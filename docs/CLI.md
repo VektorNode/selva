@@ -50,12 +50,12 @@ npx @selvajs/cli my-deployment --skip-install   # no npm install (you'll need to
 
 What lands in `<dir>`:
 
-| File                   | Purpose                                                                                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File                   | Purpose                                                                                                                                                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.env`                 | Merged from runtime's `.env.example` plus your prompt answers. Contains `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` — back this up before anything else. Provider selection lives here (`SELVA_AUTH_PROVIDER` etc.). |
-| `ecosystem.config.cjs` | PM2 process definition.                                                                                                                               |
-| `package.json`         | Pins `@selvajs/selva` + `@selvajs/cli` + `pm2`. Providers are bundled into `@selvajs/selva`.                                                          |
-| `.selva-version`       | Marker for future CLI migrations.                                                                                                                     |
+| `ecosystem.config.cjs` | PM2 process definition.                                                                                                                                                                                           |
+| `package.json`         | Pins `@selvajs/selva` + `@selvajs/cli` + `pm2`. Providers are bundled into `@selvajs/selva`.                                                                                                                      |
+| `.selva-version`       | Marker for future CLI migrations.                                                                                                                                                                                 |
 
 Notes:
 
