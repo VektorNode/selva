@@ -78,17 +78,10 @@ export async function runUpdate() {
 	const before = readRuntimeVersion(dir);
 	p.log.info(`Current @selvajs/selva: ${before ?? 'unknown'}`);
 
-	// All @selvajs/* packages move in lockstep so provider-only fixes and CLI
-	// fixes get picked up even when the runtime version hasn't moved. The
-	// admin-center button runs the same list — keep them in sync if you edit.
-	const packages = [
-		'@selvajs/cli',
-		'@selvajs/selva',
-		'@selvajs/platform',
-		'@selvajs/local-provider',
-		'@selvajs/supabase-provider',
-		'@selvajs/header-auth-provider'
-	];
+	// Providers are bundled into @selvajs/selva — the only @selvajs/* packages
+	// an operator install carries are the runtime and the CLI. The admin-center
+	// "Run update" button runs the same list — keep them in sync if you edit.
+	const packages = ['@selvajs/cli', '@selvajs/selva'];
 
 	const confirmed = await p.confirm({
 		message: 'Refresh all @selvajs/* packages and restart the app?',

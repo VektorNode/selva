@@ -89,7 +89,7 @@ The CLI prompts. Answer like this for a local-provider, single-tenant install:
 
 The CLI will:
 
-1. Write `package.json`, `.env`, `selva.config.js`, `ecosystem.config.cjs` into `~/apps/selva`.
+1. Write `package.json`, `.env`, `ecosystem.config.cjs` into `~/apps/selva`.
 2. Run `npm install` — pulls `@selvajs/selva` (the prebuilt SvelteKit app, which bundles all providers internally) and `@selvajs/cli` itself (so `selva` lands in `node_modules/.bin/`). Watch the live progress; install takes 30–90s.
 3. Print "next steps" referencing `npm run doctor` and `npm start`.
 
@@ -139,8 +139,8 @@ Expected output (mostly green checks):
 ```
 ┌   selva doctor
   ✓ .env present
-  ✓ selva.config.js present
   ✓ ecosystem.config.cjs present
+  ✓ deployment layout is current
   ✓ SELVA_HMAC_KEY is a 32-byte hex string
   ✓ SELVA_AT_REST_KEY is a 32-byte hex string
   ! DATA_PATH=./.selva-data doesn't exist yet — will be created on first run
@@ -469,7 +469,7 @@ pm2 logs selva-compute --err --lines 40 --nostream
 ## What this guide doesn't cover
 
 - **HTTPS via your own cert** (not Let's Encrypt). Use Caddy's `tls /path/to/cert /path/to/key` directive.
-- **Behind another proxy** (Cloudflare, AWS ALB, etc.). You'll likely need to set the proxy to forward `X-Forwarded-Proto` and trust it via `kit.csrf.trustedOrigins` in `selva.config.js`.
+- **Behind another proxy** (Cloudflare, AWS ALB, etc.). You'll likely need to set the proxy to forward `X-Forwarded-Proto` and configure the upstream Origin header so SvelteKit's CSRF check matches `ORIGIN` in your `.env`.
 - **Supabase backend.** Pick `supabase` at Step 4 and provide URL + keys when prompted. The local-provider-specific sections (DATA_PATH, etc.) don't apply.
 - **Header-auth (forward-auth) deployments.** Different setup story — the proxy authenticates and forwards identity headers; Selva doesn't run a login form. See `packages/providers/header-auth/README.md` for the full deployment checklist.
 - **Multi-instance / load-balanced.** The local provider's JSON stores have no file locking; switching to PM2 cluster mode will corrupt data. Use Supabase or another concurrency-safe backend for multi-instance setups.

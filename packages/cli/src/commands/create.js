@@ -2,15 +2,15 @@
 //
 // What this writes into <dir>:
 //   .env                    merged from runtime's .env.example + prompt values
-//   selva.config.js         copied from runtime's templates (operator can edit)
-//   ecosystem.config.cjs    copied verbatim
-//   package.json            depends on @selvajs/selva + providers
+//   ecosystem.config.cjs    copied verbatim from runtime templates
+//   package.json            depends on @selvajs/selva + @selvajs/cli + pm2
 //   .selva-version          marker for future CLI migrations
 //   node_modules/           after `npm install`
 //
 // The runtime templates are the source of truth — we don't carry our own
 // copies in @selvajs/cli. We install @selvajs/selva first, then copy
-// from node_modules/@selvajs/selva/templates/.
+// from node_modules/@selvajs/selva/templates/. Provider selection is
+// env-driven (SELVA_AUTH_PROVIDER etc.) — no selva.config.js is generated.
 
 import { writeFileSync, existsSync, mkdirSync, readFileSync, cpSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
@@ -81,7 +81,6 @@ export async function runCreate(argv) {
 	const envTemplate = readFileSync(join(runtimeTemplates, '.env.example'), 'utf8');
 	writeEnvFile(join(targetDir, '.env'), envTemplate, values);
 
-	cpSync(join(runtimeTemplates, 'selva.config.example.js'), join(targetDir, 'selva.config.js'));
 	cpSync(join(runtimeTemplates, 'ecosystem.config.cjs'), join(targetDir, 'ecosystem.config.cjs'));
 
 	writeFileSync(join(targetDir, '.selva-version'), CLI_VERSION + '\n', 'utf8');
@@ -257,32 +256,22 @@ function envBool(v) {
 }
 
 // The deployment's package.json depends on @selvajs/selva (prebuilt
-// SvelteKit app) plus whichever providers the operator picked. Providers are
-// imported by selva.config.js — npm needs them resolvable from node_modules.
+// SvelteKit app with all providers bundled in) plus @selvajs/cli (the
+// operator-side tool). Provider selection is env-driven — no provider
+// packages need to be listed here.
 //
-// We also list @selvajs/cli itself as a dep so the `selva` bin gets linked
+// We list @selvajs/cli itself as a dep so the `selva` bin gets linked
 // into node_modules/.bin/. Without this the operator's only way to run
 // `selva doctor` / `selva start` is a global install of the CLI.
-function buildPackageJson(name, values) {
+function buildPackageJson(name /*, values */) {
 	const deps = {
 		'@selvajs/cli': 'latest',
-		'@selvajs/platform': 'latest',
 		'@selvajs/selva': 'latest',
 		// pm2 lives in the deployment's own node_modules so `selva start` can
 		// resolve it via node_modules/.bin/pm2 without a global install. The
 		// pm2.js wrapper already prefers the local binary (see pm2Bin()).
 		pm2: '^5.4.0'
 	};
-
-	const providers = new Set([
-		values.SELVA_AUTH_PROVIDER,
-		values.SELVA_DATA_PROVIDER,
-		values.SELVA_STORAGE_PROVIDER
-	]);
-
-	if (providers.has('local')) deps['@selvajs/local-provider'] = 'latest';
-	if (providers.has('supabase')) deps['@selvajs/supabase-provider'] = 'latest';
-	if (providers.has('header')) deps['@selvajs/header-auth-provider'] = 'latest';
 
 	// Use `selva` (resolved via node_modules/.bin) in the npm scripts. Running
 	// them as `npm run start` / `npm run doctor` works without remembering the

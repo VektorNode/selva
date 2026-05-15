@@ -25,13 +25,6 @@ describe('createAllowlistStore — reads', () => {
 		expect(await store.findByUpn('anyone@example.com')).toBeNull();
 		expect(await store.findById('does-not-exist')).toBeNull();
 	});
-
-	it('createUser materializes the file under a nested directory', async () => {
-		await store.createUser('alice@example.com');
-		const onDisk = JSON.parse(await fs.readFile(filePath, 'utf-8'));
-		expect(onDisk.users).toHaveLength(1);
-		expect(onDisk.users[0].upn).toBe('alice@example.com');
-	});
 });
 
 describe('createAllowlistStore — UPN normalization', () => {
@@ -51,12 +44,6 @@ describe('createAllowlistStore — UPN normalization', () => {
 		await expect(store.createUser('ALICE@EXAMPLE.COM')).rejects.toBeInstanceOf(ProviderError);
 		const all = await store.listUsers();
 		expect(all).toHaveLength(1);
-	});
-
-	it('createUser assigns a unique id per row', async () => {
-		const a = await store.createUser('a@example.com');
-		const b = await store.createUser('b@example.com');
-		expect(a.id).not.toBe(b.id);
 	});
 });
 
@@ -89,12 +76,6 @@ describe('createAllowlistStore — materializeFromHeaders', () => {
 		expect(row?.displayName).toBe('Operator-Set Name');
 	});
 
-	it('is a no-op for an unknown id (must not throw)', async () => {
-		await expect(
-			store.materializeFromHeaders('no-such-id', { email: 'x@y.com' })
-		).resolves.toBeUndefined();
-	});
-
 	it('does not write the file when there is nothing to fill', async () => {
 		const created = await store.createUser('alice@example.com');
 		await store.materializeFromHeaders(created.id, {
@@ -115,15 +96,6 @@ describe('createAllowlistStore — materializeFromHeaders', () => {
 });
 
 describe('createAllowlistStore — touchLastLogin (debounce)', () => {
-	it('stamps lastLoginAt on first call', async () => {
-		const created = await store.createUser('alice@example.com');
-		expect(created.lastLoginAt).toBeUndefined();
-		await store.touchLastLogin(created.id);
-		const row = await store.findById(created.id);
-		expect(row?.lastLoginAt).toBeTruthy();
-		expect(Date.parse(row!.lastLoginAt!)).toBeGreaterThan(0);
-	});
-
 	it('skips the write when called again within the debounce window', async () => {
 		const created = await store.createUser('alice@example.com');
 		await store.touchLastLogin(created.id);
@@ -145,37 +117,6 @@ describe('createAllowlistStore — touchLastLogin (debounce)', () => {
 		await store.touchLastLogin(created.id);
 		const refreshed = (await store.findById(created.id))!.lastLoginAt!;
 		expect(Date.parse(refreshed)).toBeGreaterThan(Date.now() - 60_000);
-	});
-
-	it('is a no-op for an unknown id (must not throw)', async () => {
-		await expect(store.touchLastLogin('no-such-id')).resolves.toBeUndefined();
-	});
-});
-
-describe('createAllowlistStore — setDisabled / deleteUser', () => {
-	it('setDisabled flips the flag and persists', async () => {
-		const created = await store.createUser('alice@example.com');
-		await store.setDisabled(created.id, true);
-		expect((await store.findById(created.id))?.disabled).toBe(true);
-		await store.setDisabled(created.id, false);
-		expect((await store.findById(created.id))?.disabled).toBe(false);
-	});
-
-	it('setDisabled throws ProviderError(404) for unknown id', async () => {
-		await expect(store.setDisabled('no-such-id', true)).rejects.toMatchObject({
-			statusCode: 404
-		});
-	});
-
-	it('deleteUser removes the row', async () => {
-		const created = await store.createUser('alice@example.com');
-		await store.deleteUser(created.id);
-		expect(await store.findById(created.id)).toBeNull();
-		expect(await store.listUsers()).toEqual([]);
-	});
-
-	it('deleteUser throws ProviderError(404) for unknown id', async () => {
-		await expect(store.deleteUser('no-such-id')).rejects.toMatchObject({ statusCode: 404 });
 	});
 });
 

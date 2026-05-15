@@ -37,7 +37,17 @@
 		"clean": "node scripts/clean.js",
 		"rebuild": "pnpm clean && pnpm install && pnpm build",
 		"changeset": "changeset",
-		"release": "pnpm build && changeset publish"
+		"release": "pnpm build && changeset publish",
+		"prepare": "husky"
+	},
+	"lint-staged": {
+		"*.{ts,tsx,svelte}": [
+			"eslint --fix",
+			"prettier --write"
+		],
+		"*.{json,yaml,yml,md}": [
+			"prettier --write"
+		]
 	},
 	"devDependencies": {
 		"@changesets/cli": "^2.31.0",
@@ -60,6 +70,8 @@
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.17.1",
 		"globals": "^17.5.0",
+		"husky": "^9.1.7",
+		"lint-staged": "^17.0.4",
 		"prettier": "catalog:",
 		"prettier-plugin-svelte": "^3.5.1",
 		"prettier-plugin-tailwindcss": "^0.7.3",

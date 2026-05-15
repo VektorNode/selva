@@ -435,7 +435,7 @@
 				<EmptyState icon={ShieldCheck} title="User store unavailable">
 					{#snippet body()}
 						Set <code class="text-xs">DATA_PATH</code> (local provider) or check your provider
-						wiring in <code class="text-xs">selva.config.ts</code>.
+						selection in <code class="text-xs">.env</code>.
 					{/snippet}
 				</EmptyState>
 			{:else if data.users.length === 0}

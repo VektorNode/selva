@@ -3,9 +3,6 @@
  * Post-build: emit templates/ files shipped with @selvajs/selva.
  *
  * Outputs:
- *   templates/selva.config.example.js  — bundled from repo-root selva.config.ts
- *                                        (Provider imports stay external so the
- *                                        operator's node_modules resolves them.)
  *   templates/ecosystem.config.cjs     — PM2 process file
  *   templates/.env.example             — copied from packages/selva/.env.example
  *
@@ -13,21 +10,18 @@
  * node_modules/@selvajs/selva/templates/ after install.
  */
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import esbuild from 'esbuild';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const selvaDir = resolve(__dirname, '..');
-const repoRoot = resolve(selvaDir, '..', '..');
 const templatesDir = join(selvaDir, 'templates');
 
 const COLORS = {
 	RESET: '\x1b[0m',
 	BOLD: '\x1b[1m',
 	GREEN: '\x1b[32m',
-	RED: '\x1b[31m',
 	BLUE: '\x1b[34m',
 	DIM: '\x1b[2m'
 };
@@ -39,44 +33,29 @@ const dim = (msg) => log(`${COLORS.DIM}${msg}${COLORS.RESET}`);
 
 mkdirSync(templatesDir, { recursive: true });
 
-// ============================================================================
-// selva.config.example.js — compiled from repo-root selva.config.ts
-//
-// The runtime loader (providers.server.ts) expects a .js file at
-// SELVA_CONFIG_PATH — there's no TS compiler at runtime. Operators copy this
-// example into their deployment dir as selva.config.js and edit it.
-// ============================================================================
-
-header('[1/3] Compiling selva.config.ts → templates/selva.config.example.js');
-
-await esbuild.build({
-	entryPoints: [join(repoRoot, 'selva.config.ts')],
-	outfile: join(templatesDir, 'selva.config.example.js'),
-	format: 'esm',
-	platform: 'node',
-	target: 'node20',
-	bundle: true,
-	external: ['@selvajs/platform', '@selvajs/local-provider', '@selvajs/supabase-provider'],
-	logLevel: 'info'
-});
-ok('selva.config.example.js compiled');
+// Sweep stale artifacts from earlier template shapes (selva.config.example.js
+// is no longer emitted — deployments are env-only).
+rmSync(join(templatesDir, 'selva.config.example.js'), { force: true });
 
 // ============================================================================
 // ecosystem.config.cjs — PM2 process file
 // ============================================================================
 
-header('[2/3] Writing templates/ecosystem.config.cjs');
+header('[1/2] Writing templates/ecosystem.config.cjs');
 
 const ecosystem = `// PM2 process file — runtime template shipped with @selvajs/selva.
 //
-// Drop this into a deployment directory alongside selva.config.js and .env,
-// then \`pm2 start ecosystem.config.cjs\`.
+// Drop this into a deployment directory alongside .env, then
+// \`pm2 start ecosystem.config.cjs\`.
 //
 // Runtime config is loaded from .env via Node's --env-file flag (Node >= 20.6).
 // PM2's own env_file option is silently ignored by \`pm2 start\` (only works
 // under pm2-runtime) — using --env-file via node_args avoids that footgun.
 //
-// SELVA_CONFIG_PATH points the runtime at the operator's compiled config.
+// Providers are picked from SELVA_AUTH_PROVIDER / SELVA_DATA_PROVIDER /
+// SELVA_STORAGE_PROVIDER in .env. For custom providers not shipped in the box,
+// set SELVA_CONFIG_PATH to a .js file exporting a defineConfig() result.
+//
 // Rhino.Compute server URL + API key are configured in /admin/compute.
 module.exports = {
 \tapps: [
@@ -113,8 +92,7 @@ module.exports = {
 \t\t\tmerge_logs: true,
 
 \t\t\tenv: {
-\t\t\t\tNODE_ENV: 'production',
-\t\t\t\tSELVA_CONFIG_PATH: './selva.config.js'
+\t\t\t\tNODE_ENV: 'production'
 \t\t\t}
 \t\t}
 \t]
@@ -127,7 +105,7 @@ ok('templates/ecosystem.config.cjs written');
 // .env.example — copied verbatim from packages/selva/.env.example
 // ============================================================================
 
-header('[3/3] Copying .env.example');
+header('[2/2] Copying .env.example');
 
 const envExampleSrc = join(selvaDir, '.env.example');
 if (existsSync(envExampleSrc)) {

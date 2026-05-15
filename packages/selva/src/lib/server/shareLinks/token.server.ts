@@ -27,7 +27,7 @@ import { env } from '$env/dynamic/private';
  *
  * ## Setup
  *
- * See [selva.config.ts](../../../../../selva.config.ts) for the canonical
+ * See [packages/selva/.env.example](../../../../.env.example) for the canonical
  * env-var documentation, generation command, and rotation notes. tl;dr:
  *
  *   - Set `SHARE_LINK_SECRET` to a random ≥32-byte string in production.
@@ -42,7 +42,7 @@ function getSecret(): string {
 	if (!secret) {
 		throw new Error(
 			'Missing required env var: SHARE_LINK_SECRET (or SELVA_HMAC_KEY as fallback). ' +
-				'See selva.config.ts for setup instructions.'
+				'See packages/selva/.env.example for setup instructions.'
 		);
 	}
 	return secret;
