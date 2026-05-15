@@ -1,16 +1,22 @@
 import { env } from '$env/dynamic/private';
+import { randomUUID } from 'node:crypto';
 import {
 	ALL_PLATFORM_PERMISSIONS,
 	SYSTEM_CONTEXT,
 	type AuthUser,
+	type Organization,
+	type Project,
 	type TenancyMode
 } from '@selvajs/platform';
 import {
 	getAuthProvider,
 	getDataProvider,
+	getOrganizationProvider,
 	getPermissionStore,
+	getProjectProvider,
 	tenancy
 } from './providers.server.js';
+import { slugify } from './slug.js';
 
 /**
  * Shared post-verification flow used by every IdP-callback route (OAuth,
@@ -22,6 +28,11 @@ import {
  *   2. Bootstrap-admin grant — if no instance_admin exists yet AND the
  *      tenancy/env policy allows it, grant the signing-in user every
  *      platform permission so `/admin` becomes reachable.
+ *   3. Single-tenant org seed — create the default Organization + Project
+ *      owned by the new admin, mirroring what `/setup` does for password
+ *      auth. Without this, org-scoped permissions (manage_projects,
+ *      manage_definitions) silently drop on the floor because
+ *      `actingOrgId` resolves to undefined.
  *
  * Returns nothing — failures throw. Cookie/redirect are the caller's job
  * since they vary by capability (OAuth has refresh tokens, magic-link does
@@ -32,10 +43,84 @@ export async function bootstrapUserSession(user: AuthUser): Promise<void> {
 
 	const perms = getPermissionStore();
 	const hasAdmin = await perms.hasInstanceAdmin(SYSTEM_CONTEXT);
-	if (hasAdmin) return;
+	let grantedAdminHere = false;
+	if (!hasAdmin) {
+		if (!shouldBootstrapAdmin(user, env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL, tenancy)) return;
+		await perms.set(SYSTEM_CONTEXT, user.id, [...ALL_PLATFORM_PERMISSIONS]);
+		grantedAdminHere = true;
+	}
 
-	if (!shouldBootstrapAdmin(user, env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL, tenancy)) return;
-	await perms.set(SYSTEM_CONTEXT, user.id, [...ALL_PLATFORM_PERMISSIONS]);
+	// Self-heal: deployments that skipped /setup (header-auth, OAuth callback)
+	// were left without a default org until 2026-05 — `actingOrgId` resolved
+	// to undefined and org-scoped permissions silently dropped. We seed the
+	// org if it's missing. After it exists this is a single cheap listOrgs
+	// read per request and an early-return.
+	if (tenancy !== 'single') return;
+	const orgs = getOrganizationProvider();
+	const existing = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
+	if (existing.items.length > 0) return;
+
+	// Only the instance admin gets to own the freshly-created org. We just
+	// granted it above (skip the read) or we re-check for the self-heal path.
+	if (!grantedAdminHere) {
+		const userPerms = await perms.getFor(SYSTEM_CONTEXT, user.id);
+		if (!userPerms.includes('instance_admin')) return;
+	}
+	await ensureSingleTenantDefaultOrg(user);
+}
+
+/**
+ * Single-tenant deployments must have exactly one org for `actingOrgId` to
+ * resolve. The `/setup` form creates it from user input; flows that skip
+ * setup (header-auth, OAuth callback, future SAML) need the same seed or
+ * org-scoped permissions can't be persisted.
+ *
+ * No-op outside single-tenant mode and once any org exists. Picks a slug
+ * derived from the admin's email/displayName so the URL looks like the
+ * deployment rather than a UUID; falls back to `default` for anonymous
+ * UPN-only sign-ins.
+ */
+async function ensureSingleTenantDefaultOrg(user: AuthUser): Promise<void> {
+	if (tenancy !== 'single') return;
+	const orgs = getOrganizationProvider();
+	const existing = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
+	if (existing.items.length > 0) return;
+
+	const displayName =
+		typeof user.metadata?.displayName === 'string' ? user.metadata.displayName : undefined;
+	const orgName = displayName?.trim() || user.email?.split('@')[0]?.trim() || 'Default';
+	const slug = slugify(orgName).length >= 3 ? slugify(orgName) : 'default';
+
+	const now = new Date().toISOString();
+	const org: Organization = {
+		id: randomUUID(),
+		name: orgName,
+		slug,
+		ownerId: user.id,
+		createdBy: user.id,
+		updatedBy: user.id,
+		createdAt: now,
+		updatedAt: now,
+		deletedAt: null
+	};
+	await orgs.createOrg(SYSTEM_CONTEXT, org);
+
+	const projects = getProjectProvider();
+	const project: Project = {
+		id: randomUUID(),
+		orgId: org.id,
+		name: 'Default',
+		slug: 'default',
+		visibility: 'public',
+		ownerId: user.id,
+		createdBy: user.id,
+		updatedBy: user.id,
+		autoJoinOnUpload: false,
+		createdAt: now,
+		updatedAt: now,
+		deletedAt: null
+	};
+	await projects.createProject(SYSTEM_CONTEXT, project);
 }
 
 /**
