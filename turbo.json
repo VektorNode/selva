@@ -23,7 +23,7 @@
 				"vite.config.ts",
 				"vite.config.js"
 			],
-			"env": ["ADAPTER", "NODE_ENV"]
+			"env": ["ADAPTER", "NODE_ENV", "SELVA_HMAC_KEY", "SELVA_AT_REST_KEY", "DATA_PATH"]
 		},
 		"check": {
 			"dependsOn": ["^build"],

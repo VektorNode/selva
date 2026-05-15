@@ -475,6 +475,23 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		});
 		cancelOn(value);
 		origin = String(value);
+
+		// Plain HTTP + NODE_ENV=production drops the session cookie (Secure
+		// flag on, browser refuses to send over http://). Login appears to
+		// succeed but the next request is anonymous. Warn loudly here — the
+		// fix is either TLS or ALLOW_INSECURE_COOKIES=true in .env.
+		if (origin.startsWith('http://')) {
+			p.note(
+				'Sessions use Secure cookies in production; browsers will silently\n' +
+					'drop them over http://, so login will appear to succeed but the\n' +
+					'next request will be anonymous.\n\n' +
+					'Fix one of:\n' +
+					'  • put TLS in front (recommended) — e.g. a domain + Caddy auto-cert\n' +
+					'  • set ALLOW_INSECURE_COOKIES=true in .env (testing only — password\n' +
+					'    auth over plain HTTP sends credentials in cleartext)',
+				pc.yellow('⚠ Plain HTTP origin')
+			);
+		}
 	}
 
 	// ── Platform flags ─────────────────────────────────────────────────

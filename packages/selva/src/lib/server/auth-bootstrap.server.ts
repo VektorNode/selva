@@ -192,10 +192,17 @@ function shouldBootstrapUpn(
  */
 export function wireHeaderAuthBootstrap(): void {
 	const auth = getAuthProvider() as unknown as {
+		proxyAuth?: unknown;
 		setBootstrapAllowlistPolicy?: (
 			policy: ((p: { upn: string; email: string | undefined }) => boolean | Promise<boolean>) | null
 		) => void;
 	};
+	// Non-proxy providers (Local, Supabase) bootstrap admin through
+	// /setup or the OAuth callback — `wireHeaderAuthBootstrap` is a no-op
+	// for them. Without this guard the warning below misfires for every
+	// LocalAuthProvider deployment that sets BOOTSTRAP_INSTANCE_ADMIN_EMAIL.
+	if (!auth.proxyAuth) return;
+
 	if (typeof auth.setBootstrapAllowlistPolicy !== 'function') {
 		// A stale @selvajs/header-auth-provider build (pre-0.11) doesn't expose
 		// this hook. Without a warning the operator sees `user:null` indefinitely

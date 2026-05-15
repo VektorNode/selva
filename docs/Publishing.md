@@ -1,142 +1,101 @@
 # Publishing
 
-How to release Selva's npm packages. Manual for now; the GitHub Actions slot is intentionally empty until the cadence justifies it.
+How to release Selva's npm packages. Default flow is changesets (manual or via CI). For shipping a single fix faster, see [Hotfix bypass](#hotfix-bypass) below.
 
-## The one-mental-model rule
+## One version, four packages
 
-**Every published Selva package shares one version number.** Changesets is configured in `fixed` mode across the four published packages — bumping any one bumps all four. Operators see a single version line in their `package.json`. You stop tracking per-package versions in your head.
+Changesets runs in `fixed` mode across the four published packages — bumping any one bumps all four. Operators see a single version line; you stop tracking per-package versions.
 
-## What gets published
+| Published          | What it is                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------- |
+| `@selvajs/selva`   | Prebuilt SvelteKit app. Bundles `@selvajs/platform` + all providers. The thing operators install. |
+| `@selvajs/cli`     | `npx @selvajs/cli <dir>` scaffolds a deployment; `selva <cmd>` runs day-2 ops.                    |
+| `@selvajs/ui`      | Shared Svelte component library. Also bundled into `@selvajs/selva`.                              |
+| `@selvajs/schemas` | Generated UI schema types. `peerDependency` of `@selvajs/ui`.                                     |
 
-| Package            | Purpose                                                                                                                                          |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@selvajs/selva`   | Prebuilt SvelteKit app. Bundles `@selvajs/platform` + all providers internally. The thing operators install and run.                             |
-| `@selvajs/cli`     | `npx @selvajs/cli <dir>` scaffolds a deployment; `selva <cmd>` runs day-2 ops on an existing one.                                                |
-| `@selvajs/ui`      | Shared Svelte component library. Bundled into `@selvajs/selva` internally; published separately so external Selva-adjacent repos can consume it. |
-| `@selvajs/schemas` | Generated UI schema types. `peerDependency` of `@selvajs/ui`.                                                                                    |
-
-That's it. Four published packages, one shared version.
-
-## What does NOT get published
-
-Marked `"private": true` in their `package.json` and listed in `.changeset/config.json` under `ignore`:
-
-- `@selvajs/platform` — interface contracts, only consumed internally
-- `@selvajs/local-provider`, `@selvajs/supabase-provider`, `@selvajs/header-auth-provider` — bundled into `@selvajs/selva`'s build artifact
-- `@selvajs/plugin-ui` — embedded into `Selva.gha` at plugin build time
-- `@selvajs/config` — shared ESLint / Vite / Prettier configs
-
-If you find yourself wanting to publish one of these, **don't** — change the architecture instead. The point of bundling them is that operators install one package and get everything.
+Everything else (`@selvajs/platform`, the providers, `@selvajs/plugin-ui`, `@selvajs/config`) is `"private": true` and bundled or consumed internally. If you want to publish one, change the architecture instead.
 
 ## One-time setup
 
 ```bash
 npm login              # publish credentials
-gh auth status         # confirms gh CLI works (used for PR notes later)
+npm whoami             # confirm @selvajs org membership
 ```
 
-Run `npm whoami` to confirm you're publishing as a member of the `@selvajs` npm org.
-
-## The release flow
+## Release flow (changesets)
 
 ```bash
-# 1. Record what changed (interactive)
-pnpm changeset
-#    Pick the bump size (patch / minor / major). Write a one-line summary.
-#    Because changesets is in fixed mode, picking *any* of the 4 published
-#    packages applies the bump to all 4.
-
-# 2. Apply bumps + write CHANGELOGs
-pnpm changeset version
-#    Reads .changeset/*.md, bumps versions, updates CHANGELOGs, rewrites
-#    workspace:* deps between bumped packages. Commit the result.
-
-# 3. Build + publish
-pnpm release
-#    Runs `pnpm build` then `changeset publish`. Publishes only packages whose
-#    version on npm is behind the local version. Internal packages are skipped.
-```
-
-`pnpm publish` (called by `changeset publish` under the hood) rewrites `workspace:*` → real version ranges and `catalog:` → real versions in the published tarball. **Never use `npm publish`** — npm ships the literal `workspace:*` string, which silently breaks every install.
-
-## First-publish checklist
-
-Before the very first `pnpm release`:
-
-1. **Reserve the namespace.** `npm view @selvajs/selva` should 404. If anyone else has registered `@selvajs/*`, stop and resolve ownership first.
-2. **Confirm versions.** All four published packages should be at the same version in their `package.json`. If they've drifted, fix that before publishing.
-3. **Dry-run.** `pnpm -r --filter '@selvajs/selva' --filter '@selvajs/cli' --filter '@selvajs/ui' --filter '@selvajs/schemas' exec pnpm pack`. Inspect each `.tgz`:
-   - `tar -tzf <file>` — verify contents
-   - `tar -xzOf <file> package/package.json` — verify no `workspace:*` or `catalog:` strings remain
-   - Verify no `.env`, no `node_modules`, no secrets
-4. **Publish.** `pnpm release`.
-
-## Common operations
-
-### Bug fix in a provider
-
-```bash
-pnpm changeset
-# Pick @selvajs/selva (because the provider gets bundled into it), patch,
-# "fix: NTFS path normalization on Windows in local-provider"
-git add .changeset/ && git commit -m "changeset: local-provider NTFS fix"
-```
-
-You don't publish a new `@selvajs/local-provider` — it's internal. The fix reaches operators when they next `npm update @selvajs/selva` and the bundle contains the corrected provider code.
-
-### Cut a release
-
-```bash
-pnpm changeset version   # accumulated .md files → version bumps + CHANGELOGs
-git add . && git commit -m "release"
-pnpm release             # builds + publishes the 4 public packages
+pnpm changeset           # record what changed; pick bump size + summary
+pnpm changeset version   # apply bumps, write CHANGELOGs, rewrite workspace: deps
+pnpm release             # pnpm build && changeset publish
 git push --follow-tags
 ```
 
-### One-off hotfix
+`pnpm publish` (run by `changeset publish`) rewrites `workspace:*` and `catalog:` specs to real versions in the tarball. **Never use `npm publish`** — it ships the literal `workspace:*` string and breaks installs.
 
-For "shipping a single fix to one operator's VM right now" without going through changesets, see [Hotfix-CLI-Runtime.md](./Hotfix-CLI-Runtime.md). That doc is the escape hatch — the changesets flow is the default.
-
-### Unpublish (within 72h)
-
-```bash
-npm unpublish @selvajs/<pkg>@<version>
-```
-
-After 72 hours npm forbids unpublishing. Use `npm deprecate` instead:
-
-```bash
-npm deprecate @selvajs/<pkg>@<version> "broken — use @<newer-version>"
-```
-
-## Troubleshooting
-
-- **"You do not have permission to publish @selvajs/foo"** — `npm whoami`; check you're on the `@selvajs` org.
-- **`changeset publish` exits 0 but nothing happened** — local versions match what's on npm. Did you run `pnpm changeset version`?
-- **Tarball contains `workspace:*`** — you ran `npm pack`, not `pnpm pack`. Only pnpm rewrites workspace specs.
-- **"This package has been marked as private"** — the package has `"private": true`. That's intentional for everything except the four published packages.
-
-## Automated releases (active)
+## Automated releases (CI)
 
 `.github/workflows/release.yml` runs [changesets/action](https://github.com/changesets/action) on every push to `main`:
 
-- **If `.changeset/*.md` files are pending**: opens (or updates) a "Version Packages" PR with `pnpm changeset version` applied. The PR shows the proposed version bumps + CHANGELOG entries; reviewers can sanity-check before any publish.
-- **If the merge contains bumped versions** (the post-version-PR-merge state): runs `pnpm release` (build + `changeset publish`) and ships the four public packages in dependency order.
+- Pending `.changeset/*.md` files → opens/updates a "Version Packages" PR with bumps + CHANGELOG entries applied.
+- Merged version PR → runs `pnpm release` and publishes in dep order.
 
-The action figures out which mode to run from workspace state — no branching in the workflow file.
+Setup once: create an npm Automation token at `https://www.npmjs.com/settings/<user>/tokens`, add it as repo secret `NPM_TOKEN`.
 
-### One-time setup
+Operator-facing flow: author commits a `.changeset/*.md` with their PR → CI maintains the version PR → merging the version PR ships the release → operators run `npm run update`.
 
-Generate an npm automation token at https://www.npmjs.com/settings/`<your-user>`/tokens (pick "Automation"), then add it as a repo secret named `NPM_TOKEN`at **Repo → Settings → Secrets and variables → Actions**. The workflow's`contents: write`+`pull-requests: write` permissions are what let changesets/action open the version PR.
+## Hotfix bypass
 
-### Operator-facing workflow
+For one small runtime or CLI fix without going through changesets. Don't use for coordinated multi-package releases.
 
-1. Author writes a fix, runs `pnpm changeset`, commits the `.md` file alongside their PR.
-2. PR merges to `main`.
-3. CI opens "Version Packages" PR. **Don't merge it immediately** — let real changesets accumulate; this PR auto-updates on each new merge.
-4. When ready to ship: merge "Version Packages" PR. CI publishes everything.
-5. Tagged release lands on npm; operators can `npm run update`.
+**Runtime** (changes in `packages/selva/**`, `packages/providers/**`, or templates):
 
-### Manual flow as fallback
+```bash
+# Bump packages/selva/package.json patch version
+pnpm --filter @selvajs/selva run build
+grep -rl "<distinctive string from your fix>" packages/selva/build \
+  || { echo "fix not in build — ABORT"; exit 1; }
+pnpm --filter @selvajs/selva publish --access public --no-git-checks
+npm view @selvajs/selva version
+```
 
-The commands under "The release flow" above still work if you want to bypass CI (e.g. mid-incident hotfix where the workflow is paused or you don't trust the version PR's diff). See [Hotfix-CLI-Runtime.md](./Hotfix-CLI-Runtime.md) for the bypass path.
+**CLI** (changes in `packages/cli/**`):
+
+```bash
+# Bump packages/cli/package.json patch version
+node --input-type=module -e "await import('./packages/cli/src/cli.js')"  # smoke import
+pnpm --filter @selvajs/cli publish --access public --no-git-checks
+```
+
+**Combined**: bump both, build runtime, publish runtime first then CLI.
+
+## Two traps
+
+### npm publish ships `workspace:*`
+
+Always `pnpm publish` (or `changeset publish`, which uses it). If you ship a tarball with a literal `workspace:*` spec and you're inside the 72h unpublish window, unpublish, bump, republish. After 72h, use `npm deprecate`.
+
+### npm cache hides your new version
+
+Operators run `npm update` and still get the old package because npm's cached packument is stale. Recovery on the VM:
+
+```bash
+cd ~/apps/selva
+npm cache clean --force
+rm -rf node_modules package-lock.json
+npm install --prefer-online
+npm run restart
+node -e "console.log(require('./node_modules/@selvajs/selva/package.json').version)"
+```
+
+Diagnose by comparing `npm view @selvajs/selva version` locally with the installed version on the VM.
+
+## Troubleshooting
+
+- **"cannot publish over previously published version"** — forgot to bump.
+- **"You do not have permission to publish"** — `npm whoami`; check `@selvajs` org access.
+- **`changeset publish` exits 0 but nothing happened** — local versions match npm. Did you run `pnpm changeset version`?
+- **Tarball contains `workspace:*`** — you ran `npm pack`, not `pnpm pack`.
+- **Fix missing from `packages/selva/build/`** — rebuild with `--force`.
+- **`pnpm publish` blocks on dirty tree** — use `--no-git-checks` for the hotfix path.
+- **Operator still on old version after update** — stale packument cache; see recovery above.

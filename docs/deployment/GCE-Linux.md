@@ -261,6 +261,57 @@ Plain HTTP is fine for poking around but unsafe for real use. Once you have a do
 
 ---
 
+## Testing header-auth locally (dev note)
+
+The header-auth provider trusts identity headers set by an upstream proxy. In production those come from a forward-auth helper (OIDC, Entra, etc.). For local development you can skip the helper and have **Caddy inject the headers directly** — useful for iterating on permissions, allowlist UX, or admin flows without standing up an IdP.
+
+> **Security:** this configuration makes anyone who can reach Caddy authenticate as the injected user. Lock port 80 to your own IP in the GCP firewall (Source IPv4 ranges: `<your-laptop-ip>/32`) before turning this on, and never leave it in this state on a publicly reachable VM.
+
+**1. Switch the deployment to header-auth.** In `.env`:
+
+```bash
+SELVA_AUTH_PROVIDER=header
+SELVA_TENANCY=single
+HEADER_AUTH_DATA_DIR=./.selva-data         # or rely on DATA_PATH
+BOOTSTRAP_INSTANCE_ADMIN_EMAIL=admin@corp.com
+HOST=127.0.0.1                              # required — must NOT be 0.0.0.0
+```
+
+`HOST=127.0.0.1` is non-negotiable: header-auth trusts what the request claims, so the Selva process must be unreachable except via Caddy. `selva doctor` enforces this.
+
+Restart: `selva restart`.
+
+**2. Inject the test identity in the Caddyfile.** Strip any inbound copies first (a browser must not be able to spoof these), then set the trusted headers:
+
+```bash
+sudo tee /etc/caddy/Caddyfile >/dev/null <<'EOF'
+:80 {
+    request_header -SELVA-UserPrincipalName
+    request_header -SELVA-Email
+    request_header -SELVA-DisplayName
+
+    request_header SELVA-UserPrincipalName "admin@corp.com"
+    request_header SELVA-Email             "admin@corp.com"
+    request_header SELVA-DisplayName       "Test Admin"
+
+    reverse_proxy 127.0.0.1:3000
+}
+EOF
+sudo systemctl reload caddy
+```
+
+**3. First request bootstraps the admin.** Because the injected UPN matches `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`, the bootstrap policy auto-allowlists `admin@corp.com` and grants every platform permission. There is no `/setup` or `/login` under header-auth — visit the site and you're in.
+
+```bash
+curl -I http://<vm-external-ip>
+```
+
+**4. Test additional users.** Change the injected values in the Caddyfile (e.g. `bob@corp.com`) and reload Caddy. Bob will be **rejected** until you log in as admin and pre-allowlist him under **Admin → Users → New user**. That's the production behaviour — the bootstrap window has closed after the first admin exists.
+
+For the production-shaped wiring (real `forward_auth` against an OIDC sidecar instead of static `request_header` injection), see [packages/providers/header-auth/README.md](../../packages/providers/header-auth/README.md).
+
+---
+
 ## Day-2 operations
 
 All from `~/apps/selva`:
