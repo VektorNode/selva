@@ -46,14 +46,18 @@ Was a symptom of #1 — on the pre-migration layout the stale npm provider had d
 
 ## Nice-to-have
 
-### 6. Extend `selva doctor` to catch header-auth misconfig
+### 6. Extend `selva doctor` to catch header-auth misconfig — FIXED
 
-`doctor` already checks env vars and file paths. Add:
+`doctor` now runs a header-auth block (see [`checkHeaderAuth` in packages/cli/src/commands/doctor.js](packages/cli/src/commands/doctor.js)) covering:
 
-- When `SELVA_AUTH_PROVIDER=header`:
-  - Verify `header-allowlist.json` exists at `HEADER_AUTH_DATA_DIR ?? DATA_PATH`, or `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is set
-  - Verify the loaded provider exposes `setBootstrapAllowlistPolicy` (catches #1)
-  - Print the *resolved* header names the provider will look for, so they can be compared against the proxy config
+- `header-allowlist.json` presence at `HEADER_AUTH_DATA_DIR ?? DATA_PATH`, plus writability of the dir when it differs from `DATA_PATH`.
+- `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is set (red) — the only sane bootstrap path for header-auth.
+- `HOST=127.0.0.1` recommendation (yellow if not loopback).
+- `ORIGIN` required (red if unset).
+- `HEADER_AUTH_DATA_DIR` required when data provider isn't local (red — no `DATA_PATH` fallback).
+- **Resolved header names** — prints what the provider will actually read (`SELVA-UserPrincipalName` / `SELVA-Email` / `SELVA-DisplayName` by default, or whatever the operator overrode), so they can be diffed against the proxy config. Yellow-flags a partial override (1 or 2 of 3 set — usually a typo).
+
+Provider-method introspection (`setBootstrapAllowlistPolicy` presence — the "catches #1" ask) is covered transitively by `checkLayoutDrift`, which reds when a legacy standalone `@selvajs/header-auth-provider` is in `node_modules` — that's the exact failure mode that produced the silent no-op.
 
 ### 7. `defineConfig` subpath export missing from `@selvajs/selva`
 
