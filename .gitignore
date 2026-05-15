@@ -20,6 +20,7 @@ bld/
 !packages/cli/bin/
 [Oo]bj/
 [Ll]og/
+*.lscache
 
 # Visual Studio cache/options directory
 .vs/
@@ -94,6 +95,7 @@ skills-lock.json
 !Plugin/Selva.GH/**
 Plugin/Selva.GH/bin/
 Plugin/Selva.GH/obj/
+Plugin/Selva.GH/*.lscache
 
 # Definitions config files (production, not checked in)
 definitions-config.json

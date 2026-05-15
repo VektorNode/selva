@@ -1,8 +1,8 @@
-import { redirect } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { Organization, Project } from '@selvajs/platform';
 import { hasPermission, SYSTEM_CONTEXT } from '@selvajs/platform';
-import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
+import { flag, getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
 
 export interface PlatformProjectRow extends Project {
 	hostOrgName: string;
@@ -18,6 +18,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const ctx = locals.ctx;
 	if (!ctx) redirect(303, '/login');
 	if (!hasPermission(ctx, 'instance_admin')) redirect(303, '/admin');
+	if (!flag('ENABLE_PLATFORM_PROJECTS')) throw error(404, 'Not found');
 
 	const orgs = getOrganizationProvider();
 	const projects = getProjectProvider();

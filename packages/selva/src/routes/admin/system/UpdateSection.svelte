@@ -41,7 +41,7 @@
 		if (exitCode === 0) return { text: '✓ Update completed successfully', tone: 'success' };
 		if (exitCode === -2)
 			return {
-				text: '⚠ App did not respond within 90s after restart — check PM2 logs',
+				text: '⚠ App did not respond within 5 minutes after restart — check PM2 logs',
 				tone: 'destructive'
 			};
 		return { text: `Update failed (exit code ${exitCode})`, tone: 'destructive' };

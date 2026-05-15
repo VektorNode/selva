@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import {
+	flag,
 	getDefinitionMeta,
 	getOrganizationProvider,
 	getProjectProvider,
@@ -35,6 +36,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const allProjects: Project[] = projectPages.flatMap((p) => p.items);
 
 		const grantStore = getPlatformProjectGrantStore();
+		const platformProjectsEnabled = flag('ENABLE_PLATFORM_PROJECTS');
 
 		// Filter to projects accessible by this user
 		const accessibleProjects = await Promise.all(
@@ -45,6 +47,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 					return member ? p : null;
 				}
 				if (p.visibility === 'platform') {
+					if (!platformProjectsEnabled) return null;
 					const grants = await grantStore.listByProject(SYSTEM_CONTEXT, p.id);
 					const ctx = locals.ctx;
 					const hasGrant = grants.some(

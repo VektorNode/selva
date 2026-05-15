@@ -1,5 +1,31 @@
 # @selvajs/selva
 
+## 2.0.9
+
+### Patch Changes
+
+- **Gate Platform projects behind `SELVA_FLAG_ENABLE_PLATFORM_PROJECTS`.** The admin → Projects surface — instance-admin-owned projects granted to orgs or individual users — is now opt-in like the other platform flags, off by default. When off, the nav entry is hidden, the routes 404, the admin API rejects, platform-visibility projects are filtered out of every list, and the access rules treat them as inaccessible (instance_admin included). Existing rows are preserved; flipping the flag back on restores access.
+  - `selva create` lists the new flag in the platform-flags multiselect, alongside `ALLOW_ORG_CREATION`, `ENABLE_SHARING`, etc.
+  - `.env.example` documents the flag in the `PLATFORM FEATURE FLAGS` block.
+  - Rule layer: `ProjectAccessInput` and `DefinitionAccessInput` carry a new `enablePlatformProjects` boolean. Off short-circuits every `canView` / `canSolve` / `canEdit` / `canManage` / `canEditProjectSettings` / `canEditDefinition` call against a platform-visibility project to `false` — single source of truth, so route and listing code can't drift.
+
+  Existing deployments that want the feature: set `SELVA_FLAG_ENABLE_PLATFORM_PROJECTS=true` in `.env` and restart.
+
+## 2.0.8
+
+### Patch Changes
+
+- **Fix admin "Run Update" leaving the app offline.** The bash script driving the npm-mode update was being killed by PM2's tree-kill when it called `pm2 stop selva-compute` — Node's `{ detached: true }` only creates a new session/process group but does not change the parent-child relationship that tree-kill walks. Result: bash died right after stopping the app, `npm update` and `pm2 start` never ran, and the site stayed down until someone SSH'd in.
+
+  The runner is now daemonized via `setsid bash … &` + `disown` + immediate launcher exit, so its PPID becomes 1 (init) before it does anything destructive. Tree-kill can no longer reach it.
+
+  Additional hardening to the same code path:
+  - **Pre-flight version check.** `npm view @selvajs/selva version` runs before any stop/install/start cycle. If the deployment is already on the latest version, the script exits clean without taking the app down.
+  - **EXIT-trap safety net.** On any exit path (clean, crash, kill, npm hang) the runner checks `pm2 jlist` and, if selva-compute isn't reporting `online`, unconditionally starts it from `ecosystem.config.cjs`. The app should never stay dark after the runner exits.
+  - **Start from ecosystem.config.cjs**, not `pm2 start selva-compute` by name — the latter fails when `pm2 update` has wiped the in-memory process list.
+  - **PORT is read from `.env`** for the health probe, matching `scripts/update.sh` behavior.
+  - **Frontend poll window** extended from 90s to 5min — npm update + pm2 cold start on slow VPS instances legitimately exceeds 90s.
+
 ## 2.0.7
 
 ### Patch Changes

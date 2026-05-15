@@ -3,6 +3,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import {
+	flag,
 	getProjectProvider,
 	getPlatformProjectGrantStore,
 	getOrganizationProvider,
@@ -19,6 +20,7 @@ const CreateGrantBody = z.object({
 });
 
 async function assertPlatformProject(id: string) {
+	if (!flag('ENABLE_PLATFORM_PROJECTS')) throw error(404, 'Not found');
 	const project = await getProjectProvider().getProject(SYSTEM_CONTEXT, id);
 	if (!project || project.visibility !== 'platform') {
 		throw error(404, 'Platform project not found');

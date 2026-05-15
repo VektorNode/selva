@@ -41,84 +41,151 @@ function shellQuote(s: string): string {
 	return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-// Wrap an inner bash command with a tee redirect so all stdout+stderr is
-// mirrored to UPDATE_LOG_PATH. We rebind file descriptors via `exec >
-// >(tee -a ...) 2>&1` so every subsequent command in the same shell — and
-// every subprocess that inherits these fds — writes to both the original
-// pipe (for SSE while it's alive) and the file (for catch-up after the
-// blackout). The file is truncated at the top so each update starts clean.
+// Wrap the actual update commands in a tiny "launcher" that daemonizes them.
 //
-// `prelude` lines are echoed AFTER the tee redirect is in place, so they
-// land in both the SSE stream (via the bash stdout pipe) and the file. This
-// is how we get parity between what the frontend sees over SSE and what it
-// reads back from the file when SSE dies — without it, anything we
-// sendEvent'd from JS before spawning bash would silently disappear when
-// the frontend replaces its log buffer with the file content.
+// THE PROBLEM this solves: `pm2 stop selva-compute` (which the runner has to
+// call) uses tree-kill. It walks /proc parent-child relationships starting
+// from selva-compute's PID and SIGKILLs every descendant. Node's
+// `{ detached: true }` + `child.unref()` puts the spawned bash in a new
+// session/process group, but does NOT change the parent-child relationship
+// — so tree-kill still finds it and kills it. Result: bash dies mid-update,
+// the app never gets restarted, site stays down until someone SSHes in.
 //
-// SIGPIPE survival is the whole point of this wrapper. The SSE consumer is
-// served by selva-compute, so the moment the script runs `pm2 stop selva-
-// compute` the pipe between tee and the parent breaks. Without protection
-// the cascade is: tee gets SIGPIPE on its stdout → tee dies → bash's next
-// write hits a dead tee → bash gets SIGPIPE → entire script aborts mid-
-// flight (right after pm2 stop, before npm update or pm2 start). Two
-// guards prevent that:
-//   1. `tee --output-error=warn-nopipe` keeps tee alive when its stdout
-//      pipe breaks (file writes still succeed). GNU coreutils 8.25+.
-//   2. `trap '' PIPE` makes bash itself ignore SIGPIPE so a stray write
-//      to the original stdout (anything that bypasses tee) returns EPIPE
-//      instead of killing the shell.
-//   3. `2>/dev/null` on tee silences its EPIPE warning, which would
-//      otherwise be a write to the equally-broken stderr pipe.
-function wrapWithTee(innerCommand: string, prelude: string[] = []): string {
+// THE FIX: write the actual update commands to a tempfile and launch them
+// via `setsid bash ... &`, then have the launcher exit. The runner's PPID
+// becomes 1 (init) the moment the launcher exits, so it's no longer a
+// descendant of selva-compute and tree-kill can't reach it.
+//
+// Output handling:
+//   - The launcher's prelude lines are echoed via tee into UPDATE_LOG_PATH
+//     AND through stdout (visible to SSE while the connection is still up).
+//   - The runner appends its output directly to the same log file.
+//   - The frontend tolerates the SSE blackout by polling the log file.
+function buildLauncher(runnerScript: string, prelude: string[] = []): string {
 	const echoes = prelude.map((line) => `echo ${shellQuote(line)}`).join('\n');
+	// Note: runner script is embedded via a QUOTED heredoc so no variable
+	// expansion happens — the runner text is written verbatim.
 	return `
 LOGFILE=${shellQuote(UPDATE_LOG_PATH)}
+RUNNER=/tmp/selva-update-runner.sh
 mkdir -p "$(dirname "$LOGFILE")"
 : > "$LOGFILE"
+
+cat > "$RUNNER" <<'__SELVA_RUNNER_EOF__'
+${runnerScript}
+__SELVA_RUNNER_EOF__
+chmod +x "$RUNNER"
+
 trap '' PIPE
 exec > >(tee --output-error=warn-nopipe -a "$LOGFILE" 2>/dev/null) 2>&1
 ${echoes}
-${innerCommand}
+
+# Daemonize the runner so PM2's tree-kill of selva-compute can't reach it.
+# setsid puts it in a new session; the trailing & + disown + launcher exit
+# leaves the runner with PPID=1 once we're gone. stdin/stdout/stderr are
+# fully detached from this process (and from selva-compute's pipes).
+setsid bash "$RUNNER" </dev/null >>"$LOGFILE" 2>&1 &
+RUNNER_PID=$!
+disown
+echo "[INFO] Update runner started (PID $RUNNER_PID, log: $LOGFILE)"
+
+# Small pause so the runner has time to print its first line before SSE
+# closes — otherwise the frontend's first poll might see no progress.
+sleep 1
+exit 0
 `;
 }
 
-// Generate the bash pipeline that runs in npm-mode updates. Four phases:
+// Bash script the daemonized runner executes. Flow:
 //
-//   1. npm update         — refresh @selvajs/* packages, --prefer-online to
-//                           bypass packument cache (already in npmArgs).
-//   2. pm2 restart        — --update-env so .env changes apply.
-//   3. health probe       — poll /api/health for up to 30s. The new process
-//                           must reach 200 with the running version no
-//                           longer matching versionBefore (so we know we're
-//                           talking to the new process, not the old one
-//                           PM2 hasn't killed yet).
-//   4. rollback (if fail) — npm install the prior version, pm2 restart again.
+//   1. pre-flight    — query the registry; if we're already on latest, exit
+//                      clean WITHOUT touching the running app. Saves a
+//                      pointless downtime cycle.
+//   2. pm2 sync      — `pm2 update` if the daemon and CLI versions drifted.
+//   3. pm2 stop      — stop selva-compute before npm overwrites build/, so
+//                      in-flight requests can't hit ERR_MODULE_NOT_FOUND
+//                      from chunk-hash churn under their feet.
+//   4. npm update    — refresh @selvajs/* (--prefer-online bypasses the
+//                      packument cache, already baked into npmArgs).
+//   5. pm2 start     — from ecosystem.config.cjs (not `pm2 start name`,
+//                      which requires the process to already be in pm2's
+//                      in-memory list — fragile after `pm2 update`).
+//   6. health probe  — poll /api/health for up to 30s.
+//   7. rollback      — on failure: npm install the prior version, restart.
+//   8. EXIT trap     — last-resort: if anything above leaves the app
+//                      offline (crash, kill, network blip), unconditionally
+//                      try `pm2 start ecosystem.config.cjs` before exiting
+//                      so the customer's site doesn't stay dark.
 //
-// We emit one bash script (not a Node pipeline) so it survives the SSE
-// stream closing — `child.unref()` keeps it alive across browser tab close.
-// All output is line-buffered to stderr/stdout so the SSE consumer can
-// stream it without seeing it batched at the end.
-function buildNpmUpdateScript(npmArgs: string[], versionBefore: string | undefined): string {
+// Embedded into the launcher via a quoted heredoc, so this whole string is
+// written verbatim — interpolated values must be shell-quoted at JS time.
+function buildNpmRunnerScript(
+	npmArgs: string[],
+	versionBefore: string | undefined,
+	ecosystemPath: string
+): string {
 	const npmCommand = ['npm', ...npmArgs].map(shellQuote).join(' ');
 	// Empty string when versionBefore is undefined — bash sees `BEFORE=""`
 	// and skips the rollback path (you can't roll back to nothing).
 	const before = shellQuote(versionBefore ?? '');
+	const ecosystem = shellQuote(ecosystemPath);
 
-	return `
+	return `#!/bin/bash
 set -o pipefail
 BEFORE=${before}
+ECOSYSTEM=${ecosystem}
 
-# PM2's in-memory daemon and the installed CLI can drift apart after a
-# global pm2 upgrade — the daemon keeps running whatever version started it,
-# while the CLI on disk moves forward. When they diverge, PM2 prints
-# "In-memory PM2 is out-of-date" and process commands talk to a stale
-# daemon, manifesting as restarts that stop the old process but never bring
-# the new one online. \`pm2 update\` dumps processes, kills the daemon,
-# respawns it on the current CLI version, and restores the processes.
-# Resync proactively so the stop/start below talks to a coherent daemon.
+# Last-resort safety net. If the script exits with the app NOT online for
+# any reason (crash, kill -9, network blip, npm hang past timeout), try to
+# bring it back from ecosystem.config.cjs before we go. The whole point of
+# this script is to update the app; leaving it down is the worst possible
+# outcome.
+on_exit() {
+  STATUS=$(pm2 jlist 2>/dev/null | node -e "
+    try {
+      const list = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+      const app = list.find(p => p.name === 'selva-compute');
+      process.stdout.write(app ? app.pm2_env.status : 'missing');
+    } catch { process.stdout.write('error'); }
+  " 2>/dev/null || echo "error")
+  if [ "$STATUS" != "online" ]; then
+    echo "[RECOVER] selva-compute is '$STATUS' — starting from ecosystem.config.cjs"
+    pm2 start "$ECOSYSTEM" --update-env >/dev/null 2>&1 || \\
+      echo "[RECOVER] pm2 start failed — manual intervention required: cd $(dirname "$ECOSYSTEM") && pm2 start ecosystem.config.cjs"
+  fi
+}
+trap on_exit EXIT
+
+# ---------------------------------------------------------------------------
+# 1. Pre-flight: skip the whole cycle if there's nothing to install.
+# ---------------------------------------------------------------------------
+# Without this, clicking "Update" on an already-current instance triggered
+# a full stop/install/start cycle and a downtime window for no reason. Now
+# we just check the registry first.
+echo "[STEP] Checking npm registry for available updates"
+LATEST=$(npm view @selvajs/selva version --silent 2>/dev/null || echo "")
+if [ -z "$LATEST" ]; then
+  echo "[WARN] Could not query npm registry — proceeding with update attempt anyway"
+elif [ -n "$BEFORE" ] && [ "$LATEST" = "$BEFORE" ]; then
+  echo "[INFO] Already on the latest version ($BEFORE)"
+  echo "[DONE] Nothing to do"
+  exit 0
+else
+  echo "[INFO] Available: $BEFORE → $LATEST"
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Resync PM2 daemon if its in-memory version drifted from the CLI on disk.
+# ---------------------------------------------------------------------------
+# After a global pm2 upgrade the daemon keeps running its original version
+# while the CLI moves forward. Process commands then talk to a stale daemon
+# and the symptom is "stop works, start never lands". \`pm2 update\` dumps
+# processes, kills the daemon, respawns on the current CLI, restores the
+# dump. Doing it before we touch anything keeps the rest of the script
+# talking to a coherent daemon.
 echo "[STEP] Checking PM2 daemon/CLI version sync"
 if pm2 ping 2>&1 | grep -q "out-of-date" || pm2 list 2>&1 | grep -q "out-of-date"; then
-  echo "[STEP] PM2 daemon is out-of-date — running 'pm2 update' to resync before touching the app"
+  echo "[STEP] PM2 daemon is out-of-date — running 'pm2 update' to resync"
   if ! pm2 update; then
     echo "[FATAL] pm2 update failed — aborting before stopping the running app"
     exit 1
@@ -126,22 +193,30 @@ if pm2 ping 2>&1 | grep -q "out-of-date" || pm2 list 2>&1 | grep -q "out-of-date
   echo "[INFO] PM2 daemon resynced"
 fi
 
-# IMPORTANT: stop the running process BEFORE npm update overwrites build/.
+# ---------------------------------------------------------------------------
+# 3. Stop selva-compute BEFORE npm rewrites build/.
+# ---------------------------------------------------------------------------
 # SvelteKit's node adapter lazy-imports chunks from build/server/chunks/ on
-# every request. If we let npm rewrite build/ while the old process is still
-# serving traffic, in-flight requests hit ERR_MODULE_NOT_FOUND for chunks
+# every request. Letting npm rewrite build/ while the old process is still
+# serving traffic = in-flight requests hit ERR_MODULE_NOT_FOUND for chunks
 # whose hash just changed under their feet. Stopping first is a brief
 # downtime window (~1-2s longer than restart-in-place) for a much smaller
 # blast radius.
-echo "[STEP] Stopping selva-compute (graceful drain via kill_timeout in ecosystem.config.cjs)"
+#
+# This is also where the SSE connection to the frontend dies — selva-compute
+# IS the SSE server. From here on, the user sees output via the log-file
+# polling fallback in the admin UI, not over SSE.
+echo "[STEP] Stopping selva-compute"
 if ! pm2 stop selva-compute; then
   echo "[WARN] pm2 stop failed — selva-compute may not be running yet. Continuing."
 fi
 
+# ---------------------------------------------------------------------------
+# 4. Run npm update.
+# ---------------------------------------------------------------------------
 echo "[STEP] Updating @selvajs/* packages"
 if ! ${npmCommand}; then
-  echo "[FATAL] npm update failed — restarting old build to recover"
-  pm2 start selva-compute --update-env >/dev/null 2>&1 || true
+  echo "[FATAL] npm update failed — EXIT trap will restart the previous build"
   exit 1
 fi
 
@@ -156,17 +231,34 @@ if [ -n "$BEFORE" ] && [ "$BEFORE" = "$AFTER" ]; then
   echo "[WARN]   npm install --prefer-online"
 fi
 
+# ---------------------------------------------------------------------------
+# 5. Start selva-compute with the new build.
+# ---------------------------------------------------------------------------
+# Start from ecosystem.config.cjs, NOT \`pm2 start selva-compute\` — the
+# latter requires selva-compute to already be in pm2's in-memory process
+# list. After a \`pm2 update\` (step 2) that's not guaranteed.
 echo "[STEP] Starting selva-compute with new build"
-if ! pm2 start selva-compute --update-env; then
+if ! pm2 start "$ECOSYSTEM" --update-env; then
   echo "[FATAL] pm2 start failed — investigate with \\\`pm2 logs selva-compute\\\`"
   exit 2
 fi
 
-echo "[STEP] Health-probing the new process"
+# ---------------------------------------------------------------------------
+# 6. Health probe the new process.
+# ---------------------------------------------------------------------------
+# Read PORT from .env the same way scripts/update.sh does, so non-default
+# ports are respected.
+PORT=$(grep "^PORT=" .env 2>/dev/null \\
+  | head -1 \\
+  | cut -d'=' -f2 \\
+  | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*#.*//')
+PORT=\${PORT:-3000}
+
+echo "[STEP] Health-probing the new process on port $PORT"
 HEALTHY=0
 for i in $(seq 1 15); do
   sleep 2
-  CODE=$(curl -sS -o /tmp/selva-health.$$ -w "%{http_code}" --max-time 5 http://localhost:3000/api/health 2>/dev/null || echo "000")
+  CODE=$(curl -sS -o /tmp/selva-health.$$ -w "%{http_code}" --max-time 5 "http://localhost:$PORT/api/health" 2>/dev/null || echo "000")
   if [ "$CODE" = "200" ]; then
     HEALTHY=1
     echo "[INFO] Health probe passed after \${i} attempt(s)"
@@ -181,6 +273,9 @@ if [ "$HEALTHY" = "1" ]; then
   exit 0
 fi
 
+# ---------------------------------------------------------------------------
+# 7. Rollback path.
+# ---------------------------------------------------------------------------
 echo "[FATAL] New process failed health check after 30s"
 if [ -f /tmp/selva-health.$$ ]; then
   echo "[FATAL] Last response body:"
@@ -190,21 +285,20 @@ fi
 
 if [ -z "$BEFORE" ]; then
   echo "[FATAL] No prior version recorded — cannot roll back automatically."
-  echo "[FATAL] Manually install the version you want: npm install @selvajs/selva@<version>"
+  echo "[FATAL] EXIT trap will attempt to restart the current build anyway."
   exit 3
 fi
 
 echo "[STEP] Rolling back @selvajs/selva to $BEFORE"
 pm2 stop selva-compute >/dev/null 2>&1 || true
 if ! npm install --save "@selvajs/selva@$BEFORE"; then
-  echo "[FATAL] Rollback npm install failed — manual intervention required."
-  pm2 start selva-compute --update-env >/dev/null 2>&1 || true
+  echo "[FATAL] Rollback npm install failed — EXIT trap will retry restart."
   exit 4
 fi
 
-pm2 start selva-compute --update-env || true
+pm2 start "$ECOSYSTEM" --update-env || true
 sleep 3
-ROLLBACK_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3000/api/health 2>/dev/null || echo "000")
+ROLLBACK_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:$PORT/api/health" 2>/dev/null || echo "000")
 if [ "$ROLLBACK_CODE" = "200" ]; then
   echo "[DONE] Rolled back to $BEFORE — previous version is online"
   exit 5
@@ -324,33 +418,29 @@ export const POST: RequestHandler = async ({ locals }) => {
 					...(versionBefore ? [`[INFO] Current @selvajs/selva: ${versionBefore}`] : [])
 				];
 
-				// Spawn the update command detached so it survives if PM2 kills
-				// this Node process mid-restart, or if the SSE client disconnects.
-				// detached:true puts the child in its own process group; unref()
-				// stops it from blocking the event loop. stdio is piped so we can
-				// stream output while the parent is still alive.
+				// Spawn the launcher detached. The launcher writes the actual
+				// runner script to disk, daemonizes it (setsid + & + exit),
+				// and quits — leaving the runner with PPID=1 so PM2's tree-kill
+				// of selva-compute can't reach it. See buildLauncher for the
+				// full rationale.
 				//
-				// Git mode: hand off to scripts/update.sh (has its own restart +
-				// health-check + rollback baked in).
+				// Git mode: the runner just execs scripts/update.sh, which has
+				// its own restart + health-check + rollback baked in.
 				//
-				// Npm mode: emit a small bash pipeline that does
-				//   1. npm update (already cache-busted via --prefer-online in plan.args)
-				//   2. pm2 restart with --update-env
-				//   3. health-probe loop against /api/health
-				//   4. rollback if the probe never passes
-				//
-				// Both modes are wrapped by wrapWithTee so the script's full output
-				// also lands in UPDATE_LOG_PATH. The SSE stream dies the instant pm2
-				// stops selva-compute (the SvelteKit endpoint serving this stream
-				// runs INSIDE selva-compute), but the detached bash process keeps
-				// writing to the file until completion. The frontend recovers the
-				// blackout content by GETing this same route once health returns.
-				const innerCommand =
+				// Npm mode: the runner is buildNpmRunnerScript — pre-flights
+				// the version check, then stop / npm update / start / health
+				// probe / rollback, with an EXIT trap that ensures the app is
+				// online no matter how the script exits.
+				const runnerScript =
 					plan.mode === 'git'
-						? `exec ${shellQuote(plan.cmd)} ${plan.args.map(shellQuote).join(' ')}`
-						: buildNpmUpdateScript(plan.args, versionBefore);
+						? `#!/bin/bash\nexec ${shellQuote(plan.cmd)} ${plan.args.map(shellQuote).join(' ')}\n`
+						: buildNpmRunnerScript(
+								plan.args,
+								versionBefore,
+								join(plan.cwd, 'ecosystem.config.cjs')
+							);
 				const cmd = 'bash';
-				const args = ['-c', wrapWithTee(innerCommand, prelude)];
+				const args = ['-c', buildLauncher(runnerScript, prelude)];
 
 				// Prepend the deployment's node_modules/.bin to PATH so the bash
 				// script finds the project-local pm2 (and any other tooling

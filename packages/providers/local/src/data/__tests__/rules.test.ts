@@ -80,6 +80,7 @@ function accessInput(
 		member: null,
 		orgMember: null,
 		allowCrossOrgPublic: false,
+		enablePlatformProjects: true,
 		platformGrants: [],
 		actingOrgId: 'o-1',
 		userId: 'u-2',
@@ -117,6 +118,7 @@ function defAccessInput(
 	return {
 		member: null,
 		platformPermissions: [],
+		enablePlatformProjects: true,
 		...overrides
 	};
 }

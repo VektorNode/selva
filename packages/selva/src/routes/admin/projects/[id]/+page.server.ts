@@ -8,6 +8,7 @@ import type {
 } from '@selvajs/platform';
 import { hasPermission, SYSTEM_CONTEXT } from '@selvajs/platform';
 import {
+	flag,
 	getAuthProvider,
 	getDefinitionMeta,
 	getOrganizationProvider,
@@ -45,6 +46,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const ctx = locals.ctx;
 	if (!ctx) redirect(303, '/login');
 	if (!hasPermission(ctx, 'instance_admin')) redirect(303, '/admin');
+	if (!flag('ENABLE_PLATFORM_PROJECTS')) throw error(404, 'Not found');
 	const { id } = params;
 	if (!id) throw error(400, 'Missing project ID');
 
