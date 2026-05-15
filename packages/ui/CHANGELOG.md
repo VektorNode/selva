@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 2.0.2
+
+### Patch Changes
+
+- @selvajs/schemas@2.0.2
+
 ## 2.0.1
 
 ### Patch Changes
