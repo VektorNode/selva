@@ -1,5 +1,13 @@
 # @selvajs/selva
 
+## 2.0.4
+
+### Patch Changes
+
+- **Fix: header-auth and OAuth deployments now seed a default org on first admin login.** Previously only the `/setup` password flow created the single-tenant default Organization + Project, so deployments using header-auth or OAuth callback landed without an org. Without an org, `actingOrgId` resolved to `undefined` and any org-scoped permissions (`manage_projects`, `manage_definitions`) assigned in the admin UI were silently dropped instead of persisted.
+
+  The seed now runs inside `bootstrapUserSession`, self-heals existing deployments that are missing their org, and no-ops once an org exists.
+
 ## 2.0.3
 
 ## 2.0.2
