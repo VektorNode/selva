@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/schemas",
-	"version": "2.0.1",
+	"version": "2.0.2",
 	"description": "Schema definitions, generated TypeScript types, and code generators for Selva",
 	"license": "MIT",
 	"publishConfig": {

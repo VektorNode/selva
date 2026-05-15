@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/selva",
-	"version": "2.0.1",
+	"version": "2.0.2",
 	"description": "Selva — self-contained Grasshopper-driven web app. Install, configure via .env, deploy.",
 	"license": "MIT",
 	"publishConfig": {
