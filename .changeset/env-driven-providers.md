@@ -1,6 +1,6 @@
 ---
-'@selvajs/selva': bump
-'@selvajs/cli': bump
+'@selvajs/selva': patch
+'@selvajs/cli': patch
 ---
 
 **Env-driven provider wiring.** New deployments no longer ship a `selva.config.js` — provider selection moved into the runtime, driven by `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER` in `.env`. Provider implementations remain bundled into `@selvajs/selva`; the only operator-facing files are `.env` and `ecosystem.config.cjs`.
