@@ -269,8 +269,19 @@ function buildPackageJson(name /*, values */) {
 		'@selvajs/selva': 'latest',
 		// pm2 lives in the deployment's own node_modules so `selva start` can
 		// resolve it via node_modules/.bin/pm2 without a global install. The
-		// pm2.js wrapper already prefers the local binary (see pm2Bin()).
-		pm2: '^5.4.0'
+		// pm2.js wrapper requires this local binary (see pm2Bin()) — we never
+		// fall back to a global pm2 because two pm2 binaries managing the
+		// same daemon produces persistent CLI-vs-daemon version-skew
+		// warnings and stops/restarts that mysteriously hang.
+		//
+		// PINNED EXACT (no caret) on purpose. PM2's daemon and CLI must be
+		// the same version, and the daemon is sticky — once a daemon is
+		// running, only `pm2 update` swaps it. A caret range means two
+		// deployments scaffolded weeks apart can install different 5.x
+		// versions, and any host that briefly ran a different pm2 (e.g. a
+		// stray `npm i -g pm2`) is left with a daemon that won't match
+		// either. Bump this deliberately, in lockstep with documentation.
+		pm2: '5.4.3'
 	};
 
 	// Use `selva` (resolved via node_modules/.bin) in the npm scripts. Running

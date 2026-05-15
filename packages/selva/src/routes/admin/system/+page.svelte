@@ -4,6 +4,7 @@
 
 	interface PageData {
 		canManageUpdates: boolean;
+		version: string;
 		flags: {
 			ALLOW_CROSS_ORG_PUBLIC: boolean;
 			ALLOW_ORG_COMPUTE_OVERRIDE: boolean;
@@ -41,10 +42,31 @@
 		}
 	}
 
+	// Pull the tee'd update log from the server. Returns the *full* log file
+	// content — the script truncates at the start of every run so this isn't
+	// cumulative across updates. Returns null if the request fails (typically
+	// during the window where the old selva-compute is dead and the new one
+	// hasn't booted yet).
+	async function fetchUpdateLog(): Promise<string | null> {
+		try {
+			const res = await fetch('/admin/api/system/update', { cache: 'no-store' });
+			if (!res.ok) return null;
+			return await res.text();
+		} catch {
+			return null;
+		}
+	}
+
 	// Poll until we're confident the *new* process is serving:
 	//  - If we captured a startup commit, wait for the commit to change.
 	//  - Otherwise fall back to requiring 2 consecutive successful health checks
 	//    (avoids the race where we hit the old process right before PM2 kills it).
+	//
+	// While polling we also fetch the update log file. The SSE stream died at
+	// `pm2 stop`, so any output the script produced afterwards (npm update,
+	// pm2 start, health probe, rollback) is invisible until the new process is
+	// reachable. Each successful log fetch replaces the displayed logs with
+	// the full file content, surfacing the blackout chunk in one shot.
 	async function waitForAppRestart(previousCommit: string | null | undefined) {
 		updateLogs += '\nWaiting for app to come back online…\n';
 		// Give PM2 a moment to actually kill the old process before we start polling.
@@ -53,11 +75,18 @@
 		const maxAttempts = 45; // ~90s
 		let consecutiveOk = 0;
 		for (let i = 0; i < maxAttempts; i++) {
-			const health = await fetchHealth();
+			const [health, log] = await Promise.all([fetchHealth(), fetchUpdateLog()]);
+			// Backfill blackout output as soon as either the old process briefly
+			// recovers or the new one comes up. We ignore empty bodies — those
+			// mean either the file isn't there yet or we'd needlessly clobber
+			// the SSE-collected prefix with nothing.
+			if (log && log.trim().length > 0) {
+				updateLogs = log;
+			}
 			if (health) {
 				if (previousCommit && health.commit) {
 					if (health.commit !== previousCommit) {
-						updateLogs += `✓ App is back online on new commit ${health.commit.slice(0, 7)}\n`;
+						updateLogs += `\n✓ App is back online on new commit ${health.commit.slice(0, 7)}\n`;
 						updateExitCode = 0;
 						updateRunning = false;
 						updateRestarting = false;
@@ -68,7 +97,7 @@
 				} else {
 					consecutiveOk += 1;
 					if (consecutiveOk >= 2) {
-						updateLogs += '✓ App is back online!\n';
+						updateLogs += '\n✓ App is back online!\n';
 						updateExitCode = 0;
 						updateRunning = false;
 						updateRestarting = false;
@@ -80,7 +109,11 @@
 			}
 			await new Promise((r) => setTimeout(r, 2000));
 		}
-		updateLogs += '⚠ App did not come back within 90s — check PM2 logs.\n';
+		// Final log fetch so the post-mortem has the latest content the script
+		// managed to write before the timeout.
+		const finalLog = await fetchUpdateLog();
+		if (finalLog && finalLog.trim().length > 0) updateLogs = finalLog;
+		updateLogs += '\n⚠ App did not come back within 90s — check PM2 logs.\n';
 		updateExitCode = -2;
 		updateRunning = false;
 		updateRestarting = false;
@@ -222,6 +255,7 @@
 
 	{#if data.canManageUpdates}
 		<UpdateSection
+			currentVersion={data.version}
 			isRunning={updateRunning}
 			isRestarting={updateRestarting}
 			logs={updateLogs}

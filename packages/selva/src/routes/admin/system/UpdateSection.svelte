@@ -3,6 +3,7 @@
 	import { RefreshCw } from '@lucide/svelte';
 
 	interface Props {
+		currentVersion?: string;
 		isRunning?: boolean;
 		isRestarting?: boolean;
 		logs?: string;
@@ -11,6 +12,7 @@
 	}
 
 	let {
+		currentVersion,
 		isRunning = false,
 		isRestarting = false,
 		logs = '',
@@ -57,7 +59,17 @@
 
 <Card.Root>
 	<Card.Header>
-		<Card.Title>Application Update</Card.Title>
+		<div class="flex items-start justify-between gap-3">
+			<Card.Title>Application Update</Card.Title>
+			{#if currentVersion}
+				<span
+					class="border-border bg-muted text-muted-foreground rounded-full border px-2 py-0.5 font-mono text-xs"
+					title="Currently installed @selvajs/selva version"
+				>
+					v{currentVersion}
+				</span>
+			{/if}
+		</div>
 		<Card.Description>Run the update script to pull latest changes and restart</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-4">
