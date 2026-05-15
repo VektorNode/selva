@@ -1,11 +1,12 @@
 // `selva doctor` — validate a deployment without starting it.
 //
 // Checks:
-//   • .env exists and has the required keys for the chosen providers
+//   • .env and ecosystem.config.cjs exist
+//   • Layout drift (legacy provider packages, stale selva.config.js, etc.)
 //   • Secrets are present and look like 32-byte hex
 //   • DATA_PATH writable (when local provider is in use)
 //   • Supabase URL reachable (when supabase provider is in use)
-//   • @selvajs/selva + chosen provider packages installed
+//   • @selvajs/selva installed
 //   • Origin set when behind a reverse proxy looks set
 //
 // Exits 0 (green) or 1 (any red); yellow checks don't fail the run.
@@ -32,7 +33,6 @@ export async function runDoctor() {
 
 	// ── Files ──────────────────────────────────────────────────────────
 	checks.push(checkFile(join(dir, '.env'), '.env present'));
-	checks.push(checkFile(join(dir, 'selva.config.js'), 'selva.config.js present'));
 	checks.push(checkFile(join(dir, 'ecosystem.config.cjs'), 'ecosystem.config.cjs present'));
 
 	// ── Layout drift ───────────────────────────────────────────────────
@@ -47,7 +47,7 @@ export async function runDoctor() {
 
 	// ── Provider wiring ────────────────────────────────────────────────
 	// `header` is only valid for the auth slot — data/storage stay
-	// local|supabase. Mirror what selva.config.ts enforces.
+	// local|supabase. Mirror what providers.server.ts enforces.
 	const providers = {
 		auth: (env.SELVA_AUTH_PROVIDER ?? 'local').toLowerCase(),
 		data: (env.SELVA_DATA_PROVIDER ?? 'local').toLowerCase(),
@@ -90,10 +90,9 @@ export async function runDoctor() {
 	}
 
 	// ── Installed packages ─────────────────────────────────────────────
+	// Provider implementations are bundled into @selvajs/selva — only the
+	// runtime package needs to be on disk.
 	checks.push(checkPackage(dir, '@selvajs/selva'));
-	if (used.has('local')) checks.push(checkPackage(dir, '@selvajs/local-provider'));
-	if (used.has('supabase')) checks.push(checkPackage(dir, '@selvajs/supabase-provider'));
-	if (used.has('header')) checks.push(checkPackage(dir, '@selvajs/header-auth-provider'));
 
 	// ── Origin (best-effort) ───────────────────────────────────────────
 	if (env.ORIGIN) {
@@ -208,18 +207,29 @@ function checkLayoutDrift(dir) {
 	} catch {
 		return red('package.json is not valid JSON');
 	}
-	const reasons = detectDrift(pkg);
-	if (reasons.length === 0) return green('package.json layout is current');
+	const reasons = detectDrift(pkg, dir);
+	if (reasons.length === 0) return green('deployment layout is current');
 	return red(
-		`package.json layout is outdated — run \`selva migrate\`:\n     ` +
+		`deployment layout is outdated — run \`selva migrate\`:\n     ` +
 			reasons.map((r) => '· ' + r).join('\n     ')
 	);
 }
 
+// Defaults must match HeaderAuthProvider.DEFAULT_HEADERS. Duplicated here so
+// doctor doesn't have to load the runtime. If the provider's defaults ever
+// change, update both places — there's a smoke test in providers/header-auth
+// that pins them, so a divergence would surface in CI.
+const DEFAULT_HEADER_NAMES = {
+	upn: 'SELVA-UserPrincipalName',
+	email: 'SELVA-Email',
+	displayName: 'SELVA-DisplayName'
+};
+
 // Header-auth-specific sanity checks. None of these catch the truly dangerous
 // misconfigurations (header spoofing, missing proxy auth) — those are
 // runtime invariants we can't verify from here. We DO check the things we can:
-// allowlist file presence, HOST binding, ORIGIN, and logout URL.
+// allowlist file presence, HOST binding, ORIGIN, bootstrap admin, and the
+// resolved header names so they can be diffed against the proxy config.
 function checkHeaderAuth(dir, env, dataProvider) {
 	const out = [];
 
@@ -228,7 +238,8 @@ function checkHeaderAuth(dir, env, dataProvider) {
 	if (!allowlistDir) {
 		out.push(red('HEADER_AUTH_DATA_DIR (or DATA_PATH) unset — provider will fail to start'));
 	} else {
-		const allowlistPath = resolve(dir, allowlistDir, 'header-allowlist.json');
+		const allowlistAbsDir = resolve(dir, allowlistDir);
+		const allowlistPath = join(allowlistAbsDir, 'header-allowlist.json');
 		if (existsSync(allowlistPath)) {
 			out.push(green(`header-allowlist.json present (${allowlistDir}/header-allowlist.json)`));
 		} else {
@@ -240,6 +251,14 @@ function checkHeaderAuth(dir, env, dataProvider) {
 					`header-allowlist.json not found at ${allowlistDir}/ — no users will be allowed in until one is added`
 				)
 			);
+
+			// If we expect lazy creation, the dir (or its parent) needs to be
+			// writable. Only check when HEADER_AUTH_DATA_DIR is set explicitly
+			// — when falling back to DATA_PATH the `local` provider's own
+			// checkDataPath has already covered the same ground.
+			if (env.HEADER_AUTH_DATA_DIR) {
+				out.push(checkDirWritable(allowlistAbsDir, `HEADER_AUTH_DATA_DIR=${allowlistDir}`));
+			}
 		}
 	}
 
@@ -288,5 +307,56 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		out.push(green(`BOOTSTRAP_INSTANCE_ADMIN_EMAIL=${env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL}`));
 	}
 
+	// 6. Resolved header names. The most common header-auth boot symptom is
+	// `user:null` because the proxy sets one set of names and the provider
+	// reads another. Print what the provider WILL read so the operator can
+	// diff it against the Caddyfile / oauth2-proxy config. We don't fail on
+	// custom names — operators legitimately override these for non-Caddy
+	// proxies — but yellow-flag the case where one is overridden and the
+	// others aren't, since a partial override is almost always a typo.
+	const resolved = {
+		upn: env.HEADER_AUTH_UPN_HEADER || DEFAULT_HEADER_NAMES.upn,
+		email: env.HEADER_AUTH_EMAIL_HEADER || DEFAULT_HEADER_NAMES.email,
+		displayName: env.HEADER_AUTH_DISPLAY_NAME_HEADER || DEFAULT_HEADER_NAMES.displayName
+	};
+	const overrides = [
+		Boolean(env.HEADER_AUTH_UPN_HEADER),
+		Boolean(env.HEADER_AUTH_EMAIL_HEADER),
+		Boolean(env.HEADER_AUTH_DISPLAY_NAME_HEADER)
+	].filter(Boolean).length;
+	const headerList =
+		`UPN=${resolved.upn}, Email=${resolved.email}, DisplayName=${resolved.displayName}`;
+	if (overrides === 0) {
+		out.push(green(`header names (bundled defaults): ${headerList}`));
+	} else if (overrides === 3) {
+		out.push(green(`header names (all overridden): ${headerList}`));
+	} else {
+		out.push(
+			yellow(
+				`header names partially overridden (${overrides}/3 set): ${headerList} — ` +
+					`a partial override is usually a typo. Set all three or none.`
+			)
+		);
+	}
+
 	return out;
+}
+
+function checkDirWritable(absDir, label) {
+	try {
+		if (existsSync(absDir)) {
+			const stat = statSync(absDir);
+			if (!stat.isDirectory()) return red(`${label} exists but isn't a directory`);
+			accessSync(absDir, constants.W_OK);
+			return green(`${label} writable`);
+		}
+		const parent = resolve(absDir, '..');
+		if (!existsSync(parent)) {
+			return yellow(`${label} doesn't exist yet (parent missing: ${parent})`);
+		}
+		accessSync(parent, constants.W_OK);
+		return yellow(`${label} doesn't exist yet — will be created on first run`);
+	} catch {
+		return red(`${label} not writable`);
+	}
 }

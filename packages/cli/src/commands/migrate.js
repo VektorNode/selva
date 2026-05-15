@@ -1,13 +1,19 @@
-// `selva migrate` — bring an existing deployment's package.json onto the
-// current layout.
+// `selva migrate` — bring an existing deployment onto the current layout.
 //
-// Two historical migrations exist for Selva deployments:
+// Three historical migrations exist for Selva deployments:
 //   1. `@selvajs/create` → `@selvajs/cli`  (CLI bootstrap; can't be automated
 //      since the operator has no `selva` binary yet — they run two npm
 //      commands by hand from the Hotfix doc).
 //   2. `@selvajs/runtime` → `@selvajs/selva`  (runtime bundling: UI, schemas,
 //      ui-kit and the providers' workspace deps are now built into
-//      @selvajs/selva). This is what `selva migrate` automates.
+//      @selvajs/selva).
+//   3. selva.config.js → env-driven providers  (the picker logic moved into
+//      the runtime; deployments no longer need a config file. Provider
+//      packages are bundled into @selvajs/selva.)
+//
+// Migrate automates 2 and 3 together: it rewrites package.json, drops the
+// now-bundled provider packages, removes any stale selva.config.js, and
+// rewrites ecosystem.config.cjs if it still points at @selvajs/runtime.
 //
 // Future package-layout shifts go here too — the command should remain
 // idempotent. On an already-current deployment it prints "nothing to
@@ -17,12 +23,17 @@
 // pm2 again with --update-env. Rollback restores package.json.bak on
 // npm-install failure so the operator isn't left with a broken deployment.
 
-import { existsSync, readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
+import {
+	existsSync,
+	readFileSync,
+	writeFileSync,
+	copyFileSync,
+	rmSync
+} from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync, execSync } from 'node:child_process';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { readEnvFile } from '../env.js';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 
 const APP_NAME = 'selva-compute';
@@ -35,10 +46,10 @@ const SELVA_DEPS = new Set([
 	'@selvajs/cli',
 	'@selvajs/selva',
 	'@selvajs/runtime', // legacy — removed during migrate
-	'@selvajs/platform',
-	'@selvajs/local-provider',
-	'@selvajs/supabase-provider',
-	'@selvajs/header-auth-provider',
+	'@selvajs/platform', // legacy — bundled into @selvajs/selva
+	'@selvajs/local-provider', // legacy — bundled into @selvajs/selva
+	'@selvajs/supabase-provider', // legacy — bundled into @selvajs/selva
+	'@selvajs/header-auth-provider', // legacy — bundled into @selvajs/selva
 	'@selvajs/create' // legacy CLI — removed during migrate
 ]);
 
@@ -64,18 +75,30 @@ export async function runMigrate() {
 	}
 
 	const before = JSON.parse(readFileSync(pkgPath, 'utf8'));
-	const env = readEnvFile(join(dir, '.env'));
+	const target = buildTargetPackageJson(before);
+	const pkgDiff = diffPackageJson(before, target);
 
-	const target = buildTargetPackageJson(before, env);
-	const diff = diffPackageJson(before, target);
+	// Side-files: selva.config.js (now unused) and ecosystem.config.cjs
+	// (must point at @selvajs/selva, not @selvajs/runtime).
+	const configPath = join(dir, 'selva.config.js');
+	const hasStaleConfig = existsSync(configPath);
 
-	if (diff.length === 0) {
+	const ecoPath = join(dir, 'ecosystem.config.cjs');
+	const ecoHasStaleRuntime =
+		existsSync(ecoPath) && readFileSync(ecoPath, 'utf8').includes('@selvajs/runtime');
+
+	const sideFileChanges = [];
+	if (hasStaleConfig) sideFileChanges.push(`${pc.red('-')} selva.config.js ${pc.dim('(no longer needed; providers are env-driven)')}`);
+	if (ecoHasStaleRuntime) sideFileChanges.push(`${pc.yellow('~')} ecosystem.config.cjs ${pc.dim('(rewrite: @selvajs/runtime → @selvajs/selva)')}`);
+
+	if (pkgDiff.length === 0 && sideFileChanges.length === 0) {
 		p.outro(pc.green('Already on the current layout — nothing to migrate.'));
 		return;
 	}
 
 	p.log.info('Changes to apply:');
-	for (const line of diff) console.log('  ' + line);
+	for (const line of pkgDiff) console.log('  ' + line);
+	for (const line of sideFileChanges) console.log('  ' + line);
 
 	const confirmed = await p.confirm({
 		message: 'Apply these changes, reinstall, and restart?',
@@ -94,11 +117,28 @@ export async function runMigrate() {
 		p.log.warn('pm2 stop did not succeed — selva-compute may not be running. Continuing.');
 	}
 
-	// Write package.json.bak before touching anything. Restored if npm install
-	// fails so the operator can re-run with their previous state intact.
+	// Back up everything we're about to mutate. Restored on npm-install failure
+	// so the operator isn't left with a half-migrated deployment.
 	const bakPath = pkgPath + '.bak';
 	copyFileSync(pkgPath, bakPath);
 	writeFileSync(pkgPath, JSON.stringify(target, null, 2) + '\n', 'utf8');
+
+	if (hasStaleConfig) {
+		copyFileSync(configPath, configPath + '.bak');
+		rmSync(configPath, { force: true });
+	}
+
+	if (ecoHasStaleRuntime) {
+		copyFileSync(ecoPath, ecoPath + '.bak');
+		// Single-line rewrite: only @selvajs/runtime → @selvajs/selva. We don't
+		// regenerate from the canonical template here because the operator may
+		// have customized port/memory/cluster settings; preserve their edits.
+		const ecoContent = readFileSync(ecoPath, 'utf8').replace(
+			/@selvajs\/runtime/g,
+			'@selvajs/selva'
+		);
+		writeFileSync(ecoPath, ecoContent, 'utf8');
+	}
 
 	// Nuke node_modules + lockfile. A simple `npm install` won't always
 	// resolve correctly when major version ranges change (e.g. runtime 0.10
@@ -120,6 +160,12 @@ export async function runMigrate() {
 	} catch (err) {
 		s.stop(pc.red('npm install failed — rolling back package.json'));
 		copyFileSync(bakPath, pkgPath);
+		if (hasStaleConfig && existsSync(configPath + '.bak')) {
+			copyFileSync(configPath + '.bak', configPath);
+		}
+		if (ecoHasStaleRuntime && existsSync(ecoPath + '.bak')) {
+			copyFileSync(ecoPath + '.bak', ecoPath);
+		}
 		// Try to bring the old process back up so we don't leave the operator
 		// with downtime. If node_modules was wiped this won't help, but at
 		// least package.json matches what's on disk.
@@ -129,11 +175,15 @@ export async function runMigrate() {
 	}
 
 	const status = runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
+	const backupHints = ['package.json.bak'];
+	if (hasStaleConfig) backupHints.push('selva.config.js.bak');
+	if (ecoHasStaleRuntime) backupHints.push('ecosystem.config.cjs.bak');
+
 	if (status === 0) {
 		p.outro(
 			[
 				pc.green('Migration complete.'),
-				pc.dim('Old package.json saved as ') + pc.cyan('package.json.bak'),
+				pc.dim('Backups saved as ') + pc.cyan(backupHints.join(', ')),
 				pc.dim('Run ') + pc.cyan('selva doctor') + pc.dim(' to verify.')
 			].join('\n')
 		);
@@ -142,30 +192,22 @@ export async function runMigrate() {
 	}
 }
 
-// Compute what package.json should look like given the current contents and
-// the operator's .env (which tells us which providers are in use).
+// Compute what package.json should look like given the current contents.
 //
 // Wholesale-replace semantics: any @selvajs/* or pm2 entry not in our
 // canonical set is dropped. Non-selva deps the operator added are also
 // dropped — that's the design choice we made up-front.
-function buildTargetPackageJson(current, env) {
-	const providers = new Set(
-		[
-			env.SELVA_AUTH_PROVIDER,
-			env.SELVA_DATA_PROVIDER,
-			env.SELVA_STORAGE_PROVIDER
-		].filter(Boolean).map((v) => v.toLowerCase())
-	);
-
+//
+// Provider packages (@selvajs/local-provider etc.) are NOT preserved even
+// when the operator's .env selects them: they're bundled into @selvajs/selva
+// in v2.1+ and the standalone packages are legacy. Providers are picked at
+// runtime from SELVA_*_PROVIDER env vars.
+function buildTargetPackageJson(current) {
 	const deps = {
 		'@selvajs/cli': 'latest',
 		'@selvajs/selva': 'latest',
-		'@selvajs/platform': 'latest',
 		pm2: '^5.4.0'
 	};
-	if (providers.has('local')) deps['@selvajs/local-provider'] = 'latest';
-	if (providers.has('supabase')) deps['@selvajs/supabase-provider'] = 'latest';
-	if (providers.has('header')) deps['@selvajs/header-auth-provider'] = 'latest';
 
 	return {
 		name: current.name ?? 'selva-deployment',
@@ -227,14 +269,33 @@ function runPm2(dir, args, { inherit = true } = {}) {
 
 // Exported for use by `selva doctor` so it can warn about layout drift
 // without duplicating the detection logic.
-export function detectDrift(pkgJson) {
+export function detectDrift(pkgJson, dir) {
 	const deps = pkgJson?.dependencies ?? {};
 	const reasons = [];
 	if (deps['@selvajs/runtime']) reasons.push('@selvajs/runtime is the old runtime package');
 	if (deps['@selvajs/create']) reasons.push('@selvajs/create is the old CLI package');
+	if (deps['@selvajs/platform']) reasons.push('@selvajs/platform is now bundled into @selvajs/selva');
+	if (deps['@selvajs/local-provider'])
+		reasons.push('@selvajs/local-provider is now bundled into @selvajs/selva');
+	if (deps['@selvajs/supabase-provider'])
+		reasons.push('@selvajs/supabase-provider is now bundled into @selvajs/selva');
+	if (deps['@selvajs/header-auth-provider'])
+		reasons.push('@selvajs/header-auth-provider is now bundled into @selvajs/selva');
 	if (!deps['@selvajs/selva']) reasons.push('@selvajs/selva is missing');
 	if (!deps['@selvajs/cli']) reasons.push('@selvajs/cli is missing');
 	if (!deps['pm2']) reasons.push('pm2 is not in dependencies');
+
+	if (dir) {
+		const configPath = join(dir, 'selva.config.js');
+		if (existsSync(configPath)) {
+			reasons.push('selva.config.js is no longer needed (providers are env-driven)');
+		}
+		const ecoPath = join(dir, 'ecosystem.config.cjs');
+		if (existsSync(ecoPath) && readFileSync(ecoPath, 'utf8').includes('@selvajs/runtime')) {
+			reasons.push('ecosystem.config.cjs still references @selvajs/runtime');
+		}
+	}
+
 	return reasons;
 }
 

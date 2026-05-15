@@ -2,7 +2,7 @@
  * Global vitest setup file. Mocks `$lib/server/providers.server` so every
  * route handler and access helper imports a forwarding stub that reads from
  * `currentTestProviders()` instead of the production singleton initialized
- * from selva.config.ts + process.env.
+ * from process.env at module load.
  *
  * Wired via `test.setupFiles` in vitest.config.ts — runs once per test file
  * before any test code executes. The mock is hoisted above this file's

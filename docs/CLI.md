@@ -50,13 +50,12 @@ npx @selvajs/cli my-deployment --skip-install   # no npm install (you'll need to
 
 What lands in `<dir>`:
 
-| File                   | Purpose                                                                                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.env`                 | Merged from runtime's `.env.example` plus your prompt answers. Contains `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` — back this up before anything else. |
-| `selva.config.js`      | Provider wiring. Edit to swap providers or change defaults.                                                                                           |
-| `ecosystem.config.cjs` | PM2 process definition.                                                                                                                               |
-| `package.json`         | Pins `@selvajs/selva` + the providers you picked.                                                                                                     |
-| `.selva-version`       | Marker for future CLI migrations.                                                                                                                     |
+| File                   | Purpose                                                                                                                                                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.env`                 | Merged from runtime's `.env.example` plus your prompt answers. Contains `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` — back this up before anything else. Provider selection lives here (`SELVA_AUTH_PROVIDER` etc.). |
+| `ecosystem.config.cjs` | PM2 process definition.                                                                                                                                                                                           |
+| `package.json`         | Pins `@selvajs/selva` + `@selvajs/cli` + `pm2`. Providers are bundled into `@selvajs/selva`.                                                                                                                      |
+| `.selva-version`       | Marker for future CLI migrations.                                                                                                                                                                                 |
 
 Notes:
 
@@ -86,13 +85,14 @@ Validates the deployment without starting it. Exits 0 on success, 1 on any red c
 
 Checks:
 
-- `.env`, `selva.config.js`, `ecosystem.config.cjs` exist
+- `.env` and `ecosystem.config.cjs` exist
+- Layout drift (legacy provider packages still listed, stale `selva.config.js`, `ecosystem.config.cjs` pointing at `@selvajs/runtime`)
 - `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` are 32-byte hex (not the placeholder)
 - `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER` are valid combinations
 - `SELVA_TENANCY` is `single` or `multi`
 - `DATA_PATH` is writable (when local provider is in use)
 - `SUPABASE_URL` is reachable (when supabase provider is in use; soft-fails to yellow on network errors)
-- Each provider's npm package is actually installed
+- `@selvajs/selva` is installed
 - `ORIGIN` is a valid URL (or yellow if unset; required behind a reverse proxy)
 - Header-auth specifics: allowlist file, `HOST` binding, logout URL
 

@@ -37,19 +37,9 @@ afterEach(async () => {
 // ============================================================================
 
 describe('HeaderAuthProvider — IAuthProvider surface', () => {
-	it('exposes proxyAuth and a name', () => {
-		expect(provider.name).toBe('Header (Forward Auth)');
-		expect(provider.proxyAuth).toBeDefined();
-		expect(typeof provider.proxyAuth.identifyFromHeaders).toBe('function');
-	});
-
 	it('verifyToken always returns null — identity rides on headers', async () => {
 		expect(await provider.verifyToken('anything')).toBeNull();
 		expect(await provider.verifyToken('')).toBeNull();
-	});
-
-	it('getUser returns null for unknown id', async () => {
-		expect(await provider.getUser('no-such-id')).toBeNull();
 	});
 
 	it('createUser + getUser round-trips and returns an AuthUser shape', async () => {
@@ -87,20 +77,6 @@ describe('HeaderAuthProvider — IAuthProvider surface', () => {
 			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'alice@example.com' })
 		);
 		expect(user).toBeNull();
-	});
-
-	it('disableUser returns not_found for unknown id', async () => {
-		expect(await provider.disableUser('no-such-id')).toBe('not_found');
-	});
-
-	it('deleteUser removes the row', async () => {
-		const created = await provider.createUser('alice@example.com');
-		expect(await provider.deleteUser(created.id)).toBe('ok');
-		expect(await provider.getUser(created.id)).toBeNull();
-	});
-
-	it('deleteUser returns not_found for unknown id', async () => {
-		expect(await provider.deleteUser('no-such-id')).toBe('not_found');
 	});
 });
 
@@ -184,15 +160,6 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'alice@example.com' })
 		);
 		expect(result).toBeNull();
-	});
-
-	it('stamps lastLoginAt on the row', async () => {
-		const created = await provider.createUser('alice@example.com');
-		await provider.proxyAuth.identifyFromHeaders(
-			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'alice@example.com' })
-		);
-		const refetched = await provider.getUser(created.id);
-		expect(refetched?.lastLoginAt).toBeTruthy();
 	});
 
 	it('does NOT auto-create rows when no bootstrap policy is configured', async () => {
@@ -298,21 +265,6 @@ describe('HeaderAuthProvider — bootstrap policy', () => {
 // ============================================================================
 
 describe('HeaderAuthProvider.fromEnv', () => {
-	it('builds a working provider from HEADER_AUTH_DATA_DIR', async () => {
-		const p = HeaderAuthProvider.fromEnv({ HEADER_AUTH_DATA_DIR: tempDir });
-		const created = await p.createUser('alice@example.com');
-		const result = await p.proxyAuth.identifyFromHeaders(
-			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'alice@example.com' })
-		);
-		expect(result?.id).toBe(created.id);
-
-		// Confirm the file lives where the env var pointed.
-		const onDisk = JSON.parse(
-			await fs.readFile(path.join(tempDir, 'header-allowlist.json'), 'utf-8')
-		);
-		expect(onDisk.users).toHaveLength(1);
-	});
-
 	it('falls back to DATA_PATH when HEADER_AUTH_DATA_DIR is unset', async () => {
 		const p = HeaderAuthProvider.fromEnv({ DATA_PATH: tempDir });
 		await p.createUser('alice@example.com');

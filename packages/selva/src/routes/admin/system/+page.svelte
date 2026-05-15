@@ -184,7 +184,7 @@
 	<SectionHeader
 		eyebrow="Admin"
 		title="System settings"
-		description="Instance-wide configuration, platform flags, and the update runner. To change platform flags, edit your selva.config.ts configuration and restart the app."
+		description="Instance-wide configuration, platform flags, and the update runner. To change platform flags, edit SELVA_FLAG_* in your .env and restart the app."
 	/>
 
 	<Card.Root>
