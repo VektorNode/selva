@@ -17,6 +17,7 @@ x64/
 x86/
 bld/
 [Bb]in/
+!packages/cli/bin/
 [Oo]bj/
 [Ll]og/
 

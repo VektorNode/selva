@@ -1,5 +1,11 @@
 # @selvajs/cli
 
+## 2.0.3
+
+### Patch Changes
+
+- Fix `npx @selvajs/cli` and `selva` commands failing with `sh: 1: cli: not found`. The published 2.0.2 package declared `bin` entries pointing to `./bin/cli.js` and `./bin/selva.js`, but those shim files were never committed and the published tarball had no executables. Adds the missing shims and a parse-only test that prevents the regression.
+
 ## 2.0.2
 
 ### Patch Changes
