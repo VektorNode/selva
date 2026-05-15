@@ -28,8 +28,7 @@ import {
 	readFileSync,
 	writeFileSync,
 	copyFileSync,
-	rmSync,
-	cpSync
+	rmSync
 } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync, execSync } from 'node:child_process';
