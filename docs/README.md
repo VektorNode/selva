@@ -28,9 +28,4 @@ After the app is up, definitions are uploaded through the admin UI — there is 
 
 ## Release Management
 
-- **[Publishing.md](./Publishing.md)** — How to release Selva's npm packages with Changesets (first-publish checklist, common operations, troubleshooting)
-- **[Hotfix-CLI-Runtime.md](./Hotfix-CLI-Runtime.md)** — Bypass-changesets workflow for shipping a single fix to `@selvajs/selva` or `@selvajs/cli`
-
-## Troubleshooting
-
-- **[Troubleshooting.md](./Troubleshooting.md)** — Registry of known operator-facing issues with symptom → cause → fix entries (e.g. compute apiKey decryption failures after a key rotation)
+- **[Publishing.md](./Publishing.md)** — Releasing Selva's npm packages with Changesets, plus the hotfix-bypass flow and operator-side recovery for stale npm caches

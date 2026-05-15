@@ -63,7 +63,7 @@ pnpm release             # build + publish
 
 That's it. Every internal package is either (a) auto-bumped as part of the fixed-mode set, or (b) explicitly ignored in `.changeset/config.json`. There's no per-package version tracking to do.
 
-For one-off "I need this fix on a specific operator's VM now" situations, see [docs/Hotfix-CLI-Runtime.md](./docs/Hotfix-CLI-Runtime.md).
+For one-off "I need this fix on a specific operator's VM now" situations, see the [Hotfix bypass](./docs/Publishing.md#hotfix-bypass) section in Publishing.md.
 
 ## Pre-existing issues to fix separately
 

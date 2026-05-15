@@ -155,9 +155,9 @@ cd ~/selva && npm run update
 ```
 
 `selva update` runs `npm update @selvajs/*` then `pm2 restart --update-env`.
-The admin-center "Run Update" button does the same thing. See
-[docs/Hotfix-CLI-Runtime.md](../docs/Hotfix-CLI-Runtime.md) for the
-stale-packument-cache trap if `update` reports the same version twice.
+The admin-center "Run Update" button does the same thing. See the
+[stale-cache recovery](../docs/Publishing.md#npm-cache-hides-your-new-version)
+section in Publishing.md if `update` reports the same version twice.
 
 ---
 
@@ -192,14 +192,14 @@ remove it manually if you're done.
 
 ## Troubleshooting
 
-| Issue                                                          | Fix                                                                                                                                           |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Zone out of capacity                                           | Change `zone` in `terraform.tfvars` (e.g. `europe-west1-b`) and re-apply                                                                      |
-| `gcloud compute ssh`: "publickey rejected"                     | Run `gcloud compute ssh` once to any VM to generate `~/.ssh/google_compute_engine.pub`; Terraform reads it on apply.                          |
-| Startup log shows "BOOTSTRAP_INSTANCE_ADMIN_EMAIL is required" | You set `tenancy = "multi"` or `auth_provider = "header"` without `bootstrap_admin_email`. Fix the tfvar and re-apply.                        |
-| Startup log shows "SUPABASE_URL is required"                   | A supabase provider is selected but the supabase tfvars are empty. Set them or switch back to `local`.                                        |
-| Startup failed mid-way                                         | SSH in: `sudo cat /var/log/selva-startup.log`. Re-run the userland half manually: `sudo -u selva -H bash -c 'cd ~/selva && npm install'`.     |
-| `selva update` says "Current = New" twice                      | Stale npm packument cache on the VM. See [docs/Hotfix-CLI-Runtime.md](../docs/Hotfix-CLI-Runtime.md) — `npm cache clean --force` + reinstall. |
-| App not responding                                             | `cd ~/selva && ./node_modules/.bin/pm2 status && ./node_modules/.bin/pm2 logs selva-compute`                                                  |
-| Caddy can't get a cert                                         | `sudo journalctl -u caddy -f` — usually DNS hasn't propagated yet                                                                             |
-| Want to expose :3000 directly                                  | Don't. Caddy is the only ingress. Editing the firewall to open 3000 breaks the security model for forward-auth providers.                     |
+| Issue                                                          | Fix                                                                                                                                                       |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Zone out of capacity                                           | Change `zone` in `terraform.tfvars` (e.g. `europe-west1-b`) and re-apply                                                                                  |
+| `gcloud compute ssh`: "publickey rejected"                     | Run `gcloud compute ssh` once to any VM to generate `~/.ssh/google_compute_engine.pub`; Terraform reads it on apply.                                      |
+| Startup log shows "BOOTSTRAP_INSTANCE_ADMIN_EMAIL is required" | You set `tenancy = "multi"` or `auth_provider = "header"` without `bootstrap_admin_email`. Fix the tfvar and re-apply.                                    |
+| Startup log shows "SUPABASE_URL is required"                   | A supabase provider is selected but the supabase tfvars are empty. Set them or switch back to `local`.                                                    |
+| Startup failed mid-way                                         | SSH in: `sudo cat /var/log/selva-startup.log`. Re-run the userland half manually: `sudo -u selva -H bash -c 'cd ~/selva && npm install'`.                 |
+| `selva update` says "Current = New" twice                      | Stale npm packument cache on the VM. See [Publishing.md](../docs/Publishing.md#npm-cache-hides-your-new-version) — `npm cache clean --force` + reinstall. |
+| App not responding                                             | `cd ~/selva && ./node_modules/.bin/pm2 status && ./node_modules/.bin/pm2 logs selva-compute`                                                              |
+| Caddy can't get a cert                                         | `sudo journalctl -u caddy -f` — usually DNS hasn't propagated yet                                                                                         |
+| Want to expose :3000 directly                                  | Don't. Caddy is the only ingress. Editing the firewall to open 3000 breaks the security model for forward-auth providers.                                 |

@@ -5,13 +5,18 @@ Two binaries ship with a Selva deployment:
 - **`@selvajs/cli`** — scaffolds a new deployment. Run once with `npx`.
 - **`selva`** — operates an existing deployment. Installed into `node_modules/.bin/` by the scaffold; also exposed as `npm run <name>` scripts.
 
-This doc is the operator-facing reference. For development workflows (working on Selva itself), see [QuickStart.md](QuickStart.md). For shipping a fix to a live deployment, see [Hotfix-CLI-Runtime.md](Hotfix-CLI-Runtime.md).
+This doc is the operator-facing reference. For development workflows (working on Selva itself), see [QuickStart.md](QuickStart.md). For shipping a fix to the published packages, see [Publishing.md](Publishing.md).
 
 ---
 
 ## Quick tour
 
 From zero to a running deployment:
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
 
 ```bash
 # 1. Scaffold. Prompts for provider choice, secrets, ORIGIN, etc.
@@ -81,22 +86,9 @@ Re-prompts for configuration and rewrites `.env`. Uses the existing `.env` as de
 
 ### `selva doctor`
 
-Validates the deployment without starting it. Exits 0 on success, 1 on any red check.
+Validates the deployment without starting it. Exits 0 on success, 1 on any red check. Run after editing `.env` or after a `selva update` — treat any red as a hard failure.
 
-Checks:
-
-- `.env` and `ecosystem.config.cjs` exist
-- Layout drift (legacy provider packages still listed, stale `selva.config.js`, `ecosystem.config.cjs` pointing at `@selvajs/runtime`)
-- `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` are 32-byte hex (not the placeholder)
-- `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER` are valid combinations
-- `SELVA_TENANCY` is `single` or `multi`
-- `DATA_PATH` is writable (when local provider is in use)
-- `SUPABASE_URL` is reachable (when supabase provider is in use; soft-fails to yellow on network errors)
-- `@selvajs/selva` is installed
-- `ORIGIN` is a valid URL (or yellow if unset; required behind a reverse proxy)
-- Header-auth specifics: allowlist file, `HOST` binding, logout URL
-
-Run it after editing `.env` or after a `selva update`. Treat any red as a hard failure — the runtime won't start cleanly.
+Checks: required files (`.env`, `ecosystem.config.cjs`), layout drift, secret keys are 32-byte hex, provider/tenancy values, writability of `DATA_PATH`, reachability of `SUPABASE_URL`, `@selvajs/selva` installed, `ORIGIN` valid, plus header-auth specifics (allowlist file, `HOST` binding, logout URL).
 
 ### `selva start`
 
@@ -131,14 +123,7 @@ pm2 restart selva-compute --update-env
 
 Prints the runtime version before and after so you can tell whether anything actually changed. The admin UI's "Run Update" button runs the same list — if you maintain both, keep them in sync.
 
-If the "before" and "after" runtime versions are identical despite a known new release, you've hit npm's stale-packument cache. The recovery is documented in [Hotfix-CLI-Runtime.md](Hotfix-CLI-Runtime.md#the-stale-packument-cache-trap) — short version:
-
-```bash
-npm cache clean --force
-rm -rf node_modules package-lock.json
-npm install --prefer-online
-selva restart
-```
+If the before/after versions are identical despite a known new release, you've hit npm's stale-packument cache. See [Publishing.md → npm cache hides your new version](Publishing.md#npm-cache-hides-your-new-version) for the recovery.
 
 ### `selva keys rotate <hmac|at-rest>`
 
@@ -180,4 +165,4 @@ The scaffold writes shorter aliases into the deployment's `package.json` so you 
 - Runtime templates (the files copied into a fresh deployment): [packages/selva/templates/](../packages/selva/templates/)
 - Env-var reference: [packages/selva/.env.example](../packages/selva/.env.example)
 - Operator deployment guide (Linux/GCE specifics, reverse proxy, troubleshooting): [deployment/GCE-Linux.md](deployment/GCE-Linux.md)
-- Shipping a fix to a deployed CLI/runtime: [Hotfix-CLI-Runtime.md](Hotfix-CLI-Runtime.md)
+- Publishing new releases / hotfixes: [Publishing.md](Publishing.md)
