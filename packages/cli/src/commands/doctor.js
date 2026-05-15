@@ -215,10 +215,21 @@ function checkLayoutDrift(dir) {
 	);
 }
 
+// Defaults must match HeaderAuthProvider.DEFAULT_HEADERS. Duplicated here so
+// doctor doesn't have to load the runtime. If the provider's defaults ever
+// change, update both places — there's a smoke test in providers/header-auth
+// that pins them, so a divergence would surface in CI.
+const DEFAULT_HEADER_NAMES = {
+	upn: 'SELVA-UserPrincipalName',
+	email: 'SELVA-Email',
+	displayName: 'SELVA-DisplayName'
+};
+
 // Header-auth-specific sanity checks. None of these catch the truly dangerous
 // misconfigurations (header spoofing, missing proxy auth) — those are
 // runtime invariants we can't verify from here. We DO check the things we can:
-// allowlist file presence, HOST binding, ORIGIN, and logout URL.
+// allowlist file presence, HOST binding, ORIGIN, bootstrap admin, and the
+// resolved header names so they can be diffed against the proxy config.
 function checkHeaderAuth(dir, env, dataProvider) {
 	const out = [];
 
@@ -227,7 +238,8 @@ function checkHeaderAuth(dir, env, dataProvider) {
 	if (!allowlistDir) {
 		out.push(red('HEADER_AUTH_DATA_DIR (or DATA_PATH) unset — provider will fail to start'));
 	} else {
-		const allowlistPath = resolve(dir, allowlistDir, 'header-allowlist.json');
+		const allowlistAbsDir = resolve(dir, allowlistDir);
+		const allowlistPath = join(allowlistAbsDir, 'header-allowlist.json');
 		if (existsSync(allowlistPath)) {
 			out.push(green(`header-allowlist.json present (${allowlistDir}/header-allowlist.json)`));
 		} else {
@@ -239,6 +251,14 @@ function checkHeaderAuth(dir, env, dataProvider) {
 					`header-allowlist.json not found at ${allowlistDir}/ — no users will be allowed in until one is added`
 				)
 			);
+
+			// If we expect lazy creation, the dir (or its parent) needs to be
+			// writable. Only check when HEADER_AUTH_DATA_DIR is set explicitly
+			// — when falling back to DATA_PATH the `local` provider's own
+			// checkDataPath has already covered the same ground.
+			if (env.HEADER_AUTH_DATA_DIR) {
+				out.push(checkDirWritable(allowlistAbsDir, `HEADER_AUTH_DATA_DIR=${allowlistDir}`));
+			}
 		}
 	}
 
@@ -287,5 +307,56 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		out.push(green(`BOOTSTRAP_INSTANCE_ADMIN_EMAIL=${env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL}`));
 	}
 
+	// 6. Resolved header names. The most common header-auth boot symptom is
+	// `user:null` because the proxy sets one set of names and the provider
+	// reads another. Print what the provider WILL read so the operator can
+	// diff it against the Caddyfile / oauth2-proxy config. We don't fail on
+	// custom names — operators legitimately override these for non-Caddy
+	// proxies — but yellow-flag the case where one is overridden and the
+	// others aren't, since a partial override is almost always a typo.
+	const resolved = {
+		upn: env.HEADER_AUTH_UPN_HEADER || DEFAULT_HEADER_NAMES.upn,
+		email: env.HEADER_AUTH_EMAIL_HEADER || DEFAULT_HEADER_NAMES.email,
+		displayName: env.HEADER_AUTH_DISPLAY_NAME_HEADER || DEFAULT_HEADER_NAMES.displayName
+	};
+	const overrides = [
+		Boolean(env.HEADER_AUTH_UPN_HEADER),
+		Boolean(env.HEADER_AUTH_EMAIL_HEADER),
+		Boolean(env.HEADER_AUTH_DISPLAY_NAME_HEADER)
+	].filter(Boolean).length;
+	const headerList =
+		`UPN=${resolved.upn}, Email=${resolved.email}, DisplayName=${resolved.displayName}`;
+	if (overrides === 0) {
+		out.push(green(`header names (bundled defaults): ${headerList}`));
+	} else if (overrides === 3) {
+		out.push(green(`header names (all overridden): ${headerList}`));
+	} else {
+		out.push(
+			yellow(
+				`header names partially overridden (${overrides}/3 set): ${headerList} — ` +
+					`a partial override is usually a typo. Set all three or none.`
+			)
+		);
+	}
+
 	return out;
+}
+
+function checkDirWritable(absDir, label) {
+	try {
+		if (existsSync(absDir)) {
+			const stat = statSync(absDir);
+			if (!stat.isDirectory()) return red(`${label} exists but isn't a directory`);
+			accessSync(absDir, constants.W_OK);
+			return green(`${label} writable`);
+		}
+		const parent = resolve(absDir, '..');
+		if (!existsSync(parent)) {
+			return yellow(`${label} doesn't exist yet (parent missing: ${parent})`);
+		}
+		accessSync(parent, constants.W_OK);
+		return yellow(`${label} doesn't exist yet — will be created on first run`);
+	} catch {
+		return red(`${label} not writable`);
+	}
 }
