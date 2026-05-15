@@ -1,5 +1,46 @@
 # @selvajs/selva
 
+## 2.0.7
+
+### Patch Changes
+
+- Fix admin Update aborting mid-flight right after `pm2 stop`, leaving selva-compute permanently stopped.
+
+  The tee'd-log wrapper introduced in 2.0.5 didn't survive the SIGPIPE cascade that fires when `pm2 stop selva-compute` succeeds. Cascade was: pm2 kills selva-compute → the pipe between `tee` and the parent process breaks → `tee` gets SIGPIPE on its next stdout write and dies → bash's next write goes to the now-dead tee subprocess → bash gets SIGPIPE and exits. Net result: the script wrote `pm2 stop` output to the log file, then nothing — never reached `npm update` or `pm2 start`, leaving the deployment with selva-compute stopped and no clue from the UI (SSE was dead, log file truncated at the stop step).
+
+  Fix: `tee --output-error=warn-nopipe` keeps tee alive when its stdout pipe breaks (file writes continue), `trap '' PIPE` makes bash ignore SIGPIPE, and `2>/dev/null` silences tee's now-irrelevant warning. The script now runs to completion regardless of whether the SSE consumer is still alive — which is exactly the property the log-file mechanism needs to be useful.
+
+  Operators on 2.0.6 whose admin Update click left selva-compute stopped can recover with `./node_modules/.bin/pm2 start selva-compute --update-env`.
+
+## 2.0.6
+
+### Patch Changes
+
+- Fix `pm2: command not found` in the admin Update endpoint when no global pm2 is installed.
+
+  The endpoint spawned the update bash script with `PATH: process.env.PATH`, which on most servers doesn't include the deployment's `node_modules/.bin`. As soon as a host removed its global pm2 (recommended after 2.0.5 to prevent daemon/CLI version skew), every admin Update click failed at `pm2 stop` with "command not found" — silently leaving the running process untouched and exiting `[FATAL]` at `pm2 start`.
+
+  Fix: prepend `${plan.cwd}/node_modules/.bin` to the spawned script's PATH so it resolves to the project-local pm2, mirroring the local-only resolution in `@selvajs/cli`'s `pm2Bin()`. The deployment now uses one consistent pm2 from every entry point — interactive shell, `selva start`, and the admin endpoint.
+
+## 2.0.5
+
+### Patch Changes
+
+- Fix admin Update hangs caused by PM2 daemon/CLI version skew, and recover lost log output during the post-restart blackout.
+
+  **PM2 daemon/CLI sync.** The CLI scaffold previously installed `pm2: '^5.4.0'` (caret) and `pm2Bin()` fell back to a global pm2 if the local one was missing. Both choices made it possible for two pm2 binaries to manage the same daemon, producing `In-memory PM2 is out-of-date` warnings and stops/restarts that hung mid-flight. The fix:
+  - Pin `pm2` to an exact version in scaffolded deployments (`5.4.3`).
+  - `pm2Bin()` is now local-only — errors loudly if `node_modules/.bin/pm2` is missing instead of silently using a possibly-different global pm2.
+  - New `ensurePm2InSync()` helper runs before every state-changing pm2 call (`selva start`/`stop`/`restart`/`update`); detects daemon/CLI skew and runs `pm2 update` to respawn the daemon under the local CLI before continuing.
+  - Same skew detection added to the bash side of the admin update endpoint and `scripts/update.sh`, so the check runs even when the JS wrapper isn't on the call path.
+
+  **Update log visibility.** The admin Update endpoint streams script output via SSE, but the SSE is served by `selva-compute` itself — so the moment `pm2 stop selva-compute` succeeds, the stream dies and the frontend goes blind. Anything that happened afterwards (npm update output, pm2 start result, health probe, rollback) was invisible, leaving operators with an infinite spinner and no diagnostics. The fix:
+  - Bash wrapper tees all script stdout/stderr to `/tmp/selva-update.log`. The detached process keeps writing to the file even after SSE dies.
+  - `GET /admin/api/system/update` returns the log file contents (admin-only).
+  - During the post-restart wait, the frontend polls the log endpoint alongside `/api/health` and replaces the displayed logs with the full file content as soon as the new process is reachable — surfacing the entire blackout chunk in one shot.
+
+  Operators on existing hosts that have a global pm2 installed alongside the project-local one should run `npm uninstall -g pm2` after upgrading, then `./node_modules/.bin/pm2 update` once to align the daemon. New scaffolds are unaffected.
+
 ## 2.0.4
 
 ### Patch Changes

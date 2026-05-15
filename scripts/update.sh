@@ -128,6 +128,27 @@ run_quiet() {
   fi
 }
 
+# Resync the PM2 daemon if its in-memory version differs from the installed CLI.
+# After a global pm2 upgrade the daemon keeps running its original version while
+# the CLI on disk moves forward. Process commands then talk to a stale daemon and
+# the symptom is a restart that stops the old process but never brings the new one
+# online. `pm2 update` dumps processes, kills the daemon, respawns it on the
+# current CLI version, and restores the dump. Doing it here keeps the restart
+# step downstream talking to a coherent daemon.
+ensure_pm2_in_sync() {
+  if ! command -v pm2 >/dev/null 2>&1; then
+    return 0
+  fi
+  if pm2 ping 2>&1 | grep -q "out-of-date" || pm2 list 2>&1 | grep -q "out-of-date"; then
+    print_warning "PM2 in-memory daemon is older than the installed CLI — running 'pm2 update' to resync"
+    if ! pm2 update; then
+      print_error "'pm2 update' failed — daemon and CLI remain out of sync"
+      return 1
+    fi
+    print_success "PM2 daemon resynced"
+  fi
+}
+
 # Run a Vite build command; show only the summary (sizes, timing, warnings) — full output on failure
 run_build() {
   local logfile
@@ -440,6 +461,10 @@ if [ "$NO_RESTART" = false ]; then
   if [ "$PM2_RUNNING" = true ]; then
     print_step "Restarting with PM2..."
     cd "$INSTALL_DIR"
+    if ! ensure_pm2_in_sync; then
+      print_error "Refusing to restart with an out-of-sync PM2 daemon"
+      exit 1
+    fi
     # Use restart (not reload) — graceful rolling reload causes ERR_MODULE_NOT_FOUND
     # because old workers try to lazy-import chunks that the new build replaced.
     pm2 restart "$INSTALL_DIR/ecosystem.config.cjs" --update-env

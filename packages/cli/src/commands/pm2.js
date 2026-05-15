@@ -4,9 +4,13 @@
 //   • `pm2 restart` without --update-env silently keeps the old env, even
 //     after the operator edited .env. We always pass --update-env.
 //
-//   • The PM2 binary may live in node_modules/.bin (project-local install)
-//     or globally. We resolve to the local one first so a fresh deployment
-//     works without `npm i -g pm2`.
+//   • PM2's daemon and CLI must be the same version. The daemon is sticky:
+//     once forked it runs that version forever, regardless of what the on-
+//     disk binary later becomes. We resolve pm2 to ONE binary (the project-
+//     local one) so every command — interactive, scripted, admin endpoint —
+//     hits the same code path. If a different pm2 ever started the daemon
+//     (e.g. a stray `npm i -g pm2`), `ensurePm2InSync` detects the skew
+//     and runs `pm2 update` to respawn the daemon under our binary.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,10 +21,53 @@ import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 
 const APP_NAME = 'selva-compute';
 
+// Resolve pm2 to the deployment's own copy. NO global fallback — having two
+// pm2 binaries on the same host and letting them both manage the daemon
+// produces the exact version-skew bug this wrapper exists to prevent.
 function pm2Bin(dir) {
 	const local = join(dir, 'node_modules', '.bin', process.platform === 'win32' ? 'pm2.cmd' : 'pm2');
-	if (existsSync(local)) return local;
-	return 'pm2'; // fall back to PATH
+	if (!existsSync(local)) {
+		throw new Error(
+			`pm2 not found at ${local}. The deployment owns its own pm2 — run ` +
+				`\`npm install\` in ${dir} to install it. (We deliberately don't ` +
+				`fall back to a global pm2; two pm2s managing the same daemon causes ` +
+				`persistent skew warnings and hung restarts.)`
+		);
+	}
+	return local;
+}
+
+// Check whether the in-memory PM2 daemon was forked by a different pm2 than
+// the one we're about to invoke. PM2 prints "In-memory PM2 is out-of-date" on
+// every command in that state and process operations may stall. `pm2 update`
+// is the only fix: dump → kill daemon → respawn under the current binary →
+// resurrect dump. We run it here before any state-changing command so the
+// caller never gets a half-applied stop/restart against a stale daemon.
+function ensurePm2InSync(dir) {
+	const bin = pm2Bin(dir);
+	const probe = spawnSync(bin, ['ping'], {
+		cwd: dir,
+		encoding: 'utf8',
+		shell: process.platform === 'win32'
+	});
+	const output = (probe.stdout ?? '') + (probe.stderr ?? '');
+	if (!/out-of-date/i.test(output)) return;
+
+	p.log.warn(
+		'PM2 in-memory daemon is a different version than the deployment-local pm2 — ' +
+			'running `pm2 update` to resync (this briefly restarts managed processes).'
+	);
+	const result = spawnSync(bin, ['update'], {
+		cwd: dir,
+		stdio: 'inherit',
+		shell: process.platform === 'win32'
+	});
+	if ((result.status ?? 1) !== 0) {
+		throw new Error(
+			'`pm2 update` failed — daemon and CLI remain out of sync. ' +
+				'Investigate manually: `pm2 ping`, `pm2 -v`, `which -a pm2`.'
+		);
+	}
 }
 
 function runPm2(dir, args, { inherit = true } = {}) {
@@ -33,7 +80,7 @@ function runPm2(dir, args, { inherit = true } = {}) {
 	if (result.error) {
 		throw new Error(
 			`Failed to invoke pm2 (${bin}): ${result.error.message}. ` +
-				`Install pm2 with \`npm install pm2\` in this directory.`
+				`Install pm2 with \`npm install\` in this directory.`
 		);
 	}
 	return result.status ?? 0;
@@ -42,6 +89,7 @@ function runPm2(dir, args, { inherit = true } = {}) {
 export async function runStart() {
 	const dir = resolveDeploymentDir();
 	requireDeploymentDir(dir);
+	ensurePm2InSync(dir);
 	const exit = runPm2(dir, ['start', 'ecosystem.config.cjs']);
 	process.exit(exit);
 }
@@ -49,6 +97,7 @@ export async function runStart() {
 export async function runStop() {
 	const dir = resolveDeploymentDir();
 	requireDeploymentDir(dir);
+	ensurePm2InSync(dir);
 	const exit = runPm2(dir, ['stop', APP_NAME]);
 	process.exit(exit);
 }
@@ -56,6 +105,7 @@ export async function runStop() {
 export async function runRestart() {
 	const dir = resolveDeploymentDir();
 	requireDeploymentDir(dir);
+	ensurePm2InSync(dir);
 	// --update-env is the whole point of this wrapper — without it, edits to
 	// .env have no effect on the running process.
 	const exit = runPm2(dir, ['restart', APP_NAME, '--update-env']);
@@ -91,6 +141,13 @@ export async function runUpdate() {
 		p.cancel('Cancelled.');
 		return;
 	}
+
+	// Resync the daemon BEFORE we touch the running app — if the daemon is a
+	// different version than the local CLI, `pm2 stop` may report success
+	// while leaving the process group in a half-state, and the subsequent
+	// `pm2 start` then hangs. Running `pm2 update` here puts everything on
+	// the same version (and survives the dump+resurrect cycle).
+	ensurePm2InSync(dir);
 
 	// Stop the running process BEFORE npm rewrites node_modules/@selvajs/selva/build/.
 	// SvelteKit's node adapter lazy-imports chunks from build/server/chunks/ on every
