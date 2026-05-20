@@ -37,7 +37,16 @@ public class WebSocketServer : IDisposable
     private CancellationTokenSource _cancellationTokenSource;
     private bool _disposed;
     private Timer _heartbeatTimer;
+
+    // .NET Framework 4.8 ships only the HttpListener-based WebSocket flow; modern .NET
+    // (net7/net9, used by Mac/Linux Rhino) needs the manual TcpListener handshake because
+    // HttpListener depends on the Windows-only Http.sys driver. Both code paths produce a
+    // System.Net.WebSockets.WebSocket so the rest of this class is shared.
+#if NET48
     private HttpListener _httpListener;
+#else
+    private TcpListener _tcpListener;
+#endif
 
     public WebSocketServer(int port = AppConfig.WebSocket.DefaultPort)
     {
@@ -83,12 +92,11 @@ public class WebSocketServer : IDisposable
         _cancellationTokenSource = new CancellationTokenSource();
 
         // Try the preferred port, then fall back to a free one if it's taken.
-        if (!TryBindHttpListener(Port == 0 ? FindAvailablePort() : Port, out var boundPort))
+        if (!TryBindListener(Port == 0 ? FindAvailablePort() : Port, out var boundPort))
         {
             var fallback = FindAvailablePort();
-            if (!TryBindHttpListener(fallback, out boundPort))
+            if (!TryBindListener(fallback, out boundPort))
             {
-                _httpListener = null;
                 throw new InvalidOperationException(
                     $"Failed to start WebSocket server: preferred port {Port} and fallback port {fallback} are both unavailable.");
             }
@@ -111,11 +119,13 @@ public class WebSocketServer : IDisposable
     }
 
     /// <summary>
-    ///     Attempts to bind an HttpListener to the given port.
-    ///     Returns true and sets <paramref name="boundPort" /> on success; returns false on failure.
+    ///     Binds the underlying listener (HttpListener on net48, TcpListener elsewhere)
+    ///     to the given port on the loopback interface. Returns true and sets
+    ///     <paramref name="boundPort" /> on success; returns false on failure.
     /// </summary>
-    private bool TryBindHttpListener(int port, out int boundPort)
+    private bool TryBindListener(int port, out int boundPort)
     {
+#if NET48
         var listener = new HttpListener();
         listener.Prefixes.Add($"http://localhost:{port}/");
         try
@@ -127,17 +137,26 @@ public class WebSocketServer : IDisposable
         }
         catch
         {
-            try
-            {
-                listener.Close();
-            }
-            catch
-            {
-            }
-
+            try { listener.Close(); } catch { /* ignore */ }
             boundPort = 0;
             return false;
         }
+#else
+        var listener = new TcpListener(IPAddress.Loopback, port);
+        try
+        {
+            listener.Start();
+            _tcpListener = listener;
+            boundPort = ((IPEndPoint)listener.LocalEndpoint).Port;
+            return true;
+        }
+        catch
+        {
+            try { listener.Stop(); } catch { /* ignore */ }
+            boundPort = 0;
+            return false;
+        }
+#endif
     }
 
     /// <summary>
@@ -192,16 +211,24 @@ public class WebSocketServer : IDisposable
 
         try
         {
+#if NET48
             _httpListener?.Stop();
             _httpListener?.Close();
+#else
+            _tcpListener?.Stop();
+#endif
         }
         catch (Exception ex)
         {
-            Logger.Error($"Error stopping HTTP listener: {ex.Message}");
+            Logger.Error($"Error stopping WebSocket listener: {ex.Message}");
         }
         finally
         {
+#if NET48
             _httpListener = null;
+#else
+            _tcpListener = null;
+#endif
         }
     }
 
@@ -353,6 +380,7 @@ public class WebSocketServer : IDisposable
 
     private async Task AcceptConnectionsAsync(CancellationToken cancellationToken)
     {
+#if NET48
         while (!cancellationToken.IsCancellationRequested && IsRunning)
         {
             try
@@ -361,7 +389,6 @@ public class WebSocketServer : IDisposable
 
                 if (context.Request.IsWebSocketRequest)
                 {
-                    // Fire-and-forget, but as a Task — NOT async void.
                     _ = Task.Run(
                         () => ProcessWebSocketRequestAsync(context, cancellationToken),
                         cancellationToken);
@@ -382,10 +409,40 @@ public class WebSocketServer : IDisposable
                 Logger.Error($"Error accepting WebSocket connection: {ex.Message}");
             }
         }
+#else
+        while (!cancellationToken.IsCancellationRequested && IsRunning)
+        {
+            TcpClient tcpClient;
+            try
+            {
+                tcpClient = await _tcpListener.AcceptTcpClientAsync().ConfigureAwait(false);
+            }
+            catch (ObjectDisposedException)
+            {
+                break;
+            }
+            catch (SocketException ex)
+            {
+                Logger.Warn($"WebSocket listener stopped: {ex.Message}");
+                break;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error accepting TCP connection: {ex.Message}");
+                continue;
+            }
+
+            _ = Task.Run(
+                () => ProcessWebSocketRequestAsync(tcpClient, cancellationToken),
+                cancellationToken);
+        }
+#endif
     }
 
+#if NET48
     /// <summary>
-    ///     Upgraded from async void — exceptions are now observable via the Task.
+    ///     net48 path: HttpListener already negotiated the WebSocket upgrade, so we
+    ///     just take ownership of the resulting WebSocket and enter the receive loop.
     /// </summary>
     private async Task ProcessWebSocketRequestAsync(
         HttpListenerContext context,
@@ -398,28 +455,16 @@ public class WebSocketServer : IDisposable
             var wsContext = await context.AcceptWebSocketAsync(null).ConfigureAwait(false);
             webSocket = wsContext.WebSocket;
 
-            lock (_clientsLock)
+            if (!TryRegisterClient(webSocket))
             {
-                if (_connectedClients.Count >= MAX_CLIENTS)
-                // Reject outside the lock to avoid holding it during async work.
-                {
-                    goto reject;
-                }
-
-                _connectedClients.Add(webSocket);
-                _clientState[webSocket] = new ClientSendState();
-                goto accepted;
+                await webSocket.CloseAsync(
+                    WebSocketCloseStatus.PolicyViolation,
+                    "Maximum client connections reached",
+                    CancellationToken.None).ConfigureAwait(false);
+                webSocket.Dispose();
+                return;
             }
 
-        reject:
-            await webSocket.CloseAsync(
-                WebSocketCloseStatus.PolicyViolation,
-                "Maximum client connections reached",
-                CancellationToken.None).ConfigureAwait(false);
-            webSocket.Dispose();
-            return;
-
-        accepted:
             OnClientConnected?.Invoke(this, webSocket);
             await ReceiveMessagesAsync(webSocket, cancellationToken).ConfigureAwait(false);
         }
@@ -429,35 +474,148 @@ public class WebSocketServer : IDisposable
         }
         finally
         {
-            if (webSocket != null)
+            await TeardownClientAsync(webSocket).ConfigureAwait(false);
+        }
+    }
+#else
+    /// <summary>
+    ///     net7+/net9 path: perform the RFC 6455 handshake manually on a raw TCP
+    ///     connection (HttpListener's WebSocket support is Windows-only) and wrap the
+    ///     resulting stream in a server-side WebSocket.
+    /// </summary>
+    private async Task ProcessWebSocketRequestAsync(
+        TcpClient tcpClient,
+        CancellationToken cancellationToken)
+    {
+        WebSocket webSocket = null;
+
+        try
+        {
+            var networkStream = tcpClient.GetStream();
+
+            HttpRequest request;
+            try
             {
-                lock (_clientsLock)
-                {
-                    _connectedClients.Remove(webSocket);
-                    if (_clientState.TryGetValue(webSocket, out var s))
-                    {
-                        _clientState.Remove(webSocket);
-                        s.Dispose();
-                    }
-                }
-
-                try
-                {
-                    if (webSocket.State == WebSocketState.Open)
-                    {
-                        await webSocket.CloseAsync(
-                            WebSocketCloseStatus.NormalClosure,
-                            "Connection closed",
-                            CancellationToken.None).ConfigureAwait(false);
-                    }
-
-                    webSocket.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn($"Error closing WebSocket: {ex.Message}");
-                }
+                request = await HttpRequestParser.ReadAsync(networkStream, cancellationToken).ConfigureAwait(false);
             }
+            catch (InvalidDataException ex)
+            {
+                await WebSocketHandshake
+                    .WriteErrorResponseAsync(networkStream, 400, "Bad Request", ex.Message, cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            string clientKey;
+            try
+            {
+                clientKey = WebSocketHandshake.ValidateUpgradeRequest(request);
+            }
+            catch (HandshakeException ex)
+            {
+                await WebSocketHandshake
+                    .WriteErrorResponseAsync(networkStream, ex.StatusCode, ex.StatusText, ex.Message, cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            var acceptKey = WebSocketHandshake.ComputeAcceptKey(clientKey);
+            await WebSocketHandshake
+                .WriteUpgradeResponseAsync(networkStream, acceptKey, cancellationToken)
+                .ConfigureAwait(false);
+
+            webSocket = WebSocket.CreateFromStream(
+                networkStream,
+                isServer: true,
+                subProtocol: null,
+                keepAliveInterval: TimeSpan.FromMilliseconds(HEARTBEAT_INTERVAL));
+
+            if (!TryRegisterClient(webSocket))
+            {
+                await webSocket.CloseAsync(
+                    WebSocketCloseStatus.PolicyViolation,
+                    "Maximum client connections reached",
+                    CancellationToken.None).ConfigureAwait(false);
+                webSocket.Dispose();
+                return;
+            }
+
+            OnClientConnected?.Invoke(this, webSocket);
+            await ReceiveMessagesAsync(webSocket, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"WebSocket request processing error: {ex.Message}");
+        }
+        finally
+        {
+            await TeardownClientAsync(webSocket).ConfigureAwait(false);
+
+            // WebSocket.Dispose closes the underlying stream/socket. If we never got
+            // that far (handshake failure path), close the TcpClient ourselves.
+            if (webSocket == null)
+            {
+                try { tcpClient.Close(); } catch { /* ignore */ }
+            }
+        }
+    }
+#endif
+
+    /// <summary>
+    ///     Registers a newly-accepted client, enforcing the connection cap. Returns
+    ///     false if the cap is reached (caller is responsible for closing the socket).
+    /// </summary>
+    private bool TryRegisterClient(WebSocket webSocket)
+    {
+        lock (_clientsLock)
+        {
+            if (_connectedClients.Count >= MAX_CLIENTS)
+            {
+                return false;
+            }
+
+            _connectedClients.Add(webSocket);
+            _clientState[webSocket] = new ClientSendState();
+            return true;
+        }
+    }
+
+    /// <summary>
+    ///     Releases a client's bookkeeping and closes the underlying socket. Safe to
+    ///     call with a null webSocket (no-op) so callers can use a single finally block.
+    /// </summary>
+    private async Task TeardownClientAsync(WebSocket webSocket)
+    {
+        if (webSocket == null)
+        {
+            return;
+        }
+
+        lock (_clientsLock)
+        {
+            _connectedClients.Remove(webSocket);
+            if (_clientState.TryGetValue(webSocket, out var s))
+            {
+                _clientState.Remove(webSocket);
+                s.Dispose();
+            }
+        }
+
+        try
+        {
+            if (webSocket.State == WebSocketState.Open)
+            {
+                await webSocket.CloseAsync(
+                    WebSocketCloseStatus.NormalClosure,
+                    "Connection closed",
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+
+            webSocket.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Error closing WebSocket: {ex.Message}");
         }
     }
 
