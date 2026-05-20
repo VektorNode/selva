@@ -9,6 +9,16 @@ import {
 } from '$lib/server/admin-auth.server';
 import { getAuthProvider } from '$lib/server/auth.server';
 
+// DEBUG (temporary, remove after deployment stabilizes): produce a sorted
+// snapshot of every incoming header so we can surface it on /login for
+// operators diagnosing forward-auth header mismatches.
+function snapshotRequestHeaders(headers: Headers): Array<{ name: string; value: string }> {
+	const out: Array<{ name: string; value: string }> = [];
+	headers.forEach((value, name) => out.push({ name, value }));
+	out.sort((a, b) => a.name.localeCompare(b.name));
+	return out;
+}
+
 /**
  * Surface the auth capabilities the page should render. We ask the auth port
  * what's available — never the env or a specific provider's name. An adapter
@@ -22,18 +32,28 @@ import { getAuthProvider } from '$lib/server/auth.server';
  * even though auth is working — because the no-method/proxy-auth fallback
  * block doesn't know about the already-authed `locals.user`.
  */
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals, url, request }) => {
 	if (locals.user) {
 		const destination = safeRedirectTarget(url.searchParams.get('redirectTo'), '/library');
 		redirect(303, destination);
 	}
 
 	const auth = getAuthProvider();
+	const hasProxyAuth = Boolean(auth.proxyAuth);
+
+	// DEBUG (temporary, remove after deployment stabilizes): when forward-auth
+	// is the configured auth method and the user landed on /login (meaning
+	// header identification failed in hooks.server.ts), capture every header
+	// on the request so the page can render them. Avoids the SSH-to-the-box
+	// roundtrip for operators verifying their proxy config.
+	const debugHeaders = hasProxyAuth ? snapshotRequestHeaders(request.headers) : null;
+
 	return {
 		hasPasswordAuth: Boolean(auth.passwordAuth),
 		hasEmailLink: Boolean(auth.emailLink),
-		hasProxyAuth: Boolean(auth.proxyAuth),
-		oauthProviders: auth.oauth?.listProviders() ?? []
+		hasProxyAuth,
+		oauthProviders: auth.oauth?.listProviders() ?? [],
+		debugHeaders
 	};
 };
 

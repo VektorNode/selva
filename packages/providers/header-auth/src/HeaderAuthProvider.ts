@@ -46,6 +46,31 @@ const DEFAULT_HEADERS: HeaderNames = {
 };
 
 /**
+ * DEBUG (temporary, remove after deployment stabilizes): pretty-print every
+ * header on a request so we can diagnose forward-auth header mismatches.
+ * Returns a sorted, indented "name: value" string. Exported so the SvelteKit
+ * hook layer can reuse the same format in /login diagnostics.
+ */
+export function dumpHeaders(headers: Headers): string {
+	const entries: [string, string][] = [];
+	headers.forEach((value, name) => entries.push([name, value]));
+	entries.sort((a, b) => a[0].localeCompare(b[0]));
+	if (entries.length === 0) return '  (no headers)';
+	return entries.map(([name, value]) => `  ${name}: ${value}`).join('\n');
+}
+
+/**
+ * DEBUG (temporary): structured snapshot of all headers for surfacing in the
+ * /login UI. Returns sorted [name, value] tuples.
+ */
+export function snapshotHeaders(headers: Headers): Array<{ name: string; value: string }> {
+	const entries: Array<{ name: string; value: string }> = [];
+	headers.forEach((value, name) => entries.push({ name, value }));
+	entries.sort((a, b) => a.name.localeCompare(b.name));
+	return entries;
+}
+
+/**
  * Decides whether an unrecognized UPN coming through the proxy should be
  * auto-allowlisted as the bootstrap admin. Returning `true` lets the provider
  * create the allowlist row on the fly; returning `false` keeps the strict
@@ -133,6 +158,16 @@ class HeaderProxyAuth implements IProxyAuth {
 	async identifyFromHeaders(headers: Headers): Promise<AuthUser | null> {
 		const upn = headers.get(this.headers.upn);
 		if (!upn || !upn.trim()) {
+			// DEBUG (temporary, remove after deployment stabilizes): dump EVERY
+			// header that arrived on this request so the operator can see
+			// exactly what the proxy is forwarding. Per-request, not one-shot,
+			// because we're actively debugging a fresh deployment.
+			console.warn(
+				`[HeaderAuth][debug] identifyFromHeaders: no UPN. ` +
+					`Configured: upn=${this.headers.upn} email=${this.headers.email} display=${this.headers.displayName}. ` +
+					`All headers received:\n${dumpHeaders(headers)}`
+			);
+
 			// Distinguish "proxy never touched this request" (no SELVA-* headers
 			// at all → forward-auth misconfigured or being bypassed) from "proxy
 			// is here but didn't populate UPN" (one of the other SELVA-* headers
@@ -174,7 +209,16 @@ class HeaderProxyAuth implements IProxyAuth {
 			}
 		}
 
-		if (!entry || entry.disabled) return null;
+		if (!entry || entry.disabled) {
+			// DEBUG (temporary): UPN arrived but didn't resolve — log what we
+			// saw so the operator can compare against header-allowlist.json.
+			console.warn(
+				`[HeaderAuth][debug] identifyFromHeaders: UPN "${upn}" did not resolve to an active allowlist entry ` +
+					`(entry=${entry ? 'disabled' : 'missing'}). email=${email ?? '(none)'} displayName=${displayName ?? '(none)'}. ` +
+					`All headers received:\n${dumpHeaders(headers)}`
+			);
+			return null;
+		}
 
 		// First-sight materialization: fill in display-name / email from the
 		// proxy if the row is still bare. Never overwrites operator edits.

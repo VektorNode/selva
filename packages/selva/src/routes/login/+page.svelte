@@ -12,6 +12,10 @@
 		hasEmailLink: boolean;
 		hasProxyAuth: boolean;
 		oauthProviders: string[];
+		// DEBUG (temporary, remove after deployment stabilizes): full request
+		// header snapshot so the operator can verify forward-auth wiring
+		// without server log access.
+		debugHeaders: Array<{ name: string; value: string }> | null;
 	}
 
 	interface Props {
@@ -148,6 +152,24 @@
 				<p class="text-muted-foreground text-xs">
 					Operators: see <code>HEADER_AUTH_UPN_HEADER</code> and your proxy's forward-auth config.
 				</p>
+
+				<!--
+					DEBUG (temporary, remove after deployment stabilizes): full
+					dump of every header on this request so the operator can see
+					exactly what the proxy is forwarding. Open the <details>
+					element to inspect.
+				-->
+				{#if data.debugHeaders}
+					<details class="border-border rounded border p-3 text-xs">
+						<summary class="text-muted-foreground cursor-pointer font-medium">
+							Debug: request headers ({data.debugHeaders.length})
+						</summary>
+						<pre
+							class="text-muted-foreground mt-2 max-h-96 overflow-auto break-all whitespace-pre-wrap">{data.debugHeaders
+								.map((h) => `${h.name}: ${h.value}`)
+								.join('\n')}</pre>
+					</details>
+				{/if}
 			</div>
 		{:else if noAuthMethods}
 			<Alert.Root variant="destructive">
