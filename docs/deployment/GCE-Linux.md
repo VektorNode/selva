@@ -8,11 +8,11 @@ End-to-end walkthrough for getting a CLI-scaffolded Selva deployment running on 
 
 ## Prerequisites
 
-| Need                                                          | Why                                                                          |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **Ubuntu 22.04+ VM** (e.g. GCE `e2-small` is enough to start) | Anything that can run Node 20 + Caddy. The commands below assume `apt-get`.  |
-| **`gcloud` CLI configured** on your laptop                    | For the firewall rule. Skip if you'll add the rule in the GCP web console.   |
-| **`@selvajs/cli` published to npm**                           | The CLI fetches `@selvajs/selva` (and PM2) from the public registry.         |
+| Need                                                          | Why                                                                         |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Ubuntu 22.04+ VM** (e.g. GCE `e2-small` is enough to start) | Anything that can run Node 20 + Caddy. The commands below assume `apt-get`. |
+| **`gcloud` CLI configured** on your laptop                    | For the firewall rule. Skip if you'll add the rule in the GCP web console.  |
+| **`@selvajs/cli` published to npm**                           | The CLI fetches `@selvajs/selva` (and PM2) from the public registry.        |
 
 The VM does **not** need git, pnpm, or a checkout of the monorepo. Everything is installed via `npx` and `npm`. **Do not** install PM2 globally — `@selvajs/cli` ships its own pinned `pm2` as a deployment dependency and the wrappers refuse to fall back to a global binary (two PM2s managing the same daemon causes persistent version-skew warnings).
 
@@ -325,17 +325,17 @@ For the production-shaped wiring (real `forward_auth` against an OIDC sidecar in
 
 All from inside the deployment directory:
 
-| Command                         | What it does                                                                                |
-| ------------------------------- | ------------------------------------------------------------------------------------------- |
-| `npm run doctor`                | Re-validate env + providers + paths. Run after editing `.env`.                              |
-| `npm run restart`               | `pm2 restart selva-compute --update-env` — picks up env changes.                            |
-| `npm run logs`                  | Tail PM2 stdout/stderr (`Ctrl+C` to exit).                                                  |
-| `npm run update`                | `npm update --save --prefer-online` for all `@selvajs/*` packages, then restart.            |
-| `npm stop`                      | Stop the PM2 process.                                                                       |
-| `npx selva keys rotate hmac`    | Rotate `SELVA_HMAC_KEY` (logs everyone out).                                                |
-| `npx selva keys rotate at-rest` | Rotate `SELVA_AT_REST_KEY` (Rhino API key needs re-entry).                                  |
-| `npx pm2 describe selva-compute`| Inspect the live process: cwd, env vars actually seen, uptime, restarts. Useful for debug.  |
-| `npx pm2 list`                  | Quick "is it running" check. Equivalent to `pm2 ls` if you had pm2 on PATH (you don't).     |
+| Command                          | What it does                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------ |
+| `npm run doctor`                 | Re-validate env + providers + paths. Run after editing `.env`.                             |
+| `npm run restart`                | `pm2 restart selva-compute --update-env` — picks up env changes.                           |
+| `npm run logs`                   | Tail PM2 stdout/stderr (`Ctrl+C` to exit).                                                 |
+| `npm run update`                 | `npm update --save --prefer-online` for all `@selvajs/*` packages, then restart.           |
+| `npm stop`                       | Stop the PM2 process.                                                                      |
+| `npx selva keys rotate hmac`     | Rotate `SELVA_HMAC_KEY` (logs everyone out).                                               |
+| `npx selva keys rotate at-rest`  | Rotate `SELVA_AT_REST_KEY` (Rhino API key needs re-entry).                                 |
+| `npx pm2 describe selva-compute` | Inspect the live process: cwd, env vars actually seen, uptime, restarts. Useful for debug. |
+| `npx pm2 list`                   | Quick "is it running" check. Equivalent to `pm2 ls` if you had pm2 on PATH (you don't).    |
 
 The admin dashboard at `/admin/system` exposes the same `update` flow with live SSE output.
 
