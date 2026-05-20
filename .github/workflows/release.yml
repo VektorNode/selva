@@ -20,11 +20,22 @@ name: Release
 #
 # What you need set up
 # --------------------
-# - `NPM_TOKEN` repo secret — npm automation token with publish rights on
-#   the `@selvajs` org. Generate at https://www.npmjs.com/settings/<user>/tokens
-#   (pick "Automation"); add at Repo → Settings → Secrets → Actions.
-# - `contents: write` + `pull-requests: write` permissions below are what
-#   let changesets/action open the version PR.
+# - npm Trusted Publishing (OIDC), configured per package at
+#   npmjs.com → <package> → Settings → Trusted Publisher. Each of the four
+#   published packages (@selvajs/selva, @selvajs/cli, @selvajs/ui,
+#   @selvajs/schemas) needs an entry pointing at this repo
+#   (VektorNode/selva) and workflow filename (release.yml). The handshake
+#   is per-package, not per-scope — missing entries fail with a misleading
+#   404 from `npm publish`.
+# - `id-token: write` permission below — required for the GitHub → npm OIDC
+#   exchange. Without it the request is anonymous and the publish 404s.
+# - `contents: write` + `pull-requests: write` permissions let
+#   changesets/action open the version PR.
+# - npm ≥ 11.5.1 — older clients don't know how to exchange the OIDC
+#   token, so the workflow below upgrades npm before publishing. The npm
+#   bundled with Node 20 is too old.
+# - No `NPM_TOKEN` secret. If one is set in the environment, npm uses
+#   token auth instead of OIDC and the trusted-publisher path never runs.
 
 on:
   push:
@@ -67,6 +78,13 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      # Upgrade npm so `changeset publish` can perform the OIDC handshake
+      # with the registry. The npm shipped with Node 20 predates Trusted
+      # Publishing support; without this, publishes silently fall back to
+      # anonymous and 404 on the PUT.
+      - name: Upgrade npm for OIDC publishing
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -103,4 +121,6 @@ jobs:
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # No NPM_TOKEN here on purpose — auth happens via OIDC trusted
+          # publishing. Setting NPM_TOKEN would override OIDC and break
+          # publishing if the token is missing/expired/under-permissioned.
