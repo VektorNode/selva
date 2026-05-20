@@ -1,6 +1,4 @@
 ---
-'@selvajs/platform': patch
-'@selvajs/header-auth-provider': patch
 '@selvajs/selva': patch
 ---
 
