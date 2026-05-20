@@ -1,5 +1,15 @@
 # @selvajs/selva
 
+## 2.0.10
+
+### Patch Changes
+
+- 48c6886: Improve forward-auth diagnostics on the login page.
+  - If a user is already authenticated (cookie session OR forward-auth headers) when they land on `/login`, they're now redirected to `?redirectTo=` or `/library` instead of seeing the confusing "your proxy didn't forward the identity headers" fallback message that was rendered even when forward-auth was working correctly.
+  - The header-auth provider now emits a one-shot `[HeaderAuth]` warning on the first request that arrives with none of the configured `SELVA-*` identity headers, naming the expected headers and pointing operators at the README. A second one-shot warning fires when `/login` is hit and proxy identification fails, distinguishing "no headers arrived at all" (proxy bypassed or misconfigured) from "headers arrived but UPN missing or user not allowlisted". Throttled per-process so anonymous traffic doesn't spam the logs.
+
+- 74252bd: Skip the header-auth bootstrap-wiring (and its stale-provider warning) when the configured auth provider doesn't expose `proxyAuth`. Previously, deployments using `LocalAuthProvider` or `SupabaseAuthProvider` that also set `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` would see a misleading `[selva] BOOTSTRAP_INSTANCE_ADMIN_EMAIL is set but the installed @selvajs/header-auth-provider does not expose setBootstrapAllowlistPolicy…` warning on boot, even though the env var is correctly consumed by the OAuth/password bootstrap path. The warning is now only emitted when the active provider is actually a proxy-style auth provider that's out of date.
+
 ## 2.0.9
 
 ### Patch Changes
