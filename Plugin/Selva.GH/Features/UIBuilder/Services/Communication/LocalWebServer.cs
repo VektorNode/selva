@@ -15,6 +15,11 @@ namespace Selva.GH.Features.UIBuilder.Services.Communication;
 /// <summary>
 ///     Embedded HTTP server that serves static web assets from assembly resources.
 ///     Used in production to serve the web UI without external dependencies.
+///
+///     Built on raw <see cref="TcpListener" /> rather than <c>HttpListener</c> because
+///     HttpListener depends on the Windows-only Http.sys driver and throws
+///     PlatformNotSupportedException on macOS and Linux. Only GET and HEAD are
+///     implemented — the embedded UI never needs anything else.
 /// </summary>
 public class LocalWebServer : IDisposable
 {
@@ -46,7 +51,7 @@ public class LocalWebServer : IDisposable
 
     private CancellationTokenSource _cancellationTokenSource;
     private bool _disposed;
-    private HttpListener _httpListener;
+    private TcpListener _tcpListener;
 
     public LocalWebServer(int port = 0)
     {
@@ -100,12 +105,12 @@ public class LocalWebServer : IDisposable
             }
 
             _cancellationTokenSource = new CancellationTokenSource();
-            _httpListener = new HttpListener();
-            _httpListener.Prefixes.Add($"http://localhost:{Port}/");
+            _tcpListener = new TcpListener(IPAddress.Loopback, Port);
 
             try
             {
-                _httpListener.Start();
+                _tcpListener.Start();
+                Port = ((IPEndPoint)_tcpListener.LocalEndpoint).Port;
                 IsRunning = true;
                 _ = Task.Run(
                     () => AcceptRequestsAsync(_cancellationTokenSource.Token),
@@ -114,8 +119,8 @@ public class LocalWebServer : IDisposable
             catch (Exception ex)
             {
                 // Clean up the listener we just created so Stop() has nothing to do.
-                _httpListener.Close();
-                _httpListener = null;
+                try { _tcpListener.Stop(); } catch { /* ignore */ }
+                _tcpListener = null;
                 throw new InvalidOperationException(
                     $"Failed to start HTTP server on port {Port}: {ex.Message}", ex);
             }
@@ -139,14 +144,13 @@ public class LocalWebServer : IDisposable
                 return;
             }
 
-            // Signal the accept loop first, then abort the listener so
-            // GetContextAsync() throws and the loop exits cleanly.
+            // Signal the accept loop first, then stop the listener so
+            // AcceptTcpClientAsync() throws and the loop exits cleanly.
             _cancellationTokenSource?.Cancel();
 
             try
             {
-                _httpListener?.Stop();
-                _httpListener?.Close();
+                _tcpListener?.Stop();
             }
             catch (Exception ex)
             {
@@ -154,7 +158,7 @@ public class LocalWebServer : IDisposable
             }
             finally
             {
-                _httpListener = null;
+                _tcpListener = null;
                 IsRunning = false;
             }
         }
@@ -173,145 +177,201 @@ public class LocalWebServer : IDisposable
     {
         while (!cancellationToken.IsCancellationRequested && IsRunning)
         {
+            TcpClient tcpClient;
             try
             {
-                var context = await _httpListener.GetContextAsync().ConfigureAwait(false);
-                _ = Task.Run(
-                    () => ProcessRequestAsync(context, cancellationToken),
-                    cancellationToken);
+                tcpClient = await _tcpListener.AcceptTcpClientAsync().ConfigureAwait(false);
             }
-            catch (HttpListenerException ex)
+            catch (ObjectDisposedException)
             {
-                // Listener was stopped intentionally — not an error.
+                break;
+            }
+            catch (SocketException ex)
+            {
                 Logger.Warn($"HTTP listener stopped: {ex.Message}");
                 break;
             }
             catch (Exception ex)
             {
                 Logger.Error($"Error accepting HTTP request: {ex.Message}");
+                continue;
             }
+
+            _ = Task.Run(
+                () => ProcessRequestAsync(tcpClient, cancellationToken),
+                cancellationToken);
         }
     }
 
-    private async Task ProcessRequestAsync(HttpListenerContext context, CancellationToken cancellationToken)
+    private async Task ProcessRequestAsync(TcpClient tcpClient, CancellationToken cancellationToken)
     {
-        var response = context.Response;
-
         try
         {
-            var request = context.Request;
-
-            // Only GET and HEAD are meaningful for a static asset server.
-            if (request.HttpMethod is not ("GET" or "HEAD"))
+            using (tcpClient)
+            using (var stream = tcpClient.GetStream())
             {
-                response.StatusCode = 405;
-                response.AddHeader("Allow", "GET, HEAD");
-                response.Close();
-                return;
-            }
+                HttpRequest request;
+                try
+                {
+                    request = await HttpRequestParser.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
+                }
+                catch (InvalidDataException ex)
+                {
+                    await WriteResponseAsync(stream, 400, "Bad Request", "text/plain; charset=utf-8",
+                        Encoding.UTF8.GetBytes(ex.Message), false, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
+                    return;
+                }
 
-            var path = request.Url.AbsolutePath.TrimStart('/');
-            if (string.IsNullOrEmpty(path))
-            {
-                path = "index.html";
-            }
+                // Only GET and HEAD are meaningful for a static asset server.
+                if (request.Method != "GET" && request.Method != "HEAD")
+                {
+                    var allow = new Dictionary<string, string> { { "Allow", "GET, HEAD" } };
+                    await WriteResponseAsync(stream, 405, "Method Not Allowed", "text/plain; charset=utf-8",
+                        Encoding.UTF8.GetBytes("405 - Method Not Allowed"), false, allow, cancellationToken)
+                        .ConfigureAwait(false);
+                    return;
+                }
 
-            // SPA fallback: non-file routes (no extension) fall back to index.html.
-            var resourcePath = GetResourcePath(path);
-            if (!ResourceExists(resourcePath) && !path.Contains("."))
-            {
-                path = "index.html";
-                resourcePath = GetResourcePath(path);
-            }
+                // Strip the query string and leading slash before resource lookup.
+                var path = request.Target;
+                var queryStart = path.IndexOf('?');
+                if (queryStart >= 0)
+                {
+                    path = path.Substring(0, queryStart);
+                }
 
-            if (!ResourceExists(resourcePath))
-            {
-                await Send404Async(response, cancellationToken).ConfigureAwait(false);
-                return;
-            }
+                path = path.TrimStart('/');
+                if (string.IsNullOrEmpty(path))
+                {
+                    path = "index.html";
+                }
 
-            if (!_mimeTypes.TryGetValue(
-                    Path.GetExtension(path).ToLowerInvariant(),
-                    out var mimeType))
-            {
-                mimeType = "application/octet-stream";
-            }
+                // SPA fallback: non-file routes (no extension) fall back to index.html.
+                var resourcePath = GetResourcePath(path);
+                if (!ResourceExists(resourcePath) && !path.Contains("."))
+                {
+                    path = "index.html";
+                    resourcePath = GetResourcePath(path);
+                }
 
-            // index.html must never be cached; hashed assets can be cached forever.
-            var isImmutableAsset = path != "index.html" && path.Contains(".");
-            var cacheControl = isImmutableAsset
-                ? "public, max-age=31536000, immutable"
-                : "no-cache, no-store, must-revalidate";
+                if (!ResourceExists(resourcePath))
+                {
+                    await WriteResponseAsync(stream, 404, "Not Found", "text/plain; charset=utf-8",
+                        Encoding.UTF8.GetBytes("404 - Not Found"), false, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
+                    return;
+                }
 
-            response.ContentType = mimeType;
-            response.AddHeader("Cache-Control", cacheControl);
-            if (!isImmutableAsset)
-            {
-                response.AddHeader("Pragma", "no-cache");
-                response.AddHeader("Expires", "0");
-            }
+                if (!_mimeTypes.TryGetValue(
+                        Path.GetExtension(path).ToLowerInvariant(),
+                        out var mimeType))
+                {
+                    mimeType = "application/octet-stream";
+                }
 
-            using var stream = _assembly.GetManifestResourceStream(resourcePath);
-            if (stream == null)
-            {
-                await Send404Async(response, cancellationToken).ConfigureAwait(false);
-                return;
-            }
+                // index.html must never be cached; hashed assets can be cached forever.
+                var isImmutableAsset = path != "index.html" && path.Contains(".");
+                var cacheControl = isImmutableAsset
+                    ? "public, max-age=31536000, immutable"
+                    : "no-cache, no-store, must-revalidate";
 
-            response.ContentLength64 = stream.Length;
-            response.StatusCode = 200;
+                var headers = new Dictionary<string, string>
+                {
+                    { "Cache-Control", cacheControl }
+                };
+                if (!isImmutableAsset)
+                {
+                    headers["Pragma"] = "no-cache";
+                    headers["Expires"] = "0";
+                }
 
-            // HEAD: headers only, no body.
-            if (request.HttpMethod != "HEAD")
-            {
-                await stream.CopyToAsync(response.OutputStream, BUFFER_SIZE, cancellationToken)
-                    .ConfigureAwait(false);
+                using var resourceStream = _assembly.GetManifestResourceStream(resourcePath);
+                if (resourceStream == null)
+                {
+                    await WriteResponseAsync(stream, 404, "Not Found", "text/plain; charset=utf-8",
+                        Encoding.UTF8.GetBytes("404 - Not Found"), false, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                await WriteResponseHeadersAsync(stream, 200, "OK", mimeType, resourceStream.Length,
+                    headers, cancellationToken).ConfigureAwait(false);
+
+                // HEAD: headers only, no body.
+                if (request.Method != "HEAD")
+                {
+                    await resourceStream.CopyToAsync(stream, BUFFER_SIZE, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
+                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
         {
-            Logger.Error(
-                $"Error processing HTTP request for {context.Request.Url?.AbsolutePath}: {ex.Message}");
+            Logger.Error($"Error processing HTTP request: {ex.Message}");
+        }
+    }
 
-            try
-            {
-                response.StatusCode = 500;
-            }
-            catch
-            {
-                /* headers already sent */
-            }
-        }
-        finally
+    /// <summary>
+    ///     Writes a full HTTP response: status line, headers, optional body.
+    ///     <paramref name="extraHeaders" /> lets callers add response-specific headers (e.g. Allow on 405).
+    /// </summary>
+    private static async Task WriteResponseAsync(
+        Stream stream,
+        int statusCode,
+        string statusText,
+        string contentType,
+        byte[] body,
+        bool isHead,
+        IDictionary<string, string> extraHeaders = null,
+        CancellationToken cancellationToken = default)
+    {
+        await WriteResponseHeadersAsync(
+            stream, statusCode, statusText, contentType,
+            body?.LongLength ?? 0, extraHeaders, cancellationToken).ConfigureAwait(false);
+
+        if (!isHead && body != null && body.Length > 0)
         {
-            // Always close the response, whether success, 4xx, or 5xx.
-            try
+            await stream.WriteAsync(body, 0, body.Length, cancellationToken).ConfigureAwait(false);
+        }
+
+        await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task WriteResponseHeadersAsync(
+        Stream stream,
+        int statusCode,
+        string statusText,
+        string contentType,
+        long contentLength,
+        IDictionary<string, string> extraHeaders,
+        CancellationToken cancellationToken)
+    {
+        var sb = new StringBuilder();
+        sb.Append("HTTP/1.1 ").Append(statusCode).Append(' ').Append(statusText).Append("\r\n");
+        sb.Append("Content-Type: ").Append(contentType).Append("\r\n");
+        sb.Append("Content-Length: ").Append(contentLength).Append("\r\n");
+        sb.Append("Connection: close\r\n");
+
+        if (extraHeaders != null)
+        {
+            foreach (var kv in extraHeaders)
             {
-                response.Close();
-            }
-            catch
-            {
-                /* ignore */
+                sb.Append(kv.Key).Append(": ").Append(kv.Value).Append("\r\n");
             }
         }
+
+        sb.Append("\r\n");
+
+        var bytes = Encoding.ASCII.GetBytes(sb.ToString());
+        await stream.WriteAsync(bytes, 0, bytes.Length, cancellationToken).ConfigureAwait(false);
     }
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
-
-    private async Task Send404Async(HttpListenerResponse response, CancellationToken cancellationToken)
-    {
-        response.StatusCode = 404;
-        response.ContentType = "text/plain; charset=utf-8";
-
-        var message = Encoding.UTF8.GetBytes("404 - Not Found");
-        response.ContentLength64 = message.Length;
-
-        await response.OutputStream
-            .WriteAsync(message, 0, message.Length, cancellationToken)
-            .ConfigureAwait(false);
-    }
 
     private string GetResourcePath(string urlPath)
     {
