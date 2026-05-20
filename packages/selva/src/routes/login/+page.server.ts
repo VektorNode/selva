@@ -14,8 +14,20 @@ import { getAuthProvider } from '$lib/server/auth.server';
  * what's available — never the env or a specific provider's name. An adapter
  * that doesn't broker OAuth omits `oauth`; an adapter that does decides for
  * itself which providers to expose via `listProviders()`.
+ *
+ * If the user is already authenticated (cookie session OR forward-auth headers
+ * resolved in `hooks.server.ts`) we bounce them to their destination instead
+ * of rendering the page. Without this, forward-auth users who land on /login
+ * directly see a confusing "your proxy didn't forward the headers" message
+ * even though auth is working — because the no-method/proxy-auth fallback
+ * block doesn't know about the already-authed `locals.user`.
  */
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals, url }) => {
+	if (locals.user) {
+		const destination = safeRedirectTarget(url.searchParams.get('redirectTo'), '/library');
+		redirect(303, destination);
+	}
+
 	const auth = getAuthProvider();
 	return {
 		hasPasswordAuth: Boolean(auth.passwordAuth),

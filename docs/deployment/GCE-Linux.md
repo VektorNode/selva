@@ -2,23 +2,23 @@
 
 End-to-end walkthrough for getting a CLI-scaffolded Selva deployment running on a single Linux VM behind Caddy. Written after a real first-run on Google Compute Engine — every footgun in the "Things that bit us" section actually bit somebody.
 
-**Target shape:** one VM, public IP, plain HTTP for now (HTTPS upgrade path documented at the end). Local provider (filesystem JSON + HMAC sessions). PM2 + systemd for process supervision. Caddy reverse-proxying port 80 → Selva on port 3000.
+**Target shape:** one VM, public IP, plain HTTP for now (HTTPS upgrade path documented at the end). Local provider (filesystem JSON + HMAC sessions). PM2 (installed per-deployment) + systemd for process supervision. Caddy reverse-proxying port 80 → Selva on port 3000.
 
 ---
 
 ## Prerequisites
 
-| Need                                                          | Why                                                                               |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Ubuntu 22.04+ VM** (e.g. GCE `e2-small` is enough to start) | Anything that can run Node 20 + Caddy + PM2. The commands below assume `apt-get`. |
-| **`gcloud` CLI configured** on your laptop                    | For the firewall rule. Skip if you'll add the rule in the GCP web console.        |
-| **`@selvajs/cli` published to npm**                           | The CLI fetches `@selvajs/selva` from the public registry.                        |
+| Need                                                          | Why                                                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Ubuntu 22.04+ VM** (e.g. GCE `e2-small` is enough to start) | Anything that can run Node 20 + Caddy. The commands below assume `apt-get`.  |
+| **`gcloud` CLI configured** on your laptop                    | For the firewall rule. Skip if you'll add the rule in the GCP web console.   |
+| **`@selvajs/cli` published to npm**                           | The CLI fetches `@selvajs/selva` (and PM2) from the public registry.         |
 
-The VM does **not** need git, pnpm, or a checkout of the monorepo. Everything is installed via `npx` and `npm`.
+The VM does **not** need git, pnpm, or a checkout of the monorepo. Everything is installed via `npx` and `npm`. **Do not** install PM2 globally — `@selvajs/cli` ships its own pinned `pm2` as a deployment dependency and the wrappers refuse to fall back to a global binary (two PM2s managing the same daemon causes persistent version-skew warnings).
 
 ---
 
-## Step 1 — Install Node 20 and PM2 on the VM
+## Step 1 — Install Node 20 on the VM
 
 SSH in (`gcloud compute ssh <vm-name>` or whatever your access method is), then:
 
@@ -26,14 +26,12 @@ SSH in (`gcloud compute ssh <vm-name>` or whatever your access method is), then:
 sudo apt-get update
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
-sudo npm install -g pm2
 
 node -v        # expect v20.x
 npm -v         # expect 10.x
-pm2 --version  # expect 5.x or 6.x
 ```
 
-PM2 needs to be installed globally so its `pm2` binary lands on `PATH` and the deployment's npm scripts can invoke it.
+PM2 is installed as part of `npm install` in Step 4 — see [packages/cli/src/commands/create.js](../../packages/cli/src/commands/create.js) where it's listed as a dependency. The `selva start/stop/restart/logs/update` wrappers always resolve to the deployment-local `./node_modules/.bin/pm2`, never a global one.
 
 ---
 
@@ -67,7 +65,7 @@ Find your zone with `gcloud compute instances list` if you don't remember it.
 
 ## Step 4 — Scaffold the deployment
 
-Back on the VM:
+Back on the VM, pick a directory name and run the CLI. `~/apps/selva` and `~/selva` are both common — the path is purely convention, the CLI just `mkdir`s whatever you pass. Substitute your chosen path everywhere below.
 
 ```bash
 mkdir -p ~/apps && cd ~/apps
@@ -89,8 +87,8 @@ The CLI prompts. Answer like this for a local-provider, single-tenant install:
 
 The CLI will:
 
-1. Write `package.json`, `.env`, `ecosystem.config.cjs` into `~/apps/selva`.
-2. Run `npm install` — pulls `@selvajs/selva` (the prebuilt SvelteKit app, which bundles all providers internally) and `@selvajs/cli` itself (so `selva` lands in `node_modules/.bin/`). Watch the live progress; install takes 30–90s.
+1. Write `package.json`, `.env`, `ecosystem.config.cjs` into the chosen directory.
+2. Run `npm install` — pulls `@selvajs/selva` (the prebuilt SvelteKit app, which bundles all providers internally), `@selvajs/cli` itself (so `selva` lands in `node_modules/.bin/`), and a pinned `pm2` (so `pm2` also lands in `node_modules/.bin/` — no global install). Watch the live progress; install takes 30–90s.
 3. Print "next steps" referencing `npm run doctor` and `npm start`.
 
 When it's done you should see:
@@ -146,29 +144,30 @@ Expected output (mostly green checks):
   ! DATA_PATH=./.selva-data doesn't exist yet — will be created on first run
   ✓ SELVA_TENANCY=single
   ✓ @selvajs/selva installed
-  ✓ @selvajs/local-provider installed
   ✓ ORIGIN=http://<your-ip>
 └  All checks passed.
 ```
 
-The yellow `DATA_PATH doesn't exist yet` is expected on a fresh install; the local provider creates the directory on first request.
+The yellow `DATA_PATH doesn't exist yet` is expected on a fresh install. The local provider creates the directory on the first **write**, not the first request — under password auth that's when someone submits `/setup`; under header-auth it's the first request whose injected UPN matches `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`. A `GET /` that returns 401/403 doesn't trigger it.
+
+Selva no longer ships separate `@selvajs/local-provider` / `@selvajs/supabase-provider` packages — all providers are bundled into `@selvajs/selva`, which is why doctor checks only that one. If you see `@selvajs/local-provider installed` in older docs or screenshots, that's pre-bundling.
 
 If `ORIGIN` shows garbage like `http://1.2.3.4SOMETHING=true`, you hit the `.env` concatenation bug from Step 5 — re-open `.env`, fix the line, save.
 
 Then:
 
 ```bash
-npm start         # pm2 start ecosystem.config.cjs
-pm2 save          # persist process list across reboots
+npm start                              # selva start → pm2 start ecosystem.config.cjs
+npx pm2 save                           # persist process list across reboots
 ```
 
-`pm2 save` writes the current process list to `~/.pm2/dump.pm2`. To make PM2 itself auto-start on VM reboot:
+`npx pm2 ...` resolves to the deployment-local `pm2` because you're inside the deploy directory — no global install needed (and don't add one; see Prerequisites). `pm2 save` writes the current process list to `~/.pm2/dump.pm2`. To make PM2 itself auto-start on VM reboot:
 
 ```bash
-pm2 startup systemd -u $USER --hp $HOME
+npx pm2 startup systemd -u $USER --hp $HOME
 ```
 
-PM2 prints a `sudo env PATH=... pm2 startup ...` line. **Copy and paste that exact line back into the shell** — that's what actually installs the systemd unit.
+PM2 prints a `sudo env PATH=... pm2 startup ...` line. **Copy and paste that exact line back into the shell** — that's what actually installs the systemd unit. The printed line will reference the full path to your local pm2 (e.g. `/home/you/<deploy>/node_modules/pm2/bin/pm2`); leave it as-is, that's correct.
 
 ---
 
@@ -274,12 +273,20 @@ SELVA_AUTH_PROVIDER=header
 SELVA_TENANCY=single
 HEADER_AUTH_DATA_DIR=./.selva-data         # or rely on DATA_PATH
 BOOTSTRAP_INSTANCE_ADMIN_EMAIL=admin@corp.com
-HOST=127.0.0.1                              # required — must NOT be 0.0.0.0
+HOST=127.0.0.1                              # critical — must NOT be 0.0.0.0
 ```
 
-`HOST=127.0.0.1` is non-negotiable: header-auth trusts what the request claims, so the Selva process must be unreachable except via Caddy. `selva doctor` enforces this.
+`HOST=127.0.0.1` is non-negotiable: header-auth trusts what the request claims, so the Selva process must be unreachable except via Caddy. `selva doctor` yellow-flags anything else but does not block startup — the deployment is the security boundary, and only you can confirm the proxy is actually in front.
 
-Restart: `selva restart`.
+Run `npm run doctor` after editing — under header-auth it additionally checks:
+
+- `HEADER_AUTH_DATA_DIR` (or `DATA_PATH` fallback) is set and writable.
+- `header-allowlist.json` is present (yellow if missing — provider creates it lazily, but until then no one can log in).
+- `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is set (**red** if missing — without it you have no way to claim admin on first visit).
+- `ORIGIN` is set (red if missing).
+- Resolved header names — prints what the provider will read so you can diff against the Caddyfile. Partial overrides (one of the three `HEADER_AUTH_*_HEADER` vars set, others not) get yellow-flagged because that's almost always a typo.
+
+Then restart: `npm run restart`.
 
 **2. Inject the test identity in the Caddyfile.** Strip any inbound copies first (a browser must not be able to spoof these), then set the trusted headers:
 
@@ -306,6 +313,8 @@ sudo systemctl reload caddy
 curl -I http://<vm-external-ip>
 ```
 
+After this request, `.selva-data/header-allowlist.json` and `.selva-data/user-data.json` should exist in your deployment directory. That's the only thing that proves the bootstrap actually ran — the directory is created on the first **write**, not on boot or on the first GET. If `.selva-data` is still empty after a curl, the most common causes are: (a) the UPN in the Caddyfile doesn't match `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` exactly, (b) PM2's `cwd` isn't your deploy directory so the relative `DATA_PATH=./.selva-data` resolved somewhere else (`npx pm2 describe selva-compute | grep cwd`), or (c) headers were stripped by an intermediate proxy.
+
 **4. Test additional users.** Change the injected values in the Caddyfile (e.g. `bob@corp.com`) and reload Caddy. Bob will be **rejected** until you log in as admin and pre-allowlist him under **Admin → Users → New user**. That's the production behaviour — the bootstrap window has closed after the first admin exists.
 
 For the production-shaped wiring (real `forward_auth` against an OIDC sidecar instead of static `request_header` injection), see [packages/providers/header-auth/README.md](../../packages/providers/header-auth/README.md).
@@ -314,17 +323,19 @@ For the production-shaped wiring (real `forward_auth` against an OIDC sidecar in
 
 ## Day-2 operations
 
-All from `~/apps/selva`:
+All from inside the deployment directory:
 
-| Command                         | What it does                                                                     |
-| ------------------------------- | -------------------------------------------------------------------------------- |
-| `npm run doctor`                | Re-validate env + providers + paths. Run after editing `.env`.                   |
-| `npm run restart`               | `pm2 restart selva-compute --update-env` — picks up env changes.                 |
-| `npm run logs`                  | Tail PM2 stdout/stderr (`Ctrl+C` to exit).                                       |
-| `npm run update`                | `npm update --save --prefer-online` for all `@selvajs/*` packages, then restart. |
-| `npm stop`                      | Stop the PM2 process.                                                            |
-| `npx selva keys rotate hmac`    | Rotate `SELVA_HMAC_KEY` (logs everyone out).                                     |
-| `npx selva keys rotate at-rest` | Rotate `SELVA_AT_REST_KEY` (Rhino API key needs re-entry).                       |
+| Command                         | What it does                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------- |
+| `npm run doctor`                | Re-validate env + providers + paths. Run after editing `.env`.                              |
+| `npm run restart`               | `pm2 restart selva-compute --update-env` — picks up env changes.                            |
+| `npm run logs`                  | Tail PM2 stdout/stderr (`Ctrl+C` to exit).                                                  |
+| `npm run update`                | `npm update --save --prefer-online` for all `@selvajs/*` packages, then restart.            |
+| `npm stop`                      | Stop the PM2 process.                                                                       |
+| `npx selva keys rotate hmac`    | Rotate `SELVA_HMAC_KEY` (logs everyone out).                                                |
+| `npx selva keys rotate at-rest` | Rotate `SELVA_AT_REST_KEY` (Rhino API key needs re-entry).                                  |
+| `npx pm2 describe selva-compute`| Inspect the live process: cwd, env vars actually seen, uptime, restarts. Useful for debug.  |
+| `npx pm2 list`                  | Quick "is it running" check. Equivalent to `pm2 ls` if you had pm2 on PATH (you don't).     |
 
 The admin dashboard at `/admin/system` exposes the same `update` flow with live SSE output.
 
@@ -490,10 +501,10 @@ The runtime build script should hand-flatten these specs before publish to preve
 ### PM2 says `online` but the app is 502'ing through Caddy
 
 ```bash
-pm2 logs selva-compute --lines 50 --nostream
+npm run logs                              # or: npx pm2 logs selva-compute --lines 50 --nostream
 ```
 
-If you see `ERR_MODULE_NOT_FOUND` for a package, that's a missing dependency in the published runtime. Workaround: `npm install <package>` in `~/apps/selva`, then `npm run restart`. Report the missing package so the runtime can declare it.
+If you see `ERR_MODULE_NOT_FOUND` for a package, that's a missing dependency in the published runtime. Workaround: `npm install <package>` in the deploy directory, then `npm run restart`. Report the missing package so the runtime can declare it.
 
 If logs are clean but Caddy still 502s:
 
@@ -501,7 +512,7 @@ If logs are clean but Caddy still 502s:
 sudo ss -tlnp | grep -E ':80|:3000'
 ```
 
-Expect to see `caddy` on `:80` and `node` on `:3000`. If `:3000` is missing, the app isn't listening — check `pm2 status` and `pm2 logs` again.
+Expect to see `caddy` on `:80` and `node` on `:3000`. If `:3000` is missing, the app isn't listening — check `npx pm2 list` and `npm run logs` again.
 
 ### Doctor reports green but admin can't load `/admin`
 
@@ -510,10 +521,10 @@ Hard refresh the browser (`Ctrl+Shift+R`) — service workers from a previous de
 If that doesn't fix it:
 
 ```bash
-pm2 logs selva-compute --err --lines 40 --nostream
+npx pm2 logs selva-compute --err --lines 40 --nostream
 ```
 
-500s on `/admin` typically mean a permissions check threw. The local provider needs `~/apps/selva/.selva-data/` to be readable and writable by the PM2 user — check ownership with `ls -la`.
+500s on `/admin` typically mean a permissions check threw. The local provider needs `.selva-data/` (under your deploy directory, or wherever `DATA_PATH` resolves) to be readable and writable by the user PM2 is running as — check ownership with `ls -la`.
 
 ---
 

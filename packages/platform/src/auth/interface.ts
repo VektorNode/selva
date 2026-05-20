@@ -187,6 +187,23 @@ export interface IProxyAuth {
 	 * is forbidden: the allowlist IS the security boundary.
 	 */
 	identifyFromHeaders(headers: Headers): Promise<AuthUser | null>;
+
+	/**
+	 * Optional diagnostic helper. Returns true iff none of the identity
+	 * headers this provider trusts arrived on the request. The hook layer
+	 * uses this on `/login` misses to distinguish "proxy never reached us"
+	 * from "proxy is here but didn't recognise the user" so operators can
+	 * tell silent forward-auth misconfigurations apart from real allowlist
+	 * gaps without leaking the trusted header names to end users.
+	 */
+	hasNoIdentityHeaders?(headers: Headers): boolean;
+
+	/**
+	 * Optional diagnostic helper. Returns the identity-header names this
+	 * provider is configured to read. Used purely for log output — never
+	 * surfaced to end users.
+	 */
+	readonly configuredHeaderNames?: readonly string[];
 }
 
 /**
