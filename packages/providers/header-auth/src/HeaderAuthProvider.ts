@@ -93,6 +93,12 @@ function toAuthUser(u: AllowlistEntry): AuthUser {
 
 class HeaderProxyAuth implements IProxyAuth {
 	private bootstrapPolicy: BootstrapAllowlistPolicy | undefined;
+	// One-shot diagnostic flag. Flipped the first time we see a request that
+	// carries none of the configured SELVA-* headers, so deploys with a
+	// misconfigured proxy get a single loud warning in the logs without
+	// spamming on every anonymous request. Reset is intentional — the
+	// process restarts and you see the warning again next deploy.
+	private missingHeadersWarned = false;
 
 	constructor(
 		private readonly users: AllowlistStore,
@@ -106,9 +112,45 @@ class HeaderProxyAuth implements IProxyAuth {
 		this.bootstrapPolicy = policy ?? undefined;
 	}
 
+	/**
+	 * Names of the configured identity headers, in priority order. Exposed so
+	 * the hook layer can emit per-page diagnostics ("you hit /login without
+	 * these headers") without having to know provider internals.
+	 */
+	get configuredHeaderNames(): readonly string[] {
+		return [this.headers.upn, this.headers.email, this.headers.displayName];
+	}
+
+	/** True iff none of the configured identity headers are present. */
+	hasNoIdentityHeaders(headers: Headers): boolean {
+		return (
+			!headers.get(this.headers.upn) &&
+			!headers.get(this.headers.email) &&
+			!headers.get(this.headers.displayName)
+		);
+	}
+
 	async identifyFromHeaders(headers: Headers): Promise<AuthUser | null> {
 		const upn = headers.get(this.headers.upn);
-		if (!upn || !upn.trim()) return null;
+		if (!upn || !upn.trim()) {
+			// Distinguish "proxy never touched this request" (no SELVA-* headers
+			// at all → forward-auth misconfigured or being bypassed) from "proxy
+			// is here but didn't populate UPN" (one of the other SELVA-* headers
+			// arrived). The first case is the silent-failure mode operators
+			// struggle to diagnose, so we log it once per process.
+			if (!this.missingHeadersWarned && this.hasNoIdentityHeaders(headers)) {
+				this.missingHeadersWarned = true;
+				console.warn(
+					`[HeaderAuth] No identity headers received on the first non-authed request. ` +
+						`Expected one of: ${this.headers.upn}, ${this.headers.email}, ${this.headers.displayName}. ` +
+						`If you reach the app through your forward-auth proxy, this means the proxy is not ` +
+						`forwarding the configured headers — check your forward_auth / copy_headers config. ` +
+						`If you're hitting the app directly (bypassing the proxy), bind the process to ` +
+						`127.0.0.1 and only reach it through the proxy. See @selvajs/header-auth-provider README.`
+				);
+			}
+			return null;
+		}
 
 		const email = headers.get(this.headers.email)?.trim() || undefined;
 		const displayName = headers.get(this.headers.displayName)?.trim() || undefined;

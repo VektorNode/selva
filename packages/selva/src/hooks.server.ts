@@ -19,6 +19,13 @@ import {
 // subsequent requests skip the no-op.
 let headerAuthBootstrapWired = false;
 
+// One-shot diagnostic flag for the `/login` page specifically. A user
+// landing on /login under a forward-auth deployment is the loudest signal
+// that headers didn't make it through — the per-process provider warning
+// covers the very first miss, this one targets the diagnostic moment the
+// operator is most likely to observe.
+let proxyAuthLoginMissWarned = false;
+
 // Env validation is owned by each provider's `fromEnv()` — the selected
 // provider throws on missing vars (e.g. DATA_PATH for local, SUPABASE_URL for
 // supabase) while `providers.server.ts` is loaded. No app-level check
@@ -295,6 +302,33 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		let user = token ? await providers.auth.verifyToken(token) : null;
 		if (!user && isPublicPage && providers.auth.proxyAuth) {
 			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
+
+			// Diagnostic: a user landing on /login under a forward-auth
+			// deployment without a resolved identity is the canonical
+			// "headers didn't make it through" symptom. Log once per process
+			// so operators see a clear signal during deploy verification
+			// without spamming on every anonymous request.
+			if (!user && pathname === '/login' && !proxyAuthLoginMissWarned) {
+				proxyAuthLoginMissWarned = true;
+				const proxyAuth = providers.auth.proxyAuth;
+				const noHeaders = proxyAuth.hasNoIdentityHeaders?.(event.request.headers) ?? false;
+				const configured = proxyAuth.configuredHeaderNames?.join(', ') ?? '(unknown)';
+				if (noHeaders) {
+					console.warn(
+						`[HeaderAuth] /login was hit and NONE of the configured identity headers ` +
+							`(${configured}) arrived on the request. The forward-auth proxy is not ` +
+							`reaching this process, or it is not forwarding the configured headers. ` +
+							`See the @selvajs/header-auth-provider README "Verification" section.`
+					);
+				} else {
+					console.warn(
+						`[HeaderAuth] /login was hit but the UPN header was missing or the user is ` +
+							`not allowlisted. Configured headers: ${configured}. Some headers arrived ` +
+							`but identification still failed — check that the UPN header is populated ` +
+							`and that the user has been added to header-allowlist.json.`
+					);
+				}
+			}
 		}
 		if (user) {
 			await providers.data.ensureUser(SYSTEM_CONTEXT, user.id);
