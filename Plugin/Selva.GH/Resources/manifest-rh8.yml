@@ -1,6 +1,6 @@
 ---
 name: Selva
-version: 0.10.0
+version: $version
 authors:
   - Felix Brunold
   - VektorNode
@@ -15,5 +15,5 @@ keywords:
 
 icon: icon.png
 targetframeworks:
-  - "net48"
-  - "net7.0"
+  - 'net48'
+  - 'net7.0'
