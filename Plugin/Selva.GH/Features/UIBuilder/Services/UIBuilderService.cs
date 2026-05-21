@@ -1,7 +1,6 @@
 using System;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Features.UIBuilder.Services.Schema;
-using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
@@ -51,17 +50,7 @@ public class UIBuilderService : IDisposable
         StateManager = new ComponentStateManager();
         WebSocketTransport = new WebSocketTransport(SessionId);
 
-        // Only create LocalWebServer on Windows (HttpListener doesn't work on Linux)
-        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
-            System.Runtime.InteropServices.OSPlatform.Windows))
-        {
-            WebServer = new LocalWebServer();
-        }
-        else
-        {
-            WebServer = null;
-            Logger.Warn("[UIBuilderService] LocalWebServer skipped on non-Windows platform");
-        }
+        WebServer = new LocalWebServer();
 
         EventManager = new DocumentEventManager(SchemaSynchronizer, ValueCollector, WebSocketTransport);
         CleanupService = new SchemaCleanupService();
