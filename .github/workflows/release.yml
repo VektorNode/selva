@@ -70,9 +70,37 @@ jobs:
           # changesets needs full history to compute version diffs
           fetch-depth: 0
 
+      # Skip the expensive install/test/build path when there's nothing to do.
+      # Two cases warrant running:
+      #   1. Pending changesets in .changeset/*.md → open/update the version PR
+      #   2. Post-version-PR-merge: package.json versions ahead of npm → publish
+      # If neither is true (regular code push to main), bail out early.
+      - name: Check for pending release work
+        id: check
+        run: |
+          shopt -s nullglob
+          changesets=(.changeset/!(README|config).md)
+          if [ ${#changesets[@]} -gt 0 ]; then
+            echo "Found pending changesets — proceeding."
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # No changesets — check if the last commit is a version bump
+          # (changesets/action commits as "chore: version packages").
+          last_msg=$(git log -1 --pretty=%s)
+          if [[ "$last_msg" == "chore: version packages"* ]]; then
+            echo "Detected post-version-PR-merge commit — proceeding to publish."
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "No changesets and no version-bump commit — skipping."
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
+
       - uses: pnpm/action-setup@v3
+        if: steps.check.outputs.should_run == 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.should_run == 'true'
         with:
           node-version: 20
           cache: pnpm
@@ -86,6 +114,7 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Install dependencies
+        if: steps.check.outputs.should_run == 'true'
         run: pnpm install --frozen-lockfile
 
       # Run tests + type-check before letting changesets near publishing.
@@ -93,9 +122,11 @@ jobs:
       # to ship despite a known-flaky test, add it to vitest's skip list
       # rather than removing this guard.
       - name: Type-check
+        if: steps.check.outputs.should_run == 'true'
         run: pnpm type-check
 
       - name: Test
+        if: steps.check.outputs.should_run == 'true'
         # @selvajs/local-provider is the only suite with hard coverage
         # requirements today. @selvajs/selva's tests pass assertions but
         # exit 1 from a cleanup race — see the issue tracker. Run the
@@ -103,6 +134,7 @@ jobs:
         run: pnpm --filter=@selvajs/local-provider test
 
       - uses: changesets/action@v1
+        if: steps.check.outputs.should_run == 'true'
         with:
           # `pnpm changeset version` consumes .changeset/*.md, bumps
           # package.json versions across the fixed-mode group, and writes
