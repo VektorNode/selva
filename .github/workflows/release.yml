@@ -78,21 +78,24 @@ jobs:
       - name: Check for pending release work
         id: check
         run: |
-          shopt -s nullglob
-          changesets=(.changeset/!(README|config).md)
-          if [ ${#changesets[@]} -gt 0 ]; then
-            echo "Found pending changesets — proceeding."
+          # Count .changeset/*.md files, excluding README.md and config.md.
+          count=$(find .changeset -maxdepth 1 -type f -name '*.md' \
+            ! -name 'README.md' ! -name 'config.md' | wc -l)
+          if [ "$count" -gt 0 ]; then
+            echo "Found $count pending changeset(s) — proceeding."
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # No changesets — check if the last commit is a version bump
           # (changesets/action commits as "chore: version packages").
           last_msg=$(git log -1 --pretty=%s)
-          if [[ "$last_msg" == "chore: version packages"* ]]; then
-            echo "Detected post-version-PR-merge commit — proceeding to publish."
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          case "$last_msg" in
+            "chore: version packages"*)
+              echo "Detected post-version-PR-merge commit — proceeding to publish."
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
           echo "No changesets and no version-bump commit — skipping."
           echo "should_run=false" >> "$GITHUB_OUTPUT"
 
@@ -111,6 +114,7 @@ jobs:
       # Publishing support; without this, publishes silently fall back to
       # anonymous and 404 on the PUT.
       - name: Upgrade npm for OIDC publishing
+        if: steps.check.outputs.should_run == 'true'
         run: npm install -g npm@latest
 
       - name: Install dependencies
