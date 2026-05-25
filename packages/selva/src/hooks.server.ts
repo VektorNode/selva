@@ -19,6 +19,15 @@ import {
 // subsequent requests skip the no-op.
 let headerAuthBootstrapWired = false;
 
+// Same module-import-vs-test-import concern as above: kick off the
+// boot-time integrity check on the first real request rather than at
+// module load, so test files that import the pure route-classification
+// helpers from this module don't trip provider lookups before their
+// fake providers are wired. The result is still cached inside
+// bootHealth.server.ts after the first call, and `/api/health` awaits
+// the same promise. See bootHealth.server.ts.
+let bootHealthKicked = false;
+
 // One-shot diagnostic flag for the `/login` page specifically. A user
 // landing on /login under a forward-auth deployment is the loudest signal
 // that headers didn't make it through — the per-process provider warning
@@ -30,13 +39,6 @@ let proxyAuthLoginMissWarned = false;
 // provider throws on missing vars (e.g. DATA_PATH for local, SUPABASE_URL for
 // supabase) while `providers.server.ts` is loaded. No app-level check
 // is needed here.
-
-// Kick off boot-time integrity checks (currently: at-rest secret decryption
-// for the local provider). Fire-and-forget — the promise is cached inside
-// the module, and `/api/health` awaits it. Logs and degrades quietly; does
-// not block request serving, because per-row tolerance in
-// `LocalComputeServerStore` keeps pages rendering. See bootHealth.server.ts.
-void getBootHealth();
 
 /**
  * First-run state is a one-way transition (zero users → at least one user)
@@ -174,6 +176,11 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	if (!headerAuthBootstrapWired) {
 		wireHeaderAuthBootstrap();
 		headerAuthBootstrapWired = true;
+	}
+
+	if (!bootHealthKicked) {
+		bootHealthKicked = true;
+		void getBootHealth();
 	}
 
 	const { pathname } = event.url;
