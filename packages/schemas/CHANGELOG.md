@@ -115,6 +115,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MINOR** version (e.g., 1.0.x → 1.1.0): Backward-compatible additions
 - **PATCH** version (e.g., 1.0.0 → 1.0.1): Bug fixes and documentation
 
+## [2.9.0] - 2026-05-25
+
+### Added
+
+- `InputSource.kind` gains the `"bound"` variant. Bound inputs are resolved server-side at solve time by a host-supplied `IBindingResolver`, using a `path` string (opaque to the schema) as the lookup address. The form does not render bound inputs — they have no user-facing control.
+- `InputSource.path` (string, optional) - Required when `kind: 'bound'`. Format is host-defined (e.g. `'segment.outline'`, `'parcel.boundary'`); the resolver interprets it.
+- `InputSource.onMissing` (`'fail' | 'default'`, optional, default `'fail'`) - Used when `kind: 'bound'`. `'fail'` (default) hard-errors the solve if the resolver returns null/undefined. `'default'` falls back to the input's `default` value. Default chosen so missing bound values surface loudly instead of silently using defaults.
+
+### Migration Notes
+
+- Fully backward-compatible addition. Existing schemas (`kind: 'user' | 'external'` or no `source`) load unchanged.
+- Migration function `MigrateTo_2_9_0` registered in `SchemaMigrator`; no data transformation needed.
+- Bound inputs require a host that configures an `IBindingResolver` on `SelvaConfig`. Without one, any solve involving a bound input fails (by design).
+
+---
+
 ## [2.8.0] - 2026-05-08
 
 ### Added

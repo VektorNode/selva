@@ -421,10 +421,22 @@ namespace Selva.Schema.Models
     {
 
 /// <summary>
-/// 'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route).
+/// 'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route writing to sessionStorage). 'bound' = resolved server-side at solve time from a host-supplied IBindingResolver, using 'path' as an opaque address. The form does not render bound inputs.
 /// </summary>
         [JsonProperty("kind")]
         public string Kind { get; set; }
+
+/// <summary>
+/// Required when kind='bound'. Opaque string handed to the IBindingResolver to fetch the value. Format is host-defined (e.g. 'segment.outline', 'parcel.boundary'). Ignored for other kinds.
+/// </summary>
+        [JsonProperty("path")]
+        public string Path { get; set; }
+
+/// <summary>
+/// Used when kind='bound'. 'fail' (default) = the solve errors loudly if the resolver returns null/undefined. 'default' = fall back to the input's default value.
+/// </summary>
+        [JsonProperty("onMissing", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string OnMissing { get; set; } = "fail";
     }
 
     public class DiscoveredInput

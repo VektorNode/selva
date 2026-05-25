@@ -258,9 +258,17 @@ export interface LayoutItemBase {
 }
 export interface InputSource {
 	/**
-	 * 'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route).
+	 * 'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route writing to sessionStorage). 'bound' = resolved server-side at solve time from a host-supplied IBindingResolver, using 'path' as an opaque address. The form does not render bound inputs.
 	 */
-	kind: 'user' | 'external';
+	kind: 'user' | 'external' | 'bound';
+	/**
+	 * Required when kind='bound'. Opaque string handed to the IBindingResolver to fetch the value. Format is host-defined (e.g. 'segment.outline', 'parcel.boundary'). Ignored for other kinds.
+	 */
+	path?: string;
+	/**
+	 * Used when kind='bound'. 'fail' (default) = the solve errors loudly if the resolver returns null/undefined. 'default' = fall back to the input's default value.
+	 */
+	onMissing?: 'fail' | 'default';
 }
 export interface ChartWidgetConfig {}
 export interface ImageWidgetConfig {
