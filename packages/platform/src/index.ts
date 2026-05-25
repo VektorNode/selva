@@ -200,6 +200,12 @@ export type {
 } from './events/audit.js';
 
 // ---------------------------------------------------------------------------
+// bindings (server-side resolver for schema inputs marked `source.kind === 'bound'`)
+// ---------------------------------------------------------------------------
+export type { BindingRequest, IBindingResolver } from './bindings/interface.js';
+export { NoopBindingResolver } from './bindings/interface.js';
+
+// ---------------------------------------------------------------------------
 // utils
 // ---------------------------------------------------------------------------
 export type { AuditUpdate, AuditSoftDelete } from './utils/audit.js';
