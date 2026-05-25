@@ -202,7 +202,7 @@ export type {
 // ---------------------------------------------------------------------------
 // bindings (server-side resolver for schema inputs marked `source.kind === 'bound'`)
 // ---------------------------------------------------------------------------
-export type { BindingRequest, IBindingResolver } from './bindings/interface.js';
+export type { IBindingResolver } from './bindings/interface.js';
 export { NoopBindingResolver } from './bindings/interface.js';
 
 // ---------------------------------------------------------------------------

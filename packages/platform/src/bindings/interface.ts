@@ -15,27 +15,24 @@
 
 import type { RequestContext } from '../context.js';
 
-/**
- * Caller-supplied request for a batch of paths. The optional `scope` field
- * is opaque to the platform; the calling route (e.g. /api/compute) populates
- * it with whatever the host's resolver needs to disambiguate the lookup
- * (segment id, parcel id, project id, custom struct, etc.). The path
- * namespace MAY encode the scope itself ('segment:abc-123:outline') if the
- * host prefers — `scope` is offered as a structured alternative so paths
- * stay clean.
- */
-export interface BindingRequest {
-	paths: readonly string[];
-	scope?: unknown;
-}
-
 export interface IBindingResolver {
 	/**
-	 * Resolve a batch of bound paths in one call. Implementations should
-	 * return ONLY the paths they successfully resolved — absent keys in the
-	 * returned map signal "missing" to the caller, who then decides what to
-	 * do based on the input's `onMissing` field ('fail' = error the solve,
-	 * 'default' = use the input's `default`).
+	 * Resolve a batch of bound paths in one call.
+	 *
+	 *   - `paths` is what the schema author wrote — opaque to the platform,
+	 *     interpreted by the resolver. The author writes paths at design time
+	 *     so the path string should describe WHAT attribute to read, not
+	 *     WHICH entity to read it from.
+	 *   - `scope` is set by the calling route at solve time — opaque to the
+	 *     platform, supplies the "which entity" anchor that varies per
+	 *     request (segment id, parcel id, custom struct). Optional because
+	 *     not every host needs it.
+	 *
+	 * Implementations should return ONLY the paths they successfully
+	 * resolved — absent keys in the returned map signal "missing" to the
+	 * caller, who then decides what to do based on the input's `onMissing`
+	 * field ('fail' = error the solve, 'default' = use the input's
+	 * `default`).
 	 *
 	 * Do not throw for individual missing paths. Throw only for
 	 * resolver-wide failures (DB unreachable, configuration error). Per-path
@@ -45,7 +42,11 @@ export interface IBindingResolver {
 	 * from one domain object, and the resolver should be able to do that
 	 * with a single DB round-trip.
 	 */
-	resolve(ctx: RequestContext, request: BindingRequest): Promise<Map<string, unknown>>;
+	resolve(
+		ctx: RequestContext,
+		paths: readonly string[],
+		scope?: unknown
+	): Promise<Map<string, unknown>>;
 }
 
 /**
