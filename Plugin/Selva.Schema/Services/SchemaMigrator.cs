@@ -29,7 +29,8 @@ public static class SchemaMigrator
             { new Version(2, 5, 0), MigrateTo_2_5_0 },
             { new Version(2, 6, 0), MigrateTo_2_6_0 },
             { new Version(2, 7, 0), MigrateTo_2_7_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_8_0 }
+            { new Version(2, 8, 0), MigrateTo_2_8_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_9_0 }
         };
 
     /// <summary>
@@ -171,13 +172,28 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_8_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.8.0";
 
         // 2.8.0 additions (all backward-compatible):
         // - LayoutItemBase.source ({ kind: 'user' | 'external' }) signals where an
         //   input's value comes from. Absent / kind='user' = normal control behavior.
         //   kind='external' = filled by something outside the form (e.g. a producer
         //   route writing to sessionStorage). Existing schemas load unchanged.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_9_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // 2.9.0 additions (all backward-compatible):
+        // - InputSource gains kind='bound' plus optional 'path' and 'onMissing' fields.
+        //   Bound inputs are resolved server-side at solve time via the host's
+        //   IBindingResolver. The form does not render them. 'onMissing' defaults to
+        //   'fail' so an unresolved bound value errors the solve loudly rather than
+        //   silently falling back to a default.
+        // - Existing schemas (kind='user' | 'external', or no source) load unchanged.
 
         return schema;
     }

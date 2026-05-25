@@ -256,8 +256,18 @@
 			"properties": {
 				"kind": {
 					"type": "string",
-					"enum": ["user", "external"],
-					"description": "'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route)."
+					"enum": ["user", "external", "bound"],
+					"description": "'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route writing to sessionStorage). 'bound' = resolved server-side at solve time from a host-supplied IBindingResolver, using 'path' as an opaque address. The form does not render bound inputs."
+				},
+				"path": {
+					"type": "string",
+					"description": "Required when kind='bound'. Opaque string handed to the IBindingResolver to fetch the value. Format is host-defined (e.g. 'segment.outline', 'parcel.boundary'). Ignored for other kinds."
+				},
+				"onMissing": {
+					"type": "string",
+					"enum": ["fail", "default"],
+					"default": "fail",
+					"description": "Used when kind='bound'. 'fail' (default) = the solve errors loudly if the resolver returns null/undefined. 'default' = fall back to the input's default value."
 				}
 			},
 			"required": ["kind"],
@@ -728,7 +738,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.8.0",
+					"default": "2.9.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {
