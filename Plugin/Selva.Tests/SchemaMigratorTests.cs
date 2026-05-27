@@ -73,6 +73,66 @@ public class SchemaMigratorTests
         Assert.Equal("flat", migrated["layout"]?["type"]?.ToString());
     }
 
+    [Fact]
+    public void MigrateJson_RenamesInputSourceKinds_FlatLayout()
+    {
+        // 2.9.0 renamed source.kind values: external -> client, bound -> server.
+        var json = JObject.Parse("""
+                                 {
+                                 	"schemaVersion": "2.8.0",
+                                 	"layout": {
+                                 		"type": "flat",
+                                 		"groups": [
+                                 			{
+                                 				"id": "g1", "label": "G1", "items": [
+                                 					{ "type": "input", "paramId": "a", "source": { "kind": "external" } },
+                                 					{ "type": "input", "paramId": "b", "source": { "kind": "bound", "path": "segment.outline" } },
+                                 					{ "type": "input", "paramId": "c", "source": { "kind": "user" } },
+                                 					{ "type": "input", "paramId": "d" }
+                                 				]
+                                 			}
+                                 		]
+                                 	}
+                                 }
+                                 """);
+
+        var migrated = SchemaMigrator.MigrateJson(json);
+        var items = migrated["layout"]?["groups"]?[0]?["items"] as JArray;
+
+        Assert.NotNull(items);
+        Assert.Equal("client", items[0]["source"]?["kind"]?.ToString());
+        Assert.Equal("server", items[1]["source"]?["kind"]?.ToString());
+        // 'path' is preserved through the rename.
+        Assert.Equal("segment.outline", items[1]["source"]?["path"]?.ToString());
+        // 'user' and source-less items are untouched.
+        Assert.Equal("user", items[2]["source"]?["kind"]?.ToString());
+        Assert.Null(items[3]["source"]);
+    }
+
+    [Fact]
+    public void MigrateJson_RenamesInputSourceKinds_TabbedLayout()
+    {
+        var json = JObject.Parse("""
+                                 {
+                                 	"schemaVersion": "2.8.0",
+                                 	"layout": {
+                                 		"type": "tabbed",
+                                 		"tabs": [
+                                 			{ "groups": [ { "id": "g1", "label": "G1", "items": [
+                                 				{ "type": "input", "paramId": "a", "source": { "kind": "external" } }
+                                 			] } ] }
+                                 		]
+                                 	}
+                                 }
+                                 """);
+
+        var migrated = SchemaMigrator.MigrateJson(json);
+        var items = migrated["layout"]?["tabs"]?[0]?["groups"]?[0]?["items"] as JArray;
+
+        Assert.NotNull(items);
+        Assert.Equal("client", items[0]["source"]?["kind"]?.ToString());
+    }
+
     // -------------------------------------------------------------------------
     // MigrateWithTracking — object-level migrations and version handling
     // -------------------------------------------------------------------------

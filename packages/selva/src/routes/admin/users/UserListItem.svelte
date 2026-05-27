@@ -134,6 +134,13 @@
 					>
 						disabled
 					</span>
+				{:else if !user.lastLoginAt}
+					<span
+						class="rounded-full border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 font-mono text-[10px] tracking-wide text-amber-600 uppercase dark:text-amber-400"
+						title="Provisioned but has never signed in. Permissions take effect on first login."
+					>
+						invited
+					</span>
 				{/if}
 			</div>
 			<p class="text-muted-foreground truncate font-mono text-xs">{user.id}</p>

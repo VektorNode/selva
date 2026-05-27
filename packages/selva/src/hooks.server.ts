@@ -310,20 +310,6 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		if (!user && isPublicPage && providers.auth.proxyAuth) {
 			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
 
-			// DEBUG (temporary, remove after deployment stabilizes): dump every
-			// header on every /login miss so we can see exactly what the proxy
-			// is forwarding. The provider also logs from inside
-			// identifyFromHeaders, but only on the no-UPN/disabled/missing
-			// paths; this catches the "/login was hit" case for symmetry.
-			if (!user && pathname === '/login') {
-				const dump: string[] = [];
-				event.request.headers.forEach((value, name) => dump.push(`  ${name}: ${value}`));
-				dump.sort();
-				console.warn(
-					`[HeaderAuth][debug] /login miss — full request headers:\n${dump.join('\n') || '  (no headers)'}`
-				);
-			}
-
 			// Diagnostic: a user landing on /login under a forward-auth
 			// deployment without a resolved identity is the canonical
 			// "headers didn't make it through" symptom. Log once per process

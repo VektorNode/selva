@@ -200,7 +200,7 @@ export type {
 } from './events/audit.js';
 
 // ---------------------------------------------------------------------------
-// bindings (server-side resolver for schema inputs marked `source.kind === 'bound'`)
+// bindings (server-side resolver for schema inputs marked `source.kind === 'server'`)
 // ---------------------------------------------------------------------------
 export type { IBindingResolver } from './bindings/interface.js';
 export { NoopBindingResolver } from './bindings/interface.js';

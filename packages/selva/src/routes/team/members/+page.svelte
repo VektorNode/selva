@@ -325,7 +325,11 @@
 											{/if}
 										</div>
 										<p class="text-muted-foreground text-xs">
-											Joined {new Date(member.joinedAt).toLocaleDateString()}
+											{#if member.lastLoginAt}
+												Joined {new Date(member.joinedAt).toLocaleDateString()}
+											{:else}
+												Invited {new Date(member.joinedAt).toLocaleDateString()} · never signed in
+											{/if}
 										</p>
 									</div>
 								</div>

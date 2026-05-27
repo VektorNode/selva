@@ -1,6 +1,6 @@
-// External-input transit storage.
+// Client-supplied input transit storage.
 //
-// When an input has source.kind === 'external', a producer route writes the produced
+// When an input has source.kind === 'client', a producer route writes the produced
 // value here, and the solver route reads it back. Scoped per (scopeKey, inputId) so
 // values for one solver/input don't bleed into another. The scope key is whatever
 // uniquely identifies the solver context — sessionId in plugin-ui/preview,
@@ -70,7 +70,7 @@ export function getExternalInputs(schema: UISchema): ExternalInput[] {
 	for (const item of walkLayoutItems(schema)) {
 		if (item.type !== 'input') continue;
 		const source = (item as { source?: InputSource }).source;
-		if (source?.kind !== 'external') continue;
+		if (source?.kind !== 'client') continue;
 		result.push({
 			paramId: item.paramId,
 			displayName: item.displayName ?? item.paramId

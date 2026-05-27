@@ -68,11 +68,11 @@ export interface SelvaConfig {
 	/** Optional. Defaults to `NoopEventSink`. */
 	events?: IEventSink;
 	/**
-	 * Optional. Resolves values for inputs marked as `source.kind === 'bound'`
+	 * Optional. Resolves values for inputs marked as `source.kind === 'server'`
 	 * in the schema. Defaults to `NoopBindingResolver`, which returns nothing
 	 * — combined with the schema's `onMissing: 'fail'` default, that causes
-	 * any solve involving a bound input to error loudly until a real resolver
-	 * is configured. Hosts that want bound inputs must supply one.
+	 * any solve involving a server-resolved input to error loudly until a real
+	 * resolver is configured. Hosts that want server-resolved inputs must supply one.
 	 */
 	bindingResolver?: IBindingResolver;
 }
