@@ -1,5 +1,18 @@
 # @selvajs/platform
 
+## 0.11.0
+
+### Minor Changes
+
+- 3e5ebe3: Add a server-side binding resolver for schema inputs marked `source.kind === 'bound'`.
+
+  New `IBindingResolver` interface and `NoopBindingResolver` default, exposed via the new optional `SelvaConfig.bindingResolver`. The resolver batches opaque, host-defined paths to values at solve time; the default returns nothing so any bound input fails loudly (matching the schema's `onMissing: 'fail'` default) until a host wires a real implementation.
+
+- Publish the platform interface package and its local + Supabase provider
+  implementations to npm. These were previously workspace-private; they are now
+  public so external apps can build on the Selva engine (provider interfaces +
+  reference implementations) without vendoring the source.
+
 ## 0.2.0
 
 ### Minor Changes

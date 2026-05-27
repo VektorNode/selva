@@ -1,9 +1,16 @@
 {
 	"name": "@selvajs/platform",
-	"version": "0.10.0",
+	"version": "0.11.0",
 	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
 	"license": "MIT",
-	"private": true,
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/VektorNode/selva.git",
+		"directory": "packages/platform"
+	},
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",

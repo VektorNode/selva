@@ -7,12 +7,5 @@
 	"access": "public",
 	"baseBranch": "main",
 	"updateInternalDependencies": "patch",
-	"ignore": [
-		"@selvajs/plugin-ui",
-		"@selvajs/config",
-		"@selvajs/platform",
-		"@selvajs/local-provider",
-		"@selvajs/supabase-provider",
-		"@selvajs/header-auth-provider"
-	]
+	"ignore": ["@selvajs/plugin-ui", "@selvajs/config", "@selvajs/header-auth-provider"]
 }
