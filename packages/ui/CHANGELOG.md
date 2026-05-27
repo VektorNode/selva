@@ -1,5 +1,12 @@
 # @selvajs/ui
 
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [3e5ebe3]
+  - @selvajs/schemas@3.0.0
+
 ## 2.0.11
 
 ### Patch Changes
