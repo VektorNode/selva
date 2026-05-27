@@ -1,5 +1,5 @@
 /**
- * Server-side resolver for inputs marked as `source: { kind: 'bound', path }`
+ * Server-side resolver for inputs marked as `source: { kind: 'server', path }`
  * in the schema. The host (selva app or a fork) supplies an implementation;
  * the platform stays domain-agnostic.
  *

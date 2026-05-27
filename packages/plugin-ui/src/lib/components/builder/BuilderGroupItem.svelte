@@ -199,16 +199,16 @@
 	}
 
 	let isInput = $derived(item.type === 'input');
-	let isExternalSource = $derived((item as { source?: InputSource }).source?.kind === 'external');
+	let isClientSource = $derived((item as { source?: InputSource }).source?.kind === 'client');
 
-	function toggleExternalSource() {
+	function toggleClientSource() {
 		if (item.type !== 'input') return;
 		const target = item as { source?: InputSource; visible?: boolean };
-		if (target.source?.kind === 'external') {
+		if (target.source?.kind === 'client') {
 			target.source = undefined;
 		} else {
-			target.source = { kind: 'external' };
-			// External-sourced inputs are typically hidden from the end user.
+			target.source = { kind: 'client' };
+			// Client-supplied inputs are typically hidden from the end user.
 			// Default to hidden when first toggled on; user can override afterwards.
 			if (target.visible !== false) target.visible = false;
 		}
@@ -573,21 +573,21 @@
 						</div>
 					{/if}
 
-					<!-- External Source toggle (input items only) -->
+					<!-- Client-supplied value toggle (input items only) -->
 					{#if isInput}
 						<div
 							class="border-border/70 mt-1 flex items-center justify-between border-t pt-2 text-[11px]"
 						>
 							<div class="flex flex-col">
-								<span class="text-muted-foreground">External value</span>
+								<span class="text-muted-foreground">Client-supplied value</span>
 								<span class="text-muted-foreground/70 text-[9px]">
 									Filled by a producer route (e.g. /preview/producer/json-paste). Hides the control
 									by default.
 								</span>
 							</div>
 							<Switch
-								checked={isExternalSource}
-								onCheckedChange={toggleExternalSource}
+								checked={isClientSource}
+								onCheckedChange={toggleClientSource}
 								class="scale-75"
 							/>
 						</div>

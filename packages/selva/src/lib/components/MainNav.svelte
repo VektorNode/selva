@@ -3,7 +3,16 @@
 	import { LayoutGrid, GitBranch } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 
-	const hasOrg = $derived(!!(page.data as { ctx?: { orgId?: string } }).ctx?.orgId);
+	// Mirror the gate in /projects/+layout.server.ts: the route requires
+	// manage_definitions OR manage_projects. Gating on org membership alone
+	// would show a link that redirects plain members straight to /library.
+	const ctx = $derived(
+		(page.data as { ctx?: { platformPermissions?: string[]; orgPermissions?: string[] } }).ctx
+	);
+	const canManageProjects = $derived(
+		(ctx?.platformPermissions ?? []).includes('instance_admin') ||
+			(ctx?.orgPermissions ?? []).some((p) => p === 'manage_definitions' || p === 'manage_projects')
+	);
 
 	const items = $derived(
 		[
@@ -19,7 +28,7 @@
 				label: 'Projects',
 				icon: GitBranch as Component,
 				match: 'prefix',
-				show: hasOrg
+				show: canManageProjects
 			}
 		].filter((i) => i.show)
 	);

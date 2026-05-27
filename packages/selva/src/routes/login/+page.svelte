@@ -11,11 +11,15 @@
 		hasPasswordAuth: boolean;
 		hasEmailLink: boolean;
 		hasProxyAuth: boolean;
+		// Forward-auth only: true when NONE of the identity headers arrived
+		// (proxy wiring problem) vs false when headers arrived but the user
+		// isn't allowlisted (access not granted). Drives which message shows.
+		proxyHeadersMissing: boolean;
+		// Forward-auth only: redacted snapshot of the incoming request headers,
+		// shown in a collapsible block so operators can verify what the proxy
+		// forwards while deployments are still being wired. Null otherwise.
+		requestHeaders: Array<{ name: string; value: string }> | null;
 		oauthProviders: string[];
-		// DEBUG (temporary, remove after deployment stabilizes): full request
-		// header snapshot so the operator can verify forward-auth wiring
-		// without server log access.
-		debugHeaders: Array<{ name: string; value: string }> | null;
 	}
 
 	interface Props {
@@ -51,6 +55,24 @@
 		!data.hasPasswordAuth && !data.hasEmailLink && data.oauthProviders.length === 0
 	);
 </script>
+
+<!--
+	Temporary forward-auth diagnostic: render the incoming request headers so
+	operators can confirm what the proxy forwards while a deployment is still
+	being wired. Values for secret-bearing headers are redacted server-side.
+	Remove once header-auth deployments have stabilized.
+-->
+{#snippet requestHeaderDump(headers: Array<{ name: string; value: string }>)}
+	<details class="border-border rounded border p-3 text-xs">
+		<summary class="text-muted-foreground cursor-pointer font-medium">
+			Request headers ({headers.length})
+		</summary>
+		<pre
+			class="text-muted-foreground mt-2 max-h-96 overflow-auto break-all whitespace-pre-wrap">{headers
+				.map((h) => `${h.name}: ${h.value}`)
+				.join('\n')}</pre>
+	</details>
+{/snippet}
 
 <svelte:head>
 	<title>Login - {page.data.branding.name}</title>
@@ -137,7 +159,7 @@
 			</form>
 		{/if}
 
-		{#if noAuthMethods && data.hasProxyAuth}
+		{#if noAuthMethods && data.hasProxyAuth && data.proxyHeadersMissing}
 			<div class="space-y-3">
 				<p class="text-muted-foreground text-sm">
 					This deployment uses forward-auth — sign-in happens upstream at your identity provider,
@@ -152,23 +174,22 @@
 				<p class="text-muted-foreground text-xs">
 					Operators: see <code>HEADER_AUTH_UPN_HEADER</code> and your proxy's forward-auth config.
 				</p>
-
-				<!--
-					DEBUG (temporary, remove after deployment stabilizes): full
-					dump of every header on this request so the operator can see
-					exactly what the proxy is forwarding. Open the <details>
-					element to inspect.
-				-->
-				{#if data.debugHeaders}
-					<details class="border-border rounded border p-3 text-xs">
-						<summary class="text-muted-foreground cursor-pointer font-medium">
-							Debug: request headers ({data.debugHeaders.length})
-						</summary>
-						<pre
-							class="text-muted-foreground mt-2 max-h-96 overflow-auto break-all whitespace-pre-wrap">{data.debugHeaders
-								.map((h) => `${h.name}: ${h.value}`)
-								.join('\n')}</pre>
-					</details>
+				{#if data.requestHeaders}
+					{@render requestHeaderDump(data.requestHeaders)}
+				{/if}
+			</div>
+		{:else if noAuthMethods && data.hasProxyAuth}
+			<div class="space-y-3">
+				<p class="text-muted-foreground text-sm">
+					You're signed in with your identity provider, but your account hasn't been granted access
+					to this deployment yet.
+				</p>
+				<p class="text-muted-foreground text-xs">
+					Ask an administrator to add you to the allowlist. Once added, reload this page — no second
+					sign-in is needed.
+				</p>
+				{#if data.requestHeaders}
+					{@render requestHeaderDump(data.requestHeaders)}
 				{/if}
 			</div>
 		{:else if noAuthMethods}

@@ -421,19 +421,19 @@ namespace Selva.Schema.Models
     {
 
 /// <summary>
-/// 'user' = rendered as a normal control. 'external' = filled by something outside the form (e.g. a producer route writing to sessionStorage). 'bound' = resolved server-side at solve time from a host-supplied IBindingResolver, using 'path' as an opaque address. The form does not render bound inputs.
+/// Who supplies the input's value. 'user' = the person fills it in, in the form. 'client' = supplied by the app in the browser before the form runs, not by the person. 'server' = looked up on the server from your data when the definition runs, using 'path' to say what to fetch; never shown in the form.
 /// </summary>
         [JsonProperty("kind")]
         public string Kind { get; set; }
 
 /// <summary>
-/// Required when kind='bound'. Opaque string handed to the IBindingResolver to fetch the value. Format is host-defined (e.g. 'segment.outline', 'parcel.boundary'). Ignored for other kinds.
+/// Required when kind='server'. Names what value to fetch, e.g. 'segment.outline' or 'parcel.boundary'. The meaning of the name is defined by the app, not by Selva. Ignored for other kinds.
 /// </summary>
         [JsonProperty("path")]
         public string Path { get; set; }
 
 /// <summary>
-/// Used when kind='bound'. 'fail' (default) = the solve errors loudly if the resolver returns null/undefined. 'default' = fall back to the input's default value.
+/// What to do when kind='server' and the value can't be found: 'fail' (default) stops with an error; 'default' uses the input's default value instead.
 /// </summary>
         [JsonProperty("onMissing", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string OnMissing { get; set; } = "fail";

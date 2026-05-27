@@ -126,9 +126,15 @@ async function build() {
 		log('');
 
 		// Step 2: Build C# plugin with embedded assets
+		// Build the .gha project directly (not the whole solution) so the test projects
+		// — which re-pull PdfSharpCore for their own use — don't get compiled against the
+		// ILRepack-merged Release Selva.Drawing.dll. Compiling them in that context produces
+		// duplicate-type errors because the internalized PdfSharpCore types inside
+		// Selva.Drawing become visible via InternalsVisibleTo and collide with the public
+		// PdfSharpCore package reference. Tests run separately in Debug.
 		log('[2/4] Building C# plugin...');
 		try {
-			execSync('dotnet build --configuration Release', {
+			execSync('dotnet build Selva.GH/Selva.GH.csproj --configuration Release', {
 				cwd: join(projectRoot, 'Plugin'),
 				stdio: 'inherit'
 			});
