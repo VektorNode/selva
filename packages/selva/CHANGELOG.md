@@ -1,5 +1,17 @@
 # @selvajs/selva
 
+## 3.0.0
+
+### Patch Changes
+
+- 3e5ebe3: Prep the render path for server-resolved `bound` inputs.
+
+  Extracted the `library/[guid]` render path into a reusable `loadDefinitionForRender` helper so the bound-input solve path has a single home. The boot-time integrity check now fires on the first request instead of at module load, so test files importing the route-classification helpers no longer trip provider lookups before their fakes are wired.
+
+- 3e5ebe3: Remove the temporary forward-auth debug instrumentation from the login flow now that header-auth deployments have stabilized.
+
+  Removed the `/login` miss header dump in the SvelteKit hook layer and the original debug `Debug: request headers` block. The login page now distinguishes "proxy forwarded no identity headers" from "headers arrived but the user isn't allowlisted", and shows a redacted request-header snapshot in both forward-auth failure cases as a stabilization aid.
+
 ## 2.0.11
 
 ### Patch Changes
