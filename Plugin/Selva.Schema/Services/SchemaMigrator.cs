@@ -29,7 +29,8 @@ public static class SchemaMigrator
             { new Version(2, 5, 0), MigrateTo_2_5_0 },
             { new Version(2, 6, 0), MigrateTo_2_6_0 },
             { new Version(2, 7, 0), MigrateTo_2_7_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_8_0 }
+            { new Version(2, 8, 0), MigrateTo_2_8_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_9_0 }
         };
 
     /// <summary>
@@ -99,11 +100,54 @@ public static class SchemaMigrator
                 }
             }
 
+            // 3. Rename input-source kinds (2.9.0): 'external' -> 'client',
+            //    'bound' -> 'server'. The values were renamed to describe WHO
+            //    supplies the value rather than the mechanism. This is a string
+            //    rewrite so it must run pre-deserialization — the typed enum no
+            //    longer accepts the old spellings.
+            RenameInputSourceKinds(json);
+
             // Update version
             json["schemaVersion"] = SchemaVersion.CURRENT_STRING;
         }
 
         return json;
+    }
+
+    /// <summary>
+    ///     Rewrite legacy `source.kind` values on every layout item in place.
+    ///     Walks both tabbed (tabs[].groups[].items[]) and flat
+    ///     (groups[].items[]) layouts. No-op for items without a source or
+    ///     with an already-current kind.
+    /// </summary>
+    private static void RenameInputSourceKinds(JObject json)
+    {
+        var renames = new Dictionary<string, string>
+        {
+            { "external", "client" },
+            { "bound", "server" }
+        };
+
+        var layout = json["layout"] as JObject;
+        if (layout == null) return;
+
+        var groups = new List<JToken>();
+        if (layout["groups"] is JArray flatGroups) groups.AddRange(flatGroups);
+        if (layout["tabs"] is JArray tabs)
+            foreach (var tab in tabs)
+                if (tab["groups"] is JArray tabGroups)
+                    groups.AddRange(tabGroups);
+
+        foreach (var group in groups)
+        {
+            if (group["items"] is not JArray items) continue;
+            foreach (var item in items)
+            {
+                var kind = item["source"]?["kind"]?.Value<string>();
+                if (kind != null && renames.TryGetValue(kind, out var next))
+                    item["source"]!["kind"] = next;
+            }
+        }
     }
 
     private static UISchema MigrateTo_2_0_0(UISchema schema)
@@ -171,13 +215,30 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_8_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.8.0";
 
         // 2.8.0 additions (all backward-compatible):
         // - LayoutItemBase.source ({ kind: 'user' | 'external' }) signals where an
         //   input's value comes from. Absent / kind='user' = normal control behavior.
         //   kind='external' = filled by something outside the form (e.g. a producer
         //   route writing to sessionStorage). Existing schemas load unchanged.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_9_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // 2.9.0 additions (all backward-compatible):
+        // - InputSource.kind values renamed to describe WHO supplies the value:
+        //   'external' -> 'client', 'bound' -> 'server'. The string rewrite runs
+        //   in MigrateJson (RenameInputSourceKinds) before deserialization.
+        // - kind='server' gains optional 'path' and 'onMissing' fields. Server
+        //   inputs are resolved server-side at solve time via the host's
+        //   IBindingResolver and are not rendered by the form. 'onMissing'
+        //   defaults to 'fail' so an unresolved value errors the solve loudly
+        //   rather than silently falling back to a default.
 
         return schema;
     }

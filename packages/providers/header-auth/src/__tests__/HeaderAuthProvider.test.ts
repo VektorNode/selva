@@ -153,6 +153,24 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 		expect(refetched?.email).toBe('alice@example.com');
 	});
 
+	it('resolves a row pre-allowlisted by email when the proxy UPN differs', async () => {
+		// Entra norm: admin allowlists by mail, proxy forwards a different UPN.
+		const created = await provider.createUser('alice@company.com');
+		const result = await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({
+				[DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com',
+				[DEFAULT_HEADERS.email]: 'alice@company.com'
+			})
+		);
+		expect(result?.id).toBe(created.id);
+
+		// The UPN is rebound, so the next login resolves via the fast UPN path.
+		const second = await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com' })
+		);
+		expect(second?.id).toBe(created.id);
+	});
+
 	it('refuses to identify a disabled user even with valid headers', async () => {
 		const created = await provider.createUser('alice@example.com');
 		await provider.disableUser(created.id);

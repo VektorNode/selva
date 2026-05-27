@@ -9,16 +9,6 @@ import {
 } from '$lib/server/admin-auth.server';
 import { getAuthProvider } from '$lib/server/auth.server';
 
-// DEBUG (temporary, remove after deployment stabilizes): produce a sorted
-// snapshot of every incoming header so we can surface it on /login for
-// operators diagnosing forward-auth header mismatches.
-function snapshotRequestHeaders(headers: Headers): Array<{ name: string; value: string }> {
-	const out: Array<{ name: string; value: string }> = [];
-	headers.forEach((value, name) => out.push({ name, value }));
-	out.sort((a, b) => a.name.localeCompare(b.name));
-	return out;
-}
-
 /**
  * Surface the auth capabilities the page should render. We ask the auth port
  * what's available — never the env or a specific provider's name. An adapter
@@ -39,21 +29,35 @@ export const load: PageServerLoad = async ({ locals, url, request }) => {
 	}
 
 	const auth = getAuthProvider();
-	const hasProxyAuth = Boolean(auth.proxyAuth);
 
-	// DEBUG (temporary, remove after deployment stabilizes): when forward-auth
-	// is the configured auth method and the user landed on /login (meaning
-	// header identification failed in hooks.server.ts), capture every header
-	// on the request so the page can render them. Avoids the SSH-to-the-box
-	// roundtrip for operators verifying their proxy config.
-	const debugHeaders = hasProxyAuth ? snapshotRequestHeaders(request.headers) : null;
+	// Under forward-auth, landing here means identification failed in
+	// hooks.server.ts. Two very different causes, and the operator-facing copy
+	// must not conflate them: either the proxy forwarded none of the identity
+	// headers (genuine wiring problem), or the headers arrived but the user
+	// isn't on the allowlist (auth worked, access just isn't granted).
+	const proxyHeadersMissing = auth.proxyAuth
+		? auth.proxyAuth.hasNoIdentityHeaders(request.headers)
+		: false;
+
+	// While forward-auth deployments are still being wired, surface the
+	// incoming request headers on the page so operators can confirm what the
+	// proxy actually forwards without server-log access. Only populated under
+	// proxy-auth (the only place it's useful), and value-redacted for headers
+	// that carry secrets so /login doesn't leak cookies/tokens to a viewer.
+	const REDACTED = new Set(['cookie', 'authorization', 'proxy-authorization']);
+	const requestHeaders = auth.proxyAuth
+		? [...request.headers]
+				.map(([name, value]) => ({ name, value: REDACTED.has(name) ? '<redacted>' : value }))
+				.sort((a, b) => a.name.localeCompare(b.name))
+		: null;
 
 	return {
 		hasPasswordAuth: Boolean(auth.passwordAuth),
 		hasEmailLink: Boolean(auth.emailLink),
-		hasProxyAuth,
-		oauthProviders: auth.oauth?.listProviders() ?? [],
-		debugHeaders
+		hasProxyAuth: Boolean(auth.proxyAuth),
+		proxyHeadersMissing,
+		requestHeaders,
+		oauthProviders: auth.oauth?.listProviders() ?? []
 	};
 };
 

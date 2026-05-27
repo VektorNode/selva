@@ -8,6 +8,13 @@ import { getInviteStore, getOrganizationProvider } from '$lib/server/providers.s
 export interface MemberRow extends OrgMember {
 	email?: string;
 	displayName?: string;
+	/**
+	 * From the auth provider, not the membership row. Absent ⇒ the user was
+	 * provisioned (allowlisted/added) but has never authenticated, so the
+	 * membership's `joinedAt` is really a "provisioned at" timestamp. The UI
+	 * shows "Invited" rather than "Joined" in that case.
+	 */
+	lastLoginAt?: string;
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -40,7 +47,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const userById = new Map(users.filter((u): u is AuthUser => !!u).map((u) => [u.id, u]));
 		members = page.items.map((m) => ({
 			...m,
-			email: userById.get(m.userId)?.email
+			email: userById.get(m.userId)?.email,
+			lastLoginAt: userById.get(m.userId)?.lastLoginAt
 		}));
 		actorRole = page.items.find((m) => m.userId === ctx.userId)?.role ?? null;
 	} catch {

@@ -2,6 +2,7 @@ import type { IAuthProvider } from './auth/interface.js';
 import type { IDataProvider } from './data/interface.js';
 import type { IStorageProvider } from './storage/interface.js';
 import type { IEventSink } from './events/interface.js';
+import type { IBindingResolver } from './bindings/interface.js';
 
 /**
  * - `single`: one org per deployment. Setup creates it; `ctx.actingOrgId`
@@ -66,6 +67,14 @@ export interface SelvaConfig {
 	storage: IStorageProvider;
 	/** Optional. Defaults to `NoopEventSink`. */
 	events?: IEventSink;
+	/**
+	 * Optional. Resolves values for inputs marked as `source.kind === 'server'`
+	 * in the schema. Defaults to `NoopBindingResolver`, which returns nothing
+	 * — combined with the schema's `onMissing: 'fail'` default, that causes
+	 * any solve involving a server-resolved input to error loudly until a real
+	 * resolver is configured. Hosts that want server-resolved inputs must supply one.
+	 */
+	bindingResolver?: IBindingResolver;
 }
 
 export type SelvaConfigFactory = (env: Record<string, string | undefined>) => SelvaConfig;
