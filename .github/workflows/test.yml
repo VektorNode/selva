@@ -23,6 +23,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Persist ESLint's cache across runs so unchanged files are skipped.
+      # Keyed on lint config so a rule change busts the cache; restore-keys
+      # let an outdated cache seed a fresh run rather than starting cold.
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/eslint
+          key: eslint-${{ hashFiles('eslint.config.*', '.prettierrc*') }}
+          restore-keys: |
+            eslint-
+
       # Style checks before tests — they're cheap and fail fast.
       - run: pnpm format:check
       - run: pnpm lint

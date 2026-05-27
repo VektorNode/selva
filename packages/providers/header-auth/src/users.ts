@@ -51,6 +51,14 @@ async function writeFile(filePath: string, data: AllowlistFile): Promise<void> {
 
 export interface AllowlistStore {
 	findByUpn(upn: string): Promise<AllowlistEntry | null>;
+	/**
+	 * Look up by email rather than UPN. Used as a fallback on first login when
+	 * the proxy forwards a UPN that differs from the email an admin used to
+	 * pre-allowlist the user (common on Entra: UPN `x@tenant.onmicrosoft.com`
+	 * vs mail `x@company.com`). Without this, the UPN miss orphans the
+	 * org-member row that was keyed to the allowlist UUID at provision time.
+	 */
+	findByEmail(email: string): Promise<AllowlistEntry | null>;
 	findById(id: string): Promise<AllowlistEntry | null>;
 	listUsers(): Promise<AllowlistEntry[]>;
 	createUser(upn: string): Promise<AllowlistEntry>;
@@ -63,6 +71,13 @@ export interface AllowlistStore {
 		id: string,
 		fields: { email?: string; displayName?: string }
 	): Promise<void>;
+	/**
+	 * Repoint a row's UPN to the value the proxy actually forwards. Called once
+	 * after an email-fallback match so subsequent logins resolve via the fast
+	 * `findByUpn` path. No-ops if the new UPN already belongs to a different
+	 * row (a collision means manual operator cleanup — never silently merge).
+	 */
+	rebindUpn(id: string, upn: string): Promise<void>;
 	setDisabled(id: string, disabled: boolean): Promise<void>;
 	touchLastLogin(id: string): Promise<void>;
 	deleteUser(id: string): Promise<void>;
@@ -76,6 +91,16 @@ export function createAllowlistStore(filePath: string): AllowlistStore {
 			const { users } = await readFile(filePath);
 			const key = norm(upn);
 			return users.find((u) => u.upn === key) ?? null;
+		},
+
+		async findByEmail(email) {
+			const { users } = await readFile(filePath);
+			const key = norm(email);
+			// Match the `email` column OR the `upn` column: admins pre-allowlist
+			// via `createUser(email)`, which stores the email AS the upn (the
+			// `email` column stays empty until first-login materialization). So
+			// an email-keyed lookup has to consider both.
+			return users.find((u) => norm(u.email ?? '') === key || u.upn === key) ?? null;
 		},
 
 		async findById(id) {
@@ -118,6 +143,18 @@ export function createAllowlistStore(filePath: string): AllowlistStore {
 				dirty = true;
 			}
 			if (dirty) await writeFile(filePath, file);
+		},
+
+		async rebindUpn(id, upn) {
+			const file = await readFile(filePath);
+			const key = norm(upn);
+			const user = file.users.find((u) => u.id === id);
+			if (!user || user.upn === key) return;
+			// Don't merge into an existing row — a UPN collision is an operator
+			// data issue, not something to paper over by reassigning identity.
+			if (file.users.some((u) => u.id !== id && u.upn === key)) return;
+			user.upn = key;
+			await writeFile(filePath, file);
 		},
 
 		async setDisabled(id, disabled) {

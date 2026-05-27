@@ -47,6 +47,43 @@ describe('createAllowlistStore — UPN normalization', () => {
 	});
 });
 
+describe('createAllowlistStore — findByEmail', () => {
+	it('matches a pre-allowlisted row by its UPN when the email column is empty', async () => {
+		// `createUser(email)` stores email AS upn; the email column stays empty
+		// until first-login materialization. An email lookup must still hit it.
+		const created = await store.createUser('alice@example.com');
+		expect((await store.findByEmail('ALICE@example.com'))?.id).toBe(created.id);
+	});
+
+	it('matches a materialized email that differs from the upn', async () => {
+		const created = await store.createUser('alice@tenant.onmicrosoft.com');
+		await store.materializeFromHeaders(created.id, { email: 'alice@company.com' });
+		expect((await store.findByEmail('alice@company.com'))?.id).toBe(created.id);
+	});
+
+	it('returns null when nothing matches', async () => {
+		await store.createUser('alice@example.com');
+		expect(await store.findByEmail('nobody@example.com')).toBeNull();
+	});
+});
+
+describe('createAllowlistStore — rebindUpn', () => {
+	it('repoints the UPN so the next findByUpn resolves the same row', async () => {
+		const created = await store.createUser('alice@company.com');
+		await store.rebindUpn(created.id, 'alice@tenant.onmicrosoft.com');
+		expect((await store.findByUpn('alice@tenant.onmicrosoft.com'))?.id).toBe(created.id);
+		expect(await store.findByUpn('alice@company.com')).toBeNull();
+	});
+
+	it('refuses to rebind onto a UPN already owned by another row', async () => {
+		const alice = await store.createUser('alice@example.com');
+		await store.createUser('bob@example.com');
+		await store.rebindUpn(alice.id, 'BOB@example.com');
+		// Unchanged — collision is left for the operator to resolve.
+		expect((await store.findById(alice.id))?.upn).toBe('alice@example.com');
+	});
+});
+
 describe('createAllowlistStore — materializeFromHeaders', () => {
 	it('fills in empty fields on first sight', async () => {
 		const created = await store.createUser('alice@example.com');

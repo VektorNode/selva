@@ -30,7 +30,7 @@
 		}
 	});
 
-	// External inputs declared by the schema (source.kind === 'external').
+	// Client-supplied inputs declared by the schema (source.kind === 'client').
 	const externalInputs = $derived<ExternalInput[]>(
 		preview.state.schema ? getExternalInputs(preview.state.schema) : []
 	);
