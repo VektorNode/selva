@@ -1,5 +1,20 @@
 # @selvajs/supabase-provider
 
+## 0.11.0
+
+### Minor Changes
+
+- Publish the platform interface package and its local + Supabase provider
+  implementations to npm. These were previously workspace-private; they are now
+  public so external apps can build on the Selva engine (provider interfaces +
+  reference implementations) without vendoring the source.
+
+### Patch Changes
+
+- Updated dependencies [3e5ebe3]
+- Updated dependencies
+  - @selvajs/platform@0.11.0
+
 ## 0.2.0
 
 ### Minor Changes
