@@ -33,3 +33,4 @@ export { randomId } from './utils/randomId';
 // UI-specific runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';
 export type { SolveFn } from './types/solveFn';
+export { DEFAULT_PRESET_LABELS, type PresetLabels } from './types/presetLabels';

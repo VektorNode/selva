@@ -16,6 +16,12 @@
 		rightContent?: Snippet;
 		subnav?: Snippet;
 		headerClass?: string;
+		/**
+		 * Bring-your-own header. When provided, this renders inside the sticky
+		 * header bar instead of the built-in PageHeader. The bar keeps the
+		 * standard `--header-h` height so the fixed-mode layout math is unaffected.
+		 */
+		header?: Snippet;
 
 		// Body layout
 		// 'fixed'  — full viewport, header + body + footer; body owns its own scroll. For app-like pages (builder, preview, library/[guid]).
@@ -29,6 +35,8 @@
 		showFooter?: boolean;
 		errors?: string[];
 		warnings?: string[];
+		/** Fully overrides the footer copyright line. `{name}` and `{year}` are substituted. */
+		footerText?: string;
 		footerChildren?: Snippet;
 
 		// Body content
@@ -49,11 +57,13 @@
 		rightContent,
 		subnav,
 		headerClass = '',
+		header,
 		mode: _mode = 'scroll',
 		sidenav,
 		showFooter = false,
 		errors = [],
 		warnings = [],
+		footerText,
 		footerChildren,
 		class: className = '',
 		bodyClass = '',
@@ -83,17 +93,27 @@
 
 <div class={rootClass}>
 	{#if showHeader}
-		<PageHeader
-			{homeUrl}
-			{title}
-			{logo}
-			{brandName}
-			{showModeToggle}
-			{navItems}
-			{rightContent}
-			{subnav}
-			class={headerClass}
-		/>
+		{#if header}
+			<header
+				class={`top-0 backdrop-blur-sm sticky z-40 border-b border-border bg-background/90 ${headerClass}`}
+			>
+				<div class="flex h-(--header-h) items-center px-(--page-px)">
+					{@render header()}
+				</div>
+			</header>
+		{:else}
+			<PageHeader
+				{homeUrl}
+				{title}
+				{logo}
+				{brandName}
+				{showModeToggle}
+				{navItems}
+				{rightContent}
+				{subnav}
+				class={headerClass}
+			/>
+		{/if}
 	{/if}
 
 	<div class={bodyShellClass} style={bodyShellStyle}>
@@ -109,7 +129,7 @@
 
 	{#if showFooter}
 		<div class="bottom-0 sticky z-10 shrink-0">
-			<PageFooter {errors} {warnings} copyrightName={_copyright}>
+			<PageFooter {errors} {warnings} copyrightName={_copyright} {footerText}>
 				{#if footerChildren}
 					{@render footerChildren()}
 				{/if}
