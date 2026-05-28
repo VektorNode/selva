@@ -53,17 +53,16 @@ public class GH_DynamicValueListOutput : GH_Component
             "Value list options as a list of \"key\" = value pair strings (e.g. \"x\" = 0)",
             GH_ParamAccess.list);
         pManager[0].Optional = true;
-
-        // Optional override of the persisted target input GUID.
-        pManager.AddTextParameter("Target Input", "T",
-            "Optional: the instance GUID of the Dynamic Value List input to populate. Usually set from the web UI builder instead.",
-            GH_ParamAccess.item);
-        pManager[1].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        // No downstream GH output — this is a sink read by the Selva collector / Rhino.Compute.
+        // JSON routing payload { targetInputId, options }. The local collector reads the component
+        // state directly; this param lets Rhino.Compute read the same payload via normal output
+        // collection (it is harmless/unused in the local flow).
+        pManager.AddTextParameter("JSON", "J",
+            "Routing payload { targetInputId, options } consumed by the web UI / Rhino.Compute",
+            GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess da)
@@ -71,72 +70,38 @@ public class GH_DynamicValueListOutput : GH_Component
         var pairs = new List<string>();
         da.GetDataList(0, pairs);
 
-        var targetOverride = string.Empty;
-        if (da.GetData(1, ref targetOverride) && !string.IsNullOrWhiteSpace(targetOverride) &&
-            Guid.TryParse(targetOverride.Trim(), out var overrideGuid))
+        Options.Clear();
+        var duplicateNames = new List<string>();
+        foreach (var entry in OptionPairParser.Parse(pairs))
         {
-            _targetInputId = overrideGuid;
+            // Option names must be unique — they are the value list's keys. A duplicate would
+            // silently shadow an earlier entry, so fail loudly and let the author fix the source.
+            if (Options.ContainsKey(entry.Key))
+            {
+                duplicateNames.Add(entry.Key);
+                continue;
+            }
+
+            Options[entry.Key] = entry.Value;
         }
 
-        Options.Clear();
-        foreach (var entry in ParseOptions(pairs))
+        if (duplicateNames.Count > 0)
         {
-            Options[entry.Key] = entry.Value;
+            Options.Clear();
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                $"Duplicate option name(s): {string.Join(", ", duplicateNames.Distinct())}. " +
+                "Option names must be unique.");
+            return;
         }
 
         if (_targetInputId == Guid.Empty)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                "No target Dynamic Value List input set. Pick one in the web UI builder, or wire a GUID into 'Target Input'.");
-        }
-    }
-
-    /// <summary>
-    ///     Parse a list of "key" = value pair strings into ordered name -> value entries.
-    ///     Splits on the first '=', trims whitespace, and strips a single pair of surrounding
-    ///     quotes from the key. Entries without '=' or with an empty key are skipped.
-    /// </summary>
-    public static IEnumerable<KeyValuePair<string, string>> ParseOptions(IEnumerable<string> pairs)
-    {
-        if (pairs == null)
-        {
-            yield break;
+                "No target Dynamic Value List input set. Set the Target Input under this output's " +
+                "Advanced settings in the Selva UI builder.");
         }
 
-        foreach (var raw in pairs)
-        {
-            if (string.IsNullOrWhiteSpace(raw))
-            {
-                continue;
-            }
-
-            var eq = raw.IndexOf('=');
-            if (eq < 0)
-            {
-                continue;
-            }
-
-            var key = Unquote(raw.Substring(0, eq).Trim());
-            var value = raw.Substring(eq + 1).Trim();
-
-            if (string.IsNullOrEmpty(key))
-            {
-                continue;
-            }
-
-            yield return new KeyValuePair<string, string>(key, value);
-        }
-    }
-
-    private static string Unquote(string s)
-    {
-        if (s.Length >= 2 &&
-            ((s[0] == '"' && s[s.Length - 1] == '"') || (s[0] == '\'' && s[s.Length - 1] == '\'')))
-        {
-            return s.Substring(1, s.Length - 2);
-        }
-
-        return s;
+        da.SetData(0, ToJson().ToString(Newtonsoft.Json.Formatting.None));
     }
 
     /// <summary>

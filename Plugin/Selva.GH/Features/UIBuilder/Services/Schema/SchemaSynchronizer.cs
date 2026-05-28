@@ -1429,7 +1429,7 @@ public class SchemaSynchronizer
     /// <summary>
     ///     Returns all layout items from either a tabbed or flat layout.
     /// </summary>
-    private static IEnumerable<LayoutItemBase> GetAllLayoutItems(LayoutConfigBase layout)
+    public static IEnumerable<LayoutItemBase> GetAllLayoutItems(LayoutConfigBase layout)
     {
         if (layout is TabbedLayoutConfig { Tabs: not null } tabbed)
         {

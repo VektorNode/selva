@@ -7,6 +7,7 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Selva.Schema.Models;
 using Selva.GH.Features.ComputeIO.Components;
+using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.FileIO.Goos;
@@ -467,22 +468,7 @@ public class ValueCollector
             return Guid.Empty;
         }
 
-        IEnumerable<LayoutItemBase> items;
-        if (schema.Layout is TabbedLayoutConfig { Tabs: not null } tabbed)
-        {
-            items = tabbed.Tabs.SelectMany(t => t.Groups ?? new List<GroupConfig>())
-                .SelectMany(g => g.Items ?? new List<LayoutItemBase>());
-        }
-        else if (schema.Layout is FlatLayoutConfig { Groups: not null } flat)
-        {
-            items = flat.Groups.SelectMany(g => g.Items ?? new List<LayoutItemBase>());
-        }
-        else
-        {
-            return Guid.Empty;
-        }
-
-        foreach (var item in items)
+        foreach (var item in SchemaSynchronizer.GetAllLayoutItems(schema.Layout))
         {
             if (item is OutputDynamicValueListLayoutItem dvl && dvl.ParamId == outputId &&
                 dvl.Config?.TargetInputId is { } targetId && targetId != Guid.Empty)

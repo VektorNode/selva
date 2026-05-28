@@ -76,6 +76,8 @@ export function mapParamTypeToWidgetType(
 			case 'number':
 			case 'integer':
 				return 'number';
+			case 'file':
+				return 'file';
 			case 'chart':
 				return 'chart';
 			case 'dynamicValueList':

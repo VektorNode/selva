@@ -35,9 +35,14 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     {
     }
 
+
     public override GH_Exposure Exposure => GH_Exposure.quinary;
 
-    public override string TypeName => "DynamicValueList";
+    // Reuse "ValueList" so Rhino.Compute's existing ValueList input case handles this param with no
+    // fork change — the input side (passing the selected string downstream) is identical to the
+    // static value list. The dynamic vs. static distinction is carried by the schema/class name
+    // (ResolveParameterTypeName keys on the CLR class name, not TypeName), not by TypeName.
+    public override string TypeName => "ValueList";
     public override Guid ComponentGuid => new Guid("9F2C4B7E-3A8D-4C1F-B6E5-2D7A9C0E1F34");
 
     protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.GetValueList);
@@ -100,26 +105,17 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
 
     public void AssignContextualData(IEnumerable data)
     {
-        var list = new List<GH_ValueListDataGoo>();
-
+        var values = new List<string>();
         foreach (var item in data)
         {
             var stringValue = ExtractStringValue(item);
-            if (stringValue == null)
+            if (stringValue != null)
             {
-                continue;
+                values.Add(stringValue);
             }
-
-            var matchIndex = FindMatchingIndex(stringValue);
-            var expressionValue = matchIndex >= 0 && matchIndex < _storedItems.Count
-                ? _storedItems[matchIndex].Expression
-                : stringValue;
-
-            list.Add(new GH_ValueListDataGoo(expressionValue, _storedItems, matchIndex));
         }
 
-        _contextual = list.ToArray();
-        ExpireSolution(false);
+        SetValues(values);
     }
 
     public bool AutoAssignContextualData(GH_ParameterContext context)
@@ -141,37 +137,37 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     /// </summary>
     public void SetValue(string value)
     {
-        var matchIndex = FindMatchingIndex(value);
-        var expressionValue = matchIndex >= 0 && matchIndex < _storedItems.Count
-            ? _storedItems[matchIndex].Expression
-            : value;
-        _contextual = new[] { new GH_ValueListDataGoo(expressionValue, _storedItems, matchIndex) };
-        ExpireSolution(false);
+        SetValues(new[] { value });
     }
 
     /// <summary>
-    ///     Sets multiple string values directly - for use from Rhino.Compute via reflection.
+    ///     Sets one or more string values directly - for use from Rhino.Compute via reflection.
     /// </summary>
     public void SetValues(IEnumerable<string> values)
     {
-        var list = new List<GH_ValueListDataGoo>();
-
-        foreach (var value in values)
-        {
-            var matchIndex = FindMatchingIndex(value);
-            var expressionValue = matchIndex >= 0 && matchIndex < _storedItems.Count
-                ? _storedItems[matchIndex].Expression
-                : value;
-            list.Add(new GH_ValueListDataGoo(expressionValue, _storedItems, matchIndex));
-        }
-
-        _contextual = list.ToArray();
+        _contextual = values.Select(ToGoo).ToArray();
         ExpireSolution(false);
     }
 
     /// <summary>
-    ///     Selects an item by name (key) or expression. Returns true if the value matched a known option.
-    ///     Unlike the static value list this has no GH_ValueList to drive, so it just records the selection.
+    ///     Wraps a selected value in a goo, mapping it to a known option's expression when one matches,
+    ///     otherwise passing the value through verbatim (the option set is recomputed each solve).
+    /// </summary>
+    private GH_ValueListDataGoo ToGoo(string value)
+    {
+        var matchIndex = FindMatchingIndex(value);
+        var expression = matchIndex >= 0 && matchIndex < _storedItems.Count
+            ? _storedItems[matchIndex].Expression
+            : value;
+        return new GH_ValueListDataGoo(expression, _storedItems, matchIndex);
+    }
+
+    /// <summary>
+    ///     Records the selected value so it flows downstream on the next solve.
+    ///     Unlike the static value list, the options here are computed each solve and there is no
+    ///     authoritative list to validate against — any non-empty value is accepted as-is (matched
+    ///     to a known option's expression when one exists, otherwise passed through verbatim).
+    ///     Returns true whenever a value was recorded.
     /// </summary>
     public bool SelectItemByName(string value)
     {
@@ -181,11 +177,12 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         }
 
         SetValue(value);
-        return FindMatchingIndex(value) >= 0;
+        return true;
     }
 
     /// <summary>
-    ///     Selects multiple items by name (key) or expression. Returns true if at least one matched.
+    ///     Records multiple selected values (checklist mode). Returns true if any non-empty value
+    ///     was recorded. See <see cref="SelectItemByName" /> for why no matching is required.
     /// </summary>
     public bool SelectItemsByName(IEnumerable<string> values)
     {
@@ -194,9 +191,14 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
             return false;
         }
 
-        var valueList = values.Where(v => v != null).ToList();
+        var valueList = values.Where(v => !string.IsNullOrEmpty(v)).ToList();
+        if (valueList.Count == 0)
+        {
+            return false;
+        }
+
         SetValues(valueList);
-        return valueList.Any(v => FindMatchingIndex(v) >= 0);
+        return true;
     }
 
     /// <summary>
@@ -249,18 +251,37 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         };
     }
 
+    // Grasshopper calls _Custom when the param has NO wired sources, and _FromSources when it does.
+    // This param is usually unwired (its value comes from the web UI), so both must emit our data.
+    protected override void CollectVolatileData_Custom()
+    {
+        EmitData();
+    }
+
     protected override void CollectVolatileData_FromSources()
     {
+        EmitData();
+    }
+
+    /// <summary>
+    ///     Populate volatile data. Precedence:
+    ///     1. A UI selection (contextual data / tree).
+    ///     2. A wired initial value list ("key" = value pairs) → emit its default (first) item.
+    ///     3. Nothing set → emit a single empty string so the output is never "no data";
+    ///        it is replaced once a computed value arrives from the UI.
+    /// </summary>
+    private void EmitData()
+    {
+        m_data.Clear();
+
         if (_contextual != null)
         {
-            m_data.Clear();
             m_data.AppendRange(_contextual, new GH_Path(0));
             return;
         }
 
         if (_contextualDataTree != null)
         {
-            m_data.Clear();
             for (var i = 0; i < _contextualDataTree.BranchCount; i++)
             {
                 m_data.AppendRange(_contextualDataTree.Branches[i], _contextualDataTree.Paths[i]);
@@ -269,58 +290,51 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
             return;
         }
 
-        // No selection yet, and no wired sources expected — emit nothing (empty list is valid).
-        m_data.Clear();
-
-        if (Sources == null || Sources.Count == 0)
+        var initialOptions = ReadInitialOptionsFromSources();
+        if (initialOptions.Count > 0)
         {
+            _storedItems = initialOptions;
+            var first = _storedItems[0];
+            m_data.Append(new GH_ValueListDataGoo(first.Expression, _storedItems, 0), new GH_Path(0));
             return;
         }
 
-        // Allow wiring a fallback source (e.g. a Panel) to seed a default selection.
-        foreach (var source in Sources)
-        {
-            ProcessGenericSource(source);
-        }
+        // allowEmpty keeps the empty goo valid so downstream doesn't drop it.
+        m_data.Append(new GH_ValueListDataGoo(string.Empty, _storedItems, -1, allowEmpty: true), new GH_Path(0));
     }
 
-    private void ProcessGenericSource(IGH_Param source)
+    /// <summary>
+    ///     Reads "key" = value pair strings from wired sources into an ordered (Name, Expression) list.
+    ///     This is the GH-side initial value list — the author wires a Panel of pairs to seed options
+    ///     before the web UI has computed any.
+    /// </summary>
+    private List<(string Name, string Expression)> ReadInitialOptionsFromSources()
     {
-        var sourceData = source.VolatileData;
-        if (sourceData == null || sourceData.PathCount == 0)
+        var options = new List<(string Name, string Expression)>();
+        if (Sources == null || Sources.Count == 0)
         {
-            return;
+            return options;
         }
 
-        foreach (var path in sourceData.Paths)
+        foreach (var source in Sources)
         {
-            var branch = sourceData.get_Branch(path);
-            if (branch == null)
+            var sourceData = source.VolatileData;
+            if (sourceData == null || sourceData.IsEmpty)
             {
                 continue;
             }
 
-            var converted = new List<GH_ValueListDataGoo>();
-            foreach (var item in branch)
-            {
-                var stringValue = ExtractStringValue(item);
-                if (stringValue == null)
-                {
-                    continue;
-                }
+            var lines = sourceData.AllData(true)
+                .Select(ExtractStringValue)
+                .Where(s => !string.IsNullOrWhiteSpace(s));
 
-                var matchIndex = FindMatchingIndex(stringValue);
-                var expressionValue = matchIndex >= 0 && matchIndex < _storedItems.Count
-                    ? _storedItems[matchIndex].Expression
-                    : stringValue;
-                converted.Add(new GH_ValueListDataGoo(expressionValue, _storedItems, matchIndex));
-            }
-
-            if (converted.Count > 0)
+            foreach (var pair in OptionPairParser.Parse(lines))
             {
-                m_data.AppendRange(converted, path);
+                options.Add((pair.Key, pair.Value));
             }
         }
+
+        return options;
     }
 
     private int FindMatchingIndex(string value)

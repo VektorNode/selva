@@ -12,15 +12,23 @@ namespace Selva.GH.Features.ComputeIO.Goos;
 [Guid("F5A0C45C-1B2D-4E7F-9A3C-8D2E5F7B4C6A")]
 public class GH_ValueListDataGoo : GH_Goo<string>
 {
+    // When true, an empty Value is still considered valid. Used by the dynamic value list to emit
+    // an intentional empty placeholder on the first solve (before any computed options arrive) so
+    // downstream params don't drop it as invalid. Defaults to false to preserve the static
+    // value list's behavior (empty = invalid).
+    private readonly bool _allowEmpty;
+
     public GH_ValueListDataGoo()
     {
     }
 
-    public GH_ValueListDataGoo(string value, List<(string Name, string Expression)> items, int selectedIndex = 0)
+    public GH_ValueListDataGoo(string value, List<(string Name, string Expression)> items,
+        int selectedIndex = 0, bool allowEmpty = false)
     {
         Value = value;
         Items = items;
         SelectedIndex = selectedIndex;
+        _allowEmpty = allowEmpty;
     }
 
     public override string TypeName => "ValueList";
@@ -53,7 +61,7 @@ public class GH_ValueListDataGoo : GH_Goo<string>
     /// </summary>
     public string SelectedExpression => Value;
 
-    public override bool IsValid => !string.IsNullOrEmpty(Value);
+    public override bool IsValid => _allowEmpty || !string.IsNullOrEmpty(Value);
 
     /// <summary>
     ///     For serialization: returns the name (key) instead of the expression value.
@@ -68,7 +76,7 @@ public class GH_ValueListDataGoo : GH_Goo<string>
 
     public override IGH_Goo Duplicate()
     {
-        return new GH_ValueListDataGoo(Value, new List<(string, string)>(Items), SelectedIndex);
+        return new GH_ValueListDataGoo(Value, new List<(string, string)>(Items), SelectedIndex, _allowEmpty);
     }
 
     public override string ToString()
