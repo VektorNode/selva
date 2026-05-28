@@ -125,11 +125,11 @@ ${constantsCode}
 // TYPE GUARDS
 // ============================================================================
 
-export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem {
+export function isInputLayoutItem(item: LayoutItem): item is InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputDynamicValueListLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem {
   return item.type === 'input';
 }
 
-export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem | OutputImageLayoutItem {
+export function isOutputLayoutItem(item: LayoutItem): item is OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem | OutputImageLayoutItem | OutputDynamicValueListLayoutItem {
   return item.type === 'output';
 }
 
@@ -149,6 +149,10 @@ export function isDropdownWidget(item: LayoutItem): item is InputDropdownLayoutI
   return item.type === 'input' && item.widgetType === 'dropdown';
 }
 
+export function isDynamicValueListWidget(item: LayoutItem): item is InputDynamicValueListLayoutItem {
+  return item.type === 'input' && item.widgetType === 'dynamicValueList';
+}
+
 export function isCheckboxWidget(item: LayoutItem): item is InputCheckboxLayoutItem {
   return item.type === 'input' && item.widgetType === 'checkbox';
 }
@@ -166,8 +170,8 @@ export function isImageWidget(item: LayoutItem): item is OutputImageLayoutItem {
 }
 
 // Helper type aliases
-export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem;
-export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem | OutputImageLayoutItem;
+export type InputLayoutItem = InputNumberLayoutItem | InputTextLayoutItem | InputDropdownLayoutItem | InputDynamicValueListLayoutItem | InputCheckboxLayoutItem | InputFileLayoutItem | InputColorLayoutItem;
+export type OutputLayoutItem = OutputTextLayoutItem | OutputNumberLayoutItem | OutputFileLayoutItem | OutputChartLayoutItem | OutputImageLayoutItem | OutputDynamicValueListLayoutItem;
 export type SupportedTypes = string | number | boolean | string[];
 `,
   });

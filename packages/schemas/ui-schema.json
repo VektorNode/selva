@@ -10,7 +10,17 @@
 		"//_COMMENT": "--- PRIMITIVES ---",
 		"GrasshopperParamType": {
 			"type": "string",
-			"enum": ["number", "integer", "boolean", "text", "valueList", "file", "color", "generic"],
+			"enum": [
+				"number",
+				"integer",
+				"boolean",
+				"text",
+				"valueList",
+				"dynamicValueList",
+				"file",
+				"color",
+				"generic"
+			],
 			"description": "Grasshopper contextual parameter data types"
 		},
 
@@ -165,6 +175,42 @@
 			"required": ["options"],
 			"additionalProperties": false
 		},
+		"DynamicValueListWidgetConfig": {
+			"type": "object",
+			"description": "Configuration for a dynamic value list input. Options are populated at runtime from a DynamicValueList output that targets this input. Falls back to defaultOptions before the first solve produces options.",
+			"properties": {
+				"defaultOptions": {
+					"type": "object",
+					"additionalProperties": { "type": "string" },
+					"description": "Author-provided seed list (name -> value). Shown until computed options replace it. Empty/absent means the input is empty until the first solve produces options."
+				},
+				"emptyBehavior": {
+					"type": "string",
+					"enum": ["hide", "show-empty"],
+					"default": "hide",
+					"description": "What to render when there are no options yet (no defaultOptions and no computed options): 'hide' removes the field from view, 'show-empty' shows a disabled 'no options yet' control."
+				},
+				"displayAs": {
+					"type": "string",
+					"enum": ["dropdown", "checklist"],
+					"default": "dropdown",
+					"description": "How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[])."
+				}
+			},
+			"additionalProperties": false
+		},
+		"DynamicValueListOutputConfig": {
+			"type": "object",
+			"description": "Configuration for a dynamic value list output. Declares which dynamic value list input the computed options feed into.",
+			"properties": {
+				"targetInputId": {
+					"type": "string",
+					"description": "The Grasshopper instance GUID (paramId) of the DynamicValueList input that this output's computed options populate."
+				}
+			},
+			"required": ["targetInputId"],
+			"additionalProperties": false
+		},
 		"CheckboxWidgetConfig": {
 			"type": "object",
 			"properties": {},
@@ -315,6 +361,20 @@
 				}
 			]
 		},
+		"InputDynamicValueListLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "dynamicValueList" },
+						"config": { "$ref": "#/definitions/DynamicValueListWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
 		"InputCheckboxLayoutItem": {
 			"allOf": [
 				{ "$ref": "#/definitions/LayoutItemBase" },
@@ -452,6 +512,20 @@
 				}
 			]
 		},
+		"OutputDynamicValueListLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "dynamicValueList" },
+						"config": { "$ref": "#/definitions/DynamicValueListOutputConfig" }
+					},
+					"required": ["type", "widgetType", "config"]
+				}
+			]
+		},
 		"LineBreakLayoutItem": {
 			"type": "object",
 			"description": "A full-width line break that forces subsequent items onto a new grid row",
@@ -470,6 +544,7 @@
 				{ "$ref": "#/definitions/InputNumberLayoutItem" },
 				{ "$ref": "#/definitions/InputTextLayoutItem" },
 				{ "$ref": "#/definitions/InputDropdownLayoutItem" },
+				{ "$ref": "#/definitions/InputDynamicValueListLayoutItem" },
 				{ "$ref": "#/definitions/InputCheckboxLayoutItem" },
 				{ "$ref": "#/definitions/InputFileLayoutItem" },
 				{ "$ref": "#/definitions/InputColorLayoutItem" },
@@ -478,6 +553,7 @@
 				{ "$ref": "#/definitions/OutputFileLayoutItem" },
 				{ "$ref": "#/definitions/OutputChartLayoutItem" },
 				{ "$ref": "#/definitions/OutputImageLayoutItem" },
+				{ "$ref": "#/definitions/OutputDynamicValueListLayoutItem" },
 				{ "$ref": "#/definitions/LineBreakLayoutItem" }
 			]
 		},
@@ -602,8 +678,12 @@
 				"description": { "type": "string" },
 				"type": {
 					"type": "string",
-					"enum": ["text", "number", "file", "chart"],
-					"description": "Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly)"
+					"enum": ["text", "number", "file", "chart", "dynamicValueList"],
+					"description": "Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly), 'dynamicValueList' for computed value-list options routed back into a dynamic value list input"
+				},
+				"targetInputId": {
+					"type": "string",
+					"description": "For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate."
 				},
 				"groupName": {
 					"type": "string",
@@ -670,8 +750,12 @@
 				"description": { "type": "string" },
 				"type": {
 					"type": "string",
-					"enum": ["text", "number", "file", "chart"],
+					"enum": ["text", "number", "file", "chart", "dynamicValueList"],
 					"description": "Output display type"
+				},
+				"targetInputId": {
+					"type": "string",
+					"description": "For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate."
 				}
 			},
 			"required": ["id", "nickname", "type"],
@@ -738,7 +822,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.9.0",
+					"default": "2.10.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

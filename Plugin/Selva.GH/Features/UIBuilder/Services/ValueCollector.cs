@@ -85,7 +85,15 @@ public class ValueCollector
                     continue;
                 }
 
-                if (paramObject is IGH_Component ghComponent)
+                if (paramObject is GH_DynamicValueListOutput dynamicValueListOutput)
+                {
+                    var value = ExtractDynamicValueListOutput(dynamicValueListOutput, output, schema);
+                    if (value != null)
+                    {
+                        outputValues[output.Id.ToString()] = value;
+                    }
+                }
+                else if (paramObject is IGH_Component ghComponent)
                 {
                     var value = output.Type == "chart"
                         ? ExtractChartOutput(ghComponent)
@@ -414,6 +422,76 @@ public class ValueCollector
         }
 
         return null;
+    }
+
+    /// <summary>
+    ///     Extract the routing payload from a dynamic value list output component:
+    ///     { targetInputId, options }. The target id comes from the component's persisted value, falling
+    ///     back to the schema output's TargetInputId. Returns null when there is no valid target.
+    /// </summary>
+    private static object ExtractDynamicValueListOutput(GH_DynamicValueListOutput component, SchemaOutput output,
+        UISchema schema)
+    {
+        // Resolution order: component (set in GH or via Target Input) -> schema output -> layout-item config
+        // (set by the web UI builder's target-input picker).
+        var targetId = component.TargetInputId;
+        if (targetId == Guid.Empty)
+        {
+            targetId = output.TargetInputId;
+        }
+
+        if (targetId == Guid.Empty)
+        {
+            targetId = ResolveTargetInputIdFromLayout(schema, output.Id);
+        }
+
+        if (targetId == Guid.Empty)
+        {
+            return null;
+        }
+
+        return new
+        {
+            targetInputId = targetId.ToString(),
+            options = new Dictionary<string, string>(component.Options)
+        };
+    }
+
+    /// <summary>
+    ///     Find the targetInputId set on the OutputDynamicValueListLayoutItem for the given output id.
+    /// </summary>
+    private static Guid ResolveTargetInputIdFromLayout(UISchema schema, Guid outputId)
+    {
+        if (schema?.Layout == null)
+        {
+            return Guid.Empty;
+        }
+
+        IEnumerable<LayoutItemBase> items;
+        if (schema.Layout is TabbedLayoutConfig { Tabs: not null } tabbed)
+        {
+            items = tabbed.Tabs.SelectMany(t => t.Groups ?? new List<GroupConfig>())
+                .SelectMany(g => g.Items ?? new List<LayoutItemBase>());
+        }
+        else if (schema.Layout is FlatLayoutConfig { Groups: not null } flat)
+        {
+            items = flat.Groups.SelectMany(g => g.Items ?? new List<LayoutItemBase>());
+        }
+        else
+        {
+            return Guid.Empty;
+        }
+
+        foreach (var item in items)
+        {
+            if (item is OutputDynamicValueListLayoutItem dvl && dvl.ParamId == outputId &&
+                dvl.Config?.TargetInputId is { } targetId && targetId != Guid.Empty)
+            {
+                return targetId;
+            }
+        }
+
+        return Guid.Empty;
     }
 
     /// <summary>

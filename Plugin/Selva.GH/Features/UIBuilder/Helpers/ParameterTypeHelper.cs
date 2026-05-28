@@ -41,6 +41,21 @@ public static class ParameterTypeHelper
     }
 
     /// <summary>
+    ///     Check if an object is a GH_DynamicValueListOutput component (emits runtime-computed
+    ///     value list options routed back into a Dynamic Value List input).
+    /// </summary>
+    public static bool IsDynamicValueListOutputComponent(IGH_DocumentObject obj)
+    {
+        if (obj == null)
+        {
+            return false;
+        }
+
+        var typeName = obj.GetType()?.Name;
+        return string.Equals(typeName, "GH_DynamicValueListOutput", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     ///     Returns true if any source wired into <paramref name="inputParam" /> is an ISelvaFileOutput component.
     /// </summary>
     public static bool IsSourcedFromFileOutput(IGH_Param inputParam)

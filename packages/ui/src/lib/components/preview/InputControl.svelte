@@ -1,9 +1,16 @@
 <script lang="ts">
-	import type { InputLayoutItem, FileInputWidgetConfig, SupportedTypes } from '@selvajs/schemas';
+	import type {
+		InputLayoutItem,
+		FileInputWidgetConfig,
+		DynamicValueListWidgetConfig,
+		DropdownWidgetConfig,
+		SupportedTypes
+	} from '@selvajs/schemas';
 	import {
 		isNumberWidget,
 		isTextWidget,
 		isDropdownWidget,
+		isDynamicValueListWidget,
 		isCheckboxWidget,
 		isFileWidget,
 		isColorWidget
@@ -27,6 +34,8 @@
 		displayName?: string;
 		onChange: (paramId: string, value: SupportedTypes) => void;
 		disabled?: boolean;
+		/** Runtime-computed options for a dynamic value list input (name -> value). */
+		dynamicOptions?: Record<string, string>;
 	}
 
 	let {
@@ -34,7 +43,8 @@
 		value = $bindable(undefined),
 		displayName,
 		onChange,
-		disabled = false
+		disabled = false,
+		dynamicOptions
 	}: Props = $props();
 
 	const inputId = $derived(`input-${item.paramId}`);
@@ -55,93 +65,148 @@
 
 	const showRangeInLabel = $derived(isNumberWidget(item) && numberRangeHint !== null);
 
+	// Dynamic value list: computed options (from the last solve) take precedence over the
+	// author's seed list. Empty until the first solve produces options, unless a default is set.
+	const dynamicListConfig = $derived(
+		isDynamicValueListWidget(item)
+			? (item.config as DynamicValueListWidgetConfig | undefined)
+			: undefined
+	);
+	const dynamicListOptions = $derived<Record<string, string>>(
+		dynamicOptions && Object.keys(dynamicOptions).length > 0
+			? dynamicOptions
+			: (Object.fromEntries(
+					Object.entries(dynamicListConfig?.defaultOptions ?? {}).filter(
+						(entry): entry is [string, string] => entry[1] !== undefined
+					)
+				) as Record<string, string>)
+	);
+	const dynamicListHasOptions = $derived(Object.keys(dynamicListOptions).length > 0);
+	// As a dropdown config so DropdownInput/ChecklistInput can consume it unchanged.
+	const dynamicListAsDropdownConfig = $derived<DropdownWidgetConfig>({
+		options: dynamicListOptions,
+		displayAs: dynamicListConfig?.displayAs ?? 'dropdown'
+	});
+	const hideDynamicListWhenEmpty = $derived(
+		isDynamicValueListWidget(item) &&
+			!dynamicListHasOptions &&
+			(dynamicListConfig?.emptyBehavior ?? 'hide') === 'hide'
+	);
+
 	function commit(newValue: SupportedTypes) {
 		value = newValue;
 		onChange(item.paramId, newValue);
 	}
 </script>
 
-<Field.Field>
-	<Field.Label for={inputId} class="gap-2 flex items-center">
-		{label}
-		{#if item.description}
-			<Dialog.Root>
-				<Dialog.Trigger class="p-1 cursor-help opacity-60 transition-opacity hover:opacity-100">
-					<HelpCircle size={16} />
-				</Dialog.Trigger>
-				<Dialog.Content class="sm:max-w-md">
-					<Dialog.Header>
-						<Dialog.Title>{label}</Dialog.Title>
-						<Dialog.Description>{item.description}</Dialog.Description>
-					</Dialog.Header>
-				</Dialog.Content>
-			</Dialog.Root>
-		{/if}
-		{#if showRangeInLabel}
-			<span class="text-xs font-normal text-muted-foreground">{numberRangeHint}</span>
-		{/if}
-	</Field.Label>
+{#if !hideDynamicListWhenEmpty}
+	<Field.Field>
+		<Field.Label for={inputId} class="gap-2 flex items-center">
+			{label}
+			{#if item.description}
+				<Dialog.Root>
+					<Dialog.Trigger class="p-1 cursor-help opacity-60 transition-opacity hover:opacity-100">
+						<HelpCircle size={16} />
+					</Dialog.Trigger>
+					<Dialog.Content class="sm:max-w-md">
+						<Dialog.Header>
+							<Dialog.Title>{label}</Dialog.Title>
+							<Dialog.Description>{item.description}</Dialog.Description>
+						</Dialog.Header>
+					</Dialog.Content>
+				</Dialog.Root>
+			{/if}
+			{#if showRangeInLabel}
+				<span class="text-xs font-normal text-muted-foreground">{numberRangeHint}</span>
+			{/if}
+		</Field.Label>
 
-	{#if isNumberWidget(item)}
-		{@const config = item.config}
-		<NumberInput
-			{inputId}
-			value={typeof value === 'number' ? value : undefined}
-			{config}
-			onChange={commit}
-			{disabled}
-		/>
-	{:else if isCheckboxWidget(item)}
-		<CheckboxInput
-			{inputId}
-			value={typeof value === 'boolean' ? value : undefined}
-			onChange={commit}
-			{disabled}
-		/>
-	{:else if isTextWidget(item)}
-		{@const config = item.config}
-		<TextInput
-			{inputId}
-			value={typeof value === 'string' ? value : ''}
-			{config}
-			onChange={commit}
-			{disabled}
-		/>
-	{:else if isDropdownWidget(item)}
-		{@const config = item.config}
-		{#if config.displayAs === 'checklist'}
-			<ChecklistInput
+		{#if isNumberWidget(item)}
+			{@const config = item.config}
+			<NumberInput
 				{inputId}
-				value={Array.isArray(value)
-					? (value as string[])
-					: typeof value === 'string' && value
-						? [value]
-						: []}
+				value={typeof value === 'number' ? value : undefined}
 				{config}
 				onChange={commit}
 				{disabled}
 			/>
-		{:else}
-			<DropdownInput
+		{:else if isCheckboxWidget(item)}
+			<CheckboxInput
+				{inputId}
+				value={typeof value === 'boolean' ? value : undefined}
+				onChange={commit}
+				{disabled}
+			/>
+		{:else if isTextWidget(item)}
+			{@const config = item.config}
+			<TextInput
+				{inputId}
 				value={typeof value === 'string' ? value : ''}
 				{config}
 				onChange={commit}
 				{disabled}
 			/>
+		{:else if isDropdownWidget(item)}
+			{@const config = item.config}
+			{#if config.displayAs === 'checklist'}
+				<ChecklistInput
+					{inputId}
+					value={Array.isArray(value)
+						? (value as string[])
+						: typeof value === 'string' && value
+							? [value]
+							: []}
+					{config}
+					onChange={commit}
+					{disabled}
+				/>
+			{:else}
+				<DropdownInput
+					value={typeof value === 'string' ? value : ''}
+					{config}
+					onChange={commit}
+					{disabled}
+				/>
+			{/if}
+		{:else if isDynamicValueListWidget(item)}
+			{#if dynamicListHasOptions}
+				{#if dynamicListAsDropdownConfig.displayAs === 'checklist'}
+					<ChecklistInput
+						{inputId}
+						value={Array.isArray(value)
+							? (value as string[])
+							: typeof value === 'string' && value
+								? [value]
+								: []}
+						config={dynamicListAsDropdownConfig}
+						onChange={commit}
+						{disabled}
+					/>
+				{:else}
+					<DropdownInput
+						value={typeof value === 'string' ? value : ''}
+						config={dynamicListAsDropdownConfig}
+						onChange={commit}
+						{disabled}
+					/>
+				{/if}
+			{:else}
+				<p class="text-sm text-muted-foreground">No options available yet.</p>
+			{/if}
+		{:else if isFileWidget(item)}
+			{@const config = item.config as FileInputWidgetConfig}
+			<FileInput
+				value={typeof value === 'string' ? value : ''}
+				acceptedFormats={config?.acceptedFormats ?? []}
+				onChange={(newValue) => commit(newValue)}
+				defaultInputMode={config?.defaultInputMode}
+				allowedInputModes={config?.allowedInputModes}
+			/>
+		{:else if isColorWidget(item)}
+			<ColorInput
+				value={typeof value === 'string' ? value : '#000000'}
+				onChange={(newValue) => commit(newValue)}
+			/>
 		{/if}
-	{:else if isFileWidget(item)}
-		{@const config = item.config as FileInputWidgetConfig}
-		<FileInput
-			value={typeof value === 'string' ? value : ''}
-			acceptedFormats={config?.acceptedFormats ?? []}
-			onChange={(newValue) => commit(newValue)}
-			defaultInputMode={config?.defaultInputMode}
-			allowedInputModes={config?.allowedInputModes}
-		/>
-	{:else if isColorWidget(item)}
-		<ColorInput
-			value={typeof value === 'string' ? value : '#000000'}
-			onChange={(newValue) => commit(newValue)}
-		/>
-	{/if}
-</Field.Field>
+	</Field.Field>
+{/if}

@@ -26,7 +26,7 @@ namespace Selva.Schema.Models
     // ============================================================================
 
     // String-enum types are represented as 'string' in C# for compatibility
-    // GrasshopperParamType valid values: "number", "integer", "boolean", "text", "valueList", "file", "color", "generic"
+    // GrasshopperParamType valid values: "number", "integer", "boolean", "text", "valueList", "dynamicValueList", "file", "color", "generic"
     // GrasshopperInputStructure valid values: "item", "list", "tree"
 
 // ============================================================================
@@ -204,6 +204,28 @@ namespace Selva.Schema.Models
 
 /// <summary>
 /// How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected Grasshopper parameter.
+/// </summary>
+        [JsonProperty("displayAs", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string DisplayAs { get; set; } = "dropdown";
+    }
+
+    public class DynamicValueListWidgetConfig
+    {
+
+/// <summary>
+/// Author-provided seed list (name -> value). Shown until computed options replace it. Empty/absent means the input is empty until the first solve produces options.
+/// </summary>
+        [JsonProperty("defaultOptions")]
+        public Dictionary<string, object> DefaultOptions { get; set; }
+
+/// <summary>
+/// What to render when there are no options yet (no defaultOptions and no computed options): 'hide' removes the field from view, 'show-empty' shows a disabled 'no options yet' control.
+/// </summary>
+        [JsonProperty("emptyBehavior", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string EmptyBehavior { get; set; } = "hide";
+
+/// <summary>
+/// How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]).
 /// </summary>
         [JsonProperty("displayAs", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string DisplayAs { get; set; } = "dropdown";
@@ -417,6 +439,16 @@ namespace Selva.Schema.Models
         public object DefaultValue { get; set; }
     }
 
+    public class DynamicValueListOutputConfig
+    {
+
+/// <summary>
+/// The Grasshopper instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+/// </summary>
+        [JsonProperty("targetInputId")]
+        public Guid TargetInputId { get; set; }
+    }
+
     public class InputSource
     {
 
@@ -510,10 +542,16 @@ namespace Selva.Schema.Models
         public string Description { get; set; }
 
 /// <summary>
-/// Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly)
+/// Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly), 'dynamicValueList' for computed value-list options routed back into a dynamic value list input
 /// </summary>
         [JsonProperty("type")]
         public string Type { get; set; }
+
+/// <summary>
+/// For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+/// </summary>
+        [JsonProperty("targetInputId", NullValueHandling = NullValueHandling.Ignore)]
+        public Guid TargetInputId { get; set; }
 
 /// <summary>
 /// Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
@@ -570,6 +608,12 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("type")]
         public string Type { get; set; }
+
+/// <summary>
+/// For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+/// </summary>
+        [JsonProperty("targetInputId", NullValueHandling = NullValueHandling.Ignore)]
+        public Guid TargetInputId { get; set; }
     }
 
     public class ViewerOptions
@@ -746,6 +790,15 @@ public override string WidgetType => "dropdown";
         public DropdownWidgetConfig Config { get; set; }
     }
 
+public class InputDynamicValueListLayoutItem : LayoutItemBase
+    {
+public override string Type => "input";
+public override string WidgetType => "dynamicValueList";
+
+        [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
+        public DynamicValueListWidgetConfig Config { get; set; }
+    }
+
 public class InputCheckboxLayoutItem : LayoutItemBase
     {
 public override string Type => "input";
@@ -810,6 +863,15 @@ public override string WidgetType => "image";
 
         [JsonProperty("config", NullValueHandling = NullValueHandling.Ignore)]
         public ImageWidgetConfig Config { get; set; }
+    }
+
+public class OutputDynamicValueListLayoutItem : LayoutItemBase
+    {
+public override string Type => "output";
+public override string WidgetType => "dynamicValueList";
+
+        [JsonProperty("config")]
+        public DynamicValueListOutputConfig Config { get; set; }
     }
 
 public class LineBreakLayoutItem : LayoutItemBase
@@ -882,6 +944,8 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
                 item = new InputTextLayoutItem();
             else if (type == "input" && widgetType == "dropdown")
                 item = new InputDropdownLayoutItem();
+            else if (type == "input" && widgetType == "dynamicValueList")
+                item = new InputDynamicValueListLayoutItem();
             else if (type == "input" && widgetType == "checkbox")
                 item = new InputCheckboxLayoutItem();
             else if (type == "input" && widgetType == "file")
@@ -898,6 +962,8 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
                 item = new OutputChartLayoutItem();
             else if (type == "output" && widgetType == "image")
                 item = new OutputImageLayoutItem();
+            else if (type == "output" && widgetType == "dynamicValueList")
+                item = new OutputDynamicValueListLayoutItem();
             else if (type == "linebreak")
                 item = new LineBreakLayoutItem();
             else

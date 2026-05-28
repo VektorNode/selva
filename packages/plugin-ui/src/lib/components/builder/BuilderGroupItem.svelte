@@ -7,6 +7,7 @@
 		FileInputWidgetConfig,
 		TextWidgetConfig,
 		DropdownWidgetConfig,
+		DynamicValueListOutputConfig,
 		ImageWidgetConfig,
 		InputSource
 	} from '@selvajs/schemas';
@@ -92,15 +93,30 @@
 	let isFileOutput = $derived(item.type === 'output' && item.widgetType === 'file');
 	let isImageOutput = $derived(item.type === 'output' && item.widgetType === 'image');
 	let isFileOrImageOutput = $derived(isFileOutput || isImageOutput);
+	let isDynamicValueListOutput = $derived(
+		item.type === 'output' && item.widgetType === 'dynamicValueList'
+	);
 	let fileInputConfig = $derived(isFileInput ? (item.config as FileInputWidgetConfig) : null);
 	let dropdownConfig = $derived(isDropdownInput ? (item.config as DropdownWidgetConfig) : null);
 	let imageConfig = $derived(isImageOutput ? (item.config as ImageWidgetConfig) : null);
+	let dynamicValueListOutputConfig = $derived(
+		isDynamicValueListOutput ? (item.config as DynamicValueListOutputConfig) : null
+	);
+	// Dynamic value list inputs this output can target.
+	let dynamicValueListInputs = $derived(
+		availableInputs.filter((p) => p.type === 'dynamicValueList')
+	);
 	let showAdvanced = $state(false);
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((item.visibilityCondition?.rules?.length ?? 0) > 0);
 	// Advanced section only for widget-specific options
 	let hasAdvancedOptions = $derived(
-		isNumberInput || isFileInput || isTextInput || isDropdownInput || isFileOrImageOutput
+		isNumberInput ||
+			isFileInput ||
+			isTextInput ||
+			isDropdownInput ||
+			isFileOrImageOutput ||
+			isDynamicValueListOutput
 	);
 	let hasDescription = $derived(!!(item.description && item.description.trim().length > 0));
 	let hasCustomConfig = $derived.by(() => {
@@ -398,6 +414,32 @@
 													class="scale-75"
 												/>
 											</div>
+										{/if}
+									</div>
+								{/if}
+
+								<!-- Output: Dynamic Value List target-input picker -->
+								{#if isDynamicValueListOutput && dynamicValueListOutputConfig}
+									<div class="flex flex-col gap-1 pb-2">
+										<span class="text-muted-foreground text-[10px] font-medium">Target Input</span>
+										{#if dynamicValueListInputs.length === 0}
+											<span class="text-[10px] text-amber-600 dark:text-amber-400">
+												No Dynamic Value List inputs in this schema. Add one first, then pick it
+												here.
+											</span>
+										{:else}
+											<select
+												bind:value={dynamicValueListOutputConfig.targetInputId}
+												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+											>
+												<option value="">— Select an input —</option>
+												{#each dynamicValueListInputs as input (input.id)}
+													<option value={input.id}>{input.nickname}</option>
+												{/each}
+											</select>
+											<span class="text-muted-foreground/70 text-[9px]">
+												The Dynamic Value List input that this output's computed options populate.
+											</span>
 										{/if}
 									</div>
 								{/if}

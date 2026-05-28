@@ -33,6 +33,7 @@ public class ValueApplicator
             { "text", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
             { "boolean", (typeof(GH_Boolean), val => new GH_Boolean(Convert.ToBoolean(val))) },
             { "valueList", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
+            { "dynamicValueList", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
             {
                 "file", (typeof(FileInputGoo), val =>
                 {
@@ -318,6 +319,13 @@ public class ValueApplicator
         {
             // Special handling for ValueList - use the parameter's native type
             if (paramTypeName == "valueList")
+            {
+                return ApplyToValueList(contextParam, value, addMessage, pendingExpirations);
+            }
+
+            // Dynamic value list: same selection-by-name flow as the static value list, but the
+            // parameter has no wired GH_ValueList to expire — it records the selection itself.
+            if (paramTypeName == "dynamicValueList")
             {
                 return ApplyToValueList(contextParam, value, addMessage, pendingExpirations);
             }

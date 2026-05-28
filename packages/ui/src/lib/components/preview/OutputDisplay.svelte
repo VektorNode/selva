@@ -288,49 +288,52 @@
 	{/if}
 {/snippet}
 
-<div class="gap-2 flex flex-col">
-	{@render fieldHeader()}
+<!-- Dynamic value list outputs are routing sinks (their options feed an input), not displayed. -->
+{#if item.widgetType !== 'dynamicValueList'}
+	<div class="gap-2 flex flex-col">
+		{@render fieldHeader()}
 
-	{#if item.widgetType === 'chart'}
-		<ChartOutput
-			{item}
-			value={typeof value === 'string' ? value : value != null ? JSON.stringify(value) : ''}
-		/>
-	{:else if item.widgetType === 'image'}
-		<ImageOutput {item} {value} />
-	{:else if item.widgetType === 'file'}
-		{@render fileDisplay()}
-	{:else if item.widgetType === 'number'}
-		<div class="{boxClass} flex items-center bg-muted/50 wrap-break-word">
-			{#if hasValue}
-				<span class="font-bold text-primary">{formattedValue}</span>
-			{:else}
-				{@render placeholder()}
-			{/if}
-		</div>
-	{:else if item.widgetType === 'text'}
-		<div class="group relative">
-			{#if isObjectValue}
-				<pre
-					class="{boxClass} overflow-wrap-anywhere max-h-96 overflow-auto bg-muted/10 text-foreground">{formattedValue}</pre>
-			{:else}
-				<div
-					class="{boxClass} overflow-wrap-anywhere bg-muted/10 wrap-break-word whitespace-pre-wrap text-foreground"
-				>
-					{#if hasValue}{value}{:else}{@render placeholder()}{/if}
-				</div>
-			{/if}
-			{#if hasValue}
-				<Button
-					onclick={copyToClipboard}
-					class="right-2 top-2 absolute transition-opacity {copied
-						? 'opacity-100'
-						: 'opacity-0 group-hover:opacity-100'}"
-					size="sm"
-				>
-					{copied ? 'Copied!' : 'Copy'}
-				</Button>
-			{/if}
-		</div>
-	{/if}
-</div>
+		{#if item.widgetType === 'chart'}
+			<ChartOutput
+				{item}
+				value={typeof value === 'string' ? value : value != null ? JSON.stringify(value) : ''}
+			/>
+		{:else if item.widgetType === 'image'}
+			<ImageOutput {item} {value} />
+		{:else if item.widgetType === 'file'}
+			{@render fileDisplay()}
+		{:else if item.widgetType === 'number'}
+			<div class="{boxClass} flex items-center bg-muted/50 wrap-break-word">
+				{#if hasValue}
+					<span class="font-bold text-primary">{formattedValue}</span>
+				{:else}
+					{@render placeholder()}
+				{/if}
+			</div>
+		{:else if item.widgetType === 'text'}
+			<div class="group relative">
+				{#if isObjectValue}
+					<pre
+						class="{boxClass} overflow-wrap-anywhere max-h-96 overflow-auto bg-muted/10 text-foreground">{formattedValue}</pre>
+				{:else}
+					<div
+						class="{boxClass} overflow-wrap-anywhere bg-muted/10 wrap-break-word whitespace-pre-wrap text-foreground"
+					>
+						{#if hasValue}{value}{:else}{@render placeholder()}{/if}
+					</div>
+				{/if}
+				{#if hasValue}
+					<Button
+						onclick={copyToClipboard}
+						class="right-2 top-2 absolute transition-opacity {copied
+							? 'opacity-100'
+							: 'opacity-0 group-hover:opacity-100'}"
+						size="sm"
+					>
+						{copied ? 'Copied!' : 'Copy'}
+					</Button>
+				{/if}
+			</div>
+		{/if}
+	</div>
+{/if}

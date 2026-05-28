@@ -29,6 +29,9 @@ public class SchemaSynchronizer
     {
         { "GetNumberParameter", "number" },
         { "Slider", "number" },
+        // DynamicValueList must precede ValueList: the type name contains "ValueList" and
+        // ResolveParameterTypeName matches on first substring hit.
+        { "DynamicValueList", "dynamicValueList" },
         { "ValueList", "valueList" },
         { "GetFile", "file" },
         { "GetColor", "color" },
@@ -95,12 +98,14 @@ public class SchemaSynchronizer
         };
 
         var scopeFilter = BuildScopeFilter(document, ownerComponent);
-        var (contextParams, printComponents, bakeComponents) = ClassifyDocumentObjects(document, scopeFilter);
+        var (contextParams, printComponents, bakeComponents, dynamicValueListOutputs) =
+            ClassifyDocumentObjects(document, scopeFilter);
         var groupLookup = BuildGroupLookup(document);
 
         CollectPrintOutputs(printComponents, result.Outputs, groupLookup);
         CollectFileOutputs(bakeComponents, result.Outputs, groupLookup);
         CollectChartOutputs(bakeComponents, result.Outputs, groupLookup);
+        CollectDynamicValueListOutputs(dynamicValueListOutputs, result.Outputs, groupLookup);
         CollectInputs(contextParams, result.Inputs, groupLookup);
 
         return result;
@@ -190,18 +195,27 @@ public class SchemaSynchronizer
     /// <summary>
     ///     Single pass over document objects — classify into inputs, print outputs, and bake outputs.
     /// </summary>
-    private static (List<IGH_ContextualParameter> Inputs, List<GH_Component> Prints, List<GH_Component> Bakes)
+    private static (List<IGH_ContextualParameter> Inputs, List<GH_Component> Prints, List<GH_Component> Bakes,
+        List<GH_DynamicValueListOutput> DynamicValueListOutputs)
         ClassifyDocumentObjects(GH_Document document, HashSet<Guid> scopeFilter)
     {
         var inputs = new List<IGH_ContextualParameter>();
         var prints = new List<GH_Component>();
         var bakes = new List<GH_Component>();
+        var dynamicValueListOutputs = new List<GH_DynamicValueListOutput>();
 
         foreach (var obj in document.Objects)
         {
             if (obj is IGH_ContextualParameter cp)
             {
                 inputs.Add(cp);
+                continue;
+            }
+
+            if (obj is GH_DynamicValueListOutput dynVl)
+            {
+                // Not wire-bound to the owner; always in scope (like Context Print).
+                dynamicValueListOutputs.Add(dynVl);
                 continue;
             }
 
@@ -226,7 +240,7 @@ public class SchemaSynchronizer
             }
         }
 
-        return (inputs, prints, bakes);
+        return (inputs, prints, bakes, dynamicValueListOutputs);
     }
 
     private static void CollectPrintOutputs(
@@ -288,6 +302,24 @@ public class SchemaSynchronizer
         }
     }
 
+    private static void CollectDynamicValueListOutputs(
+        List<GH_DynamicValueListOutput> dynamicValueListOutputs, List<DiscoveredOutput> outputs,
+        Dictionary<Guid, string> groupLookup)
+    {
+        foreach (var c in dynamicValueListOutputs)
+        {
+            outputs.Add(new DiscoveredOutput
+            {
+                Id = c.InstanceGuid,
+                Nickname = c.NickName,
+                Description = "",
+                Type = "dynamicValueList",
+                TargetInputId = c.TargetInputId,
+                GroupName = ResolveGroupName(groupLookup, c.InstanceGuid)
+            });
+        }
+    }
+
     private static void CollectInputs(
         List<IGH_ContextualParameter> contextParams, List<DiscoveredInput> inputs, Dictionary<Guid, string> groupLookup)
     {
@@ -328,6 +360,12 @@ public class SchemaSynchronizer
         if (param is GetValueListParameter valueList)
         {
             PopulateValueListDefault(valueList, ghParam, input);
+            return;
+        }
+
+        if (param is GetDynamicValueListParameter dynamicValueList)
+        {
+            PopulateDynamicValueListDefault(dynamicValueList, input);
             return;
         }
 
@@ -472,6 +510,28 @@ public class SchemaSynchronizer
         catch
         {
             // Silently ignore ValueList extraction failures
+        }
+    }
+
+    private static void PopulateDynamicValueListDefault(GetDynamicValueListParameter param, DiscoveredInput input)
+    {
+        try
+        {
+            if (param.Values is { Count: > 0 } values)
+            {
+                var options = new Dictionary<string, object>();
+                foreach (var kvp in values)
+                {
+                    options[kvp.Key] = kvp.Value;
+                }
+
+                input.Options = options;
+                input.Default = param.GetDefaultValue();
+            }
+        }
+        catch
+        {
+            // Silently ignore dynamic value list extraction failures
         }
     }
 

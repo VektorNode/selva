@@ -105,7 +105,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.check.outputs.should_run == 'true'
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
@@ -153,8 +153,8 @@ jobs:
           # components.
           publish: pnpm release
 
-          commit: "chore: version packages"
-          title: "chore: version packages"
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No NPM_TOKEN here on purpose — auth happens via OIDC trusted

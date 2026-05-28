@@ -11,6 +11,7 @@ export type GrasshopperParamType =
 	| 'boolean'
 	| 'text'
 	| 'valueList'
+	| 'dynamicValueList'
 	| 'file'
 	| 'color'
 	| 'generic';
@@ -30,6 +31,12 @@ export type InputDropdownLayoutItem = LayoutItemBase & {
 	type: 'input';
 	widgetType: 'dropdown';
 	config: DropdownWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type InputDynamicValueListLayoutItem = LayoutItemBase & {
+	type: 'input';
+	widgetType: 'dynamicValueList';
+	config?: DynamicValueListWidgetConfig;
 	[k: string]: unknown | undefined;
 };
 export type InputCheckboxLayoutItem = LayoutItemBase & {
@@ -78,10 +85,17 @@ export type OutputImageLayoutItem = LayoutItemBase & {
 	config?: ImageWidgetConfig;
 	[k: string]: unknown | undefined;
 };
+export type OutputDynamicValueListLayoutItem = LayoutItemBase & {
+	type: 'output';
+	widgetType: 'dynamicValueList';
+	config: DynamicValueListOutputConfig;
+	[k: string]: unknown | undefined;
+};
 export type LayoutItem =
 	| InputNumberLayoutItem
 	| InputTextLayoutItem
 	| InputDropdownLayoutItem
+	| InputDynamicValueListLayoutItem
 	| InputCheckboxLayoutItem
 	| InputFileLayoutItem
 	| InputColorLayoutItem
@@ -90,6 +104,7 @@ export type LayoutItem =
 	| OutputFileLayoutItem
 	| OutputChartLayoutItem
 	| OutputImageLayoutItem
+	| OutputDynamicValueListLayoutItem
 	| LineBreakLayoutItem;
 export type LayoutConfig = TabbedLayoutConfig | FlatLayoutConfig;
 export type GrasshopperInputStructure = 'item' | 'list' | 'tree';
@@ -211,6 +226,28 @@ export interface DropdownWidgetConfig {
 	 * How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected Grasshopper parameter.
 	 */
 	displayAs?: 'dropdown' | 'checklist';
+}
+export interface DynamicValueListWidgetConfig {
+	/**
+	 * Author-provided seed list (name -> value). Shown until computed options replace it. Empty/absent means the input is empty until the first solve produces options.
+	 */
+	defaultOptions?: {
+		[k: string]: string | undefined;
+	};
+	/**
+	 * What to render when there are no options yet (no defaultOptions and no computed options): 'hide' removes the field from view, 'show-empty' shows a disabled 'no options yet' control.
+	 */
+	emptyBehavior?: 'hide' | 'show-empty';
+	/**
+	 * How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]).
+	 */
+	displayAs?: 'dropdown' | 'checklist';
+}
+export interface DynamicValueListOutputConfig {
+	/**
+	 * The Grasshopper instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+	 */
+	targetInputId: string;
 }
 export interface CheckboxWidgetConfig {}
 export interface FileWidgetConfig {
@@ -359,9 +396,13 @@ export interface DiscoveredOutput {
 	nickname: string;
 	description?: string;
 	/**
-	 * Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly)
+	 * Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly), 'dynamicValueList' for computed value-list options routed back into a dynamic value list input
 	 */
-	type: 'text' | 'number' | 'file' | 'chart';
+	type: 'text' | 'number' | 'file' | 'chart' | 'dynamicValueList';
+	/**
+	 * For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+	 */
+	targetInputId?: string;
 	/**
 	 * Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
 	 */
@@ -404,7 +445,11 @@ export interface SchemaOutput {
 	/**
 	 * Output display type
 	 */
-	type: 'text' | 'number' | 'file' | 'chart';
+	type: 'text' | 'number' | 'file' | 'chart' | 'dynamicValueList';
+	/**
+	 * For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+	 */
+	targetInputId?: string;
 }
 export interface ViewerOptions {
 	/**
@@ -546,6 +591,7 @@ export function isInputLayoutItem(
 	| InputNumberLayoutItem
 	| InputTextLayoutItem
 	| InputDropdownLayoutItem
+	| InputDynamicValueListLayoutItem
 	| InputCheckboxLayoutItem
 	| InputFileLayoutItem
 	| InputColorLayoutItem {
@@ -559,7 +605,8 @@ export function isOutputLayoutItem(
 	| OutputNumberLayoutItem
 	| OutputFileLayoutItem
 	| OutputChartLayoutItem
-	| OutputImageLayoutItem {
+	| OutputImageLayoutItem
+	| OutputDynamicValueListLayoutItem {
 	return item.type === 'output';
 }
 
@@ -577,6 +624,12 @@ export function isTextWidget(item: LayoutItem): item is InputTextLayoutItem {
 
 export function isDropdownWidget(item: LayoutItem): item is InputDropdownLayoutItem {
 	return item.type === 'input' && item.widgetType === 'dropdown';
+}
+
+export function isDynamicValueListWidget(
+	item: LayoutItem
+): item is InputDynamicValueListLayoutItem {
+	return item.type === 'input' && item.widgetType === 'dynamicValueList';
 }
 
 export function isCheckboxWidget(item: LayoutItem): item is InputCheckboxLayoutItem {
@@ -600,6 +653,7 @@ export type InputLayoutItem =
 	| InputNumberLayoutItem
 	| InputTextLayoutItem
 	| InputDropdownLayoutItem
+	| InputDynamicValueListLayoutItem
 	| InputCheckboxLayoutItem
 	| InputFileLayoutItem
 	| InputColorLayoutItem;
@@ -608,5 +662,6 @@ export type OutputLayoutItem =
 	| OutputNumberLayoutItem
 	| OutputFileLayoutItem
 	| OutputChartLayoutItem
-	| OutputImageLayoutItem;
+	| OutputImageLayoutItem
+	| OutputDynamicValueListLayoutItem;
 export type SupportedTypes = string | number | boolean | string[];

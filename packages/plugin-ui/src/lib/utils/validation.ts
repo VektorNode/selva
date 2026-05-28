@@ -1,4 +1,12 @@
-import type { VisibilityRule, DiscoveredInput, GrasshopperParamType } from '@selvajs/schemas';
+import type {
+	VisibilityRule,
+	DiscoveredInput,
+	GrasshopperParamType,
+	UISchema,
+	SchemaInput,
+	SchemaOutput,
+	LayoutItem
+} from '@selvajs/schemas';
 
 /**
  * Validates a visibility rule value against parameter constraints
@@ -180,6 +188,60 @@ export function validateDefaultValue(value: unknown, paramInfo?: DiscoveredInput
 	return null;
 }
 
+export interface DynamicValueListIssue {
+	outputId: string;
+	message: string;
+}
+
+/**
+ * Validate that every dynamic value list output targets an existing dynamic value list input.
+ *
+ * Reads the targetInputId from the output's layout-item config (the builder's source of truth),
+ * falling back to the schema output's targetInputId. Returns one issue per misconfigured output.
+ */
+export function validateDynamicValueListOutputs(schema: UISchema): DynamicValueListIssue[] {
+	const issues: DynamicValueListIssue[] = [];
+
+	const dynamicInputIds = new Set(
+		schema.inputs
+			.filter((i: SchemaInput) => i.paramType === 'dynamicValueList')
+			.map((i: SchemaInput) => i.id)
+	);
+
+	const dynamicOutputs = schema.outputs.filter((o: SchemaOutput) => o.type === 'dynamicValueList');
+
+	// targetInputId set per output via the layout-item config (preferred) or the schema output.
+	const layoutTargets = new Map<string, string | undefined>();
+	const groups =
+		schema.layout.type === 'tabbed'
+			? schema.layout.tabs.flatMap((t) => t.groups)
+			: schema.layout.groups;
+	for (const group of groups) {
+		for (const item of group.items as LayoutItem[]) {
+			if (item.type === 'output' && item.widgetType === 'dynamicValueList') {
+				layoutTargets.set(item.paramId, item.config?.targetInputId);
+			}
+		}
+	}
+
+	for (const output of dynamicOutputs) {
+		const target = layoutTargets.get(output.id) ?? output.targetInputId;
+		if (!target) {
+			issues.push({
+				outputId: output.id,
+				message: `Dynamic value list output "${output.nickname}" has no target input selected.`
+			});
+		} else if (!dynamicInputIds.has(target)) {
+			issues.push({
+				outputId: output.id,
+				message: `Dynamic value list output "${output.nickname}" targets an input that no longer exists or is not a dynamic value list.`
+			});
+		}
+	}
+
+	return issues;
+}
+
 /**
  * Returns appropriate operators based on parameter type
  */
@@ -202,7 +264,7 @@ export function getOperatorsForType(
 		];
 	}
 
-	if (paramType === 'valueList') {
+	if (paramType === 'valueList' || paramType === 'dynamicValueList') {
 		return [
 			...baseOperators,
 			{ value: 'in', label: 'in' },
