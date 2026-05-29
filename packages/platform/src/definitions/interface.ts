@@ -1,5 +1,6 @@
 import type { RequestContext } from '../context.js';
 import type { ListOptions, DefinitionListOptions, Page } from '../pagination.js';
+import type { UISchema } from '@selvajs/schemas';
 import type { DefinitionRecord, DefinitionRecordPatch, DefinitionVersion } from './types.js';
 
 /**
@@ -41,6 +42,14 @@ export interface IDefinitionStore {
 		opts?: ListOptions
 	): Promise<Page<DefinitionVersion>>;
 	getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null>;
+
+	/**
+	 * Set the cached compute-extracted schema on a version row. Used by the
+	 * upload path (writes the schema validated up-front) and the temporary
+	 * solve-time backfill bridge (see selva/specs/SchemaCaching.md). No-op if
+	 * the version doesn't exist.
+	 */
+	setVersionSchema(ctx: RequestContext, versionId: string, schema: UISchema): Promise<void>;
 	/**
 	 * Throws 409 if the version is referenced by `liveVersionId` or
 	 * `draftVersionId`. Caller deletes the blob separately.

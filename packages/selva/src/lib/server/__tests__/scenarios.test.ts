@@ -240,12 +240,16 @@ describe('§11 — versioning & rollback', () => {
 		const aliceCtx = (await actAs(tp, alice.id)).ctx;
 
 		// Upload v2 + publish it as live.
+		const v2Schema = { name: 'Test', inputs: [], outputs: [] } as unknown as Parameters<
+			typeof tp.definitionService.uploadVersion
+		>[5];
 		const v2 = await tp.definitionService.uploadVersion(
 			aliceCtx,
 			def.record.guid,
 			new TextEncoder().encode('V2_BYTES'),
 			'gh',
-			'v2.gh'
+			'v2.gh',
+			v2Schema
 		);
 		await tp.definitionService.publish(aliceCtx, def.record.guid, v2.id);
 
