@@ -9,7 +9,8 @@ import type {
 	RequestContext,
 	DefinitionListOptions,
 	ListOptions,
-	Page
+	Page,
+	UISchema
 } from '@selvajs/platform';
 import { ProviderError, auditSoftDelete, actorFrom, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
@@ -228,6 +229,15 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		return data ? rowToVersion(data) : null;
 	}
 
+	async setVersionSchema(ctx: RequestContext, versionId: string, schema: UISchema): Promise<void> {
+		const { error } = await this.clients
+			.forRequest(ctx)
+			.from('definition_versions')
+			.update({ schema, schema_extracted_at: new Date().toISOString() })
+			.eq('id', versionId);
+		if (error) throw mapError(error);
+	}
+
 	async deleteVersion(ctx: RequestContext, versionId: string): Promise<void> {
 		// FK enforcement at the DB layer: live_version_id / draft_version_id
 		// are ON DELETE RESTRICT. If the version is referenced by either
@@ -377,6 +387,8 @@ interface DefinitionVersionRow {
 	uploaded_by: string;
 	uploaded_at: string;
 	change_note?: string | null;
+	schema?: UISchema | null;
+	schema_extracted_at?: string | null;
 }
 
 function rowToRecord(row: DefinitionRow): DefinitionRecord {
@@ -450,7 +462,9 @@ function rowToVersion(row: DefinitionVersionRow): DefinitionVersion {
 		originalFilename: row.original_filename ?? undefined,
 		uploadedBy: row.uploaded_by,
 		uploadedAt: row.uploaded_at,
-		changeNote: row.change_note ?? undefined
+		changeNote: row.change_note ?? undefined,
+		schema: row.schema ?? undefined,
+		schemaExtractedAt: row.schema_extracted_at ?? undefined
 	};
 }
 
@@ -466,6 +480,8 @@ function versionToRow(v: DefinitionVersion): Record<string, unknown> {
 		uploaded_at: v.uploadedAt
 	};
 	if (v.changeNote !== undefined) row.change_note = v.changeNote;
+	if (v.schema !== undefined) row.schema = v.schema;
+	if (v.schemaExtractedAt !== undefined) row.schema_extracted_at = v.schemaExtractedAt;
 	return row;
 }
 

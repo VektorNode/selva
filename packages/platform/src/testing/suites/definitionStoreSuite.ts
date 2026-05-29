@@ -323,6 +323,38 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got?.versionNumber).toBe(1);
 		});
 
+		it('setVersionSchema persists a cached schema on the version', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const v1 = version(guid, 1, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v1);
+			expect((await store.getVersion(ctx(scope.ownerId), v1.id))?.schema).toBeUndefined();
+
+			const schema = {
+				name: 'Test',
+				inputs: [],
+				outputs: []
+			} as unknown as Parameters<typeof store.setVersionSchema>[2];
+			await store.setVersionSchema(ctx(scope.ownerId), v1.id, schema);
+
+			const got = await store.getVersion(ctx(scope.ownerId), v1.id);
+			expect(got?.schema).toEqual(schema);
+			expect(got?.schemaExtractedAt).toBeTypeOf('string');
+		});
+
+		it('setVersionSchema is a no-op for a missing version', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const schema = { name: 'X', inputs: [], outputs: [] } as unknown as Parameters<
+				typeof store.setVersionSchema
+			>[2];
+			await expect(
+				store.setVersionSchema(ctx(scope.ownerId), makeUuid(), schema)
+			).resolves.toBeUndefined();
+		});
+
 		it('setLiveVersion + setDraftVersion repoint channels', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();

@@ -6,7 +6,8 @@ import type {
 	DefinitionRecord,
 	DefinitionFileExt,
 	DefinitionVersion,
-	UpdateMetadataInput
+	UpdateMetadataInput,
+	UISchema
 } from '@selvajs/platform';
 import { ProviderError, definitionPaths } from '@selvajs/platform';
 
@@ -70,7 +71,8 @@ export class DefinitionService {
 	async create(
 		ctx: RequestContext,
 		input: CreateDefinitionRecord,
-		file: Uint8Array
+		file: Uint8Array,
+		schema: UISchema
 	): Promise<{ record: DefinitionRecord; version: DefinitionVersion }> {
 		const now = new Date().toISOString();
 		const actor = ctx.userId || input.ownerId;
@@ -113,7 +115,9 @@ export class DefinitionService {
 			fileKey,
 			originalFilename: input.originalFilename,
 			uploadedBy: actor,
-			uploadedAt: now
+			uploadedAt: now,
+			schema,
+			schemaExtractedAt: now
 		};
 		await this.data.definitions.createVersion(ctx, version);
 
@@ -140,6 +144,7 @@ export class DefinitionService {
 		file: Uint8Array,
 		ext: DefinitionFileExt,
 		originalName: string,
+		schema: UISchema,
 		changeNote?: string
 	): Promise<DefinitionVersion> {
 		const existing = await this.data.definitions.get(ctx, guid);
@@ -164,7 +169,9 @@ export class DefinitionService {
 			originalFilename: originalName,
 			uploadedBy: actor,
 			uploadedAt: now,
-			changeNote: changeNote?.trim() || undefined
+			changeNote: changeNote?.trim() || undefined,
+			schema,
+			schemaExtractedAt: now
 		};
 		await this.data.definitions.createVersion(ctx, version);
 		await this.data.definitions.setDraftVersion(ctx, guid, versionId);

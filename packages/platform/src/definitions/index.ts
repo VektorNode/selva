@@ -7,6 +7,7 @@ export type {
 	DefinitionChannel
 } from './types.js';
 export type { IDefinitionStore } from './interface.js';
+export type { UISchema } from '@selvajs/schemas';
 export {
 	GH_EXTENSIONS,
 	COVER_IMAGE_EXTENSIONS,

@@ -111,6 +111,7 @@
 		"type-check": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@selvajs/schemas": "workspace:*",
 		"zod": "^4.3.6"
 	},
 	"peerDependencies": {

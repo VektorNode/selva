@@ -10,8 +10,8 @@
 // routes (project membership, segment ownership, share-token, admin override).
 
 import { GrasshopperClient } from '@selvajs/compute/grasshopper';
-import { camelcaseKeys } from '@selvajs/compute/core';
 import type { UISchema } from '@selvajs/schemas';
+import { fetchSchemaFromCompute } from './schemaExtraction.server';
 import type {
 	ComputeServerConfig,
 	DefinitionRecord,
@@ -107,10 +107,16 @@ export async function loadDefinitionForRender(
 	}
 
 	try {
-		// Fetch schema and IO in parallel — both are fast (no solve needed).
+		// Prefer the schema cached on the version row (extracted + validated at
+		// upload). Fall back to a live fetch for versions predating schema caching
+		// — the solve-time backfill bridge fills those in over time
+		// (see specs/SchemaCaching.md). `getIO` is always needed to merge compute
+		// default values into the schema, cached or not.
 		const [definition, fetchedSchema] = await Promise.all([
 			client.getIO(definitionSource),
-			fetchSchemaFromCompute(definitionSource, computeServer)
+			version.schema
+				? Promise.resolve(version.schema)
+				: fetchSchemaFromCompute(definitionSource, computeServer)
 		]);
 
 		if (!definition) {
@@ -128,48 +134,6 @@ export async function loadDefinitionForRender(
 		const message = err instanceof Error ? err.message : String(err);
 		throw new DefinitionLoadError('schema', message, err);
 	}
-}
-
-// Fetch UI schema from Rhino Compute's /grasshopper/schema endpoint (no solve required).
-async function fetchSchemaFromCompute(
-	definitionBytes: Uint8Array,
-	server: ComputeServerConfig
-): Promise<UISchema> {
-	const schemaUrl = new URL('/grasshopper/schema', server.serverUrl).toString();
-
-	const formData = new FormData();
-	const blob = new Blob([new Uint8Array(definitionBytes)], { type: 'application/octet-stream' });
-	formData.append('file', blob, 'definition.gh');
-
-	const headers: Record<string, string> = {};
-	if (server.apiKey) {
-		headers['RhinoComputeKey'] = server.apiKey;
-	}
-
-	const response = await fetch(schemaUrl, { method: 'POST', headers, body: formData });
-
-	if (!response.ok) {
-		throw new Error(`Schema endpoint returned ${response.status}: ${response.statusText}`);
-	}
-
-	// Compute returns [{ FileName, Schemas }] with PascalCase wrapper keys only.
-	// The schema contents are already camelCase from our C# serializer, so we only
-	// need a shallow camelcase to normalize FileName→fileName, Schemas→schemas.
-	// deep:true would mangle user-defined option names (e.g. "Display3d" → "display3d").
-	const raw = await response.json();
-	const results: { schemas: UISchema[] }[] = camelcaseKeys(Array.isArray(raw) ? raw : [raw]) as {
-		schemas: UISchema[];
-	}[];
-	const schemas = results.flatMap((r) => r.schemas ?? []);
-
-	if (schemas.length === 0) {
-		throw new Error(
-			'No schemas found in definition.\n\n' +
-				'In Grasshopper, verify a Context Bake component with the output name "Schema" is present and wired to the solver.'
-		);
-	}
-
-	return schemas[0];
 }
 
 // Merge default values from Compute definition into schema inputs.

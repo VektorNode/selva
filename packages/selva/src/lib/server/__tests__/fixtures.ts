@@ -281,7 +281,10 @@ export async function seedDefinition(
 		platformPermissions: ['instance_admin'],
 		orgPermissions: []
 	};
-	return tp.definitionService.create(ctx, input, file);
+	const schema = { name: 'Test', inputs: [], outputs: [] } as unknown as Parameters<
+		typeof tp.definitionService.create
+	>[3];
+	return tp.definitionService.create(ctx, input, file, schema);
 }
 
 export interface SeededShareLink {
