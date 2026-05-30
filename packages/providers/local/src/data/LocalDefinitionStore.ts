@@ -9,7 +9,8 @@ import type {
 	RequestContext,
 	DefinitionListOptions,
 	ListOptions,
-	Page
+	Page,
+	UISchema
 } from '@selvajs/platform';
 import {
 	ProviderError,
@@ -272,6 +273,15 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	async getVersion(_ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null> {
 		const config = await this.readConfig();
 		return config.definitionVersions[versionId] ?? null;
+	}
+
+	async setVersionSchema(_ctx: RequestContext, versionId: string, schema: UISchema): Promise<void> {
+		const config = await this.readConfig();
+		const version = config.definitionVersions[versionId];
+		if (!version) return;
+		version.schema = schema;
+		version.schemaExtractedAt = new Date().toISOString();
+		await this.writeConfig(config);
 	}
 
 	async deleteVersion(ctx: RequestContext, versionId: string): Promise<void> {

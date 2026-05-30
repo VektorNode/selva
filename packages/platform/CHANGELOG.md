@@ -1,5 +1,30 @@
 # @selvajs/platform
 
+## 0.12.0
+
+### Minor Changes
+
+- 9ded581: Cache each definition version's compute-extracted UI schema on the version row, and make schema extraction a hard upload gate.
+
+  `DefinitionVersion` gains optional `schema` + `schemaExtractedAt`, and `IDefinitionStore` gains `setVersionSchema`. On upload, the schema is now extracted and validated against Rhino.Compute **before** any blob or version row is written — a compute outage or a definition with no valid `Schema` output rejects the upload (503 / 422) with nothing persisted. The render path reads the cached schema instead of re-fetching it from compute on every load, falling back to a live fetch (plus a temporary solve-time backfill) for versions uploaded before this change.
+
+  `@selvajs/platform` now re-exports the `UISchema` type from `@selvajs/schemas` (types-only dependency). The Supabase provider adds a `0002` migration creating `definition_versions.schema` / `schema_extracted_at` (and the previously-missing `change_note`) columns.
+
+- 9ded581: Unify the `InputSource` address into a single `key` (schema format v2.9.0 → v2.10.0).
+
+  `InputSource` is now `{ kind: 'user' | 'client' | 'server', key?: string }`. The previously-separate `path` (server) field, the short-lived `producer` (client) field, and the server-only `onMissing` field are removed in favour of one opaque `key`, interpreted by the host per `kind`:
+  - `client` → `key` names **which** producer app fills the input (e.g. `'line-app'`, `'file-upload'`) so the host can pre-route to it.
+  - `server` → `key` names **what** to fetch (e.g. `'capture.geometry'`) for the host's `IBindingResolver`.
+
+  `kind` already encodes the push (client/browser) vs pull (server) distinction, so a single `key` next to it is the normalised shape — the host decides how to read it; Selva stays domain-agnostic.
+
+  `IBindingResolver.resolve` renames its `paths` parameter to `keys` to match. The C# `SchemaMigrator` (`UnifyInputSourceKey`, run pre-deserialization) folds any saved `path`/`producer` into `key` and drops `onMissing`, so existing schemas load unchanged. Regenerated the TypeScript and C# (`UISchema.Generated.cs`) types; `SchemaVersion` and the migrator registry track the bump (`MigrateTo_2_10_0`).
+
+### Patch Changes
+
+- Updated dependencies [9ded581]
+  - @selvajs/schemas@4.0.0
+
 ## 0.11.0
 
 ### Minor Changes

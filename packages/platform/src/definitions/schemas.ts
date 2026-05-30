@@ -17,7 +17,11 @@ export const DefinitionVersionSchema = z.object({
 	originalFilename: z.string().max(256).optional(),
 	uploadedBy: z.string().min(1),
 	uploadedAt: z.string(),
-	changeNote: z.string().max(1000).optional()
+	changeNote: z.string().max(1000).optional(),
+	// Cached compute-extracted UI schema. Structural correctness is validated by
+	// Rhino.Compute at upload, not here — this only asserts it's an object.
+	schema: z.record(z.string(), z.unknown()).optional(),
+	schemaExtractedAt: z.string().optional()
 });
 
 export const DefinitionChannelSchema = z.enum(['live', 'draft']);

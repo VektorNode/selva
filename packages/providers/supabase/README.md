@@ -84,13 +84,14 @@ To switch back to the local provider, swap the import and the three provider lin
 
 ## Applying the schema
 
-The `supabase/migrations/` directory holds a single bootstrap file that installs the entire schema in one pass:
+The `supabase/migrations/` directory holds numbered files, applied in order:
 
-| File               | What it installs                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0001_initial.sql` | Everything: `user_profiles` (+ auto-seed trigger), `orgs` / `org_members` / `projects` / `project_members` (+ RLS helpers), `definitions` / `definition_versions` (+ deletion-protection FKs and the atomic `increment_run_count` RPC), `invites` (+ `get_invite_by_token` RPC), `compute_servers` (+ per-org/instance defaults, spec §3 BYO compute), `share_links` (+ `try_increment_share_link_solve_count` RPC, spec §7), and the `selva-public` / `selva-private` storage policies. |
+| File                                 | What it installs                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0001_initial.sql`                   | Everything: `user_profiles` (+ auto-seed trigger), `orgs` / `org_members` / `projects` / `project_members` (+ RLS helpers), `definitions` / `definition_versions` (+ deletion-protection FKs and the atomic `increment_run_count` RPC), `invites` (+ `get_invite_by_token` RPC), `compute_servers` (+ per-org/instance defaults, spec §3 BYO compute), `share_links` (+ `try_increment_share_link_solve_count` RPC, spec §7), and the `selva-public` / `selva-private` storage policies. |
+| `0002_definition_version_schema.sql` | Adds `definition_versions.schema` + `schema_extracted_at` (cached compute-extracted UI schema) and the previously-missing `change_note` column. All `add column if not exists`, so it's safe to re-run.                                                                                                                                                                                                                                                                                  |
 
-Future schema changes go in numbered files (`0002_…`, `0003_…`).
+Future schema changes go in numbered files (`0003_…`, `0004_…`).
 
 The `supabase/seed.sql` file creates the two storage buckets (`selva-public`, `selva-private`).
 
@@ -112,6 +113,15 @@ npx supabase db push
 ```
 
 Alternatively you can copy each `.sql` file into Supabase Dashboard → **SQL Editor** and run them in order. The CLI path is strongly preferred — it's idempotent and version-controlled.
+
+### Upgrading an existing database
+
+If your project already has `0001_initial.sql` applied (any deployment created before the schema-caching release), you only need to apply the new migration:
+
+- **CLI (preferred):** `npx supabase db push` from `packages/providers/supabase` applies any migrations not yet recorded in the project's migration history — it will pick up `0002` and skip `0001`.
+- **SQL Editor:** paste the contents of `0002_definition_version_schema.sql` and run it. It uses `add column if not exists`, so running it on an already-migrated DB is a safe no-op.
+
+No backfill step is required: existing definition versions keep working (the app falls back to fetching their schema from Rhino.Compute), and each version's `schema` column is populated lazily the first time it's solved.
 
 ---
 

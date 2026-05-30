@@ -258,17 +258,13 @@ export interface LayoutItemBase {
 }
 export interface InputSource {
 	/**
-	 * Who supplies the input's value. 'user' = the person fills it in, in the form. 'client' = supplied by the app in the browser before the form runs, not by the person. 'server' = looked up on the server from your data when the definition runs, using 'path' to say what to fetch; never shown in the form.
+	 * Who supplies the input's value. 'user' = the person fills it in, in the form. 'client' = supplied by an app in the browser before the form runs, not by the person (e.g. a measurement/producer tool). 'server' = looked up on the server from your data when the definition runs; never shown in the form.
 	 */
 	kind: 'user' | 'client' | 'server';
 	/**
-	 * Required when kind='server'. Names what value to fetch, e.g. 'segment.outline' or 'parcel.boundary'. The meaning of the name is defined by the app, not by Selva. Ignored for other kinds.
+	 * The opaque address of the value, interpreted by the host app per 'kind': for 'client' it names WHICH producer app fills the input (e.g. 'line-app', 'file-upload') so the host can pre-route to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. An open string — its meaning is defined by the host, not by Selva. Ignored for kind='user'.
 	 */
-	path?: string;
-	/**
-	 * What to do when kind='server' and the value can't be found: 'fail' (default) stops with an error; 'default' uses the input's default value instead.
-	 */
-	onMissing?: 'fail' | 'default';
+	key?: string;
 }
 export interface ChartWidgetConfig {}
 export interface ImageWidgetConfig {

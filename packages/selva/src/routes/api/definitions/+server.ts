@@ -6,6 +6,8 @@ import { requireCanCreateDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { CreateDefinitionInputSchema } from '@selvajs/platform/definitions';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
+import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
+import { fetchSchemaFromCompute } from '$lib/server/definitions/schemaExtraction.server';
 
 function parseTags(raw: unknown): string[] | undefined {
 	if (typeof raw !== 'string' || !raw.trim()) return undefined;
@@ -51,7 +53,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		projectId = defaultProject.id;
 	}
 
-	await requireCanCreateDefinition(locals, projectId);
+	const { project } = await requireCanCreateDefinition(locals, projectId);
 
 	const parsed = CreateDefinitionInputSchema.safeParse({
 		displayName: formData.get('displayName'),
@@ -69,6 +71,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const fileData = new Uint8Array(await file.arrayBuffer());
+
+		// Validate-and-cache gate: extract the schema from compute BEFORE any
+		// write. A failure here (compute down / no valid Schema output) rejects
+		// the upload with nothing persisted. See specs/SchemaCaching.md.
+		const server = await resolveServerForOrg(ctx, project.orgId, {
+			definitionPin: parsed.data.computeServerId ?? null
+		});
+		const schema = await fetchSchemaFromCompute(fileData, server);
+
 		const { record, version } = await definitionService.create(
 			ctx,
 			{
@@ -84,7 +95,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				tags: parsed.data.tags,
 				coverImage: parsed.data.coverImage
 			},
-			fileData
+			fileData,
+			schema
 		);
 
 		let coverImage = record.coverImage;

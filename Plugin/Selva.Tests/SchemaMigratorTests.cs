@@ -102,8 +102,9 @@ public class SchemaMigratorTests
         Assert.NotNull(items);
         Assert.Equal("client", items[0]["source"]?["kind"]?.ToString());
         Assert.Equal("server", items[1]["source"]?["kind"]?.ToString());
-        // 'path' is preserved through the rename.
-        Assert.Equal("segment.outline", items[1]["source"]?["path"]?.ToString());
+        // 2.10.0 unified the address: 'path' folds into 'key' and 'path' is dropped.
+        Assert.Equal("segment.outline", items[1]["source"]?["key"]?.ToString());
+        Assert.Null(items[1]["source"]?["path"]);
         // 'user' and source-less items are untouched.
         Assert.Equal("user", items[2]["source"]?["kind"]?.ToString());
         Assert.Null(items[3]["source"]);
