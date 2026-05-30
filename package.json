@@ -32,6 +32,7 @@
 		"lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
 		"lint:fix": "eslint . --fix --cache --cache-location node_modules/.cache/eslint/",
 		"test": "turbo run test",
+		"test:e2e": "turbo run test:e2e",
 		"format": "prettier --write \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
 		"format:check": "prettier --check \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
 		"clean": "node scripts/clean.js",

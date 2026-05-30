@@ -15,6 +15,7 @@
 	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { untrack, onDestroy } from 'svelte';
 
 	const API_KEY_CLEAR = '__clear__';
 
@@ -116,11 +117,18 @@
 	$effect(() => {
 		// Pre-create an (idle) health entry per known server so each card has a
 		// Check button to drive. No probe runs here — servers stay untouched until
-		// the operator explicitly checks them.
-		for (const s of data.servers) ensureHealth(s.id);
-		return () => {
-			for (const h of Object.values(healthMap)) h.stop();
-		};
+		// the operator explicitly checks them. `ensureHealth` writes healthMap, so
+		// it must be untracked — otherwise this effect re-runs and (via its old
+		// cleanup) tore down the entries it just made, leaving Check a no-op.
+		const ids = data.servers.map((s) => s.id);
+		untrack(() => {
+			for (const id of ids) ensureHealth(id);
+		});
+	});
+
+	// Teardown only on real unmount — never coupled to data/healthMap changes.
+	onDestroy(() => {
+		for (const h of Object.values(healthMap)) h.stop();
 	});
 
 	function addServer() {

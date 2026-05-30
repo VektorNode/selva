@@ -25,7 +25,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"type-check": "tsc --noEmit",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"test:e2e": "playwright test"
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
@@ -49,6 +50,7 @@
 		"@selvajs/schemas": "workspace:*",
 		"@selvajs/supabase-provider": "workspace:*",
 		"@selvajs/ui": "workspace:*",
+		"@playwright/test": "catalog:",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@types/three": "catalog:",
 		"tw-animate-css": "catalog:",

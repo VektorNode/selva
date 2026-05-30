@@ -40,6 +40,12 @@
 			"outputs": [],
 			"inputs": ["src/**", "vitest.config.ts", ".env.test"]
 		},
+		"test:e2e": {
+			"dependsOn": ["build"],
+			"outputs": ["playwright-report/**"],
+			"inputs": ["src/**", "e2e/**", "playwright.config.ts"],
+			"env": ["CI", "E2E_PORT"]
+		},
 		"dev": {
 			"cache": false,
 			"persistent": true,
