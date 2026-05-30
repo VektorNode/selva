@@ -12,7 +12,8 @@
 // Exits 0 (green) or 1 (any red); yellow checks don't fail the run.
 
 import { existsSync, readFileSync, accessSync, constants, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { readEnvFile } from '../env.js';
@@ -93,6 +94,14 @@ export async function runDoctor() {
 	// Provider implementations are bundled into @selvajs/selva — only the
 	// runtime package needs to be on disk.
 	checks.push(checkPackage(dir, '@selvajs/selva'));
+
+	// ── CLI / runtime version alignment ────────────────────────────────
+	// The CLI and runtime ship as a `fixed` changeset group, so they SHOULD
+	// always share a version. They can still drift on disk: a caret pin
+	// (`^4`) won't cross a major, so after the group jumps to 5.x a stale
+	// `^4` pin silently keeps the CLI on 4.x. That's the exact failure that
+	// makes `selva update` look like a no-op for the CLI. Surface it.
+	checks.push(checkCliRuntimeAlignment(dir));
 
 	// ── Origin (best-effort) ───────────────────────────────────────────
 	if (env.ORIGIN) {
@@ -196,6 +205,50 @@ function checkPackage(dir, name) {
 	const path = join(dir, 'node_modules', ...name.split('/'), 'package.json');
 	if (!existsSync(path)) return red(`${name} not installed (run npm install)`);
 	return green(`${name} installed`);
+}
+
+function readPackageVersion(pkgJsonPath) {
+	try {
+		return JSON.parse(readFileSync(pkgJsonPath, 'utf8')).version ?? null;
+	} catch {
+		return null;
+	}
+}
+
+function majorOf(version) {
+	const m = /^(\d+)\./.exec(version ?? '');
+	return m ? Number(m[1]) : null;
+}
+
+// Compare the running CLI's major against the installed @selvajs/selva
+// runtime's major. They release together (`fixed` group), so a major skew
+// means the deployment's `@selvajs/cli` pin is stale — bump it and reinstall.
+function checkCliRuntimeAlignment(dir) {
+	const here = dirname(fileURLToPath(import.meta.url));
+	const cliVersion = readPackageVersion(join(here, '..', '..', 'package.json'));
+	const runtimeVersion = readPackageVersion(
+		join(dir, 'node_modules', '@selvajs', 'selva', 'package.json')
+	);
+
+	// Runtime missing is already reported red by checkPackage; stay quiet here.
+	if (!runtimeVersion) return yellow('CLI/runtime version check skipped (runtime not installed)');
+	if (!cliVersion) return yellow('CLI/runtime version check skipped (could not read CLI version)');
+
+	const cliMajor = majorOf(cliVersion);
+	const runtimeMajor = majorOf(runtimeVersion);
+	if (cliMajor === null || runtimeMajor === null) {
+		return yellow(`CLI ${cliVersion} / runtime ${runtimeVersion} — unparseable version, skipping`);
+	}
+
+	if (cliMajor === runtimeMajor) {
+		return green(`CLI ${cliVersion} aligned with runtime ${runtimeVersion} (major ${cliMajor})`);
+	}
+
+	return red(
+		`CLI major (${cliVersion}) != runtime major (${runtimeVersion}) — the @selvajs/cli pin ` +
+			`is stale. A caret range won't cross a major, so update it explicitly:\n     ` +
+			`npm install @selvajs/cli@^${runtimeMajor} && selva restart`
+	);
 }
 
 function checkLayoutDrift(dir) {

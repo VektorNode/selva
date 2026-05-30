@@ -11,7 +11,10 @@ import {
 import type { SchemaInput } from '@selvajs/schemas';
 import { error, json, isHttpError } from '@sveltejs/kit';
 import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';
-import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
+import {
+	resolveServerForOrg,
+	ComputeServerUnconfiguredError
+} from '$lib/server/compute/resolve.server';
 import { isSafeRemoteDefinitionUrl } from '$lib/server/compute/safe-url';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import {
@@ -392,6 +395,11 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	} catch (err) {
 		// Re-throw SvelteKit errors (400, 404, etc.) as-is
 		if (isHttpError(err)) throw err;
+
+		// No compute server configured/visible — an operator action, not a bug.
+		if (err instanceof ComputeServerUnconfiguredError) {
+			throw error(503, err.message);
+		}
 
 		const message = err instanceof Error ? err.message : 'Unknown error';
 		console.error('[API/Compute] Error:', message);

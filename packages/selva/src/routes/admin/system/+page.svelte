@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { Card, SectionHeader } from '@selvajs/ui';
 	import UpdateSection from './UpdateSection.svelte';
+	import HealthSection from './HealthSection.svelte';
 
 	interface PageData {
 		canManageUpdates: boolean;
+		isInstanceAdmin: boolean;
 		version: string;
 		flags: {
 			ALLOW_CROSS_ORG_PUBLIC: boolean;
@@ -60,6 +62,21 @@
 		}
 	}
 
+	// The health poller only proves the app is *reachable* — NOT that the update
+	// succeeded. A rollback (runner exit 5) leaves the app perfectly healthy on
+	// the OLD version; if we reported that as exit 0 the operator would think
+	// the update worked. So once the app is back we read the runner's own
+	// verdict out of the log file and map it to the exit code the UI classifies.
+	// Returns null when the log carries no terminal marker (fall back to health).
+	function exitCodeFromLog(log: string): number | null {
+		if (/\bManual recovery required\b/.test(log)) return 6; // rollback failed — app may be DOWN
+		if (/\bRolled back to .* — previous version is online\b/.test(log)) return 5; // safe rollback
+		if (/New process failed health check/.test(log) && !/Rolled back/.test(log)) return 3;
+		if (/\[FATAL\]/.test(log) && !/\[DONE\]/.test(log)) return 1; // fatal with no clean finish
+		if (/\[DONE\]/.test(log)) return 0; // runner reported clean completion
+		return null;
+	}
+
 	// Poll until we're confident the *new* process is serving:
 	//  - If we captured a startup commit, wait for the commit to change.
 	//  - Otherwise fall back to requiring 2 consecutive successful health checks
@@ -93,8 +110,10 @@
 			if (health) {
 				if (previousCommit && health.commit) {
 					if (health.commit !== previousCommit) {
-						updateLogs += `\n✓ App is back online on new commit ${health.commit.slice(0, 7)}\n`;
-						updateExitCode = 0;
+						// App is reachable on a NEW build. Trust the runner's logged
+						// verdict over a bare assumption of success — a rollback also
+						// changes nothing here but must not be reported as a clean update.
+						updateExitCode = exitCodeFromLog(updateLogs) ?? 0;
 						updateRunning = false;
 						updateRestarting = false;
 						return;
@@ -104,8 +123,10 @@
 				} else {
 					consecutiveOk += 1;
 					if (consecutiveOk >= 2) {
-						updateLogs += '\n✓ App is back online!\n';
-						updateExitCode = 0;
+						// Reachable, but commit-based detection wasn't available. The
+						// log verdict is the source of truth: a healthy app after a
+						// rollback is exit 5, not 0.
+						updateExitCode = exitCodeFromLog(updateLogs) ?? 0;
 						updateRunning = false;
 						updateRestarting = false;
 						return;
@@ -259,6 +280,10 @@
 			</div>
 		</Card.Content>
 	</Card.Root>
+
+	{#if data.isInstanceAdmin}
+		<HealthSection />
+	{/if}
 
 	{#if data.canManageUpdates}
 		<UpdateSection

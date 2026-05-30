@@ -16,6 +16,9 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ locals }) => {
 	const ctx = locals.ctx;
 	const canManageUpdates = ctx ? hasPermission(ctx, 'manage_updates') : false;
+	// The on-demand health check endpoint is instance_admin-only; gate the UI
+	// to match so we don't show a button that 403s.
+	const isInstanceAdmin = ctx ? hasPermission(ctx, 'instance_admin') : false;
 
 	const flags = {
 		ALLOW_CROSS_ORG_PUBLIC: flag('ALLOW_CROSS_ORG_PUBLIC'),
@@ -25,5 +28,5 @@ export const load: PageServerLoad = async ({ locals }) => {
 		ENABLE_SHARING: flag('ENABLE_SHARING')
 	};
 
-	return { canManageUpdates, flags, version: pkg.version };
+	return { canManageUpdates, isInstanceAdmin, flags, version: pkg.version };
 };

@@ -161,6 +161,27 @@ describe('definition upload — schema validation gate', () => {
 		expect(page.items).toHaveLength(0);
 	});
 
+	it('rejects with 503 and persists nothing when no compute server is configured', async () => {
+		tp = await freshProviders();
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		// Intentionally NO seedComputeServer() — resolve has nothing to return.
+		const { ctx, user } = await actAs(tp, alice.id);
+
+		// fetch must never be reached; if it is, the test should still fail loudly.
+		const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+		await expectStatus(
+			createDefinition(createEvent(tp, user, ctx, uploadForm(alicesPrivate.id))),
+			503
+		);
+		expect(fetchSpy).not.toHaveBeenCalled();
+
+		const page = await tp.config.data.definitions.listByProject(ctx, alicesPrivate.id, {
+			includePending: true
+		});
+		expect(page.items).toHaveLength(0);
+	});
+
 	it('seedDefinition still produces a version carrying a cached schema', async () => {
 		// Guards the fixture path used by the rest of the suite.
 		tp = await freshProviders();
