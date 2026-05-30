@@ -1,5 +1,23 @@
 # @selvajs/cli
 
+## 4.1.0
+
+### Minor Changes
+
+- Bump `@selvajs/cli` onto the `4.x` line, aligned with the `@selvajs/selva`
+  runtime.
+
+  The CLI and runtime release as a `linked` group but had drifted (CLI at `3.x`,
+  runtime at `4.x`) because the CLI carried no changeset during the runtime's
+  `4.0` cycle. Operators reasonably expect `selva` (the CLI) and the app it
+  manages to share a major, and `selva update` refreshes both packages together.
+  This lands the CLI at `4.1.0` — `4.0.0` is already published and can't be
+  reissued, so the minor is the lowest `4.x` we can ship.
+
+  No breaking CLI behavior; the bump is purely to re-sync the major line.
+  Functionality (`init`, `doctor`, `start/stop/restart/logs`, `update`,
+  `migrate`, `keys rotate`) is unchanged.
+
 ## 3.0.0
 
 ## 2.0.11
