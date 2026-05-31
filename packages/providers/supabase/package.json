@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/supabase-provider",
-	"version": "0.12.0",
+	"version": "0.13.0",
 	"description": "Supabase (Auth + Postgres + Storage) implementations of @selvajs/platform interfaces",
 	"license": "MIT",
 	"publishConfig": {
