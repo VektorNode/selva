@@ -1,5 +1,11 @@
 # @selvajs/supabase-provider
 
+## 0.13.1
+
+### Patch Changes
+
+- 1f6afe3: Pin `selva.set_updated_at()` to an empty `search_path` via a new migration, resolving the Supabase linter `function_search_path_mutable` warning.
+
 ## 0.13.0
 
 ### Minor Changes
