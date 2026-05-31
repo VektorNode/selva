@@ -7,12 +7,27 @@
  */
 
 import { execSync } from 'child_process';
-import { rmSync, cpSync, mkdirSync, statSync } from 'fs';
+import { rmSync, cpSync, mkdirSync, statSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const projectRoot = join(__dirname, '..');
+
+// Single source of truth for the plugin version: Selva.GH.csproj <Version>.
+// We substitute it into the yak manifest ourselves rather than leaving yak's
+// `$version` token to resolve — token resolution depends on yak inspecting an
+// assembly in the staging root, which is empty for multi-TFM packages (the
+// .gha lives in TFM subfolders), so it fails on clean CI runners.
+function readPluginVersion() {
+	const csprojPath = join(projectRoot, 'Plugin/Selva.GH/Selva.GH.csproj');
+	const csproj = readFileSync(csprojPath, 'utf-8');
+	const match = csproj.match(/<Version>([^<]+)<\/Version>/);
+	if (!match) {
+		throw new Error(`Could not find <Version> in ${csprojPath}`);
+	}
+	return match[1].trim();
+}
 
 // Colors for output
 const COLORS = {
@@ -172,6 +187,9 @@ async function build() {
 			}
 		];
 
+		const pluginVersion = readPluginVersion();
+		logSuccess(`Plugin version (from csproj): ${pluginVersion}`);
+
 		try {
 			rmSync(yakStagingRoot, { recursive: true, force: true });
 		} catch {
@@ -208,8 +226,11 @@ async function build() {
 			}
 
 			// Place manifest.yml and icon.png at the staging root (overwrites any
-			// manifest.yml copied in from the build output above).
-			cpSync(pkg.manifest, join(pkg.stageDir, 'manifest.yml'));
+			// manifest.yml copied in from the build output above). Substitute the
+			// real version for the `$version` token so yak doesn't have to resolve
+			// it by inspecting assemblies (which fails on CI for multi-TFM packages).
+			const manifest = readFileSync(pkg.manifest, 'utf-8').replace(/\$version\b/g, pluginVersion);
+			writeFileSync(join(pkg.stageDir, 'manifest.yml'), manifest);
 			cpSync(join(resourcesDir, 'Icons', 'Icon.png'), join(pkg.stageDir, 'icon.png'));
 
 			try {
