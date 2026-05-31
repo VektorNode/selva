@@ -23,6 +23,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Persist Turbo's local task cache across runs. Turbo hashes task inputs
+      # itself, so the key only needs to version + warm-seed the blob: the SHA
+      # makes every run write a fresh entry, and restore-keys pull the most
+      # recent prior cache so unchanged packages skip rebuilds. Scoped per
+      # workflow (turbo-e2e-) — actions/cache entries don't cross workflows.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-e2e-${{ github.sha }}
+          restore-keys: |
+            turbo-e2e-
+
       # Cache the Playwright browser binaries keyed on the installed version, so
       # we only re-download Chromium when @playwright/test bumps. restore-keys
       # lets a stale cache seed a fresh install rather than starting cold.

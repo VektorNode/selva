@@ -135,6 +135,20 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         run: pnpm install --frozen-lockfile
 
+      # Persist Turbo's local task cache so `pnpm release` (→ pnpm build) can
+      # reuse unchanged package builds across releases. Turbo hashes inputs
+      # itself; the SHA key writes a fresh entry and restore-keys warm-seed
+      # from the latest prior cache. This is local-only — it won't reuse builds
+      # produced by the PR test/e2e runs (that needs a remote cache), but it
+      # warms successive release runs.
+      - uses: actions/cache@v4
+        if: steps.check.outputs.should_run == 'true'
+        with:
+          path: .turbo
+          key: turbo-release-${{ github.sha }}
+          restore-keys: |
+            turbo-release-
+
       # Run tests + type-check before letting changesets near publishing.
       # Catches regressions in the version-bump-PR merge commit. If you need
       # to ship despite a known-flaky test, add it to vitest's skip list

@@ -23,6 +23,17 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Persist Turbo's local task cache (type-check/check/generate all run
+      # through turbo). Turbo handles input hashing; the SHA key writes a fresh
+      # entry each run and restore-keys warm-seed from the latest prior cache.
+      # Scoped per workflow — actions/cache entries don't cross workflows.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-test-${{ github.sha }}
+          restore-keys: |
+            turbo-test-
+
       # Workspace versioning invariants (publish coverage, bundle-only selva,
       # cli/selva fixed-group). Pure file scan — fails fast, no build needed.
       - name: Check publish invariants
@@ -92,6 +103,18 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      # Cache the NuGet global-packages folder. Keyed on the csproj files (no
+      # packages.lock.json exists, so setup-dotnet's built-in cache can't be
+      # used); restore-keys seed a fresh run from the last cache. Shares the
+      # same key shape as plugin-release.yml, but the OS differs so the entries
+      # don't collide.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Plugin/**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
       # Schema models, validation, and the SchemaMigrator — the logic that
       # protects user schemas across versions. 103 tests, fully deterministic.

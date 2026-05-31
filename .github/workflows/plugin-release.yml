@@ -65,6 +65,18 @@ jobs:
             7.0.x
             9.0.x
 
+      # Cache the NuGet global-packages folder so restore doesn't re-download
+      # the Grasshopper/Rhino packages every tag. We key on the csproj files
+      # (no packages.lock.json exists, so setup-dotnet's built-in cache can't
+      # be used) — a dependency change in any project busts it; restore-keys
+      # seed a fresh run from the last cache rather than starting cold.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Plugin/**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
       - uses: pnpm/action-setup@v3
 
       - uses: actions/setup-node@v4
@@ -73,6 +85,17 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # Persist Turbo's local task cache for the plugin-ui web-asset build that
+      # `build:plugin` runs through turbo. Turbo handles input hashing; the SHA
+      # key writes a fresh entry and restore-keys warm-seed from the latest
+      # prior cache. Scoped per workflow — entries don't cross workflows.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-plugin-${{ github.sha }}
+          restore-keys: |
+            turbo-plugin-
 
       # ── Yak CLI ──────────────────────────────────────────────────────────
       # yak.exe is a standalone download (no Rhino required). Put it on PATH so
