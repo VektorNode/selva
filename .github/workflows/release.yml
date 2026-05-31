@@ -92,9 +92,15 @@ jobs:
           # squash-merged (subject "chore: version packages") or merged as a
           # merge commit (subject "Merge pull request ..."), which the old
           # commit-subject check missed and silently skipped the publish.
-          for pkg in selva cli ui schemas; do
-            name="@selvajs/$pkg"
-            local_ver=$(node -p "require('./packages/$pkg/package.json').version")
+          #
+          # The publishable set is DERIVED from the workspace (every package
+          # with private!=true), not hardcoded. The old `selva cli ui schemas`
+          # list omitted @selvajs/platform + the providers, so a provider-only
+          # bump bumped package.json/CHANGELOG but never published — silently
+          # breaking consumers (parafa) that pin `@selvajs/platform ^0.12.0`.
+          # scripts/publishable-packages.mjs is dependency-free so it runs here
+          # on the runner's system node, before `pnpm install`.
+          while IFS=$'\t' read -r name local_ver _dir; do
             # `npm view` exits non-zero / empty for never-published packages;
             # treat that as "needs publish" too.
             npm_ver=$(npm view "$name" version 2>/dev/null || echo "")
@@ -103,7 +109,7 @@ jobs:
               echo "should_run=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-          done
+          done < <(node scripts/publishable-packages.mjs --list)
           echo "No changesets and all published versions match npm — skipping."
           echo "should_run=false" >> "$GITHUB_OUTPUT"
 
@@ -149,12 +155,14 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         with:
           # `pnpm changeset version` consumes .changeset/*.md, bumps
-          # package.json versions, and writes CHANGELOGs. The linked-mode
-          # config in .changeset/config.json keeps @selvajs/selva,
-          # @selvajs/cli, @selvajs/ui, @selvajs/schemas on a shared version
-          # only when they're released together — packages without a change
-          # in a given release stay put (so versions may drift), which avoids
-          # the spurious major bumps the old fixed-mode group produced.
+          # package.json versions, and writes CHANGELOGs. The `fixed` group in
+          # .changeset/config.json is intentionally narrow: only
+          # @selvajs/selva + @selvajs/cli share a version, so their MAJOR
+          # versions stay aligned (the `selva doctor` cli/runtime compat
+          # check). @selvajs/ui, @selvajs/schemas, @selvajs/platform and the
+          # providers version INDEPENDENTLY on their own changesets — they're
+          # consumed standalone from npm (parafa/parapet), so lockstepping
+          # them to selva would just inflate their versions.
           version: pnpm changeset version
 
           # `pnpm release` runs `pnpm build && changeset publish`. The

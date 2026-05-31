@@ -10,7 +10,7 @@
 -- by 0001_initial.sql — this closes that drift.
 -- ============================================================================
 
-alter table public.definition_versions
+alter table selva.definition_versions
 	add column if not exists change_note text,
 	add column if not exists schema jsonb,
 	add column if not exists schema_extracted_at timestamptz;

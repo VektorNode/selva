@@ -12,7 +12,10 @@
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
-!/Plugin/Releases/
+# Plugin/Releases/ is no longer committed. Release .yak/.gha artifacts are
+# published to GitHub Releases + the Yak registry by
+# .github/workflows/plugin-release.yml. (Previously force-included here via
+# "!/Plugin/Releases/".)
 x64/
 x86/
 bld/

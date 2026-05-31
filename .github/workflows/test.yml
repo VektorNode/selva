@@ -23,6 +23,28 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Workspace versioning invariants (publish coverage, bundle-only selva,
+      # cli/selva fixed-group). Pure file scan — fails fast, no build needed.
+      - name: Check publish invariants
+        run: node scripts/publishable-packages.mjs --check
+
+      # Generated-code drift gate. `ui-schema.json` is the single source of
+      # truth; the committed schema.ts / UISchema.Generated.cs / SchemaVersion.cs
+      # are derived. The generators already error if definitions changed without
+      # a schemaVersion bump, but that only fires when someone runs `generate`.
+      # This makes CI the backstop: regenerate, then fail if anything differs
+      # from what's committed.
+      - name: Verify generated code is up to date
+        run: |
+          pnpm generate
+          if ! git diff --exit-code -- \
+            packages/schemas/src/generated \
+            Plugin/Selva.Schema/Models/UISchema.Generated.cs \
+            Plugin/Selva.Schema/Constants/SchemaVersion.cs; then
+            echo "::error::Generated code is out of date. Run 'pnpm generate' and commit the result."
+            exit 1
+          fi
+
       # Persist ESLint's cache across runs so unchanged files are skipped.
       # Keyed on lint config so a rule change busts the cache; restore-keys
       # let an outdated cache seed a fresh run rather than starting cold.
@@ -55,3 +77,29 @@ jobs:
       #     suite teardown and async store writes). Re-enable here once the
       #     race is fixed.
       - run: pnpm --filter @selvajs/local-provider test
+
+  # .NET tests for the Rhino-free libraries. Runs on ubuntu in parallel with
+  # the JS job. Selva.Tests and Selva.Drawing.Tests both target net8.0 and have
+  # NO Rhino/Grasshopper dependency — Selva.Tests references only Selva.Schema
+  # and *links* the handful of Rhino-free source files it needs (see its csproj),
+  # so the schema migrator / validator now have real CI protection. The
+  # Rhino-coupled Selva.GH tests still need a Windows+Rhino runner (future work).
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # Schema models, validation, and the SchemaMigrator — the logic that
+      # protects user schemas across versions. 103 tests, fully deterministic.
+      - name: Test Selva.Schema (migration, validation)
+        run: dotnet test Plugin/Selva.Tests/Selva.Tests.csproj --nologo
+
+      # Drawing document model + layout passes, including the SvgRendererSnapshotTests
+      # (pinned SVG output). These are deterministic: glyph advances come from the
+      # bundled font via FontMetrics, not the host's installed fonts.
+      - name: Test Selva.Drawing (model + layout + SVG snapshots)
+        run: dotnet test Plugin/Selva.Drawing.Tests/Selva.Drawing.Tests.csproj --nologo
