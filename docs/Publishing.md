@@ -1,19 +1,27 @@
 # Publishing
 
-How to release Selva's npm packages. Default flow is changesets (manual or via CI). For shipping a single fix faster, see [Hotfix bypass](#hotfix-bypass) below.
+How to release Selva. Two independent tracks: the **npm packages** (changesets — manual or CI) and the **Grasshopper plugin** (`.yak`, via a `plugin-v*` tag — see [Plugin releases (Yak)](#plugin-releases-yak)). For shipping a single npm fix faster, see [Hotfix bypass](#hotfix-bypass).
 
-## One version, four packages
+## Published packages
 
-Changesets runs in `fixed` mode across the four published packages — bumping any one bumps all four. Operators see a single version line; you stop tracking per-package versions.
+Most packages publish to npm under `@selvajs/*`, in two versioning modes:
 
-| Published          | What it is                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------- |
-| `@selvajs/selva`   | Prebuilt SvelteKit app. Bundles `@selvajs/platform` + all providers. The thing operators install. |
-| `@selvajs/cli`     | `npx @selvajs/cli <dir>` scaffolds a deployment; `selva <cmd>` runs day-2 ops.                    |
-| `@selvajs/ui`      | Shared Svelte component library. Also bundled into `@selvajs/selva`.                              |
-| `@selvajs/schemas` | Generated UI schema types. `peerDependency` of `@selvajs/ui`.                                     |
+- **`@selvajs/selva` + `@selvajs/cli`** are a changeset `fixed` group — they always share a version, so their MAJOR versions stay aligned (the `selva doctor` cli/runtime compatibility check depends on this).
+- **`@selvajs/ui`, `@selvajs/schemas`, `@selvajs/platform`, `@selvajs/local-provider`, `@selvajs/supabase-provider`** version **independently**, on their own changesets. They're consumed standalone from npm (e.g. by Parafa), so lockstepping them to selva would only inflate their versions.
 
-Everything else (`@selvajs/platform`, the providers, `@selvajs/plugin-ui`, `@selvajs/config`) is `"private": true` and bundled or consumed internally. If you want to publish one, change the architecture instead.
+| Published                    | What it is                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------ |
+| `@selvajs/selva`             | Prebuilt SvelteKit app. Bundles ui + schemas + platform + all providers. What operators install. |
+| `@selvajs/cli`               | `npx @selvajs/cli <dir>` scaffolds a deployment; `selva <cmd>` runs day-2 ops.                   |
+| `@selvajs/ui`                | Shared Svelte component library (also bundled into `@selvajs/selva`).                            |
+| `@selvajs/schemas`           | Generated UI schema types + the TS/C# generators.                                                |
+| `@selvajs/platform`          | Provider interfaces + Zod schemas. Consumed by apps building custom providers.                   |
+| `@selvajs/local-provider`    | Filesystem implementation of the platform interfaces.                                            |
+| `@selvajs/supabase-provider` | Supabase implementation of the platform interfaces.                                              |
+
+`"private": true` (never published — bundled or internal): `@selvajs/header-auth-provider`, `@selvajs/plugin-ui`, `@selvajs/config`.
+
+The publish set is **derived from the workspace** (every non-`private` package) by `scripts/publishable-packages.mjs` — both the release workflow and a CI guard use it, so adding a publishable package needs no edits to either. That script also enforces invariants (e.g. `@selvajs/selva` stays a self-contained bundle; no published package has a runtime dependency on a private one).
 
 ## One-time setup
 
