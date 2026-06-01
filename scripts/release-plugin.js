@@ -238,7 +238,8 @@ function replaceTag(text, tag, value) {
 	const re = new RegExp(`<${tag}>.*?</${tag}>`, 'g');
 	const matches = text.match(re);
 	if (!matches) die(`<${tag}> not found in Selva.GH.csproj — cannot bump it safely.`);
-	if (matches.length > 1) die(`<${tag}> appears ${matches.length}× in Selva.GH.csproj — ambiguous.`);
+	if (matches.length > 1)
+		die(`<${tag}> appears ${matches.length}× in Selva.GH.csproj — ambiguous.`);
 	return text.replace(re, `<${tag}>${value}</${tag}>`);
 }
 
