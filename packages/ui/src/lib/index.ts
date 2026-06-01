@@ -24,6 +24,7 @@ export * from './external/storage';
 
 // Contexts & Composables
 export * from './contexts/footerContext.svelte';
+export * from './contexts/clientSlotContext.svelte';
 export * from './composables/useFooterItem.svelte';
 
 // Utils (cn function)

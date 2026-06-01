@@ -262,6 +262,23 @@
 				"key": {
 					"type": "string",
 					"description": "The opaque address of the value, interpreted by the host app per 'kind': for 'client' it names WHICH producer app fills the input (e.g. 'line-app', 'file-upload') so the host can pre-route to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. An open string — its meaning is defined by the host, not by Selva. Ignored for kind='user'."
+				},
+				"client": {
+					"type": "object",
+					"description": "How a client-sourced input appears in the form (only meaningful when kind='client'). Omitted = hidden (prefilled silently). 'slot' = Selva reserves the input's cell and renders a host-provided element in its place; Selva renders nothing itself and never interprets the element's meaning.",
+					"properties": {
+						"presentation": {
+							"type": "string",
+							"enum": ["hidden", "slot"],
+							"default": "hidden",
+							"description": "'hidden' = no UI; the value is prefilled by the producer app and the input does not appear. 'slot' = the host app renders a custom element (e.g. an 'Edit JSON' button) in this input's place."
+						},
+						"slotLabel": {
+							"type": "string",
+							"description": "Author-set text passed through to the host's slot snippet untouched. Selva does not render or interpret it (e.g. 'Edit JSON')."
+						}
+					},
+					"additionalProperties": false
 				}
 			},
 			"required": ["kind"],

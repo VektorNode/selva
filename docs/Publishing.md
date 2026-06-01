@@ -1,6 +1,6 @@
 # Publishing
 
-How to release Selva. Two independent tracks: the **npm packages** (changesets — manual or CI) and the **Grasshopper plugin** (`.yak`, via a `plugin-v*` tag — see [Plugin releases (Yak)](#plugin-releases-yak)). For shipping a single npm fix faster, see [Hotfix bypass](#hotfix-bypass).
+How to release Selva. Two independent tracks: the **npm packages** (changesets — manual or CI) and the **Grasshopper plugin** (`.yak`, via `pnpm release:plugin` which tags `plugin-v*` — see [Plugin releases (Yak)](#plugin-releases-yak)). For shipping a single npm fix faster, see [Hotfix bypass](#hotfix-bypass).
 
 ## Published packages
 
@@ -61,6 +61,24 @@ The Grasshopper plugin has its **own version line** — `Plugin/Selva.GH/Selva.G
 Add a **`YAK_TOKEN`** repo secret (Settings → Secrets and variables → Actions): run `yak login` locally once, then copy the `credentials.token` value out of `%APPDATA%\McNeel\yak.yml`. yak reads this env var directly for `yak push` (no `yak.yml` is needed on the runner — verified against `test.yak.rhino3d.com`).
 
 ### Release flow
+
+```bash
+pnpm release:plugin            # prompts: patch / minor / major
+# or skip the prompt:
+pnpm release:plugin minor      # bump a part directly
+pnpm release:plugin 0.10.4     # set an explicit version
+```
+
+`scripts/release-plugin.js` bumps all four version tags in
+`Plugin/Selva.GH/Selva.GH.csproj` (`<Version>` + `AssemblyVersion` /
+`FileVersion` / `InformationalVersion`), commits the bump, creates the
+`plugin-v<x.y.z>` tag, and pushes — which fires the workflow below. It refuses on
+a dirty tree or an existing tag, and shows a plan you confirm before it acts.
+Flags: `--dry-run` (print actions only), `--no-push` (commit + tag locally, push
+yourself), `--build` (opt-in local `build:plugin` first; CI builds anyway),
+`-y` (skip confirmation). Run `pnpm release:plugin --help` for the full list.
+
+Manual equivalent, if you'd rather do it by hand:
 
 ```bash
 # 1. bump <Version> (and AssemblyVersion/FileVersion/InformationalVersion) in

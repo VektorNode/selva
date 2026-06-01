@@ -216,12 +216,43 @@
 			target.source = undefined;
 			return;
 		}
-		// Preserve any already-typed key when switching client↔server.
+		// Preserve any already-typed key and client presentation when switching.
 		const prevKey = target.source?.key;
-		target.source = { kind, ...(prevKey ? { key: prevKey } : {}) };
+		const prevClient = target.source?.client;
+		target.source = {
+			kind,
+			...(prevKey ? { key: prevKey } : {}),
+			...(kind === 'client' && prevClient ? { client: prevClient } : {})
+		};
 		// Externally-supplied inputs are typically hidden from the end user.
 		// Default to hidden the first time it leaves 'user'; author can override.
 		if (target.visible !== false) target.visible = false;
+	}
+
+	// Client presentation: 'hidden' (default) or 'slot' (host renders a custom
+	// element in the input's place). 'slot' requires the cell to be visible.
+	let clientPresentation = $derived(
+		(item as { source?: InputSource }).source?.client?.presentation ?? 'hidden'
+	);
+
+	function setClientPresentation(presentation: 'hidden' | 'slot') {
+		if (item.type !== 'input') return;
+		const target = item as { source?: InputSource; visible?: boolean };
+		if (!target.source || target.source.kind !== 'client') return;
+		if (presentation === 'hidden') {
+			target.source.client = undefined;
+			target.visible = false;
+		} else {
+			target.source.client = { ...target.source.client, presentation };
+			target.visible = true;
+		}
+	}
+
+	function setSlotLabel(label: string) {
+		if (item.type !== 'input') return;
+		const target = item as { source?: InputSource };
+		if (!target.source?.client) return;
+		target.source.client.slotLabel = label || undefined;
 	}
 
 	function toggleAcceptedFormat(format: string) {
@@ -624,6 +655,35 @@
 											shown in the form.
 										{/if}
 									</span>
+
+									{#if sourceKind === 'client'}
+										<div class="flex items-center justify-between gap-2">
+											<span class="text-muted-foreground">In the form</span>
+											<select
+												value={clientPresentation}
+												onchange={(e) =>
+													setClientPresentation(e.currentTarget.value as 'hidden' | 'slot')}
+												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-1.5 text-[10px] focus:outline-none"
+											>
+												<option value="hidden">Hidden</option>
+												<option value="slot">Custom slot (host app)</option>
+											</select>
+										</div>
+										{#if clientPresentation === 'slot'}
+											{@const client = (item as { source?: InputSource }).source?.client}
+											<input
+												type="text"
+												value={client?.slotLabel ?? ''}
+												oninput={(e) => setSlotLabel(e.currentTarget.value)}
+												placeholder="Slot label (optional, e.g. Edit JSON)"
+												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+											/>
+											<span class="text-muted-foreground/70 text-[9px]">
+												The host app renders its own element here. The label is passed through
+												untouched; Selva renders nothing itself.
+											</span>
+										{/if}
+									{/if}
 								</div>
 							{/if}
 						</div>

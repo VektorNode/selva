@@ -431,6 +431,12 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("key")]
         public string Key { get; set; }
+
+/// <summary>
+/// How a client-sourced input appears in the form (only meaningful when kind='client'). Omitted = hidden (prefilled silently). 'slot' = Selva reserves the input's cell and renders a host-provided element in its place; Selva renders nothing itself and never interprets the element's meaning.
+/// </summary>
+        [JsonProperty("client", NullValueHandling = NullValueHandling.Ignore)]
+        public object Client { get; set; }
     }
 
     public class DiscoveredInput

@@ -14,6 +14,7 @@
 	import AppLayout from './AppLayout.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import { getExternalInputs, readExternalValue } from '../../external/storage';
+	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
 
 	import type { Snippet } from 'svelte';
 
@@ -57,6 +58,14 @@
 		 * values. If absent, falls back to definitionKey, then to schema.id.
 		 */
 		externalScopeKey?: string;
+		/**
+		 * Host-rendered element for client-sourced inputs whose schema sets
+		 * source.client.presentation === 'slot'. Selva reserves the input's cell and
+		 * invokes this snippet in its place, passing { inputId, displayName, slotLabel,
+		 * value }. Selva renders nothing itself and never interprets what the host puts
+		 * here (e.g. an "Edit JSON" button that navigates back to a producer page).
+		 */
+		clientSlot?: ClientSlot;
 	}
 
 	let {
@@ -83,8 +92,13 @@
 		headerRight,
 		header,
 		onReady,
-		externalScopeKey
+		externalScopeKey,
+		clientSlot
 	}: Props = $props();
+
+	// Make the host's client-input slot available to InputControl deep in the tree.
+	// svelte-ignore state_referenced_locally
+	setClientSlot(clientSlot);
 
 	const resolvedScopeKey = $derived(externalScopeKey || definitionKey || schema?.id || '');
 
