@@ -95,6 +95,7 @@ export type {
 	DefinitionChannel
 } from './definitions/types.js';
 export type { IDefinitionStore } from './definitions/interface.js';
+export type { UISchema } from '@selvajs/schemas';
 export {
 	GH_EXTENSIONS,
 	COVER_IMAGE_EXTENSIONS,

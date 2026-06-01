@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/supabase-provider",
-	"version": "0.11.0",
+	"version": "0.13.2",
 	"description": "Supabase (Auth + Postgres + Storage) implementations of @selvajs/platform interfaces",
 	"license": "MIT",
 	"publishConfig": {
@@ -14,6 +14,9 @@
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
+	"bin": {
+		"selva-supabase": "./dist/cli/sync-migrations.js"
+	},
 	"exports": {
 		".": {
 			"source": "./src/index.ts",

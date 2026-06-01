@@ -1,6 +1,8 @@
 import { error } from '@sveltejs/kit';
 import { ProviderError } from '@selvajs/platform';
 import type { ZodError } from 'zod';
+import { SchemaExtractionError } from './definitions/schemaExtraction.server';
+import { ComputeServerUnconfiguredError } from './compute/resolve.server';
 
 function isSvelteKitError(err: unknown): err is { status: number; body: unknown } {
 	return !!err && typeof err === 'object' && 'status' in err && 'body' in err;
@@ -30,6 +32,15 @@ function friendlyConstraintMessage(raw: string): string | null {
  */
 export function handleApiError(err: unknown, fallback: string): never {
 	if (isSvelteKitError(err)) throw err;
+	// Schema extraction is the upload validation gate (specs/SchemaCaching.md):
+	// compute unreachable → 503, no valid Schema output → 422.
+	if (err instanceof SchemaExtractionError) {
+		throw error(err.kind === 'unreachable' ? 503 : 422, err.message);
+	}
+	// No compute server configured/visible — an operator action, not a bug.
+	if (err instanceof ComputeServerUnconfiguredError) {
+		throw error(503, err.message);
+	}
 	if (err instanceof ProviderError) {
 		const friendly = friendlyConstraintMessage(err.message);
 		throw error(err.statusCode, friendly ?? err.message);

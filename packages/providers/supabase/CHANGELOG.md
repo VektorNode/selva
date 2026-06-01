@@ -1,5 +1,45 @@
 # @selvajs/supabase-provider
 
+## 0.13.2
+
+### Patch Changes
+
+- @selvajs/platform@0.12.1
+
+## 0.13.1
+
+### Patch Changes
+
+- 1f6afe3: Pin `selva.set_updated_at()` to an empty `search_path` via a new migration, resolving the Supabase linter `function_search_path_mutable` warning.
+
+## 0.13.0
+
+### Minor Changes
+
+- e7d2adb: Move all engine tables into a dedicated `selva` Postgres schema instead of `public`.
+
+  A consuming app sharing the same database now keeps `public` entirely for its own tables — `selva.projects` and a consumer's `public.projects` can coexist, removing the name-clash that previously forced consumers to rename around the engine. The data clients are constructed with `db: { schema: 'selva' }`, the initial migration creates the schema, grants the standard roles, and exposes it to PostgREST via `alter role authenticator set pgrst.db_schemas` (done from the migration, not `config.toml`, to avoid the boot-before-migrations race).
+
+  **Breaking for existing databases on the old `public` layout.** This is a table relocation, not an additive change. A fresh install (`db reset` / first `db push`) just works. A database with live data on the old layout needs a data-preserving `alter table … set schema selva` migration path — not covered by the fresh-install SQL. Consumers referencing engine objects from their own migrations must qualify them with `selva.` (`references selva.orgs`, `selva.is_org_member()`, `selva.is_instance_admin()`, `selva.set_updated_at()`).
+
+  Also fixes a pre-existing missing UPDATE RLS policy on `definition_versions` that caused `setVersionSchema` to silently write 0 rows for user-scoped callers.
+
+## 0.12.0
+
+### Minor Changes
+
+- 9ded581: Cache each definition version's compute-extracted UI schema on the version row, and make schema extraction a hard upload gate.
+
+  `DefinitionVersion` gains optional `schema` + `schemaExtractedAt`, and `IDefinitionStore` gains `setVersionSchema`. On upload, the schema is now extracted and validated against Rhino.Compute **before** any blob or version row is written — a compute outage or a definition with no valid `Schema` output rejects the upload (503 / 422) with nothing persisted. The render path reads the cached schema instead of re-fetching it from compute on every load, falling back to a live fetch (plus a temporary solve-time backfill) for versions uploaded before this change.
+
+  `@selvajs/platform` now re-exports the `UISchema` type from `@selvajs/schemas` (types-only dependency). The Supabase provider adds a `0002` migration creating `definition_versions.schema` / `schema_extracted_at` (and the previously-missing `change_note`) columns.
+
+### Patch Changes
+
+- Updated dependencies [9ded581]
+- Updated dependencies [9ded581]
+  - @selvajs/platform@0.12.0
+
 ## 0.11.0
 
 ### Minor Changes

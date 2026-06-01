@@ -108,9 +108,9 @@
 
 		displayName = nameFromFile(file);
 
-		// Schema preview needs a target project for the upload-rights gate. If one
-		// isn't picked yet, skip the preview — the user still gets the filename-derived
-		// name and can submit; server-side validation runs on actual upload.
+		// Schema extraction needs a target project for the upload-rights gate. If
+		// one isn't picked yet, defer validation — the $effect above re-runs this
+		// once a project is selected. Submission stays blocked until then.
 		if (!selectedProjectId) return;
 
 		validating = true;
@@ -123,18 +123,24 @@
 				{ method: 'POST', body: formData }
 			);
 
-			// Compute unreachable — skip silently, name already set from filename
-			if (response.status === 404) return;
-
-			const body = await response.json();
-
 			if (!response.ok) {
-				validationError = body?.message ?? 'Validation failed';
+				// Schema extraction is a hard gate: the server rejects uploads that
+				// don't validate, so surface the failure and block submission here.
+				const body = await response.json().catch(() => null);
+				validationError =
+					body?.message ??
+					(response.status === 503
+						? 'Compute server is unreachable. It must be online to upload a definition.'
+						: 'Validation failed');
 				return;
 			}
 
+			const body = await response.json();
 			const schema = body?.[0];
-			if (!schema) return;
+			if (!schema) {
+				validationError = 'No valid Selva schema found in this definition.';
+				return;
+			}
 
 			// Pre-fill from UISchema
 			validationSchema = schema;
@@ -142,7 +148,7 @@
 			if (schema.description) description = schema.description;
 			if (schema.tags?.length) tags = schema.tags;
 		} catch {
-			// Network error — skip silently
+			validationError = 'Compute server is unreachable. It must be online to upload a definition.';
 		} finally {
 			validating = false;
 		}
@@ -159,6 +165,14 @@
 		}
 		if (showProjectDropdown && !selectedProjectId) {
 			toast.error('Please pick a project');
+			return;
+		}
+		// Schema extraction is a server-side hard gate: the definition can't be
+		// uploaded unless compute is reachable and returns a valid schema.
+		if (!validationSchema) {
+			toast.error(
+				validationError ?? 'The definition must be validated against an online compute server first'
+			);
 			return;
 		}
 
@@ -303,10 +317,12 @@
 						Validating definition…
 					</p>
 				{:else if validationError}
-					<div class="border-warning/40 bg-warning/5 rounded-md border p-3">
-						<p class="text-warning text-xs font-medium">Validation warning</p>
-						<p class="text-warning/80 mt-0.5 text-xs">{validationError}</p>
-						<p class="text-warning/60 mt-1 text-xs">You can still upload the file.</p>
+					<div class="border-destructive/40 bg-destructive/5 rounded-md border p-3">
+						<p class="text-destructive text-xs font-medium">Validation failed</p>
+						<p class="text-destructive/80 mt-0.5 text-xs">{validationError}</p>
+						<p class="text-destructive/60 mt-1 text-xs">
+							This definition can't be uploaded until it validates against an online compute server.
+						</p>
 					</div>
 				{:else if validationSchema}
 					<div class="border-success/30 bg-success/5 flex items-center gap-3 rounded-md border p-3">
@@ -424,7 +440,7 @@
 
 		<Dialog.Footer class="gap-2 sm:justify-end">
 			<Button variant="outline" onclick={() => onOpenChange?.(false)}>Cancel</Button>
-			<Button onclick={handleSubmit} disabled={isAdding || validating}>
+			<Button onclick={handleSubmit} disabled={isAdding || validating || !validationSchema}>
 				{isAdding ? 'Creating…' : validating ? 'Validating…' : 'Create Definition'}
 			</Button>
 		</Dialog.Footer>

@@ -11,6 +11,7 @@
 	import { Button, Input, Label, Textarea, Dialog, Card } from '../primitives';
 
 	import type { ActionButton } from '../../types/actionButton';
+	import { DEFAULT_PRESET_LABELS, type PresetLabels } from '../../types/presetLabels';
 
 	interface Props {
 		schema: UISchema;
@@ -19,6 +20,12 @@
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
 		actions?: ActionButton[];
+		/** When set, persist saved states via this callback instead of downloading a .sps file. */
+		onSaveState?: (state: ParameterPreset) => void | Promise<void>;
+		/** When set, the Load dialog lists these states instead of showing a file input. */
+		onListStates?: () => ParameterPreset[] | Promise<ParameterPreset[]>;
+		/** Partial overrides for UI strings (e.g. for localization). */
+		labels?: Partial<PresetLabels>;
 	}
 
 	let {
@@ -27,8 +34,13 @@
 		onLoadValues,
 		showSaveButton = true,
 		showLoadButton = true,
-		actions = []
+		actions = [],
+		onSaveState,
+		onListStates,
+		labels
 	}: Props = $props();
+
+	const t = $derived({ ...DEFAULT_PRESET_LABELS, ...labels });
 
 	// Save dialog state
 	let showExportDialog = $state(false);
@@ -44,6 +56,11 @@
 	let validationResult = $state<ReturnType<typeof validateSavedState> | null>(null);
 	let fileInputRef = $state<HTMLInputElement | null>(null);
 
+	// Listed states (when onListStates is provided)
+	let listedStates = $state<ParameterPreset[]>([]);
+	let isLoadingList = $state(false);
+	let listError = $state('');
+
 	function openExportDialog() {
 		exportName = `State ${new Date().toLocaleDateString()}`;
 		exportDescription = '';
@@ -52,9 +69,9 @@
 		showExportDialog = true;
 	}
 
-	function handleExport() {
+	async function handleExport() {
 		if (!exportName.trim()) {
-			alert('Please enter a name for this state');
+			alert(t.saveNameRequired);
 			return;
 		}
 
@@ -64,12 +81,26 @@
 			author: exportAuthor.trim() || undefined,
 			tags: exportTags
 				.split(',')
-				.map((t) => t.trim())
-				.filter((t) => t.length > 0)
+				.map((tag) => tag.trim())
+				.filter((tag) => tag.length > 0)
 		});
 
-		exportStateAsJson(state);
+		if (onSaveState) await onSaveState(state);
+		else exportStateAsJson(state);
 		showExportDialog = false;
+	}
+
+	// Validate a preset, then either load it directly (no issues) or open the
+	// validation dialog (any errors or warnings). Shared by every load path.
+	function tryLoad(preset: ParameterPreset) {
+		const validation = validateSavedState(preset, schema);
+		if (validation.isValid) {
+			onLoadValues(extractLoadableValues(preset, schema, validation));
+		} else {
+			importedState = preset;
+			validationResult = validation;
+			showValidationDialog = true;
+		}
 	}
 
 	async function handleImport(event: Event) {
@@ -77,33 +108,10 @@
 		if (!input.files || input.files.length === 0) return;
 
 		try {
-			const file = input.files[0];
-			const imported = await importStateFromJson(file);
-
-			// Validate before loading
-			const validation = validateSavedState(imported, schema);
-
-			if (!validation.canLoad) {
-				// Show validation errors
-				importedState = imported;
-				validationResult = validation;
-				showValidationDialog = true;
-				return;
-			}
-
-			// Warnings only - show validation but allow load
-			if (!validation.isValid) {
-				importedState = imported;
-				validationResult = validation;
-				showValidationDialog = true;
-				return;
-			}
-
-			// No issues - load immediately
-			const values = extractLoadableValues(imported, schema, validation);
-			onLoadValues(values);
+			const imported = await importStateFromJson(input.files[0]);
+			tryLoad(imported);
 		} catch (error) {
-			alert('Failed to import state: ' + (error as Error).message);
+			alert(t.loadImportError + (error as Error).message);
 		}
 
 		// Reset input
@@ -128,12 +136,29 @@
 		validationResult = null;
 	}
 
-	function openLoadDialog() {
+	async function openLoadDialog() {
 		showLoadDialog = true;
+		if (!onListStates) return;
+
+		isLoadingList = true;
+		listError = '';
+		listedStates = [];
+		try {
+			listedStates = await onListStates();
+		} catch (error) {
+			listError = (error as Error).message;
+		} finally {
+			isLoadingList = false;
+		}
 	}
 
 	function handleLoadClick() {
 		fileInputRef?.click();
+		showLoadDialog = false;
+	}
+
+	function selectListedState(preset: ParameterPreset) {
+		tryLoad(preset);
 		showLoadDialog = false;
 	}
 </script>
@@ -141,14 +166,14 @@
 {#if showSaveButton}
 	<Button variant="default" size="sm" onclick={openExportDialog}>
 		<Download class="mr-2 h-4 w-4" />
-		Save State
+		{t.saveButton}
 	</Button>
 {/if}
 
 {#if showLoadButton}
 	<Button variant="outline" size="sm" onclick={openLoadDialog}>
 		<Upload class="mr-2 h-4 w-4" />
-		Load State
+		{t.loadButton}
 	</Button>
 {/if}
 
@@ -168,44 +193,40 @@
 <Dialog.Root bind:open={showExportDialog}>
 	<Dialog.Content>
 		<Dialog.Header>
-			<Dialog.Title>Save Parameter State</Dialog.Title>
-			<Dialog.Description>Save the current parameter values as a .sps file</Dialog.Description>
+			<Dialog.Title>{t.saveDialogTitle}</Dialog.Title>
+			<Dialog.Description>{t.saveDialogDescription}</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="gap-4 py-4 grid">
 			<div class="gap-2 grid">
-				<Label for="export-name">State Name *</Label>
-				<Input id="export-name" bind:value={exportName} placeholder="e.g., Design Option A" />
+				<Label for="export-name">{t.saveNameLabel}</Label>
+				<Input id="export-name" bind:value={exportName} placeholder={t.saveNamePlaceholder} />
 			</div>
 
 			<div class="gap-2 grid">
-				<Label for="export-description">Description</Label>
+				<Label for="export-description">{t.saveDescriptionLabel}</Label>
 				<Textarea
 					id="export-description"
 					bind:value={exportDescription}
-					placeholder="Optional description of this state"
+					placeholder={t.saveDescriptionPlaceholder}
 					rows={3}
 				/>
 			</div>
 
 			<div class="gap-2 grid">
-				<Label for="export-author">Author</Label>
-				<Input id="export-author" bind:value={exportAuthor} placeholder="Your name or email" />
+				<Label for="export-author">{t.saveAuthorLabel}</Label>
+				<Input id="export-author" bind:value={exportAuthor} placeholder={t.saveAuthorPlaceholder} />
 			</div>
 
 			<div class="gap-2 grid">
-				<Label for="export-tags">Tags</Label>
-				<Input
-					id="export-tags"
-					bind:value={exportTags}
-					placeholder="facade, option-a, client-approved (comma-separated)"
-				/>
+				<Label for="export-tags">{t.saveTagsLabel}</Label>
+				<Input id="export-tags" bind:value={exportTags} placeholder={t.saveTagsPlaceholder} />
 			</div>
 		</div>
 
 		<Dialog.Footer>
-			<Button variant="outline" onclick={() => (showExportDialog = false)}>Cancel</Button>
-			<Button onclick={handleExport}>Save State</Button>
+			<Button variant="outline" onclick={() => (showExportDialog = false)}>{t.cancelButton}</Button>
+			<Button onclick={handleExport}>{t.saveButton}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
@@ -214,19 +235,49 @@
 <Dialog.Root bind:open={showLoadDialog}>
 	<Dialog.Content>
 		<Dialog.Header>
-			<Dialog.Title>Load Parameter State</Dialog.Title>
-			<Dialog.Description>Select a .sps state file from your drive to load</Dialog.Description>
+			<Dialog.Title>{t.loadDialogTitle}</Dialog.Title>
+			<Dialog.Description>{t.loadDialogDescription}</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="py-8">
-			<Button onclick={handleLoadClick} class="w-full" size="lg">
-				<Upload class="mr-2 h-4 w-4" />
-				Select .sps File
-			</Button>
-		</div>
+		{#if onListStates}
+			<div class="py-4 max-h-[60vh] overflow-y-auto">
+				{#if isLoadingList}
+					<p class="text-sm py-8 text-center text-muted-foreground">…</p>
+				{:else if listError}
+					<p class="text-sm py-8 text-center text-destructive">{listError}</p>
+				{:else if listedStates.length === 0}
+					<p class="text-sm py-8 text-center text-muted-foreground">{t.loadEmptyList}</p>
+				{:else}
+					<div class="space-y-2">
+						{#each listedStates as preset (preset.id)}
+							<button
+								type="button"
+								onclick={() => selectListedState(preset)}
+								class="p-3 w-full rounded-lg border text-left transition-colors hover:bg-muted"
+							>
+								<div class="text-sm font-medium">{preset.name}</div>
+								{#if preset.description}
+									<div class="text-xs mt-0.5 text-muted-foreground">{preset.description}</div>
+								{/if}
+								<div class="text-xs mt-1 text-muted-foreground">
+									{new Date(preset.timestamp).toLocaleString()}
+								</div>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{:else}
+			<div class="py-8">
+				<Button onclick={handleLoadClick} class="w-full" size="lg">
+					<Upload class="mr-2 h-4 w-4" />
+					{t.loadFromFileButton}
+				</Button>
+			</div>
+		{/if}
 
 		<Dialog.Footer>
-			<Button variant="outline" onclick={() => (showLoadDialog = false)}>Cancel</Button>
+			<Button variant="outline" onclick={() => (showLoadDialog = false)}>{t.cancelButton}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
@@ -235,10 +286,10 @@
 <Dialog.Root bind:open={showValidationDialog}>
 	<Dialog.Content class="max-w-2xl max-h-[80vh] overflow-y-auto">
 		<Dialog.Header>
-			<Dialog.Title>State Validation Report</Dialog.Title>
+			<Dialog.Title>{t.validationTitle}</Dialog.Title>
 			<Dialog.Description>
 				{#if importedState}
-					Validating state: {importedState.name}
+					{t.validationValidatingPrefix}{importedState.name}
 				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
@@ -251,9 +302,11 @@
 						<div class="gap-3 flex items-start">
 							<CheckCircle class="h-5 w-5 text-success" />
 							<div>
-								<h4 class="text-sm font-semibold text-success-foreground">No Issues Found</h4>
+								<h4 class="text-sm font-semibold text-success-foreground">
+									{t.validationNoIssuesTitle}
+								</h4>
 								<p class="text-sm mt-1 text-success-foreground/80">
-									This state can be loaded safely.
+									{t.validationNoIssuesBody}
 								</p>
 							</div>
 						</div>
@@ -263,9 +316,14 @@
 						<div class="gap-3 flex items-start">
 							<AlertTriangle class="h-5 w-5 text-warning" />
 							<div>
-								<h4 class="text-sm font-semibold text-warning-foreground">Warnings Detected</h4>
+								<h4 class="text-sm font-semibold text-warning-foreground">
+									{t.validationWarningsTitle}
+								</h4>
 								<p class="text-sm mt-1 text-warning-foreground/80">
-									{validationResult.issues.length} warning(s) found, but state can still be loaded.
+									{t.validationWarningsBody.replace(
+										'{count}',
+										String(validationResult.issues.length)
+									)}
 								</p>
 							</div>
 						</div>
@@ -275,9 +333,9 @@
 						<div class="gap-3 flex items-start">
 							<AlertTriangle class="h-5 w-5 text-destructive" />
 							<div>
-								<h4 class="text-sm font-semibold text-destructive">Critical Errors</h4>
+								<h4 class="text-sm font-semibold text-destructive">{t.validationErrorsTitle}</h4>
 								<p class="text-sm mt-1 text-destructive/80">
-									Cannot load this state due to critical incompatibilities.
+									{t.validationErrorsBody}
 								</p>
 							</div>
 						</div>
@@ -287,7 +345,7 @@
 				<!-- Issues List -->
 				{#if !validationResult.isValid}
 					<div class="space-y-2">
-						<h4 class="text-sm font-medium">Issues:</h4>
+						<h4 class="text-sm font-medium">{t.validationIssuesHeading}</h4>
 						{#each validationResult.issues as issue (issue.message)}
 							<div
 								class="p-3 rounded-lg border {issue.severity === 'error'
@@ -304,7 +362,9 @@
 										<p class="text-sm font-medium">{issue.message}</p>
 										{#if issue.details}
 											<p class="text-xs mt-1 text-muted-foreground">
-												Expected: {issue.details.expected} → Actual: {issue.details.actual}
+												{t.validationExpected}
+												{issue.details.expected} → {t.validationActual}
+												{issue.details.actual}
 											</p>
 										{/if}
 									</div>
@@ -317,9 +377,9 @@
 		{/if}
 
 		<Dialog.Footer>
-			<Button variant="outline" onclick={cancelImport}>Cancel</Button>
+			<Button variant="outline" onclick={cancelImport}>{t.cancelButton}</Button>
 			{#if validationResult?.canLoad}
-				<Button onclick={confirmLoad}>Load Anyway</Button>
+				<Button onclick={confirmLoad}>{t.loadAnywayButton}</Button>
 			{/if}
 		</Dialog.Footer>
 	</Dialog.Content>

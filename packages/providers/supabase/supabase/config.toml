@@ -8,8 +8,13 @@ project_id = "selva-supabase-provider"
 [api]
 enabled = true
 port = 54321
-# Exposed REST schemas. `public` is where all Selva tables live; `storage`
-# stays private (only the storage-js client reaches it via the dedicated path).
+# Exposed REST schemas. `selva` (where all Selva tables live, isolated from a
+# consuming app's `public`) is intentionally NOT listed here: PostgREST loads
+# this config at stack boot, *before* migrations run, so naming a not-yet-created
+# schema fails the health check and aborts `supabase start`. Instead the initial
+# migration exposes `selva` via `alter role authenticator set pgrst.db_schemas`
+# once the schema exists. A hosted project that boots from a snapshot already
+# containing `selva` may also add it here directly.
 schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000

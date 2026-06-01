@@ -1,4 +1,7 @@
-import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
+import {
+	resolveServerForOrg,
+	ComputeServerUnconfiguredError
+} from '$lib/server/compute/resolve.server';
 import { requireCanCreateDefinition } from '$lib/server/access.server';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
@@ -16,7 +19,13 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	// Eliminates the random-authenticated-drain path the auth-only check left open.
 	const { project } = await requireCanCreateDefinition(locals, projectId);
 
-	const server = await resolveServerForOrg(locals.ctx!, project.orgId);
+	let server;
+	try {
+		server = await resolveServerForOrg(locals.ctx!, project.orgId);
+	} catch (err) {
+		if (err instanceof ComputeServerUnconfiguredError) throw error(503, err.message);
+		throw err;
+	}
 	const formData = await request.formData();
 
 	const schemaUrl = new URL('/grasshopper/schema', server.serverUrl).toString();

@@ -6,14 +6,14 @@
  * every relevant table.
  */
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { buildClientBundle, type ClientBundle } from '../client.js';
+import { createClient } from '@supabase/supabase-js';
+import { buildClientBundle, type ClientBundle, type SelvaSchemaClient } from '../client.js';
 
 export interface TestContext {
 	url: string;
 	anonKey: string;
 	serviceRoleKey: string;
-	adminClient: SupabaseClient;
+	adminClient: SelvaSchemaClient;
 	bundle: ClientBundle;
 }
 
@@ -27,9 +27,10 @@ export function readEnv(): TestContext | null {
 	// loads `@supabase/realtime-js`, which on Node < 22 throws at construction
 	// without a native WebSocket. Swallow that so the suite cleanly skips
 	// instead of crashing test collection.
-	let adminClient: SupabaseClient;
+	let adminClient: SelvaSchemaClient;
 	try {
 		adminClient = createClient(url, serviceRoleKey, {
+			db: { schema: 'selva' },
 			auth: { persistSession: false, autoRefreshToken: false }
 		});
 	} catch (err) {

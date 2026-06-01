@@ -27,6 +27,7 @@
 		NumberInput,
 		TextInput
 	} from '$lib/components/preview/inputs';
+	import { getClientSlot } from '$lib/contexts/clientSlotContext.svelte';
 
 	interface Props {
 		item: InputLayoutItem;
@@ -49,6 +50,18 @@
 
 	const inputId = $derived(`input-${item.paramId}`);
 	const label = $derived(displayName || item.displayName || item.paramId);
+
+	// Client-sourced input set to render a host element in its place. The 'hidden'
+	// presentation never reaches here (visible:false filters it out upstream), so a
+	// client slot source means presentation === 'slot'.
+	const clientSlotConfig = $derived.by(() => {
+		const source = (
+			item as { source?: { kind?: string; client?: { presentation?: string; slotLabel?: string } } }
+		).source;
+		if (source?.kind !== 'client' || source.client?.presentation !== 'slot') return null;
+		return { slotLabel: source.client.slotLabel };
+	});
+	const clientSlot = getClientSlot();
 
 	// Number range hint — shown next to label for sliders, under the input for plain number fields.
 	const numberRangeHint = $derived.by(() => {
@@ -99,7 +112,16 @@
 	}
 </script>
 
-{#if !hideDynamicListWhenEmpty}
+{#if clientSlotConfig}
+	{#if clientSlot}
+		{@render clientSlot({
+			inputId: item.paramId,
+			displayName: label,
+			slotLabel: clientSlotConfig.slotLabel,
+			value
+		})}
+	{/if}
+{:else if !hideDynamicListWhenEmpty}
 	<Field.Field>
 		<Field.Label for={inputId} class="gap-2 flex items-center">
 			{label}

@@ -5,6 +5,7 @@
 - **[QuickStart.md](QuickStart.md)** — Setup, development, and initial configuration
 - **[CLI.md](CLI.md)** — `npx @selvajs/cli` and the `selva` operator commands (init, doctor, start/stop/restart, logs, update, keys rotate)
 - **[Turborepo.md](Turborepo.md)** — How tasks are wired across the monorepo
+- **[Testing.md](Testing.md)** — Vitest (unit/integration) and Playwright (E2E) — how they're structured and run
 
 ## Backend Providers
 

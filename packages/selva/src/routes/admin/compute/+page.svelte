@@ -1,12 +1,21 @@
 <script lang="ts">
 	import { Button, Card, EmptyState, Input, toast, SectionHeader, randomId } from '@selvajs/ui';
-	import { Circle, Server, Plus, Trash2, Star, ChevronDown, ChevronUp } from '@lucide/svelte';
+	import {
+		Circle,
+		Server,
+		Plus,
+		Trash2,
+		Star,
+		ChevronDown,
+		ChevronUp,
+		RefreshCw
+	} from '@lucide/svelte';
 	import type { PlatformComputeServer } from '@selvajs/platform/computeServer';
 	import type { TenancyMode } from '@selvajs/platform';
 	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { untrack, onDestroy } from 'svelte';
 
 	const API_KEY_CLEAR = '__clear__';
 
@@ -33,6 +42,7 @@
 	let { data }: Props = $props();
 
 	const statusConfig = {
+		idle: { label: 'Not checked', color: 'text-muted-foreground' },
 		ok: { label: 'Online', color: 'text-green-600 dark:text-green-400' },
 		warning: { label: 'Warning', color: 'text-yellow-600 dark:text-yellow-400' },
 		error: { label: 'Offline', color: 'text-red-600 dark:text-red-400' },
@@ -77,8 +87,16 @@
 		defaultServerId = data.defaultServerId;
 	}
 
-	// Per-server health — keyed by server id
+	// Per-server health — keyed by server id. Entries are created lazily and never
+	// probe on their own; a server is only contacted when the operator clicks Check.
 	let healthMap = $state<Record<string, ReturnType<typeof useServerHealth>>>({});
+
+	function ensureHealth(id: string) {
+		if (!healthMap[id]) {
+			healthMap[id] = useServerHealth(() => id);
+		}
+		return healthMap[id];
+	}
 
 	$effect(() => {
 		if (dirtyIds.size === 0) {
@@ -96,16 +114,21 @@
 		}
 	});
 
-	onMount(() => {
-		for (const s of data.servers) {
-			const id = s.id;
-			const h = useServerHealth(() => id);
-			healthMap[id] = h;
-			h.start();
-		}
-		return () => {
-			for (const h of Object.values(healthMap)) h.stop();
-		};
+	$effect(() => {
+		// Pre-create an (idle) health entry per known server so each card has a
+		// Check button to drive. No probe runs here — servers stay untouched until
+		// the operator explicitly checks them. `ensureHealth` writes healthMap, so
+		// it must be untracked — otherwise this effect re-runs and (via its old
+		// cleanup) tore down the entries it just made, leaving Check a no-op.
+		const ids = data.servers.map((s) => s.id);
+		untrack(() => {
+			for (const id of ids) ensureHealth(id);
+		});
+	});
+
+	// Teardown only on real unmount — never coupled to data/healthMap changes.
+	onDestroy(() => {
+		for (const h of Object.values(healthMap)) h.stop();
 	});
 
 	function addServer() {
@@ -124,6 +147,7 @@
 				retryCount: 0
 			}
 		];
+		ensureHealth(id);
 		markDirty(id);
 	}
 
@@ -176,15 +200,11 @@
 				toast.success('Compute config saved');
 				await invalidateAll();
 				dirtyIds.clear();
-				// Re-check health for all servers after save
+				// Reset health to idle after save (URL/key may have changed) without
+				// probing — the operator re-checks manually to avoid waking servers.
 				for (const h of Object.values(healthMap)) h.stop();
 				healthMap = {};
-				for (const s of servers) {
-					const id = s.id;
-					const h = useServerHealth(() => id);
-					healthMap[id] = h;
-					h.start();
-				}
+				for (const s of servers) ensureHealth(s.id);
 			} else {
 				const err = await res.json().catch(() => ({ error: 'Unknown error' }));
 				toast.error(err.message || err.error || `Failed to save (${res.status})`);
@@ -275,7 +295,8 @@
 
 {#snippet serverCard(server: ServerEntry, i: number)}
 	{@const health = healthMap[server.id]?.state}
-	{@const sc = statusConfig[health?.state ?? 'checking']}
+	{@const sc = statusConfig[health?.state ?? 'idle']}
+	{@const isChecking = health?.state === 'checking'}
 	{@const pluginEntries = Object.entries(health?.plugins ?? {})}
 	{@const isDirty = dirtyIds.has(server.id)}
 	<div
@@ -319,6 +340,17 @@
 					<Circle class="h-2.5 w-2.5 shrink-0 fill-current {sc.color}" />
 					<span class="text-xs font-medium {sc.color}">{sc.label}</span>
 				</div>
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={() => healthMap[server.id]?.check()}
+					disabled={isChecking}
+					class="h-7"
+					title="Probe this server's availability (retries for up to 1 min)"
+				>
+					<RefreshCw class="mr-1.5 h-3.5 w-3.5 {isChecking ? 'animate-spin' : ''}" />
+					{isChecking ? 'Checking…' : 'Check'}
+				</Button>
 				{#if isDirty}
 					<Button
 						variant="ghost"

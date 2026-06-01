@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
-	import type { UISchema } from '@selvajs/schemas';
+	import type { UISchema, ParameterPreset } from '@selvajs/schemas';
 	import type { ActionButton } from '../../types/actionButton';
 	import type { SolveFn } from '../../types/solveFn';
+	import type { PresetLabels } from '../../types/presetLabels';
 	import { getDefaultValue } from '../../schema/defaults';
 	import { createComputeThrottle } from '../../compute/computeThrottle.svelte';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
@@ -13,6 +14,7 @@
 	import AppLayout from './AppLayout.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import { getExternalInputs, readExternalValue } from '../../external/storage';
+	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
 
 	import type { Snippet } from 'svelte';
 
@@ -27,6 +29,16 @@
 		panelActions?: ActionButton[];
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
+		/** When set, persist saved states via this callback instead of downloading a .sps file. */
+		onSaveState?: (state: ParameterPreset) => void | Promise<void>;
+		/** When set, the Load dialog lists these states instead of showing a file input. */
+		onListStates?: () => ParameterPreset[] | Promise<ParameterPreset[]>;
+		/** Partial overrides for the preset-manager UI strings (e.g. for localization). */
+		presetLabels?: Partial<PresetLabels>;
+		/** Name shown in the footer copyright line. Defaults to the brand name ("Selva"). */
+		copyrightName?: string;
+		/** Fully overrides the footer copyright line. `{name}` and `{year}` are substituted. */
+		footerText?: string;
 		/** Per-solve abort timeout (ms). Falls back to createComputeThrottle's default. */
 		solveTimeoutMs?: number;
 		footerComponent?: any;
@@ -36,10 +48,24 @@
 		onReady?: (api: { loadValues: (values: Record<string, unknown>) => void }) => void;
 		headerRight?: Snippet;
 		/**
+		 * Bring-your-own header. When provided, replaces the built-in header inside
+		 * the standard-height sticky bar (so the fixed layout is unaffected).
+		 * Takes precedence over `headerRight`.
+		 */
+		header?: Snippet;
+		/**
 		 * Stable identifier used to scope sessionStorage entries for external-input
 		 * values. If absent, falls back to definitionKey, then to schema.id.
 		 */
 		externalScopeKey?: string;
+		/**
+		 * Host-rendered element for client-sourced inputs whose schema sets
+		 * source.client.presentation === 'slot'. Selva reserves the input's cell and
+		 * invokes this snippet in its place, passing { inputId, displayName, slotLabel,
+		 * value }. Selva renders nothing itself and never interprets what the host puts
+		 * here (e.g. an "Edit JSON" button that navigates back to a producer page).
+		 */
+		clientSlot?: ClientSlot;
 	}
 
 	let {
@@ -53,15 +79,26 @@
 		panelActions = [],
 		showSaveButton = true,
 		showLoadButton = true,
+		onSaveState,
+		onListStates,
+		presetLabels,
+		copyrightName,
+		footerText,
 		solveTimeoutMs,
 		footerComponent,
 		footerComponentProps,
 		footerItemId = 'footer-item',
 		footerItemPriority = 0,
 		headerRight,
+		header,
 		onReady,
-		externalScopeKey
+		externalScopeKey,
+		clientSlot
 	}: Props = $props();
+
+	// Make the host's client-input slot available to InputControl deep in the tree.
+	// svelte-ignore state_referenced_locally
+	setClientSlot(clientSlot);
 
 	const resolvedScopeKey = $derived(externalScopeKey || definitionKey || schema?.id || '');
 
@@ -219,6 +256,9 @@
 		showFooter
 		title={pageTitle}
 		{showModeToggle}
+		{copyrightName}
+		{footerText}
+		{header}
 		rightContent={headerRight}
 		errors={computeErrors}
 		warnings={computeWarnings}
@@ -245,6 +285,9 @@
 					{panelActions}
 					{showSaveButton}
 					{showLoadButton}
+					{onSaveState}
+					{onListStates}
+					{presetLabels}
 					onValueChange={handleValueChange}
 					oncalculate={handleCalculate}
 					onLoadValues={() => {

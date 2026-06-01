@@ -1,0 +1,145 @@
+name: Plugin Release
+
+# Builds and publishes the Grasshopper plugin (.yak) on a `plugin-v*` tag.
+# This is intentionally SEPARATE from the npm release flow (release.yml):
+# the plugin has its own version line (Selva.GH.csproj <Version>, surfaced to
+# yak via the `$version` token in the manifests) and its own cadence.
+#
+# Trigger:   git tag plugin-v0.10.4 && git push origin plugin-v0.10.4
+# Produces:  - Rhino 8 (.yak, net48 + net7.0) and Rhino 9 (.yak, net9.0)
+#            - pushed to the Yak registry (yak.rhino3d.com)
+#            - attached to a GitHub Release for the tag
+#
+# Required setup
+# --------------
+# - Secret YAK_TOKEN: the Yak OAuth token. Get it locally with `yak login`
+#   (interactive, opens a browser), then copy the `credentials.token` value
+#   from %APPDATA%\McNeel\yak.yml and store it as the YAK_TOKEN repo secret.
+#   yak reads this env var directly for `yak push` (verified end-to-end against
+#   test.yak.rhino3d.com — no yak.yml needs to exist on the runner).
+#   See https://developer.rhino3d.com/guides/yak/pushing-a-package-to-the-server/
+# - GITHUB_TOKEN (provided automatically) with contents:write — set below.
+#
+# Why windows-latest: net48 needs the .NET Framework targeting pack (Windows
+# only), and yak.exe is the Windows/Mac tool. The plugin compiles against the
+# Grasshopper NuGet packages (ExcludeAssets=runtime), so NO Rhino install is
+# needed on the runner.
+
+on:
+  push:
+    tags:
+      - 'plugin-v*'
+
+permissions:
+  contents: write # create the GitHub Release
+
+concurrency:
+  group: plugin-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plugin-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Version guard ────────────────────────────────────────────────────
+      # The tag IS the release version; the .gha/.yak version comes from the
+      # csproj <Version> (single source of truth). They must match, or we'd
+      # publish a package whose internal version disagrees with its tag.
+      - name: Verify tag matches csproj version
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME -replace '^plugin-v', ''
+          [xml]$csproj = Get-Content Plugin/Selva.GH/Selva.GH.csproj
+          $ver = @($csproj.Project.PropertyGroup.Version | Where-Object { $_ })[0]
+          Write-Host "tag=$tag  csproj <Version>=$ver"
+          if ($tag -ne $ver) {
+            Write-Error "Tag version ($tag) != Selva.GH.csproj <Version> ($ver). Bump the csproj or fix the tag."
+            exit 1
+          }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            7.0.x
+            9.0.x
+
+      # Cache the NuGet global-packages folder so restore doesn't re-download
+      # the Grasshopper/Rhino packages every tag. We key on the csproj files
+      # (no packages.lock.json exists, so setup-dotnet's built-in cache can't
+      # be used) — a dependency change in any project busts it; restore-keys
+      # seed a fresh run from the last cache rather than starting cold.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Plugin/**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - uses: pnpm/action-setup@v3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Persist Turbo's local task cache for the plugin-ui web-asset build that
+      # `build:plugin` runs through turbo. Turbo handles input hashing; the SHA
+      # key writes a fresh entry and restore-keys warm-seed from the latest
+      # prior cache. Scoped per workflow — entries don't cross workflows.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-plugin-${{ github.sha }}
+          restore-keys: |
+            turbo-plugin-
+
+      # ── Yak CLI ──────────────────────────────────────────────────────────
+      # yak.exe is a standalone download (no Rhino required). Put it on PATH so
+      # scripts/build-production.js (which shells out to `yak build`) finds it.
+      - name: Install Yak CLI
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\yak"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Invoke-WebRequest -Uri 'https://files.mcneel.com/yak/tools/latest/yak.exe' -OutFile "$dir\yak.exe"
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
+          & "$dir\yak.exe" version
+
+      # Builds plugin-ui web assets, the multi-target Release .gha, and stages +
+      # `yak build`s the Rhino 8 / Rhino 9 packages. (Same script used locally.)
+      - name: Build plugin + yak packages
+        run: pnpm run build:plugin
+
+      # ── Publish ──────────────────────────────────────────────────────────
+      # yak reads the OAuth token straight from the YAK_TOKEN env var — verified
+      # against test.yak.rhino3d.com (auth succeeds with only YAK_TOKEN set, no
+      # yak.yml on disk). Yak rejects re-pushing an existing version, so a re-run
+      # on an already-published tag fails loudly (intended).
+      - name: Push to Yak registry
+        shell: pwsh
+        env:
+          YAK_TOKEN: ${{ secrets.YAK_TOKEN }}
+        run: |
+          if (-not $env:YAK_TOKEN) { Write-Error 'YAK_TOKEN secret is not set.'; exit 1 }
+          $packages = Get-ChildItem -Path Plugin/Selva.GH/bin/Yak -Recurse -Filter *.yak
+          if ($packages.Count -eq 0) { Write-Error 'No .yak packages were produced.'; exit 1 }
+          foreach ($p in $packages) {
+            Write-Host "Pushing $($p.Name)"
+            yak push --source https://yak.rhino3d.com $p.FullName
+          }
+
+      # Attach the same artifacts to a GitHub Release so they're downloadable
+      # without a Rhino/yak client. `gh` is preinstalled and uses GITHUB_TOKEN.
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $packages = Get-ChildItem -Path Plugin/Selva.GH/bin/Yak -Recurse -Filter *.yak | ForEach-Object { $_.FullName }
+          gh release create $env:GITHUB_REF_NAME @packages `
+            --title "Selva Plugin $env:GITHUB_REF_NAME" `
+            --generate-notes

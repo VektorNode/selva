@@ -1,6 +1,7 @@
 <script lang="ts">
-	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
+	import type { UISchema, SupportedTypes, ParameterPreset } from '@selvajs/schemas';
 	import type { ActionButton } from '../../types/actionButton';
+	import type { PresetLabels } from '../../types/presetLabels';
 	import { ChevronUp } from '@lucide/svelte';
 	import Viewer, { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import CalculateButton from '../primitives/CalculateButton.svelte';
@@ -28,6 +29,9 @@
 		panelActions?: ActionButton[];
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
+		onSaveState?: (state: ParameterPreset) => void | Promise<void>;
+		onListStates?: () => ParameterPreset[] | Promise<ParameterPreset[]>;
+		presetLabels?: Partial<PresetLabels>;
 		viewerConfig?: ViewerConfig;
 	}
 
@@ -46,6 +50,9 @@
 		panelActions = [],
 		showSaveButton = true,
 		showLoadButton = true,
+		onSaveState,
+		onListStates,
+		presetLabels,
 		viewerConfig = {}
 	}: Props = $props();
 
@@ -130,6 +137,9 @@
 							onLoadValues={handleLoadValues}
 							{showSaveButton}
 							{showLoadButton}
+							{onSaveState}
+							{onListStates}
+							labels={presetLabels}
 						/>
 					{/if}
 					{#each panelActions as action (action.id)}

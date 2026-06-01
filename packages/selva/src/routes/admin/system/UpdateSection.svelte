@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button, Card, AlertDialog } from '@selvajs/ui';
-	import { RefreshCw } from '@lucide/svelte';
+	import { RefreshCw, CircleCheck, Info, TriangleAlert, CircleX } from '@lucide/svelte';
+	import { deriveOutcome, type OutcomeSeverity } from './update-outcome';
 
 	interface Props {
 		currentVersion?: string;
@@ -23,6 +24,47 @@
 	let logEl = $state<HTMLPreElement>();
 	let showRunConfirm = $state(false);
 
+	// Only classify once the run has finished (exitCode set). While running we
+	// show live progress instead, so a transient mid-run log line can't be
+	// misread as a final verdict.
+	let outcome = $derived(exitCode === null ? null : deriveOutcome(exitCode, logs));
+
+	const severityStyles: Record<
+		OutcomeSeverity,
+		{ text: string; border: string; bg: string; icon: typeof CircleCheck }
+	> = {
+		success: {
+			text: 'text-success',
+			border: 'border-success/40',
+			bg: 'bg-success/10',
+			icon: CircleCheck
+		},
+		info: {
+			text: 'text-foreground',
+			border: 'border-border',
+			bg: 'bg-muted/50',
+			icon: Info
+		},
+		warning: {
+			text: 'text-warning',
+			border: 'border-warning/40',
+			bg: 'bg-warning/10',
+			icon: TriangleAlert
+		},
+		critical: {
+			text: 'text-destructive',
+			border: 'border-destructive/40',
+			bg: 'bg-destructive/10',
+			icon: CircleX
+		},
+		pending: {
+			text: 'text-muted-foreground',
+			border: 'border-border',
+			bg: 'bg-muted/50',
+			icon: RefreshCw
+		}
+	};
+
 	$effect(() => {
 		// Auto-scroll to bottom whenever logs change
 		if (logs && logEl) {
@@ -34,17 +76,6 @@
 		if (isRestarting) return 'Restarting & verifying…';
 		if (isRunning) return 'Running…';
 		return 'Run Update';
-	}
-
-	function statusMessage(): { text: string; tone: 'success' | 'destructive' | 'muted' } | null {
-		if (exitCode === null) return null;
-		if (exitCode === 0) return { text: '✓ Update completed successfully', tone: 'success' };
-		if (exitCode === -2)
-			return {
-				text: '⚠ App did not respond within 5 minutes after restart — check PM2 logs',
-				tone: 'destructive'
-			};
-		return { text: `Update failed (exit code ${exitCode})`, tone: 'destructive' };
 	}
 
 	function handleRunClick() {
@@ -87,24 +118,35 @@
 				<span>PM2 is restarting the app — waiting for the new process to come online…</span>
 			</div>
 		{/if}
+		{#if outcome}
+			{@const style = severityStyles[outcome.severity]}
+			{@const Icon = style.icon}
+			<div
+				class="flex items-start gap-3 rounded-md border px-3 py-3 {style.border} {style.bg}"
+				role={outcome.severity === 'critical' ? 'alert' : 'status'}
+				aria-live={outcome.severity === 'critical' ? 'assertive' : 'polite'}
+			>
+				<Icon class="mt-0.5 h-5 w-5 shrink-0 {style.text}" />
+				<div class="min-w-0 space-y-1">
+					<p class="text-sm font-medium {style.text}">{outcome.title}</p>
+					{#if outcome.from && outcome.to && outcome.from !== outcome.to}
+						<p class="text-muted-foreground font-mono text-xs">
+							{outcome.from} → {outcome.to}
+						</p>
+					{/if}
+					{#if outcome.detail}
+						<p class="text-muted-foreground text-xs whitespace-pre-line">{outcome.detail}</p>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
 		{#if logs}
 			<div class="space-y-2">
 				<h4 class="text-sm font-medium">Update Logs</h4>
 				<pre
 					bind:this={logEl}
 					class="bg-muted text-foreground max-h-96 overflow-auto rounded-md p-4 font-mono text-xs">{logs}</pre>
-				{#if statusMessage()}
-					{@const msg = statusMessage()!}
-					<p
-						class="text-sm font-medium {msg.tone === 'success'
-							? 'text-success'
-							: msg.tone === 'destructive'
-								? 'text-destructive'
-								: 'text-muted-foreground'}"
-					>
-						{msg.text}
-					</p>
-				{/if}
 			</div>
 		{/if}
 	</Card.Content>

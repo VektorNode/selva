@@ -12,7 +12,7 @@ selva/
 │   ├── Selva.Drawing.Tests/        # xUnit tests for Selva.Drawing
 │   ├── Selva.GH/                   # Grasshopper plugin (depends on Selva.Schema + Selva.Drawing)
 │   ├── Selva.Tests/                # xUnit tests for Selva.GH + Selva.Schema
-│   └── Releases/                   # Versioned .yak/.gha release artifacts (tracked)
+│   └── Releases/                   # Local build output only — NOT tracked; releases ship via plugin-release.yml (GitHub Releases + Yak registry)
 │
 ├── packages/                       # TypeScript / Svelte workspace
 │   ├── schemas/                    # ui-schema.json + TS/C# code generators

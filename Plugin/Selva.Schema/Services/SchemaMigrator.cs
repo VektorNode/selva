@@ -31,7 +31,8 @@ public static class SchemaMigrator
             { new Version(2, 7, 0), MigrateTo_2_7_0 },
             { new Version(2, 8, 0), MigrateTo_2_8_0 },
             { new Version(2, 9, 0), MigrateTo_2_9_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_10_0 }
+            { new Version(2, 10, 0), MigrateTo_2_10_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_11_0 }
         };
 
     /// <summary>
@@ -108,6 +109,13 @@ public static class SchemaMigrator
             //    longer accepts the old spellings.
             RenameInputSourceKinds(json);
 
+            // 4. Unify the input-source address field (2.10.0): the separate
+            //    'path' (server) and short-lived 'producer' (client) fields
+            //    collapse into one opaque 'key'. Fold either spelling into 'key'
+            //    and drop the server-only 'onMissing'. Runs pre-deserialization
+            //    because the typed model no longer has the old fields.
+            UnifyInputSourceKey(json);
+
             // Update version
             json["schemaVersion"] = SchemaVersion.CURRENT_STRING;
         }
@@ -147,6 +155,47 @@ public static class SchemaMigrator
                 var kind = item["source"]?["kind"]?.Value<string>();
                 if (kind != null && renames.TryGetValue(kind, out var next))
                     item["source"]!["kind"] = next;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Collapse the old per-side address fields on `source` into one `key`:
+    ///     server `path` and the short-lived client `producer` both become
+    ///     `key`; the server-only `onMissing` is dropped. In-place, both layout
+    ///     shapes. No-op for sources that already use `key` or have none.
+    /// </summary>
+    private static void UnifyInputSourceKey(JObject json)
+    {
+        var layout = json["layout"] as JObject;
+        if (layout == null) return;
+
+        var groups = new List<JToken>();
+        if (layout["groups"] is JArray flatGroups) groups.AddRange(flatGroups);
+        if (layout["tabs"] is JArray tabs)
+            foreach (var tab in tabs)
+                if (tab["groups"] is JArray tabGroups)
+                    groups.AddRange(tabGroups);
+
+        foreach (var group in groups)
+        {
+            if (group["items"] is not JArray items) continue;
+            foreach (var item in items)
+            {
+                if (item["source"] is not JObject source) continue;
+
+                // Fold legacy address fields into `key` (prefer an existing key,
+                // then path, then producer). Then strip the obsolete fields.
+                if (source["key"] == null)
+                {
+                    var legacy = source["path"]?.Value<string>()
+                                 ?? source["producer"]?.Value<string>();
+                    if (legacy != null) source["key"] = legacy;
+                }
+
+                source.Remove("path");
+                source.Remove("producer");
+                source.Remove("onMissing");
             }
         }
     }
@@ -246,9 +295,25 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_10_0(UISchema schema)
     {
+        schema.SchemaVersion = "2.10.0";
+
+        // 2.10.0 (InputSource address unified):
+        // - The separate 'path' (server) and short-lived 'producer' (client)
+        //   fields collapse into ONE opaque 'key', interpreted by the host per
+        //   'kind' (client → which producer app; server → what to fetch). The
+        //   server-only 'onMissing' is dropped. The fold + cleanup runs in
+        //   MigrateJson (UnifyInputSourceKey) pre-deserialization, so any saved
+        //   2.9.0 'path'/'producer' carries over into 'key'. Existing 'user'
+        //   inputs and sources already using 'key' load unchanged.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_11_0(UISchema schema)
+    {
         schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
 
-        // 2.10.0 additions (all backward-compatible):
+        // 2.11.0 additions (all backward-compatible):
         // - 'dynamicValueList' added to GrasshopperParamType, plus
         //   InputDynamicValueListLayoutItem / OutputDynamicValueListLayoutItem and
         //   their configs. A dynamic value list input's options are populated at

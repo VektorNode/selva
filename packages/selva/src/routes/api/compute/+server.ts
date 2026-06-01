@@ -11,7 +11,10 @@ import {
 import type { SchemaInput } from '@selvajs/schemas';
 import { error, json, isHttpError } from '@sveltejs/kit';
 import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';
-import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
+import {
+	resolveServerForOrg,
+	ComputeServerUnconfiguredError
+} from '$lib/server/compute/resolve.server';
 import { isSafeRemoteDefinitionUrl } from '$lib/server/compute/safe-url';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import {
@@ -25,6 +28,7 @@ import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { getStorageProvider, providers } from '$lib/server/providers.server';
 import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
+import { fetchSchemaFromCompute } from '$lib/server/definitions/schemaExtraction.server';
 
 interface ComputeRequest {
 	inputs: (SchemaInput & { minimum?: number; maximum?: number; stepSize?: number })[];
@@ -216,6 +220,9 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		}
 
 		let definitionSource: Uint8Array;
+		// BRIDGE: remove ~2026-09 — see specs/SchemaCaching.md. Holds the local
+		// version row so we can lazily backfill its cached schema post-solve.
+		let localVersionForBackfill: { id: string; hasSchema: boolean } | null = null;
 		// Track which org owns the definition so BYO compute can route the solve
 		// to that org's override server (spec §3). Null when the definition is
 		// externally hosted — no tenant context, fall through to global default.
@@ -299,6 +306,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			if (!version || version.definitionId !== guid) {
 				throw error(404, `Definition '${guid}' ${channel} version is missing`);
 			}
+			localVersionForBackfill = { id: version.id, hasSchema: version.schema !== undefined };
 
 			try {
 				const bytes = await storage.get(version.fileKey);
@@ -340,6 +348,21 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		}
 
 		const serverConfig = await resolveServerForOrg(solveCtx, solveOrgId, { definitionPin });
+
+		// BRIDGE: remove ~2026-09 — see specs/SchemaCaching.md. New uploads cache
+		// their schema at upload; versions predating that have none. Backfill it
+		// here, lazily, the first time such a version is solved. Best-effort: a
+		// failure must never block or fail the solve.
+		if (localVersionForBackfill && !localVersionForBackfill.hasSchema) {
+			const versionId = localVersionForBackfill.id;
+			try {
+				const schema = await fetchSchemaFromCompute(definitionSource, serverConfig);
+				await providers.data.definitions.setVersionSchema(solveCtx, versionId, schema);
+			} catch (err) {
+				console.warn(`[API/Compute] Schema backfill failed for version ${versionId}:`, err);
+			}
+		}
+
 		const { scheduler } = await getClient(serverConfig);
 
 		// The scheduler propagates `request.signal` to the Compute call, so a
@@ -372,6 +395,11 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	} catch (err) {
 		// Re-throw SvelteKit errors (400, 404, etc.) as-is
 		if (isHttpError(err)) throw err;
+
+		// No compute server configured/visible — an operator action, not a bug.
+		if (err instanceof ComputeServerUnconfiguredError) {
+			throw error(503, err.message);
+		}
 
 		const message = err instanceof Error ? err.message : 'Unknown error';
 		console.error('[API/Compute] Error:', message);

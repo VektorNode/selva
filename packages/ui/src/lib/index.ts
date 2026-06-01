@@ -25,6 +25,7 @@ export * from './external/storage';
 
 // Contexts & Composables
 export * from './contexts/footerContext.svelte';
+export * from './contexts/clientSlotContext.svelte';
 export * from './composables/useFooterItem.svelte';
 
 // Utils (cn function)
@@ -34,3 +35,4 @@ export { randomId } from './utils/randomId';
 // UI-specific runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';
 export type { SolveFn } from './types/solveFn';
+export { DEFAULT_PRESET_LABELS, type PresetLabels } from './types/presetLabels';

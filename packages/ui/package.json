@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/ui",
-	"version": "3.0.0",
+	"version": "4.3.0",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
 	"publishConfig": {
@@ -67,7 +67,7 @@
 	},
 	"peerDependencies": {
 		"@selvajs/compute": "catalog:",
-		"@selvajs/schemas": "workspace:*",
+		"@selvajs/schemas": "workspace:^",
 		"@sveltejs/kit": "^2",
 		"bits-ui": "^2.15.4",
 		"svelte": "^5",

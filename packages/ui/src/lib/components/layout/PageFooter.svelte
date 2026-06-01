@@ -11,10 +11,18 @@
 		errors?: string[];
 		warnings?: string[];
 		copyrightName?: string;
+		/** Fully overrides the copyright line. `{name}` and `{year}` are substituted. */
+		footerText?: string;
 		children?: Snippet;
 	}
 
-	let { errors = [], warnings = [], copyrightName = 'Selva', children }: Props = $props();
+	let {
+		errors = [],
+		warnings = [],
+		copyrightName = 'Selva',
+		footerText,
+		children
+	}: Props = $props();
 
 	let footerStore = (() => {
 		try {
@@ -64,6 +72,12 @@
 
 	const groupedErrors = $derived(groupMessages(errors));
 	const groupedWarnings = $derived(groupMessages(warnings));
+
+	const copyrightLine = $derived(
+		footerText
+			? footerText.replace('{name}', copyrightName).replace('{year}', String(_currentYear))
+			: `by ${copyrightName} © ${_currentYear}`
+	);
 </script>
 
 <footer
@@ -218,6 +232,6 @@
 			<FooterItemRenderer {item} />
 		{/each}
 
-		<p>by {copyrightName} &copy; {_currentYear}</p>
+		<p>{copyrightLine}</p>
 	</div>
 </footer>

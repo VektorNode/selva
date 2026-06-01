@@ -1,0 +1,71 @@
+name: E2E
+
+on:
+  pull_request:
+
+# Cancel in-progress runs when a new commit is pushed to the same PR.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Persist Turbo's local task cache across runs. Turbo hashes task inputs
+      # itself, so the key only needs to version + warm-seed the blob: the SHA
+      # makes every run write a fresh entry, and restore-keys pull the most
+      # recent prior cache so unchanged packages skip rebuilds. Scoped per
+      # workflow (turbo-e2e-) — actions/cache entries don't cross workflows.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-e2e-${{ github.sha }}
+          restore-keys: |
+            turbo-e2e-
+
+      # Cache the Playwright browser binaries keyed on the installed version, so
+      # we only re-download Chromium when @playwright/test bumps. restore-keys
+      # lets a stale cache seed a fresh install rather than starting cold.
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.pw.outputs.version }}
+          restore-keys: |
+            playwright-
+
+      # --with-deps installs the OS libraries Chromium needs on a clean runner.
+      # On a cache hit the browser is already present, so install only the deps.
+      - run: pnpm --filter @selvajs/selva exec playwright install --with-deps chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+      - run: pnpm --filter @selvajs/selva exec playwright install-deps chromium
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+
+      # Run through turbo so the `build` dependency fires — the app is served
+      # from build/index.js (adapter-node) by Playwright's webServer.
+      - run: pnpm test:e2e --filter=@selvajs/selva
+        env:
+          CI: 'true'
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: packages/selva/playwright-report/
+          retention-days: 7

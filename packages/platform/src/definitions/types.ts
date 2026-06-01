@@ -1,3 +1,5 @@
+import type { UISchema } from '@selvajs/schemas';
+
 export type DefinitionFileExt = 'gh' | 'ghx';
 
 export const GH_EXTENSIONS: string[] = ['.gh', '.ghx'];
@@ -43,6 +45,15 @@ export interface DefinitionVersion {
 	uploadedAt: string;
 	/** Free-form note describing what changed in this version. */
 	changeNote?: string;
+	/**
+	 * Compute-extracted UI schema, cached at upload so the render path doesn't
+	 * re-fetch it from Rhino.Compute on every load. Optional only because of the
+	 * lazy-backfill bridge for pre-existing versions (see
+	 * selva/specs/SchemaCaching.md); new uploads always set it.
+	 */
+	schema?: UISchema;
+	/** ISO timestamp of when `schema` was extracted. */
+	schemaExtractedAt?: string;
 }
 
 export interface DefinitionRecord {

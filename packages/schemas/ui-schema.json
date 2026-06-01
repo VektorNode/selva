@@ -298,22 +298,33 @@
 
 		"InputSource": {
 			"type": "object",
-			"description": "Where the input's value comes from. If omitted, the person fills it in ('user'). Written as an object rather than a single value so new kinds can add their own fields later without breaking existing schemas.",
+			"description": "Where the input's value comes from. If omitted, the person fills it in ('user'). Written as an object rather than a single value so new fields can be added later without breaking existing schemas.",
 			"properties": {
 				"kind": {
 					"type": "string",
 					"enum": ["user", "client", "server"],
-					"description": "Who supplies the input's value. 'user' = the person fills it in, in the form. 'client' = supplied by the app in the browser before the form runs, not by the person. 'server' = looked up on the server from your data when the definition runs, using 'path' to say what to fetch; never shown in the form."
+					"description": "Who supplies the input's value. 'user' = the person fills it in, in the form. 'client' = supplied by an app in the browser before the form runs, not by the person (e.g. a measurement/producer tool). 'server' = looked up on the server from your data when the definition runs; never shown in the form."
 				},
-				"path": {
+				"key": {
 					"type": "string",
-					"description": "Required when kind='server'. Names what value to fetch, e.g. 'segment.outline' or 'parcel.boundary'. The meaning of the name is defined by the app, not by Selva. Ignored for other kinds."
+					"description": "The opaque address of the value, interpreted by the host app per 'kind': for 'client' it names WHICH producer app fills the input (e.g. 'line-app', 'file-upload') so the host can pre-route to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. An open string — its meaning is defined by the host, not by Selva. Ignored for kind='user'."
 				},
-				"onMissing": {
-					"type": "string",
-					"enum": ["fail", "default"],
-					"default": "fail",
-					"description": "What to do when kind='server' and the value can't be found: 'fail' (default) stops with an error; 'default' uses the input's default value instead."
+				"client": {
+					"type": "object",
+					"description": "How a client-sourced input appears in the form (only meaningful when kind='client'). Omitted = hidden (prefilled silently). 'slot' = Selva reserves the input's cell and renders a host-provided element in its place; Selva renders nothing itself and never interprets the element's meaning.",
+					"properties": {
+						"presentation": {
+							"type": "string",
+							"enum": ["hidden", "slot"],
+							"default": "hidden",
+							"description": "'hidden' = no UI; the value is prefilled by the producer app and the input does not appear. 'slot' = the host app renders a custom element (e.g. an 'Edit JSON' button) in this input's place."
+						},
+						"slotLabel": {
+							"type": "string",
+							"description": "Author-set text passed through to the host's slot snippet untouched. Selva does not render or interpret it (e.g. 'Edit JSON')."
+						}
+					},
+					"additionalProperties": false
 				}
 			},
 			"required": ["kind"],

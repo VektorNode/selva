@@ -215,19 +215,60 @@
 	}
 
 	let isInput = $derived(item.type === 'input');
-	let isClientSource = $derived((item as { source?: InputSource }).source?.kind === 'client');
 
-	function toggleClientSource() {
+	// Where this input's value comes from (InputSource.kind). Absent source = 'user'.
+	//   user   → the person fills it in the form (normal control).
+	//   client → an app in the browser fills it before the form runs; `key` names
+	//            which producer (e.g. 'line-app') so the host pre-routes to it.
+	//   server → resolved server-side at solve time from host data; `key` names
+	//            what to fetch (e.g. 'capture.geometry') for the IBindingResolver.
+	// One opaque `key` either way; `kind` says how the host reads it.
+	let sourceKind = $derived((item as { source?: InputSource }).source?.kind ?? 'user');
+
+	function setSourceKind(kind: 'user' | 'client' | 'server') {
 		if (item.type !== 'input') return;
 		const target = item as { source?: InputSource; visible?: boolean };
-		if (target.source?.kind === 'client') {
+		if (kind === 'user') {
 			target.source = undefined;
-		} else {
-			target.source = { kind: 'client' };
-			// Client-supplied inputs are typically hidden from the end user.
-			// Default to hidden when first toggled on; user can override afterwards.
-			if (target.visible !== false) target.visible = false;
+			return;
 		}
+		// Preserve any already-typed key and client presentation when switching.
+		const prevKey = target.source?.key;
+		const prevClient = target.source?.client;
+		target.source = {
+			kind,
+			...(prevKey ? { key: prevKey } : {}),
+			...(kind === 'client' && prevClient ? { client: prevClient } : {})
+		};
+		// Externally-supplied inputs are typically hidden from the end user.
+		// Default to hidden the first time it leaves 'user'; author can override.
+		if (target.visible !== false) target.visible = false;
+	}
+
+	// Client presentation: 'hidden' (default) or 'slot' (host renders a custom
+	// element in the input's place). 'slot' requires the cell to be visible.
+	let clientPresentation = $derived(
+		(item as { source?: InputSource }).source?.client?.presentation ?? 'hidden'
+	);
+
+	function setClientPresentation(presentation: 'hidden' | 'slot') {
+		if (item.type !== 'input') return;
+		const target = item as { source?: InputSource; visible?: boolean };
+		if (!target.source || target.source.kind !== 'client') return;
+		if (presentation === 'hidden') {
+			target.source.client = undefined;
+			target.visible = false;
+		} else {
+			target.source.client = { ...target.source.client, presentation };
+			target.visible = true;
+		}
+	}
+
+	function setSlotLabel(label: string) {
+		if (item.type !== 'input') return;
+		const target = item as { source?: InputSource };
+		if (!target.source?.client) return;
+		target.source.client.slotLabel = label || undefined;
 	}
 
 	function toggleAcceptedFormat(format: string) {
@@ -615,23 +656,78 @@
 						</div>
 					{/if}
 
-					<!-- Client-supplied value toggle (input items only) -->
+					<!-- Value source (input items only): who supplies this input. -->
 					{#if isInput}
-						<div
-							class="border-border/70 mt-1 flex items-center justify-between border-t pt-2 text-[11px]"
-						>
-							<div class="flex flex-col">
-								<span class="text-muted-foreground">Client-supplied value</span>
-								<span class="text-muted-foreground/70 text-[9px]">
-									Filled by a producer route (e.g. /preview/producer/json-paste). Hides the control
-									by default.
-								</span>
+						<div class="border-border/70 mt-1 flex flex-col gap-1 border-t pt-2 text-[11px]">
+							<div class="flex items-center justify-between gap-2">
+								<span class="text-muted-foreground">Value source</span>
+								<select
+									value={sourceKind}
+									onchange={(e) =>
+										setSourceKind(e.currentTarget.value as 'user' | 'client' | 'server')}
+									class="border-border/70 bg-background focus:border-primary h-6 rounded border px-1.5 text-[10px] focus:outline-none"
+								>
+									<option value="user">User (form)</option>
+									<option value="client">Client (browser app)</option>
+									<option value="server">Server (looked up)</option>
+								</select>
 							</div>
-							<Switch
-								checked={isClientSource}
-								onCheckedChange={toggleClientSource}
-								class="scale-75"
-							/>
+
+							{#if sourceKind !== 'user'}
+								{@const source = (item as { source?: InputSource }).source}
+								<div class="flex flex-col gap-1">
+									<input
+										type="text"
+										value={source?.key ?? ''}
+										oninput={(e) => {
+											const t = item as { source?: InputSource };
+											if (t.source) t.source.key = e.currentTarget.value || undefined;
+										}}
+										placeholder={sourceKind === 'client'
+											? 'e.g. line-app'
+											: 'e.g. capture.geometry'}
+										class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
+									/>
+									<span class="text-muted-foreground/70 text-[9px]">
+										{#if sourceKind === 'client'}
+											Filled by a browser app before the form runs. The key names which producer to
+											open. Hidden from the form by default.
+										{:else}
+											Looked up on the server at solve time. The key names what to fetch. Never
+											shown in the form.
+										{/if}
+									</span>
+
+									{#if sourceKind === 'client'}
+										<div class="flex items-center justify-between gap-2">
+											<span class="text-muted-foreground">In the form</span>
+											<select
+												value={clientPresentation}
+												onchange={(e) =>
+													setClientPresentation(e.currentTarget.value as 'hidden' | 'slot')}
+												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-1.5 text-[10px] focus:outline-none"
+											>
+												<option value="hidden">Hidden</option>
+												<option value="slot">Custom slot (host app)</option>
+											</select>
+										</div>
+										{#if clientPresentation === 'slot'}
+											{@const client = (item as { source?: InputSource }).source?.client}
+											<input
+												type="text"
+												value={client?.slotLabel ?? ''}
+												oninput={(e) => setSlotLabel(e.currentTarget.value)}
+												placeholder="Slot label (optional, e.g. Edit JSON)"
+												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+											/>
+											<span class="text-muted-foreground/70 text-[9px]">
+												The host app renders its own element here. The label is passed through
+												untouched; Selva renders nothing itself.
+											</span>
+										{/if}
+									{/if}
+								</div>
+							{/if}
 						</div>
 					{/if}
 

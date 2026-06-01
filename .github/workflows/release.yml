@@ -86,17 +86,31 @@ jobs:
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # No changesets — check if the last commit is a version bump
-          # (changesets/action commits as "chore: version packages").
-          last_msg=$(git log -1 --pretty=%s)
-          case "$last_msg" in
-            "chore: version packages"*)
-              echo "Detected post-version-PR-merge commit — proceeding to publish."
+          # No changesets — we're in the post-version-PR-merge state if any
+          # published package's local version is ahead of what's on npm. This
+          # is merge-style-agnostic: it works whether the version PR was
+          # squash-merged (subject "chore: version packages") or merged as a
+          # merge commit (subject "Merge pull request ..."), which the old
+          # commit-subject check missed and silently skipped the publish.
+          #
+          # The publishable set is DERIVED from the workspace (every package
+          # with private!=true), not hardcoded. The old `selva cli ui schemas`
+          # list omitted @selvajs/platform + the providers, so a provider-only
+          # bump bumped package.json/CHANGELOG but never published — silently
+          # breaking consumers (parafa) that pin `@selvajs/platform ^0.12.0`.
+          # scripts/publishable-packages.mjs is dependency-free so it runs here
+          # on the runner's system node, before `pnpm install`.
+          while IFS=$'\t' read -r name local_ver _dir; do
+            # `npm view` exits non-zero / empty for never-published packages;
+            # treat that as "needs publish" too.
+            npm_ver=$(npm view "$name" version 2>/dev/null || echo "")
+            if [ "$local_ver" != "$npm_ver" ]; then
+              echo "$name local=$local_ver npm=${npm_ver:-<none>} — proceeding to publish."
               echo "should_run=true" >> "$GITHUB_OUTPUT"
               exit 0
-              ;;
-          esac
-          echo "No changesets and no version-bump commit — skipping."
+            fi
+          done < <(node scripts/publishable-packages.mjs --list)
+          echo "No changesets and all published versions match npm — skipping."
           echo "should_run=false" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v3
@@ -121,6 +135,20 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         run: pnpm install --frozen-lockfile
 
+      # Persist Turbo's local task cache so `pnpm release` (→ pnpm build) can
+      # reuse unchanged package builds across releases. Turbo hashes inputs
+      # itself; the SHA key writes a fresh entry and restore-keys warm-seed
+      # from the latest prior cache. This is local-only — it won't reuse builds
+      # produced by the PR test/e2e runs (that needs a remote cache), but it
+      # warms successive release runs.
+      - uses: actions/cache@v4
+        if: steps.check.outputs.should_run == 'true'
+        with:
+          path: .turbo
+          key: turbo-release-${{ github.sha }}
+          restore-keys: |
+            turbo-release-
+
       # Run tests + type-check before letting changesets near publishing.
       # Catches regressions in the version-bump-PR merge commit. If you need
       # to ship despite a known-flaky test, add it to vitest's skip list
@@ -141,10 +169,14 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         with:
           # `pnpm changeset version` consumes .changeset/*.md, bumps
-          # package.json versions across the fixed-mode group, and writes
-          # CHANGELOGs. The fixed-mode config in .changeset/config.json
-          # keeps @selvajs/selva, @selvajs/cli, @selvajs/ui, @selvajs/schemas
-          # at one shared version.
+          # package.json versions, and writes CHANGELOGs. The `fixed` group in
+          # .changeset/config.json is intentionally narrow: only
+          # @selvajs/selva + @selvajs/cli share a version, so their MAJOR
+          # versions stay aligned (the `selva doctor` cli/runtime compat
+          # check). @selvajs/ui, @selvajs/schemas, @selvajs/platform and the
+          # providers version INDEPENDENTLY on their own changesets — they're
+          # consumed standalone from npm (parafa/parapet), so lockstepping
+          # them to selva would just inflate their versions.
           version: pnpm changeset version
 
           # `pnpm release` runs `pnpm build && changeset publish`. The
