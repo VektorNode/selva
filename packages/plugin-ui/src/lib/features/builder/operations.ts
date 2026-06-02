@@ -10,20 +10,14 @@ import type {
 	OutputLayoutItem
 } from '@selvajs/schemas';
 import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from './widget-config';
-import { toast } from '@selvajs/ui';
+import { toast, getLayoutItems } from '@selvajs/ui';
+
+// Re-exported from the shared @selvajs/ui traversal module so the layout walk lives in
+// one place. Kept under the local name for existing callers.
+export { getLayoutItems as getAllLayoutItems };
 
 export function isInputItem(item: DiscoveredInput | DiscoveredOutput): item is DiscoveredInput {
 	return 'name' in item;
-}
-
-export function getAllLayoutItems(schema: UISchema): LayoutItem[] {
-	if (!schema?.layout) return [];
-	if (schema.layout.type === 'tabbed') {
-		return schema.layout.tabs.flatMap((tab) => tab.groups?.flatMap((g) => g.items) ?? []);
-	} else if (schema.layout.type === 'flat') {
-		return schema.layout.groups?.flatMap((g) => g.items) ?? [];
-	}
-	return [];
 }
 
 export function isItemUsedInLayout(schema: UISchema | null, paramId: string): boolean {

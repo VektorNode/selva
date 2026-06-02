@@ -8,7 +8,8 @@
 //
 // inputId is the Grasshopper parameter instance GUID (LayoutItem.paramId / SchemaInput.id).
 
-import type { UISchema, LayoutItem, GroupConfig, InputSource } from '@selvajs/schemas';
+import type { UISchema } from '@selvajs/schemas';
+import { getInputItems } from '../schema/traversal';
 
 const STORAGE_PREFIX = 'external';
 
@@ -53,28 +54,11 @@ export interface ExternalInput {
 	displayName: string;
 }
 
-function* walkLayoutItems(schema: UISchema): Generator<LayoutItem> {
-	const groups: GroupConfig[] =
-		schema.layout.type === 'tabbed'
-			? schema.layout.tabs.flatMap((t) => t.groups)
-			: schema.layout.groups;
-	for (const group of groups) {
-		for (const item of group.items) {
-			yield item;
-		}
-	}
-}
-
 export function getExternalInputs(schema: UISchema): ExternalInput[] {
-	const result: ExternalInput[] = [];
-	for (const item of walkLayoutItems(schema)) {
-		if (item.type !== 'input') continue;
-		const source = (item as { source?: InputSource }).source;
-		if (source?.kind !== 'client') continue;
-		result.push({
+	return getInputItems(schema)
+		.filter((item) => item.source?.kind === 'client')
+		.map((item) => ({
 			paramId: item.paramId,
 			displayName: item.displayName ?? item.paramId
-		});
-	}
-	return result;
+		}));
 }

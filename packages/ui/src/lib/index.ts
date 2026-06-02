@@ -17,6 +17,7 @@ export { default as Viewer } from './components/viewer/Viewer.svelte';
 
 // Utilities
 export * from './schema/defaults';
+export * from './schema/traversal';
 export * from './compute/solving.svelte';
 
 // External-input transit storage (used by routes that wire pre-step producers)

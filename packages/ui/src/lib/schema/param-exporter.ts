@@ -1,17 +1,11 @@
 import { randomId } from '../utils/randomId';
+import { getGroups } from './traversal';
 import type {
 	UISchema,
 	ParameterPreset,
 	ParameterState,
 	ValidationIssueMessage
 } from '@selvajs/schemas';
-
-function getGroups(schema: UISchema) {
-	if (!schema.layout) return [];
-	if (schema.layout.type === 'tabbed') return schema.layout.tabs.flatMap((t) => t.groups ?? []);
-	if (schema.layout.type === 'flat') return schema.layout.groups ?? [];
-	return [];
-}
 
 export function createSavedState(
 	schema: UISchema,
