@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { definitionService, getProjectProvider } from '$lib/server/providers.server';
+import { getDefinitionService, getProjectProvider } from '$lib/server/providers.server';
 import { requireCanCreateDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { CreateDefinitionInputSchema } from '@selvajs/platform/definitions';
@@ -80,7 +80,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 		const schema = await fetchSchemaFromCompute(fileData, server);
 
-		const { record, version } = await definitionService.create(
+		const { record, version } = await getDefinitionService().create(
 			ctx,
 			{
 				guid,
@@ -102,7 +102,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		let coverImage = record.coverImage;
 		if (imageFile instanceof File && imageFile.size > 0) {
 			const imageData = new Uint8Array(await imageFile.arrayBuffer());
-			coverImage = await definitionService.saveCoverImage(ctx, guid, imageData);
+			coverImage = await getDefinitionService().saveCoverImage(ctx, guid, imageData);
 		}
 
 		return json({ success: true, guid, version, coverImage });
