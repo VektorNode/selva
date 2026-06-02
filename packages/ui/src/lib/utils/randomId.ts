@@ -1,22 +1,6 @@
-// Generate a UUIDv4-shaped string in any browser context.
-//
-// `crypto.randomUUID()` requires a secure context (HTTPS or localhost).
-// Plain-HTTP deployments — common for first-time self-hosters trying things
-// out — get `crypto.randomUUID is not a function`, which is a confusing
-// browser-level error nobody can diagnose without devtools open.
-//
-// We try in order:
-//   1. crypto.randomUUID()         — fastest path, available in secure contexts
-//   2. crypto.getRandomValues()    — Web Crypto's lower-level entropy, works
-//                                    in any context that ships Web Crypto
-//   3. Math.random() fallback      — last resort; non-cryptographic, but the
-//                                    IDs we generate here are only used as
-//                                    collision-resistant keys for client-side
-//                                    form rows, not as security tokens.
-//
-// Callers that need cryptographic randomness (tokens, secrets) must NOT use
-// this — they should fail loudly in insecure contexts instead of silently
-// downgrading.
+// Falls back through crypto.randomUUID → crypto.getRandomValues → Math.random so
+// plain-HTTP deployments don't crash. Math.random IDs are non-cryptographic —
+// fine for collision-resistant UI keys, not for tokens or secrets.
 export function randomId(): string {
 	const c = typeof crypto !== 'undefined' ? crypto : undefined;
 	if (c?.randomUUID) return c.randomUUID();

@@ -14,7 +14,7 @@ import {
 	getOrganizationProvider,
 	getPermissionStore,
 	getProjectProvider,
-	tenancy
+	getTenancy
 } from './providers.server.js';
 import { slugify } from './slug.js';
 
@@ -41,6 +41,7 @@ import { slugify } from './slug.js';
 export async function bootstrapUserSession(user: AuthUser): Promise<void> {
 	await getDataProvider().ensureUser(SYSTEM_CONTEXT, user.id);
 
+	const tenancy = getTenancy();
 	const perms = getPermissionStore();
 	const hasAdmin = await perms.hasInstanceAdmin(SYSTEM_CONTEXT);
 	let grantedAdminHere = false;
@@ -81,7 +82,7 @@ export async function bootstrapUserSession(user: AuthUser): Promise<void> {
  * UPN-only sign-ins.
  */
 async function ensureSingleTenantDefaultOrg(user: AuthUser): Promise<void> {
-	if (tenancy !== 'single') return;
+	if (getTenancy() !== 'single') return;
 	const orgs = getOrganizationProvider();
 	const existing = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
 	if (existing.items.length > 0) return;
@@ -220,6 +221,6 @@ export function wireHeaderAuthBootstrap(): void {
 	auth.setBootstrapAllowlistPolicy(async ({ upn, email }) => {
 		const hasAdmin = await getPermissionStore().hasInstanceAdmin(SYSTEM_CONTEXT);
 		if (hasAdmin) return false;
-		return shouldBootstrapUpn(upn, email, env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL, tenancy);
+		return shouldBootstrapUpn(upn, email, env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL, getTenancy());
 	});
 }

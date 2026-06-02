@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { definitionService } from '$lib/server/providers.server';
+import { getDefinitionService } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError } from '$lib/server/api-errors';
 import { GuidSchema } from '@selvajs/platform/definitions';
@@ -19,7 +19,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const { ctx } = await requireEditableDefinition(locals, guidParsed.data);
 
 	try {
-		await definitionService.deleteVersion(ctx, guidParsed.data, versionParsed.data);
+		await getDefinitionService().deleteVersion(ctx, guidParsed.data, versionParsed.data);
 		return json({ success: true });
 	} catch (err) {
 		handleApiError(err, 'Failed to delete version');

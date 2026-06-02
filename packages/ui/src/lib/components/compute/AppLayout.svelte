@@ -44,7 +44,7 @@
 		hasNeverSolved = false,
 		isViewerFullscreen = $bindable(false),
 		oncalculate = () => {},
-		values = $bindable({}),
+		values,
 		onValueChange,
 		onLoadValues,
 		panelActions = [],

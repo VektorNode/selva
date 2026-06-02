@@ -6,7 +6,7 @@
  * @property errors - Optional array of error messages that occurred
  * @property warnings - Optional array of warning messages from the computation
  */
-interface SolveResult {
+export interface SolveResult {
 	outputs: Record<string, unknown>;
 	meshes?: any[];
 	errors?: string[];

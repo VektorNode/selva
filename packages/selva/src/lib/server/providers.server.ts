@@ -128,89 +128,132 @@ async function loadRawConfig(): Promise<SelvaConfig | SelvaConfigFactory> {
 	return mod.default;
 }
 
+// Loading the *config source* (default factory, or the SELVA_CONFIG_PATH
+// override module) is cheap and secret-free — a factory is just a function.
+// We do that eagerly. We do NOT invoke the factory here: calling it runs
+// pickAuth/pickData/pickStorage → provider.fromEnv(), which validates required
+// secrets (SELVA_HMAC_KEY etc.). Doing that at import time would make merely
+// *building* the app require a full runtime env, which breaks `vite build` and
+// any tool that loads the SSR bundle. So provider instantiation is deferred to
+// first use via resolveProviders().
 const _raw = await loadRawConfig();
-export const providers: SelvaConfig = typeof _raw === 'function' ? _raw(env) : _raw;
 
-export const tenancy: TenancyMode = providers.tenancy ?? 'single';
+let _providers: SelvaConfig | undefined;
 
-// One-line boot summary so operators can confirm at a glance what got wired
-// without grepping env vars or reading the config file. Provider names come
-// from the IAuthProvider.name field; data/storage adapters don't expose a
-// name, so we infer from the constructor.
-console.log(
-	`[selva] providers wired: ` +
-		`auth=${providers.auth.name} ` +
-		`data=${providers.data.constructor.name} ` +
-		`storage=${providers.storage.constructor.name} ` +
-		`tenancy=${tenancy}` +
-		(env.SELVA_CONFIG_PATH ? ` config=${env.SELVA_CONFIG_PATH}` : '')
-);
+/**
+ * Memoized provider wiring. The first call instantiates providers from env
+ * (and may throw if required secrets are missing); subsequent calls return the
+ * cached config. Importing this module has no side effects — initialization
+ * happens lazily on the first request, never at build time.
+ */
+export function resolveProviders(): SelvaConfig {
+	if (_providers) return _providers;
+	_providers = typeof _raw === 'function' ? _raw(env) : _raw;
 
-const _brand = providers.branding ?? {};
-const _name = _brand.name?.trim() || 'Selva';
+	// One-line boot summary so operators can confirm at a glance what got wired
+	// without grepping env vars or reading the config file. Provider names come
+	// from the IAuthProvider.name field; data/storage adapters don't expose a
+	// name, so we infer from the constructor.
+	console.info(
+		`[selva] providers wired: ` +
+			`auth=${_providers.auth.name} ` +
+			`data=${_providers.data.constructor.name} ` +
+			`storage=${_providers.storage.constructor.name} ` +
+			`tenancy=${_providers.tenancy ?? 'single'}` +
+			(env.SELVA_CONFIG_PATH ? ` config=${env.SELVA_CONFIG_PATH}` : '')
+	);
+
+	return _providers;
+}
+
+/**
+ * @deprecated Prefer {@link resolveProviders}. Kept as a property accessor so
+ * existing `import { providers }` call sites resolve lazily instead of at
+ * import time.
+ */
+export const providers = new Proxy({} as SelvaConfig, {
+	get(_t, prop) {
+		return Reflect.get(resolveProviders(), prop);
+	}
+});
+
+export function getTenancy(): TenancyMode {
+	return resolveProviders().tenancy ?? 'single';
+}
+
 /**
  * Resolved branding — every field has a default so the UI never has to
  * null-check. White-label deployments override via SELVA_BRAND_* env vars.
  */
-export const branding: Required<SelvaBranding> = {
-	name: _name,
-	copyrightName: _brand.copyrightName?.trim() || _name,
-	tagline: _brand.tagline?.trim() || 'Turn Grasshopper definitions into tools anyone can use.',
-	description:
-		_brand.description?.trim() ||
-		`Build and deploy interactive web applications powered by Grasshopper definitions with ${_name}.`
-};
-
-export const flags: SelvaFlags = providers.flags ?? {};
-/** Use this rather than reading `flags` directly — omitted flags resolve to false. */
-export function flag(name: keyof SelvaFlags): boolean {
-	return isFlagEnabled(providers, name);
+export function getBranding(): Required<SelvaBranding> {
+	const brand = resolveProviders().branding ?? {};
+	const name = brand.name?.trim() || 'Selva';
+	return {
+		name,
+		copyrightName: brand.copyrightName?.trim() || name,
+		tagline: brand.tagline?.trim() || 'Turn Grasshopper definitions into tools anyone can use.',
+		description:
+			brand.description?.trim() ||
+			`Build and deploy interactive web applications powered by Grasshopper definitions with ${name}.`
+	};
 }
 
-export const definitionService = new DefinitionService(providers.data, providers.storage);
+/** Use this rather than reading flags directly — omitted flags resolve to false. */
+export function flag(name: keyof SelvaFlags): boolean {
+	return isFlagEnabled(resolveProviders(), name);
+}
+
+let _definitionService: DefinitionService | undefined;
+export function getDefinitionService(): DefinitionService {
+	if (!_definitionService) {
+		const p = resolveProviders();
+		_definitionService = new DefinitionService(p.data, p.storage);
+	}
+	return _definitionService;
+}
 
 export function getAuthProvider() {
-	return providers.auth;
+	return resolveProviders().auth;
 }
 
 export function getStorageProvider() {
-	return providers.storage;
+	return resolveProviders().storage;
 }
 
 export function getDataProvider() {
-	return providers.data;
+	return resolveProviders().data;
 }
 
 export function getOrganizationProvider() {
-	return providers.data.orgs;
+	return resolveProviders().data.orgs;
 }
 
 export function getProjectProvider() {
-	return providers.data.projects;
+	return resolveProviders().data.projects;
 }
 
 export function getDefinitionMeta() {
-	return providers.data.definitions;
+	return resolveProviders().data.definitions;
 }
 
 export function getComputeServerConfigStore() {
-	return providers.data.computeServer;
+	return resolveProviders().data.computeServer;
 }
 
 export function getUserProfileStore() {
-	return providers.data.userProfile;
+	return resolveProviders().data.userProfile;
 }
 
 export function getInviteStore() {
-	return providers.data.invites;
+	return resolveProviders().data.invites;
 }
 
 export function getPermissionStore() {
-	return providers.data.permissions;
+	return resolveProviders().data.permissions;
 }
 
 export function getPlatformProjectGrantStore() {
-	return providers.data.platformProjectGrants;
+	return resolveProviders().data.platformProjectGrants;
 }
 
 /**

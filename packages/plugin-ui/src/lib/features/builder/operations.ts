@@ -9,40 +9,73 @@ import type {
 	InputLayoutItem,
 	OutputLayoutItem
 } from '@selvajs/schemas';
+import { getGroups, getLayoutItems } from '@selvajs/schemas';
 import { mapParamTypeToWidgetType, createDefaultWidgetConfig } from './widget-config';
-import { toast } from '@selvajs/ui';
+
+// Re-exported from the shared @selvajs/schemas traversal module so the layout walk lives
+// in one place. Kept under the local name for existing callers.
+export { getLayoutItems as getAllLayoutItems };
 
 export function isInputItem(item: DiscoveredInput | DiscoveredOutput): item is DiscoveredInput {
 	return 'name' in item;
 }
 
-export function getAllLayoutItems(schema: UISchema): LayoutItem[] {
-	if (!schema?.layout) return [];
+// ============================================================================
+// Group container seam
+// ============================================================================
+//
+// Most mutators below need the same two things: "the groups for a tab" and "write the
+// mutated groups back where they belong." In tabbed mode that's a tab's `groups` (plus
+// reassigning `layout.tabs` to nudge reactivity); in flat mode it's `layout.groups`. A
+// GroupContainer hides that split so each mutator stays one branch-free function, and
+// the reactivity write-back ritual lives in exactly one place.
+
+interface GroupContainer {
+	groups: GroupConfig[];
+	setGroups(next: GroupConfig[]): void;
+}
+
+/**
+ * Resolves the mutable group container addressed by `tabId`. In tabbed mode this is the
+ * matching tab; in flat mode `tabId` is ignored and the layout itself is the container.
+ * Returns undefined when there's no layout or the tab id doesn't match.
+ */
+function resolveGroupContainer(schema: UISchema, tabId: string): GroupContainer | undefined {
+	if (!schema?.layout) return undefined;
+
 	if (schema.layout.type === 'tabbed') {
-		return schema.layout.tabs.flatMap((tab) => tab.groups?.flatMap((g) => g.items) ?? []);
-	} else if (schema.layout.type === 'flat') {
-		return schema.layout.groups?.flatMap((g) => g.items) ?? [];
+		const layout = schema.layout;
+		const tab = layout.tabs.find((t) => t.id === tabId);
+		if (!tab) return undefined;
+		return {
+			get groups() {
+				return tab.groups;
+			},
+			setGroups(next) {
+				tab.groups = next;
+				layout.tabs = [...layout.tabs];
+			}
+		};
 	}
-	return [];
+
+	if (schema.layout.type === 'flat') {
+		const layout = schema.layout;
+		return {
+			get groups() {
+				return layout.groups;
+			},
+			setGroups(next) {
+				layout.groups = next;
+			}
+		};
+	}
+
+	return undefined;
 }
 
 export function isItemUsedInLayout(schema: UISchema | null, paramId: string): boolean {
-	if (!schema?.layout) return false;
-
-	if (schema.layout.type === 'tabbed') {
-		return (
-			schema.layout.tabs.some((t) =>
-				t.groups.some((g) => g.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId))
-			) ?? false
-		);
-	} else if (schema.layout.type === 'flat') {
-		return (
-			schema.layout.groups.some((g) =>
-				g.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId)
-			) ?? false
-		);
-	}
-	return false;
+	if (!schema) return false;
+	return getLayoutItems(schema).some((i) => i.type !== 'linebreak' && i.paramId === paramId);
 }
 
 export function removeItemIfOrphaned(
@@ -167,6 +200,15 @@ export interface ItemDropOptions {
 	outputType?: 'text' | 'number' | 'file' | 'chart';
 }
 
+/**
+ * Outcome of a drop. `added` means a layout item was inserted; `duplicate` means the
+ * param was already in the target group and nothing changed. The duplicate label lets
+ * the caller phrase its own notification — operations.ts stays UI-free (no toast).
+ */
+export type ItemDropResult =
+	| { added: true }
+	| { added: false; duplicate: true; itemLabel: 'file component' | 'parameter' | 'output' };
+
 export function handleItemDrop({
 	schema,
 	group,
@@ -180,12 +222,11 @@ export function handleItemDrop({
 	targetItem,
 	dropPosition,
 	outputType
-}: ItemDropOptions) {
+}: ItemDropOptions): ItemDropResult {
 	if (group.items.some((i) => i.type !== 'linebreak' && i.paramId === paramId)) {
-		const itemTypeLabel =
+		const itemLabel =
 			widgetType === 'file' ? 'file component' : itemType === 'input' ? 'parameter' : 'output';
-		toast.warning(`This ${itemTypeLabel} is already in this group`);
-		return;
+		return { added: false, duplicate: true, itemLabel };
 	}
 
 	if (itemType === 'input') {
@@ -229,6 +270,7 @@ export function handleItemDrop({
 		paramType
 	);
 	insertLayoutItem(group, newItem, targetItem, dropPosition);
+	return { added: true };
 }
 
 export function handleGroupItemDrop(
@@ -298,65 +340,31 @@ export function removeTab(schema: UISchema, tabId: string) {
 }
 
 export function addGroup(schema: UISchema, tabId: string) {
-	if (!schema.layout) return;
+	const container = resolveGroupContainer(schema, tabId);
+	if (!container) return;
 
-	if (schema.layout.type === 'tabbed') {
-		const tab = schema.layout.tabs.find((t) => t.id === tabId);
-		if (!tab) return;
+	const newGroup: GroupConfig = {
+		id: crypto.randomUUID().substring(0, 8),
+		label: `Group ${container.groups.length + 1}`,
+		description: '',
+		order: container.groups.length,
+		collapsed: false,
+		columns: 1,
+		items: []
+	};
 
-		const newGroup: GroupConfig = {
-			id: crypto.randomUUID().substring(0, 8),
-			label: `Group ${tab.groups.length + 1}`,
-			description: '',
-			order: tab.groups.length,
-			collapsed: false,
-			columns: 1,
-			items: []
-		};
-
-		tab.groups = [...tab.groups, newGroup];
-	} else if (schema.layout.type === 'flat') {
-		const newGroup: GroupConfig = {
-			id: crypto.randomUUID().substring(0, 8),
-			label: `Group ${schema.layout.groups.length + 1}`,
-			description: '',
-			order: schema.layout.groups.length,
-			collapsed: false,
-			columns: 1,
-			items: []
-		};
-
-		schema.layout.groups = [...schema.layout.groups, newGroup];
-	}
+	container.setGroups([...container.groups, newGroup]);
 }
 
 export function removeGroup(schema: UISchema, tabId: string, groupId: string) {
-	if (!schema.layout) return;
-
-	if (schema.layout.type === 'tabbed') {
-		const tab = schema.layout.tabs.find((t) => t.id === tabId);
-		if (!tab) return;
-
-		tab.groups = tab.groups.filter((g) => g.id !== groupId);
-		schema.layout.tabs = [...schema.layout.tabs];
-	} else if (schema.layout.type === 'flat') {
-		schema.layout.groups = schema.layout.groups.filter((g) => g.id !== groupId);
-	}
+	const container = resolveGroupContainer(schema, tabId);
+	if (!container) return;
+	container.setGroups(container.groups.filter((g) => g.id !== groupId));
 }
 
 export function removeItem(schema: UISchema, tabId: string, groupId: string, itemId: string) {
-	if (!schema.layout) return;
-
-	let group: GroupConfig | undefined;
-
-	if (schema.layout.type === 'tabbed') {
-		const tab = schema.layout.tabs.find((t) => t.id === tabId);
-		if (!tab) return;
-		group = tab.groups.find((g) => g.id === groupId);
-	} else if (schema.layout.type === 'flat') {
-		group = schema.layout.groups.find((g) => g.id === groupId);
-	}
-
+	const container = resolveGroupContainer(schema, tabId);
+	const group = container?.groups.find((g) => g.id === groupId);
 	if (!group) return;
 
 	const item = group.items.find((i) => i.id === itemId);
@@ -418,35 +426,17 @@ export function moveGroupToTab(
 }
 
 export function reorderGroups(schema: UISchema, tabId: string, fromIndex: number, toIndex: number) {
-	if (!schema.layout) return;
+	const container = resolveGroupContainer(schema, tabId);
+	if (!container) return;
 
-	let groups: GroupConfig[] | undefined;
-
-	if (schema.layout.type === 'tabbed') {
-		const tab = schema.layout.tabs.find((t) => t.id === tabId);
-		if (!tab) return;
-		groups = tab.groups;
-	} else if (schema.layout.type === 'flat') {
-		groups = schema.layout.groups;
-	}
-
-	if (!groups) return;
-
-	const newGroups = [...groups];
+	const newGroups = [...container.groups];
 	const [movedGroup] = newGroups.splice(fromIndex, 1);
 	newGroups.splice(toIndex, 0, movedGroup);
-
 	newGroups.forEach((group, index) => {
 		group.order = index;
 	});
 
-	if (schema.layout.type === 'tabbed') {
-		const tab = schema.layout.tabs.find((t) => t.id === tabId);
-		if (tab) tab.groups = newGroups;
-		schema.layout.tabs = [...schema.layout.tabs];
-	} else if (schema.layout.type === 'flat') {
-		schema.layout.groups = newGroups;
-	}
+	container.setGroups(newGroups);
 }
 
 export function batchSetNumberWidgetType(
@@ -455,12 +445,8 @@ export function batchSetNumberWidgetType(
 ): { changed: number } {
 	let count = 0;
 
-	if (!schema.layout) {
-		return { changed: count };
-	}
-
-	const processGroup = (group: GroupConfig) => {
-		group.items.forEach((item) => {
+	for (const group of getGroups(schema)) {
+		for (const item of group.items) {
 			// Only process input number widgets
 			if (item.type === 'input' && item.widgetType === 'number') {
 				if (item.config && 'renderAsSlider' in item.config) {
@@ -468,15 +454,7 @@ export function batchSetNumberWidgetType(
 					count++;
 				}
 			}
-		});
-	};
-
-	if (schema.layout.type === 'tabbed') {
-		schema.layout.tabs.forEach((tab) => {
-			tab.groups.forEach(processGroup);
-		});
-	} else if (schema.layout.type === 'flat') {
-		schema.layout.groups.forEach(processGroup);
+		}
 	}
 
 	return { changed: count };

@@ -3,8 +3,8 @@
 	import type { UISchema, ParameterPreset } from '@selvajs/schemas';
 	import {
 		createSavedState,
-		validateSavedState,
-		extractLoadableValues,
+		loadPreset,
+		type PresetLoadResult,
 		exportStateAsJson,
 		importStateFromJson
 	} from '../../schema/param-exporter';
@@ -52,8 +52,8 @@
 	// Import/validation state
 	let showValidationDialog = $state(false);
 	let showLoadDialog = $state(false);
-	let importedState = $state<ParameterPreset | null>(null);
-	let validationResult = $state<ReturnType<typeof validateSavedState> | null>(null);
+	let loadResult = $state<PresetLoadResult | null>(null);
+	let loadingPresetName = $state('');
 	let fileInputRef = $state<HTMLInputElement | null>(null);
 
 	// Listed states (when onListStates is provided)
@@ -90,15 +90,15 @@
 		showExportDialog = false;
 	}
 
-	// Validate a preset, then either load it directly (no issues) or open the
+	// Load a preset in one pass, then either apply it directly (no issues) or open the
 	// validation dialog (any errors or warnings). Shared by every load path.
 	function tryLoad(preset: ParameterPreset) {
-		const validation = validateSavedState(preset, schema);
-		if (validation.isValid) {
-			onLoadValues(extractLoadableValues(preset, schema, validation));
+		const result = loadPreset(preset, schema);
+		if (result.isValid) {
+			onLoadValues(result.values);
 		} else {
-			importedState = preset;
-			validationResult = validation;
+			loadResult = result;
+			loadingPresetName = preset.name;
 			showValidationDialog = true;
 		}
 	}
@@ -119,21 +119,16 @@
 	}
 
 	function confirmLoad() {
-		if (!importedState || !validationResult) return;
+		if (!loadResult || !loadResult.canLoad) return;
 
-		if (validationResult.canLoad) {
-			const values = extractLoadableValues(importedState, schema, validationResult);
-			onLoadValues(values);
-			showValidationDialog = false;
-			importedState = null;
-			validationResult = null;
-		}
+		onLoadValues(loadResult.values);
+		showValidationDialog = false;
+		loadResult = null;
 	}
 
 	function cancelImport() {
 		showValidationDialog = false;
-		importedState = null;
-		validationResult = null;
+		loadResult = null;
 	}
 
 	async function openLoadDialog() {
@@ -288,16 +283,16 @@
 		<Dialog.Header>
 			<Dialog.Title>{t.validationTitle}</Dialog.Title>
 			<Dialog.Description>
-				{#if importedState}
-					{t.validationValidatingPrefix}{importedState.name}
+				{#if loadingPresetName}
+					{t.validationValidatingPrefix}{loadingPresetName}
 				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 
-		{#if validationResult}
+		{#if loadResult}
 			<div class="gap-4 py-4 grid">
 				<!-- Summary Alert -->
-				{#if validationResult.isValid}
+				{#if loadResult.isValid}
 					<Card.Root class="p-4 border-success/30 bg-success/5">
 						<div class="gap-3 flex items-start">
 							<CheckCircle class="h-5 w-5 text-success" />
@@ -311,7 +306,7 @@
 							</div>
 						</div>
 					</Card.Root>
-				{:else if validationResult.canLoad}
+				{:else if loadResult.canLoad}
 					<Card.Root class="p-4 border-warning/30 bg-warning/5">
 						<div class="gap-3 flex items-start">
 							<AlertTriangle class="h-5 w-5 text-warning" />
@@ -320,10 +315,7 @@
 									{t.validationWarningsTitle}
 								</h4>
 								<p class="text-sm mt-1 text-warning-foreground/80">
-									{t.validationWarningsBody.replace(
-										'{count}',
-										String(validationResult.issues.length)
-									)}
+									{t.validationWarningsBody.replace('{count}', String(loadResult.issues.length))}
 								</p>
 							</div>
 						</div>
@@ -343,10 +335,10 @@
 				{/if}
 
 				<!-- Issues List -->
-				{#if !validationResult.isValid}
+				{#if !loadResult.isValid}
 					<div class="space-y-2">
 						<h4 class="text-sm font-medium">{t.validationIssuesHeading}</h4>
-						{#each validationResult.issues as issue (issue.message)}
+						{#each loadResult.issues as issue (issue.message)}
 							<div
 								class="p-3 rounded-lg border {issue.severity === 'error'
 									? 'border-destructive/30 bg-destructive/5'
@@ -378,7 +370,7 @@
 
 		<Dialog.Footer>
 			<Button variant="outline" onclick={cancelImport}>{t.cancelButton}</Button>
-			{#if validationResult?.canLoad}
+			{#if loadResult?.canLoad}
 				<Button onclick={confirmLoad}>{t.loadAnywayButton}</Button>
 			{/if}
 		</Dialog.Footer>

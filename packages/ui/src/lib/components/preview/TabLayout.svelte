@@ -4,7 +4,7 @@
 	import * as Tabs from '$lib/components/primitives/tabs';
 	import TabBar from './TabBar.svelte';
 	import TabContent from './TabContent.svelte';
-	import { evaluateVisibility } from '$lib/schema/visibility-rules';
+	import { buildVisibilityMap, itemKey } from '$lib/schema/visibility-rules';
 
 	interface Props {
 		schema: UISchema;
@@ -64,17 +64,18 @@
 		if (schema.layout.type !== 'tabbed') return;
 		const updates: Record<string, unknown> = {};
 		visibleTabs.forEach((tab) =>
-			tab.groups.forEach((group) =>
+			tab.groups.forEach((group) => {
+				const visibilityMap = buildVisibilityMap(group.items, values);
 				group.items.forEach((layoutItem) => {
 					if (layoutItem.type === 'linebreak') return;
-					const { visible, disabled, defaultValue } = evaluateVisibility(layoutItem, values);
+					const { visible, disabled, defaultValue } = visibilityMap[itemKey(layoutItem)];
 					const input = schema.inputs.find((i) => i.id === layoutItem.paramId);
 					if (!input || defaultValue === undefined) return;
 					if ((!visible || disabled) && values[input.id] !== defaultValue) {
 						updates[input.id] = defaultValue;
 					}
-				})
-			)
+				});
+			})
 		);
 		if (Object.keys(updates).length > 0) Object.assign(values, updates);
 	});

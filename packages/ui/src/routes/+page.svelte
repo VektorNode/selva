@@ -1,16 +1,13 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
 	import AppLayout from '$lib/components/compute/AppLayout.svelte';
 	import exampleSchema from '../demo/example-schema.json';
-	import exampleSchemaLeftOnly from '../demo/example-schema-left-only.json';
 	import AppShell from '$lib/components/layout/AppShell.svelte';
 	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '../demo/dummy-output-values';
 	import { APP_DEFAULTS } from '$lib/constants';
 
-	// Switch between left-only, right-only and full schema
 	let schema = $state(exampleSchema as UISchema);
-	const _schemaLeft = exampleSchemaLeftOnly as UISchema;
-	const _schemaFull = exampleSchema as UISchema;
 
 	// Meshes state - starts with fallback cube
 	let meshes = $state([cubeMesh]);
@@ -25,9 +22,7 @@
 		'Warning: The calculation may take longer than expected due to the complexity of the input values.'
 	];
 
-	// Load parsed meshes on mount
-	$effect(() => {
-		// This effect runs once on mount
+	onMount(() => {
 		getParsedMeshes()
 			.then((parsedMeshes: any[]) => {
 				if (parsedMeshes && parsedMeshes.length > 0) {
@@ -82,7 +77,7 @@
 			showSolvingIndicator={schema.instanceSolve !== false}
 			{hasPendingChanges}
 			bind:isViewerFullscreen
-			bind:values
+			{values}
 			onValueChange={handleValueChange}
 			oncalculate={handleCalculate}
 			onLoadValues={async () => {

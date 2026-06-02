@@ -1,10 +1,10 @@
-import { branding, flag, getAuthProvider } from '$lib/server/providers.server';
+import { getBranding, flag, getAuthProvider } from '$lib/server/providers.server';
 import type { LayoutServerLoad } from './$types';
 
 // Expose the authenticated user to every route in the app.
 export const load: LayoutServerLoad = async ({ locals }) => {
 	return {
-		branding,
+		branding: getBranding(),
 		// Forward-auth providers identify on every request via proxy headers;
 		// there's no Selva session to destroy, so the UI hides the logout button.
 		hasProxyAuth: Boolean(getAuthProvider().proxyAuth),

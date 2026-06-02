@@ -2,13 +2,14 @@ import type { PageServerLoad } from './$types';
 import {
 	getComputeServerConfigStore,
 	getOrganizationProvider,
-	tenancy
+	getTenancy
 } from '$lib/server/providers.server';
 import { assertManageCompute } from '$lib/server/access.server';
 import { platformServers, type Organization } from '@selvajs/platform';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	assertManageCompute(locals);
+	const tenancy = getTenancy();
 	try {
 		const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
 		const servers = platformServers(config).map(({ apiKey, ...rest }) => ({

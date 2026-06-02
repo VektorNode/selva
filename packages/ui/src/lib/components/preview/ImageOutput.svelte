@@ -2,7 +2,7 @@
 	import type { OutputImageLayoutItem } from '@selvajs/schemas';
 	import type { FileData } from '@selvajs/compute';
 	import { Download, Maximize, Minimize } from '@lucide/svelte';
-	import { downloadFiles } from '$lib/utils/file-download';
+	import { downloadFiles, isFileData, MIME_BY_EXT } from '$lib/utils/file-download';
 
 	interface Props {
 		item: OutputImageLayoutItem;
@@ -12,18 +12,6 @@
 	let { item, value }: Props = $props();
 
 	const SUPPORTED_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
-	const MIME_BY_EXT: Record<string, string> = {
-		'.png': 'image/png',
-		'.jpg': 'image/jpeg',
-		'.jpeg': 'image/jpeg',
-		'.webp': 'image/webp',
-		'.gif': 'image/gif',
-		'.svg': 'image/svg+xml'
-	};
-
-	function isFileData(x: unknown): x is FileData {
-		return !!x && typeof x === 'object' && 'fileName' in x && 'data' in x && 'fileType' in x;
-	}
 
 	const file = $derived.by<FileData | null>(() => {
 		if (Array.isArray(value)) return value.find(isFileData) ?? null;

@@ -244,16 +244,16 @@
 		}
 	}
 
-	useFooterItem(
-		'ws-status',
-		WsStatusFooter,
-		() => ({
+	useFooterItem({
+		id: 'ws-status',
+		component: WsStatusFooter,
+		getProps: () => ({
 			connected: builderState?.wsState.connected ?? false,
 			sessionId
 		}),
-		'left',
-		10
-	);
+		position: 'left',
+		priority: 10
+	});
 </script>
 
 <AppShell {homeUrl} title="Schema Builder" mode="fixed" showFooter>
