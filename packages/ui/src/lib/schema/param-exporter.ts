@@ -1,5 +1,5 @@
 import { randomId } from '../utils/randomId';
-import { getGroups } from './traversal';
+import { getGroups } from '@selvajs/schemas';
 import type {
 	UISchema,
 	ParameterPreset,
@@ -106,25 +106,52 @@ export function validateSavedState(
 	return { isValid: issues.length === 0, issues, canLoad: !hasErrors };
 }
 
+/**
+ * The subset of a preset's parameters that can safely be applied to the current schema:
+ * every param that still exists as an input. A param that no longer exists is dropped
+ * (it's the same condition `validateSavedState` flags as an error), so this derives its
+ * own "loadable" rule from the schema rather than re-reading validation issues — no
+ * coupling to how sentinel ids are encoded.
+ */
 export function extractLoadableValues(
 	savedState: ParameterPreset,
-	currentSchema: UISchema,
-	validation: ReturnType<typeof validateSavedState>
+	currentSchema: UISchema
 ): Record<string, unknown> {
-	const errorParamIds = new Set(
-		validation.issues
-			.filter((i) => i.severity === 'error' && !i.paramId.startsWith('__'))
-			.map((i) => i.paramId)
-	);
-
 	const values: Record<string, unknown> = {};
 	for (const paramState of savedState.parameters) {
 		const exists = currentSchema.inputs.some((i) => i.id === paramState.paramId);
-		if (!errorParamIds.has(paramState.paramId) && exists) {
+		if (exists) {
 			values[paramState.paramId] = paramState.value;
 		}
 	}
 	return values;
+}
+
+/** The full outcome of loading a preset: what to apply, plus the diagnostics to surface. */
+export interface PresetLoadResult {
+	/** Values safe to apply now (params that still exist). */
+	values: Record<string, unknown>;
+	/** All validation issues (errors + warnings) for the load dialog. */
+	issues: ValidationIssueMessage[];
+	/** No issues at all — load silently. */
+	isValid: boolean;
+	/** No blocking errors — load is allowed (warnings are fine). */
+	canLoad: boolean;
+}
+
+/**
+ * Single entry point for applying a preset: validates against the current schema and, in
+ * the same pass, computes the loadable values. Callers get one object instead of
+ * threading a validation result back into a separate extraction step.
+ */
+export function loadPreset(savedState: ParameterPreset, currentSchema: UISchema): PresetLoadResult {
+	const validation = validateSavedState(savedState, currentSchema);
+	return {
+		values: extractLoadableValues(savedState, currentSchema),
+		issues: validation.issues,
+		isValid: validation.isValid,
+		canLoad: validation.canLoad
+	};
 }
 
 export function exportStateAsJson(savedState: ParameterPreset): void {

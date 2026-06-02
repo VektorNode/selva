@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getGroups, getLayoutItems, getInputItems } from './traversal';
+import { getGroups, getLayoutItems, getInputItems } from '@selvajs/schemas';
 import type { UISchema } from '@selvajs/schemas';
 
 // These pin the layout-union discrimination (tabbed vs flat) and the defensive contract

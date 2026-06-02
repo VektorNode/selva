@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateSavedState, extractLoadableValues } from './param-exporter';
+import { validateSavedState, extractLoadableValues, loadPreset } from './param-exporter';
 import type { UISchema, ParameterPreset } from '@selvajs/schemas';
 
 // These tests cover the load path a user hits when restoring a preset against a
@@ -82,16 +82,14 @@ describe('validateSavedState', () => {
 });
 
 describe('extractLoadableValues', () => {
-	it('drops params flagged as errors but keeps the rest', () => {
+	it('drops params that no longer exist in the schema, keeps the rest', () => {
 		const p = preset({
 			parameters: [
 				{ paramId: 'a', nickname: 'A', value: 1 },
-				{ paramId: 'gone', nickname: 'Gone', value: 9 } // not in schema -> error
+				{ paramId: 'gone', nickname: 'Gone', value: 9 } // not in schema
 			] as ParameterPreset['parameters']
 		});
-		const s = schema();
-		const validation = validateSavedState(p, s);
-		expect(extractLoadableValues(p, s, validation)).toEqual({ a: 1 });
+		expect(extractLoadableValues(p, schema())).toEqual({ a: 1 });
 	});
 
 	it('keeps a warned-but-valid param (nickname drift) on load', () => {
@@ -101,7 +99,38 @@ describe('extractLoadableValues', () => {
 				{ id: 'b', nickname: 'B', paramType: 'number' }
 			]
 		} as unknown as Partial<UISchema>);
-		const validation = validateSavedState(preset(), renamed);
-		expect(extractLoadableValues(preset(), renamed, validation)).toEqual({ a: 1, b: 2 });
+		expect(extractLoadableValues(preset(), renamed)).toEqual({ a: 1, b: 2 });
+	});
+});
+
+describe('loadPreset', () => {
+	it('fuses validation and extraction: valid preset loads cleanly', () => {
+		const result = loadPreset(preset(), schema());
+		expect(result.isValid).toBe(true);
+		expect(result.canLoad).toBe(true);
+		expect(result.issues).toEqual([]);
+		expect(result.values).toEqual({ a: 1, b: 2 });
+	});
+
+	it('blocks on a document mismatch but still returns loadable values', () => {
+		const result = loadPreset(preset({ documentId: 'other-doc' }), schema());
+		expect(result.canLoad).toBe(false);
+		expect(result.issues.some((i) => i.severity === 'error')).toBe(true);
+		// values are still computed (the caller decides whether to apply them)
+		expect(result.values).toEqual({ a: 1, b: 2 });
+	});
+
+	it('allows load with warnings (schema drift) and drops missing params', () => {
+		const p = preset({
+			parameters: [
+				{ paramId: 'a', nickname: 'A', value: 1 },
+				{ paramId: 'gone', nickname: 'Gone', value: 9 }
+			] as ParameterPreset['parameters'],
+			schemaId: 'old-schema'
+		});
+		const result = loadPreset(p, schema());
+		expect(result.isValid).toBe(false);
+		expect(result.canLoad).toBe(false); // missing param is an error
+		expect(result.values).toEqual({ a: 1 });
 	});
 });

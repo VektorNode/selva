@@ -9,7 +9,7 @@
 // inputId is the Grasshopper parameter instance GUID (LayoutItem.paramId / SchemaInput.id).
 
 import type { UISchema } from '@selvajs/schemas';
-import { getInputItems } from '../schema/traversal';
+import { getInputItems } from '@selvajs/schemas';
 
 const STORAGE_PREFIX = 'external';
 
