@@ -1,0 +1,11 @@
+{
+	// Playwright e2e files live outside the SvelteKit-generated tsconfig's `include` (which
+	// only covers src/ and test{,s}/), so ESLint's typed-lint project service can't parse
+	// them. This config exists solely to give the project service a tsconfig that covers the
+	// e2e suite, the WS stub, and playwright.config.ts — it is not used for emit.
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"types": ["node", "@playwright/test"]
+	},
+	"include": ["**/*.ts", "../playwright.config.ts"]
+}

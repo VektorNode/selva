@@ -30,7 +30,9 @@ export default [
 			// Config files at package root — not in any tsconfig include, and
 			// they don't need application linting.
 			'packages/*/vitest.config.ts',
-			'packages/*/*/vitest.config.ts'
+			'packages/*/*/vitest.config.ts',
+			'packages/*/playwright.config.ts',
+			'packages/*/*/playwright.config.ts'
 		]
 	},
 	{
