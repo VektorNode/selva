@@ -14,29 +14,9 @@
 			"types": "./dist/index.d.ts",
 			"svelte": "./dist/index.js"
 		},
-		"./primitives": {
-			"types": "./dist/components/primitives/index.d.ts",
-			"svelte": "./dist/components/primitives/index.js"
-		},
-		"./layout": {
-			"types": "./dist/components/layout/index.d.ts",
-			"svelte": "./dist/components/layout/index.js"
-		},
-		"./compute": {
-			"types": "./dist/components/compute/index.d.ts",
-			"svelte": "./dist/components/compute/index.js"
-		},
-		"./viewer": {
-			"types": "./dist/components/viewer/index.d.ts",
-			"svelte": "./dist/components/viewer/index.js"
-		},
-		"./footer": {
-			"types": "./dist/contexts/footerContext.svelte.d.ts",
-			"svelte": "./dist/contexts/footerContext.svelte.js"
-		},
-		"./utils": {
-			"types": "./dist/utils.d.ts",
-			"import": "./dist/utils.js"
+		"./external": {
+			"types": "./dist/external/storage.d.ts",
+			"svelte": "./dist/external/storage.js"
 		},
 		"./styles/base.css": "./src/lib/styles/base.css",
 		"./styles/themes/*": "./src/lib/styles/themes/*"
@@ -62,6 +42,8 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"format": "prettier --write .",
 		"lint": "prettier --check . && eslint ."
 	},
@@ -95,9 +77,11 @@
 		"@selvajs/config": "workspace:*",
 		"@selvajs/schemas": "workspace:*",
 		"@sveltejs/kit": "catalog:",
+		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"@types/three": "catalog:",
 		"bits-ui": "^2.18.0",
 		"svelte": "catalog:",
-		"tailwind-variants": "^3.2.2"
+		"tailwind-variants": "^3.2.2",
+		"vitest": "catalog:"
 	}
 }

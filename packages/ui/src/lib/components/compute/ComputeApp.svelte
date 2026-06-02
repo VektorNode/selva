@@ -5,15 +5,16 @@
 	import type { ActionButton } from '../../types/actionButton';
 	import type { SolveFn } from '../../types/solveFn';
 	import type { PresetLabels } from '../../types/presetLabels';
-	import { getDefaultValue } from '../../schema/defaults';
-	import { createComputeThrottle } from '../../compute/computeThrottle.svelte';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
+	import {
+		createSolveSession,
+		createRequestResponseDriver
+	} from '../../compute/createSolveSession.svelte';
 	import { useFooterItem } from '../../composables/useFooterItem.svelte';
 	import { hexToOklch } from '../../utils/color';
 	import AppShell from '../layout/AppShell.svelte';
 	import AppLayout from './AppLayout.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
-	import { getExternalInputs, readExternalValue } from '../../external/storage';
 	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
 
 	import type { Snippet } from 'svelte';
@@ -47,24 +48,11 @@
 		footerItemPriority?: number;
 		onReady?: (api: { loadValues: (values: Record<string, unknown>) => void }) => void;
 		headerRight?: Snippet;
-		/**
-		 * Bring-your-own header. When provided, replaces the built-in header inside
-		 * the standard-height sticky bar (so the fixed layout is unaffected).
-		 * Takes precedence over `headerRight`.
-		 */
+		// Replaces the built-in header; takes precedence over `headerRight`.
 		header?: Snippet;
-		/**
-		 * Stable identifier used to scope sessionStorage entries for external-input
-		 * values. If absent, falls back to definitionKey, then to schema.id.
-		 */
+		// Scopes sessionStorage for external-input values; falls back to definitionKey then schema.id.
 		externalScopeKey?: string;
-		/**
-		 * Host-rendered element for client-sourced inputs whose schema sets
-		 * source.client.presentation === 'slot'. Selva reserves the input's cell and
-		 * invokes this snippet in its place, passing { inputId, displayName, slotLabel,
-		 * value }. Selva renders nothing itself and never interprets what the host puts
-		 * here (e.g. an "Edit JSON" button that navigates back to a producer page).
-		 */
+		// Renders client-sourced inputs with presentation === 'slot'; receives { inputId, displayName, slotLabel, value }.
 		clientSlot?: ClientSlot;
 	}
 
@@ -102,86 +90,26 @@
 
 	const resolvedScopeKey = $derived(externalScopeKey || definitionKey || schema?.id || '');
 
-	function createInitialValues(s: UISchema, scopeKey: string) {
-		const externalSet = new Set(getExternalInputs(s).map((e) => e.paramId));
-		const v: Record<string, unknown> = {};
-		for (const input of s.inputs) {
-			if (externalSet.has(input.id)) {
-				const stored = readExternalValue({ scopeKey, inputId: input.id });
-				if (stored !== undefined) v[input.id] = stored;
-				// else: leave undefined so the missing-inputs panel can detect it
-				continue;
-			}
-			v[input.id] = input.default ?? getDefaultValue(input.paramType);
-		}
-		for (const output of s.outputs) {
-			v[output.id] = null;
-		}
-		return v;
-	}
-
+	// Solve Session owns the value/lifecycle state machine; the request/response driver
+	// gives it its transport (Rhino.Compute over HTTP via onSolve, throttled). The driver
+	// reads the reporter lazily so it can capture the session it's wired into.
 	// svelte-ignore state_referenced_locally
-	let values = $state<Record<string, unknown>>(
-		createInitialValues(schema, externalScopeKey || definitionKey || schema?.id || '')
-	);
-	let error = $state('');
-	let computeErrors = $state<string[]>([]);
-	let computeWarnings = $state<string[]>([]);
-	let meshes = $state<any[]>([]);
-	let pendingValues = $state<Record<string, unknown>>({});
-	// svelte-ignore state_referenced_locally
-	let hasPendingChanges = $state(schema?.instanceSolve === false);
-	// svelte-ignore state_referenced_locally
-	let hasNeverSolved = $state(schema?.instanceSolve === false);
-	let isViewerFullscreen = $state(false);
-
-	async function performSolveInternal(solveValues: Record<string, unknown>, signal: AbortSignal) {
-		try {
-			error = '';
-			computeErrors = [];
-			computeWarnings = [];
-
-			const result = await onSolve(solveValues, signal);
-
-			if (signal.aborted) return;
-
-			computeErrors = result.errors ?? [];
-			computeWarnings = result.warnings ?? [];
-			meshes = result.meshes ?? [];
-
-			Object.assign(values, result.outputs);
-			pendingValues = {};
-			hasPendingChanges = false;
-			hasNeverSolved = false;
-		} catch (err) {
-			if (err instanceof Error && err.name === 'AbortError') return;
-			error = err instanceof Error ? err.message : String(err);
-		}
-	}
-
-	// svelte-ignore state_referenced_locally
-	const computeThrottle = createComputeThrottle<Record<string, unknown>>(performSolveInternal, {
+	const driver = createRequestResponseDriver(onSolve, () => session, {
 		timeout: solveTimeoutMs
 	});
+	// svelte-ignore state_referenced_locally
+	const session = createSolveSession({
+		schema,
+		scopeKey: externalScopeKey || definitionKey || schema?.id || '',
+		driver
+	});
 
-	let solving = $derived(computeThrottle.isComputing);
-	const solvingIndicator = createSolvingIndicator(() => solving);
+	let isViewerFullscreen = $state(false);
 
-	function performSolve() {
-		computeThrottle.trigger($state.snapshot(values));
-	}
-
-	function loadValues(incoming: Record<string, unknown>) {
-		Object.assign(values, incoming);
-		if (schema?.instanceSolve !== false) {
-			performSolve();
-		} else {
-			hasPendingChanges = true;
-		}
-	}
+	const solvingIndicator = createSolvingIndicator(() => session.isSolving);
 
 	$effect(() => {
-		onReady?.({ loadValues });
+		onReady?.({ loadValues: (incoming) => session.loadValues(incoming) });
 	});
 
 	let previousDefinitionKey = $state('');
@@ -195,50 +123,35 @@
 				isInitialLoad = false;
 				previousDefinitionKey = definitionKey;
 				if (schema?.instanceSolve !== false) {
-					performSolve();
+					session.solve();
 				}
 			} else if (previousDefinitionKey !== definitionKey) {
-				meshes = [];
-				values = createInitialValues(schema, resolvedScopeKey);
-				error = '';
-				computeErrors = [];
-				computeWarnings = [];
-				if (schema && Object.keys(values).length > 0) {
-					performSolve();
-				}
+				// Host owns the WHEN (definitionKey changed); session owns the WHAT.
+				session.rebuild(schema, resolvedScopeKey);
 				previousDefinitionKey = definitionKey;
 			}
 		});
 	});
 
-	async function handleValueChange(id: string, val: unknown) {
-		values[id] = val;
-
-		if (schema?.instanceSolve === false) {
-			pendingValues[id] = val;
-			hasPendingChanges = true;
-			return;
-		}
-
-		performSolve();
+	function handleValueChange(id: string, val: unknown) {
+		session.setValue(id, val);
 	}
 
 	function handleCalculate() {
-		performSolve();
+		session.solve();
 	}
 
-	// Use untrack to read these static props without creating reactive dependencies.
-	// footerComponentProps is intentionally NOT untracked — it's a getter called every render.
-	const _footerItemId = untrack(() => footerItemId);
-	const _footerComponent = untrack(() => footerComponent);
-	const _footerItemPriority = untrack(() => footerItemPriority);
-	useFooterItem(
-		_footerItemId,
-		_footerComponent,
-		() => (_footerComponent ? (footerComponentProps?.() ?? {}) : {}),
-		'left',
-		_footerItemPriority
-	);
+	// Read static props without creating reactive dependencies (registration is fixed at
+	// mount). footerComponentProps is intentionally read live — it's a getter the renderer
+	// calls every render to keep the footer in sync. The composable no-ops when component
+	// is absent, so the hook itself stays unconditional.
+	useFooterItem({
+		id: untrack(() => footerItemId),
+		component: untrack(() => footerComponent),
+		getProps: () => footerComponentProps?.() ?? {},
+		position: 'left',
+		priority: untrack(() => footerItemPriority)
+	});
 
 	let resolvedIsEmbedded = $derived(isEmbedded ?? page.url.searchParams.get('embed') === 'true');
 	let resolvedPrimaryColor = $derived(primaryColor ?? page.url.searchParams.get('primary'));
@@ -260,12 +173,12 @@
 		{footerText}
 		{header}
 		rightContent={headerRight}
-		errors={computeErrors}
-		warnings={computeWarnings}
+		errors={session.computeErrors}
+		warnings={session.computeWarnings}
 	>
-		{#if error}
+		{#if session.error}
 			<div class="min-h-100 p-8 flex items-center justify-center">
-				<StateDisplay type="error" size="medium" message={error} />
+				<StateDisplay type="error" size="medium" message={session.error} />
 			</div>
 		{:else if !schema}
 			<div class="min-h-100 flex items-center justify-center">
@@ -275,13 +188,13 @@
 			{#key definitionKey}
 				<AppLayout
 					{schema}
-					{meshes}
-					isSolving={solving}
+					meshes={session.meshes}
+					isSolving={session.isSolving}
 					showSolvingIndicator={schema.instanceSolve !== false && solvingIndicator.show}
-					{hasPendingChanges}
-					{hasNeverSolved}
+					hasPendingChanges={session.hasPendingChanges}
+					hasNeverSolved={session.hasNeverSolved}
 					bind:isViewerFullscreen
-					bind:values
+					values={session.values}
 					{panelActions}
 					{showSaveButton}
 					{showLoadButton}
@@ -290,13 +203,7 @@
 					{presetLabels}
 					onValueChange={handleValueChange}
 					oncalculate={handleCalculate}
-					onLoadValues={() => {
-						if (schema?.instanceSolve !== false) {
-							performSolve();
-						} else {
-							hasPendingChanges = true;
-						}
-					}}
+					onLoadValues={() => session.loadValues({})}
 				/>
 			{/key}
 		{/if}

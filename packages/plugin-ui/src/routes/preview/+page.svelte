@@ -67,13 +67,13 @@
 
 	const homeUrl = $derived(`/?${buildSessionParams()}`);
 
-	useFooterItem(
-		'ws-status',
-		WsStatusFooter,
-		() => ({ connected: preview.wsState.connected, sessionId }),
-		'left',
-		10
-	);
+	useFooterItem({
+		id: 'ws-status',
+		component: WsStatusFooter,
+		getProps: () => ({ connected: preview.wsState.connected, sessionId }),
+		position: 'left',
+		priority: 10
+	});
 </script>
 
 <AppShell {homeUrl} title={preview.state.schema?.name ?? null} mode="fixed" showFooter>
@@ -113,7 +113,7 @@
 						solvingIndicator.show}
 					hasPendingChanges={preview.state.hasPendingChanges}
 					bind:isViewerFullscreen
-					bind:values={preview.state.values}
+					values={preview.state.values}
 					onValueChange={preview.handleValueChange}
 					oncalculate={preview.handleCalculate}
 					onLoadValues={() => {

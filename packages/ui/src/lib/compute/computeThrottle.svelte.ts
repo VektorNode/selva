@@ -55,8 +55,11 @@ export function createComputeThrottle<T>(
 		try {
 			await computeFn(values, signal);
 		} catch (err) {
-			if (!(err instanceof Error && err.name === 'AbortError')) {
-				throw err;
+			// AbortError is expected (timeout or cancel). Non-abort errors must be
+			// handled inside computeFn — re-throwing here would produce an unhandled
+			// rejection because executeCompute is always called fire-and-forget.
+			if (!(err instanceof Error) || (err.name !== 'AbortError' && err.name !== 'TimeoutError')) {
+				console.error('[computeThrottle] unhandled error in computeFn:', err);
 			}
 		} finally {
 			clearTimeout(timeoutId);

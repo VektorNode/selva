@@ -3,7 +3,7 @@
 	import type { Snippet } from 'svelte';
 	import * as Card from '$lib/components/primitives/card';
 	import { ChevronDown } from '@lucide/svelte';
-	import { evaluateVisibility } from '$lib/schema/visibility-rules';
+	import { buildVisibilityMap, itemKey } from '$lib/schema/visibility-rules';
 
 	interface Props {
 		label: string;
@@ -44,6 +44,9 @@
 		}
 	}
 
+	// One visibility evaluation per item per render; columnStarts and gridItem both read it.
+	const visibilityMap = $derived(buildVisibilityMap(items, values));
+
 	/**
 	 * Compute the column position (0-indexed) where each item starts, accounting
 	 * for spans and linebreak resets. Items hidden by visibility don't consume
@@ -58,7 +61,7 @@
 				col = 0;
 				continue;
 			}
-			const visibility = evaluateVisibility(item, values);
+			const visibility = visibilityMap[itemKey(item)];
 			if (!visibility.visible) {
 				positions.push(0);
 				continue;
@@ -120,7 +123,7 @@
 	{#if layoutItem.type === 'linebreak'}
 		<div style="grid-column: 1 / -1" class="h-px bg-border" aria-hidden="true"></div>
 	{:else}
-		{@const visibility = evaluateVisibility(layoutItem, values)}
+		{@const visibility = visibilityMap[itemKey(layoutItem)]}
 		{@const span = Math.min(Math.max(1, layoutItem.span ?? 1), cols)}
 		{#if visibility.visible}
 			{#if layoutItem.type === 'input'}

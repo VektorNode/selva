@@ -1,11 +1,21 @@
-import { getContext, setContext } from 'svelte';
+import { getContext, setContext, type Component } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 
-export interface FooterItem {
+/**
+ * A footer item registered by a descendant of the root layout. `component` + `position`
+ * are fixed at registration; the renderer re-invokes `getProps` reactively, so return
+ * reactive state from it (e.g. `() => ({ status: myState.status })`) to keep the footer
+ * in sync.
+ *
+ * Generic over the component's props `P` so registration is type-checked at the call
+ * site. The store holds a heterogeneous mix of items, so its map widens `P` to
+ * `Record<string, unknown>` at the boundary.
+ */
+export interface FooterItem<P extends Record<string, unknown> = Record<string, unknown>> {
 	id: string;
-	component: any;
-	/** Called on every render — return reactive state to keep footer in sync */
-	getProps: () => Record<string, any>;
+	component: Component<P>;
+	/** Called on every render — return reactive state to keep footer in sync. */
+	getProps: () => P;
 	position: 'left' | 'right';
 	priority: number;
 	onClick?: () => void;
@@ -13,13 +23,10 @@ export interface FooterItem {
 
 export interface FooterStore {
 	items: SvelteMap<string, FooterItem>;
-	register(
-		id: string,
-		component: any,
-		getProps: () => Record<string, any>,
-		position?: 'left' | 'right',
-		priority?: number,
-		onClick?: () => void
+	/** Register (or replace) a footer item. `position`/`priority` default to 'left'/0. */
+	register<P extends Record<string, unknown>>(
+		item: Omit<FooterItem<P>, 'position' | 'priority'> &
+			Partial<Pick<FooterItem<P>, 'position' | 'priority'>>
 	): void;
 	unregister(id: string): void;
 }
@@ -31,8 +38,16 @@ export function initializeFooterContext(): FooterStore {
 
 	const store: FooterStore = {
 		items,
-		register(id, component, getProps, position = 'left', priority = 0, onClick) {
-			items.set(id, { id, component, getProps, position, priority, onClick });
+		register(item) {
+			const { id, component, getProps, position = 'left', priority = 0, onClick } = item;
+			items.set(id, {
+				id,
+				component: component as Component<Record<string, unknown>>,
+				getProps: getProps as () => Record<string, unknown>,
+				position,
+				priority,
+				onClick
+			});
 		},
 		unregister(id) {
 			items.delete(id);

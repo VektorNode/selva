@@ -41,7 +41,7 @@
 	let urlInput = $state('');
 	let isDragging = $state(false);
 	let isLoading = $state(false);
-	let urlError = $state<{ message: string; isCors: boolean } | null>(null);
+	let urlError = $state<{ message: string; isCors: boolean; hint?: string } | null>(null);
 	let urlSuccess = $state('');
 
 	// Parse existing value if it's JSON
@@ -88,26 +88,22 @@
 	async function handleUrlChange() {
 		if (!urlInput.trim()) return;
 
-		// Reset all state before starting a new fetch
 		isLoading = true;
 		urlError = null;
 		urlSuccess = '';
 		uploadedFileName = '';
 
 		try {
-			// Validate URL format first
 			let parsedUrl: URL;
 			try {
 				parsedUrl = new URL(urlInput);
 			} catch {
 				urlError = { message: 'Invalid URL — make sure it starts with https://', isCors: false };
-				isLoading = false;
 				return;
 			}
 
 			if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
 				urlError = { message: 'Only http:// and https:// URLs are supported.', isCors: false };
-				isLoading = false;
 				return;
 			}
 
@@ -117,7 +113,6 @@
 					message: `Server returned ${response.status} ${response.statusText}. Check the URL is correct and publicly accessible.`,
 					isCors: false
 				};
-				isLoading = false;
 				return;
 			}
 
@@ -129,7 +124,6 @@
 					message: `File format "${fileEnding}" is not accepted. Allowed: ${acceptedFormats.join(', ')}`,
 					isCors: false
 				};
-				isLoading = false;
 				return;
 			}
 
@@ -139,24 +133,22 @@
 					message: `File too large: ${(blob.size / 1024 / 1024).toFixed(2)}MB (max ${APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB}MB). Download it and use Upload instead.`,
 					isCors: false
 				};
-				isLoading = false;
 				return;
 			}
 
-			await new Promise<void>((resolve, reject) => {
+			const base64Data = await new Promise<string>((resolve, reject) => {
 				const reader = new FileReader();
 				reader.onload = (e) => {
-					const base64 = e.target?.result as string;
-					const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
-					const data = JSON.stringify({ file: base64Data, type: 'base64', fileEnding });
-					value = data;
-					urlSuccess = `Loaded ${fileEnding} (${(blob.size / 1024).toFixed(0)} KB)`;
-					onChange(data);
-					resolve();
+					const result = e.target?.result as string;
+					resolve(result.includes(',') ? result.split(',')[1] : result);
 				};
 				reader.onerror = () => reject(new Error('Failed to read the downloaded file.'));
 				reader.readAsDataURL(blob);
 			});
+			const data = JSON.stringify({ file: base64Data, type: 'base64', fileEnding });
+			value = data;
+			urlSuccess = `Loaded ${fileEnding} (${(blob.size / 1024).toFixed(0)} KB)`;
+			onChange(data);
 		} catch (error) {
 			if (isCorsError(error)) {
 				const host = (() => {
@@ -184,7 +176,6 @@
 				urlError = {
 					message: `Could not reach "${host}" — the file may not exist, or the server does not allow browser access.`,
 					isCors: true,
-					// @ts-expect-error hint is properly typed at runtime
 					hint
 				};
 			} else {
@@ -328,8 +319,8 @@
 						<CircleAlert size={13} class="mt-0.5 shrink-0 text-destructive" />
 						<p class="text-xs leading-snug text-destructive">{urlError.message}</p>
 					</div>
-					{#if urlError.isCors && (urlError as any).hint}
-						<p class="text-xs leading-snug pl-5 text-muted-foreground">{(urlError as any).hint}</p>
+					{#if urlError.isCors && urlError.hint}
+						<p class="text-xs leading-snug pl-5 text-muted-foreground">{urlError.hint}</p>
 					{/if}
 				</div>
 			{/if}

@@ -3,7 +3,12 @@
 	import type { FileData } from '@selvajs/compute';
 	import ChartOutput from './ChartOutput.svelte';
 	import ImageOutput from './ImageOutput.svelte';
-	import { downloadFiles, formatFileSize, getBase64FileSize } from '$lib/utils/file-download';
+	import {
+		downloadFiles,
+		formatFileSize,
+		getBase64FileSize,
+		isFileData
+	} from '$lib/utils/file-download';
 	import { Button } from '../primitives';
 	import * as Dialog from '$lib/components/primitives/dialog';
 	import { Info, Folder, FolderOpen, FileIcon, ChevronRight } from '@lucide/svelte';
@@ -45,10 +50,6 @@
 	// --- file state ---
 	let downloading = $state(false);
 	let downloadError = $state<string | null>(null);
-
-	function isFileData(data: any): data is FileData {
-		return data && typeof data === 'object' && 'fileName' in data && 'data' in data;
-	}
 
 	const filesArray = $derived(
 		!value ? [] : Array.isArray(value) ? value.filter(isFileData) : isFileData(value) ? [value] : []
@@ -114,7 +115,6 @@
 	});
 	const hasDuplicates = $derived(duplicatePaths.length > 0);
 
-	// All folders expanded by default
 	let expandedFolders = new SvelteSet<string>();
 
 	$effect(() => {

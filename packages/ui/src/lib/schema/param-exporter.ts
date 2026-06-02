@@ -1,4 +1,3 @@
-import { APP_DEFAULTS } from '../constants';
 import { randomId } from '../utils/randomId';
 import type {
 	UISchema,
@@ -136,20 +135,14 @@ export function extractLoadableValues(
 
 export function exportStateAsJson(savedState: ParameterPreset): void {
 	const blob = new Blob([JSON.stringify(savedState, null, 2)], { type: 'application/json' });
-	const url = URL.createObjectURL(blob);
-	const link = document.createElement('a');
-	link.href = url;
-	link.download = `${savedState.name.replace(/[^a-z0-9]/gi, '_')}_${savedState.timestamp.split('T')[0].replace(/-/g, '_')}.sps`;
-	link.style.display = 'none';
-	document.body.appendChild(link);
+	const safeName = savedState.name.replace(/[^a-z0-9]/gi, '_');
+	const date = savedState.timestamp.split('T')[0].replace(/-/g, '_');
 
-	setTimeout(() => {
-		link.click();
-		setTimeout(() => {
-			document.body.removeChild(link);
-			URL.revokeObjectURL(url);
-		}, APP_DEFAULTS.TIMEOUTS.PARAM_EXPORT_DELAY);
-	}, 0);
+	const link = document.createElement('a');
+	link.href = URL.createObjectURL(blob);
+	link.download = `${safeName}_${date}.sps`;
+	link.click();
+	URL.revokeObjectURL(link.href);
 }
 
 export async function importStateFromJson(file: File): Promise<ParameterPreset> {
