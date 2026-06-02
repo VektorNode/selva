@@ -16,3 +16,48 @@ body:
       placeholder: A clear and concise description of the feature
     validations:
       required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why is this needed?
+      description: What problem does this solve, or what does it make possible?
+      placeholder: The use case or pain point behind the request
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: affected-areas
+    attributes:
+      label: Affected Components
+      options:
+        - label: Plugin UI (@selvajs/plugin-ui)
+        - label: Cloud App (@selvajs/selva)
+        - label: Shared UI (@selvajs/ui)
+        - label: Grasshopper Plugin (C#)
+        - label: Schema (@selvajs/schemas)
+        - label: Core / Compute
+        - label: Communication (WebSocket/HTTP)
+        - label: Other
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this to you?
+      options:
+        - Nice to have
+        - Normal
+        - High
+        - Critical / blocking
+    validations:
+      required: true
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Would you be willing to contribute this feature?
+      options:
+        - 'No'
+        - 'No, but I can test it'
+        - 'Yes, I can help implement it'
