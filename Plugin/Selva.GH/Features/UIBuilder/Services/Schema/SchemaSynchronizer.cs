@@ -588,6 +588,10 @@ public class SchemaSynchronizer
                             output.TargetInputId != dvl.Config.TargetInputId)
                         {
                             output.TargetInputId = dvl.Config.TargetInputId;
+                            // The output is not downstream of the UIBuilder, so the post-save expire
+                            // won't re-solve it; expire it directly so its stale "no target" remark
+                            // clears now that the target is set.
+                            output.ExpireSolution(false);
                         }
 
                         break;
