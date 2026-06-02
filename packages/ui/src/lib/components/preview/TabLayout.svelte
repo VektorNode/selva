@@ -16,13 +16,7 @@
 		requestedTabId?: string | null;
 	}
 
-	let {
-		schema,
-		values = $bindable(),
-		onValueChange,
-		panelFilter,
-		requestedTabId = null
-	}: Props = $props();
+	let { schema, values, onValueChange, panelFilter, requestedTabId = null }: Props = $props();
 
 	let activeTabId = $state('');
 	let collapsedGroups = $state<Record<string, boolean>>({});
