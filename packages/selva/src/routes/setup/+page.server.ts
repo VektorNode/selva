@@ -14,7 +14,7 @@ import {
 	getPermissionStore,
 	getProjectProvider,
 	getUserProfileStore,
-	tenancy
+	getTenancy
 } from '$lib/server/providers.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
@@ -42,6 +42,7 @@ export const load: PageServerLoad = async () => {
 
 export const actions = {
 	default: async ({ request, cookies }) => {
+		const tenancy = getTenancy();
 		const data = await request.formData();
 		const companyName = (data.get('companyName') as string | null)?.trim() ?? '';
 		const displayName = (data.get('displayName') as string | null)?.trim() || undefined;

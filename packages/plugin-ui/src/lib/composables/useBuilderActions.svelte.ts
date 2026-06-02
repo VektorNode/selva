@@ -3,6 +3,7 @@ import type { DiscoveredInput, DiscoveredOutput, GroupConfig, LayoutItem } from 
 import {
 	handleItemDrop,
 	type ItemDropOptions,
+	type ItemDropResult,
 	addTab,
 	removeTab,
 	addGroup,
@@ -31,6 +32,17 @@ export function useBuilderActions(
 		// Every mutation flips isDirty — needed for the save-conflict and nav-prompt flows.
 		builderState.markDirty();
 		return { builderState, schema: builderState.state.draft };
+	}
+
+	// Drops an item and surfaces the duplicate warning. operations.handleItemDrop is
+	// UI-free and reports the outcome; the toast (a UI concern) lives here in the
+	// composable. Returns the result so callers can gate their own success messages.
+	function dropItem(options: ItemDropOptions): ItemDropResult {
+		const result = handleItemDrop(options);
+		if (!result.added) {
+			toast.warning(`This ${result.itemLabel} is already in this group`);
+		}
+		return result;
 	}
 
 	function onParameterDrop(tabId: string, groupId: string, event: CustomEvent) {
@@ -69,7 +81,7 @@ export function useBuilderActions(
 
 		if (dropType === 'input') {
 			const param = data as DiscoveredInput;
-			handleItemDrop({
+			dropItem({
 				...base,
 				paramId: param.id,
 				displayName: param.nickname || 'unnamed',
@@ -78,7 +90,7 @@ export function useBuilderActions(
 			});
 		} else if (dropType === 'output') {
 			const output = data as DiscoveredOutput;
-			handleItemDrop({
+			dropItem({
 				...base,
 				paramId: output.id,
 				displayName: output.nickname,
@@ -130,7 +142,7 @@ export function useBuilderActions(
 		if (!group) return;
 
 		const asInput = isInputItem(item);
-		handleItemDrop({
+		const result = dropItem({
 			schema,
 			group,
 			paramId: item.id,
@@ -143,7 +155,7 @@ export function useBuilderActions(
 			outputType: asInput ? undefined : item.type
 		});
 
-		toast.success(`Added to ${tabLabel} / ${group.label}`);
+		if (result.added) toast.success(`Added to ${tabLabel} / ${group.label}`);
 	}
 
 	function onAddToNewGroup(path: string, item: DiscoveredInput | DiscoveredOutput) {
@@ -204,7 +216,7 @@ export function useBuilderActions(
 			}
 
 			const asInput = isInputItem(item);
-			handleItemDrop({
+			const result = dropItem({
 				schema,
 				group,
 				paramId: item.id,
@@ -217,7 +229,8 @@ export function useBuilderActions(
 				outputType: asInput ? undefined : item.type
 			});
 
-			toast.success(`Added ${item.nickname || 'item'} to ${tab.label} / ${group.label}`);
+			if (result.added)
+				toast.success(`Added ${item.nickname || 'item'} to ${tab.label} / ${group.label}`);
 		} else if (schema.layout.type === 'flat') {
 			groupLabel = parts[parts.length - 1];
 
@@ -232,7 +245,7 @@ export function useBuilderActions(
 			}
 
 			const asInput = isInputItem(item);
-			handleItemDrop({
+			const result = dropItem({
 				schema,
 				group,
 				paramId: item.id,
@@ -245,7 +258,7 @@ export function useBuilderActions(
 				outputType: asInput ? undefined : item.type
 			});
 
-			toast.success(`Added ${item.nickname || 'item'} to ${group.label}`);
+			if (result.added) toast.success(`Added ${item.nickname || 'item'} to ${group.label}`);
 		}
 	}
 
@@ -437,7 +450,7 @@ export function useBuilderActions(
 			);
 
 			for (const param of inputsForGroup) {
-				handleItemDrop({
+				const result = handleItemDrop({
 					schema,
 					group,
 					paramId: param.id,
@@ -447,11 +460,11 @@ export function useBuilderActions(
 					availableOutputs,
 					paramType: param.type
 				});
-				totalAdded++;
+				if (result.added) totalAdded++;
 			}
 
 			for (const output of outputsForGroup) {
-				handleItemDrop({
+				const result = handleItemDrop({
 					schema,
 					group,
 					paramId: output.id,
@@ -462,7 +475,7 @@ export function useBuilderActions(
 					widgetType: outputWidgetType(output.type),
 					outputType: output.type
 				});
-				totalAdded++;
+				if (result.added) totalAdded++;
 			}
 		}
 

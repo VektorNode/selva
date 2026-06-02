@@ -13,15 +13,19 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"type-check": "tsc --noEmit",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"test:e2e": "playwright test"
 	},
 	"devDependencies": {
 		"@lucide/svelte": "catalog:",
+		"@playwright/test": "catalog:",
 		"@selvajs/config": "workspace:*",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@types/three": "catalog:",
+		"@types/ws": "catalog:",
 		"tw-animate-css": "catalog:",
-		"vitest": "catalog:"
+		"vitest": "catalog:",
+		"ws": "catalog:"
 	},
 	"dependencies": {
 		"@iconify/svelte": "catalog:",

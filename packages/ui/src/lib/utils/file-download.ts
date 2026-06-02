@@ -1,12 +1,8 @@
-/**
- * Wrapper utilities for file downloads from Grasshopper outputs
- * Uses the core package implementation for file handling
- */
-
 import { downloadFileData, type FileData } from '@selvajs/compute';
+import { SvelteMap } from 'svelte/reactivity';
 import { APP_DEFAULTS } from '../constants';
 
-const MIME_BY_EXT: Record<string, string> = {
+export const MIME_BY_EXT: Record<string, string> = {
 	'.png': 'image/png',
 	'.jpg': 'image/jpeg',
 	'.jpeg': 'image/jpeg',
@@ -45,10 +41,6 @@ function saveSingleFile(file: FileData): void {
 	URL.revokeObjectURL(a.href);
 }
 
-/**
- * Download file(s) from Grasshopper outputs
- * Single files are downloaded directly, multiple files are packaged as ZIP
- */
 export async function downloadFiles(
 	fileData: FileData | FileData[],
 	fileName: string = 'grasshopper-output'
@@ -73,9 +65,6 @@ export async function downloadFiles(
 	}
 }
 
-/**
- * Check if data is FileData
- */
 export function isFileData(data: unknown): data is FileData {
 	return (
 		typeof data === 'object' &&
@@ -86,9 +75,17 @@ export function isFileData(data: unknown): data is FileData {
 	);
 }
 
-/**
- * Format file size for display
- */
+export function groupMessages(messages: string[]): Array<{ message: string; count: number }> {
+	const grouped = new SvelteMap<string, number>();
+	for (const msg of messages) {
+		const baseMsg = msg.replace(/\([a-f0-9-]{36}\)$/i, '(...)').trim();
+		grouped.set(baseMsg, (grouped.get(baseMsg) ?? 0) + 1);
+	}
+	return Array.from(grouped.entries())
+		.map(([message, count]) => ({ message, count }))
+		.sort((a, b) => b.count - a.count);
+}
+
 export function formatFileSize(bytes: number): string {
 	if (bytes === 0) return '0 Bytes';
 
@@ -99,10 +96,6 @@ export function formatFileSize(bytes: number): string {
 	return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }
 
-/**
- * Get approximate file size from base64 string
- */
 export function getBase64FileSize(base64: string): number {
-	// Base64 encoded string is approximately 33% larger than original
 	return Math.ceil((base64.length * 3) / 4);
 }

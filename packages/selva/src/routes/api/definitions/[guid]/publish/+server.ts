@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { definitionService } from '$lib/server/providers.server';
+import { getDefinitionService } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { GuidSchema, PublishVersionInputSchema } from '@selvajs/platform/definitions';
@@ -21,7 +21,11 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const { ctx } = await requireEditableDefinition(locals, guidParsed.data);
 
 	try {
-		const version = await definitionService.publish(ctx, guidParsed.data, parsed.data.versionId);
+		const version = await getDefinitionService().publish(
+			ctx,
+			guidParsed.data,
+			parsed.data.versionId
+		);
 		return json({ success: true, version });
 	} catch (err) {
 		handleApiError(err, 'Failed to publish version');

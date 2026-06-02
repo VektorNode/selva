@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { definitionService } from '$lib/server/providers.server';
+import { getDefinitionService } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError } from '$lib/server/api-errors';
 import { GuidSchema } from '@selvajs/platform/definitions';
@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 	try {
 		const imageData = new Uint8Array(await file.arrayBuffer());
-		const coverImage = await definitionService.saveCoverImage(ctx, guid, imageData);
+		const coverImage = await getDefinitionService().saveCoverImage(ctx, guid, imageData);
 		return json({ success: true, coverImage });
 	} catch (err) {
 		handleApiError(err, 'Failed to upload image');

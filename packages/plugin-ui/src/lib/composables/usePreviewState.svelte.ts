@@ -1,353 +1,121 @@
-import type { UISchema, SupportedTypes } from '@selvajs/schemas';
+// Reactive shell over preview-state-core.ts + a Solve Session (see @selvajs/ui CONTEXT.md).
+// It owns the $state for schema/loading/error/sync, constructs a SchemaSource and — once the
+// first schema arrives — a SolveSession driven by that source's WebSocket SolveDriver. The
+// session owns values/meshes/solve-gating; this shell owns schema/notifications and routes
+// push events to the pure core. All transport quirks live in the GrasshopperSource adapter.
+
+import type { SupportedTypes } from '@selvajs/schemas';
+import type { WsOutputsMessage } from '$lib/websocket/websocket.svelte';
+import { createSolveSession, type SolveSession, type SolveReporter } from '@selvajs/ui';
+import { getWebSocketPortFromUrl } from '$lib/utils/session';
+import { getGrasshopperSource } from '$lib/schema-source/grasshopper-source';
+import type { SchemaSource, PreviewSolveDriver } from '$lib/schema-source/schema-source';
+import { createNotificationManager } from '$lib/features/preview/notifications.svelte';
 import {
-	getWebSocketPortFromUrl,
-	initializeWebSocketSession,
-	ensureSchemaLayoutDefaults
-} from '$lib/utils/session';
-import { getWebSocketState } from '$lib/websocket/websocket.svelte';
-import type {
-	WsInitialDataMessage,
-	WsOutputsMessage,
-	WsSchemaUpdatedMessage,
-	WsMetadataUpdatedMessage,
-	WsSessionMessage,
-	WsCurrentValuesMessage
-} from '$lib/websocket/websocket.svelte';
-import {
-	initializeValues,
-	processOutputUpdate,
-	updateParameterMetadata,
-	removeParametersFromValues
-} from '$lib/features/preview/handlers';
-import {
-	createNotificationManager,
-	formatParameterUpdateMessage,
-	formatMetadataUpdateMessage
-} from '$lib/features/preview/notifications.svelte';
-import { parseMeshBatchBlob, SCALE_FACTORS } from '@selvajs/compute/visualization';
-import type * as THREE from 'three';
+	createInitialPreviewState,
+	handleInitialData as coreHandleInitialData,
+	handleCurrentValues as coreHandleCurrentValues,
+	handleOutputUpdate as coreHandleOutputUpdate,
+	handleSchemaUpdated as coreHandleSchemaUpdated,
+	handleMetadataUpdated as coreHandleMetadataUpdated,
+	handleParametersAdded as coreHandleParametersAdded,
+	clearSyncNeeded,
+	type PreviewState,
+	type PreviewDeps
+} from './preview-state-core';
 
-interface PreviewState {
-	schema: UISchema | null;
-	values: Record<string, unknown>;
-	loading: boolean;
-	error: string;
-	syncNeeded: boolean;
-	displayMeshes: THREE.Mesh[];
-	modelUnits: string;
-	hasPendingChanges: boolean;
-}
+const EMPTY_VALUES: Record<string, unknown> = {};
+const EMPTY_MESHES: unknown[] = [];
 
-export function usePreviewState(getSessionId: () => string) {
-	const wsPort = getWebSocketPortFromUrl();
-	const wsState = getWebSocketState(wsPort);
-
-	const state = $state<PreviewState>({
-		schema: null,
-		values: {},
-		loading: true,
-		error: '',
-		syncNeeded: false,
-		displayMeshes: [],
-		modelUnits: 'Meters',
-		hasPendingChanges: false
-	});
-
+/**
+ * @param source Defaults to the Grasshopper WebSocket source bound to the URL's wsPort.
+ *   Tests inject a FakeSource to exercise the state machine without a live socket.
+ */
+export function usePreviewState(getSessionId: () => string, source?: SchemaSource) {
+	const schemaSource = source ?? getGrasshopperSource(getWebSocketPortFromUrl());
+	const state = $state<PreviewState>(createInitialPreviewState());
 	const { manager: notification, getMessage: getNotification } = createNotificationManager();
 
-	let isRemoteUpdate = false;
-	let initialSolveTriggered = false;
-	let solveTimeout: ReturnType<typeof setTimeout> | null = null;
+	// The Solve Session and its driver are built on the first initialData (once a schema and
+	// scope key exist). Until then the route is in `loading` and never reads values/meshes.
+	let session: SolveSession | null = null;
+	let driver: PreviewSolveDriver | null = null;
 	let initialized = false;
-	// Monotonic token: each handleOutputs call grabs a fresh value, and only
-	// commits its parsed meshes if no newer call has started in the meantime.
-	// Prevents stale initialData mesh parsing from clobbering live outputs.
-	let outputsToken = 0;
 
-	// Binary mesh frames arrive on a separate WebSocket message stream after the JSON `outputs`
-	// envelope (see WebSocketTransport.BroadcastOutputsWithFilesAndDisplay). The envelope tells us
-	// how many blobs to expect via `binaryBatchCount`; we collect that many `ArrayBuffer`s, then
-	// parse them all together. A small ring-buffered queue handles the (rare) case where blobs
-	// arrive before the corresponding outputs message has been dispatched on the bus.
-	const pendingBlobs: ArrayBuffer[] = [];
-	let pendingExpectation: {
-		token: number;
-		expected: number;
-		scaleFactor: number;
-		resolve: (blobs: ArrayBuffer[]) => void;
-	} | null = null;
-
-	// Strip file metadata objects — Grasshopper already has the file
-	function prepareValuesForSend(values: Record<string, unknown>): Record<string, unknown> {
-		const prepared: Record<string, unknown> = {};
-		for (const [key, value] of Object.entries(values)) {
-			let parsed = value;
-			if (typeof value === 'string' && value.trim().startsWith('{')) {
-				try {
-					parsed = JSON.parse(value);
-				} catch {
-					/* keep as string */
-				}
-			}
-			if (
-				parsed &&
-				typeof parsed === 'object' &&
-				'_isMetadata' in parsed &&
-				(parsed as Record<string, unknown>)._isMetadata === true
-			)
-				continue;
-			prepared[key] = value;
+	const reporter: SolveReporter = {
+		report: (result) => session?.report(result),
+		reportError: (message) => {
+			if (session) session.reportError(message);
+			else state.error = message;
 		}
-		return prepared;
+	};
+
+	// Lazily builds the Solve Session + driver the first time the core reaches for it (which is
+	// from inside handleInitialData's loadValues, once state.schema is set). Before that the
+	// route is in `loading` and never reads values/meshes, so a build-on-demand getter keeps
+	// the pure handlers total without a no-op stand-in.
+	function getOrBuildSession(): SolveSession {
+		if (!session) {
+			const schema = state.schema!; // set by the core before it touches the session
+			driver = schemaSource.makeSolveDriver(getSessionId(), () => reporter);
+			session = createSolveSession({ schema, scopeKey: getSessionId(), driver });
+		}
+		return session;
 	}
 
+	/** Build deps with the live sessionId for a handler invocation. */
+	function depsFor(): PreviewDeps {
+		return {
+			sessionId: getSessionId(),
+			get session() {
+				return getOrBuildSession();
+			},
+			notify: notification
+		};
+	}
+
+	// Bound push-event handlers (stable refs for on/off).
+	const onInitialData = (m: Parameters<typeof coreHandleInitialData>[2]) => {
+		coreHandleInitialData(state, depsFor(), m);
+		// initialData carries the last solve's outputs/meshes so the preview paints immediately.
+		// The core seeded values + built the session via loadValues; now feed those outputs
+		// through the driver's parse+report path (it owns mesh-frame collection).
+		if (state.schema && m.outputs && Object.keys(m.outputs).length > 0) {
+			driver?.primeFromInitialData(m as WsOutputsMessage);
+		}
+	};
+	const onCurrentValues = (m: Parameters<typeof coreHandleCurrentValues>[2]) =>
+		coreHandleCurrentValues(state, depsFor(), m);
+	const onOutputUpdate = (m: Parameters<typeof coreHandleOutputUpdate>[2]) =>
+		coreHandleOutputUpdate(state, depsFor(), m);
+	const onSchemaUpdated = (m: Parameters<typeof coreHandleSchemaUpdated>[2]) =>
+		coreHandleSchemaUpdated(state, depsFor(), m);
+	const onMetadataUpdated = (m: Parameters<typeof coreHandleMetadataUpdated>[2]) =>
+		coreHandleMetadataUpdated(state, depsFor(), m);
+	const onParametersAdded = (m: Parameters<typeof coreHandleParametersAdded>[2]) =>
+		coreHandleParametersAdded(state, depsFor(), m);
+
 	function handleValueChange(paramId: string, value: SupportedTypes) {
-		if (isRemoteUpdate) return;
-		state.values[paramId] = value;
-
-		if (state.schema?.instanceSolve === false) {
-			state.hasPendingChanges = true;
-			return;
-		}
-
-		if (wsState.connected) {
-			wsState.sendValueUpdate(getSessionId(), prepareValuesForSend($state.snapshot(state.values)));
-		} else {
-			console.warn('[Preview] Cannot send values - WebSocket not connected');
-		}
+		session?.setValue(paramId, value);
 	}
 
 	function handleCalculate() {
-		if (!state.hasPendingChanges) return;
-		if (wsState.connected) {
-			wsState.sendValueUpdate(getSessionId(), prepareValuesForSend($state.snapshot(state.values)));
-			state.hasPendingChanges = false;
-		} else {
-			console.warn('[Preview] Cannot calculate - WebSocket not connected');
-		}
+		session?.solve();
+	}
+
+	/**
+	 * Preset/external values were applied to the live values map by the host; re-run the solve
+	 * (auto mode) or mark pending (manual). loadValues({}) merges nothing new but applies the
+	 * instanceSolve gating — same outcome as the old "send current values or set pending".
+	 */
+	function handleLoadValues() {
+		session?.loadValues({});
 	}
 
 	function syncParameters() {
-		state.syncNeeded = false;
-		initialSolveTriggered = false;
-		wsState.requestInitialData(getSessionId());
+		clearSyncNeeded(state);
+		schemaSource.requestInitialData(getSessionId());
 		notification.show('Syncing parameters...');
-	}
-
-	async function handleOutputs(message: WsOutputsMessage) {
-		const sessionId = getSessionId();
-		if (message.sessionId !== sessionId) return;
-
-		const myToken = ++outputsToken;
-
-		if (message.modelUnits) state.modelUnits = message.modelUnits;
-
-		// `binaryBatchCount` describes the binary mesh transport: mesh blobs arrive as separate
-		// binary WebSocket frames, not inside this JSON envelope. `0` is meaningful — it means
-		// "no display output this solve, clear the meshes." `undefined` means the server didn't
-		// send a display payload at all; leave existing meshes alone.
-		if (typeof message.binaryBatchCount === 'number') {
-			const expected = message.binaryBatchCount;
-			const scaleFactor = SCALE_FACTORS[state.modelUnits as keyof typeof SCALE_FACTORS] ?? 1;
-
-			if (expected === 0) {
-				if (myToken === outputsToken) state.displayMeshes = [];
-			} else {
-				try {
-					const blobs = await collectPendingBlobs(myToken, expected, scaleFactor);
-					if (myToken !== outputsToken) {
-						// Newer outputs already started; discard our stale parse.
-					} else {
-						const allMeshes: THREE.Mesh[] = [];
-						for (const blob of blobs) {
-							const meshes = await parseMeshBatchBlob(blob, {
-								mergeByMaterial: false,
-								applyTransforms: true,
-								scaleFactor,
-								debug: false
-							});
-							allMeshes.push(...meshes);
-						}
-						if (myToken === outputsToken) state.displayMeshes = allMeshes;
-					}
-				} catch (err) {
-					console.error('[Preview] Error parsing display data:', err);
-				}
-			}
-		}
-
-		const allUpdates = processOutputUpdate({
-			outputs: message.outputs,
-			fileOutputs: message.fileOutputs,
-			schema: state.schema
-		});
-		if (Object.keys(allUpdates).length > 0) {
-			try {
-				isRemoteUpdate = true;
-				Object.assign(state.values, allUpdates);
-			} finally {
-				isRemoteUpdate = false;
-			}
-		}
-	}
-
-	// Resolves once `expected` binary frames have been collected for this `token`. Frames that
-	// arrived early (before the matching JSON envelope reached this handler) are drained from
-	// `pendingBlobs` first.
-	function collectPendingBlobs(
-		token: number,
-		expected: number,
-		scaleFactor: number
-	): Promise<ArrayBuffer[]> {
-		// If a previous expectation was abandoned (e.g. token was superseded), discard its leftovers
-		// before installing this one. Anything in pendingBlobs is from the most recent stream.
-		const drained = pendingBlobs.splice(0, pendingBlobs.length);
-
-		if (drained.length >= expected) {
-			// Already buffered enough frames; the rest (if any) are stragglers from a previous
-			// envelope and should be dropped.
-			return Promise.resolve(drained.slice(0, expected));
-		}
-
-		return new Promise((resolve) => {
-			pendingExpectation = {
-				token,
-				expected,
-				scaleFactor,
-				resolve: (blobs) => resolve(blobs)
-			};
-			// Re-queue the partial set so handleBinaryFrame can complete the batch.
-			pendingBlobs.push(...drained);
-		});
-	}
-
-	function handleBinaryFrame(buffer: ArrayBuffer) {
-		// No active expectation: a frame arrived ahead of (or after) its envelope. Buffer it; the
-		// next `handleOutputs` will drain on entry. Cap the buffer to avoid unbounded growth if
-		// envelopes are dropped for some reason.
-		if (!pendingExpectation) {
-			if (pendingBlobs.length < 64) pendingBlobs.push(buffer);
-			return;
-		}
-
-		// Stale frame (its expectation was already superseded by a newer outputs message). Drop.
-		if (pendingExpectation.token !== outputsToken) {
-			pendingExpectation = null;
-			pendingBlobs.length = 0;
-			return;
-		}
-
-		pendingBlobs.push(buffer);
-		if (pendingBlobs.length >= pendingExpectation.expected) {
-			const expectation = pendingExpectation;
-			const blobs = pendingBlobs.splice(0, expectation.expected);
-			pendingExpectation = null;
-			expectation.resolve(blobs);
-		}
-	}
-
-	async function handleInitialData(message: WsInitialDataMessage) {
-		const sessionId = getSessionId();
-		if (message.sessionId !== sessionId) return;
-
-		if (!message.schema) {
-			state.error = 'No schema configured. Please use the Schema Builder to create a UI.';
-			state.loading = false;
-			return;
-		}
-
-		const processedSchema = ensureSchemaLayoutDefaults(message.schema);
-		if (!processedSchema) {
-			state.error = 'Failed to process schema.';
-			state.loading = false;
-			return;
-		}
-
-		const newValues = initializeValues({
-			schema: processedSchema,
-			availableParams: message.availableParams,
-			currentValues: message.currentValues
-		});
-
-		try {
-			isRemoteUpdate = true;
-			state.values = newValues;
-		} finally {
-			isRemoteUpdate = false;
-		}
-
-		state.schema = processedSchema;
-
-		const hasOutputs = message.outputs && Object.keys(message.outputs).length > 0;
-
-		if (hasOutputs) {
-			// Await so loading flips off only after meshes/outputs are populated
-			await handleOutputs(message as WsOutputsMessage);
-			state.loading = false;
-		} else if (!message.isSolving) {
-			state.loading = false;
-			solveTimeout = setTimeout(() => {
-				if (wsState.connected && !initialSolveTriggered) {
-					initialSolveTriggered = true;
-					// Snapshot live state.values (not the stale newValues from above) so that
-					// any post-init mutations — e.g. external inputs seeded from sessionStorage
-					// by the route — are included in the initial solve.
-					wsState.send('valueUpdate', {
-						sessionId,
-						values: prepareValuesForSend($state.snapshot(state.values))
-					});
-				}
-			}, 500);
-		} else {
-			state.loading = false;
-			initialSolveTriggered = true;
-		}
-	}
-
-	function handleCurrentValues(message: WsCurrentValuesMessage) {
-		if (message.sessionId !== getSessionId()) return;
-		try {
-			isRemoteUpdate = true;
-			Object.assign(state.values, message.values);
-		} finally {
-			isRemoteUpdate = false;
-		}
-	}
-
-	function handleOutputUpdate(message: WsOutputsMessage) {
-		if (message.sessionId !== getSessionId()) return;
-		const allUpdates = processOutputUpdate({ outputs: message.outputs, schema: state.schema });
-		if (Object.keys(allUpdates).length > 0) {
-			try {
-				isRemoteUpdate = true;
-				Object.assign(state.values, allUpdates);
-			} finally {
-				isRemoteUpdate = false;
-			}
-		}
-	}
-
-	function handleSchemaUpdated(message: WsSchemaUpdatedMessage) {
-		if (message.sessionId !== getSessionId()) return;
-		const removedCount = message.removedIds?.length || 0;
-		if (removedCount > 0)
-			state.values = removeParametersFromValues(state.values, message.removedIds!);
-		state.schema = ensureSchemaLayoutDefaults(message.schema);
-		if (removedCount > 0) notification.show(formatParameterUpdateMessage(removedCount));
-	}
-
-	function handleMetadataUpdated(message: WsMetadataUpdatedMessage) {
-		if (message.sessionId !== getSessionId() || !state.schema) return;
-		const changedParams = message.changedParams ?? [];
-		if (changedParams.length === 0) return;
-		const result = updateParameterMetadata(state.schema, changedParams);
-		if (result.updated > 0) notification.show(formatMetadataUpdateMessage(result.names));
-	}
-
-	function handleParametersAdded(message: WsSessionMessage) {
-		if (message.sessionId !== getSessionId()) return;
-		state.syncNeeded = true;
-		notification.show('New parameters detected - click Sync to add them to your UI');
 	}
 
 	async function initialize() {
@@ -356,57 +124,66 @@ export function usePreviewState(getSessionId: () => string) {
 		if (initialized) return;
 		initialized = true;
 
-		initialSolveTriggered = false;
-		wsState.on('initialData', handleInitialData);
-		wsState.on('currentValues', handleCurrentValues);
-		wsState.on('outputs', handleOutputs);
-		wsState.on('outputUpdate', handleOutputUpdate);
-		wsState.on('schemaUpdated', handleSchemaUpdated);
-		wsState.on('metadataUpdated', handleMetadataUpdated);
-		wsState.on('parametersAdded', handleParametersAdded);
-		wsState.on('binaryFrame', handleBinaryFrame);
+		schemaSource.on('initialData', onInitialData);
+		schemaSource.on('currentValues', onCurrentValues);
+		schemaSource.on('outputUpdate', onOutputUpdate);
+		schemaSource.on('schemaUpdated', onSchemaUpdated);
+		schemaSource.on('metadataUpdated', onMetadataUpdated);
+		schemaSource.on('parametersAdded', onParametersAdded);
 
-		const result = await initializeWebSocketSession(sessionId);
-		if (result.error) {
+		const result = await schemaSource.connect(sessionId);
+		if (!result.ok) {
 			state.error = result.error;
 			state.loading = false;
 			return;
 		}
 
-		wsState.requestInitialData(sessionId);
+		schemaSource.requestInitialData(sessionId);
 	}
 
 	function cleanup() {
 		if (!initialized) return;
 		initialized = false;
 
-		if (solveTimeout) {
-			clearTimeout(solveTimeout);
-			solveTimeout = null;
-		}
 		notification.clear();
-		wsState.off('initialData', handleInitialData);
-		wsState.off('currentValues', handleCurrentValues);
-		wsState.off('outputs', handleOutputs);
-		wsState.off('outputUpdate', handleOutputUpdate);
-		wsState.off('schemaUpdated', handleSchemaUpdated);
-		wsState.off('metadataUpdated', handleMetadataUpdated);
-		wsState.off('parametersAdded', handleParametersAdded);
-		wsState.off('binaryFrame', handleBinaryFrame);
-		pendingExpectation = null;
-		pendingBlobs.length = 0;
+		schemaSource.off('initialData', onInitialData);
+		schemaSource.off('currentValues', onCurrentValues);
+		schemaSource.off('outputUpdate', onOutputUpdate);
+		schemaSource.off('schemaUpdated', onSchemaUpdated);
+		schemaSource.off('metadataUpdated', onMetadataUpdated);
+		schemaSource.off('parametersAdded', onParametersAdded);
+		driver?.dispose();
+		driver = null;
+		session = null;
 	}
 
 	return {
 		get state() {
 			return state;
 		},
+		/** Values map (inputs + reported outputs). Empty until the session is built. */
+		get values() {
+			return session?.values ?? EMPTY_VALUES;
+		},
+		/** Display meshes from the latest solve. Empty until the session is built. */
+		get displayMeshes() {
+			return session?.meshes ?? EMPTY_MESHES;
+		},
+		get isSolving() {
+			return driver?.isSolving ?? false;
+		},
+		get hasPendingChanges() {
+			return session?.hasPendingChanges ?? false;
+		},
+		get connected() {
+			return schemaSource.connected;
+		},
 		get notification() {
 			return getNotification();
 		},
-		wsState,
 		handleValueChange,
 		handleCalculate,
+		handleLoadValues,
 		syncParameters,
 		initialize,
 		cleanup

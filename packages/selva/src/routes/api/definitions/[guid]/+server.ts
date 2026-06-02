@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { definitionService, getProjectProvider } from '$lib/server/providers.server';
+import { getDefinitionService, getProjectProvider } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError } from '$lib/server/api-errors';
 import { GuidSchema, UpdateMetadataInputSchema } from '@selvajs/platform/definitions';
@@ -44,7 +44,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		});
 		const schema = await fetchSchemaFromCompute(data, server);
 
-		const version = await definitionService.uploadVersion(
+		const version = await getDefinitionService().uploadVersion(
 			ctx,
 			guidParsed.data,
 			data,
@@ -67,7 +67,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const { ctx } = await requireEditableDefinition(locals, guidParsed.data);
 
 	try {
-		await definitionService.delete(ctx, guidParsed.data);
+		await getDefinitionService().delete(ctx, guidParsed.data);
 		return json({ success: true });
 	} catch (err) {
 		handleApiError(err, 'Failed to delete definition');
@@ -86,7 +86,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	if (!parsed.success) throwZodError(parsed.error);
 
 	try {
-		await definitionService.updateMeta(ctx, guidParsed.data, parsed.data);
+		await getDefinitionService().updateMeta(ctx, guidParsed.data, parsed.data);
 		return json({ success: true });
 	} catch (err) {
 		handleApiError(err, 'Failed to update definition');

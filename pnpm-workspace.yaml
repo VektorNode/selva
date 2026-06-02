@@ -32,6 +32,8 @@ catalogs:
     typescript: ^5.9.3
     vite: ^7.3.2
     vitest: ^3.2.4
+    ws: ^8.18.0
+    '@types/ws': ^8.5.13
 
 onlyBuiltDependencies:
   - esbuild

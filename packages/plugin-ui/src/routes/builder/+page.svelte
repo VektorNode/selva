@@ -14,7 +14,7 @@
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
-	import { initializeWebSocketSession, buildSessionParams } from '$lib/utils/session';
+	import { buildSessionParams } from '$lib/utils/session';
 	import { onMount } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
@@ -98,81 +98,11 @@
 
 	function saveSchema(): Promise<boolean> {
 		if (saveInFlight) return saveInFlight;
+		if (!builderState) return Promise.resolve(false);
 
-		const promise = new Promise<boolean>((resolve) => {
-			if (!builderState?.state.draft) {
-				toast.error('Schema not initialized');
-				resolve(false);
-				return;
-			}
-
-			if (!sessionId) {
-				toast.error('Session not initialized');
-				resolve(false);
-				return;
-			}
-
-			if (!builderState.wsState.connected) {
-				toast.error('Not connected to Grasshopper');
-				resolve(false);
-				return;
-			}
-
-			let handled = false;
-			let timeoutId: ReturnType<typeof setTimeout>;
-
-			const settle = (success: boolean) => {
-				if (handled) return;
-				handled = true;
-				clearTimeout(timeoutId);
-				builderState?.wsState.off('schemaSaved', handleSaveResponse);
-				builderState?.wsState.off('schemaSaveRejected', handleRejected);
-				resolve(success);
-			};
-
-			const handleSaveResponse = (data: unknown) => {
-				const message = data as { sessionId: string; success: boolean; message?: string };
-				if (message.sessionId !== sessionId) return;
-
-				if (message.success) {
-					// The schemaUpdated broadcast that precedes this ack carries the
-					// just-saved state. Clear isDirty so replaceCanonical re-clones the
-					// draft cleanly on the next broadcast.
-					if (builderState) {
-						builderState.state.isDirty = false;
-					}
-					toast.success('Schema saved successfully');
-					settle(true);
-				} else {
-					toast.error(`Failed to save schema: ${message.message || 'Unknown error'}`);
-					settle(false);
-				}
-			};
-
-			const handleRejected = (data: unknown) => {
-				const message = data as { sessionId: string };
-				if (message.sessionId !== sessionId) return;
-				// The composable already replaced canonical and tripped the conflict
-				// banner. From the save flow's perspective, this is a failure.
-				settle(false);
-			};
-
-			builderState.wsState.on('schemaSaved', handleSaveResponse);
-			builderState.wsState.on('schemaSaveRejected', handleRejected);
-
-			timeoutId = setTimeout(() => {
-				if (handled) return;
-				toast.error('Save timeout: no response from Grasshopper');
-				settle(false);
-			}, 10000);
-
-			builderState.wsState.saveSchema(
-				sessionId,
-				$state.snapshot(builderState.state.draft),
-				builderState.state.canonicalHash
-			);
-		});
-
+		// The seam owns the request/response handshake, timeout, and post-save lifecycle
+		// (isDirty reset + toasts). The route just guards against overlapping saves.
+		const promise = builderState.save();
 		saveInFlight = promise;
 		promise.finally(() => {
 			if (saveInFlight === promise) saveInFlight = null;
@@ -211,21 +141,9 @@
 		const urlSessionId = page.url.searchParams.get('session') || '';
 		sessionId = urlSessionId;
 
-		const initializeBuilder = async () => {
-			const result = await initializeWebSocketSession(urlSessionId);
-
-			builderState = useBuilderState(urlSessionId);
-
-			if (result.error) {
-				builderState.state.error = result.error;
-				builderState.state.loading = false;
-				return;
-			}
-
-			builderState.initialize();
-		};
-
-		initializeBuilder();
+		builderState = useBuilderState(urlSessionId);
+		// initialize() now owns the connect handshake (via the SchemaSource) and the first fetch.
+		builderState.initialize();
 		window.addEventListener('keydown', handleKeydown);
 
 		return () => {
@@ -244,16 +162,16 @@
 		}
 	}
 
-	useFooterItem(
-		'ws-status',
-		WsStatusFooter,
-		() => ({
-			connected: builderState?.wsState.connected ?? false,
+	useFooterItem({
+		id: 'ws-status',
+		component: WsStatusFooter,
+		getProps: () => ({
+			connected: builderState?.connected ?? false,
 			sessionId
 		}),
-		'left',
-		10
-	);
+		position: 'left',
+		priority: 10
+	});
 </script>
 
 <AppShell {homeUrl} title="Schema Builder" mode="fixed" showFooter>
@@ -300,7 +218,7 @@
 						variant="outline"
 						size="sm"
 						onclick={() => builderState?.syncParameters()}
-						disabled={!builderState?.wsState.connected}
+						disabled={!builderState?.connected}
 					>
 						<RefreshCw class="mr-2 h-4 w-4" />Refresh
 					</Button>

@@ -25,7 +25,7 @@
 		oncalculate?: () => void;
 		values: Record<string, unknown>;
 		onValueChange: (id: string, val: SupportedTypes) => void | Promise<void>;
-		onLoadValues?: () => void | Promise<void>;
+		onLoadValues?: (values: Record<string, unknown>) => void | Promise<void>;
 		panelActions?: ActionButton[];
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
@@ -44,7 +44,7 @@
 		hasNeverSolved = false,
 		isViewerFullscreen = $bindable(false),
 		oncalculate = () => {},
-		values = $bindable({}),
+		values,
 		onValueChange,
 		onLoadValues,
 		panelActions = [],
@@ -99,7 +99,7 @@
 
 	async function handleLoadValues(loadedValues: Record<string, unknown>) {
 		Object.assign(values, loadedValues);
-		await onLoadValues?.();
+		await onLoadValues?.(loadedValues);
 	}
 
 	let _touchStartY = 0;

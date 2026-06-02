@@ -21,7 +21,7 @@
 	let isViewerFullscreen = $state(false);
 
 	const preview = usePreviewState(() => sessionId);
-	const solvingIndicator = createSolvingIndicator(() => preview.wsState.isSolving);
+	const solvingIndicator = createSolvingIndicator(() => preview.isSolving);
 
 	$effect(() => {
 		if (sessionId) {
@@ -51,11 +51,11 @@
 			for (const ext of inputs) {
 				const stored = readExternalValue({ scopeKey: sid, inputId: ext.paramId });
 				if (stored !== undefined) {
-					if (preview.state.values[ext.paramId] !== stored) {
+					if (preview.values[ext.paramId] !== stored) {
 						preview.handleValueChange(ext.paramId, stored as never);
 					}
-				} else if (preview.state.values[ext.paramId] !== undefined) {
-					delete preview.state.values[ext.paramId];
+				} else if (preview.values[ext.paramId] !== undefined) {
+					delete preview.values[ext.paramId];
 				}
 			}
 		});
@@ -67,13 +67,13 @@
 
 	const homeUrl = $derived(`/?${buildSessionParams()}`);
 
-	useFooterItem(
-		'ws-status',
-		WsStatusFooter,
-		() => ({ connected: preview.wsState.connected, sessionId }),
-		'left',
-		10
-	);
+	useFooterItem({
+		id: 'ws-status',
+		component: WsStatusFooter,
+		getProps: () => ({ connected: preview.connected, sessionId }),
+		position: 'left',
+		priority: 10
+	});
 </script>
 
 <AppShell {homeUrl} title={preview.state.schema?.name ?? null} mode="fixed" showFooter>
@@ -107,22 +107,16 @@
 			{#key preview.state.schema}
 				<AppLayout
 					schema={preview.state.schema}
-					meshes={preview.state.displayMeshes}
-					isSolving={preview.wsState.isSolving}
+					meshes={preview.displayMeshes}
+					isSolving={preview.isSolving}
 					showSolvingIndicator={preview.state.schema.instanceSolve !== false &&
 						solvingIndicator.show}
-					hasPendingChanges={preview.state.hasPendingChanges}
+					hasPendingChanges={preview.hasPendingChanges}
 					bind:isViewerFullscreen
-					bind:values={preview.state.values}
+					values={preview.values}
 					onValueChange={preview.handleValueChange}
 					oncalculate={preview.handleCalculate}
-					onLoadValues={() => {
-						if (preview.state.schema?.instanceSolve !== false) {
-							preview.wsState.sendValueUpdate(sessionId, $state.snapshot(preview.state.values));
-						} else {
-							preview.state.hasPendingChanges = true;
-						}
-					}}
+					onLoadValues={preview.handleLoadValues}
 				/>
 			{/key}
 		{/if}

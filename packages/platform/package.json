@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/platform",
-	"version": "0.12.1",
+	"version": "0.12.2",
 	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
 	"license": "MIT",
 	"publishConfig": {
