@@ -33,7 +33,7 @@
 		{currentLabel || 'Select an option...'}
 	</Select.Trigger>
 	<Select.Content>
-		{#each Object.entries(options) as [name, expr] (expr ?? name)}
+		{#each Object.entries(options) as [name, expr] (name)}
 			<Select.Item value={expr ?? name} label={name} />
 		{/each}
 	</Select.Content>

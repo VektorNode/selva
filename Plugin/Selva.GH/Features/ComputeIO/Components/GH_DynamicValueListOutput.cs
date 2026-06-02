@@ -10,8 +10,9 @@ using Selva.GH.Properties;
 namespace Selva.GH.Features.ComputeIO.Components;
 
 /// <summary>
-///     Emits a runtime-computed value list (name -> value options) that is routed back into a
-///     <see cref="GetDynamicValueListParameter" /> in the web UI. The target input is referenced by its
+///     "Set Dynamic Value List": emits a runtime-computed value list (name -> value options) that is
+///     routed back into a <see cref="GetDynamicValueListParameter" /> ("Get Dynamic Value List") in the
+///     web UI. The target input is referenced by its
 ///     Grasshopper instance GUID. The collector reads <see cref="Options" /> and <see cref="TargetInputId" />
 ///     after each solve; for Rhino.Compute the same payload is produced by <see cref="ToJson" />.
 /// </summary>
@@ -20,16 +21,18 @@ public class GH_DynamicValueListOutput : GH_Component
     private Guid _targetInputId = Guid.Empty;
 
     public GH_DynamicValueListOutput()
-        : base("Dynamic Value List", "DynVL Out",
-            "Send a runtime-computed value list back to a Dynamic Value List input in the web UI",
-            "Params", "Util")
+        : base("Set Dynamic Value List", "Set DynVL",
+            "Send a runtime-computed value list back to a Get Dynamic Value List input in the web UI",
+            "Selva", "Utilities")
     {
     }
 
     public override GH_Exposure Exposure => GH_Exposure.quinary;
     public override Guid ComponentGuid => new Guid("1D8E3F62-7B4A-4C9E-A0F1-5C2D8E7B3A41");
 
-    protected override Bitmap Icon => Utils.ContextualiseIcon(Resources.GetValueList);
+    // A real component (not a contextual input param), so it uses the plain icon — no purple
+    // ContextualiseIcon overlay, which is reserved for the "Get …" contextual params.
+    protected override Bitmap Icon => Resources.GetValueList;
 
     /// <summary>
     ///     The instance GUID of the Dynamic Value List input this output's options populate.
@@ -97,7 +100,7 @@ public class GH_DynamicValueListOutput : GH_Component
         if (_targetInputId == Guid.Empty)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                "No target Dynamic Value List input set. Set the Target Input under this output's " +
+                "No target Get Dynamic Value List input set. Set the Target Input under this output's " +
                 "Advanced settings in the Selva UI builder.");
         }
 

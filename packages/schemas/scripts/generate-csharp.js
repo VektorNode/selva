@@ -198,6 +198,11 @@ function generateProperty(name, prop, required) {
 
   const attributeString = attributes.length > 0 ? ', ' + attributes.join(', ') : '';
 
+  // GUID-typed fields: the web UI emits "" for an unset GUID, which a plain System.Guid cannot
+  // deserialize. Route every Guid property through TolerantGuidConverter ("" / null → Guid.Empty).
+  const converterAttr =
+    csharpType === 'Guid' ? '\n        [JsonConverter(typeof(TolerantGuidConverter))]' : '';
+
   let defaultValue = '';
   // Special handling for schemaVersion - use centralized constant
   if (name === 'schemaVersion' && prop.default !== undefined) {
@@ -221,7 +226,7 @@ function generateProperty(name, prop, required) {
     : '';
 
   return `${description}
-        [JsonProperty("${name}"${attributeString})]
+        [JsonProperty("${name}"${attributeString})]${converterAttr}
         public ${csharpType} ${pascalName} { get; set; }${defaultValue}`;
 }
 

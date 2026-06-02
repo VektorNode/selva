@@ -106,6 +106,22 @@
 			(dynamicListConfig?.emptyBehavior ?? 'hide') === 'hide'
 	);
 
+	// When a dynamic value list recomputes, a previously-selected value may no longer be an
+	// available option. Prune the stale selection so the control shows a valid option (or empty)
+	// instead of rendering the orphaned raw value as its own label.
+	$effect(() => {
+		if (!isDynamicValueListWidget(item) || !dynamicListHasOptions) return;
+		const validValues = new Set(Object.values(dynamicListOptions));
+		// Route through onChange (not commit) — value is a one-way prop here, so writing it
+		// directly from an effect trips Svelte's binding-ownership check.
+		if (Array.isArray(value)) {
+			const pruned = value.filter((v) => typeof v === 'string' && validValues.has(v));
+			if (pruned.length !== value.length) onChange(item.paramId, pruned);
+		} else if (typeof value === 'string' && value && !validValues.has(value)) {
+			onChange(item.paramId, '');
+		}
+	});
+
 	function commit(newValue: SupportedTypes) {
 		value = newValue;
 		onChange(item.paramId, newValue);

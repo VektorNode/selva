@@ -553,8 +553,11 @@ public class SchemaSynchronizer
 
     /// <summary>
     ///     Apply layout-item config flags that affect GH parameter behavior back onto the document.
-    ///     Currently: when a dropdown layout item declares `displayAs = "checklist"`, the matching
-    ///     GetValueListParameter is switched to list access so multi-selection flows downstream.
+    ///     - When a dropdown layout item declares `displayAs = "checklist"`, the matching
+    ///       GetValueListParameter is switched to list access so multi-selection flows downstream.
+    ///     - The target-input picked in the web UI builder is written back onto the matching
+    ///       GH_DynamicValueListOutput so the component itself becomes the source of truth (its
+    ///       solve-time "no target set" remark and persisted GUID stay in sync with the schema).
     /// </summary>
     public void ApplyParameterAccessFromSchema(UISchema schema, GH_Document document)
     {
@@ -565,19 +568,31 @@ public class SchemaSynchronizer
 
         foreach (var item in GetAllLayoutItems(schema.Layout))
         {
-            if (item is not InputDropdownLayoutItem dropdown || dropdown.Config == null)
+            switch (item)
             {
-                continue;
-            }
+                case InputDropdownLayoutItem dropdown when dropdown.Config != null:
+                    {
+                        if (document.FindObject(dropdown.ParamId, false) is GetValueListParameter valueList)
+                        {
+                            var listAccess = string.Equals(dropdown.Config.DisplayAs, "checklist",
+                                StringComparison.OrdinalIgnoreCase);
+                            valueList.SetListAccess(listAccess);
+                        }
 
-            var docObj = document.FindObject(dropdown.ParamId, false);
-            if (docObj is not GetValueListParameter valueList)
-            {
-                continue;
-            }
+                        break;
+                    }
 
-            var listAccess = string.Equals(dropdown.Config.DisplayAs, "checklist", StringComparison.OrdinalIgnoreCase);
-            valueList.SetListAccess(listAccess);
+                case OutputDynamicValueListLayoutItem dvl when dvl.Config != null:
+                    {
+                        if (document.FindObject(dvl.ParamId, false) is GH_DynamicValueListOutput output &&
+                            output.TargetInputId != dvl.Config.TargetInputId)
+                        {
+                            output.TargetInputId = dvl.Config.TargetInputId;
+                        }
+
+                        break;
+                    }
+            }
         }
     }
 

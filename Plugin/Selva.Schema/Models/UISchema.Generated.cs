@@ -55,6 +55,7 @@ namespace Selva.Schema.Models
 /// Grasshopper document unique identifier (GUID)
 /// </summary>
         [JsonProperty("documentId", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonConverter(typeof(TolerantGuidConverter))]
         public Guid DocumentId { get; set; }
 
 /// <summary>
@@ -446,6 +447,7 @@ namespace Selva.Schema.Models
 /// The Grasshopper instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
 /// </summary>
         [JsonProperty("targetInputId")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
         public Guid TargetInputId { get; set; }
     }
 
@@ -478,6 +480,7 @@ namespace Selva.Schema.Models
 /// Grasshopper parameter instance GUID
 /// </summary>
         [JsonProperty("id")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
         public Guid Id { get; set; }
 
         [JsonProperty("name")]
@@ -533,6 +536,7 @@ namespace Selva.Schema.Models
 /// Grasshopper component instance GUID
 /// </summary>
         [JsonProperty("id")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
         public Guid Id { get; set; }
 
         [JsonProperty("nickname")]
@@ -551,6 +555,7 @@ namespace Selva.Schema.Models
 /// For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
 /// </summary>
         [JsonProperty("targetInputId", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonConverter(typeof(TolerantGuidConverter))]
         public Guid TargetInputId { get; set; }
 
 /// <summary>
@@ -567,6 +572,7 @@ namespace Selva.Schema.Models
 /// Grasshopper parameter instance GUID
 /// </summary>
         [JsonProperty("id")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
         public Guid Id { get; set; }
 
         [JsonProperty("nickname")]
@@ -595,6 +601,7 @@ namespace Selva.Schema.Models
 /// Grasshopper parameter instance GUID
 /// </summary>
         [JsonProperty("id")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
         public Guid Id { get; set; }
 
         [JsonProperty("nickname")]
@@ -613,6 +620,7 @@ namespace Selva.Schema.Models
 /// For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
 /// </summary>
         [JsonProperty("targetInputId", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonConverter(typeof(TolerantGuidConverter))]
         public Guid TargetInputId { get; set; }
     }
 
@@ -735,6 +743,7 @@ namespace Selva.Schema.Models
 /// References the Grasshopper component InstanceGuid (Data Source)
 /// </summary>
         [JsonProperty("paramId")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
         public Guid ParamId { get; set; }
 
         [JsonProperty("displayName")]
