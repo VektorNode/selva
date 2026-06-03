@@ -125,7 +125,7 @@
 )}
 	<div class="panel-content-wrapper">
 		{#if schema.layout.type === 'tabbed'}
-			<TabLayout {schema} bind:values {onValueChange} {panelFilter} {requestedTabId} />
+			<TabLayout {schema} {values} {onValueChange} {panelFilter} {requestedTabId} />
 		{/if}
 		{#if showParameterStateManager || (!isMobile && showCalculateButton && schema.instanceSolve === false)}
 			<div class="panel-footer px-3">
