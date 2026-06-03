@@ -1,5 +1,17 @@
 # @selvajs/ui
 
+## 4.6.0
+
+### Minor Changes
+
+- 7db97cb: Support dynamic value lists in the preview runtime, plus a client-side file-size guard.
+  - `buildDynamicValueListOptions` now takes the whole `UISchema` (was just `outputs`) and collects every `dynamicValueList` source from both `schema.outputs[]` and the layout. The layout pass is back-compat defense for schemas persisted by an older plugin that did not mirror dynamic outputs into `outputs[]`; for current schemas it finds nothing new. `TabLayout` is updated to pass the schema.
+  - `FileInput` now rejects oversize uploads client-side (against `APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES`) instead of letting the request fail server-side with an opaque 413, matching the existing URL-import check.
+
+### Patch Changes
+
+- 9ea2137: Fix dev-mode binding warning by removing the redundant two-way binding on `values` in `AppLayout` and `TabLayout`. The `values` object is a `$state` proxy that is only ever mutated in place, so `bind:`/`$bindable()` was unnecessary and produced a "did not declare values as a binding" warning through the `AppShell` → `AppLayout` prop chain.
+
 ## 4.5.0
 
 ### Minor Changes
