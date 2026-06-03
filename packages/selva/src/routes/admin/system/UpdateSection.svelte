@@ -188,8 +188,8 @@
 		<AlertDialog.Header>
 			<AlertDialog.Title>Run Update?</AlertDialog.Title>
 			<AlertDialog.Description>
-				This will pull the latest changes and restart the application. The service will be
-				temporarily unavailable.
+				This will update @selvajs/* to the latest published release and restart the application. The
+				service will be temporarily unavailable.
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>

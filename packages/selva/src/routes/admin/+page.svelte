@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { Card, SectionHeader } from '@selvajs/ui';
-	import { Users, Server, LayoutDashboard, GitCommit, Building2 } from '@lucide/svelte';
+	import { Users, Server, LayoutDashboard, Package, Building2 } from '@lucide/svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
 	import type { PlatformPermission } from '@selvajs/platform';
 
@@ -10,18 +10,12 @@
 	interface PageData {
 		stats: { users: number | null };
 		platformPermissions: PlatformPermission[];
+		version: string;
 	}
 	interface Props {
 		data: PageData;
 	}
 	let { data }: Props = $props();
-
-	const build = {
-		hash: __GIT_SHORT_HASH__,
-		fullHash: __GIT_HASH__,
-		message: __GIT_MESSAGE__,
-		date: __GIT_DATE__
-	};
 
 	const can = (p: PlatformPermission) =>
 		data.platformPermissions.includes('instance_admin') || data.platformPermissions.includes(p);
@@ -83,15 +77,14 @@
 	<Card.Root>
 		<Card.Header>
 			<Card.Title class="flex items-center gap-2 text-sm font-medium">
-				<GitCommit class="text-muted-foreground h-4 w-4" />
-				Web app build
+				<Package class="text-muted-foreground h-4 w-4" />
+				Installed version
 			</Card.Title>
 		</Card.Header>
 		<Card.Content>
 			<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-				<code class="text-foreground font-mono text-xs" title={build.fullHash}>{build.hash}</code>
-				<span class="text-muted-foreground text-xs">{build.message}</span>
-				<span class="text-muted-foreground text-xs">{build.date}</span>
+				<code class="text-foreground font-mono text-xs">@selvajs/selva</code>
+				<span class="text-muted-foreground text-xs">v{data.version}</span>
 			</div>
 		</Card.Content>
 	</Card.Root>
