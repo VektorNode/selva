@@ -7,13 +7,17 @@
 //   • DATA_PATH writable (when local provider is in use)
 //   • Supabase URL reachable (when supabase provider is in use)
 //   • @selvajs/selva installed
+//   • Boot persistence (Linux): dump.pm2 saved, systemd unit installed and
+//     pointing at the deployment-local pm2, no stray global pm2 on PATH
 //   • Origin set when behind a reverse proxy looks set
 //
 // Exits 0 (green) or 1 (any red); yellow checks don't fail the run.
+// All checks are read-only — doctor never starts or pings the pm2 daemon.
 
 import { existsSync, readFileSync, accessSync, constants, statSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { join, resolve, dirname, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { readEnvFile } from '../env.js';
@@ -102,6 +106,13 @@ export async function runDoctor() {
 	// `^4` pin silently keeps the CLI on 4.x. That's the exact failure that
 	// makes `selva update` look like a no-op for the CLI. Surface it.
 	checks.push(checkCliRuntimeAlignment(dir));
+
+	// ── Boot persistence (read-only) ───────────────────────────────────
+	// Validates that a reboot will actually bring the app back. All checks
+	// here are pure reads — no `pm2 ping`/daemon interaction — so doctor keeps
+	// its "never starts anything" contract. Linux/systemd only; skipped
+	// elsewhere because pm2's boot integration is platform-specific.
+	checks.push(...checkBootPersistence(dir));
 
 	// ── Origin (best-effort) ───────────────────────────────────────────
 	if (env.ORIGIN) {
@@ -249,6 +260,109 @@ function checkCliRuntimeAlignment(dir) {
 			`is stale. A caret range won't cross a major, so update it explicitly:\n     ` +
 			`npm install @selvajs/cli@^${runtimeMajor} && selva restart`
 	);
+}
+
+// Validate that a VM reboot will resurrect the app. Three failure modes,
+// all of which we hit in the field:
+//   1. `pm2 save` never run → no dump.pm2 → resurrect restores nothing.
+//   2. `pm2 startup` never run → no systemd unit → pm2 never launches at boot.
+//   3. The systemd unit was generated from a *global* pm2 (the operator
+//      pasted pm2's auto-printed `sudo env ... pm2 startup` line verbatim
+//      while a global pm2 was on PATH). The unit then resurrects via a
+//      different pm2 than the deployment-local one the CLI manages with —
+//      silent version skew on every boot. This is the only RED here.
+// All checks are read-only (existsSync + reading the unit file + scanning
+// PATH); none touch the pm2 daemon, so doctor stays side-effect-free.
+function checkBootPersistence(dir) {
+	// pm2's boot integration is Linux/systemd-specific. On macOS it's launchd
+	// (different unit path) and on Windows pm2 boot persistence isn't a thing —
+	// stay silent rather than emit misleading checks.
+	if (process.platform !== 'linux') return [];
+
+	const out = [];
+
+	// 1. dump.pm2 — what `pm2 startup` resurrects. PM2_HOME overrides location.
+	const pm2Home = process.env.PM2_HOME ?? join(homedir(), '.pm2');
+	const dumpPath = join(pm2Home, 'dump.pm2');
+	if (existsSync(dumpPath)) {
+		out.push(green('pm2 process list saved (dump.pm2 present)'));
+	} else {
+		out.push(
+			yellow(
+				'pm2 process list not saved — run `npx pm2 save` so a reboot can ' +
+					'resurrect the app (nothing to restore without it)'
+			)
+		);
+	}
+
+	// 2 + 3. systemd unit: present, and pointing at the deployment-local pm2.
+	const user = process.env.USER ?? process.env.LOGNAME;
+	const unitPath = user
+		? `/etc/systemd/system/pm2-${user}.service`
+		: null;
+
+	if (unitPath && existsSync(unitPath)) {
+		const localPm2 = join(dir, 'node_modules', 'pm2', 'bin', 'pm2');
+		let unit = '';
+		try {
+			unit = readFileSync(unitPath, 'utf8');
+		} catch {
+			out.push(yellow(`pm2 systemd unit present but unreadable (${unitPath})`));
+			return out;
+		}
+		const execStart = /^ExecStart=(.+)$/m.exec(unit)?.[1] ?? '';
+		if (execStart.includes(localPm2)) {
+			out.push(green('pm2 systemd boot unit installed (uses deployment-local pm2)'));
+		} else {
+			out.push(
+				red(
+					`pm2 systemd boot unit points at a different pm2 than this deployment's.\n     ` +
+						`ExecStart: ${execStart || '(not found)'}\n     ` +
+						`expected:  ${localPm2} resurrect\n     ` +
+						`Reboots will resurrect via the wrong pm2 (version skew). Re-run startup ` +
+						`with the local binary:\n     ` +
+						`sudo env PATH=$PATH:${join(dir, 'node_modules', '.bin')} ${localPm2} ` +
+						`startup systemd -u $USER --hp $HOME`
+				)
+			);
+		}
+	} else {
+		out.push(
+			yellow(
+				'pm2 systemd boot unit not installed — the app will NOT restart after a ' +
+					'reboot. Run `npx pm2 startup systemd -u $USER --hp $HOME` and paste the ' +
+					'printed command (point it at this deployment’s pm2).'
+			)
+		);
+	}
+
+	// Global pm2 on PATH — the root cause of mode 3 and of day-to-day skew
+	// warnings. Advisory only.
+	const globalPm2 = findGlobalPm2(dir);
+	if (globalPm2) {
+		out.push(
+			yellow(
+				`a pm2 outside this deployment is on PATH (${globalPm2}) — it can fork a ` +
+					`mismatched daemon and trigger skew. Prefer \`npm run\` wrappers / \`npx pm2\` ` +
+					`from this directory; consider \`npm uninstall -g pm2\`.`
+			)
+		);
+	}
+
+	return out;
+}
+
+// Scan PATH for a `pm2` binary that isn't this deployment's. Returns the first
+// such path, or null. Pure filesystem reads — no execution.
+function findGlobalPm2(dir) {
+	const localBin = resolve(dir, 'node_modules', '.bin');
+	const dirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
+	for (const d of dirs) {
+		if (resolve(d) === localBin) continue;
+		const candidate = join(d, 'pm2');
+		if (existsSync(candidate)) return candidate;
+	}
+	return null;
 }
 
 function checkLayoutDrift(dir) {

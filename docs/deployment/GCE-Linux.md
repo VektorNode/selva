@@ -167,7 +167,29 @@ npx pm2 save                           # persist process list across reboots
 npx pm2 startup systemd -u $USER --hp $HOME
 ```
 
-PM2 prints a `sudo env PATH=... pm2 startup ...` line. **Copy and paste that exact line back into the shell** — that's what actually installs the systemd unit. The printed line will reference the full path to your local pm2 (e.g. `/home/you/<deploy>/node_modules/pm2/bin/pm2`); leave it as-is, that's correct.
+PM2 prints a `sudo env PATH=... pm2 startup ...` line that installs the systemd unit. **Before pasting it, check which `pm2` it names.** If it points at your deployment-local binary (e.g. `/home/you/<deploy>/node_modules/pm2/bin/pm2`), paste it as-is. If it says a bare `pm2` (or a global path like `/usr/lib/node_modules/...`), rewrite it to the local binary first — otherwise systemd will resurrect via a _different_ pm2 than the one you manage with, causing the version-skew breakage in the debug section below:
+
+```bash
+sudo env PATH=$PATH:$HOME/<deploy>/node_modules/.bin \
+  $HOME/<deploy>/node_modules/pm2/bin/pm2 \
+  startup systemd -u $USER --hp $HOME
+```
+
+Confirm the installed unit uses the local pm2 — both lines below should reference `<deploy>/node_modules/pm2/bin/pm2`:
+
+```bash
+grep -E 'ExecStart|ExecStop' /etc/systemd/system/pm2-$USER.service
+```
+
+Then **re-run `npx pm2 save`** (the `startup` step may have restarted the daemon), and verify boot survival for real:
+
+```bash
+npx pm2 save
+sudo reboot
+# reconnect:
+cd ~/<deploy> && npx pm2 list      # selva-compute 'online', no manual start, no skew warning
+systemctl status pm2-$USER         # 'active' — systemd ran resurrect at boot
+```
 
 ---
 

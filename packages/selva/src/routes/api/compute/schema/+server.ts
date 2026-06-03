@@ -19,9 +19,16 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	// Eliminates the random-authenticated-drain path the auth-only check left open.
 	const { project } = await requireCanCreateDefinition(locals, projectId);
 
+	// Pin to the same server the upload will use, so schema extraction runs on
+	// the server that later solves the definition - not the org/global default.
+	// No record exists yet, so the pin comes from the client's selection.
+	const computeServerId = url.searchParams.get('computeServerId');
+
 	let server;
 	try {
-		server = await resolveServerForOrg(locals.ctx!, project.orgId);
+		server = await resolveServerForOrg(locals.ctx!, project.orgId, {
+			definitionPin: computeServerId
+		});
 	} catch (err) {
 		if (err instanceof ComputeServerUnconfiguredError) throw error(503, err.message);
 		throw err;

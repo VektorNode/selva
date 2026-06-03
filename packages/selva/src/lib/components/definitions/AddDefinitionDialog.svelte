@@ -61,16 +61,31 @@
 		if (defaultProjectId) selectedProjectId = defaultProjectId;
 	});
 
-	// If the user picked a file before choosing a project, re-run validation
-	// once the project is set so the schema preview can appear.
+	// Re-run validation when the file, project, or compute server selection changes:
+	// a project unblocks the first validation; changing the server must re-extract
+	// the schema on that server (it may differ, e.g. block-instance support).
+	// lastValidatedKey dedupes so the effect doesn't loop on the validating/schema
+	// writes onFileSelected makes.
+	let lastValidatedKey = $state<string | null>(null);
 	$effect(() => {
-		if (selectedProjectId && fileInput?.files?.length && !validationSchema && !validating) {
-			onFileSelected();
-		}
+		if (!selectedProjectId || !selectedFile) return;
+		const key = [
+			selectedProjectId,
+			selectedComputeServerId,
+			selectedFile.name,
+			selectedFile.size,
+			selectedFile.lastModified
+		].join('|');
+		if (key === lastValidatedKey || validating) return;
+		lastValidatedKey = key;
+		onFileSelected();
 	});
 
 	// File inputs
 	let fileInput = $state<HTMLInputElement>();
+	// Reactive mirror of the chosen .gh file so the validation effect can key off
+	// it (the bare input element isn't reactive). Set by the file input onchange.
+	let selectedFile = $state<File | null>(null);
 	let imageInput = $state<HTMLInputElement>();
 	let imageHasFile = $state(false);
 
@@ -92,36 +107,43 @@
 			.replace(/\b\w/g, (l) => l.toUpperCase());
 	}
 
-	async function onFileSelected() {
-		const file = fileInput?.files?.[0];
+	// Mirror the chosen file into reactive state and reset any fields pre-filled
+	// from a previous file's schema. The validation effect picks up the new file
+	// (and re-runs if project/server change). Submission stays blocked until a
+	// project is picked and validation succeeds.
+	function onFileChanged() {
+		const file = fileInput?.files?.[0] ?? null;
 		validationError = null;
 		validationSchema = null;
-		// Clear fields that may have been pre-filled from a previous file's schema,
-		// so stale description/tags don't leak across selections.
 		description = '';
 		tags = [];
+		selectedFile = file;
+		displayName = file ? nameFromFile(file) : '';
+	}
 
-		if (!file) {
-			displayName = '';
-			return;
-		}
-
-		displayName = nameFromFile(file);
-
-		// Schema extraction needs a target project for the upload-rights gate. If
-		// one isn't picked yet, defer validation — the $effect above re-runs this
-		// once a project is selected. Submission stays blocked until then.
-		if (!selectedProjectId) return;
+	// Extract + validate the schema for the current file on the selected server.
+	// Guarded by the effect: selectedProjectId and selectedFile are non-null here.
+	async function onFileSelected() {
+		const file = selectedFile;
+		if (!file || !selectedProjectId) return;
 
 		validating = true;
 
 		try {
 			const formData = new FormData();
 			formData.append('files', file);
-			const response = await fetch(
-				`/api/compute/schema?projectId=${encodeURIComponent(selectedProjectId)}`,
-				{ method: 'POST', body: formData }
-			);
+			// Extract the schema on the same server the upload will use, so the
+			// preview matches what later solves the definition. Mirrors the
+			// computeServerId sent on submit.
+			const params = new URLSearchParams(
+				selectedComputeServerId
+					? { projectId: selectedProjectId, computeServerId: selectedComputeServerId }
+					: { projectId: selectedProjectId }
+			).toString();
+			const response = await fetch(`/api/compute/schema?${params}`, {
+				method: 'POST',
+				body: formData
+			});
 
 			if (!response.ok) {
 				// Schema extraction is a hard gate: the server rejects uploads that
@@ -212,6 +234,8 @@
 		validationError = null;
 		validationSchema = null;
 		if (fileInput) fileInput.value = '';
+		selectedFile = null;
+		lastValidatedKey = null;
 		if (imageInput) imageInput.value = '';
 		imageHasFile = false;
 	}
@@ -296,7 +320,7 @@
 					type="file"
 					accept=".gh,.ghx"
 					bind:this={fileInput}
-					onchange={onFileSelected}
+					onchange={onFileChanged}
 					class="border-input bg-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
 				/>
 
