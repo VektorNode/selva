@@ -52,6 +52,25 @@
 		}
 	}
 
+	// Probe the *heavier* readiness endpoint (`/admin/api/system/health`), not
+	// just /api/health. The lightweight /api/health answers the instant the Node
+	// process boots — before the app can necessarily serve real routes through
+	// the proxy — so keying "online" on it alone races: the UI said "back online"
+	// while a health-check click moments later 502'd. The admin health route
+	// exercises the provider stores / config the way a real request does, so a
+	// 200 here means the app is genuinely warm. We gate on HTTP reachability
+	// only: this route returns 200 even when its *verdict* is "degraded" (e.g. an
+	// unreachable compute server), and degraded-but-up must not block "online".
+	// Returns true only on a real 200; false on any non-2xx or transport error.
+	async function isReadinessProbeWarm(): Promise<boolean> {
+		try {
+			const res = await fetch('/admin/api/system/health', { cache: 'no-store' });
+			return res.ok;
+		} catch {
+			return false;
+		}
+	}
+
 	// Pull the tee'd update log from the server. Returns the *full* log file
 	// content — the script truncates at the start of every run so this isn't
 	// cumulative across updates. Returns null if the request fails (typically
@@ -94,8 +113,12 @@
 	// Crucially we do NOT treat "reachable" as "ready": fetchHealth returns null
 	// for a 503 (degraded / still booting) or a refused connection, and we keep
 	// waiting. A bare 200 from the OLD process carries the OLD instanceId, so it
-	// can't satisfy the check either. This is what prevents the premature
-	// "online" verdict that left a reload hitting a 503.
+	// can't satisfy the check either. And even a fresh instanceId isn't enough on
+	// its own — /api/health answers the instant the process boots, a beat before
+	// real routes serve through the proxy, so we additionally require the heavier
+	// /admin/api/system/health route to answer 200 (isReadinessProbeWarm). That
+	// pairing is what prevents the premature "online" verdict that left an
+	// immediate reload / health-check click hitting a 502.
 	//
 	// While polling we also fetch the update log file. The SSE stream died at
 	// `pm2 stop`, so any output the script produced afterwards (npm update,
@@ -113,7 +136,11 @@
 		// otherwise succeeding in the background.
 		const maxAttempts = 150; // ~5min
 		for (let i = 0; i < maxAttempts; i++) {
-			const [health, log] = await Promise.all([fetchHealth(), fetchUpdateLog()]);
+			const [health, log, ready] = await Promise.all([
+				fetchHealth(),
+				fetchUpdateLog(),
+				isReadinessProbeWarm()
+			]);
 			// Backfill blackout output as soon as either the old process briefly
 			// recovers or the new one comes up. We ignore empty bodies — those
 			// mean either the file isn't there yet or we'd needlessly clobber
@@ -133,7 +160,12 @@
 			// the runner's own terminal marker in the log ([DONE]/rollback/fatal)
 			// before accepting. That avoids latching onto the still-running old
 			// process and reporting "online" prematurely.
-			const newProcessUp = health?.instanceId && health.instanceId !== previousInstanceId;
+			// "Online" requires BOTH a fresh process (new instanceId) AND the
+			// heavier readiness probe answering 200 — the latter is what closes the
+			// premature-online race, where /api/health flips to the new instanceId a
+			// beat before the app can actually serve real routes through the proxy.
+			const newProcessUp =
+				!!health?.instanceId && health.instanceId !== previousInstanceId && ready;
 			const logVerdict = exitCodeFromLog(updateLogs);
 			if (newProcessUp) {
 				updateExitCode = logVerdict ?? 0;
@@ -141,7 +173,7 @@
 				updateRestarting = false;
 				return;
 			}
-			if (!previousInstanceId && health && logVerdict !== null) {
+			if (!previousInstanceId && health && ready && logVerdict !== null) {
 				updateExitCode = logVerdict;
 				updateRunning = false;
 				updateRestarting = false;
