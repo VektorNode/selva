@@ -1,5 +1,12 @@
 # @selvajs/platform
 
+## 0.12.3
+
+### Patch Changes
+
+- Updated dependencies [7c10ccf]
+  - @selvajs/schemas@4.5.0
+
 ## 0.12.2
 
 ### Patch Changes
