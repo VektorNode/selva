@@ -118,8 +118,10 @@ public static class ParameterTypeHelper
     }
 
     /// <summary>
-    ///     Returns true if the component is a ContextBakeComponent whose inputs are sourced
-    ///     from a component that outputs a Dynamic Value List goo (detected by TypeName convention).
+    ///     Returns true if the component is a ContextBakeComponent fed by a GH_DynamicValueListOutput
+    ///     ("Set Dynamic Value List"). Detected by upstream component type, not goo TypeName: the Set
+    ///     component's output is a generic param, so its goo's "Dynamic Value List" TypeName is only
+    ///     visible in volatile data after a solve — component-type detection works pre-solve too.
     /// </summary>
     public static bool IsDynamicValueListBakeComponent(GH_Component component)
     {
@@ -128,20 +130,44 @@ public static class ParameterTypeHelper
             return false;
         }
 
-        if (component.Params.Input == null)
+        return FindUpstreamDynamicValueListOutput(component) != null;
+    }
+
+    /// <summary>
+    ///     The single classifier for ContextBake output types. Returns the schema output type string
+    ///     ("file" / "chart" / "dynamicValueList") for a qualifying bake, or null if the component is
+    ///     not a bake or carries no recognized Selva output.
+    ///
+    ///     Every place that asks "is this a qualifying bake output, and of what type?" — the scope
+    ///     filter, the post-solve add/remove sync, the schema collectors — must route through here so
+    ///     the set of supported bake output types lives in ONE place. Adding a 4th type = one branch
+    ///     here, not a hunt across the synchronizer. (This drift is what stripped dynamicValueList
+    ///     outputs every solve.)
+    /// </summary>
+    public static string ClassifyBakeOutputType(GH_Component component)
+    {
+        if (IsFileOutputBakeComponent(component))
         {
-            return false;
+            return "file";
         }
 
-        foreach (var inputParam in component.Params.Input)
+        if (IsChartOutputBakeComponent(component))
         {
-            if (IsSourcedFromGooTypeName(inputParam, "Dynamic Value List"))
-            {
-                return true;
-            }
+            return "chart";
         }
 
-        return false;
+        if (IsDynamicValueListBakeComponent(component))
+        {
+            return "dynamicValueList";
+        }
+
+        return null;
+    }
+
+    /// <summary>True if the component is a ContextBake carrying any recognized Selva output.</summary>
+    public static bool IsQualifyingBakeOutput(GH_Component component)
+    {
+        return ClassifyBakeOutputType(component) != null;
     }
 
     /// <summary>
@@ -167,11 +193,52 @@ public static class ParameterTypeHelper
 
         foreach (var inputParam in bakeComponent.Params.Input)
         {
-            foreach (var source in inputParam.Sources)
+            var found = WalkUpstreamFor<GH_DynamicValueListOutput>(inputParam, new HashSet<Guid>());
+            if (found != null)
             {
-                if (source?.Attributes?.GetTopLevel?.DocObject is GH_DynamicValueListOutput setComponent)
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Walk a param's sources upward looking for a producing component of type
+    ///     <typeparamref name="T" />, transparently passing through wire relays and generic pass-through
+    ///     params (e.g. Param_GenericObject, param painters) that sit between the producer and the
+    ///     ContextBake. Cycle-guarded by visited instance ids.
+    /// </summary>
+    private static T WalkUpstreamFor<T>(IGH_Param param, HashSet<Guid> visited) where T : class
+    {
+        if (param?.Sources == null)
+        {
+            return null;
+        }
+
+        foreach (var source in param.Sources)
+        {
+            if (source == null || !visited.Add(source.InstanceGuid))
+            {
+                continue;
+            }
+
+            // The component owning this source output param.
+            var owner = source.Attributes?.GetTopLevel?.DocObject;
+            if (owner is T match)
+            {
+                return match;
+            }
+
+            // Pass-through hop: a bare param (relay / generic) just forwards data — keep walking up.
+            // Component-owned params whose owner is a real component but not T stop the search on this
+            // branch (we don't tunnel through arbitrary components, only wire-forwarding params).
+            if (owner == null || ReferenceEquals(owner, source))
+            {
+                var deeper = WalkUpstreamFor<T>(source, visited);
+                if (deeper != null)
                 {
-                    return setComponent;
+                    return deeper;
                 }
             }
         }

@@ -5,10 +5,11 @@ import {
 	removeGroup,
 	reorderGroups,
 	handleGroupItemDrop,
+	handleItemDrop,
 	batchSetNumberWidgetType,
 	removeItem
 } from './operations';
-import type { UISchema } from '@selvajs/schemas';
+import type { DiscoveredOutput, GroupConfig, UISchema } from '@selvajs/schemas';
 
 // operations.ts mutates the schema's layout in place. These pin the behaviour that's
 // shared across both layout kinds (tabbed / flat) and the group-container resolution +
@@ -25,6 +26,39 @@ function tabbed(tabs: { id: string; groups: unknown[] }[]): UISchema {
 function flat(groups: unknown[]): UISchema {
 	return { layout: { type: 'flat', groups }, inputs: [], outputs: [] } as unknown as UISchema;
 }
+
+describe('handleItemDrop — dynamicValueList output', () => {
+	it('adds the output to schema.outputs[] (not just the layout)', () => {
+		const s = tabbed([{ id: 't1', groups: [group('g1')] }]);
+		const g = (s.layout as { tabs: { groups: GroupConfig[] }[] }).tabs[0].groups[0];
+		const discovered: DiscoveredOutput = {
+			id: 'bake-guid',
+			nickname: 'DNY',
+			type: 'dynamicValueList',
+			description: '',
+			targetInputId: 'target-input-guid'
+		} as DiscoveredOutput;
+
+		const result = handleItemDrop({
+			schema: s,
+			group: g,
+			paramId: 'bake-guid',
+			displayName: 'DNY',
+			itemType: 'output',
+			availableInputs: [],
+			availableOutputs: [discovered],
+			widgetType: 'dynamicValueList',
+			outputType: 'dynamicValueList'
+		});
+
+		expect(result.added).toBe(true);
+		// The bug: layout item added but schema.outputs[] left empty -> C# collector skips the bake.
+		expect(s.outputs.map((o) => o.id)).toContain('bake-guid');
+		const added = s.outputs.find((o) => o.id === 'bake-guid');
+		expect(added?.type).toBe('dynamicValueList');
+		expect((added as { targetInputId?: string }).targetInputId).toBe('target-input-guid');
+	});
+});
 
 describe('addGroup', () => {
 	it('appends a group to the addressed tab (tabbed)', () => {

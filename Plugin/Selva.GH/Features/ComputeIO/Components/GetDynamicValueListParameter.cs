@@ -53,19 +53,7 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     ///     All available items (name -> expression). Sourced from the last-applied options.
     /// </summary>
     [JsonProperty("values")]
-    public Dictionary<string, string> Values
-    {
-        get
-        {
-            var dict = new Dictionary<string, string>();
-            foreach (var item in _storedItems)
-            {
-                dict[item.Name] = item.Expression;
-            }
-
-            return dict;
-        }
-    }
+    public Dictionary<string, string> Values => DynamicValueListLogic.ToValuesDictionary(_storedItems);
 
     // IGH_ContextualParameter properties
     public string Prompt { get; set; } = string.Empty;
@@ -79,14 +67,7 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     public void SetListAccess(bool listAccess)
     {
         Access = listAccess ? GH_ParamAccess.list : GH_ParamAccess.item;
-        if (listAccess && AtMost <= 1)
-        {
-            AtMost = int.MaxValue;
-        }
-        else if (!listAccess && AtMost == int.MaxValue)
-        {
-            AtMost = 1;
-        }
+        AtMost = DynamicValueListLogic.ResolveAtMost(listAccess, AtMost);
     }
 
     public IEnumerable<object> ContextualData
@@ -140,6 +121,7 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         SetValues(new[] { value });
     }
 
+
     /// <summary>
     ///     Sets one or more string values directly - for use from Rhino.Compute via reflection.
     /// </summary>
@@ -155,10 +137,7 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     /// </summary>
     private GH_ValueListDataGoo ToGoo(string value)
     {
-        var matchIndex = FindMatchingIndex(value);
-        var expression = matchIndex >= 0 && matchIndex < _storedItems.Count
-            ? _storedItems[matchIndex].Expression
-            : value;
+        var (expression, matchIndex) = DynamicValueListLogic.ResolveExpression(_storedItems, value);
         return new GH_ValueListDataGoo(expression, _storedItems, matchIndex);
     }
 
@@ -186,12 +165,7 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     /// </summary>
     public bool SelectItemsByName(IEnumerable<string> values)
     {
-        if (values == null)
-        {
-            return false;
-        }
-
-        var valueList = values.Where(v => !string.IsNullOrEmpty(v)).ToList();
+        var valueList = DynamicValueListLogic.FilterSelectableValues(values);
         if (valueList.Count == 0)
         {
             return false;
@@ -226,12 +200,8 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     /// </summary>
     public string GetDefaultValue()
     {
-        if (_contextual != null && _contextual.Length > 0)
-        {
-            return _contextual[0].Value;
-        }
-
-        return _storedItems.Count > 0 ? _storedItems[0].Expression : string.Empty;
+        var selected = _contextual?.Select(goo => goo.Value).ToList();
+        return DynamicValueListLogic.GetDefaultValue(selected, _storedItems);
     }
 
     /// <summary>
@@ -335,20 +305,6 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         }
 
         return options;
-    }
-
-    private int FindMatchingIndex(string value)
-    {
-        for (var i = 0; i < _storedItems.Count; i++)
-        {
-            if (string.Equals(_storedItems[i].Expression, value, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(_storedItems[i].Name, value, StringComparison.OrdinalIgnoreCase))
-            {
-                return i;
-            }
-        }
-
-        return -1;
     }
 
     private static string ExtractStringValue(object item)

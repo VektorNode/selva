@@ -182,9 +182,7 @@ public class SchemaSynchronizer
             // Context Print components use GH's contextual mechanism (not wires) so they are always in scope
             if (isPrint ||
                 ParameterTypeHelper.IsWiredToOwner(c, ownerComponent.InstanceGuid) ||
-                ParameterTypeHelper.IsFileOutputBakeComponent(c) ||
-                ParameterTypeHelper.IsChartOutputBakeComponent(c) ||
-                ParameterTypeHelper.IsDynamicValueListBakeComponent(c))
+                ParameterTypeHelper.IsQualifyingBakeOutput(c))
             {
                 inScope.Add(c.InstanceGuid);
             }
@@ -700,6 +698,10 @@ public class SchemaSynchronizer
         removedIds = PurgeStaleReferences(schema, existingIds);
         MergeDiscoveredInputs(schema, document);
         MergeDiscoveredPrintOutputs(schema, document);
+
+        // Schema invariant: dynamicValueList layout items are mirrored into schema.Outputs so every
+        // consumer reads one canonical place. Enforced here — the funnel every save/connect passes.
+        SchemaOutputCanonicalizer.CanonicalizeDynamicValueListOutputs(schema);
     }
 
     /// <summary>
@@ -859,11 +861,13 @@ public class SchemaSynchronizer
             }
         }
 
-        // Remove existing schema outputs that are ContextBake but no longer qualify
+        // Remove existing schema outputs that are ContextBake but no longer qualify. The qualifying
+        // set (file/chart/dynamicValueList) lives in ClassifyBakeOutputType — routing through it here
+        // means a DynVL bake is no longer stripped every solve (which fought the canonicalizer and
+        // produced the spurious "1 parameter removed" churn).
         var toRemove = schema.Outputs
             .Where(o => bakeComponents.TryGetValue(o.Id, out var c)
-                        && !ParameterTypeHelper.IsFileOutputBakeComponent(c)
-                        && !ParameterTypeHelper.IsChartOutputBakeComponent(c))
+                        && !ParameterTypeHelper.IsQualifyingBakeOutput(c))
             .Select(o => o.Id)
             .ToList();
 
@@ -887,26 +891,23 @@ public class SchemaSynchronizer
                 continue;
             }
 
-            string type;
-            if (ParameterTypeHelper.IsFileOutputBakeComponent(kvp.Value))
-            {
-                type = "file";
-            }
-            else if (ParameterTypeHelper.IsChartOutputBakeComponent(kvp.Value))
-            {
-                type = "chart";
-            }
-            else
+            var type = ParameterTypeHelper.ClassifyBakeOutputType(kvp.Value);
+            if (type == null)
             {
                 continue;
             }
+
+            var targetInputId = type == "dynamicValueList"
+                ? ParameterTypeHelper.ResolveDynamicValueListTargetId(kvp.Value)
+                : Guid.Empty;
 
             schema.Outputs.Add(new SchemaOutput
             {
                 Id = kvp.Key,
                 Nickname = kvp.Value.Params.Input[0].NickName,
                 Description = "",
-                Type = type
+                Type = type,
+                TargetInputId = targetInputId
             });
 
             existingIds.Add(kvp.Key);
@@ -1445,21 +1446,12 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Returns all layout items from either a tabbed or flat layout.
+    ///     Returns all layout items from either a tabbed or flat layout. Thin forwarder to the
+    ///     Rhino-free <see cref="SchemaOutputCanonicalizer.GetAllLayoutItems" /> (single implementation).
     /// </summary>
     public static IEnumerable<LayoutItemBase> GetAllLayoutItems(LayoutConfigBase layout)
     {
-        if (layout is TabbedLayoutConfig { Tabs: not null } tabbed)
-        {
-            return tabbed.Tabs.SelectMany(t => t.Groups).SelectMany(g => g.Items);
-        }
-
-        if (layout is FlatLayoutConfig { Groups: not null } flat)
-        {
-            return flat.Groups.SelectMany(g => g.Items);
-        }
-
-        return Enumerable.Empty<LayoutItemBase>();
+        return SchemaOutputCanonicalizer.GetAllLayoutItems(layout);
     }
 
     #endregion

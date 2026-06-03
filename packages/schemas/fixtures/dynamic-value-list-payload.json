@@ -1,0 +1,9 @@
+{
+	"_comment": "Cross-stack golden contract for the dynamicValueList output payload. Loaded by BOTH dotnet test (DynamicValueListPayload) and vitest (coercePayload). If C# and TS disagree on this shape, one side's CI goes red. Do not edit without updating both sides.",
+	"targetInputId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+	"options": {
+		"Sphere": "0",
+		"Box": "1",
+		"Cone": "2"
+	}
+}

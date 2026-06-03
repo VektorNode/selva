@@ -201,6 +201,17 @@
 			return;
 		}
 
+		// Guard the upload size client-side. The file is base64-embedded into the
+		// compute request body, so an oversize file would otherwise be rejected
+		// server-side with an opaque 413 (see COMPUTE_REQUEST_MAX_BYTES). The URL
+		// import path has the same check; keep the two in sync.
+		if (file.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) {
+			alert(
+				`File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB (max ${APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB}MB).`
+			);
+			return;
+		}
+
 		uploadedFileName = file.name;
 
 		const reader = new FileReader();

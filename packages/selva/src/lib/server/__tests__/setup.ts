@@ -18,15 +18,18 @@ vi.mock('$lib/server/providers.server', async () => {
 		get providers() {
 			return currentTestProviders().config;
 		},
+		resolveProviders: () => currentTestProviders().config,
 		get tenancy() {
 			return currentTestProviders().tenancy;
 		},
+		getTenancy: () => currentTestProviders().tenancy,
 		get flags() {
 			return currentTestProviders().flags;
 		},
 		get definitionService() {
 			return currentTestProviders().definitionService;
 		},
+		getDefinitionService: () => currentTestProviders().definitionService,
 		flag: (name: string) =>
 			Boolean((currentTestProviders().flags as Record<string, unknown>)[name]),
 		getAuthProvider: () => currentTestProviders().config.auth,

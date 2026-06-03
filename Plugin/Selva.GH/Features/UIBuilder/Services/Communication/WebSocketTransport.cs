@@ -4,7 +4,6 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Rhino;
 using Selva.Schema.Models;
 using Selva.GH.Config;
@@ -45,6 +44,10 @@ public class WebSocketTransport : IDisposable
 
     private readonly int _port;
     private readonly string _sessionId;
+
+    // Pure parse/classify of inbound frames — unit-tested in InboundMessageParserTests. This
+    // transport keeps only the socket, the thread marshalling, and the event raising.
+    private readonly InboundMessageParser _inboundParser = new InboundMessageParser(SecureSerializer);
 
     // All mutable state that can be touched from multiple threads is guarded by _stateLock.
     private readonly object _stateLock = new object();
@@ -199,7 +202,7 @@ public class WebSocketTransport : IDisposable
     /// </summary>
     public Task BroadcastMessage(string messageType, object data)
     {
-        return BroadcastAsync(new { type = messageType, sessionId = _sessionId, data });
+        return BroadcastAsync(OutboundEnvelopes.Wrapped(_sessionId, messageType, data));
     }
 
     /// <summary>
@@ -209,12 +212,7 @@ public class WebSocketTransport : IDisposable
     /// </summary>
     public Task BroadcastParametersAdded(DiscoveredParameters availableParams)
     {
-        return BroadcastAsync(new
-        {
-            type = "parametersAdded",
-            sessionId = _sessionId,
-            availableParams
-        });
+        return BroadcastAsync(OutboundEnvelopes.ParametersAdded(_sessionId, availableParams));
     }
 
     public async Task BroadcastOutputsWithFilesAndDisplay(
@@ -243,15 +241,8 @@ public class WebSocketTransport : IDisposable
 
         // JSON envelope: omit displayData; include count so the client knows how many binary
         // frames to collect before processing the scene update.
-        await BroadcastAsync(new
-        {
-            type = "outputs",
-            sessionId = _sessionId,
-            outputs,
-            fileOutputs,
-            binaryBatchCount = binaryBlobs.Count,
-            modelUnits
-        });
+        await BroadcastAsync(OutboundEnvelopes.Outputs(
+            _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits));
 
         // Send each binary blob as a separate binary WebSocket frame. WebSocket preserves message
         // order (TCP), so these frames always arrive after the JSON envelope above.
@@ -266,19 +257,13 @@ public class WebSocketTransport : IDisposable
 
     public Task BroadcastCurrentValues(Dictionary<string, object> values)
     {
-        return BroadcastAsync(new { type = "currentValues", sessionId = _sessionId, values });
+        return BroadcastAsync(OutboundEnvelopes.CurrentValues(_sessionId, values));
     }
 
     public Task BroadcastSchemaUpdate(UISchema schema, List<Guid> removedIds = null)
     {
-        return BroadcastAsync(new
-        {
-            type = "schemaUpdated",
-            sessionId = _sessionId,
-            schema,
-            schemaHash = SchemaHash.Compute(schema),
-            removedIds = removedIds ?? new List<Guid>()
-        });
+        return BroadcastAsync(OutboundEnvelopes.SchemaUpdated(
+            _sessionId, schema, SchemaHash.Compute(schema), removedIds));
     }
 
     public Task BroadcastInitialData(
@@ -292,21 +277,14 @@ public class WebSocketTransport : IDisposable
             solvingState = _lastBroadcastedSolvingState;
         }
 
-        return BroadcastAsync(new
-        {
-            type = "initialData",
-            sessionId = _sessionId,
-            schema,
-            schemaHash = SchemaHash.Compute(schema),
-            availableParams,
-            currentValues,
-            isSolving = solvingState ?? false
-        });
+        return BroadcastAsync(OutboundEnvelopes.InitialData(
+            _sessionId, schema, SchemaHash.Compute(schema), availableParams, currentValues,
+            solvingState ?? false));
     }
 
     public Task BroadcastSchemaSaved(bool success, string message = null)
     {
-        return BroadcastAsync(new { type = "schemaSaved", sessionId = _sessionId, success, message });
+        return BroadcastAsync(OutboundEnvelopes.SchemaSaved(_sessionId, success, message));
     }
 
     /// <summary>
@@ -316,14 +294,8 @@ public class WebSocketTransport : IDisposable
     /// </summary>
     public Task BroadcastSchemaSaveRejected(UISchema currentSchema, string reason = null)
     {
-        return BroadcastAsync(new
-        {
-            type = "schemaSaveRejected",
-            sessionId = _sessionId,
-            schema = currentSchema,
-            schemaHash = SchemaHash.Compute(currentSchema),
-            reason = reason ?? "Schema changed in Grasshopper since you started editing."
-        });
+        return BroadcastAsync(OutboundEnvelopes.SchemaSaveRejected(
+            _sessionId, currentSchema, SchemaHash.Compute(currentSchema), reason));
     }
 
     /// <summary>
@@ -360,17 +332,14 @@ public class WebSocketTransport : IDisposable
             _lastBroadcastedSolvingState = isSolving;
         }
 
-        return BroadcastAsync(new { type = "solvingState", sessionId = _sessionId, isSolving });
+        return BroadcastAsync(OutboundEnvelopes.SolvingState(_sessionId, isSolving));
     }
 
     /// <summary>
-    ///     Broadcast parameter metadata changes. Suppressed during schema saves.
-    ///
-    ///     Wire format: `changedParams` is a FLAT array of items keyed by parameter id (mixing
-    ///     inputs and outputs). The UI looks each id up in `schema.inputs` / `schema.outputs` —
-    ///     it doesn't need to know which side an item came from. Sending the raw
-    ///     `DiscoveredParameters` object (with nested `inputs` / `outputs` arrays) silently
-    ///     breaks the UI handlers because they call `.forEach` on the value.
+    ///     Broadcast parameter metadata changes. Suppressed during schema saves. The flat-array
+    ///     wire shape (and why the nested DiscoveredParameters object breaks the UI) lives in
+    ///     <see cref="OutboundEnvelopes.MetadataUpdated" />, which returns null when there's nothing
+    ///     to send.
     /// </summary>
     public Task BroadcastMetadataChanges(DiscoveredParameters changedParams)
     {
@@ -382,70 +351,14 @@ public class WebSocketTransport : IDisposable
             }
         }
 
-        if (changedParams == null)
-        {
-            return Task.CompletedTask;
-        }
-
-        var inputCount = changedParams.Inputs?.Count ?? 0;
-        var outputCount = changedParams.Outputs?.Count ?? 0;
-        if (inputCount == 0 && outputCount == 0)
-        {
-            return Task.CompletedTask;
-        }
-
-        // Build entries as dictionaries so absent fields are simply not emitted — the UI's
-        // `!== undefined` checks require missing keys, not explicit nulls.
-        var flat = new List<Dictionary<string, object>>(inputCount + outputCount);
-        if (changedParams.Inputs != null)
-        {
-            foreach (var i in changedParams.Inputs)
-            {
-                var item = new Dictionary<string, object>
-                {
-                    ["id"] = i.Id,
-                    ["nickname"] = i.Nickname,
-                    ["description"] = i.Description ?? ""
-                };
-                if (i.Minimum.HasValue) item["minimum"] = i.Minimum.Value;
-                if (i.Maximum.HasValue) item["maximum"] = i.Maximum.Value;
-                if (i.StepSize.HasValue) item["stepSize"] = i.StepSize.Value;
-                if (i.Options != null) item["options"] = i.Options;
-                flat.Add(item);
-            }
-        }
-
-        if (changedParams.Outputs != null)
-        {
-            foreach (var o in changedParams.Outputs)
-            {
-                flat.Add(new Dictionary<string, object>
-                {
-                    ["id"] = o.Id,
-                    ["nickname"] = o.Nickname,
-                    ["description"] = o.Description ?? ""
-                });
-            }
-        }
-
-        return BroadcastAsync(new
-        {
-            type = "metadataUpdated",
-            sessionId = _sessionId,
-            changedParams = flat
-        });
+        var envelope = OutboundEnvelopes.MetadataUpdated(_sessionId, changedParams);
+        return envelope == null ? Task.CompletedTask : BroadcastAsync(envelope);
     }
 
     public Task BroadcastRuntimeMessage(string level, string messageText)
     {
-        return BroadcastAsync(new
-        {
-            type = "runtimeMessage",
-            sessionId = _sessionId,
-            level,
-            message = messageText,
-            timestamp = DateTime.UtcNow
-        });
+        return BroadcastAsync(OutboundEnvelopes.RuntimeMessage(
+            _sessionId, level, messageText, DateTime.UtcNow));
     }
 
     public Task BroadcastSyncPreview(SyncDiff syncDiff)
@@ -455,24 +368,12 @@ public class WebSocketTransport : IDisposable
             return Task.CompletedTask;
         }
 
-        return BroadcastAsync(new
-        {
-            type = "syncPreview",
-            sessionId = _sessionId,
-            fromGH = syncDiff.FromGH,
-            toGH = syncDiff.ToGH
-        });
+        return BroadcastAsync(OutboundEnvelopes.SyncPreview(_sessionId, syncDiff));
     }
 
     public Task BroadcastSyncApplied(bool success, string message = null)
     {
-        return BroadcastAsync(new
-        {
-            type = "syncApplied",
-            sessionId = _sessionId,
-            success,
-            message = message ?? (success ? "Sync completed successfully" : "Sync failed")
-        });
+        return BroadcastAsync(OutboundEnvelopes.SyncApplied(_sessionId, success, message));
     }
 
     // -------------------------------------------------------------------------
@@ -509,39 +410,21 @@ public class WebSocketTransport : IDisposable
         {
             try
             {
-                var jObj = JObject.Parse(message);
-                var msgType = jObj["type"]?.ToString();
-                var sid = jObj["sessionId"]?.ToString();
+                // Parse/classify is pure (see InboundMessageParser); this method owns only the
+                // session-establish in-flight guard, the thread marshalling, and the event raising.
+                var inbound = _inboundParser.Parse(message, _sessionId);
 
-                // requestInitialData establishes the session — exempt from session check.
-                if (msgType != "requestInitialData" && sid != _sessionId)
+                switch (inbound.Kind)
                 {
-                    Logger.Warn($"[WebSocketTransport] Session ID mismatch for '{msgType}'.");
-                    return;
-                }
+                    case InboundKind.ValueUpdate:
+                        MarshalToMainThread(() => OnValuesReceived?.Invoke(this, inbound.Values));
+                        break;
 
-                switch (msgType)
-                {
-                    case "valueUpdate":
-                        {
-                            var values = jObj["values"]?.ToObject<Dictionary<string, object>>(SecureSerializer);
-                            if (values != null)
-                            {
-                                MarshalToMainThread(() => OnValuesReceived?.Invoke(this, values));
-                            }
-                            else
-                            {
-                                Logger.Warn("[WebSocketTransport] valueUpdate missing 'values'.");
-                            }
-
-                            break;
-                        }
-
-                    case "requestCurrentValues":
+                    case InboundKind.RequestCurrentValues:
                         MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
                         break;
 
-                    case "requestInitialData":
+                    case InboundKind.RequestInitialData:
                         // Guard against concurrent invocations — if the flag is already 1, bail out.
                         if (Interlocked.CompareExchange(ref _initialDataInFlight, 1, 0) != 0)
                         {
@@ -561,47 +444,39 @@ public class WebSocketTransport : IDisposable
                         });
                         break;
 
-                    case "saveSchema":
+                    case InboundKind.SaveSchema:
                         {
-                            var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
-                            if (schema != null)
+                            var request = new SchemaSaveRequest
                             {
-                                var baseHash = jObj["baseSchemaHash"]?.ToString();
-                                var request = new SchemaSaveRequest
-                                {
-                                    Schema = schema,
-                                    BaseSchemaHash = baseHash
-                                };
-                                MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, request));
-                            }
-
+                                Schema = inbound.Schema,
+                                BaseSchemaHash = inbound.BaseSchemaHash
+                            };
+                            MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, request));
                             break;
                         }
 
-                    case "requestSyncPreview":
-                        {
-                            var schema = jObj["schema"]?.ToObject<UISchema>(SecureSerializer);
-                            if (schema != null)
-                            {
-                                MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, schema));
-                            }
+                    case InboundKind.RequestSyncPreview:
+                        MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, inbound.Schema));
+                        break;
 
-                            break;
-                        }
+                    case InboundKind.ApplySyncChanges:
+                        MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, inbound.Changes));
+                        break;
 
-                    case "applySyncChanges":
-                        {
-                            var changes = jObj["changes"]?.ToObject<List<SyncChange>>(SecureSerializer);
-                            if (changes != null)
-                            {
-                                MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, changes));
-                            }
+                    case InboundKind.SessionMismatch:
+                        Logger.Warn($"[WebSocketTransport] Session ID mismatch for '{inbound.MessageType}'.");
+                        break;
 
-                            break;
-                        }
+                    case InboundKind.MissingField:
+                        Logger.Warn($"[WebSocketTransport] '{inbound.MessageType}' missing a required field.");
+                        break;
 
-                    default:
-                        Logger.Warn($"[WebSocketTransport] Unknown message type: '{msgType}'.");
+                    case InboundKind.Unknown:
+                        Logger.Warn($"[WebSocketTransport] Unknown message type: '{inbound.MessageType}'.");
+                        break;
+
+                    case InboundKind.Malformed:
+                        Logger.Warn("[WebSocketTransport] Received a malformed message (bad JSON or no type).");
                         break;
                 }
             }

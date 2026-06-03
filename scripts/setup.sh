@@ -321,11 +321,12 @@ PORT=${PORT}
 ORIGIN="${ORIGIN}"
 ALLOW_INSECURE_COOKIES="${ALLOW_INSECURE_COOKIES}"
 
-# Request body size limit for large geometry uploads. Sized to the largest
-# legitimate payload (a big .gh upload + image). Don't set "Infinity" in
-# production — every JSON endpoint inherits this cap and an unbounded body
-# is a DoS vector on routes that lack their own per-route cap.
-BODY_SIZE_LIMIT=150M
+# Request body size limit for large geometry uploads. The binding case is a
+# `file` widget compute input: a 150 MB raw file base64-inflates to ~200 MB on
+# the wire, so this clears that. Keep >= COMPUTE_REQUEST_MAX_BYTES. Don't set
+# "Infinity" in production — every JSON endpoint inherits this cap and an
+# unbounded body is a DoS vector on routes that lack their own per-route cap.
+BODY_SIZE_LIMIT=210M
 
 # Installation directory — used by the admin dashboard's update endpoint
 # to locate scripts/update.sh. Without this, updates triggered from the UI

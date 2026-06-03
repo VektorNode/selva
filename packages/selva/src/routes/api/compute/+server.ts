@@ -9,7 +9,7 @@ import {
 	type SolveScheduler
 } from '@selvajs/compute';
 import type { SchemaInput } from '@selvajs/schemas';
-import { error, json, isHttpError } from '@sveltejs/kit';
+import { error, isHttpError } from '@sveltejs/kit';
 import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';
 import {
 	resolveServerForOrg,
@@ -19,6 +19,7 @@ import { isSafeRemoteDefinitionUrl } from '$lib/server/compute/safe-url';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import {
 	COMPUTE_REQUEST_MAX_BYTES,
+	COMPUTE_RESPONSE_MAX_BYTES,
 	DEFINITION_CACHE_TTL_MS,
 	MAX_SOLVE_DURATION_MS,
 	REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
@@ -391,7 +392,37 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			throw err;
 		}
 
-		return json(solvedDefinition);
+		// Serialize once and guard the size. A `file`-typed output base64-embeds
+		// its bytes here; a large enough export both risks the V8 ~512 MB string
+		// wall during stringify and balloons browser-tab memory on the client.
+		// This is the defensive backstop for that (ADR 0003 is the real fix):
+		// fail with a clear 413 instead of an opaque 500 or a silently OOM'd tab.
+		// We stringify ourselves (one copy, same as `json()` would do) so we can
+		// both measure the result and catch the RangeError stringify throws when
+		// a single string leaf exceeds V8's limit.
+		let serialized: string;
+		try {
+			serialized = JSON.stringify(solvedDefinition);
+		} catch (err) {
+			if (err instanceof RangeError) {
+				throw error(
+					413,
+					'Solve result is too large to return. This usually means a file output exceeds the supported size.'
+				);
+			}
+			throw err;
+		}
+		// `length` is UTF-16 code units; byte length is >= that for non-ASCII but
+		// base64 is ASCII, so for the payloads this guards the two coincide.
+		if (serialized.length > COMPUTE_RESPONSE_MAX_BYTES) {
+			throw error(
+				413,
+				'Solve result is too large to return. This usually means a file output exceeds the supported size.'
+			);
+		}
+		return new Response(serialized, {
+			headers: { 'Content-Type': 'application/json' }
+		});
 	} catch (err) {
 		// Re-throw SvelteKit errors (400, 404, etc.) as-is
 		if (isHttpError(err)) throw err;

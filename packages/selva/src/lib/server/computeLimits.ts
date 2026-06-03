@@ -67,9 +67,26 @@ export const RATE_LIMIT_MAX_REQUESTS = readPositiveInt('COMPUTE_RATE_LIMIT_MAX',
 export const MAX_GH_FILE_SIZE = readPositiveInt('MAX_GH_FILE_SIZE_BYTES', 50 * MB);
 export const MAX_IMAGE_FILE_SIZE = readPositiveInt('MAX_IMAGE_FILE_SIZE_BYTES', 10 * MB);
 
-// /api/compute JSON body cap. This is inputs + values, not the .gh — typical
-// payloads are tens of KB. 5 MB is generous; larger is almost certainly abuse.
-export const COMPUTE_REQUEST_MAX_BYTES = readPositiveInt('COMPUTE_REQUEST_MAX_BYTES', 5 * MB);
+// /api/compute JSON body cap. This is inputs + values, not the .gh. Most
+// payloads are tens of KB (sliders + dropdowns), BUT a `file` widget input
+// embeds the uploaded geometry as base64 inside `values` — and base64 inflates
+// raw bytes by ~4/3. The client file cap is APP_DEFAULTS.FILE_UPLOAD (150 MB
+// raw, in @selvajs/ui), so a worst-case body is ~200 MB. We size to 210 MB to
+// clear that plus JSON envelope slack. NOTE: this must stay <= the global
+// BODY_SIZE_LIMIT (adapter-node), or the global backstop rejects first.
+export const COMPUTE_REQUEST_MAX_BYTES = readPositiveInt('COMPUTE_REQUEST_MAX_BYTES', 210 * MB);
+
+// /api/compute JSON *response* cap — the missing counterpart to the request
+// cap above. A `file`-typed output (e.g. an exported .3dm) is base64-embedded
+// in the solve response; real definitions produce 250+ MB exports. Two failure
+// modes this guards: (1) V8 caps a single string at ~512 MB, so a large enough
+// base64 leaf makes `JSON.stringify` throw `RangeError: Invalid string length`
+// — an opaque 500; (2) the browser holds several full copies and OOMs the tab.
+// This is a DEFENSIVE backstop only: it turns a silent crash into a clear 413
+// so the failure is loud. The real fix (stream large file outputs out-of-band)
+// is ADR 0003 — until that lands, this cap is the safety net. Sized well above
+// any legitimate inline payload today, well below the V8 string wall.
+export const COMPUTE_RESPONSE_MAX_BYTES = readPositiveInt('COMPUTE_RESPONSE_MAX_BYTES', 300 * MB);
 
 // Hard cap + deadline on fetching remote definitions. The cap tracks
 // MAX_GH_FILE_SIZE; the timeout protects against slow-loris hosts.

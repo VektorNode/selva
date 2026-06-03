@@ -13,6 +13,7 @@ using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
+using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
@@ -423,68 +424,80 @@ public class ValueCollector
 
     /// <summary>
     ///     Extract the routing payload { targetInputId, options } from the DynamicValueListGoo wired into
-    ///     a ContextBake's first input. The Goo carries the target id (set on the upstream "Set Dynamic
-    ///     Value List" component), so no schema/layout fallback is needed here.
+    ///     a ContextBake's first input. Delegates the payload shape to <see cref="OutputPayloadBuilder" />
+    ///     (the unit-tested contract) — this method only walks Rhino's volatile data and unwraps.
     /// </summary>
-    private static object ExtractDynamicValueListOutput(IGH_Component component)
+    private object ExtractDynamicValueListOutput(IGH_Component component)
     {
-        var inputParam = component.Params.Input.FirstOrDefault();
-        if (inputParam?.VolatileData == null || inputParam.VolatileData.IsEmpty)
-        {
-            return null;
-        }
-
-        foreach (var goo in inputParam.VolatileData.AllData(true))
-        {
-            if (goo is DynamicValueListGoo dvl)
-            {
-                return new
-                {
-                    targetInputId = dvl.TargetInputId == Guid.Empty ? null : dvl.TargetInputId.ToString(),
-                    options = new Dictionary<string, string>(dvl.Options ?? new Dictionary<string, string>())
-                };
-            }
-        }
-
-        return null;
+        return BuildFirstInputPayload(component);
     }
 
     /// <summary>
     ///     Extract a PlotlyFigure JSON string from the first input of a ContextBake component.
-    ///     Uses duck-typing (TypeName + CastTo string) to avoid a hard dependency on the chart assembly.
-    ///     https://github.com/TheVessen/selva-canopy/blob/main/src/PlotlyFigure.cs
+    ///     Delegates classification + payload to <see cref="OutputPayloadBuilder" />.
     /// </summary>
-    private static object ExtractChartOutput(IGH_Component component)
+    private object ExtractChartOutput(IGH_Component component)
+    {
+        return BuildFirstInputPayload(component);
+    }
+
+    /// <summary>
+    ///     Walk the first input's volatile data, project each goo into a Rhino-free <see cref="GooView" />,
+    ///     and ask <see cref="OutputPayloadBuilder" /> for the payload. The first recognized goo wins.
+    ///     All ContextBake-wired output types (dynamicValueList / chart / file) flow through here, so
+    ///     their wire shape is decided in one unit-tested place.
+    /// </summary>
+    private object BuildFirstInputPayload(IGH_Component component)
     {
         var inputParam = component.Params.Input.FirstOrDefault();
         if (inputParam?.VolatileData == null || inputParam.VolatileData.IsEmpty)
         {
+            Logger.Log($"[ValueCollector] ContextBake '{component.NickName}' output: {BuildOutcome.EmptyResult}");
             return null;
         }
 
-        foreach (var goo in inputParam.VolatileData.AllData(true))
+        // Project every goo into the Rhino-free view, then let the tested classifier decide. The outcome
+        // is logged once — so a null payload says *why* (empty / unknown type) instead of vanishing.
+        var views = inputParam.VolatileData.AllData(true).Select(ProjectGoo);
+        var outcome = OutputPayloadBuilder.Classify(views);
+
+        Logger.Log($"[ValueCollector] ContextBake '{component.NickName}' output: {outcome}");
+
+        return outcome.Payload;
+    }
+
+    /// <summary>
+    ///     Reduce a (possibly GH_ObjectWrapper-wrapped) goo to the Rhino-free facts the payload decision
+    ///     needs. This is the only place that touches Rhino goo types for ContextBake outputs.
+    /// </summary>
+    private GooView ProjectGoo(IGH_Goo goo)
+    {
+        if (goo == null)
         {
-            if (goo == null)
-            {
-                continue;
-            }
-
-            // Custom goo from external assemblies arrives wrapped in GH_ObjectWrapper on generic inputs
-            var inner = goo is GH_ObjectWrapper wrapper ? wrapper.Value as IGH_Goo ?? goo : goo;
-
-            if (!string.Equals(inner.TypeName, "Plotly Figure", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var json = inner.GetType().GetMethod("ToJson")?.Invoke(inner, null) as string;
-            if (!string.IsNullOrEmpty(json))
-            {
-                return json;
-            }
+            return null;
         }
 
-        return null;
+        // Custom goo arrives wrapped in GH_ObjectWrapper on a generic ContextBake input — unwrap it
+        // before the type checks, or the match silently fails.
+        var inner = goo is GH_ObjectWrapper wrapper ? wrapper.Value as IGH_Goo ?? goo : goo;
+
+        if (inner is DynamicValueListGoo dvl)
+        {
+            return new GooView { TypeName = inner.TypeName, DynamicValueList = dvl.Payload };
+        }
+
+        if (string.Equals(inner.TypeName, "Plotly Figure", StringComparison.Ordinal))
+        {
+            var json = inner.GetType().GetMethod("ToJson")?.Invoke(inner, null) as string;
+            return new GooView { TypeName = inner.TypeName, ChartJson = string.IsNullOrEmpty(json) ? null : json };
+        }
+
+        if (inner is FileDataGoo fileGoo)
+        {
+            return new GooView { TypeName = inner.TypeName, FilePayload = ExtractFileDataFromGoo(fileGoo) };
+        }
+
+        return new GooView { TypeName = inner?.TypeName };
     }
 
     /// <summary>

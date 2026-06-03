@@ -113,6 +113,38 @@ If a helper is specific to compute, schema, viewer, etc., it goes in a domain fo
 - Use `_components/` when the route owns **2 or more** page-specific components. Below that, just put them inline or import from `lib/components/`.
 - Cross-route shared UI lives in `lib/components/` or `@selvajs/ui`.
 
+## Cross-stack contracts (plugin ↔ UI)
+
+The plugin (C#) produces data the UI (TS) consumes over WebSocket / Rhino.Compute. These are **two
+implementations of one contract** — the recurring source of "works on one side, silently drops on the
+other" bugs. Rules to keep them from drifting:
+
+- **One source of truth per shape.** The schema is generated from `ui-schema.json` (CI fails on drift).
+  For runtime wire shapes that aren't generated, give the payload a single Rhino-free type that both
+  the local collector and the compute path serialize through (e.g. `DynamicValueListPayload`), so the
+  two paths provably can't diverge. A `*ContractTests` test asserts local == compute.
+- **One canonical location per concept.** A thing the UI reads must live in exactly one place. Outputs
+  are canonical in `schema.Outputs`; layout items are routing sinks. `SchemaOutputCanonicalizer`
+  enforces this in the validate funnel so every reader scans one place. Don't make readers tolerate
+  "either/or" — repair the schema at the boundary instead.
+- **Extract the decision out of the Rhino types.** Logic welded to `IGH_*` can't be unit-tested
+  (Rhino breaks the test host). Pull the pure decision into a Rhino-free class linked into
+  `Selva.Tests` (see `OutputPayloadBuilder`, `SchemaOutputCanonicalizer`); leave only the
+  unwrap/IO in the Rhino-typed shell.
+
+### Adding a new output type — checklist
+
+Touch **both stacks and add a test on each side**, or it will silently half-work:
+
+1. **Schema** — add the type to `ui-schema.json`, run `cd packages/schemas && pnpm run generate:all`.
+2. **C# Goo** — a `*Goo : ISelvaSerializableGoo` whose wire shape lives in a Rhino-free payload type.
+3. **C# collect** — a branch in `OutputPayloadBuilder` (the table-driven classifier) + a golden row in
+   `OutputPayloadContractTests`. Do **not** add a new bespoke extractor in `ValueCollector`.
+4. **C# canonicalize** — if it can live in the layout, mirror it into `schema.Outputs` in
+   `SchemaOutputCanonicalizer` + an invariant test.
+5. **TS route** — handle the new `outputs` payload in the UI consumer + a `vitest` covering it.
+6. Run `dotnet test` **and** `pnpm test` — both must be green before the PR.
+
 ## Filename casing
 
 | Context            | Convention                                                   | Example                                             |
