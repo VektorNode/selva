@@ -1,9 +1,16 @@
 <script lang="ts">
-	import type { InputLayoutItem, FileInputWidgetConfig, SupportedTypes } from '@selvajs/schemas';
+	import type {
+		InputLayoutItem,
+		FileInputWidgetConfig,
+		DynamicValueListWidgetConfig,
+		DropdownWidgetConfig,
+		SupportedTypes
+	} from '@selvajs/schemas';
 	import {
 		isNumberWidget,
 		isTextWidget,
 		isDropdownWidget,
+		isDynamicValueListWidget,
 		isCheckboxWidget,
 		isFileWidget,
 		isColorWidget
@@ -28,6 +35,8 @@
 		displayName?: string;
 		onChange: (paramId: string, value: SupportedTypes) => void;
 		disabled?: boolean;
+		/** Runtime-computed options for a dynamic value list input (name -> value). */
+		dynamicOptions?: Record<string, string>;
 	}
 
 	let {
@@ -35,7 +44,8 @@
 		value = $bindable(undefined),
 		displayName,
 		onChange,
-		disabled = false
+		disabled = false,
+		dynamicOptions
 	}: Props = $props();
 
 	const inputId = $derived(`input-${item.paramId}`);
@@ -68,6 +78,50 @@
 
 	const showRangeInLabel = $derived(isNumberWidget(item) && numberRangeHint !== null);
 
+	// Dynamic value list: computed options (from the last solve) take precedence over the
+	// author's seed list. Empty until the first solve produces options, unless a default is set.
+	const dynamicListConfig = $derived(
+		isDynamicValueListWidget(item)
+			? (item.config as DynamicValueListWidgetConfig | undefined)
+			: undefined
+	);
+	const dynamicListOptions = $derived<Record<string, string>>(
+		dynamicOptions && Object.keys(dynamicOptions).length > 0
+			? dynamicOptions
+			: (Object.fromEntries(
+					Object.entries(dynamicListConfig?.defaultOptions ?? {}).filter(
+						(entry): entry is [string, string] => entry[1] !== undefined
+					)
+				) as Record<string, string>)
+	);
+	const dynamicListHasOptions = $derived(Object.keys(dynamicListOptions).length > 0);
+	// As a dropdown config so DropdownInput/ChecklistInput can consume it unchanged.
+	const dynamicListAsDropdownConfig = $derived<DropdownWidgetConfig>({
+		options: dynamicListOptions,
+		displayAs: dynamicListConfig?.displayAs ?? 'dropdown'
+	});
+	const hideDynamicListWhenEmpty = $derived(
+		isDynamicValueListWidget(item) &&
+			!dynamicListHasOptions &&
+			(dynamicListConfig?.emptyBehavior ?? 'hide') === 'hide'
+	);
+
+	// When a dynamic value list recomputes, a previously-selected value may no longer be an
+	// available option. Prune the stale selection so the control shows a valid option (or empty)
+	// instead of rendering the orphaned raw value as its own label.
+	$effect(() => {
+		if (!isDynamicValueListWidget(item) || !dynamicListHasOptions) return;
+		const validValues = new Set(Object.values(dynamicListOptions));
+		// Route through onChange (not commit) — value is a one-way prop here, so writing it
+		// directly from an effect trips Svelte's binding-ownership check.
+		if (Array.isArray(value)) {
+			const pruned = value.filter((v) => typeof v === 'string' && validValues.has(v));
+			if (pruned.length !== value.length) onChange(item.paramId, pruned);
+		} else if (typeof value === 'string' && value && !validValues.has(value)) {
+			onChange(item.paramId, '');
+		}
+	});
+
 	function commit(newValue: SupportedTypes) {
 		value = newValue;
 		onChange(item.paramId, newValue);
@@ -83,7 +137,7 @@
 			value
 		})}
 	{/if}
-{:else}
+{:else if !hideDynamicListWhenEmpty}
 	<Field.Field>
 		<Field.Label for={inputId} class="gap-2 flex items-center">
 			{label}
@@ -151,6 +205,31 @@
 					onChange={commit}
 					{disabled}
 				/>
+			{/if}
+		{:else if isDynamicValueListWidget(item)}
+			{#if dynamicListHasOptions}
+				{#if dynamicListAsDropdownConfig.displayAs === 'checklist'}
+					<ChecklistInput
+						{inputId}
+						value={Array.isArray(value)
+							? (value as string[])
+							: typeof value === 'string' && value
+								? [value]
+								: []}
+						config={dynamicListAsDropdownConfig}
+						onChange={commit}
+						{disabled}
+					/>
+				{:else}
+					<DropdownInput
+						value={typeof value === 'string' ? value : ''}
+						config={dynamicListAsDropdownConfig}
+						onChange={commit}
+						{disabled}
+					/>
+				{/if}
+			{:else}
+				<p class="text-sm text-muted-foreground">No options available yet.</p>
 			{/if}
 		{:else if isFileWidget(item)}
 			{@const config = item.config as FileInputWidgetConfig}

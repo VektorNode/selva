@@ -17,10 +17,10 @@
 	},
 	"scripts": {
 		"dev": "vite dev",
-		"build": "rm -rf build && vite build && node ./scripts/generate-templates.js",
+		"build": "rimraf build && vite build && node ./scripts/generate-templates.js",
 		"preview": "vite preview",
 		"start": "node build/index.js",
-		"clean": "rm -rf build templates",
+		"clean": "rimraf build templates",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"type-check": "tsc --noEmit",
@@ -53,6 +53,7 @@
 		"@playwright/test": "catalog:",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@types/three": "catalog:",
+		"rimraf": "catalog:",
 		"tw-animate-css": "catalog:",
 		"vitest": "catalog:"
 	}

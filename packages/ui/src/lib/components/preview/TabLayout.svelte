@@ -5,6 +5,7 @@
 	import TabBar from './TabBar.svelte';
 	import TabContent from './TabContent.svelte';
 	import { buildVisibilityMap, itemKey } from '$lib/schema/visibility-rules';
+	import { buildDynamicValueListOptions } from '$lib/schema/dynamic-value-list';
 
 	interface Props {
 		schema: UISchema;
@@ -31,6 +32,9 @@
 	);
 
 	const showTabBar = $derived(visibleTabs.length > 1);
+
+	// Computed value list options keyed by the target input id, derived from solved outputs.
+	const dynamicOptions = $derived(buildDynamicValueListOptions(schema.outputs, values));
 
 	// Tab selection
 	$effect(() => {
@@ -98,6 +102,7 @@
 				{onValueChange}
 				inputs={schema.inputs}
 				outputs={schema.outputs}
+				{dynamicOptions}
 			/>
 		{/each}
 	</Tabs.Root>

@@ -34,7 +34,7 @@
 	],
 	"scripts": {
 		"dev": "vite dev",
-		"build": "rm -rf dist && pnpm prepack",
+		"build": "rimraf dist && pnpm prepack",
 		"build:fast": "svelte-kit sync && svelte-package",
 		"build:watch": "svelte-kit sync && svelte-package --watch",
 		"preview": "vite preview",
@@ -80,6 +80,7 @@
 		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"@types/three": "catalog:",
 		"bits-ui": "^2.18.0",
+		"rimraf": "catalog:",
 		"svelte": "catalog:",
 		"tailwind-variants": "^3.2.2",
 		"vitest": "catalog:"

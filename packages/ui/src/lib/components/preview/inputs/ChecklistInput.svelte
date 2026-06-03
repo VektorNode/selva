@@ -28,7 +28,7 @@
 </script>
 
 <div class="divide-y divide-border/60 overflow-hidden rounded-md border border-input">
-	{#each Object.entries(options) as [name, expr] (expr ?? name)}
+	{#each Object.entries(options) as [name, expr] (name)}
 		{@const optionValue = expr ?? name}
 		{@const optionId = `${inputId}-${optionValue}`}
 		{@const isSelected = selected.has(optionValue)}

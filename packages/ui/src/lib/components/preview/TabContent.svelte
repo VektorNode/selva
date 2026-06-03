@@ -23,10 +23,20 @@
 		onValueChange: (paramId: string, value: SupportedTypes) => void;
 		inputs: SchemaInput[];
 		outputs: DiscoveredOutput[];
+		/** Computed value list options keyed by the target dynamic-value-list input id. */
+		dynamicOptions?: Record<string, Record<string, string>>;
 	}
 
-	let { tab, values, collapsedGroups, onToggleGroup, onValueChange, inputs, outputs }: Props =
-		$props();
+	let {
+		tab,
+		values,
+		collapsedGroups,
+		onToggleGroup,
+		onValueChange,
+		inputs,
+		outputs,
+		dynamicOptions = {}
+	}: Props = $props();
 
 	function getInputById(paramId: string): SchemaInput | undefined {
 		return inputs.find((i) => i.id === paramId);
@@ -49,6 +59,7 @@
 			displayName={layoutItem.displayName}
 			onChange={onValueChange}
 			disabled={visibility.disabled}
+			dynamicOptions={dynamicOptions[input.id]}
 		/>
 	{/if}
 {/snippet}

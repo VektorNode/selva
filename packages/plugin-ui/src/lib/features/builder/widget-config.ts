@@ -4,6 +4,8 @@ import type {
 	NumberWidgetConfig,
 	TextWidgetConfig,
 	DropdownWidgetConfig,
+	DynamicValueListWidgetConfig,
+	DynamicValueListOutputConfig,
 	CheckboxWidgetConfig,
 	FileInputWidgetConfig,
 	ColorWidgetConfig,
@@ -12,6 +14,7 @@ import type {
 	InputNumberLayoutItem,
 	InputTextLayoutItem,
 	InputDropdownLayoutItem,
+	InputDynamicValueListLayoutItem,
 	InputCheckboxLayoutItem,
 	InputFileLayoutItem,
 	InputColorLayoutItem,
@@ -19,7 +22,8 @@ import type {
 	OutputNumberLayoutItem,
 	OutputFileLayoutItem,
 	OutputChartLayoutItem,
-	OutputImageLayoutItem
+	OutputImageLayoutItem,
+	OutputDynamicValueListLayoutItem
 } from '@selvajs/schemas';
 import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 
@@ -31,6 +35,7 @@ export type InputWidgetType =
 	| InputNumberLayoutItem['widgetType']
 	| InputTextLayoutItem['widgetType']
 	| InputDropdownLayoutItem['widgetType']
+	| InputDynamicValueListLayoutItem['widgetType']
 	| InputCheckboxLayoutItem['widgetType']
 	| InputFileLayoutItem['widgetType']
 	| InputColorLayoutItem['widgetType'];
@@ -40,7 +45,8 @@ export type OutputWidgetType =
 	| OutputNumberLayoutItem['widgetType']
 	| OutputFileLayoutItem['widgetType']
 	| OutputChartLayoutItem['widgetType']
-	| OutputImageLayoutItem['widgetType'];
+	| OutputImageLayoutItem['widgetType']
+	| OutputDynamicValueListLayoutItem['widgetType'];
 
 export type WidgetType = InputWidgetType | OutputWidgetType;
 
@@ -48,11 +54,16 @@ export type InputWidgetConfig =
 	| NumberWidgetConfig
 	| TextWidgetConfig
 	| DropdownWidgetConfig
+	| DynamicValueListWidgetConfig
 	| CheckboxWidgetConfig
 	| FileInputWidgetConfig
 	| ColorWidgetConfig;
 
-export type OutputWidgetConfig = ChartWidgetConfig | ImageWidgetConfig | Record<string, never>;
+export type OutputWidgetConfig =
+	| ChartWidgetConfig
+	| ImageWidgetConfig
+	| DynamicValueListOutputConfig
+	| Record<string, never>;
 
 export type WidgetConfig = InputWidgetConfig | OutputWidgetConfig;
 
@@ -65,8 +76,12 @@ export function mapParamTypeToWidgetType(
 			case 'number':
 			case 'integer':
 				return 'number';
+			case 'file':
+				return 'file';
 			case 'chart':
 				return 'chart';
+			case 'dynamicValueList':
+				return 'dynamicValueList';
 			default:
 				return 'text';
 		}
@@ -81,6 +96,8 @@ export function mapParamTypeToWidgetType(
 				return 'text';
 			case 'valueList':
 				return 'dropdown';
+			case 'dynamicValueList':
+				return 'dynamicValueList';
 			case 'file':
 				return 'file';
 			case 'color':
@@ -111,6 +128,15 @@ export function createDefaultWidgetConfig(
 			case 'dropdown': {
 				const config: DropdownWidgetConfig = {
 					options: param.options || {}
+				};
+				return config;
+			}
+
+			case 'dynamicValueList': {
+				const config: DynamicValueListWidgetConfig = {
+					defaultOptions: param.options || {},
+					emptyBehavior: 'hide',
+					displayAs: 'dropdown'
 				};
 				return config;
 			}
@@ -167,6 +193,10 @@ export function createDefaultWidgetConfig(
 				};
 				return config;
 			}
+
+			case 'dynamicValueList':
+				// targetInputId is filled in by createLayoutItem from the discovered output.
+				return { targetInputId: '' } as DynamicValueListOutputConfig;
 
 			case 'dropdown':
 			case 'checkbox':

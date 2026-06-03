@@ -123,7 +123,7 @@ export function createLayoutItem(
 	const description =
 		itemType === 'input' ? (fullParam?.description ?? '') : (fullOutput?.description ?? '');
 
-	const config =
+	let config =
 		itemType === 'input' && paramType
 			? createDefaultWidgetConfig(
 					resolvedWidgetType as any,
@@ -133,6 +133,11 @@ export function createLayoutItem(
 			: itemType === 'output' && paramType
 				? createDefaultWidgetConfig(resolvedWidgetType as any, { type: paramType } as any, 'output')
 				: {};
+
+	// Dynamic value list outputs route to a target input; seed targetInputId from discovery.
+	if (itemType === 'output' && resolvedWidgetType === 'dynamicValueList' && fullOutput) {
+		config = { targetInputId: fullOutput.targetInputId ?? '' };
+	}
 
 	return itemType === 'input'
 		? ({
@@ -197,7 +202,7 @@ export interface ItemDropOptions {
 	widgetType?: string;
 	targetItem?: LayoutItem;
 	dropPosition?: 'before' | 'after';
-	outputType?: 'text' | 'number' | 'file' | 'chart';
+	outputType?: 'text' | 'number' | 'file' | 'chart' | 'dynamicValueList';
 }
 
 /**
@@ -246,6 +251,7 @@ export function handleItemDrop({
 		const outputExists = schema.outputs.some((o) => o.id === paramId);
 		if (!outputExists) {
 			const finalOutputType = outputType || 'text';
+			const discoveredOutput = availableOutputs.find((o) => o.id === paramId);
 
 			schema.outputs = [
 				...schema.outputs,
@@ -253,7 +259,10 @@ export function handleItemDrop({
 					id: paramId,
 					nickname: displayName,
 					type: finalOutputType,
-					description: ''
+					description: '',
+					...(finalOutputType === 'dynamicValueList'
+						? { targetInputId: discoveredOutput?.targetInputId ?? '' }
+						: {})
 				} as DiscoveredOutput
 			];
 		}

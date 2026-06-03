@@ -15,7 +15,13 @@ import {
 	batchSetNumberWidgetType,
 	isInputItem
 } from '$lib/features/builder/operations';
+import { mapParamTypeToWidgetType } from '$lib/features/builder/widget-config';
 import type { useBuilderState } from './useBuilderState.svelte';
+
+// Map a discovered output's type to its layout widgetType (file/chart/dynamicValueList/text...).
+function outputWidgetType(outputType: DiscoveredOutput['type']): string {
+	return mapParamTypeToWidgetType(outputType, 'output');
+}
 
 export function useBuilderActions(
 	getBuilderState: () => ReturnType<typeof useBuilderState> | null
@@ -89,7 +95,7 @@ export function useBuilderActions(
 				paramId: output.id,
 				displayName: output.nickname,
 				itemType: 'output',
-				widgetType: output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text',
+				widgetType: outputWidgetType(output.type),
 				outputType: output.type
 			});
 		}
@@ -145,7 +151,7 @@ export function useBuilderActions(
 			availableInputs: builderState.state.availableInputs,
 			availableOutputs: builderState.state.availableOutputs,
 			paramType: asInput ? item.type : undefined,
-			widgetType: asInput ? undefined : item.type === 'file' ? 'file' : 'text',
+			widgetType: asInput ? undefined : outputWidgetType(item.type as DiscoveredOutput['type']),
 			outputType: asInput ? undefined : item.type
 		});
 
@@ -219,7 +225,7 @@ export function useBuilderActions(
 				availableInputs: builderState.state.availableInputs,
 				availableOutputs: builderState.state.availableOutputs,
 				paramType: asInput ? item.type : undefined,
-				widgetType: asInput ? undefined : item.type === 'file' ? 'file' : 'text',
+				widgetType: asInput ? undefined : outputWidgetType(item.type as DiscoveredOutput['type']),
 				outputType: asInput ? undefined : item.type
 			});
 
@@ -248,7 +254,7 @@ export function useBuilderActions(
 				availableInputs: builderState.state.availableInputs,
 				availableOutputs: builderState.state.availableOutputs,
 				paramType: asInput ? item.type : undefined,
-				widgetType: asInput ? undefined : item.type === 'file' ? 'file' : 'text',
+				widgetType: asInput ? undefined : outputWidgetType(item.type as DiscoveredOutput['type']),
 				outputType: asInput ? undefined : item.type
 			});
 
@@ -466,7 +472,7 @@ export function useBuilderActions(
 					itemType: 'output',
 					availableInputs,
 					availableOutputs,
-					widgetType: output.type === 'file' ? 'file' : output.type === 'chart' ? 'chart' : 'text',
+					widgetType: outputWidgetType(output.type),
 					outputType: output.type
 				});
 				if (result.added) totalAdded++;

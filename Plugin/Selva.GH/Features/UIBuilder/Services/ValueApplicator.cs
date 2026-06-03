@@ -33,6 +33,7 @@ public class ValueApplicator
             { "text", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
             { "boolean", (typeof(GH_Boolean), val => new GH_Boolean(Convert.ToBoolean(val))) },
             { "valueList", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
+            { "dynamicValueList", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
             {
                 "file", (typeof(FileInputGoo), val =>
                 {
@@ -316,8 +317,10 @@ public class ValueApplicator
     {
         try
         {
-            // Special handling for ValueList - use the parameter's native type
-            if (paramTypeName == "valueList")
+            // Static and dynamic value lists share the same selection-by-name flow. An empty value
+            // is a benign no-op for both (an unchecked checklist, or a dynamic list before its first
+            // solve has produced options), not an error.
+            if (paramTypeName == "valueList" || paramTypeName == "dynamicValueList")
             {
                 return ApplyToValueList(contextParam, value, addMessage, pendingExpirations);
             }
@@ -401,8 +404,9 @@ public class ValueApplicator
             var selectedKey = value?.ToString();
             if (string.IsNullOrEmpty(selectedKey))
             {
-                addMessage?.Invoke(GH_RuntimeMessageLevel.Warning, "ValueList value is null or empty");
-                return false;
+                // Empty is a valid state, not an error: an unchecked checklist, or a dynamic value
+                // list before its first solve has produced options. Nothing to apply — no-op.
+                return true;
             }
 
             // Try to use the simple SelectItemByName method
