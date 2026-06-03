@@ -4,6 +4,7 @@ using System.Reflection;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 using Selva.Schema.Models;
+using Selva.GH.Features.ComputeIO.Components;
 using Selva.GH.Features.FileIO;
 
 namespace Selva.GH.Features.UIBuilder.Helpers;
@@ -38,21 +39,6 @@ public static class ParameterTypeHelper
 
         var typeName = obj.GetType()?.Name;
         return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    ///     Check if an object is a GH_DynamicValueListOutput component (emits runtime-computed
-    ///     value list options routed back into a Dynamic Value List input).
-    /// </summary>
-    public static bool IsDynamicValueListOutputComponent(IGH_DocumentObject obj)
-    {
-        if (obj == null)
-        {
-            return false;
-        }
-
-        var typeName = obj.GetType()?.Name;
-        return string.Equals(typeName, "GH_DynamicValueListOutput", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -132,11 +118,81 @@ public static class ParameterTypeHelper
     }
 
     /// <summary>
+    ///     Returns true if the component is a ContextBakeComponent whose inputs are sourced
+    ///     from a component that outputs a Dynamic Value List goo (detected by TypeName convention).
+    /// </summary>
+    public static bool IsDynamicValueListBakeComponent(GH_Component component)
+    {
+        if (component == null || !IsContextBakeComponent(component))
+        {
+            return false;
+        }
+
+        if (component.Params.Input == null)
+        {
+            return false;
+        }
+
+        foreach (var inputParam in component.Params.Input)
+        {
+            if (IsSourcedFromGooTypeName(inputParam, "Dynamic Value List"))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     ///     Returns true if any source wired into <paramref name="inputParam" /> carries PlotlyFigure goo,
     ///     detected by checking the goo TypeName from the upstream output param's volatile data,
     ///     or from the ContextBake input param's own volatile data as a fallback.
     /// </summary>
     public static bool IsSourcedFromChartOutput(IGH_Param inputParam)
+    {
+        return IsSourcedFromGooTypeName(inputParam, "Plotly Figure");
+    }
+
+    /// <summary>
+    ///     Find the GH_DynamicValueListOutput ("Set Dynamic Value List") component feeding a ContextBake,
+    ///     or null when none is wired. Walks the bake's input sources up to the producing component.
+    /// </summary>
+    public static GH_DynamicValueListOutput FindUpstreamDynamicValueListOutput(GH_Component bakeComponent)
+    {
+        if (bakeComponent?.Params.Input == null)
+        {
+            return null;
+        }
+
+        foreach (var inputParam in bakeComponent.Params.Input)
+        {
+            foreach (var source in inputParam.Sources)
+            {
+                if (source?.Attributes?.GetTopLevel?.DocObject is GH_DynamicValueListOutput setComponent)
+                {
+                    return setComponent;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     The TargetInputId of the GH_DynamicValueListOutput feeding a ContextBake, or Guid.Empty.
+    /// </summary>
+    public static Guid ResolveDynamicValueListTargetId(GH_Component bakeComponent)
+    {
+        return FindUpstreamDynamicValueListOutput(bakeComponent)?.TargetInputId ?? Guid.Empty;
+    }
+
+    /// <summary>
+    ///     Returns true if any source wired into <paramref name="inputParam" /> carries a goo whose
+    ///     TypeName matches <paramref name="gooTypeName" />, checking the bake input's own volatile data
+    ///     and the upstream source params (TypeName + volatile data).
+    /// </summary>
+    private static bool IsSourcedFromGooTypeName(IGH_Param inputParam, string gooTypeName)
     {
         if (inputParam == null)
         {
@@ -148,7 +204,7 @@ public static class ParameterTypeHelper
         {
             foreach (var goo in inputParam.VolatileData.AllData(true))
             {
-                if (goo != null && string.Equals(goo.TypeName, "Plotly Figure", StringComparison.Ordinal))
+                if (goo != null && string.Equals(goo.TypeName, gooTypeName, StringComparison.Ordinal))
                 {
                     return true;
                 }
@@ -164,7 +220,7 @@ public static class ParameterTypeHelper
             }
 
             // TypeName on the param itself (works for strongly-typed params)
-            if (string.Equals(source.TypeName, "Plotly Figure", StringComparison.Ordinal))
+            if (string.Equals(source.TypeName, gooTypeName, StringComparison.Ordinal))
             {
                 return true;
             }
@@ -174,7 +230,7 @@ public static class ParameterTypeHelper
             {
                 foreach (var goo in source.VolatileData.AllData(true))
                 {
-                    if (goo != null && string.Equals(goo.TypeName, "Plotly Figure", StringComparison.Ordinal))
+                    if (goo != null && string.Equals(goo.TypeName, gooTypeName, StringComparison.Ordinal))
                     {
                         return true;
                     }

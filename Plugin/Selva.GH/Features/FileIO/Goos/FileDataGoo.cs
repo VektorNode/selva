@@ -1,11 +1,12 @@
 ﻿using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
+using Selva.GH.Features.ComputeIO;
 using Selva.GH.Features.FileIO.Services;
 
 namespace Selva.GH.Features.FileIO.Goos;
 
-public class FileDataGoo : IGH_Goo
+public class FileDataGoo : IGH_Goo, ISelvaSerializableGoo
 {
     public FileDataGoo()
     {
@@ -74,6 +75,13 @@ public class FileDataGoo : IGH_Goo
     public object ScriptVariable()
     {
         return Value;
+    }
+
+    // ISelvaSerializableGoo — Rhino.Compute returns this payload. FileData is a plain DTO, so default
+    // settings match how the Goo serializes everywhere else (Write/Duplicate).
+    public string ToComputeJson()
+    {
+        return JsonConvert.SerializeObject(Value);
     }
 
     public bool Write(GH_IWriter writer)

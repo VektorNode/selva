@@ -98,14 +98,14 @@ public class SchemaSynchronizer
         };
 
         var scopeFilter = BuildScopeFilter(document, ownerComponent);
-        var (contextParams, printComponents, bakeComponents, dynamicValueListOutputs) =
+        var (contextParams, printComponents, bakeComponents) =
             ClassifyDocumentObjects(document, scopeFilter);
         var groupLookup = BuildGroupLookup(document);
 
         CollectPrintOutputs(printComponents, result.Outputs, groupLookup);
         CollectFileOutputs(bakeComponents, result.Outputs, groupLookup);
         CollectChartOutputs(bakeComponents, result.Outputs, groupLookup);
-        CollectDynamicValueListOutputs(dynamicValueListOutputs, result.Outputs, groupLookup);
+        CollectDynamicValueListOutputs(bakeComponents, result.Outputs, groupLookup);
         CollectInputs(contextParams, result.Inputs, groupLookup);
 
         return result;
@@ -183,7 +183,8 @@ public class SchemaSynchronizer
             if (isPrint ||
                 ParameterTypeHelper.IsWiredToOwner(c, ownerComponent.InstanceGuid) ||
                 ParameterTypeHelper.IsFileOutputBakeComponent(c) ||
-                ParameterTypeHelper.IsChartOutputBakeComponent(c))
+                ParameterTypeHelper.IsChartOutputBakeComponent(c) ||
+                ParameterTypeHelper.IsDynamicValueListBakeComponent(c))
             {
                 inScope.Add(c.InstanceGuid);
             }
@@ -195,27 +196,18 @@ public class SchemaSynchronizer
     /// <summary>
     ///     Single pass over document objects — classify into inputs, print outputs, and bake outputs.
     /// </summary>
-    private static (List<IGH_ContextualParameter> Inputs, List<GH_Component> Prints, List<GH_Component> Bakes,
-        List<GH_DynamicValueListOutput> DynamicValueListOutputs)
+    private static (List<IGH_ContextualParameter> Inputs, List<GH_Component> Prints, List<GH_Component> Bakes)
         ClassifyDocumentObjects(GH_Document document, HashSet<Guid> scopeFilter)
     {
         var inputs = new List<IGH_ContextualParameter>();
         var prints = new List<GH_Component>();
         var bakes = new List<GH_Component>();
-        var dynamicValueListOutputs = new List<GH_DynamicValueListOutput>();
 
         foreach (var obj in document.Objects)
         {
             if (obj is IGH_ContextualParameter cp)
             {
                 inputs.Add(cp);
-                continue;
-            }
-
-            if (obj is GH_DynamicValueListOutput dynVl)
-            {
-                // Not wire-bound to the owner; always in scope (like Context Print).
-                dynamicValueListOutputs.Add(dynVl);
                 continue;
             }
 
@@ -240,7 +232,7 @@ public class SchemaSynchronizer
             }
         }
 
-        return (inputs, prints, bakes, dynamicValueListOutputs);
+        return (inputs, prints, bakes);
     }
 
     private static void CollectPrintOutputs(
@@ -303,18 +295,22 @@ public class SchemaSynchronizer
     }
 
     private static void CollectDynamicValueListOutputs(
-        List<GH_DynamicValueListOutput> dynamicValueListOutputs, List<DiscoveredOutput> outputs,
-        Dictionary<Guid, string> groupLookup)
+        List<GH_Component> bakeComponents, List<DiscoveredOutput> outputs, Dictionary<Guid, string> groupLookup)
     {
-        foreach (var c in dynamicValueListOutputs)
+        foreach (var c in bakeComponents)
         {
+            if (!ParameterTypeHelper.IsDynamicValueListBakeComponent(c))
+            {
+                continue;
+            }
+
             outputs.Add(new DiscoveredOutput
             {
                 Id = c.InstanceGuid,
-                Nickname = c.NickName,
+                Nickname = c.Params.Input[0].NickName,
                 Description = "",
                 Type = "dynamicValueList",
-                TargetInputId = c.TargetInputId,
+                TargetInputId = ParameterTypeHelper.ResolveDynamicValueListTargetId(c),
                 GroupName = ResolveGroupName(groupLookup, c.InstanceGuid)
             });
         }
@@ -584,7 +580,10 @@ public class SchemaSynchronizer
 
                 case OutputDynamicValueListLayoutItem dvl when dvl.Config != null:
                     {
-                        if (document.FindObject(dvl.ParamId, false) is GH_DynamicValueListOutput output &&
+                        // ParamId is the ContextBake's GUID (the output identity). Walk up to the
+                        // GH_DynamicValueListOutput feeding it to write the picked target back.
+                        if (document.FindObject(dvl.ParamId, false) is GH_Component bake &&
+                            ParameterTypeHelper.FindUpstreamDynamicValueListOutput(bake) is { } output &&
                             output.TargetInputId != dvl.Config.TargetInputId)
                         {
                             output.TargetInputId = dvl.Config.TargetInputId;

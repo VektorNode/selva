@@ -4,17 +4,17 @@ using System.Drawing;
 using System.Linq;
 using GH_IO.Serialization;
 using Grasshopper.Kernel;
-using Newtonsoft.Json.Linq;
+using Selva.GH.Features.ComputeIO.Goos;
 using Selva.GH.Properties;
 
 namespace Selva.GH.Features.ComputeIO.Components;
 
 /// <summary>
-///     "Set Dynamic Value List": emits a runtime-computed value list (name -> value options) that is
-///     routed back into a <see cref="GetDynamicValueListParameter" /> ("Get Dynamic Value List") in the
-///     web UI. The target input is referenced by its
-///     Grasshopper instance GUID. The collector reads <see cref="Options" /> and <see cref="TargetInputId" />
-///     after each solve; for Rhino.Compute the same payload is produced by <see cref="ToJson" />.
+///     "Set Dynamic Value List": emits a <see cref="DynamicValueListGoo" /> carrying a runtime-computed
+///     value list (name -> value options) routed back into a <see cref="GetDynamicValueListParameter" />
+///     ("Get Dynamic Value List") in the web UI. The target input is referenced by its Grasshopper
+///     instance GUID. Wire the output into a ContextBake (like file/chart outputs) so all Selva outputs
+///     share one authoring gesture and one serialization contract; the Goo owns its compute JSON.
 /// </summary>
 public class GH_DynamicValueListOutput : GH_Component
 {
@@ -60,10 +60,9 @@ public class GH_DynamicValueListOutput : GH_Component
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        // JSON routing payload { targetInputId, options }. The local collector reads the component
-        // state directly; this param lets Rhino.Compute read the same payload via normal output
-        // collection (it is harmless/unused in the local flow).
-        pManager.AddTextParameter("JSON", "J",
+        // Emits a DynamicValueListGoo carrying { targetInputId, options }. Wire this into a ContextBake
+        // to expose it as a web UI output; the Goo owns its compute serialization.
+        pManager.AddGenericParameter("Dynamic Value List", "DVL",
             "Routing payload { targetInputId, options } consumed by the web UI / Rhino.Compute",
             GH_ParamAccess.item);
     }
@@ -104,26 +103,7 @@ public class GH_DynamicValueListOutput : GH_Component
                 "Advanced settings in the Selva UI builder.");
         }
 
-        da.SetData(0, ToJson().ToString(Newtonsoft.Json.Formatting.None));
-    }
-
-    /// <summary>
-    ///     Serialize the routing payload for the web UI / Rhino.Compute:
-    ///     { "targetInputId": "&lt;guid&gt;", "options": { "x": "0", ... } }.
-    /// </summary>
-    public JObject ToJson()
-    {
-        var options = new JObject();
-        foreach (var kvp in Options)
-        {
-            options[kvp.Key] = kvp.Value;
-        }
-
-        return new JObject
-        {
-            { "targetInputId", _targetInputId == Guid.Empty ? null : _targetInputId.ToString() },
-            { "options", options }
-        };
+        da.SetData(0, new DynamicValueListGoo(_targetInputId, Options));
     }
 
     public override bool Write(GH_IWriter writer)

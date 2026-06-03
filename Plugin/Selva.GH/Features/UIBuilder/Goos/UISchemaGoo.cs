@@ -3,11 +3,12 @@ using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Selva.Schema.Models;
+using Selva.GH.Features.ComputeIO;
 using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Goos;
 
-public class UISchemaGoo : IGH_Goo
+public class UISchemaGoo : IGH_Goo, ISelvaSerializableGoo
 {
     public UISchemaGoo()
     {
@@ -93,6 +94,13 @@ public class UISchemaGoo : IGH_Goo
         // Rhino Compute will use JSON.NET to serialize this to JSON
         // The JsonConverter attributes on the UISchema classes will ensure proper serialization
         return Value;
+    }
+
+    // ISelvaSerializableGoo — Rhino.Compute returns this payload. UISchema needs its custom converters
+    // (SchemaSerializationSettings) to round-trip layout/widget polymorphism correctly.
+    public string ToComputeJson()
+    {
+        return JsonConvert.SerializeObject(Value, SchemaSerializationSettings.Settings);
     }
 
     public bool Write(GH_IWriter writer)

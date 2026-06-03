@@ -1,6 +1,7 @@
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
+using Selva.GH.Features.ComputeIO;
 using Selva.GH.Features.Display.Services;
 
 namespace Selva.GH.Features.Display.Goos;
@@ -8,7 +9,7 @@ namespace Selva.GH.Features.Display.Goos;
 /// <summary>
 ///     Grasshopper Goo wrapper for WebDisplay data to prevent double JSON encoding.
 /// </summary>
-public class WebDisplayGoo : GH_Goo<MeshBatch>
+public class WebDisplayGoo : GH_Goo<MeshBatch>, ISelvaSerializableGoo
 {
     public WebDisplayGoo()
     {
@@ -117,6 +118,14 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>
     {
         // Return the JSON string directly for script access
         // This prevents double-encoding when accessed via GHPython or file I/O
+        return JsonConvert.SerializeObject(Value);
+    }
+
+    // ISelvaSerializableGoo — Rhino.Compute returns this payload. MeshBatch is a web-ready DTO
+    // (geometry already converted by BinaryGeometryWriter), so default settings match the Goo's
+    // own serialization (Write/ScriptVariable).
+    public string ToComputeJson()
+    {
         return JsonConvert.SerializeObject(Value);
     }
 }
