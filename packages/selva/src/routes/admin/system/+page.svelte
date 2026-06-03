@@ -35,7 +35,12 @@
 	let updateExitCode = $state<number | null>(null);
 	let updateRestarting = $state(false);
 
-	type HealthResponse = { status: string; commit?: string | null };
+	type HealthResponse = {
+		status: string;
+		instanceId?: string | null;
+		commit?: string | null;
+		version?: string | null;
+	};
 
 	async function fetchHealth(): Promise<HealthResponse | null> {
 		try {
@@ -77,17 +82,27 @@
 		return null;
 	}
 
-	// Poll until we're confident the *new* process is serving:
-	//  - If we captured a startup commit, wait for the commit to change.
-	//  - Otherwise fall back to requiring 2 consecutive successful health checks
-	//    (avoids the race where we hit the old process right before PM2 kills it).
+	// Poll until we're confident the *new* process is serving.
+	//
+	// The reliable signal is `instanceId`: a per-boot fingerprint from
+	// /api/health that changes on every restart. We wait for it to differ from
+	// the process that was running before we started — that's the ONLY moment
+	// we know the old process is gone and a fresh one is answering. This works
+	// in every deployment shape (npm has no git commit) and even when the new
+	// build is the same version (rollback / reinstall).
+	//
+	// Crucially we do NOT treat "reachable" as "ready": fetchHealth returns null
+	// for a 503 (degraded / still booting) or a refused connection, and we keep
+	// waiting. A bare 200 from the OLD process carries the OLD instanceId, so it
+	// can't satisfy the check either. This is what prevents the premature
+	// "online" verdict that left a reload hitting a 503.
 	//
 	// While polling we also fetch the update log file. The SSE stream died at
 	// `pm2 stop`, so any output the script produced afterwards (npm update,
 	// pm2 start, health probe, rollback) is invisible until the new process is
 	// reachable. Each successful log fetch replaces the displayed logs with
 	// the full file content, surfacing the blackout chunk in one shot.
-	async function waitForAppRestart(previousCommit: string | null | undefined) {
+	async function waitForAppRestart(previousInstanceId: string | null | undefined) {
 		updateLogs += '\nWaiting for app to come back online…\n';
 		// Give PM2 a moment to actually kill the old process before we start polling.
 		await new Promise((r) => setTimeout(r, 2000));
@@ -97,7 +112,6 @@
 		// headroom and was failing live customers even when the update was
 		// otherwise succeeding in the background.
 		const maxAttempts = 150; // ~5min
-		let consecutiveOk = 0;
 		for (let i = 0; i < maxAttempts; i++) {
 			const [health, log] = await Promise.all([fetchHealth(), fetchUpdateLog()]);
 			// Backfill blackout output as soon as either the old process briefly
@@ -107,33 +121,31 @@
 			if (log && log.trim().length > 0) {
 				updateLogs = log;
 			}
-			if (health) {
-				if (previousCommit && health.commit) {
-					if (health.commit !== previousCommit) {
-						// App is reachable on a NEW build. Trust the runner's logged
-						// verdict over a bare assumption of success — a rollback also
-						// changes nothing here but must not be reported as a clean update.
-						updateExitCode = exitCodeFromLog(updateLogs) ?? 0;
-						updateRunning = false;
-						updateRestarting = false;
-						return;
-					}
-					// Same commit — likely still the old process, keep waiting.
-					consecutiveOk = 0;
-				} else {
-					consecutiveOk += 1;
-					if (consecutiveOk >= 2) {
-						// Reachable, but commit-based detection wasn't available. The
-						// log verdict is the source of truth: a healthy app after a
-						// rollback is exit 5, not 0.
-						updateExitCode = exitCodeFromLog(updateLogs) ?? 0;
-						updateRunning = false;
-						updateRestarting = false;
-						return;
-					}
-				}
-			} else {
-				consecutiveOk = 0;
+			// A *new* instanceId means the new process is up and serving (status
+			// was 'ok', or fetchHealth would have returned null). Trust the
+			// runner's logged verdict over a bare assumption of success — a
+			// rollback also brings up a fresh process but must not be reported
+			// as a clean update.
+			//
+			// If we never captured a baseline instanceId (the pre-update health
+			// fetch failed, or an old build with no fingerprint), we can't tell
+			// the new process from the old one by id alone — so we hold out for
+			// the runner's own terminal marker in the log ([DONE]/rollback/fatal)
+			// before accepting. That avoids latching onto the still-running old
+			// process and reporting "online" prematurely.
+			const newProcessUp = health?.instanceId && health.instanceId !== previousInstanceId;
+			const logVerdict = exitCodeFromLog(updateLogs);
+			if (newProcessUp) {
+				updateExitCode = logVerdict ?? 0;
+				updateRunning = false;
+				updateRestarting = false;
+				return;
+			}
+			if (!previousInstanceId && health && logVerdict !== null) {
+				updateExitCode = logVerdict;
+				updateRunning = false;
+				updateRestarting = false;
+				return;
 			}
 			await new Promise((r) => setTimeout(r, 2000));
 		}
@@ -153,10 +165,10 @@
 		updateLogs = '';
 		updateExitCode = null;
 
-		// Snapshot the commit of the *currently running* process so we can detect
-		// when a new one takes over.
+		// Snapshot the instanceId of the *currently running* process so we can
+		// detect when a new one takes over (the value changes on every boot).
 		const preHealth = await fetchHealth();
-		const previousCommit = preHealth?.commit ?? null;
+		const previousInstanceId = preHealth?.instanceId ?? null;
 
 		try {
 			const response = await fetch('/admin/api/system/update', { method: 'POST' });
@@ -209,7 +221,7 @@
 			// the "restarting" signal is EXPECTED, not a failure. Treat it as such
 			// and let the health poller decide whether the new process came up.
 			if (sawRestarting) {
-				await waitForAppRestart(previousCommit);
+				await waitForAppRestart(previousInstanceId);
 			} else if (sawExit && streamExitCode === 0) {
 				// Clean exit, no restart (e.g. --no-restart or "already up to date").
 				updateExitCode = 0;
@@ -221,13 +233,13 @@
 			} else {
 				// Stream ended without exit and without restart signal — unusual,
 				// but still poll health in case the script silently restarted.
-				await waitForAppRestart(previousCommit);
+				await waitForAppRestart(previousInstanceId);
 			}
 		} catch (err) {
 			// Fetch threw — most likely because PM2 killed the connection mid-stream.
 			// If we got far enough to see a restart, treat it as expected.
 			if (updateRestarting) {
-				await waitForAppRestart(previousCommit);
+				await waitForAppRestart(previousInstanceId);
 			} else {
 				updateLogs += '\nError: ' + (err instanceof Error ? err.message : 'Unknown error');
 				updateExitCode = -1;
