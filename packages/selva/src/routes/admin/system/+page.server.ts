@@ -1,5 +1,6 @@
 import { hasPermission } from '@selvajs/platform';
 import { flag } from '$lib/server/providers.server';
+import { checkForUpdate } from '$lib/server/updateCheck.server';
 import pkg from '../../../../package.json';
 import type { PageServerLoad } from './$types';
 
@@ -13,7 +14,7 @@ import type { PageServerLoad } from './$types';
  * after an admin update the new build embeds the new constant. No need to
  * shell out to `npm` or read node_modules at request time.
  */
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, fetch }) => {
 	const ctx = locals.ctx;
 	const canManageUpdates = ctx ? hasPermission(ctx, 'manage_updates') : false;
 	// The on-demand health check endpoint is instance_admin-only; gate the UI
@@ -28,5 +29,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		ENABLE_SHARING: flag('ENABLE_SHARING')
 	};
 
-	return { canManageUpdates, isInstanceAdmin, flags, version: pkg.version };
+	// Only operators who can run updates need the registry check — skip the
+	// npm round-trip for everyone else.
+	const update = canManageUpdates
+		? await checkForUpdate(fetch)
+		: { current: null, latest: null, updateAvailable: false };
+
+	return { canManageUpdates, isInstanceAdmin, flags, version: pkg.version, update };
 };

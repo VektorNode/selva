@@ -1,27 +1,13 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { execSync } from 'child_process';
 import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
 import { getBootHealth, isDegraded } from '$lib/server/bootHealth.server';
 
-// Captured once at module load so it reflects the commit of the *running* process,
-// not whatever the working tree looks like later (e.g. mid-update). Null in npm
-// deployments (no git repo) — see INSTANCE_ID below for the fingerprint that
-// works in every deployment shape.
-const STARTUP_COMMIT = (() => {
-	try {
-		return execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
-	} catch {
-		return null;
-	}
-})();
-
-// Per-process fingerprint. Unlike STARTUP_COMMIT (git-only) this is generated
-// fresh on every boot, so a client polling after a restart can confirm the
-// *new* process is answering by watching for instanceId to change — even in
-// npm-mode deployments with no git repo, and even when the new build is the
-// same version (rollback / reinstall). This is the reliable signal the update
-// poller keys on; commit/version are informational.
+// Per-process fingerprint generated fresh on every boot, so a client polling
+// after a restart can confirm the *new* process is answering by watching for
+// instanceId to change — even when the new build is the same version (rollback
+// / reinstall). This is the reliable signal the update poller keys on; version
+// is informational.
 const INSTANCE_ID = randomUUID();
 
 // Installed @selvajs/selva version, for display ("updated X → Y"). Resolved
@@ -42,8 +28,7 @@ const RUNTIME_VERSION = (() => {
  *
  * The `instanceId` field is a per-boot fingerprint — clients polling after a
  * restart confirm the *new* process is responding (not the old one about to be
- * killed) by watching for the value to change. Works in every deployment shape;
- * `commit` only changes in git deployments and is null under npm.
+ * killed) by watching for the value to change.
  *
  * Returns 503 with `status: "degraded"` when boot-time integrity checks
  * failed (e.g. compute server apiKeys can't be decrypted under the current
@@ -60,7 +45,6 @@ export const GET: RequestHandler = async () => {
 		status: degraded ? 'degraded' : 'ok',
 		timestamp: new Date().toISOString(),
 		instanceId: INSTANCE_ID,
-		commit: STARTUP_COMMIT,
 		version: RUNTIME_VERSION,
 		boot
 	};

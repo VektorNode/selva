@@ -7,6 +7,7 @@
 		canManageUpdates: boolean;
 		isInstanceAdmin: boolean;
 		version: string;
+		update: { latest: string | null; updateAvailable: boolean };
 		flags: {
 			ALLOW_CROSS_ORG_PUBLIC: boolean;
 			ALLOW_ORG_COMPUTE_OVERRIDE: boolean;
@@ -38,7 +39,6 @@
 	type HealthResponse = {
 		status: string;
 		instanceId?: string | null;
-		commit?: string | null;
 		version?: string | null;
 	};
 
@@ -300,6 +300,8 @@
 	{#if data.canManageUpdates}
 		<UpdateSection
 			currentVersion={data.version}
+			latestVersion={data.update.latest}
+			updateAvailable={data.update.updateAvailable}
 			isRunning={updateRunning}
 			isRestarting={updateRestarting}
 			logs={updateLogs}

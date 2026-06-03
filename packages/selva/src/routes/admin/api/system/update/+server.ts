@@ -2,8 +2,9 @@ import { spawn } from 'child_process';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { env } from '$env/dynamic/private';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import { requirePermission } from '$lib/server/access.server';
+import { checkForUpdate } from '$lib/server/updateCheck.server';
 
 // Where the bash wrapper mirrors all script output. The SSE stream dies the
 // moment `pm2 stop selva-compute` succeeds (selva-compute IS the SSE server),
@@ -310,58 +311,37 @@ exit 6
 `;
 }
 
-// Selva runs in two valid shapes:
+// Selva self-updates as a CLI-scaffolded npm deployment: the deployment dir
+// holds a package.json that depends on @selvajs/selva, and update means
+// `npm update @selvajs/*` + pm2 restart. We probe the cwd upward for the
+// installed package as proof we're in such a deployment.
 //
-//   git  — a checkout of the monorepo (dev boxes, anyone running from source).
-//          Update means: git pull + pnpm install + pnpm build + pm2 restart.
-//          Implemented by scripts/update.sh, which only exists in the repo.
+// `INSTALL_DIR` lets an operator pin the deployment root explicitly (useful
+// when the SvelteKit process cwd isn't the install dir).
+type UpdatePlan = { cwd: string; args: string[] };
+
+function isDeploymentDir(dir: string): boolean {
+	return existsSync(join(dir, 'node_modules', '@selvajs', 'selva', 'package.json'));
+}
+
+// All @selvajs/* packages move together — fixing a provider-only bug without
+// bumping the runtime is a supported flow.
 //
-//   npm  — a CLI-scaffolded deployment (operators, customers). The deployment
-//          dir holds a package.json that depends on @selvajs/selva. Update
-//          means: npm update @selvajs/* + pm2 restart. There is no repo.
-//
-// We probe the cwd upward and pick the first shape we can prove. `scripts/
-// update.sh` is the more specific marker (only the monorepo carries it), so
-// it wins over `node_modules/@selvajs/selva` when both somehow coexist.
-type UpdatePlan =
-	| { mode: 'git'; cwd: string; cmd: string; args: string[] }
-	| { mode: 'npm'; cwd: string; cmd: string; args: string[] };
+// --prefer-online forces npm to revalidate cached packuments against the
+// registry. Without it, npm's packument cache (5+ min TTL) can silently no-op
+// an update right after publish. See docs/Hotfix-CLI-Runtime.md
+// "stale-packument-cache trap".
+const NPM_UPDATE_ARGS = ['update', '--save', '--prefer-online', '@selvajs/cli', '@selvajs/selva'];
 
 function detectUpdatePlan(): UpdatePlan | null {
-	// Honor an explicit override first — useful for development.
-	if (env.INSTALL_DIR && existsSync(join(env.INSTALL_DIR, 'scripts', 'update.sh'))) {
-		return {
-			mode: 'git',
-			cwd: env.INSTALL_DIR,
-			cmd: 'bash',
-			args: [join(env.INSTALL_DIR, 'scripts', 'update.sh')]
-		};
+	if (env.INSTALL_DIR && isDeploymentDir(env.INSTALL_DIR)) {
+		return { cwd: env.INSTALL_DIR, args: NPM_UPDATE_ARGS };
 	}
 
 	let dir = process.cwd();
 	for (let i = 0; i < 6; i++) {
-		if (existsSync(join(dir, 'scripts', 'update.sh'))) {
-			return {
-				mode: 'git',
-				cwd: dir,
-				cmd: 'bash',
-				args: [join(dir, 'scripts', 'update.sh')]
-			};
-		}
-		if (existsSync(join(dir, 'node_modules', '@selvajs', 'selva', 'package.json'))) {
-			// All @selvajs/* packages move together — fixing a provider-only bug
-			// without bumping the runtime is a supported flow.
-			//
-			// --prefer-online forces npm to revalidate cached packuments against
-			// the registry. Without it, npm's packument cache (5+ min TTL) can
-			// silently no-op an update right after publish. See
-			// docs/Hotfix-CLI-Runtime.md "stale-packument-cache trap".
-			return {
-				mode: 'npm',
-				cwd: dir,
-				cmd: 'npm',
-				args: ['update', '--save', '--prefer-online', '@selvajs/cli', '@selvajs/selva']
-			};
+		if (isDeploymentDir(dir)) {
+			return { cwd: dir, args: NPM_UPDATE_ARGS };
 		}
 		const parent = join(dir, '..');
 		if (parent === dir) break;
@@ -372,9 +352,9 @@ function detectUpdatePlan(): UpdatePlan | null {
 
 // POST - Run update and stream output via Server-Sent Events.
 //
-// In git mode we hand off to scripts/update.sh (which has its own pm2
-// restart at the end). In npm mode we run `npm update` and then a separate
-// `pm2 restart --update-env` so the new process picks up any .env changes.
+// Runs `npm update @selvajs/*` then restarts via ecosystem.config.cjs. The
+// runner script handles stop / update / start / health-probe / rollback with
+// an EXIT trap that keeps the app online no matter how it exits.
 export const POST: RequestHandler = async ({ locals }) => {
 	requirePermission(locals, 'instance_admin');
 
@@ -384,8 +364,8 @@ export const POST: RequestHandler = async ({ locals }) => {
 			JSON.stringify({
 				error:
 					"Couldn't determine how to update this deployment. " +
-					'Expected either scripts/update.sh (monorepo) or ' +
-					'node_modules/@selvajs/selva (CLI scaffold) in the cwd or a parent.'
+					'Expected node_modules/@selvajs/selva (CLI scaffold) in the cwd ' +
+					'or a parent directory.'
 			}),
 			{ status: 500, headers: { 'Content-Type': 'application/json' } }
 		);
@@ -401,12 +381,10 @@ export const POST: RequestHandler = async ({ locals }) => {
 			}
 
 			try {
-				// In npm mode we capture the runtime version BEFORE we touch
-				// anything, so we can: (a) detect a no-op update and warn,
-				// (b) roll back to the prior version if the new process fails
-				// to come up healthy. Git mode handles its own rollback inside
-				// update.sh.
-				const versionBefore = plan.mode === 'npm' ? readRuntimeVersion(plan.cwd) : undefined;
+				// Capture the runtime version BEFORE we touch anything, so we
+				// can: (a) detect a no-op update and warn, (b) roll back to the
+				// prior version if the new process fails to come up healthy.
+				const versionBefore = readRuntimeVersion(plan.cwd);
 
 				// Prelude lines are passed to the bash wrapper rather than
 				// sendEvent'd directly so they end up in both the SSE stream
@@ -414,7 +392,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 				// the frontend's blackout-recovery file fetch would clobber
 				// these lines when it replaces its buffer with the file content.
 				const prelude = [
-					`[INFO] Update mode: ${plan.mode} (cwd: ${plan.cwd})`,
+					`[INFO] Updating deployment (cwd: ${plan.cwd})`,
 					...(versionBefore ? [`[INFO] Current @selvajs/selva: ${versionBefore}`] : [])
 				];
 
@@ -424,21 +402,15 @@ export const POST: RequestHandler = async ({ locals }) => {
 				// of selva-compute can't reach it. See buildLauncher for the
 				// full rationale.
 				//
-				// Git mode: the runner just execs scripts/update.sh, which has
-				// its own restart + health-check + rollback baked in.
-				//
-				// Npm mode: the runner is buildNpmRunnerScript — pre-flights
-				// the version check, then stop / npm update / start / health
-				// probe / rollback, with an EXIT trap that ensures the app is
-				// online no matter how the script exits.
-				const runnerScript =
-					plan.mode === 'git'
-						? `#!/bin/bash\nexec ${shellQuote(plan.cmd)} ${plan.args.map(shellQuote).join(' ')}\n`
-						: buildNpmRunnerScript(
-								plan.args,
-								versionBefore,
-								join(plan.cwd, 'ecosystem.config.cjs')
-							);
+				// The runner is buildNpmRunnerScript — pre-flights the version
+				// check, then stop / npm update / start / health probe /
+				// rollback, with an EXIT trap that ensures the app is online no
+				// matter how the script exits.
+				const runnerScript = buildNpmRunnerScript(
+					plan.args,
+					versionBefore,
+					join(plan.cwd, 'ecosystem.config.cjs')
+				);
 				const cmd = 'bash';
 				const args = ['-c', buildLauncher(runnerScript, prelude)];
 
@@ -546,13 +518,27 @@ export const POST: RequestHandler = async ({ locals }) => {
 	});
 };
 
-// GET — read the tee'd update log so the frontend can recover the chunk of
-// output that happened during the SSE blackout (between `pm2 stop` killing
-// this process and the new selva-compute coming back online). Returns an
-// empty body if no update has run yet on this host. Polled by the admin UI
-// during the post-restart wait; not intended for general consumption.
-export const GET: RequestHandler = async ({ locals }) => {
+// GET — two jobs, selected by query param:
+//
+//   ?check=1  → query the npm registry and report whether a newer
+//               @selvajs/selva is published. JSON: { current, latest,
+//               updateAvailable }. The admin page calls this on load to show
+//               an "update available" badge. Degrades gracefully: if the
+//               registry is unreachable, latest is null and updateAvailable
+//               is false (we never block the page on npm).
+//
+//   (default) → read the tee'd update log so the frontend can recover the
+//               chunk of output that happened during the SSE blackout (between
+//               `pm2 stop` killing this process and the new selva-compute
+//               coming back online). Empty body if no update has run yet.
+//               Polled by the admin UI during the post-restart wait.
+export const GET: RequestHandler = async ({ locals, url, fetch }) => {
 	requirePermission(locals, 'instance_admin');
+
+	if (url.searchParams.get('check') !== null) {
+		return json(await checkForUpdate(fetch), { headers: { 'Cache-Control': 'no-store' } });
+	}
+
 	let body = '';
 	try {
 		body = readFileSync(UPDATE_LOG_PATH, 'utf8');

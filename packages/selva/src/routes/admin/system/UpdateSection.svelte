@@ -1,10 +1,19 @@
 <script lang="ts">
 	import { Button, Card, AlertDialog } from '@selvajs/ui';
-	import { RefreshCw, CircleCheck, Info, TriangleAlert, CircleX } from '@lucide/svelte';
+	import {
+		RefreshCw,
+		CircleCheck,
+		Info,
+		TriangleAlert,
+		CircleX,
+		ArrowUpCircle
+	} from '@lucide/svelte';
 	import { deriveOutcome, type OutcomeSeverity } from './update-outcome';
 
 	interface Props {
 		currentVersion?: string;
+		latestVersion?: string | null;
+		updateAvailable?: boolean;
 		isRunning?: boolean;
 		isRestarting?: boolean;
 		logs?: string;
@@ -14,6 +23,8 @@
 
 	let {
 		currentVersion,
+		latestVersion = null,
+		updateAvailable = false,
 		isRunning = false,
 		isRestarting = false,
 		logs = '',
@@ -94,16 +105,36 @@
 			<Card.Title>Application Update</Card.Title>
 			{#if currentVersion}
 				<span
-					class="border-border bg-muted text-muted-foreground rounded-full border px-2 py-0.5 font-mono text-xs"
+					class="rounded-full border px-2 py-0.5 font-mono text-xs {updateAvailable
+						? 'border-warning/40 bg-warning/10 text-warning'
+						: 'border-border bg-muted text-muted-foreground'}"
 					title="Currently installed @selvajs/selva version"
 				>
 					v{currentVersion}
 				</span>
 			{/if}
 		</div>
-		<Card.Description>Run the update script to pull latest changes and restart</Card.Description>
+		<Card.Description
+			>Update @selvajs/* to the latest published release and restart</Card.Description
+		>
 	</Card.Header>
 	<Card.Content class="space-y-4">
+		{#if updateAvailable && latestVersion}
+			<div
+				class="border-warning/40 bg-warning/10 text-warning flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+				role="status"
+			>
+				<ArrowUpCircle class="h-4 w-4 shrink-0" />
+				<span>
+					Update available — <span class="font-mono">v{currentVersion}</span> →
+					<span class="font-mono">v{latestVersion}</span>
+				</span>
+			</div>
+		{:else if currentVersion && latestVersion}
+			<p class="text-muted-foreground text-sm">
+				You're on the latest release (<span class="font-mono">v{currentVersion}</span>).
+			</p>
+		{/if}
 		<Button onclick={handleRunClick} disabled={isRunning} variant="destructive">
 			{#if isRestarting}
 				<RefreshCw class="mr-2 h-4 w-4 animate-spin" />
