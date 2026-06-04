@@ -57,9 +57,18 @@
 
 		const meshes = shouldShowViewer ? await processor.extractMeshesFromResponse() : [];
 
+		// Resolve each output by id first, then fall back to its name. Stock
+		// Rhino.Compute solve responses omit the per-item `id` (only the VektorNode
+		// fork emits it), so a pure id match silently returns nothing — which broke
+		// dynamic value lists (their options ride an output payload that never
+		// reached the input). ParamName is always present, and the schema nickname
+		// matches it, so name is the reliable fallback.
 		const outputs: Record<string, unknown> = {};
 		for (const o of data.schema.outputs) {
-			outputs[o.id] = processor.getValueByParamId(o.id, { parseValues: true });
+			const byId = processor.getValue({ byId: o.id }, { parseValues: true });
+			const name = (o as { nickname?: string }).nickname;
+			outputs[o.id] =
+				byId ?? (name ? processor.getValue({ byName: name }, { parseValues: true }) : undefined);
 		}
 
 		return {

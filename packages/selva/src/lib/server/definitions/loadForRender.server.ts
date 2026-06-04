@@ -20,8 +20,16 @@ import type {
 } from '@selvajs/platform';
 import { getStorageProvider, getDefinitionMeta, getProjectProvider } from '../providers.server';
 import { resolveServerForOrg } from '../compute/resolve.server';
+import { env } from '$env/dynamic/private';
 
 export type DefinitionChannel = 'live' | 'draft';
+
+// Verbose IO diagnostics — same flag as the solve route. When set, an
+// unhealthy IO result (empty inputs / parse / load errors) also dumps the raw
+// /io wire shape so casing/serialization mismatches are visible.
+const COMPUTE_DEBUG = ['true', '1', 'yes'].includes(
+	(env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase()
+);
 
 export interface LoadedDefinition {
 	version: DefinitionVersion;
@@ -121,6 +129,34 @@ export async function loadDefinitionForRender(
 
 		if (!definition) {
 			throw new Error(`Failed to get definition IO — server returned undefined`);
+		}
+
+		// Surface IO health when something looks off: zero inputs, or the compute
+		// layer reported parse/load problems (e.g. an empty ValueList because its
+		// backing GH component didn't resolve → "Missing Definition Objects", or a
+		// PascalCase /io response the parser silently dropped to []). On a problem
+		// we also fetch the raw IO so the un-parsed wire shape is in the logs.
+		// Always-on warn (cheap, only fires on the unhappy path); the verbose raw
+		// dump is gated on SELVA_FLAG_COMPUTE_DEBUG.
+		const ioParseErrors = (definition as { parseErrors?: unknown[] }).parseErrors ?? [];
+		const ioLoadErrors = (definition as { loadErrors?: unknown[] }).loadErrors ?? [];
+		const ioLooksBroken =
+			definition.inputs.length === 0 || ioParseErrors.length > 0 || ioLoadErrors.length > 0;
+		if (ioLooksBroken) {
+			console.warn(
+				`[loadForRender] IO health for '${record.guid}':`,
+				JSON.stringify({
+					inputCount: definition.inputs.length,
+					outputCount: definition.outputs?.length,
+					parseErrors: ioParseErrors,
+					loadErrors: ioLoadErrors,
+					loadWarnings: (definition as { loadWarnings?: unknown }).loadWarnings
+				})
+			);
+			if (COMPUTE_DEBUG) {
+				const rawIO = await client.getRawIO(definitionSource).catch((e) => ({ error: String(e) }));
+				console.warn('[loadForRender] raw /io:', JSON.stringify(rawIO).slice(0, 3000));
+			}
 		}
 
 		return {

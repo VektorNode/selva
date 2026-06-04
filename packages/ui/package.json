@@ -51,7 +51,7 @@
 		"@selvajs/compute": "catalog:",
 		"@selvajs/schemas": "workspace:^",
 		"@sveltejs/kit": "^2",
-		"bits-ui": "^2.15.4",
+		"bits-ui": "^2.18.0",
 		"svelte": "^5",
 		"tailwind-variants": "^3.2.2",
 		"three": "catalog:"

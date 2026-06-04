@@ -416,9 +416,23 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({
 	// underlying cause chain. SvelteKit's default logging drops `cause`, which
 	// is where provider adapters tend to stash the real reason (Supabase
 	// network error, fs EACCES, etc.).
+	// Render the thrown value usefully regardless of its shape. Errors print
+	// their stack; everything else (provider adapters occasionally reject with
+	// a plain `{ message, status }` object, not an Error) is JSON-serialized so
+	// it doesn't collapse to a useless "[object Object]".
+	const rendered =
+		error instanceof Error
+			? (error.stack ?? error.message)
+			: (() => {
+					try {
+						return JSON.stringify(error);
+					} catch {
+						return String(error);
+					}
+				})();
 	const cause = error instanceof Error && error.cause ? `\n  caused by: ${error.cause}` : '';
 	console.error(
-		`[Unhandled error] ${event.request.method} ${event.url.pathname}\n  ${error}${cause}`
+		`[Unhandled error] ${event.request.method} ${event.url.pathname}\n  ${rendered}${cause}`
 	);
 	return { message: 'An unexpected error occurred.' };
 };

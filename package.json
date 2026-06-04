@@ -16,8 +16,7 @@
 	},
 	"packageManager": "pnpm@10.33.0",
 	"scripts": {
-		"dev": "pnpm --filter @selvajs/plugin-ui dev",
-		"dev:plugin-ui": "pnpm --filter @selvajs/plugin-ui dev",
+		"dev:plugin": "pnpm --filter @selvajs/plugin-ui dev",
 		"dev:selva": "pnpm --filter @selvajs/selva dev",
 		"dev:ui": "pnpm --filter @selvajs/ui dev",
 		"watch:ui": "pnpm --filter @selvajs/ui build:watch",
@@ -41,6 +40,17 @@
 		"changeset": "changeset",
 		"release": "pnpm build && changeset publish",
 		"prepare": "husky"
+	},
+	"pnpm": {
+		"overrides": {
+			"@sveltejs/kit": "2.58.0",
+			"svelte": "5.55.5"
+		},
+		"peerDependencyRules": {
+			"allowedVersions": {
+				"@sveltejs/kit": "2.58.0"
+			}
+		}
 	},
 	"lint-staged": {
 		"*.{ts,tsx,svelte}": [

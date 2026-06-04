@@ -130,7 +130,6 @@
 			{/if}
 			<FolderOpen class="h-3.5 w-3.5 shrink-0 opacity-70" />
 			<span class="flex-1 truncate text-sm font-medium">All projects</span>
-			<span class="shrink-0 font-mono text-[11px] tabular-nums opacity-60">{records.length}</span>
 		</button>
 
 		{#if filteredProjects.length > 0}

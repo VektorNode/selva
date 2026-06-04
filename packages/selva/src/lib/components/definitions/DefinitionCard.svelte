@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRight, Star } from '@lucide/svelte';
+	import { ArrowRight, Server, Star } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
 	import { huesFor, monogram, formatUpdated } from './cardStyles';
 	import { statusRing, statusDot } from '../../../routes/projects/_components/statusStyles';
@@ -16,6 +16,8 @@
 		// ---- Author surface (projects) ----
 		/** When true, renders the status badge top-left and "updated X ago" in the footer. */
 		showStatus?: boolean;
+		/** Compute server this definition solves on. Shown in the footer when provided. */
+		serverName?: string;
 
 		// ---- Consumer surface (library) ----
 		/** Spinner overlay while the runner navigates. */
@@ -32,6 +34,7 @@
 		projectName,
 		projectVisibility,
 		showStatus = false,
+		serverName,
 		loading = false,
 		starred = false,
 		starBusy = false,
@@ -147,6 +150,15 @@
 		{/if}
 
 		<div class="mt-auto">
+			{#if showStatus && serverName}
+				<div
+					class="text-muted-foreground mt-2.5 flex items-center gap-1.5 font-mono text-[11px]"
+					title="Solves on {serverName}"
+				>
+					<Server class="h-3 w-3 shrink-0 opacity-70" />
+					<span class="truncate">{serverName}</span>
+				</div>
+			{/if}
 			<hr class="border-border my-3" />
 			<div class="text-muted-foreground flex items-center justify-between text-[11.5px]">
 				<span class="font-mono">
