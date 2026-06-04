@@ -6,8 +6,10 @@ import {
 	type InputParam,
 	TreeBuilder,
 	GrasshopperClient,
+	enableDebugLogging,
 	type SolveScheduler
 } from '@selvajs/compute';
+import { env } from '$env/dynamic/private';
 import type { SchemaInput } from '@selvajs/schemas';
 import { error, isHttpError } from '@sveltejs/kit';
 import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';
@@ -38,6 +40,15 @@ interface ComputeRequest {
 	/** Spec §6 channel selector. Defaults to 'live'. 'draft' requires editor. */
 	channel?: 'live' | 'draft';
 }
+
+// Opt-in verbose compute logging. When set, the compute client logs each
+// request and — crucially — the upstream Rhino.Compute response body on
+// failures, which is otherwise swallowed behind "Server error: Internal
+// Server Error". Off by default so prod logs stay quiet.
+const COMPUTE_DEBUG = ['true', '1', 'yes'].includes(
+	(env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase()
+);
+if (COMPUTE_DEBUG) enableDebugLogging();
 
 // -----------------------------
 // Caching infrastructure
@@ -77,7 +88,8 @@ async function getClient(
 
 	cachedClient = await GrasshopperClient.create({
 		serverUrl: currentConfig.serverUrl,
-		apiKey: currentConfig.apiKey
+		apiKey: currentConfig.apiKey,
+		debug: COMPUTE_DEBUG
 	});
 	// `mode: 'queue'` because each HTTP request is its own caller — we never
 	// want one user's solve to be superseded by another's. The dedup we want
@@ -85,7 +97,15 @@ async function getClient(
 	cachedScheduler = cachedClient.createScheduler({
 		mode: 'queue',
 		timeoutMs: MAX_SOLVE_DURATION_MS,
-		cache: { maxEntries: 20, ttlMs: 5 * 60_000 }
+		cache: { maxEntries: 20, ttlMs: 5 * 60_000 },
+		// @selvajs/compute 2.0 added a server-definition-cache fast path that
+		// solves repeat requests by `pointer` instead of re-uploading the algo.
+		// On a pointer miss it's meant to fall back to a full upload, but the
+		// VektorNode Compute fork answers a stale pointer with an empty 200
+		// (no error), so the fallback never fires and outputs come back empty.
+		// Disable it until the fork errors on pointer miss — costs a re-upload
+		// per solve, which is exactly 1.5.x behaviour.
+		reuseServerDefinitionCache: false
 	});
 	cachedClientConfig = currentConfig;
 	return { client: cachedClient, scheduler: cachedScheduler };
