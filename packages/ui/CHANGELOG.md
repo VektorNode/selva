@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 4.6.1
+
+### Patch Changes
+
+- a196044: Update `@selvajs/compute` peer dependency to 2.0.0.
+
 ## 4.6.0
 
 ### Minor Changes
