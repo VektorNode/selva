@@ -25,11 +25,9 @@ public static class MeshBatchProcessor
         List<string> layers = null,
         string sourceComponentId = null)
     {
-        if (meshes.Count == 0)
-        {
-            throw new ArgumentException("Mesh list cannot be empty");
-        }
-
+        // Zero meshes is valid: an items-only batch (curves/points, no meshable geometry) still
+        // produces a well-formed batch with a valid empty blob (vertexCount = 0). The component
+        // sets DisplayBatch.Items afterward.
         if (meshes.Count != names.Count || meshes.Count != materials.Count)
         {
             throw new ArgumentException("Meshes, names, and materials lists must have the same length");
