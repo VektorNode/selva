@@ -17,7 +17,7 @@ public static class MeshBatchProcessor
     ///     Processes multiple meshes with materials into an optimized batch format.
     ///     Groups meshes by material for efficient Three.js rendering and compresses all data together.
     /// </summary>
-    public static MeshBatch CreateBatch(
+    public static DisplayBatch CreateBatch(
         List<Mesh> meshes,
         List<string> names,
         List<ThreeMaterial> materials,
@@ -79,7 +79,7 @@ public static class MeshBatchProcessor
             .ToList();
 
         // Build batch structure
-        var batch = new MeshBatch
+        var batch = new DisplayBatch
         {
             Materials = materialCache.GetAllMaterials()
                 .Select(SerializableMaterial.FromThreeMaterial)
@@ -161,7 +161,7 @@ public static class MeshBatchProcessor
     ///     Serializes the batch envelope without its own binary blob, for embedding in the blob's
     ///     metadata header. Keeps a single JSON shape so the client decoder doesn't branch on transport.
     /// </summary>
-    private static string SerializeMetadata(MeshBatch batch)
+    private static string SerializeMetadata(DisplayBatch batch)
     {
         var savedBlob = batch.CompressedData;
         batch.CompressedData = null;

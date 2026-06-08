@@ -9,13 +9,13 @@ namespace Selva.GH.Features.Display.Goos;
 /// <summary>
 ///     Grasshopper Goo wrapper for WebDisplay data to prevent double JSON encoding.
 /// </summary>
-public class WebDisplayGoo : GH_Goo<MeshBatch>, ISelvaSerializableGoo
+public class WebDisplayGoo : GH_Goo<DisplayBatch>, ISelvaSerializableGoo
 {
     public WebDisplayGoo()
     {
     }
 
-    public WebDisplayGoo(MeshBatch value)
+    public WebDisplayGoo(DisplayBatch value)
     {
         Value = value;
     }
@@ -61,13 +61,13 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>, ISelvaSerializableGoo
         }
 
         var json = reader.GetString("WebDisplayJson");
-        Value = JsonConvert.DeserializeObject<MeshBatch>(json);
+        Value = JsonConvert.DeserializeObject<DisplayBatch>(json);
         return true;
     }
 
     public override bool CastFrom(object source)
     {
-        if (source is MeshBatch batch)
+        if (source is DisplayBatch batch)
         {
             Value = batch;
             return true;
@@ -77,7 +77,7 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>, ISelvaSerializableGoo
         {
             try
             {
-                Value = JsonConvert.DeserializeObject<MeshBatch>(ghString.Value);
+                Value = JsonConvert.DeserializeObject<DisplayBatch>(ghString.Value);
                 return true;
             }
             catch
@@ -91,7 +91,7 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>, ISelvaSerializableGoo
 
     public override bool CastTo<Q>(ref Q target)
     {
-        if (typeof(Q).IsAssignableFrom(typeof(MeshBatch)))
+        if (typeof(Q).IsAssignableFrom(typeof(DisplayBatch)))
         {
             target = (Q)(object)Value;
             return true;
@@ -121,7 +121,7 @@ public class WebDisplayGoo : GH_Goo<MeshBatch>, ISelvaSerializableGoo
         return JsonConvert.SerializeObject(Value);
     }
 
-    // ISelvaSerializableGoo — Rhino.Compute returns this payload. MeshBatch is a web-ready DTO
+    // ISelvaSerializableGoo — Rhino.Compute returns this payload. DisplayBatch is a web-ready DTO
     // (geometry already converted by BinaryGeometryWriter), so default settings match the Goo's
     // own serialization (Write/ScriptVariable).
     public string ToComputeJson()

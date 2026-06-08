@@ -224,7 +224,7 @@ public class WebSocketTransport : IDisposable
         var doc = RhinoDoc.ActiveDoc;
         var modelUnits = doc?.ModelUnitSystem.ToString() ?? "Meters";
 
-        // Extract binary blobs from MeshBatch objects so they travel as binary WebSocket frames
+        // Extract binary blobs from DisplayBatch objects so they travel as binary WebSocket frames
         // instead of base64-in-JSON. The SLVA blob contains embedded metadata (materials, groups,
         // sourceComponentId), so no separate envelope is needed.
         var binaryBlobs = new List<byte[]>();
@@ -232,7 +232,7 @@ public class WebSocketTransport : IDisposable
         {
             foreach (var item in displayData)
             {
-                if (item is MeshBatch batch && batch.CompressedData != null)
+                if (item is DisplayBatch batch && batch.CompressedData != null)
                 {
                     binaryBlobs.Add(batch.CompressedData);
                 }

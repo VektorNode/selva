@@ -57,10 +57,12 @@ public class MaterialCache
 }
 
 /// <summary>
-///     Represents a batch of meshes optimized for Three.js rendering.
-///     Meshes are grouped by material for efficient batching on the web.
+///     One Display component's payload, ready for Three.js rendering.
+///     Meshes are grouped by material and travel as a binary blob; non-mesh display items
+///     (curves, points, and later labels/icons) ride as JSON alongside that blob. Named
+///     <c>DisplayBatch</c> rather than <c>MeshBatch</c> because it carries more than meshes.
 /// </summary>
-public class MeshBatch
+public class DisplayBatch
 {
     /// <summary>
     ///     Array of unique materials used across all meshes.
@@ -125,7 +127,7 @@ public class MeshMetadata
 
     /// <summary>
     ///     Original index of this mesh in the GH input tree, before material grouping.
-    ///     Together with sourceComponentId on MeshBatch, uniquely identifies the GH source.
+    ///     Together with sourceComponentId on DisplayBatch, uniquely identifies the GH source.
     /// </summary>
     [JsonProperty("originalIndex")]
     public int OriginalIndex { get; set; }
