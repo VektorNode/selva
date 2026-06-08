@@ -39,6 +39,12 @@ export interface WsOutputsMessage extends WsSessionMessage {
 	fileOutputs?: Record<string, unknown>;
 	binaryBatchCount?: number;
 	modelUnits?: string;
+	/**
+	 * Non-mesh display items (curves, points; later labels/icons) as JSON. Unlike meshes these have
+	 * no binary frame — they ride the envelope directly and the driver tessellates them. Absent on
+	 * mesh-only solves.
+	 */
+	displayItems?: import('@selvajs/compute/visualization').DisplayItem[];
 }
 
 export interface WsSchemaUpdatedMessage extends WsSessionMessage {

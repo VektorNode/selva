@@ -227,22 +227,36 @@ public class WebSocketTransport : IDisposable
         // Extract binary blobs from DisplayBatch objects so they travel as binary WebSocket frames
         // instead of base64-in-JSON. The SLVA blob contains embedded metadata (materials, groups,
         // sourceComponentId), so no separate envelope is needed.
+        //
+        // Non-mesh display items (curves, points) have no binary form — they ride the JSON envelope
+        // directly as `displayItems`, flattened across all batches (each item already carries a
+        // component-derived id). The client tessellates them alongside the mesh frames.
         var binaryBlobs = new List<byte[]>();
+        var displayItems = new List<DisplayItem>();
         if (includeDisplayData && displayData != null)
         {
             foreach (var item in displayData)
             {
-                if (item is DisplayBatch batch && batch.CompressedData != null)
+                if (item is DisplayBatch batch)
                 {
-                    binaryBlobs.Add(batch.CompressedData);
+                    if (batch.CompressedData != null)
+                    {
+                        binaryBlobs.Add(batch.CompressedData);
+                    }
+
+                    if (batch.Items != null && batch.Items.Count > 0)
+                    {
+                        displayItems.AddRange(batch.Items);
+                    }
                 }
             }
         }
 
-        // JSON envelope: omit displayData; include count so the client knows how many binary
-        // frames to collect before processing the scene update.
+        // JSON envelope: omit the raw displayData; include the binary-frame count and any non-mesh
+        // display items. `displayItems` is null when empty so mesh-only solves are unchanged.
         await BroadcastAsync(OutboundEnvelopes.Outputs(
-            _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits));
+            _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits,
+            displayItems.Count > 0 ? displayItems : null));
 
         // Send each binary blob as a separate binary WebSocket frame. WebSocket preserves message
         // order (TCP), so these frames always arrive after the JSON envelope above.

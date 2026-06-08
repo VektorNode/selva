@@ -19,8 +19,8 @@ catalogs:
       specifier: ^1.49.1
       version: 1.60.0
     '@selvajs/compute':
-      specifier: ^2.0.0
-      version: 2.0.0
+      specifier: ^2.1.0-beta.0
+      version: 2.1.0-beta.0
     '@sveltejs/adapter-auto':
       specifier: ^7.0.1
       version: 7.0.1
@@ -246,7 +246,7 @@ importers:
         version: 5.2.1(svelte@5.55.5(@typescript-eslint/types@8.60.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 2.0.0(three@0.184.0)
+        version: 2.1.0-beta.0(three@0.184.0)
       '@selvajs/schemas':
         specifier: workspace:*
         version: link:../schemas
@@ -259,6 +259,9 @@ importers:
       mode-watcher:
         specifier: 'catalog:'
         version: 1.1.0(svelte@5.55.5(@typescript-eslint/types@8.60.0))
+      rhino3dm:
+        specifier: 8.17.0
+        version: 8.17.0
       svelte-dnd-action:
         specifier: ^0.9.69
         version: 0.9.69(svelte@5.55.5(@typescript-eslint/types@8.60.0))
@@ -382,7 +385,7 @@ importers:
         version: 1.16.0(svelte@5.55.5(@typescript-eslint/types@8.60.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 2.0.0(three@0.184.0)
+        version: 2.1.0-beta.0(three@0.184.0)
       '@supabase/supabase-js':
         specifier: ^2.104.1
         version: 2.106.2
@@ -398,6 +401,9 @@ importers:
       mode-watcher:
         specifier: 'catalog:'
         version: 1.1.0(svelte@5.55.5(@typescript-eslint/types@8.60.0))
+      rhino3dm:
+        specifier: 8.17.0
+        version: 8.17.0
       sharp:
         specifier: ^0.34.5
         version: 0.34.5
@@ -467,7 +473,7 @@ importers:
         version: 1.16.0(svelte@5.55.5(@typescript-eslint/types@8.60.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 2.0.0(three@0.184.0)
+        version: 2.1.0-beta.0(three@0.184.0)
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
@@ -1238,8 +1244,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@selvajs/compute@2.0.0':
-    resolution: {integrity: sha512-rUi2cpmsolFf/SFDE3knhC8C3N3fBhxJmiciIuP6Fwbd7HH2jBBXL16OJXKA93USRv3U5RpsataZUzUDWsFy5w==}
+  '@selvajs/compute@2.1.0-beta.0':
+    resolution: {integrity: sha512-k6+rm8OR/eRKMT66gKNYd+2Fsm7ZaVfnuyCgdN7HnkR1984xm/2lkFsj6G5CI/GacEizjsYWsKIIjAe5k+5bdQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       three: '>=0.179.0'
@@ -3729,7 +3735,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.60.4':
     optional: true
 
-  '@selvajs/compute@2.0.0(three@0.184.0)':
+  '@selvajs/compute@2.1.0-beta.0(three@0.184.0)':
     dependencies:
       fflate: 0.8.3
       rhino3dm: 8.17.0

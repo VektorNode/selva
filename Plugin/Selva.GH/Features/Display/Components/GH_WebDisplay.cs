@@ -117,6 +117,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         pManager.AddGenericParameter("Web Display", "WD", "Geometry data for web display", GH_ParamAccess.item);
     }
 
+
     protected override void SolveInstance(IGH_DataAccess DA)
     {
         GH_Structure<IGH_GeometricGoo> geoTree;
@@ -525,6 +526,10 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             return g;
         }
 
+        // Several GH curve/point primitives expose their value as a *struct* (Line, Arc, Circle,
+        // Point3d, …), which is NOT a GeometryBase — so `ScriptVariable() is GeometryBase` above
+        // misses them and they would fall through to null and be skipped. Convert each to its
+        // GeometryBase form here so the item path can route it to a curve/point display item.
         return goo switch
         {
             GH_GeometricGoo<GeometryBase> x => x.Value,
@@ -532,6 +537,10 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             GH_Brep x => x.Value,
             GH_Surface x => x.Value,
             GH_Curve x => x.Value,
+            GH_Line x when x.Value.IsValid => new LineCurve(x.Value),
+            GH_Arc x when x.Value.IsValid => new ArcCurve(x.Value),
+            GH_Circle x when x.Value.IsValid => new ArcCurve(x.Value),
+            GH_Rectangle x when x.Value.IsValid => x.Value.ToNurbsCurve(),
             // GH_Point's ScriptVariable is a Point3d struct (not GeometryBase), so wrap it as a
             // Point GeometryBase here — the item path then routes it to a DisplayPoint.
             GH_Point x => new Rhino.Geometry.Point(x.Value),

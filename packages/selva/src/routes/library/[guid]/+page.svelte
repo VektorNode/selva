@@ -1,11 +1,23 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
+	import type { RhinoModule } from 'rhino3dm';
 	import { ComputeApp, type SolveFn } from '@selvajs/ui';
 	import { GrasshopperResponseProcessor } from '@selvajs/compute';
 	import ServerFooter from '$lib/components/ServerFooter.svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
 
 	let { data }: PageProps = $props();
+
+	// rhino3dm is a heavy WASM module needed only to decode curve display items. Load it once,
+	// lazily, the first time the viewer actually runs — and reuse the same promise so concurrent
+	// solves share a single load. Points and meshes don't need it; curves are skipped without it.
+	let rhinoPromise: Promise<RhinoModule> | null = null;
+	function getRhino(): Promise<RhinoModule> {
+		if (!rhinoPromise) {
+			rhinoPromise = import('rhino3dm').then((m) => m.default());
+		}
+		return rhinoPromise;
+	}
 
 	// Soft cooldown after a 429: until this timestamp elapses, short-circuit
 	// new solves so dragging a slider during the rate-limit window doesn't
@@ -55,7 +67,9 @@
 		const shouldShowViewer =
 			data.schema.viewerOptions?.enableLocal || data.schema.viewerOptions?.enableRemote;
 
-		const meshes = shouldShowViewer ? await processor.extractMeshesFromResponse() : [];
+		const meshes = shouldShowViewer
+			? await processor.extractMeshesFromResponse({ rhino: await getRhino() })
+			: [];
 
 		// Resolve each output by id first, then fall back to its name. Stock
 		// Rhino.Compute solve responses omit the per-item `id` (only the VektorNode
