@@ -201,6 +201,8 @@ export function createWebSocketSolveDriver(
 		// our token was superseded mid-parse, skip the report so we don't apply stale display.
 		if (myToken !== outputsToken) return;
 
+		console.info('[Preview] parsed scene objects', sceneObjects);
+
 		getReporter().report({
 			outputs: { ...(message.outputs ?? {}), ...(message.fileOutputs ?? {}) },
 			...(sceneObjects !== undefined ? { meshes: sceneObjects } : {})

@@ -6,23 +6,26 @@
 	import ServerFooter from '$lib/components/ServerFooter.svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
 
+	// Pass rhino3dm.wasm via locateFile to avoid 404 on dynamic routes.
+	import rhinoWasmUrl from 'rhino3dm/rhino3dm.wasm?url';
+
 	let { data }: PageProps = $props();
 
-	// rhino3dm is a heavy WASM module needed only to decode curve display items. Load it once,
-	// lazily, the first time the viewer actually runs — and reuse the same promise so concurrent
-	// solves share a single load. Points and meshes don't need it; curves are skipped without it.
+	// Lazy-load once; curves skipped without it.
 	let rhinoPromise: Promise<RhinoModule> | null = null;
 	function getRhino(): Promise<RhinoModule> {
 		if (!rhinoPromise) {
-			rhinoPromise = import('rhino3dm').then((m) => m.default());
+			rhinoPromise = import('rhino3dm').then((m) => {
+				const init = m.default as (opts?: {
+					locateFile?: (path: string) => string;
+				}) => Promise<RhinoModule>;
+				return init({ locateFile: () => rhinoWasmUrl });
+			});
 		}
 		return rhinoPromise;
 	}
 
-	// Soft cooldown after a 429: until this timestamp elapses, short-circuit
-	// new solves so dragging a slider during the rate-limit window doesn't
-	// generate a flood of doomed requests. The user-visible error message
-	// stays until the next successful solve replaces it.
+	// Short-circuit solves during rate-limit window.
 	let cooldownUntil = 0;
 
 	const onSolve: SolveFn = async (values, signal) => {
@@ -71,12 +74,7 @@
 			? await processor.extractMeshesFromResponse({ rhino: await getRhino() })
 			: [];
 
-		// Resolve each output by id first, then fall back to its name. Stock
-		// Rhino.Compute solve responses omit the per-item `id` (only the VektorNode
-		// fork emits it), so a pure id match silently returns nothing — which broke
-		// dynamic value lists (their options ride an output payload that never
-		// reached the input). ParamName is always present, and the schema nickname
-		// matches it, so name is the reliable fallback.
+		// Fall back to name if id missing (VektorNode fork only); stock Compute omits id.
 		const outputs: Record<string, unknown> = {};
 		for (const o of data.schema.outputs) {
 			const byId = processor.getValue({ byId: o.id }, { parseValues: true });

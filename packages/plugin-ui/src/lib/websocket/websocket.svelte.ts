@@ -222,7 +222,6 @@ export class WebSocketState {
 				this.socket.binaryType = 'arraybuffer';
 
 				this.socket.onopen = () => {
-					// If reconnecting after server disconnect, reload the page to get fresh state
 					if (this._shouldReloadOnReconnect) {
 						window.location.reload();
 						return;
@@ -236,7 +235,6 @@ export class WebSocketState {
 
 				this.socket.onmessage = (event) => {
 					try {
-						// Binary frame — SLVA mesh blob from the server.
 						if (event.data instanceof ArrayBuffer) {
 							const handlers = this.messageHandlers.get('binaryFrame');
 							if (handlers) {
