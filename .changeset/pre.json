@@ -1,17 +1,20 @@
 {
-	"mode": "pre",
-	"tag": "beta",
-	"initialVersions": {
-		"@selvajs/cli": "4.3.5",
-		"@selvajs/config": "0.0.0",
-		"@selvajs/platform": "0.12.3",
-		"@selvajs/plugin-ui": "0.10.0",
-		"@selvajs/header-auth-provider": "0.11.0",
-		"@selvajs/local-provider": "0.12.3",
-		"@selvajs/supabase-provider": "0.13.4",
-		"@selvajs/schemas": "4.5.0",
-		"@selvajs/selva": "4.3.5",
-		"@selvajs/ui": "4.6.1"
-	},
-	"changesets": ["partial-unique-projects"]
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "@selvajs/cli": "4.3.5",
+    "@selvajs/config": "0.0.0",
+    "@selvajs/platform": "0.12.3",
+    "@selvajs/plugin-ui": "0.10.0",
+    "@selvajs/header-auth-provider": "0.11.0",
+    "@selvajs/local-provider": "0.12.3",
+    "@selvajs/supabase-provider": "0.13.4",
+    "@selvajs/schemas": "4.5.0",
+    "@selvajs/selva": "4.3.5",
+    "@selvajs/ui": "4.6.1"
+  },
+  "changesets": [
+    "late-baboons-clean",
+    "partial-unique-projects"
+  ]
 }

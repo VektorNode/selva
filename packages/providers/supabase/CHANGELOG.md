@@ -1,5 +1,11 @@
 # @selvajs/supabase-provider
 
+## 0.13.5-beta.1
+
+### Patch Changes
+
+- Roll beta prerelease.
+
 ## 0.13.5-beta.0
 
 ### Patch Changes
