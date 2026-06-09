@@ -2,7 +2,20 @@ name: Release
 
 # What this does
 # ---------------
-# Streamlined publish flow using changesets/action. On every push to `main`:
+# Handles BOTH the stable (`main`) and beta (`beta`) publish flows from one
+# workflow — deliberately, because npm Trusted Publishing matches on the
+# workflow FILENAME and allows one publisher per package. Splitting beta into
+# its own file would need a second per-package trusted-publisher entry npm
+# won't grant, and publishes 404. So beta rides release.yml's identity.
+#
+# BETA branch (changesets "pre mode"): push a changeset to `beta` (which must
+# have run `pnpm changeset pre enter beta`, committing .changeset/pre.json) and
+# this versions the affected packages as `x.y.z-beta.N`, commits the bump back
+# to `beta`, and publishes them under the npm `beta` dist-tag — no version PR.
+# `npm i pkg` still resolves stable; `npm i pkg@beta` gets the prerelease.
+# Exit the cycle with `pnpm changeset pre exit` on `beta`, then merge to main.
+#
+# MAIN branch — streamlined publish flow using changesets/action. On every push:
 #
 # 1. If there are .changeset/*.md files pending: opens (or updates) a
 #    "Version Packages" PR with `pnpm changeset version` applied. Reviewers
@@ -39,11 +52,15 @@ name: Release
 
 on:
   push:
-    branches: [main]
+    branches: [main, beta]
 
+# Per-ref so main and beta never collide. On beta we cancel in-flight runs
+# (a newer push supersedes — its checkout already has the older bump commit);
+# on main we don't, to avoid interrupting an in-progress publish. The
+# expression yields true only for beta.
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref == 'refs/heads/beta' }}
 
 jobs:
   release:
@@ -70,14 +87,62 @@ jobs:
           # changesets needs full history to compute version diffs
           fetch-depth: 0
 
-      # Skip the expensive install/test/build path when there's nothing to do.
-      # Two cases warrant running:
-      #   1. Pending changesets in .changeset/*.md → open/update the version PR
-      #   2. Post-version-PR-merge: package.json versions ahead of npm → publish
-      # If neither is true (regular code push to main), bail out early.
+      # Decide whether to run, and via which path. Outputs:
+      #   should_run    — gate every heavy step below
+      #   is_beta       — true on the beta branch (pre-release publish path)
+      #   needs_version — beta-only: run `changeset version` (vs. re-publish an
+      #                   already-bumped version whose publish failed)
+      #
+      # MAIN: same as before — pending changesets open/update the version PR;
+      # a post-merge bump (local version ahead of npm) triggers publish.
+      #
+      # BETA: changesets "pre mode". A changeset .md is NOT deleted by
+      # `changeset version` in pre mode — it's recorded in pre.json and left on
+      # disk until `pre exit`, so an UNCONSUMED changeset (basename absent from
+      # pre.json.changesets) means "version a new -beta.N". Otherwise, if a
+      # local version is ahead of its `beta` dist-tag on npm, a prior run
+      # versioned but failed to publish → re-publish without re-versioning.
       - name: Check for pending release work
         id: check
         run: |
+          if [ "${{ github.ref }}" = "refs/heads/beta" ]; then
+            echo "is_beta=true" >> "$GITHUB_OUTPUT"
+            if [ ! -f .changeset/pre.json ]; then
+              echo "::error::.changeset/pre.json missing — beta branch is not in pre mode."
+              echo "Run 'pnpm changeset pre enter beta' on the beta branch first."
+              exit 1
+            fi
+            # Count changesets not yet consumed this pre-cycle.
+            unconsumed=0
+            for f in $(find .changeset -maxdepth 1 -type f -name '*.md' \
+              ! -name 'README.md' ! -name 'config.md'); do
+              name=$(basename "$f" .md)
+              if ! node -e "process.exit(require('./.changeset/pre.json').changesets.includes('$name') ? 0 : 1)"; then
+                unconsumed=$((unconsumed + 1))
+              fi
+            done
+            if [ "$unconsumed" -gt 0 ]; then
+              echo "Found $unconsumed unconsumed changeset(s) — version + publish."
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+              echo "needs_version=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # No new changesets — re-publish if a local version is ahead of npm's beta tag.
+            while IFS=$'\t' read -r name local_ver _dir; do
+              beta_ver=$(npm view "$name@beta" version 2>/dev/null || echo "")
+              if [ "$local_ver" != "$beta_ver" ]; then
+                echo "$name local=$local_ver beta=${beta_ver:-<none>} — re-publishing."
+                echo "should_run=true" >> "$GITHUB_OUTPUT"
+                echo "needs_version=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            done < <(node scripts/publishable-packages.mjs --list)
+            echo "No unconsumed changesets and all beta versions match npm — skipping."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ── main branch ──────────────────────────────────────────────────
           # Count .changeset/*.md files, excluding README.md and config.md.
           count=$(find .changeset -maxdepth 1 -type f -name '*.md' \
             ! -name 'README.md' ! -name 'config.md' | wc -l)
@@ -165,8 +230,45 @@ jobs:
         # ones we trust here; the rest are best-effort.
         run: pnpm --filter=@selvajs/local-provider test
 
+      # ── beta path: version (pre-release), commit the bump back, publish ───
+      # In pre mode, plain `changeset publish` publishes under the `beta`
+      # dist-tag automatically — passing `--tag` is REJECTED ("custom tag not
+      # allowed in pre mode"), so we reuse `pnpm release` (build + publish).
+      - name: Version beta packages
+        if: steps.check.outputs.is_beta == 'true' && steps.check.outputs.needs_version == 'true'
+        run: pnpm changeset version
+
+      - name: Commit beta version bumps
+        if: steps.check.outputs.is_beta == 'true' && steps.check.outputs.needs_version == 'true'
+        # HUSKY=0 + --no-verify: the repo pre-commit hook runs lint-staged,
+        # which aborts on a no-op commit. CI bumps are machine-generated.
+        env:
+          HUSKY: 0
+        run: |
+          if git diff --quiet; then
+            echo "No version changes to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit --no-verify -m "chore: version beta packages [skip ci]"
+            # No --force: a non-fast-forward push fails the job rather than
+            # clobbering. The concurrency guard makes the race rare; re-running
+            # on the latest commit is the recovery path.
+            git push origin HEAD:beta
+          fi
+
+      - name: Build & publish beta
+        if: steps.check.outputs.is_beta == 'true'
+        run: pnpm release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No NPM_TOKEN — auth via OIDC trusted publishing (this workflow
+          # filename, release.yml, is the package's registered publisher).
+
+      # ── main path: changesets/action opens the version PR / publishes ─────
       - uses: changesets/action@v1
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true'
         with:
           # `pnpm changeset version` consumes .changeset/*.md, bumps
           # package.json versions, and writes CHANGELOGs. The `fixed` group in
