@@ -39,6 +39,7 @@
 		"rebuild": "pnpm clean && pnpm install && pnpm build",
 		"changeset": "changeset",
 		"release": "pnpm build && changeset publish",
+		"release:beta": "pnpm build && changeset publish --tag beta",
 		"prepare": "husky"
 	},
 	"pnpm": {
