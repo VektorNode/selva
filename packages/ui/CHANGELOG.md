@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 4.6.2-beta.0
+
+### Patch Changes
+
+- 8505304: Roll beta prerelease for @selvajs/ui.
+
 ## 4.6.1
 
 ### Patch Changes
