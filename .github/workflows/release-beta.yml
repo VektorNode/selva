@@ -68,10 +68,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Only do work when there are pending changesets AND we're in pre mode.
-      # A push to beta with no changesets (e.g. the pre-enter commit itself,
-      # or a docs tweak) should be a no-op, not a republish of the same
-      # versions.
+      # Decide whether to run. Two cases warrant work, mirroring release.yml:
+      #   1. Pending .changeset/*.md → version + publish a new -beta.N.
+      #   2. No pending changesets, but a published package's local version is
+      #      ahead of its `beta` dist-tag on npm → a prior run versioned but
+      #      failed to publish (e.g. the publish step errored). Re-publish
+      #      without re-versioning. This makes the workflow self-healing.
+      # Always requires pre mode (.changeset/pre.json) to be active.
       - name: Check for pending beta release work
         id: check
         run: |
@@ -84,12 +87,25 @@ jobs:
           count=$(find .changeset -maxdepth 1 -type f -name '*.md' \
             ! -name 'README.md' ! -name 'config.md' | wc -l)
           if [ "$count" -gt 0 ]; then
-            echo "Found $count pending changeset(s) — proceeding with beta release."
+            echo "Found $count pending changeset(s) — version + publish."
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No pending changesets — nothing to release."
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "needs_version=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          # No changesets — is any published package's local version ahead of
+          # what's tagged `beta` on npm? If so, a prior version succeeded but
+          # the publish didn't; re-publish without re-versioning.
+          while IFS=$'\t' read -r name local_ver _dir; do
+            beta_ver=$(npm view "$name@beta" version 2>/dev/null || echo "")
+            if [ "$local_ver" != "$beta_ver" ]; then
+              echo "$name local=$local_ver beta=${beta_ver:-<none>} — re-publishing."
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+              echo "needs_version=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done < <(node scripts/publishable-packages.mjs --list)
+          echo "No changesets and all beta versions match npm — skipping."
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v3
         if: steps.check.outputs.should_run == 'true'
@@ -132,11 +148,11 @@ jobs:
       # bumps back to the beta branch so the -beta.N counter advances on the
       # next push (changesets reads existing versions to compute N+1).
       - name: Version beta packages
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.check.outputs.needs_version == 'true'
         run: pnpm changeset version
 
       - name: Commit version bumps
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.check.outputs.needs_version == 'true'
         run: |
           if git diff --quiet; then
             echo "No version changes to commit."
@@ -152,9 +168,13 @@ jobs:
             git push origin HEAD:beta
           fi
 
+      # Plain `pnpm release` (build + `changeset publish`), NOT a custom
+      # --tag. In pre mode, changesets publishes under the pre-tag name
+      # automatically (here: the `beta` dist-tag) and REJECTS an explicit
+      # `--tag` with "Releasing under custom tag is not allowed in pre mode".
       - name: Build & publish beta
         if: steps.check.outputs.should_run == 'true'
-        run: pnpm release:beta
+        run: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No NPM_TOKEN — auth via OIDC trusted publishing.
