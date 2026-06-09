@@ -41,10 +41,7 @@ interface ComputeRequest {
 	channel?: 'live' | 'draft';
 }
 
-// Opt-in verbose compute logging. When set, the compute client logs each
-// request and — crucially — the upstream Rhino.Compute response body on
-// failures, which is otherwise swallowed behind "Server error: Internal
-// Server Error". Off by default so prod logs stay quiet.
+// Logs upstream Rhino.Compute response body on failures (off by default).
 const COMPUTE_DEBUG = ['true', '1', 'yes'].includes(
 	(env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase()
 );
@@ -57,9 +54,7 @@ if (COMPUTE_DEBUG) enableDebugLogging();
 /** Cache for remote definitions (URL -> bytes). TTL/caps come from computeLimits. */
 const definitionCache = new Map<string, { data: Uint8Array; fetchedAt: number }>();
 
-/** Singleton GrasshopperClient + scheduler. The scheduler dedupes identical
- * (definition, dataTree) solves via an LRU cache and propagates AbortSignal
- * to the upstream Compute call so client disconnects kill orphan solves. */
+// Singleton with dedup cache; AbortSignal kills orphan solves on client disconnect.
 let cachedClient: GrasshopperClient | null = null;
 let cachedScheduler: SolveScheduler | null = null;
 let cachedClientConfig: { serverUrl: string; apiKey?: string } | null = null;
@@ -82,8 +77,7 @@ async function getClient(
 		return { client: cachedClient, scheduler: cachedScheduler };
 	}
 
-	// Server identity changed — drop the old scheduler so its cache + in-flight
-	// state don't leak across servers.
+	// Drop scheduler on server change to prevent state leakage.
 	cachedScheduler?.dispose();
 
 	cachedClient = await GrasshopperClient.create({
@@ -91,36 +85,18 @@ async function getClient(
 		apiKey: currentConfig.apiKey,
 		debug: COMPUTE_DEBUG
 	});
-	// `mode: 'queue'` because each HTTP request is its own caller — we never
-	// want one user's solve to be superseded by another's. The dedup we want
-	// is response caching, which is independent of mode.
 	cachedScheduler = cachedClient.createScheduler({
 		mode: 'queue',
 		timeoutMs: MAX_SOLVE_DURATION_MS,
 		cache: { maxEntries: 20, ttlMs: 5 * 60_000 },
-		// @selvajs/compute 2.0 added a server-definition-cache fast path that
-		// solves repeat requests by `pointer` instead of re-uploading the algo.
-		// On a pointer miss it's meant to fall back to a full upload, but the
-		// VektorNode Compute fork answers a stale pointer with an empty 200
-		// (no error), so the fallback never fires and outputs come back empty.
-		// Disable it until the fork errors on pointer miss — costs a re-upload
-		// per solve, which is exactly 1.5.x behaviour.
+		// VektorNode fork returns empty 200 on stale pointer; disable until it errors.
 		reuseServerDefinitionCache: false
 	});
 	cachedClientConfig = currentConfig;
 	return { client: cachedClient, scheduler: cachedScheduler };
 }
 
-/**
- * Load definition from cache or fetch from remote URL.
- * Local definitions bypass cache (handled by container).
- *
- * SSRF protection:
- *   - private/loopback/link-local hosts rejected up-front
- *   - `redirect: 'error'` so a public host can't bounce us to a private IP
- *   - response size capped via Content-Length AND streamed-byte budget
- *   - hard timeout via AbortController
- */
+// SSRF checks: up-front host validation, redirect:'error', size caps, timeout.
 async function loadRemoteDefinition(url: string): Promise<Uint8Array> {
 	if (!isSafeRemoteDefinitionUrl(url)) {
 		throw new Error('Remote definition URL is not allowed');
@@ -129,7 +105,6 @@ async function loadRemoteDefinition(url: string): Promise<Uint8Array> {
 	const now = Date.now();
 	const cached = definitionCache.get(url);
 
-	// Return cached if still fresh
 	if (cached && now - cached.fetchedAt < DEFINITION_CACHE_TTL_MS) {
 		return cached.data;
 	}
@@ -158,14 +133,11 @@ async function loadRemoteDefinition(url: string): Promise<Uint8Array> {
 		clearTimeout(timeout);
 	}
 
-	// Cache the result
 	definitionCache.set(url, { data, fetchedAt: now });
 
-	// Clean up old entries (simple LRU-ish cleanup)
 	if (definitionCache.size > 50) {
 		const entries = Array.from(definitionCache.entries());
 		entries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
-		// Remove oldest 10 entries
 		for (let i = 0; i < 10; i++) {
 			definitionCache.delete(entries[i][0]);
 		}
@@ -174,9 +146,6 @@ async function loadRemoteDefinition(url: string): Promise<Uint8Array> {
 	return data;
 }
 
-/**
- * Transform input parameter to Rhino Compute format
- */
 function transformInputParameter(
 	input: SchemaInput & { minimum?: number; maximum?: number; stepSize?: number },
 	value: unknown
@@ -221,9 +190,7 @@ function transformInputParameter(
 export const POST: RequestHandler = async ({ request, locals, url }) => {
 	const storage = getStorageProvider();
 
-	// Per-route body cap — see `COMPUTE_REQUEST_MAX_BYTES` for rationale.
-	// Runs BEFORE `request.json()` so a too-large declared payload is
-	// rejected without buffering.
+	// Reject oversized payloads before buffering.
 	requireMaxBodySize(request, COMPUTE_REQUEST_MAX_BYTES);
 
 	try {
@@ -241,20 +208,14 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		}
 
 		let definitionSource: Uint8Array;
-		// BRIDGE: remove ~2026-09 — see specs/SchemaCaching.md. Holds the local
-		// version row so we can lazily backfill its cached schema post-solve.
+		// BRIDGE: remove ~2026-09 — lazy schema backfill for pre-cached versions.
 		let localVersionForBackfill: { id: string; hasSchema: boolean } | null = null;
-		// Track which org owns the definition so BYO compute can route the solve
-		// to that org's override server (spec §3). Null when the definition is
-		// externally hosted — no tenant context, fall through to global default.
+		// BYO compute routing per org (spec §3); null for remote definitions.
 		let solveOrgId: string | null = null;
-		// Per-definition compute pin (spec §3 step 1). Falls through silently if
-		// the pinned server is no longer visible to the project's org.
+		// Per-definition compute pin (spec §3 step 1).
 		let definitionPin: string | null = null;
 
-		// Spec §7 — share-link tokens authenticate anonymous solves to one
-		// (definitionId, channel). Only meaningful for `local:` URLs; remote
-		// definitions stay user-auth-only.
+		// Share-link tokens (spec §7); null for remote definitions or no token.
 		const isLocal = definitionUrl.startsWith('local:');
 		const guid = isLocal ? definitionUrl.substring(6) : null;
 		const sharedAccess =
@@ -262,20 +223,14 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				? await tryResolveShareToken(request, url, guid, channel, { requireSolve: true })
 				: null;
 
-		// User-auth fallback: every non-token request still needs a session.
 		if (!sharedAccess && (!locals.ctx || !locals.user)) {
 			throw error(401, 'Unauthorized');
 		}
 
-		// `solveCtx` is the data-layer context — synthetic when token-resolved,
-		// the user's ctx otherwise. Used for definition + version + project reads.
+		// Synthetic for token-resolved, user's context otherwise.
 		const solveCtx: RequestContext = sharedAccess?.ctx ?? locals.ctx!;
 
-		// Per-key rate limit. `share:{linkId}` for token-credentialed solves
-		// (each link has its own bucket so anonymous consumers of one link
-		// don't share quota with the link's owner); `user:{userId}` otherwise.
-		// Runs BEFORE definition + version reads so we don't burn DB on
-		// already-throttled callers.
+		// Per-key rate limit; runs before DB reads so throttled callers don't burn quota.
 		const rateLimitKey = sharedAccess ? `share:${sharedAccess.link.id}` : `user:${locals.user!.id}`;
 		const rateLimit = checkComputeRateLimit(rateLimitKey);
 		if (!rateLimit.allowed) {
@@ -309,8 +264,6 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			solveOrgId = project?.orgId ?? null;
 			definitionPin = record.computeServerId ?? null;
 
-			// Token-resolved requests skip the user-auth gate (the token IS the
-			// authorization). Otherwise enforce the channel-appropriate user rule.
 			if (!sharedAccess) {
 				if (channel === 'draft') {
 					await requireCanEditDefinition(locals, record.projectId, guid);
@@ -338,7 +291,6 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				throw error(404, `Definition '${guid}' not found`);
 			}
 		} else {
-			// Externally-hosted definition; no tenant-scoped gate applies.
 			try {
 				definitionSource = await loadRemoteDefinition(definitionUrl);
 			} catch (err) {
@@ -356,8 +308,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				.map((input) => transformInputParameter(input, values[input.id]))
 		);
 
-		// Spec §7 — atomic check-and-increment BEFORE the solve, so a request
-		// past the cap doesn't burn compute. Returns null when the cap is hit.
+		// Atomic check-and-increment (spec §7); run before solve to avoid wasting compute.
 		if (sharedAccess) {
 			const next = await providers.data.shareLinks.tryIncrementSolveCount(
 				solveCtx,
@@ -370,10 +321,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 
 		const serverConfig = await resolveServerForOrg(solveCtx, solveOrgId, { definitionPin });
 
-		// BRIDGE: remove ~2026-09 — see specs/SchemaCaching.md. New uploads cache
-		// their schema at upload; versions predating that have none. Backfill it
-		// here, lazily, the first time such a version is solved. Best-effort: a
-		// failure must never block or fail the solve.
+		// BRIDGE: remove ~2026-09 — lazy backfill for pre-cached versions. Best-effort.
 		if (localVersionForBackfill && !localVersionForBackfill.hasSchema) {
 			const versionId = localVersionForBackfill.id;
 			try {
@@ -386,22 +334,16 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 
 		const { scheduler } = await getClient(serverConfig);
 
-		// The scheduler propagates `request.signal` to the Compute call, so a
-		// client disconnect aborts the upstream solve instead of orphaning it.
-		// Timeout is enforced by the scheduler (MAX_SOLVE_DURATION_MS); on
-		// overrun the scheduler rejects with an abort error which we map to 504.
+		// request.signal propagates to Compute; abort kills orphan solves.
 		let solvedDefinition;
 		try {
 			solvedDefinition = await scheduler.solve(definitionSource, inputTree, {
 				signal: request.signal
 			});
 		} catch (err) {
-			// Distinguish timeout from caller-disconnect. The scheduler raises
-			// AbortError for both; the timer firing first means we hit the
-			// deadline, the request signal firing first means the client left.
+			// Distinguish timeout (scheduler timer) from client disconnect (request signal).
 			if (err instanceof Error && err.name === 'AbortError') {
 				if (request.signal.aborted) {
-					// Client gave up; don't bother responding with a useful body.
 					throw error(499, 'Client closed request');
 				}
 				throw error(
@@ -412,14 +354,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			throw err;
 		}
 
-		// Serialize once and guard the size. A `file`-typed output base64-embeds
-		// its bytes here; a large enough export both risks the V8 ~512 MB string
-		// wall during stringify and balloons browser-tab memory on the client.
-		// This is the defensive backstop for that (ADR 0003 is the real fix):
-		// fail with a clear 413 instead of an opaque 500 or a silently OOM'd tab.
-		// We stringify ourselves (one copy, same as `json()` would do) so we can
-		// both measure the result and catch the RangeError stringify throws when
-		// a single string leaf exceeds V8's limit.
+		// Stringify once to measure and catch V8 RangeError on oversized strings.
 		let serialized: string;
 		try {
 			serialized = JSON.stringify(solvedDefinition);
@@ -432,8 +367,6 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			}
 			throw err;
 		}
-		// `length` is UTF-16 code units; byte length is >= that for non-ASCII but
-		// base64 is ASCII, so for the payloads this guards the two coincide.
 		if (serialized.length > COMPUTE_RESPONSE_MAX_BYTES) {
 			throw error(
 				413,
@@ -444,10 +377,8 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			headers: { 'Content-Type': 'application/json' }
 		});
 	} catch (err) {
-		// Re-throw SvelteKit errors (400, 404, etc.) as-is
 		if (isHttpError(err)) throw err;
 
-		// No compute server configured/visible — an operator action, not a bug.
 		if (err instanceof ComputeServerUnconfiguredError) {
 			throw error(503, err.message);
 		}
@@ -455,7 +386,6 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		const message = err instanceof Error ? err.message : 'Unknown error';
 		console.error('[API/Compute] Error:', message);
 
-		// Distinguish connectivity errors from other failures
 		if (err instanceof TypeError && message === 'fetch failed') {
 			throw error(503, 'Compute server is unreachable');
 		}

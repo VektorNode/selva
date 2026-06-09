@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Selva.Schema.Models;
+using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
@@ -107,9 +108,14 @@ public static class OutboundEnvelopes
     /// <summary>
     ///     The `outputs` JSON envelope (the binary mesh frames that follow are sent separately by the
     ///     transport). `binaryBatchCount` tells the client how many binary frames to collect.
+    ///     `displayItems` carries the non-mesh display items (curves, points; later labels/icons)
+    ///     as JSON — unlike meshes these have no binary form, so they ride the envelope directly and
+    ///     the client tessellates them. Omitted (null) when there are none, so a mesh-only solve is
+    ///     byte-for-byte as before.
     /// </summary>
     public static object Outputs(string sessionId, Dictionary<string, object> outputs,
-        Dictionary<string, object> fileOutputs, int binaryBatchCount, string modelUnits) =>
+        Dictionary<string, object> fileOutputs, int binaryBatchCount, string modelUnits,
+        List<DisplayItem> displayItems = null) =>
         new
         {
             type = "outputs",
@@ -117,7 +123,8 @@ public static class OutboundEnvelopes
             outputs,
             fileOutputs,
             binaryBatchCount,
-            modelUnits
+            modelUnits,
+            displayItems
         };
 
     /// <summary>

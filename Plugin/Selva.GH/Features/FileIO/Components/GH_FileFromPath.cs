@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using Grasshopper.Kernel;
@@ -34,6 +35,10 @@ public class GH_FileFromPath : GH_Component, ISelvaFileOutput
             GH_ParamAccess.item, "");
         pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item,
             "");
+        pManager.AddTextParameter("Metadata", "M",
+            "Optional metadata as \"key=value\" lines (e.g. author=felix). Rides along with the file for downstream tagging/indexing.",
+            GH_ParamAccess.list);
+        pManager[3].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -54,6 +59,9 @@ public class GH_FileFromPath : GH_Component, ISelvaFileOutput
 
         DA.GetData(1, ref nameOverride);
         DA.GetData(2, ref subFolder);
+
+        var metadataLines = new List<string>();
+        DA.GetDataList(3, metadataLines);
 
         if (!File.Exists(path))
         {
@@ -83,7 +91,8 @@ public class GH_FileFromPath : GH_Component, ISelvaFileOutput
             Data = Convert.ToBase64String(bytes),
             FileType = extension,
             IsBase64Encoded = true,
-            SubFolder = subFolder ?? ""
+            SubFolder = subFolder ?? "",
+            Metadata = FileMetadataParser.Parse(metadataLines)
         };
 
         DA.SetData(0, new FileDataGoo(fileData));

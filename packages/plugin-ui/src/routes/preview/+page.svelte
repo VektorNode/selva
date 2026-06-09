@@ -45,6 +45,7 @@
 	$effect(() => {
 		if (!sessionId) return;
 		if (externalInputs.length === 0) return;
+
 		const sid = sessionId;
 		const inputs = externalInputs;
 		untrack(() => {

@@ -105,7 +105,10 @@ const outputsSchema = baseEnvelope.extend({
 	outputs: z.record(z.string(), z.unknown()).nullish(),
 	fileOutputs: z.record(z.string(), z.unknown()).nullish(),
 	binaryBatchCount: z.number().nullish(),
-	modelUnits: z.string().nullish()
+	modelUnits: z.string().nullish(),
+	// Non-mesh display items (curves/points) ride the envelope as JSON; shape is validated by the
+	// compute parser, so here we only assert it's an array when present.
+	displayItems: z.array(z.unknown()).nullish()
 });
 
 // outputUpdate is currently subscribed by usePreviewState but not broadcast by the

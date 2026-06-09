@@ -23,13 +23,18 @@ namespace Selva.GH.Features.Display.Components;
 public sealed class SolveResult
 {
     public SolveResult(List<Mesh> meshes, List<string> names, List<string> layers,
-        List<Dictionary<string, string>> metadata, List<ThreeMaterial> materials, int skipped = 0)
+        List<Dictionary<string, string>> metadata, List<ThreeMaterial> materials,
+        List<DisplayItem> items, List<Curve> previewCurves, List<Point3d> previewPoints,
+        int skipped = 0)
     {
         Meshes = meshes;
         Names = names;
         Layers = layers;
         Metadata = metadata;
         Materials = materials;
+        Items = items;
+        PreviewCurves = previewCurves;
+        PreviewPoints = previewPoints;
         Skipped = skipped;
     }
 
@@ -38,7 +43,19 @@ public sealed class SolveResult
     public List<string> Layers { get; }
     public List<Dictionary<string, string>> Metadata { get; }
     public List<ThreeMaterial> Materials { get; }
+
+    /// <summary>Non-mesh display items (curves, points) ready to attach to the batch.</summary>
+    public List<DisplayItem> Items { get; }
+
+    /// <summary>Original Rhino curves kept for viewport preview (the JSON in Items isn't drawable).</summary>
+    public List<Curve> PreviewCurves { get; }
+
+    /// <summary>Original Rhino points kept for viewport preview.</summary>
+    public List<Point3d> PreviewPoints { get; }
+
     public int Skipped { get; }
+
+    public int Count => Meshes.Count + Items.Count;
 }
 
 /// <summary>
@@ -50,6 +67,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 {
     private BoundingBox _previewBB;
     private List<GH_CustomPreviewItem> _previewItems;
+    private List<(Curve curve, Color color)> _previewCurves;
+    private List<(Point3d point, Color color)> _previewPoints;
 
     public WebDisplay()
         : base("Display", "D", "Converts geometry to display file", "Selva", "Display")
@@ -65,6 +84,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     {
         base.ClearData();
         _previewItems = null;
+        _previewCurves = null;
+        _previewPoints = null;
         _previewBB = BoundingBox.Empty;
     }
 
@@ -96,6 +117,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         pManager.AddGenericParameter("Web Display", "WD", "Geometry data for web display", GH_ParamAccess.item);
     }
 
+
     protected override void SolveInstance(IGH_DataAccess DA)
     {
         GH_Structure<IGH_GeometricGoo> geoTree;
@@ -118,31 +140,38 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         if (InPreSolve)
         {
             TaskList.Add(Task.Run(() =>
-                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings),
+                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId),
                 CancelToken));
             return;
         }
 
         if (!GetSolveResults(DA, out var result))
         {
-            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings);
+            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId);
         }
 
-        if (result == null || result.Meshes.Count == 0)
+        if (result == null || result.Count == 0)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be meshed");
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be displayed");
             return;
         }
 
         if (result.Skipped > 0)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                $"{result.Skipped} item(s) could not be meshed and were skipped");
+                $"{result.Skipped} item(s) could not be displayed and were skipped");
         }
 
+        // Meshes go through the binary blob path; curves/points ride as JSON items. CreateBatch
+        // always emits a valid (possibly empty) blob, so an items-only batch is well-formed.
         var batch = MeshBatchProcessor.CreateBatch(
             result.Meshes, result.Names, result.Materials, result.Metadata,
             result.Layers, componentId);
+        if (result.Items.Count > 0)
+        {
+            batch.Items = result.Items;
+        }
+
         DA.SetData(0, new WebDisplayGoo(batch));
 
         // Build preview items on main thread (Rhino display API requirement).
@@ -178,6 +207,49 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             });
             _previewBB.Union(mesh.GetBoundingBox(false));
         }
+
+        // Curve / point preview: the JSON in the batch isn't drawable, so we keep the original Rhino
+        // geometry (with its item color) and draw it as wires in DrawViewportWires.
+        _previewCurves = new List<(Curve, Color)>(result.PreviewCurves.Count);
+        for (var i = 0; i < result.PreviewCurves.Count; i++)
+        {
+            var curve = result.PreviewCurves[i];
+            _previewCurves.Add((curve, ColorOf(result.Items, "curve", i)));
+            _previewBB.Union(curve.GetBoundingBox(false));
+        }
+
+        _previewPoints = new List<(Point3d, Color)>(result.PreviewPoints.Count);
+        for (var i = 0; i < result.PreviewPoints.Count; i++)
+        {
+            var point = result.PreviewPoints[i];
+            _previewPoints.Add((point, ColorOf(result.Items, "point", i)));
+            _previewBB.Union(new BoundingBox(point, point));
+        }
+    }
+
+    /// <summary>
+    ///     Pulls the preview color for the <paramref name="ordinal" />-th item of a given kind from the
+    ///     built items list (which carries the resolved color hex). Falls back to white.
+    /// </summary>
+    private static Color ColorOf(List<DisplayItem> items, string kind, int ordinal)
+    {
+        var seen = 0;
+        foreach (var it in items)
+        {
+            if (it.Kind != kind)
+            {
+                continue;
+            }
+
+            if (seen == ordinal)
+            {
+                return it.Color != null ? ColorTranslator.FromHtml(it.Color) : Color.White;
+            }
+
+            seen++;
+        }
+
+        return Color.White;
     }
 
     private static List<T> ResolveBranch<T>(IGH_Structure tree, GH_Path path) where T : class
@@ -203,14 +275,23 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         GH_Structure<GH_String> layerTree,
         GH_Structure<GH_String> metaTree,
         GH_Structure<ThreeMaterialGoo> matTree,
-        MeshingParameters meshSettings)
+        MeshingParameters meshSettings,
+        string componentId)
     {
         var meshes = new List<Mesh>();
         var names = new List<string>();
         var layers = new List<string>();
         var metadata = new List<Dictionary<string, string>>();
         var materials = new List<ThreeMaterial>();
+        var items = new List<DisplayItem>();
+        var previewCurves = new List<Curve>();
+        var previewPoints = new List<Point3d>();
         var skipped = 0;
+
+        // Stable per-component ordinal across all geometry in tree order. Both meshes (via
+        // OriginalIndex set in MeshBatchProcessor — kept separate) and items synthesize their pick id
+        // from the component id; here it indexes items as they are encountered.
+        var ordinal = 0;
 
         foreach (var path in geoTree.Paths)
         {
@@ -232,12 +313,36 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 ? matItems[matItems.Count - 1]?.Value ?? ThreeMaterial.Default()
                 : ThreeMaterial.Default();
 
-            for (var i = 0; i < geoItems.Count; i++)
+            for (var i = 0; i < geoItems.Count; i++, ordinal++)
             {
                 var geom = TryExtractGeometry(geoItems[i]);
                 if (geom == null || !geom.IsValid)
                 {
                     skipped++;
+                    continue;
+                }
+
+                var nameStr = i < nameItems.Count ? nameItems[i]?.Value ?? lastName : lastName;
+                var layerStr = i < layerItems.Count ? layerItems[i]?.Value ?? lastLayer : lastLayer;
+                var mat = i < matItems.Count ? matItems[i]?.Value ?? lastMat : lastMat;
+                var mergedMeta = ResolveMetadata(metaItems, geoItems.Count, i, lastMeta);
+
+                // Curves and points are not meshable — they travel as JSON display items, decoded
+                // and tessellated on the web (curves via rhino3dm, points as raw vertices).
+                if (TryBuildItem(geom, componentId, ordinal, nameStr, layerStr, mergedMeta, mat,
+                        out var item, out var previewCurve, out var previewPoint))
+                {
+                    items.Add(item);
+                    if (previewCurve != null)
+                    {
+                        previewCurves.Add(previewCurve);
+                    }
+
+                    if (previewPoint.HasValue)
+                    {
+                        previewPoints.Add(previewPoint.Value);
+                    }
+
                     continue;
                 }
 
@@ -251,32 +356,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 mesh.Normals.ComputeNormals();
                 mesh.Compact();
 
-                var nameStr = i < nameItems.Count ? nameItems[i]?.Value ?? lastName : lastName;
-                var layerStr = i < layerItems.Count ? layerItems[i]?.Value ?? lastLayer : lastLayer;
-                var mat = i < matItems.Count ? matItems[i]?.Value ?? lastMat : lastMat;
-
-                // If there are more metadata items than geo items, merge all extras into this mesh.
-                // This handles the case where one branch has one mesh but multiple metadata strings.
-                var mergedMeta = new Dictionary<string, string>();
-                if (metaItems.Count > geoItems.Count)
-                {
-                    foreach (var m in metaItems)
-                    {
-                        if (m?.Value != null)
-                        {
-                            foreach (var kv in ParseMetadataString(m.Value))
-                            {
-                                mergedMeta[kv.Key] = kv.Value;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    var metaStr = i < metaItems.Count ? metaItems[i]?.Value ?? lastMeta : lastMeta;
-                    mergedMeta = ParseMetadataString(metaStr);
-                }
-
                 meshes.Add(mesh);
                 names.Add(!string.IsNullOrWhiteSpace(nameStr) ? nameStr : meshes.Count.ToString());
                 layers.Add(layerStr ?? "");
@@ -285,7 +364,88 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             }
         }
 
-        return meshes.Count > 0 ? new SolveResult(meshes, names, layers, metadata, materials, skipped) : null;
+        var hasAnything = meshes.Count > 0 || items.Count > 0;
+        return hasAnything
+            ? new SolveResult(meshes, names, layers, metadata, materials, items, previewCurves,
+                previewPoints, skipped)
+            : null;
+    }
+
+    /// <summary>
+    ///     Resolves the metadata dictionary for the <paramref name="i" />-th geometry in a branch.
+    ///     When a branch has more metadata strings than geometry, all extras merge into the item
+    ///     (one geometry, many metadata strings).
+    /// </summary>
+    private static Dictionary<string, string> ResolveMetadata(
+        List<GH_String> metaItems, int geoCount, int i, string lastMeta)
+    {
+        if (metaItems.Count > geoCount)
+        {
+            var merged = new Dictionary<string, string>();
+            foreach (var m in metaItems)
+            {
+                if (m?.Value == null)
+                {
+                    continue;
+                }
+
+                foreach (var kv in ParseMetadataString(m.Value))
+                {
+                    merged[kv.Key] = kv.Value;
+                }
+            }
+
+            return merged;
+        }
+
+        var metaStr = i < metaItems.Count ? metaItems[i]?.Value ?? lastMeta : lastMeta;
+        return ParseMetadataString(metaStr);
+    }
+
+    /// <summary>
+    ///     If the geometry is a curve or a point, builds the corresponding <see cref="DisplayItem" />
+    ///     and surfaces the original Rhino geometry for viewport preview. Returns false for meshable
+    ///     geometry (which the caller routes through the mesh path instead).
+    /// </summary>
+    private static bool TryBuildItem(
+        GeometryBase geom, string componentId, int ordinal,
+        string name, string layer, Dictionary<string, string> metadata, ThreeMaterial mat,
+        out DisplayItem item, out Curve previewCurve, out Point3d? previewPoint)
+    {
+        item = null;
+        previewCurve = null;
+        previewPoint = null;
+
+        var id = $"{componentId}:{ordinal}";
+        var displayName = !string.IsNullOrWhiteSpace(name) ? name : ordinal.ToString();
+        var colorHex = ColorTranslator.ToHtml(mat.Color);
+        double? opacity = mat.Opacity < 1.0 ? mat.Opacity : (double?)null;
+
+        switch (geom)
+        {
+            case Curve curve:
+            {
+                var nurbs = curve.ToNurbsCurve();
+                if (nurbs == null)
+                {
+                    return false;
+                }
+
+                var json = nurbs.ToJSON(new Rhino.FileIO.SerializationOptions());
+                item = DisplayItem.Curve(json, id, displayName, layer ?? "", metadata, colorHex, opacity);
+                previewCurve = curve;
+                return true;
+            }
+            case Rhino.Geometry.Point pointGeom:
+            {
+                item = DisplayItem.Point(pointGeom.Location, id, displayName, layer ?? "", metadata,
+                    colorHex, opacity);
+                previewPoint = pointGeom.Location;
+                return true;
+            }
+            default:
+                return false;
+        }
     }
 
 
@@ -317,17 +477,39 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
     public override void DrawViewportWires(IGH_PreviewArgs args)
     {
-        if (Locked || _previewItems == null)
+        if (Locked)
         {
             return;
         }
 
-        foreach (var item in _previewItems)
+        if (_previewItems != null)
         {
-            item.Geometry.DrawViewportWires(new GH_PreviewWireArgs(
-                args.Viewport, args.Display,
-                Attributes.Selected ? args.WireColour_Selected : args.WireColour,
-                args.DefaultCurveThickness));
+            foreach (var item in _previewItems)
+            {
+                item.Geometry.DrawViewportWires(new GH_PreviewWireArgs(
+                    args.Viewport, args.Display,
+                    Attributes.Selected ? args.WireColour_Selected : args.WireColour,
+                    args.DefaultCurveThickness));
+            }
+        }
+
+        if (_previewCurves != null)
+        {
+            foreach (var (curve, color) in _previewCurves)
+            {
+                args.Display.DrawCurve(curve,
+                    Attributes.Selected ? args.WireColour_Selected : color,
+                    args.DefaultCurveThickness);
+            }
+        }
+
+        if (_previewPoints != null)
+        {
+            foreach (var (point, color) in _previewPoints)
+            {
+                args.Display.DrawPoint(point, PointStyle.RoundSimple, 4,
+                    Attributes.Selected ? args.WireColour_Selected : color);
+            }
         }
     }
 
@@ -344,6 +526,10 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             return g;
         }
 
+        // Several GH curve/point primitives expose their value as a *struct* (Line, Arc, Circle,
+        // Point3d, …), which is NOT a GeometryBase — so `ScriptVariable() is GeometryBase` above
+        // misses them and they would fall through to null and be skipped. Convert each to its
+        // GeometryBase form here so the item path can route it to a curve/point display item.
         return goo switch
         {
             GH_GeometricGoo<GeometryBase> x => x.Value,
@@ -351,6 +537,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             GH_Brep x => x.Value,
             GH_Surface x => x.Value,
             GH_Curve x => x.Value,
+            GH_Line x when x.Value.IsValid => new LineCurve(x.Value),
+            GH_Arc x when x.Value.IsValid => new ArcCurve(x.Value),
+            GH_Circle x when x.Value.IsValid => new ArcCurve(x.Value),
+            GH_Rectangle x when x.Value.IsValid => x.Value.ToNurbsCurve(),
+            // GH_Point's ScriptVariable is a Point3d struct (not GeometryBase), so wrap it as a
+            // Point GeometryBase here — the item path then routes it to a DisplayPoint.
+            GH_Point x => new Rhino.Geometry.Point(x.Value),
             GH_Box x when x.Value.IsValid => x.Value.ToBrep(),
             _ => null
         };

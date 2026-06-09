@@ -39,6 +39,12 @@ export interface WsOutputsMessage extends WsSessionMessage {
 	fileOutputs?: Record<string, unknown>;
 	binaryBatchCount?: number;
 	modelUnits?: string;
+	/**
+	 * Non-mesh display items (curves, points; later labels/icons) as JSON. Unlike meshes these have
+	 * no binary frame — they ride the envelope directly and the driver tessellates them. Absent on
+	 * mesh-only solves.
+	 */
+	displayItems?: import('@selvajs/compute/visualization').DisplayItem[];
 }
 
 export interface WsSchemaUpdatedMessage extends WsSessionMessage {
@@ -216,7 +222,6 @@ export class WebSocketState {
 				this.socket.binaryType = 'arraybuffer';
 
 				this.socket.onopen = () => {
-					// If reconnecting after server disconnect, reload the page to get fresh state
 					if (this._shouldReloadOnReconnect) {
 						window.location.reload();
 						return;
@@ -230,7 +235,6 @@ export class WebSocketState {
 
 				this.socket.onmessage = (event) => {
 					try {
-						// Binary frame — SLVA mesh blob from the server.
 						if (event.data instanceof ArrayBuffer) {
 							const handlers = this.messageHandlers.get('binaryFrame');
 							if (handlers) {
