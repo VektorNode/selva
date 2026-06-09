@@ -13,5 +13,5 @@
 		"@selvajs/selva": "4.3.5",
 		"@selvajs/ui": "4.6.1"
 	},
-	"changesets": []
+	"changesets": ["partial-unique-projects"]
 }
