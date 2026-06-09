@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace Selva.GH.Features.FileIO.Services;
@@ -44,4 +45,12 @@ public class FileData
     /// </summary>
     [JsonProperty("subFolder")]
     public string SubFolder { get; set; } = "";
+
+    /// <summary>
+    ///     Gets or sets arbitrary user-supplied metadata (e.g. tags, indexing keys).
+    ///     The plugin does not interpret these values; they ride along with the file
+    ///     payload for downstream consumers (tagging, indexing, etc.).
+    /// </summary>
+    [JsonProperty("metadata")]
+    public Dictionary<string, string> Metadata { get; set; } = new();
 }
