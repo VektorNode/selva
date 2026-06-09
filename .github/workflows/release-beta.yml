@@ -69,9 +69,10 @@ jobs:
           fetch-depth: 0
 
       # Decide whether to run. Two cases warrant work, mirroring release.yml:
-      #   1. Pending .changeset/*.md → version + publish a new -beta.N.
-      #   2. No pending changesets, but a published package's local version is
-      #      ahead of its `beta` dist-tag on npm → a prior run versioned but
+      #   1. An UNCONSUMED changeset (a .md not yet listed in pre.json) →
+      #      version + publish a new -beta.N.
+      #   2. No unconsumed changesets, but a published package's local version
+      #      is ahead of its `beta` dist-tag on npm → a prior run versioned but
       #      failed to publish (e.g. the publish step errored). Re-publish
       #      without re-versioning. This makes the workflow self-healing.
       # Always requires pre mode (.changeset/pre.json) to be active.
@@ -83,11 +84,23 @@ jobs:
             echo "Run 'pnpm changeset pre enter beta' on the beta branch first."
             exit 1
           fi
-          # Count .changeset/*.md files, excluding README.md and config.md.
-          count=$(find .changeset -maxdepth 1 -type f -name '*.md' \
-            ! -name 'README.md' ! -name 'config.md' | wc -l)
-          if [ "$count" -gt 0 ]; then
-            echo "Found $count pending changeset(s) — version + publish."
+          # Find changeset .md files NOT already consumed this pre-cycle.
+          # In pre mode, `changeset version` does NOT delete the .md — it
+          # records the changeset's name in pre.json's "changesets" array and
+          # leaves the file on disk until `pre exit`. So a raw file count would
+          # see the same changeset as "pending" on every push and re-version it
+          # to -beta.N+1 forever. A changeset is genuinely pending only if its
+          # basename is absent from that consumed list.
+          unconsumed=0
+          for f in $(find .changeset -maxdepth 1 -type f -name '*.md' \
+            ! -name 'README.md' ! -name 'config.md'); do
+            name=$(basename "$f" .md)
+            if ! node -e "process.exit(require('./.changeset/pre.json').changesets.includes('$name') ? 0 : 1)"; then
+              unconsumed=$((unconsumed + 1))
+            fi
+          done
+          if [ "$unconsumed" -gt 0 ]; then
+            echo "Found $unconsumed unconsumed changeset(s) — version + publish."
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "needs_version=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -153,6 +166,11 @@ jobs:
 
       - name: Commit version bumps
         if: steps.check.outputs.needs_version == 'true'
+        # HUSKY=0 + --no-verify: the repo's pre-commit hook runs lint-staged,
+        # which aborts on a no-op/empty commit and would fail this CI commit.
+        # CI commits are machine-generated version bumps — skip the hooks.
+        env:
+          HUSKY: 0
         run: |
           if git diff --quiet; then
             echo "No version changes to commit."
@@ -160,7 +178,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add -A
-            git commit -m "chore: version beta packages [skip ci]"
+            git commit --no-verify -m "chore: version beta packages [skip ci]"
             # No --force: a non-fast-forward push (the branch moved under us)
             # fails the job rather than clobbering. Re-running on the latest
             # commit is the recovery path. The concurrency guard above makes
