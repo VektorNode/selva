@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -16,9 +16,12 @@ using Selva.GH.Properties;
 using Selva.GH.Utilities;
 using Point = Rhino.Geometry.Point;
 
-namespace Selva.GH.Features.FileIO.Components;
+namespace Selva.GH.Features.FileIO.OBSOLETE;
 
-public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
+/// <summary>
+///     Obsolete Geometry To File component (until v0.11.0). Replaced by the version with a Metadata input.
+/// </summary>
+public class OBSOLETE_GeometryToFile_UntilV0_11_0 : GH_Component, ISelvaFileOutput
 {
     private const string DefaultLayerName = "Default";
     private const string DefaultFileEnding = ".3dm";
@@ -28,10 +31,7 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
     private static RhinoDocumentConverter _converter;
     private static readonly object _converterLock = new object();
 
-    /// <summary>
-    ///     Initializes a new instance of the DataToFile class.
-    /// </summary>
-    public GH_GeometryToFile()
+    public OBSOLETE_GeometryToFile_UntilV0_11_0()
         : base("Geometry To File", "GTF",
             "Exports geometry to file format(s) with layer organization. Supports both single file (list input) and multiple files (tree input).",
             "Selva", "IO")
@@ -39,27 +39,17 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         EnsureConverterInitialized();
     }
 
-    /// <summary>
-    ///     Provides an Icon for the component.
-    /// </summary>
     protected override Bitmap Icon => Resources.GeometryToFile;
 
-    /// <summary>
-    ///     Gets the unique ID for this component. Do not change this ID after release.
-    /// </summary>
-    public override Guid ComponentGuid => new Guid("4B2646E6-A8B0-48B6-A566-FE5EC2376C82");
+    public override Guid ComponentGuid => new Guid("8D0ECB14-7318-4400-8AA2-588E6424ACC4");
 
-    /// <summary>
-    ///     Creates custom component attributes
-    /// </summary>
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
+
     public override void CreateAttributes()
     {
         m_attributes = new GH_ContextBakeOutputAttributes(this);
     }
 
-    /// <summary>
-    ///     Ensures the converter is initialized (singleton pattern)
-    /// </summary>
     private void EnsureConverterInitialized()
     {
         if (_converter == null)
@@ -68,7 +58,6 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
             {
                 if (_converter == null)
                 {
-                    // Configure options for Grasshopper usage
                     var options = new RhinoConverterOptions();
 
                     _converter = new RhinoDocumentConverter(options);
@@ -77,9 +66,6 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         }
     }
 
-    /// <summary>
-    ///     Registers all the input parameters for this component.
-    /// </summary>
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddGeometryParameter("Geometry", "G",
@@ -100,20 +86,13 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         pManager.AddTextParameter("Sub Folder", "Folder",
             "Optional subfolder path for storage",
             GH_ParamAccess.item, "");
-        pManager.AddTextParameter("Metadata", "M",
-            "Optional metadata as \"key=value\" lines (e.g. author=felix). Applied to every exported file for downstream tagging/indexing.",
-            GH_ParamAccess.list);
 
         pManager[1].Optional = true;
         pManager[2].Optional = true;
         pManager[4].Optional = true;
         pManager[5].Optional = true;
-        pManager[6].Optional = true;
     }
 
-    /// <summary>
-    ///     Registers all the output parameters for this component.
-    /// </summary>
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
         pManager.AddGenericParameter("File", "F",
@@ -121,9 +100,6 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
             GH_ParamAccess.list);
     }
 
-    /// <summary>
-    ///     This is the method that actually does the work.
-    /// </summary>
     protected override void SolveInstance(IGH_DataAccess DA)
     {
         // Get trees for all parameters
@@ -148,10 +124,6 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         var subFolder = "";
         DA.GetData(5, ref subFolder);
 
-        var metadataLines = new List<string>();
-        DA.GetDataList(6, metadataLines);
-        var metadata = FileMetadataParser.Parse(metadataLines);
-
         // Validate file ending
         if (string.IsNullOrWhiteSpace(fileEnding) || !fileEnding.StartsWith("."))
         {
@@ -164,18 +136,15 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         {
             List<FileDataGoo> results;
 
-            // Determine if we're in single file mode (simple list) or multiple file mode (tree structure)
             if (IsSingleFileMode(geometryTree))
-                // Single file mode - all geometry in one file
             {
                 results = ProcessSingleFile(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree, fileEnding,
-                    subFolder, metadata);
+                    subFolder);
             }
             else
-                // Multiple files mode - one file per branch
             {
                 results = ProcessMultipleFiles(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree,
-                    fileEnding, subFolder, metadata);
+                    fileEnding, subFolder);
             }
 
             if (results.Count == 0)
@@ -192,30 +161,22 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         }
     }
 
-    /// <summary>
-    ///     Determines if the component should operate in single file mode based on tree structure.
-    /// </summary>
     private bool IsSingleFileMode(GH_Structure<IGH_GeometricGoo> geometryTree)
     {
         return geometryTree.PathCount == 1 ||
                (geometryTree.PathCount > 1 && geometryTree.Branches.Skip(1).All(b => b.Count == 0));
     }
 
-    /// <summary>
-    ///     Processes all geometry into a single file.
-    /// </summary>
     private List<FileDataGoo> ProcessSingleFile(
         GH_Structure<IGH_GeometricGoo> geometryTree,
         GH_Structure<GH_String> layerNamesTree,
         GH_Structure<GH_Colour> layerColorsTree,
         GH_Structure<GH_String> fileNamesTree,
         string fileEnding,
-        string subFolder,
-        Dictionary<string, string> metadata)
+        string subFolder)
     {
         var results = new List<FileDataGoo>();
 
-        // Flatten all data
         var allGeometry = geometryTree.AllData(true).OfType<IGH_GeometricGoo>().ToList();
         var allLayerNames = layerNamesTree?.AllData(true)
             .Select(s => (s as GH_String)?.Value)
@@ -266,8 +227,7 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
                     Data = base64String,
                     FileType = fileEnding,
                     IsBase64Encoded = true,
-                    SubFolder = subFolder ?? "",
-                    Metadata = metadata ?? new Dictionary<string, string>()
+                    SubFolder = subFolder ?? ""
                 };
                 results.Add(new FileDataGoo(fileData));
             }
@@ -284,17 +244,13 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         return results;
     }
 
-    /// <summary>
-    ///     Processes geometry into multiple files, one per branch.
-    /// </summary>
     private List<FileDataGoo> ProcessMultipleFiles(
         GH_Structure<IGH_GeometricGoo> geometryTree,
         GH_Structure<GH_String> layerNamesTree,
         GH_Structure<GH_Colour> layerColorsTree,
         GH_Structure<GH_String> fileNamesTree,
         string fileEnding,
-        string subFolder,
-        Dictionary<string, string> metadata)
+        string subFolder)
     {
         var results = new List<FileDataGoo>();
         var paths = geometryTree.Paths.ToList();
@@ -364,8 +320,7 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
                             Data = base64String,
                             FileType = fileEnding,
                             IsBase64Encoded = true,
-                            SubFolder = subFolder ?? "",
-                            Metadata = metadata ?? new Dictionary<string, string>()
+                            SubFolder = subFolder ?? ""
                         };
                         results.Add(new FileDataGoo(fileData));
                     }
@@ -390,9 +345,6 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         return results;
     }
 
-    /// <summary>
-    ///     Extracts valid GeometryBase objects from IGH_GeometricGoo list with detailed error handling.
-    /// </summary>
     private List<(GeometryBase Geometry, int OriginalIndex)> ExtractValidGeometries(List<IGH_GeometricGoo> gooList)
     {
         var validGeometries = new List<(GeometryBase, int)>();
@@ -467,15 +419,11 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         return validGeometries;
     }
 
-    /// <summary>
-    ///     Adds geometries to the Rhino document with proper layer management.
-    /// </summary>
     private void AddGeometriesToDocument(RhinoDoc doc,
         List<(GeometryBase Geometry, int OriginalIndex)> geometries,
         List<string> layerNames,
         List<Color> layerColors)
     {
-        // Create a dictionary to track layers and avoid duplicates
         var layerCache = new Dictionary<string, int>();
 
         foreach (var (geometry, originalIndex) in geometries)
@@ -534,9 +482,6 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         }
     }
 
-    /// <summary>
-    ///     Gets the layer name for a specific index with fallback to default.
-    /// </summary>
     private string GetLayerName(List<string> layerNames, int index)
     {
         if (layerNames == null || layerNames.Count == 0)
@@ -553,9 +498,6 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         return lastName ?? DefaultLayerName;
     }
 
-    /// <summary>
-    ///     Gets the layer color for a specific index with fallback to default.
-    /// </summary>
     private Color GetLayerColor(List<Color> layerColors, int index)
     {
         if (layerColors == null || layerColors.Count == 0)
@@ -571,9 +513,6 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         return layerColors.Count > 0 ? layerColors[layerColors.Count - 1] : DefaultLayerColor;
     }
 
-    /// <summary>
-    ///     Exports the document to the specified file format using the new converter.
-    /// </summary>
     private string ExportDocument(RhinoDoc doc, string fileEnding)
     {
         try

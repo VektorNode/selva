@@ -7,11 +7,14 @@ using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
 
-namespace Selva.GH.Features.FileIO.Components;
+namespace Selva.GH.Features.FileIO.OBSOLETE;
 
-public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
+/// <summary>
+///     Obsolete Create File component (until v0.11.0). Replaced by the version with a Metadata input.
+/// </summary>
+public class OBSOLETE_DataToFileGeneric_UntilV0_11_0 : GH_Component, ISelvaFileOutput
 {
-    public GH_DataToFileGeneric()
+    public OBSOLETE_DataToFileGeneric_UntilV0_11_0()
         : base("Create File", "MkFile",
             "Creates a file from text or base64 data.",
             "Selva", "IO")
@@ -20,7 +23,9 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
 
     protected override Bitmap Icon => Resources.CreateFile;
 
-    public override Guid ComponentGuid => new Guid("4A845B41-30E7-4DC7-BD47-0AC4C44E4F46");
+    public override Guid ComponentGuid => new Guid("F9B3F862-611E-4E67-9DE4-67129CC0EF24");
+
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
 
     public override void CreateAttributes()
     {
@@ -37,10 +42,6 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
             GH_ParamAccess.item, false);
         pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item,
             "");
-        pManager.AddTextParameter("Metadata", "M",
-            "Optional metadata as \"key=value\" lines (e.g. author=felix). Rides along with the file for downstream tagging/indexing.",
-            GH_ParamAccess.list);
-        pManager[5].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -66,9 +67,6 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
         DA.GetData(3, ref isBase64);
         DA.GetData(4, ref subFolder);
 
-        var metadataLines = new List<string>();
-        DA.GetDataList(5, metadataLines);
-
 
         // Ensure extension starts with a dot
         if (!string.IsNullOrEmpty(extension) && !extension.StartsWith("."))
@@ -86,8 +84,7 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
             Data = combinedData,
             FileType = extension,
             IsBase64Encoded = isBase64,
-            SubFolder = subFolder ?? "",
-            Metadata = FileMetadataParser.Parse(metadataLines)
+            SubFolder = subFolder ?? ""
         };
 
         DA.SetData(0, new FileDataGoo(fileData));

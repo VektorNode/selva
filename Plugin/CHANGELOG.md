@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-06-09
+
+### Added
+
+**File output: Metadata input**
+
+- New optional `Metadata` input (`M`, list of `"key=value"` lines) on `Create File`, `File From Path`, `Block to File`, and `Geometry To File`, parsed via `FileMetadataParser` and attached to `FileData.Metadata` for downstream tagging/indexing.
+
+**Upgraders**
+
+- `GH_DataToFileGenericUpgrader_To_0_11_1`, `GH_FileFromPathUpgrader_To_0_11_1`, `GH_BlockToFileUpgrader_To_0_11_1`, `GH_GeometryToFileUpgrader_To_0_11_1`: migrate the old (pre-metadata) file-output components to their new component GUIDs, remapping every existing input 1:1 and leaving the new `Metadata` input empty.
+
+**Obsolete components**
+
+- `OBSOLETE_DataToFileGeneric_UntilV0_11_0`, `OBSOLETE_FileFromPath_UntilV0_11_0`, `OBSOLETE_BlockToFile_UntilV0_11_0`, `OBSOLETE_GeometryToFile_UntilV0_11_0`: hidden snapshots of the pre-metadata shapes (keeping their original GUIDs) so definitions saved before v0.11.2 load and auto-upgrade cleanly.
+
+### Fixed
+
+- The `Metadata` input had been added to the four file-output components in beta without versioning (same component GUID, extra param), which would have silently corrupted parameter alignment in saved definitions. Each component now carries a new GUID with a matching obsolete snapshot + upgrader.
+
 ## [0.9.0] - 2026-04-14
 
 ### Added

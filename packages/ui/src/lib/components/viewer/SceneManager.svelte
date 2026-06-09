@@ -80,11 +80,16 @@
 		}
 	};
 
-	const getObjectLabel = (object: THREE.Object3D) =>
-		object.userData?.name || object.userData?.fileName || object.name || object.type;
+	const prettyType = (type: string) =>
+		type
+			.replace(/^Line(Segments)?2$/, 'Curve')
+			.replace('Mesh', '')
+			.replace('Object3D', 'Obj') || type;
 
-	const getTypeLabel = (object: THREE.Object3D) =>
-		object.type.replace('Mesh', '').replace('Object3D', 'Obj') || object.type;
+	const getObjectLabel = (object: THREE.Object3D) =>
+		object.userData?.name || object.userData?.fileName || object.name || prettyType(object.type);
+
+	const getTypeLabel = (object: THREE.Object3D) => prettyType(object.type);
 
 	let searchQuery = $state('');
 
