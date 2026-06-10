@@ -259,8 +259,8 @@ public class ValueApplicator
                 }
             }
 
-            // Validate numeric type conversions
-            if (input.ParamType == "Number" || input.ParamType == "Integer")
+            // Validate numeric type conversions (paramType enum values are lowercase)
+            if (input.ParamType == "number" || input.ParamType == "integer")
             {
                 double numValue;
                 try
@@ -284,7 +284,7 @@ public class ValueApplicator
             }
 
             // Validate integer conversion
-            if (input.ParamType == "Integer")
+            if (input.ParamType == "integer")
             {
                 try
                 {

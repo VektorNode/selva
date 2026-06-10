@@ -51,6 +51,13 @@ public class WebSocketTransport : IDisposable
 
     // All mutable state that can be touched from multiple threads is guarded by _stateLock.
     private readonly object _stateLock = new object();
+
+    // Inbound messages are processed off the receive loop but strictly in arrival order:
+    // each message is chained onto the previous one's task. Without this, two rapid
+    // valueUpdates can race and the older value can win.
+    private readonly object _dispatchLock = new object();
+    private Task _dispatchChain = Task.CompletedTask;
+
     private bool _disposed;
 
     // Interlocked is sufficient for a single int flag.
@@ -419,86 +426,96 @@ public class WebSocketTransport : IDisposable
 
     private void HandleMessageReceived(object sender, string message)
     {
-        // Parse and dispatch on a thread-pool thread so we never block the receive loop.
-        _ = Task.Run(() =>
+        // Process on a thread-pool thread so we never block the receive loop, but chain
+        // messages so they are handled strictly in arrival order.
+        lock (_dispatchLock)
         {
-            try
+            _dispatchChain = _dispatchChain.ContinueWith(
+                _ => ProcessInboundMessage(message),
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.Default);
+        }
+    }
+
+    private void ProcessInboundMessage(string message)
+    {
+        try
+        {
+            // Parse/classify is pure (see InboundMessageParser); this method owns only the
+            // session-establish in-flight guard, the thread marshalling, and the event raising.
+            var inbound = _inboundParser.Parse(message, _sessionId);
+
+            switch (inbound.Kind)
             {
-                // Parse/classify is pure (see InboundMessageParser); this method owns only the
-                // session-establish in-flight guard, the thread marshalling, and the event raising.
-                var inbound = _inboundParser.Parse(message, _sessionId);
+                case InboundKind.ValueUpdate:
+                    MarshalToMainThread(() => OnValuesReceived?.Invoke(this, inbound.Values));
+                    break;
 
-                switch (inbound.Kind)
-                {
-                    case InboundKind.ValueUpdate:
-                        MarshalToMainThread(() => OnValuesReceived?.Invoke(this, inbound.Values));
-                        break;
+                case InboundKind.RequestCurrentValues:
+                    MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
+                    break;
 
-                    case InboundKind.RequestCurrentValues:
-                        MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
-                        break;
+                case InboundKind.RequestInitialData:
+                    // Guard against concurrent invocations — if the flag is already 1, bail out.
+                    if (Interlocked.CompareExchange(ref _initialDataInFlight, 1, 0) != 0)
+                    {
+                        return;
+                    }
 
-                    case InboundKind.RequestInitialData:
-                        // Guard against concurrent invocations — if the flag is already 1, bail out.
-                        if (Interlocked.CompareExchange(ref _initialDataInFlight, 1, 0) != 0)
+                    MarshalToMainThread(() =>
+                    {
+                        try
                         {
-                            return;
+                            OnClientConnected?.Invoke(this, EventArgs.Empty);
                         }
-
-                        MarshalToMainThread(() =>
+                        finally
                         {
-                            try
-                            {
-                                OnClientConnected?.Invoke(this, EventArgs.Empty);
-                            }
-                            finally
-                            {
-                                Interlocked.Exchange(ref _initialDataInFlight, 0);
-                            }
-                        });
-                        break;
-
-                    case InboundKind.SaveSchema:
-                        {
-                            var request = new SchemaSaveRequest
-                            {
-                                Schema = inbound.Schema,
-                                BaseSchemaHash = inbound.BaseSchemaHash
-                            };
-                            MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, request));
-                            break;
+                            Interlocked.Exchange(ref _initialDataInFlight, 0);
                         }
+                    });
+                    break;
 
-                    case InboundKind.RequestSyncPreview:
-                        MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, inbound.Schema));
+                case InboundKind.SaveSchema:
+                    {
+                        var request = new SchemaSaveRequest
+                        {
+                            Schema = inbound.Schema,
+                            BaseSchemaHash = inbound.BaseSchemaHash
+                        };
+                        MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, request));
                         break;
+                    }
 
-                    case InboundKind.ApplySyncChanges:
-                        MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, inbound.Changes));
-                        break;
+                case InboundKind.RequestSyncPreview:
+                    MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, inbound.Schema));
+                    break;
 
-                    case InboundKind.SessionMismatch:
-                        Logger.Warn($"[WebSocketTransport] Session ID mismatch for '{inbound.MessageType}'.");
-                        break;
+                case InboundKind.ApplySyncChanges:
+                    MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, inbound.Changes));
+                    break;
 
-                    case InboundKind.MissingField:
-                        Logger.Warn($"[WebSocketTransport] '{inbound.MessageType}' missing a required field.");
-                        break;
+                case InboundKind.SessionMismatch:
+                    Logger.Warn($"[WebSocketTransport] Session ID mismatch for '{inbound.MessageType}'.");
+                    break;
 
-                    case InboundKind.Unknown:
-                        Logger.Warn($"[WebSocketTransport] Unknown message type: '{inbound.MessageType}'.");
-                        break;
+                case InboundKind.MissingField:
+                    Logger.Warn($"[WebSocketTransport] '{inbound.MessageType}' missing a required field.");
+                    break;
 
-                    case InboundKind.Malformed:
-                        Logger.Warn("[WebSocketTransport] Received a malformed message (bad JSON or no type).");
-                        break;
-                }
+                case InboundKind.Unknown:
+                    Logger.Warn($"[WebSocketTransport] Unknown message type: '{inbound.MessageType}'.");
+                    break;
+
+                case InboundKind.Malformed:
+                    Logger.Warn("[WebSocketTransport] Received a malformed message (bad JSON or no type).");
+                    break;
             }
-            catch (Exception ex)
-            {
-                Logger.Warn($"[WebSocketTransport] Message error: {ex.Message}");
-            }
-        });
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[WebSocketTransport] Message error: {ex.Message}");
+        }
     }
 
     /// <summary>

@@ -602,18 +602,18 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     // Schema persistence - save/load with .gh file
     public override bool Write(GH_IWriter writer)
     {
-        // Use persistence service to save schema and values
-        if (_service?.PersistenceService != null)
+        // Persist schema and values. Don't depend on _service being initialized — under
+        // headless hosts (or before the first solve) it is null, and skipping serialization
+        // there would silently drop the schema from the saved file.
+        try
         {
-            try
-            {
-                var lastValues = _service.ValueApplicator?.GetLastAppliedValues();
-                _service.PersistenceService.SerializeToArchive(writer, _embeddedSchema, lastValues);
-            }
-            catch (Exception ex)
-            {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not save schema/values: {ex.Message}");
-            }
+            var persistence = _service?.PersistenceService ?? new SchemaArchiveSerializer(PluginVersion);
+            var lastValues = _service?.ValueApplicator?.GetLastAppliedValues();
+            persistence.SerializeToArchive(writer, _embeddedSchema, lastValues);
+        }
+        catch (Exception ex)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not save schema/values: {ex.Message}");
         }
 
         // Append to schema history on every GH file save (skip under headless
@@ -655,6 +655,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                 {
                     _embeddedSchema = result.Value.schema;
                     _embeddedValues = result.Value.values;
+
+                    if (!string.IsNullOrEmpty(result.Value.migrationMessage))
+                    {
+                        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, result.Value.migrationMessage);
+                    }
                 }
             }
             catch (InvalidOperationException ex)
