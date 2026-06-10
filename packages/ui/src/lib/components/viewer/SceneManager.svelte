@@ -10,10 +10,17 @@
 
 	let { scene = $bindable(), sceneVersion = 0 }: Props = $props();
 
+	// Viewer aids (grid, floor, measurement overlay, CSS2D label layer) are tagged with these ids by
+	// @selvajs/compute. They aren't scene content, so they're hidden from the object list.
+	const HELPER_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
+
 	const getSceneObjects = () => {
 		void sceneVersion;
 		return scene.children.filter(
-			(obj) => !(obj instanceof THREE.Camera) && !(obj instanceof THREE.Light)
+			(obj) =>
+				!(obj instanceof THREE.Camera) &&
+				!(obj instanceof THREE.Light) &&
+				!HELPER_IDS.has(obj.userData?.id)
 		);
 	};
 

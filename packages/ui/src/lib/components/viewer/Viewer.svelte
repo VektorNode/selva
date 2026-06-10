@@ -8,7 +8,8 @@
 		type CameraController,
 		type CameraProjection,
 		type MeasureTool,
-		type ViewPreset
+		type ViewPreset,
+		type Grid
 	} from '@selvajs/compute/visualization';
 	import {
 		Maximize,
@@ -20,6 +21,7 @@
 		Square,
 		Frame,
 		Ruler,
+		Grid3x3,
 		Check,
 		ChevronRight
 	} from '@lucide/svelte';
@@ -35,6 +37,8 @@
 		showFullscreenButton?: boolean;
 		showSceneManager?: boolean;
 		showToolsMenu?: boolean;
+		/** Expose the grid show/hide toggle in the tools menu. Grid starts hidden. */
+		showGridToggle?: boolean;
 		enableMeshClick?: boolean;
 		backgroundColor?: string;
 	}
@@ -53,6 +57,7 @@
 		showFullscreenButton: true,
 		showSceneManager: true,
 		showToolsMenu: true,
+		showGridToggle: true,
 		enableMeshClick: true,
 		backgroundColor: '#E6E6E6'
 	};
@@ -74,6 +79,7 @@
 	let controls: OrbitControls | null = null;
 	let cameraController: CameraController | null = null;
 	let measureTool: MeasureTool | null = null;
+	let grid: Grid | null = null;
 	let fitToView: (() => void) | null = null;
 	let viewerInitialized = false;
 	let sceneVersion = $state(0);
@@ -81,6 +87,7 @@
 	let sceneManagerOpen = $state(false);
 	let projection: CameraProjection = $state('perspective');
 	let measureActive = $state(false);
+	let gridVisible = $state(false);
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
 
@@ -112,7 +119,8 @@
 		const opts: ThreeInitializerOptions = {
 			environment: { backgroundColor: config.backgroundColor },
 			controls: {},
-			grid: { enabled: config.showToolsMenu },
+			// Build the grid so it can be toggled at runtime, but start hidden (off by default).
+			grid: { enabled: config.showToolsMenu && config.showGridToggle },
 			gizmo: { enabled: false },
 			measure: { enabled: config.showToolsMenu },
 			events: {
@@ -133,6 +141,8 @@
 		controls = init.controls;
 		cameraController = init.cameraController;
 		measureTool = init.measureTool;
+		grid = init.grid;
+		grid?.setVisible(gridVisible);
 		fitToView = init.fitToView;
 		projection = init.cameraController.getProjection();
 
@@ -154,6 +164,12 @@
 		if (!measureTool) return;
 		measureActive = !measureActive;
 		measureTool.setEnabled(measureActive);
+	}
+
+	function toggleGrid() {
+		if (!grid) return;
+		gridVisible = !gridVisible;
+		grid.setVisible(gridVisible);
 	}
 
 	$effect(() => {
@@ -308,6 +324,20 @@
 											<Check class="h-4 w-4" />
 										{/if}
 									</DropdownMenu.Item>
+
+									{#if config.showGridToggle}
+										<DropdownMenu.Item
+											closeOnSelect={false}
+											class="{itemClass} {gridVisible ? 'text-primary' : ''}"
+											onSelect={toggleGrid}
+										>
+											<Grid3x3 class="h-4 w-4" />
+											<span class="flex-1">Grid</span>
+											{#if gridVisible}
+												<Check class="h-4 w-4" />
+											{/if}
+										</DropdownMenu.Item>
+									{/if}
 
 									<!-- Scene tools -->
 									{#if config.showSceneManager || config.showScreenshotButton || config.showFullscreenButton}
