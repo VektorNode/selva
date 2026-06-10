@@ -47,6 +47,18 @@ describe('isSafeRemoteDefinitionUrl', () => {
 		['http://[fc00::1]/foo', 'IPv6 unique-local fc'],
 		['http://[fd12:3456::1]/foo', 'IPv6 unique-local fd'],
 		['http://[fe80::1]/foo', 'IPv6 link-local'],
+		// IPv4-mapped IPv6 — must unwrap and apply the v4 rules.
+		['http://[::ffff:127.0.0.1]/foo', 'IPv4-mapped loopback'],
+		['http://[::ffff:169.254.169.254]/foo', 'IPv4-mapped metadata'],
+		['http://[::ffff:10.0.0.1]/foo', 'IPv4-mapped RFC1918'],
+		// Alternate IPv4 encodings that glibc/inet_aton resolve to loopback.
+		['http://2130706433/foo', 'integer loopback'],
+		['http://0x7f000001/foo', 'hex loopback'],
+		['http://0177.0.0.1/foo', 'octal loopback'],
+		['http://127.1/foo', 'short-form loopback'],
+		['http://0/foo', 'integer 0.0.0.0'],
+		// Alternate encodings of the cloud-metadata address.
+		['http://2852039166/foo', 'integer metadata 169.254.169.254'],
 		// Non-http(s) schemes
 		['file:///etc/passwd', 'file scheme'],
 		['gopher://evil/', 'gopher scheme'],
