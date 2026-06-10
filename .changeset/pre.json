@@ -14,6 +14,8 @@
     "@selvajs/ui": "4.6.1"
   },
   "changesets": [
-    "scene-manager-curve-label"
+    "grid-toggle-viewer",
+    "scene-manager-curve-label",
+    "supabase-tombstone-slug-release"
   ]
 }
