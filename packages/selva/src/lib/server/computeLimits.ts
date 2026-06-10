@@ -44,18 +44,18 @@ const MB = 1024 * 1024;
 // proxy (`read_timeout`) or serverless platform cap may shoot the request
 // sooner; bumping this past those caps will produce 502s, not longer
 // solves. See `.env.example` for the deployment-side guidance.
-export const MAX_SOLVE_DURATION_MS = readPositiveInt('MAX_SOLVE_DURATION_MS', 60_000);
+export const MAX_SOLVE_DURATION_MS = readPositiveInt('MAX_SOLVE_DURATION_MS', 100_000);
 
 // ============================================================================
 // Per-key compute rate limit (see computeRateLimit.server.ts)
 // ============================================================================
-// Fixed-window cap on /api/compute. Default 120 / 60s = 2 solves/sec sustained,
-// well above what slider scrubbing produces in practice (one-in-flight throttle
-// + 150ms slider debounce ≈ 6/sec peak only when solves are <50ms; in steady
-// state the cap is rarely touched). If you raise MAX_SOLVE_DURATION_MS for
-// long-running definitions, the rate cap rarely needs to move with it (each
-// long solve is one request, not many).
-export const RATE_LIMIT_WINDOW_MS = readPositiveInt('COMPUTE_RATE_LIMIT_WINDOW_MS', 60_000);
+// Fixed-window cap on /api/compute. Default 120 / 100s ≈ 1.2 solves/sec
+// sustained, well above what slider scrubbing produces in practice (one-in-
+// flight throttle + 150ms slider debounce ≈ 6/sec peak only when solves are
+// <50ms; in steady state the cap is rarely touched). If you raise
+// MAX_SOLVE_DURATION_MS for long-running definitions, the rate cap rarely needs
+// to move with it (each long solve is one request, not many).
+export const RATE_LIMIT_WINDOW_MS = readPositiveInt('COMPUTE_RATE_LIMIT_WINDOW_MS', 100_000);
 export const RATE_LIMIT_MAX_REQUESTS = readPositiveInt('COMPUTE_RATE_LIMIT_MAX', 120);
 
 // ============================================================================

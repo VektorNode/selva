@@ -70,7 +70,8 @@ public class SchemaArchiveSerializer
         }
     }
 
-    public (UISchema schema, Dictionary<string, object> values)? DeserializeFromArchive(GH_IReader reader)
+    public (UISchema schema, Dictionary<string, object> values, string migrationMessage)?
+        DeserializeFromArchive(GH_IReader reader)
     {
         if (reader == null)
         {
@@ -166,7 +167,7 @@ public class SchemaArchiveSerializer
         // If we have schema or values, return them along with any migration message
         if (schema != null || values != null)
         {
-            return (schema, values);
+            return (schema, values, migrationMessage);
         }
 
         return null;

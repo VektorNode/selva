@@ -8,16 +8,21 @@
 
 	<ItemGroup>
 		<!--
-			PrivateAssets="all" stops PdfSharpCore + SharpZipLib from flowing to consumers
-			(Selva.GH, etc.) as separate sibling DLLs — they're merged into Selva.Drawing.dll
-			by the ILRepack target below. GeneratePathProperty exposes $(Pkg…) so the merge
-			target can locate the source DLLs in the NuGet cache without enabling
-			CopyLocalLockFileAssemblies (which would drag every transitive dep into bin/).
-		-->
-		<PackageReference Include="PdfSharpCore" Version="1.3.67" GeneratePathProperty="true" PrivateAssets="all" />
-		<PackageReference Include="SharpZipLib" Version="1.4.2" GeneratePathProperty="true" PrivateAssets="all" />
-		<PackageReference Include="System.Drawing.Common" Version="8.0.0"/>
-		<PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34" PrivateAssets="all" />
+                        Release: PrivateAssets="all" stops PdfSharpCore + SharpZipLib from flowing to
+                        consumers as separate sibling DLLs — they're merged into Selva.Drawing.dll by the
+                        ILRepack target below. GeneratePathProperty exposes $(Pkg…) so the merge target can
+                        locate the source DLLs in the NuGet cache.
+
+                        Debug: no PrivateAssets, so the DLLs flow through the project reference to
+                        Selva.GH's output and are available when Grasshopper loads the plugin. ILRepack is
+                        skipped in Debug, so the separate DLLs must be present at runtime.
+                        Note: on net48 (Rhino 8) a SharpZipLib version conflict with Rhino's bundled
+                        v1.3.3.11 may surface in Debug — this is accepted for development builds.
+                -->
+                <PackageReference Include="PdfSharpCore" Version="1.3.67" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
+                <PackageReference Include="SharpZipLib" Version="1.4.2" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
+                <PackageReference Include="PdfSharpCore" Version="1.3.67" Condition="'$(Configuration)' == 'Debug'" />
+                <PackageReference Include="SharpZipLib" Version="1.4.2" Condition="'$(Configuration)' == 'Debug'" />
 	</ItemGroup>
 
 	<ItemGroup>

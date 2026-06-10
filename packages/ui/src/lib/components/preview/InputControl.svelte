@@ -33,7 +33,12 @@
 		item: InputLayoutItem;
 		value?: SupportedTypes;
 		displayName?: string;
-		onChange: (paramId: string, value: SupportedTypes) => void;
+		/**
+		 * Commit a value. `forceSolve` requests a solve even in manual-solve mode — used for
+		 * system-initiated reconciliation (e.g. pruning a vanished dynamic-list selection) where
+		 * leaving the previous output on screen would misrepresent the now-changed input.
+		 */
+		onChange: (paramId: string, value: SupportedTypes, forceSolve?: boolean) => void;
 		disabled?: boolean;
 		/** Runtime-computed options for a dynamic value list input (name -> value). */
 		dynamicOptions?: Record<string, string>;
@@ -108,7 +113,10 @@
 
 	// When a dynamic value list recomputes, a previously-selected value may no longer be an
 	// available option. Prune the stale selection so the control shows a valid option (or empty)
-	// instead of rendering the orphaned raw value as its own label.
+	// instead of rendering the orphaned raw value as its own label. This is a system-initiated
+	// change (the user didn't pick the new option), so force a solve — otherwise manual-solve
+	// schemas would keep the prior output on screen, making it look like the auto-picked option
+	// produced it.
 	$effect(() => {
 		if (!isDynamicValueListWidget(item) || !dynamicListHasOptions) return;
 		const validValues = new Set(Object.values(dynamicListOptions));
@@ -116,9 +124,17 @@
 		// directly from an effect trips Svelte's binding-ownership check.
 		if (Array.isArray(value)) {
 			const pruned = value.filter((v) => typeof v === 'string' && validValues.has(v));
-			if (pruned.length !== value.length) onChange(item.paramId, pruned);
+			if (pruned.length !== value.length) {
+				// Fall back to first option when checklist becomes fully empty after pruning
+				onChange(
+					item.paramId,
+					pruned.length > 0 ? pruned : [Object.values(dynamicListOptions)[0]],
+					true
+				);
+			}
 		} else if (typeof value === 'string' && value && !validValues.has(value)) {
-			onChange(item.paramId, '');
+			// Fall back to first available option instead of clearing to empty
+			onChange(item.paramId, Object.values(dynamicListOptions)[0], true);
 		}
 	});
 

@@ -160,7 +160,7 @@ public class ValueCollector
 
     /// <summary>
     ///     Collect display data from ContextBakeComponent inputs.
-    ///     Returns an array of MeshBatch objects (as JSON-serializable objects).
+    ///     Returns an array of DisplayBatch objects (as JSON-serializable objects).
     ///     This mirrors Rhino.Compute behavior where baking is explicit.
     ///
     ///     When <paramref name="bakeIds" /> is provided, only those components are visited
@@ -567,7 +567,7 @@ public class ValueCollector
 
     /// <summary>
     ///     Extract WebDisplayGoo data from a component's output parameters.
-    ///     Returns the MeshBatch object only if the output is wired into a ContextBakeComponent,
+    ///     Returns the DisplayBatch object only if the output is wired into a ContextBakeComponent,
     ///     mirroring the Rhino.Compute behaviour where baking is explicit.
     /// </summary>
     private object ExtractWebDisplayDataFromComponent(IGH_Component component,

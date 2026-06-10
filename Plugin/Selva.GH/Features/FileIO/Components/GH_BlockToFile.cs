@@ -40,7 +40,7 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
         EnsureConverterInitialized();
     }
 
-    public override Guid ComponentGuid => new Guid("BC984091-9444-4757-B781-486DDC31BDC4");
+    public override Guid ComponentGuid => new Guid("4D92D5D2-37D3-4046-A513-CED165939336");
 
     protected override Bitmap Icon => Resources.BlockToFile;
 
@@ -58,8 +58,12 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
         pManager.AddTextParameter("Format", "F", "File format extension: .3dm (default) or .stp", GH_ParamAccess.item);
         pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item,
             "");
+        pManager.AddTextParameter("Metadata", "M",
+            "Optional metadata as \"key=value\" lines (e.g. author=felix). Rides along with the file for downstream tagging/indexing.",
+            GH_ParamAccess.list);
         pManager[2].Optional = true;
         pManager[3].Optional = true;
+        pManager[4].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -93,6 +97,9 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
             var subFolder = "";
             DA.GetData(3, ref subFolder);
 
+            var metadataLines = new List<string>();
+            DA.GetDataList(4, metadataLines);
+
             if (!IsSupportedFormat(format))
             {
                 AddRuntimeMessage(
@@ -101,7 +108,8 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
                 return;
             }
 
-            var exportedFile = ExportBlockToFile(blockObj, fileName, format, subFolder ?? "");
+            var exportedFile = ExportBlockToFile(blockObj, fileName, format, subFolder ?? "",
+                FileMetadataParser.Parse(metadataLines));
 
             if (exportedFile != null)
             {
@@ -145,7 +153,8 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
         return true;
     }
 
-    private FileData ExportBlockToFile(ModelObject blockObj, string fileName, string format, string subFolder)
+    private FileData ExportBlockToFile(ModelObject blockObj, string fileName, string format, string subFolder,
+        Dictionary<string, string> metadata)
     {
         using var headlessDoc = RhinoDoc.CreateHeadless(null);
         _copiedBlockIndices.Clear();
@@ -162,7 +171,7 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
             return null;
         }
 
-        return CreateFileData(fileName, base64String, format, subFolder);
+        return CreateFileData(fileName, base64String, format, subFolder, metadata);
     }
 
     private bool TryProcessBlockObject(ModelObject blockObj, RhinoDoc targetDoc, out string blockName)
@@ -278,7 +287,8 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
             : _converter.DocToBase64(doc, format);
     }
 
-    private FileData CreateFileData(string fileName, string base64String, string format, string subFolder)
+    private FileData CreateFileData(string fileName, string base64String, string format, string subFolder,
+        Dictionary<string, string> metadata)
     {
         return new FileData
         {
@@ -286,7 +296,8 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
             Data = base64String,
             FileType = format,
             IsBase64Encoded = true,
-            SubFolder = subFolder ?? ""
+            SubFolder = subFolder ?? "",
+            Metadata = metadata ?? new Dictionary<string, string>()
         };
     }
 

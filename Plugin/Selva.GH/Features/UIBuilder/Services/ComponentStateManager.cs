@@ -13,6 +13,13 @@ public class ComponentStateManager
     private bool _lastEnable;
     private DateTime _lastStateChangeTime = DateTime.MinValue;
 
+    // A SolutionStart was seen (possibly debounced) since the last SolutionEnd. The start-debounce
+    // only suppresses redundant solving=true *indicator* broadcasts; it must NOT make the matching
+    // end look like a no-op, or a real solve's outputs would never be collected/broadcast. This
+    // flag lets SetSolving(false) report "a solve actually ran" even when its start was debounced —
+    // the case that froze dynamic-value-list reconcile solves (they fire <100ms after the prior solve).
+    private bool _solveStartedSinceLastEnd;
+
     public bool IsSolving { get; private set; }
 
     /// <summary>
@@ -45,24 +52,44 @@ public class ComponentStateManager
     /// </summary>
     public bool SetSolving(bool isSolving)
     {
-        if (IsSolving != isSolving)
+        // A solve ended: report whether a real solve ran since the last end so callers can collect
+        // outputs. True when we were tracking IsSolving OR a start was debounced in between — the
+        // latter keeps a fast follow-up solve (e.g. dynamic-list reconcile) from being silently
+        // dropped. Resets the per-cycle flag.
+        if (!isSolving)
+        {
+            var solved = IsSolving || _solveStartedSinceLastEnd;
+            IsSolving = false;
+            _solveStartedSinceLastEnd = false;
+            if (solved)
+            {
+                _lastStateChangeTime = DateTime.UtcNow;
+            }
+
+            Debug.WriteLine($"[ComponentStateManager] Solve ended (actuallySolving={solved})");
+            return solved;
+        }
+
+        // A solve started. Record it for the matching end even if we debounce the indicator below.
+        _solveStartedSinceLastEnd = true;
+
+        if (!IsSolving)
         {
             var now = DateTime.UtcNow;
             var timeSinceLastChange = (now - _lastStateChangeTime).TotalMilliseconds;
 
-            // Only debounce transitions TO solving (true), never FROM solving (false)
-            // This ensures we never get stuck in a solving state
-            if (isSolving && timeSinceLastChange < STATE_CHANGE_DEBOUNCE_MS)
+            // Debounce only the solving=true indicator broadcast — rapid back-to-back solve starts
+            // shouldn't spam the UI. The end still collects outputs via _solveStartedSinceLastEnd.
+            if (timeSinceLastChange < STATE_CHANGE_DEBOUNCE_MS)
             {
-                // Too soon to start another solve - ignore rapid solve starts
                 Debug.WriteLine(
                     $"[ComponentStateManager] Solve start debounced ({timeSinceLastChange:F0}ms since last change)");
                 return false;
             }
 
-            IsSolving = isSolving;
+            IsSolving = true;
             _lastStateChangeTime = now;
-            Debug.WriteLine($"[ComponentStateManager] Solving state changed to: {isSolving}");
+            Debug.WriteLine("[ComponentStateManager] Solving state changed to: True");
             return true;
         }
 

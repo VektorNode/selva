@@ -1,18 +1,22 @@
 {
 	"name": "@selvajs/ui",
-	"version": "4.6.1",
+	"version": "4.7.0-beta.2",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
 	"publishConfig": {
 		"access": "public"
 	},
 	"type": "module",
-	"svelte": "./dist/index.js",
-	"types": "./dist/index.d.ts",
+	"svelte": "./dist/public.js",
+	"types": "./dist/public.d.ts",
 	"exports": {
 		".": {
-			"types": "./dist/index.d.ts",
-			"svelte": "./dist/index.js"
+			"source": {
+				"types": "./dist/index.d.ts",
+				"svelte": "./dist/index.js"
+			},
+			"types": "./dist/public.d.ts",
+			"svelte": "./dist/public.js"
 		},
 		"./external": {
 			"types": "./dist/external/storage.d.ts",
@@ -80,6 +84,7 @@
 		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"@types/three": "catalog:",
 		"bits-ui": "^2.18.0",
+		"rhino3dm": "8.17.0",
 		"rimraf": "catalog:",
 		"svelte": "catalog:",
 		"tailwind-variants": "^3.2.2",

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using Rhino;
 using Rhino.DocObjects;
 using Rhino.FileIO;
@@ -18,6 +19,11 @@ public static class FileImporter
 {
     private static readonly int MAX_FILE_SIZE_BYTES = AppConfig.ValueLimits.MaxFileSizeBytes;
 
+    private static readonly HttpClient UrlDownloadClient = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(60)
+    };
+
     /// <summary>
     ///     Imports a file from path or base64 data.
     /// </summary>
@@ -30,15 +36,14 @@ public static class FileImporter
         }
 
         string tempPath = null;
+        // Only delete files we created ourselves (base64/url temp files) — never the
+        // user's own file when Type is "path" or unspecified.
+        var deleteAfterImport = false;
         try
         {
             // Resolve to local file path based on input type
             switch (fileData.Type?.ToLowerInvariant())
             {
-                case "path":
-                    tempPath = fileData.File;
-                    break;
-
                 case "base64":
                     var decodeResult = DecodeBase64ToTemp(fileData.File, fileData.FileEnding);
                     if (!decodeResult.Success)
@@ -47,10 +52,22 @@ public static class FileImporter
                     }
 
                     tempPath = decodeResult.TempPath;
+                    deleteAfterImport = true;
+                    break;
+
+                case "url":
+                    var downloadResult = DownloadUrlToTemp(fileData.File, fileData.FileEnding);
+                    if (!downloadResult.Success)
+                    {
+                        return (false, new List<GeometryWithName>(), "", downloadResult.ErrorMessage);
+                    }
+
+                    tempPath = downloadResult.TempPath;
+                    deleteAfterImport = true;
                     break;
 
                 default:
-                    // Treat as path
+                    // "path" or unspecified — treat as a local path
                     tempPath = fileData.File;
                     break;
             }
@@ -59,9 +76,7 @@ public static class FileImporter
         }
         finally
         {
-            if (!string.IsNullOrEmpty(tempPath) &&
-                fileData.Type?.ToLowerInvariant() != "path" &&
-                File.Exists(tempPath))
+            if (deleteAfterImport && !string.IsNullOrEmpty(tempPath) && File.Exists(tempPath))
             {
                 try
                 {
@@ -183,16 +198,9 @@ public static class FileImporter
 
             // Validate and sanitize file extension
             var extension = !string.IsNullOrEmpty(fileEnding) ? fileEnding : ".tmp";
-            if (extension.Contains("..") || extension.Contains("/") || extension.Contains("\\"))
+            if (!IsAllowedExtension(extension, out var extensionError))
             {
-                return (false, null, "Invalid file extension");
-            }
-
-            var allowedExtensions = AcceptedFileFormats.Values;
-            var normalizedExtension = extension?.ToLowerInvariant() ?? "";
-            if (!allowedExtensions.Any(ext => ext.Equals(normalizedExtension, StringComparison.OrdinalIgnoreCase)))
-            {
-                return (false, null, $"File extension '{extension}' is not supported");
+                return (false, null, extensionError);
             }
 
             var bytes = Convert.FromBase64String(base64Data);
@@ -219,6 +227,115 @@ public static class FileImporter
         {
             return (false, null, $"Base64 decode failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    ///     Downloads a file from an http(s) URL to a temp file, enforcing the same size
+    ///     and extension limits as base64 input.
+    /// </summary>
+    public static (bool Success, string TempPath, string ErrorMessage) DownloadUrlToTemp(string url,
+        string fileEnding)
+    {
+        string tempPath = null;
+        try
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                return (false, null, "Invalid URL: only http/https are supported");
+            }
+
+            var extension = !string.IsNullOrEmpty(fileEnding) ? fileEnding : Path.GetExtension(uri.LocalPath);
+            if (!IsAllowedExtension(extension, out var extensionError))
+            {
+                return (false, null, extensionError);
+            }
+
+            // HttpClient methods are async-only on net48; blocking is safe here because
+            // HttpClient internals use ConfigureAwait(false) throughout.
+            using var response = UrlDownloadClient
+                .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead)
+                .GetAwaiter().GetResult();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return (false, null, $"Download failed: HTTP {(int)response.StatusCode}");
+            }
+
+            if (response.Content.Headers.ContentLength > MAX_FILE_SIZE_BYTES)
+            {
+                return (false, null,
+                    $"Downloaded file too large (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
+            }
+
+            tempPath = Path.Combine(Path.GetTempPath(),
+                $"selva_url_{Guid.NewGuid():N}{extension.ToLowerInvariant()}");
+
+            using (var source = response.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
+            using (var destination = File.Create(tempPath))
+            {
+                // Manual copy so the size cap holds even when Content-Length is absent or wrong.
+                var buffer = new byte[81920];
+                long total = 0;
+                int read;
+                while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    total += read;
+                    if (total > MAX_FILE_SIZE_BYTES)
+                    {
+                        return (false, null,
+                            $"Downloaded file too large (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
+                    }
+
+                    destination.Write(buffer, 0, read);
+                }
+            }
+
+            var result = (true, tempPath, "");
+            tempPath = null; // success — caller owns the file now
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return (false, null, $"Download failed: {ex.Message}");
+        }
+        finally
+        {
+            // Clean up a partially-written temp file on any failure path.
+            if (tempPath != null && File.Exists(tempPath))
+            {
+                try { File.Delete(tempPath); } catch { /* ignore cleanup errors */ }
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Validates a file extension against the schema-driven allowlist and rejects
+    ///     path-traversal characters.
+    /// </summary>
+    private static bool IsAllowedExtension(string extension, out string errorMessage)
+    {
+        if (string.IsNullOrEmpty(extension))
+        {
+            errorMessage = "File extension is missing";
+            return false;
+        }
+
+        if (extension.Contains("..") || extension.Contains("/") || extension.Contains("\\"))
+        {
+            errorMessage = "Invalid file extension";
+            return false;
+        }
+
+        if (!AcceptedFileFormats.Values.Any(ext =>
+                ext.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            errorMessage = $"File extension '{extension}' is not supported";
+            return false;
+        }
+
+        errorMessage = "";
+        return true;
     }
 
     /// <summary>

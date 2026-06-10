@@ -10,7 +10,7 @@
 	interface Props {
 		schema: UISchema;
 		values: Record<string, unknown>;
-		onValueChange: (paramId: string, value: SupportedTypes) => void;
+		onValueChange: (paramId: string, value: SupportedTypes, forceSolve?: boolean) => void;
 		/** Filter tabs by panel position. 'left' shows unpositioned + left tabs, 'right' shows right tabs only. */
 		panelFilter?: 'left' | 'right';
 		/** Externally request a specific tab to be active (e.g. from collapsed strip click) */

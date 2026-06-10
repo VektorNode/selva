@@ -283,7 +283,9 @@ public class WebSocketServer : IDisposable
         {
             if (client.State != WebSocketState.Open)
             {
-                clientsToRemove.Add(client);
+                // MarkForRemoval locks: in-flight SendToClientAsync tasks for earlier
+                // clients may append to this list concurrently.
+                MarkForRemoval(client, clientsToRemove);
                 continue;
             }
 

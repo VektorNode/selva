@@ -36,6 +36,7 @@
 		"bits-ui": "^2.18.0",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
+		"rhino3dm": "8.17.0",
 		"sharp": "^0.34.5",
 		"tailwind-merge": "catalog:",
 		"tailwind-variants": "^3.2.2",

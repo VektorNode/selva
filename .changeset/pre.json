@@ -1,5 +1,5 @@
 {
-	"mode": "pre",
+	"mode": "exit",
 	"tag": "beta",
 	"initialVersions": {
 		"@selvajs/cli": "4.3.5",
@@ -13,5 +13,9 @@
 		"@selvajs/selva": "4.3.5",
 		"@selvajs/ui": "4.6.1"
 	},
-	"changesets": []
+	"changesets": [
+		"grid-toggle-viewer",
+		"scene-manager-curve-label",
+		"supabase-tombstone-slug-release"
+	]
 }

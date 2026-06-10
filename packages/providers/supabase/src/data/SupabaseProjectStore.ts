@@ -169,6 +169,46 @@ export class SupabaseProjectStore implements IProjectStore {
 		await this.events.emit({ type: 'project.deleted', projectId: id, actorId: actorFrom(ctx) });
 	}
 
+	async reactivateProject(
+		ctx: RequestContext,
+		orgId: string,
+		slug: string
+	): Promise<Project | null> {
+		const client = this.clients.forRequest(ctx);
+
+		// Clear the tombstone. The WHERE deleted_at IS NOT NULL ensures we never
+		// accidentally clobber a live row, and the unique constraint means there
+		// can be at most one tombstone per (org_id, slug) at any time.
+		const { data, error } = await client
+			.from('projects')
+			.update({ deleted_at: null })
+			.eq('org_id', orgId)
+			.eq('slug', slug)
+			.not('deleted_at', 'is', null)
+			.select('*')
+			.maybeSingle();
+		if (error) throw mapError(error);
+		if (!data) return null;
+
+		// Reactivate the owner's project_members row (deleteProject cascades to it).
+		const { error: pmErr } = await client
+			.from('project_members')
+			.update({ deleted_at: null })
+			.eq('project_id', data.id)
+			.eq('user_id', data.owner_id)
+			.not('deleted_at', 'is', null);
+		if (pmErr) throw mapError(pmErr);
+
+		const project = rowToProject(data);
+		await this.events.emit({
+			type: 'project.created',
+			projectId: project.id,
+			orgId: project.orgId,
+			actorId: actorFrom(ctx)
+		});
+		return project;
+	}
+
 	// ============================================================================
 	// Project members
 	// ============================================================================

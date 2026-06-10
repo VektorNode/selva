@@ -4,9 +4,28 @@
 	import {
 		initThree,
 		updateScene,
-		type ThreeInitializerOptions
+		type ThreeInitializerOptions,
+		type CameraController,
+		type CameraProjection,
+		type MeasureTool,
+		type ViewPreset,
+		type Grid
 	} from '@selvajs/compute/visualization';
-	import { Maximize, Minimize, Camera, Layers } from '@lucide/svelte';
+	import {
+		Maximize,
+		Minimize,
+		Camera,
+		Layers,
+		Settings2,
+		Box,
+		Square,
+		Frame,
+		Ruler,
+		Grid3x3,
+		Check,
+		ChevronRight
+	} from '@lucide/svelte';
+	import { DropdownMenu } from 'bits-ui';
 	import type * as THREE from 'three';
 	import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import SceneManager from './SceneManager.svelte';
@@ -17,6 +36,9 @@
 		showScreenshotButton?: boolean;
 		showFullscreenButton?: boolean;
 		showSceneManager?: boolean;
+		showToolsMenu?: boolean;
+		/** Expose the grid show/hide toggle in the tools menu. Grid starts hidden. */
+		showGridToggle?: boolean;
 		enableMeshClick?: boolean;
 		backgroundColor?: string;
 	}
@@ -34,6 +56,8 @@
 		showScreenshotButton: true,
 		showFullscreenButton: true,
 		showSceneManager: true,
+		showToolsMenu: true,
+		showGridToggle: true,
 		enableMeshClick: true,
 		backgroundColor: '#E6E6E6'
 	};
@@ -53,12 +77,29 @@
 	let scene: THREE.Scene | null = $state(null);
 	let camera: THREE.PerspectiveCamera | null = null;
 	let controls: OrbitControls | null = null;
+	let cameraController: CameraController | null = null;
+	let measureTool: MeasureTool | null = null;
+	let grid: Grid | null = null;
+	let fitToView: (() => void) | null = null;
 	let viewerInitialized = false;
 	let sceneVersion = $state(0);
 	let hideButton = $state(false);
 	let sceneManagerOpen = $state(false);
+	let projection: CameraProjection = $state('perspective');
+	let measureActive = $state(false);
+	let gridVisible = $state(false);
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
+
+	const VIEW_PRESETS: { preset: ViewPreset; label: string }[] = [
+		{ preset: 'top', label: 'Top' },
+		{ preset: 'front', label: 'Front' },
+		{ preset: 'right', label: 'Right' },
+		{ preset: 'back', label: 'Back' },
+		{ preset: 'left', label: 'Left' },
+		{ preset: 'bottom', label: 'Bottom' },
+		{ preset: 'iso', label: 'Isometric' }
+	];
 
 	// Hide button instantly when expanding, show after animation when collapsing
 	$effect(() => {
@@ -78,6 +119,10 @@
 		const opts: ThreeInitializerOptions = {
 			environment: { backgroundColor: config.backgroundColor },
 			controls: {},
+			// Build the grid so it can be toggled at runtime, but start hidden (off by default).
+			grid: { enabled: config.showToolsMenu && config.showGridToggle },
+			gizmo: { enabled: false },
+			measure: { enabled: config.showToolsMenu },
 			events: {
 				onMeshMetadataClicked: config.enableMeshClick
 					? (metadata: Record<string, string>) => {
@@ -94,11 +139,38 @@
 		scene = init.scene;
 		camera = init.camera;
 		controls = init.controls;
+		cameraController = init.cameraController;
+		measureTool = init.measureTool;
+		grid = init.grid;
+		grid?.setVisible(gridVisible);
+		fitToView = init.fitToView;
+		projection = init.cameraController.getProjection();
 
 		return () => {
 			init.dispose();
 		};
 	});
+
+	function toggleProjection() {
+		if (!cameraController) return;
+		projection = cameraController.toggleProjection();
+	}
+
+	function setView(preset: ViewPreset) {
+		cameraController?.setView(preset);
+	}
+
+	function toggleMeasure() {
+		if (!measureTool) return;
+		measureActive = !measureActive;
+		measureTool.setEnabled(measureActive);
+	}
+
+	function toggleGrid() {
+		if (!grid) return;
+		gridVisible = !gridVisible;
+		grid.setVisible(gridVisible);
+	}
 
 	$effect(() => {
 		if (scene && camera && controls) {
@@ -179,58 +251,134 @@
 					></div>
 				{/if}
 
-				{#if config.showScreenshotButton || config.showFullscreenButton || config.showSceneManager}
+				{#if config.showToolsMenu}
+					{@const itemClass =
+						'gap-2 px-2 py-1.5 text-sm flex cursor-pointer select-none items-center rounded-sm outline-none transition-colors hover:bg-muted focus:bg-muted'}
 					<div
-						class="right-4 {isFullscreen
+						class="left-4 {isFullscreen
 							? 'bottom-4'
-							: 'bottom-16 sm:bottom-4'} gap-2 absolute z-50 flex items-center"
+							: 'bottom-16 sm:bottom-4'} absolute z-50 flex items-center"
 						style={hideButton
 							? 'opacity: 0; pointer-events: none;'
 							: 'opacity: 1; pointer-events: auto;'}
 					>
-						<!-- Screenshot Button -->
-						{#if config.showScreenshotButton}
-							<button
-								class="h-10 w-10 shadow-lg hover:shadow-xl flex items-center justify-center rounded-lg border border-border bg-card/90 transition-all hover:bg-card active:scale-95"
-								onclick={downloadScreenshot}
-								title="Download screenshot"
-								aria-label="Download screenshot"
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger
+								class="h-10 w-10 shadow-lg hover:shadow-xl flex items-center justify-center rounded-lg border border-border bg-card/90 transition-all hover:bg-card active:scale-95 data-[state=open]:bg-secondary/60"
+								title="Viewer tools"
+								aria-label="Viewer tools"
 							>
-								<Camera class="h-5 w-5 text-card-foreground" />
-							</button>
-						{/if}
+								<Settings2 class="h-5 w-5 text-card-foreground" />
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Portal>
+								<DropdownMenu.Content
+									sideOffset={6}
+									align="start"
+									class="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 min-w-44 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
+								>
+									<!-- Camera -->
+									<DropdownMenu.Item class={itemClass} onSelect={toggleProjection}>
+										{#if projection === 'perspective'}
+											<Square class="h-4 w-4" />
+											Switch to 2D
+										{:else}
+											<Box class="h-4 w-4" />
+											Switch to 3D
+										{/if}
+									</DropdownMenu.Item>
 
-						<!-- Fullscreen Toggle -->
-						{#if config.showFullscreenButton}
-							<button
-								class="h-10 w-10 shadow-lg hover:shadow-xl flex items-center justify-center rounded-lg border border-border bg-card/90 transition-all hover:bg-card active:scale-95"
-								onclick={toggleFullscreen}
-								title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-								aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-							>
-								{#if isFullscreen}
-									<Minimize class="h-5 w-5 text-card-foreground" />
-								{:else}
-									<Maximize class="h-5 w-5 text-card-foreground" />
-								{/if}
-							</button>
-						{/if}
+									<DropdownMenu.Item class={itemClass} onSelect={() => fitToView?.()}>
+										<Frame class="h-4 w-4" />
+										Fit to view
+									</DropdownMenu.Item>
 
-						<!-- Scene Manager Toggle -->
-						{#if config.showSceneManager}
-							<button
-								class="h-10 w-10 shadow-lg hover:shadow-xl flex items-center justify-center rounded-lg border transition-all active:scale-95 {sceneManagerOpen
-									? 'border-muted-foreground/40 bg-secondary/40 hover:bg-secondary/60'
-									: 'border-muted-foreground/50 bg-card/90 hover:bg-secondary/80'}"
-								onclick={() => (sceneManagerOpen = !sceneManagerOpen)}
-								title={sceneManagerOpen ? 'Hide scene manager' : 'Show scene manager'}
-								aria-label="Toggle scene manager"
-							>
-								<Layers
-									class="h-5 w-5 {sceneManagerOpen ? 'text-primary' : 'text-secondary-foreground'}"
-								/>
-							</button>
-						{/if}
+									<DropdownMenu.Sub>
+										<DropdownMenu.SubTrigger class="{itemClass} data-[state=open]:bg-muted">
+											<Box class="h-4 w-4" />
+											<span class="flex-1">Views</span>
+											<ChevronRight class="h-4 w-4 text-muted-foreground" />
+										</DropdownMenu.SubTrigger>
+										<DropdownMenu.SubContent
+											sideOffset={4}
+											class="min-w-32 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
+										>
+											{#each VIEW_PRESETS as { preset, label } (preset)}
+												<DropdownMenu.Item
+													class="px-2 py-1.5 text-sm flex cursor-pointer items-center rounded-sm transition-colors outline-none select-none hover:bg-muted focus:bg-muted"
+													onSelect={() => setView(preset)}
+												>
+													{label}
+												</DropdownMenu.Item>
+											{/each}
+										</DropdownMenu.SubContent>
+									</DropdownMenu.Sub>
+
+									<DropdownMenu.Item
+										closeOnSelect={false}
+										class="{itemClass} {measureActive ? 'text-primary' : ''}"
+										onSelect={toggleMeasure}
+									>
+										<Ruler class="h-4 w-4" />
+										<span class="flex-1">Measure</span>
+										{#if measureActive}
+											<Check class="h-4 w-4" />
+										{/if}
+									</DropdownMenu.Item>
+
+									{#if config.showGridToggle}
+										<DropdownMenu.Item
+											closeOnSelect={false}
+											class="{itemClass} {gridVisible ? 'text-primary' : ''}"
+											onSelect={toggleGrid}
+										>
+											<Grid3x3 class="h-4 w-4" />
+											<span class="flex-1">Grid</span>
+											{#if gridVisible}
+												<Check class="h-4 w-4" />
+											{/if}
+										</DropdownMenu.Item>
+									{/if}
+
+									<!-- Scene tools -->
+									{#if config.showSceneManager || config.showScreenshotButton || config.showFullscreenButton}
+										<DropdownMenu.Separator class="my-1 h-px bg-border" />
+									{/if}
+
+									{#if config.showSceneManager}
+										<DropdownMenu.Item
+											closeOnSelect={false}
+											class="{itemClass} {sceneManagerOpen ? 'text-primary' : ''}"
+											onSelect={() => (sceneManagerOpen = !sceneManagerOpen)}
+										>
+											<Layers class="h-4 w-4" />
+											<span class="flex-1">Scene manager</span>
+											{#if sceneManagerOpen}
+												<Check class="h-4 w-4" />
+											{/if}
+										</DropdownMenu.Item>
+									{/if}
+
+									{#if config.showScreenshotButton}
+										<DropdownMenu.Item class={itemClass} onSelect={downloadScreenshot}>
+											<Camera class="h-4 w-4" />
+											Screenshot
+										</DropdownMenu.Item>
+									{/if}
+
+									{#if config.showFullscreenButton}
+										<DropdownMenu.Item class={itemClass} onSelect={toggleFullscreen}>
+											{#if isFullscreen}
+												<Minimize class="h-4 w-4" />
+												Exit fullscreen
+											{:else}
+												<Maximize class="h-4 w-4" />
+												Fullscreen
+											{/if}
+										</DropdownMenu.Item>
+									{/if}
+								</DropdownMenu.Content>
+							</DropdownMenu.Portal>
+						</DropdownMenu.Root>
 					</div>
 				{/if}
 			</div>

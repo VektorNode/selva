@@ -182,6 +182,42 @@ export class LocalProjectStore implements IProjectStore {
 		await this.events.emit({ type: 'project.deleted', projectId: id, actorId: actorFrom(ctx) });
 	}
 
+	async reactivateProject(
+		ctx: RequestContext,
+		orgId: string,
+		slug: string
+	): Promise<Project | null> {
+		const store = await this.loader.get();
+		const idx = store.projects.findIndex((p) => p.orgId === orgId && p.slug === slug && !isLive(p));
+		if (idx === -1) return null;
+
+		const now = new Date().toISOString();
+		store.projects[idx] = { ...store.projects[idx], deletedAt: null, updatedAt: now };
+
+		// Reactivate the owner's project_members row.
+		const ownerId = store.projects[idx].ownerId;
+		const pmIdx = store.projectMembers.findIndex(
+			(m) => m.projectId === store.projects[idx].id && m.userId === ownerId && !isLive(m)
+		);
+		if (pmIdx !== -1) {
+			store.projectMembers[pmIdx] = {
+				...store.projectMembers[pmIdx],
+				deletedAt: null,
+				updatedAt: now
+			};
+		}
+
+		await this.loader.write(store);
+		const project = { ...store.projects[idx] };
+		await this.events.emit({
+			type: 'project.created',
+			projectId: project.id,
+			orgId: project.orgId,
+			actorId: actorFrom(ctx)
+		});
+		return project;
+	}
+
 	async listProjectMembers(
 		_ctx: RequestContext,
 		projectId: string,

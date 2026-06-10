@@ -90,10 +90,16 @@ public class ValueApplicator
                     continue;
                 }
 
-                // Skip dedup check for file params: the same file can be re-submitted after
-                // the user clears the GH parameter (ClearContextualData doesn't touch
-                // _lastAppliedValues, so HasValueChanged would wrongly return false).
-                if (input.ParamType != "file" && !HasValueChanged(inputKey, value))
+                // Skip dedup for file and dynamicValueList params:
+                //  - file: the same file can be re-submitted after the user clears the GH
+                //    parameter (ClearContextualData doesn't touch _lastAppliedValues, so
+                //    HasValueChanged would wrongly return false).
+                //  - dynamicValueList: its options are recomputed every solve, so the same
+                //    string value can map to a different option (or be re-sent unchanged when the
+                //    UI reconciles a vanished selection). Deduping would skip the re-apply and the
+                //    downstream output would freeze on the previous solve's value.
+                var skipDedup = input.ParamType == "file" || input.ParamType == "dynamicValueList";
+                if (!skipDedup && !HasValueChanged(inputKey, value))
                 {
                     continue;
                 }
@@ -259,8 +265,8 @@ public class ValueApplicator
                 }
             }
 
-            // Validate numeric type conversions
-            if (input.ParamType == "Number" || input.ParamType == "Integer")
+            // Validate numeric type conversions (paramType enum values are lowercase)
+            if (input.ParamType == "number" || input.ParamType == "integer")
             {
                 double numValue;
                 try
@@ -284,7 +290,7 @@ public class ValueApplicator
             }
 
             // Validate integer conversion
-            if (input.ParamType == "Integer")
+            if (input.ParamType == "integer")
             {
                 try
                 {

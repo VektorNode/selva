@@ -34,6 +34,7 @@
 		"@selvajs/ui": "workspace:*",
 		"bits-ui": "^2.18.0",
 		"mode-watcher": "catalog:",
+		"rhino3dm": "8.17.0",
 		"svelte-dnd-action": "^0.9.69",
 		"tailwind-variants": "^3.2.2",
 		"three": "catalog:",

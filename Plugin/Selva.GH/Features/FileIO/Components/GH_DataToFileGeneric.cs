@@ -20,7 +20,7 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
 
     protected override Bitmap Icon => Resources.CreateFile;
 
-    public override Guid ComponentGuid => new Guid("F9B3F862-611E-4E67-9DE4-67129CC0EF24");
+    public override Guid ComponentGuid => new Guid("4A845B41-30E7-4DC7-BD47-0AC4C44E4F46");
 
     public override void CreateAttributes()
     {
@@ -37,6 +37,10 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
             GH_ParamAccess.item, false);
         pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item,
             "");
+        pManager.AddTextParameter("Metadata", "M",
+            "Optional metadata as \"key=value\" lines (e.g. author=felix). Rides along with the file for downstream tagging/indexing.",
+            GH_ParamAccess.list);
+        pManager[5].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -62,6 +66,9 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
         DA.GetData(3, ref isBase64);
         DA.GetData(4, ref subFolder);
 
+        var metadataLines = new List<string>();
+        DA.GetDataList(5, metadataLines);
+
 
         // Ensure extension starts with a dot
         if (!string.IsNullOrEmpty(extension) && !extension.StartsWith("."))
@@ -79,7 +86,8 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
             Data = combinedData,
             FileType = extension,
             IsBase64Encoded = isBase64,
-            SubFolder = subFolder ?? ""
+            SubFolder = subFolder ?? "",
+            Metadata = FileMetadataParser.Parse(metadataLines)
         };
 
         DA.SetData(0, new FileDataGoo(fileData));

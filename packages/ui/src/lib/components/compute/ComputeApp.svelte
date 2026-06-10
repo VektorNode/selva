@@ -133,8 +133,8 @@
 		});
 	});
 
-	function handleValueChange(id: string, val: unknown) {
-		session.setValue(id, val);
+	function handleValueChange(id: string, val: unknown, forceSolve?: boolean) {
+		session.setValue(id, val, forceSolve);
 	}
 
 	function handleCalculate() {

@@ -47,7 +47,7 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
     /// <summary>
     ///     Gets the unique ID for this component. Do not change this ID after release.
     /// </summary>
-    public override Guid ComponentGuid => new Guid("8D0ECB14-7318-4400-8AA2-588E6424ACC4");
+    public override Guid ComponentGuid => new Guid("4B2646E6-A8B0-48B6-A566-FE5EC2376C82");
 
     /// <summary>
     ///     Creates custom component attributes
@@ -100,11 +100,15 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         pManager.AddTextParameter("Sub Folder", "Folder",
             "Optional subfolder path for storage",
             GH_ParamAccess.item, "");
+        pManager.AddTextParameter("Metadata", "M",
+            "Optional metadata as \"key=value\" lines (e.g. author=felix). Applied to every exported file for downstream tagging/indexing.",
+            GH_ParamAccess.list);
 
         pManager[1].Optional = true;
         pManager[2].Optional = true;
         pManager[4].Optional = true;
         pManager[5].Optional = true;
+        pManager[6].Optional = true;
     }
 
     /// <summary>
@@ -144,6 +148,10 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         var subFolder = "";
         DA.GetData(5, ref subFolder);
 
+        var metadataLines = new List<string>();
+        DA.GetDataList(6, metadataLines);
+        var metadata = FileMetadataParser.Parse(metadataLines);
+
         // Validate file ending
         if (string.IsNullOrWhiteSpace(fileEnding) || !fileEnding.StartsWith("."))
         {
@@ -161,13 +169,13 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
                 // Single file mode - all geometry in one file
             {
                 results = ProcessSingleFile(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree, fileEnding,
-                    subFolder);
+                    subFolder, metadata);
             }
             else
                 // Multiple files mode - one file per branch
             {
                 results = ProcessMultipleFiles(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree,
-                    fileEnding, subFolder);
+                    fileEnding, subFolder, metadata);
             }
 
             if (results.Count == 0)
@@ -202,7 +210,8 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         GH_Structure<GH_Colour> layerColorsTree,
         GH_Structure<GH_String> fileNamesTree,
         string fileEnding,
-        string subFolder)
+        string subFolder,
+        Dictionary<string, string> metadata)
     {
         var results = new List<FileDataGoo>();
 
@@ -257,7 +266,8 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
                     Data = base64String,
                     FileType = fileEnding,
                     IsBase64Encoded = true,
-                    SubFolder = subFolder ?? ""
+                    SubFolder = subFolder ?? "",
+                    Metadata = metadata ?? new Dictionary<string, string>()
                 };
                 results.Add(new FileDataGoo(fileData));
             }
@@ -283,7 +293,8 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
         GH_Structure<GH_Colour> layerColorsTree,
         GH_Structure<GH_String> fileNamesTree,
         string fileEnding,
-        string subFolder)
+        string subFolder,
+        Dictionary<string, string> metadata)
     {
         var results = new List<FileDataGoo>();
         var paths = geometryTree.Paths.ToList();
@@ -353,7 +364,8 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
                             Data = base64String,
                             FileType = fileEnding,
                             IsBase64Encoded = true,
-                            SubFolder = subFolder ?? ""
+                            SubFolder = subFolder ?? "",
+                            Metadata = metadata ?? new Dictionary<string, string>()
                         };
                         results.Add(new FileDataGoo(fileData));
                     }

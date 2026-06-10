@@ -25,6 +25,16 @@ export interface IProjectStore {
 	 * Definition versions and share links cascade through the definition delete.
 	 */
 	deleteProject(ctx: RequestContext, id: string): Promise<void>;
+	/**
+	 * Reactivate a previously soft-deleted project identified by its org + slug.
+	 * Clears `deleted_at` and reactivates the owner's `project_members` row.
+	 * Returns the live project, or `null` if no tombstone with that slug exists.
+	 *
+	 * Use this when `createProject` fails with a duplicate-key error on a slug
+	 * that was soft-deleted — the unconditional unique constraint blocks creation
+	 * even though `getProjectBySlug` returns null for tombstones.
+	 */
+	reactivateProject(ctx: RequestContext, orgId: string, slug: string): Promise<Project | null>;
 
 	// Project members
 	listProjectMembers(

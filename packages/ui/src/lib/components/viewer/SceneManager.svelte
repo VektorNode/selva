@@ -10,10 +10,17 @@
 
 	let { scene = $bindable(), sceneVersion = 0 }: Props = $props();
 
+	// Viewer aids (grid, floor, measurement overlay, CSS2D label layer) are tagged with these ids by
+	// @selvajs/compute. They aren't scene content, so they're hidden from the object list.
+	const HELPER_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
+
 	const getSceneObjects = () => {
 		void sceneVersion;
 		return scene.children.filter(
-			(obj) => !(obj instanceof THREE.Camera) && !(obj instanceof THREE.Light)
+			(obj) =>
+				!(obj instanceof THREE.Camera) &&
+				!(obj instanceof THREE.Light) &&
+				!HELPER_IDS.has(obj.userData?.id)
 		);
 	};
 
@@ -80,11 +87,16 @@
 		}
 	};
 
-	const getObjectLabel = (object: THREE.Object3D) =>
-		object.userData?.name || object.userData?.fileName || object.name || object.type;
+	const prettyType = (type: string) =>
+		type
+			.replace(/^Line(Segments)?2$/, 'Curve')
+			.replace('Mesh', '')
+			.replace('Object3D', 'Obj') || type;
 
-	const getTypeLabel = (object: THREE.Object3D) =>
-		object.type.replace('Mesh', '').replace('Object3D', 'Obj') || object.type;
+	const getObjectLabel = (object: THREE.Object3D) =>
+		object.userData?.name || object.userData?.fileName || object.name || prettyType(object.type);
+
+	const getTypeLabel = (object: THREE.Object3D) => prettyType(object.type);
 
 	let searchQuery = $state('');
 

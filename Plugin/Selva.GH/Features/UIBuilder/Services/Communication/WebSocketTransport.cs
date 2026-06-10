@@ -51,6 +51,13 @@ public class WebSocketTransport : IDisposable
 
     // All mutable state that can be touched from multiple threads is guarded by _stateLock.
     private readonly object _stateLock = new object();
+
+    // Inbound messages are processed off the receive loop but strictly in arrival order:
+    // each message is chained onto the previous one's task. Without this, two rapid
+    // valueUpdates can race and the older value can win.
+    private readonly object _dispatchLock = new object();
+    private Task _dispatchChain = Task.CompletedTask;
+
     private bool _disposed;
 
     // Interlocked is sufficient for a single int flag.
@@ -224,25 +231,39 @@ public class WebSocketTransport : IDisposable
         var doc = RhinoDoc.ActiveDoc;
         var modelUnits = doc?.ModelUnitSystem.ToString() ?? "Meters";
 
-        // Extract binary blobs from MeshBatch objects so they travel as binary WebSocket frames
+        // Extract binary blobs from DisplayBatch objects so they travel as binary WebSocket frames
         // instead of base64-in-JSON. The SLVA blob contains embedded metadata (materials, groups,
         // sourceComponentId), so no separate envelope is needed.
+        //
+        // Non-mesh display items (curves, points) have no binary form — they ride the JSON envelope
+        // directly as `displayItems`, flattened across all batches (each item already carries a
+        // component-derived id). The client tessellates them alongside the mesh frames.
         var binaryBlobs = new List<byte[]>();
+        var displayItems = new List<DisplayItem>();
         if (includeDisplayData && displayData != null)
         {
             foreach (var item in displayData)
             {
-                if (item is MeshBatch batch && batch.CompressedData != null)
+                if (item is DisplayBatch batch)
                 {
-                    binaryBlobs.Add(batch.CompressedData);
+                    if (batch.CompressedData != null)
+                    {
+                        binaryBlobs.Add(batch.CompressedData);
+                    }
+
+                    if (batch.Items != null && batch.Items.Count > 0)
+                    {
+                        displayItems.AddRange(batch.Items);
+                    }
                 }
             }
         }
 
-        // JSON envelope: omit displayData; include count so the client knows how many binary
-        // frames to collect before processing the scene update.
+        // JSON envelope: omit the raw displayData; include the binary-frame count and any non-mesh
+        // display items. `displayItems` is null when empty so mesh-only solves are unchanged.
         await BroadcastAsync(OutboundEnvelopes.Outputs(
-            _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits));
+            _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits,
+            displayItems.Count > 0 ? displayItems : null));
 
         // Send each binary blob as a separate binary WebSocket frame. WebSocket preserves message
         // order (TCP), so these frames always arrive after the JSON envelope above.
@@ -405,86 +426,96 @@ public class WebSocketTransport : IDisposable
 
     private void HandleMessageReceived(object sender, string message)
     {
-        // Parse and dispatch on a thread-pool thread so we never block the receive loop.
-        _ = Task.Run(() =>
+        // Process on a thread-pool thread so we never block the receive loop, but chain
+        // messages so they are handled strictly in arrival order.
+        lock (_dispatchLock)
         {
-            try
+            _dispatchChain = _dispatchChain.ContinueWith(
+                _ => ProcessInboundMessage(message),
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.Default);
+        }
+    }
+
+    private void ProcessInboundMessage(string message)
+    {
+        try
+        {
+            // Parse/classify is pure (see InboundMessageParser); this method owns only the
+            // session-establish in-flight guard, the thread marshalling, and the event raising.
+            var inbound = _inboundParser.Parse(message, _sessionId);
+
+            switch (inbound.Kind)
             {
-                // Parse/classify is pure (see InboundMessageParser); this method owns only the
-                // session-establish in-flight guard, the thread marshalling, and the event raising.
-                var inbound = _inboundParser.Parse(message, _sessionId);
+                case InboundKind.ValueUpdate:
+                    MarshalToMainThread(() => OnValuesReceived?.Invoke(this, inbound.Values));
+                    break;
 
-                switch (inbound.Kind)
-                {
-                    case InboundKind.ValueUpdate:
-                        MarshalToMainThread(() => OnValuesReceived?.Invoke(this, inbound.Values));
-                        break;
+                case InboundKind.RequestCurrentValues:
+                    MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
+                    break;
 
-                    case InboundKind.RequestCurrentValues:
-                        MarshalToMainThread(() => OnCurrentValuesRequested?.Invoke(this, EventArgs.Empty));
-                        break;
+                case InboundKind.RequestInitialData:
+                    // Guard against concurrent invocations — if the flag is already 1, bail out.
+                    if (Interlocked.CompareExchange(ref _initialDataInFlight, 1, 0) != 0)
+                    {
+                        return;
+                    }
 
-                    case InboundKind.RequestInitialData:
-                        // Guard against concurrent invocations — if the flag is already 1, bail out.
-                        if (Interlocked.CompareExchange(ref _initialDataInFlight, 1, 0) != 0)
+                    MarshalToMainThread(() =>
+                    {
+                        try
                         {
-                            return;
+                            OnClientConnected?.Invoke(this, EventArgs.Empty);
                         }
-
-                        MarshalToMainThread(() =>
+                        finally
                         {
-                            try
-                            {
-                                OnClientConnected?.Invoke(this, EventArgs.Empty);
-                            }
-                            finally
-                            {
-                                Interlocked.Exchange(ref _initialDataInFlight, 0);
-                            }
-                        });
-                        break;
-
-                    case InboundKind.SaveSchema:
-                        {
-                            var request = new SchemaSaveRequest
-                            {
-                                Schema = inbound.Schema,
-                                BaseSchemaHash = inbound.BaseSchemaHash
-                            };
-                            MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, request));
-                            break;
+                            Interlocked.Exchange(ref _initialDataInFlight, 0);
                         }
+                    });
+                    break;
 
-                    case InboundKind.RequestSyncPreview:
-                        MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, inbound.Schema));
+                case InboundKind.SaveSchema:
+                    {
+                        var request = new SchemaSaveRequest
+                        {
+                            Schema = inbound.Schema,
+                            BaseSchemaHash = inbound.BaseSchemaHash
+                        };
+                        MarshalToMainThread(() => OnSchemaSaveRequested?.Invoke(this, request));
                         break;
+                    }
 
-                    case InboundKind.ApplySyncChanges:
-                        MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, inbound.Changes));
-                        break;
+                case InboundKind.RequestSyncPreview:
+                    MarshalToMainThread(() => OnSyncPreviewRequested?.Invoke(this, inbound.Schema));
+                    break;
 
-                    case InboundKind.SessionMismatch:
-                        Logger.Warn($"[WebSocketTransport] Session ID mismatch for '{inbound.MessageType}'.");
-                        break;
+                case InboundKind.ApplySyncChanges:
+                    MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, inbound.Changes));
+                    break;
 
-                    case InboundKind.MissingField:
-                        Logger.Warn($"[WebSocketTransport] '{inbound.MessageType}' missing a required field.");
-                        break;
+                case InboundKind.SessionMismatch:
+                    Logger.Warn($"[WebSocketTransport] Session ID mismatch for '{inbound.MessageType}'.");
+                    break;
 
-                    case InboundKind.Unknown:
-                        Logger.Warn($"[WebSocketTransport] Unknown message type: '{inbound.MessageType}'.");
-                        break;
+                case InboundKind.MissingField:
+                    Logger.Warn($"[WebSocketTransport] '{inbound.MessageType}' missing a required field.");
+                    break;
 
-                    case InboundKind.Malformed:
-                        Logger.Warn("[WebSocketTransport] Received a malformed message (bad JSON or no type).");
-                        break;
-                }
+                case InboundKind.Unknown:
+                    Logger.Warn($"[WebSocketTransport] Unknown message type: '{inbound.MessageType}'.");
+                    break;
+
+                case InboundKind.Malformed:
+                    Logger.Warn("[WebSocketTransport] Received a malformed message (bad JSON or no type).");
+                    break;
             }
-            catch (Exception ex)
-            {
-                Logger.Warn($"[WebSocketTransport] Message error: {ex.Message}");
-            }
-        });
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[WebSocketTransport] Message error: {ex.Message}");
+        }
     }
 
     /// <summary>
