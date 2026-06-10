@@ -14,8 +14,6 @@
     "@selvajs/ui": "4.6.1"
   },
   "changesets": [
-    "bump-ui-beta",
-    "late-baboons-clean",
-    "partial-unique-projects"
+    "scene-manager-curve-label"
   ]
 }
