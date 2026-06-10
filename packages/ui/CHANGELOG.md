@@ -1,5 +1,17 @@
 # @selvajs/ui
 
+## 4.7.0
+
+### Minor Changes
+
+- 2655d2e: Add grid toggle to viewer tools menu. The grid can now be shown/hidden at runtime via a new `showGridToggle` prop (defaults to `true`). Grid starts hidden by default for a cleaner initial viewport. Hidden viewer helper objects (grid, floor, labels, measurement overlay) are now filtered from the scene object list.
+
+### Patch Changes
+
+- fa64d0e: Scene manager now labels line geometry as "Curve" instead of the internal Three.js class name
+  (`Line2`/`LineSegments2`), which read as a 2D type. The relabel applies to both the object label
+  fallback and the type column.
+
 ## 4.7.0-beta.2
 
 ### Minor Changes
