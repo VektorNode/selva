@@ -20,7 +20,7 @@
 		values: Record<string, unknown>;
 		collapsedGroups: Record<string, boolean>;
 		onToggleGroup: (groupId: string) => void;
-		onValueChange: (paramId: string, value: SupportedTypes) => void;
+		onValueChange: (paramId: string, value: SupportedTypes, forceSolve?: boolean) => void;
 		inputs: SchemaInput[];
 		outputs: DiscoveredOutput[];
 		/** Computed value list options keyed by the target dynamic-value-list input id. */

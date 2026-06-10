@@ -95,8 +95,8 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 	const onParametersAdded = (m: Parameters<typeof coreHandleParametersAdded>[2]) =>
 		coreHandleParametersAdded(state, depsFor(), m);
 
-	function handleValueChange(paramId: string, value: SupportedTypes) {
-		session?.setValue(paramId, value);
+	function handleValueChange(paramId: string, value: SupportedTypes, forceSolve?: boolean) {
+		session?.setValue(paramId, value, forceSolve);
 	}
 
 	function handleCalculate() {

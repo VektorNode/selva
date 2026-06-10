@@ -24,7 +24,7 @@
 		isViewerFullscreen?: boolean;
 		oncalculate?: () => void;
 		values: Record<string, unknown>;
-		onValueChange: (id: string, val: SupportedTypes) => void | Promise<void>;
+		onValueChange: (id: string, val: SupportedTypes, forceSolve?: boolean) => void | Promise<void>;
 		onLoadValues?: (values: Record<string, unknown>) => void | Promise<void>;
 		panelActions?: ActionButton[];
 		showSaveButton?: boolean;

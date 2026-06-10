@@ -286,6 +286,57 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		});
 
 		// ============================================================================
+		// reactivateProject — un-delete (slug-tombstone problem)
+		// ============================================================================
+
+		it('reactivateProject returns null when no tombstone exists for that slug', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const got = await store.reactivateProject(ctx(ownerId), orgId, 'no-such-slug');
+			expect(got).toBeNull();
+		});
+
+		it('reactivateProject clears the tombstone and surfaces it via getProject/getProjectBySlug', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId, { slug: 'revive-me' });
+			await store.createProject(ctx(ownerId), p);
+			await store.deleteProject(ctx(ownerId), p.id);
+			// Before reactivation: invisible
+			expect(await store.getProject(ctx(ownerId), p.id)).toBeNull();
+			expect(await store.getProjectBySlug(ctx(ownerId), orgId, 'revive-me')).toBeNull();
+
+			const revived = await store.reactivateProject(ctx(ownerId), orgId, 'revive-me');
+			expect(revived?.id).toBe(p.id);
+			expect(revived?.slug).toBe('revive-me');
+			// After reactivation: visible again
+			expect(await store.getProject(ctx(ownerId), p.id)).not.toBeNull();
+			expect(await store.getProjectBySlug(ctx(ownerId), orgId, 'revive-me')).not.toBeNull();
+		});
+
+		it('reactivateProject restores the owner project_member row', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId, { slug: 'member-revive' });
+			await store.createProject(ctx(ownerId), p);
+			await store.deleteProject(ctx(ownerId), p.id);
+			await store.reactivateProject(ctx(ownerId), orgId, 'member-revive');
+			const m = await store.getProjectMember(ctx(ownerId), p.id, ownerId);
+			expect(m?.role).toBe('owner');
+		});
+
+		it('createProject after delete+reactivate on the same slug works', async () => {
+			// This covers the bootstrap re-seed scenario: delete project, then createProject
+			// with the same slug succeeds after reactivating the tombstone.
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId, { slug: 'reseed-slug' });
+			await store.createProject(ctx(ownerId), p);
+			await store.deleteProject(ctx(ownerId), p.id);
+			await store.reactivateProject(ctx(ownerId), orgId, 'reseed-slug');
+			// Now it's live; a second delete + fresh createProject should work.
+			await store.deleteProject(ctx(ownerId), p.id);
+			await store.reactivateProject(ctx(ownerId), orgId, 'reseed-slug');
+			expect(await store.getProjectBySlug(ctx(ownerId), orgId, 'reseed-slug')).not.toBeNull();
+		});
+
+		// ============================================================================
 		// Project flags (autoJoinOnUpload)
 		// ============================================================================
 

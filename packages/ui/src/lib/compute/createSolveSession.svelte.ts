@@ -35,8 +35,12 @@ export interface SolveSession {
 	readonly hasPendingChanges: boolean;
 	readonly hasNeverSolved: boolean;
 	readonly isSolving: boolean;
-	/** Records a value change and dispatches a solve unless the schema is manual-solve. */
-	setValue(id: string, value: unknown): void;
+	/**
+	 * Records a value change and dispatches a solve unless the schema is manual-solve.
+	 * `forceSolve` overrides manual mode for system-initiated reconciliation (e.g. a dynamic
+	 * value list pruning a vanished selection), so the output can't lag behind the new value.
+	 */
+	setValue(id: string, value: unknown, forceSolve?: boolean): void;
 	/** Explicit "calculate" — dispatches a solve with the current values. */
 	solve(): void;
 	/** Merges incoming values, then solves (auto) or marks dirty (manual). */
@@ -100,9 +104,16 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			return args.driver.isSolving;
 		},
 
-		setValue(id, value) {
+		setValue(id, value, forceSolve = false) {
 			const { shouldSolve } = applyValueChange(state, id, value, currentSchema?.instanceSolve);
-			if (shouldSolve) dispatch();
+			if (shouldSolve || forceSolve) {
+				// A forced solve reconciles the deferred output; clear the dirty flags it raised.
+				if (forceSolve && !shouldSolve) {
+					state.pendingValues = {};
+					state.hasPendingChanges = false;
+				}
+				dispatch();
+			}
 		},
 
 		solve() {
