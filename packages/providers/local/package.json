@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/local-provider",
-	"version": "0.12.3",
+	"version": "0.12.4",
 	"description": "Local filesystem, JSON, and HMAC implementations of @selvajs/platform interfaces",
 	"license": "MIT",
 	"publishConfig": {
