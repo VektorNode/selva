@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 4.7.1
+
+### Patch Changes
+
+- 2d3e963: Expose `Viewer` and its `ViewerConfig` type from the published public API so external applications can embed the standalone 3D viewer directly (driven by a `meshes` array and an optional `viewerConfig`), without going through `ComputeApp`.
+
 ## 4.7.0
 
 ### Minor Changes
