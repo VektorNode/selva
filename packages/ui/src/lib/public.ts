@@ -22,6 +22,11 @@
 export { default as AppLayout } from './components/compute/AppLayout.svelte';
 export { default as ComputeApp } from './components/compute/ComputeApp.svelte';
 
+// Standalone 3D viewer. Render Grasshopper meshes on their own, outside a
+// ComputeApp host — external apps drive it directly with a `meshes` array and
+// an optional `viewerConfig`.
+export { default as Viewer, type ViewerConfig } from './components/viewer/Viewer.svelte';
+
 // Full-screen states a host app renders
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 
