@@ -31,6 +31,8 @@
 	import SceneManager from './SceneManager.svelte';
 	import MeshMetadataDialog from './MeshMetadataDialog.svelte';
 	import * as Resizable from '$lib/components/primitives/resizable/index.js';
+	import type { Locale } from '$lib/i18n/messages';
+	import { setLocaleContext, getLocaleContext } from '$lib/i18n/localeContext.svelte';
 
 	export interface ViewerConfig {
 		showScreenshotButton?: boolean;
@@ -50,6 +52,13 @@
 		isBlurred?: boolean;
 		drawerOpen?: boolean;
 		viewerConfig?: ViewerConfig;
+		/**
+		 * UI language for the viewer's own chrome (tools menu, panels, dialogs).
+		 * When set, the viewer provides it to its subtree. When omitted, the viewer
+		 * reads the nearest locale context (set by the host app), defaulting to
+		 * English. Does not translate Grasshopper-sourced names/metadata.
+		 */
+		lang?: Locale;
 	}
 
 	const defaultViewerConfig: Required<ViewerConfig> = {
@@ -68,10 +77,22 @@
 		isSolving = false,
 		isBlurred = false,
 		drawerOpen = false,
-		viewerConfig = {}
+		viewerConfig = {},
+		lang
 	}: Props = $props();
 
 	const config = $derived({ ...defaultViewerConfig, ...viewerConfig });
+
+	// Read any host-provided locale before we (maybe) override it for our subtree.
+	const hostLocale = getLocaleContext();
+
+	// Resolution order: explicit `lang` prop → host locale context → default.
+	// Provide the resolved value to our subtree so the scene manager and metadata
+	// dialog read the same locale. The getter is re-read reactively, so switching
+	// the `lang` prop (or the host's locale) updates the chrome live.
+	setLocaleContext(() => lang ?? hostLocale.locale);
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	let canvas: HTMLCanvasElement;
 	let scene: THREE.Scene | null = $state(null);
@@ -91,14 +112,14 @@
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
 
-	const VIEW_PRESETS: { preset: ViewPreset; label: string }[] = [
-		{ preset: 'top', label: 'Top' },
-		{ preset: 'front', label: 'Front' },
-		{ preset: 'right', label: 'Right' },
-		{ preset: 'back', label: 'Back' },
-		{ preset: 'left', label: 'Left' },
-		{ preset: 'bottom', label: 'Bottom' },
-		{ preset: 'iso', label: 'Isometric' }
+	const VIEW_PRESETS: { preset: ViewPreset; label: () => string }[] = [
+		{ preset: 'top', label: () => t.viewTop },
+		{ preset: 'front', label: () => t.viewFront },
+		{ preset: 'right', label: () => t.viewRight },
+		{ preset: 'back', label: () => t.viewBack },
+		{ preset: 'left', label: () => t.viewLeft },
+		{ preset: 'bottom', label: () => t.viewBottom },
+		{ preset: 'iso', label: () => t.viewIso }
 	];
 
 	// Hide button instantly when expanding, show after animation when collapsing
@@ -128,7 +149,7 @@
 					? (metadata: Record<string, string>) => {
 							if (hasUsefulMetadata(metadata)) {
 								selectedMeshMetadata = metadata;
-								selectedMeshName = metadata?.name || 'Object';
+								selectedMeshName = metadata?.name || t.objectFallbackName;
 							}
 						}
 					: undefined
@@ -265,8 +286,8 @@
 						<DropdownMenu.Root>
 							<DropdownMenu.Trigger
 								class="h-10 w-10 shadow-lg hover:shadow-xl flex items-center justify-center rounded-lg border border-border bg-card/90 transition-all hover:bg-card active:scale-95 data-[state=open]:bg-secondary/60"
-								title="Viewer tools"
-								aria-label="Viewer tools"
+								title={t.toolsMenu}
+								aria-label={t.toolsMenu}
 							>
 								<Settings2 class="h-5 w-5 text-card-foreground" />
 							</DropdownMenu.Trigger>
@@ -280,22 +301,22 @@
 									<DropdownMenu.Item class={itemClass} onSelect={toggleProjection}>
 										{#if projection === 'perspective'}
 											<Square class="h-4 w-4" />
-											Switch to 2D
+											{t.switchTo2D}
 										{:else}
 											<Box class="h-4 w-4" />
-											Switch to 3D
+											{t.switchTo3D}
 										{/if}
 									</DropdownMenu.Item>
 
 									<DropdownMenu.Item class={itemClass} onSelect={() => fitToView?.()}>
 										<Frame class="h-4 w-4" />
-										Fit to view
+										{t.fitToView}
 									</DropdownMenu.Item>
 
 									<DropdownMenu.Sub>
 										<DropdownMenu.SubTrigger class="{itemClass} data-[state=open]:bg-muted">
 											<Box class="h-4 w-4" />
-											<span class="flex-1">Views</span>
+											<span class="flex-1">{t.views}</span>
 											<ChevronRight class="h-4 w-4 text-muted-foreground" />
 										</DropdownMenu.SubTrigger>
 										<DropdownMenu.SubContent
@@ -307,7 +328,7 @@
 													class="px-2 py-1.5 text-sm flex cursor-pointer items-center rounded-sm transition-colors outline-none select-none hover:bg-muted focus:bg-muted"
 													onSelect={() => setView(preset)}
 												>
-													{label}
+													{label()}
 												</DropdownMenu.Item>
 											{/each}
 										</DropdownMenu.SubContent>
@@ -319,7 +340,7 @@
 										onSelect={toggleMeasure}
 									>
 										<Ruler class="h-4 w-4" />
-										<span class="flex-1">Measure</span>
+										<span class="flex-1">{t.measure}</span>
 										{#if measureActive}
 											<Check class="h-4 w-4" />
 										{/if}
@@ -332,7 +353,7 @@
 											onSelect={toggleGrid}
 										>
 											<Grid3x3 class="h-4 w-4" />
-											<span class="flex-1">Grid</span>
+											<span class="flex-1">{t.grid}</span>
 											{#if gridVisible}
 												<Check class="h-4 w-4" />
 											{/if}
@@ -351,7 +372,7 @@
 											onSelect={() => (sceneManagerOpen = !sceneManagerOpen)}
 										>
 											<Layers class="h-4 w-4" />
-											<span class="flex-1">Scene manager</span>
+											<span class="flex-1">{t.sceneManager}</span>
 											{#if sceneManagerOpen}
 												<Check class="h-4 w-4" />
 											{/if}
@@ -361,7 +382,7 @@
 									{#if config.showScreenshotButton}
 										<DropdownMenu.Item class={itemClass} onSelect={downloadScreenshot}>
 											<Camera class="h-4 w-4" />
-											Screenshot
+											{t.screenshot}
 										</DropdownMenu.Item>
 									{/if}
 
@@ -369,10 +390,10 @@
 										<DropdownMenu.Item class={itemClass} onSelect={toggleFullscreen}>
 											{#if isFullscreen}
 												<Minimize class="h-4 w-4" />
-												Exit fullscreen
+												{t.exitFullscreen}
 											{:else}
 												<Maximize class="h-4 w-4" />
-												Fullscreen
+												{t.fullscreen}
 											{/if}
 										</DropdownMenu.Item>
 									{/if}

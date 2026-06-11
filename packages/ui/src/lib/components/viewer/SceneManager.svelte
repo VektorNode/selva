@@ -2,6 +2,10 @@
 	import * as THREE from 'three';
 	import { Eye, EyeOff, ChevronRight, Search, X } from '@lucide/svelte';
 	import { SvelteSet, SvelteMap } from 'svelte/reactivity';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	interface Props {
 		scene: THREE.Scene;
@@ -165,11 +169,11 @@
 		<Search class="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
 		<input
 			class="min-w-0 text-xs flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground/50"
-			placeholder="Search objects..."
+			placeholder={t.searchObjects}
 			bind:value={searchQuery}
 		/>
 		{#if searchQuery}
-			<button onclick={() => (searchQuery = '')} aria-label="Clear search">
+			<button onclick={() => (searchQuery = '')} aria-label={t.clearSearch}>
 				<X
 					class="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-muted-foreground"
 				/>
@@ -187,7 +191,7 @@
 				<button
 					class="rounded p-0.5 shrink-0 text-muted-foreground transition-colors hover:text-muted-foreground"
 					onclick={() => toggleLayerCollapsed(layerName)}
-					aria-label={collapsed ? 'Expand layer' : 'Collapse layer'}
+					aria-label={collapsed ? t.expandLayer : t.collapseLayer}
 				>
 					<ChevronRight
 						class="h-3.5 w-3.5 transition-transform duration-150 {collapsed ? '' : 'rotate-90'}"
@@ -197,8 +201,8 @@
 				<button
 					class="rounded p-1 shrink-0 transition-colors hover:bg-muted"
 					onclick={() => toggleLayer(layerName, objects)}
-					title={layerHidden ? 'Show layer' : 'Hide layer'}
-					aria-label={layerHidden ? 'Show layer' : 'Hide layer'}
+					title={layerHidden ? t.showLayer : t.hideLayer}
+					aria-label={layerHidden ? t.showLayer : t.hideLayer}
 				>
 					{#if layerHidden}
 						<EyeOff class="h-3.5 w-3.5 text-muted-foreground/40" />
@@ -249,8 +253,8 @@
 									e.stopPropagation();
 									toggleObject(object);
 								}}
-								title={hidden ? 'Show' : 'Hide'}
-								aria-label={hidden ? 'Show object' : 'Hide object'}
+								title={hidden ? t.showObject : t.hideObject}
+								aria-label={hidden ? t.showObject : t.hideObject}
 							>
 								{#if hidden}
 									<EyeOff class="h-3 w-3 text-muted-foreground/60" />
@@ -284,12 +288,14 @@
 		{#if getSceneObjects().length === 0}
 			<div class="py-12 flex flex-col items-center justify-center text-center">
 				<EyeOff class="mb-2 h-5 w-5 text-muted-foreground/30" />
-				<p class="text-xs text-muted-foreground">No objects</p>
+				<p class="text-xs text-muted-foreground">{t.noObjects}</p>
 			</div>
 		{:else if getFilteredLayerGroups().size === 0}
 			<div class="py-12 flex flex-col items-center justify-center text-center">
 				<Search class="mb-2 h-5 w-5 text-muted-foreground/30" />
-				<p class="text-xs text-muted-foreground">No results for "{searchQuery}"</p>
+				<p class="text-xs text-muted-foreground">
+					{t.noResultsFor.replace('{query}', searchQuery)}
+				</p>
 			</div>
 		{/if}
 	</div>
