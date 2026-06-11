@@ -1,9 +1,14 @@
 <script lang="ts">
+	import { getLocaleContext } from '../../i18n/localeContext.svelte';
+
 	interface Props {
 		show: boolean;
 	}
 
 	let { show }: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 </script>
 
 {#if show}
@@ -19,8 +24,8 @@
 			></div>
 		</div>
 		<div class="leading-tight flex flex-col">
-			<span class="text-sm font-semibold">Solving</span>
-			<span class="text-xs opacity-70">Grasshopper is calculating...</span>
+			<span class="text-sm font-semibold">{t.solving}</span>
+			<span class="text-xs opacity-70">{t.solvingSubtitle}</span>
 		</div>
 	</div>
 {/if}

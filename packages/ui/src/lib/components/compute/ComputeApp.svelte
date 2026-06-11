@@ -16,6 +16,8 @@
 	import AppLayout from './AppLayout.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
+	import type { Locale } from '../../i18n/messages';
+	import { setLocaleContext, getLocaleContext } from '../../i18n/localeContext.svelte';
 
 	import type { Snippet } from 'svelte';
 
@@ -54,6 +56,13 @@
 		externalScopeKey?: string;
 		// Renders client-sourced inputs with presentation === 'slot'; receives { inputId, displayName, slotLabel, value }.
 		clientSlot?: ClientSlot;
+		/**
+		 * UI language for the app's own chrome (viewer, panels, status text).
+		 * Provided once here and read by every descendant via locale context.
+		 * Defaults to English when unset. Does not translate schema-authored labels
+		 * or Grasshopper-sourced names/metadata.
+		 */
+		lang?: Locale;
 	}
 
 	let {
@@ -81,12 +90,20 @@
 		header,
 		onReady,
 		externalScopeKey,
-		clientSlot
+		clientSlot,
+		lang
 	}: Props = $props();
 
 	// Make the host's client-input slot available to InputControl deep in the tree.
 	// svelte-ignore state_referenced_locally
 	setClientSlot(clientSlot);
+
+	// Provide the UI locale once for the whole app subtree (viewer, panels, status
+	// text). Resolution: explicit `lang` → any host-provided locale → English. The
+	// getter is re-read reactively, so switching `lang` updates the chrome live.
+	const hostLocale = getLocaleContext();
+	setLocaleContext(() => lang ?? hostLocale.locale);
+	const t = $derived(getLocaleContext().messages);
 
 	const resolvedScopeKey = $derived(externalScopeKey || definitionKey || schema?.id || '');
 
@@ -182,7 +199,7 @@
 			</div>
 		{:else if !schema}
 			<div class="min-h-100 flex items-center justify-center">
-				<StateDisplay type="loading" size="large" message="Loading schema..." />
+				<StateDisplay type="loading" size="large" message={t.loadingSchema} />
 			</div>
 		{:else}
 			{#key definitionKey}

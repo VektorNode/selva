@@ -52,6 +52,26 @@ export interface ViewerMessages {
 	// Metadata dialog
 	objectFallbackName: string;
 	noMetadata: string;
+
+	// App layout / compute shell
+	loadingSchema: string;
+	parametersTab: string;
+	moreTab: string;
+	expandPanel: string;
+	collapsePanel: string;
+	/** `{side}` is replaced with `panelSideLeft` / `panelSideRight`. */
+	expandSidePanel: string;
+	panelSideLeft: string;
+	panelSideRight: string;
+	tabNoGroups: string;
+
+	// Solve controls
+	solving: string;
+	solvingEllipsis: string;
+	solvingSubtitle: string;
+	pressToCalculate: string;
+	calculate: string;
+	upToDate: string;
 }
 
 const en: ViewerMessages = {
@@ -87,7 +107,24 @@ const en: ViewerMessages = {
 	noResultsFor: 'No results for "{query}"',
 
 	objectFallbackName: 'Object',
-	noMetadata: 'No metadata'
+	noMetadata: 'No metadata',
+
+	loadingSchema: 'Loading schema...',
+	parametersTab: 'Parameters',
+	moreTab: 'More',
+	expandPanel: 'Expand panel',
+	collapsePanel: 'Collapse panel',
+	expandSidePanel: 'Expand {side} panel',
+	panelSideLeft: 'left',
+	panelSideRight: 'right',
+	tabNoGroups: 'This tab has no groups configured.',
+
+	solving: 'Solving',
+	solvingEllipsis: 'Solving...',
+	solvingSubtitle: 'Grasshopper is calculating...',
+	pressToCalculate: 'Press to calculate',
+	calculate: 'Calculate',
+	upToDate: 'Up to date'
 };
 
 const de: ViewerMessages = {
@@ -123,7 +160,24 @@ const de: ViewerMessages = {
 	noResultsFor: 'Keine Ergebnisse für „{query}“',
 
 	objectFallbackName: 'Objekt',
-	noMetadata: 'Keine Metadaten'
+	noMetadata: 'Keine Metadaten',
+
+	loadingSchema: 'Schema wird geladen...',
+	parametersTab: 'Parameter',
+	moreTab: 'Mehr',
+	expandPanel: 'Bereich aufklappen',
+	collapsePanel: 'Bereich zuklappen',
+	expandSidePanel: '{side} Bereich aufklappen',
+	panelSideLeft: 'Linken',
+	panelSideRight: 'Rechten',
+	tabNoGroups: 'Für diesen Tab sind keine Gruppen konfiguriert.',
+
+	solving: 'Berechnung läuft',
+	solvingEllipsis: 'Berechnung läuft...',
+	solvingSubtitle: 'Grasshopper berechnet...',
+	pressToCalculate: 'Zum Berechnen klicken',
+	calculate: 'Berechnen',
+	upToDate: 'Aktuell'
 };
 
 export const VIEWER_MESSAGES: Record<Locale, ViewerMessages> = { en, de };

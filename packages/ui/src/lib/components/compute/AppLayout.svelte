@@ -11,6 +11,10 @@
 	import * as Resizable from '$lib/components/primitives/resizable';
 	import { Button } from '$lib';
 	import ParameterPresetManager from './ParameterPresetManager.svelte';
+	import { getLocaleContext } from '../../i18n/localeContext.svelte';
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	const COLLAPSED_WIDTH = 48;
 
@@ -74,7 +78,7 @@
 	let isMobile = $state(false);
 	let drawerOpen = $state(false);
 
-	const activeLeftTabLabel = $derived(leftTabs[0]?.label ?? 'Parameters');
+	const activeLeftTabLabel = $derived(leftTabs[0]?.label ?? t.parametersTab);
 
 	$effect(() => {
 		const mqMobile = window.matchMedia('(max-width: 639px)');
@@ -200,7 +204,7 @@
 					onclick={() => (drawerOpen = !drawerOpen)}
 					ontouchstart={onDrawerTouchStart}
 					ontouchend={onDrawerTouchEnd}
-					aria-label={drawerOpen ? 'Collapse panel' : 'Expand panel'}
+					aria-label={drawerOpen ? t.collapsePanel : t.expandPanel}
 					aria-expanded={drawerOpen}
 				>
 					<div class="drawer-pill"></div>
@@ -227,7 +231,7 @@
 							<div class="my-4 gap-2 flex items-center">
 								<div class="h-px flex-1 bg-border"></div>
 								<span class="text-xs font-medium px-1 text-muted-foreground">
-									{rightTabs[0]?.label ?? 'More'}
+									{rightTabs[0]?.label ?? t.moreTab}
 								</span>
 								<div class="h-px flex-1 bg-border"></div>
 							</div>
@@ -257,7 +261,7 @@
 						<div class="my-4 gap-2 flex items-center">
 							<div class="h-px flex-1 bg-border"></div>
 							<span class="text-xs font-medium px-1 text-muted-foreground">
-								{rightTabs[0]?.label ?? 'More'}
+								{rightTabs[0]?.label ?? t.moreTab}
 							</span>
 							<div class="h-px flex-1 bg-border"></div>
 						</div>
