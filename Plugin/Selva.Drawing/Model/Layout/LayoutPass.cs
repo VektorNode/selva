@@ -35,8 +35,9 @@ public static class LayoutPass
 
 		// The page-level layout context is the page rect minus margins, in Y-up world coords
 		// with origin (0,0). Layout primitives that care about position (e.g. a Stack that
-		// wants to be top-aligned within the page) anchor against this rect.
-		var available = page.Margins.Equals(default) || PaperIsZero(page.Size)
+		// wants to be top-aligned within the page) anchor against this rect. Zero margins are
+		// a valid setting (full-bleed page) — only a zero-size paper means "no page bounds".
+		var available = PaperIsZero(page.Size)
 			? BoundingBox.Empty
 			: new BoundingBox(
 				page.Margins.Left,

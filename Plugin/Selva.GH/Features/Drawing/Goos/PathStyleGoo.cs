@@ -1,7 +1,6 @@
 using System;
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
-using Newtonsoft.Json;
 using Selva.Drawing.Model.Style;
 
 namespace Selva.GH.Features.Drawing.Goos;
@@ -18,13 +17,9 @@ public class PathStyleGoo : IGH_Goo
     public string TypeName => "PathStyle";
     public string TypeDescription => "Path style bundle (stroke + fill)";
 
-    public IGH_Goo Duplicate()
-    {
-        if (Value == null) return new PathStyleGoo();
-        var json = JsonConvert.SerializeObject(Value);
-        var copy = JsonConvert.DeserializeObject<PathStyle>(json);
-        return new PathStyleGoo(copy ?? Value);
-    }
+    // PathStyle is immutable (init-only properties), so duplicates can safely share the
+    // same instance. The old JSON round-trip here silently zeroed Color (private ctor).
+    public IGH_Goo Duplicate() => new PathStyleGoo(Value);
 
     public IGH_GooProxy EmitProxy() => null;
 
@@ -66,14 +61,14 @@ public class PathStyleGoo : IGH_Goo
 
     public bool Write(GH_IWriter writer)
     {
-        writer.SetString("PathStyleJson", JsonConvert.SerializeObject(Value));
+        writer.SetString("PathStyleJson", StyleJson.Serialize(Value));
         return true;
     }
 
     public bool Read(GH_IReader reader)
     {
         if (!reader.ItemExists("PathStyleJson")) return false;
-        Value = JsonConvert.DeserializeObject<PathStyle>(reader.GetString("PathStyleJson"));
+        Value = StyleJson.Deserialize<PathStyle>(reader.GetString("PathStyleJson"));
         return true;
     }
 

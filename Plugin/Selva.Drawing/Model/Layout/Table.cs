@@ -43,10 +43,14 @@ public sealed class Table : LayoutElement
 	public Stroke Border { get; init; } = new Stroke { Width = 0.25 };
 	public TableBorderStyle BorderStyle { get; init; } = TableBorderStyle.All;
 	public Fill HeaderBackground { get; init; }
-	// Per-row body fills, cycled. Body row k uses RowStripeFills[k % Count]. A null entry in
-	// the list = no fill for that slot (so [null, gray] = unstriped/gray alternation). Null
-	// or empty list = no row fills at all.
+	// Per-row body fills, cycled. Body row k uses RowStripeFills[(StripeOffset + k) % Count].
+	// A null entry in the list = no fill for that slot (so [null, gray] = unstriped/gray
+	// alternation). Null or empty list = no row fills at all.
 	public IReadOnlyList<Fill> RowStripeFills { get; init; }
+
+	// Stripe-cycle phase. Carried into the overflow clone when the table splits across pages
+	// so alternating stripes continue seamlessly instead of restarting at slot 0.
+	public int StripeOffset { get; init; }
 	public TextStyle DefaultCellStyle { get; init; } = new TextStyle();
 	// Explicit header text style. When null, header cells inherit DefaultCellStyle with
 	// Weight bumped to Bold (see ResolveCellContent).
@@ -118,7 +122,7 @@ public sealed class Table : LayoutElement
 			var dataStart = hasHeader ? 1 : 0;
 			for (var k = 0; k < Rows.Count; k++)
 			{
-				var fill = RowStripeFills[k % RowStripeFills.Count];
+				var fill = RowStripeFills[(StripeOffset + k) % RowStripeFills.Count];
 				if (fill == null) continue;
 				var stripeCell = grid.ComputeCellRect(gridLayout,
 					new GridCell { Row = dataStart + k, Column = 0, ColumnSpan = columnCount },
@@ -210,21 +214,39 @@ public sealed class Table : LayoutElement
 		if (fitsRowCount == 0)
 			return SplitResult.NothingFits(this);
 
+		return SplitAfterRow(fitsRowCount, headerHeight + consumed, context);
+	}
+
+	// Nothing fits on a fresh page (header + first row taller than the budget): force out
+	// the first row anyway so pagination keeps making progress instead of dumping the whole
+	// remaining table onto one page.
+	public override SplitResult ForcePlace(double availableHeight, LayoutContext context)
+	{
+		if (Rows == null || Rows.Count <= 1)
+			return base.ForcePlace(availableHeight, context);
+		var (headerHeight, dataRowHeights) = MeasureRowHeights(context);
+		return SplitAfterRow(1, headerHeight + dataRowHeights[0], context);
+	}
+
+	private SplitResult SplitAfterRow(int fitsRowCount, double fallbackHeight, LayoutContext context)
+	{
 		var fitsRows = new List<IReadOnlyList<TableCell>>(fitsRowCount);
 		for (var i = 0; i < fitsRowCount; i++) fitsRows.Add(Rows[i]);
 		var overflowRows = new List<IReadOnlyList<TableCell>>(Rows.Count - fitsRowCount);
 		for (var i = fitsRowCount; i < Rows.Count; i++) overflowRows.Add(Rows[i]);
 
-		var fitsTable = CloneWithRows(fitsRows, Origin);
-		var overflowTable = CloneWithRows(overflowRows, Point2D.Zero);
+		var stripeCount = RowStripeFills?.Count ?? 0;
+		var fitsTable = CloneWithRows(fitsRows, Origin, StripeOffset);
+		var overflowTable = CloneWithRows(overflowRows, Point2D.Zero,
+			stripeCount > 0 ? (StripeOffset + fitsRowCount) % stripeCount : 0);
 
 		var fitsResolved = fitsTable.Resolve(context);
 		var fitsBounds = fitsResolved?.ComputeBounds() ?? BoundingBox.Empty;
-		var fitsHeight = fitsBounds.IsEmpty ? (headerHeight + consumed) : fitsBounds.Height;
+		var fitsHeight = fitsBounds.IsEmpty ? fallbackHeight : fitsBounds.Height;
 		return SplitResult.Partial(fitsResolved, overflowTable, fitsHeight);
 	}
 
-	private Table CloneWithRows(IReadOnlyList<IReadOnlyList<TableCell>> rows, Point2D origin)
+	private Table CloneWithRows(IReadOnlyList<IReadOnlyList<TableCell>> rows, Point2D origin, int stripeOffset)
 	{
 		return new Table
 		{
@@ -241,6 +263,7 @@ public sealed class Table : LayoutElement
 			BorderStyle = BorderStyle,
 			HeaderBackground = HeaderBackground,
 			RowStripeFills = RowStripeFills,
+			StripeOffset = stripeOffset,
 			DefaultCellStyle = DefaultCellStyle,
 			HeaderStyle = HeaderStyle,
 			Origin = origin,

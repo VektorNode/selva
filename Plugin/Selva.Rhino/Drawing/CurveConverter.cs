@@ -57,26 +57,32 @@ public static class CurveConverter
     {
         var arc = arcCurve.Arc;
 
+        // Arc.AngleDomain.Length is always positive in RhinoCommon — the arc's world
+        // orientation lives in its plane: normal toward +Z sweeps CCW in world XY, toward
+        // −Z sweeps CW (typical for trims, fillets, and reversed curves). Ignoring the
+        // normal made every arc bow to the CCW side regardless of its real direction.
+        // World-CCW maps to SVG sweep=1 once the root Y-flip is applied; SweepClockwise
+        // mirrors SVG's sweep flag.
+        var sweepClockwise = arc.Plane.Normal.Z >= 0;
+
         // Full circle: emit two half-arcs (a single SVG-style A-segment can't cover 360°).
+        // The sweep flag carries the curve's authored direction so winding stays faithful
+        // for NonZero fills (hole circles are typically wound opposite to the outer).
         if (Math.Abs(arc.AngleDomain.Length - 2 * Math.PI) < 1e-10)
         {
             var c = arc.Center;
             var r = arc.Radius;
             return new Path.Builder()
                 .MoveTo(c.X + r, c.Y)
-                .ArcTo(new Point2D(c.X - r, c.Y), r, r, 0, largeArc: true, sweepClockwise: false)
-                .ArcTo(new Point2D(c.X + r, c.Y), r, r, 0, largeArc: true, sweepClockwise: false)
+                .ArcTo(new Point2D(c.X - r, c.Y), r, r, 0, largeArc: true, sweepClockwise: sweepClockwise)
+                .ArcTo(new Point2D(c.X + r, c.Y), r, r, 0, largeArc: true, sweepClockwise: sweepClockwise)
                 .Close()
                 .Build();
         }
 
         var start = arc.PointAt(arc.AngleDomain.T0);
         var end = arc.PointAt(arc.AngleDomain.T1);
-        var sweep = arc.AngleDomain.Length;
-        var largeArc = Math.Abs(sweep) > Math.PI;
-        // Rhino CCW (positive sweep) maps to SVG sweep=1 once the root Y-flip is applied —
-        // PathSegment.ArcTo.SweepClockwise mirrors SVG's sweep flag, so true == sweep > 0.
-        var sweepClockwise = sweep > 0;
+        var largeArc = arc.AngleDomain.Length > Math.PI;
 
         return new Path.Builder()
             .MoveTo(start.X, start.Y)

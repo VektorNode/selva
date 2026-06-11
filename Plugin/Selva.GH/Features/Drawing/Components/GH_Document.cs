@@ -27,6 +27,10 @@ public class GH_Document : GH_Component
     private List<DrawElement> _previewContents;
     private BoundingBox _clippingBox = BoundingBox.Empty;
 
+    // Stamped once per component instance so identical inputs produce identical Documents
+    // across recomputes — DateTime.UtcNow per solve made every recompute a "new" file.
+    private readonly DateTime _createdAt = DateTime.UtcNow;
+
     private const double TileGapMm = 20.0;
 
     public GH_Document()
@@ -140,7 +144,7 @@ public class GH_Document : GH_Component
                 Keywords = keywordList,
                 Creator = "Selva",
                 Producer = "Selva.Drawing",
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = _createdAt,
             },
         };
 
@@ -158,14 +162,17 @@ public class GH_Document : GH_Component
 
     private void BuildPreview(IReadOnlyList<Page> pages)
     {
-        _previewPages = new List<Page>(pages);
-        _previewContents = new List<DrawElement>(pages.Count);
+        // Accumulate across solve instances (a list of titles makes one document per
+        // instance) — assignment here would leave only the last document's pages visible.
+        _previewPages ??= new List<Page>();
+        _previewContents ??= new List<DrawElement>();
         foreach (var p in pages)
         {
+            _previewPages.Add(p);
             var resolved = LayoutPass.ResolvePage(p);
             _previewContents.Add(resolved?.Content);
         }
-        _clippingBox = ComputeClippingBox(pages);
+        _clippingBox = ComputeClippingBox(_previewPages);
     }
 
     // Surface what the pagination pass actually reserved so the user has a visible signal
@@ -189,7 +196,7 @@ public class GH_Document : GH_Component
     }
 
     // The chrome's Origin is overwritten by AnchorChrome — surface this instead of letting
-    // users wonder why their carefully positioned TitleBlock snapped somewhere else.
+    // users wonder why their carefully positioned header block snapped somewhere else.
     private void WarnIfChromeHasOrigin(DrawElement element, string slot)
     {
         if (element == null) return;
@@ -265,7 +272,9 @@ public class GH_Document : GH_Component
         }
     }
 
-    public override void DrawViewportMeshes(IGH_PreviewArgs args) => DrawViewportWires(args);
+    // Everything (wires, text, shaded fills) is drawn in the wires pass — repeating it in
+    // the mesh pass doubled preview cost and composited transparent fills twice.
+    public override void DrawViewportMeshes(IGH_PreviewArgs args) { }
 
     private static BoundingBox ComputeClippingBox(IReadOnlyList<Page> pages)
     {

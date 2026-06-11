@@ -55,8 +55,8 @@ public static class DocumentLayoutPass
 				Margins = margins,
 				Title = layout.Title,
 				SectionTitle = string.Empty,
-				ResolvedHeader = defaultHeader,
-				ResolvedFooter = defaultFooter,
+				RawHeader = layout.Header,
+				RawFooter = layout.Footer,
 				HeaderAlign = layout.HeaderAlign,
 				FooterAlign = layout.FooterAlign,
 				Layout = body,
@@ -112,8 +112,8 @@ public static class DocumentLayoutPass
 						Margins = margins,
 						Title = layout.Title,
 						SectionTitle = section.Title ?? string.Empty,
-						ResolvedHeader = sectionHeader,
-						ResolvedFooter = sectionFooter,
+						RawHeader = section.Header ?? layout.Header,
+						RawFooter = section.Footer ?? layout.Footer,
 						HeaderAlign = headerAlign,
 						FooterAlign = footerAlign,
 						Layout = body,
@@ -135,8 +135,8 @@ public static class DocumentLayoutPass
 				Margins = margins,
 				Title = layout.Title,
 				SectionTitle = string.Empty,
-				ResolvedHeader = defaultHeader,
-				ResolvedFooter = defaultFooter,
+				RawHeader = layout.Header,
+				RawFooter = layout.Footer,
 				HeaderAlign = layout.HeaderAlign,
 				FooterAlign = layout.FooterAlign,
 				Layout = PaginationPass.PaginateBody(null, paper, margins, 0, 0),
@@ -153,10 +153,15 @@ public static class DocumentLayoutPass
 			var rp = raw[i];
 			var resolver = new TokenResolver(i + 1, totalPages, rp.Title, rp.SectionTitle, layout.Tokens, now);
 
-			var pageHeader = rp.ResolvedHeader != null ? resolver.ResolveTree(rp.ResolvedHeader) : null;
-			var pageFooter = rp.ResolvedFooter != null ? resolver.ResolveTree(rp.ResolvedFooter) : null;
+			// Chrome resolves per page against its band rect (so star grids fill the band width
+			// and TextFlows wrap to it), then this page's tokens substitute into the result.
+			// Band heights were measured from the unsubstituted template above — close enough
+			// for typical {page}-style tokens.
+			var pageHeader = PaginationPass.ResolveChromeForPage(rp.RawHeader, rp.Layout.HeaderRect, resolver);
+			var pageFooter = PaginationPass.ResolveChromeForPage(rp.RawFooter, rp.Layout.FooterRect, resolver);
 
-			var rawContent = rp.Layout.RawContents[rp.ContentIndex];
+			// Body text gets the same substitution so tokens work outside chrome too.
+			var rawContent = resolver.ResolveTree(rp.Layout.RawContents[rp.ContentIndex]);
 			var anchoredContent = PaginationPass.AnchorTopLeft(rawContent, rp.Layout.ContentRect);
 			var anchoredHeader = PaginationPass.AnchorChrome(pageHeader, rp.Layout.HeaderRect, rp.HeaderAlign);
 			var anchoredFooter = PaginationPass.AnchorChrome(pageFooter, rp.Layout.FooterRect, rp.FooterAlign);
@@ -179,8 +184,8 @@ public static class DocumentLayoutPass
 		public Margins Margins;
 		public string Title;
 		public string SectionTitle;
-		public DrawElement ResolvedHeader;
-		public DrawElement ResolvedFooter;
+		public DrawElement RawHeader;
+		public DrawElement RawFooter;
 		public HorizontalAlign HeaderAlign;
 		public HorizontalAlign FooterAlign;
 		public SectionLayout Layout;

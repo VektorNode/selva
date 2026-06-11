@@ -83,20 +83,26 @@ public sealed class DrawingView : LayoutElement
 				effectiveScale = Math.Min(innerWidth / geomBounds.Width, innerHeight / geomBounds.Height);
 			}
 		}
-		else if (Scale <= 0 && !geomBounds.IsEmpty && context.HasFiniteAvailableWidth && context.HasFiniteAvailableHeight)
+		else if (Scale <= 0 && !geomBounds.IsEmpty && (context.HasFiniteAvailableWidth || context.HasFiniteAvailableHeight))
 		{
 			// Auto-fit to whatever container we're being resolved into. This is the
-			// "drop me on a Page and figure it out" path.
-			var availW = Math.Max(0, context.AvailableWidth - Padding.Left - Padding.Right);
-			var availH = Math.Max(0, context.AvailableHeight - Padding.Top - Padding.Bottom);
+			// "drop me on a Page and figure it out" path. Containers may constrain only
+			// one axis (a vertical Stack provides width but unbounded height) — fit to
+			// whichever axes are real instead of inventing a budget for the other.
+			var availW = context.HasFiniteAvailableWidth
+				? Math.Max(0, context.AvailableWidth - Padding.Left - Padding.Right)
+				: 0;
+			var availH = context.HasFiniteAvailableHeight
+				? Math.Max(0, context.AvailableHeight - Padding.Top - Padding.Bottom)
+				: 0;
 			if (availW > 0 && availH > 0)
-			{
 				effectiveScale = Math.Min(availW / geomBounds.Width, availH / geomBounds.Height);
-			}
+			else if (availW > 0)
+				effectiveScale = availW / geomBounds.Width;
+			else if (availH > 0)
+				effectiveScale = availH / geomBounds.Height;
 			else
-			{
 				effectiveScale = 1.0;
-			}
 			innerWidth = geomBounds.Width * effectiveScale;
 			innerHeight = geomBounds.Height * effectiveScale;
 		}

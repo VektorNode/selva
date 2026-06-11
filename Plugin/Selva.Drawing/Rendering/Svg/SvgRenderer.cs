@@ -30,6 +30,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	private Dictionary<string, SymbolDefinition> _symbolDefs;
 	// Hatch patterns collected per page: key = stable pattern id string, value = Fill snapshot.
 	private Dictionary<string, Fill> _hatchPatternDefs;
+	private int _hatchClipCounter;
 
 	public SvgRenderer() : this(new SvgRenderOptions()) { }
 	public SvgRenderer(SvgRenderOptions options)
@@ -177,7 +178,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 				bounds = bounds.Union(TransformBox(tb.Box, t));
 				break;
 			case DimensionElement d:
-				bounds = bounds.Union(TransformBox(MeasureDimension(d), t));
+				bounds = bounds.Union(TransformBox(DimensionMeasure.Measure(d), t));
 				break;
 			case LeaderElement le:
 				bounds = bounds.Union(TransformBox(le.ComputeBounds(), t));
@@ -208,108 +209,6 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		var p3 = t.Apply(new Point2D(b.MaxX, b.MaxY));
 		var p4 = t.Apply(new Point2D(b.MinX, b.MaxY));
 		return BoundingBox.FromPoint(p1).Union(p2).Union(p3).Union(p4);
-	}
-
-	private static BoundingBox MeasureDimension(DimensionElement d)
-	{
-		var style = d.Style ?? new DimensionStyle();
-		switch (d.Kind)
-		{
-			case DimensionKind.Linear: return MeasureLinear(d, style);
-			case DimensionKind.Angular: return MeasureAngular(d, style);
-			default: return d.ComputeBounds();
-		}
-	}
-
-	private static BoundingBox MeasureLinear(DimensionElement element, DimensionStyle style)
-	{
-		var ax = element.A.X; var ay = element.A.Y;
-		var bx = element.B.X; var by = element.B.Y;
-		var offset = element.Offset;
-		var dx = bx - ax; var dy = by - ay;
-		var len = Math.Sqrt(dx * dx + dy * dy);
-		if (len < 1e-9) return BoundingBox.Empty;
-
-		var ux = dx / len; var uy = dy / len;
-		var nx = -uy; var ny = ux;
-		var ts = style.TextSize;
-		var extOver = ts * style.ExtensionOvershootFactor;
-		var sign = offset >= 0 ? 1 : -1;
-
-		var extEndAx = ax + nx * (offset + extOver * sign);
-		var extEndAy = ay + ny * (offset + extOver * sign);
-		var extEndBx = bx + nx * (offset + extOver * sign);
-		var extEndBy = by + ny * (offset + extOver * sign);
-		var dimAx = ax + nx * offset;
-		var dimAy = ay + ny * offset;
-		var dimBx = bx + nx * offset;
-		var dimBy = by + ny * offset;
-
-		var b = BoundingBox.FromPoint(new Point2D(ax, ay));
-		b = b.Union(new Point2D(bx, by));
-		b = b.Union(new Point2D(extEndAx, extEndAy));
-		b = b.Union(new Point2D(extEndBx, extEndBy));
-		b = b.Union(new Point2D(dimAx, dimAy));
-		b = b.Union(new Point2D(dimBx, dimBy));
-		return b;
-	}
-
-	private static BoundingBox MeasureAngular(DimensionElement element, DimensionStyle style)
-	{
-		var vx = element.Vertex.X; var vy = element.Vertex.Y;
-		var ax = element.A.X; var ay = element.A.Y;
-		var bx = element.B.X; var by = element.B.Y;
-
-		var dax = ax - vx; var day = ay - vy;
-		var dbx = bx - vx; var dby = by - vy;
-		var lenA = Math.Sqrt(dax * dax + day * day);
-		var lenB = Math.Sqrt(dbx * dbx + dby * dby);
-		if (lenA < 1e-9 || lenB < 1e-9) return BoundingBox.Empty;
-
-		var radius = Math.Min(lenA, lenB) * 0.3;
-		var uax = dax / lenA; var uay = day / lenA;
-		var ubx = dbx / lenB; var uby = dby / lenB;
-
-		var dot = uax * ubx + uay * uby;
-		var cross = uax * uby - uay * ubx;
-		var theta = Math.Atan2(cross, dot);
-		if (Math.Abs(theta) < 1e-6) return BoundingBox.Empty;
-
-		var arcStartX = vx + uax * radius;
-		var arcStartY = vy + uay * radius;
-		var arcEndX = vx + ubx * radius;
-		var arcEndY = vy + uby * radius;
-
-		var bisX = uax + ubx; var bisY = uay + uby;
-		var bisLen = Math.Sqrt(bisX * bisX + bisY * bisY);
-		var sweepCcw = theta > 0;
-		if (bisLen < 1e-9)
-		{
-			bisX = sweepCcw ? -uay : uay;
-			bisY = sweepCcw ? uax : -uax;
-			bisLen = 1.0;
-		}
-		bisX /= bisLen; bisY /= bisLen;
-
-		var ts = style.TextSize;
-		var textRadius = radius + ts * style.TextLiftFactor;
-		var midX = vx + bisX * textRadius;
-		var midY = vy + bisY * textRadius;
-
-		var b = BoundingBox.FromPoint(new Point2D(vx, vy));
-		b = b.Union(new Point2D(arcStartX, arcStartY));
-		b = b.Union(new Point2D(arcEndX, arcEndY));
-		b = b.Union(new Point2D(midX, midY));
-
-		// Sample 7 points along the arc — matches the legacy 8-step sampler (i=1..7).
-		const int samples = 8;
-		for (var i = 1; i < samples; i++)
-		{
-			var u = i / (double)samples;
-			var ang = Math.Atan2(uay, uax) + theta * u;
-			b = b.Union(new Point2D(vx + Math.Cos(ang) * radius, vy + Math.Sin(ang) * radius));
-		}
-		return b;
 	}
 
 	private static bool ContainsDimensions(DrawElement element)
@@ -654,32 +553,62 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			+ ") scale(1 -1) rotate(" + F(-element.RotationDegrees) + ")";
 
 		if (hasBackground)
-		{
 			AppendTextBackgroundRect(element, style, transform);
-			_sb.Append("  <text x='0' y='0'");
-			AppendIdClass(element.Id, element.CssClass);
-			_sb.Append(" font-size='").Append(F(style.FontSize)).Append('\'');
-			_sb.Append(" fill='").Append(ColorValue(style.Color)).Append('\'');
-			_sb.Append(" text-anchor='").Append(AnchorToSvg(style.HorizontalAnchor)).Append('\'');
-			_sb.Append(" dominant-baseline='middle'");
-			_sb.Append(" transform='").Append(transform).Append('\'');
-			AppendData(element.Metadata);
-			_sb.Append('>').Append(Escape(element.Text ?? string.Empty)).Append("</text>\n");
-		}
-		else
-		{
-			_sb.Append("  <text x='0' y='0'");
-			AppendIdClass(element.Id, element.CssClass);
-			_sb.Append(" font-size='").Append(F(style.FontSize)).Append('\'');
-			_sb.Append(" fill='").Append(ColorValue(style.Color)).Append('\'');
-			_sb.Append(" text-anchor='").Append(AnchorToSvg(style.HorizontalAnchor)).Append('\'');
-			_sb.Append(" dominant-baseline='middle'");
-			_sb.Append(" transform='").Append(transform).Append('\'');
-			AppendData(element.Metadata);
-			_sb.Append('>').Append(Escape(element.Text ?? string.Empty)).Append("</text>\n");
-		}
+
+		// Baseline placement via an explicit y offset (not dominant-baseline, whose support
+		// varies across SVG viewers) so style.VerticalAnchor renders the same as in the PDF
+		// exporter and the Rhino viewport.
+		_sb.Append("  <text x='0' y='").Append(F(BaselineShift(style))).Append('\'');
+		AppendIdClass(element.Id, element.CssClass);
+		_sb.Append(" font-size='").Append(F(style.FontSize)).Append('\'');
+		AppendFontAttributes(style);
+		_sb.Append(" fill='").Append(ColorValue(style.Color)).Append('\'');
+		_sb.Append(" text-anchor='").Append(AnchorToSvg(style.HorizontalAnchor)).Append('\'');
+		_sb.Append(" transform='").Append(transform).Append('\'');
+		AppendData(element.Metadata);
+		_sb.Append('>').Append(Escape(element.Text ?? string.Empty)).Append("</text>\n");
 
 		if (hasLink) _sb.Append("  </a>\n");
+	}
+
+	// Baseline y-offset in the text's local (post-counter-flip, y-down) frame for the
+	// style's vertical anchor. Matches PdfRenderer.DrawText — FontMetrics.Descent is
+	// negative, so Middle resolves to (ascent − |descent|) / 2 below the anchor point.
+	private static double BaselineShift(TextStyle style)
+	{
+		if (style.VerticalAnchor == VerticalAnchor.Baseline) return 0.0;
+		var m = FontMetrics.Measure(string.Empty, style);
+		switch (style.VerticalAnchor)
+		{
+			case VerticalAnchor.Top: return m.Ascent;
+			case VerticalAnchor.Middle: return (m.Ascent + m.Descent) / 2.0;
+			case VerticalAnchor.Bottom: return m.Descent;
+			default: return 0.0;
+		}
+	}
+
+	// Per-text font attributes, emitted only when they differ from the inherited root
+	// font-family (weight/style are never set on the root). Without these every text
+	// rendered in the root stack while the PDF honoured the style — bold and custom
+	// families silently disappeared from SVG output.
+	private void AppendFontAttributes(TextStyle style)
+	{
+		var rootFamily = _options.FontFamily ?? SvgRenderOptions.DefaultFontFamily;
+		var family = style.FontFamily?.Trim();
+		if (!string.IsNullOrEmpty(family)
+			&& !string.Equals(family, rootFamily.Trim(), StringComparison.OrdinalIgnoreCase)
+			&& !string.Equals(family, FirstFamily(rootFamily), StringComparison.OrdinalIgnoreCase))
+		{
+			_sb.Append(" font-family='").Append(Escape(family).Replace("\"", "&quot;")).Append('\'');
+		}
+		if (style.Weight == FontWeight.Bold) _sb.Append(" font-weight='bold'");
+		if (style.Style == FontStyle.Italic) _sb.Append(" font-style='italic'");
+	}
+
+	private static string FirstFamily(string stack)
+	{
+		var comma = stack.IndexOf(',');
+		return (comma < 0 ? stack : stack.Substring(0, comma)).Trim().Trim('"', '\'');
 	}
 
 	// Draws the background rectangle behind a TextElement under the same transform the
@@ -705,9 +634,10 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			default: x = 0; break;
 		}
 		var height = ascent + descent;
-		// dominant-baseline=middle puts y=0 at the line's visual middle in local
-		// (post-counter-flip) coords; the rect's top sits half the line height above it.
-		var y = -height / 2.0;
+		// The rect's top sits one (inflated) ascent above wherever the baseline lands for
+		// the style's vertical anchor, so the background stays glued to the glyphs in all
+		// four anchor modes.
+		var y = BaselineShift(style) - ascent;
 
 		var p = element.BackgroundPadding;
 		if (p > 0)
@@ -801,9 +731,134 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 	public void Visit(HatchElement element)
 	{
-		// Phase 2 stub. Phase 7+ adds <pattern>/Form XObject emission. The visitor must
-		// still accept the type so Accept(visitor) doesn't throw.
-		_ = element;
+		if (element == null || element.Boundary.IsEmpty) return;
+		var bounds = element.Boundary.ComputeBounds();
+		if (bounds.IsEmpty) return;
+
+		var line = element.LineStyle ?? new Stroke { Width = 0.18 };
+		var spacing = element.Spacing > 0 ? element.Spacing : 2.0;
+		var clipRule = element.FillRule == FillRule.NonZero ? "nonzero" : "evenodd";
+
+		// Mirrors PdfRenderer.Visit(HatchElement): background fill, pattern strokes clipped
+		// to the boundary, then the boundary outline so sparse patterns stay legible.
+		if (element.BackgroundColor.A > 0)
+		{
+			_sb.Append("  <path d='");
+			SvgPathBuilder.AppendTo(_sb, element.Boundary);
+			_sb.Append("' fill='").Append(ColorValue(element.BackgroundColor))
+				.Append("' fill-rule='").Append(clipRule).Append("' stroke='none' />\n");
+		}
+
+		if (element.Pattern == HatchPatternKind.Solid)
+		{
+			_sb.Append("  <path d='");
+			SvgPathBuilder.AppendTo(_sb, element.Boundary);
+			_sb.Append("' fill='").Append(ColorValue(line.Color)).Append('\'');
+			if (line.Opacity < 1.0) _sb.Append(" fill-opacity='").Append(F(line.Opacity)).Append('\'');
+			_sb.Append(" fill-rule='").Append(clipRule).Append("' stroke='none' />\n");
+		}
+		else
+		{
+			var clipId = $"selva-hatchclip-{_hatchClipCounter++}";
+			_sb.Append("  <clipPath id='").Append(clipId).Append("'><path d='");
+			SvgPathBuilder.AppendTo(_sb, element.Boundary);
+			_sb.Append("' clip-rule='").Append(clipRule).Append("' /></clipPath>\n");
+			_sb.Append("  <g clip-path='url(#").Append(clipId).Append(")'>\n");
+			switch (element.Pattern)
+			{
+				case HatchPatternKind.Lines:
+					AppendHatchLines(bounds, element.AngleDegrees, spacing, line);
+					break;
+				case HatchPatternKind.CrossHatch:
+					AppendHatchLines(bounds, element.AngleDegrees, spacing, line);
+					AppendHatchLines(bounds, element.AngleDegrees + 90.0, spacing, line);
+					break;
+				case HatchPatternKind.Dots:
+					AppendHatchDots(bounds, spacing, line);
+					break;
+			}
+			_sb.Append("  </g>\n");
+		}
+
+		_sb.Append("  <path d='");
+		SvgPathBuilder.AppendTo(_sb, element.Boundary);
+		_sb.Append("' fill='none'");
+		AppendHatchStrokeAttributes(line);
+		_sb.Append(" />\n");
+	}
+
+	// Same sweep math as PdfRenderer.DrawHatchLines so the two outputs tile identically:
+	// project the bbox corners onto the sweep axis, snap the first line to a spacing
+	// multiple, and overshoot the line ends so clipped diagonals reach the corners.
+	private void AppendHatchLines(BoundingBox bounds, double angleDegrees, double spacing, Stroke line)
+	{
+		if (spacing <= 0) return;
+		var theta = angleDegrees * Math.PI / 180.0;
+		var ux = Math.Cos(theta);
+		var uy = Math.Sin(theta);
+		var px = -uy;
+		var py = ux;
+
+		var corners = new[]
+		{
+			(bounds.MinX, bounds.MinY),
+			(bounds.MaxX, bounds.MinY),
+			(bounds.MaxX, bounds.MaxY),
+			(bounds.MinX, bounds.MaxY),
+		};
+		double tMin = double.PositiveInfinity, tMax = double.NegativeInfinity;
+		double sMin = double.PositiveInfinity, sMax = double.NegativeInfinity;
+		foreach (var (x, y) in corners)
+		{
+			var t = x * px + y * py;
+			var s = x * ux + y * uy;
+			if (t < tMin) tMin = t;
+			if (t > tMax) tMax = t;
+			if (s < sMin) sMin = s;
+			if (s > sMax) sMax = s;
+		}
+
+		var first = Math.Floor(tMin / spacing) * spacing;
+		var s0 = sMin - spacing;
+		var s1 = sMax + spacing;
+
+		for (var t = first; t <= tMax + 1e-9; t += spacing)
+		{
+			var x0 = ux * s0 + px * t;
+			var y0 = uy * s0 + py * t;
+			var x1 = ux * s1 + px * t;
+			var y1 = uy * s1 + py * t;
+			_sb.Append("    <line x1='").Append(F(x0)).Append("' y1='").Append(F(y0))
+				.Append("' x2='").Append(F(x1)).Append("' y2='").Append(F(y1)).Append('\'');
+			AppendHatchStrokeAttributes(line);
+			_sb.Append(" />\n");
+		}
+	}
+
+	private void AppendHatchDots(BoundingBox bounds, double spacing, Stroke line)
+	{
+		if (spacing <= 0) return;
+		// Radius matches PdfRenderer.DrawHatchDotsClipped so dot weight is identical.
+		var radius = Math.Max(line.Width * 0.5, 0.15);
+		var x0 = Math.Floor(bounds.MinX / spacing) * spacing;
+		var y0 = Math.Floor(bounds.MinY / spacing) * spacing;
+		for (var y = y0; y <= bounds.MaxY + 1e-9; y += spacing)
+		{
+			for (var x = x0; x <= bounds.MaxX + 1e-9; x += spacing)
+			{
+				_sb.Append("    <circle cx='").Append(F(x)).Append("' cy='").Append(F(y))
+					.Append("' r='").Append(F(radius)).Append("' fill='").Append(ColorValue(line.Color)).Append('\'');
+				if (line.Opacity < 1.0) _sb.Append(" fill-opacity='").Append(F(line.Opacity)).Append('\'');
+				_sb.Append(" />\n");
+			}
+		}
+	}
+
+	private void AppendHatchStrokeAttributes(Stroke line)
+	{
+		_sb.Append(" stroke='").Append(ColorValue(line.Color)).Append('\'');
+		_sb.Append(" stroke-width='").Append(F(line.Width)).Append('\'');
+		if (line.Opacity < 1.0) _sb.Append(" stroke-opacity='").Append(F(line.Opacity)).Append('\'');
 	}
 
 	public void Visit(SymbolElement element)

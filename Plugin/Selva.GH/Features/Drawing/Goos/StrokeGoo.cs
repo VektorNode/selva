@@ -1,7 +1,6 @@
 using System;
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
-using Newtonsoft.Json;
 using Selva.Drawing.Model.Style;
 
 namespace Selva.GH.Features.Drawing.Goos;
@@ -18,13 +17,9 @@ public class StrokeGoo : IGH_Goo
     public string TypeName => "Stroke";
     public string TypeDescription => "Stroke style (color, width, dash, caps)";
 
-    public IGH_Goo Duplicate()
-    {
-        if (Value == null) return new StrokeGoo();
-        var json = JsonConvert.SerializeObject(Value);
-        var copy = JsonConvert.DeserializeObject<Stroke>(json);
-        return new StrokeGoo(copy ?? Value);
-    }
+    // Stroke is immutable (init-only properties), so duplicates can safely share the
+    // same instance. The old JSON round-trip here silently zeroed Color (private ctor).
+    public IGH_Goo Duplicate() => new StrokeGoo(Value);
 
     public IGH_GooProxy EmitProxy() => null;
 
@@ -54,14 +49,14 @@ public class StrokeGoo : IGH_Goo
 
     public bool Write(GH_IWriter writer)
     {
-        writer.SetString("StrokeJson", JsonConvert.SerializeObject(Value));
+        writer.SetString("StrokeJson", StyleJson.Serialize(Value));
         return true;
     }
 
     public bool Read(GH_IReader reader)
     {
         if (!reader.ItemExists("StrokeJson")) return false;
-        Value = JsonConvert.DeserializeObject<Stroke>(reader.GetString("StrokeJson"));
+        Value = StyleJson.Deserialize<Stroke>(reader.GetString("StrokeJson"));
         return true;
     }
 

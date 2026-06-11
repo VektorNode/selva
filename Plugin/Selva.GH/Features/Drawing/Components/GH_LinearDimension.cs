@@ -26,11 +26,11 @@ public class GH_LinearDimension : GH_Component
     {
         pManager.AddPointParameter("Point A", "A", "Start point", GH_ParamAccess.item);
         pManager.AddPointParameter("Point B", "B", "End point", GH_ParamAccess.item);
-        pManager.AddNumberParameter("Offset", "O", "Perpendicular offset distance (positive = left of A→B)", GH_ParamAccess.item, 5.0);
+        pManager.AddNumberParameter("Offset", "O", "Perpendicular offset distance in mm (paper space); positive = left of A→B", GH_ParamAccess.item, 5.0);
         pManager.AddTextParameter("Label", "L", "Override label (default: distance)", GH_ParamAccess.item, "");
-        pManager.AddNumberParameter("Text Size", "TS", "Text height in drawing units", GH_ParamAccess.item, 2.5);
+        pManager.AddNumberParameter("Text Size", "TS", "Text height in mm (paper space)", GH_ParamAccess.item, 2.5);
         pManager.AddColourParameter("Color", "C", "Dimension color", GH_ParamAccess.item, Color.Black);
-        pManager.AddNumberParameter("Stroke Width", "SW", "Line stroke width", GH_ParamAccess.item, 0.5);
+        pManager.AddNumberParameter("Stroke Width", "SW", "Line stroke width in mm (paper space)", GH_ParamAccess.item, 0.5);
         pManager.AddIntegerParameter("Tick Style", "TK", "Tick mark style at line endpoints", GH_ParamAccess.item, 0);
         pManager.AddNumberParameter("Tick Size", "TZ", "Tick/arrow size in drawing units (mm), independent of Text Size", GH_ParamAccess.item, 4.0);
         pManager.AddIntegerParameter("Text Placement", "TP", "Where the label sits relative to the dimension line", GH_ParamAccess.item, 0);

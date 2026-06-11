@@ -29,7 +29,10 @@ internal sealed class PdfFontEmbedder : IFontResolver
 	private static readonly object InstallLock = new object();
 	private static PdfFontEmbedder _installed;
 
-	private readonly Dictionary<string, byte[]> _faceData = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+	// Concurrent: the embedder is a process-wide singleton and GetFont can be hit from
+	// parallel renders.
+	private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> _faceData =
+		new System.Collections.Concurrent.ConcurrentDictionary<string, byte[]>(StringComparer.Ordinal);
 	// When another IFontResolver was already in place (e.g. Rhino installs one that maps
 	// unknown families to AcadEref.ttf), we wrap it: Inter requests go to us, everything
 	// else delegates so the host's font setup keeps working.

@@ -75,10 +75,16 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
         DA.GetData(4, ref embedFonts);
         DA.GetData(5, ref subFolder);
 
-        if (!TryBuildDocument(inputs, name, out var doc, out var error))
+        if (!RenderDocumentInput.TryBuildDocument(inputs, name, out var doc, out var wasLoose, out var error))
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, error);
             return;
+        }
+
+        if (wasLoose && !autoFit)
+        {
+            var fitWarning = RenderDocumentInput.LoosePageFitWarning(doc);
+            if (fitWarning != null) AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, fitWarning);
         }
 
         string backgroundColor = null;
@@ -122,70 +128,4 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
         }
     }
 
-    private static bool TryBuildDocument(List<IGH_Goo> inputs, string title, out Document doc, out string error)
-    {
-        // A single Document goes through unchanged. Anything else is treated as loose
-        // DrawElements (curves, surfaces, dimensions, text, DrawingViews, ...) and wrapped
-        // in a single-page document.
-        if (inputs.Count == 1 && Unwrap(inputs[0]) is Document existing)
-        {
-            doc = existing;
-            error = null;
-            return true;
-        }
-
-        var elements = new List<DrawElement>(inputs.Count);
-        foreach (var item in inputs)
-        {
-            switch (Unwrap(item))
-            {
-                case null:
-                    continue;
-                case DrawElement element:
-                    elements.Add(element);
-                    break;
-                case Document _:
-                    doc = null;
-                    error = "Mixing a Document with loose drawing elements is not supported. Wire either a single Document or one or more drawing elements.";
-                    return false;
-                default:
-                    doc = null;
-                    error = $"Unsupported input type: {item?.GetType().Name ?? "null"}";
-                    return false;
-            }
-        }
-
-        if (elements.Count == 0)
-        {
-            doc = null;
-            error = "No content provided";
-            return false;
-        }
-
-        DrawElement content = elements.Count == 1
-            ? elements[0]
-            : new GroupElement { Children = elements };
-
-        doc = new Document
-        {
-            Metadata = new DocumentMetadata { Title = title },
-            Pages = new[]
-            {
-                new Page
-                {
-                    Title = title,
-                    Content = content,
-                },
-            },
-        };
-        error = null;
-        return true;
-    }
-
-    private static object Unwrap(IGH_Goo goo) => goo switch
-    {
-        null => null,
-        GH_ObjectWrapper wrap => wrap.Value,
-        _ => goo,
-    };
 }

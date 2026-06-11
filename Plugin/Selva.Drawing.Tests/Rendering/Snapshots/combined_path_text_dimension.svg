@@ -17,6 +17,6 @@
     <line stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' vector-effect='non-scaling-stroke' marker-start='url(#selva-dim-arrow-4)' marker-end='url(#selva-dim-arrow-4)' x1='0' y1='-8' x2='50' y2='-8' />
     <text x='0' y='0' font-size='2.5' fill='rgb(0,0,0)' text-anchor='middle' dominant-baseline='middle' transform='translate(25 -9.5) scale(1 -1) rotate(-0)'>50</text>
   </g>
-  <text x='0' y='0' font-size='3' fill='rgb(0,0,0)' text-anchor='middle' dominant-baseline='middle' transform='translate(25 12.5) scale(1 -1) rotate(-0)'>Plate</text>
+  <text x='0' y='0' font-size='3' fill='rgb(0,0,0)' text-anchor='middle' transform='translate(25 12.5) scale(1 -1) rotate(-0)'>Plate</text>
 </g>
 </svg>

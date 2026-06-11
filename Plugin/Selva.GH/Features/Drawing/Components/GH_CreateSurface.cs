@@ -43,11 +43,9 @@ public class GH_CreateSurface : GH_Component
         _preview.Render(args);
     }
 
-    public override void DrawViewportMeshes(IGH_PreviewArgs args)
-    {
-        if (Locked || Hidden) return;
-        _preview.Render(args);
-    }
+    // The wires pass already renders everything (including shaded fills) — repeating it in
+    // the mesh pass doubled preview cost and composited transparent fills twice.
+    public override void DrawViewportMeshes(IGH_PreviewArgs args) { }
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -67,7 +65,7 @@ public class GH_CreateSurface : GH_Component
     {
         Brep brep = null;
         PathStyle style = null;
-        var tolerance = 0.01;
+        var tolerance = DrawingTolerance.FromActiveDoc();
 
         if (!DA.GetData(0, ref brep) || brep == null) return;
         DA.GetData(1, ref style);

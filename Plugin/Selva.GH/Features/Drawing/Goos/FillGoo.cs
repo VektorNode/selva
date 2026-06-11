@@ -1,7 +1,6 @@
 using System;
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
-using Newtonsoft.Json;
 using Selva.Drawing.Model.Style;
 
 namespace Selva.GH.Features.Drawing.Goos;
@@ -18,13 +17,9 @@ public class FillGoo : IGH_Goo
     public string TypeName => "Fill";
     public string TypeDescription => "Fill style (color, opacity, hatch pattern)";
 
-    public IGH_Goo Duplicate()
-    {
-        if (Value == null) return new FillGoo();
-        var json = JsonConvert.SerializeObject(Value);
-        var copy = JsonConvert.DeserializeObject<Fill>(json);
-        return new FillGoo(copy ?? Value);
-    }
+    // Fill is immutable (init-only properties), so duplicates can safely share the
+    // same instance. The old JSON round-trip here silently zeroed Color (private ctor).
+    public IGH_Goo Duplicate() => new FillGoo(Value);
 
     public IGH_GooProxy EmitProxy() => null;
 
@@ -54,14 +49,14 @@ public class FillGoo : IGH_Goo
 
     public bool Write(GH_IWriter writer)
     {
-        writer.SetString("FillJson", JsonConvert.SerializeObject(Value));
+        writer.SetString("FillJson", StyleJson.Serialize(Value));
         return true;
     }
 
     public bool Read(GH_IReader reader)
     {
         if (!reader.ItemExists("FillJson")) return false;
-        Value = JsonConvert.DeserializeObject<Fill>(reader.GetString("FillJson"));
+        Value = StyleJson.Deserialize<Fill>(reader.GetString("FillJson"));
         return true;
     }
 

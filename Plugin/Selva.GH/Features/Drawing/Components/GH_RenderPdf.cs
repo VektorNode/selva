@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
-using Selva.Drawing.Model;
+using Grasshopper.Kernel.Types;
 using Selva.Drawing.Rendering.Pdf;
 using Selva.GH.Features.FileIO;
 using Selva.GH.Features.FileIO.Goos;
@@ -11,15 +12,19 @@ using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Renders a Document to a PDF and emits a FileDataGoo so the result flows into the same
-// download / context-bake pipeline as the other file producers (GeometryToFile, CreateFile).
-// The PDF bytes are base64-encoded into FileData.Data; the Selva UI decodes and serves
-// the download. PdfSharpCore handles multi-page natively, so an N-page Document → N-page PDF.
+// Renders to PDF and emits a FileDataGoo so the result flows into the same download /
+// context-bake pipeline as the other file producers (GeometryToFile, CreateFile). Accepts
+// either a Document (multi-page) or loose drawing elements (wrapped in a single page) —
+// the same inputs as Render SVG, so switching formats doesn't require restructuring the
+// graph. The PDF bytes are base64-encoded into FileData.Data; the Selva UI decodes and
+// serves the download. PdfSharpCore handles multi-page natively.
 public class GH_RenderPdf : GH_Component, ISelvaFileOutput
 {
     public GH_RenderPdf()
         : base("Render PDF", "PDF",
-            "Renders a drawing document to a PDF file (downloadable via the Selva UI)",
+            "Renders drawing content to a PDF file (downloadable via the Selva UI). " +
+            "Input a Document for paginated multi-page output, or wire DrawingViews / loose " +
+            "elements directly for a single-page PDF.",
             "Selva", "Drawing")
     {
     }
@@ -35,7 +40,7 @@ public class GH_RenderPdf : GH_Component, ISelvaFileOutput
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddGenericParameter("Document", "D", "Drawing document", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Drawing", "D", "A Document (paginated) or one or more DrawElements / DrawingViews to wrap into a single-page PDF", GH_ParamAccess.list);
         pManager.AddTextParameter("Name", "N", "Output file name without extension", GH_ParamAccess.item, "drawing");
         pManager.AddBooleanParameter("Auto Fit", "AF", "Auto-fit page to content with a 10mm margin. When false, the document's page size is used.", GH_ParamAccess.item, false);
         pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item, "");
@@ -52,15 +57,27 @@ public class GH_RenderPdf : GH_Component, ISelvaFileOutput
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        Document doc = null;
+        var inputs = new List<IGH_Goo>();
         var name = "drawing";
         var autoFit = false;
         var subFolder = "";
 
-        if (!DA.GetData(0, ref doc) || doc == null) return;
+        if (!DA.GetDataList(0, inputs) || inputs.Count == 0) return;
         DA.GetData(1, ref name);
         DA.GetData(2, ref autoFit);
         DA.GetData(3, ref subFolder);
+
+        if (!RenderDocumentInput.TryBuildDocument(inputs, name, out var doc, out var wasLoose, out var error))
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, error);
+            return;
+        }
+
+        if (wasLoose && !autoFit)
+        {
+            var fitWarning = RenderDocumentInput.LoosePageFitWarning(doc);
+            if (fitWarning != null) AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, fitWarning);
+        }
 
         try
         {

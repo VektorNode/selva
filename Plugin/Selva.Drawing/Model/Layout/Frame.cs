@@ -33,16 +33,26 @@ public sealed class Frame : LayoutElement
 		{
 			innerWidth = Math.Max(0, Size.Value.Width - Padding.Left - Padding.Right);
 			innerHeight = Math.Max(0, Size.Value.Height - Padding.Top - Padding.Bottom);
+			if (innerWidth <= 0 || innerHeight <= 0) return new LayoutContext(BoundingBox.Empty);
 		}
 		else
 		{
-			var pw = parent.AvailableWidth;
-			var ph = parent.AvailableHeight;
-			innerWidth = double.IsInfinity(pw) ? 0 : Math.Max(0, pw - Padding.Left - Padding.Right);
-			innerHeight = double.IsInfinity(ph) ? 0 : Math.Max(0, ph - Padding.Top - Padding.Bottom);
+			// The parent may constrain only one axis (a vertical Stack provides width but an
+			// unbounded height). Forward each axis independently; a degenerate (≤0) inner
+			// size falls back to unconstrained on that axis so children use natural sizing.
+			innerWidth = InnerSpan(parent.AvailableWidth, Padding.Left + Padding.Right);
+			innerHeight = InnerSpan(parent.AvailableHeight, Padding.Top + Padding.Bottom);
+			if (double.IsPositiveInfinity(innerWidth) && double.IsPositiveInfinity(innerHeight))
+				return new LayoutContext(BoundingBox.Empty);
 		}
-		if (innerWidth <= 0 || innerHeight <= 0) return new LayoutContext(BoundingBox.Empty);
 		return new LayoutContext(new BoundingBox(0, 0, innerWidth, innerHeight));
+	}
+
+	private static double InnerSpan(double available, double padding)
+	{
+		if (double.IsInfinity(available)) return double.PositiveInfinity;
+		var inner = available - padding;
+		return inner > 0 ? inner : double.PositiveInfinity;
 	}
 
 	public override DrawElement Resolve(LayoutContext context)
@@ -58,9 +68,11 @@ public sealed class Frame : LayoutElement
 			? nested.Resolve(childContext)
 			: Child;
 
-		var childBounds = Child is LayoutElement nestedForBounds
-			? nestedForBounds.ComputeBounds(childContext)
-			: resolvedChild?.ComputeBounds() ?? BoundingBox.Empty;
+		// Measure the subtree that will actually render. Measuring the unresolved child
+		// instead would use its context-blind natural bounds, which diverge from the
+		// constrained resolve above (auto-fit views, star grids) — the frame then sizes
+		// around a different box than the one it draws.
+		var childBounds = resolvedChild?.ComputeBounds() ?? BoundingBox.Empty;
 
 		double width, height;
 		if (Size.HasValue)
