@@ -1,6 +1,10 @@
 <script lang="ts">
 	import type { TabConfig } from '@selvajs/schemas';
 	import Icon from '@iconify/svelte';
+	import { getLocaleContext } from '../../i18n/localeContext.svelte';
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	interface Props {
 		side: 'left' | 'right';
@@ -29,7 +33,10 @@
 	style="--collapsed-w: {collapsedWidth}px;"
 	role="button"
 	tabindex="0"
-	aria-label="Expand {side} panel"
+	aria-label={t.expandSidePanel.replace(
+		'{side}',
+		side === 'left' ? t.panelSideLeft : t.panelSideRight
+	)}
 	onclick={onExpand}
 	onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onExpand()}
 >

@@ -22,6 +22,24 @@
 export { default as AppLayout } from './components/compute/AppLayout.svelte';
 export { default as ComputeApp } from './components/compute/ComputeApp.svelte';
 
+// Standalone 3D viewer. Render Grasshopper meshes on their own, outside a
+// ComputeApp host — external apps drive it directly with a `meshes` array and
+// an optional `viewerConfig`. Pass `lang` to localize its chrome, or provide a
+// locale context (setLocaleContext) at the host root to drive it app-wide.
+export { default as Viewer, type ViewerConfig } from './components/viewer/Viewer.svelte';
+
+// Viewer localization. The library renders English + German chrome; switch at
+// runtime by passing `lang` to <Viewer> or by setting a reactive locale context
+// once at the host root (e.g. feed in an app-wide Paraglide locale). Does not
+// translate Grasshopper-sourced names/metadata.
+export type { Locale, ViewerMessages } from './i18n/messages';
+export { VIEWER_MESSAGES, DEFAULT_LOCALE, messagesFor } from './i18n/messages';
+export {
+	setLocaleContext,
+	getLocaleContext,
+	type LocaleContext
+} from './i18n/localeContext.svelte';
+
 // Full-screen states a host app renders
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 

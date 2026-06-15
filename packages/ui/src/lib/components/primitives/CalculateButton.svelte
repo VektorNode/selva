@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { Button } from './button';
 	import { Zap, Check, Loader, Play } from '@lucide/svelte';
+	import { getLocaleContext } from '../../i18n/localeContext.svelte';
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	interface Props {
 		hasPendingChanges: boolean;
@@ -25,16 +29,16 @@
 	>
 		{#if isSolving}
 			<Loader class="h-4 w-4 animate-spin" />
-			Solving...
+			{t.solvingEllipsis}
 		{:else if hasNeverSolved}
 			<Play class="h-4 w-4" />
-			Press to calculate
+			{t.pressToCalculate}
 		{:else if hasPendingChanges}
 			<Zap class="h-4 w-4" />
-			Calculate
+			{t.calculate}
 		{:else}
 			<Check class="h-4 w-4" />
-			Up to date
+			{t.upToDate}
 		{/if}
 	</Button>
 </div>

@@ -128,8 +128,16 @@ public class GH_LayoutOverride : GH_Component
         PaperSize? paperOverride = null;
         if (paperIndex >= 0)
         {
+            if (paperIndex > 8)
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    $"Paper Size {paperIndex} is out of range (0=A0 … 8=Tabloid) — falling back to A4");
             var p = ResolvePaper(paperIndex);
             paperOverride = landscape ? p.Landscape() : p;
+        }
+        else if (landscape)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                "Landscape is ignored while Paper Size is Inherit — set a paper size to apply it");
         }
 
         var ov = new LayoutOverride

@@ -42,6 +42,12 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	private List<(BoundingBox WorldBoundsMm, string Url)> _pendingLinks;
 	private List<PdfPage> _renderedPages;
 
+	// Accumulated group transforms during the visitor pass, mirroring _gfx's matrix stack.
+	// Needed because hyperlink rects are recorded in element-local coordinates but the
+	// /Link annotation wants page space — without this, links inside any transformed group
+	// (page tiles, scaled drawing views) landed at the wrong spot.
+	private Transform _modelTransform = Transform.Identity;
+
 	// Phase 10a: SymbolDefinition.Id → cached Form XObject. Built once per page in a
 	// pre-pass; Visit(SymbolElement) draws the form via _gfx.DrawImage(form,...) which
 	// causes PdfSharpCore to share the underlying Form XObject across instances.
@@ -302,7 +308,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 				bounds = bounds.Union(TransformBox(tb.Box, t));
 				break;
 			case DimensionElement d:
-				bounds = bounds.Union(TransformBox(d.ComputeBounds(), t));
+				bounds = bounds.Union(TransformBox(DimensionMeasure.Measure(d), t));
 				break;
 			case LeaderElement le:
 				bounds = bounds.Union(TransformBox(le.ComputeBounds(), t));
@@ -442,15 +448,23 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var hasTransform = !element.Transform.IsIdentity;
 
 		XGraphicsState state = default;
+		var previousModelTransform = _modelTransform;
 		if (hasTransform)
 		{
 			state = _gfx.Save();
 			_gfx.MultiplyTransform(ToXMatrix(element.Transform), XMatrixOrder.Prepend);
+			// Mirror the graphics transform on the model side — hyperlink rects are captured
+			// in element-local coords and must be mapped to page space when annotated.
+			_modelTransform = element.Transform.Then(_modelTransform);
 		}
 
 		foreach (var child in element.Children) child?.Accept(this);
 
-		if (hasTransform) _gfx.Restore(state);
+		if (hasTransform)
+		{
+			_gfx.Restore(state);
+			_modelTransform = previousModelTransform;
+		}
 	}
 
 	public void Visit(PathElement element)
@@ -489,8 +503,11 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		else if (brush != null)
 		{
 			// Fills (with or without stroke) need a single XGraphicsPath so multi-subpath
-			// shapes with holes resolve correctly under the path's fill rule.
+			// shapes with holes resolve correctly under the path's fill rule. The default
+			// FillMode is Alternate (even-odd); NonZero must switch to Winding or holes
+			// appear/disappear relative to the SVG output's fill-rule.
 			var xpath = PdfPathBuilder.Build(element.Path);
+			if (element.Fill.Rule == FillRule.NonZero) xpath.FillMode = XFillMode.Winding;
 			if (pen != null) _gfx.DrawPath(pen, brush, xpath);
 			else _gfx.DrawPath(brush, xpath);
 		}
@@ -519,7 +536,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			style,
 			element.RotationDegrees,
 			horizontalAnchor: style.HorizontalAnchor,
-			verticalAnchor: VerticalAnchor.Middle); // SvgRenderer uses dominant-baseline=middle
+			verticalAnchor: style.VerticalAnchor);
 
 		// Phase 9: capture clickable hyperlink rect. We use ComputeBounds() over MeasuredBounds
 		// when available — falls back to FontMetrics-based bounds. Rotated text gets an
@@ -527,7 +544,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		// (which only carry a rect, not a quadpoints array).
 		if (_pendingLinks != null && !string.IsNullOrEmpty(element.Hyperlink))
 		{
-			var bounds = element.ComputeBounds();
+			var bounds = TransformBox(element.ComputeBounds(), _modelTransform);
 			if (!bounds.IsEmpty) _pendingLinks.Add((bounds, element.Hyperlink));
 		}
 	}
@@ -544,7 +561,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			style,
 			rotationDegrees: 0,
 			horizontalAnchor: TextAnchor.Left,
-			verticalAnchor: VerticalAnchor.Middle);
+			verticalAnchor: style.VerticalAnchor);
 	}
 
 	public void Visit(ImageElement element)
@@ -588,13 +605,14 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		if (!string.IsNullOrEmpty(element.Text))
 		{
 			var anchor = element.Points[element.Points.Count - 1];
+			var textStyle = element.TextStyle ?? new TextStyle();
 			DrawText(
 				element.Text,
 				anchor,
-				element.TextStyle ?? new TextStyle(),
+				textStyle,
 				rotationDegrees: 0,
-				horizontalAnchor: (element.TextStyle ?? new TextStyle()).HorizontalAnchor,
-				verticalAnchor: VerticalAnchor.Middle);
+				horizontalAnchor: textStyle.HorizontalAnchor,
+				verticalAnchor: textStyle.VerticalAnchor);
 		}
 	}
 
@@ -1023,8 +1041,16 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			case TextAnchor.Right: xOffset = -width; break;
 		}
 
-		// Mirror DrawText's verticalAnchor=Middle baseline placement.
-		var yBaseline = (ascent + descent) / 2.0;
+		// Mirror DrawText's baseline placement for the style's vertical anchor (raw metrics,
+		// before line-height inflation — same values DrawText reads).
+		double yBaseline;
+		switch (style.VerticalAnchor)
+		{
+			case VerticalAnchor.Top: yBaseline = measured.Ascent; break;
+			case VerticalAnchor.Middle: yBaseline = (measured.Ascent + measured.Descent) / 2.0; break;
+			case VerticalAnchor.Bottom: yBaseline = measured.Descent; break;
+			default: yBaseline = 0; break;
+		}
 		var yTop = yBaseline - ascent;
 		var height = ascent + descent;
 
@@ -1327,12 +1353,15 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		}
 		pen.MiterLimit = stroke.MiterLimit;
 
-		if (stroke.DashArray != null && stroke.DashArray.Count > 0)
+		if (stroke.DashArray != null && stroke.DashArray.Count > 0 && stroke.Width > 0)
 		{
+			// XPen.DashPattern entries are multiples of the pen width (GDI+ semantics);
+			// the model's DashArray is in mm to match SVG's stroke-dasharray. Divide by
+			// the width so a "5 2" pattern dashes identically in both outputs.
 			var pattern = new double[stroke.DashArray.Count];
-			for (var i = 0; i < pattern.Length; i++) pattern[i] = stroke.DashArray[i];
+			for (var i = 0; i < pattern.Length; i++) pattern[i] = stroke.DashArray[i] / stroke.Width;
 			pen.DashPattern = pattern;
-			pen.DashOffset = stroke.DashOffset;
+			pen.DashOffset = stroke.DashOffset / stroke.Width;
 		}
 		return pen;
 	}

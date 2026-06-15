@@ -81,11 +81,12 @@ public class TableSplitTests
 	public void Pagination_force_places_table_when_header_taller_than_page()
 	{
 		// Header alone is bigger than the whole page. Forward-progress guarantee force-places
-		// the whole table on a single page (overflowing the paper) rather than looping.
+		// header + first row (oversize) per page rather than dumping the whole table on one
+		// page — so two data rows still produce two pages.
 		var table = MakeTable(header: 15.0, rowHeights: new[] { 4.0, 4.0 });
 		var paper = new PaperSize(20, 10, "T20x10");
 		var pages = PaginationPass.Paginate(table, paper, Margins.Zero);
-		Assert.Single(pages);
+		Assert.Equal(2, pages.Count);
 	}
 
 	[Fact]

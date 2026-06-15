@@ -116,7 +116,8 @@ public class GH_Page : GH_Component
             WarnOnDirectMultiElementLayout(
                 children,
                 overrides?.PaperSize ?? PaperSize.A4,
-                overrides?.Margins ?? Margins.Uniform(10));
+                overrides?.Margins ?? Margins.Uniform(10),
+                paperKnown: overrides?.PaperSize != null);
         }
 
         var section = new Section
@@ -143,7 +144,11 @@ public class GH_Page : GH_Component
             EmitChromeReservationRemark(overrides);
         }
 
-        BuildPreview(section);
+        // When the section feeds a Document, the Document previews the real pages (global
+        // numbering, document chrome) at the same world origin — drawing both superimposes
+        // two conflicting previews. Only preview dangling Page components.
+        if (Params.Output[0].Recipients.Count == 0)
+            BuildPreview(section);
 
         DA.SetData(0, section);
     }
@@ -191,7 +196,7 @@ public class GH_Page : GH_Component
     // their world coordinates and is treated as one atomic block by pagination. That silently
     // hides content when children overlap or fall outside the margin box. Surface those
     // cases as warnings so the user knows to put a Stack/Grid in front.
-    private void WarnOnDirectMultiElementLayout(List<DrawElement> children, PaperSize paper, Margins margins)
+    private void WarnOnDirectMultiElementLayout(List<DrawElement> children, PaperSize paper, Margins margins, bool paperKnown)
     {
         var marginBox = new ModelBoundingBox(
             margins.Left,
@@ -226,8 +231,14 @@ public class GH_Page : GH_Component
         }
         if (outside > 0)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                $"{outside} element(s) extend outside the page's margin box and will be clipped. Use a Stack to flow content across pages.");
+            // Without a section override the real paper comes from the Document downstream —
+            // a hard warning against assumed A4 would regularly be wrong in both directions.
+            if (paperKnown)
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    $"{outside} element(s) extend outside the page's margin box and will be clipped. Use a Stack to flow content across pages.");
+            else
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                    $"{outside} element(s) extend outside an assumed A4 margin box — actual paper size is set by the Document downstream.");
         }
     }
 
@@ -260,14 +271,18 @@ public class GH_Page : GH_Component
         };
         var pages = DocumentLayoutPass.Paginate(layout);
 
-        _previewPages = new List<Page>(pages);
-        _previewContents = new List<DrawElement>(pages.Count);
+        // Accumulate across solve instances (list-matched inputs produce one section per
+        // instance) — assignment here would leave only the last instance's pages visible.
+        // ClearData resets the lists before the next solve.
+        _previewPages ??= new List<Page>();
+        _previewContents ??= new List<DrawElement>();
         foreach (var p in pages)
         {
+            _previewPages.Add(p);
             var resolved = LayoutPass.ResolvePage(p);
             _previewContents.Add(resolved?.Content);
         }
-        _clippingBox = ComputeClippingBox(pages);
+        _clippingBox = ComputeClippingBox(_previewPages);
     }
 
     public override void DrawViewportWires(IGH_PreviewArgs args)
@@ -332,7 +347,9 @@ public class GH_Page : GH_Component
         }
     }
 
-    public override void DrawViewportMeshes(IGH_PreviewArgs args) => DrawViewportWires(args);
+    // Everything (wires, text, shaded fills) is drawn in the wires pass — repeating it in
+    // the mesh pass doubled preview cost and composited transparent fills twice.
+    public override void DrawViewportMeshes(IGH_PreviewArgs args) { }
 
     private static BoundingBox ComputeClippingBox(IReadOnlyList<Page> pages)
     {

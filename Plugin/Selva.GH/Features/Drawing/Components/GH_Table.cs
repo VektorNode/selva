@@ -140,11 +140,27 @@ public class GH_Table : GH_Component
 
         var resolvedBorderStyle = (TableBorderStyle)Math.Max(0, Math.Min(4, borderStyleIndex));
 
+        IReadOnlyList<GridLength> columnWidths = null;
+        if (!string.IsNullOrWhiteSpace(columnsDsl))
+        {
+            try
+            {
+                columnWidths = TrackDsl.Parse(columnsDsl, "Column Widths");
+            }
+            catch (FormatException ex)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
+                return;
+            }
+        }
+
+        WarnOnCountMismatch(headers, bodyRows, columnWidths, alignTokens);
+
         var table = new Table
         {
             Header = headerRow,
             Rows = bodyRows,
-            ColumnWidths = string.IsNullOrWhiteSpace(columnsDsl) ? null : ParseTracks(columnsDsl),
+            ColumnWidths = columnWidths,
             ColumnAlignments = columnAlignments,
             RowHeight = rowHeight > 0 ? (double?)rowHeight : null,
             Border = border ?? new Stroke { Width = 0.25 },
@@ -156,6 +172,30 @@ public class GH_Table : GH_Component
         };
 
         DA.SetData(0, table);
+    }
+
+    // Mismatched counts render with blank/ignored cells, which reads as "the table is
+    // broken" with no hint — surface a remark so users see why columns look off.
+    private void WarnOnCountMismatch(
+        List<string> headers,
+        List<IReadOnlyList<TableCell>> bodyRows,
+        IReadOnlyList<GridLength> columnWidths,
+        List<string> alignTokens)
+    {
+        var bodyColumns = 0;
+        foreach (var row in bodyRows)
+            if (row.Count > bodyColumns) bodyColumns = row.Count;
+        if (bodyColumns == 0) return;
+
+        if (headers.Count > 0 && headers.Count != bodyColumns)
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                $"Headers has {headers.Count} item(s) but the widest body row has {bodyColumns} — extra columns render blank");
+        if (columnWidths != null && columnWidths.Count != bodyColumns)
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                $"Column Widths declares {columnWidths.Count} track(s) but the widest body row has {bodyColumns} column(s)");
+        if (alignTokens.Count > 0 && alignTokens.Count < bodyColumns)
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                $"Column Align has {alignTokens.Count} item(s) for {bodyColumns} column(s) — remaining columns fall back to left");
     }
 
     private static Fill ToFill(System.Drawing.Color c) => new Fill
@@ -183,31 +223,4 @@ public class GH_Table : GH_Component
         }
     }
 
-    private static IReadOnlyList<GridLength> ParseTracks(string dsl)
-    {
-        // Reuses the same DSL as GH_Grid. Kept inline to avoid taking a public dependency.
-        var list = new List<GridLength>();
-        if (string.IsNullOrWhiteSpace(dsl)) return list;
-        foreach (var raw in dsl.Split(new[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries))
-        {
-            var t = raw.Trim();
-            if (t.Equals("auto", StringComparison.OrdinalIgnoreCase))
-            {
-                list.Add(GridLength.Auto);
-            }
-            else if (t.EndsWith("*"))
-            {
-                var w = t.Substring(0, t.Length - 1);
-                var weight = w.Length == 0 ? 1.0
-                    : double.Parse(w, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
-                list.Add(GridLength.Star(weight));
-            }
-            else
-            {
-                var mm = double.Parse(t, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
-                list.Add(GridLength.Absolute(mm));
-            }
-        }
-        return list;
-    }
 }

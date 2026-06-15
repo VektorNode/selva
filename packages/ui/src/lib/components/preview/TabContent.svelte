@@ -14,6 +14,10 @@
 	import InputControl from './InputControl.svelte';
 	import OutputDisplay from './OutputDisplay.svelte';
 	import { evaluateGroupVisibility } from '$lib/schema/visibility-rules';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	interface Props {
 		tab: TabConfig;
@@ -79,7 +83,7 @@
 	<ScrollArea class="h-full" orientation="vertical">
 		<div class="p-4 tab-content-container">
 			{#if tab.groups.length === 0}
-				<StateDisplay type="empty" size="medium" message="This tab has no groups configured." />
+				<StateDisplay type="empty" size="medium" message={t.tabNoGroups} />
 			{:else}
 				<div class="gap-8 flex flex-col">
 					{#each tab.groups as group (group.id)}

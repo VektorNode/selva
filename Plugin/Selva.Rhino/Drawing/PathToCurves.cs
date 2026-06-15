@@ -34,12 +34,16 @@ internal static class PathToCurves
                 if (c != null && c.IsClosed) result.Add(c);
         }
 
+        // Subpaths that return to their start point are fillable even without an explicit
+        // Close segment — SVG/PDF auto-close fills, so the viewport must match.
+        bool GeometricallyClosed() => hasCursor && segs.Count > 0 && Same(cursor, subpathStart);
+
         foreach (var seg in path)
         {
             switch (seg)
             {
                 case PathSeg.MoveTo m:
-                    Flush(closed: false);
+                    Flush(closed: GeometricallyClosed());
                     cursor = m.To;
                     subpathStart = m.To;
                     hasCursor = true;
@@ -70,7 +74,7 @@ internal static class PathToCurves
                     break;
             }
         }
-        Flush(closed: false);
+        Flush(closed: GeometricallyClosed());
         return result;
     }
 

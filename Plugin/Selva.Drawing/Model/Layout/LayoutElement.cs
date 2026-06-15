@@ -47,4 +47,16 @@ public abstract class LayoutElement : DrawElement
 			return SplitResult.AllFits(resolved, height);
 		return SplitResult.NothingFits(resolved);
 	}
+
+	// Pagination fallback when TrySplit reports NothingFits on a fresh page: place the
+	// smallest leading fragment (oversize if need be) so pagination keeps making progress.
+	// Contract: Fits is always non-null and resolved; Overflow strictly shrinks toward null.
+	// Default places the whole element. Splittable containers override to shed only their
+	// head (first stack child, header + first table row, first text line).
+	public virtual SplitResult ForcePlace(double availableHeight, LayoutContext context)
+	{
+		var resolved = Resolve(context);
+		var bounds = resolved?.ComputeBounds() ?? BoundingBox.Empty;
+		return SplitResult.AllFits(resolved, bounds.IsEmpty ? 0 : bounds.Height);
+	}
 }

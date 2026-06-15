@@ -57,6 +57,7 @@ public class GH_DrawingView : GH_Component
         DA.GetData(2, ref padding);
 
         var views = new List<DrawingView>(tree.PathCount);
+        var skipped = 0;
         foreach (var path in tree.Paths)
         {
             var branch = tree.get_Branch(path);
@@ -65,6 +66,7 @@ public class GH_DrawingView : GH_Component
             {
                 if (item is GH_ObjectWrapper wrap && wrap.Value is DrawElement de) children.Add(de);
                 else if (item is DrawElement direct) children.Add(direct);
+                else if (item != null) skipped++;
             }
             if (children.Count == 0) continue;
 
@@ -78,6 +80,12 @@ public class GH_DrawingView : GH_Component
                 Length = length > 0 ? (double?)length : null,
                 Padding = Margins.Uniform(Math.Max(0, padding)),
             });
+        }
+
+        if (skipped > 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"Skipped {skipped} input(s) that are not drawing elements — wire Rhino geometry through Draw Curve / Draw Surface first");
         }
 
         if (views.Count == 0)

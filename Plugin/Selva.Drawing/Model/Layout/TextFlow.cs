@@ -61,6 +61,22 @@ public sealed class TextFlow : LayoutElement
 		if (fitsLineCount >= lines.Count)
 			return base.TrySplit(availableHeight, context);
 
+		return SplitAfterLine(fitsLineCount, lines, lineHeight, context);
+	}
+
+	// Nothing fits on a fresh page (budget below one line height): force out the first
+	// line anyway so pagination keeps making progress.
+	public override SplitResult ForcePlace(double availableHeight, LayoutContext context)
+	{
+		var effectiveWidth = ResolveEffectiveWidth(context);
+		var (lines, lineHeight, _) = LayoutLines(Style, Text, effectiveWidth);
+		if (lines.Count <= 1 || lineHeight <= 0)
+			return base.ForcePlace(availableHeight, context);
+		return SplitAfterLine(1, lines, lineHeight, context);
+	}
+
+	private SplitResult SplitAfterLine(int fitsLineCount, IReadOnlyList<string> lines, double lineHeight, LayoutContext context)
+	{
 		var fitsLines = new List<string>(fitsLineCount);
 		for (var i = 0; i < fitsLineCount; i++) fitsLines.Add(lines[i]);
 		var overflowLines = new List<string>(lines.Count - fitsLineCount);
@@ -129,12 +145,17 @@ public sealed class TextFlow : LayoutElement
 			});
 		}
 
+		// Pin the resolved bounds to the same box ComputeBounds reports. The glyph union is
+		// smaller (it misses the line gap and trailing wrap width), so without this pin the
+		// pagination budget and the measured stack/frame layout disagree by up to one line.
+		var boundsWidth = effectiveWidth > 0 ? effectiveWidth : MaxLineWidth(lines, style);
 		return new GroupElement
 		{
 			Id = Id,
 			CssClass = CssClass,
 			Metadata = Metadata,
 			Children = children,
+			BoundsOverride = new BoundingBox(Origin.X, Origin.Y, Origin.X + boundsWidth, Origin.Y + totalH),
 		};
 	}
 

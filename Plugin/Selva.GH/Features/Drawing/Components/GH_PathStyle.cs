@@ -28,14 +28,14 @@ public class GH_PathStyle : GH_Component
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddColourParameter("Stroke Color", "SC", "Stroke color", GH_ParamAccess.item, Color.Black);
-        pManager.AddNumberParameter("Stroke Width", "SW", "Stroke width", GH_ParamAccess.item, 1.0);
+        pManager.AddNumberParameter("Stroke Width", "SW", "Stroke width in mm (paper space)", GH_ParamAccess.item, 1.0);
         pManager.AddNumberParameter("Stroke Opacity", "SO", "Stroke opacity (0-1)", GH_ParamAccess.item, 1.0);
         pManager.AddColourParameter("Fill Color", "FC", "Fill color (closed paths)", GH_ParamAccess.item, Color.Transparent);
         pManager.AddBooleanParameter("Fill", "F", "Enable fill", GH_ParamAccess.item, false);
         pManager.AddNumberParameter("Fill Opacity", "FO", "Fill opacity (0-1)", GH_ParamAccess.item, 1.0);
         pManager.AddIntegerParameter("Line Cap", "LC", "Stroke line cap shape", GH_ParamAccess.item, 0);
         pManager.AddIntegerParameter("Line Join", "LJ", "Stroke line join shape", GH_ParamAccess.item, 0);
-        pManager.AddNumberParameter("Dash Pattern", "DP", "Stroke dash pattern (e.g. 5 2 1 2 maps to stroke-dasharray)", GH_ParamAccess.list);
+        pManager.AddNumberParameter("Dash Pattern", "DP", "Stroke dash/gap lengths in mm (paper space), e.g. 5 2 1 2", GH_ParamAccess.list);
         pManager.AddIntegerParameter("Fill Rule", "FR", "Fill rule for self-intersecting paths", GH_ParamAccess.item, 0);
         pManager.AddIntegerParameter("Hatch Pattern", "HP", "Fill hatch pattern (overrides solid fill)", GH_ParamAccess.item, 0);
         pManager.AddNumberParameter("Pattern Scale", "PS", "Hatch pattern scale multiplier (1 = default)", GH_ParamAccess.item, 1.0);

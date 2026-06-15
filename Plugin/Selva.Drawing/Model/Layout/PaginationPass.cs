@@ -53,10 +53,15 @@ public static class PaginationPass
 		{
 			var resolver = new TokenResolver(i + 1, totalPages, template.Title, null, template.Tokens, now);
 
-			var pageHeader = resolvedHeader != null ? resolver.ResolveTree(resolvedHeader) : null;
-			var pageFooter = resolvedFooter != null ? resolver.ResolveTree(resolvedFooter) : null;
+			// Chrome is re-resolved per page against its band rect (not the empty context used
+			// for band-height measurement above) so star grids fill the band width and TextFlows
+			// wrap to it. Tokens substitute after layout — band heights therefore reflect the
+			// template text, which is close enough for typical {page}-style tokens.
+			var pageHeader = ResolveChromeForPage(template.Header, body.HeaderRect, resolver);
+			var pageFooter = ResolveChromeForPage(template.Footer, body.FooterRect, resolver);
 
-			var anchoredContent = AnchorTopLeft(body.RawContents[i], body.ContentRect);
+			// Body text gets the same substitution so tokens work outside chrome too.
+			var anchoredContent = AnchorTopLeft(resolver.ResolveTree(body.RawContents[i]), body.ContentRect);
 			var anchoredHeader = AnchorChrome(pageHeader, body.HeaderRect, template.HeaderAlign);
 			var anchoredFooter = AnchorChrome(pageFooter, body.FooterRect, template.FooterAlign);
 
@@ -131,8 +136,12 @@ public static class PaginationPass
 				}
 				else if (split.Overflow != null)
 				{
-					rawContents.Add(split.Overflow);
-					remaining = null;
+					// Nothing fits even on a fresh page. Force-place only the smallest leading
+					// fragment (oversize) and keep paginating — dumping the whole remainder here
+					// would cram every later element onto this page and silently stop.
+					var forced = ForcePlaceElement(remaining, availableHeight, ctx);
+					rawContents.Add(forced.Fits);
+					remaining = forced.Overflow;
 				}
 				else
 				{
@@ -239,6 +248,15 @@ public static class PaginationPass
 		return SplitResult.NothingFits(element);
 	}
 
+	private static SplitResult ForcePlaceElement(DrawElement element, double availableHeight, LayoutContext context)
+	{
+		if (element is LayoutElement layout)
+			return layout.ForcePlace(availableHeight, context);
+		// Primitives are atomic: place whole (oversize) and move on.
+		var bounds = element.ComputeBounds();
+		return SplitResult.AllFits(element, bounds.IsEmpty ? 0 : bounds.Height);
+	}
+
 	private static BoundingBox ContentRect(PaperSize paper, Margins margins)
 	{
 		if (paper.WidthMm <= 0 || paper.HeightMm <= 0) return BoundingBox.Empty;
@@ -264,6 +282,15 @@ public static class PaginationPass
 	// post-layout extent, which silently zeroes out the chrome band reservation.
 	public static DrawElement ResolveLayout(DrawElement element)
 		=> LayoutPass.Resolve(element, new LayoutContext(BoundingBox.Empty));
+
+	// Per-page chrome: resolve the raw template against the band rect (so width-aware
+	// children fill/wrap to the band), then substitute this page's tokens into the result.
+	internal static DrawElement ResolveChromeForPage(DrawElement template, BoundingBox bandRect, TokenResolver resolver)
+	{
+		if (template == null) return null;
+		var resolved = LayoutPass.Resolve(template, new LayoutContext(bandRect));
+		return resolver.ResolveTree(resolved);
+	}
 
 	public static double ResolveBandHeight(double? explicitHeight, DrawElement resolved)
 	{

@@ -1,5 +1,25 @@
 # @selvajs/ui
 
+## 4.9.0
+
+### Minor Changes
+
+- 9d73f8e: Extend multi-language (en/de) support to the compute app shell. `<ComputeApp>` now takes a `lang` prop that provides the UI locale to its whole subtree, so the panel layout, calculate/solving controls, collapsed panel strip, and loading/empty states are localized alongside the viewer.
+
+  Set the language with the `lang` prop on `<ComputeApp>` (or on a standalone `<Viewer>`), or drive it app-wide via the exported `setLocaleContext`. Defaults to English when unset. Schema-authored labels and Grasshopper-sourced names/metadata are not translated.
+
+## 4.8.0
+
+### Minor Changes
+
+- e069192: Add multi-language (en/de) support to the Viewer and its panels. The viewer chrome — tools menu, view presets, scene manager, and metadata dialog — is now localizable. Set the language with the new `lang` prop on `<Viewer>`, or drive it app-wide via the exported `setLocaleContext`. Defaults to English when unset. Grasshopper-sourced names and metadata are not translated.
+
+## 4.7.1
+
+### Patch Changes
+
+- 2d3e963: Expose `Viewer` and its `ViewerConfig` type from the published public API so external applications can embed the standalone 3D viewer directly (driven by a `meshes` array and an optional `viewerConfig`), without going through `ComputeApp`.
+
 ## 4.7.0
 
 ### Minor Changes

@@ -1,7 +1,6 @@
 using System;
 using GH_IO.Serialization;
 using Grasshopper.Kernel.Types;
-using Newtonsoft.Json;
 using Selva.Drawing.Model.Style;
 
 namespace Selva.GH.Features.Drawing.Goos;
@@ -18,13 +17,9 @@ public class TextStyleGoo : IGH_Goo
     public string TypeName => "TextStyle";
     public string TypeDescription => "Text style (font, size, color, alignment)";
 
-    public IGH_Goo Duplicate()
-    {
-        if (Value == null) return new TextStyleGoo();
-        var json = JsonConvert.SerializeObject(Value);
-        var copy = JsonConvert.DeserializeObject<TextStyle>(json);
-        return new TextStyleGoo(copy ?? Value);
-    }
+    // TextStyle is immutable (init-only properties), so duplicates can safely share the
+    // same instance. The old JSON round-trip here silently zeroed Color (private ctor).
+    public IGH_Goo Duplicate() => new TextStyleGoo(Value);
 
     public IGH_GooProxy EmitProxy() => null;
 
@@ -51,14 +46,14 @@ public class TextStyleGoo : IGH_Goo
 
     public bool Write(GH_IWriter writer)
     {
-        writer.SetString("TextStyleJson", JsonConvert.SerializeObject(Value));
+        writer.SetString("TextStyleJson", StyleJson.Serialize(Value));
         return true;
     }
 
     public bool Read(GH_IReader reader)
     {
         if (!reader.ItemExists("TextStyleJson")) return false;
-        Value = JsonConvert.DeserializeObject<TextStyle>(reader.GetString("TextStyleJson"));
+        Value = StyleJson.Deserialize<TextStyle>(reader.GetString("TextStyleJson"));
         return true;
     }
 

@@ -143,7 +143,10 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         var t3d = new Rhino.Display.Text3d(text, plane, size * capRatio * transformScale) { FontFace = fontFace };
         t3d.HorizontalAlignment = ToRhinoHAlign(style?.HorizontalAnchor ?? Selva.Drawing.Model.Style.TextAnchor.Left);
         t3d.VerticalAlignment = ToRhinoVAlign(style?.VerticalAnchor ?? Selva.Drawing.Model.Style.VerticalAnchor.Baseline);
-        _display.Draw3dText(t3d, TextColor);
+        // Honor the style's color like SVG/PDF do — a hardcoded preview color made colored
+        // text look wrong until export.
+        var textColor = style != null ? ToSystemColor(style.Color, TextColor) : TextColor;
+        _display.Draw3dText(t3d, textColor);
         t3d.Dispose();
     }
 
@@ -332,20 +335,18 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         }
 
         var spacing = element.Spacing > 0 ? element.Spacing : 2.0;
-        var bounds = element.Boundary.ComputeBounds();
-        if (bounds.IsEmpty) return;
 
         switch (element.Pattern)
         {
             case HatchPatternKind.Lines:
-                DrawHatchLines(subpaths, bounds, element.AngleDegrees, spacing, lineColor);
+                DrawHatchLines(subpaths, element.AngleDegrees, spacing, lineColor);
                 break;
             case HatchPatternKind.CrossHatch:
-                DrawHatchLines(subpaths, bounds, element.AngleDegrees, spacing, lineColor);
-                DrawHatchLines(subpaths, bounds, element.AngleDegrees + 90, spacing, lineColor);
+                DrawHatchLines(subpaths, element.AngleDegrees, spacing, lineColor);
+                DrawHatchLines(subpaths, element.AngleDegrees + 90, spacing, lineColor);
                 break;
             case HatchPatternKind.Dots:
-                DrawHatchDots(subpaths, bounds, spacing, lineColor);
+                DrawHatchDots(subpaths, spacing, lineColor);
                 break;
         }
     }
@@ -383,6 +384,18 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         var det = t.A * t.D - t.B * t.C;
         var s = Math.Sqrt(Math.Abs(det));
         return s > 1e-12 ? s : 1.0;
+    }
+
+    // A direction vector pushed through the current transform's linear part (no
+    // translation) and normalized — used so hatch patterns rotate with their group
+    // transform the way the exporters' patterns do.
+    private (double X, double Y) MapDirection(double x, double y)
+    {
+        var mx = _current.A * x + _current.C * y;
+        var my = _current.B * x + _current.D * y;
+        var len = Math.Sqrt(mx * mx + my * my);
+        if (len < 1e-12) return (x, y);
+        return (mx / len, my / len);
     }
 
     private void DrawBoxOutline(DrawBox b, Color color)
@@ -423,20 +436,49 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         var dimA = new DrawPoint(ax + nx * offset, ay + ny * offset);
         var dimB = new DrawPoint(bx + nx * offset, by + ny * offset);
 
-        _display.DrawLine(new Line(Map(d.A), Map(dimA)), DimColor);
-        _display.DrawLine(new Line(Map(d.B), Map(dimB)), DimColor);
-        _display.DrawLine(new Line(Map(dimA), Map(dimB)), DimColor);
+        var dimColor = d.Style != null ? ToSystemColor(d.Style.Color, DimColor) : DimColor;
+        _display.DrawLine(new Line(Map(d.A), Map(dimA)), dimColor);
+        _display.DrawLine(new Line(Map(d.B), Map(dimB)), dimColor);
+        _display.DrawLine(new Line(Map(dimA), Map(dimB)), dimColor);
 
         var label = string.IsNullOrEmpty(d.Label) ? len.ToString("0.##") : d.Label;
         var size = d.Style?.TextSize ?? 2.5;
         if (size > 0)
         {
-            var midX = (dimA.X + dimB.X) * 0.5;
-            var midY = (dimA.Y + dimB.Y) * 0.5;
-            var mid = Map(new DrawPoint(midX, midY));
-            var plane = new Plane(mid, Vector3d.XAxis, Vector3d.YAxis);
-            _display.Draw3dText(label, DimColor, plane, size, "Arial");
+            // Mirror the exporters: label centred on the dimension line, rotated along its
+            // direction, lifted off the line unless the placement breaks the line.
+            var style = d.Style ?? new DimensionStyle();
+            var lift = style.TextPlacement == DimensionTextPlacement.BreakLine
+                ? 0.0
+                : size * style.TextLiftFactor;
+            var sign = offset >= 0 ? 1 : -1;
+            var midX = (dimA.X + dimB.X) * 0.5 + nx * lift * sign;
+            var midY = (dimA.Y + dimB.Y) * 0.5 + ny * lift * sign;
+            DrawDimLabel(label, new DrawPoint(midX, midY), new DrawPoint(ux, uy), style, size, dimColor);
         }
+    }
+
+    // Centred, rotated dimension label matching the exporters' placement. Direction is in
+    // model space; mapped axes keep the rotation correct under page-tile / view-scale
+    // transforms, and the cap-height correction matches DrawText's em sizing.
+    private void DrawDimLabel(string label, DrawPoint anchor, DrawPoint direction, DimensionStyle style, double size, Color color)
+    {
+        var mid = Map(anchor);
+        var alongEnd = Map(new DrawPoint(anchor.X + direction.X, anchor.Y + direction.Y));
+        var xAxis = alongEnd - mid;
+        if (xAxis.X < 0) xAxis.Reverse(); // keep labels readable left-to-right
+        if (!xAxis.Unitize()) xAxis = Vector3d.XAxis;
+        var yAxis = Vector3d.CrossProduct(Vector3d.ZAxis, xAxis);
+        var plane = new Plane(mid, xAxis, yAxis);
+        var textStyle = new Selva.Drawing.Model.Style.TextStyle { FontFamily = style.FontFamily, FontSize = size };
+        var t3d = new Rhino.Display.Text3d(label, plane, size * CapHeightToEmRatio(textStyle) * UniformScale(_current))
+        {
+            FontFace = ResolveFontFace(style.FontFamily),
+            HorizontalAlignment = Rhino.DocObjects.TextHorizontalAlignment.Center,
+            VerticalAlignment = Rhino.DocObjects.TextVerticalAlignment.Middle,
+        };
+        _display.Draw3dText(t3d, color);
+        t3d.Dispose();
     }
 
     private void DrawAngularDim(DimensionElement d)
@@ -455,9 +497,11 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         var theta = Math.Atan2(uax * uby - uay * ubx, uax * ubx + uay * uby);
         if (Math.Abs(theta) < 1e-6) return;
 
+        var dimColor = d.Style != null ? ToSystemColor(d.Style.Color, DimColor) : DimColor;
+
         // Stub arms.
-        _display.DrawLine(new Line(Map(d.Vertex), Map(d.A)), DimColor);
-        _display.DrawLine(new Line(Map(d.Vertex), Map(d.B)), DimColor);
+        _display.DrawLine(new Line(Map(d.Vertex), Map(d.A)), dimColor);
+        _display.DrawLine(new Line(Map(d.Vertex), Map(d.B)), dimColor);
 
         // Sample the sweep arc.
         const int samples = 24;
@@ -469,7 +513,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
             var ang = startAng + theta * u;
             pts.Add(Map(new DrawPoint(vx + Math.Cos(ang) * radius, vy + Math.Sin(ang) * radius)));
         }
-        _display.DrawPolyline(new Polyline(pts), DimColor, 1);
+        _display.DrawPolyline(new Polyline(pts), dimColor, 1);
 
         var label = string.IsNullOrEmpty(d.Label)
             ? (Math.Abs(theta) * 180.0 / Math.PI).ToString("0.##") + "°"
@@ -477,10 +521,14 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         var size = d.Style?.TextSize ?? 2.5;
         if (size > 0)
         {
+            // Label sits past the arc on the angle bisector, rotated along the arc tangent —
+            // matches the exporters' lifted placement.
+            var style = d.Style ?? new DimensionStyle();
             var midAng = startAng + theta * 0.5;
-            var mid = Map(new DrawPoint(vx + Math.Cos(midAng) * radius, vy + Math.Sin(midAng) * radius));
-            var plane = new Plane(mid, Vector3d.XAxis, Vector3d.YAxis);
-            _display.Draw3dText(label, DimColor, plane, size, "Arial");
+            var textRadius = radius + size * style.TextLiftFactor;
+            var anchor = new DrawPoint(vx + Math.Cos(midAng) * textRadius, vy + Math.Sin(midAng) * textRadius);
+            var tangent = new DrawPoint(-Math.Sin(midAng), Math.Cos(midAng));
+            DrawDimLabel(label, anchor, tangent, style, size, dimColor);
         }
     }
 
@@ -543,7 +591,12 @@ public sealed class RhinoViewportVisitor : IElementVisitor
 
         void Flush()
         {
-            if (current.Count > 0) result.Add(new Subpath(current, closed));
+            // Subpaths that return to their start point fill in SVG/PDF even without an
+            // explicit Close — treat them as closed so the preview matches the export.
+            var geometricallyClosed = closed || (cursorValid && current.Count > 2
+                && Math.Abs(cursor.X - subpathStart.X) < 1e-9
+                && Math.Abs(cursor.Y - subpathStart.Y) < 1e-9);
+            if (current.Count > 0) result.Add(new Subpath(current, geometricallyClosed));
             current = new List<Point3d>();
             closed = false;
         }
@@ -728,16 +781,28 @@ public sealed class RhinoViewportVisitor : IElementVisitor
     private static readonly ConditionalWeakTable<DrawPath, Brep[]> _brepCache =
         new ConditionalWeakTable<DrawPath, Brep[]>();
 
+    // DisplayMaterial wraps unmanaged display resources — constructing one per filled path
+    // per redraw leaked them at viewport refresh rate. Cached per ARGB value for the
+    // process lifetime; the working set is tiny (one entry per distinct fill color).
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, DisplayMaterial> _materialCache =
+        new System.Collections.Concurrent.ConcurrentDictionary<int, DisplayMaterial>();
+
+    private static DisplayMaterial MaterialFor(Color color) =>
+        _materialCache.GetOrAdd(color.ToArgb(), _ =>
+        {
+            var material = new DisplayMaterial(color);
+            if (color.A < 255) material.Transparency = 1.0 - color.A / 255.0;
+            return material;
+        });
+
     // Returns true if the fill was rendered via DrawBrepShaded (the fast path). Returns
     // false if we couldn't build any Breps from this path (no closed subpaths, or
     // CreatePlanarBreps rejected the input) — caller falls back to the mesh path.
     private bool FillPathWithBreps(DrawPath path, Color color)
     {
-        if (!_brepCache.TryGetValue(path, out var breps))
-        {
-            breps = BuildBrepsForPath(path);
-            _brepCache.Add(path, breps);
-        }
+        // GetValue's factory runs under the table's lock — unlike TryGetValue-then-Add,
+        // it can't throw when two display pipelines race on the same path.
+        var breps = _brepCache.GetValue(path, BuildBrepsForPath);
         if (breps.Length == 0) return false;
 
         // Push the model-space transform onto the display stack so Rhino applies it on the
@@ -746,8 +811,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         var pushed = !t.IsIdentity;
         if (pushed) _display.PushModelTransform(t);
 
-        var material = new DisplayMaterial(color);
-        if (color.A < 255) material.Transparency = 1.0 - color.A / 255.0;
+        var material = MaterialFor(color);
         foreach (var b in breps) _display.DrawBrepShaded(b, material);
 
         if (pushed) _display.PopModelTransform();
@@ -794,9 +858,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         var mesh = TriangulateRings(rings, rule);
         if (mesh == null || mesh.Faces.Count == 0) return;
 
-        var material = new DisplayMaterial(color);
-        if (color.A < 255) material.Transparency = 1.0 - color.A / 255.0;
-        _display.DrawMeshShaded(mesh, material);
+        _display.DrawMeshShaded(mesh, MaterialFor(color));
     }
 
     // Build a triangle mesh from a set of closed rings. Outer rings get filled, hole
@@ -1086,9 +1148,6 @@ public sealed class RhinoViewportVisitor : IElementVisitor
     // tile = 4mm * scale, lines at 45° + PatternAngle). Hatch replaces the flat fill.
     private void DrawFillPattern(DrawPath path, List<Subpath> subpaths, Fill fill, Color color)
     {
-        var bounds = path.ComputeBounds();
-        if (bounds.IsEmpty) return;
-
         var scale = fill.PatternScale > 0 ? fill.PatternScale : 1.0;
         var spacing = 4.0 * scale;
         var angle = fill.PatternAngle;
@@ -1096,32 +1155,56 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         switch (fill.Pattern)
         {
             case HatchPattern.Lines:
-                DrawHatchLines(subpaths, bounds, 45.0 + angle, spacing, color);
+                DrawHatchLines(subpaths, 45.0 + angle, spacing, color);
                 break;
             case HatchPattern.CrossHatch:
-                DrawHatchLines(subpaths, bounds, 45.0 + angle, spacing, color);
-                DrawHatchLines(subpaths, bounds, -45.0 + angle, spacing, color);
+                DrawHatchLines(subpaths, 45.0 + angle, spacing, color);
+                DrawHatchLines(subpaths, -45.0 + angle, spacing, color);
                 break;
             case HatchPattern.Dots:
-                DrawHatchDots(subpaths, bounds, spacing, color);
+                DrawHatchDots(subpaths, spacing, color);
                 break;
             case HatchPattern.Brick:
                 // Approximate brick coursing: horizontal lines + perpendicular ticks.
-                DrawHatchLines(subpaths, bounds, angle, spacing, color);
-                DrawHatchLines(subpaths, bounds, 90.0 + angle, spacing * 2, color);
+                DrawHatchLines(subpaths, angle, spacing, color);
+                DrawHatchLines(subpaths, 90.0 + angle, spacing * 2, color);
                 break;
         }
     }
 
-    // Sweep parallel lines across the bounding box at the given angle/spacing, clip each
-    // line to the boundary subpaths via even-odd ray crossings, and emit the inside spans.
-    private void DrawHatchLines(List<Subpath> subpaths, DrawBox bounds, double angleDegrees, double spacing, Color color)
+    // Bounding box of the already-mapped subpath points. Hatch generation, clipping, and
+    // emission must all live in this one (mapped) space — mixing it with the unmapped model
+    // bbox shifted or dropped hatches on every page tile / scaled view after the first.
+    private static DrawBox MappedBounds(List<Subpath> subpaths)
     {
+        double minX = double.PositiveInfinity, minY = double.PositiveInfinity;
+        double maxX = double.NegativeInfinity, maxY = double.NegativeInfinity;
+        foreach (var sp in subpaths)
+        {
+            foreach (var p in sp.Points)
+            {
+                if (p.X < minX) minX = p.X;
+                if (p.X > maxX) maxX = p.X;
+                if (p.Y < minY) minY = p.Y;
+                if (p.Y > maxY) maxY = p.Y;
+            }
+        }
+        return minX > maxX ? DrawBox.Empty : new DrawBox(minX, minY, maxX, maxY);
+    }
+
+    // Sweep parallel lines across the mapped bounds at the given angle/spacing, clip each
+    // line to the boundary subpaths via even-odd ray crossings, and emit the inside spans.
+    // The pattern direction rotates and the spacing scales with the current transform so
+    // the preview matches the exporters, where the group transform carries the pattern.
+    private void DrawHatchLines(List<Subpath> subpaths, double angleDegrees, double spacing, Color color)
+    {
+        spacing *= UniformScale(_current);
         if (spacing <= 0) return;
+        var bounds = MappedBounds(subpaths);
+        if (bounds.IsEmpty) return;
 
         var theta = angleDegrees * Math.PI / 180.0;
-        var dx = Math.Cos(theta);
-        var dy = Math.Sin(theta);
+        var (dx, dy) = MapDirection(Math.Cos(theta), Math.Sin(theta));
         // Perpendicular axis along which we step from line to line.
         var nx = -dy;
         var ny = dx;
@@ -1185,9 +1268,15 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         }
     }
 
-    private void DrawHatchDots(List<Subpath> subpaths, DrawBox bounds, double spacing, Color color)
+    private void DrawHatchDots(List<Subpath> subpaths, double spacing, Color color)
     {
+        // Grid, inside-test, and emission all in mapped space — the subpath points were
+        // already mapped, so testing unmapped grid points against them dropped every dot
+        // under a non-identity transform.
+        spacing *= UniformScale(_current);
         if (spacing <= 0) return;
+        var bounds = MappedBounds(subpaths);
+        if (bounds.IsEmpty) return;
 
         var minX = bounds.MinX;
         var minY = bounds.MinY;
@@ -1202,8 +1291,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
             {
                 var x = minX + c * spacing;
                 if (!PointInSubpaths(subpaths, x, y)) continue;
-                var pt = Map(new DrawPoint(x, y));
-                _display.DrawPoint(pt, PointStyle.RoundSimple, 2, color);
+                _display.DrawPoint(new Point3d(x, y, 0), PointStyle.RoundSimple, 2, color);
             }
         }
     }

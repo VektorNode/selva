@@ -118,6 +118,14 @@ public class GH_TextStyle : GH_Component
             LetterSpacing = letterSpacing,
         };
 
+        // Non-bundled fonts are measured with a rough width heuristic while the viewer
+        // substitutes a real font — wrapping and table sizing then drift from what renders.
+        if (!Selva.Drawing.Fonts.FontMetrics.IsBundled(textStyle.FontFamily, textStyle.Weight, textStyle.Style))
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                $"\"{textStyle.FontFamily}\" is not a bundled font — text is measured with approximate metrics, so wrapping and cell sizes may not match the rendered output. Bundled: Inter (Regular/Bold).");
+        }
+
         DA.SetData(0, new TextStyleGoo(textStyle));
     }
 }

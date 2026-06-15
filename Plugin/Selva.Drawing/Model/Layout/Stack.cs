@@ -47,6 +47,7 @@ public sealed class Stack : LayoutElement
 		var bounds = new BoundingBox[Children.Count];
 		var maxCross = 0.0;
 		var totalMain = 0.0;
+		var nonEmptyCount = 0;
 		for (var i = 0; i < Children.Count; i++)
 		{
 			var child = Children[i] is LayoutElement nested
@@ -55,18 +56,22 @@ public sealed class Stack : LayoutElement
 			resolvedChildren[i] = child;
 			var b = child?.ComputeBounds() ?? BoundingBox.Empty;
 			bounds[i] = b;
+			if (b.IsEmpty) continue;
+			nonEmptyCount++;
 			if (Orientation == StackOrientation.Vertical)
 			{
-				totalMain += b.IsEmpty ? 0 : b.Height;
-				if (!b.IsEmpty && b.Width > maxCross) maxCross = b.Width;
+				totalMain += b.Height;
+				if (b.Width > maxCross) maxCross = b.Width;
 			}
 			else
 			{
-				totalMain += b.IsEmpty ? 0 : b.Width;
-				if (!b.IsEmpty && b.Height > maxCross) maxCross = b.Height;
+				totalMain += b.Width;
+				if (b.Height > maxCross) maxCross = b.Height;
 			}
 		}
-		totalMain += Spacing * Math.Max(0, Children.Count - 1);
+		// Spacing only between children that occupy space — the placement loop below skips
+		// empty children entirely, so counting them here would shift content off the anchor.
+		totalMain += Spacing * Math.Max(0, nonEmptyCount - 1);
 
 		// Stretch alignment: if the parent provides a finite cross-axis and we'd otherwise
 		// pick a smaller maxCross, expand to fill. Layout-element children already filled
@@ -150,6 +155,7 @@ public sealed class Stack : LayoutElement
 		var overflowChildren = new List<DrawElement>();
 		var consumed = 0.0;
 		var splitDone = false;
+		var placedNonEmpty = false;
 
 		for (var i = 0; i < Children.Count; i++)
 		{
@@ -165,12 +171,14 @@ public sealed class Stack : LayoutElement
 				: child;
 			var b = resolvedForMeasure?.ComputeBounds() ?? BoundingBox.Empty;
 			var h = b.IsEmpty ? 0 : b.Height;
-			var spacingBefore = fitsChildren.Count > 0 ? Spacing : 0;
+			// Mirror Resolve's accounting: spacing applies only between non-empty children.
+			var spacingBefore = placedNonEmpty && !b.IsEmpty ? Spacing : 0;
 
 			if (consumed + spacingBefore + h <= availableHeight + 1e-6)
 			{
 				fitsChildren.Add(child);
 				consumed += spacingBefore + h;
+				if (!b.IsEmpty) placedNonEmpty = true;
 				continue;
 			}
 
@@ -238,24 +246,77 @@ public sealed class Stack : LayoutElement
 		return SplitResult.Partial(fitsResolved, overflowStack, fitsHeight);
 	}
 
+	// Nothing fits on a fresh page: shed only the head child (letting a splittable head —
+	// a tall TextFlow, a Table — shed its own leading fragment first) so the oversize page
+	// carries as little as possible and pagination continues with the rest.
+	public override SplitResult ForcePlace(double availableHeight, LayoutContext context)
+	{
+		if (Orientation != StackOrientation.Vertical || Children.Count == 0)
+			return base.ForcePlace(availableHeight, context);
+
+		var childContext = BuildChildContext(context);
+		var head = Children[0];
+		DrawElement headFits;
+		DrawElement headOverflow = null;
+		if (head is LayoutElement headLayout && !IsKeepTogether(head))
+		{
+			var forced = headLayout.ForcePlace(availableHeight, childContext);
+			headFits = forced.Fits;
+			headOverflow = forced.Overflow;
+		}
+		else
+		{
+			headFits = head;
+		}
+
+		var fitsStack = new Stack
+		{
+			Id = Id,
+			CssClass = CssClass,
+			Metadata = Metadata,
+			Orientation = Orientation,
+			Spacing = Spacing,
+			CrossAlign = CrossAlign,
+			Origin = Origin,
+			Children = new[] { headFits },
+		};
+		var fitsResolved = fitsStack.Resolve(context);
+		var fitsBounds = fitsResolved?.ComputeBounds() ?? BoundingBox.Empty;
+		var fitsHeight = fitsBounds.IsEmpty ? 0 : fitsBounds.Height;
+
+		var overflowChildren = new List<DrawElement>(Children.Count);
+		if (headOverflow != null) overflowChildren.Add(headOverflow);
+		for (var i = 1; i < Children.Count; i++) overflowChildren.Add(Children[i]);
+		if (overflowChildren.Count == 0)
+			return SplitResult.AllFits(fitsResolved, fitsHeight);
+
+		var overflowStack = new Stack
+		{
+			Orientation = Orientation,
+			Spacing = Spacing,
+			CrossAlign = CrossAlign,
+			Origin = Point2D.Zero,
+			Children = overflowChildren,
+		};
+		return SplitResult.Partial(fitsResolved, overflowStack, fitsHeight);
+	}
+
 	// Build the per-child context: cross-axis = parent's available cross-axis size,
-	// main axis = unconstrained (0 width box on main). Children that care about cross
-	// (auto-width TextFlow in a vertical stack) read AvailableWidth/Height from this.
+	// main axis = unbounded. The infinite main axis matters: a finite fake value (the old
+	// behaviour used cross × cross) made auto-fit children (DrawingView) scale against a
+	// fictitious square viewport. Children that split read their height budget from
+	// TrySplit, never from this context.
 	private LayoutContext BuildChildContext(LayoutContext parent)
 	{
 		if (Orientation == StackOrientation.Vertical)
 		{
 			var w = parent.AvailableWidth;
 			if (double.IsInfinity(w) || w <= 0) return new LayoutContext(BoundingBox.Empty);
-			// Use a tall box on the main axis — children won't read AvailableHeight here
-			// (TrySplit handles per-child height budgets explicitly). Setting it to
-			// a finite value avoids the "infinite" branch in star-track resolution while
-			// remaining permissive.
-			return new LayoutContext(new BoundingBox(0, 0, w, w));
+			return new LayoutContext(new BoundingBox(0, 0, w, double.PositiveInfinity));
 		}
 		var h = parent.AvailableHeight;
 		if (double.IsInfinity(h) || h <= 0) return new LayoutContext(BoundingBox.Empty);
-		return new LayoutContext(new BoundingBox(0, 0, h, h));
+		return new LayoutContext(new BoundingBox(0, 0, double.PositiveInfinity, h));
 	}
 
 	// Keep-together flag lives in DrawElement.Metadata under "keep-together". Truthy

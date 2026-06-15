@@ -1,5 +1,9 @@
 <script lang="ts">
 	import * as Dialog from '../primitives/dialog/index.js';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	interface Props {
 		open: boolean;
@@ -50,12 +54,12 @@
 				<Dialog.Title class="text-sm font-semibold">{meshName}</Dialog.Title>
 			</div>
 		{:else}
-			<Dialog.Title class="sr-only">Object</Dialog.Title>
+			<Dialog.Title class="sr-only">{t.objectFallbackName}</Dialog.Title>
 		{/if}
 
 		<div class="max-h-80 overflow-y-auto">
 			{#if !metadata || Object.keys(getFilteredMetadata()).length === 0}
-				<p class="px-4 py-3 text-xs text-muted-foreground">No metadata</p>
+				<p class="px-4 py-3 text-xs text-muted-foreground">{t.noMetadata}</p>
 			{:else}
 				<table class="text-xs w-full border-collapse">
 					<tbody>
