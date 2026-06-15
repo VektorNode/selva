@@ -50,6 +50,7 @@ export function readEnv(): TestContext | null {
  * dependents to parents.
  */
 export async function resetAllData(ctx: TestContext): Promise<void> {
+	await truncate(ctx, 'solve_metrics');
 	await truncate(ctx, 'share_links');
 	await truncate(ctx, 'invites');
 	// Versions FK to definitions ON DELETE CASCADE, but `definitions` can't

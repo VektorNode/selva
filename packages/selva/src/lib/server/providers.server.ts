@@ -6,13 +6,14 @@ import type {
 	IAuthProvider,
 	IDataProvider,
 	IStorageProvider,
+	ISolveMetricSink,
 	SelvaBranding,
 	SelvaConfig,
 	SelvaConfigFactory,
 	SelvaFlags,
 	TenancyMode
 } from '@selvajs/platform';
-import { defineConfig, isFlagEnabled } from '@selvajs/platform';
+import { defineConfig, isFlagEnabled, NoopSolveMetricSink } from '@selvajs/platform';
 import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
 import * as header from '@selvajs/header-auth-provider';
@@ -81,6 +82,20 @@ function pickStorage(e: Env): IStorageProvider {
 	}
 }
 
+/**
+ * Per-solve metric sink. Supabase's data provider carries a `solveMetrics`
+ * sink built from its own client bundle — reuse it so timings persist
+ * automatically. Other backends (local) have no metrics table; left undefined,
+ * which falls back to `NoopSolveMetricSink` in `getSolveMetricSink()`.
+ */
+function pickSolveMetrics(data: IDataProvider): ISolveMetricSink | undefined {
+	const candidate = (data as { solveMetrics?: unknown }).solveMetrics;
+	if (candidate && typeof (candidate as { record?: unknown }).record === 'function') {
+		return candidate as ISolveMetricSink;
+	}
+	return undefined;
+}
+
 function pickTenancy(e: Env): TenancyMode {
 	const choice = (e.SELVA_TENANCY ?? 'single').toLowerCase();
 	if (choice !== 'single' && choice !== 'multi') {
@@ -89,25 +104,29 @@ function pickTenancy(e: Env): TenancyMode {
 	return choice;
 }
 
-const defaultConfig = defineConfig((e) => ({
-	tenancy: pickTenancy(e),
-	flags: {
-		ALLOW_CROSS_ORG_PUBLIC: envBool(e, 'SELVA_FLAG_ALLOW_CROSS_ORG_PUBLIC'),
-		ALLOW_ORG_COMPUTE_OVERRIDE: envBool(e, 'SELVA_FLAG_ALLOW_ORG_COMPUTE_OVERRIDE'),
-		ALLOW_ORG_CREATION: envBool(e, 'SELVA_FLAG_ALLOW_ORG_CREATION'),
-		ENABLE_PLATFORM_PROJECTS: envBool(e, 'SELVA_FLAG_ENABLE_PLATFORM_PROJECTS'),
-		ENABLE_SHARING: envBool(e, 'SELVA_FLAG_ENABLE_SHARING')
-	},
-	branding: {
-		name: e.SELVA_BRAND_NAME,
-		copyrightName: e.SELVA_BRAND_COPYRIGHT_NAME,
-		tagline: e.SELVA_BRAND_TAGLINE,
-		description: e.SELVA_BRAND_DESCRIPTION
-	},
-	auth: pickAuth(e),
-	data: pickData(e),
-	storage: pickStorage(e)
-}));
+const defaultConfig = defineConfig((e) => {
+	const data = pickData(e);
+	return {
+		tenancy: pickTenancy(e),
+		flags: {
+			ALLOW_CROSS_ORG_PUBLIC: envBool(e, 'SELVA_FLAG_ALLOW_CROSS_ORG_PUBLIC'),
+			ALLOW_ORG_COMPUTE_OVERRIDE: envBool(e, 'SELVA_FLAG_ALLOW_ORG_COMPUTE_OVERRIDE'),
+			ALLOW_ORG_CREATION: envBool(e, 'SELVA_FLAG_ALLOW_ORG_CREATION'),
+			ENABLE_PLATFORM_PROJECTS: envBool(e, 'SELVA_FLAG_ENABLE_PLATFORM_PROJECTS'),
+			ENABLE_SHARING: envBool(e, 'SELVA_FLAG_ENABLE_SHARING')
+		},
+		branding: {
+			name: e.SELVA_BRAND_NAME,
+			copyrightName: e.SELVA_BRAND_COPYRIGHT_NAME,
+			tagline: e.SELVA_BRAND_TAGLINE,
+			description: e.SELVA_BRAND_DESCRIPTION
+		},
+		auth: pickAuth(e),
+		data,
+		storage: pickStorage(e),
+		solveMetrics: pickSolveMetrics(data)
+	};
+});
 
 async function loadRawConfig(): Promise<SelvaConfig | SelvaConfigFactory> {
 	const override = env.SELVA_CONFIG_PATH;
@@ -254,6 +273,19 @@ export function getPermissionStore() {
 
 export function getPlatformProjectGrantStore() {
 	return resolveProviders().data.platformProjectGrants;
+}
+
+let _solveMetricSink: ISolveMetricSink | undefined;
+
+/**
+ * Per-solve timing sink. Defaults to `NoopSolveMetricSink` when the config
+ * omits `solveMetrics`, so the compute route can always record unconditionally.
+ */
+export function getSolveMetricSink(): ISolveMetricSink {
+	if (!_solveMetricSink) {
+		_solveMetricSink = resolveProviders().solveMetrics ?? new NoopSolveMetricSink();
+	}
+	return _solveMetricSink;
 }
 
 /**

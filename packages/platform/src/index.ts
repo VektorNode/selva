@@ -201,6 +201,12 @@ export type {
 } from './events/audit.js';
 
 // ---------------------------------------------------------------------------
+// metrics (per-solve timing telemetry)
+// ---------------------------------------------------------------------------
+export type { ISolveMetricSink, SolveMetric, SolveFailureKind } from './metrics/interface.js';
+export { NoopSolveMetricSink } from './metrics/interface.js';
+
+// ---------------------------------------------------------------------------
 // bindings (server-side resolver for schema inputs marked `source.kind === 'server'`)
 // ---------------------------------------------------------------------------
 export type { IBindingResolver } from './bindings/interface.js';

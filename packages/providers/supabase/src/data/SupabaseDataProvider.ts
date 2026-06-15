@@ -3,6 +3,7 @@ import { ProviderError } from '@selvajs/platform';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle } from './client.js';
 import { SupabaseEventSink } from './SupabaseEventSink.js';
+import { SupabaseSolveMetricSink } from './SupabaseSolveMetricSink.js';
 import { SupabaseAuditQuery } from './SupabaseAuditQuery.js';
 import { SupabaseOrgStore } from './SupabaseOrgStore.js';
 import { SupabaseProjectStore } from './SupabaseProjectStore.js';
@@ -53,11 +54,18 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly permissions: SupabasePlatformPermissionStore;
 	readonly platformProjectGrants: IPlatformProjectGrantStore;
 	readonly auditQuery: SupabaseAuditQuery;
+	/**
+	 * Per-solve timing sink, built from the same client bundle. Exposed so the
+	 * app's provider wiring can hand it to `SelvaConfig.solveMetrics` without
+	 * constructing a second Supabase client.
+	 */
+	readonly solveMetrics: SupabaseSolveMetricSink;
 
 	private constructor(
 		private readonly clients: ClientBundle,
 		events: IEventSink
 	) {
+		this.solveMetrics = new SupabaseSolveMetricSink(clients);
 		this.orgs = new SupabaseOrgStore(clients, events);
 		this.projects = new SupabaseProjectStore(clients, events);
 		this.definitions = new SupabaseDefinitionStore(clients, events);

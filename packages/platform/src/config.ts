@@ -2,6 +2,7 @@ import type { IAuthProvider } from './auth/interface.js';
 import type { IDataProvider } from './data/interface.js';
 import type { IStorageProvider } from './storage/interface.js';
 import type { IEventSink } from './events/interface.js';
+import type { ISolveMetricSink } from './metrics/interface.js';
 import type { IBindingResolver } from './bindings/interface.js';
 
 /**
@@ -67,6 +68,12 @@ export interface SelvaConfig {
 	storage: IStorageProvider;
 	/** Optional. Defaults to `NoopEventSink`. */
 	events?: IEventSink;
+	/**
+	 * Optional. Records per-solve timing (wall time of the Rhino.Compute solve
+	 * call). Defaults to `NoopSolveMetricSink`, which discards every metric.
+	 * Supply a real sink to persist or aggregate solve durations.
+	 */
+	solveMetrics?: ISolveMetricSink;
 	/**
 	 * Optional. Resolves values for inputs marked as `source.kind === 'server'`
 	 * in the schema. Defaults to `NoopBindingResolver`, which returns nothing

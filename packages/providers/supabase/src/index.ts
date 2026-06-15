@@ -10,6 +10,7 @@ export {
 	SupabaseShareLinkStore,
 	SupabaseDataProvider,
 	SupabaseEventSink,
+	SupabaseSolveMetricSink,
 	SupabaseAuditQuery,
 	buildClientBundle
 } from './data/index.js';
