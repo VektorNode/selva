@@ -1,9 +1,8 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
 import { requireCanManage, requireCanEditProjectSettings } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { slugify } from '$lib/server/slug';
 import {
 	ProjectVisibilitySchema,
@@ -23,7 +22,7 @@ const UpdateProjectBody = z
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const { id } = params;
-	if (!id) throw error(400, 'Missing project ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
 
 	// `requireCanEditProjectSettings` is owner-only at the project level — that
 	// IS the gate for editing settings. The platform-scope `manage_projects`
@@ -48,7 +47,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			canChangeVisibilityToPublic({ orgMember })
 		);
 		if (!passes) {
-			throw error(403, 'Only org owners or admins can make a project public.');
+			apiError(403, ApiErrorCode.FORBIDDEN, 'Only org owners or admins can make a project public.');
 		}
 	}
 
@@ -61,7 +60,11 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		autoJoinOnUpload: mergedAutoJoin
 	});
 	if (flagIssues.length > 0) {
-		throw error(400, flagIssues.map((i) => `${i.path}: ${i.message}`).join('; '));
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			flagIssues.map((i) => `${i.path}: ${i.message}`).join('; ')
+		);
 	}
 
 	const patch: {
@@ -85,7 +88,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 	try {
 		await getProjectProvider().updateProject(ctx, id, patch);
-		return json({ success: true });
+		return new Response(null, { status: 204 });
 	} catch (err) {
 		handleApiError(err, 'Failed to update project');
 	}
@@ -93,13 +96,13 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const { id } = params;
-	if (!id) throw error(400, 'Missing project ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
 	await requireCanManage(locals, id);
 	const ctx = locals.ctx!;
 
 	try {
 		await getProjectProvider().deleteProject(ctx, id);
-		return json({ success: true });
+		return new Response(null, { status: 204 });
 	} catch (err) {
 		handleApiError(err, 'Failed to delete project');
 	}

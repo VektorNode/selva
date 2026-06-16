@@ -213,7 +213,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		if (await isFirstRun()) {
 			if (isJsonApiRoute) {
 				return applySecurityHeaders(
-					new Response(JSON.stringify({ error: 'Setup required' }), {
+					new Response(JSON.stringify({ message: 'Setup required', code: 'SETUP_REQUIRED' }), {
 						status: 503,
 						headers: { 'Content-Type': 'application/json' }
 					}),
@@ -272,7 +272,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		if (!user) {
 			if (isJsonApiRoute) {
 				return applySecurityHeaders(
-					new Response(JSON.stringify({ error: 'Unauthorized' }), {
+					new Response(JSON.stringify({ message: 'Unauthorized', code: 'UNAUTHORIZED' }), {
 						status: 401,
 						headers: { 'Content-Type': 'application/json' }
 					}),
@@ -404,13 +404,15 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({
 	status,
 	event
 }) => {
-	// For expected HTTP errors (thrown with error(4xx, message)), pass the message through as-is.
+	// For expected HTTP errors (thrown with error(4xx, body)), pass the
+	// structured body through unchanged so `code`/`fields` reach the client.
 	// For unexpected errors, show a generic message to avoid leaking internals.
 	if (isHttpError(error)) {
-		return { message: error.body.message };
+		const body = error.body as App.Error;
+		return { message: body.message, code: body.code, fields: body.fields };
 	}
 	if (status === 404) {
-		return { message: 'Page not found.' };
+		return { message: 'Page not found.', code: 'NOT_FOUND' };
 	}
 	// Log enough context to diagnose without grepping: route, method, and the
 	// underlying cause chain. SvelteKit's default logging drops `cause`, which
@@ -434,5 +436,5 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({
 	console.error(
 		`[Unhandled error] ${event.request.method} ${event.url.pathname}\n  ${rendered}${cause}`
 	);
-	return { message: 'An unexpected error occurred.' };
+	return { message: 'An unexpected error occurred.', code: 'INTERNAL' };
 };

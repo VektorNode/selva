@@ -1,10 +1,10 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { getInviteStore } from '$lib/server/providers.server';
 import { requireManageOrgMembers } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import {
 	OrgRoleSchema,
 	OrgPermissionSchema,
@@ -35,14 +35,14 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const GET: RequestHandler = async ({ locals }) => {
 	requireManageOrgMembers(locals);
 	const ctx = locals.ctx!;
-	if (!ctx.actingOrgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
 	try {
 		const page = await getInviteStore().listByOrg(ctx, ctx.actingOrgId, { limit: 200 });
 		// Strip `tokenHash` from the listing — it's the server-side lookup
 		// key and an admin in the pending-invites UI has no use for it
 		// (the raw token was shown to them once at mint time).
-		const items = page.items.map(({ tokenHash: _omit, ...rest }) => rest);
-		return json(items);
+		const invites = page.items.map(({ tokenHash: _omit, ...rest }) => rest);
+		return json({ invites });
 	} catch (err) {
 		handleApiError(err, 'Failed to list invites');
 	}
@@ -53,7 +53,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	requireManageOrgMembers(locals);
 	const ctx = locals.ctx!;
 	const user = locals.user!;
-	if (!ctx.actingOrgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
 
 	const body = await request.json().catch(() => null);
 	const parsed = CreateBody.safeParse(body);

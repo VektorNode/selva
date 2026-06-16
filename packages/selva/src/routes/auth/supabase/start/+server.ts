@@ -1,5 +1,6 @@
-import { error, redirect } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getAuthProvider } from '$lib/server/auth.server';
 
 const ALLOWED_PROVIDERS = ['google', 'github', 'azure', 'gitlab'] as const;
@@ -23,12 +24,16 @@ function isAllowedProvider(value: string | null): value is AllowedProvider {
 export const GET: RequestHandler = async ({ url }) => {
 	const provider = url.searchParams.get('provider');
 	if (!isAllowedProvider(provider)) {
-		throw error(400, `Invalid provider. Allowed: ${ALLOWED_PROVIDERS.join(', ')}`);
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			`Invalid provider. Allowed: ${ALLOWED_PROVIDERS.join(', ')}`
+		);
 	}
 
 	const oauth = getAuthProvider().oauth;
 	if (!oauth) {
-		throw error(501, 'OAuth is not supported by the configured auth provider.');
+		apiError(501, ApiErrorCode.INTERNAL, 'OAuth is not supported by the configured auth provider.');
 	}
 
 	const redirectTo = url.searchParams.get('redirectTo') ?? '/library';

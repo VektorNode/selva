@@ -1,13 +1,13 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { getUserProfileStore } from '$lib/server/providers.server';
-import { handleApiError } from '$lib/server/api-errors';
+import { handleApiError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 
 /** Star a definition for the current user. No-op if already starred. */
 export const POST: RequestHandler = async ({ params, locals }) => {
-	if (!locals.user || !locals.ctx) throw error(401, 'Unauthorized');
+	if (!locals.user || !locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
 	const guid = params.guid;
-	if (!guid) throw error(400, 'Missing definition guid');
+	if (!guid) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing definition guid');
 
 	try {
 		await getUserProfileStore().starDefinition(locals.ctx, locals.user.id, guid);
@@ -19,9 +19,9 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 
 /** Unstar a definition for the current user. No-op if not starred. */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
-	if (!locals.user || !locals.ctx) throw error(401, 'Unauthorized');
+	if (!locals.user || !locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
 	const guid = params.guid;
-	if (!guid) throw error(400, 'Missing definition guid');
+	if (!guid) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing definition guid');
 
 	try {
 		await getUserProfileStore().unstarDefinition(locals.ctx, locals.user.id, guid);

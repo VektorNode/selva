@@ -1,9 +1,9 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { getDefinitionService, getProjectProvider } from '$lib/server/providers.server';
 import { requireCanCreateDefinition } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { CreateDefinitionInputSchema } from '@selvajs/platform/definitions';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
@@ -25,31 +25,43 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const file = formData.get('file');
 	if (!(file instanceof File)) {
-		throw error(400, 'A Grasshopper (.gh or .ghx) file is required');
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'A Grasshopper (.gh or .ghx) file is required');
 	}
 
 	const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
 	if (!GH_EXTENSIONS.includes(ext)) {
-		throw error(400, `File type not allowed. Allowed: ${GH_EXTENSIONS.join(', ')}`);
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			`File type not allowed. Allowed: ${GH_EXTENSIONS.join(', ')}`
+		);
 	}
 	if (file.size > MAX_GH_FILE_SIZE) {
-		throw error(400, `File too large. Max size: ${MAX_GH_FILE_SIZE / (1024 * 1024)} MB`);
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			`File too large. Max size: ${MAX_GH_FILE_SIZE / (1024 * 1024)} MB`
+		);
 	}
 
 	const imageFile = formData.get('image');
 	if (imageFile instanceof File && imageFile.size > MAX_IMAGE_FILE_SIZE) {
-		throw error(400, `Image too large. Max size: ${MAX_IMAGE_FILE_SIZE / (1024 * 1024)} MB`);
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			`Image too large. Max size: ${MAX_IMAGE_FILE_SIZE / (1024 * 1024)} MB`
+		);
 	}
 
 	let projectId = formData.get('projectId');
 	if (typeof projectId !== 'string' || !projectId) {
 		// Fall back to the first project of the active org.
-		if (!ctx.actingOrgId) throw error(400, 'No active organization');
+		if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
 		const projectsPage = await getProjectProvider().listProjects(ctx, ctx.actingOrgId, {
 			limit: 1
 		});
 		const defaultProject = projectsPage.items[0];
-		if (!defaultProject) throw error(500, 'No project configured');
+		if (!defaultProject) apiError(500, ApiErrorCode.INTERNAL, 'No project configured');
 		projectId = defaultProject.id;
 	}
 
@@ -105,7 +117,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			coverImage = await getDefinitionService().saveCoverImage(ctx, guid, imageData);
 		}
 
-		return json({ success: true, guid, version, coverImage });
+		return json({ guid, version, coverImage }, { status: 201 });
 	} catch (err) {
 		handleApiError(err, 'Failed to create definition');
 	}

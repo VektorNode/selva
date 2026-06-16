@@ -1,5 +1,6 @@
-import { error, redirect } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { bootstrapUserSession } from '$lib/server/auth-bootstrap.server';
 import {
@@ -19,14 +20,15 @@ import {
 export const GET: RequestHandler = async ({ url, cookies }) => {
 	const emailLink = getAuthProvider().emailLink;
 	if (!emailLink) {
-		throw error(501, 'Email sign-in is not supported by this provider.');
+		apiError(501, ApiErrorCode.INTERNAL, 'Email sign-in is not supported by this provider.');
 	}
 
 	// Pass the full URL through so the adapter can read whatever query
 	// params it needs (Supabase wants `token_hash` + `type`; a future
 	// adapter might use a different shape).
 	const result = await emailLink.verifyMagicLink(url.toString());
-	if (!result) throw error(401, 'This sign-in link is invalid or has expired.');
+	if (!result)
+		apiError(401, ApiErrorCode.UNAUTHORIZED, 'This sign-in link is invalid or has expired.');
 
 	await bootstrapUserSession(result.user);
 

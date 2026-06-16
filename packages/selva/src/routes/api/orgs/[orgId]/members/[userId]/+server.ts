@@ -1,5 +1,4 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import {
 	OrgRoleSchema,
@@ -10,7 +9,7 @@ import {
 } from '@selvajs/platform';
 import { getOrganizationProvider } from '$lib/server/providers.server';
 import { requireManageOrgMembers } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 
 /**
  * PATCH /api/orgs/[orgId]/members/[userId]
@@ -46,7 +45,7 @@ const PatchSchema = z
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const { orgId, userId } = params;
-	if (!orgId || !userId) throw error(400, 'Missing org ID or user ID');
+	if (!orgId || !userId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing org ID or user ID');
 
 	// Owner+admin gate (covers permission edits). Role-change branch adds an
 	// extra owner-only gate below.
@@ -56,7 +55,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	// Tenancy — never trust URL orgId in isolation. The acting context decides
 	// which tenant this request applies to.
 	if (ctx.actingOrgId !== orgId) {
-		throw error(403, 'Acting org does not match the target org.');
+		apiError(403, ApiErrorCode.FORBIDDEN, 'Acting org does not match the target org.');
 	}
 
 	const body = await request.json().catch(() => null);
@@ -71,13 +70,14 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		orgs.getOrgMember(ctx, orgId, ctx.userId),
 		orgs.getOrgMember(ctx, orgId, userId)
 	]);
-	if (!target) throw error(404, 'Member not found in this organization.');
-	if (!actorMember) throw error(403, 'You are not a member of this organization.');
+	if (!target) apiError(404, ApiErrorCode.NOT_FOUND, 'Member not found in this organization.');
+	if (!actorMember)
+		apiError(403, ApiErrorCode.FORBIDDEN, 'You are not a member of this organization.');
 
 	// Role change branch: owner-only.
 	if (patch.role !== undefined && patch.role !== target.role) {
 		if (actorMember.role !== 'owner') {
-			throw error(403, 'Only the org owner can change roles.');
+			apiError(403, ApiErrorCode.FORBIDDEN, 'Only the org owner can change roles.');
 		}
 		// Sole-owner invariant: cannot demote the last owner.
 		if (target.role === 'owner' && patch.role !== 'owner') {
@@ -86,8 +86,9 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 				(m) => m.role === 'owner' && m.userId !== target.userId && !m.deletedAt
 			);
 			if (otherOwners.length === 0) {
-				throw error(
+				apiError(
 					409,
+					ApiErrorCode.CONFLICT,
 					'Cannot demote the sole owner of this organization. Promote another member to owner first.'
 				);
 			}
@@ -105,8 +106,9 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 				: new Set<OrgPermission>(ALL_ORG_PERMISSIONS);
 		const invalid = patch.permissions.filter((p) => !valid.has(p));
 		if (invalid.length > 0) {
-			throw error(
+			apiError(
 				400,
+				ApiErrorCode.VALIDATION_FAILED,
 				`Permissions [${invalid.join(', ')}] cannot be assigned to a ${effectiveRole}.`
 			);
 		}
@@ -117,5 +119,5 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		}
 	}
 
-	return json({ success: true });
+	return new Response(null, { status: 204 });
 };

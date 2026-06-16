@@ -341,7 +341,7 @@ describe('§11 — project edit gates', () => {
 			params: { id: mallorysProject.id },
 			body: { description: 'updated by owner' }
 		});
-		expect(res.status).toBe(200);
+		expect(res.status).toBe(204);
 	});
 
 	it('Project viewer tries to delete a definition — 403', async () => {
@@ -383,7 +383,7 @@ describe('§11 — reclaim & owner removal', () => {
 			request: new Request('http://test.local/'),
 			url: new URL('http://test.local/')
 		} as never);
-		expect(res?.status).toBe(200);
+		expect(res?.status).toBe(201);
 
 		// Both Alice and Bob now exist as project members; Alice still owner.
 		const owners = await tp.config.data.projects.listProjectMembers(

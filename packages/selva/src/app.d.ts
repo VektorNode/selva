@@ -4,6 +4,18 @@ declare global {
 	namespace App {
 		interface Error {
 			message: string;
+			/**
+			 * Stable machine-readable error code (e.g. `VALIDATION_FAILED`,
+			 * `NOT_FOUND`). Present on every error this app raises via
+			 * `api-errors.ts`; consumers (UI + external CLI) can branch on it
+			 * without parsing `message`. See `ApiErrorCode` in api-errors.ts.
+			 */
+			code?: string;
+			/**
+			 * Per-field validation messages, keyed by dotted field path. Only
+			 * present on `VALIDATION_FAILED` errors raised from Zod parsing.
+			 */
+			fields?: Record<string, string>;
 			details?: string;
 		}
 		interface Locals {

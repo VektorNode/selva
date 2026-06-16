@@ -1,5 +1,6 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { flag, getComputeServerConfigStore } from '$lib/server/providers.server';
 import { requireManageOrgCompute } from '$lib/server/access.server';
 import {
@@ -43,8 +44,9 @@ interface IncomingConfig {
 
 function requireFlag() {
 	if (!flag('ALLOW_ORG_COMPUTE_OVERRIDE')) {
-		throw error(
+		apiError(
 			403,
+			ApiErrorCode.FORBIDDEN,
 			'Per-org compute override is disabled on this instance (ALLOW_ORG_COMPUTE_OVERRIDE).'
 		);
 	}
@@ -60,7 +62,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	requireFlag();
 	requireManageOrgCompute(locals);
 	const ctx = locals.ctx!;
-	if (!ctx.actingOrgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
 
 	const config = await getComputeServerConfigStore().getConfig(ctx);
 	const orgId = ctx.actingOrgId;
@@ -104,26 +106,30 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	requireFlag();
 	requireManageOrgCompute(locals);
 	const ctx = locals.ctx!;
-	if (!ctx.actingOrgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
 	const orgId = ctx.actingOrgId;
 
 	const body = await request.json().catch(() => null);
-	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
+	if (!body || typeof body !== 'object')
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid request body');
 	const incoming = body as IncomingConfig;
-	if (!Array.isArray(incoming.servers)) throw error(400, 'servers must be an array');
+	if (!Array.isArray(incoming.servers))
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'servers must be an array');
 
 	for (const s of incoming.servers) {
-		if (!s.id || typeof s.id !== 'string') throw error(400, 'Each server needs an id');
-		if (!s.label || typeof s.label !== 'string') throw error(400, 'Each server needs a label');
+		if (!s.id || typeof s.id !== 'string')
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs an id');
+		if (!s.label || typeof s.label !== 'string')
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a label');
 		if (!s.serverUrl || typeof s.serverUrl !== 'string')
-			throw error(400, 'Each server needs a serverUrl');
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a serverUrl');
 		try {
 			new URL(s.serverUrl);
 		} catch {
-			throw error(400, `Invalid serverUrl: ${s.serverUrl}`);
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Invalid serverUrl: ${s.serverUrl}`);
 		}
 		if (s.apiKey !== undefined && s.apiKey !== null && typeof s.apiKey !== 'string')
-			throw error(400, 'apiKey must be a string, null, or omitted');
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a string, null, or omitted');
 	}
 
 	const provider = getComputeServerConfigStore();
@@ -159,7 +165,11 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		};
 		const visibleIds = new Set(serversVisibleTo(projected, orgId).map((s) => s.id));
 		if (!visibleIds.has(incoming.defaultServerId)) {
-			throw error(400, 'defaultServerId must reference a server visible to this organization');
+			apiError(
+				400,
+				ApiErrorCode.VALIDATION_FAILED,
+				'defaultServerId must reference a server visible to this organization'
+			);
 		}
 	}
 

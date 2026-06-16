@@ -97,7 +97,7 @@ describe('GET /api/invites — listing strips tokenHash', () => {
 
 		const res = await call(GET, { locals: aliceLocals });
 		expect(res.status).toBe(200);
-		const items = res.json as Array<Record<string, unknown>>;
+		const items = (res.json as { invites: Array<Record<string, unknown>> }).invites;
 		expect(items.length).toBeGreaterThanOrEqual(2);
 		for (const item of items) {
 			expect(item.tokenHash).toBeUndefined();

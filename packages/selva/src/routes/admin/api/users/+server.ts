@@ -1,11 +1,11 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getOrganizationProvider, getPermissionStore } from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import {
 	OrgPermissionSchema,
 	PlatformPermissionSchema,
@@ -32,8 +32,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 	requireManageInstanceUsers(locals);
 	const page = await getAuthProvider().listUsers({ limit: 200 });
 	if (page === null) {
-		throw error(
+		apiError(
 			501,
+			ApiErrorCode.INTERNAL,
 			'User management is not supported by the current auth provider. Configure DATA_PATH (local provider) or check your provider wiring.'
 		);
 	}
@@ -63,7 +64,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			};
 		})
 	);
-	return json(flattened);
+	return json({ users: flattened });
 };
 
 // POST — create a user + attach to default org with split permissions.
@@ -79,19 +80,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Only an existing platform admin may create a user with platform-scope perms.
 	if (platform.length > 0 && !hasPermission(locals.ctx!, 'instance_admin')) {
-		throw error(403, 'Only a platform admin can grant platform-scope permissions');
+		apiError(
+			403,
+			ApiErrorCode.FORBIDDEN,
+			'Only a platform admin can grant platform-scope permissions'
+		);
 	}
 
 	try {
 		let user;
 		if (auth.passwordAuth) {
-			if (!password) throw error(400, 'Password is required');
+			if (!password) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Password is required');
 			user = await auth.passwordAuth.createUserWithPassword(email, password);
 		} else if (auth.createUser) {
 			user = await auth.createUser(email);
 		} else {
-			throw error(
+			apiError(
 				501,
+				ApiErrorCode.INTERNAL,
 				`User creation is not supported by ${auth.name}. Users are managed externally.`
 			);
 		}

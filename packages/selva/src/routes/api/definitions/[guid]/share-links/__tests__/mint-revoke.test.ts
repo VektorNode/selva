@@ -173,7 +173,7 @@ describe('DELETE /api/definitions/[guid]/share-links/[linkId]', () => {
 			locals: aliceLocals,
 			params: { guid: def.record.guid, linkId }
 		});
-		expect(del.status).toBe(200);
+		expect(del.status).toBe(204);
 
 		const list = await call(GET, { locals: aliceLocals, params: { guid: def.record.guid } });
 		const body = list.json as { links: Array<unknown> };

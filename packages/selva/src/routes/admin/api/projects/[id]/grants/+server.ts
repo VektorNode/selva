@@ -1,5 +1,5 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import {
@@ -10,7 +10,7 @@ import {
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { SYSTEM_CONTEXT, type PlatformProjectGrant } from '@selvajs/platform';
 
 const CreateGrantBody = z.object({
@@ -20,10 +20,10 @@ const CreateGrantBody = z.object({
 });
 
 async function assertPlatformProject(id: string) {
-	if (!flag('ENABLE_PLATFORM_PROJECTS')) throw error(404, 'Not found');
+	if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
 	const project = await getProjectProvider().getProject(SYSTEM_CONTEXT, id);
 	if (!project || project.visibility !== 'platform') {
-		throw error(404, 'Platform project not found');
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Platform project not found');
 	}
 	return project;
 }
@@ -31,7 +31,7 @@ async function assertPlatformProject(id: string) {
 export const GET: RequestHandler = async ({ params, locals }) => {
 	requireInstanceAdmin(locals);
 	const { id } = params;
-	if (!id) throw error(400, 'Missing project ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
 	try {
 		await assertPlatformProject(id);
 		const grants = await getPlatformProjectGrantStore().listByProject(SYSTEM_CONTEXT, id);
@@ -44,7 +44,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const user = requireInstanceAdmin(locals);
 	const { id } = params;
-	if (!id) throw error(400, 'Missing project ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
 
 	const body = await request.json().catch(() => null);
 	const parsed = CreateGrantBody.safeParse(body);
@@ -57,10 +57,16 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		// catch typos here; Supabase will eventually enforce via DB FK.
 		if (parsed.data.granteeType === 'org') {
 			const org = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, parsed.data.granteeId);
-			if (!org) throw error(400, `Organization '${parsed.data.granteeId}' not found`);
+			if (!org)
+				apiError(
+					400,
+					ApiErrorCode.VALIDATION_FAILED,
+					`Organization '${parsed.data.granteeId}' not found`
+				);
 		} else {
 			const profile = await getUserProfileStore().getProfile(SYSTEM_CONTEXT, parsed.data.granteeId);
-			if (!profile) throw error(400, `User '${parsed.data.granteeId}' not found`);
+			if (!profile)
+				apiError(400, ApiErrorCode.VALIDATION_FAILED, `User '${parsed.data.granteeId}' not found`);
 		}
 
 		const grant: PlatformProjectGrant = {

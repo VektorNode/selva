@@ -1,5 +1,5 @@
-import { error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { GuidSchema, definitionPaths } from '@selvajs/platform/definitions';
 import { getDefinitionMeta, getStorageProvider } from '$lib/server/providers.server';
 import { requireCanViewProject } from '$lib/server/access.server';
@@ -46,28 +46,28 @@ const COVER_PATH_PATTERN =
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const storagePath = params.path;
-	if (!storagePath) throw error(400, 'Missing path');
+	if (!storagePath) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing path');
 
 	// 1. Path-shape gate — only cover images are served here.
 	const match = COVER_PATH_PATTERN.exec(storagePath);
-	if (!match) throw error(404, 'File not found');
+	if (!match) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
 	const [, guid, rawExt] = match;
 	const ext = `.${rawExt.toLowerCase()}`;
-	if (!ALLOWED_EXTENSIONS[ext]) throw error(404, 'File not found');
+	if (!ALLOWED_EXTENSIONS[ext]) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
 
 	// Belt-and-suspenders: the regex already validated the GUID shape, but
 	// running it through the canonical schema keeps the contract tied to
 	// one source of truth.
 	const guidParsed = GuidSchema.safeParse(guid);
-	if (!guidParsed.success) throw error(404, 'File not found');
+	if (!guidParsed.success) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
 
-	if (!locals.ctx) throw error(401, 'Unauthorized');
+	if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
 
 	// 2. Per-resource auth — the caller must be allowed to view the
 	// definition's parent project. Mirrors the typed
 	// `/api/definitions/[guid]/image/[filename]` route.
 	const record = await getDefinitionMeta().get(locals.ctx, guidParsed.data);
-	if (!record) throw error(404, 'File not found');
+	if (!record) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
 	await requireCanViewProject(locals, record.projectId);
 
 	// 3. Read the canonical path from `definitionPaths` rather than echoing
@@ -75,7 +75,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	// passes the regex but resolves to something else after URL decoding.
 	const canonicalPath = definitionPaths.image(guidParsed.data);
 	const bytes = await getStorageProvider().get(canonicalPath);
-	if (!bytes) throw error(404, 'File not found');
+	if (!bytes) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
 
 	return new Response(Buffer.from(bytes), {
 		headers: {

@@ -1,8 +1,7 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { getDefinitionService } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
-import { handleApiError } from '$lib/server/api-errors';
+import { handleApiError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { GuidSchema } from '@selvajs/platform/definitions';
 
 /**
@@ -12,15 +11,16 @@ import { GuidSchema } from '@selvajs/platform/definitions';
  */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const guidParsed = GuidSchema.safeParse(params.guid);
-	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
+	if (!guidParsed.success) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid or missing GUID');
 	const versionParsed = GuidSchema.safeParse(params.versionId);
-	if (!versionParsed.success) throw error(400, 'Invalid or missing version ID');
+	if (!versionParsed.success)
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid or missing version ID');
 
 	const { ctx } = await requireEditableDefinition(locals, guidParsed.data);
 
 	try {
 		await getDefinitionService().deleteVersion(ctx, guidParsed.data, versionParsed.data);
-		return json({ success: true });
+		return new Response(null, { status: 204 });
 	} catch (err) {
 		handleApiError(err, 'Failed to delete version');
 	}

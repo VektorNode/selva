@@ -12,6 +12,8 @@
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { POST as createDefinition } from '../+server.js';
+
+type CreateDefinitionEvent = Parameters<typeof createDefinition>[0];
 import {
 	freshProviders,
 	seedAcme,
@@ -20,7 +22,6 @@ import {
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
 import { SYSTEM_CONTEXT, type ComputeServerConfig } from '@selvajs/platform';
-import type { RequestEvent } from '@sveltejs/kit';
 
 let tp: TestProviders | null = null;
 
@@ -77,13 +78,13 @@ function createEvent(
 	user: { id: string },
 	ctx: unknown,
 	form: FormData
-): RequestEvent {
+): CreateDefinitionEvent {
 	return {
 		request: new Request('http://test.local/api/definitions', { method: 'POST', body: form }),
 		locals: { user, ctx },
 		params: {},
 		url: new URL('http://test.local/api/definitions')
-	} as unknown as RequestEvent;
+	} as unknown as CreateDefinitionEvent;
 }
 
 function uploadForm(projectId: string): FormData {

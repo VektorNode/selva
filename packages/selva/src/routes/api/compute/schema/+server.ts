@@ -3,15 +3,15 @@ import {
 	ComputeServerUnconfiguredError
 } from '$lib/server/compute/resolve.server';
 import { requireCanCreateDefinition } from '$lib/server/access.server';
-import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { camelcaseKeys } from '@selvajs/compute/core';
 import type { UISchema } from '@selvajs/schemas';
 
 export const POST: RequestHandler = async ({ request, locals, url }) => {
 	const projectId = url.searchParams.get('projectId');
 	if (!projectId) {
-		throw error(400, 'projectId query parameter is required');
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'projectId query parameter is required');
 	}
 
 	// Same gate as POST /api/definitions: container projects need owner/editor;
@@ -30,7 +30,8 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			definitionPin: computeServerId
 		});
 	} catch (err) {
-		if (err instanceof ComputeServerUnconfiguredError) throw error(503, err.message);
+		if (err instanceof ComputeServerUnconfiguredError)
+			apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, err.message);
 		throw err;
 	}
 	const formData = await request.formData();
@@ -46,11 +47,11 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	try {
 		response = await fetch(schemaUrl, { method: 'POST', headers, body: formData });
 	} catch {
-		throw error(503, 'Compute server is unreachable');
+		apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, 'Compute server is unreachable');
 	}
 
 	if (!response.ok) {
-		throw error(response.status as 400 | 500 | 502, 'Compute server error');
+		apiError(response.status, ApiErrorCode.COMPUTE_UNAVAILABLE, 'Compute server error');
 	}
 
 	// Compute returns [{ FileName, Schemas }] with PascalCase wrapper keys only.
@@ -64,7 +65,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	const schemas = results.flatMap((r) => r.schemas ?? []);
 
 	if (schemas.length === 0) {
-		throw error(422, 'No schemas found in definition');
+		apiError(422, ApiErrorCode.UNPROCESSABLE, 'No schemas found in definition');
 	}
 
 	return new Response(JSON.stringify(schemas), {

@@ -2,7 +2,8 @@ import { spawn } from 'child_process';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { env } from '$env/dynamic/private';
-import { json, type RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { requirePermission } from '$lib/server/access.server';
 import { checkForUpdate } from '$lib/server/updateCheck.server';
 

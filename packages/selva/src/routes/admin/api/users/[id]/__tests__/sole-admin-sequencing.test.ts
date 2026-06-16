@@ -53,7 +53,7 @@ describe('§2 sole-admin invariant — DELETE /admin/api/users/[id]', () => {
 		const aliceLocals = await actAs(tp, alice.id);
 
 		const res = await call(DELETE, { locals: aliceLocals, params: { id: bob.id } });
-		expect(res.status).toBe(200);
+		expect(res.status).toBe(204);
 
 		const bobAfter = await tp.authUsers.findById(bob.id);
 		expect(bobAfter).toBeNull();
@@ -83,7 +83,7 @@ describe('§2 sole-admin invariant — POST /admin/api/users/[id]/disable', () =
 		const aliceLocals = await actAs(tp, alice.id);
 
 		const res = await call(DISABLE, { locals: aliceLocals, params: { id: bob.id } });
-		expect(res.status).toBe(200);
+		expect(res.status).toBe(204);
 
 		const bobAfter = await tp.authUsers.findById(bob.id);
 		expect(bobAfter?.disabled).toBe(true);

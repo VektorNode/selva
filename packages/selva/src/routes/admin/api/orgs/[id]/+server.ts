@@ -1,14 +1,14 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { getOrganizationProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { UpdateOrgSchema, ProviderError } from '@selvajs/platform';
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	requireInstanceAdmin(locals);
 	const { id } = params;
-	if (!id) throw error(400, 'Missing org ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing org ID');
 	const ctx = locals.ctx!;
 
 	const body = await request.json().catch(() => null);
@@ -21,7 +21,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		return json(updated);
 	} catch (err) {
 		if (err instanceof ProviderError && err.statusCode === 409) {
-			throw error(409, err.message);
+			apiError(409, ApiErrorCode.CONFLICT, err.message);
 		}
 		handleApiError(err, 'Failed to update org');
 	}
@@ -30,12 +30,12 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	requireInstanceAdmin(locals);
 	const { id } = params;
-	if (!id) throw error(400, 'Missing org ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing org ID');
 	const ctx = locals.ctx!;
 
 	try {
 		await getOrganizationProvider().deleteOrg(ctx, id);
-		return json({ success: true });
+		return new Response(null, { status: 204 });
 	} catch (err) {
 		handleApiError(err, 'Failed to delete org');
 	}

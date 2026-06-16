@@ -1,5 +1,4 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
 import {
@@ -8,7 +7,7 @@ import {
 	getPermissionStore
 } from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
-import { throwZodError } from '$lib/server/api-errors';
+import { throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import {
 	OrgPermissionSchema,
 	PlatformPermissionSchema,
@@ -31,7 +30,7 @@ const UpdatePermissionsBody = z.object({
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	requireManageInstanceUsers(locals);
 	const { id } = params;
-	if (!id) throw error(400, 'Missing user ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing user ID');
 
 	const body = await request.json().catch(() => null);
 	const parsed = UpdatePermissionsBody.safeParse(body);
@@ -47,16 +46,25 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		platform.some((p: PlatformPermission) => !existingPlatform.includes(p)) ||
 		existingPlatform.some((p: PlatformPermission) => !platform.includes(p));
 	if (platformChanged && !hasPermission(locals.ctx!, 'instance_admin')) {
-		throw error(403, 'Only a platform admin can change platform-scope permissions');
+		apiError(
+			403,
+			ApiErrorCode.FORBIDDEN,
+			'Only a platform admin can change platform-scope permissions'
+		);
 	}
 
 	const platformResult = await setUserPlatformPermissions(locals.ctx!, id, platform);
-	if (platformResult === 'not_found') throw error(404, 'User not found');
+	if (platformResult === 'not_found') apiError(404, ApiErrorCode.NOT_FOUND, 'User not found');
 	if (platformResult === 'not_supported')
-		throw error(501, 'Platform permission updates not supported by this auth provider');
+		apiError(
+			501,
+			ApiErrorCode.INTERNAL,
+			'Platform permission updates not supported by this auth provider'
+		);
 	if (platformResult === 'last_admin')
-		throw error(
+		apiError(
 			409,
+			ApiErrorCode.CONFLICT,
 			'Cannot remove the last instance admin. Promote another user to instance admin first.'
 		);
 
@@ -94,7 +102,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		}
 	}
 
-	return json({ success: true });
+	return new Response(null, { status: 204 });
 };
 
 // DELETE — remove user. The §2 sole-`instance_admin` invariant is enforced
@@ -103,28 +111,29 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	requireManageInstanceUsers(locals);
 	const { id } = params;
-	if (!id) throw error(400, 'Missing user ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing user ID');
 
 	const targetPerms = await getPermissionStore().getFor(locals.ctx!, id);
 	if (targetPerms.includes('instance_admin')) {
 		const others = await getPermissionStore().countInstanceAdminsExcluding(locals.ctx!, id);
 		if (others === 0) {
-			throw error(
+			apiError(
 				409,
+				ApiErrorCode.CONFLICT,
 				'Cannot delete the last instance admin. Promote another user to instance admin first.'
 			);
 		}
 	}
 
 	const result = await getAuthProvider().deleteUser(id);
-	if (result === 'not_found') throw error(404, 'User not found');
+	if (result === 'not_found') apiError(404, ApiErrorCode.NOT_FOUND, 'User not found');
 	if (result === 'not_supported')
-		throw error(501, 'User deletion not supported by this auth provider');
+		apiError(501, ApiErrorCode.INTERNAL, 'User deletion not supported by this auth provider');
 
 	// Cascade: drop the user-data row. Supabase no-ops (FK cascade); local
 	// removes the row from `user-data.json`. Symmetric to the `ensureUser`
 	// hook in `hooks.server.ts`.
 	await getDataProvider().onUserDeleted(SYSTEM_CONTEXT, id);
 
-	return json({ success: true });
+	return new Response(null, { status: 204 });
 };

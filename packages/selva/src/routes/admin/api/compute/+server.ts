@@ -1,5 +1,6 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { requireManageCompute } from '$lib/server/access.server';
 import {
@@ -49,7 +50,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		});
 	} catch (err) {
 		console.error('[Compute GET] Failed:', err);
-		throw error(500, 'Failed to load compute config');
+		apiError(500, ApiErrorCode.INTERNAL, 'Failed to load compute config');
 	}
 };
 
@@ -61,34 +62,47 @@ export const GET: RequestHandler = async ({ locals }) => {
 export const PUT: RequestHandler = async ({ request, locals }) => {
 	requireManageCompute(locals);
 	const body = await request.json().catch(() => null);
-	if (!body || typeof body !== 'object') throw error(400, 'Invalid request body');
+	if (!body || typeof body !== 'object')
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid request body');
 
 	const incoming = body as IncomingConfig;
-	if (!Array.isArray(incoming.servers)) throw error(400, 'servers must be an array');
+	if (!Array.isArray(incoming.servers))
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'servers must be an array');
 
 	for (const s of incoming.servers) {
-		if (!s.id || typeof s.id !== 'string') throw error(400, 'Each server needs an id');
-		if (!s.label || typeof s.label !== 'string') throw error(400, 'Each server needs a label');
+		if (!s.id || typeof s.id !== 'string')
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs an id');
+		if (!s.label || typeof s.label !== 'string')
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a label');
 		if (!s.serverUrl || typeof s.serverUrl !== 'string')
-			throw error(400, 'Each server needs a serverUrl');
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a serverUrl');
 		try {
 			new URL(s.serverUrl);
 		} catch {
-			throw error(400, `Invalid serverUrl: ${s.serverUrl}`);
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Invalid serverUrl: ${s.serverUrl}`);
 		}
 		if (s.sharedWith !== 'all' && !Array.isArray(s.sharedWith)) {
-			throw error(400, 'sharedWith must be "all" or an array of org ids');
+			apiError(
+				400,
+				ApiErrorCode.VALIDATION_FAILED,
+				'sharedWith must be "all" or an array of org ids'
+			);
 		}
 		if (Array.isArray(s.sharedWith) && s.sharedWith.some((x) => typeof x !== 'string')) {
-			throw error(400, 'sharedWith array must contain strings');
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'sharedWith array must contain strings');
 		}
 		if (s.apiKey !== undefined && s.apiKey !== null && typeof s.apiKey !== 'string')
-			throw error(400, 'apiKey must be a string, null, or omitted');
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a string, null, or omitted');
 	}
 
 	if (incoming.defaultServerId) {
 		const found = incoming.servers.find((s) => s.id === incoming.defaultServerId);
-		if (!found) throw error(400, 'defaultServerId must reference one of the submitted servers');
+		if (!found)
+			apiError(
+				400,
+				ApiErrorCode.VALIDATION_FAILED,
+				'defaultServerId must reference one of the submitted servers'
+			);
 	}
 
 	try {
@@ -109,6 +123,6 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		return new Response(null, { status: 204 });
 	} catch (err) {
 		console.error('[Compute PUT] Failed:', err);
-		throw error(500, 'Failed to save compute config');
+		apiError(500, ApiErrorCode.INTERNAL, 'Failed to save compute config');
 	}
 };

@@ -1,9 +1,9 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { slugify } from '$lib/server/slug';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 
@@ -17,7 +17,7 @@ const UpdatePlatformProjectBody = z
 async function loadPlatformProjectOr404(id: string) {
 	const project = await getProjectProvider().getProject(SYSTEM_CONTEXT, id);
 	if (!project || project.visibility !== 'platform') {
-		throw error(404, 'Platform project not found');
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Platform project not found');
 	}
 	return project;
 }
@@ -25,7 +25,7 @@ async function loadPlatformProjectOr404(id: string) {
 export const GET: RequestHandler = async ({ params, locals }) => {
 	requireInstanceAdmin(locals);
 	const { id } = params;
-	if (!id) throw error(400, 'Missing project ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
 	try {
 		const project = await loadPlatformProjectOr404(id);
 		return json(project);
@@ -37,7 +37,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	requireInstanceAdmin(locals);
 	const { id } = params;
-	if (!id) throw error(400, 'Missing project ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
 
 	const body = await request.json().catch(() => null);
 	const parsed = UpdatePlatformProjectBody.safeParse(body);
@@ -54,7 +54,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			patch.description = parsed.data.description ?? undefined;
 		}
 		await getProjectProvider().updateProject(SYSTEM_CONTEXT, id, patch);
-		return json({ success: true });
+		return new Response(null, { status: 204 });
 	} catch (err) {
 		handleApiError(err, 'Failed to update platform project');
 	}
@@ -63,11 +63,11 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	requireInstanceAdmin(locals);
 	const { id } = params;
-	if (!id) throw error(400, 'Missing project ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
 	try {
 		await loadPlatformProjectOr404(id);
 		await getProjectProvider().deleteProject(SYSTEM_CONTEXT, id);
-		return json({ success: true });
+		return new Response(null, { status: 204 });
 	} catch (err) {
 		handleApiError(err, 'Failed to delete platform project');
 	}

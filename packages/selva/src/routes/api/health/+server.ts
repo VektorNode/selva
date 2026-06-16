@@ -1,4 +1,5 @@
-import { json, type RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
 import { getBootHealth, isDegraded } from '$lib/server/bootHealth.server';

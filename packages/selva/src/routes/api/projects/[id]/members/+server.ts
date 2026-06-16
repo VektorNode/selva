@@ -1,9 +1,9 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanManageMembers, requireTargetIsOrgMember } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { ProjectRoleSchema, type ProjectMember } from '@selvajs/platform';
 
 const AddMemberSchema = z.object({
@@ -13,7 +13,7 @@ const AddMemberSchema = z.object({
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const { id } = params;
-	if (!id) throw error(400, 'Missing project ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
 	await requireCanManageMembers(locals, id);
 	const ctx = locals.ctx!;
 
@@ -27,7 +27,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const { id } = params;
-	if (!id) throw error(400, 'Missing project ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
 	await requireCanManageMembers(locals, id);
 	const ctx = locals.ctx!;
 
@@ -36,7 +36,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	if (!parsed.success) throwZodError(parsed.error);
 
 	const project = await getProjectProvider().getProject(ctx, id);
-	if (!project) throw error(404, 'Project not found');
+	if (!project) apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
 	await requireTargetIsOrgMember(locals, project.orgId, parsed.data.userId);
 
 	const now = new Date().toISOString();

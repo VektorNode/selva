@@ -1,8 +1,8 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanReclaim } from '$lib/server/access.server';
-import { handleApiError } from '$lib/server/api-errors';
+import { handleApiError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import type { ProjectMember } from '@selvajs/platform';
 
 /**
@@ -12,7 +12,7 @@ import type { ProjectMember } from '@selvajs/platform';
  */
 export const POST: RequestHandler = async ({ params, locals }) => {
 	const { id } = params;
-	if (!id) throw error(400, 'Missing project ID');
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
 
 	const { user, ctx } = await requireCanReclaim(locals, id);
 
@@ -29,7 +29,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 
 	try {
 		await getProjectProvider().addProjectMember(ctx, member);
-		return json({ success: true, member });
+		return json({ member }, { status: 201 });
 	} catch (err) {
 		handleApiError(err, 'Failed to reclaim project');
 	}

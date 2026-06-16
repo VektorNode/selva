@@ -52,7 +52,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 			params: { orgId: acme.id, userId: bob.id },
 			body: { role: 'admin' }
 		});
-		expect(res.status).toBe(200);
+		expect(res.status).toBe(204);
 
 		const updated = await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, acme.id, bob.id);
 		expect(updated?.role).toBe('admin');
@@ -84,7 +84,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 			params: { orgId: acme.id, userId: bob.id },
 			body: { permissions: ['manage_definitions', 'manage_projects'] }
 		});
-		expect(res.status).toBe(200);
+		expect(res.status).toBe(204);
 
 		const updated = await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, acme.id, bob.id);
 		expect(updated?.permissions).toEqual(
@@ -155,7 +155,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 			params: { orgId: acme.id, userId: bob.id },
 			body: { role: 'owner' }
 		});
-		expect(promote.status).toBe(200);
+		expect(promote.status).toBe(204);
 
 		// Now demote original owner (Bob remains as second owner)
 		const demote = await call(PATCH, {
@@ -163,6 +163,6 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 			params: { orgId: acme.id, userId: owner.id },
 			body: { role: 'member' }
 		});
-		expect(demote.status).toBe(200);
+		expect(demote.status).toBe(204);
 	});
 });

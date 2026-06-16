@@ -1,9 +1,9 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { getOrganizationProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import {
 	CreateOrgSchema,
 	MAX_PAGE_LIMIT,
@@ -60,7 +60,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	} catch (err) {
 		// Slug collision is the most likely failure mode — surface it cleanly.
 		if (err instanceof ProviderError && err.statusCode === 409) {
-			throw error(409, err.message);
+			apiError(409, ApiErrorCode.CONFLICT, err.message);
 		}
 		handleApiError(err, 'Failed to create org');
 	}

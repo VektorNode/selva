@@ -1,5 +1,6 @@
-import { error, redirect } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { bootstrapUserSession } from '$lib/server/auth-bootstrap.server';
 import {
@@ -20,15 +21,15 @@ import {
  */
 export const GET: RequestHandler = async ({ url, cookies }) => {
 	const code = url.searchParams.get('code');
-	if (!code) throw error(400, 'Missing authorization code');
+	if (!code) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing authorization code');
 
 	const oauth = getAuthProvider().oauth;
 	if (!oauth) {
-		throw error(501, 'OAuth is not supported by the configured auth provider.');
+		apiError(501, ApiErrorCode.INTERNAL, 'OAuth is not supported by the configured auth provider.');
 	}
 
 	const result = await oauth.exchangeOAuthCode(code);
-	if (!result) throw error(401, 'OAuth exchange failed');
+	if (!result) apiError(401, ApiErrorCode.UNAUTHORIZED, 'OAuth exchange failed');
 
 	await bootstrapUserSession(result.user);
 

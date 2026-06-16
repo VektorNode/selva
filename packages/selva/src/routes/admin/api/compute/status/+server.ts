@@ -1,5 +1,6 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { findServerById } from '@selvajs/platform';
 import { requireManageCompute } from '$lib/server/access.server';
@@ -20,12 +21,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	requireManageCompute(locals);
 
 	const serverId = url.searchParams.get('serverId');
-	if (!serverId) throw error(400, 'serverId required');
+	if (!serverId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'serverId required');
 
 	// Admin route — read the full config; admin can probe any server.
 	const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
 	const server = findServerById(config, serverId);
-	if (!server) throw error(404, 'Server not found');
+	if (!server) apiError(404, ApiErrorCode.NOT_FOUND, 'Server not found');
 
 	try {
 		const [healthRes, versionRes, pluginsRes] = await Promise.all([

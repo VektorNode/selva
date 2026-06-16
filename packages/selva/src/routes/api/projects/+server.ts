@@ -1,10 +1,10 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanCreateProject } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { slugify } from '$lib/server/slug';
 import { ProjectVisibilitySchema, ProviderError, type Project } from '@selvajs/platform';
 
@@ -35,7 +35,7 @@ const CreateProjectBody = z.object({
 
 export const GET: RequestHandler = async ({ locals }) => {
 	const ctx = locals.ctx!;
-	if (!ctx.actingOrgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
 	try {
 		const page = await getProjectProvider().listProjects(ctx, ctx.actingOrgId, { limit: 200 });
 		return json({ projects: page.items });
@@ -46,7 +46,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const ctx = locals.ctx!;
-	if (!ctx.actingOrgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
 	await requireCanCreateProject(locals, ctx.actingOrgId);
 
 	const body = await request.json().catch(() => null);
@@ -55,7 +55,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const autoJoinOnUpload = parsed.data.autoJoinOnUpload ?? false;
 	if (autoJoinOnUpload && parsed.data.visibility !== 'public') {
-		throw error(400, 'autoJoinOnUpload requires visibility=public');
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'autoJoinOnUpload requires visibility=public');
 	}
 
 	const projectStore = getProjectProvider();
@@ -89,12 +89,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return json(project, { status: 201 });
 		} catch (err) {
 			if (isNameConflict(err)) {
-				throw error(409, 'A project with that name already exists in this organization.');
+				apiError(
+					409,
+					ApiErrorCode.CONFLICT,
+					'A project with that name already exists in this organization.'
+				);
 			}
 			if (isSlugConflict(err)) continue;
 			handleApiError(err, 'Failed to create project');
 		}
 	}
 
-	throw error(409, 'Could not pick a unique project slug after several attempts.');
+	apiError(
+		409,
+		ApiErrorCode.CONFLICT,
+		'Could not pick a unique project slug after several attempts.'
+	);
 };

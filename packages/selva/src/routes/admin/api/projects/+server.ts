@@ -1,10 +1,10 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { flag, getProjectProvider, getOrganizationProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { slugify } from '$lib/server/slug';
 import { ProviderError, SYSTEM_CONTEXT, type Project } from '@selvajs/platform';
 
@@ -46,7 +46,7 @@ const CreatePlatformProjectBody = z.object({
  */
 export const GET: RequestHandler = async ({ locals }) => {
 	requireInstanceAdmin(locals);
-	if (!flag('ENABLE_PLATFORM_PROJECTS')) throw error(404, 'Not found');
+	if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
 	try {
 		// Listing across orgs requires walking each org. Fast enough for the
 		// admin surface; if instance scale ever demands it, add a dedicated
@@ -69,7 +69,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = requireInstanceAdmin(locals);
-	if (!flag('ENABLE_PLATFORM_PROJECTS')) throw error(404, 'Not found');
+	if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
 	const ctx = locals.ctx!;
 
 	const body = await request.json().catch(() => null);
@@ -80,10 +80,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// they pass an explicit `orgId`, validate it exists.
 	const hostOrgId = parsed.data.orgId ?? ctx.actingOrgId;
 	if (!hostOrgId) {
-		throw error(400, 'A host orgId is required (no active organization in context).');
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			'A host orgId is required (no active organization in context).'
+		);
 	}
 	const hostOrg = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, hostOrgId);
-	if (!hostOrg) throw error(400, `Host organization '${hostOrgId}' not found.`);
+	if (!hostOrg)
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, `Host organization '${hostOrgId}' not found.`);
 
 	const projectStore = getProjectProvider();
 	const baseSlug = slugify(parsed.data.name) || 'platform-project';
@@ -113,12 +118,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return json(project, { status: 201 });
 		} catch (err) {
 			if (isNameConflict(err)) {
-				throw error(409, 'A project with that name already exists in the host organization.');
+				apiError(
+					409,
+					ApiErrorCode.CONFLICT,
+					'A project with that name already exists in the host organization.'
+				);
 			}
 			if (isSlugConflict(err)) continue;
 			handleApiError(err, 'Failed to create platform project');
 		}
 	}
 
-	throw error(409, 'Could not pick a unique project slug after several attempts.');
+	apiError(
+		409,
+		ApiErrorCode.CONFLICT,
+		'Could not pick a unique project slug after several attempts.'
+	);
 };

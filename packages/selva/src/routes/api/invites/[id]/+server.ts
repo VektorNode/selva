@@ -1,14 +1,13 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { getInviteStore } from '$lib/server/providers.server';
 import { requireManageOrgMembers } from '$lib/server/access.server';
-import { handleApiError } from '$lib/server/api-errors';
+import { handleApiError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 
 // DELETE — revoke a pending invite. Consumed invites are preserved for audit.
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	requireManageOrgMembers(locals);
 	const ctx = locals.ctx!;
-	if (!ctx.actingOrgId) throw error(400, 'No active organization');
+	if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
 	const id = params.id!;
 	try {
 		// `manage_org_members` is org-scoped, so a permitted caller must not be
@@ -26,9 +25,9 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 			}
 			cursor = page.nextCursor ?? undefined;
 		} while (cursor);
-		if (!found) throw error(404, 'Invite not found');
+		if (!found) apiError(404, ApiErrorCode.NOT_FOUND, 'Invite not found');
 		await store.revoke(ctx, id);
-		return json({ success: true });
+		return new Response(null, { status: 204 });
 	} catch (err) {
 		handleApiError(err, 'Failed to revoke invite');
 	}

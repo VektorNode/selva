@@ -1,9 +1,9 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { providers, flag } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
-import { handleApiError, throwZodError } from '$lib/server/api-errors';
+import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { GuidSchema } from '@selvajs/platform/definitions';
 import {
 	CreateShareLinkInputSchema,
@@ -14,7 +14,11 @@ import { hashToken, mintRawToken } from '$lib/server/shareLinks/token.server';
 
 function assertSharingEnabled() {
 	if (!flag('ENABLE_SHARING')) {
-		throw error(404, 'Share links are disabled on this instance (ENABLE_SHARING).');
+		apiError(
+			404,
+			ApiErrorCode.NOT_FOUND,
+			'Share links are disabled on this instance (ENABLE_SHARING).'
+		);
 	}
 }
 
@@ -36,7 +40,7 @@ function strip(link: ShareLink): SafeShareLink {
 export const GET: RequestHandler = async ({ params, locals }) => {
 	assertSharingEnabled();
 	const guidParsed = GuidSchema.safeParse(params.guid);
-	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
+	if (!guidParsed.success) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid or missing GUID');
 
 	const { ctx } = await requireEditableDefinition(locals, guidParsed.data);
 
@@ -56,7 +60,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 export const POST: RequestHandler = async ({ params, request, locals }) => {
 	assertSharingEnabled();
 	const guidParsed = GuidSchema.safeParse(params.guid);
-	if (!guidParsed.success) throw error(400, 'Invalid or missing GUID');
+	if (!guidParsed.success) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid or missing GUID');
 
 	const { ctx } = await requireEditableDefinition(locals, guidParsed.data);
 
