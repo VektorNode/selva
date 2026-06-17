@@ -7,9 +7,13 @@ published: true
 
 # Local Dev Setup
 
+This runs the full Selva web app on your own machine — the fastest way to see it working before you set up any servers. (For a real deployment, see [Get Started](getting-started/overview.md).)
+
 ## Prerequisites
 
-- **Node.js >= 20.6** and **pnpm >= 10**
+Install these first if you don't have them. **Node.js** runs JavaScript outside the browser; **pnpm** is the tool that downloads Selva's code dependencies (think of it as a package installer).
+
+- **Node.js >= 20.6** and **pnpm >= 10** — required
 - **.NET SDK 7.0+** — only if touching the C# plugin
 - **Rhino 8** — only if running the plugin
 - **Docker Desktop** — only if using the Supabase provider locally
@@ -27,9 +31,9 @@ pnpm build
 cp packages/selva/.env.example packages/selva/.env
 ```
 
-[`.env.example`](../packages/selva/.env.example) is the authoritative reference for every env var. At minimum:
+An `.env` file holds settings the app reads at startup — secrets and config you don't want hard-coded. [`.env.example`](../packages/selva/.env.example) lists every available setting with inline notes; you just copied it and now fill in a few values. At minimum:
 
-- Set `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` (instructions inline) — enough for the local provider.
+- Set `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` — two random secret strings the app uses to sign sessions and encrypt stored data. The `.env.example` comments show a command to generate them. That's all the `local` provider needs.
 - For Supabase, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` (see the [supabase-provider README](../packages/providers/supabase/README.md)) and `SELVA_AUTH_PROVIDER=supabase`.
 - For multi-org testing, set `SELVA_TENANCY=multi`.
 
@@ -67,5 +71,5 @@ Switch by changing `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAG
 ## Troubleshooting
 
 - **Compute 500s on solve** — verify Rhino.Compute is running and registered at `/admin/compute`.
-- **`Cross-site POST form submissions are forbidden`** — set `ORIGIN=https://your-domain.com` in `.env`.
+- **`Cross-site POST form submissions are forbidden`** — the app doesn't know its own public URL. Set `ORIGIN=https://your-domain.com` (or `http://localhost:3000` locally) in `.env`.
 - **First user can't sign in** — check `/setup` ran cleanly (available only on a fresh install with no users).

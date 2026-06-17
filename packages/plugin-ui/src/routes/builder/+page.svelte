@@ -18,8 +18,6 @@
 	import { onMount } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
-	import { getDuplicateSourceKeyParamIds } from '$lib/utils/validation';
-	import { setDuplicateSourceKeys } from '$lib/components/builder/duplicate-source-keys-context';
 
 	let sessionId = $state('');
 	let builderState = $state<ReturnType<typeof useBuilderState> | null>(null);
@@ -93,14 +91,6 @@
 		}
 		return ids;
 	});
-
-	// paramIds whose client/server source key collides with another input's. Provided via
-	// context so BuilderGroupItem can flag each offender inline as the key is edited.
-	const duplicateSourceKeyIds = $derived.by(() => {
-		const draft = builderState?.state.draft;
-		return draft ? getDuplicateSourceKeyParamIds(draft) : new Set<string>();
-	});
-	setDuplicateSourceKeys(() => duplicateSourceKeyIds);
 
 	const availableInputs = $derived(builderState?.state.availableInputs || []);
 	const availableOutputsUnplaced = $derived(builderState?.state.availableOutputs || []);

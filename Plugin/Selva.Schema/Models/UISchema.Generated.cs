@@ -461,7 +461,7 @@ namespace Selva.Schema.Models
         public string Kind { get; set; }
 
 /// <summary>
-/// The address the host resolves to fill this input — opaque to Selva, interpreted by the host per 'kind'. For 'client' it names WHICH producer app supplies the value (e.g. 'line-app', 'file-upload') so the host pre-routes to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. Must be unique across the schema's inputs: two inputs sharing a key bind to the same provider and the host cannot tell them apart. Ignored for kind='user'.
+/// The address the host resolves to fill this input — opaque to Selva, interpreted by the host per 'kind'. For 'client' it names WHICH producer app supplies the value (e.g. 'line-app', 'file-upload') so the host pre-routes to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. Keys need not be unique: the same producer/fetch may fill several inputs. Ignored for kind='user'.
 /// </summary>
         [JsonProperty("key")]
         public string Key { get; set; }

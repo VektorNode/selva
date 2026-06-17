@@ -17,15 +17,22 @@ Build a normal SvelteKit app, add the `@selvajs/*` packages, wrap them in whatev
 
 ```mermaid
 flowchart TB
-    subgraph app["Your SvelteKit app"]
-        routes["Your routes, branding, domain logic"]
-        ui["@selvajs/ui — viewer + controls"]
-        compute["@selvajs/compute — Rhino.Compute client"]
-        schemas["@selvajs/schemas — schema types"]
-        platform["@selvajs/platform + a provider — backend"]
-    end
-    app -->|solves over HTTP| rc["Rhino.Compute"]
+    routes["Your routes, branding, domain logic<br/>(the product you build)"]
+    ui["@selvajs/ui<br/>viewer + controls"]
+    compute["@selvajs/compute<br/>Rhino.Compute client"]
+    schemas["@selvajs/schemas<br/>schema types"]
+    platform["@selvajs/platform + a provider<br/>backend: auth, data, storage"]
+    rc["Rhino.Compute<br/>(your solve server)"]
+
+    routes -->|renders| ui
+    routes -->|reads/writes| platform
+    routes -->|sends inputs to| compute
+    ui -->|speaks| schemas
+    compute -->|speaks| schemas
+    compute -->|solves over HTTP| rc
 ```
+
+Read it top-down: **your app** is the product; it pulls in the viewer (`ui`), the compute client, and a backend (`platform` + provider) as building blocks. `ui` and `compute` both speak the same schema contract (`schemas`), and `compute` is the only piece that talks to your Rhino.Compute server. Take only the boxes you need.
 
 ## Building blocks
 

@@ -17,8 +17,10 @@ Grasshopper logic stays locked inside Rhino on the author's machine. Sharing it 
 
 ## Two halves
 
-- **The plugin** (`Selva.gha`) is where the author _designs the interface_. It reads the definition's parameters, maps them to web controls via a drag-and-drop designer, and saves that layout (the **schema**) into the `.gh` file.
-- **The web app** (`@selvajs/selva`) is where the interface _runs_. It loads the schema, renders the controls, and solves the definition through **Rhino.Compute** (headless Rhino). End users need no Rhino.
+- **The plugin** (`Selva.gha`) is where the author _designs the interface_. It reads the definition's parameters, maps them to web controls via a drag-and-drop designer, and saves that layout (the **schema**) into the `.gh` file. (A `.gha` is just a Grasshopper plugin file — like any other component you install.)
+- **The web app** (`@selvajs/selva`) is where the interface _runs_. It loads the schema, renders the controls, and solves the definition through **Rhino.Compute** — a copy of Rhino running on a server with no window, no mouse, just solving definitions on request. End users need no Rhino.
+
+> **New to the web side?** A few terms show up throughout these docs — _schema_, _Rhino.Compute_, _provider_, _the CLI_. Each is explained where it first matters, and the [Architecture](architecture.md) page lays them all out together. You don't need web-dev experience to follow along.
 
 One schema drives both, generated into TypeScript (UI) and C# (plugin) so they never drift.
 
@@ -48,8 +50,8 @@ flowchart LR
 
 ## Two ways to use it
 
-1. **Deploy the standalone app** with `@selvajs/selva` + the [CLI](CLI.md). A multi-user platform for hosting and sharing definitions. Most teams take this path.
-2. **Build your own app.** Selva's viewer, controls, and compute client ship as `@selvajs/*` npm packages to embed in your own product. See [Build your own app](getting-started/build-your-own-app.md).
+1. **Deploy the standalone app** with `@selvajs/selva` + the [CLI](CLI.md) (a command-line tool that sets up and runs your deployment for you). A multi-user platform for hosting and sharing definitions. Most teams take this path.
+2. **Build your own app.** Selva's viewer, controls, and compute client ship as reusable `@selvajs/*` code packages you can drop into your own product. See [Build your own app](getting-started/build-your-own-app.md).
 
 ## Next
 
