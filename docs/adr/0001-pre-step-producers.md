@@ -48,7 +48,7 @@ The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` i
 
 ### How values reach Grasshopper
 
-`values[paramId]` is set from sessionStorage → `transformInputParameter` wraps it per `paramType` (text/number/boolean) → `TreeBuilder.fromInputParams` builds the GH data tree server-side in [api/compute/+server.ts](../../packages/selva/src/routes/api/compute/+server.ts). For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write a JSON-stringified payload — the GH definition parses it via a script component (parapet's pattern).
+`values[paramId]` is set from sessionStorage → `transformInputParameter` wraps it per `paramType` (text/number/boolean) → `TreeBuilder.fromInputParams` builds the GH data tree server-side in [api/compute/+server.ts](../../packages/selva/src/routes/api/compute/+server.ts). For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write a JSON-stringified payload — the GH definition parses it via a script component.
 
 ### What's intentionally absent in v1
 
@@ -78,11 +78,11 @@ If your component imports anything Selva-specific, you've crossed the boundary. 
 
 ### Recipe: "Line Drawer" producer (concrete walkthrough)
 
-Pick this as the first one because it's representative of complex data and you have parapet's drawing logic to port from.
+Pick this as the first one because it's representative of complex data.
 
 #### Step 1 — extract the domain-pure component
 
-Take [parapet/.../service/segment-draw/parametric-line-app.svelte.ts](../../../parapet/packages/app/src/lib/services/segment-draw/parametric-line-app.svelte.ts) and the canvas component. Strip everything that touches Firebase, navigation, `objectState`, or any parapet-specific cache. The component should accept config props and fire `onDone(payload: LineData)`.
+Build (or port) a standalone line-drawing app and its canvas component. Keep it free of any backend, navigation, or app-specific cache dependencies. The component should accept config props and fire `onDone(payload: LineData)`.
 
 Land it in `packages/plugin-ui/src/lib/producers/line-drawer/LineDrawerApp.svelte` (or `packages/ui/...` if you want it usable across apps from day one).
 
@@ -160,7 +160,7 @@ In the schema builder, add a text input, toggle "External value" on. Save. The s
 
 - **For text inputs holding JSON**, the producer should `writeExternalValue({ value: JSON.stringify(payload) })` — keep `values[paramId]` a string so the selva-app's `transformInputParameter` doesn't fight you. (Or improve `transformInputParameter` to stringify objects when `paramType === 'text'` — see "future improvements" below.)
 - **Persistence across reloads**: sessionStorage scope is per-tab. Want survival across tabs/devices? Add a backend store. The storage helpers in `@selvajs/ui` are pluggable — swap `sessionStorage` for an `IPlatformDataStore` call without changing callers.
-- **The component should default to "no saved state"** unless you explicitly load it. Parapet's drawing app loaded from `curveDataCache`; for a clean start, skip that. You can re-add saved-state loading later.
+- **The component should default to "no saved state"** unless you explicitly load it. For a clean start, skip loading from any cache; you can re-add saved-state loading later.
 - **One producer route, many entry points.** The solver renders a link, but a "Tools" menu, an external link, an email — anyone can deep-link to `/preview/producer/line-drawer?session=X&for=Y`. The producer doesn't care where the user came from.
 
 ### Future improvements worth knowing about
@@ -301,7 +301,7 @@ function partitionInputs(schema) {
 
 ### Runtime flow in selva-app
 
-Replaces parapet's hand-written `buildLineValues` switch (see [parapet/.../compute/[slug]/+page.svelte:79-118](../../../parapet/packages/app/src/routes/compute/[slug]/+page.svelte#L79-L118)):
+Replaces a hand-written `buildLineValues`-style switch:
 
 ```ts
 async function gatherPreStepValues(
@@ -434,9 +434,9 @@ Schema using it:
 
 Runtime: route loads schema → `partitionInputs` → finds 1 pre-step input → renders `LineBuilder.Runner` (fullscreen) → user draws → output collected → `toDataTree` wraps as JSON string → merged into values map at `input.id` → solver receives complete inputs map and runs.
 
-## What this fixes vs. the parapet pattern
+## What this fixes vs. a hand-rolled pre-step pattern
 
-| Concern                          | Parapet today                                          | Selva with this design                          |
+| Concern                          | Hand-rolled pattern                                    | Selva with this design                          |
 | -------------------------------- | ------------------------------------------------------ | ----------------------------------------------- |
 | Producer binding                 | Top-level `inputType: 'polyline-draw'` per route       | Per-input `source.producer` in schema           |
 | Input matching                   | Nickname string match (`findId('line-data')`)          | Direct match by `input.id`                      |
@@ -445,10 +445,10 @@ Runtime: route loads schema → `partitionInputs` → finds 1 pre-step input →
 | Restricting attachable inputs    | Implicit (always means the line input)                 | Explicit `acceptableInputs`                     |
 | Routing                          | Separate routes (`/polyline-draw` → `/compute/[slug]`) | Same route, internal phase state                |
 
-What we should _keep_ from parapet:
+What's worth _keeping_ from such patterns:
 
-1. **Persistence across reloads.** Parapet's `curveDataCache` (localStorage + Firebase fallback) means a user drawing 40 lines doesn't lose them on refresh. Bake into the producer contract via `persist?: 'session' | 'platform'`.
-2. **Presets.** Parapet's `DataTreePreset` lets users save/load prior compute settings. If pre-step outputs are JSON-serializable (they are by contract), they fit into the same preset mechanism.
+1. **Persistence across reloads.** A local cache (e.g. localStorage with a backend fallback) means a user drawing 40 lines doesn't lose them on refresh. Bake into the producer contract via `persist?: 'session' | 'platform'`.
+2. **Presets.** A preset mechanism lets users save/load prior compute settings. If pre-step outputs are JSON-serializable (they are by contract), they fit into the same preset mechanism.
 
 ## Open questions / next decisions
 

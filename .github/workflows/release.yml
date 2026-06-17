@@ -162,7 +162,7 @@ jobs:
           # with private!=true), not hardcoded. The old `selva cli ui schemas`
           # list omitted @selvajs/platform + the providers, so a provider-only
           # bump bumped package.json/CHANGELOG but never published — silently
-          # breaking consumers (parafa) that pin `@selvajs/platform ^0.12.0`.
+          # breaking consumers  that pin `@selvajs/platform ^0.12.0`.
           # scripts/publishable-packages.mjs is dependency-free so it runs here
           # on the runner's system node, before `pnpm install`.
           while IFS=$'\t' read -r name local_ver _dir; do
@@ -277,7 +277,7 @@ jobs:
           # versions stay aligned (the `selva doctor` cli/runtime compat
           # check). @selvajs/ui, @selvajs/schemas, @selvajs/platform and the
           # providers version INDEPENDENTLY on their own changesets — they're
-          # consumed standalone from npm (parafa/parapet), so lockstepping
+          # consumed standalone from npm , so lockstepping
           # them to selva would just inflate their versions.
           version: pnpm changeset version
 

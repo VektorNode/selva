@@ -10,8 +10,8 @@
 //            `name<TAB>version<TAB>relativeDir`. The release workflow iterates
 //            this instead of a hardcoded `selva cli ui schemas` list, so a
 //            provider-/platform-only bump actually triggers a publish (the old
-//            list silently skipped those — the very packages parafa/parapet
-//            consume from npm).
+//            list silently skipped those — the very packages external
+//            consumers pull from npm).
 //
 //   --check  Assert the versioning model's invariants and exit non-zero on
 //            violation. Runs in PR CI so the model can't silently regress.

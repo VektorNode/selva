@@ -7,7 +7,7 @@
 //
 // Scope: the compute-app SDK — everything an external host app needs to embed a
 // Grasshopper-driven app (ComputeApp), drive solves, and wire pre-step
-// producers. Verified against real consumers (parafa, parapet): they import
+// producers. Verified against real external host apps: they import
 // ComputeApp + its types, the solve seam, and external/storage. Nothing else.
 //
 // Deliberately NOT public: design-system primitives (Button, Card, Dialog, …),
@@ -56,10 +56,10 @@ export {
 } from './compute/createSolveSession.svelte';
 
 // Client-slot context type (host apps render their own cell for client-sourced
-// inputs; parafa uses ClientSlotArgs).
+// inputs, and may commit a value back via ClientSlotArgs.onValueChange).
 export type { ClientSlotArgs, ClientSlot } from './contexts/clientSlotContext.svelte';
 
-// Pre-step producer transit storage (parafa wires producers via these).
+// Pre-step producer transit storage (host apps wire producers via these).
 export * from './external/storage';
 
 // Schema utilities a ComputeApp host reasonably needs to read/shape values.

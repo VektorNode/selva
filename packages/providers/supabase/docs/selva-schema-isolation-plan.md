@@ -5,7 +5,7 @@ conformance-verified (169/169 against a fresh `selva` DB from the committed
 migrations); consumer README updated (exposed-schemas onboarding, cross-boundary
 `selva.` guidance, clash caveat deleted); `minor` changeset written
 (`@selvajs/supabase-provider` — pre-1.0, so breaking-but-minor, not major).
-Remaining: **Parafa retrofit** (part 5), and the hosted-data-migration open
+Remaining: **consumer retrofit** (part 5), and the hosted-data-migration open
 question below (no hosted deployment on the old layout exists yet, so deferred).
 
 ## Bootstrap finding (changed the config approach)
@@ -32,16 +32,14 @@ old `public` layout as well.
 ## Why
 
 Every engine table currently lives in Postgres's `public` schema. A consuming
-app that shares the same database (e.g. Parafa) therefore shares the `public`
-namespace with the engine and must avoid the engine's table names — which is
-why Parafa's work-package entity is `jobs`, not `projects` (`projects` is
-already `public.projects`, owned by the engine). See parafa
-`docs/adr/0003-data-spine.md` §"Job is a general work-package".
+app that shares the same database therefore shares the `public` namespace with
+the engine and must avoid the engine's table names — e.g. a consumer wanting a
+work-package entity can't call it `projects` (`projects` is already
+`public.projects`, owned by the engine) and has to name around it.
 
 Moving engine objects into a dedicated `selva` schema removes the collision
 permanently: `selva.projects` and a consumer's own `public.projects` can
-coexist. The goal is long-term robustness for future shared-DB consumers, not
-solving a problem Parafa has today (Parafa already named around it).
+coexist. The goal is long-term robustness for future shared-DB consumers.
 
 ## Spike result (what's proven)
 
@@ -54,7 +52,7 @@ DB. All risk points passed:
   scariest unknown works.**
 - RLS helper functions (`selva.is_org_member`, etc.) evaluate cross-schema.
 - A `public` app table can FK into `selva.orgs` and use `selva.is_org_member()`
-  in its RLS policy — the exact Parafa cross-boundary pattern.
+  in its RLS policy — the exact consumer cross-boundary pattern.
 
 The **one catch**, also proven: PostgREST does not expose `selva` by default,
 and supabase-js defaults to the `public` schema. Both must be told about
@@ -141,25 +139,24 @@ sign-in client) need the same `db: { schema: 'selva' }` or explicit
   (qualified), which is more self-documenting than bare `public.`.
 - The shared-`public` name-clash caveat is **deleted** — it no longer applies.
 
-## Parafa retrofit (the only known existing consumer)
+## Consumer retrofit (the only known existing consumer)
 
 Real but mechanical, proven in the spike:
 
-- Harvested engine migrations (`0001_initial.sql`, `0005_definition_version_schema.sql`)
-  re-synced from the new `selva`-schema upstream.
-- Parafa's own spine migrations (`0002_parafa_spine.sql`, `0004_pm_spine.sql`)
-  change cross-boundary refs: `references public.orgs` → `references selva.orgs`,
+- Harvested engine migrations re-synced from the new `selva`-schema upstream.
+- The consumer's own spine migrations change cross-boundary refs:
+  `references public.orgs` → `references selva.orgs`,
   `public.is_org_member(org_id)` → `selva.is_org_member(org_id)`,
   `public.set_updated_at()` → `selva.set_updated_at()`,
   `public.is_instance_admin()` → `selva.is_instance_admin()`.
-- Parafa's PostgREST config adds `selva` to exposed schemas.
-- Parafa's `providers.server.ts` is unaffected (it constructs the provider via
-  the published package; the schema lives inside the provider's client).
-- Update parafa `docs/adr/0004-engine-drift-strategy.md` harvest table to the
-  new upstream filenames + record the schema move.
+- The consumer's PostgREST config adds `selva` to exposed schemas.
+- The consumer's provider construction is unaffected (it constructs the provider
+  via the published package; the schema lives inside the provider's client).
+- Update the consumer's own engine-drift docs to the new upstream filenames +
+  record the schema move.
 - A coordinated release: bump `@selvajs/supabase-provider` (minor at least —
   this is a breaking schema change for anyone on the old layout; arguably a
-  major), then Parafa bumps + applies the migration on a fresh `db reset`
+  major), then the consumer bumps + applies the migration on a fresh `db reset`
   locally and a planned migration on any hosted env.
 
 ## Sequencing
@@ -171,7 +168,7 @@ Real but mechanical, proven in the spike:
 3. Update provider README + delete the clash caveat.
 4. Version bump (decide minor vs major — leaning major: existing deployments
    need a real migration, not just an additive one).
-5. Parafa retrofit PR, gated on the provider release.
+5. Consumer retrofit PR, gated on the provider release.
 
 ## Open questions
 
@@ -181,11 +178,11 @@ Real but mechanical, proven in the spike:
   fresh-install SQL. The spike only tested fresh creation. **Before shipping,
   prove the data-preserving `set schema` path** (likely:
   `alter table public.orgs set schema selva;` for each table, then recreate the
-  policies/grants). Parafa local can `db reset`; a hosted Parafa cannot.
+  policies/grants). A consumer's local DB can `db reset`; a hosted one cannot.
 - ~~**Major vs minor version.**~~ **Resolved:** `minor`. The package is pre-1.0
   (0.12.0); under semver a 0.x breaking change bumps the minor, and a changesets
   `major` would force 1.0 prematurely. The breaking nature is called out
   loudly in the changeset body instead.
 - ~~**Whether to also gate this behind a config flag.**~~ **Resolved: hard-cut.**
-  One consumer (Parafa), no hosted old-layout deployment, so a flag's doubled
+  One consumer, no hosted old-layout deployment, so a flag's doubled
   test matrix buys nothing.

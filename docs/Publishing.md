@@ -1,170 +1,94 @@
 # Publishing
 
-How to release Selva. Two independent tracks: the **npm packages** (changesets — manual or CI) and the **Grasshopper plugin** (`.yak`, via `pnpm release:plugin` which tags `plugin-v*` — see [Plugin releases (Yak)](#plugin-releases-yak)). For shipping a single npm fix faster, see [Hotfix bypass](#hotfix-bypass).
+Two independent release tracks: **npm packages** (changesets) and **Grasshopper plugin** (`.yak` via `pnpm release:plugin`).
 
 ## Published packages
 
-Most packages publish to npm under `@selvajs/*`, in two versioning modes:
+`@selvajs/selva` and `@selvajs/cli` share a version (changeset `fixed` group) so their MAJOR stays aligned. All other packages version independently.
 
-- **`@selvajs/selva` + `@selvajs/cli`** are a changeset `fixed` group — they always share a version, so their MAJOR versions stay aligned (the `selva doctor` cli/runtime compatibility check depends on this).
-- **`@selvajs/ui`, `@selvajs/schemas`, `@selvajs/platform`, `@selvajs/local-provider`, `@selvajs/supabase-provider`** version **independently**, on their own changesets. They're consumed standalone from npm (e.g. by Parafa), so lockstepping them to selva would only inflate their versions.
+| Package                      | What it is                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `@selvajs/selva`             | Prebuilt SvelteKit app. Bundles ui + schemas + platform + providers.         |
+| `@selvajs/cli`               | `npx @selvajs/cli <dir>` scaffolds deployments; `selva <cmd>` for day-2 ops. |
+| `@selvajs/ui`                | Shared Svelte component library.                                             |
+| `@selvajs/schemas`           | UI schema types + TS/C# generators.                                          |
+| `@selvajs/platform`          | Provider interfaces + Zod schemas.                                           |
+| `@selvajs/local-provider`    | Filesystem implementation of platform interfaces.                            |
+| `@selvajs/supabase-provider` | Supabase implementation of platform interfaces.                              |
 
-| Published                    | What it is                                                                                       |
-| ---------------------------- | ------------------------------------------------------------------------------------------------ |
-| `@selvajs/selva`             | Prebuilt SvelteKit app. Bundles ui + schemas + platform + all providers. What operators install. |
-| `@selvajs/cli`               | `npx @selvajs/cli <dir>` scaffolds a deployment; `selva <cmd>` runs day-2 ops.                   |
-| `@selvajs/ui`                | Shared Svelte component library (also bundled into `@selvajs/selva`).                            |
-| `@selvajs/schemas`           | Generated UI schema types + the TS/C# generators.                                                |
-| `@selvajs/platform`          | Provider interfaces + Zod schemas. Consumed by apps building custom providers.                   |
-| `@selvajs/local-provider`    | Filesystem implementation of the platform interfaces.                                            |
-| `@selvajs/supabase-provider` | Supabase implementation of the platform interfaces.                                              |
+Private (never published): `@selvajs/header-auth-provider`, `@selvajs/plugin-ui`, `@selvajs/config`.
 
-`"private": true` (never published — bundled or internal): `@selvajs/header-auth-provider`, `@selvajs/plugin-ui`, `@selvajs/config`.
+The publish set is derived from the workspace by `scripts/publishable-packages.mjs` — adding a publishable package needs no edits to the release workflow.
 
-The publish set is **derived from the workspace** (every non-`private` package) by `scripts/publishable-packages.mjs` — both the release workflow and a CI guard use it, so adding a publishable package needs no edits to either. That script also enforces invariants (e.g. `@selvajs/selva` stays a self-contained bundle; no published package has a runtime dependency on a private one).
-
-## One-time setup
+## npm release flow
 
 ```bash
-npm login              # publish credentials
-npm whoami             # confirm @selvajs org membership
-```
-
-## Release flow (changesets)
-
-```bash
-pnpm changeset           # record what changed; pick bump size + summary
-pnpm changeset version   # apply bumps, write CHANGELOGs, rewrite workspace: deps
-pnpm release             # pnpm build && changeset publish
+pnpm changeset           # record what changed
+pnpm changeset version   # apply bumps + write CHANGELOGs
+pnpm release             # build + changeset publish
 git push --follow-tags
 ```
 
-`pnpm publish` (run by `changeset publish`) rewrites `workspace:*` and `catalog:` specs to real versions in the tarball. **Never use `npm publish`** — it ships the literal `workspace:*` string and breaks installs.
+**Never use `npm publish`** — it ships literal `workspace:*` strings. Always use `pnpm publish` or `changeset publish`.
 
 ## Automated releases (CI)
 
-`.github/workflows/release.yml` runs [changesets/action](https://github.com/changesets/action) on every push to `main`:
+`release.yml` runs on every push to `main` and `beta`:
 
-- Pending `.changeset/*.md` files → opens/updates a "Version Packages" PR with bumps + CHANGELOG entries applied.
-- Merged version PR → runs `pnpm release` and publishes in dep order.
+- **main**: pending changesets → opens "Version Packages" PR. Merging it triggers publish.
+- **beta**: versions as `x.y.z-beta.N` and publishes under the `beta` dist-tag. Requires `pnpm changeset pre enter beta` on the branch first.
 
-Setup once: npm **Trusted Publishing (OIDC)**, configured per package at npmjs.com → ‹package› → Settings → Trusted Publisher, pointing at this repo (`VektorNode/selva`) and `release.yml`. There is **no `NPM_TOKEN` secret** — auth is the GitHub→npm OIDC handshake (the workflow grants `id-token: write`). Setting `NPM_TOKEN` would override OIDC and break publishing. The handshake is per-package, so each published package needs its own Trusted Publisher entry.
-
-Operator-facing flow: author commits a `.changeset/*.md` with their PR → CI maintains the version PR → merging the version PR ships the release → operators run `npm run update`.
+Auth is GitHub→npm **OIDC** (`id-token: write`). There is **no `NPM_TOKEN`** — setting one would break publishing. Each published package needs its own Trusted Publisher entry at npmjs.com → Settings → Trusted Publisher (repo: `VektorNode/selva`, workflow: `release.yml`).
 
 ## Plugin releases (Yak)
 
-The Grasshopper plugin has its **own version line** — `Plugin/Selva.GH/Selva.GH.csproj` `<Version>`, surfaced to yak via the `$version` token in the manifests — and its own cadence, independent of the npm packages. Releases are automated by `.github/workflows/plugin-release.yml`, triggered by a `plugin-v*` tag.
+The plugin has its own version line in `Plugin/Selva.GH/Selva.GH.csproj`, independent of npm. Releases are triggered by a `plugin-v*` tag.
 
-### One-time setup
-
-Add a **`YAK_TOKEN`** repo secret (Settings → Secrets and variables → Actions): run `yak login` locally once, then copy the `credentials.token` value out of `%APPDATA%\McNeel\yak.yml`. yak reads this env var directly for `yak push` (no `yak.yml` is needed on the runner — verified against `test.yak.rhino3d.com`).
-
-### Release flow
+**One-time setup**: add a `YAK_TOKEN` repo secret — run `yak login` locally, copy `credentials.token` from `%APPDATA%\McNeel\yak.yml`.
 
 ```bash
-pnpm release:plugin            # prompts: patch / minor / major
-# or skip the prompt:
-pnpm release:plugin minor      # bump a part directly
-pnpm release:plugin 0.10.4     # set an explicit version
+pnpm release:plugin            # prompts patch / minor / major
+pnpm release:plugin minor      # bump directly
+pnpm release:plugin 0.10.4     # set explicit version
 ```
 
-`scripts/release-plugin.js` bumps all four version tags in
-`Plugin/Selva.GH/Selva.GH.csproj` (`<Version>` + `AssemblyVersion` /
-`FileVersion` / `InformationalVersion`), commits the bump, creates the
-`plugin-v<x.y.z>` tag, and pushes — which fires the workflow below. It refuses on
-a dirty tree or an existing tag, and shows a plan you confirm before it acts.
-Flags: `--dry-run` (print actions only), `--no-push` (commit + tag locally, push
-yourself), `--build` (opt-in local `build:plugin` first; CI builds anyway),
-`-y` (skip confirmation). Run `pnpm release:plugin --help` for the full list.
+The script bumps all four version tags in the csproj, commits, tags `plugin-v<x.y.z>`, and pushes. The CI workflow then builds the multi-target `.gha`, packages `.yak` files, pushes to Yak, and attaches them to a GitHub Release.
 
-Manual equivalent, if you'd rather do it by hand:
+Flags: `--dry-run`, `--no-push`, `--build`, `-y`. Run `pnpm release:plugin --help`.
+
+**Never push to Yak locally for a release** — watch the Actions tab instead.
+
+### Local dry-run
 
 ```bash
-# 1. bump <Version> (and AssemblyVersion/FileVersion/InformationalVersion) in
-#    Plugin/Selva.GH/Selva.GH.csproj, then commit
-git commit -am "Plugin 0.10.4"
-git push
-
-# 2. tag that commit and push the tag
-git tag plugin-v0.10.4
-git push origin plugin-v0.10.4
-```
-
-The tag triggers the workflow on a **Windows runner**, which:
-
-1. **Guards** that the tag (`0.10.4`) matches the csproj `<Version>` — mismatch fails the run.
-2. Builds the multi-target `.gha` (net48 + net7.0 for Rhino 8, net9.0 for Rhino 9).
-3. Packages the Rhino 8 / Rhino 9 `.yak` files.
-4. `yak push`es them to the registry (→ Rhino's Package Manager).
-5. Attaches them to a **GitHub Release** for the tag.
-
-You **never run yak locally** for a release — watch the run in the **Actions** tab. Use a new version each time; yak rejects re-pushing an existing one.
-
-### Local build (fallback / dry-run)
-
-`pnpm run build:plugin` runs the same build locally, producing `.yak` files under `Plugin/Selva.GH/bin/Yak/`. To dry-run a publish without touching production, push to the sandbox server (periodically wiped by McNeel):
-
-```bash
+pnpm run build:plugin   # produces .yak under Plugin/Selva.GH/bin/Yak/
 yak push --source https://test.yak.rhino3d.com Plugin/Selva.GH/bin/Yak/rh-8/<pkg>.yak
 ```
 
-### Artifacts are not committed
-
-`.yak` / `.gha` files are gitignored. Releases live on the **Yak registry** and **GitHub Releases**, not in git — older versions remain installable from Rhino's Package Manager regardless.
-
 ## Hotfix bypass
 
-For one small runtime or CLI fix without going through changesets. Don't use for coordinated multi-package releases.
+For a single-package fix without going through changesets.
 
-**Runtime** (changes in `packages/selva/**`, `packages/providers/**`, or templates):
+**Runtime** (`packages/selva/**` or providers):
 
 ```bash
-# Bump packages/selva/package.json patch version
+# Bump packages/selva/package.json version
 pnpm --filter @selvajs/selva run build
-grep -rl "<distinctive string from your fix>" packages/selva/build \
-  || { echo "fix not in build — ABORT"; exit 1; }
 pnpm --filter @selvajs/selva publish --access public --no-git-checks
-npm view @selvajs/selva version
 ```
 
-**CLI** (changes in `packages/cli/**`):
+**CLI** (`packages/cli/**`):
 
 ```bash
-# Bump packages/cli/package.json patch version
-node --input-type=module -e "await import('./packages/cli/src/cli.js')"  # smoke import
+# Bump packages/cli/package.json version
 pnpm --filter @selvajs/cli publish --access public --no-git-checks
 ```
-
-**Combined**: bump both, build runtime, publish runtime first then CLI.
-
-## Two traps
-
-### npm publish ships `workspace:*`
-
-Always `pnpm publish` (or `changeset publish`, which uses it). If you ship a tarball with a literal `workspace:*` spec and you're inside the 72h unpublish window, unpublish, bump, republish. After 72h, use `npm deprecate`.
-
-### npm cache hides your new version
-
-Operators run `npm update` and still get the old package because npm's cached packument is stale. Recovery on the VM:
-
-```bash
-cd ~/apps/selva
-npm cache clean --force
-rm -rf node_modules package-lock.json
-npm install --prefer-online
-npm run restart
-node -e "console.log(require('./node_modules/@selvajs/selva/package.json').version)"
-```
-
-Diagnose by comparing `npm view @selvajs/selva version` locally with the installed version on the VM.
 
 ## Troubleshooting
 
 - **"cannot publish over previously published version"** — forgot to bump.
-- **"You do not have permission to publish"** — `npm whoami`; check `@selvajs` org access.
-- **`changeset publish` exits 0 but nothing happened** — local versions match npm. Did you run `pnpm changeset version`?
-- **Tarball contains `workspace:*`** — you ran `npm pack`, not `pnpm pack`.
-- **Fix missing from `packages/selva/build/`** — rebuild with `--force`.
-- **`pnpm publish` blocks on dirty tree** — use `--no-git-checks` for the hotfix path.
-- **Operator still on old version after update** — stale packument cache; see recovery above.
+- **"You do not have permission"** — `npm whoami`; check `@selvajs` org access.
+- **`changeset publish` exits 0, nothing published** — versions match npm. Did you run `pnpm changeset version`?
+- **Tarball contains `workspace:*`** — used `npm pack` instead of `pnpm pack`.
+- **`pnpm publish` blocks on dirty tree** — add `--no-git-checks`.
+- **Operator still on old version** — stale npm cache. Recovery: `npm cache clean --force && rm -rf node_modules package-lock.json && npm install --prefer-online`.

@@ -150,7 +150,8 @@
 			inputId: item.paramId,
 			displayName: label,
 			slotLabel: clientSlotConfig.slotLabel,
-			value
+			value,
+			onValueChange: commit
 		})}
 	{/if}
 {:else if !hideDynamicListWhenEmpty}
