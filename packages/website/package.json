@@ -1,0 +1,39 @@
+{
+	"name": "@selvajs/website",
+	"description": "Selva marketing website (selva.app)",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"type-check": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@selvajs/config": "workspace:*",
+		"@selvajs/ui": "workspace:*",
+		"@tailwindcss/typography": "^0.5.20",
+		"@sveltejs/adapter-static": "^3.0.10",
+		"mdsvex": "^0.12.6",
+		"rehype-autolink-headings": "^7.1.0",
+		"rehype-slug": "^6.0.0",
+		"shiki": "^3.16.0",
+		"unist-util-visit": "^5.0.0",
+		"@sveltejs/kit": "catalog:",
+		"@sveltejs/vite-plugin-svelte": "catalog:",
+		"@tailwindcss/vite": "catalog:",
+		"svelte": "catalog:",
+		"svelte-check": "catalog:",
+		"tailwindcss": "catalog:",
+		"tw-animate-css": "catalog:",
+		"typescript": "catalog:",
+		"vite": "catalog:"
+	},
+	"dependencies": {
+		"@lucide/svelte": "catalog:"
+	}
+}
