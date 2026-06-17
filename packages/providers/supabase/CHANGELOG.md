@@ -1,5 +1,11 @@
 # @selvajs/supabase-provider
 
+## 0.14.1
+
+### Patch Changes
+
+- @selvajs/platform@0.14.1
+
 ## 0.14.0
 
 ### Minor Changes
