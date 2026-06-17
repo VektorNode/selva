@@ -1,8 +1,4 @@
-// Minimal .env parser / serializer.
-//
-// We don't pull in dotenv: the runtime already loads .env via node --env-file,
-// and the CLI's needs are simpler than dotenv supports (no shell expansion, no
-// multiline values). Keeping it in-tree means one less dep to vet.
+// Minimal .env parser/serializer (no dotenv; runtime uses node --env-file).
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
@@ -32,12 +28,7 @@ export function readEnvFile(path) {
 	return parseEnv(readFileSync(path, 'utf8'));
 }
 
-// Re-serialize a .env file. Comments + section structure from `template` are
-// preserved; lines whose key appears in `values` get rewritten in-place. Keys
-// in `values` but absent from the template are appended at the end.
-//
-// Lines beginning with `# KEY=...` (commented examples) are treated as
-// suggestions and left alone; the actual value (if any) goes uncommented.
+// Merge values into template: preserve structure, rewrite in-place, append new keys.
 export function mergeEnv(template, values) {
 	const seen = new Set();
 	const lines = template.split(/\r?\n/);
@@ -78,11 +69,7 @@ export function mergeEnv(template, values) {
 		out.push(...appended);
 	}
 
-	// Always end with a single trailing newline. Without it, a later
-	// `echo VAR=value >> .env` concatenates onto the last line, producing
-	// `HOST=127.0.0.1HEADER_AUTH_DATA_DIR=...` and a `getaddrinfo ENOTFOUND`
-	// boot crash. Strip any existing trailing blanks first so we don't grow
-	// the file by a line on each rewrite.
+	// Ensure single trailing newline (shell append mishap guard).
 	while (out.length > 0 && out[out.length - 1] === '') out.pop();
 	return out.join('\n') + '\n';
 }

@@ -295,25 +295,21 @@ export interface LayoutItemBase {
 }
 export interface InputSource {
 	/**
-	 * Who supplies the input's value. 'user' = the person fills it in, in the form. 'client' = supplied by an app in the browser before the form runs, not by the person (e.g. a measurement/producer tool). 'server' = looked up on the server from your data when the definition runs; never shown in the form.
+	 * Which data provider supplies the value. 'user' = the person types it into the form. 'client' = a browser app (e.g. a measurement/producer tool) fills it in before the form runs, not the person. 'server' = looked up on the server from your data when the definition solves; never shown in the form.
 	 */
 	kind: 'user' | 'client' | 'server';
 	/**
-	 * The opaque address of the value, interpreted by the host app per 'kind': for 'client' it names WHICH producer app fills the input (e.g. 'line-app', 'file-upload') so the host can pre-route to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. An open string — its meaning is defined by the host, not by Selva. Ignored for kind='user'.
+	 * The address the host resolves to fill this input — opaque to Selva, interpreted by the host per 'kind'. For 'client' it names WHICH producer app supplies the value (e.g. 'line-app', 'file-upload') so the host pre-routes to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. Must be unique across the schema's inputs: two inputs sharing a key bind to the same provider and the host cannot tell them apart. Ignored for kind='user'.
 	 */
 	key?: string;
 	/**
-	 * How a client-sourced input appears in the form (only meaningful when kind='client'). Omitted = hidden (prefilled silently). 'slot' = Selva reserves the input's cell and renders a host-provided element in its place; Selva renders nothing itself and never interprets the element's meaning.
+	 * How a client-sourced input appears in the form (only meaningful when kind='client'). Omitted = 'hidden': the value is prefilled silently and the input does not appear. 'slot' = Selva reserves the input's grid cell and lets the host render its own element there; Selva draws nothing itself and never interprets that element.
 	 */
 	client?: {
 		/**
-		 * 'hidden' = no UI; the value is prefilled by the producer app and the input does not appear. 'slot' = the host app renders a custom element (e.g. an 'Edit JSON' button) in this input's place.
+		 * 'hidden' = no UI; the producer app prefills the value and the input does not appear. 'slot' = the host renders a custom element (e.g. an 'Edit JSON' button) in this input's place, referencing the producer named by 'key'.
 		 */
 		presentation?: 'hidden' | 'slot';
-		/**
-		 * Author-set text passed through to the host's slot snippet untouched. Selva does not render or interpret it (e.g. 'Edit JSON').
-		 */
-		slotLabel?: string;
 	};
 }
 export interface ChartWidgetConfig {}

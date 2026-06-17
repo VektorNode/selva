@@ -1,14 +1,6 @@
-// ============================================================================
-// @selvajs/platform — public API
-// ============================================================================
-// This file IS the contract. Every symbol below is part of the published API
-// and removing or changing one is a breaking change. Add a symbol here only
-// when you intend to commit to it long-term; otherwise keep it internal to
-// its module.
+// @selvajs/platform — published API contract. Every symbol here is breaking-change-protected.
 
-// ---------------------------------------------------------------------------
 // auth
-// ---------------------------------------------------------------------------
 export type { AuthUser, UserManagementResult, LoginResult } from './auth/types.js';
 export type {
 	IAuthProvider,
@@ -25,16 +17,12 @@ export type { PlatformPermission } from './permissions/types.js';
 export { PlatformPermissionSchema, ALL_PLATFORM_PERMISSIONS } from './permissions/types.js';
 export type { IPlatformPermissionStore } from './permissions/interface.js';
 
-// ---------------------------------------------------------------------------
 // userProfile
-// ---------------------------------------------------------------------------
 export type { IUserProfileStore } from './userProfile/interface.js';
 export type { UserProfile, RecentRun } from './userProfile/types.js';
 export { emptyProfile } from './userProfile/types.js';
 
-// ---------------------------------------------------------------------------
 // organizations
-// ---------------------------------------------------------------------------
 export type { Organization, OrgMember } from './organizations/types.js';
 export type { IOrgStore } from './organizations/interface.js';
 export type {
@@ -55,15 +43,11 @@ export {
 	MEMBER_ASSIGNABLE_PERMISSIONS
 } from './organizations/schemas.js';
 
-// ---------------------------------------------------------------------------
 // invites
-// ---------------------------------------------------------------------------
 export type { Invite } from './invites/types.js';
 export type { IInviteStore } from './invites/interface.js';
 
-// ---------------------------------------------------------------------------
 // projects
-// ---------------------------------------------------------------------------
 export type { Project, ProjectMember } from './projects/types.js';
 export type { IProjectStore } from './projects/interface.js';
 export type { ProjectVisibility, ProjectRole } from './projects/schemas.js';
@@ -73,9 +57,7 @@ export {
 	validateProjectFlags
 } from './projects/schemas.js';
 
-// ---------------------------------------------------------------------------
 // platformProjects
-// ---------------------------------------------------------------------------
 export type { PlatformProjectGrant, PlatformProjectGranteeType } from './platformProjects/types.js';
 export type { IPlatformProjectGrantStore } from './platformProjects/interface.js';
 export {
@@ -83,9 +65,7 @@ export {
 	PlatformProjectGranteeTypeSchema
 } from './platformProjects/schemas.js';
 
-// ---------------------------------------------------------------------------
 // definitions
-// ---------------------------------------------------------------------------
 export type {
 	DefinitionFileExt,
 	DefinitionRecord,

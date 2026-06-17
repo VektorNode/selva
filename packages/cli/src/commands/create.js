@@ -1,16 +1,6 @@
-// `npx @selvajs/cli <dir>` — scaffold a fresh deployment.
-//
-// What this writes into <dir>:
-//   .env                    merged from runtime's .env.example + prompt values
-//   ecosystem.config.cjs    copied verbatim from runtime templates
-//   package.json            depends on @selvajs/selva + @selvajs/cli + pm2
-//   .selva-version          marker for future CLI migrations
-//   node_modules/           after `npm install`
-//
-// The runtime templates are the source of truth — we don't carry our own
-// copies in @selvajs/cli. We install @selvajs/selva first, then copy
-// from node_modules/@selvajs/selva/templates/. Provider selection is
-// env-driven (SELVA_AUTH_PROVIDER etc.) — no selva.config.js is generated.
+// Scaffold a fresh deployment: write .env (merged from template + prompts),
+// ecosystem.config.cjs, package.json, and bootstrap node_modules. Runtime
+// templates are the source of truth; providers are env-driven.
 
 import { writeFileSync, existsSync, mkdirSync, readFileSync, cpSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
@@ -37,27 +27,22 @@ export async function runCreate(argv) {
 	}
 	mkdirSync(targetDir, { recursive: true });
 
-	// 1. Collect config. --yes (or CI=1) takes everything from the
-	//    environment instead of prompting — for Terraform startup scripts,
-	//    Dockerfiles, and any other unattended bootstrap.
+	// --yes or CI=1 skips prompts (unattended bootstrap).
 	const nonInteractive = yes || envBool(process.env.CI);
 	const values = nonInteractive
 		? collectConfigFromEnv(process.env)
 		: await collectConfig({ defaults: {}, mode: 'create' });
 
-	// 2. Always generate fresh secrets for a new install. They MUST be stable
-	//    across restarts; the env-merge logic below writes them once and
-	//    `selva init` later refuses to regenerate them.
+	// Generate fresh secrets (stable across restarts; init refuses to regen).
 	values.SELVA_HMAC_KEY = generateKey();
 	values.SELVA_AT_REST_KEY = generateKey();
 
 	const deployName = basename(targetDir);
 
-	// 3. Write package.json before installing so npm has something to read.
+	// Write package.json, then install (need templates from @selvajs/selva).
 	const pkgJson = buildPackageJson(deployName, values);
 	writeFileSync(join(targetDir, 'package.json'), pkgJson + '\n', 'utf8');
 
-	// 4. Install. We need @selvajs/selva on disk to copy templates from it.
 	if (!skipInstall) {
 		await runNpmInstall(targetDir);
 	} else {
@@ -66,7 +51,7 @@ export async function runCreate(argv) {
 		);
 	}
 
-	// 5. Now copy templates from the installed runtime and fill them in.
+	// Copy templates from installed runtime.
 	const runtimeTemplates = join(targetDir, 'node_modules', '@selvajs', 'selva', 'templates');
 	if (skipInstall || !existsSync(runtimeTemplates)) {
 		p.log.warn(
@@ -86,7 +71,6 @@ export async function runCreate(argv) {
 	writeFileSync(join(targetDir, '.selva-version'), CLI_VERSION + '\n', 'utf8');
 	writeGitignore(targetDir);
 
-	// 6. Outro with next steps.
 	p.outro(
 		[
 			pc.green('Scaffolded ' + pc.cyan(targetDir)),
@@ -103,59 +87,37 @@ export async function runCreate(argv) {
 	);
 }
 
-// Run `npm install` with live progress and a real error report.
-//
-// The previous implementation used execSync + stdio:'pipe' which buffered
-// everything in memory and discarded it on failure — operators saw "Command
-// failed: npm install" with no clue what went wrong. We stream stdout/stderr
-// into a ring buffer instead, and on failure dump the last lines so they can
-// act on the actual error (sharp's libvips missing, registry timeout, etc.)
-// without fishing through /home/user/.npm/_logs/.
-//
-// Cache-bust hint: if npm prints a placeDep for @selvajs/selva@0.10.2
-// (which was published broken and unpublished), surface that so the operator
-// knows to `npm cache clean --force`.
+// Stream npm output with live progress; on failure, show tail for debugging.
+// Cache-bust hint: surface broken versions like @selvajs/selva@0.10.2.
 function runNpmInstall(cwd) {
 	return new Promise((resolveP, rejectP) => {
 		const s = p.spinner();
 		s.start('Installing dependencies (this can take a minute)');
 
-		// Ring buffer — keep the last 80 lines so we can show them on failure.
+		// Keep last 80 lines for failure output.
 		const tail = [];
-		const maxTail = 80;
 		const remember = (line) => {
 			tail.push(line);
-			if (tail.length > maxTail) tail.shift();
+			if (tail.length > 80) tail.shift();
 		};
 
-		// Visible progress milestones. npm doesn't emit a clean progress
-		// stream; we cherry-pick recognizable transitions and pass them to
-		// the spinner so the operator sees movement.
+		// Extract progress milestones (reify: lines, package count).
 		const updateProgress = (line) => {
 			const trimmed = line.trim();
 			if (!trimmed) return;
-			// "added 412 packages" — final summary
 			if (/^added \d+ packages/.test(trimmed)) {
 				s.message('Finalizing installation');
 				return;
 			}
-			// "reify:foo: timing reifyNode..." — npm 8/9/10 progress lines.
-			// Pull the package name out and show it.
 			const reify = trimmed.match(/^reify:([^:]+):/);
 			if (reify) {
 				s.message(`Installing ${pc.cyan(reify[1])}`);
 				return;
 			}
-			// "npm WARN ..." / "npm error ..." — pass through prefixed.
-			if (/^npm (WARN|error|notice)/.test(trimmed)) {
-				// Don't change the spinner message for these — they're noisy.
-				return;
-			}
+			if (/^npm (WARN|error|notice)/.test(trimmed)) return;
 		};
 
-		// Spawn npm with --loglevel=info so we get reify: progress lines.
-		// We DO NOT use stdio: 'inherit' because that would interleave with
-		// the spinner; we DO want a live read so we can update the message.
+		// Spawn with --loglevel=info for reify: progress; pipe stdout/stderr for live updates.
 		const child = spawn('npm', ['install', '--loglevel=info'], {
 			cwd,
 			stdio: ['ignore', 'pipe', 'pipe'],
@@ -255,38 +217,16 @@ function envBool(v) {
 	return ['1', 'true', 'yes'].includes(String(v).toLowerCase());
 }
 
-// The deployment's package.json depends on @selvajs/selva (prebuilt
-// SvelteKit app with all providers bundled in) plus @selvajs/cli (the
-// operator-side tool). Provider selection is env-driven — no provider
-// packages need to be listed here.
-//
-// We list @selvajs/cli itself as a dep so the `selva` bin gets linked
-// into node_modules/.bin/. Without this the operator's only way to run
-// `selva doctor` / `selva start` is a global install of the CLI.
+// Depends on @selvajs/selva (prebuilt) + @selvajs/cli (operator tool).
+// @selvajs/cli links the `selva` bin; without it, only global CLI works.
 function buildPackageJson(name /*, values */) {
 	const deps = {
 		'@selvajs/cli': 'latest',
 		'@selvajs/selva': 'latest',
-		// pm2 lives in the deployment's own node_modules so `selva start` can
-		// resolve it via node_modules/.bin/pm2 without a global install. The
-		// pm2.js wrapper requires this local binary (see pm2Bin()) — we never
-		// fall back to a global pm2 because two pm2 binaries managing the
-		// same daemon produces persistent CLI-vs-daemon version-skew
-		// warnings and stops/restarts that mysteriously hang.
-		//
-		// PINNED EXACT (no caret) on purpose. PM2's daemon and CLI must be
-		// the same version, and the daemon is sticky — once a daemon is
-		// running, only `pm2 update` swaps it. A caret range means two
-		// deployments scaffolded weeks apart can install different 5.x
-		// versions, and any host that briefly ran a different pm2 (e.g. a
-		// stray `npm i -g pm2`) is left with a daemon that won't match
-		// either. Bump this deliberately, in lockstep with documentation.
+		// Deployment-local pm2 (pinned exact to prevent daemon version skew).
 		pm2: '5.4.3'
 	};
 
-	// Use `selva` (resolved via node_modules/.bin) in the npm scripts. Running
-	// them as `npm run start` / `npm run doctor` works without remembering the
-	// ./node_modules/.bin/ prefix.
 	const pkg = {
 		name: sanitizePackageName(name),
 		version: '0.1.0',

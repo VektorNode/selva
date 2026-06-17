@@ -9,6 +9,7 @@ import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schem
 import { getAllLayoutItems } from '$lib/features/builder/operations';
 import { updateParameterMetadata } from '$lib/features/preview/handlers';
 import { processInitialDataSchema } from '$lib/utils/schema-defaults';
+import { validateUniqueSourceKeys } from '$lib/utils/validation';
 import type { SchemaSource } from '$lib/schema-source/schema-source';
 import type {
 	SyncDiff,
@@ -431,6 +432,14 @@ export async function saveDraft(state: BuilderState, deps: BuilderDeps): Promise
 	}
 	if (!deps.source.connected) {
 		deps.notify.error('Not connected to Grasshopper');
+		return false;
+	}
+
+	// Two inputs sharing a client/server source key would route to the same producer/fetch,
+	// so the host cannot tell them apart. Block the save and name the offending key.
+	const duplicateKeys = validateUniqueSourceKeys(state.draft);
+	if (duplicateKeys.length > 0) {
+		deps.notify.error(duplicateKeys[0].message);
 		return false;
 	}
 

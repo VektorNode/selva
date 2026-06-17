@@ -7,27 +7,12 @@ export function createViteConfig(overrides = {}) {
 	return mergeConfig(
 		{
 			plugins: [tailwindcss(), sveltekit()],
-			// Resolve internal @selvajs/* packages through their "source" export
-			// condition (the same one vitest uses). For @selvajs/ui this swaps its
-			// published, curated public entry for the full barrel — so monorepo apps
-			// keep importing primitives/layout/toast from '@selvajs/ui', while npm
-			// consumers (who don't set this condition) only ever see the public
-			// compute-app SDK.
+			// Resolve @selvajs/* through "source" export condition (monorepo dev vs npm consumers).
 			resolve: {
-				// Prepend, don't replace: bare `conditions: ['source']` would drop
-				// Vite's defaults (module/browser/import/…) and break SvelteKit's
-				// virtual-module resolution. Keep defaults, just prefer "source".
 				conditions: ['source', ...defaultClientConditions]
 			},
-			// Force-bundle internal @selvajs/* packages into the SSR build so
-			// the published @selvajs/selva tarball doesn't need them installable
-			// at runtime. Without this they'd appear as bare `require('@selvajs/…')`
-			// calls in build/, which would crash on any operator that doesn't
-			// also install platform + provider packages — defeating the
-			// "one install gets you everything" model.
+			// Force-bundle @selvajs/* into SSR build (no external runtime deps).
 			ssr: {
-				// Same "source" condition for the SSR graph — selva renders
-				// ComputeApp server-side and bundles @selvajs/ui (below).
 				resolve: {
 					conditions: ['source', ...defaultServerConditions]
 				},

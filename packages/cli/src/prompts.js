@@ -1,6 +1,4 @@
-// Shared prompt flow used by both `create` (fresh scaffold) and
-// `selva init` (reconfigure existing install). The two callers differ only in
-// what defaults are passed in and what gets written afterwards.
+// Shared prompt flow for create and init; differs only in defaults and output.
 
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
@@ -12,17 +10,8 @@ function envBool(v) {
 	return TRUTHY.has(String(v).toLowerCase());
 }
 
-// Non-interactive sibling of `collectConfig`. Reads everything from `env`
-// (defaults to process.env) so unattended bootstraps — Terraform startup
-// scripts, CI, Docker entrypoints — never touch a prompt. Same output shape
-// as `collectConfig` so the caller code in create.js doesn't branch further.
-//
-// Validation mirrors collectConfig's prompt-time checks. Anything missing or
-// malformed throws with the offending var name so the boot log makes the
-// fix obvious. We deliberately do NOT fall back to a "safe default" for
-// security-relevant fields (BOOTSTRAP_INSTANCE_ADMIN_EMAIL for header-auth /
-// multi-tenant, SUPABASE_SERVICE_ROLE_KEY when supabase is selected) — a
-// silently-misconfigured deploy is worse than a loud failure.
+// Non-interactive sibling of collectConfig: read from env, validate strictly,
+// fail loud for security-relevant fields (no safe defaults).
 export function collectConfigFromEnv(env = process.env) {
 	const tenancy = pick(env.SELVA_TENANCY, ['single', 'multi'], 'single', 'SELVA_TENANCY');
 	const auth = pick(
@@ -55,7 +44,6 @@ export function collectConfigFromEnv(env = process.env) {
 		SELVA_STORAGE_PROVIDER: storage
 	};
 
-	// ── Provider-specific config ──────────────────────────────────────────
 	if (auth === 'local' || data === 'local' || storage === 'local') {
 		values.DATA_PATH = env.DATA_PATH || './.selva-data';
 	}
@@ -101,7 +89,6 @@ export function collectConfigFromEnv(env = process.env) {
 	}
 	values.BOOTSTRAP_INSTANCE_ADMIN_EMAIL = adminEmail;
 
-	// ── Reverse proxy ────────────────────────────────────────────────────
 	const origin = env.ORIGIN || '';
 	if (origin) {
 		try {
@@ -115,10 +102,7 @@ export function collectConfigFromEnv(env = process.env) {
 	}
 	values.ORIGIN = origin;
 
-	// ── Feature flags ────────────────────────────────────────────────────
-	// Pass-through: any SELVA_FLAG_* var set on the environment is written
-	// verbatim. Unset flags get an empty string so the .env file still has
-	// a row for them (operator can flip later without editing structure).
+	// Pass-through: SELVA_FLAG_* vars written verbatim; unset = empty string.
 	const flagNames = [
 		'ALLOW_ORG_CREATION',
 		'ALLOW_CROSS_ORG_PUBLIC',
@@ -148,12 +132,8 @@ function requireEnv(env, name) {
 	return v;
 }
 
-// Runs the full interactive prompt sequence and returns a flat object of
-// env-var-name → value (string). The caller decides whether to merge with an
-// existing .env or write fresh.
-//
-// `defaults` is an existing env map (from .env, or {}). Anything present there
-// pre-populates the prompt so re-running is cheap.
+// Run full interactive prompt sequence; return env vars. Caller decides merge vs fresh.
+// `defaults` pre-populates prompts (cheap re-run).
 export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	const isInit = mode === 'init';
 
@@ -164,7 +144,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	// these env vars are absent. To re-enable, add a brand prompt block here
 	// and write the values into `values` below.
 
-	// ── Tenancy ─────────────────────────────────────────────────────────
 	const tenancy = await p.select({
 		message: 'Tenancy mode',
 		initialValue: defaults.SELVA_TENANCY ?? 'single',
@@ -183,7 +162,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	});
 	cancelOn(tenancy);
 
-	// ── Auth provider ───────────────────────────────────────────────────
 	const auth = await p.select({
 		message: 'Auth backend',
 		initialValue: defaults.SELVA_AUTH_PROVIDER ?? 'local',
@@ -199,9 +177,7 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	});
 	cancelOn(auth);
 
-	// Header-auth is auth-only — it has no data/storage to share. The user
-	// MUST pick a separate backend for those. Local is the sensible default
-	// pairing (same filesystem as the allowlist).
+	// Header-auth: auth-only; user must pick separate data/storage backend.
 	let data;
 	let storage;
 	if (auth === 'header') {
@@ -229,9 +205,7 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		cancelOn(storageChoice);
 		storage = storageChoice;
 	} else {
-		// In practice operators almost always want data + storage on the same
-		// backend as auth. Ask once, default the others; let advanced users
-		// override.
+		// Operators usually want same backend for all three; ask once, default the others.
 		const mixProviders = await p.confirm({
 			message: `Use ${pc.cyan(auth)} for data and storage too?`,
 			initialValue: pickSameProviderDefault(defaults, auth)
@@ -265,7 +239,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		}
 	}
 
-	// ── Provider-specific config ───────────────────────────────────────
 	const providerValues = {};
 	if (auth === 'local' || data === 'local' || storage === 'local') {
 		const dataPath = await p.text({
@@ -316,10 +289,7 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	}
 
 	if (auth === 'header') {
-		// HEADER_AUTH_DATA_DIR is where header-allowlist.json lives. When the
-		// data provider is local, DATA_PATH is the natural home and we let
-		// the provider fall back to it. Only ask explicitly if data isn't
-		// local — otherwise there's no obvious default.
+		// HEADER_AUTH_DATA_DIR: ask only if data provider isn't local (fallback available).
 		if (data !== 'local') {
 			const dataDir = await p.text({
 				message: 'HEADER_AUTH_DATA_DIR — directory for header-allowlist.json',
@@ -369,10 +339,7 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 			providerValues.HEADER_AUTH_DISPLAY_NAME_HEADER = stringValue(display);
 		}
 
-		// Header-auth deployments MUST bind to loopback. We don't force it
-		// (the operator might run inside a Docker network where the proxy
-		// reaches the container by service name), but we set HOST=127.0.0.1
-		// as the default and let them override.
+		// Header-auth: default to loopback (not enforced; Docker networks may override).
 		const bindLoopback = await p.confirm({
 			message: 'Bind the app to 127.0.0.1 only? (recommended for header-auth)',
 			initialValue: !defaults.HOST || defaults.HOST === '127.0.0.1' || defaults.HOST === 'localhost'
@@ -381,14 +348,7 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		providerValues.HOST = bindLoopback ? '127.0.0.1' : stringValue(defaults.HOST);
 	}
 
-	// ── Bootstrap admin ────────────────────────────────────────────────
-	// Two roles in one env var: (1) gate the "first-signup-becomes-admin"
-	// path to a specific email — required for multi-tenant so a random
-	// signup doesn't get Selva staff perms; (2) break-glass recovery if
-	// admin is lost to a backup restore / manual DB edit. The check ONLY
-	// runs while no admin exists yet, so leaving it set permanently is
-	// safe. Phrase the prompt differently per tenancy/auth-provider because
-	// the security implications differ.
+	// Bootstrap admin (checked only while no admin exists; safe to leave set).
 	if (auth === 'header') {
 		p.note(
 			[
@@ -449,7 +409,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	});
 	cancelOn(adminEmail);
 
-	// ── Reverse proxy ──────────────────────────────────────────────────
 	const behindProxy = await p.confirm({
 		message: 'Behind a reverse proxy (Caddy, nginx, etc.)?',
 		initialValue: Boolean(defaults.ORIGIN)
@@ -476,10 +435,7 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		cancelOn(value);
 		origin = String(value);
 
-		// Plain HTTP + NODE_ENV=production drops the session cookie (Secure
-		// flag on, browser refuses to send over http://). Login appears to
-		// succeed but the next request is anonymous. Warn loudly here — the
-		// fix is either TLS or ALLOW_INSECURE_COOKIES=true in .env.
+		// Plain HTTP kills Secure cookies in production (login appears to succeed, then anon).
 		if (origin.startsWith('http://')) {
 			p.note(
 				'Sessions use Secure cookies in production; browsers will silently\n' +
@@ -494,7 +450,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		}
 	}
 
-	// ── Platform flags ─────────────────────────────────────────────────
 	const flagOptions = [
 		{
 			value: 'ALLOW_ORG_CREATION',
@@ -535,7 +490,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	});
 	cancelOn(flags);
 
-	// ── Done ───────────────────────────────────────────────────────────
 	const values = {
 		SELVA_TENANCY: tenancy,
 		SELVA_AUTH_PROVIDER: auth,
@@ -554,9 +508,7 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	return values;
 }
 
-// `selva init` should default to "yes, same provider for all three" only when
-// the current .env already reflects that. If the operator deliberately split
-// auth and data, don't re-merge them on reconfigure.
+// Init: default to "same provider" only if current .env already shows that.
 function pickSameProviderDefault(defaults, auth) {
 	const data = defaults.SELVA_DATA_PROVIDER ?? auth;
 	const storage = defaults.SELVA_STORAGE_PROVIDER ?? auth;
@@ -565,8 +517,6 @@ function pickSameProviderDefault(defaults, auth) {
 }
 
 function cancelOn(v) {
-	// @clack/prompts returns Symbol(clack:cancel) when the user hits Ctrl+C.
-	// p.isCancel() is the official API for detecting it.
 	if (p.isCancel(v)) {
 		p.cancel('Cancelled.');
 		process.exit(0);
@@ -578,9 +528,7 @@ function stringValue(v) {
 	return String(v);
 }
 
-// Shown once when the operator picks header-auth. The provider's README is
-// emphatic that the deployment IS the security boundary — none of these
-// invariants can be enforced at runtime, so we surface them up front.
+// Header-auth security: deployment IS the boundary (runtime enforcement impossible).
 function headerAuthSecurityWarning() {
 	return [
 		'Header-auth trusts identity headers from the upstream proxy. Anyone who',

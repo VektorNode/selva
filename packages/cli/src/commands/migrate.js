@@ -1,27 +1,6 @@
-// `selva migrate` — bring an existing deployment onto the current layout.
-//
-// Three historical migrations exist for Selva deployments:
-//   1. `@selvajs/create` → `@selvajs/cli`  (CLI bootstrap; can't be automated
-//      since the operator has no `selva` binary yet — they run two npm
-//      commands by hand from the Hotfix doc).
-//   2. `@selvajs/runtime` → `@selvajs/selva`  (runtime bundling: UI, schemas,
-//      ui-kit and the providers' workspace deps are now built into
-//      @selvajs/selva).
-//   3. selva.config.js → env-driven providers  (the picker logic moved into
-//      the runtime; deployments no longer need a config file. Provider
-//      packages are bundled into @selvajs/selva.)
-//
-// Migrate automates 2 and 3 together: it rewrites package.json, drops the
-// now-bundled provider packages, removes any stale selva.config.js, and
-// rewrites ecosystem.config.cjs if it still points at @selvajs/runtime.
-//
-// Future package-layout shifts go here too — the command should remain
-// idempotent. On an already-current deployment it prints "nothing to
-// migrate" and exits 0.
-//
-// Mirrors `selva update`'s lifecycle: stop pm2, mutate node_modules, start
-// pm2 again with --update-env. Rollback restores package.json.bak on
-// npm-install failure so the operator isn't left with a broken deployment.
+// Migrate deployment to current layout: rewrite package.json (drop legacy
+// provider packages), remove stale selva.config.js, update ecosystem.config.cjs.
+// Idempotent; mirrors update's lifecycle (stop/mutate/start with rollback on failure).
 
 import {
 	existsSync,
@@ -109,16 +88,13 @@ export async function runMigrate() {
 		return;
 	}
 
-	// Stop pm2 before mutating node_modules. Same reasoning as `selva update`:
-	// SvelteKit's node adapter lazy-imports chunks, so swapping the build dir
-	// under a live process causes ERR_MODULE_NOT_FOUND on in-flight requests.
+	// Stop pm2 before npm rewrites (SvelteKit lazy-loads chunks; see update command).
 	const stopStatus = runPm2(dir, ['stop', APP_NAME], { inherit: false });
 	if (stopStatus !== 0) {
 		p.log.warn('pm2 stop did not succeed — selva-compute may not be running. Continuing.');
 	}
 
-	// Back up everything we're about to mutate. Restored on npm-install failure
-	// so the operator isn't left with a half-migrated deployment.
+	// Back up for rollback on npm-install failure.
 	const bakPath = pkgPath + '.bak';
 	copyFileSync(pkgPath, bakPath);
 	writeFileSync(pkgPath, JSON.stringify(target, null, 2) + '\n', 'utf8');
@@ -130,9 +106,7 @@ export async function runMigrate() {
 
 	if (ecoHasStaleRuntime) {
 		copyFileSync(ecoPath, ecoPath + '.bak');
-		// Single-line rewrite: only @selvajs/runtime → @selvajs/selva. We don't
-		// regenerate from the canonical template here because the operator may
-		// have customized port/memory/cluster settings; preserve their edits.
+		// Rewrite @selvajs/runtime → @selvajs/selva only (preserve customizations).
 		const ecoContent = readFileSync(ecoPath, 'utf8').replace(
 			/@selvajs\/runtime/g,
 			'@selvajs/selva'
@@ -140,10 +114,7 @@ export async function runMigrate() {
 		writeFileSync(ecoPath, ecoContent, 'utf8');
 	}
 
-	// Nuke node_modules + lockfile. A simple `npm install` won't always
-	// resolve correctly when major version ranges change (e.g. runtime 0.10
-	// → selva 2.0) — the lockfile pins old transitive deps that no longer
-	// belong. Clean install is the only reliable path.
+	// Clean install required (major version changes break legacy lockfile).
 	rmSync(join(dir, 'node_modules'), { recursive: true, force: true });
 	rmSync(join(dir, 'package-lock.json'), { force: true });
 
@@ -166,9 +137,7 @@ export async function runMigrate() {
 		if (ecoHasStaleRuntime && existsSync(ecoPath + '.bak')) {
 			copyFileSync(ecoPath + '.bak', ecoPath);
 		}
-		// Try to bring the old process back up so we don't leave the operator
-		// with downtime. If node_modules was wiped this won't help, but at
-		// least package.json matches what's on disk.
+		// Try to bring the process back up (best-effort; at least package.json is consistent).
 		runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
 		p.outro(pc.red(`Migration aborted: ${err.message ?? err}`));
 		process.exit(1);
@@ -192,16 +161,8 @@ export async function runMigrate() {
 	}
 }
 
-// Compute what package.json should look like given the current contents.
-//
-// Wholesale-replace semantics: any @selvajs/* or pm2 entry not in our
-// canonical set is dropped. Non-selva deps the operator added are also
-// dropped — that's the design choice we made up-front.
-//
-// Provider packages (@selvajs/local-provider etc.) are NOT preserved even
-// when the operator's .env selects them: they're bundled into @selvajs/selva
-// in v2.1+ and the standalone packages are legacy. Providers are picked at
-// runtime from SELVA_*_PROVIDER env vars.
+// Build target package.json with canonical dependencies (wholesale replace).
+// Drops non-canonical @selvajs/* and operator's own deps (by design).
 function buildTargetPackageJson(current) {
 	const deps = {
 		'@selvajs/cli': 'latest',
@@ -219,8 +180,7 @@ function buildTargetPackageJson(current) {
 	};
 }
 
-// Produce human-readable diff lines for the confirmation prompt. Keep it
-// short — the operator just needs to see what's moving, not a unified diff.
+// Format package.json diff for confirmation prompt (concise, not full diff).
 function diffPackageJson(before, after) {
 	const lines = [];
 
@@ -252,9 +212,7 @@ function diffPackageJson(before, after) {
 	return lines;
 }
 
-// Local copy of pm2.js's runner. Importing it would create a circular
-// dependency via the `pm2.js` exports; pm2 invocation is small enough to
-// duplicate.
+// Local pm2 runner (avoid circular dep; duplication is small).
 function runPm2(dir, args, { inherit = true } = {}) {
 	const local = join(dir, 'node_modules', '.bin', process.platform === 'win32' ? 'pm2.cmd' : 'pm2');
 	const bin = existsSync(local) ? local : 'pm2';
@@ -267,8 +225,7 @@ function runPm2(dir, args, { inherit = true } = {}) {
 	return result.status ?? 0;
 }
 
-// Exported for use by `selva doctor` so it can warn about layout drift
-// without duplicating the detection logic.
+// Exported for `selva doctor` to check layout drift without duplication.
 export function detectDrift(pkgJson, dir) {
 	const deps = pkgJson?.dependencies ?? {};
 	const reasons = [];
@@ -299,6 +256,5 @@ export function detectDrift(pkgJson, dir) {
 	return reasons;
 }
 
-// Re-exported so tests/imports can verify what migrate would write without
-// actually running it.
+// Re-exported for tests to verify without running migrate.
 export { buildTargetPackageJson, SELVA_DEPS };
