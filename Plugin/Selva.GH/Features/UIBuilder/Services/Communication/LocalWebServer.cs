@@ -308,9 +308,36 @@ public class LocalWebServer : IDisposable
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
         }
+        catch (Exception ex) when (IsClientDisconnect(ex))
+        {
+            // Browser closed the socket mid-response (reload, navigation, prefetch
+            // cancel). Routine and out of our control — log only in debug builds.
+            Logger.Log($"Client disconnected during HTTP request: {ex.Message}");
+        }
         catch (Exception ex)
         {
             Logger.Error($"Error processing HTTP request: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     True when an exception is a client-side disconnect (socket aborted or reset,
+    ///     or the request was canceled) rather than a genuine server fault.
+    /// </summary>
+    private static bool IsClientDisconnect(Exception ex)
+    {
+        switch (ex)
+        {
+            case OperationCanceledException _:
+                return true;
+            case SocketException socketEx:
+                return socketEx.SocketErrorCode == SocketError.ConnectionAborted
+                       || socketEx.SocketErrorCode == SocketError.ConnectionReset
+                       || socketEx.SocketErrorCode == SocketError.Shutdown;
+            case IOException ioEx when ioEx.InnerException != null:
+                return IsClientDisconnect(ioEx.InnerException);
+            default:
+                return false;
         }
     }
 

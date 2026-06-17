@@ -1,11 +1,11 @@
 ---
-title: Getting Started
-group: Getting Started
-order: 1
+title: Local Dev Setup
+group: Get Started
+order: 4
 published: true
 ---
 
-# Getting Started
+# Local Dev Setup
 
 ## Prerequisites
 

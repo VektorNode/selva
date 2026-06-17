@@ -43,3 +43,13 @@
 .prose :where(code)::after {
 	content: none;
 }
+
+/* Center build-time mermaid diagrams (rendered as inline SVG). */
+.prose > svg {
+	display: block;
+	margin-inline: auto;
+}
+
+.dark {
+	--primary: oklch(73.653% 0.13688 138.527);
+}

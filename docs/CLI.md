@@ -1,7 +1,7 @@
 ---
 title: CLI
-group: Guides
-order: 1
+group: Get Started
+order: 3
 published: true
 ---
 
@@ -68,7 +68,7 @@ Validates the deployment without starting it. Exits 0 on success, 1 on any failu
 
 ### `selva update`
 
-Runs `npm update --save @selvajs/cli @selvajs/selva` and restarts. If before/after versions are identical despite a known new release, you've hit npm's stale packument cache — see [Publishing.md](Publishing.md#troubleshooting).
+Runs `npm update --save @selvajs/cli @selvajs/selva` and restarts. If before/after versions are identical despite a known new release, you've hit npm's stale packument cache — see [Publishing.md](https://github.com/VektorNode/selva/blob/main/docs/Publishing.md#troubleshooting).
 
 ### `selva keys rotate <hmac|at-rest>`
 

@@ -1,0 +1,72 @@
+---
+title: Architecture
+group: Concepts
+order: 2
+published: true
+---
+
+# Architecture
+
+The big-picture view: how the parts flow together, not how they're coded.
+
+## Four moving parts
+
+| Part                                 | What it is                                     | Runs on                                |
+| ------------------------------------ | ---------------------------------------------- | -------------------------------------- |
+| **Selva plugin** (`Selva.gha`)       | The schema _designer_ + bridge to a live Rhino | Author's Rhino, and the Compute server |
+| **Selva web app** (`@selvajs/selva`) | The schema _runner_                            | Your server                            |
+| **Rhino.Compute**                    | Headless Rhino that solves over HTTP           | A Windows VM                           |
+| **Provider**                         | Pluggable auth / data / storage backend        | In-process with the web app            |
+
+Everything else (`@selvajs/ui`, `schemas`, `compute`, `platform`) is a shared library these are built from.
+
+## The schema is the contract
+
+A **schema** describes a definition's web interface: which inputs are exposed, what control each maps to, the layout, and the outputs. The author creates it in the designer; the web app reads it to render the UI.
+
+Its shape is defined once in `ui-schema.json` and code-generated into **both** stacks: TypeScript for the web app, C# for the plugin. CI fails on drift. That's what keeps a C# plugin and a TS web app speaking the same language with no hand-written API spec.
+
+## Two runtime paths
+
+**Design time: WebSocket to a live Rhino.** While the author builds the interface, the plugin runs a WebSocket server (port 8765) in their Rhino. The designer connects, discovers parameters, and writes the schema back into the `.gh`. Changes round-trip live.
+
+**Run time: HTTP to Rhino.Compute.** Deployed, there's no live Rhino. The web app loads the saved schema and, on each change, sends inputs to Rhino.Compute over HTTP. Compute solves headlessly and returns geometry to the Three.js viewer.
+
+```mermaid
+flowchart LR
+    browser["End user's browser<br/>controls + 3D viewer"]
+    app["@selvajs/selva<br/>schema + provider"]
+    rc["Rhino.Compute<br/>headless Rhino + Selva.gha"]
+    provider["Provider<br/>(your backend)"]
+    browser -->|HTTP inputs| app
+    app -->|geometry| browser
+    app -->|HTTP solve| rc
+    rc -->|geometry| app
+    app -->|auth / data / storage| provider
+```
+
+## The packages
+
+| Package               | Role                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `@selvajs/schemas`    | The schema contract + TS/C# generators. Source of truth for both stacks.                                                  |
+| `@selvajs/plugin-ui`  | The schema designer UI. Embedded into `Selva.gha`.                                                                        |
+| `@selvajs/selva`      | The deployable web app.                                                                                                   |
+| `@selvajs/ui`         | Shared Svelte components, theme, viewer building blocks.                                                                  |
+| `@selvajs/compute`    | Type-safe Rhino.Compute client + Three.js helpers (npm). See [Build your own app](getting-started/build-your-own-app.md). |
+| `@selvajs/platform`   | Provider _interfaces_, no implementations. See [Providers](providers.md).                                                 |
+| `@selvajs/*-provider` | Concrete provider implementations.                                                                                        |
+| `@selvajs/cli`        | Scaffolds and operates a deployment. See [CLI](CLI.md).                                                                   |
+
+The .NET side splits schema/drawing logic (no Rhino dependency, unit-testable) from the Rhino-coupled `Selva.GH`/`Selva.Rhino`. Layout: [STRUCTURE.md](https://github.com/VektorNode/selva/blob/main/STRUCTURE.md).
+
+## What stays in sync
+
+- **Plugin ↔ web app.** Both generate from `ui-schema.json`; CI fails on drift.
+- **Providers ↔ interfaces.** Every adapter runs a conformance suite, so a new provider behaves like the reference one.
+
+## Next
+
+- [Providers](providers.md): the backend model.
+- [Get Started](getting-started/overview.md): stand it up.
+- [Build your own app](getting-started/build-your-own-app.md): use the packages directly.

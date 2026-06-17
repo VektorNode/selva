@@ -1,6 +1,6 @@
 ---
-title: Rhino Compute
-group: Guides
+title: Rhino Compute Setup
+group: Get Started
 order: 2
 published: true
 ---
