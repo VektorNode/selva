@@ -94,9 +94,22 @@ public sealed class TitleBlock : LayoutElement
 	// portrait (210mm paper − margins) without catching A3 landscape's 180mm corner block.
 	public const double IsoFullWidthThreshold = 200.0;
 
-	// Optional logo rendered in a dedicated cell. Placed top-left and aspect-preserved by the
-	// caller (the GH component sizes the ImageElement to the cell). Null = no logo cell.
+	// Fixed fraction of the block width reserved for the logo column in the ISO 7200 layout. The
+	// owner / project cells split the rest. ~20% of a 180mm block ≈ 36mm — a comfortable logo
+	// strip that still leaves the bulk of the row for the two names.
+	public const double LogoColumnSpan = 0.2;
+
+	// Optional logo rendered in a dedicated cell. Placed top-left and aspect-preserved, fitted
+	// into the first row's logo column (row 0, column 0) so it never bleeds into the owner /
+	// project cells next to it. Null = no logo cell.
 	public ImageElement Logo { get; init; }
+
+	// Hard cap on the rendered logo box (mm). The logo is fitted into a box no wider than
+	// LogoMaxWidth and no taller than LogoMaxHeight (each ignored when <= 0), then aspect-
+	// preserved within it. The logo column width is an additional, automatic cap. Defaults
+	// leave the column as the only constraint.
+	public double LogoMaxWidth { get; init; }
+	public double LogoMaxHeight { get; init; }
 
 	public Stroke Border { get; init; } = new Stroke { Width = 0.35 };
 	public Stroke InnerBorder { get; init; } = new Stroke { Width = 0.18 };
@@ -190,11 +203,11 @@ public sealed class TitleBlock : LayoutElement
 		if (Border != null)
 			children.Add(new PathElement { Path = borderPath, Stroke = Border });
 
-		// Logo overlays the top-left, fitted into the first row's height with a small inset and
-		// aspect preserved. Drawn last so it sits over the field grid (the standard layout keeps
-		// the top-left cell blank for it).
+		// Logo overlays the top-left, fitted into the first row's logo cell (height + the cell's
+		// own width) with a small inset and aspect preserved. Drawn last so it sits over the field
+		// grid (the standard layout keeps the top-left cell blank for it).
 		if (Logo != null)
-			children.Add(PlaceLogo(Logo, rowHeight));
+			children.Add(PlaceLogo(Logo, rowHeight, LogoCellWidth(totalWidth)));
 
 		return new GroupElement
 		{
@@ -218,19 +231,41 @@ public sealed class TitleBlock : LayoutElement
 		return available <= IsoFullWidthThreshold ? available : Size.Width;
 	}
 
-	// Fit the logo into the top-left of the block: a box one row tall (minus inset), pinned to
-	// the top-left corner, aspect preserved. Honours the image's intrinsic aspect when both
-	// Width and Height are set; otherwise scales the given extent to the cell height.
-	private DrawElement PlaceLogo(ImageElement logo, double rowHeight)
+	// Width of the logo cell — row 0, column 0 — under the resolved total width. This is the
+	// automatic width cap that keeps a wide logo from spilling into the owner / project cells.
+	private double LogoCellWidth(double totalWidth)
+	{
+		if (Rows == null || Rows.Count == 0) return totalWidth;
+		var firstRow = Rows[0];
+		if (firstRow == null || firstRow.Count == 0) return totalWidth;
+		return ResolveColumnWidths(firstRow, totalWidth)[0];
+	}
+
+	// Fit the logo into the top-left logo cell: a box one row tall and one logo-cell wide (each
+	// minus inset), pinned to the top-left corner, aspect preserved. The box is the tightest of
+	// the cell extent and the optional LogoMaxWidth / LogoMaxHeight caps; the logo is then scaled
+	// to fit inside it without overflowing into the neighbouring cells. Honours the image's
+	// intrinsic aspect when both Width and Height are set; otherwise assumes square.
+	private DrawElement PlaceLogo(ImageElement logo, double rowHeight, double cellWidth)
 	{
 		const double inset = 1.5;
 		var boxHeight = Math.Max(0, rowHeight - inset * 2);
+		var boxWidth = Math.Max(0, cellWidth - inset * 2);
+		if (LogoMaxHeight > 0) boxHeight = Math.Min(boxHeight, LogoMaxHeight);
+		if (LogoMaxWidth > 0) boxWidth = Math.Min(boxWidth, LogoMaxWidth);
+
 		var srcW = logo.Width > 0 ? logo.Width : boxHeight;
 		var srcH = logo.Height > 0 ? logo.Height : boxHeight;
 		var aspect = srcH > 0 ? srcW / srcH : 1.0;
 
+		// Fit aspect-preserved inside the box: start height-bound, shrink if that overflows width.
 		var drawH = boxHeight;
 		var drawW = drawH * aspect;
+		if (boxWidth > 0 && drawW > boxWidth)
+		{
+			drawW = boxWidth;
+			drawH = aspect > 0 ? drawW / aspect : boxHeight;
+		}
 
 		// Top-left of the block: y from (top − inset − drawH) up to (top − inset).
 		var x = Origin.X + inset;
@@ -434,10 +469,13 @@ public sealed class TitleBlock : LayoutElement
 			Size = size ?? new BoundingBox(0, 0, 180, 50),
 			Rows = new IReadOnlyList<TitleBlockField>[]
 			{
-				// Row 1: blank logo cell (top-left) + legal owner / project.
-				new[] { (TitleBlockField)null,
-				        new TitleBlockField { Label = L.LegalOwner, Value = V("Owner"), Span = 0.35 },
-				        new TitleBlockField { Label = L.Project, Value = V("Project"), Span = 0.45 } },
+				// Row 1: blank logo cell (top-left, fixed ~20% so a logo always has room) + legal
+				// owner / project. Owner and project are auto-width (Span = 0): they split the
+				// remaining ~80% and grow to fill it, so long names get the space — while the logo
+				// column stays a predictable fixed width regardless of name length.
+				new[] { new TitleBlockField { Span = LogoColumnSpan },
+				        new TitleBlockField { Label = L.LegalOwner, Value = V("Owner") },
+				        new TitleBlockField { Label = L.Project, Value = V("Project") } },
 				new[] { new TitleBlockField { Label = L.Title, Value = V("Title"), Span = 1.0 } },
 				new[] { new TitleBlockField { Label = L.DrawingNumber, Value = V("DrawingNumber"), Span = 0.35 },
 				        new TitleBlockField { Label = L.Revision, Value = V("Revision"), Span = 0.15 },

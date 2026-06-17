@@ -78,8 +78,10 @@ public class TitleBlockTests
 		};
 		var block = TitleBlock.Iso7200(values);
 		Assert.Equal(4, block.Rows.Count);
-		// First row's first cell is the blank logo cell.
-		Assert.Null(block.Rows[0][0]);
+		// First row's first cell is the blank logo cell: a fixed-span field with no label/value.
+		Assert.Equal("", block.Rows[0][0].Label ?? "");
+		Assert.Equal("", block.Rows[0][0].Value ?? "");
+		Assert.Equal(TitleBlock.LogoColumnSpan, block.Rows[0][0].Span, 6);
 		var b = block.ComputeBounds();
 		Assert.Equal(180, b.Width, 6);
 		Assert.Equal(50, b.Height, 6);
@@ -167,6 +169,43 @@ public class TitleBlockTests
 		// Top-left: y sits near the top of the block, x near the left edge.
 		Assert.True(placed.Position.X >= 0 && placed.Position.X < 5);
 		Assert.True(placed.Position.Y > 40 - 12); // within the top row band
+	}
+
+	[Fact]
+	public void Wide_logo_is_clamped_to_its_cell_width()
+	{
+		// A very wide logo (aspect 10:1) would, height-bound, be 70mm wide on a 7mm row — far past
+		// the ~36mm logo cell. It must shrink to fit the cell, not bleed into owner/project.
+		var logo = new ImageElement { Data = new byte[] { 1 }, Format = ImageFormat.Png, Width = 100, Height = 10 };
+		var block = new TitleBlock
+		{
+			Size = new BoundingBox(0, 0, 180, 40),
+			Logo = logo,
+			Rows = TitleBlock.Iso7200(null).Rows,
+		};
+		var placed = FindImage(block.Resolve(new LayoutContext(BoundingBox.Empty)));
+		Assert.NotNull(placed);
+		// Logo cell = 0.2 × 180 = 36mm, minus inset (2 × 1.5) = 33mm box.
+		Assert.True(placed.Width <= 33 + 1e-6, $"expected width <= 33, got {placed.Width}");
+		// Aspect preserved at 10:1.
+		Assert.Equal(placed.Width / 10.0, placed.Height, 6);
+	}
+
+	[Fact]
+	public void Logo_max_width_caps_the_logo_box()
+	{
+		var logo = new ImageElement { Data = new byte[] { 1 }, Format = ImageFormat.Png, Width = 20, Height = 10 };
+		var block = new TitleBlock
+		{
+			Size = new BoundingBox(0, 0, 180, 40),
+			Logo = logo,
+			LogoMaxWidth = 8,
+			Rows = TitleBlock.Iso7200(null).Rows,
+		};
+		var placed = FindImage(block.Resolve(new LayoutContext(BoundingBox.Empty)));
+		Assert.NotNull(placed);
+		Assert.True(placed.Width <= 8 + 1e-6, $"expected width <= 8, got {placed.Width}");
+		Assert.Equal(placed.Width / 2.0, placed.Height, 6);
 	}
 
 	private static ImageElement FindImage(DrawElement element)

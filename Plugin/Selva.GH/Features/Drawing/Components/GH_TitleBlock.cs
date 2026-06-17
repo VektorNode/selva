@@ -45,12 +45,14 @@ public class GH_TitleBlock : GH_Component
         pManager.AddTextParameter("Created By", "A", "Drafter name/initials (or {token})", GH_ParamAccess.item, "");
         pManager.AddTextParameter("Approved By", "Ap", "Approver name/initials (or {token})", GH_ParamAccess.item, "");
         pManager.AddTextParameter("Date", "Dt", "Date of issue, e.g. \"{date}\"", GH_ParamAccess.item, "");
-        pManager.AddGenericParameter("Logo", "L", "Optional logo from a Draw Image component — placed top-left, aspect preserved. Ignored on the Continuation variant.", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Logo", "L", "Optional logo from a Draw Image component — placed top-left, aspect preserved, clipped to its cell so it never overlaps the owner/project text. Ignored on the Continuation variant.", GH_ParamAccess.item);
+        pManager.AddNumberParameter("Logo Max W", "LW", "Max logo width in mm. 0 = bounded only by the logo cell. Aspect is always preserved.", GH_ParamAccess.item, 0.0);
+        pManager.AddNumberParameter("Logo Max H", "LH", "Max logo height in mm. 0 = the logo-row height. Aspect is always preserved.", GH_ParamAccess.item, 0.0);
         pManager.AddNumberParameter("Width", "W", "Block width in mm. 0 = Auto (ISO rule from the document's paper). Positive = fixed width.", GH_ParamAccess.item, 0.0);
         pManager.AddNumberParameter("Height", "H", "Block height in mm. 0 = the variant's default (Full 50mm, Continuation 12mm).", GH_ParamAccess.item, 0.0);
         pManager.AddIntegerParameter("Labels", "Lb", "Language of the printed field captions (PROJECT / DRAWING NO. … vs PROJEKT / ZEICHNUNGS-NR. …). Independent of the Document's date Culture.", GH_ParamAccess.item, 0);
 
-        for (var i = 0; i < 15; i++) pManager[i].Optional = true;
+        for (var i = 0; i < 17; i++) pManager[i].Optional = true;
 
         if (pManager[0] is Param_Integer variant)
         {
@@ -58,7 +60,7 @@ public class GH_TitleBlock : GH_Component
             variant.AddNamedValue("Continuation", 1);
         }
 
-        if (pManager[14] is Param_Integer labels)
+        if (pManager[16] is Param_Integer labels)
         {
             labels.AddNamedValue("English", 0);
             labels.AddNamedValue("Deutsch", 1);
@@ -76,6 +78,8 @@ public class GH_TitleBlock : GH_Component
         string project = "", owner = "", title = "", drawingNo = "", revision = "",
             scale = "", sheet = "", author = "", approver = "", date = "";
         DrawElement logo = null;
+        var logoMaxW = 0.0;
+        var logoMaxH = 0.0;
         var width = 0.0;
         var height = 0.0;
         var labelsIndex = 0;
@@ -92,9 +96,11 @@ public class GH_TitleBlock : GH_Component
         DA.GetData(9, ref approver);
         DA.GetData(10, ref date);
         DA.GetData(11, ref logo);
-        DA.GetData(12, ref width);
-        DA.GetData(13, ref height);
-        DA.GetData(14, ref labelsIndex);
+        DA.GetData(12, ref logoMaxW);
+        DA.GetData(13, ref logoMaxH);
+        DA.GetData(14, ref width);
+        DA.GetData(15, ref height);
+        DA.GetData(16, ref labelsIndex);
 
         var isContinuation = variant == 1;
         var labels = labelsIndex == 1 ? TitleBlockLabels.German : TitleBlockLabels.English;
@@ -127,14 +133,16 @@ public class GH_TitleBlock : GH_Component
             ? TitleBlock.Continuation(values, size, labels)
             : TitleBlock.Iso7200(values, size, labels);
 
-        block = WithSettings(block, size, autoWidth, isContinuation ? null : ExtractLogo(logo));
+        block = WithSettings(block, size, autoWidth, isContinuation ? null : ExtractLogo(logo),
+            logoMaxW, logoMaxH);
 
         DA.SetData(0, block);
     }
 
     // Apply the resolved size / auto-width flag / logo onto the factory-produced block. The
     // factory helpers set Rows + Size; this layers the GH-driven settings on top.
-    private static TitleBlock WithSettings(TitleBlock block, BBox size, bool autoWidth, ImageElement logo)
+    private static TitleBlock WithSettings(TitleBlock block, BBox size, bool autoWidth, ImageElement logo,
+        double logoMaxW, double logoMaxH)
     {
         return new TitleBlock
         {
@@ -142,6 +150,8 @@ public class GH_TitleBlock : GH_Component
             Size = size,
             AutoWidth = autoWidth,
             Logo = logo,
+            LogoMaxWidth = logoMaxW,
+            LogoMaxHeight = logoMaxH,
             Border = block.Border,
             InnerBorder = block.InnerBorder,
             LabelStyle = block.LabelStyle,
