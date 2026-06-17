@@ -298,30 +298,26 @@
 
 		"InputSource": {
 			"type": "object",
-			"description": "Where the input's value comes from. If omitted, the person fills it in ('user'). Written as an object rather than a single value so new fields can be added later without breaking existing schemas.",
+			"description": "Where an input's value comes from — its data provider. If omitted, the input defaults to 'user' (the person fills it in). Modeled as an object, not a bare string, so fields like 'key' and 'client' can be added without breaking existing schemas. The kind ('client'/'server') is the provider behind the value; a client 'slot' is a custom UI element the host renders in place of that input, referencing the provider.",
 			"properties": {
 				"kind": {
 					"type": "string",
 					"enum": ["user", "client", "server"],
-					"description": "Who supplies the input's value. 'user' = the person fills it in, in the form. 'client' = supplied by an app in the browser before the form runs, not by the person (e.g. a measurement/producer tool). 'server' = looked up on the server from your data when the definition runs; never shown in the form."
+					"description": "Which data provider supplies the value. 'user' = the person types it into the form. 'client' = a browser app (e.g. a measurement/producer tool) fills it in before the form runs, not the person. 'server' = looked up on the server from your data when the definition solves; never shown in the form."
 				},
 				"key": {
 					"type": "string",
-					"description": "The opaque address of the value, interpreted by the host app per 'kind': for 'client' it names WHICH producer app fills the input (e.g. 'line-app', 'file-upload') so the host can pre-route to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. An open string — its meaning is defined by the host, not by Selva. Ignored for kind='user'."
+					"description": "The address the host resolves to fill this input — opaque to Selva, interpreted by the host per 'kind'. For 'client' it names WHICH producer app supplies the value (e.g. 'line-app', 'file-upload') so the host pre-routes to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. Must be unique across the schema's inputs: two inputs sharing a key bind to the same provider and the host cannot tell them apart. Ignored for kind='user'."
 				},
 				"client": {
 					"type": "object",
-					"description": "How a client-sourced input appears in the form (only meaningful when kind='client'). Omitted = hidden (prefilled silently). 'slot' = Selva reserves the input's cell and renders a host-provided element in its place; Selva renders nothing itself and never interprets the element's meaning.",
+					"description": "How a client-sourced input appears in the form (only meaningful when kind='client'). Omitted = 'hidden': the value is prefilled silently and the input does not appear. 'slot' = Selva reserves the input's grid cell and lets the host render its own element there; Selva draws nothing itself and never interprets that element.",
 					"properties": {
 						"presentation": {
 							"type": "string",
 							"enum": ["hidden", "slot"],
 							"default": "hidden",
-							"description": "'hidden' = no UI; the value is prefilled by the producer app and the input does not appear. 'slot' = the host app renders a custom element (e.g. an 'Edit JSON' button) in this input's place."
-						},
-						"slotLabel": {
-							"type": "string",
-							"description": "Author-set text passed through to the host's slot snippet untouched. Selva does not render or interpret it (e.g. 'Edit JSON')."
+							"description": "'hidden' = no UI; the producer app prefills the value and the input does not appear. 'slot' = the host renders a custom element (e.g. an 'Edit JSON' button) in this input's place, referencing the producer named by 'key'."
 						}
 					},
 					"additionalProperties": false

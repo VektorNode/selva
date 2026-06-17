@@ -1,16 +1,6 @@
-// Thin wrappers around PM2 commands. The point isn't to abstract pm2 —
-// it's to hide footguns the docs already warn about:
-//
-//   • `pm2 restart` without --update-env silently keeps the old env, even
-//     after the operator edited .env. We always pass --update-env.
-//
-//   • PM2's daemon and CLI must be the same version. The daemon is sticky:
-//     once forked it runs that version forever, regardless of what the on-
-//     disk binary later becomes. We resolve pm2 to ONE binary (the project-
-//     local one) so every command — interactive, scripted, admin endpoint —
-//     hits the same code path. If a different pm2 ever started the daemon
-//     (e.g. a stray `npm i -g pm2`), `ensurePm2InSync` detects the skew
-//     and runs `pm2 update` to respawn the daemon under our binary.
+// Thin wrappers around PM2 commands: always pass --update-env (ignore edits),
+// resolve to deployment-local pm2 (avoid daemon version skew with global install),
+// and resync daemon before state changes.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -21,9 +11,7 @@ import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 
 const APP_NAME = 'selva-compute';
 
-// Resolve pm2 to the deployment's own copy. NO global fallback — having two
-// pm2 binaries on the same host and letting them both manage the daemon
-// produces the exact version-skew bug this wrapper exists to prevent.
+// Resolve to deployment-local pm2 (no global fallback; prevents version skew).
 function pm2Bin(dir) {
 	const local = join(dir, 'node_modules', '.bin', process.platform === 'win32' ? 'pm2.cmd' : 'pm2');
 	if (!existsSync(local)) {
@@ -37,12 +25,7 @@ function pm2Bin(dir) {
 	return local;
 }
 
-// Check whether the in-memory PM2 daemon was forked by a different pm2 than
-// the one we're about to invoke. PM2 prints "In-memory PM2 is out-of-date" on
-// every command in that state and process operations may stall. `pm2 update`
-// is the only fix: dump → kill daemon → respawn under the current binary →
-// resurrect dump. We run it here before any state-changing command so the
-// caller never gets a half-applied stop/restart against a stale daemon.
+// Check for daemon/CLI version mismatch; run `pm2 update` if stale.
 function ensurePm2InSync(dir) {
 	const bin = pm2Bin(dir);
 	const probe = spawnSync(bin, ['ping'], {
@@ -142,19 +125,10 @@ export async function runUpdate() {
 		return;
 	}
 
-	// Resync the daemon BEFORE we touch the running app — if the daemon is a
-	// different version than the local CLI, `pm2 stop` may report success
-	// while leaving the process group in a half-state, and the subsequent
-	// `pm2 start` then hangs. Running `pm2 update` here puts everything on
-	// the same version (and survives the dump+resurrect cycle).
+	// Resync daemon before state changes (avoid half-state stop/start).
 	ensurePm2InSync(dir);
 
-	// Stop the running process BEFORE npm rewrites node_modules/@selvajs/selva/build/.
-	// SvelteKit's node adapter lazy-imports chunks from build/server/chunks/ on every
-	// request; if we let npm replace them while the old process is still serving
-	// traffic, in-flight requests hit ERR_MODULE_NOT_FOUND for chunks whose hash
-	// just changed. Brief downtime (~1-2s longer than restart-in-place) but no
-	// chunk-mismatch errors.
+	// Stop before npm rewrites (SvelteKit lazy-loads chunks; see migrate command).
 	const stopStatus = runPm2(dir, ['stop', APP_NAME], { inherit: false });
 	if (stopStatus !== 0) {
 		p.log.warn('pm2 stop did not succeed — selva-compute may not be running. Continuing.');
@@ -163,11 +137,7 @@ export async function runUpdate() {
 	const s = p.spinner();
 	s.start(`npm update ${packages.join(' ')}`);
 	try {
-		// --prefer-online forces npm to revalidate cached packuments against
-		// the registry before using them. Without this, npm's 5+ minute
-		// packument cache silently re-installs the same version even when a
-		// newer one was published in the meantime. See docs/Hotfix-CLI-Runtime.md
-		// "The stale-packument-cache trap".
+		// --prefer-online bypasses npm's packument cache (see docs/Hotfix-CLI-Runtime.md).
 		execSync(`npm update --save --prefer-online ${packages.join(' ')}`, {
 			cwd: dir,
 			stdio: 'pipe'
@@ -175,7 +145,7 @@ export async function runUpdate() {
 		s.stop('npm update finished');
 	} catch (err) {
 		s.stop('npm update failed');
-		// Bring the old process back up so the operator isn't left with downtime.
+		// Best-effort: bring old process back up.
 		runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
 		throw err;
 	}
@@ -183,10 +153,7 @@ export async function runUpdate() {
 	const after = readRuntimeVersion(dir);
 	p.log.info(`New @selvajs/selva:     ${after ?? 'unknown'}`);
 
-	// Surface no-op updates explicitly. --prefer-online closes most cache
-	// holes, but a freshly-published version can take a minute or two to
-	// propagate through npm's CDN — operators who run update too quickly
-	// after publish still see "Current = New". Tell them how to retry.
+	// Surface no-op updates (cache may be stale; propagation delay is real).
 	if (before && after && before === after) {
 		p.log.warn(
 			[

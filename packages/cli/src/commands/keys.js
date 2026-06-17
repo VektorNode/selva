@@ -1,16 +1,4 @@
-// `selva keys rotate <hmac|at-rest>` — generate a fresh secret and write it
-// back to .env. Refuses without an explicit confirm; what gets invalidated is
-// not subtle.
-//
-//   hmac     — SELVA_HMAC_KEY (HMAC-SHA256). Rotating logs every user out
-//              (cookie sessions stop verifying) and breaks any share-link /
-//              invite tokens that fell back to it (only relevant when
-//              SHARE_LINK_SECRET / INVITE_TOKEN_SECRET are unset — those have
-//              their own rotation cycle).
-//
-//   at-rest  — SELVA_AT_REST_KEY (AES-256-GCM). The encrypted Rhino.Compute
-//              API key in compute.config.json becomes undecryptable. The
-//              operator has to re-enter the key at /admin/compute.
+// Rotate SELVA_HMAC_KEY or SELVA_AT_REST_KEY; requires explicit confirm (blast radius in TARGETS).
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';

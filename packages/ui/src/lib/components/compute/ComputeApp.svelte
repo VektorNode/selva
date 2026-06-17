@@ -54,7 +54,7 @@
 		header?: Snippet;
 		// Scopes sessionStorage for external-input values; falls back to definitionKey then schema.id.
 		externalScopeKey?: string;
-		// Renders client-sourced inputs with presentation === 'slot'; receives { inputId, displayName, slotLabel, value }.
+		// Renders client-sourced inputs with presentation === 'slot'; receives { inputId, displayName, value, onValueChange }.
 		clientSlot?: ClientSlot;
 		/**
 		 * UI language for the app's own chrome (viewer, panels, status text).

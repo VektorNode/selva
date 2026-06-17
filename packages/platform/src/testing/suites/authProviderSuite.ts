@@ -1,12 +1,4 @@
-/**
- * Adapter conformance suite for IAuthProvider.
- *
- * Covers token round-trips, identity verification, password auth (when the
- * provider exposes `passwordAuth`), and admin user management.
- *
- * User-profile state (starring, recent runs, profile mutations) is tested
- * separately by `runUserProfileStoreConformance` against `IUserProfileStore`.
- */
+// Conformance suite for IAuthProvider: token round-trips, identity, password auth, admin management.
 
 import { describe, it, expect } from 'vitest';
 import type { IAuthProvider } from '../../auth/index.js';
@@ -39,10 +31,7 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 	const { name, createProvider, userManagement = false } = opts;
 
 	describe(`IAuthProvider conformance: ${name}`, () => {
-		// ============================================================================
 		// Token round-trips
-		// ============================================================================
-
 		it('verifyLogin returns a session token that verifyToken accepts', async () => {
 			const { provider, adminPassword, adminEmail = '' } = await createProvider();
 			const result = await provider.passwordAuth!.verifyLogin(adminEmail, adminPassword);
@@ -64,10 +53,7 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 			expect(result).toBeNull();
 		});
 
-		// ============================================================================
 		// Password auth (only runs when passwordAuth is present)
-		// ============================================================================
-
 		it('verifyLogin returns success with correct password', async () => {
 			const { provider, adminPassword, adminEmail = '' } = await createProvider();
 			if (!provider.passwordAuth) return;
@@ -87,10 +73,7 @@ export function runAuthProviderConformance(opts: AuthProviderConformanceOptions)
 			expect(result.kind).toBe('failed');
 		});
 
-		// ============================================================================
 		// getUser
-		// ============================================================================
-
 		it('getUser returns null for unknown id', async () => {
 			const { provider } = await createProvider();
 			// Valid UUID shape but not an actual user — stricter backends (Postgres

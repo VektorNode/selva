@@ -5,7 +5,8 @@ import type {
 	UISchema,
 	SchemaInput,
 	SchemaOutput,
-	LayoutItem
+	LayoutItem,
+	InputSource
 } from '@selvajs/schemas';
 
 /**
@@ -240,6 +241,87 @@ export function validateDynamicValueListOutputs(schema: UISchema): DynamicValueL
 	}
 
 	return issues;
+}
+
+export interface SourceKeyIssue {
+	paramId: string;
+	key: string;
+	message: string;
+}
+
+/**
+ * Validate that every non-user input source.key is unique across the schema.
+ *
+ * A source.key is the address the host resolves to fill the input: for 'client' it names
+ * which producer app supplies the value, for 'server' it names what to fetch. Two inputs
+ * sharing a key would both bind to the same producer/fetch, so the host cannot tell them
+ * apart — the routing is ambiguous. ('user' inputs have no key and are skipped.)
+ *
+ * Returns one issue per input that collides with an earlier input on the same key.
+ */
+export function validateUniqueSourceKeys(schema: UISchema): SourceKeyIssue[] {
+	const issues: SourceKeyIssue[] = [];
+	const seen = new Map<string, string>(); // key -> first paramId that claimed it
+
+	const groups =
+		schema.layout.type === 'tabbed'
+			? schema.layout.tabs.flatMap((t) => t.groups)
+			: schema.layout.groups;
+
+	for (const group of groups) {
+		for (const item of group.items as LayoutItem[]) {
+			if (item.type !== 'input') continue;
+			const source = (item as { source?: InputSource }).source;
+			if (!source || source.kind === 'user') continue;
+			const key = source.key?.trim();
+			if (!key) continue;
+
+			const firstOwner = seen.get(key);
+			if (firstOwner !== undefined) {
+				issues.push({
+					paramId: item.paramId,
+					key,
+					message: `Source key "${key}" is already used by another input. Each client/server source key must be unique.`
+				});
+			} else {
+				seen.set(key, item.paramId);
+			}
+		}
+	}
+
+	return issues;
+}
+
+/**
+ * Collect the paramIds of every input whose non-user source.key is shared with at least
+ * one other input. Unlike validateUniqueSourceKeys (which flags only the later duplicate
+ * for a blocking save error), this returns ALL inputs on a colliding key — including the
+ * first — so the builder can mark each one inline as the user types.
+ */
+export function getDuplicateSourceKeyParamIds(schema: UISchema): Set<string> {
+	const owners = new Map<string, string[]>(); // key -> paramIds claiming it
+
+	const groups =
+		schema.layout.type === 'tabbed'
+			? schema.layout.tabs.flatMap((t) => t.groups)
+			: schema.layout.groups;
+
+	for (const group of groups) {
+		for (const item of group.items as LayoutItem[]) {
+			if (item.type !== 'input') continue;
+			const source = (item as { source?: InputSource }).source;
+			if (!source || source.kind === 'user') continue;
+			const key = source.key?.trim();
+			if (!key) continue;
+			(owners.get(key) ?? owners.set(key, []).get(key)!).push(item.paramId);
+		}
+	}
+
+	const duplicates = new Set<string>();
+	for (const paramIds of owners.values()) {
+		if (paramIds.length > 1) for (const id of paramIds) duplicates.add(id);
+	}
+	return duplicates;
 }
 
 /**

@@ -59,12 +59,10 @@
 	// Client-sourced input set to render a host element in its place. The 'hidden'
 	// presentation never reaches here (visible:false filters it out upstream), so a
 	// client slot source means presentation === 'slot'.
-	const clientSlotConfig = $derived.by(() => {
-		const source = (
-			item as { source?: { kind?: string; client?: { presentation?: string; slotLabel?: string } } }
-		).source;
-		if (source?.kind !== 'client' || source.client?.presentation !== 'slot') return null;
-		return { slotLabel: source.client.slotLabel };
+	const isClientSlot = $derived.by(() => {
+		const source = (item as { source?: { kind?: string; client?: { presentation?: string } } })
+			.source;
+		return source?.kind === 'client' && source.client?.presentation === 'slot';
 	});
 	const clientSlot = getClientSlot();
 
@@ -144,15 +142,32 @@
 	}
 </script>
 
-{#if clientSlotConfig}
+{#if isClientSlot}
 	{#if clientSlot}
-		{@render clientSlot({
-			inputId: item.paramId,
-			displayName: label,
-			slotLabel: clientSlotConfig.slotLabel,
-			value,
-			onValueChange: commit
-		})}
+		<Field.Field>
+			<Field.Label class="gap-2 flex items-center">
+				{label}
+				{#if item.description}
+					<Dialog.Root>
+						<Dialog.Trigger class="p-1 cursor-help opacity-60 transition-opacity hover:opacity-100">
+							<HelpCircle size={16} />
+						</Dialog.Trigger>
+						<Dialog.Content class="sm:max-w-md">
+							<Dialog.Header>
+								<Dialog.Title>{label}</Dialog.Title>
+								<Dialog.Description>{item.description}</Dialog.Description>
+							</Dialog.Header>
+						</Dialog.Content>
+					</Dialog.Root>
+				{/if}
+			</Field.Label>
+			{@render clientSlot({
+				inputId: item.paramId,
+				displayName: label,
+				value,
+				onValueChange: commit
+			})}
+		</Field.Field>
 	{/if}
 {:else if !hideDynamicListWhenEmpty}
 	<Field.Field>

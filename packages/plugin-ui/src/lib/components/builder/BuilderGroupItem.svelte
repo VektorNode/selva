@@ -22,6 +22,7 @@
 	} from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
+	import { getDuplicateSourceKeys } from './duplicate-source-keys-context';
 	import { dragHandle } from 'svelte-dnd-action';
 
 	interface BuilderGroupItemProps {
@@ -225,6 +226,13 @@
 	// One opaque `key` either way; `kind` says how the host reads it.
 	let sourceKind = $derived((item as { source?: InputSource }).source?.kind ?? 'user');
 
+	// Live duplicate-key flag from the builder page: true when this input's source.key is
+	// shared with another input, which would make the host's routing ambiguous and blocks save.
+	const duplicateSourceKeyIds = getDuplicateSourceKeys();
+	let isDuplicateSourceKey = $derived(
+		item.type === 'input' && duplicateSourceKeyIds().has(item.paramId)
+	);
+
 	function setSourceKind(kind: 'user' | 'client' | 'server') {
 		if (item.type !== 'input') return;
 		const target = item as { source?: InputSource; visible?: boolean };
@@ -262,13 +270,6 @@
 			target.source.client = { ...target.source.client, presentation };
 			target.visible = true;
 		}
-	}
-
-	function setSlotLabel(label: string) {
-		if (item.type !== 'input') return;
-		const target = item as { source?: InputSource };
-		if (!target.source?.client) return;
-		target.source.client.slotLabel = label || undefined;
 	}
 
 	function toggleAcceptedFormat(format: string) {
@@ -686,8 +687,18 @@
 										placeholder={sourceKind === 'client'
 											? 'e.g. line-app'
 											: 'e.g. capture.geometry'}
-										class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
+										class={`bg-background h-6 rounded border px-2 font-mono text-[10px] focus:outline-none ${
+											isDuplicateSourceKey
+												? 'border-destructive focus:border-destructive'
+												: 'border-border/70 focus:border-primary'
+										}`}
 									/>
+									{#if isDuplicateSourceKey}
+										<span class="text-destructive flex items-center gap-1 text-[9px]">
+											<AlertTriangle size={10} />
+											This key is used by another input. Each source key must be unique.
+										</span>
+									{/if}
 									<span class="text-muted-foreground/70 text-[9px]">
 										{#if sourceKind === 'client'}
 											Filled by a browser app before the form runs. The key names which producer to
@@ -712,17 +723,8 @@
 											</select>
 										</div>
 										{#if clientPresentation === 'slot'}
-											{@const client = (item as { source?: InputSource }).source?.client}
-											<input
-												type="text"
-												value={client?.slotLabel ?? ''}
-												oninput={(e) => setSlotLabel(e.currentTarget.value)}
-												placeholder="Slot label (optional, e.g. Edit JSON)"
-												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
-											/>
 											<span class="text-muted-foreground/70 text-[9px]">
-												The host app renders its own element here. The label is passed through
-												untouched; Selva renders nothing itself.
+												The host app renders its own element here; Selva renders nothing itself.
 											</span>
 										{/if}
 									{/if}

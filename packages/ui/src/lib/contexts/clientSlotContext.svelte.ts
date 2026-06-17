@@ -9,16 +9,14 @@ import type { SupportedTypes } from '@selvajs/schemas';
 // An input with source.kind === 'client' and source.client.presentation === 'slot'
 // reserves its cell but renders nothing itself. Instead Selva invokes this snippet
 // so the host can render its own element (e.g. an "Edit JSON" button, or a custom
-// picker). Selva never interprets what the host renders; `slotLabel` is passed
-// through untouched. The host may COMMIT a value back via `onValueChange`, which
-// flows into the solve exactly like any built-in widget's change.
+// picker). Selva never interprets what the host renders. The host may COMMIT a value
+// back via `onValueChange`, which flows into the solve exactly like any built-in
+// widget's change.
 
 export interface ClientSlotArgs {
 	/** Grasshopper parameter instance GUID (LayoutItem.paramId / SchemaInput.id). */
 	inputId: string;
 	displayName: string;
-	/** Author-set label from the schema, passed through untouched. May be undefined. */
-	slotLabel?: string;
 	/** The current value held for this input (e.g. the prefilled JSON), if any. */
 	value: unknown;
 	/**

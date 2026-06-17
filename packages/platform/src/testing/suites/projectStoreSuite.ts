@@ -1,9 +1,4 @@
-/**
- * Adapter conformance suite for IProjectStore.
- *
- * Tests project CRUD, project membership management, and access checks to
- * ensure all adapters behave identically.
- */
+// Conformance suite for IProjectStore: CRUD, membership, access checks across adapters.
 
 import { describe, it, expect } from 'vitest';
 import type { IProjectStore } from '../../projects/interface.js';
