@@ -43,9 +43,10 @@ public class GH_LayoutOverride : GH_Component
         pManager.AddIntegerParameter("Header Placement", "HP", "Where the header band lives. -1 inherits.", GH_ParamAccess.item, -1);
         pManager.AddIntegerParameter("Footer Placement", "FP", "Where the footer band lives. -1 inherits.", GH_ParamAccess.item, -1);
         pManager.AddNumberParameter("Header Edge Offset", "HEO", "Distance in mm from the top of the paper to the top of the header band when Header Placement is Edge. -1 inherits.", GH_ParamAccess.item, -1.0);
-        pManager.AddNumberParameter("Footer Edge Offset", "FEO", "Distance in mm from the bottom of the paper to the bottom of the footer band when Footer Placement is Edge. -1 inherits.", GH_ParamAccess.item, -1.0);
+        pManager.AddNumberParameter("Footer Edge Offset", "FEO", "Distance from the bottom of the paper to the bottom of the footer band when Footer Placement is Edge, in document units. -1 inherits.", GH_ParamAccess.item, -1.0);
+        pManager.AddIntegerParameter("Units", "U", "Unit that Margin and the Header/Footer height + offset inputs are authored in. Auto = the active Rhino document's unit. Paper sizes are physical and fixed regardless.", GH_ParamAccess.item, DrawingUnits.Auto);
 
-        for (var i = 0; i < 13; i++) pManager[i].Optional = true;
+        for (var i = 0; i < 14; i++) pManager[i].Optional = true;
 
         if (pManager[0] is Param_Integer paperParam)
         {
@@ -59,7 +60,19 @@ public class GH_LayoutOverride : GH_Component
             paperParam.AddNamedValue("Letter", 6);
             paperParam.AddNamedValue("Legal", 7);
             paperParam.AddNamedValue("Tabloid", 8);
+            paperParam.AddNamedValue("ANSI A", 9);
+            paperParam.AddNamedValue("ANSI B", 10);
+            paperParam.AddNamedValue("ANSI C", 11);
+            paperParam.AddNamedValue("ANSI D", 12);
+            paperParam.AddNamedValue("ANSI E", 13);
+            paperParam.AddNamedValue("ARCH A", 14);
+            paperParam.AddNamedValue("ARCH B", 15);
+            paperParam.AddNamedValue("ARCH C", 16);
+            paperParam.AddNamedValue("ARCH D", 17);
+            paperParam.AddNamedValue("ARCH E", 18);
         }
+        if (pManager[13] is Param_Integer unitsParam)
+            DrawingUnits.AddNamedValues(unitsParam);
         if (pManager[7] is Param_Integer headerAlign)
         {
             headerAlign.AddNamedValue("Inherit", -1);
@@ -110,6 +123,7 @@ public class GH_LayoutOverride : GH_Component
         var footerPlacementIndex = -1;
         var headerEdgeOffset = -1.0;
         var footerEdgeOffset = -1.0;
+        var unitsIndex = 0;
 
         DA.GetData(0, ref paperIndex);
         DA.GetData(1, ref landscape);
@@ -124,13 +138,16 @@ public class GH_LayoutOverride : GH_Component
         DA.GetData(10, ref footerPlacementIndex);
         DA.GetData(11, ref headerEdgeOffset);
         DA.GetData(12, ref footerEdgeOffset);
+        DA.GetData(13, ref unitsIndex);
+
+        var mmPerUnit = DrawingUnits.MmPerUnit(unitsIndex);
 
         PaperSize? paperOverride = null;
         if (paperIndex >= 0)
         {
-            if (paperIndex > 8)
+            if (paperIndex > 18)
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                    $"Paper Size {paperIndex} is out of range (0=A0 … 8=Tabloid) — falling back to A4");
+                    $"Paper Size {paperIndex} is out of range (0=A0 … 18=ARCH E) — falling back to A4");
             var p = ResolvePaper(paperIndex);
             paperOverride = landscape ? p.Landscape() : p;
         }
@@ -143,27 +160,28 @@ public class GH_LayoutOverride : GH_Component
         var ov = new LayoutOverride
         {
             PaperSize = paperOverride,
-            Margins = margin >= 0 ? Margins.Uniform(margin) : null,
+            Margins = margin >= 0 ? Margins.Uniform(margin * mmPerUnit) : null,
             Header = header,
             Footer = footer,
-            HeaderHeight = ResolveBandHeight(headerHeight),
-            FooterHeight = ResolveBandHeight(footerHeight),
+            HeaderHeight = ResolveBandHeight(headerHeight, mmPerUnit),
+            FooterHeight = ResolveBandHeight(footerHeight, mmPerUnit),
             HeaderAlign = ResolveAlign(headerAlignIndex),
             FooterAlign = ResolveAlign(footerAlignIndex),
             HeaderPlacement = ResolvePlacement(headerPlacementIndex),
             FooterPlacement = ResolvePlacement(footerPlacementIndex),
-            HeaderEdgeOffset = headerEdgeOffset >= 0 ? headerEdgeOffset : (double?)null,
-            FooterEdgeOffset = footerEdgeOffset >= 0 ? footerEdgeOffset : (double?)null,
+            HeaderEdgeOffset = headerEdgeOffset >= 0 ? headerEdgeOffset * mmPerUnit : (double?)null,
+            FooterEdgeOffset = footerEdgeOffset >= 0 ? footerEdgeOffset * mmPerUnit : (double?)null,
         };
 
         DA.SetData(0, ov);
     }
 
-    private static double? ResolveBandHeight(double input)
+    // -1 = inherit (null), 0 = no reservation, >0 = explicit height (converted to mm).
+    private static double? ResolveBandHeight(double input, double mmPerUnit)
     {
         if (input < 0) return null;
         if (input == 0) return 0.0;
-        return input;
+        return input * mmPerUnit;
     }
 
     private static HorizontalAlign? ResolveAlign(int i) => i switch
@@ -192,6 +210,16 @@ public class GH_LayoutOverride : GH_Component
         6 => PaperSize.Letter,
         7 => PaperSize.Legal,
         8 => PaperSize.Tabloid,
+        9 => PaperSize.AnsiA,
+        10 => PaperSize.AnsiB,
+        11 => PaperSize.AnsiC,
+        12 => PaperSize.AnsiD,
+        13 => PaperSize.AnsiE,
+        14 => PaperSize.ArchA,
+        15 => PaperSize.ArchB,
+        16 => PaperSize.ArchC,
+        17 => PaperSize.ArchD,
+        18 => PaperSize.ArchE,
         _ => PaperSize.A4,
     };
 }

@@ -100,6 +100,7 @@ public static class LayoutPass
 				Metadata = group.Metadata,
 				Transform = group.Transform,
 				BoundsOverride = group.BoundsOverride,
+				PreviewOnly = group.PreviewOnly,
 				Children = rewritten,
 			};
 		}

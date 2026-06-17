@@ -37,6 +37,24 @@ public readonly struct PaperSize : IEquatable<PaperSize>
 	public static readonly PaperSize Legal = new PaperSize(215.9, 355.6, "Legal");
 	public static readonly PaperSize Tabloid = new PaperSize(279.4, 431.8, "Tabloid");
 
+	// ANSI/ASME Y14.1 engineering series, defined in inches → mm (1 in = 25.4 mm). ANSI A == Letter
+	// and ANSI B == Tabloid, but the named constants make the imperial series discoverable.
+	public static readonly PaperSize AnsiA = Inches(8.5, 11, "ANSI A");
+	public static readonly PaperSize AnsiB = Inches(11, 17, "ANSI B");
+	public static readonly PaperSize AnsiC = Inches(17, 22, "ANSI C");
+	public static readonly PaperSize AnsiD = Inches(22, 34, "ANSI D");
+	public static readonly PaperSize AnsiE = Inches(34, 44, "ANSI E");
+
+	// ARCH architectural series, in inches → mm.
+	public static readonly PaperSize ArchA = Inches(9, 12, "ARCH A");
+	public static readonly PaperSize ArchB = Inches(12, 18, "ARCH B");
+	public static readonly PaperSize ArchC = Inches(18, 24, "ARCH C");
+	public static readonly PaperSize ArchD = Inches(24, 36, "ARCH D");
+	public static readonly PaperSize ArchE = Inches(36, 48, "ARCH E");
+
+	private static PaperSize Inches(double widthIn, double heightIn, string name) =>
+		new PaperSize(widthIn * 25.4, heightIn * 25.4, name);
+
 	public bool Equals(PaperSize other) =>
 		WidthMm == other.WidthMm && HeightMm == other.HeightMm && Name == other.Name;
 

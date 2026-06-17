@@ -13,10 +13,10 @@ using DrawColor = Selva.Drawing.Model.Style.Color;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Phase 7 layout component: tabular data layout with optional header row, column-track DSL,
-// and built-in borders/cell padding. Body cells arrive as a data tree where each branch is
-// one row and each item in the branch is a cell value (text). Mirrors Grid's track DSL —
-// "40 auto 1*" — for ColumnWidths.
+// Phase 7 layout component: tabular data layout with optional header row, a column-width
+// number list, and built-in borders/cell padding. Body cells arrive as a data tree where
+// each branch is one row and each item in the branch is a cell value (text). Column widths
+// use the same convention as Grid: >0 = mm, 0 = auto, <0 = star weight.
 public class GH_Table : GH_Component
 {
     public GH_Table()
@@ -28,13 +28,13 @@ public class GH_Table : GH_Component
 
     protected override Bitmap Icon => Resources.Table;
     public override GH_Exposure Exposure => GH_Exposure.quinary;
-    public override Guid ComponentGuid => new Guid("7CAE0062-0CC4-4D3E-ACE9-EE874D00C6BD");
+    public override Guid ComponentGuid => new Guid("2B7C8D3E-4F5A-4B6C-8D9E-1F2A3B4C5D62");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddTextParameter("Headers", "H", "Optional header row", GH_ParamAccess.list);
         pManager.AddTextParameter("Rows", "R", "Body rows — supply as a data tree, one branch per row", GH_ParamAccess.tree);
-        pManager.AddTextParameter("Column Widths", "CW", "Track DSL: \"40 auto 1*\". Empty → all columns are 1*.", GH_ParamAccess.item, "");
+        pManager.AddNumberParameter("Column Widths", "CW", "Column widths, one number per column: >0 = fixed mm, 0 = auto (fit content), <0 = star track (weight = abs). Empty → all columns are equal star tracks.", GH_ParamAccess.list);
         pManager.AddNumberParameter("Row Height", "RH", "Fixed row height in mm (0 = auto-size)", GH_ParamAccess.item, 0.0);
         pManager.AddParameter(new Param_Stroke("Border", "B", "Border stroke (use Path Style component; leave empty for none)", "Selva", "Layout", GH_ParamAccess.item));
         pManager.AddParameter(new Param_TextStyle("Default Style", "S", "Default cell text style (use Text Style component; leave empty for default)", "Selva", "Layout", GH_ParamAccess.item));
@@ -67,13 +67,13 @@ public class GH_Table : GH_Component
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddGenericParameter("Element", "E", "Drawing element", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Drawing", "Dwg", "Drawing element", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
         var headers = new List<string>();
-        var columnsDsl = "";
+        var columnSizes = new List<double>();
         var rowHeight = 0.0;
         Stroke border = null;
         TextStyle style = null;
@@ -89,7 +89,7 @@ public class GH_Table : GH_Component
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No rows provided");
             return;
         }
-        DA.GetData(2, ref columnsDsl);
+        DA.GetDataList(2, columnSizes);
         DA.GetData(3, ref rowHeight);
         DA.GetData(4, ref border);
         DA.GetData(5, ref style);
@@ -140,19 +140,9 @@ public class GH_Table : GH_Component
 
         var resolvedBorderStyle = (TableBorderStyle)Math.Max(0, Math.Min(4, borderStyleIndex));
 
-        IReadOnlyList<GridLength> columnWidths = null;
-        if (!string.IsNullOrWhiteSpace(columnsDsl))
-        {
-            try
-            {
-                columnWidths = TrackDsl.Parse(columnsDsl, "Column Widths");
-            }
-            catch (FormatException ex)
-            {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
-                return;
-            }
-        }
+        IReadOnlyList<GridLength> columnWidths = columnSizes.Count > 0
+            ? TrackSizes.FromNumbers(columnSizes)
+            : null;
 
         WarnOnCountMismatch(headers, bodyRows, columnWidths, alignTokens);
 

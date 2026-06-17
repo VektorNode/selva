@@ -24,6 +24,7 @@ public sealed class TokenResolver
 	private readonly string _title;
 	private readonly string _section;
 	private readonly IReadOnlyDictionary<string, string> _userTokens;
+	private readonly CultureInfo _culture;
 
 	public TokenResolver(
 		int page,
@@ -31,7 +32,8 @@ public sealed class TokenResolver
 		string title,
 		string section = null,
 		IReadOnlyDictionary<string, string> userTokens = null,
-		DateTime? now = null)
+		DateTime? now = null,
+		CultureInfo culture = null)
 	{
 		_page = page;
 		_totalPages = totalPages;
@@ -39,6 +41,9 @@ public sealed class TokenResolver
 		_section = section ?? string.Empty;
 		_userTokens = userTokens;
 		_now = now ?? DateTime.Now;
+		// Drives localized {date} month/day names (e.g. de-DE → "Juni", "Dienstag"). Numeric
+		// formats like dd.MM.yyyy are culture-independent. Defaults to invariant (English).
+		_culture = culture ?? CultureInfo.InvariantCulture;
 	}
 
 	public string Resolve(string input)
@@ -118,6 +123,7 @@ public sealed class TokenResolver
 						Metadata = g.Metadata,
 						Transform = g.Transform,
 						BoundsOverride = g.BoundsOverride,
+						PreviewOnly = g.PreviewOnly,
 						Children = cloned,
 					};
 				}
@@ -139,8 +145,8 @@ public sealed class TokenResolver
 				return _totalPages.ToString(CultureInfo.InvariantCulture);
 			case "date":
 				return arg != null
-					? _now.ToString(arg, CultureInfo.InvariantCulture)
-					: _now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+					? _now.ToString(arg, _culture)
+					: _now.ToString("yyyy-MM-dd", _culture);
 			case "title":
 				return _title;
 			case "section":

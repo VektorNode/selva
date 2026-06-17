@@ -99,7 +99,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 		_sb = new StringBuilder();
 		_sb.Append("<?xml version='1.0' encoding='UTF-8'?>\n");
-		_sb.Append("<svg xmlns='http://www.w3.org/2000/svg' version='1.1'");
+		_sb.Append("<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' version='1.1'");
 		_sb.Append(" width='").Append(F(width)).Append('\'');
 		_sb.Append(" height='").Append(F(height)).Append('\'');
 		_sb.Append(" viewBox='")
@@ -489,6 +489,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	public void Visit(GroupElement element)
 	{
 		if (element == null) return;
+		if (element.PreviewOnly) return; // viewport-only overlay (e.g. Grid cell dividers)
 
 		var hasTransform = !element.Transform.IsIdentity;
 		if (hasTransform)
@@ -676,10 +677,38 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 	public void Visit(ImageElement element)
 	{
-		// Phase 2 stub — emission lands when a real use case appears (logos in title
-		// blocks, Phase 8). Keep the visitor complete by no-op'ing for now.
-		_ = element;
+		if (element == null || element.Data == null || element.Data.Length == 0) return;
+		if (element.Width <= 0 || element.Height <= 0) return;
+
+		// Image lives in Y-up world space spanning [Position.Y, Position.Y + Height]. The
+		// root Y-flip would render the bitmap mirrored vertically, so we counter-flip the
+		// same way Visit(TextElement) does: translate to the image's top edge in world
+		// space, then scale(1 -1) so the local box draws top-left at (0,0) upright.
+		var topY = element.Position.Y + element.Height;
+		var transform = "translate(" + F(element.Position.X) + " " + F(topY) + ") scale(1 -1)";
+
+		_sb.Append("  <image");
+		AppendIdClass(element.Id, element.CssClass);
+		_sb.Append(" x='0' y='0' width='").Append(F(element.Width))
+			.Append("' height='").Append(F(element.Height)).Append('\'');
+		_sb.Append(" transform='").Append(transform).Append('\'');
+		_sb.Append(" preserveAspectRatio='none'");
+		// Emit both xlink:href (SVG 1.1 — required by strict consumers like librsvg/PDF
+		// rasterisers) and href (SVG 2 — modern browsers). The data URI is identical.
+		var dataUri = "data:" + MimeType(element.Format) + ";base64," + Convert.ToBase64String(element.Data);
+		_sb.Append(" xlink:href='").Append(dataUri).Append('\'');
+		_sb.Append(" href='").Append(dataUri).Append('\'');
+		_sb.Append(" />\n");
 	}
+
+	private static string MimeType(ImageFormat format) => format switch
+	{
+		ImageFormat.Png => "image/png",
+		ImageFormat.Jpeg => "image/jpeg",
+		ImageFormat.Webp => "image/webp",
+		ImageFormat.Svg => "image/svg+xml",
+		_ => "application/octet-stream",
+	};
 
 	public void Visit(DimensionElement element)
 	{

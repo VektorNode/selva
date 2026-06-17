@@ -29,6 +29,12 @@ namespace Selva.Drawing.Model.Drawings;
 // "SCALE 1:5" or a view name. Caption text uses CaptionStyle.
 public sealed class DrawingView : LayoutElement
 {
+	// Metadata key under which the resolved view records the scale it actually rendered at
+	// (numeric, e.g. "0.2" for 1:5). DocumentLayoutPass harvests this off the resolved body to
+	// auto-fill the {scale} token in a title block, so an auto-fit view never needs its scale
+	// typed in by hand. Present on the resolved GroupElement only when the scale is meaningful.
+	public const string ScaleMetadataKey = "selva:scale";
+
 	public DrawElement Geometry { get; init; }
 
 	// Drawing scale. 1.0 = full size in mm; 0.2 = 1:5; 2.0 = 2:1. Numeric only — formatting
@@ -54,6 +60,11 @@ public sealed class DrawingView : LayoutElement
 
 	// Optional caption shown below the frame (drawing title, scale label, etc.).
 	public string Caption { get; init; }
+
+	// When true and no explicit Caption is set, the view auto-captions its inferred scale as
+	// "SCALE 1:N" from the scale it actually resolved at. Lets a dropped-on-a-page view label
+	// itself without the user computing the ratio. Ignored when Caption is set.
+	public bool AutoScaleCaption { get; init; }
 	public TextStyle CaptionStyle { get; init; } = new TextStyle { FontSize = 2.5 };
 	public double CaptionGap { get; init; } = 1.5;
 
@@ -122,9 +133,16 @@ public sealed class DrawingView : LayoutElement
 		var outerWidth = innerWidth + Padding.Left + Padding.Right;
 		var outerHeight = innerHeight + Padding.Top + Padding.Bottom;
 
+		// Explicit Caption wins; otherwise auto-label the inferred scale when asked.
+		var effectiveCaption = !string.IsNullOrEmpty(Caption)
+			? Caption
+			: AutoScaleCaption && effectiveScale > 0 && !geomBounds.IsEmpty
+				? FormatScaleLabel(effectiveScale)
+				: null;
+
 		// Caption sits below the frame's bottom edge, so the resolved group's bounds extend
 		// downward from Origin.Y by (caption gap + caption height).
-		var captionMetrics = string.IsNullOrEmpty(Caption)
+		var captionMetrics = string.IsNullOrEmpty(effectiveCaption)
 			? (Height: 0.0, Ascent: 0.0)
 			: ComputeCaptionMetrics();
 
@@ -191,7 +209,7 @@ public sealed class DrawingView : LayoutElement
 			var baseline = Origin.Y - CaptionGap - captionMetrics.Ascent;
 			children.Add(new TextElement
 			{
-				Text = Caption,
+				Text = effectiveCaption,
 				Position = new Point2D(Origin.X + outerWidth / 2.0, baseline),
 				Style = new TextStyle
 				{
@@ -213,10 +231,25 @@ public sealed class DrawingView : LayoutElement
 		{
 			Id = Id,
 			CssClass = CssClass,
-			Metadata = Metadata,
+			// Record the scale this view actually rendered at so a title block's {scale} token
+			// can be auto-filled. Only stamp when geometry was drawn at a meaningful scale.
+			Metadata = (!geomBounds.IsEmpty && effectiveScale > 0)
+				? WithScale(Metadata, effectiveScale)
+				: Metadata,
 			Children = children,
 			BoundsOverride = new BoundingBox(minX, minY, maxX, maxY),
 		};
+	}
+
+	private static IReadOnlyDictionary<string, string> WithScale(IReadOnlyDictionary<string, string> existing, double scale)
+	{
+		var map = existing != null
+			? new Dictionary<string, string>(existing.Count + 1)
+			: new Dictionary<string, string>(1);
+		if (existing != null)
+			foreach (var kv in existing) map[kv.Key] = kv.Value;
+		map[ScaleMetadataKey] = scale.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+		return map;
 	}
 
 	private static DrawElement CounterScalePaperSpaceStyles(DrawElement element, double styleScale)
@@ -298,6 +331,7 @@ public sealed class DrawingView : LayoutElement
 					Metadata = group.Metadata,
 					Transform = group.Transform,
 					BoundsOverride = group.BoundsOverride,
+					PreviewOnly = group.PreviewOnly,
 					Children = rewritten,
 				};
 			default:

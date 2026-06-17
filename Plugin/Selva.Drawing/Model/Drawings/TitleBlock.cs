@@ -16,6 +16,47 @@ namespace Selva.Drawing.Model.Drawings;
 //
 // Standard helpers (`Standard()`, `Compact()`) produce conventional layouts so callers can
 // fill a few fields and get a complete block.
+// Localizable caption set for the title-block factories. Each property is the small-caps
+// label shown above a value cell. Defaults are English (ISO drafting convention); German()
+// supplies the equivalent DIN/ISO German captions. Callers can also build a custom set.
+public sealed class TitleBlockLabels
+{
+	public string LegalOwner { get; init; } = "LEGAL OWNER";
+	public string Client { get; init; } = "CLIENT";
+	public string Project { get; init; } = "PROJECT";
+	public string Title { get; init; } = "TITLE";
+	public string DrawingNumber { get; init; } = "DRAWING NO.";
+	public string Revision { get; init; } = "REV";
+	public string Scale { get; init; } = "SCALE";
+	public string Sheet { get; init; } = "SHEET";
+	public string CreatedBy { get; init; } = "CREATED BY";
+	public string Drawn { get; init; } = "DRAWN";
+	public string ApprovedBy { get; init; } = "APPROVED BY";
+	public string Checked { get; init; } = "CHECKED";
+	public string Date { get; init; } = "DATE";
+	public string DateOfIssue { get; init; } = "DATE OF ISSUE";
+
+	public static readonly TitleBlockLabels English = new TitleBlockLabels();
+
+	public static readonly TitleBlockLabels German = new TitleBlockLabels
+	{
+		LegalOwner = "EIGENTÜMER",
+		Client = "KUNDE",
+		Project = "PROJEKT",
+		Title = "TITEL",
+		DrawingNumber = "ZEICHNUNGS-NR.",
+		Revision = "ÄND",
+		Scale = "MASSSTAB",
+		Sheet = "BLATT",
+		CreatedBy = "ERSTELLT VON",
+		Drawn = "GEZEICHNET",
+		ApprovedBy = "GENEHMIGT VON",
+		Checked = "GEPRÜFT",
+		Date = "DATUM",
+		DateOfIssue = "AUSGABEDATUM",
+	};
+}
+
 public sealed class TitleBlockField
 {
 	// Short caption shown above the value, e.g. "PROJECT", "DRAWING NO".
@@ -42,6 +83,21 @@ public sealed class TitleBlock : LayoutElement
 	// pin the block to any corner via Origin.
 	public BoundingBox Size { get; init; } = new BoundingBox(0, 0, 180, 40);
 
+	// ISO 7200 width rule: on A4-and-narrower sheets the title block spans the full content
+	// width; on A3 and larger it stays a fixed strip pinned to the bottom-right corner. When
+	// AutoWidth is set, Resolve stretches the block to the band's available width if that width
+	// is below IsoFullWidthThreshold, otherwise it keeps Size.Width. The component that wires the
+	// block into chrome flips the footer alignment (Right vs full-width) on the same signal.
+	public bool AutoWidth { get; init; }
+
+	// Sheets at or below this content width (mm) get a full-width block. ~200mm covers A4
+	// portrait (210mm paper − margins) without catching A3 landscape's 180mm corner block.
+	public const double IsoFullWidthThreshold = 200.0;
+
+	// Optional logo rendered in a dedicated cell. Placed top-left and aspect-preserved by the
+	// caller (the GH component sizes the ImageElement to the cell). Null = no logo cell.
+	public ImageElement Logo { get; init; }
+
 	public Stroke Border { get; init; } = new Stroke { Width = 0.35 };
 	public Stroke InnerBorder { get; init; } = new Stroke { Width = 0.18 };
 
@@ -53,19 +109,20 @@ public sealed class TitleBlock : LayoutElement
 
 	public override DrawElement Resolve(LayoutContext context)
 	{
+		// ISO 7200: full-width on A4-and-narrower bands, fixed Size.Width on larger sheets.
+		var totalWidth = ResolveWidth(context);
+		var totalHeight = Size.Height;
+
 		if (Rows == null || Rows.Count == 0)
 		{
 			// Empty block: just the outer rect.
 			return new Frame
 			{
-				Size = new BoundingBox(0, 0, Size.Width, Size.Height),
+				Size = new BoundingBox(0, 0, totalWidth, totalHeight),
 				Border = Border,
 				Origin = Origin,
 			}.Resolve(context);
 		}
-
-		var totalWidth = Size.Width;
-		var totalHeight = Size.Height;
 		var rowHeight = totalHeight / Rows.Count;
 
 		// Build the cell-content tree as a list of GridCells layered on top of a backing
@@ -133,6 +190,12 @@ public sealed class TitleBlock : LayoutElement
 		if (Border != null)
 			children.Add(new PathElement { Path = borderPath, Stroke = Border });
 
+		// Logo overlays the top-left, fitted into the first row's height with a small inset and
+		// aspect preserved. Drawn last so it sits over the field grid (the standard layout keeps
+		// the top-left cell blank for it).
+		if (Logo != null)
+			children.Add(PlaceLogo(Logo, rowHeight));
+
 		return new GroupElement
 		{
 			Id = Id,
@@ -142,6 +205,44 @@ public sealed class TitleBlock : LayoutElement
 			BoundsOverride = new BoundingBox(
 				Origin.X, Origin.Y,
 				Origin.X + totalWidth, Origin.Y + totalHeight),
+		};
+	}
+
+	// ISO 7200 width: when AutoWidth is set and the band is A4-narrow, stretch to the band's
+	// available width; otherwise keep the fixed Size.Width. A degenerate/empty context (no band
+	// known yet, e.g. band-height measurement) falls back to Size.Width.
+	private double ResolveWidth(LayoutContext context)
+	{
+		if (!AutoWidth || !context.HasFiniteAvailableWidth) return Size.Width;
+		var available = context.AvailableWidth;
+		return available <= IsoFullWidthThreshold ? available : Size.Width;
+	}
+
+	// Fit the logo into the top-left of the block: a box one row tall (minus inset), pinned to
+	// the top-left corner, aspect preserved. Honours the image's intrinsic aspect when both
+	// Width and Height are set; otherwise scales the given extent to the cell height.
+	private DrawElement PlaceLogo(ImageElement logo, double rowHeight)
+	{
+		const double inset = 1.5;
+		var boxHeight = Math.Max(0, rowHeight - inset * 2);
+		var srcW = logo.Width > 0 ? logo.Width : boxHeight;
+		var srcH = logo.Height > 0 ? logo.Height : boxHeight;
+		var aspect = srcH > 0 ? srcW / srcH : 1.0;
+
+		var drawH = boxHeight;
+		var drawW = drawH * aspect;
+
+		// Top-left of the block: y from (top − inset − drawH) up to (top − inset).
+		var x = Origin.X + inset;
+		var y = Origin.Y + Size.Height - inset - drawH;
+
+		return new ImageElement
+		{
+			Data = logo.Data,
+			Format = logo.Format,
+			Position = new Point2D(x, y),
+			Width = drawW,
+			Height = drawH,
 		};
 	}
 
@@ -295,25 +396,77 @@ public sealed class TitleBlock : LayoutElement
 	// Convenient builder: the drafting-spec staple — title at top spanning full width, then
 	// a project/drawing/scale/sheet row, then revision/date/author. Callers fill the values
 	// they care about; missing keys are rendered as blanks.
-	public static TitleBlock Standard(IReadOnlyDictionary<string, string> values, BoundingBox? size = null)
+	public static TitleBlock Standard(IReadOnlyDictionary<string, string> values, BoundingBox? size = null, TitleBlockLabels labels = null)
 	{
 		string V(string k) => values != null && values.TryGetValue(k, out var v) ? v : string.Empty;
+		var L = labels ?? TitleBlockLabels.English;
 
 		return new TitleBlock
 		{
 			Size = size ?? new BoundingBox(0, 0, 180, 40),
 			Rows = new IReadOnlyList<TitleBlockField>[]
 			{
-				new[] { new TitleBlockField { Label = "PROJECT", Value = V("Project"), Span = 0.6 },
-				        new TitleBlockField { Label = "CLIENT", Value = V("Client"), Span = 0.4 } },
-				new[] { new TitleBlockField { Label = "TITLE", Value = V("Title"), Span = 1.0 } },
-				new[] { new TitleBlockField { Label = "DRAWING NO", Value = V("DrawingNumber"), Span = 0.4 },
-				        new TitleBlockField { Label = "REV", Value = V("Revision"), Span = 0.15 },
-				        new TitleBlockField { Label = "SCALE", Value = V("Scale"), Span = 0.2 },
-				        new TitleBlockField { Label = "SHEET", Value = V("Sheet"), Span = 0.25 } },
-				new[] { new TitleBlockField { Label = "DRAWN", Value = V("Author"), Span = 0.4 },
-				        new TitleBlockField { Label = "DATE", Value = V("Date"), Span = 0.3 },
-				        new TitleBlockField { Label = "CHECKED", Value = V("Checker"), Span = 0.3 } },
+				new[] { new TitleBlockField { Label = L.Project, Value = V("Project"), Span = 0.6 },
+				        new TitleBlockField { Label = L.Client, Value = V("Client"), Span = 0.4 } },
+				new[] { new TitleBlockField { Label = L.Title, Value = V("Title"), Span = 1.0 } },
+				new[] { new TitleBlockField { Label = L.DrawingNumber, Value = V("DrawingNumber"), Span = 0.4 },
+				        new TitleBlockField { Label = L.Revision, Value = V("Revision"), Span = 0.15 },
+				        new TitleBlockField { Label = L.Scale, Value = V("Scale"), Span = 0.2 },
+				        new TitleBlockField { Label = L.Sheet, Value = V("Sheet"), Span = 0.25 } },
+				new[] { new TitleBlockField { Label = L.Drawn, Value = V("Author"), Span = 0.4 },
+				        new TitleBlockField { Label = L.Date, Value = V("Date"), Span = 0.3 },
+				        new TitleBlockField { Label = L.Checked, Value = V("Checker"), Span = 0.3 } },
+			},
+		};
+	}
+
+	// ISO 7200 full title block (first sheet). Data fields follow the standard's mandatory and
+	// optional set: title, legal owner, drawing number, sheet n/N, revision, date of issue,
+	// created/approved by, scale. The top-left cell is left blank so a Logo can overlay it.
+	// Keys match GH_DocumentInfo / GH_TitleBlock token names; missing keys render blank.
+	public static TitleBlock Iso7200(IReadOnlyDictionary<string, string> values, BoundingBox? size = null, TitleBlockLabels labels = null)
+	{
+		string V(string k) => values != null && values.TryGetValue(k, out var v) ? v : string.Empty;
+		var L = labels ?? TitleBlockLabels.English;
+
+		return new TitleBlock
+		{
+			Size = size ?? new BoundingBox(0, 0, 180, 50),
+			Rows = new IReadOnlyList<TitleBlockField>[]
+			{
+				// Row 1: blank logo cell (top-left) + legal owner / project.
+				new[] { (TitleBlockField)null,
+				        new TitleBlockField { Label = L.LegalOwner, Value = V("Owner"), Span = 0.35 },
+				        new TitleBlockField { Label = L.Project, Value = V("Project"), Span = 0.45 } },
+				new[] { new TitleBlockField { Label = L.Title, Value = V("Title"), Span = 1.0 } },
+				new[] { new TitleBlockField { Label = L.DrawingNumber, Value = V("DrawingNumber"), Span = 0.35 },
+				        new TitleBlockField { Label = L.Revision, Value = V("Revision"), Span = 0.15 },
+				        new TitleBlockField { Label = L.Scale, Value = V("Scale"), Span = 0.25 },
+				        new TitleBlockField { Label = L.Sheet, Value = V("Sheet"), Span = 0.25 } },
+				new[] { new TitleBlockField { Label = L.CreatedBy, Value = V("Author"), Span = 0.35 },
+				        new TitleBlockField { Label = L.ApprovedBy, Value = V("Approver"), Span = 0.35 },
+				        new TitleBlockField { Label = L.DateOfIssue, Value = V("Date"), Span = 0.3 } },
+			},
+		};
+	}
+
+	// ISO continuation-sheet strip: a single slim row carrying just enough to identify the sheet
+	// if printed and separated — drawing number, title, revision, sheet n/N. Used as the
+	// document-default footer on pages after the first.
+	public static TitleBlock Continuation(IReadOnlyDictionary<string, string> values, BoundingBox? size = null, TitleBlockLabels labels = null)
+	{
+		string V(string k) => values != null && values.TryGetValue(k, out var v) ? v : string.Empty;
+		var L = labels ?? TitleBlockLabels.English;
+
+		return new TitleBlock
+		{
+			Size = size ?? new BoundingBox(0, 0, 180, 12),
+			Rows = new IReadOnlyList<TitleBlockField>[]
+			{
+				new[] { new TitleBlockField { Label = L.DrawingNumber, Value = V("DrawingNumber"), Span = 0.3 },
+				        new TitleBlockField { Label = L.Title, Value = V("Title"), Span = 0.45 },
+				        new TitleBlockField { Label = L.Revision, Value = V("Revision"), Span = 0.1 },
+				        new TitleBlockField { Label = L.Sheet, Value = V("Sheet"), Span = 0.15 } },
 			},
 		};
 	}

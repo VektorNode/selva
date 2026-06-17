@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Elements;
 
 namespace Selva.Drawing.Model.Layout;
@@ -151,7 +153,14 @@ public static class DocumentLayoutPass
 		for (var i = 0; i < totalPages; i++)
 		{
 			var rp = raw[i];
-			var resolver = new TokenResolver(i + 1, totalPages, rp.Title, rp.SectionTitle, layout.Tokens, now);
+
+			// Auto-fill {scale} from the views actually placed on this page: one scale → "1:N",
+			// several distinct → "As shown" (the drafting convention), none → empty so an unfilled
+			// {scale} renders blank rather than leaking the literal token. A doc-level / manual
+			// {scale} still wins. Harvested before chrome resolves so the title block's {scale}
+			// sees it.
+			var tokens = MergeScaleToken(layout.Tokens, HarvestScaleLabel(rp.Layout.RawContents[rp.ContentIndex]) ?? string.Empty);
+			var resolver = new TokenResolver(i + 1, totalPages, rp.Title, rp.SectionTitle, tokens, now, layout.Culture);
 
 			// Chrome resolves per page against its band rect (so star grids fill the band width
 			// and TextFlows wrap to it), then this page's tokens substitute into the result.
@@ -176,6 +185,67 @@ public static class DocumentLayoutPass
 		}
 
 		return pages;
+	}
+
+	// Returns the {scale} label for a resolved page body: the shared "1:N" ratio when every
+	// view drew at one scale, "As shown" when they differ, or null when no view stamped a scale
+	// (so the doc-level token / manual value wins). Distinct scales are compared on the rounded
+	// label so 1:4.999 and 1:5 don't read as divergent.
+	private static string HarvestScaleLabel(DrawElement body)
+	{
+		var labels = new HashSet<string>(StringComparer.Ordinal);
+		CollectScaleLabels(body, labels);
+		if (labels.Count == 0) return null;
+		if (labels.Count == 1)
+		{
+			var only = default(string);
+			foreach (var l in labels) only = l;
+			return only;
+		}
+		return "As shown";
+	}
+
+	private static void CollectScaleLabels(DrawElement element, HashSet<string> labels)
+	{
+		if (element == null) return;
+		if (element.Metadata != null
+			&& element.Metadata.TryGetValue(DrawingView.ScaleMetadataKey, out var raw)
+			&& double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var scale)
+			&& scale > 0)
+		{
+			labels.Add(FormatRatio(scale));
+		}
+		if (element is GroupElement g)
+			foreach (var c in g.Children) CollectScaleLabels(c, labels);
+	}
+
+	// Bare "1:N" / "N:1" ratio for a title-block field (no "SCALE " prefix).
+	private static string FormatRatio(double scale)
+	{
+		if (Math.Abs(scale - 1.0) < 1e-9) return "1:1";
+		if (scale < 1.0) return $"1:{FormatNumber(1.0 / scale)}";
+		return $"{FormatNumber(scale)}:1";
+	}
+
+	private static string FormatNumber(double n)
+	{
+		if (Math.Abs(n - Math.Round(n)) < 1e-6) return ((int)Math.Round(n)).ToString(CultureInfo.InvariantCulture);
+		return n.ToString("0.##", CultureInfo.InvariantCulture);
+	}
+
+	private static IReadOnlyDictionary<string, string> MergeScaleToken(
+		IReadOnlyDictionary<string, string> tokens, string scaleLabel)
+	{
+		// Defensive: a null label means "don't touch tokens". Callers pass "" to render blank.
+		if (scaleLabel == null) return tokens;
+		var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		if (tokens != null)
+			foreach (var kv in tokens) map[kv.Key] = kv.Value;
+		// Only auto-fill when the document didn't already define {scale} explicitly — an explicit
+		// project value is intentional and shouldn't be overwritten by inference. Defining it as
+		// empty when nothing is inferred means an unfilled {scale} renders blank, not as "{scale}".
+		if (!map.ContainsKey("scale")) map["scale"] = scaleLabel;
+		return map;
 	}
 
 	private struct RawPage
@@ -223,4 +293,8 @@ public sealed class DocumentLayout
 
 	// Override the clock, mainly for deterministic tests.
 	public DateTime? Now { get; init; }
+
+	// Culture used to format the {date} token's localized parts (month/day names). Null →
+	// invariant (English). Numeric date formats (dd.MM.yyyy) are unaffected by culture.
+	public System.Globalization.CultureInfo Culture { get; init; }
 }

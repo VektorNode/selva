@@ -35,7 +35,7 @@ public class GH_Document : GH_Component
 
     public GH_Document()
         : base("Document", "Doc",
-            "Bundles sections into a paginated document with shared metadata. Wire a Layout Override for non-default paper / chrome.",
+            "Bundles pages into a paginated document with shared metadata. Wire a Layout Override for non-default paper / chrome.",
             "Selva", "Drawing")
     {
     }
@@ -57,14 +57,16 @@ public class GH_Document : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddGenericParameter("Sections", "S", "Sections to assemble into the document, in order", GH_ParamAccess.list);
+        pManager.AddGenericParameter("Pages", "P", "Pages to assemble into the document, in order", GH_ParamAccess.list);
         pManager.AddTextParameter("Title", "T", "Document title — surfaces via the {title} token and as PDF metadata", GH_ParamAccess.item, string.Empty);
         pManager.AddTextParameter("Author", "A", "Document author (PDF /Info)", GH_ParamAccess.item, string.Empty);
         pManager.AddTextParameter("Subject", "Sj", "Document subject (PDF /Info)", GH_ParamAccess.item, string.Empty);
         pManager.AddTextParameter("Keywords", "K", "Comma-separated keyword list (PDF /Info)", GH_ParamAccess.list);
         pManager.AddGenericParameter("Override", "O", "Optional document-wide layout (paper, margins, chrome) from a Layout Override component. Leave unconnected to use built-in defaults (A4, 10mm margins, no chrome).", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Info", "I", "Optional Document Info — your own reusable {token} values. Wire a Document Info component (Keys = [\"project\",\"client\"], Values = [\"Villa A\",\"Acme\"]) and then any header/footer/cell text containing {project} or {client} gets replaced. Built-in tokens ({title} {date} {page} {pages} {section} {scale}) always work without this.", GH_ParamAccess.item);
+        pManager.AddTextParameter("Culture", "C", "Language/region code for the {date} token's month and day NAMES, e.g. \"de-DE\" (Juni, Dienstag), \"fr-FR\", \"en-US\". Default en-US. Numeric formats like {date:dd.MM.yyyy} look the same in every culture — switch this only when you use month/day names like {date:d. MMMM yyyy}.", GH_ParamAccess.item, "en-US");
 
-        for (var i = 1; i <= 5; i++) pManager[i].Optional = true;
+        for (var i = 1; i <= 7; i++) pManager[i].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -80,6 +82,8 @@ public class GH_Document : GH_Component
         var subject = string.Empty;
         var keywords = new List<string>();
         IGH_Goo overrideGoo = null;
+        IGH_Goo infoGoo = null;
+        var cultureCode = "en-US";
 
         DA.GetDataList(0, sections);
         DA.GetData(1, ref title);
@@ -87,12 +91,21 @@ public class GH_Document : GH_Component
         DA.GetData(3, ref subject);
         DA.GetDataList(4, keywords);
         DA.GetData(5, ref overrideGoo);
+        DA.GetData(6, ref infoGoo);
+        DA.GetData(7, ref cultureCode);
 
         var overrides = Unwrap(overrideGoo) as LayoutOverride;
         if (overrideGoo != null && overrides == null)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
                 "Override input must be a Layout Override value — ignoring.");
+        }
+
+        var info = Unwrap(infoGoo) as DocumentInfo;
+        if (infoGoo != null && info == null)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                "Info input must be a Document Info value — ignoring.");
         }
 
         WarnIfChromeHasOrigin(overrides?.Header, "Header");
@@ -126,6 +139,8 @@ public class GH_Document : GH_Component
             FooterPlacement = overrides?.FooterPlacement ?? ChromePlacement.Margin,
             HeaderEdgeOffset = overrides?.HeaderEdgeOffset ?? 0,
             FooterEdgeOffset = overrides?.FooterEdgeOffset ?? 0,
+            Tokens = info?.Tokens,
+            Culture = ResolveCulture(cultureCode),
         };
 
         if (overrides != null) EmitChromeReservationRemark(overrides);
@@ -294,4 +309,21 @@ public class GH_Document : GH_Component
     }
 
     private static string NullIfEmpty(string s) => string.IsNullOrEmpty(s) ? null : s;
+
+    // Parses the Culture code (e.g. "de-DE") used for {date} month / day names. Empty/invalid
+    // falls back to invariant (English); the caller warns on an unrecognised code.
+    private System.Globalization.CultureInfo ResolveCulture(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return System.Globalization.CultureInfo.InvariantCulture;
+        try
+        {
+            return System.Globalization.CultureInfo.GetCultureInfo(code.Trim());
+        }
+        catch (System.Globalization.CultureNotFoundException)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"Culture \"{code}\" is not recognised — falling back to English. Use a code like \"de-DE\", \"fr-FR\", or \"en-US\".");
+            return System.Globalization.CultureInfo.InvariantCulture;
+        }
+    }
 }

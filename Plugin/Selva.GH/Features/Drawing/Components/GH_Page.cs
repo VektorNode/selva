@@ -2,12 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Data;
+using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Rhino.Geometry;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Layout;
 using ModelBoundingBox = Selva.Drawing.Model.Geometry.BoundingBox;
+using DrawTransform = Selva.Drawing.Model.Geometry.Transform;
 using Selva.GH.Properties;
 using Selva.Drawing.RhinoInterop;
 
@@ -16,6 +19,15 @@ namespace Selva.GH.Features.Drawing.Components;
 // Wraps drawing elements into a Section that flows into GH_Document. The section is the
 // unrendered description; GH_Document drives pagination and global token resolution so
 // page numbering is correct across multi-section documents.
+//
+// Arrange controls how the input is placed:
+//   Auto (default) — each input tree BRANCH is one unit (its internal relative geometry kept
+//     intact: a line and the dimension annotating it stay paired). Each branch's world offset
+//     is stripped and the branches flow down the page, centred and spaced, inside the margins.
+//     This is the painless default: drop drawings on a Page and they land sensibly.
+//   Grid — branches packed into a fit-to-page grid (contact-sheet style).
+//   Manual — branches keep their raw Rhino world coordinates (for deliberately positioned
+//     layouts). Overlap / outside-margin warnings apply only in this mode.
 //
 // Per-section paper / margin / chrome overrides live on the optional Override input
 // (produced by GH_LayoutOverride). Most pages don't need it — leave it unconnected and
@@ -35,7 +47,7 @@ public class GH_Page : GH_Component
 
     public GH_Page()
         : base("Page", "Page",
-            "Wraps drawing elements into a section that flows into GH_Document. Use a Section Override for per-section paper / chrome.",
+            "Wraps drawing elements into a page that flows into a Document. Use a Layout Override for per-page paper / chrome.",
             "Selva", "Drawing")
     {
     }
@@ -57,32 +69,46 @@ public class GH_Page : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddGenericParameter("Content", "C", "Drawing elements to flow across the section's pages", GH_ParamAccess.list);
-        pManager.AddTextParameter("Title", "T", "Section title — surfaces via the {section} token in chrome and is stamped on each output Page", GH_ParamAccess.item, string.Empty);
-        pManager.AddGenericParameter("Override", "O", "Optional per-section overrides (paper, margins, chrome) from a Layout Override component. Leave unconnected to inherit everything from the Document.", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Drawings", "Dwg", "Drawing elements to place on the page(s). Each tree branch is one unit kept together (e.g. a drawing + its dimension); branches are arranged relative to each other per the Arrange mode.", GH_ParamAccess.tree);
+        pManager.AddTextParameter("Title", "T", "Page title — surfaces via the {section} token in chrome and is stamped on each output page", GH_ParamAccess.item, string.Empty);
+        pManager.AddGenericParameter("Override", "O", "Optional per-page overrides (paper, margins, chrome) from a Layout Override component. Leave unconnected to inherit everything from the Document.", GH_ParamAccess.item);
         pManager.AddBooleanParameter("Keep Together", "KT", "When true, the entire section is forced onto a single page even if its content overflows.", GH_ParamAccess.item, false);
+        pManager.AddIntegerParameter("Arrange", "Ar", "How to place the input. Auto = flow branches centred down the page (painless default). Grid = pack into a fit-to-page grid. Manual = keep raw Rhino world coordinates.", GH_ParamAccess.item, 0);
+        pManager.AddNumberParameter("Spacing", "Sp", "Gap between arranged branches, in mm (Auto / Grid modes).", GH_ParamAccess.item, 5.0);
 
         pManager[1].Optional = true;
         pManager[2].Optional = true;
         pManager[3].Optional = true;
+        pManager[4].Optional = true;
+        pManager[5].Optional = true;
+
+        if (pManager[4] is Param_Integer arrange)
+        {
+            arrange.AddNamedValue("Auto", 0);
+            arrange.AddNamedValue("Grid", 1);
+            arrange.AddNamedValue("Manual", 2);
+        }
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddGenericParameter("Section", "S", "Section to plug into GH_Document", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Page", "P", "Page to plug into a Document", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        var elements = new List<DrawElement>();
         var title = string.Empty;
         IGH_Goo overrideGoo = null;
         var keepTogether = false;
+        var arrangeMode = 0;
+        var spacing = 5.0;
 
-        DA.GetDataList(0, elements);
+        if (!DA.GetDataTree<IGH_Goo>(0, out GH_Structure<IGH_Goo> tree)) tree = new GH_Structure<IGH_Goo>();
         DA.GetData(1, ref title);
         DA.GetData(2, ref overrideGoo);
         DA.GetData(3, ref keepTogether);
+        DA.GetData(4, ref arrangeMode);
+        DA.GetData(5, ref spacing);
 
         var overrides = Unwrap(overrideGoo) as LayoutOverride;
         if (overrideGoo != null && overrides == null)
@@ -94,31 +120,26 @@ public class GH_Page : GH_Component
         WarnIfChromeHasOrigin(overrides?.Header, "Header");
         WarnIfChromeHasOrigin(overrides?.Footer, "Footer");
 
-        var children = new List<DrawElement>(elements.Count);
-        foreach (var e in elements) if (e != null) children.Add(e);
+        // Each branch becomes one unit. A single-element branch is that element; a multi-element
+        // branch is Grouped so its internal relative geometry (drawing + its dimension) is kept.
+        var branches = BuildBranchUnits(tree, out var skipped);
+        if (skipped > 0)
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"Skipped {skipped} input(s) that are not drawing elements");
 
-        if (children.Count == 0)
+        if (branches.Count == 0)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No content provided");
             return;
         }
 
-        // Wrap a multi-element list in a Group so children keep their absolute world
-        // positions — drawings (line + dimension annotating that line) depend on relative
-        // geometry. A Stack would re-flow children top-to-bottom by bounding box and break
-        // that alignment. Pass a pre-built Stack/Table as a single element to opt into flow.
-        DrawElement content = children.Count == 1
-            ? children[0]
-            : new GroupElement { Children = children };
-
-        if (children.Count > 1)
+        spacing = Math.Max(0, spacing);
+        DrawElement content = arrangeMode switch
         {
-            WarnOnDirectMultiElementLayout(
-                children,
-                overrides?.PaperSize ?? PaperSize.A4,
-                overrides?.Margins ?? Margins.Uniform(10),
-                paperKnown: overrides?.PaperSize != null);
-        }
+            2 => ComposeManual(branches, overrides),     // raw world coords (legacy behaviour)
+            1 => ComposeGrid(branches, spacing),         // fit-to-page grid
+            _ => ComposeAuto(branches, spacing),         // centred vertical flow (default)
+        };
 
         var section = new Section
         {
@@ -151,6 +172,113 @@ public class GH_Page : GH_Component
             BuildPreview(section);
 
         DA.SetData(0, section);
+    }
+
+    // One unit per branch. Single-element branch → that element; multi-element branch → a Group
+    // preserving the children's relative world geometry so an annotation stays with its drawing.
+    private static List<DrawElement> BuildBranchUnits(GH_Structure<IGH_Goo> tree, out int skipped)
+    {
+        skipped = 0;
+        var units = new List<DrawElement>(tree.PathCount);
+        foreach (var path in tree.Paths)
+        {
+            var branch = tree.get_Branch(path);
+            var elems = new List<DrawElement>(branch.Count);
+            foreach (var item in branch)
+            {
+                if (item is GH_ObjectWrapper wrap && wrap.Value is DrawElement de) elems.Add(de);
+                else if (item is DrawElement direct) elems.Add(direct);
+                else if (item != null) skipped++;
+            }
+            if (elems.Count == 0) continue;
+            units.Add(elems.Count == 1 ? elems[0] : new GroupElement { Children = elems });
+        }
+        return units;
+    }
+
+    // Auto: strip each branch's world offset (so a branch drawn far from origin lands on the
+    // sheet, not at its Rhino coordinates) and flow them centred down the page. Pagination and
+    // page-fitting are handled downstream by the Stack + Document.
+    private static DrawElement ComposeAuto(List<DrawElement> branches, double spacing)
+    {
+        if (branches.Count == 1) return NormalizeToOrigin(branches[0]);
+
+        var normalized = new List<DrawElement>(branches.Count);
+        foreach (var b in branches) normalized.Add(NormalizeToOrigin(b));
+
+        return new Stack
+        {
+            Children = normalized,
+            Orientation = StackOrientation.Vertical,
+            Spacing = spacing,
+            CrossAlign = CrossAlign.Center,
+        };
+    }
+
+    // Grid: pack normalized branches into a near-square grid of equal (star) tracks that fills
+    // the page width. Row count follows from the column count so the sheet reads as a contact
+    // sheet of the branches.
+    private DrawElement ComposeGrid(List<DrawElement> branches, double spacing)
+    {
+        if (branches.Count == 1) return NormalizeToOrigin(branches[0]);
+
+        var cols = (int)Math.Ceiling(Math.Sqrt(branches.Count));
+        var rows = (int)Math.Ceiling(branches.Count / (double)cols);
+
+        var colTracks = new GridLength[cols];
+        for (var c = 0; c < cols; c++) colTracks[c] = GridLength.Star();
+        var rowTracks = new GridLength[rows];
+        for (var r = 0; r < rows; r++) rowTracks[r] = GridLength.Auto;
+
+        var cells = new List<GridCell>(branches.Count);
+        for (var i = 0; i < branches.Count; i++)
+        {
+            cells.Add(new GridCell
+            {
+                Row = i / cols,
+                Column = i % cols,
+                Content = NormalizeToOrigin(branches[i]),
+            });
+        }
+
+        return new Grid
+        {
+            Columns = colTracks,
+            Rows = rowTracks,
+            Cells = cells,
+            ColumnSpacing = spacing,
+            RowSpacing = spacing,
+        };
+    }
+
+    // Manual: legacy behaviour — keep raw world coordinates, Group multi-branch input, and warn
+    // when content overlaps or falls outside the margins so the user can correct positions.
+    private DrawElement ComposeManual(List<DrawElement> branches, LayoutOverride overrides)
+    {
+        if (branches.Count > 1)
+            WarnOnDirectMultiElementLayout(
+                branches,
+                overrides?.PaperSize ?? PaperSize.A4,
+                overrides?.Margins ?? Margins.Uniform(10),
+                paperKnown: overrides?.PaperSize != null);
+
+        return branches.Count == 1 ? branches[0] : new GroupElement { Children = branches };
+    }
+
+    // Shift an element so its bounding box's bottom-left sits at the origin, discarding the
+    // world offset it inherited from where it was drawn in Rhino. Empty/degenerate bounds pass
+    // through unchanged.
+    private static DrawElement NormalizeToOrigin(DrawElement element)
+    {
+        if (element == null) return null;
+        var b = SafeBounds(element);
+        if (b.IsEmpty) return element;
+        if (Math.Abs(b.MinX) < 1e-9 && Math.Abs(b.MinY) < 1e-9) return element;
+        return new GroupElement
+        {
+            Transform = DrawTransform.Translate(-b.MinX, -b.MinY),
+            Children = new[] { element },
+        };
     }
 
     private static object Unwrap(IGH_Goo goo) => goo switch

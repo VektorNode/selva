@@ -157,8 +157,13 @@ export function createDefaultWidgetConfig(
 			}
 
 			case 'file': {
+				// Prefer the parameter's own allowlist (e.g. image extensions for a Get Image
+				// input) and fall back to the geometry default for plain Get File inputs.
 				const config: FileInputWidgetConfig = {
-					acceptedFormats: [...ACCEPTED_FILE_FORMATS],
+					acceptedFormats:
+						param.acceptedFormats && param.acceptedFormats.length > 0
+							? [...param.acceptedFormats]
+							: [...ACCEPTED_FILE_FORMATS],
 					defaultInputMode: 'upload'
 				};
 				return config;

@@ -34,6 +34,10 @@ public class SchemaSynchronizer
         { "DynamicValueList", "dynamicValueList" },
         { "ValueList", "valueList" },
         { "GetFile", "file" },
+        // GetImage reuses the entire file input pipeline (upload/url widget +
+        // ApplyToFileParameter): it carries a FileInputData payload exactly like GetFile,
+        // differing only in its accepted-format allowlist (advertised via GetContextualJson).
+        { "GetImage", "file" },
         { "GetColor", "color" },
         { "Colour", "color" },
         { "Integer", "integer" },
@@ -341,8 +345,27 @@ public class SchemaSynchronizer
             PopulateInputDefault(param, ghParam, input);
             ExtractTreeAccess(param, input);
             ParameterTypeHelper.ExtractNumberParameterConstraints(param, ghParam, input);
+            PopulateAcceptedFormats(param, input);
 
             inputs.Add(input);
+        }
+    }
+
+    /// <summary>
+    ///     Populate the accepted-format allowlist for file-bearing parameters so the builder
+    ///     seeds the correct defaults (image extensions for Get Image, geometry for Get File)
+    ///     instead of a single hardcoded list.
+    /// </summary>
+    private static void PopulateAcceptedFormats(IGH_ContextualParameter param, DiscoveredInput input)
+    {
+        switch (param)
+        {
+            case GetImageParameter:
+                input.AcceptedFormats = FileIO.Services.ImageInputResolver.AcceptedFormats.ToList();
+                break;
+            case GetFileParameter:
+                input.AcceptedFormats = AcceptedFileFormats.Values.ToList();
+                break;
         }
     }
 

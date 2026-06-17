@@ -40,6 +40,75 @@ public class DrawingViewTests
 	}
 
 	[Fact]
+	public void Resolved_view_stamps_the_scale_it_rendered_at()
+	{
+		// 100mm geometry pinned to 20mm longest side → scale 0.2 (1:5).
+		var geometry = new PathElement
+		{
+			Path = new Path.Builder().MoveTo(0, 0).LineTo(100, 50).Build(),
+		};
+		var view = new DrawingView { Geometry = geometry, Length = 20 };
+		var resolved = view.Resolve(new LayoutContext(BoundingBox.Empty));
+		Assert.NotNull(resolved.Metadata);
+		Assert.True(resolved.Metadata.TryGetValue(DrawingView.ScaleMetadataKey, out var raw));
+		Assert.Equal(0.2, double.Parse(raw, System.Globalization.CultureInfo.InvariantCulture), 6);
+	}
+
+	[Fact]
+	public void Auto_fit_view_stamps_the_fitted_scale()
+	{
+		var geometry = new PathElement
+		{
+			Path = new Path.Builder().MoveTo(0, 0).LineTo(200, 100).Build(),
+		};
+		var view = new DrawingView { Geometry = geometry, Padding = Margins.Zero };
+		// Fit into a 100×100 band → longest side 200 maps to 100 → scale 0.5.
+		var resolved = view.Resolve(new LayoutContext(new BoundingBox(0, 0, 100, 100)));
+		Assert.True(resolved.Metadata.TryGetValue(DrawingView.ScaleMetadataKey, out var raw));
+		Assert.Equal(0.5, double.Parse(raw, System.Globalization.CultureInfo.InvariantCulture), 6);
+	}
+
+	[Fact]
+	public void Auto_scale_caption_labels_the_inferred_ratio()
+	{
+		var geometry = new PathElement
+		{
+			Path = new Path.Builder().MoveTo(0, 0).LineTo(100, 50).Build(),
+		};
+		var view = new DrawingView { Geometry = geometry, Length = 20, AutoScaleCaption = true };
+		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
+		Assert.Equal("SCALE 1:5", FindCaption(resolved));
+	}
+
+	[Fact]
+	public void Explicit_caption_wins_over_auto_scale_caption()
+	{
+		var geometry = new PathElement
+		{
+			Path = new Path.Builder().MoveTo(0, 0).LineTo(100, 50).Build(),
+		};
+		var view = new DrawingView { Geometry = geometry, Length = 20, AutoScaleCaption = true, Caption = "PLAN" };
+		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
+		Assert.Equal("PLAN", FindCaption(resolved));
+	}
+
+	private static string FindCaption(DrawElement element)
+	{
+		switch (element)
+		{
+			case TextElement t: return t.Text;
+			case GroupElement g:
+				foreach (var c in g.Children)
+				{
+					var v = FindCaption(c);
+					if (v != null) return v;
+				}
+				return null;
+			default: return null;
+		}
+	}
+
+	[Fact]
 	public void Fixed_size_view_pins_outer_bounds()
 	{
 		var geometry = new PathElement

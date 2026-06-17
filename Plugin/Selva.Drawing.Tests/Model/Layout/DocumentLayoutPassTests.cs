@@ -232,6 +232,91 @@ public class DocumentLayoutPassTests
 		Assert.Equal("Felix", FindFirstText(pages[0].Content));
 	}
 
+	[Fact]
+	public void Scale_token_auto_fills_from_a_single_views_inferred_scale()
+	{
+		// 100mm geometry pinned to 20mm → 1:5.
+		var view = new Selva.Drawing.Model.Drawings.DrawingView
+		{
+			Geometry = Rect(100, 50),
+			Length = 20,
+		};
+		var header = ScaleHeader();
+		var layout = new DocumentLayout
+		{
+			Sections = new[] { new Section { Content = view } },
+			PaperSize = new PaperSize(300, 300, "T300"),
+			Margins = NoMargin,
+			Header = header,
+			HeaderHeight = 5,
+		};
+		var pages = DocumentLayoutPass.Paginate(layout);
+		Assert.Equal("1:5", FindFirstText(pages[0].Content));
+	}
+
+	[Fact]
+	public void Scale_token_reads_as_shown_when_views_differ()
+	{
+		var view5 = new Selva.Drawing.Model.Drawings.DrawingView { Geometry = Rect(100, 50), Length = 20 }; // 1:5
+		var view2 = new Selva.Drawing.Model.Drawings.DrawingView { Geometry = Rect(100, 50), Length = 50 }; // 1:2
+		var content = new Stack
+		{
+			Orientation = StackOrientation.Vertical,
+			Spacing = 0,
+			Children = new DrawElement[] { view5, view2 },
+		};
+		var layout = new DocumentLayout
+		{
+			Sections = new[] { new Section { Content = content, KeepTogether = true } },
+			PaperSize = new PaperSize(300, 300, "T300"),
+			Margins = NoMargin,
+			Header = ScaleHeader(),
+			HeaderHeight = 5,
+		};
+		var pages = DocumentLayoutPass.Paginate(layout);
+		Assert.Single(pages);
+		Assert.Equal("As shown", FindFirstText(pages[0].Content));
+	}
+
+	[Fact]
+	public void Explicit_scale_token_is_not_overwritten_by_inference()
+	{
+		var view = new Selva.Drawing.Model.Drawings.DrawingView { Geometry = Rect(100, 50), Length = 20 };
+		var layout = new DocumentLayout
+		{
+			Sections = new[] { new Section { Content = view } },
+			PaperSize = new PaperSize(300, 300, "T300"),
+			Margins = NoMargin,
+			Header = ScaleHeader(),
+			HeaderHeight = 5,
+			Tokens = new Dictionary<string, string> { ["scale"] = "1:100" },
+		};
+		var pages = DocumentLayoutPass.Paginate(layout);
+		Assert.Equal("1:100", FindFirstText(pages[0].Content));
+	}
+
+	[Fact]
+	public void Unfilled_scale_token_renders_blank_not_the_literal_token()
+	{
+		// No DrawingView on the page and no doc-level {scale} → {scale} resolves to empty.
+		var layout = new DocumentLayout
+		{
+			Sections = new[] { new Section { Content = Rect(2, 5) } },
+			PaperSize = new PaperSize(300, 300, "T300"),
+			Margins = NoMargin,
+			Header = ScaleHeader(),
+			HeaderHeight = 5,
+		};
+		var pages = DocumentLayoutPass.Paginate(layout);
+		Assert.Equal("", FindFirstText(pages[0].Content));
+	}
+
+	private static GroupElement ScaleHeader() => new GroupElement
+	{
+		Children = new DrawElement[] { new TextElement { Text = "{scale}", Position = Point2D.Zero } },
+		BoundsOverride = new BoundingBox(0, 0, 10, 0),
+	};
+
 	private static PathElement Rect(double w, double h) =>
 		new PathElement
 		{

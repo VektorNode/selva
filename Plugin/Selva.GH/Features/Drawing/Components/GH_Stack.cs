@@ -29,7 +29,7 @@ public class GH_Stack : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddGenericParameter("Children", "C", "Drawing elements to arrange. All branches of the input tree are flattened into a single stack.", GH_ParamAccess.tree);
+        pManager.AddGenericParameter("Drawings", "Dwg", "Drawing elements to arrange. All branches of the input tree are flattened into a single stack.", GH_ParamAccess.tree);
         pManager.AddIntegerParameter("Orientation", "O", "0 = vertical, 1 = horizontal", GH_ParamAccess.item, 0);
         pManager.AddNumberParameter("Spacing", "S", "Gap between children in millimetres", GH_ParamAccess.item, 0.0);
         pManager.AddIntegerParameter("Cross Align", "A", "Cross-axis alignment", GH_ParamAccess.item, 0);
@@ -54,7 +54,7 @@ public class GH_Stack : GH_Component
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddGenericParameter("Element", "E", "Drawing element", GH_ParamAccess.item);
+        pManager.AddGenericParameter("Drawing", "Dwg", "Drawing element", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)

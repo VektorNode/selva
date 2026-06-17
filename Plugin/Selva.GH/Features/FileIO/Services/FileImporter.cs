@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using Rhino;
 using Rhino.DocObjects;
@@ -239,11 +240,16 @@ public static class FileImporter
         string tempPath = null;
         try
         {
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
-                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            // SSRF guard: resolve the host and reject any non-public address (loopback,
+            // link-local incl. cloud metadata, private ranges). On net7+ the returned IPs
+            // are used to pin the connection (see CreatePinnedClient) so a rebind between
+            // this check and the fetch can't redirect us to an internal host.
+            if (!SafeUrlValidator.TryValidate(url, out var resolvedAddresses, out var urlError))
             {
-                return (false, null, "Invalid URL: only http/https are supported");
+                return (false, null, urlError);
             }
+
+            var uri = new Uri(url);
 
             var extension = !string.IsNullOrEmpty(fileEnding) ? fileEnding : Path.GetExtension(uri.LocalPath);
             if (!IsAllowedExtension(extension, out var extensionError))
@@ -251,49 +257,57 @@ public static class FileImporter
                 return (false, null, extensionError);
             }
 
-            // HttpClient methods are async-only on net48; blocking is safe here because
-            // HttpClient internals use ConfigureAwait(false) throughout.
-            using var response = UrlDownloadClient
-                .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead)
-                .GetAwaiter().GetResult();
-
-            if (!response.IsSuccessStatusCode)
+            var (client, ownsClient) = CreatePinnedClient(resolvedAddresses);
+            try
             {
-                return (false, null, $"Download failed: HTTP {(int)response.StatusCode}");
-            }
+                // HttpClient methods are async-only on net48; blocking is safe here because
+                // HttpClient internals use ConfigureAwait(false) throughout.
+                using var response = client
+                    .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead)
+                    .GetAwaiter().GetResult();
 
-            if (response.Content.Headers.ContentLength > MAX_FILE_SIZE_BYTES)
-            {
-                return (false, null,
-                    $"Downloaded file too large (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
-            }
-
-            tempPath = Path.Combine(Path.GetTempPath(),
-                $"selva_url_{Guid.NewGuid():N}{extension.ToLowerInvariant()}");
-
-            using (var source = response.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
-            using (var destination = File.Create(tempPath))
-            {
-                // Manual copy so the size cap holds even when Content-Length is absent or wrong.
-                var buffer = new byte[81920];
-                long total = 0;
-                int read;
-                while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+                if (!response.IsSuccessStatusCode)
                 {
-                    total += read;
-                    if (total > MAX_FILE_SIZE_BYTES)
-                    {
-                        return (false, null,
-                            $"Downloaded file too large (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
-                    }
-
-                    destination.Write(buffer, 0, read);
+                    return (false, null, $"Download failed: HTTP {(int)response.StatusCode}");
                 }
-            }
 
-            var result = (true, tempPath, "");
-            tempPath = null; // success — caller owns the file now
-            return result;
+                if (response.Content.Headers.ContentLength > MAX_FILE_SIZE_BYTES)
+                {
+                    return (false, null,
+                        $"Downloaded file too large (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
+                }
+
+                tempPath = Path.Combine(Path.GetTempPath(),
+                    $"selva_url_{Guid.NewGuid():N}{extension.ToLowerInvariant()}");
+
+                using (var source = response.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
+                using (var destination = File.Create(tempPath))
+                {
+                    // Manual copy so the size cap holds even when Content-Length is absent or wrong.
+                    var buffer = new byte[81920];
+                    long total = 0;
+                    int read;
+                    while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        total += read;
+                        if (total > MAX_FILE_SIZE_BYTES)
+                        {
+                            return (false, null,
+                                $"Downloaded file too large (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
+                        }
+
+                        destination.Write(buffer, 0, read);
+                    }
+                }
+
+                var result = (true, tempPath, "");
+                tempPath = null; // success — caller owns the file now
+                return result;
+            }
+            finally
+            {
+                if (ownsClient) client.Dispose();
+            }
         }
         catch (Exception ex)
         {
@@ -308,6 +322,64 @@ public static class FileImporter
             }
         }
     }
+
+    /// <summary>
+    ///     Returns an HttpClient for the download. On net7+ it pins outgoing connections to
+    ///     the already-validated IPs so a DNS rebind between validation and fetch cannot
+    ///     redirect the request to an internal host. On net48 (no ConnectCallback) it falls
+    ///     back to the shared client — validate-then-fetch, leaving a narrow rebind window.
+    /// </summary>
+    private static (HttpClient client, bool ownsClient) CreatePinnedClient(IPAddress[] resolvedAddresses)
+    {
+#if NET7_0_OR_GREATER
+        var allowed = new HashSet<IPAddress>(resolvedAddresses);
+        var handler = new SocketsHttpHandler
+        {
+            ConnectCallback = async (context, cancellationToken) =>
+            {
+                // Resolve again at connect time, but only allow IPs that passed validation.
+                // Anything else (a rebind to an internal address) is refused.
+                var target = context.DnsEndPoint;
+                if (IPAddress.TryParse(target.Host, out var literal))
+                {
+                    if (!allowed.Contains(literal))
+                        throw new HttpRequestException("Host resolved to a disallowed address");
+                    return await OpenSocket(literal, target.Port, cancellationToken).ConfigureAwait(false);
+                }
+
+                var current = await Dns.GetHostAddressesAsync(target.Host, cancellationToken).ConfigureAwait(false);
+                var pinned = current.FirstOrDefault(ip => allowed.Contains(ip) && SafeUrlValidator.IsPublic(ip));
+                if (pinned == null)
+                    throw new HttpRequestException("Host resolved to a disallowed address");
+
+                return await OpenSocket(pinned, target.Port, cancellationToken).ConfigureAwait(false);
+            }
+        };
+
+        return (new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) }, true);
+#else
+        return (UrlDownloadClient, false);
+#endif
+    }
+
+#if NET7_0_OR_GREATER
+    private static async System.Threading.Tasks.Task<Stream> OpenSocket(
+        IPAddress address, int port, System.Threading.CancellationToken cancellationToken)
+    {
+        var socket = new System.Net.Sockets.Socket(
+            System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
+        try
+        {
+            await socket.ConnectAsync(new IPEndPoint(address, port), cancellationToken).ConfigureAwait(false);
+            return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+    }
+#endif
 
     /// <summary>
     ///     Validates a file extension against the schema-driven allowlist and rejects

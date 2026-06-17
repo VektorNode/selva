@@ -23,8 +23,8 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
     public GH_RenderSvg()
         : base("Render SVG", "SVG",
             "Renders drawing content to SVG file(s) (downloadable via the Selva UI). " +
-            "Input a Document for paginated multi-page output, or wire DrawingViews / loose " +
-            "elements directly for a single-page SVG.",
+            "Input a Document for paginated multi-page output, or wire drawings / drawing views " +
+            "directly for a single-page SVG.",
             "Selva", "Drawing")
     {
     }
@@ -40,7 +40,7 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddGenericParameter("Drawing", "D", "A Document (paginated) or one or more DrawElements / DrawingViews to wrap into a single-page SVG", GH_ParamAccess.list);
+        pManager.AddGenericParameter("Document", "Doc", "A Document for paginated multi-page output. You can also wire pages, drawing views, or loose drawings directly — they're wrapped into a single page.", GH_ParamAccess.list);
         pManager.AddTextParameter("Name", "N", "Output file name without extension", GH_ParamAccess.item, "drawing");
         pManager.AddBooleanParameter("Auto Fit", "AF", "Auto-fit viewBox to content with a 10mm margin. When false, the document's page size is used.", GH_ParamAccess.item, false);
         pManager.AddColourParameter("Background", "BG", "Background color (leave unconnected for transparent)", GH_ParamAccess.item);

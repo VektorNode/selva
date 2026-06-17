@@ -445,6 +445,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	public void Visit(GroupElement element)
 	{
 		if (element == null) return;
+		if (element.PreviewOnly) return; // viewport-only overlay (e.g. Grid cell dividers)
 		var hasTransform = !element.Transform.IsIdentity;
 
 		XGraphicsState state = default;
@@ -566,8 +567,38 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 	public void Visit(ImageElement element)
 	{
-		// Phase 5 stub. Image embedding ships when title-block use cases land in Phase 8.
-		_ = element;
+		if (element?.Data == null || element.Data.Length == 0) return;
+		if (element.Width <= 0 || element.Height <= 0) return;
+
+		// PdfSharpCore (via ImageSharp) decodes PNG/JPEG/WEBP rasters. SVG is a vector
+		// format it can't embed; the GH component validates this up front and warns, so
+		// here we simply skip it rather than throw.
+		if (element.Format == ImageFormat.Svg) return;
+
+		// The page graphics root is Y-up (flipped once at page setup). A raster XImage has
+		// a fixed top-down orientation, so drawn directly it would appear mirrored. Counter-
+		// flip locally — same trick the symbol-form builder and Visit(TextElement) use:
+		// translate to the image's top edge in world space, flip Y, then draw the box at
+		// the local origin.
+		var topY = element.Position.Y + element.Height;
+		var state = _gfx.Save();
+		try
+		{
+			_gfx.TranslateTransform(element.Position.X, topY);
+			_gfx.ScaleTransform(1, -1);
+
+			var data = element.Data;
+			using var image = XImage.FromStream(() => new System.IO.MemoryStream(data));
+			_gfx.DrawImage(image, 0, 0, element.Width, element.Height);
+		}
+		catch
+		{
+			// Undecodable / corrupt image data — skip rather than abort the whole render.
+		}
+		finally
+		{
+			_gfx.Restore(state);
+		}
 	}
 
 	public void Visit(DimensionElement element)

@@ -97,6 +97,19 @@
 		item.type === 'output' && item.widgetType === 'dynamicValueList'
 	);
 	let fileInputConfig = $derived(isFileInput ? (item.config as FileInputWidgetConfig) : null);
+	// Formats offered as toggleable checkboxes are scoped to what the parameter accepts:
+	// image extensions for a Get Image input, geometry for a Get File input. The parameter's
+	// declared set (from discovery) is the source of truth; fall back to the geometry default
+	// only when none was declared (e.g. a hand-added file input with no GH source). Any format
+	// already selected in the config is unioned in so a manual edit never hides its own value.
+	let availableFileFormats = $derived.by<string[]>(() => {
+		const declared =
+			paramInfo?.acceptedFormats && paramInfo.acceptedFormats.length > 0
+				? paramInfo.acceptedFormats
+				: Array.from(ACCEPTED_FILE_FORMATS);
+		const extras = (fileInputConfig?.acceptedFormats ?? []).filter((f) => !declared.includes(f));
+		return [...declared, ...extras];
+	});
 	let dropdownConfig = $derived(isDropdownInput ? (item.config as DropdownWidgetConfig) : null);
 	let imageConfig = $derived(isImageOutput ? (item.config as ImageWidgetConfig) : null);
 	let dynamicValueListOutputConfig = $derived(
@@ -133,7 +146,7 @@
 				return true;
 			if (
 				fileInputConfig.acceptedFormats &&
-				fileInputConfig.acceptedFormats.length < ACCEPTED_FILE_FORMATS.length
+				fileInputConfig.acceptedFormats.length < availableFileFormats.length
 			)
 				return true;
 			return false;
@@ -269,7 +282,8 @@
 		const config = item.config as FileInputWidgetConfig;
 		if (!config) return;
 		if (!config.acceptedFormats) {
-			config.acceptedFormats = Array.from(ACCEPTED_FILE_FORMATS);
+			// Seed from the parameter's declared set (image vs geometry), not the global default.
+			config.acceptedFormats = [...availableFileFormats];
 		}
 
 		const index = config.acceptedFormats.indexOf(format);
@@ -583,7 +597,7 @@
 											<span class="text-muted-foreground text-[10px] font-medium">File Formats</span
 											>
 											<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
-												{#each ACCEPTED_FILE_FORMATS as format (format)}
+												{#each availableFileFormats as format (format)}
 													{@const isChecked = fileInputConfig.acceptedFormats?.includes(format)}
 													<button
 														onclick={() => toggleAcceptedFormat(format)}

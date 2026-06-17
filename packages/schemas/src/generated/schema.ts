@@ -388,6 +388,10 @@ export interface DiscoveredInput {
 		[k: string]: string | undefined;
 	};
 	/**
+	 * File extensions the parameter accepts (e.g. ['.png', '.svg'] for an image input, geometry formats for a file input). Used to seed the file widget's accepted-formats default.
+	 */
+	acceptedFormats?: string[];
+	/**
 	 * Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
 	 */
 	groupName?: string;

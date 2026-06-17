@@ -85,6 +85,11 @@ public sealed class Grid : LayoutElement
 		var children = new List<DrawElement>(layout.ResolvedCells.Length);
 		PlaceCells(layout, total.Width, children);
 
+		// Authoring guides: a dotted box per track intersection so the grid lines are visible
+		// in the Rhino viewport — at the Grid component AND wherever the grid is nested
+		// (Page, Document, …). Tagged PreviewOnly so SVG/PDF export skips them.
+		AppendCellGuides(layout, children);
+
 		// Pin the resolved group's outer bounds to the resolved track totals. Stack/Frame/
 		// Table consumers measure resolved-child bounds and need the grid's full track
 		// extent — not just the union of cell content (which can be smaller than its track).
@@ -100,6 +105,24 @@ public sealed class Grid : LayoutElement
 			Children = children,
 			BoundsOverride = pinned,
 		};
+	}
+
+	private void AppendCellGuides(TrackLayout layout, List<DrawElement> children)
+	{
+		var totalHeight = SumWithSpacing(layout.RowHeights, RowSpacing);
+		for (var r = 0; r < layout.RowHeights.Length; r++)
+			for (var c = 0; c < layout.ColWidths.Length; c++)
+			{
+				var local = ComputeCellRect(layout, new GridCell { Row = r, Column = c }, totalHeight);
+				if (local.Width <= 0 || local.Height <= 0) continue;
+				children.Add(new GroupElement
+				{
+					PreviewOnly = true,
+					BoundsOverride = new BoundingBox(
+						Origin.X + local.MinX, Origin.Y + local.MinY,
+						Origin.X + local.MaxX, Origin.Y + local.MaxY),
+				});
+			}
 	}
 
 	public override BoundingBox ComputeBounds()
