@@ -8,7 +8,9 @@
 		Star,
 		ChevronDown,
 		ChevronUp,
-		RefreshCw
+		RefreshCw,
+		Eraser,
+		Power
 	} from '@lucide/svelte';
 	import type { PlatformComputeServer } from '@selvajs/platform/computeServer';
 	import type { TenancyMode } from '@selvajs/platform';
@@ -215,6 +217,55 @@
 			saving = false;
 		}
 	}
+
+	// Per-server in-flight action ('purge' | 'shutdown') so each card disables only
+	// its own buttons while a fleet action runs.
+	let busyAction = $state<Record<string, 'purge' | 'shutdown' | null>>({});
+
+	async function runAction(server: ServerEntry, action: 'purge' | 'shutdown') {
+		if (action === 'shutdown') {
+			const ok = confirm(
+				`Shut down ALL child processes on "${server.label}"?\n\n` +
+					'In-flight solves on those children will be interrupted. The pool ' +
+					'auto-respawns on the next request.'
+			);
+			if (!ok) return;
+		}
+		busyAction[server.id] = action;
+		try {
+			const res = await fetch('/admin/api/compute/actions', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ serverId: server.id, action })
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(data.message || data.error || `Action failed (${res.status})`);
+				return;
+			}
+			if (action === 'purge') {
+				// purgeAllChildren is best-effort across a round-robin pool — say so
+				// honestly unless the server reported a single child (exact).
+				const { totalPurged = 0, children = 0, confident } = data;
+				toast.success(
+					confident
+						? `Purged ${totalPurged} cached solve${totalPurged === 1 ? '' : 's'}`
+						: `Purged ~${totalPurged} across ${children} children (best-effort)`
+				);
+			} else {
+				const { shutdown = 0, active = 0 } = data;
+				toast.success(
+					`Shut down ${shutdown} child${shutdown === 1 ? '' : 'ren'} (${active} still active)`
+				);
+				// The pool changed — re-probe so the card's status/version refresh.
+				healthMap[server.id]?.check();
+			}
+		} catch {
+			toast.error(`Failed to ${action} server`);
+		} finally {
+			busyAction[server.id] = null;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -351,6 +402,31 @@
 					<RefreshCw class="mr-1.5 h-3.5 w-3.5 {isChecking ? 'animate-spin' : ''}" />
 					{isChecking ? 'Checking…' : 'Check'}
 				</Button>
+				{#if health?.reachable}
+					{@const busy = busyAction[server.id]}
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => runAction(server, 'purge')}
+						disabled={busy !== null && busy !== undefined}
+						class="h-7"
+						title="Clear cached solve results across this server's children (best-effort fleet-wide)"
+					>
+						<Eraser class="mr-1.5 h-3.5 w-3.5" />
+						{busy === 'purge' ? 'Purging…' : 'Purge cache'}
+					</Button>
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => runAction(server, 'shutdown')}
+						disabled={busy !== null && busy !== undefined}
+						class="text-destructive hover:text-destructive h-7"
+						title="Gracefully shut down all child processes (they auto-respawn on the next request)"
+					>
+						<Power class="mr-1.5 h-3.5 w-3.5" />
+						{busy === 'shutdown' ? 'Shutting down…' : 'Shutdown children'}
+					</Button>
+				{/if}
 				{#if isDirty}
 					<Button
 						variant="ghost"

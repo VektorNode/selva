@@ -83,16 +83,15 @@ public sealed class TitleBlock : LayoutElement
 	// pin the block to any corner via Origin.
 	public BoundingBox Size { get; init; } = new BoundingBox(0, 0, 180, 40);
 
-	// ISO 7200 width rule: on A4-and-narrower sheets the title block spans the full content
-	// width; on A3 and larger it stays a fixed strip pinned to the bottom-right corner. When
-	// AutoWidth is set, Resolve stretches the block to the band's available width if that width
-	// is below IsoFullWidthThreshold, otherwise it keeps Size.Width. The component that wires the
-	// block into chrome flips the footer alignment (Right vs full-width) on the same signal.
+	// Width rule: when AutoWidth is set, Resolve stretches the block to the band's available
+	// width on every paper size — so the block always tracks the sheet — capped at MaxAutoWidth
+	// so it never grows absurdly wide on large formats (A1/A0). A degenerate/empty context (band
+	// width unknown yet, e.g. band-height measurement) falls back to Size.Width.
 	public bool AutoWidth { get; init; }
 
-	// Sheets at or below this content width (mm) get a full-width block. ~200mm covers A4
-	// portrait (210mm paper − margins) without catching A3 landscape's 180mm corner block.
-	public const double IsoFullWidthThreshold = 200.0;
+	// Upper bound (mm) on the auto-stretched width. Beyond this the block stops growing and stays
+	// MaxAutoWidth wide, keeping the field cells readable on large sheets. 420mm ≈ A3's long edge.
+	public const double MaxAutoWidth = 420.0;
 
 	// Fixed fraction of the block width reserved for the logo column in the ISO 7200 layout. The
 	// owner / project cells split the rest. ~20% of a 180mm block ≈ 36mm — a comfortable logo
@@ -122,7 +121,7 @@ public sealed class TitleBlock : LayoutElement
 
 	public override DrawElement Resolve(LayoutContext context)
 	{
-		// ISO 7200: full-width on A4-and-narrower bands, fixed Size.Width on larger sheets.
+		// Auto-width: stretch to the band, capped at MaxAutoWidth. Fixed Size.Width otherwise.
 		var totalWidth = ResolveWidth(context);
 		var totalHeight = Size.Height;
 
@@ -221,14 +220,13 @@ public sealed class TitleBlock : LayoutElement
 		};
 	}
 
-	// ISO 7200 width: when AutoWidth is set and the band is A4-narrow, stretch to the band's
-	// available width; otherwise keep the fixed Size.Width. A degenerate/empty context (no band
-	// known yet, e.g. band-height measurement) falls back to Size.Width.
+	// Auto-width: stretch to the band's available width on every paper size, capped at
+	// MaxAutoWidth so large formats don't get absurdly wide cells. A degenerate/empty context
+	// (no band known yet, e.g. band-height measurement) falls back to Size.Width.
 	private double ResolveWidth(LayoutContext context)
 	{
 		if (!AutoWidth || !context.HasFiniteAvailableWidth) return Size.Width;
-		var available = context.AvailableWidth;
-		return available <= IsoFullWidthThreshold ? available : Size.Width;
+		return Math.Min(context.AvailableWidth, MaxAutoWidth);
 	}
 
 	// Width of the logo cell — row 0, column 0 — under the resolved total width. This is the

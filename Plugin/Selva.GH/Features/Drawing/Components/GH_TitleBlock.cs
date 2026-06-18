@@ -16,9 +16,10 @@ namespace Selva.GH.Features.Drawing.Components;
 // each file's data. Two variants: Full (first sheet, all fields + optional logo) and
 // Continuation (slim strip — drawing no. / title / rev / sheet — for later sheets).
 //
-// Width defaults to Auto (ISO rule, resolved from the document's paper at render time): full
-// content width on A4-and-narrower sheets, fixed 180mm bottom-right corner on A3 and larger.
-// Set Width to a positive number to override. Wire the output into a Layout Override's Footer.
+// Width defaults to Auto (resolved from the document's paper at render time): the block stretches
+// to the page's content width on every paper size, capped at TitleBlock.MaxAutoWidth so large
+// formats don't get absurdly wide cells. Set Width to a positive number to override. Wire the
+// output into a Layout Override's Footer.
 public class GH_TitleBlock : GH_Component
 {
     public GH_TitleBlock()
@@ -48,7 +49,7 @@ public class GH_TitleBlock : GH_Component
         pManager.AddGenericParameter("Logo", "L", "Optional logo from a Draw Image component — placed top-left, aspect preserved, clipped to its cell so it never overlaps the owner/project text. Ignored on the Continuation variant.", GH_ParamAccess.item);
         pManager.AddNumberParameter("Logo Max W", "LW", "Max logo width in mm. 0 = bounded only by the logo cell. Aspect is always preserved.", GH_ParamAccess.item, 0.0);
         pManager.AddNumberParameter("Logo Max H", "LH", "Max logo height in mm. 0 = the logo-row height. Aspect is always preserved.", GH_ParamAccess.item, 0.0);
-        pManager.AddNumberParameter("Width", "W", "Block width in mm. 0 = Auto (ISO rule from the document's paper). Positive = fixed width.", GH_ParamAccess.item, 0.0);
+        pManager.AddNumberParameter("Width", "W", "Block width in mm. 0 = Auto (stretches to the page's content width, capped at 420mm). Positive = fixed width.", GH_ParamAccess.item, 0.0);
         pManager.AddNumberParameter("Height", "H", "Block height in mm. 0 = the variant's default (Full 50mm, Continuation 12mm).", GH_ParamAccess.item, 0.0);
         pManager.AddIntegerParameter("Labels", "Lb", "Language of the printed field captions (PROJECT / DRAWING NO. … vs PROJEKT / ZEICHNUNGS-NR. …). Independent of the Document's date Culture.", GH_ParamAccess.item, 0);
 
@@ -122,9 +123,9 @@ public class GH_TitleBlock : GH_Component
         var defaultHeight = isContinuation ? 12.0 : 50.0;
         var h = height > 0 ? height : defaultHeight;
 
-        // Width 0 → Auto: keep the 180mm fixed size as the corner-block fallback and flag the
-        // block so the renderer stretches it to A4-narrow bands per ISO 7200. A positive width
-        // pins an explicit size and disables the auto rule.
+        // Width 0 → Auto: keep 180mm as the fallback used only when the band width is unknown, and
+        // flag the block so the renderer stretches it to the page's content width (capped). A
+        // positive width pins an explicit size and disables the auto rule.
         var autoWidth = width <= 0;
         var w = width > 0 ? width : 180.0;
         var size = new BBox(0, 0, w, h);

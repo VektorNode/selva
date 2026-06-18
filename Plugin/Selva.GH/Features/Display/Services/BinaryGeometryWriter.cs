@@ -18,13 +18,14 @@ namespace Selva.GH.Features.Display.Services;
 ///     [N]  metadata         = UTF-8 JSON (materials, groups, sourceComponentId, ...)
 ///
 ///     -- geometry block --
-///     [4]  flags            = uint32 (bit 0: 0 = int16 quantized, 1 = float32 raw)
+///     [4]  flags            = uint32 (bit 0: 0 = int16 quantized, 1 = float32 raw;
+///                                     bit 1: 0 = uint32 indices, 1 = uint16 indices)
 ///     [24] origin           = 3 x float64
 ///     [24] scale            = 3 x float64 (step per int16 unit; identity for float32)
 ///     [4]  vertexCount      = uint32 number of vertices (positions = vertexCount * 3 components)
 ///     [V]  vertices         = int16[vertexCount*3]  OR  float32[vertexCount*3] depending on flags
 ///     [4]  indexCount       = uint32 number of indices
-///     [I]  indices          = uint32[indexCount]
+///     [I]  indices          = uint32[indexCount]  OR  uint16[indexCount] depending on flags
 ///
 ///     For int16: client reconstructs world position as origin + (q + 32767) * scale, where q is the
 ///     stored signed int16 in [-32767, 32767]. With scale = bboxSize / 65534 this maps the original
@@ -36,9 +37,19 @@ namespace Selva.GH.Features.Display.Services;
 public static class BinaryGeometryWriter
 {
     public const uint Magic = 0x41564C53; // "SLVA" little-endian
-    public const uint Version = 1;
+    public const uint Version = 2;
 
     public const uint FlagFloat32 = 0x1;
+
+    /// <summary>
+    ///     Bit 1 of the flags word: when set, indices are uint16 instead of uint32. Used when the
+    ///     batch's total vertex count fits in 16 bits (≤ 65535), which halves the index payload —
+    ///     usually the largest part of the blob for unwelded brep meshes.
+    /// </summary>
+    public const uint FlagUint16Indices = 0x2;
+
+    /// <summary>Largest vertex index addressable by a uint16 index.</summary>
+    private const int MaxUint16Index = 65535;
 
     /// <summary>
     ///     Smallest allowed scale on any axis. Prevents divide-by-zero on planar/degenerate batches
@@ -61,6 +72,7 @@ public static class BinaryGeometryWriter
     public struct WriteResult
     {
         public bool UsedFloat32;
+        public bool UsedUint16Indices;
         public double OriginX, OriginY, OriginZ;
         public double ScaleX, ScaleY, ScaleZ;
         public int VertexCount;
@@ -145,6 +157,10 @@ public static class BinaryGeometryWriter
             scaleZ = Math.Max((maxZ - minZ) / 65534.0, ScaleEpsilon);
         }
 
+        // Indices address the combined vertex array, so the whole batch must fit in uint16 to use the
+        // narrow path. vertexCount - 1 is the largest possible index value.
+        var useUint16Indices = vertexCount > 0 && vertexCount - 1 <= MaxUint16Index;
+
         using (var writer = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true))
         {
             // -- envelope --
@@ -154,7 +170,18 @@ public static class BinaryGeometryWriter
             writer.Write(metadataBytes);
 
             // -- geometry block --
-            writer.Write(useFloat32 ? FlagFloat32 : 0u);
+            var flags = 0u;
+            if (useFloat32)
+            {
+                flags |= FlagFloat32;
+            }
+
+            if (useUint16Indices)
+            {
+                flags |= FlagUint16Indices;
+            }
+
+            writer.Write(flags);
             writer.Write(originX);
             writer.Write(originY);
             writer.Write(originZ);
@@ -174,12 +201,20 @@ public static class BinaryGeometryWriter
             }
 
             writer.Write((uint)indices.Length);
-            WriteUInt32Indices(output, indices);
+            if (useUint16Indices)
+            {
+                WriteUInt16Indices(output, indices);
+            }
+            else
+            {
+                WriteUInt32Indices(output, indices);
+            }
         }
 
         return new WriteResult
         {
             UsedFloat32 = useFloat32,
+            UsedUint16Indices = useUint16Indices,
             OriginX = originX,
             OriginY = originY,
             OriginZ = originZ,
@@ -270,6 +305,33 @@ public static class BinaryGeometryWriter
         try
         {
             Buffer.BlockCopy(vertices, 0, buffer, 0, byteCount);
+            output.Write(buffer, 0, byteCount);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static void WriteUInt16Indices(Stream output, int[] indices)
+    {
+        var byteCount = indices.Length * sizeof(ushort);
+        if (byteCount == 0)
+        {
+            return;
+        }
+
+        var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
+        try
+        {
+            var bi = 0;
+            foreach (var index in indices)
+            {
+                var u = (ushort)index;
+                buffer[bi++] = (byte)(u & 0xFF);
+                buffer[bi++] = (byte)((u >> 8) & 0xFF);
+            }
+
             output.Write(buffer, 0, byteCount);
         }
         finally

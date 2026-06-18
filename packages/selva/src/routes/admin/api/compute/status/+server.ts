@@ -4,18 +4,7 @@ import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { findServerById } from '@selvajs/platform';
 import { requireManageCompute } from '$lib/server/access.server';
-
-const TIMEOUT_MS = 8000;
-
-function fetchFromServer(serverUrl: string, apiKey: string | undefined, path: string) {
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-	const headers: Record<string, string> = {};
-	if (apiKey) headers['RhinoComputeKey'] = apiKey;
-	return fetch(new URL(path, serverUrl).toString(), { signal: controller.signal, headers }).finally(
-		() => clearTimeout(timer)
-	);
-}
+import { ComputeServerStats } from '@selvajs/compute/core';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	requireManageCompute(locals);
@@ -28,26 +17,36 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const server = findServerById(config, serverId);
 	if (!server) apiError(404, ApiErrorCode.NOT_FOUND, 'Server not found');
 
+	const stats = new ComputeServerStats(server.serverUrl, server.apiKey);
 	try {
-		const [healthRes, versionRes, pluginsRes] = await Promise.all([
-			fetchFromServer(server.serverUrl, server.apiKey, '/healthcheck'),
-			fetchFromServer(server.serverUrl, server.apiKey, '/version'),
-			fetchFromServer(server.serverUrl, server.apiKey, '/plugins/gh/installed')
+		// Probe liveness first; only fan out to version/plugins when reachable.
+		const reachable = await stats.isServerOnline();
+		if (!reachable) {
+			return json({
+				reachable: false,
+				rhinoVersion: null,
+				computeVersion: null,
+				selvaInstalled: false,
+				selvaVersion: null,
+				plugins: {}
+			});
+		}
+
+		const [version, plugins] = await Promise.all([
+			stats.getVersion(),
+			stats.getInstalledPlugins('gh')
 		]);
 
-		const reachable = healthRes.ok;
-		const version = versionRes.ok ? await versionRes.json() : null;
-		const plugins: Record<string, string> = pluginsRes.ok ? await pluginsRes.json() : {};
-
-		const selvaVersion: string | null = plugins['Selva'] ?? null;
+		const installed = plugins ?? {};
+		const selvaVersion: string | null = installed['Selva'] ?? null;
 
 		return json({
-			reachable,
+			reachable: true,
 			rhinoVersion: version?.rhino ?? null,
 			computeVersion: version?.compute ?? null,
 			selvaInstalled: selvaVersion !== null,
 			selvaVersion,
-			plugins
+			plugins: installed
 		});
 	} catch {
 		return json({
@@ -58,5 +57,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			selvaVersion: null,
 			plugins: {}
 		});
+	} finally {
+		await stats.dispose();
 	}
 };

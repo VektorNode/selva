@@ -45,8 +45,11 @@ public static class MeshBatchProcessor
 
         var materialCache = new MaterialCache();
 
-        // Convert meshes and assign material IDs (single conversion, no intermediate storage)
-        var processedMeshes = new List<ProcessedMesh>();
+        // Convert meshes and assign material IDs (single conversion, no intermediate storage).
+        // Accumulate the combined-array sizes here so we avoid two extra Sum() passes later.
+        var processedMeshes = new List<ProcessedMesh>(meshes.Count);
+        var totalComponentCount = 0;
+        var totalIndexCount = 0;
         for (var i = 0; i < meshes.Count; i++)
         {
             var mesh = meshes[i];
@@ -57,6 +60,9 @@ public static class MeshBatchProcessor
 
             var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh);
             var materialId = materialCache.GetMaterialId(materials[i]);
+
+            totalComponentCount += vertices.Length;
+            totalIndexCount += faces.Length;
 
             processedMeshes.Add(new ProcessedMesh
             {
@@ -70,11 +76,14 @@ public static class MeshBatchProcessor
             });
         }
 
-        // Group by material for optimal batching
-        var groupedMeshes = processedMeshes
-            .GroupBy(m => m.MaterialId)
-            .OrderBy(g => g.Key)
-            .ToList();
+        // Order meshes by material id for optimal batching, keeping a stable order within a material
+        // (List.Sort isn't stable, so break ties on OriginalIndex). This replaces a GroupBy/OrderBy
+        // that allocated intermediate IGrouping objects.
+        processedMeshes.Sort((a, b) =>
+        {
+            var byMat = a.MaterialId.CompareTo(b.MaterialId);
+            return byMat != 0 ? byMat : a.OriginalIndex.CompareTo(b.OriginalIndex);
+        });
 
         // Build batch structure
         var batch = new DisplayBatch
@@ -89,9 +98,6 @@ public static class MeshBatchProcessor
         // Single allocation for all combined geometry. Lengths are in component/index units:
         //   allVertices: 3 * total vertex count (x,y,z floats)
         //   allIndices:  total index count
-        var totalComponentCount = processedMeshes.Sum(m => m.Vertices.Length);
-        var totalIndexCount = processedMeshes.Sum(m => m.Faces.Length);
-
         var allVertices = new float[totalComponentCount];
         var allIndices = new int[totalIndexCount];
 
@@ -99,47 +105,48 @@ public static class MeshBatchProcessor
         var indexCursor = 0;              // write head into allIndices, in indices
         var vertexBaseForIndices = 0;     // number of vertices already in the combined array (rebases per-mesh local indices)
 
-        foreach (var group in groupedMeshes)
+        // processedMeshes is sorted by MaterialId, so a new group starts whenever the id changes.
+        MaterialGroup materialGroup = null;
+        foreach (var mesh in processedMeshes)
         {
-            var materialGroup = new MaterialGroup
+            if (materialGroup == null || materialGroup.MaterialId != mesh.MaterialId)
             {
-                MaterialId = group.Key,
-                Meshes = new List<MeshMetadata>()
-            };
-
-            foreach (var mesh in group)
-            {
-                var meshComponentCount = mesh.Vertices.Length;
-                var meshVertexCount = meshComponentCount / 3;
-                var meshIndexCount = mesh.Faces.Length;
-
-                materialGroup.Meshes.Add(new MeshMetadata
+                materialGroup = new MaterialGroup
                 {
-                    Name = mesh.Name,
-                    Layer = mesh.Layer,
-                    OriginalIndex = mesh.OriginalIndex,
-                    VertexCount = meshVertexCount,
-                    IndexCount = meshIndexCount,
-                    VertexStart = vertexBaseForIndices,
-                    IndexStart = indexCursor,
-                    Metadata = mesh.Metadata
-                });
-
-                var vertexSpan = allVertices.AsSpan(componentCursor, meshComponentCount);
-                mesh.Vertices.AsSpan().CopyTo(vertexSpan);
-
-                var indexSpan = allIndices.AsSpan(indexCursor, meshIndexCount);
-                for (var i = 0; i < meshIndexCount; i++)
-                {
-                    indexSpan[i] = mesh.Faces[i] + vertexBaseForIndices;
-                }
-
-                componentCursor += meshComponentCount;
-                indexCursor += meshIndexCount;
-                vertexBaseForIndices += meshVertexCount;
+                    MaterialId = mesh.MaterialId,
+                    Meshes = new List<MeshMetadata>()
+                };
+                batch.Groups.Add(materialGroup);
             }
 
-            batch.Groups.Add(materialGroup);
+            var meshComponentCount = mesh.Vertices.Length;
+            var meshVertexCount = meshComponentCount / 3;
+            var meshIndexCount = mesh.Faces.Length;
+
+            materialGroup.Meshes.Add(new MeshMetadata
+            {
+                Name = mesh.Name,
+                Layer = mesh.Layer,
+                OriginalIndex = mesh.OriginalIndex,
+                VertexCount = meshVertexCount,
+                IndexCount = meshIndexCount,
+                VertexStart = vertexBaseForIndices,
+                IndexStart = indexCursor,
+                Metadata = mesh.Metadata
+            });
+
+            var vertexSpan = allVertices.AsSpan(componentCursor, meshComponentCount);
+            mesh.Vertices.AsSpan().CopyTo(vertexSpan);
+
+            var indexSpan = allIndices.AsSpan(indexCursor, meshIndexCount);
+            for (var i = 0; i < meshIndexCount; i++)
+            {
+                indexSpan[i] = mesh.Faces[i] + vertexBaseForIndices;
+            }
+
+            componentCursor += meshComponentCount;
+            indexCursor += meshIndexCount;
+            vertexBaseForIndices += meshVertexCount;
         }
 
         // Build the binary blob. The metadata JSON inside the blob is a self-contained copy of the
@@ -149,7 +156,10 @@ public static class MeshBatchProcessor
         using (var ms = new MemoryStream())
         {
             BinaryGeometryWriter.Write(ms, metadataJson, allVertices, allIndices);
-            batch.CompressedData = ms.ToArray();
+            // The blob ships uncompressed over the wire (no transport gzip on dynamic responses or
+            // the local WS), so apply an optional gzip pass. Returns the original bytes unchanged
+            // when compression doesn't help; the decoder sniffs the leading magic either way.
+            batch.CompressedData = BlobCompressor.Compress(ms.ToArray());
         }
 
         return batch;

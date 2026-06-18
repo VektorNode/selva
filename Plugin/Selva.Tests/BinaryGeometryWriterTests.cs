@@ -8,7 +8,7 @@ namespace Selva.Tests;
 public class BinaryGeometryWriterTests
 {
     private const uint ExpectedMagic = 0x41564C53;
-    private const uint ExpectedVersion = 1;
+    private const uint ExpectedVersion = 2;
 
     [Fact]
     public void Write_EmitsMagicAndVersion()
@@ -60,11 +60,13 @@ public class BinaryGeometryWriterTests
         var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
 
         Assert.False(result.UsedFloat32);
+        Assert.True(result.UsedUint16Indices);
         Assert.Equal(8, result.VertexCount);
         Assert.Equal(12, result.IndexCount);
 
         var (decodedVerts, decodedIndices, flags) = ReadGeometry(ms.ToArray());
-        Assert.Equal(0u, flags);
+        // Small batch: int16 verts (bit 0 clear) + uint16 indices (bit 1 set).
+        Assert.Equal(BinaryGeometryWriter.FlagUint16Indices, flags);
 
         for (var i = 0; i < vertices.Length; i++)
         {
@@ -123,7 +125,8 @@ public class BinaryGeometryWriterTests
         Assert.True(result.UsedFloat32);
 
         var (decoded, _, flags) = ReadGeometry(ms.ToArray());
-        Assert.Equal(BinaryGeometryWriter.FlagFloat32, flags);
+        // Float32 verts (bit 0) and — being a 4-vertex batch — uint16 indices (bit 1) too.
+        Assert.Equal(BinaryGeometryWriter.FlagFloat32, flags & BinaryGeometryWriter.FlagFloat32);
 
         // Float32 path is exact for the supplied values (they fit in float32 exactly).
         for (var i = 0; i < vertices.Length; i++)
@@ -170,9 +173,33 @@ public class BinaryGeometryWriterTests
             BinaryGeometryWriter.Write(ms, "{}", new float[0], null!));
     }
 
+    [Fact]
+    public void Write_UsesUint32IndicesWhenBatchExceedsUint16()
+    {
+        // 65537 vertices forces uint32 indices. Tiny bbox keeps int16 verts in play.
+        const int vertexCount = 65537;
+        var vertices = new float[vertexCount * 3];
+        for (var v = 0; v < vertexCount; v++)
+        {
+            vertices[v * 3] = (v % 100) * 0.001f;
+        }
+
+        var indices = new[] { 0, 1, 65536 };
+
+        using var ms = new MemoryStream();
+        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+
+        Assert.False(result.UsedUint16Indices);
+
+        var (_, decodedIndices, flags) = ReadGeometry(ms.ToArray());
+        Assert.Equal(0u, flags & BinaryGeometryWriter.FlagUint16Indices);
+        Assert.Equal(new uint[] { 0, 1, 65536 }, decodedIndices);
+    }
+
     /// <summary>
     ///     Decodes the binary blob the same way the JS parser will: peel envelope, peel geometry
-    ///     header, dequantize int16 (or read float32 directly), and read uint32 indices.
+    ///     header, dequantize int16 (or read float32 directly), and read uint16/uint32 indices per
+    ///     the flags word.
     /// </summary>
     private static (float[] vertices, uint[] indices, uint flags) ReadGeometry(byte[] blob)
     {
@@ -217,9 +244,10 @@ public class BinaryGeometryWriterTests
 
         var indexCount = br.ReadUInt32();
         var indices = new uint[indexCount];
+        var uint16Indices = (flags & BinaryGeometryWriter.FlagUint16Indices) != 0;
         for (var i = 0; i < indexCount; i++)
         {
-            indices[i] = br.ReadUInt32();
+            indices[i] = uint16Indices ? br.ReadUInt16() : br.ReadUInt32();
         }
 
         return (verts, indices, flags);

@@ -114,7 +114,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddGenericParameter("Web Display", "WD", "Geometry data for web display", GH_ParamAccess.item);
+        pManager.AddParameter(new Param_WebDisplay("Web Display", "WD", "Geometry data for web display", "Selva",
+            "Display", GH_ParamAccess.item));
     }
 
 
@@ -254,19 +255,63 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
     private static List<T> ResolveBranch<T>(IGH_Structure tree, GH_Path path) where T : class
     {
-        if (tree == null)
+        if (tree == null || tree.IsEmpty)
         {
             return new List<T>();
         }
 
+        // Exact path match first.
         var branch = tree.get_Branch(path)?.Cast<T>().ToList();
         if (branch != null && branch.Count > 0)
         {
             return branch;
         }
 
+        // Single-branch tree: apply it to every geometry path regardless of its actual path. This is
+        // the common case where an aux input (materials/names/…) is a flat list but lands on a deeper
+        // path than the geometry (e.g. geo on {0}, materials on {0;0;0}) — matching by exact path or
+        // {0} alone would miss it and silently fall back to defaults.
+        if (tree.PathCount == 1)
+        {
+            var only = tree.get_Branch(tree.Paths[0])?.Cast<T>().ToList();
+            if (only != null && only.Count > 0)
+            {
+                return only;
+            }
+        }
+
         var fallback = tree.get_Branch(new GH_Path(0))?.Cast<T>().ToList();
         return fallback ?? new List<T>();
+    }
+
+    /// <summary>
+    ///     One geometry to process, with its already-resolved per-item attributes and stable ordinal.
+    ///     The cheap flatten pass produces these in tree order; the expensive meshing then runs over
+    ///     them in parallel.
+    /// </summary>
+    private struct WorkItem
+    {
+        public GeometryBase Geom;
+        public int Ordinal;
+        public string Name;
+        public string Layer;
+        public Dictionary<string, string> Metadata;
+        public ThreeMaterial Material;
+    }
+
+    /// <summary>Per-slot output of the parallel pass; gathered back in tree order.</summary>
+    private struct WorkResult
+    {
+        public bool Skipped;
+
+        // Mesh path
+        public Mesh Mesh;
+        public string MeshName;
+
+        // Item path (curve / point)
+        public DisplayItem Item;
+        public Curve PreviewCurve;
+        public Point3d? PreviewPoint;
     }
 
     private static SolveResult ComputeBatch(
@@ -278,19 +323,11 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         MeshingParameters meshSettings,
         string componentId)
     {
-        var meshes = new List<Mesh>();
-        var names = new List<string>();
-        var layers = new List<string>();
-        var metadata = new List<Dictionary<string, string>>();
-        var materials = new List<ThreeMaterial>();
-        var items = new List<DisplayItem>();
-        var previewCurves = new List<Curve>();
-        var previewPoints = new List<Point3d>();
+        // Pass 1 (cheap, sequential): flatten the trees into a work list, resolving each item's
+        // attributes and stable ordinal. Geometry extraction touches GH_Goo wrappers and must not
+        // race with the parallel pass, so it stays here. Invalid geometry counts as skipped now.
+        var work = new List<WorkItem>();
         var skipped = 0;
-
-        // Stable per-component ordinal across all geometry in tree order. Both meshes (via
-        // OriginalIndex set in MeshBatchProcessor — kept separate) and items synthesize their pick id
-        // from the component id; here it indexes items as they are encountered.
         var ordinal = 0;
 
         foreach (var path in geoTree.Paths)
@@ -322,46 +359,107 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                     continue;
                 }
 
-                var nameStr = i < nameItems.Count ? nameItems[i]?.Value ?? lastName : lastName;
-                var layerStr = i < layerItems.Count ? layerItems[i]?.Value ?? lastLayer : lastLayer;
-                var mat = i < matItems.Count ? matItems[i]?.Value ?? lastMat : lastMat;
-                var mergedMeta = ResolveMetadata(metaItems, geoItems.Count, i, lastMeta);
-
-                // Curves and points are not meshable — they travel as JSON display items, decoded
-                // and tessellated on the web (curves via rhino3dm, points as raw vertices).
-                if (TryBuildItem(geom, componentId, ordinal, nameStr, layerStr, mergedMeta, mat,
-                        out var item, out var previewCurve, out var previewPoint))
+                work.Add(new WorkItem
                 {
-                    items.Add(item);
-                    if (previewCurve != null)
-                    {
-                        previewCurves.Add(previewCurve);
-                    }
-
-                    if (previewPoint.HasValue)
-                    {
-                        previewPoints.Add(previewPoint.Value);
-                    }
-
-                    continue;
-                }
-
-                var mesh = ConvertSingleGeometry(geom, meshSettings);
-                if (mesh == null || !mesh.IsValid)
-                {
-                    skipped++;
-                    continue;
-                }
-
-                mesh.Normals.ComputeNormals();
-                mesh.Compact();
-
-                meshes.Add(mesh);
-                names.Add(!string.IsNullOrWhiteSpace(nameStr) ? nameStr : meshes.Count.ToString());
-                layers.Add(layerStr ?? "");
-                metadata.Add(mergedMeta);
-                materials.Add(mat);
+                    Geom = geom,
+                    Ordinal = ordinal,
+                    Name = i < nameItems.Count ? nameItems[i]?.Value ?? lastName : lastName,
+                    Layer = i < layerItems.Count ? layerItems[i]?.Value ?? lastLayer : lastLayer,
+                    Metadata = ResolveMetadata(metaItems, geoItems.Count, i, lastMeta),
+                    Material = i < matItems.Count ? matItems[i]?.Value ?? lastMat : lastMat
+                });
             }
+        }
+
+        // Pass 2 (expensive, parallel): mesh breps/surfaces and build curve/point items. Each slot is
+        // independent and writes only its own index, so no locking is needed. Rhino meshing is
+        // thread-safe per geometry; meshSettings is read-only here.
+        var results = new WorkResult[work.Count];
+        Parallel.For(0, work.Count, idx =>
+        {
+            var w = work[idx];
+
+            // Curves and points are not meshable — they travel as JSON display items, decoded
+            // and tessellated on the web (curves via rhino3dm, points as raw vertices).
+            if (TryBuildItem(w.Geom, componentId, w.Ordinal, w.Name, w.Layer, w.Metadata, w.Material,
+                    out var item, out var previewCurve, out var previewPoint))
+            {
+                results[idx] = new WorkResult
+                {
+                    Item = item,
+                    PreviewCurve = previewCurve,
+                    PreviewPoint = previewPoint
+                };
+                return;
+            }
+
+            var mesh = ConvertSingleGeometry(w.Geom, meshSettings);
+            if (mesh == null || !mesh.IsValid)
+            {
+                results[idx] = new WorkResult { Skipped = true };
+                return;
+            }
+
+            // Brep meshing emits one vertex per face-corner, so a clean box arrives with ~3x the
+            // vertices it needs. We weld coincident vertices to shrink the payload, but RESPECTING
+            // normals (ignoreNormals: false): both the web and the C# preview recompute smooth normals
+            // via computeVertexNormals, which averages across every shared vertex. Welding across hard
+            // edges would therefore smear them. Computing normals first lets the weld keep hard-edge
+            // vertices split (different normals) while merging smooth-surface interiors (matching
+            // normals) — preserving the original shading while still cutting most of the duplication.
+            mesh.Normals.ComputeNormals();
+            mesh.Vertices.CombineIdentical(false, true);
+            mesh.Compact();
+
+            results[idx] = new WorkResult
+            {
+                Mesh = mesh,
+                MeshName = w.Name
+            };
+        });
+
+        // Pass 3 (cheap, sequential): gather in tree order so output ordering is deterministic and
+        // matches the pre-parallel behaviour.
+        var meshes = new List<Mesh>();
+        var names = new List<string>();
+        var layers = new List<string>();
+        var metadata = new List<Dictionary<string, string>>();
+        var materials = new List<ThreeMaterial>();
+        var items = new List<DisplayItem>();
+        var previewCurves = new List<Curve>();
+        var previewPoints = new List<Point3d>();
+
+        for (var idx = 0; idx < results.Length; idx++)
+        {
+            var r = results[idx];
+            if (r.Skipped)
+            {
+                skipped++;
+                continue;
+            }
+
+            if (r.Item != null)
+            {
+                items.Add(r.Item);
+                if (r.PreviewCurve != null)
+                {
+                    previewCurves.Add(r.PreviewCurve);
+                }
+
+                if (r.PreviewPoint.HasValue)
+                {
+                    previewPoints.Add(r.PreviewPoint.Value);
+                }
+
+                continue;
+            }
+
+            var w = work[idx];
+            meshes.Add(r.Mesh);
+            names.Add(!string.IsNullOrWhiteSpace(r.MeshName) ? r.MeshName : meshes.Count.ToString());
+            layers.Add(w.Layer ?? "");
+            metadata.Add(w.Metadata);
+            materials.Add(w.Material);
         }
 
         var hasAnything = meshes.Count > 0 || items.Count > 0;

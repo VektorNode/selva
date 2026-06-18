@@ -106,7 +106,7 @@ public class TitleBlockTests
 	[Fact]
 	public void Auto_width_stretches_to_a_narrow_band()
 	{
-		// A4 content width (~190mm) is below the ISO full-width threshold → stretch to the band.
+		// A4 content width (~190mm) → stretch to fill the band.
 		var block = new TitleBlock
 		{
 			Size = new BoundingBox(0, 0, 180, 40),
@@ -118,9 +118,9 @@ public class TitleBlockTests
 	}
 
 	[Fact]
-	public void Auto_width_keeps_fixed_size_on_a_wide_band()
+	public void Auto_width_stretches_to_a_wide_band_up_to_the_cap()
 	{
-		// A3-wide band (~400mm) is above the threshold → keep the 180mm corner block.
+		// A3-landscape content (~400mm), below the 420mm cap → tracks the band, no snap to 180.
 		var block = new TitleBlock
 		{
 			Size = new BoundingBox(0, 0, 180, 40),
@@ -128,7 +128,21 @@ public class TitleBlockTests
 			Rows = TitleBlock.Iso7200(null).Rows,
 		};
 		var resolved = block.Resolve(new LayoutContext(new BoundingBox(0, 0, 400, 40)));
-		Assert.Equal(180, resolved.ComputeBounds().Width, 6);
+		Assert.Equal(400, resolved.ComputeBounds().Width, 6);
+	}
+
+	[Fact]
+	public void Auto_width_is_capped_on_very_wide_bands()
+	{
+		// A1/A0-scale band far past the cap → clamps to MaxAutoWidth, not the full band width.
+		var block = new TitleBlock
+		{
+			Size = new BoundingBox(0, 0, 180, 40),
+			AutoWidth = true,
+			Rows = TitleBlock.Iso7200(null).Rows,
+		};
+		var resolved = block.Resolve(new LayoutContext(new BoundingBox(0, 0, 1100, 40)));
+		Assert.Equal(TitleBlock.MaxAutoWidth, resolved.ComputeBounds().Width, 6);
 	}
 
 	[Fact]

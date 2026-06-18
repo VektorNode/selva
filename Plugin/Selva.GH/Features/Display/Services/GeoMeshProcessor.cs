@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using Rhino.Geometry;
 
 namespace Selva.GH.Features.Display.Services;
@@ -22,48 +20,32 @@ public static class GeoMeshProcessor
     /// </returns>
     public static (float[] vertices, int[] faces) ConvertMeshToArrays(Mesh mesh)
     {
-        const int verticesPerTriangle = 3;
-        const int verticesPerQuad = 6;
         const int componentsPerVertex = 3;
 
+        var meshVertices = mesh.Vertices;
+        var meshFaces = mesh.Faces;
+        var vertexCount = meshVertices.Count;
+        var faceCount = meshFaces.Count;
 
-        // Convert vertices
-        var vertices = new float[mesh.Vertices.Count * componentsPerVertex];
+        // Convert vertices via indexed access (foreach over MeshVertexList boxes each Point3f).
+        var vertices = new float[vertexCount * componentsPerVertex];
         var vertexIndex = 0;
-        foreach (var vertex in mesh.Vertices)
+        for (var i = 0; i < vertexCount; i++)
         {
+            var vertex = meshVertices[i];
             vertices[vertexIndex++] = vertex.X;
             vertices[vertexIndex++] = vertex.Y;
             vertices[vertexIndex++] = vertex.Z;
         }
 
-        // Convert faces to list to avoid double enumeration
-        var faceList = mesh.Faces as IList<MeshFace> ?? mesh.Faces.ToList();
+        // Triangle -> 3 indices, quad -> 6 (two triangles). Counts are O(1) on MeshFaceList, so we
+        // size the array exactly without a counting pass and walk the faces only once.
+        var faces = new int[meshFaces.TriangleCount * 3 + meshFaces.QuadCount * 6];
 
-        // Count indices needed
-        var totalIndices = 0;
-        foreach (var face in faceList)
-        {
-            if (face.IsTriangle)
-            {
-                totalIndices += verticesPerTriangle;
-            }
-            else if (face.IsQuad)
-            {
-                totalIndices += verticesPerQuad;
-            }
-            else
-            {
-                Console.WriteLine("NGON detected. This component only supports triangles and quads.");
-            }
-        }
-
-        var faces = new int[totalIndices];
-
-        // Convert faces (triangulate quads)
         var faceIndex = 0;
-        foreach (var face in faceList)
+        for (var i = 0; i < faceCount; i++)
         {
+            var face = meshFaces[i];
             if (face.IsTriangle)
             {
                 faces[faceIndex++] = face.A;
@@ -78,6 +60,10 @@ public static class GeoMeshProcessor
                 faces[faceIndex++] = face.C;
                 faces[faceIndex++] = face.D;
                 faces[faceIndex++] = face.A;
+            }
+            else
+            {
+                Console.WriteLine("NGON detected. This component only supports triangles and quads.");
             }
         }
 

@@ -1,6 +1,9 @@
 using GH_IO.Serialization;
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
+using Rhino.Display;
+using Rhino.Geometry;
 using Selva.GH.Features.ComputeIO;
 using Selva.GH.Features.Display.Services;
 
@@ -8,9 +11,21 @@ namespace Selva.GH.Features.Display.Goos;
 
 /// <summary>
 ///     Grasshopper Goo wrapper for WebDisplay data to prevent double JSON encoding.
+///
+///     Derives from <see cref="GH_GeometricGoo{T}" /> (not plain <see cref="GH_Goo{T}" />) so the
+///     dedicated <c>Param_WebDisplay</c> can derive from <c>GH_PersistentGeometryParam</c> and get
+///     Grasshopper's native param preview — a plain persistent param's IGH_PreviewObject draw methods
+///     are never invoked by GH. Implements <see cref="IGH_PreviewData" /> to actually draw; the
+///     drawable geometry is reconstructed from the encoded batch (the Goo carries only the quantized
+///     blob + JSON items) and cached on first draw.
+///
+///     The batch is baked display data, not editable geometry, so the geometric-goo transform/morph
+///     operations are identity no-ops — Selva never spatially transforms a Web Display in GH.
 /// </summary>
-public class WebDisplayGoo : GH_Goo<DisplayBatch>, ISelvaSerializableGoo
+public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGoo, IGH_PreviewData
 {
+    private WebDisplayPreview _preview;
+
     public WebDisplayGoo()
     {
     }
@@ -20,11 +35,81 @@ public class WebDisplayGoo : GH_Goo<DisplayBatch>, ISelvaSerializableGoo
         Value = value;
     }
 
-    public override bool IsValid => Value != null && Value.Materials != null && Value.Groups != null;
+    private WebDisplayPreview Preview => _preview ??= WebDisplayPreview.Build(Value);
+
+    // ── IGH_GeometricGoo ────────────────────────────────────────────────────────────────────────
 
     public override string TypeName => "WebDisplay";
 
     public override string TypeDescription => "Geometry data for web display";
+
+    public override BoundingBox Boundingbox => IsValid ? Preview.BoundingBox : BoundingBox.Empty;
+
+    public override bool IsValid => Value != null && Value.Materials != null && Value.Groups != null;
+
+    public override BoundingBox GetBoundingBox(Transform xform)
+    {
+        if (!IsValid)
+        {
+            return BoundingBox.Empty;
+        }
+
+        var bb = Preview.BoundingBox;
+        bb.Transform(xform);
+        return bb;
+    }
+
+    public override IGH_GeometricGoo DuplicateGeometry()
+    {
+        return new WebDisplayGoo(Value);
+    }
+
+    // A Web Display is baked display data — spatial transform/morph don't apply, so return self.
+    public override IGH_GeometricGoo Transform(Transform xform)
+    {
+        return new WebDisplayGoo(Value);
+    }
+
+    public override IGH_GeometricGoo Morph(SpaceMorph xmorph)
+    {
+        return new WebDisplayGoo(Value);
+    }
+
+    // ── IGH_PreviewData ─────────────────────────────────────────────────────────────────────────
+
+    public BoundingBox ClippingBox => IsValid ? Preview.BoundingBox : BoundingBox.Empty;
+
+    public void DrawViewportMeshes(GH_PreviewMeshArgs args)
+    {
+        if (!IsValid)
+        {
+            return;
+        }
+
+        foreach (var (mesh, color) in Preview.Meshes)
+        {
+            var material = new DisplayMaterial(color) { IsTwoSided = true };
+            args.Pipeline.DrawMeshShaded(mesh, material);
+        }
+    }
+
+    public void DrawViewportWires(GH_PreviewWireArgs args)
+    {
+        if (!IsValid)
+        {
+            return;
+        }
+
+        foreach (var (curve, color) in Preview.Curves)
+        {
+            args.Pipeline.DrawCurve(curve, color, args.Thickness);
+        }
+
+        foreach (var (point, color) in Preview.Points)
+        {
+            args.Pipeline.DrawPoint(point, PointStyle.RoundSimple, 4, color);
+        }
+    }
 
     public override IGH_Goo Duplicate()
     {
