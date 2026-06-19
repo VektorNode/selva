@@ -200,6 +200,15 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         run: pnpm install --frozen-lockfile
 
+      # @selvajs/website renders its docs' mermaid diagrams to inline SVG at
+      # build time via rehype-mermaid, which drives a headless Chromium through
+      # Playwright. `pnpm release` → `pnpm build` builds every workspace package
+      # (website included), so the browser must exist or the build aborts with
+      # "Executable doesn't exist". Scope to the website's Playwright + chromium.
+      - name: Install Playwright Chromium for website docs
+        if: steps.check.outputs.should_run == 'true'
+        run: pnpm --filter @selvajs/website exec playwright install --with-deps chromium
+
       # Persist Turbo's local task cache so `pnpm release` (→ pnpm build) can
       # reuse unchanged package builds across releases. Turbo hashes inputs
       # itself; the SHA key writes a fresh entry and restore-keys warm-seed
