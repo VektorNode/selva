@@ -1,5 +1,11 @@
 # Schema Changelog
 
+## 4.6.1
+
+### Patch Changes
+
+- 3ca77a5: Allow input source keys to repeat. A value source key (client producer or server fetch) no longer has to be unique across the schema — the same producer/fetch may legitimately fill several inputs. Updated the `source.key` schema description accordingly; the builder no longer flags duplicate keys or blocks save on them.
+
 ## 4.6.0
 
 ### Minor Changes
