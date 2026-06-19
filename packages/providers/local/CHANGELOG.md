@@ -1,5 +1,11 @@
 # @selvajs/local-provider
 
+## 0.12.7
+
+### Patch Changes
+
+- @selvajs/platform@0.14.2
+
 ## 0.12.6
 
 ### Patch Changes
