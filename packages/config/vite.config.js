@@ -9,7 +9,13 @@ export function createViteConfig(overrides = {}) {
 			plugins: [tailwindcss(), sveltekit()],
 			// Resolve @selvajs/* through "source" export condition (monorepo dev vs npm consumers).
 			resolve: {
-				conditions: ['source', ...defaultClientConditions]
+				conditions: ['source', ...defaultClientConditions],
+				// Force a single physical copy of these. The monorepo resolves
+				// @sveltejs/kit against two vite majors (7 and 8), which splits it
+				// into multiple module instances; mixing them breaks SvelteKit's
+				// `instanceof Redirect`/`HttpError` control-flow checks, so a normal
+				// `redirect()` surfaces as an "[Unhandled error]" 500 instead.
+				dedupe: ['@sveltejs/kit', 'svelte', 'vite']
 			},
 			// Force-bundle @selvajs/* into SSR build (no external runtime deps).
 			ssr: {

@@ -64,7 +64,11 @@ export const RATE_LIMIT_MAX_REQUESTS = readPositiveInt('COMPUTE_RATE_LIMIT_MAX',
 // Largest .gh definition we accept on upload AND the largest remote definition
 // we'll fetch for compute. Kept in lockstep deliberately — a remote URL must
 // not be a way to smuggle a file past the upload cap.
-export const MAX_GH_FILE_SIZE = readPositiveInt('MAX_GH_FILE_SIZE_BYTES', 50 * MB);
+// TEMP (dev): raised 50 MB → 300 MB so large dev definitions don't hit the
+// Selva-side gate. NOTE: the Rhino.Compute server still caps at its own
+// RHINO_COMPUTE_MAX_REQUEST_SIZE (default 50 MB), so uploads past that 413 at
+// compute regardless of this value. Revert to 50 * MB before release.
+export const MAX_GH_FILE_SIZE = readPositiveInt('MAX_GH_FILE_SIZE_BYTES', 300 * MB);
 export const MAX_IMAGE_FILE_SIZE = readPositiveInt('MAX_IMAGE_FILE_SIZE_BYTES', 10 * MB);
 
 // /api/compute JSON body cap. This is inputs + values, not the .gh. Most
@@ -74,7 +78,10 @@ export const MAX_IMAGE_FILE_SIZE = readPositiveInt('MAX_IMAGE_FILE_SIZE_BYTES', 
 // raw, in @selvajs/ui), so a worst-case body is ~200 MB. We size to 210 MB to
 // clear that plus JSON envelope slack. NOTE: this must stay <= the global
 // BODY_SIZE_LIMIT (adapter-node), or the global backstop rejects first.
-export const COMPUTE_REQUEST_MAX_BYTES = readPositiveInt('COMPUTE_REQUEST_MAX_BYTES', 210 * MB);
+// TEMP (dev): raised 210 MB → 300 MB. In a production (adapter-node) build,
+// also bump BODY_SIZE_LIMIT to >= 300M or the global cap rejects first; under
+// vite dev it isn't enforced. Revert to 210 * MB before release.
+export const COMPUTE_REQUEST_MAX_BYTES = readPositiveInt('COMPUTE_REQUEST_MAX_BYTES', 300 * MB);
 
 // /api/compute JSON *response* cap — the missing counterpart to the request
 // cap above. A `file`-typed output (e.g. an exported .3dm) is base64-embedded
