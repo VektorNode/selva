@@ -428,7 +428,9 @@ export const POST: RequestHandler = async ({ locals }) => {
 				const child = spawn(cmd, args, {
 					cwd: plan.cwd,
 					env: {
+						// eslint-disable-next-line no-restricted-properties -- OS env for the spawned child, not .env config
 						PATH: `${localBin}:${process.env.PATH ?? ''}`,
+						// eslint-disable-next-line no-restricted-properties -- OS env for the spawned child, not .env config
 						HOME: process.env.HOME,
 						INSTALL_DIR: plan.cwd
 					},

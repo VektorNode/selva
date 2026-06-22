@@ -380,6 +380,7 @@ function applySecurityHeaders(response: Response, pathname: string): Response {
 		'Permissions-Policy',
 		'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()'
 	);
+	// eslint-disable-next-line no-restricted-properties -- NODE_ENV is OS-level, set by Node/Vite, not loaded from .env
 	if (process.env.NODE_ENV === 'production') {
 		response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
 	}

@@ -1,4 +1,5 @@
 import { error, type Cookies } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 
 const SESSION_COOKIE_NAME = 'admin_session';
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -62,7 +63,8 @@ export function clearRateLimit(ip: string): void {
  */
 export function setSessionCookie(cookies: Cookies, sessionToken: string): void {
 	const isSecure =
-		process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true';
+		// eslint-disable-next-line no-restricted-properties -- NODE_ENV is OS-level, set by Node/Vite, not loaded from .env
+		process.env.NODE_ENV === 'production' && env.ALLOW_INSECURE_COOKIES !== 'true';
 
 	cookies.set(SESSION_COOKIE_NAME, sessionToken, {
 		path: '/',
@@ -85,7 +87,8 @@ export function destroySession(cookies: Cookies): void {
  */
 export function setRefreshCookie(cookies: Cookies, refreshToken: string): void {
 	const isSecure =
-		process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_COOKIES !== 'true';
+		// eslint-disable-next-line no-restricted-properties -- NODE_ENV is OS-level, set by Node/Vite, not loaded from .env
+		process.env.NODE_ENV === 'production' && env.ALLOW_INSECURE_COOKIES !== 'true';
 	cookies.set(REFRESH_COOKIE_NAME, refreshToken, {
 		path: '/',
 		httpOnly: true,

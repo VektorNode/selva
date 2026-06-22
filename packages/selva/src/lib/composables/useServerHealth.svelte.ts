@@ -10,6 +10,10 @@ export interface ServerHealthState {
 	selvaInstalled: boolean;
 	selvaVersion: string | null;
 	plugins: Record<string, string>;
+	// Live fleet metrics — null when unreachable or the server doesn't report them.
+	// `activeChildren` is read passively (never spawns), so 0 means a genuinely idle pool.
+	activeChildren: number | null;
+	idleSpanSeconds: number | null;
 }
 
 // A manual check keeps retrying a cold/booting server for up to this long before
@@ -27,7 +31,9 @@ export function useServerHealth(serverId: () => string) {
 		computeVersion: null,
 		selvaInstalled: false,
 		selvaVersion: null,
-		plugins: {}
+		plugins: {},
+		activeChildren: null,
+		idleSpanSeconds: null
 	});
 
 	let timerId: ReturnType<typeof setTimeout> | null = null;
@@ -51,6 +57,8 @@ export function useServerHealth(serverId: () => string) {
 				selvaInstalled: data.selvaInstalled,
 				selvaVersion: data.selvaVersion,
 				plugins: data.plugins ?? {},
+				activeChildren: data.activeChildren ?? null,
+				idleSpanSeconds: data.idleSpanSeconds ?? null,
 				state: !data.reachable ? 'error' : !data.selvaInstalled ? 'warning' : 'ok'
 			};
 			return data.reachable;

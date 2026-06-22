@@ -100,6 +100,10 @@
 		outputs: unknown[];
 	} | null>(null);
 
+	function formatBytes(bytes: number): string {
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
 	function nameFromFile(file: File): string {
 		return file.name
 			.replace(/\.(gh|ghx)$/i, '')
@@ -149,6 +153,16 @@
 				// Schema extraction is a hard gate: the server rejects uploads that
 				// don't validate, so surface the failure and block submission here.
 				const body = await response.json().catch(() => null);
+				// A 413 can come from the app's size guard OR from an upstream proxy /
+				// adapter-node BODY_SIZE_LIMIT — the latter returns a non-JSON body, so
+				// don't rely on body.message being present. Either way the cause is the
+				// same: the .gh is too large for the configured upload limit.
+				if (response.status === 413) {
+					validationError =
+						body?.message ??
+						`This Grasshopper file is too large to upload (${formatBytes(file.size)}). Reduce its size or raise the server's upload limit.`;
+					return;
+				}
 				validationError =
 					body?.message ??
 					(response.status === 503

@@ -28,13 +28,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 				computeVersion: null,
 				selvaInstalled: false,
 				selvaVersion: null,
-				plugins: {}
+				plugins: {},
+				activeChildren: null,
+				idleSpanSeconds: null
 			});
 		}
 
-		const [version, plugins] = await Promise.all([
+		// `initialize: false` keeps this a passive read — never spawn children just
+		// to count them, or the status probe would wake (and bill) an idle server.
+		const [version, plugins, activeChildren, idleSpanSeconds] = await Promise.all([
 			stats.getVersion(),
-			stats.getInstalledPlugins('gh')
+			stats.getInstalledPlugins('gh'),
+			stats.getActiveChildren({ initialize: false }),
+			stats.getIdleSpan()
 		]);
 
 		const installed = plugins ?? {};
@@ -46,7 +52,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			computeVersion: version?.compute ?? null,
 			selvaInstalled: selvaVersion !== null,
 			selvaVersion,
-			plugins: installed
+			plugins: installed,
+			activeChildren,
+			idleSpanSeconds
 		});
 	} catch {
 		return json({
@@ -55,7 +63,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			computeVersion: null,
 			selvaInstalled: false,
 			selvaVersion: null,
-			plugins: {}
+			plugins: {},
+			activeChildren: null,
+			idleSpanSeconds: null
 		});
 	} finally {
 		await stats.dispose();

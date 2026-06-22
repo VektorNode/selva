@@ -43,6 +43,18 @@
 	}
 	let { data }: Props = $props();
 
+	// Humanize an idle span (seconds since the last child request) into a compact
+	// "just now / 5m / 1h 3m" label. null → '-' (unreachable or not reported).
+	function formatIdle(seconds: number | null): string {
+		if (seconds === null) return '-';
+		if (seconds < 5) return 'just now';
+		if (seconds < 60) return `${Math.round(seconds)}s`;
+		const m = Math.floor(seconds / 60);
+		if (m < 60) return `${m}m`;
+		const h = Math.floor(m / 60);
+		return `${h}h ${m % 60}m`;
+	}
+
 	const statusConfig = {
 		idle: { label: 'Not checked', color: 'text-muted-foreground' },
 		ok: { label: 'Online', color: 'text-green-600 dark:text-green-400' },
@@ -475,6 +487,16 @@
 							<span class="text-red-600 dark:text-red-400">Not installed</span>
 						{/if}
 					</p>
+				</div>
+			</div>
+			<div class="grid grid-cols-2 gap-2">
+				<div class="bg-muted/40 rounded-md px-3 py-2">
+					<p class="text-muted-foreground text-xs">Active children</p>
+					<p class="mt-0.5 text-xs font-medium">{health.activeChildren ?? '-'}</p>
+				</div>
+				<div class="bg-muted/40 rounded-md px-3 py-2">
+					<p class="text-muted-foreground text-xs">Idle for</p>
+					<p class="mt-0.5 text-xs font-medium">{formatIdle(health.idleSpanSeconds)}</p>
 				</div>
 			</div>
 		{/if}

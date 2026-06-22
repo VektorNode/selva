@@ -1,6 +1,18 @@
 import { hasPermission } from '@selvajs/platform';
 import { flag } from '$lib/server/providers.server';
 import { checkForUpdate } from '$lib/server/updateCheck.server';
+import {
+	MAX_SOLVE_DURATION_MS,
+	RATE_LIMIT_WINDOW_MS,
+	RATE_LIMIT_MAX_REQUESTS,
+	MAX_GH_FILE_SIZE,
+	MAX_IMAGE_FILE_SIZE,
+	COMPUTE_REQUEST_MAX_BYTES,
+	COMPUTE_RESPONSE_MAX_BYTES,
+	REMOTE_DEFINITION_MAX_BYTES,
+	REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
+	DEFINITION_CACHE_TTL_MS
+} from '$lib/server/computeLimits';
 import pkg from '../../../../package.json';
 import type { PageServerLoad } from './$types';
 
@@ -29,11 +41,27 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 		ENABLE_SHARING: flag('ENABLE_SHARING')
 	};
 
+	// Resolved compute/upload limits (computeLimits.ts is the single source of
+	// truth — each value here reflects the env override or its default). Surfaced
+	// read-only so operators can see what's enforced without reading the .env.
+	const limits = {
+		MAX_SOLVE_DURATION_MS,
+		RATE_LIMIT_WINDOW_MS,
+		RATE_LIMIT_MAX_REQUESTS,
+		MAX_GH_FILE_SIZE,
+		MAX_IMAGE_FILE_SIZE,
+		COMPUTE_REQUEST_MAX_BYTES,
+		COMPUTE_RESPONSE_MAX_BYTES,
+		REMOTE_DEFINITION_MAX_BYTES,
+		REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
+		DEFINITION_CACHE_TTL_MS
+	};
+
 	// Only operators who can run updates need the registry check — skip the
 	// npm round-trip for everyone else.
 	const update = canManageUpdates
 		? await checkForUpdate(fetch)
 		: { current: null, latest: null, updateAvailable: false };
 
-	return { canManageUpdates, isInstanceAdmin, flags, version: pkg.version, update };
+	return { canManageUpdates, isInstanceAdmin, flags, limits, version: pkg.version, update };
 };

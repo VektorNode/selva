@@ -83,6 +83,7 @@ export const load = (async ({ params, locals, request, url }) => {
 			}
 			if (err.kind === 'schema') {
 				console.error('[PageLoad] Definition loading failed:', err.message);
+				// eslint-disable-next-line no-restricted-properties -- NODE_ENV is OS-level, set by Node/Vite, not loaded from .env
 				if (process.env.NODE_ENV === 'development') {
 					const hint = `\n\nTroubleshooting:\n1. Check /api/health/compute to diagnose server connectivity\n2. Check the browser console for more details`;
 					throw error(500, `Failed to load definition from ${clientDefUrl}: ${err.message}${hint}`);

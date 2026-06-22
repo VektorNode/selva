@@ -19,6 +19,7 @@ import {
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { slugify } from '$lib/server/slug';
+import { env } from '$env/dynamic/private';
 
 // Redirect away if a platform admin already exists — setup is only for a
 // fresh install. Uses the permission store directly (works for OIDC providers
@@ -35,7 +36,7 @@ export const load: PageServerLoad = async () => {
 		hasPasswordAuth: Boolean(auth.passwordAuth),
 		hasEmailLink: Boolean(auth.emailLink),
 		hasProxyAuth: Boolean(auth.proxyAuth),
-		bootstrapEmail: process.env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL ?? null,
+		bootstrapEmail: env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL ?? null,
 		oauthProviders: auth.oauth?.listProviders() ?? []
 	};
 };

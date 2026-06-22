@@ -17,8 +17,14 @@
  * input components themselves.
  */
 
+import { env } from '$env/dynamic/private';
+
 function readPositiveInt(name: string, fallback: number): number {
-	const raw = process.env[name];
+	// Read via SvelteKit's dynamic private env, not bare `process.env`: in
+	// `vite dev` Vite loads `.env` into this module but does NOT mirror it into
+	// `process.env`, so a raw `process.env[name]` is undefined in dev and every
+	// knob silently fell back to its default regardless of `.env`.
+	const raw = env[name];
 	if (!raw) return fallback;
 	const parsed = Number(raw);
 	if (!Number.isFinite(parsed) || parsed <= 0) {

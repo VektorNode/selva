@@ -15,8 +15,115 @@
 			ENABLE_PLATFORM_PROJECTS: boolean;
 			ENABLE_SHARING: boolean;
 		};
+		limits: {
+			MAX_SOLVE_DURATION_MS: number;
+			RATE_LIMIT_WINDOW_MS: number;
+			RATE_LIMIT_MAX_REQUESTS: number;
+			MAX_GH_FILE_SIZE: number;
+			MAX_IMAGE_FILE_SIZE: number;
+			COMPUTE_REQUEST_MAX_BYTES: number;
+			COMPUTE_RESPONSE_MAX_BYTES: number;
+			REMOTE_DEFINITION_MAX_BYTES: number;
+			REMOTE_DEFINITION_FETCH_TIMEOUT_MS: number;
+			DEFINITION_CACHE_TTL_MS: number;
+		};
 	}
 	let { data }: { data: PageData } = $props();
+
+	function formatBytes(bytes: number): string {
+		if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+		if (bytes >= 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))} MB`;
+		if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+		return `${bytes} B`;
+	}
+
+	function formatMs(ms: number): string {
+		if (ms >= 60_000) {
+			const mins = ms / 60_000;
+			return `${Number.isInteger(mins) ? mins : mins.toFixed(1)} min`;
+		}
+		if (ms >= 1000) {
+			const s = ms / 1000;
+			return `${Number.isInteger(s) ? s : s.toFixed(1)} s`;
+		}
+		return `${ms} ms`;
+	}
+
+	// Display metadata for each resolved limit, in render order. The `value`
+	// thunk picks the right unit formatter; `env` is the override var name.
+	const limitRows: Array<{
+		key: keyof PageData['limits'];
+		label: string;
+		env: string;
+		value: (l: PageData['limits']) => string;
+		description: string;
+	}> = [
+		{
+			key: 'MAX_SOLVE_DURATION_MS',
+			label: 'Max solve duration',
+			env: 'MAX_SOLVE_DURATION_MS',
+			value: (l) => formatMs(l.MAX_SOLVE_DURATION_MS),
+			description: 'Longest a single /api/compute solve may run before it is aborted.'
+		},
+		{
+			key: 'RATE_LIMIT_MAX_REQUESTS',
+			label: 'Compute rate limit',
+			// Two vars drive this row: the count and the window. Show both so an
+			// operator who wants to change "/ 1.7 min" knows which knob to set.
+			env: 'COMPUTE_RATE_LIMIT_MAX · COMPUTE_RATE_LIMIT_WINDOW_MS',
+			value: (l) => `${l.RATE_LIMIT_MAX_REQUESTS} / ${formatMs(l.RATE_LIMIT_WINDOW_MS)}`,
+			description: 'Max solves per key (user or share-link) within the fixed window.'
+		},
+		{
+			key: 'MAX_GH_FILE_SIZE',
+			label: 'Max .gh upload size',
+			env: 'MAX_GH_FILE_SIZE_BYTES',
+			value: (l) => formatBytes(l.MAX_GH_FILE_SIZE),
+			description: 'Largest Grasshopper definition accepted on upload.'
+		},
+		{
+			key: 'MAX_IMAGE_FILE_SIZE',
+			label: 'Max cover image size',
+			env: 'MAX_IMAGE_FILE_SIZE_BYTES',
+			value: (l) => formatBytes(l.MAX_IMAGE_FILE_SIZE),
+			description: 'Largest cover image accepted on upload.'
+		},
+		{
+			key: 'COMPUTE_REQUEST_MAX_BYTES',
+			label: 'Compute request body cap',
+			env: 'COMPUTE_REQUEST_MAX_BYTES',
+			value: (l) => formatBytes(l.COMPUTE_REQUEST_MAX_BYTES),
+			description: 'Max /api/compute JSON request size (inputs + base64 file values).'
+		},
+		{
+			key: 'COMPUTE_RESPONSE_MAX_BYTES',
+			label: 'Compute response body cap',
+			env: 'COMPUTE_RESPONSE_MAX_BYTES',
+			value: (l) => formatBytes(l.COMPUTE_RESPONSE_MAX_BYTES),
+			description: 'Max /api/compute JSON response size before it 413s.'
+		},
+		{
+			key: 'REMOTE_DEFINITION_MAX_BYTES',
+			label: 'Remote definition fetch cap',
+			env: 'MAX_GH_FILE_SIZE_BYTES',
+			value: (l) => formatBytes(l.REMOTE_DEFINITION_MAX_BYTES),
+			description: 'Max size of a remotely-fetched .gh (tracks the upload cap).'
+		},
+		{
+			key: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
+			label: 'Remote definition fetch timeout',
+			env: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
+			value: (l) => formatMs(l.REMOTE_DEFINITION_FETCH_TIMEOUT_MS),
+			description: 'Deadline for fetching a remote .gh before the request is dropped.'
+		},
+		{
+			key: 'DEFINITION_CACHE_TTL_MS',
+			label: 'Definition cache TTL',
+			env: 'DEFINITION_CACHE_TTL_MS',
+			value: (l) => formatMs(l.DEFINITION_CACHE_TTL_MS),
+			description: 'How long remotely-fetched .gh bytes stay cached in-process.'
+		}
+	];
 
 	const flagDescriptions: Record<keyof PageData['flags'], string> = {
 		ALLOW_CROSS_ORG_PUBLIC:
@@ -318,6 +425,35 @@
 							}`}
 						>
 							{value ? 'On' : 'Off'}
+						</span>
+					</div>
+				{/each}
+			</div>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title class="text-sm font-medium">Platform limits</Card.Title>
+			<Card.Description>
+				Resolved compute, upload, and timeout caps currently enforced by the instance. Each value
+				reflects its environment override or the built-in default. To change one, set the listed
+				variable in your environment configuration and restart the app.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<div class="divide-y rounded-lg border">
+				{#each limitRows as row (row.key)}
+					<div class="flex items-start justify-between gap-4 px-4 py-3">
+						<div class="min-w-0 flex-1">
+							<span class="text-foreground text-sm font-medium">{row.label}</span>
+							<p class="text-muted-foreground mt-1 text-xs">{row.description}</p>
+							<code class="text-muted-foreground mt-1 block font-mono text-[10px]">{row.env}</code>
+						</div>
+						<span
+							class="border-border text-foreground shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide whitespace-nowrap"
+						>
+							{row.value(data.limits)}
 						</span>
 					</div>
 				{/each}
