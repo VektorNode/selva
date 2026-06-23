@@ -43,6 +43,8 @@
 		         Link="Linked\OptionPairParser.cs"/>
 		<Compile Include="..\Selva.GH\Features\FileIO\Services\SafeUrlValidator.cs"
 		         Link="Linked\SafeUrlValidator.cs"/>
+		<Compile Include="..\Selva.GH\Features\FileIO\Services\ServerFilePath.cs"
+		         Link="Linked\ServerFilePath.cs"/>
 		<Compile Include="..\Selva.GH\Features\FileIO\Services\ImageDimensions.cs"
 		         Link="Linked\ImageDimensions.cs"/>
 		<Compile Include="..\Selva.GH\Features\ComputeIO\Components\DynamicValueListLogic.cs"
