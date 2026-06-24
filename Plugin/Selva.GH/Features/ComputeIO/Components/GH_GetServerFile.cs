@@ -1,9 +1,11 @@
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Windows.Forms;
 using GH_IO.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
@@ -12,6 +14,7 @@ using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json.Linq;
 using Rhino.Geometry;
+using Selva.Schema.Models;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Point = Rhino.Geometry.Point;
@@ -30,6 +33,13 @@ namespace Selva.GH.Features.ComputeIO.Components;
 ///     Paths are resolved cross-platform: backslashes and forward slashes in the relative
 ///     path are normalised to the host separator, so a definition authored on Windows
 ///     resolves correctly on a Linux server and vice versa.
+///
+///     Local testing: the .gh is shared across a company, so it only ever stores the
+///     relative path — absolute paths would break on a colleague's machine. To test a
+///     definition before deploying, a right-click "Pick local file…" menu item points the
+///     component at a real file on this machine. That absolute path is a per-machine
+///     override, never persisted to the .gh. Selva-injected context always wins over it,
+///     so the same definition resolves on the server after upload.
 /// </summary>
 public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParameter
 {
@@ -41,6 +51,10 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
 
     // Server data directory, assigned at solve time (web UI / Rhino.Compute), never persisted.
     private string _serverDataPath;
+
+    // Local-testing override: an absolute path to a real file on this machine, set via the
+    // right-click menu. Never persisted (the .gh is shared) and never wins over Selva context.
+    private string _localFilePath;
 
     public GetServerFileParameter()
         : base("Get Server File", "Get Server File",
@@ -186,6 +200,48 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
         };
     }
 
+    /// <summary>
+    ///     Adds a "Pick local file…" item for testing the definition on this machine before
+    ///     deploying. The chosen absolute path is a per-machine override (never saved to the
+    ///     shared .gh) and is ignored once Selva injects the server data path.
+    /// </summary>
+    public override void AppendAdditionalMenuItems(ToolStripDropDown menu)
+    {
+        base.AppendAdditionalMenuItems(menu);
+
+        Menu_AppendSeparator(menu);
+        Menu_AppendItem(menu, "Pick local file…", OnPickLocalFile);
+
+        if (!string.IsNullOrWhiteSpace(_localFilePath))
+        {
+            Menu_AppendItem(menu, $"Clear local file ({Path.GetFileName(_localFilePath)})", OnClearLocalFile);
+        }
+    }
+
+    private void OnPickLocalFile(object sender, EventArgs e)
+    {
+        var filter = "Supported geometry|" + string.Join(";", AcceptedFileFormats.Values.Select(ext => "*" + ext));
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Pick a local file to test with",
+            Filter = filter + "|All files|*.*",
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog() == DialogResult.OK)
+        {
+            _localFilePath = dialog.FileName;
+            ExpireSolution(true);
+        }
+    }
+
+    private void OnClearLocalFile(object sender, EventArgs e)
+    {
+        _localFilePath = null;
+        ExpireSolution(true);
+    }
+
     protected override void CollectVolatileData_Custom()
     {
         m_data.Clear();
@@ -208,47 +264,77 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
     }
 
     /// <summary>
-    ///     Joins the server base path with the relative path and imports the geometry.
+    ///     Resolves the file to import and outputs its geometry. Resolution priority:
+    ///     <list type="number">
+    ///         <item>Selva-injected server data path joined with the relative path (the real
+    ///             cloud / Rhino.Compute path — always wins when present).</item>
+    ///         <item>A local absolute file set via the right-click menu (local testing only,
+    ///             never persisted to the shared .gh).</item>
+    ///     </list>
     /// </summary>
     private void ResolveAndImport(string basePath, string relativePath)
     {
+        // 1) Selva context: resolve the relative path against the server's data directory.
+        if (!string.IsNullOrWhiteSpace(basePath))
+        {
+            if (string.IsNullOrWhiteSpace(relativePath))
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No relative file path set");
+                return;
+            }
+
+            string resolvedPath;
+            try
+            {
+                resolvedPath = ServerFilePath.Resolve(basePath, relativePath);
+            }
+            catch (ArgumentException ex)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
+                return;
+            }
+
+            if (resolvedPath.Length > MaxPathLength)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Resolved path exceeds the maximum length");
+                return;
+            }
+
+            if (!File.Exists(resolvedPath))
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"File not found on server: {resolvedPath}");
+                return;
+            }
+
+            ImportAndOutputGeometry(FileInputData.FromPath(resolvedPath));
+            return;
+        }
+
+        // 2) Local-testing fallback: a file picked via the right-click menu on this machine.
+        if (!string.IsNullOrWhiteSpace(_localFilePath))
+        {
+            if (!File.Exists(_localFilePath))
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Local file not found: {_localFilePath}");
+                return;
+            }
+
+            ImportAndOutputGeometry(FileInputData.FromPath(_localFilePath));
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                "Using local test file. Selva will resolve the relative path on the server.");
+            return;
+        }
+
+        // Neither a server data path nor a local test file is available.
         if (string.IsNullOrWhiteSpace(relativePath))
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No relative file path set");
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(basePath))
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                "No server data path provided. This component resolves files relative to the server's data directory.");
-            return;
-        }
-
-        string resolvedPath;
-        try
-        {
-            resolvedPath = ServerFilePath.Resolve(basePath, relativePath);
-        }
-        catch (ArgumentException ex)
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
-            return;
-        }
-
-        if (resolvedPath.Length > MaxPathLength)
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Resolved path exceeds the maximum length");
-            return;
-        }
-
-        if (!File.Exists(resolvedPath))
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"File not found on server: {resolvedPath}");
-            return;
-        }
-
-        ImportAndOutputGeometry(FileInputData.FromPath(resolvedPath));
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+            "No server data path provided. Solve over Selva to resolve relative to the server's data " +
+            "directory, or right-click → \"Pick local file…\" to test on this machine.");
     }
 
     /// <summary>
