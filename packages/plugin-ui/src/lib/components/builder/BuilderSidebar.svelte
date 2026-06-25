@@ -118,7 +118,13 @@
 				</Card.Content>
 			</Card.Root>
 
-			<SchemaInfoPanel {schema} {onSchemaChange} bind:open={schemaInfoOpen} />
+			<SchemaInfoPanel
+				{schema}
+				{onSchemaChange}
+				liveInputs={availableInputs}
+				liveOutputs={availableOutputs}
+				bind:open={schemaInfoOpen}
+			/>
 		</div>
 	</ScrollArea>
 </aside>

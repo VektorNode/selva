@@ -1,8 +1,14 @@
 <script lang="ts">
-	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
+	import type {
+		UISchema,
+		ViewerOptions,
+		DiscoveredInput,
+		DiscoveredOutput
+	} from '@selvajs/schemas';
 	import { Card, Input, Textarea, Label, Checkbox, Button, Collapsible, toast } from '@selvajs/ui';
 	import { ChevronDown, Download, Upload } from '@lucide/svelte';
 	import { exportSchemaAsFile, importSchemaFromFile } from '$lib/utils/schema-exporter';
+	import { remapImportedSchema } from '$lib/utils/schema-remap';
 	import SchemaImportDialog from './SchemaImportDialog.svelte';
 	import type { ExportedSchema } from '$lib/utils/schema-exporter';
 
@@ -10,9 +16,17 @@
 		schema: UISchema;
 		open?: boolean;
 		onSchemaChange?: (schema: UISchema) => void;
+		liveInputs?: DiscoveredInput[];
+		liveOutputs?: DiscoveredOutput[];
 	}
 
-	let { schema, open = $bindable(false), onSchemaChange }: SchemaInfoPanelProps = $props();
+	let {
+		schema,
+		open = $bindable(false),
+		onSchemaChange,
+		liveInputs = [],
+		liveOutputs = []
+	}: SchemaInfoPanelProps = $props();
 
 	let fileInput: HTMLInputElement;
 	let showImportDialog = $state(false);
@@ -61,10 +75,26 @@
 	}
 
 	function handleImportConfirm(importedSchema: UISchema) {
-		onSchemaChange?.(importedSchema);
+		// Rebind the imported schema's parameter ids onto the live canvas by nickname.
+		// Without this, the imported ids (from the source document) don't resolve on save
+		// and the plugin purges every input/output as stale.
+		const { schema: remapped, unmatched } = remapImportedSchema(
+			importedSchema,
+			liveInputs,
+			liveOutputs
+		);
+
+		onSchemaChange?.(remapped);
 		showImportDialog = false;
 		pendingImport = null;
-		toast.success('Schema imported successfully');
+
+		if (unmatched.length > 0) {
+			toast.warning(
+				`Imported. ${unmatched.length} parameter${unmatched.length > 1 ? 's' : ''} had no match on the current document and will be dropped on save: ${unmatched.join(', ')}`
+			);
+		} else {
+			toast.success('Schema imported successfully');
+		}
 	}
 
 	function handleImportCancel() {
