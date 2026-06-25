@@ -108,39 +108,88 @@ public class BridgeOrchestrator : IDisposable
     {
         try
         {
-            if (_stateManager.IsSolving)
+            // A solve is running or scheduled-but-not-yet-started: coalesce (latest wins) instead of
+            // dropping. The old drop-and-warn silently lost the final slider value when an update
+            // landed in the ~1 RTT window before the client's solving mirror caught up. The pending
+            // buffer is drained on a fresh UI tick once the in-flight solve ends (see DrainPendingValues).
+            if (_stateManager.IsBusy)
             {
-                Logger.Log("[BridgeOrchestrator] Skipping value update — currently solving.");
-                _ = _webSocketTransport.BroadcastRuntimeMessage("warning",
-                    "Skipping value update — currently solving.");
+                _stateManager.MergePendingValues(values);
                 return;
             }
 
-            var document = _component.OnPingDocument();
-            var schema = _getSchema();
-
-            if (!DocumentGuards.DocumentAndSchemaValid(document, schema, out _))
-            {
-                Logger.Warn("[BridgeOrchestrator] Document or schema invalid, skipping value update.");
-                _ = _webSocketTransport.BroadcastRuntimeMessage("error", "Document or schema invalid.");
-                return;
-            }
-
-            _valueApplicator.ApplyValuesAndSchedule(document, schema, values, (level, msg) =>
-            {
-                _component.AddRuntimeMessage(level, msg);
-
-                if (level == GH_RuntimeMessageLevel.Error || level == GH_RuntimeMessageLevel.Warning)
-                {
-                    _ = _webSocketTransport.BroadcastRuntimeMessage(ConvertMessageLevel(level), msg);
-                }
-            });
+            ApplyValuesAndSchedule(values);
         }
         catch (Exception ex)
         {
             Logger.Error($"[BridgeOrchestrator] Error handling value update: {ex.Message}", ex);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
             _ = _webSocketTransport.BroadcastRuntimeMessage("error", $"Error handling value update: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     Apply a set of values to the live document and schedule a solve. Marks the solve as scheduled
+    ///     (synchronously, before ScheduleSolution's ~10ms defer elapses) so a value update arriving in
+    ///     the schedule→start gap coalesces instead of scheduling a competing solve. Re-reads the current
+    ///     schema each call — it may have changed via a save mid-drag.
+    /// </summary>
+    private void ApplyValuesAndSchedule(Dictionary<string, object> values)
+    {
+        var document = _component.OnPingDocument();
+        var schema = _getSchema();
+
+        if (!DocumentGuards.DocumentAndSchemaValid(document, schema, out _))
+        {
+            Logger.Warn("[BridgeOrchestrator] Document or schema invalid, skipping value update.");
+            _ = _webSocketTransport.BroadcastRuntimeMessage("error", "Document or schema invalid.");
+            return;
+        }
+
+        var updateCount = _valueApplicator.ApplyValuesAndSchedule(document, schema, values, (level, msg) =>
+        {
+            _component.AddRuntimeMessage(level, msg);
+
+            if (level == GH_RuntimeMessageLevel.Error || level == GH_RuntimeMessageLevel.Warning)
+            {
+                _ = _webSocketTransport.BroadcastRuntimeMessage(ConvertMessageLevel(level), msg);
+            }
+        });
+
+        // A non-zero count means a solution was scheduled (ApplyValuesAndSchedule schedules iff at
+        // least one parameter expired). Close the schedule→start window before it opens.
+        if (updateCount > 0)
+        {
+            _stateManager.MarkSolveScheduled();
+        }
+    }
+
+    /// <summary>
+    ///     Apply any values that coalesced while a solve was in flight. Called on a fresh UI tick after
+    ///     SolutionEnd — never inline in the end handler, which is reentrant (it broadcasts outputs,
+    ///     merges bake outputs, etc.). The buffer is taken-and-cleared first so a value changed during
+    ///     the drain solve is captured for the next cycle, not lost.
+    /// </summary>
+    public void DrainPendingValues()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var pending = _stateManager.TakePendingValues();
+        if (pending == null || pending.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            ApplyValuesAndSchedule(pending);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BridgeOrchestrator] Error draining pending values: {ex.Message}", ex);
         }
     }
 

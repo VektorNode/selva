@@ -69,6 +69,8 @@
 		         Link="Linked\InboundMessageParser.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\OutboundEnvelopes.cs"
 		         Link="Linked\OutboundEnvelopes.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\ComponentStateManager.cs"
+		         Link="Linked\ComponentStateManager.cs"/>
 	</ItemGroup>
 
 	<ItemGroup>

@@ -245,6 +245,16 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             }
 
             ClearAllContextualParameters();
+
+            // Apply any value updates that coalesced while this solve was in flight. Posted to a fresh
+            // UI tick rather than run inline: this handler is reentrant (it just broadcast outputs and
+            // merged bake outputs), and draining inline would re-schedule a solve from inside the end of
+            // the current one — under a slider drag that becomes a non-draining loop. By the time the
+            // posted callback runs, the solve has fully ended (IsBusy is false) so the drain schedules cleanly.
+            if (_service.StateManager.HasPendingValues)
+            {
+                RhinoApp.InvokeOnUiThread((Action)(() => _service.BridgeService?.DrainPendingValues()));
+            }
         };
         _onDocumentModified = (s, e) =>
         {
