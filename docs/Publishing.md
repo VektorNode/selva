@@ -56,6 +56,18 @@ The script bumps all four version tags in the csproj, commits, tags `plugin-v<x.
 
 Flags: `--dry-run`, `--no-push`, `--build`, `-y`. Run `pnpm release:plugin --help`.
 
+### Beta (pre-release) plugins
+
+```bash
+pnpm release:plugin minor --beta   # 0.13.0 → 0.14.0-beta.1
+pnpm release:plugin --beta         # 0.14.0-beta.1 → 0.14.0-beta.2 (re-cut same target)
+pnpm release:plugin 0.14.0         # 0.14.0-beta.N → 0.14.0 (promote to stable)
+```
+
+`--beta` produces an `x.y.z-beta.N` version. **Yak treats `-beta.N` as a pre-release**: it's hidden from Rhino's Package Manager and `yak install` unless the user opts in (the "include pre-releases" checkbox, or `yak install Selva --prerelease`). The matching GitHub Release is flagged as a pre-release too, so normal users never see beta builds.
+
+`AssemblyVersion` / `FileVersion` stay numeric (`x.y.z.0`) — .NET rejects a suffix there — while `<Version>` / `<InformationalVersion>` (what yak and users see) carry the full `-beta.N`. Promoting to stable is just a normal release at the target `x.y.z`.
+
 **Never push to Yak locally for a release** — watch the Actions tab instead.
 
 ### Local dry-run

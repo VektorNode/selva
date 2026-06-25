@@ -134,12 +134,19 @@ jobs:
 
       # Attach the same artifacts to a GitHub Release so they're downloadable
       # without a Rhino/yak client. `gh` is preinstalled and uses GITHUB_TOKEN.
+      # A `-beta` tag is flagged as a GitHub pre-release (kept out of "Latest
+      # release"), mirroring how yak hides the pre-release from normal installs.
       - name: Create GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $packages = Get-ChildItem -Path Plugin/Selva.GH/bin/Yak -Recurse -Filter *.yak | ForEach-Object { $_.FullName }
-          gh release create $env:GITHUB_REF_NAME @packages `
-            --title "Selva Plugin $env:GITHUB_REF_NAME" `
-            --generate-notes
+          $ghArgs = @(
+            $env:GITHUB_REF_NAME
+          ) + $packages + @(
+            '--title', "Selva Plugin $env:GITHUB_REF_NAME",
+            '--generate-notes'
+          )
+          if ($env:GITHUB_REF_NAME -match '-beta') { $ghArgs += '--prerelease' }
+          gh release create @ghArgs

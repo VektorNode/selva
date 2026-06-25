@@ -18,6 +18,13 @@
  *   <x.y.z>             set an explicit version
  *
  * Options:
+ *   --beta       cut a pre-release. Produces x.y.z-beta.N: combined with a bump
+ *                arg it targets the next x.y.z and starts at -beta.1; with no bump
+ *                arg on a version that is already -beta.N it increments to N+1.
+ *                Yak treats -beta.N as a pre-release (hidden from normal installs
+ *                unless the user opts into pre-releases). AssemblyVersion /
+ *                FileVersion stay numeric (.NET rejects a suffix) — only <Version>
+ *                and <InformationalVersion> carry the -beta.N.
  *   --build      run `pnpm build:plugin` locally before tagging (verification;
  *                CI builds anyway, so this is opt-in)
  *   --no-push    commit and tag locally, but don't push (you push when ready)
@@ -52,6 +59,9 @@ Usage:
   <x.y.z>              set an explicit version
 
 Options:
+  --beta       cut a pre-release (x.y.z-beta.N). With a bump arg: target the next
+               x.y.z at -beta.1. With no bump arg on an existing -beta.N: ++N.
+               Yak hides pre-releases from normal installs.
   --build      run \`pnpm build:plugin\` locally before tagging (CI builds anyway)
   --no-push    commit and tag locally, but don't push
   --dry-run    print every action without changing anything
@@ -66,6 +76,7 @@ which builds the multi-target .gha/.yak, publishes to Yak, and cuts a Release.`)
 const DRY_RUN = flag('--dry-run');
 const NO_PUSH = flag('--no-push');
 const BUILD = flag('--build');
+const BETA = flag('--beta');
 const ASSUME_YES = flag('--yes') || flag('-y');
 const bumpArg = args.find((a) => !a.startsWith('-'));
 
@@ -104,19 +115,57 @@ function ask(question) {
 	);
 }
 
+// Accepts x.y.z and x.y.z-beta.N. `beta` is null for a stable version, else the
+// numeric pre-release counter.
 function parseVersion(v) {
-	const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(v);
-	if (!m) die(`Version "${v}" is not in x.y.z form.`);
-	return { major: +m[1], minor: +m[2], patch: +m[3] };
+	const m = /^(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/.exec(v);
+	if (!m) die(`Version "${v}" is not in x.y.z or x.y.z-beta.N form.`);
+	return { major: +m[1], minor: +m[2], patch: +m[3], beta: m[4] != null ? +m[4] : null };
 }
 
-function bump(current, kind) {
+// The numeric x.y.z core, dropping any -beta suffix (used for AssemblyVersion /
+// FileVersion, which .NET requires to be purely numeric).
+function coreVersion(v) {
+	const { major, minor, patch } = parseVersion(v);
+	return `${major}.${minor}.${patch}`;
+}
+
+function bumpCore(current, kind) {
 	const { major, minor, patch } = parseVersion(current);
 	if (kind === 'major') return `${major + 1}.0.0`;
 	if (kind === 'minor') return `${major}.${minor + 1}.0`;
 	if (kind === 'patch') return `${major}.${minor}.${patch + 1}`;
-	parseVersion(kind); // explicit version — validate
-	return kind;
+	return coreVersion(kind); // explicit version — validate + strip any suffix
+}
+
+// Stable bump (no --beta): plain x.y.z, exactly as before.
+function bump(current, kind) {
+	const next = bumpCore(current, kind);
+	if (kind !== 'major' && kind !== 'minor' && kind !== 'patch') return kind; // explicit version verbatim
+	return next;
+}
+
+// Pre-release bump (--beta):
+//   - with a bump arg → next core at -beta.1 (e.g. minor on 0.13.0 → 0.14.0-beta.1)
+//   - explicit x.y.z   → that core at -beta.1
+//   - no bump arg, current is already -beta.N → same core, -beta.(N+1)
+//   - no bump arg, current is stable → can't infer a target; caller must pass one
+function bumpBeta(current, kind) {
+	const cur = parseVersion(current);
+	if (kind) {
+		const core =
+			kind === 'major' || kind === 'minor' || kind === 'patch'
+				? bumpCore(current, kind)
+				: coreVersion(kind);
+		return `${core}-beta.1`;
+	}
+	if (cur.beta == null) {
+		die(
+			'--beta with no bump arg needs a current -beta version to increment. ' +
+				'Pass a bump (e.g. `--beta minor`) or an explicit x.y.z to start a new beta line.'
+		);
+	}
+	return `${cur.major}.${cur.minor}.${cur.patch}-beta.${cur.beta + 1}`;
 }
 
 // ============================================================================
@@ -133,14 +182,18 @@ const currentVersion = currentMatch[1].trim();
 // ============================================================================
 
 let targetVersion;
-if (bumpArg) {
-	targetVersion = bump(currentVersion, bumpArg);
+if (BETA && !bumpArg && parseVersion(currentVersion).beta != null) {
+	// Fast path: `--beta` on an existing -beta.N just increments the counter.
+	targetVersion = bumpBeta(currentVersion, null);
+} else if (bumpArg) {
+	targetVersion = BETA ? bumpBeta(currentVersion, bumpArg) : bump(currentVersion, bumpArg);
 } else {
 	info(`Current plugin version: \x1b[1m${currentVersion}\x1b[0m`);
+	const pick = BETA ? bumpBeta : bump;
 	const choice = (
 		await ask(
 			`Bump which part? [${['patch', 'minor', 'major']
-				.map((k) => `${k} → ${bump(currentVersion, k)}`)
+				.map((k) => `${k} → ${pick(currentVersion, k)}`)
 				.join(', ')}] (patch): `
 		)
 	).toLowerCase();
@@ -149,7 +202,7 @@ if (bumpArg) {
 		// allow typing an explicit version at the prompt too
 		parseVersion(kind);
 	}
-	targetVersion = bump(currentVersion, kind);
+	targetVersion = BETA ? bumpBeta(currentVersion, kind) : bump(currentVersion, kind);
 }
 
 if (targetVersion === currentVersion) die(`Target version equals current (${currentVersion}).`);
@@ -217,6 +270,7 @@ info('');
 info(`  Plugin release plan`);
 info(`  ───────────────────`);
 info(`  version : ${currentVersion} → \x1b[1m${targetVersion}\x1b[0m`);
+info(`  channel : ${BETA ? 'beta (pre-release — hidden from normal yak installs)' : 'stable'}`);
 info(`  tag     : ${tag}`);
 info(`  build   : ${BUILD ? 'yes (pnpm build:plugin)' : 'no (CI builds on tag push)'}`);
 info(`  push    : ${NO_PUSH ? 'no (local only)' : 'yes (triggers plugin-release.yml)'}`);
@@ -243,10 +297,14 @@ function replaceTag(text, tag, value) {
 	return text.replace(re, `<${tag}>${value}</${tag}>`);
 }
 
+// AssemblyVersion / FileVersion must be purely numeric (x.y.z.w) — .NET rejects a
+// -beta suffix there — so they take the core; Version / InformationalVersion carry
+// the full string (incl. -beta.N), which is what yak and humans see.
+const numericCore = coreVersion(targetVersion);
 let updated = csproj;
 updated = replaceTag(updated, 'Version', targetVersion);
-updated = replaceTag(updated, 'AssemblyVersion', `${targetVersion}.0`);
-updated = replaceTag(updated, 'FileVersion', `${targetVersion}.0`);
+updated = replaceTag(updated, 'AssemblyVersion', `${numericCore}.0`);
+updated = replaceTag(updated, 'FileVersion', `${numericCore}.0`);
 updated = replaceTag(updated, 'InformationalVersion', targetVersion);
 
 if (DRY_RUN) {
