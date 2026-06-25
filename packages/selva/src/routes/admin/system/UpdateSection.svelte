@@ -14,6 +14,7 @@
 		currentVersion?: string;
 		latestVersion?: string | null;
 		updateAvailable?: boolean;
+		channel?: 'stable' | 'beta';
 		isRunning?: boolean;
 		isRestarting?: boolean;
 		logs?: string;
@@ -25,12 +26,15 @@
 		currentVersion,
 		latestVersion = null,
 		updateAvailable = false,
+		channel = 'stable',
 		isRunning = false,
 		isRestarting = false,
 		logs = '',
 		exitCode = null,
 		onRun
 	}: Props = $props();
+
+	const channelLabel = $derived(channel === 'beta' ? 'beta' : 'stable');
 
 	let logEl = $state<HTMLPreElement>();
 	let showRunConfirm = $state(false);
@@ -115,7 +119,7 @@
 			{/if}
 		</div>
 		<Card.Description
-			>Update @selvajs/* to the latest published release and restart</Card.Description
+			>Update @selvajs/* to the latest <span class="font-medium">{channelLabel}</span> release and restart</Card.Description
 		>
 	</Card.Header>
 	<Card.Content class="space-y-4">
@@ -126,13 +130,14 @@
 			>
 				<ArrowUpCircle class="h-4 w-4 shrink-0" />
 				<span>
-					Update available — <span class="font-mono">v{currentVersion}</span> →
+					{channelLabel} release available — <span class="font-mono">v{currentVersion}</span> →
 					<span class="font-mono">v{latestVersion}</span>
 				</span>
 			</div>
 		{:else if currentVersion && latestVersion}
 			<p class="text-muted-foreground text-sm">
-				You're on the latest release (<span class="font-mono">v{currentVersion}</span>).
+				You're on the latest {channelLabel} release (<span class="font-mono">v{currentVersion}</span
+				>).
 			</p>
 		{/if}
 		<Button onclick={handleRunClick} disabled={isRunning} variant="destructive">
@@ -188,8 +193,8 @@
 		<AlertDialog.Header>
 			<AlertDialog.Title>Run Update?</AlertDialog.Title>
 			<AlertDialog.Description>
-				This will update @selvajs/* to the latest published release and restart the application. The
-				service will be temporarily unavailable.
+				This will update @selvajs/* to the latest {channelLabel} release and restart the application.
+				The service will be temporarily unavailable.
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>

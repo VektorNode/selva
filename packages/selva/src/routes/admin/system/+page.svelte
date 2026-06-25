@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { Card, SectionHeader } from '@selvajs/ui';
 	import UpdateSection from './UpdateSection.svelte';
+	import ChannelSection from './ChannelSection.svelte';
 	import HealthSection from './HealthSection.svelte';
 
 	interface PageData {
 		canManageUpdates: boolean;
 		isInstanceAdmin: boolean;
 		version: string;
+		channel: 'stable' | 'beta';
 		update: { latest: string | null; updateAvailable: boolean };
 		flags: {
 			ALLOW_CROSS_ORG_PUBLIC: boolean;
@@ -466,10 +468,14 @@
 	{/if}
 
 	{#if data.canManageUpdates}
+		{#key data.channel}
+			<ChannelSection channel={data.channel} disabled={updateRunning} />
+		{/key}
 		<UpdateSection
 			currentVersion={data.version}
 			latestVersion={data.update.latest}
 			updateAvailable={data.update.updateAvailable}
+			channel={data.channel}
 			isRunning={updateRunning}
 			isRestarting={updateRestarting}
 			logs={updateLogs}

@@ -40,6 +40,17 @@ git push --follow-tags
 
 Auth is GitHub→npm **OIDC** (`id-token: write`). There is **no `NPM_TOKEN`** — setting one would break publishing. Each published package needs its own Trusted Publisher entry at npmjs.com → Settings → Trusted Publisher (repo: `VektorNode/selva`, workflow: `release.yml`).
 
+## Release channel (admin opt-in to beta)
+
+A self-hosted instance tracks one **release channel**, chosen in **Admin → System → Release channel**:
+
+- **Stable** (default) — installs the npm `latest` dist-tag.
+- **Beta** — installs the npm `beta` dist-tag (the `x.y.z-beta.N` pre-releases published from the `beta` branch above).
+
+The choice is persisted to `selva-channel.json` in the deployment dir (gitignored, alongside `ecosystem.config.cjs`) so **both** the app and the update runner read it. Switching the channel is **switch-only** — it doesn't update anything; the operator then runs **Application Update**, which installs `@selvajs/{cli,selva}@<channel-tag>`.
+
+**Reverting beta → stable** works the same way: switch to Stable, then Update. The runner `npm install`s the exact stable version pinned to `@latest`, which correctly **downgrades** from the beta you were on (a plain `npm update` can't move backwards — this is why the runner installs a tagged version rather than running `update`).
+
 ## Plugin releases (Yak)
 
 The plugin has its own version line in `Plugin/Selva.GH/Selva.GH.csproj`, independent of npm. Releases are triggered by a `plugin-v*` tag.

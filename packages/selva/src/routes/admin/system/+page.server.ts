@@ -1,6 +1,9 @@
+import { fail } from '@sveltejs/kit';
 import { hasPermission } from '@selvajs/platform';
 import { flag } from '$lib/server/providers.server';
 import { checkForUpdate } from '$lib/server/updateCheck.server';
+import { readChannel, writeChannel } from '$lib/server/releaseChannel.server';
+import { requirePermission } from '$lib/server/access.server';
 import {
 	MAX_SOLVE_DURATION_MS,
 	RATE_LIMIT_WINDOW_MS,
@@ -14,7 +17,7 @@ import {
 	DEFINITION_CACHE_TTL_MS
 } from '$lib/server/computeLimits';
 import pkg from '../../../../package.json';
-import type { PageServerLoad } from './$types';
+import type { Actions, PageServerLoad } from './$types';
 
 /**
  * System settings host the Update runner (`manage_updates`). Other panels
@@ -57,11 +60,45 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 		DEFINITION_CACHE_TTL_MS
 	};
 
+	// The persisted release channel drives which dist-tag the update check (and
+	// the runner) targets. Read it regardless of permission so the panel can show
+	// it; only managers can change it via the action below.
+	const channel = readChannel();
+
 	// Only operators who can run updates need the registry check — skip the
 	// npm round-trip for everyone else.
 	const update = canManageUpdates
-		? await checkForUpdate(fetch)
-		: { current: null, latest: null, updateAvailable: false };
+		? await checkForUpdate(fetch, channel)
+		: { channel, current: null, latest: null, updateAvailable: false };
 
-	return { canManageUpdates, isInstanceAdmin, flags, limits, version: pkg.version, update };
+	return {
+		canManageUpdates,
+		isInstanceAdmin,
+		flags,
+		limits,
+		version: pkg.version,
+		channel,
+		update
+	};
+};
+
+export const actions: Actions = {
+	// Persist the release channel. Switch-only: this does NOT trigger an update —
+	// the operator then uses the Update runner to install from the chosen channel.
+	setChannel: async ({ request, locals }) => {
+		requirePermission(locals, 'manage_updates');
+		const data = await request.formData();
+		const channel = data.get('channel');
+		if (channel !== 'stable' && channel !== 'beta') {
+			return fail(400, { error: 'Invalid channel.' });
+		}
+		try {
+			writeChannel(channel);
+		} catch (e) {
+			return fail(500, {
+				error: `Could not persist the channel: ${e instanceof Error ? e.message : 'unknown error'}`
+			});
+		}
+		return { channel };
+	}
 };

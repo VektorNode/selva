@@ -21,6 +21,9 @@ Thumbs.db
 # Deployment-specific config (edit example.* files instead, setup.sh copies them)
 ecosystem.config.cjs
 
+# Release channel selection (written at runtime by the admin System page)
+selva-channel.json
+
 # Grasshopper definitions (keep private, not tracked)
 *.gh
 *.ghx

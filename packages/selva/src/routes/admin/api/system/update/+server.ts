@@ -6,6 +6,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requirePermission } from '$lib/server/access.server';
 import { checkForUpdate } from '$lib/server/updateCheck.server';
+import { readChannel, channelTag, type ReleaseChannel } from '$lib/server/releaseChannel.server';
 
 // Where the bash wrapper mirrors all script output. The SSE stream dies the
 // moment `pm2 stop selva-compute` succeeds (selva-compute IS the SSE server),
@@ -124,18 +125,26 @@ exit 0
 function buildNpmRunnerScript(
 	npmArgs: string[],
 	versionBefore: string | undefined,
-	ecosystemPath: string
+	ecosystemPath: string,
+	tag: string
 ): string {
 	const npmCommand = ['npm', ...npmArgs].map(shellQuote).join(' ');
 	// Empty string when versionBefore is undefined — bash sees `BEFORE=""`
 	// and skips the rollback path (you can't roll back to nothing).
 	const before = shellQuote(versionBefore ?? '');
 	const ecosystem = shellQuote(ecosystemPath);
+	// The npm dist-tag the chosen channel resolves to (`latest` / `beta`). The
+	// pre-flight and no-change warning query this tag, so they don't misfire on
+	// a beta channel (where the channel's published version is a pre-release the
+	// default `latest` query would never see) or on a revert (where the target
+	// stable version is OLDER than the installed beta).
+	const distTag = shellQuote(tag);
 
 	return `#!/bin/bash
 set -o pipefail
 BEFORE=${before}
 ECOSYSTEM=${ecosystem}
+TAG=${distTag}
 
 # Last-resort safety net. If the script exits with the app NOT online for
 # any reason (crash, kill -9, network blip, npm hang past timeout), try to
@@ -164,16 +173,18 @@ trap on_exit EXIT
 # Without this, clicking "Update" on an already-current instance triggered
 # a full stop/install/start cycle and a downtime window for no reason. Now
 # we just check the registry first.
-echo "[STEP] Checking npm registry for available updates"
-LATEST=$(npm view @selvajs/selva version --silent 2>/dev/null || echo "")
+echo "[STEP] Checking npm registry for the '$TAG' channel version"
+LATEST=$(npm view "@selvajs/selva@$TAG" version --silent 2>/dev/null || echo "")
 if [ -z "$LATEST" ]; then
   echo "[WARN] Could not query npm registry — proceeding with update attempt anyway"
 elif [ -n "$BEFORE" ] && [ "$LATEST" = "$BEFORE" ]; then
-  echo "[INFO] Already on the latest version ($BEFORE)"
+  echo "[INFO] Already on the '$TAG' channel version ($BEFORE)"
   echo "[DONE] Nothing to do"
   exit 0
 else
-  echo "[INFO] Available: $BEFORE → $LATEST"
+  # May be a forward update OR a revert (target older than installed) — either
+  # way the installed version differs from what this channel publishes.
+  echo "[INFO] Target ($TAG): $BEFORE → $LATEST"
 fi
 
 # ---------------------------------------------------------------------------
@@ -328,21 +339,32 @@ function isDeploymentDir(dir: string): boolean {
 // All @selvajs/* packages move together — fixing a provider-only bug without
 // bumping the runtime is a supported flow.
 //
-// --prefer-online forces npm to revalidate cached packuments against the
-// registry. Without it, npm's packument cache (5+ min TTL) can silently no-op
-// an update right after publish. See docs/Hotfix-CLI-Runtime.md
+// We `npm install` the packages pinned to the channel's dist-tag rather than
+// `npm update`, because `update` only ever moves FORWARD within the installed
+// semver range — it can't switch dist-tags or DOWNGRADE. Pinning to @latest /
+// @beta makes one command serve every transition: forward stable bumps,
+// beta→newer-beta, and the revert case (beta→stable lands on an older version).
+//
+// --save persists the resolved version into package.json so the next plain
+// install is reproducible; --prefer-online forces npm to revalidate cached
+// packuments against the registry. Without it, npm's packument cache (5+ min
+// TTL) can silently no-op right after publish. See docs/Hotfix-CLI-Runtime.md
 // "stale-packument-cache trap".
-const NPM_UPDATE_ARGS = ['update', '--save', '--prefer-online', '@selvajs/cli', '@selvajs/selva'];
+function npmInstallArgs(channel: ReleaseChannel): string[] {
+	const tag = channelTag(channel);
+	return ['install', '--save', '--prefer-online', `@selvajs/cli@${tag}`, `@selvajs/selva@${tag}`];
+}
 
-function detectUpdatePlan(): UpdatePlan | null {
+function detectUpdatePlan(channel: ReleaseChannel): UpdatePlan | null {
+	const args = npmInstallArgs(channel);
 	if (env.INSTALL_DIR && isDeploymentDir(env.INSTALL_DIR)) {
-		return { cwd: env.INSTALL_DIR, args: NPM_UPDATE_ARGS };
+		return { cwd: env.INSTALL_DIR, args };
 	}
 
 	let dir = process.cwd();
 	for (let i = 0; i < 6; i++) {
 		if (isDeploymentDir(dir)) {
-			return { cwd: dir, args: NPM_UPDATE_ARGS };
+			return { cwd: dir, args };
 		}
 		const parent = join(dir, '..');
 		if (parent === dir) break;
@@ -359,7 +381,8 @@ function detectUpdatePlan(): UpdatePlan | null {
 export const POST: RequestHandler = async ({ locals }) => {
 	requirePermission(locals, 'instance_admin');
 
-	const plan = detectUpdatePlan();
+	const channel = readChannel();
+	const plan = detectUpdatePlan(channel);
 	if (!plan) {
 		return new Response(
 			JSON.stringify({
@@ -393,7 +416,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 				// the frontend's blackout-recovery file fetch would clobber
 				// these lines when it replaces its buffer with the file content.
 				const prelude = [
-					`[INFO] Updating deployment (cwd: ${plan.cwd})`,
+					`[INFO] Updating deployment (cwd: ${plan.cwd}, channel: ${channel})`,
 					...(versionBefore ? [`[INFO] Current @selvajs/selva: ${versionBefore}`] : [])
 				];
 
@@ -410,7 +433,8 @@ export const POST: RequestHandler = async ({ locals }) => {
 				const runnerScript = buildNpmRunnerScript(
 					plan.args,
 					versionBefore,
-					join(plan.cwd, 'ecosystem.config.cjs')
+					join(plan.cwd, 'ecosystem.config.cjs'),
+					channelTag(channel)
 				);
 				const cmd = 'bash';
 				const args = ['-c', buildLauncher(runnerScript, prelude)];
@@ -539,7 +563,9 @@ export const GET: RequestHandler = async ({ locals, url, fetch }) => {
 	requirePermission(locals, 'instance_admin');
 
 	if (url.searchParams.get('check') !== null) {
-		return json(await checkForUpdate(fetch), { headers: { 'Cache-Control': 'no-store' } });
+		return json(await checkForUpdate(fetch, readChannel()), {
+			headers: { 'Cache-Control': 'no-store' }
+		});
 	}
 
 	let body = '';
