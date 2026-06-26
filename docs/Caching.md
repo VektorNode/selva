@@ -15,7 +15,7 @@ it costs.
 | --- | --------------------------------- | ---------------------------------- | --------------------------------- | --------- |
 | 1   | In-process response cache         | the network call **and** the solve | Selva's server process (RAM)      | always on |
 | 2   | Pointer reuse                     | re-uploading the `.gh` binary      | Selva ↔ Rhino.Compute             | on        |
-| 3   | Server solve cache (`cachesolve`) | the solve                          | Rhino.Compute server (RAM + disk) | off       |
+| 3   | Server solve cache (`cachesolve`) | the solve                          | Rhino.Compute server (RAM + disk) | on        |
 
 Picture of one solve request:
 
@@ -76,14 +76,15 @@ inputs, and hand back a stored result on an identical repeat.
 
 ## Which should I turn on?
 
-- **Single Selva instance, rarely restarted:** the defaults are fine. Cache 1
-  already covers repeated identical solves; cache 3 adds little.
-- **Multiple instances, or restarts often:** also turn on cache 3
-  (`COMPUTE_SERVER_CACHESOLVE=true`). Then a cold or different instance still gets
-  a server-side hit instead of re-solving from scratch.
-- **Big definitions / lots of slider scrubbing:** keep pointer reuse (cache 2) on
-  — it's the one that helps here. The result caches won't, because the inputs
-  keep changing.
+- **Defaults (all on except none):** caches 1, 2 and 3 are on out of the box —
+  fine for most setups. Identical re-solves hit cache 1 (or cache 3 across
+  instances / after a restart); big definitions benefit from pointer reuse.
+- **Compute server is memory-constrained, or definitions emit large outputs:**
+  consider `COMPUTE_SERVER_CACHESOLVE=false` — cache 3's stored results live in the
+  server's memory + disk, and that's the heaviest cost of the three.
+- **Big definitions / lots of slider scrubbing:** pointer reuse (cache 2) is the
+  one that helps — keep it on. The result caches won't, because the inputs keep
+  changing.
 - **Pointing at a Rhino.Compute server you don't control:** set
   `COMPUTE_REUSE_DEFINITION_CACHE=false` to be safe (see cache 2's safety note).
 
@@ -101,7 +102,7 @@ they're applied in
 | Setting                          | Cache | Default | What it does                                             |
 | -------------------------------- | ----- | ------- | -------------------------------------------------------- |
 | `COMPUTE_REUSE_DEFINITION_CACHE` | 2     | `true`  | Send a pointer instead of re-uploading the `.gh` binary. |
-| `COMPUTE_SERVER_CACHESOLVE`      | 3     | `false` | Let Rhino.Compute cache and return solve results.        |
+| `COMPUTE_SERVER_CACHESOLVE`      | 3     | `true`  | Let Rhino.Compute cache and return solve results.        |
 
 Cache 1 (the in-process response cache) has **no env knob** — it's always on. Its
 size and lifetime are hardcoded in `+server.ts` (`cache: { maxEntries: 20, ttlMs:

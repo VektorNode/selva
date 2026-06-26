@@ -156,6 +156,18 @@ export const COMPUTE_REUSE_DEFINITION_CACHE = readBool('COMPUTE_REUSE_DEFINITION
 // restarts and is shared across instances.
 //
 // Only helps IDENTICAL re-solves (same definition AND same inputs) — a changed
-// slider is always a miss. Default off: it's a pure win for shared/identical
-// configurations but adds server memory/disk pressure, so opt in per deployment.
-export const COMPUTE_SERVER_CACHESOLVE = readBool('COMPUTE_SERVER_CACHESOLVE', false);
+// slider is always a miss. Default ON: identical re-solves return instantly and
+// survive Selva restarts / span instances. Set COMPUTE_SERVER_CACHESOLVE=false if
+// the compute server is memory-constrained or your definitions emit large outputs
+// (the cached results live in the server's memory + disk).
+export const COMPUTE_SERVER_CACHESOLVE = readBool('COMPUTE_SERVER_CACHESOLVE', true);
+
+// Opt-in: also cache solves that reported Grasshopper errors. By default the
+// compute server never caches an errored solve (an error usually means a bad
+// result), so a definition that errors re-solves every time. But many definitions
+// throw GH errors BY DESIGN (a guarded Python component, a filtered/pruned branch)
+// while still producing correct geometry — for those, caching the errored result
+// is correct and a big win. Default OFF (conservative): only enable when your
+// definitions' errors are known to be benign. Requires COMPUTE_SERVER_CACHESOLVE
+// and a compute server that honors the flag (VektorNode fork).
+export const COMPUTE_CACHE_ERRORED_SOLVES = readBool('COMPUTE_CACHE_ERRORED_SOLVES', false);
