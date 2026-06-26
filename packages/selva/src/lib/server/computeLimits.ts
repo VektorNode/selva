@@ -34,6 +34,21 @@ function readPositiveInt(name: string, fallback: number): number {
 	return Math.floor(parsed);
 }
 
+/**
+ * Read a boolean env flag. Accepts `true/1/yes/on` (case-insensitive) as true and
+ * `false/0/no/off` as false; any other / absent value falls back. Uses the same
+ * dynamic private env as {@link readPositiveInt} so `.env` works under `vite dev`.
+ */
+function readBool(name: string, fallback: boolean): boolean {
+	const raw = env[name];
+	if (raw == null || raw === '') return fallback;
+	const v = raw.trim().toLowerCase();
+	if (v === 'true' || v === '1' || v === 'yes' || v === 'on') return true;
+	if (v === 'false' || v === '0' || v === 'no' || v === 'off') return false;
+	console.warn(`[computeLimits] Invalid ${name}=${raw}, falling back to ${fallback}`);
+	return fallback;
+}
+
 const MB = 1024 * 1024;
 
 // ============================================================================
@@ -111,3 +126,36 @@ export const REMOTE_DEFINITION_FETCH_TIMEOUT_MS = readPositiveInt(
 
 // In-process cache for remote-fetched .gh bytes.
 export const DEFINITION_CACHE_TTL_MS = readPositiveInt('DEFINITION_CACHE_TTL_MS', 5 * 60 * 1000);
+
+// ============================================================================
+// Server definition-cache reuse (pointer instead of re-uploading the binary)
+// ============================================================================
+// When on, a definition is uploaded to Rhino.Compute once; later solves of the
+// same definition send only the server's cache-key pointer, skipping the
+// (multi-MB) base64 re-upload. On a stale-pointer miss the client
+// (@selvajs/compute) transparently re-uploads.
+//
+// SAFETY: the transparent miss-recovery only works on a Rhino.Compute server that
+// signals the miss — either the VektorNode fork's `code: "definition_not_cached"`
+// or a fork that throws "Unable to load grasshopper definition". A server that
+// instead returns an empty 200 on a stale pointer would silently yield EMPTY
+// geometry after a compute restart / on a fresh instance. Leave this ON only when
+// you control the compute server and know its miss behavior; set
+// COMPUTE_REUSE_DEFINITION_CACHE=false for an unknown / standard rhino.compute.
+export const COMPUTE_REUSE_DEFINITION_CACHE = readBool('COMPUTE_REUSE_DEFINITION_CACHE', true);
+
+// ============================================================================
+// Server-side solve-result cache (`cachesolve`)
+// ============================================================================
+// When on, Selva asks Rhino.Compute to cache solve RESULTS keyed on the full
+// request (definition + inputs), and to return a cached result on an identical
+// repeat — skipping the actual Grasshopper solve. Distinct from the two layers
+// above: the in-process response cache (per Selva instance, 5-min TTL) and
+// pointer reuse (skips re-upload, not the solve). This one is server-wide
+// (memory + disk, LRU-evicted under memory pressure) so it survives Selva
+// restarts and is shared across instances.
+//
+// Only helps IDENTICAL re-solves (same definition AND same inputs) — a changed
+// slider is always a miss. Default off: it's a pure win for shared/identical
+// configurations but adds server memory/disk pressure, so opt in per deployment.
+export const COMPUTE_SERVER_CACHESOLVE = readBool('COMPUTE_SERVER_CACHESOLVE', false);

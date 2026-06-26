@@ -18,6 +18,7 @@
 - **[GCE-Linux.md](./deployment/GCE-Linux.md)** — Linux VM deploy behind Caddy
 - **[Caddyfile.example](./deployment/Caddyfile.example)** — Reference Caddy config
 - **[RhinoCompute.md](./RhinoCompute.md)** — Set up the Rhino.Compute server
+- **[Caching.md](./Caching.md)** — The three solve caches, their settings, and costs
 
 ## Architecture
 
