@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -30,7 +31,11 @@ public static class SchemaHash
     private static readonly JsonSerializerSettings HashSerializerSettings = new JsonSerializerSettings
     {
         NullValueHandling = NullValueHandling.Ignore,
-        DefaultValueHandling = DefaultValueHandling.Ignore
+        DefaultValueHandling = DefaultValueHandling.Ignore,
+        // Newtonsoft has no built-in converter for System.Drawing.Color and serializes it as a
+        // POCO — which on Mono/macOS yields a null property name and throws ArgumentNullException
+        // ('key'). Any stray Color in the schema must serialize to a hex string instead.
+        Converters = { new ColorHexConverter() }
     };
 
     public static string Compute(UISchema schema)
@@ -54,6 +59,25 @@ public static class SchemaHash
         var sb = new StringBuilder(bytes.Length * 2);
         foreach (var b in bytes) sb.Append(b.ToString("x2"));
         return sb.ToString();
+    }
+
+    /// <summary>
+    ///     Serializes System.Drawing.Color as a hex string (e.g. "#FF5733"). Read-only: the hash
+    ///     path never deserializes. Guards against Newtonsoft's default Color handling, which throws
+    ///     a null-key ArgumentNullException on Mono/macOS.
+    /// </summary>
+    private sealed class ColorHexConverter : JsonConverter<Color>
+    {
+        public override void WriteJson(JsonWriter writer, Color value, JsonSerializer serializer)
+        {
+            writer.WriteValue(ColorTranslator.ToHtml(value));
+        }
+
+        public override Color ReadJson(JsonReader reader, Type objectType, Color existingValue,
+            bool hasExistingValue, JsonSerializer serializer)
+        {
+            throw new NotSupportedException("ColorHexConverter is serialize-only.");
+        }
     }
 
     private static JToken SortJson(JToken token)

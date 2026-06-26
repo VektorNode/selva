@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Reflection;
 using Grasshopper;
@@ -387,7 +388,12 @@ public class SchemaSynchronizer
         }
 
         // TODO: properly handle tree inputs (not a priority for now)
-        input.Default = ExtractFirstScriptVariable(ghParam);
+        var raw = ExtractFirstScriptVariable(ghParam);
+
+        // GH_Colour.ScriptVariable() is a System.Drawing.Color, which Newtonsoft cannot
+        // serialize cleanly (throws ArgumentNullException 'key' on Mono/macOS). Emit a hex
+        // string instead — symmetric with how GetColorParameter parses hex on the way in.
+        input.Default = raw is Color color ? ColorTranslator.ToHtml(color) : raw;
     }
 
     /// <summary>
