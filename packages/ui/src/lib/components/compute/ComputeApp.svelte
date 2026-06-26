@@ -150,7 +150,7 @@
 		});
 	});
 
-	function handleValueChange(id: string, val: unknown, forceSolve?: boolean) {
+	function handleValueChange(id: string, val: unknown, forceSolve = false) {
 		session.setValue(id, val, forceSolve);
 	}
 

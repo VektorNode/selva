@@ -57,7 +57,7 @@
 		}
 	}
 
-	function formatExpiry(iso?: string | null) {
+	function formatExpiry(iso: string | null = null) {
 		if (!iso) return 'Never';
 		const date = new Date(iso);
 		const now = new Date();

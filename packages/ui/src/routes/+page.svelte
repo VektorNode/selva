@@ -46,7 +46,7 @@
 	let hasPendingChanges = $state(false);
 	let isViewerFullscreen = $state(false);
 
-	function handleValueChange(id: string, val: SupportedTypes, forceSolve?: boolean) {
+	function handleValueChange(id: string, val: SupportedTypes, forceSolve = false) {
 		values[id] = val;
 		if (schema.instanceSolve === false && !forceSolve) {
 			hasPendingChanges = true;
