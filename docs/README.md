@@ -26,6 +26,11 @@
 - **[ADR 0002 — Grasshopper Bridge Seam](./adr/0002-grasshopper-bridge-seam.md)**
 - **[ADR 0003 — Large File Output Streaming](./adr/0003-large-file-output-streaming.md)**
 
+## Plans
+
+- **[Solve / Input Race Conditions](./plans/solve-input-race-conditions.md)** — Fixing lost-update and double-solve bugs in the GH ↔ web bridge
+- **[Mesh Texture Support](./plans/mesh-texture-support.md)** — Optional UV chunk in the binary mesh format for textured display
+
 ## Release Management
 
 - **[Publishing.md](./Publishing.md)** — npm releases (Changesets) and Grasshopper plugin (Yak)
