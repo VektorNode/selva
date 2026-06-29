@@ -7,7 +7,7 @@ project_id = "selva-supabase-provider"
 
 [api]
 enabled = true
-port = 54321
+port = 54421
 # Exposed REST schemas. `selva` (where all Selva tables live, isolated from a
 # consuming app's `public`) is intentionally NOT listed here: PostgREST loads
 # this config at stack boot, *before* migrations run, so naming a not-yet-created
@@ -20,8 +20,8 @@ extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
 [db]
-port = 54322
-shadow_port = 54320
+port = 54422
+shadow_port = 54420
 major_version = 15
 
 [db.pooler]
@@ -33,11 +33,11 @@ sql_paths = ["./seed.sql"]
 
 [studio]
 enabled = true
-port = 54323
+port = 54423
 
 [inbucket]
 enabled = true
-port = 54324
+port = 54424
 
 [storage]
 enabled = true
@@ -45,7 +45,7 @@ file_size_limit = "50MiB"
 
 [auth]
 enabled = true
-site_url = "http://127.0.0.1:54321"
+site_url = "http://127.0.0.1:54421"
 additional_redirect_urls = ["http://127.0.0.1:5173"]
 jwt_expiry = 3600
 enable_signup = true

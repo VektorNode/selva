@@ -11,6 +11,7 @@
  */
 
 import { vi } from 'vitest';
+import { NoopSolveMetricSink } from '@selvajs/platform';
 
 vi.mock('$lib/server/providers.server', async () => {
 	const { currentTestProviders } = await import('./test-providers.js');
@@ -43,6 +44,9 @@ vi.mock('$lib/server/providers.server', async () => {
 		getInviteStore: () => currentTestProviders().config.data.invites,
 		getPermissionStore: () => currentTestProviders().config.data.permissions,
 		getPlatformProjectGrantStore: () => currentTestProviders().config.data.platformProjectGrants,
-		getAuditQuery: () => currentTestProviders().config.data.auditQuery ?? null
+		getAuditQuery: () => currentTestProviders().config.data.auditQuery ?? null,
+		getSolveMetricSink: () =>
+			(currentTestProviders().config.data as { solveMetrics?: unknown }).solveMetrics ??
+			new NoopSolveMetricSink()
 	};
 });
