@@ -17,91 +17,67 @@ using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
 
-namespace Selva.GH.Features.Display.Components;
+namespace Selva.GH.Features.Display.OBSOLETE;
 
-/// <summary>
-///     One input branch's worth of display data: everything needed to build a single
-///     <see cref="DisplayBatch" />, tagged with the Grasshopper path it came from. The component
-///     emits one batch per branch onto its matching output path, so the output tree mirrors the
-///     input tree (Grasshopper-native behaviour) instead of flattening everything into one item.
-/// </summary>
-public sealed class BranchResult
+// Result of the single background task: all items batched together.
+public sealed class SolveResult_V0_14_0
 {
-    public BranchResult(GH_Path path)
+    public SolveResult_V0_14_0(List<Mesh> meshes, List<string> names, List<string> layers,
+        List<Dictionary<string, string>> metadata, List<ThreeMaterial> materials,
+        List<DisplayItem> items, List<Curve> previewCurves, List<Point3d> previewPoints,
+        int skipped = 0)
     {
-        Path = path;
-    }
-
-    public GH_Path Path { get; }
-
-    public List<float[]> MeshVertices { get; } = new List<float[]>();
-    public List<int[]> MeshFaces { get; } = new List<int[]>();
-    public List<string> Names { get; } = new List<string>();
-    public List<string> Layers { get; } = new List<string>();
-    public List<Dictionary<string, string>> Metadata { get; } = new List<Dictionary<string, string>>();
-    public List<ThreeMaterial> Materials { get; } = new List<ThreeMaterial>();
-
-    /// <summary>Non-mesh display items (curves, points) for this branch's batch.</summary>
-    public List<DisplayItem> Items { get; } = new List<DisplayItem>();
-
-    public int Count => MeshVertices.Count + Items.Count;
-}
-
-// Result of the single background task: one BranchResult per input branch, plus the global viewport
-// preview lists (drawn across all branches) and the total skipped count.
-public sealed class SolveResult
-{
-    public SolveResult(List<BranchResult> branches, List<Mesh> previewMeshes,
-        List<ThreeMaterial> previewMaterials, List<Curve> previewCurves, List<Color> curveColors,
-        List<Point3d> previewPoints, List<Color> pointColors, int skipped = 0)
-    {
-        Branches = branches;
-        PreviewMeshes = previewMeshes;
-        PreviewMaterials = previewMaterials;
+        Meshes = meshes;
+        Names = names;
+        Layers = layers;
+        Metadata = metadata;
+        Materials = materials;
+        Items = items;
         PreviewCurves = previewCurves;
-        CurveColors = curveColors;
         PreviewPoints = previewPoints;
-        PointColors = pointColors;
         Skipped = skipped;
     }
 
-    /// <summary>One batch's worth of data per input branch, in tree order.</summary>
-    public List<BranchResult> Branches { get; }
+    public List<Mesh> Meshes { get; }
+    public List<string> Names { get; }
+    public List<string> Layers { get; }
+    public List<Dictionary<string, string>> Metadata { get; }
+    public List<ThreeMaterial> Materials { get; }
 
-    // Viewport preview spans every branch (it's one component drawing all its geometry), so these are
-    // flat lists gathered across branches, aligned 1:1 within each kind.
-    public List<Mesh> PreviewMeshes { get; }
-    public List<ThreeMaterial> PreviewMaterials { get; }
+    /// <summary>Non-mesh display items (curves, points) ready to attach to the batch.</summary>
+    public List<DisplayItem> Items { get; }
+
+    /// <summary>Original Rhino curves kept for viewport preview (the JSON in Items isn't drawable).</summary>
     public List<Curve> PreviewCurves { get; }
-    public List<Color> CurveColors { get; }
+
+    /// <summary>Original Rhino points kept for viewport preview.</summary>
     public List<Point3d> PreviewPoints { get; }
-    public List<Color> PointColors { get; }
 
     public int Skipped { get; }
 
-    public int Count => Branches.Sum(b => b.Count);
+    public int Count => Meshes.Count + Items.Count;
 }
 
 /// <summary>
-///     Component that converts geometry to a WebDisplay output, one batch per input branch.
-///     Reads all inputs as trees so SolveInstance is called exactly once, queuing a single
-///     background task; the output tree mirrors the input tree. Viewport preview is built in
-///     AfterSolveInstance.
+///     Obsolete WebDisplay component (until v0.14.0). Replaced by the version that maps each
+///     Grasshopper branch to its own scene-manager group when no explicit Layer is provided.
+///     This version flattened every branch into a single group ("Default" when no layer set).
 /// </summary>
-public class WebDisplay : GH_TaskCapableComponent<SolveResult>
+public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveResult_V0_14_0>
 {
     private BoundingBox _previewBB;
     private List<GH_CustomPreviewItem> _previewItems;
     private List<(Curve curve, Color color)> _previewCurves;
     private List<(Point3d point, Color color)> _previewPoints;
 
-    public WebDisplay()
+    public OBSOLETE_WebDisplay_UntilV0_14_0()
         : base("Display", "D", "Converts geometry to display file", "Selva", "Display")
     {
     }
 
     protected override Bitmap Icon => Resources.WebDisplay;
-    public override Guid ComponentGuid => new Guid("CEC76466-37FD-4B1B-8C7F-71E5C1FDBA14");
+    public override Guid ComponentGuid => new Guid("4F7A9C2E-1B3D-4E8F-A6C0-9D2E5B7F1A4C");
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
     public override BoundingBox ClippingBox => _previewBB;
     public override bool IsPreviewCapable => true;
 
@@ -139,9 +115,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddParameter(new Param_WebDisplay("Web Display", "WD",
-            "Geometry data for web display, one per input branch (output tree mirrors the input tree)",
-            "Selva", "Display", GH_ParamAccess.tree));
+        pManager.AddParameter(new Param_WebDisplay("Web Display", "WD", "Geometry data for web display", "Selva",
+            "Display", GH_ParamAccess.item));
     }
 
 
@@ -189,39 +164,27 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 $"{result.Skipped} item(s) could not be displayed and were skipped");
         }
 
-        // Build one batch per input branch and emit them onto their matching output paths, so the
-        // output tree mirrors the input tree. Each batch's vertex/face arrays were already extracted
-        // in the parallel pass, so the array overload keeps this step off the per-vertex copy path.
-        var output = new GH_Structure<WebDisplayGoo>();
-        foreach (var b in result.Branches)
+        // Meshes go through the binary blob path; curves/points ride as JSON items. CreateBatch
+        // always emits a valid (possibly empty) blob, so an items-only batch is well-formed.
+        var batch = MeshBatchProcessor.CreateBatch(
+            result.Meshes, result.Names, result.Materials, result.Metadata,
+            result.Layers, componentId);
+        if (result.Items.Count > 0)
         {
-            if (b.Count == 0)
-            {
-                continue;
-            }
-
-            var batch = MeshBatchProcessor.CreateBatch(
-                b.MeshVertices, b.MeshFaces, b.Names, b.Materials, b.Metadata, b.Layers, componentId);
-            if (b.Items.Count > 0)
-            {
-                batch.Items = b.Items;
-            }
-
-            output.Append(new WebDisplayGoo(batch), b.Path);
+            batch.Items = result.Items;
         }
 
-        DA.SetDataTree(0, output);
+        DA.SetData(0, new WebDisplayGoo(batch));
 
-        // Build preview items on main thread (Rhino display API requirement). Preview spans every
-        // branch — it's one component drawing all of its geometry, regardless of tree structure.
-        _previewItems = new List<GH_CustomPreviewItem>(result.PreviewMeshes.Count);
+        // Build preview items on main thread (Rhino display API requirement).
+        _previewItems = new List<GH_CustomPreviewItem>(result.Meshes.Count);
         _previewBB = BoundingBox.Empty;
         var matCache = new Dictionary<uint, DisplayMaterial>();
 
-        for (var i = 0; i < result.PreviewMeshes.Count; i++)
+        for (var i = 0; i < result.Meshes.Count; i++)
         {
-            var mesh = result.PreviewMeshes[i];
-            var mat = result.PreviewMaterials[i];
+            var mesh = result.Meshes[i];
+            var mat = result.Materials[i];
 
             var ghMat = new GH_Material(mat.Color);
             var renderMat = ghMat.MaterialBestGuess();
@@ -252,17 +215,43 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         _previewCurves = new List<(Curve, Color)>(result.PreviewCurves.Count);
         for (var i = 0; i < result.PreviewCurves.Count; i++)
         {
-            _previewCurves.Add((result.PreviewCurves[i], result.CurveColors[i]));
-            _previewBB.Union(result.PreviewCurves[i].GetBoundingBox(false));
+            var curve = result.PreviewCurves[i];
+            _previewCurves.Add((curve, ColorOf(result.Items, "curve", i)));
+            _previewBB.Union(curve.GetBoundingBox(false));
         }
 
         _previewPoints = new List<(Point3d, Color)>(result.PreviewPoints.Count);
         for (var i = 0; i < result.PreviewPoints.Count; i++)
         {
             var point = result.PreviewPoints[i];
-            _previewPoints.Add((point, result.PointColors[i]));
+            _previewPoints.Add((point, ColorOf(result.Items, "point", i)));
             _previewBB.Union(new BoundingBox(point, point));
         }
+    }
+
+    /// <summary>
+    ///     Pulls the preview color for the <paramref name="ordinal" />-th item of a given kind from the
+    ///     built items list (which carries the resolved color hex). Falls back to white.
+    /// </summary>
+    private static Color ColorOf(List<DisplayItem> items, string kind, int ordinal)
+    {
+        var seen = 0;
+        foreach (var it in items)
+        {
+            if (it.Kind != kind)
+            {
+                continue;
+            }
+
+            if (seen == ordinal)
+            {
+                return it.Color != null ? ColorTranslator.FromHtml(it.Color) : Color.White;
+            }
+
+            seen++;
+        }
+
+        return Color.White;
     }
 
     private static List<T> ResolveBranch<T>(IGH_Structure tree, GH_Path path) where T : class
@@ -297,14 +286,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     }
 
     /// <summary>
-    ///     One geometry to process, with its already-resolved per-item attributes, stable ordinal, and
-    ///     the index of the branch it belongs to. The cheap flatten pass produces these in tree order;
-    ///     the expensive meshing then runs over them in parallel.
+    ///     One geometry to process, with its already-resolved per-item attributes and stable ordinal.
+    ///     The cheap flatten pass produces these in tree order; the expensive meshing then runs over
+    ///     them in parallel.
     /// </summary>
     private struct WorkItem
     {
         public GeometryBase Geom;
-        public int BranchIndex;
         public int Ordinal;
         public string Name;
         public string Layer;
@@ -312,28 +300,22 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         public ThreeMaterial Material;
     }
 
-    /// <summary>Per-slot output of the parallel pass; gathered back into its branch in tree order.</summary>
+    /// <summary>Per-slot output of the parallel pass; gathered back in tree order.</summary>
     private struct WorkResult
     {
         public bool Skipped;
 
-        // Mesh path. The vertex/face arrays are extracted here, on the parallel thread, so the serial
-        // assembly pass (MeshBatchProcessor.CreateBatch) doesn't re-walk every vertex on one thread.
-        // Mesh itself is kept for the main-thread viewport preview.
+        // Mesh path
         public Mesh Mesh;
         public string MeshName;
-        public float[] MeshVertices;
-        public int[] MeshFaces;
 
-        // Item path (curve / point). PreviewColor is resolved here so the gather pass doesn't re-scan
-        // the items list to recover each curve/point's color.
+        // Item path (curve / point)
         public DisplayItem Item;
         public Curve PreviewCurve;
         public Point3d? PreviewPoint;
-        public Color PreviewColor;
     }
 
-    private static SolveResult ComputeBatch(
+    private static SolveResult_V0_14_0 ComputeBatch(
         GH_Structure<IGH_GeometricGoo> geoTree,
         GH_Structure<GH_String> nameTree,
         GH_Structure<GH_String> layerTree,
@@ -343,12 +325,9 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         string componentId)
     {
         // Pass 1 (cheap, sequential): flatten the trees into a work list, resolving each item's
-        // attributes, stable ordinal, and owning branch. Geometry extraction touches GH_Goo wrappers
-        // and must not race with the parallel pass, so it stays here. Invalid geometry counts as
-        // skipped now. Each non-empty geometry branch is recorded as its own output branch — the
-        // output tree mirrors the input tree.
+        // attributes and stable ordinal. Geometry extraction touches GH_Goo wrappers and must not
+        // race with the parallel pass, so it stays here. Invalid geometry counts as skipped now.
         var work = new List<WorkItem>();
-        var branchPaths = new List<GH_Path>();
         var skipped = 0;
         var ordinal = 0;
 
@@ -359,9 +338,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             {
                 continue;
             }
-
-            var branchIndex = branchPaths.Count;
-            branchPaths.Add(path);
 
             var nameItems = ResolveBranch<GH_String>(nameTree, path);
             var layerItems = ResolveBranch<GH_String>(layerTree, path);
@@ -387,7 +363,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 work.Add(new WorkItem
                 {
                     Geom = geom,
-                    BranchIndex = branchIndex,
                     Ordinal = ordinal,
                     Name = i < nameItems.Count ? nameItems[i]?.Value ?? lastName : lastName,
                     Layer = i < layerItems.Count ? layerItems[i]?.Value ?? lastLayer : lastLayer,
@@ -414,8 +389,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 {
                     Item = item,
                     PreviewCurve = previewCurve,
-                    PreviewPoint = previewPoint,
-                    PreviewColor = w.Material.Color
+                    PreviewPoint = previewPoint
                 };
                 return;
             }
@@ -438,33 +412,23 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             mesh.Vertices.CombineIdentical(false, true);
             mesh.Compact();
 
-            // Extract the vertex/face arrays now, while we're already off the main thread. This is the
-            // per-vertex copy that CreateBatch would otherwise do serially for every mesh in the batch.
-            var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh);
-
             results[idx] = new WorkResult
             {
                 Mesh = mesh,
-                MeshName = w.Name,
-                MeshVertices = vertices,
-                MeshFaces = faces
+                MeshName = w.Name
             };
         });
 
-        // Pass 3 (cheap, sequential): gather each slot back into its branch in tree order, so each
-        // branch's output is deterministic. Preview lists are global (one component draws everything).
-        var branches = new List<BranchResult>(branchPaths.Count);
-        foreach (var p in branchPaths)
-        {
-            branches.Add(new BranchResult(p));
-        }
-
-        var previewMeshes = new List<Mesh>();
-        var previewMaterials = new List<ThreeMaterial>();
+        // Pass 3 (cheap, sequential): gather in tree order so output ordering is deterministic and
+        // matches the pre-parallel behaviour.
+        var meshes = new List<Mesh>();
+        var names = new List<string>();
+        var layers = new List<string>();
+        var metadata = new List<Dictionary<string, string>>();
+        var materials = new List<ThreeMaterial>();
+        var items = new List<DisplayItem>();
         var previewCurves = new List<Curve>();
-        var curveColors = new List<Color>();
         var previewPoints = new List<Point3d>();
-        var pointColors = new List<Color>();
 
         for (var idx = 0; idx < results.Length; idx++)
         {
@@ -475,44 +439,34 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 continue;
             }
 
-            var w = work[idx];
-            var branch = branches[w.BranchIndex];
-
             if (r.Item != null)
             {
-                branch.Items.Add(r.Item);
+                items.Add(r.Item);
                 if (r.PreviewCurve != null)
                 {
                     previewCurves.Add(r.PreviewCurve);
-                    curveColors.Add(r.PreviewColor);
                 }
 
                 if (r.PreviewPoint.HasValue)
                 {
                     previewPoints.Add(r.PreviewPoint.Value);
-                    pointColors.Add(r.PreviewColor);
                 }
 
                 continue;
             }
 
-            branch.MeshVertices.Add(r.MeshVertices);
-            branch.MeshFaces.Add(r.MeshFaces);
-            branch.Names.Add(!string.IsNullOrWhiteSpace(r.MeshName)
-                ? r.MeshName
-                : branch.MeshVertices.Count.ToString());
-            branch.Layers.Add(w.Layer ?? "");
-            branch.Metadata.Add(w.Metadata);
-            branch.Materials.Add(w.Material);
-
-            previewMeshes.Add(r.Mesh);
-            previewMaterials.Add(w.Material);
+            var w = work[idx];
+            meshes.Add(r.Mesh);
+            names.Add(!string.IsNullOrWhiteSpace(r.MeshName) ? r.MeshName : meshes.Count.ToString());
+            layers.Add(w.Layer ?? "");
+            metadata.Add(w.Metadata);
+            materials.Add(w.Material);
         }
 
-        var hasAnything = branches.Any(b => b.Count > 0);
+        var hasAnything = meshes.Count > 0 || items.Count > 0;
         return hasAnything
-            ? new SolveResult(branches, previewMeshes, previewMaterials, previewCurves, curveColors,
-                previewPoints, pointColors, skipped)
+            ? new SolveResult_V0_14_0(meshes, names, layers, metadata, materials, items, previewCurves,
+                previewPoints, skipped)
             : null;
     }
 

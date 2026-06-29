@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**WebDisplay: tree-structured output**
+
+- The `Web Display` output is now a tree that mirrors the geometry input tree: each input branch produces its own `Web Display` on the matching path, instead of every branch flattening into one merged item. Downstream tree operations (graft, merge, path-mapper) now behave the Grasshopper-native way. The previous flatten-everything component is preserved (hidden) with an auto-upgrader, so existing definitions migrate transparently.
+
+### Performance
+
+- WebDisplay now extracts each mesh's vertex/face arrays inside the parallel meshing pass instead of in the serial batch-assembly step. Previously the per-vertex copy ran single-threaded for every mesh after meshing; it now scales with the meshing parallelism. `MeshBatchProcessor.CreateBatch` gains an array-taking overload for this (the mesh-taking overload is unchanged for other callers).
+
 ## [0.14.0-beta.2] - 2026-06-29
 
 ### Added

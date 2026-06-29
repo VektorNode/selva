@@ -24,40 +24,80 @@ public static class MeshBatchProcessor
         List<string> layers = null,
         string sourceComponentId = null)
     {
+        // Convert each mesh to vertex/face arrays here (the legacy serial path). Callers that already
+        // extracted the arrays in their own parallel pass should use the overload below to skip this.
+        var vertexArrays = new List<float[]>(meshes.Count);
+        var faceArrays = new List<int[]>(meshes.Count);
+        foreach (var mesh in meshes)
+        {
+            if (mesh == null || !mesh.IsValid)
+            {
+                vertexArrays.Add(null);
+                faceArrays.Add(null);
+                continue;
+            }
+
+            var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh);
+            vertexArrays.Add(vertices);
+            faceArrays.Add(faces);
+        }
+
+        return CreateBatch(vertexArrays, faceArrays, names, materials, metadataList, layers,
+            sourceComponentId);
+    }
+
+    /// <summary>
+    ///     Same as <see cref="CreateBatch(List{Mesh},List{string},List{ThreeMaterial},List{Dictionary{string,string}},List{string},string)" />
+    ///     but takes vertex/face arrays already extracted from the meshes. The component runs that
+    ///     extraction inside its parallel meshing pass, so this overload keeps the serial assembly
+    ///     pass free of per-vertex copying. A null entry marks a slot whose mesh was invalid; it is
+    ///     skipped, exactly as the mesh-taking overload skips null/invalid meshes.
+    /// </summary>
+    public static DisplayBatch CreateBatch(
+        List<float[]> vertexArrays,
+        List<int[]> faceArrays,
+        List<string> names,
+        List<ThreeMaterial> materials,
+        List<Dictionary<string, string>> metadataList = null,
+        List<string> layers = null,
+        string sourceComponentId = null)
+    {
+        var count = vertexArrays.Count;
+
         // Zero meshes is valid: an items-only batch (curves/points, no meshable geometry) still
         // produces a well-formed batch with a valid empty blob (vertexCount = 0). The component
         // sets DisplayBatch.Items afterward.
-        if (meshes.Count != names.Count || meshes.Count != materials.Count)
+        if (faceArrays.Count != count || count != names.Count || count != materials.Count)
         {
-            throw new ArgumentException("Meshes, names, and materials lists must have the same length");
+            throw new ArgumentException("Vertex, face, name, and material lists must have the same length");
         }
 
-        if (metadataList != null && meshes.Count != metadataList.Count)
+        if (metadataList != null && count != metadataList.Count)
         {
             throw new ArgumentException("Metadata list must have the same length as meshes if provided");
         }
 
-        if (layers != null && meshes.Count != layers.Count)
+        if (layers != null && count != layers.Count)
         {
             throw new ArgumentException("Layers list must have the same length as meshes if provided");
         }
 
         var materialCache = new MaterialCache();
 
-        // Convert meshes and assign material IDs (single conversion, no intermediate storage).
-        // Accumulate the combined-array sizes here so we avoid two extra Sum() passes later.
-        var processedMeshes = new List<ProcessedMesh>(meshes.Count);
+        // Assign material IDs and accumulate the combined-array sizes so we avoid two extra Sum()
+        // passes later. Vertex/face extraction already happened (parallel pass), so this loop is cheap.
+        var processedMeshes = new List<ProcessedMesh>(count);
         var totalComponentCount = 0;
         var totalIndexCount = 0;
-        for (var i = 0; i < meshes.Count; i++)
+        for (var i = 0; i < count; i++)
         {
-            var mesh = meshes[i];
-            if (mesh == null || !mesh.IsValid)
+            var vertices = vertexArrays[i];
+            var faces = faceArrays[i];
+            if (vertices == null || faces == null)
             {
                 continue;
             }
 
-            var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh);
             var materialId = materialCache.GetMaterialId(materials[i]);
 
             totalComponentCount += vertices.Length;

@@ -4,6 +4,37 @@ using SheepMetal.PluginGrasshopper.Upgraders;
 
 namespace Selva.GH.Features.Display.OBSOLETE;
 
+public class GH_WebDisplayUpgrader_To_0_14 : IGH_UpgradeObject
+{
+    public DateTime Version => new DateTime(2026, 6, 29);
+    public Guid UpgradeFrom => new Guid("4F7A9C2E-1B3D-4E8F-A6C0-9D2E5B7F1A4C");
+    public Guid UpgradeTo => new Guid("CEC76466-37FD-4B1B-8C7F-71E5C1FDBA14");
+
+    public IGH_DocumentObject Upgrade(IGH_DocumentObject target, GH_Document document)
+    {
+        var oldComponent = target as IGH_Component;
+        if (oldComponent == null)
+        {
+            return null;
+        }
+
+        // Inputs and outputs are unchanged (Geo, Name, Layer, Metadata, T-Material, Meshing Settings
+        // → Web Display); the only change is per-branch scene grouping. Straight 1:1 remap.
+        var helper = new GH_ComponentUpgradeHelper(oldComponent, UpgradeTo);
+        var newComponent = helper
+            .MapInput(0, 0) // Geo
+            .MapInput(1, 1) // Name
+            .MapInput(2, 2) // Layer
+            .MapInput(3, 3) // Metadata
+            .MapInput(4, 4) // T-Material
+            .MapInput(5, 5) // Meshing Settings
+            .MapOutput(0, 0) // Web Display
+            .Execute();
+
+        return newComponent;
+    }
+}
+
 public class GH_WebDisplayUpgrader_To_0_9 : IGH_UpgradeObject
 {
     public DateTime Version => new DateTime(2026, 4, 14);

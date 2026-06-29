@@ -29,10 +29,6 @@ public class DocumentEventManager : IDisposable
     // Used to short-circuit UndoStateChanged when no relevant objects exist.
     private readonly HashSet<Guid> _watchedIds = [];
 
-    // Subset of _watchedIds — ContextBake components only. Used by CollectAndBroadcastOutputs to
-    // avoid re-scanning the entire document on every solve-end just to find ContextBakes.
-    private readonly HashSet<Guid> _bakeIds = [];
-
     private GH_Document _currentDocument;
     private bool _disposed;
 
@@ -117,7 +113,6 @@ public class DocumentEventManager : IDisposable
     public void ClearWatchedObjects()
     {
         _watchedIds.Clear();
-        _bakeIds.Clear();
     }
 
     /// <summary>
@@ -164,16 +159,6 @@ public class DocumentEventManager : IDisposable
         catch (Exception ex)
         {
             Logger.Error("Failed to subscribe to document events", ex);
-        }
-
-        // Seed the bake-id set so CollectAndBroadcastOutputs can skip the per-solve doc walk.
-        // OnObjectsAdded keeps it up to date afterwards.
-        foreach (var obj in document.Objects)
-        {
-            if (ParameterTypeHelper.IsContextBakeComponent(obj) && obj is IGH_DocumentObject docObj)
-            {
-                _bakeIds.Add(docObj.InstanceGuid);
-            }
         }
 
         _eventsRegistered = true;
@@ -305,10 +290,6 @@ public class DocumentEventManager : IDisposable
             if (obj is IGH_DocumentObject docObj && IsRelevantObject(obj))
             {
                 _watchedIds.Add(docObj.InstanceGuid);
-                if (ParameterTypeHelper.IsContextBakeComponent(obj))
-                {
-                    _bakeIds.Add(docObj.InstanceGuid);
-                }
                 anyAdded = true;
             }
         }
@@ -335,7 +316,6 @@ public class DocumentEventManager : IDisposable
         {
             if (obj is IGH_DocumentObject docObj && _watchedIds.Remove(docObj.InstanceGuid))
             {
-                _bakeIds.Remove(docObj.InstanceGuid);
                 anyRemoved = true;
             }
         }
@@ -403,10 +383,18 @@ public class DocumentEventManager : IDisposable
 
         var outputValues = _valueCollector.CollectOutputValues(_currentDocument, schema);
         var fileOutputs = _valueCollector.CollectFileOutputs(_currentDocument, schema);
-        // Only scan display data when the 3D viewer is enabled — scanning all document objects is expensive.
-        // Pass the watched bake-id set so the collector doesn't have to re-walk the entire document.
+        // Only scan display data when the 3D viewer is enabled — scanning all document objects is
+        // otherwise wasted work.
+        //
+        // We deliberately re-scan the whole document for ContextBakes here instead of using the
+        // incrementally-tracked _bakeIds set. That set desyncs in practice: ContextBakes added while
+        // the WS server was momentarily down (OnObjectsAdded early-returns on !IsRunning), or restored
+        // by undo/redo or paste without a reliable ObjectsAdded event, never make it into _bakeIds. The
+        // fast path would then silently skip those components, so their meshes never reach the
+        // frontend (and a stale id can resolve to the wrong object, showing a neighbour's material).
+        // A full bake scan on solve-end is O(objects) once and keeps every ContextBake's meshes flowing.
         var displayData = includeDisplayData
-            ? _valueCollector.CollectDisplayData(_currentDocument, _bakeIds)
+            ? _valueCollector.CollectDisplayData(_currentDocument)
             : new List<object>();
 
         if (outputValues.Count > 0 || fileOutputs.Count > 0 || displayData.Count > 0)
