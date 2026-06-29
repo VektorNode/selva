@@ -1,5 +1,11 @@
 # @selvajs/selva
 
+## 4.6.0-beta.2
+
+### Patch Changes
+
+- New beta release
+
 ## 4.6.0-beta.1
 
 ### Patch Changes

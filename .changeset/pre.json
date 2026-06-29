@@ -14,5 +14,5 @@
 		"@selvajs/ui": "4.11.0",
 		"@selvajs/website": "0.0.1"
 	},
-	"changesets": ["new-beta-release"]
+	"changesets": ["beta-compute-route"]
 }
