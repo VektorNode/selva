@@ -162,10 +162,14 @@ export function createWebSocketSolveDriver(
 							const parsed = await parseMeshBatchBlob(blob, {
 								mergeByMaterial: false,
 								applyTransforms: true,
-								scaleFactor,
 								debug: false
 							});
 							all.push(...parsed);
+						}
+						// Mesh parsing is unit-agnostic; scale to model units here, the same
+						// way the display-items path below does, so meshes and items share one frame.
+						if (scaleFactor !== 1) {
+							for (const obj of all) obj.scale.set(scaleFactor, scaleFactor, scaleFactor);
 						}
 						if (myToken === outputsToken) sceneObjects = all;
 					}
