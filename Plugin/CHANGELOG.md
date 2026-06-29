@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0-beta.2] - 2026-06-29
+
+### Added
+
+**WebDisplay: transform & geometry casting**
+
+- The `Web Display` param now responds to spatial transforms. Move, Rotate, Scale, Orient, Mirror (and any `Transform` component) and `SpaceMorph` deformers relocate the displayed geometry: `DisplayBatchTransformer` decodes the batch, moves the mesh vertices and curve/point items, and re-encodes a fresh batch. Viewport preview and the web payload both follow.
+- A `Web Display` can now be cast straight into a `Mesh`, `Curve`, or `Point` param: the mesh cast joins every mesh in the batch into one; the curve/point cast returns the first item of that kind. Existing `DisplayBatch` / JSON-string casts are unchanged and take lower priority.
+
+### Fixed
+
+- A selected downstream `Web Display` param now highlights green (GH selection shade material / wire colour) like every other geometry param, instead of always drawing its baked batch colours.
+
 ## [0.11.2] - 2026-06-09
 
 ### Added

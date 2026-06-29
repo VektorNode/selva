@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Newtonsoft.Json;
 using Rhino.Geometry;
 
 namespace Selva.GH.Features.Display.Services;
@@ -152,7 +151,7 @@ public static class MeshBatchProcessor
         // Build the binary blob. The metadata JSON inside the blob is a self-contained copy of the
         // batch envelope (without the blob itself), so the format is transport-agnostic — the same
         // bytes can travel inside today's JSON values message or as a future binary WebSocket frame.
-        var metadataJson = SerializeMetadata(batch);
+        var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
         using (var ms = new MemoryStream())
         {
             BinaryGeometryWriter.Write(ms, metadataJson, allVertices, allIndices);
@@ -163,24 +162,6 @@ public static class MeshBatchProcessor
         }
 
         return batch;
-    }
-
-    /// <summary>
-    ///     Serializes the batch envelope without its own binary blob, for embedding in the blob's
-    ///     metadata header. Keeps a single JSON shape so the client decoder doesn't branch on transport.
-    /// </summary>
-    private static string SerializeMetadata(DisplayBatch batch)
-    {
-        var savedBlob = batch.CompressedData;
-        batch.CompressedData = null;
-        try
-        {
-            return JsonConvert.SerializeObject(batch);
-        }
-        finally
-        {
-            batch.CompressedData = savedBlob;
-        }
     }
 
     /// <summary>

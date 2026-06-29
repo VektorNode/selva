@@ -78,11 +78,14 @@ public class Param_WebDisplay : GH_PersistentGeometryParam<WebDisplayGoo>, IGH_P
             return;
         }
 
-        var meshArgs = new GH_PreviewMeshArgs(args.Viewport, args.Display, args.ShadeMaterial,
-            args.MeshingParameters);
+        // When selected, hand the goo GH's green selection shade material so it overrides the batch
+        // colors — matching how every other geometry param highlights on selection.
+        var selected = Attributes.Selected;
+        var meshArgs = new GH_PreviewMeshArgs(args.Viewport, args.Display,
+            selected ? args.ShadeMaterial_Selected : args.ShadeMaterial, args.MeshingParameters);
         foreach (var goo in PreviewGoos())
         {
-            goo.DrawViewportMeshes(meshArgs);
+            goo.DrawViewportMeshes(meshArgs, selected);
         }
     }
 
@@ -93,11 +96,12 @@ public class Param_WebDisplay : GH_PersistentGeometryParam<WebDisplayGoo>, IGH_P
             return;
         }
 
-        var wireArgs = new GH_PreviewWireArgs(args.Viewport, args.Display, args.WireColour,
-            args.DefaultCurveThickness);
+        var selected = Attributes.Selected;
+        var wireArgs = new GH_PreviewWireArgs(args.Viewport, args.Display,
+            selected ? args.WireColour_Selected : args.WireColour, args.DefaultCurveThickness);
         foreach (var goo in PreviewGoos())
         {
-            goo.DrawViewportWires(wireArgs);
+            goo.DrawViewportWires(wireArgs, selected);
         }
     }
 

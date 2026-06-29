@@ -19,8 +19,10 @@ namespace Selva.GH.Features.Display.Goos;
 ///     drawable geometry is reconstructed from the encoded batch (the Goo carries only the quantized
 ///     blob + JSON items) and cached on first draw.
 ///
-///     The batch is baked display data, not editable geometry, so the geometric-goo transform/morph
-///     operations are identity no-ops — Selva never spatially transforms a Web Display in GH.
+///     The batch is baked display data, not live Rhino geometry, but the geometric-goo
+///     transform/morph operations still relocate it: <see cref="DisplayBatchTransformer" /> decodes
+///     the blob, moves the vertices and curve/point items, and re-encodes a new batch, so
+///     Move/Rotate/Scale/Orient behave as expected on a Web Display wire.
 /// </summary>
 public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGoo, IGH_PreviewData
 {
@@ -36,6 +38,27 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
     }
 
     private WebDisplayPreview Preview => _preview ??= WebDisplayPreview.Build(Value);
+
+    /// <summary>
+    ///     Joins every decoded mesh in the batch into a single mesh for a single-item cast. Returns
+    ///     false when the batch has no meshes (e.g. a curves/points-only batch).
+    /// </summary>
+    private bool TryJoinMeshes(out Mesh joined)
+    {
+        joined = null;
+        if (Preview.Meshes.Count == 0)
+        {
+            return false;
+        }
+
+        joined = new Mesh();
+        foreach (var (mesh, _) in Preview.Meshes)
+        {
+            joined.Append(mesh);
+        }
+
+        return joined.Faces.Count > 0;
+    }
 
     // ── IGH_GeometricGoo ────────────────────────────────────────────────────────────────────────
 
@@ -64,15 +87,18 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
         return new WebDisplayGoo(Value);
     }
 
-    // A Web Display is baked display data — spatial transform/morph don't apply, so return self.
+    // A Web Display holds baked geometry (quantized mesh blob + curve/point JSON), not live Rhino
+    // geometry, but Move/Rotate/Scale/Orient should still relocate it like any other geometric goo.
+    // The transformer decodes, moves, and re-encodes a fresh batch; the new goo rebuilds its preview
+    // lazily (its _preview starts null).
     public override IGH_GeometricGoo Transform(Transform xform)
     {
-        return new WebDisplayGoo(Value);
+        return IsValid ? new WebDisplayGoo(DisplayBatchTransformer.Transform(Value, xform)) : this;
     }
 
     public override IGH_GeometricGoo Morph(SpaceMorph xmorph)
     {
-        return new WebDisplayGoo(Value);
+        return IsValid ? new WebDisplayGoo(DisplayBatchTransformer.Morph(Value, xmorph)) : this;
     }
 
     // ── IGH_PreviewData ─────────────────────────────────────────────────────────────────────────
@@ -81,6 +107,16 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
     public void DrawViewportMeshes(GH_PreviewMeshArgs args)
     {
+        DrawViewportMeshes(args, false);
+    }
+
+    /// <summary>
+    ///     Draws the batch meshes. When <paramref name="selected" /> is true, the GH selection shade
+    ///     material from <c>args.Material</c> overrides each mesh's own batch color so a selected Web
+    ///     Display turns green like any other geometry; otherwise each mesh draws in its own color.
+    /// </summary>
+    public void DrawViewportMeshes(GH_PreviewMeshArgs args, bool selected)
+    {
         if (!IsValid)
         {
             return;
@@ -88,12 +124,23 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
         foreach (var (mesh, color) in Preview.Meshes)
         {
-            var material = new DisplayMaterial(color) { IsTwoSided = true };
+            var material = selected
+                ? args.Material
+                : new DisplayMaterial(color) { IsTwoSided = true };
             args.Pipeline.DrawMeshShaded(mesh, material);
         }
     }
 
     public void DrawViewportWires(GH_PreviewWireArgs args)
+    {
+        DrawViewportWires(args, false);
+    }
+
+    /// <summary>
+    ///     Draws the batch curves/points. When <paramref name="selected" /> is true, the GH selection
+    ///     wire color from <c>args.Color</c> overrides each item's own color.
+    /// </summary>
+    public void DrawViewportWires(GH_PreviewWireArgs args, bool selected)
     {
         if (!IsValid)
         {
@@ -102,12 +149,12 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
         foreach (var (curve, color) in Preview.Curves)
         {
-            args.Pipeline.DrawCurve(curve, color, args.Thickness);
+            args.Pipeline.DrawCurve(curve, selected ? args.Color : color, args.Thickness);
         }
 
         foreach (var (point, color) in Preview.Points)
         {
-            args.Pipeline.DrawPoint(point, PointStyle.RoundSimple, 4, color);
+            args.Pipeline.DrawPoint(point, PointStyle.RoundSimple, 4, selected ? args.Color : color);
         }
     }
 
@@ -180,6 +227,48 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
         {
             target = (Q)(object)Value;
             return true;
+        }
+
+        // Decode the baked batch back to Rhino geometry so a Web Display can be wired straight into a
+        // Mesh/Curve/Point param. A batch can hold many meshes; a single-item cast joins them into one
+        // (standard GH single-cast behaviour). Curve/point casts take the first item of that kind.
+        if (IsValid)
+        {
+            if (typeof(Q).IsAssignableFrom(typeof(GH_Mesh)) && TryJoinMeshes(out var joined))
+            {
+                target = (Q)(object)new GH_Mesh(joined);
+                return true;
+            }
+
+            if (typeof(Q).IsAssignableFrom(typeof(Mesh)) && TryJoinMeshes(out var rawMesh))
+            {
+                target = (Q)(object)rawMesh;
+                return true;
+            }
+
+            if (typeof(Q).IsAssignableFrom(typeof(GH_Curve)) && Preview.Curves.Count > 0)
+            {
+                target = (Q)(object)new GH_Curve(Preview.Curves[0].curve);
+                return true;
+            }
+
+            if (typeof(Q).IsAssignableFrom(typeof(Curve)) && Preview.Curves.Count > 0)
+            {
+                target = (Q)(object)Preview.Curves[0].curve;
+                return true;
+            }
+
+            if (typeof(Q).IsAssignableFrom(typeof(GH_Point)) && Preview.Points.Count > 0)
+            {
+                target = (Q)(object)new GH_Point(Preview.Points[0].point);
+                return true;
+            }
+
+            if (typeof(Q).IsAssignableFrom(typeof(Point3d)) && Preview.Points.Count > 0)
+            {
+                target = (Q)(object)Preview.Points[0].point;
+                return true;
+            }
         }
 
         if (typeof(Q).IsAssignableFrom(typeof(GH_String)))
