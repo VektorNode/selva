@@ -55,7 +55,11 @@ const mdsvexOptions = {
 			const { codeToHtml, bundledLanguages } = await import('shiki');
 			// Fall back to plaintext for languages Shiki doesn't bundle (e.g. caddyfile).
 			const safeLang = lang in bundledLanguages ? lang : 'text';
-			const html = await codeToHtml(code, { lang: safeLang, theme: 'github-dark' });
+			const shiki = await codeToHtml(code, { lang: safeLang, theme: 'github-dark' });
+			// Wrap in a container and stash the raw source (base64, so quotes/braces
+			// can't break the markup) for the client-side copy button to read back.
+			const encoded = Buffer.from(code, 'utf-8').toString('base64');
+			const html = `<div class="code-block" data-code="${encoded}">${shiki}<button type="button" class="code-copy" aria-label="Copy code">Copy</button></div>`;
 			// Escape curly braces so Svelte doesn't treat them as expressions.
 			const escaped = html.replace(/[{}]/g, (c) => (c === '{' ? '&#123;' : '&#125;'));
 			return `{@html \`${escaped.replace(/`/g, '\\`')}\`}`;

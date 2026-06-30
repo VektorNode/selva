@@ -50,6 +50,42 @@
 	margin-inline: auto;
 }
 
+/* Copy-to-clipboard button on Shiki code blocks (markup from svelte.config.js). */
+.prose .code-block {
+	position: relative;
+}
+.prose .code-copy {
+	position: absolute;
+	top: 0.5rem;
+	right: 0.5rem;
+	padding: 0.2rem 0.55rem;
+	font-size: 0.75rem;
+	line-height: 1.2;
+	color: var(--color-muted-foreground);
+	background-color: var(--color-muted);
+	border: 1px solid var(--color-border);
+	border-radius: 0.25rem;
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		opacity 0.15s,
+		color 0.15s,
+		border-color 0.15s;
+}
+.prose .code-block:hover .code-copy,
+.prose .code-copy:focus-visible {
+	opacity: 1;
+}
+.prose .code-copy:hover {
+	color: var(--color-foreground);
+	border-color: var(--color-muted-foreground);
+}
+.prose .code-copy.is-copied {
+	color: var(--color-primary);
+	border-color: var(--color-primary);
+	opacity: 1;
+}
+
 .dark {
 	--primary: oklch(73.653% 0.13688 138.527);
 }
