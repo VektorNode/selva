@@ -26,6 +26,8 @@
 		onSolve: SolveFn;
 		definitionKey?: string;
 		title?: string;
+		/** Logo URL shown in the header. Falls back to the app default when unset. */
+		logo?: string;
 		isEmbedded?: boolean;
 		primaryColor?: string;
 		showModeToggle?: boolean;
@@ -70,6 +72,7 @@
 		onSolve,
 		definitionKey = '',
 		title,
+		logo,
 		isEmbedded,
 		primaryColor,
 		showModeToggle = false,
@@ -185,6 +188,7 @@
 		showHeader={!resolvedIsEmbedded}
 		showFooter
 		title={pageTitle}
+		{logo}
 		{showModeToggle}
 		{copyrightName}
 		{footerText}

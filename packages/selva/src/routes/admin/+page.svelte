@@ -3,6 +3,7 @@
 	import { Card, SectionHeader } from '@selvajs/ui';
 	import { Users, Server, LayoutDashboard, Package, Building2 } from '@lucide/svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
+	import AssetUpload from '$lib/components/AssetUpload.svelte';
 	import type { PlatformPermission } from '@selvajs/platform';
 
 	const brandName = $derived(page.data.branding.name);
@@ -11,6 +12,7 @@
 		stats: { users: number | null };
 		platformPermissions: PlatformPermission[];
 		version: string;
+		org: { id: string; name: string; assets: Record<string, string> } | null;
 	}
 	interface Props {
 		data: PageData;
@@ -73,6 +75,16 @@
 			<StatCard {...tile} />
 		{/each}
 	</div>
+
+	{#if data.org}
+		<AssetUpload
+			orgId={data.org.id}
+			kind="logo"
+			url={data.org.assets.logo ?? null}
+			title="Company logo"
+			description="Upload a logo to reuse across {brandName}. Shown in the viewer header; more surfaces will pick it up."
+		/>
+	{/if}
 
 	<Card.Root>
 		<Card.Header>

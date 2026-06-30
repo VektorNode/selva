@@ -16,7 +16,7 @@ export interface IOrgStore {
 	updateOrg(
 		ctx: RequestContext,
 		id: string,
-		patch: Partial<Pick<Organization, 'name' | 'slug'>>
+		patch: Partial<Pick<Organization, 'name' | 'slug' | 'assets'>>
 	): Promise<void>;
 	/**
 	 * Soft-delete the org. Cascades soft-delete to org members, projects in the

@@ -166,7 +166,7 @@ export class LocalOrgStore implements IOrgStore {
 	async updateOrg(
 		ctx: RequestContext,
 		id: string,
-		patch: Partial<Pick<Organization, 'name' | 'slug'>>
+		patch: Partial<Pick<Organization, 'name' | 'slug' | 'assets'>>
 	): Promise<void> {
 		const store = await this.loader.get();
 		const idx = store.orgs.findIndex((o) => o.id === id && isLive(o));

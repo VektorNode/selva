@@ -18,6 +18,7 @@ import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
 import * as header from '@selvajs/header-auth-provider';
 import { DefinitionService } from './definitions/DefinitionService.js';
+import { OrgAssetService } from './organizations/OrgAssetService.js';
 
 /**
  * Provider wiring source. Two modes:
@@ -229,6 +230,15 @@ export function getDefinitionService(): DefinitionService {
 		_definitionService = new DefinitionService(p.data, p.storage);
 	}
 	return _definitionService;
+}
+
+let _orgAssetService: OrgAssetService | undefined;
+export function getOrgAssetService(): OrgAssetService {
+	if (!_orgAssetService) {
+		const p = resolveProviders();
+		_orgAssetService = new OrgAssetService(p.data.orgs, p.storage);
+	}
+	return _orgAssetService;
 }
 
 export function getAuthProvider() {

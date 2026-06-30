@@ -1,4 +1,12 @@
-import type { OrgRole, OrgPermission } from './schemas.js';
+import type { OrgRole, OrgPermission, OrgAssetKind } from './schemas.js';
+
+/**
+ * Public URLs of an org's branding assets, keyed by kind. Each value is what
+ * `IStorageProvider.getPublicUrl` returned for the stored blob; a kind is
+ * absent when unset. One small map so adding a new asset kind never touches
+ * the `Organization` shape, the migration, or the row mappers again.
+ */
+export type OrgAssets = Partial<Record<OrgAssetKind, string>>;
 
 export interface Organization {
 	id: string;
@@ -10,6 +18,8 @@ export interface Organization {
 	/** Immutable even on ownership transfer. */
 	createdBy: string;
 	updatedBy: string;
+	/** Branding assets (logo, favicon, …) by kind. Blobs live under `orgPaths.asset()`. */
+	assets?: OrgAssets;
 	createdAt: string;
 	updatedAt: string;
 	deletedAt?: string | null;

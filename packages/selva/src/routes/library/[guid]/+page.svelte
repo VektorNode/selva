@@ -97,6 +97,7 @@
 	{onSolve}
 	definitionKey={data.currentDefinition}
 	title={data.schema?.description || data.schema.name}
+	logo={data.orgLogoUrl ?? undefined}
 	showModeToggle={true}
 	solveTimeoutMs={data.solveTimeoutMs}
 	footerComponent={ServerFooter}

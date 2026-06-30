@@ -171,5 +171,26 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			expect(atWebp?.slice(0, 4)).toEqual(bytes('RIFF'));
 			expect(atWebp?.slice(8, 12)).toEqual(bytes('WEBP'));
 		});
+
+		it('rasterizes svg input to webp — no vector blob is ever stored', async () => {
+			const storage = await createStorage();
+			// A minimal SVG carrying a <script> — the exact XSS payload the
+			// rasterize-everything policy is meant to neutralize.
+			const svg =
+				'<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">' +
+				'<script>alert(1)</script><rect width="10" height="10" fill="red"/></svg>';
+			const svgBytes = new TextEncoder().encode(svg);
+			await storage.put('orgs/x/logo.webp', svgBytes, 'image/svg+xml');
+
+			// The stored blob is a WebP raster, NOT the original SVG bytes — so the
+			// served file can't execute script. (The path is already .webp because
+			// orgPaths.asset fixes it; the content is what matters here.)
+			const stored = await storage.get('orgs/x/logo.webp');
+			expect(stored).toBeTruthy();
+			expect(stored?.slice(0, 4)).toEqual(bytes('RIFF'));
+			expect(stored?.slice(8, 12)).toEqual(bytes('WEBP'));
+			// Defense-in-depth assertion: the script tag is gone from the bytes.
+			expect(new TextDecoder().decode(stored!)).not.toContain('script');
+		});
 	});
 }

@@ -132,6 +132,23 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 				expect(got?.slug).toBe('new-slug');
 			});
 
+			it('updateOrg sets and clears branding assets', async () => {
+				const store = await createStore();
+				const u1 = await seed();
+				const orgId = makeUuid();
+				await store.createOrg(ctx(u1), org(u1, { id: orgId, slug: 'asset-org' }));
+
+				// Set the logo asset.
+				await store.updateOrg(ctx(u1), orgId, { assets: { logo: '/api/files/orgs/x/logo.webp' } });
+				expect((await store.getOrg(ctx(u1), orgId))?.assets?.logo).toBe(
+					'/api/files/orgs/x/logo.webp'
+				);
+
+				// Replace the whole map (drops logo) — the store persists what it's given.
+				await store.updateOrg(ctx(u1), orgId, { assets: {} });
+				expect((await store.getOrg(ctx(u1), orgId))?.assets?.logo ?? null).toBeNull();
+			});
+
 			it('deleteOrg removes the organization', async () => {
 				const store = await createStore();
 				const u1 = await seed();

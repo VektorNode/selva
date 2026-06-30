@@ -13,6 +13,15 @@ export const SlugSchema = z
 export const OrgRoleSchema = z.enum(['owner', 'admin', 'member']);
 export type OrgRole = z.infer<typeof OrgRoleSchema>;
 
+/**
+ * Kinds of org-scoped branding asset. Adding a new kind is a single entry here
+ * — the storage path, upload route, store, and UI are all generic over it.
+ */
+export const OrgAssetKindSchema = z.enum(['logo', 'favicon']);
+export type OrgAssetKind = z.infer<typeof OrgAssetKindSchema>;
+
+export const ALL_ORG_ASSET_KINDS: readonly OrgAssetKind[] = OrgAssetKindSchema.options;
+
 /** Org-scope permissions. A user may hold different sets in different orgs. */
 export const OrgPermissionSchema = z.enum([
 	'manage_org_members',

@@ -23,17 +23,21 @@ export type { UserProfile, RecentRun } from './userProfile/types.js';
 export { emptyProfile } from './userProfile/types.js';
 
 // organizations
-export type { Organization, OrgMember } from './organizations/types.js';
+export type { Organization, OrgMember, OrgAssets } from './organizations/types.js';
 export type { IOrgStore } from './organizations/interface.js';
+export { orgPaths } from './organizations/paths.js';
 export type {
 	OrgRole,
 	OrgPermission,
+	OrgAssetKind,
 	CreateOrgInput,
 	UpdateOrgInput
 } from './organizations/schemas.js';
 export {
 	OrgRoleSchema,
 	OrgPermissionSchema,
+	OrgAssetKindSchema,
+	ALL_ORG_ASSET_KINDS,
 	SlugSchema,
 	CreateOrgSchema,
 	UpdateOrgSchema,

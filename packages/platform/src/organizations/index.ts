@@ -1,9 +1,18 @@
-export type { Organization, OrgMember } from './types.js';
+export type { Organization, OrgMember, OrgAssets } from './types.js';
 export type { IOrgStore } from './interface.js';
-export type { OrgRole, OrgPermission, CreateOrgInput, UpdateOrgInput } from './schemas.js';
+export { orgPaths } from './paths.js';
+export type {
+	OrgRole,
+	OrgPermission,
+	OrgAssetKind,
+	CreateOrgInput,
+	UpdateOrgInput
+} from './schemas.js';
 export {
 	OrgRoleSchema,
 	OrgPermissionSchema,
+	OrgAssetKindSchema,
+	ALL_ORG_ASSET_KINDS,
 	SlugSchema,
 	CreateOrgSchema,
 	UpdateOrgSchema,

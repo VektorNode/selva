@@ -22,12 +22,17 @@ export interface TranscodeResult {
 /** True if the input looks like an image to process — by content type or path extension. */
 export function isImageUpload(contentType: string | undefined, storagePath: string): boolean {
 	if (contentType?.startsWith('image/')) return true;
-	return /\.(webp|png|jpe?g|gif|bmp|tif?f)$/i.test(storagePath);
+	return /\.(webp|png|jpe?g|gif|bmp|tif?f|svg)$/i.test(storagePath);
 }
 
-/** Rewrite a path's extension to `.webp`. Unchanged if not a recognized image extension. */
+/**
+ * Rewrite a path's extension to `.webp`. Unchanged if not a recognized image
+ * extension. SVG is included: every upload (including SVG) is rasterized to
+ * WebP, so a `.svg` input is stored as `.webp` — no vector blob is ever
+ * persisted, which keeps the served bytes XSS-free without a sanitizer.
+ */
 export function toWebpPath(storagePath: string): string {
-	return storagePath.replace(/\.(png|jpe?g|gif|bmp|tif?f)$/i, '.webp');
+	return storagePath.replace(/\.(png|jpe?g|gif|bmp|tif?f|svg)$/i, '.webp');
 }
 
 /**

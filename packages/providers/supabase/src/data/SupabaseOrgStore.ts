@@ -105,11 +105,13 @@ export class SupabaseOrgStore implements IOrgStore {
 	async updateOrg(
 		ctx: RequestContext,
 		id: string,
-		patch: Partial<Pick<Organization, 'name' | 'slug'>>
+		patch: Partial<Pick<Organization, 'name' | 'slug' | 'assets'>>
 	): Promise<void> {
 		const row: Record<string, unknown> = {};
 		if (patch.name !== undefined) row.name = patch.name;
 		if (patch.slug !== undefined) row.slug = patch.slug;
+		// Callers pass the full merged map; store it wholesale (JSONB column).
+		if (patch.assets !== undefined) row.assets = patch.assets;
 		if (Object.keys(row).length === 0) return;
 		// `updated_at` is set by the trg_orgs_updated_at trigger; `updated_by`
 		// is not, so stamp it here. ctx.userId can be empty in system contexts —
@@ -449,6 +451,7 @@ interface OrgRow {
 	name: string;
 	slug: string;
 	owner_id: string;
+	assets?: Record<string, string> | null;
 	created_by?: string | null;
 	updated_by?: string | null;
 	created_at: string;
@@ -473,6 +476,7 @@ function rowToOrg(row: OrgRow): Organization {
 		name: row.name,
 		slug: row.slug,
 		ownerId: row.owner_id,
+		assets: row.assets ?? undefined,
 		createdBy: row.created_by ?? row.owner_id,
 		updatedBy: row.updated_by ?? row.owner_id,
 		createdAt: row.created_at,
@@ -487,6 +491,7 @@ function orgToRow(org: Organization): OrgRow {
 		name: org.name,
 		slug: org.slug,
 		owner_id: org.ownerId,
+		assets: org.assets ?? null,
 		created_by: org.createdBy,
 		updated_by: org.updatedBy,
 		created_at: org.createdAt,

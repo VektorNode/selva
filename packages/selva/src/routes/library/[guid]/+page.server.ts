@@ -1,7 +1,11 @@
 import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import type { RequestContext } from '@selvajs/platform';
-import { getDefinitionMeta } from '$lib/server/providers.server';
+import {
+	getDefinitionMeta,
+	getProjectProvider,
+	getOrganizationProvider
+} from '$lib/server/providers.server';
 import { requireCanSolve } from '$lib/server/access.server';
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
 import { MAX_SOLVE_DURATION_MS } from '$lib/server/computeLimits';
@@ -48,11 +52,18 @@ export const load = (async ({ params, locals, request, url }) => {
 
 		const loaded = await loadDefinitionForRender(ctx, record, channel);
 
+		// Owning org's logo, for viewer branding. Same `ctx` already authorized to
+		// load this definition (user session or share-token ctx, which carries
+		// actingOrgId). Best-effort: a missing project/org or read failure just
+		// yields no logo — branding is non-essential and must never break a solve.
+		const orgLogoUrl = await resolveOrgLogo(ctx, record.projectId);
+
 		return {
 			schema: loaded.schema,
 			ghDefinition: clientDefUrl,
 			currentDefinition: guid,
 			serverLabel: loaded.computeServer.label,
+			orgLogoUrl,
 			channel,
 			// Forward to the client so /api/compute/solve calls can include it.
 			// Null when the request was user-authenticated (session cookie carries auth).
@@ -100,3 +111,20 @@ export const load = (async ({ params, locals, request, url }) => {
 		throw err;
 	}
 }) satisfies PageServerLoad;
+
+/**
+ * Resolve the owning org's logo URL for viewer branding. definition → project →
+ * org. Best-effort and self-contained: any miss or read error returns null so a
+ * branding lookup can never fail the render path.
+ */
+async function resolveOrgLogo(ctx: RequestContext, projectId: string): Promise<string | null> {
+	try {
+		const project = await getProjectProvider().getProject(ctx, projectId);
+		if (!project?.orgId) return null;
+		const org = await getOrganizationProvider().getOrg(ctx, project.orgId);
+		return org?.assets?.logo ?? null;
+	} catch (err) {
+		console.warn('[App Load] Failed to resolve org logo:', err);
+		return null;
+	}
+}
