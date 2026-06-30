@@ -37,6 +37,8 @@
 		onListStates?: () => ParameterPreset[] | Promise<ParameterPreset[]>;
 		presetLabels?: Partial<PresetLabels>;
 		viewerConfig?: ViewerConfig;
+		/** Branding logo URL shown as a watermark in the viewer's bottom-right corner. */
+		logoUrl?: string;
 	}
 
 	let {
@@ -57,7 +59,8 @@
 		onSaveState,
 		onListStates,
 		presetLabels,
-		viewerConfig = {}
+		viewerConfig = {},
+		logoUrl
 	}: Props = $props();
 
 	const hasViewer = $derived(
@@ -185,6 +188,7 @@
 					{isSolving}
 					isBlurred={drawerOpen}
 					{drawerOpen}
+					{logoUrl}
 					viewerConfig={{
 						...viewerConfig,
 						backgroundColor: schema?.viewerOptions?.backgroundColor,
@@ -347,6 +351,7 @@
 							{meshes}
 							bind:isFullscreen={isViewerFullscreen}
 							{isSolving}
+							{logoUrl}
 							viewerConfig={{
 								backgroundColor: schema?.viewerOptions?.backgroundColor
 							}}

@@ -26,7 +26,7 @@
 		onSolve: SolveFn;
 		definitionKey?: string;
 		title?: string;
-		/** Logo URL shown in the header. Falls back to the app default when unset. */
+		/** Branding logo URL shown as a watermark in the viewer's bottom-right corner. Hidden when unset. */
 		logo?: string;
 		isEmbedded?: boolean;
 		primaryColor?: string;
@@ -188,7 +188,6 @@
 		showHeader={!resolvedIsEmbedded}
 		showFooter
 		title={pageTitle}
-		{logo}
 		{showModeToggle}
 		{copyrightName}
 		{footerText}
@@ -216,6 +215,7 @@
 					hasNeverSolved={session.hasNeverSolved}
 					bind:isViewerFullscreen
 					values={session.values}
+					logoUrl={logo}
 					{panelActions}
 					{showSaveButton}
 					{showLoadButton}

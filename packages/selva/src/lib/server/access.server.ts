@@ -261,6 +261,26 @@ export async function requireCanCreateDefinition(
 }
 
 /**
+ * Org-content gate — the caller must be a member of `orgId`. Used by the
+ * file-serving proxy for org-private assets (e.g. pricing sheets under
+ * `orgs/{id}/private/*`). Org membership is the only rule; this runs through
+ * `contentCheck` (no `instance_admin` management bypass), matching the
+ * content-scope policy of `requireCanViewProject` — platform staff use Reclaim
+ * if they need access without membership.
+ *
+ * Throws 401 unauthenticated, 403 when not a member.
+ */
+export async function requireCanViewOrg(locals: Locals, orgId: string): Promise<AuthUser> {
+	const { user, ctx } = requireAuthed(locals);
+	const allowed = await contentCheck(async () => {
+		const member = await getOrganizationProvider().getOrgMember(ctx, orgId, ctx.userId);
+		return member !== null;
+	});
+	if (!allowed) throw error(403, 'You do not have access to this organization.');
+	return user;
+}
+
+/**
  * Project members must be members of the project's parent org (§4). Enforced
  * at the rule layer, not as a DB constraint, to leave room for cross-org
  * guests later without a schema migration.

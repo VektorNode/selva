@@ -73,6 +73,10 @@ export class LocalStorageProvider implements IStorageProvider {
 	}
 
 	getPublicUrl(storagePath: string): string {
+		// Local has no CDN, so every asset — public branding and members-only
+		// blobs alike — is served through the `/api/files` proxy. The proxy
+		// route classifies the path (`classifyAssetPath`) and applies the right
+		// auth per visibility, so the URL shape is uniform here by design.
 		return `${this.publicUrlBase}/${storagePath}`;
 	}
 }

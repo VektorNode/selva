@@ -118,6 +118,14 @@ export {
 	transcodeImageIfNeeded
 } from './storage/image.js';
 export type { TranscodeResult } from './storage/image.js';
+export { ASSET_CLASSES, classifyAssetPath, isPublicAssetPath } from './storage/assetClasses.js';
+export type {
+	AssetVisibility,
+	AssetScope,
+	AssetClass,
+	AssetMatch
+} from './storage/assetClasses.js';
+export { withCacheBust } from './storage/cacheBust.js';
 
 // ---------------------------------------------------------------------------
 // data (composition root)

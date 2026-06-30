@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isPublicRoute, isStaticAsset } from '../hooks.server.js';
+import { isPublicRoute, isStaticAsset, isSelfGatingApiRoute } from '../hooks.server.js';
 
 /**
  * `hooks.server.ts` runs deny-by-default: any path not classified as public
@@ -20,7 +20,12 @@ describe('isPublicRoute', () => {
 		['/logout/'], // form action also matches the prefix
 		['/auth/supabase/start'],
 		['/auth/supabase/callback'],
-		['/api/health']
+		['/api/health'],
+		// The blob proxy is self-gating: it must pass the hook so it can apply
+		// per-asset-class auth itself (public branding for guests, 401 for
+		// org/project assets without a session).
+		['/api/files/orgs/abc/branding/logo.webp'],
+		['/api/files/definitions/00000000-0000-0000-0000-000000000000/cover.webp']
 	])('classifies %j as public', (path) => {
 		expect(isPublicRoute(path)).toBe(true);
 	});
@@ -46,6 +51,15 @@ describe('isPublicRoute', () => {
 		['/whatever']
 	])('classifies %j as NOT public (deny-by-default)', (path) => {
 		expect(isPublicRoute(path)).toBe(false);
+	});
+
+	it('treats /api/files as self-gating, not other /api routes', () => {
+		expect(isSelfGatingApiRoute('/api/files/orgs/abc/branding/logo.webp')).toBe(true);
+		expect(isSelfGatingApiRoute('/api/files/anything')).toBe(true);
+		expect(isSelfGatingApiRoute('/api/projects')).toBe(false);
+		expect(isSelfGatingApiRoute('/api/health')).toBe(false);
+		// `/api/filesX` must not be admitted by a loose prefix.
+		expect(isSelfGatingApiRoute('/api/filesX/y')).toBe(false);
 	});
 
 	it('does not treat /loginX as public via prefix match', () => {

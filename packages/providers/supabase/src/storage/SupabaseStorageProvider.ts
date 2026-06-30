@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@supabase/supabase-js';
-import { transcodeImageIfNeeded } from '@selvajs/platform/storage';
+import { transcodeImageIfNeeded, classifyAssetPath } from '@selvajs/platform/storage';
 import type { IStorageProvider } from '@selvajs/platform/storage';
 
 /**
@@ -74,14 +74,19 @@ export class SupabaseStorageProvider implements IStorageProvider {
 	}
 
 	/**
-	 * Route a storage path to a bucket. Any `.gh`/`.ghx` source file is
-	 * private — confidentiality is determined by extension, not location, so
-	 * a path-scheme rename (e.g. `definition.gh` → `versions/v1.gh`) can't
-	 * silently move source files into the public bucket. Everything else
-	 * (covers, archives, thumbnails) is public.
+	 * Route a storage path to a bucket. A path is private when either:
+	 *   - it's a `.gh`/`.ghx` source file — confidentiality by extension, so a
+	 *     path-scheme rename can't silently move sources into the public bucket;
+	 *   - it classifies as a non-`public` asset class (`classifyAssetPath`) —
+	 *     e.g. `orgs/{id}/private/*` pricing sheets are members-only and must
+	 *     never land in the CDN-readable bucket.
+	 * Everything else (branding, covers, archives, thumbnails) is public.
 	 */
 	private bucketFor(storagePath: string): string {
-		return /\.(gh|ghx)$/i.test(storagePath) ? this.privateBucket : this.publicBucket;
+		if (/\.(gh|ghx)$/i.test(storagePath)) return this.privateBucket;
+		const cls = classifyAssetPath(storagePath);
+		if (cls && cls.class.visibility !== 'public') return this.privateBucket;
+		return this.publicBucket;
 	}
 
 	async get(storagePath: string): Promise<Uint8Array | null> {

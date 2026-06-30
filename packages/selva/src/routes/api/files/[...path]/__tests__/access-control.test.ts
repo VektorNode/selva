@@ -6,13 +6,14 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { definitionPaths } from '@selvajs/platform';
+import { definitionPaths, orgPaths } from '@selvajs/platform';
 import {
 	freshProviders,
 	seedAcme,
 	seedBigClient,
 	seedDefinition,
 	actAs,
+	anon,
 	call,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
@@ -59,7 +60,14 @@ describe('GET /api/files/[...path] — path shape gate', () => {
 		['../etc/passwd', 'path traversal'],
 		['random/file.webp', 'not under definitions/'],
 		['definitions/not-a-uuid/cover.webp', 'invalid guid'],
-		['definitions/00000000-0000-0000-0000-000000000000/cover.webp.evil.webp', 'suffix injection']
+		['definitions/00000000-0000-0000-0000-000000000000/cover.webp.evil.webp', 'suffix injection'],
+		// Traversal/empty segments must not classify even though the segment
+		// alphabet would otherwise admit `..` — `hasUnsafeSegment` rejects them
+		// before any class match, so they 404 (never reach auth or storage).
+		['orgs/../branding/logo.webp', 'dotdot as orgId (branding)'],
+		['orgs/../private/pricing.pdf', 'dotdot as orgId (org-private)'],
+		['orgs/abc/private/../branding/logo.webp', 'mid-path traversal'],
+		['orgs//branding/logo.webp', 'empty segment']
 	])('rejects %j with 404 (%s)', async (path) => {
 		tp = await freshProviders();
 		const { alice } = await seedAcme(tp);
@@ -130,5 +138,88 @@ describe('GET /api/files/[...path] — per-resource authorization', () => {
 			params: { path: `definitions/00000000-0000-0000-0000-000000000000/cover.webp` }
 		});
 		expect(res.status).toBe(404);
+	});
+});
+
+// ============================================================================
+// Org branding — public asset class. Logos must serve to anyone, including
+// logged-out visitors (viewer header, login page).
+// ============================================================================
+
+describe('GET /api/files/[...path] — org branding (public)', () => {
+	it('serves a logo to an anonymous (logged-out) caller', async () => {
+		tp = await freshProviders();
+		const { acme } = await seedAcme(tp);
+		// Branding is stored as `.webp`; put a real WebP at the branding path by
+		// uploading a PNG and letting the transcoder rewrite the extension —
+		// same trick as `seedCover`.
+		const webpPath = orgPaths.asset(acme.id, 'logo');
+		const pngPath = webpPath.replace(/\.webp$/, '.png');
+		await tp.config.storage.put(pngPath, TINY_PNG, 'image/png');
+
+		const res = await call(GET, {
+			locals: anon(tp),
+			params: { path: webpPath }
+		});
+		expect(res.status).toBe(200);
+		expect(res.headers.get('content-type')).toBe('image/webp');
+		// Public, not private — branding is CDN-cacheable.
+		expect(res.headers.get('cache-control')).toContain('public');
+	});
+
+	it('404s a branding path with an unregistered kind', async () => {
+		tp = await freshProviders();
+		const { acme } = await seedAcme(tp);
+		const res = await call(GET, {
+			locals: anon(tp),
+			params: { path: `orgs/${acme.id}/branding/banner.webp` }
+		});
+		expect(res.status).toBe(404);
+	});
+});
+
+// ============================================================================
+// Org-private — members-only asset class (e.g. pricing sheets). Reuses the
+// `orgs/{id}/private/*` tier the registry reserves for future org docs.
+// ============================================================================
+
+describe('GET /api/files/[...path] — org-private (members only)', () => {
+	const privatePath = (orgId: string) => orgPaths.privateAsset(orgId, 'pricing.pdf');
+
+	async function seedPrivateDoc(orgId: string): Promise<string> {
+		const p = privatePath(orgId);
+		await tp!.config.storage.put(p, new TextEncoder().encode('PRICES'), 'application/pdf');
+		return p;
+	}
+
+	it('serves an org-private doc to a member of that org', async () => {
+		tp = await freshProviders();
+		const { acme, bob } = await seedAcme(tp);
+		const path = await seedPrivateDoc(acme.id);
+
+		const bobLocals = await actAs(tp, bob.id); // bob is an Acme member
+		const res = await call(GET, { locals: bobLocals, params: { path } });
+		expect(res.status).toBe(200);
+		expect(res.headers.get('cache-control')).toContain('private');
+	});
+
+	it('blocks a member of a different org', async () => {
+		tp = await freshProviders();
+		const { acme } = await seedAcme(tp);
+		const { carol } = await seedBigClient(tp);
+		const path = await seedPrivateDoc(acme.id);
+
+		const carolLocals = await actAs(tp, carol.id);
+		const res = await call(GET, { locals: carolLocals, params: { path } });
+		expect(res.status).toBe(403);
+	});
+
+	it('blocks an anonymous caller with 401', async () => {
+		tp = await freshProviders();
+		const { acme } = await seedAcme(tp);
+		const path = await seedPrivateDoc(acme.id);
+
+		const res = await call(GET, { locals: anon(tp), params: { path } });
+		expect(res.status).toBe(401);
 	});
 });

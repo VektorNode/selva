@@ -1,86 +1,113 @@
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { GuidSchema, definitionPaths } from '@selvajs/platform/definitions';
+import {
+	GuidSchema,
+	definitionPaths,
+	classifyAssetPath,
+	COVER_IMAGE_CONTENT_TYPES
+} from '@selvajs/platform';
 import { getDefinitionMeta, getStorageProvider } from '$lib/server/providers.server';
-import { requireCanViewProject } from '$lib/server/access.server';
+import { requireCanViewProject, requireCanViewOrg } from '$lib/server/access.server';
 
 /**
- * Authenticated cover-image proxy. Today this route serves exactly one shape:
- * `/api/files/definitions/{guid}/cover.{ext}` — the URL `LocalStorageProvider`
- * (and, for private-bucket paths, `SupabaseStorageProvider`) returns from
- * `getPublicUrl`. Anything else is rejected.
+ * Authenticated/­public blob proxy. The set of servable paths is the closed
+ * asset-class registry (`classifyAssetPath` / `ASSET_CLASSES` in
+ * `@selvajs/platform`). Each class declares a visibility; this route maps that
+ * visibility to an authorization check:
  *
- * The original implementation was an extension-gated open proxy: any
- * authenticated user could fetch any storage path whose basename matched
- * an allowed image extension. That was M5 in the audit — the path itself
- * was the only authorization, and a leaked GUID let any authed user pull
- * any cover image regardless of project membership.
+ *   - `public`  (org branding — logo/favicon): served to anyone, incl.
+ *     logged-out visitors, with no auth. Cacheable. The bytes are always a
+ *     rasterized WebP, so there is no XSS surface to gate.
+ *   - `org`     (org-private blobs, e.g. pricing sheets under
+ *     `orgs/{id}/private/*`): `requireCanViewOrg(orgId)`.
+ *   - `project` (definition covers): `requireCanViewProject(projectId)` — the
+ *     M5 hardening, unchanged.
  *
- * Current contract:
- *   1. Path must match `definitions/{valid-guid}/cover.{ext}` exactly.
- *   2. Caller must be allowed to view the parent definition's project
- *      (`requireCanViewProject`) — same gate as the typed
- *      `/api/definitions/[guid]/image/[filename]` route.
- *   3. Extension allowlist remains as defense in depth.
+ * Anything that classifies to no asset class 404s. New blob types are opt-in:
+ * add a registry entry with the right visibility — never a generic
+ * "is the extension allowed" fallthrough. Authorization lives here (the route),
+ * not in the storage layer, per `IStorageProvider`'s contract.
  *
- * Other file shapes don't exist in storage today; if a future feature
- * needs to serve a different blob via the proxy, it adds an explicit
- * branch with its own auth — never a generic "is the extension allowed"
- * fallthrough.
+ * Why a single proxy for all three: with the registry, the route is no longer a
+ * pile of per-shape branches — it classifies once and dispatches on visibility,
+ * so the cover-only contract that this route used to pin now generalizes
+ * without re-opening the M5 hole.
  */
 
-const ALLOWED_EXTENSIONS: Record<string, string> = {
-	'.webp': 'image/webp',
-	'.jpg': 'image/jpeg',
-	'.jpeg': 'image/jpeg',
-	'.png': 'image/png',
-	'.gif': 'image/gif'
+// Content types we set on served blobs. Image types are reused from the
+// canonical `COVER_IMAGE_CONTENT_TYPES` so cover/branding stay in lockstep with
+// the upload validation. `.pdf` is added for the org-private tier (pricing
+// sheets under `orgs/{id}/private/*`). Deliberately NO `image/svg+xml`: no
+// registered class serves SVG (branding is always rasterized WebP), and
+// serving raw SVG would reintroduce the XSS surface the transcoder removes.
+// Anything not listed falls back to `application/octet-stream` (download, not
+// inline-render).
+const CONTENT_TYPE_BY_EXT: Record<string, string> = {
+	...COVER_IMAGE_CONTENT_TYPES,
+	'.pdf': 'application/pdf'
 };
 
-/**
- * Match `definitions/{guid}/cover.{ext}`. Anchored at both ends so a path
- * like `definitions/{guid}/cover.webp.evil.webp` can't sneak through.
- */
-const COVER_PATH_PATTERN =
-	/^definitions\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/cover\.([a-z]+)$/i;
+function contentTypeFor(storagePath: string): string {
+	const dot = storagePath.lastIndexOf('.');
+	const ext = dot === -1 ? '' : storagePath.slice(dot).toLowerCase();
+	return CONTENT_TYPE_BY_EXT[ext] ?? 'application/octet-stream';
+}
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const storagePath = params.path;
 	if (!storagePath) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing path');
 
-	// 1. Path-shape gate — only cover images are served here.
-	const match = COVER_PATH_PATTERN.exec(storagePath);
+	// 1. Classify against the closed registry. No match → unservable → 404.
+	const match = classifyAssetPath(storagePath);
 	if (!match) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
-	const [, guid, rawExt] = match;
-	const ext = `.${rawExt.toLowerCase()}`;
-	if (!ALLOWED_EXTENSIONS[ext]) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
 
-	// Belt-and-suspenders: the regex already validated the GUID shape, but
-	// running it through the canonical schema keeps the contract tied to
-	// one source of truth.
-	const guidParsed = GuidSchema.safeParse(guid);
-	if (!guidParsed.success) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
+	// 2. Authorize per the class's visibility, and resolve the canonical
+	//    storage path to read from. For `project` we re-derive the path from
+	//    `definitionPaths` rather than echoing the request — eliminates any
+	//    chance the matched path resolves to something else after decoding.
+	let canonicalPath = storagePath;
 
-	if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+	switch (match.class.visibility) {
+		case 'public':
+			// No auth — branding is world-readable. The registry's anchored,
+			// safe-alphabet pattern is the only gate the path needs.
+			break;
 
-	// 2. Per-resource auth — the caller must be allowed to view the
-	// definition's parent project. Mirrors the typed
-	// `/api/definitions/[guid]/image/[filename]` route.
-	const record = await getDefinitionMeta().get(locals.ctx, guidParsed.data);
-	if (!record) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
-	await requireCanViewProject(locals, record.projectId);
+		case 'org': {
+			if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+			const orgId = match.scopeId;
+			if (!orgId) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
+			await requireCanViewOrg(locals, orgId);
+			break;
+		}
 
-	// 3. Read the canonical path from `definitionPaths` rather than echoing
-	// the user-supplied one — eliminates any chance the request `params.path`
-	// passes the regex but resolves to something else after URL decoding.
-	const canonicalPath = definitionPaths.image(guidParsed.data);
+		case 'project': {
+			if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+			const guid = match.scopeId;
+			const guidParsed = GuidSchema.safeParse(guid);
+			if (!guidParsed.success) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
+
+			const record = await getDefinitionMeta().get(locals.ctx, guidParsed.data);
+			if (!record) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
+			await requireCanViewProject(locals, record.projectId);
+
+			canonicalPath = definitionPaths.image(guidParsed.data);
+			break;
+		}
+	}
+
+	// 3. Stream the bytes.
 	const bytes = await getStorageProvider().get(canonicalPath);
 	if (!bytes) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
 
+	// Public branding is CDN-cacheable; everything else is per-user private.
+	const cacheControl =
+		match.class.visibility === 'public' ? 'public, max-age=3600' : 'private, max-age=3600';
+
 	return new Response(Buffer.from(bytes), {
 		headers: {
-			'Content-Type': ALLOWED_EXTENSIONS[ext],
-			'Cache-Control': 'private, max-age=3600'
+			'Content-Type': contentTypeFor(canonicalPath),
+			'Cache-Control': cacheControl
 		}
 	});
 };

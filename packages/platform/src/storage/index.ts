@@ -7,3 +7,6 @@ export {
 	transcodeImageIfNeeded
 } from './image.js';
 export type { TranscodeResult } from './image.js';
+export { ASSET_CLASSES, classifyAssetPath, isPublicAssetPath } from './assetClasses.js';
+export type { AssetVisibility, AssetScope, AssetClass, AssetMatch } from './assetClasses.js';
+export { withCacheBust } from './cacheBust.js';

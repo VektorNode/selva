@@ -53,6 +53,11 @@
 		drawerOpen?: boolean;
 		viewerConfig?: ViewerConfig;
 		/**
+		 * Branding logo URL. When set, shown as a small watermark in the viewer's
+		 * bottom-right corner. Omitted/empty renders nothing.
+		 */
+		logoUrl?: string;
+		/**
 		 * UI language for the viewer's own chrome (tools menu, panels, dialogs).
 		 * When set, the viewer provides it to its subtree. When omitted, the viewer
 		 * reads the nearest locale context (set by the host app), defaulting to
@@ -78,6 +83,7 @@
 		isBlurred = false,
 		drawerOpen = false,
 		viewerConfig = {},
+		logoUrl,
 		lang
 	}: Props = $props();
 
@@ -270,6 +276,24 @@
 					<div
 						class="inset-0 absolute z-10 animate-[selva-viewer-fade-in_0.2s_ease-out] backdrop-blur-[2px] transition-all duration-300"
 					></div>
+				{/if}
+
+				{#if logoUrl}
+					<!-- Branding watermark, bottom-right. Matches the tools menu's
+					     bottom offset so it clears the mobile drawer handle, and is
+					     non-interactive so it never intercepts canvas drags. -->
+					<div
+						class="right-4 {isFullscreen ? 'bottom-4' : 'bottom-16 sm:bottom-4'} absolute z-20"
+						style={hideButton
+							? 'opacity: 0; pointer-events: none;'
+							: 'opacity: 1; pointer-events: none;'}
+					>
+						<img
+							src={logoUrl}
+							alt=""
+							class="h-8 max-w-32 drop-shadow-sm sm:h-10 w-auto object-contain opacity-80"
+						/>
+					</div>
 				{/if}
 
 				{#if config.showToolsMenu}

@@ -149,6 +149,17 @@ const PUBLIC_PATH_PREFIXES: readonly string[] = ['/auth/', '/logout'];
 const PUBLIC_API_ROUTES: ReadonlySet<string> = new Set(['/api/health']);
 
 /**
+ * The blob proxy is *self-gating*: `/api/files/[...path]` classifies every
+ * path against the asset-class registry and applies per-class auth itself —
+ * public branding (logo/favicon) serves to anyone, while org/project assets
+ * 401 when no session is attached. So the hook must NOT deny it up front;
+ * instead it's treated like a public route (best-effort session attach) and
+ * the route makes the real decision. This is the ONLY `/api/*` prefix allowed
+ * to carry its own authorization — every other API route stays deny-by-default.
+ */
+const SELF_GATING_API_PREFIX = '/api/files/';
+
+/**
  * Static-asset paths the SvelteKit/adapter-node serves directly. We
  * recognize them so the auth gate doesn't trip and we can apply
  * cache-control headers.
@@ -164,9 +175,14 @@ export function isStaticAsset(pathname: string): boolean {
 	return STATIC_ASSET_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
+export function isSelfGatingApiRoute(pathname: string): boolean {
+	return pathname.startsWith(SELF_GATING_API_PREFIX);
+}
+
 export function isPublicRoute(pathname: string): boolean {
 	if (PUBLIC_PAGE_ROUTES.has(pathname)) return true;
 	if (PUBLIC_API_ROUTES.has(pathname)) return true;
+	if (isSelfGatingApiRoute(pathname)) return true;
 	return PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
@@ -304,10 +320,15 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// the authed state (nav, user chip, etc.). Failure is silent — public
 		// pages must keep rendering for guests. Skipped for public APIs and
 		// the OAuth flow under `/auth/` since neither benefits from the lookup.
+		// Best-effort attach applies to public *pages* and to the self-gating
+		// files proxy: the latter needs `locals.ctx` populated when a session is
+		// present so org/project assets resolve, while still rendering for guests
+		// (who get only public branding).
 		const isPublicPage = PUBLIC_PAGE_ROUTES.has(pathname);
-		const token = isPublicPage ? (event.cookies.get('admin_session') ?? '') : '';
+		const wantsSessionAttach = isPublicPage || isSelfGatingApiRoute(pathname);
+		const token = wantsSessionAttach ? (event.cookies.get('admin_session') ?? '') : '';
 		let user = token ? await providers.auth.verifyToken(token) : null;
-		if (!user && isPublicPage && providers.auth.proxyAuth) {
+		if (!user && wantsSessionAttach && providers.auth.proxyAuth) {
 			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
 
 			// Diagnostic: a user landing on /login under a forward-auth
