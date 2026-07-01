@@ -1,5 +1,11 @@
 # @selvajs/supabase-provider
 
+## 0.14.3
+
+### Patch Changes
+
+- 2173bef: Fix Supabase local port configuration and wire the solve-metric sink into the server test setup.
+
 ## 0.14.2
 
 ### Patch Changes

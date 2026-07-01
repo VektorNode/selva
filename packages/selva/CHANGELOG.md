@@ -1,5 +1,16 @@
 # @selvajs/selva
 
+## 4.6.0
+
+### Minor Changes
+
+- 2173bef: Organization assets & branding. Admins can now upload and manage per-org assets (including a logo) from the admin area, backed by a new asset-upload flow and org asset service. Served files are classified and gated by visibility/access-control checks on the `/api/files` route, and the owning org's logo is forwarded to the viewer as a branding watermark.
+- 2173bef: Run or preview any historical definition version. The versioning tab's "Run" action can now open the runner against an arbitrary version — not just the live/draft channel pointer — via a `?version=` param, and the compute route accepts a matching `versionId`. Explicit-version runs are editor-only and never accessible through share tokens, and the runner shows a "vN preview" badge.
+
+### Patch Changes
+
+- 2173bef: Fix Supabase local port configuration and wire the solve-metric sink into the server test setup.
+
 ## 4.6.0-beta.2
 
 ### Patch Changes
