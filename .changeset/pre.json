@@ -1,5 +1,5 @@
 {
-	"mode": "pre",
+	"mode": "exit",
 	"tag": "beta",
 	"initialVersions": {
 		"@selvajs/cli": "4.5.1",
