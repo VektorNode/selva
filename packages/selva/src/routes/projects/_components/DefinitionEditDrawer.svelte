@@ -44,7 +44,7 @@
 		onClose: () => void;
 		onSave: (guid: string, patch: EditPatch) => Promise<void>;
 		onDelete: (guid: string) => Promise<void>;
-		onOpenRunner: (guid: string, channel?: 'live' | 'draft') => void;
+		onOpenRunner: (guid: string, channel?: 'live' | 'draft', versionId?: string) => void;
 		/** Optional — when set, surfaces a Back link to return to the detail view. */
 		onBack?: () => void;
 	}

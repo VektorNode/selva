@@ -41,7 +41,10 @@
 				inputs: data.schema.inputs,
 				values,
 				definitionUrl: data.ghDefinition,
-				...(data.channel === 'draft' && { channel: 'draft' })
+				// An explicit version pick takes precedence over the channel pointer.
+				...(data.versionId
+					? { versionId: data.versionId }
+					: data.channel === 'draft' && { channel: 'draft' })
 			}),
 			signal
 		});
@@ -104,7 +107,13 @@
 	footerComponentProps={() => ({ label: data.serverLabel })}
 >
 	{#snippet headerRight()}
-		{#if data.channel === 'draft'}
+		{#if data.versionId}
+			<span
+				class="bg-warning/15 text-warning rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase"
+			>
+				v{data.versionNumber} preview
+			</span>
+		{:else if data.channel === 'draft'}
 			<span
 				class="bg-warning/15 text-warning rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase"
 			>

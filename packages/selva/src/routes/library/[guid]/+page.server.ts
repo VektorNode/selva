@@ -19,15 +19,19 @@ export const load = (async ({ params, locals, request, url }) => {
 
 	const guid = params.guid;
 	const channel = url.searchParams.get('channel') === 'draft' ? 'draft' : 'live';
+	// Explicit version pick (versioning tab "Run"): render an arbitrary version,
+	// not just the live/draft pointer. Editor-only, never share-token accessible.
+	const explicitVersionId = url.searchParams.get('version');
 	const clientDefUrl = `local:${guid}`;
 	// `shareToken` is forwarded to the page so the client can include it on
 	// subsequent /api/compute/solve calls. null = user-authenticated session.
 	let shareToken: string | null = null;
 
 	try {
-		// Draft channel is editor-only — share tokens are always live channel.
+		// Draft channel and explicit-version picks are editor-only — share tokens
+		// are always live channel on the pointer.
 		const sharedAccess =
-			channel === 'live'
+			channel === 'live' && !explicitVersionId
 				? await tryResolveShareToken(request, url, guid, 'live', { requireSolve: false })
 				: null;
 		if (sharedAccess) {
@@ -44,13 +48,14 @@ export const load = (async ({ params, locals, request, url }) => {
 		// User-auth path needs the canSolve gate; token-auth was already gated.
 		if (!sharedAccess) await requireCanSolve(locals, record.projectId);
 
-		// Draft channel requires edit permission on top of solve.
-		if (channel === 'draft') {
+		// Draft channel and explicit-version picks require edit permission on top
+		// of solve.
+		if (channel === 'draft' || explicitVersionId) {
 			const { requireEditableDefinition } = await import('$lib/server/access.server');
 			await requireEditableDefinition(locals, guid);
 		}
 
-		const loaded = await loadDefinitionForRender(ctx, record, channel);
+		const loaded = await loadDefinitionForRender(ctx, record, channel, explicitVersionId);
 
 		// Owning org's logo, for viewer branding. Same `ctx` already authorized to
 		// load this definition (user session or share-token ctx, which carries
@@ -65,6 +70,10 @@ export const load = (async ({ params, locals, request, url }) => {
 			serverLabel: loaded.computeServer.label,
 			orgLogoUrl,
 			channel,
+			// When rendering an explicit version, forward its id (so solve calls
+			// target the same version) and number (for the preview badge).
+			versionId: explicitVersionId,
+			versionNumber: loaded.version.versionNumber,
 			// Forward to the client so /api/compute/solve calls can include it.
 			// Null when the request was user-authenticated (session cookie carries auth).
 			shareToken,

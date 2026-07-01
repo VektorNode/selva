@@ -59,26 +59,33 @@ export class DefinitionLoadError extends Error {
 }
 
 /**
- * Load a definition's version blob + schema (with merged compute defaults) for
- * the given channel. Throws `DefinitionLoadError` for classified failures so
- * the caller can translate to HTTP status codes.
+ * Load a definition's version blob + schema (with merged compute defaults).
+ * By default resolves the `channel` pointer (live/draft); pass
+ * `explicitVersionId` to render an arbitrary historical version instead — the
+ * caller must gate that behind edit permission (editor-only, like the draft
+ * channel). Throws `DefinitionLoadError` for classified failures so the caller
+ * can translate to HTTP status codes.
  */
 export async function loadDefinitionForRender(
 	ctx: RequestContext,
 	record: DefinitionRecord,
-	channel: DefinitionChannel
+	channel: DefinitionChannel,
+	explicitVersionId?: string | null
 ): Promise<LoadedDefinition> {
 	const storage = getStorageProvider();
 	const meta = getDefinitionMeta();
 	const projects = getProjectProvider();
 
-	const versionId = channel === 'draft' ? record.draftVersionId : record.liveVersionId;
+	const versionId =
+		explicitVersionId ?? (channel === 'draft' ? record.draftVersionId : record.liveVersionId);
 	if (!versionId)
 		throw new DefinitionLoadError('data', `Definition '${record.guid}' has no ${channel} version`);
 
 	const version = await meta.getVersion(ctx, versionId);
-	if (!version)
-		throw new DefinitionLoadError('data', `${channel} version missing for '${record.guid}'`);
+	if (!version) throw new DefinitionLoadError('data', `version missing for '${record.guid}'`);
+	// An explicitly requested version must belong to this definition.
+	if (version.definitionId !== record.guid)
+		throw new DefinitionLoadError('data', `version does not belong to '${record.guid}'`);
 
 	const definitionSource = await storage.get(version.fileKey);
 	if (!definitionSource)

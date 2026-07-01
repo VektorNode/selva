@@ -12,7 +12,7 @@
 		showShare: boolean;
 		onClose: () => void;
 		onEdit: (record: DefinitionRecord) => void;
-		onOpenRunner: (guid: string, channel?: 'live' | 'draft') => void;
+		onOpenRunner: (guid: string, channel?: 'live' | 'draft', versionId?: string) => void;
 		onShare: (record: DefinitionRecord) => void;
 	}
 

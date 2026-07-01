@@ -415,8 +415,10 @@
 			editCameFromDetail = true;
 			drawerRecord = null;
 		}}
-		onOpenRunner={(guid, channel) =>
-			goto(`/library/${guid}${channel === 'draft' ? '?channel=draft' : ''}`)}
+		onOpenRunner={(guid, channel, versionId) =>
+			goto(
+				`/library/${guid}${versionId ? `?version=${versionId}` : channel === 'draft' ? '?channel=draft' : ''}`
+			)}
 	/>
 {/if}
 
@@ -444,8 +446,10 @@
 				: undefined}
 			onSave={saveDefinition}
 			onDelete={deleteDefinition}
-			onOpenRunner={(guid, channel) =>
-				goto(`/library/${guid}${channel === 'draft' ? '?channel=draft' : ''}`)}
+			onOpenRunner={(guid, channel, versionId) =>
+				goto(
+					`/library/${guid}${versionId ? `?version=${versionId}` : channel === 'draft' ? '?channel=draft' : ''}`
+				)}
 		/>
 	{/key}
 {/if}

@@ -235,6 +235,10 @@
 	// reachable. Each successful log fetch replaces the displayed logs with
 	// the full file content, surfacing the blackout chunk in one shot.
 	async function waitForAppRestart(previousInstanceId: string | null | undefined) {
+		// The daemonized runner never streams over SSE, so the SSE `restarting`
+		// event can't drive this flag — set it here, where we actually begin the
+		// restart wait, so the "PM2 is restarting…" banner reflects reality.
+		updateRestarting = true;
 		updateLogs += '\nWaiting for app to come back online…\n';
 		// Give PM2 a moment to actually kill the old process before we start polling.
 		await new Promise((r) => setTimeout(r, 2000));
@@ -278,6 +282,20 @@
 			const logVerdict = exitCodeFromLog(updateLogs);
 			if (newProcessUp) {
 				updateExitCode = logVerdict ?? 0;
+				updateRunning = false;
+				updateRestarting = false;
+				return;
+			}
+			// No-restart terminal: the runner reached a verdict WITHOUT bringing up
+			// a new process — the pre-flight "already up to date" path exits before
+			// `pm2 stop`, and an early failure (e.g. `pm2 update` failed) aborts while
+			// the old process is still serving. In both cases the instanceId never
+			// changes, so newProcessUp can never fire; keying on it alone would wait
+			// out the full 5-minute timeout and report a false failure. When the app
+			// is currently reachable+warm on the SAME instanceId and the log carries a
+			// terminal marker, that marker IS the outcome.
+			if (logVerdict !== null && health && ready && health.instanceId === previousInstanceId) {
+				updateExitCode = logVerdict;
 				updateRunning = false;
 				updateRestarting = false;
 				return;
@@ -357,23 +375,21 @@
 				}
 			}
 
-			// PM2 kills the SSE stream as part of the restart — so a dropped stream
-			// (or a non-zero "exit" arriving moments before death) after we've seen
-			// the "restarting" signal is EXPECTED, not a failure. Treat it as such
-			// and let the health poller decide whether the new process came up.
-			if (sawRestarting) {
-				await waitForAppRestart(previousInstanceId);
-			} else if (sawExit && streamExitCode === 0) {
-				// Clean exit, no restart (e.g. --no-restart or "already up to date").
-				updateExitCode = 0;
-				updateRunning = false;
-			} else if (sawExit) {
-				// Real failure before we ever got to the restart phase.
-				updateExitCode = streamExitCode ?? -1;
+			// The POST spawns a LAUNCHER that daemonizes the real update runner and
+			// then exits 0 on its own. So the SSE stream closing with exit 0 means
+			// "runner launched", NOT "update finished" — and because the runner's
+			// output (pm2 stop/start, npm, health probe, rollback) is redirected to
+			// the log file, the SSE stream never carries the `restarting` signal or
+			// the runner's real exit code. The only source of truth from here is
+			// /api/health + the log file, which waitForAppRestart polls.
+			//
+			// The one case we can decide from the stream alone: the launcher itself
+			// exiting non-zero means it failed before daemonizing anything, so nothing
+			// is updating in the background — surface that directly.
+			if (sawExit && !sawRestarting && streamExitCode !== null && streamExitCode !== 0) {
+				updateExitCode = streamExitCode;
 				updateRunning = false;
 			} else {
-				// Stream ended without exit and without restart signal — unusual,
-				// but still poll health in case the script silently restarted.
 				await waitForAppRestart(previousInstanceId);
 			}
 		} catch (err) {
