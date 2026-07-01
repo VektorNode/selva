@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/ui",
-	"version": "4.11.0",
+	"version": "4.12.0",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
 	"publishConfig": {
