@@ -10,6 +10,13 @@ export interface SerializableMaterial {
 	roughness: number;
 	opacity: number;
 	transparent: boolean;
+	/**
+	 * Optional color-map texture reference: an http(s) URL, a data URI, or a plugin asset URL
+	 * (`http://localhost:{port}/assets/{hash}`). Absent for untextured materials — the field is
+	 * omitted from JSON entirely, so pre-texture payloads are unchanged. When set, the mesh blob
+	 * also carries per-vertex UVs (FLAG_HAS_UVS) for meshes using this material.
+	 */
+	map?: string;
 }
 
 /**

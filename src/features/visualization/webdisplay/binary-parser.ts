@@ -40,6 +40,26 @@ export const FLAG_UINT16_INDICES = 0x2;
  * pass compress far better. Decoding reverses the filter with a running prefix sum.
  */
 export const FLAG_DELTA_ENCODED = 0x4;
+/**
+ * Bit 3 of the geometry flags word: a UV chunk trails the index block. Layout:
+ * `uvFormat(u32: 0 = uint16 quantized, 1 = float32) | uvOrigin(2×f64) | uvScale(2×f64) | data`,
+ * with the element count implied by vertexCount. Quantized UVs reconstruct as
+ * `uv = origin + q * scale` (q unsigned in [0, 65535]) and are delta+zigzag filtered per component
+ * (independent u/v predictors) iff FLAG_DELTA_ENCODED; float32 UVs are never filtered. Absent flag
+ * = absent chunk, so untextured blobs are byte-identical to pre-chunk writers.
+ */
+export const FLAG_HAS_UVS = 0x8;
+/**
+ * Bit 4 of the geometry flags word: a vertex-color chunk trails the index block (after the UV
+ * chunk when both are present). Layout: `uint8 rgb[vertexCount*3]`, delta+zigzag filtered per
+ * channel (wrapped 8-bit, independent r/g/b predictors) iff FLAG_DELTA_ENCODED.
+ */
+export const FLAG_HAS_VERTEX_COLORS = 0x10;
+
+/** uvFormat value inside the UV chunk: uint16 quantized. */
+export const UV_FORMAT_UINT16 = 0;
+/** uvFormat value inside the UV chunk: raw float32. */
+export const UV_FORMAT_FLOAT32 = 1;
 
 const HEADER_PREAMBLE_BYTES = 4 /* magic */ + 4 /* version */ + 4; /* metadataLen */
 const GEOMETRY_HEADER_BYTES =
@@ -69,6 +89,11 @@ export interface BinaryMeshMetadata {
  * views over the original `ArrayBuffer` — zero copies; the consumer is responsible for not mutating
  * the underlying buffer if it cares about safety, or for calling `.slice()` to detach. Delta-encoded
  * blobs (FLAG_DELTA_ENCODED) decode into freshly allocated arrays instead.
+ *
+ * `uvs` / `colors` are the optional trailing chunks (FLAG_HAS_UVS / FLAG_HAS_VERTEX_COLORS), null
+ * when the blob doesn't carry them. UVs are returned dequantized to absolute Float32 values (u,v
+ * per vertex), so consumers can hand them straight to a `BufferAttribute(uvs, 2)`. Colors are raw
+ * r,g,b bytes per vertex for a normalized `BufferAttribute(colors, 3, true)`.
  */
 export interface ParsedBinaryMeshBatch {
 	metadata: BinaryMeshMetadata;
@@ -77,6 +102,8 @@ export interface ParsedBinaryMeshBatch {
 	indices: Uint16Array | Uint32Array;
 	origin: [number, number, number];
 	scale: [number, number, number];
+	uvs: Float32Array | null;
+	colors: Uint8Array | null;
 }
 
 // ============================================================================
@@ -271,6 +298,21 @@ export function parseBinaryMeshBatch(
 				? decodeDeltaIndices16(indicesView)
 				: decodeDeltaIndices32(indicesView);
 	}
+	offset += indicesByteLength;
+
+	// Optional trailing chunks (UV first, then colors). Blobs from pre-chunk writers simply end
+	// here; the flags gate every read, so nothing is consumed when the chunks are absent.
+	let uvs: Float32Array | null = null;
+	if ((flags & FLAG_HAS_UVS) !== 0) {
+		const parsed = parseUvChunk(bytes, view, offset, vertexCount, deltaEncoded);
+		uvs = parsed.uvs;
+		offset = parsed.offset;
+	}
+
+	let colors: Uint8Array | null = null;
+	if ((flags & FLAG_HAS_VERTEX_COLORS) !== 0) {
+		colors = parseColorChunk(bytes, offset, vertexCount, deltaEncoded);
+	}
 
 	return {
 		metadata,
@@ -278,8 +320,123 @@ export function parseBinaryMeshBatch(
 		vertices: verticesView,
 		indices: indicesView,
 		origin: [originX, originY, originZ],
-		scale: [scaleX, scaleY, scaleZ]
+		scale: [scaleX, scaleY, scaleZ],
+		uvs,
+		colors
 	};
+}
+
+/** Byte size of the UV chunk header: uvFormat(u32) + uvOrigin(2×f64) + uvScale(2×f64). */
+const UV_CHUNK_HEADER_BYTES = 4 + 16 + 16;
+
+/**
+ * Parses the trailing UV chunk into absolute Float32 u,v pairs. Quantized UVs reconstruct as
+ * `origin + q * scale` with an unsigned q, undoing the per-component delta+zigzag filter when the
+ * blob-wide delta flag is set; float32 UVs are copied out as-is (never filtered).
+ */
+function parseUvChunk(
+	bytes: Uint8Array,
+	view: DataView,
+	offset: number,
+	vertexCount: number,
+	deltaEncoded: boolean
+): { uvs: Float32Array; offset: number } {
+	if (offset + UV_CHUNK_HEADER_BYTES > bytes.byteLength) {
+		throw fail('Insufficient data to read UV chunk header.', {
+			expectedBytes: UV_CHUNK_HEADER_BYTES,
+			availableBytes: bytes.byteLength - offset,
+			offset
+		});
+	}
+
+	const uvFormat = view.getUint32(offset, true);
+	offset += 4;
+	const originU = view.getFloat64(offset, true);
+	offset += 8;
+	const originV = view.getFloat64(offset, true);
+	offset += 8;
+	const scaleU = view.getFloat64(offset, true);
+	offset += 8;
+	const scaleV = view.getFloat64(offset, true);
+	offset += 8;
+
+	const componentCount = vertexCount * 2;
+	const useFloat32 = uvFormat === UV_FORMAT_FLOAT32;
+	const dataByteLength = componentCount * (useFloat32 ? 4 : 2);
+	if (offset + dataByteLength > bytes.byteLength) {
+		throw fail('Insufficient data to read UV chunk.', {
+			expectedBytes: dataByteLength,
+			availableBytes: bytes.byteLength - offset,
+			offset,
+			uvFormat,
+			vertexCount
+		});
+	}
+
+	const absoluteOffset = bytes.byteOffset + offset;
+	let uvs: Float32Array;
+	if (useFloat32) {
+		// Copy (not view) so the attribute owns its memory like the quantized path.
+		uvs = readFloat32Vertices(bytes.buffer, absoluteOffset, componentCount).slice();
+	} else {
+		const raw = readUint16Array(bytes.buffer, absoluteOffset, componentCount);
+		uvs = new Float32Array(componentCount);
+		let qu = 0;
+		let qv = 0;
+		for (let i = 0; i < componentCount; i += 2) {
+			if (deltaEncoded) {
+				qu = (qu + unzigzag(raw[i]!)) & 0xffff;
+				qv = (qv + unzigzag(raw[i + 1]!)) & 0xffff;
+			} else {
+				qu = raw[i]!;
+				qv = raw[i + 1]!;
+			}
+			uvs[i] = originU + qu * scaleU;
+			uvs[i + 1] = originV + qv * scaleV;
+		}
+	}
+
+	return { uvs, offset: offset + dataByteLength };
+}
+
+/**
+ * Parses the trailing vertex-color chunk into raw r,g,b bytes, undoing the per-channel wrapped
+ * 8-bit delta+zigzag filter when the blob-wide delta flag is set.
+ */
+function parseColorChunk(
+	bytes: Uint8Array,
+	offset: number,
+	vertexCount: number,
+	deltaEncoded: boolean
+): Uint8Array {
+	const byteLength = vertexCount * 3;
+	if (offset + byteLength > bytes.byteLength) {
+		throw fail('Insufficient data to read vertex-color chunk.', {
+			expectedBytes: byteLength,
+			availableBytes: bytes.byteLength - offset,
+			offset,
+			vertexCount
+		});
+	}
+
+	const raw = bytes.subarray(offset, offset + byteLength);
+	if (!deltaEncoded) {
+		return raw.slice();
+	}
+
+	const colors = new Uint8Array(byteLength);
+	let r = 0;
+	let g = 0;
+	let b = 0;
+	for (let i = 0; i < byteLength; i += 3) {
+		r = (r + unzigzag(raw[i]!)) & 0xff;
+		g = (g + unzigzag(raw[i + 1]!)) & 0xff;
+		b = (b + unzigzag(raw[i + 2]!)) & 0xff;
+		colors[i] = r;
+		colors[i + 1] = g;
+		colors[i + 2] = b;
+	}
+	return colors;
 }
 
 // ============================================================================

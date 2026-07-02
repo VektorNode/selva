@@ -4,6 +4,7 @@ import { parseColor } from '../threejs/three-helpers';
 import { getLogger } from '@/core';
 
 import { FLAG_FLOAT32, parseBinaryMeshBatch } from './binary-parser';
+import { applyTextureMap } from './texture-cache';
 
 import type { ParsedBinaryMeshBatch } from './binary-parser';
 import type {
@@ -206,13 +207,24 @@ function buildMeshesFromParsed(
 	}
 
 	const meshCreateStart = performance.now();
-	const materials = materialsSrc.map(createMaterial);
+	// Vertex colors are batch-wide when present (meshes without real colors carry a white fill,
+	// which multiplies to identity), so the material can enable vertexColors unconditionally.
+	const materials = materialsSrc.map((m) =>
+		createMaterial(m, { vertexColors: parsed.colors != null })
+	);
 
 	const meshes: THREE.Mesh[] = [];
 
 	for (const group of groups) {
 		if (mergeByMaterial && group.meshes.length > 1) {
-			const mergedMesh = createMergedMesh(group, worldVertices, parsed.indices, materials);
+			const mergedMesh = createMergedMesh(
+				group,
+				worldVertices,
+				parsed.indices,
+				materials,
+				parsed.uvs,
+				parsed.colors
+			);
 			mergedMesh.userData.sourceComponentId = sourceComponentId ?? null;
 			meshes.push(mergedMesh);
 		} else {
@@ -220,7 +232,9 @@ function buildMeshesFromParsed(
 				group,
 				worldVertices,
 				parsed.indices,
-				materials
+				materials,
+				parsed.uvs,
+				parsed.colors
 			);
 			for (const mesh of individualMeshes) {
 				mesh.userData.sourceComponentId = sourceComponentId ?? null;
@@ -294,15 +308,19 @@ function maybeRotateFloat32Vertices(
 // MATERIAL CONSTRUCTION
 // ============================================================================
 
-function createMaterial(matData: SerializableMaterial): THREE.MeshPhysicalMaterial {
+function createMaterial(
+	matData: SerializableMaterial,
+	options?: { vertexColors?: boolean }
+): THREE.MeshPhysicalMaterial {
 	const color = parseColor(matData.color);
 
-	return new THREE.MeshPhysicalMaterial({
+	const material = new THREE.MeshPhysicalMaterial({
 		color,
 		metalness: matData.metalness,
 		roughness: matData.roughness,
 		opacity: matData.opacity,
 		transparent: matData.transparent,
+		vertexColors: options?.vertexColors ?? false,
 		side: THREE.DoubleSide,
 		// Reduced polygon offset to minimize artifacts
 		// Only use minimal offset to prevent z-fighting on coplanar faces
@@ -313,6 +331,15 @@ function createMaterial(matData: SerializableMaterial): THREE.MeshPhysicalMateri
 		depthWrite: true,
 		depthTest: true
 	});
+
+	// Texture loading is async (image decode); the cache assigns `material.map` when ready and
+	// flags needsUpdate, so the mesh renders untextured for at most the first frames. Hash-keyed
+	// asset URLs are immutable, so each texture is fetched and decoded once per session.
+	if (matData.map) {
+		applyTextureMap(material, matData.map);
+	}
+
+	return material;
 }
 
 // ============================================================================
@@ -331,7 +358,9 @@ function createMergedMesh(
 	group: MaterialGroup,
 	allVertices: Float32Array,
 	allIndices: Uint16Array | Uint32Array,
-	materials: THREE.Material[]
+	materials: THREE.Material[],
+	allUvs: Float32Array | null = null,
+	allColors: Uint8Array | null = null
 ): THREE.Mesh {
 	let totalVertexCount = 0;
 	let totalIndexCount = 0;
@@ -342,6 +371,8 @@ function createMergedMesh(
 
 	const mergedVertices = new Float32Array(totalVertexCount * 3);
 	const mergedIndices = new Uint32Array(totalIndexCount);
+	const mergedUvs = allUvs ? new Float32Array(totalVertexCount * 2) : null;
+	const mergedColors = allColors ? new Uint8Array(totalVertexCount * 3) : null;
 
 	let vertexWriteCursor = 0;
 	let indexWriteCursor = 0;
@@ -353,6 +384,21 @@ function createMergedMesh(
 			allVertices.subarray(componentStart, componentStart + componentLen),
 			vertexWriteCursor * 3
 		);
+
+		if (mergedUvs && allUvs) {
+			const uvStart = meshMeta.vertexStart * 2;
+			mergedUvs.set(
+				allUvs.subarray(uvStart, uvStart + meshMeta.vertexCount * 2),
+				vertexWriteCursor * 2
+			);
+		}
+
+		if (mergedColors && allColors) {
+			mergedColors.set(
+				allColors.subarray(componentStart, componentStart + componentLen),
+				vertexWriteCursor * 3
+			);
+		}
 
 		const indicesSlice = allIndices.subarray(
 			meshMeta.indexStart,
@@ -374,6 +420,12 @@ function createMergedMesh(
 	const geometry = new THREE.BufferGeometry();
 	geometry.setAttribute('position', new THREE.BufferAttribute(mergedVertices, 3));
 	geometry.setIndex(new THREE.BufferAttribute(mergedIndices, 1));
+	if (mergedUvs) {
+		geometry.setAttribute('uv', new THREE.BufferAttribute(mergedUvs, 2));
+	}
+	if (mergedColors) {
+		geometry.setAttribute('color', new THREE.BufferAttribute(mergedColors, 3, true));
+	}
 	geometry.computeVertexNormals();
 
 	const threeMesh = new THREE.Mesh(geometry, materials[group.materialId]);
@@ -407,7 +459,9 @@ function createIndividualMeshes(
 	group: MaterialGroup,
 	allVertices: Float32Array,
 	allIndices: Uint16Array | Uint32Array,
-	materials: THREE.Material[]
+	materials: THREE.Material[],
+	allUvs: Float32Array | null = null,
+	allColors: Uint8Array | null = null
 ): THREE.Mesh[] {
 	const meshes: THREE.Mesh[] = [];
 
@@ -432,6 +486,15 @@ function createIndividualMeshes(
 		const geometry = new THREE.BufferGeometry();
 		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 		geometry.setIndex(new THREE.BufferAttribute(rebasedIndices, 1));
+		if (allUvs) {
+			const uvStart = meshMeta.vertexStart * 2;
+			const uvs = allUvs.slice(uvStart, uvStart + meshMeta.vertexCount * 2);
+			geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+		}
+		if (allColors) {
+			const colors = allColors.slice(componentStart, componentStart + componentLen);
+			geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3, true));
+		}
 		geometry.computeVertexNormals();
 
 		const mesh = new THREE.Mesh(geometry, materials[group.materialId]);

@@ -9,6 +9,8 @@ import {
 	COMPRESSED_MESH_MAGIC,
 	FLAG_DELTA_ENCODED,
 	FLAG_FLOAT32,
+	FLAG_HAS_UVS,
+	FLAG_HAS_VERTEX_COLORS,
 	FLAG_UINT16_INDICES,
 	parseBinaryMeshBatch
 } from '../binary-parser';
@@ -175,6 +177,77 @@ describe('parseBinaryMeshBatch', () => {
 			expect(parsed.metadata.groups).toHaveLength(1);
 			expect(parsed.metadata.groups[0]!.meshes[0]!.name).toBe('cube');
 			expect(parsed.metadata.sourceComponentId).toBe('gh-component-xyz');
+		});
+	});
+
+	describe('trailing UV / vertex-color chunks', () => {
+		const vertices = new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]);
+		const indices = new Uint32Array([0, 1, 2, 0, 2, 3]);
+
+		it('returns null uvs/colors when the chunks are absent', () => {
+			const parsed = parseBinaryMeshBatch(encodeBatchPayload(vertices, indices, EMPTY_METADATA));
+
+			expect(parsed.flags & FLAG_HAS_UVS).toBe(0);
+			expect(parsed.flags & FLAG_HAS_VERTEX_COLORS).toBe(0);
+			expect(parsed.uvs).toBeNull();
+			expect(parsed.colors).toBeNull();
+		});
+
+		it('roundtrips quantized uvs within precision', () => {
+			const uvs = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
+			const parsed = parseBinaryMeshBatch(
+				encodeBatchPayload(vertices, indices, { ...EMPTY_METADATA, uvs })
+			);
+
+			expect(parsed.flags & FLAG_HAS_UVS).toBe(FLAG_HAS_UVS);
+			expect(parsed.uvs).toBeInstanceOf(Float32Array);
+			for (let i = 0; i < uvs.length; i++) {
+				// Quantization error bound: extent / 65535.
+				expect(parsed.uvs![i]).toBeCloseTo(uvs[i]!, 4);
+			}
+		});
+
+		it('roundtrips heavily tiled uvs exactly via the float32 fallback', () => {
+			// Extent 100 => step 100/65535 > 1/4096 => float32 chunk.
+			const uvs = new Float32Array([0, 0, 100, 0, 100, 100, 0, 100]);
+			const parsed = parseBinaryMeshBatch(
+				encodeBatchPayload(vertices, indices, { ...EMPTY_METADATA, uvs })
+			);
+
+			expect(Array.from(parsed.uvs!)).toEqual(Array.from(uvs));
+		});
+
+		it('roundtrips vertex colors exactly, including wrapping deltas', () => {
+			// Full-range jumps (0 → 255 → 1) exercise the wrapped 8-bit delta arithmetic.
+			const colors = new Uint8Array([0, 255, 128, 255, 0, 1, 1, 254, 255, 10, 20, 30]);
+			const parsed = parseBinaryMeshBatch(
+				encodeBatchPayload(vertices, indices, { ...EMPTY_METADATA, colors })
+			);
+
+			expect(parsed.flags & FLAG_HAS_VERTEX_COLORS).toBe(FLAG_HAS_VERTEX_COLORS);
+			expect(Array.from(parsed.colors!)).toEqual(Array.from(colors));
+			expect(parsed.uvs).toBeNull();
+		});
+
+		it('decodes both chunks in uv-then-color order', () => {
+			const uvs = new Float32Array([0, 0, 0.5, 0, 0.5, 0.5, 0, 0.5]);
+			const colors = new Uint8Array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]);
+			const parsed = parseBinaryMeshBatch(
+				encodeBatchPayload(vertices, indices, { ...EMPTY_METADATA, uvs, colors })
+			);
+
+			expect(Array.from(parsed.colors!)).toEqual(Array.from(colors));
+			for (let i = 0; i < uvs.length; i++) {
+				expect(parsed.uvs![i]).toBeCloseTo(uvs[i]!, 4);
+			}
+		});
+
+		it('throws on a truncated uv chunk', () => {
+			const uvs = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
+			const base64 = encodeBatchPayload(vertices, indices, { ...EMPTY_METADATA, uvs });
+			const bytes = new Uint8Array(Buffer.from(base64, 'base64'));
+
+			expect(() => parseBinaryMeshBatch(bytes.subarray(0, bytes.length - 4))).toThrow(/UV chunk/);
 		});
 	});
 

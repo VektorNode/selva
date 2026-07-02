@@ -3,7 +3,11 @@ import {
 	BINARY_MESH_VERSION,
 	FLAG_DELTA_ENCODED,
 	FLAG_FLOAT32,
-	FLAG_UINT16_INDICES
+	FLAG_HAS_UVS,
+	FLAG_HAS_VERTEX_COLORS,
+	FLAG_UINT16_INDICES,
+	UV_FORMAT_FLOAT32,
+	UV_FORMAT_UINT16
 } from '@/features/visualization/webdisplay/binary-parser';
 import type {
 	MaterialGroup,
@@ -159,6 +163,10 @@ interface EncodeOptions {
 	groups: MaterialGroup[];
 	sourceComponentId?: string;
 	forceFloat32?: boolean;
+	/** Optional absolute u,v pairs per vertex (length = vertexCount * 2) → trailing UV chunk. */
+	uvs?: Float32Array | null;
+	/** Optional r,g,b bytes per vertex (length = vertexCount * 3) → trailing color chunk. */
+	colors?: Uint8Array | null;
 }
 
 /**
@@ -172,7 +180,14 @@ export function encodeBatchPayload(
 	faces: Uint32Array,
 	encodeOptions: EncodeOptions
 ): string {
-	const { materials, groups, sourceComponentId, forceFloat32 = false } = encodeOptions;
+	const {
+		materials,
+		groups,
+		sourceComponentId,
+		forceFloat32 = false,
+		uvs = null,
+		colors = null
+	} = encodeOptions;
 
 	const metadataObject = sourceComponentId
 		? { materials, groups, sourceComponentId }
@@ -186,10 +201,23 @@ export function encodeBatchPayload(
 		forceFloat32
 	);
 
+	if (uvs && uvs.length !== vertexCount * 2) {
+		throw new Error(`uvs length must be vertexCount * 2 (${vertexCount * 2}), got ${uvs.length}`);
+	}
+	if (colors && colors.length !== vertexCount * 3) {
+		throw new Error(
+			`colors length must be vertexCount * 3 (${vertexCount * 3}), got ${colors.length}`
+		);
+	}
+
+	const uvFormat = uvs ? computeUvFormat(uvs) : null;
+
 	// Mirror C#: use uint16 indices when the whole batch addresses ≤ 65535 vertices.
 	const useUint16Indices = vertexCount > 0 && vertexCount - 1 <= 65535;
 	const verticesByteLength = vertexCount * 3 * (useFloat32 ? 4 : 2);
 	const indicesByteLength = faces.length * (useUint16Indices ? 2 : 4);
+	const uvChunkByteLength = uvs ? 4 + 16 + 16 + uvs.length * (uvFormat!.useFloat32 ? 4 : 2) : 0;
+	const colorChunkByteLength = colors ? colors.length : 0;
 
 	const totalBytes =
 		4 /* magic */ +
@@ -202,7 +230,9 @@ export function encodeBatchPayload(
 		4 /* vertexCount */ +
 		verticesByteLength +
 		4 /* indexCount */ +
-		indicesByteLength;
+		indicesByteLength +
+		uvChunkByteLength +
+		colorChunkByteLength;
 
 	const buffer = new ArrayBuffer(totalBytes);
 	const view = new DataView(buffer);
@@ -221,6 +251,8 @@ export function encodeBatchPayload(
 	let flags = FLAG_DELTA_ENCODED;
 	if (useFloat32) flags |= FLAG_FLOAT32;
 	if (useUint16Indices) flags |= FLAG_UINT16_INDICES;
+	if (uvs) flags |= FLAG_HAS_UVS;
+	if (colors) flags |= FLAG_HAS_VERTEX_COLORS;
 	view.setUint32(offset, flags, true);
 	offset += 4;
 	view.setFloat64(offset, originX, true);
@@ -281,8 +313,119 @@ export function encodeBatchPayload(
 			prev = faces[i]!;
 		}
 	}
+	offset += indicesByteLength;
+
+	// Trailing UV chunk, mirroring the C# writer (delta+zigzag per component when quantized).
+	if (uvs && uvFormat) {
+		view.setUint32(offset, uvFormat.useFloat32 ? UV_FORMAT_FLOAT32 : UV_FORMAT_UINT16, true);
+		offset += 4;
+		view.setFloat64(offset, uvFormat.originU, true);
+		offset += 8;
+		view.setFloat64(offset, uvFormat.originV, true);
+		offset += 8;
+		view.setFloat64(offset, uvFormat.scaleU, true);
+		offset += 8;
+		view.setFloat64(offset, uvFormat.scaleV, true);
+		offset += 8;
+
+		if (uvFormat.useFloat32) {
+			for (let i = 0; i < uvs.length; i++) {
+				view.setFloat32(offset + i * 4, uvs[i]!, true);
+			}
+			offset += uvs.length * 4;
+		} else {
+			let pu = 0;
+			let pv = 0;
+			for (let i = 0; i < uvs.length; i += 2) {
+				const qu = quantizeUv(uvs[i]!, uvFormat.originU, uvFormat.scaleU);
+				const qv = quantizeUv(uvs[i + 1]!, uvFormat.originV, uvFormat.scaleV);
+				view.setUint16(offset + i * 2, zigzag16(wrap16(qu - pu)), true);
+				view.setUint16(offset + (i + 1) * 2, zigzag16(wrap16(qv - pv)), true);
+				pu = qu;
+				pv = qv;
+			}
+			offset += uvs.length * 2;
+		}
+	}
+
+	// Trailing color chunk: per-channel wrapped 8-bit delta, zigzagged.
+	if (colors) {
+		let pr = 0;
+		let pg = 0;
+		let pb = 0;
+		for (let i = 0; i < colors.length; i += 3) {
+			u8[offset + i] = zigzag8(wrap8(colors[i]! - pr));
+			u8[offset + i + 1] = zigzag8(wrap8(colors[i + 1]! - pg));
+			u8[offset + i + 2] = zigzag8(wrap8(colors[i + 2]! - pb));
+			pr = colors[i]!;
+			pg = colors[i + 1]!;
+			pb = colors[i + 2]!;
+		}
+	}
 
 	return uint8ToBase64(u8);
+}
+
+interface UvFormat {
+	useFloat32: boolean;
+	originU: number;
+	originV: number;
+	scaleU: number;
+	scaleV: number;
+}
+
+/**
+ * Mirrors the C# writer's UV format decision: quantize over the bounding range unless any axis'
+ * step exceeds 1/4096 (heavily tiled UVs), then fall back to float32 with identity origin/scale.
+ */
+function computeUvFormat(uvs: Float32Array): UvFormat {
+	if (uvs.length === 0) {
+		return { useFloat32: false, originU: 0, originV: 0, scaleU: 1e-12, scaleV: 1e-12 };
+	}
+
+	let minU = uvs[0]!,
+		maxU = uvs[0]!;
+	let minV = uvs[1]!,
+		maxV = uvs[1]!;
+	for (let i = 2; i < uvs.length; i += 2) {
+		const u = uvs[i]!;
+		const v = uvs[i + 1]!;
+		if (u < minU) minU = u;
+		else if (u > maxU) maxU = u;
+		if (v < minV) minV = v;
+		else if (v > maxV) maxV = v;
+	}
+
+	const maxStep = 1 / 4096;
+	if ((maxU - minU) / 65535 > maxStep || (maxV - minV) / 65535 > maxStep) {
+		return { useFloat32: true, originU: 0, originV: 0, scaleU: 1, scaleV: 1 };
+	}
+
+	const eps = 1e-12;
+	return {
+		useFloat32: false,
+		originU: minU,
+		originV: minV,
+		scaleU: Math.max((maxU - minU) / 65535, eps),
+		scaleV: Math.max((maxV - minV) / 65535, eps)
+	};
+}
+
+/** Unsigned UV quantization: q in [0, 65535], uv = origin + q * scale. */
+function quantizeUv(value: number, origin: number, scale: number): number {
+	const q = Math.round((value - origin) / scale);
+	if (q < 0) return 0;
+	if (q > 65535) return 65535;
+	return q;
+}
+
+/** Wrap to signed 8-bit, mirroring the C# writer's `unchecked((sbyte)(...))`. */
+function wrap8(value: number): number {
+	return (value << 24) >> 24;
+}
+
+function zigzag8(delta: number): number {
+	return ((delta << 1) ^ (delta >> 7)) & 0xff;
 }
 
 /** Wrap to signed 16-bit, mirroring the C# writer's `unchecked((short)(...))`. */
