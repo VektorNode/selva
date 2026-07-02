@@ -41,6 +41,16 @@ public class ThreeMaterial
     [JsonProperty("transparent")]
     public bool Transparent { get; set; }
 
+    /// <summary>
+    ///     Optional texture reference for the material's color map: an http(s) URL, a data URI, or
+    ///     a plugin asset URL (<c>http://localhost:{port}/assets/{hash}</c>). Null (the default)
+    ///     omits the field from JSON entirely, keeping untextured materials byte-identical on the
+    ///     wire. A material with a Map also causes WebDisplay to carry the mesh's texture
+    ///     coordinates into the batch.
+    /// </summary>
+    [JsonProperty("map", NullValueHandling = NullValueHandling.Ignore)]
+    public string Map { get; set; }
+
     public static ThreeMaterial Default()
     {
         return new ThreeMaterial

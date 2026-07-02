@@ -66,7 +66,7 @@ public sealed class WebDisplayPreview
 
             foreach (var meshMeta in group.Meshes)
             {
-                var mesh = BuildMesh(verts, indices, meshMeta);
+                var mesh = BuildMesh(verts, indices, decoded.Colors, meshMeta);
                 if (mesh == null)
                 {
                     continue;
@@ -78,7 +78,7 @@ public sealed class WebDisplayPreview
         }
     }
 
-    private static Mesh BuildMesh(float[] verts, int[] indices, MeshMetadata meta)
+    private static Mesh BuildMesh(float[] verts, int[] indices, byte[] colors, MeshMetadata meta)
     {
         var mesh = new Mesh();
 
@@ -89,6 +89,17 @@ public sealed class WebDisplayPreview
         {
             var c = (vStart + v) * 3;
             mesh.Vertices.Add(verts[c], verts[c + 1], verts[c + 2]);
+        }
+
+        // Vertex colors ride the blob batch-wide when any mesh has them (white fill elsewhere);
+        // put them back so rendered viewport modes show the same gradients as the web.
+        if (colors != null)
+        {
+            for (var v = 0; v < meta.VertexCount; v++)
+            {
+                var c = (vStart + v) * 3;
+                mesh.VertexColors.Add(colors[c], colors[c + 1], colors[c + 2]);
+            }
         }
 
         var iStart = meta.IndexStart;

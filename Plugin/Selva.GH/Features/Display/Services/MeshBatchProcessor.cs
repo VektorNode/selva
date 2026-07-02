@@ -52,6 +52,15 @@ public static class MeshBatchProcessor
     ///     extraction inside its parallel meshing pass, so this overload keeps the serial assembly
     ///     pass free of per-vertex copying. A null entry marks a slot whose mesh was invalid; it is
     ///     skipped, exactly as the mesh-taking overload skips null/invalid meshes.
+    ///
+    ///     <paramref name="uvArrays" /> / <paramref name="colorArrays" /> optionally carry per-mesh
+    ///     texture coordinates (vertexCount * 2 floats) and vertex colors (vertexCount * 3 bytes);
+    ///     null lists — or null entries — mean "this mesh has none". When ANY mesh in the batch has
+    ///     a channel, the whole batch carries it and the meshes without it get neutral fill
+    ///     (UV 0,0 / color white), which delta+deflate compresses to almost nothing and which
+    ///     renders identically to no channel at all (white multiplies to identity; a uv attribute
+    ///     is inert without a texture). When NO mesh has the channel, nothing is written and the
+    ///     blob stays byte-identical to today.
     /// </summary>
     public static DisplayBatch CreateBatch(
         List<float[]> vertexArrays,
@@ -60,7 +69,9 @@ public static class MeshBatchProcessor
         List<ThreeMaterial> materials,
         List<Dictionary<string, string>> metadataList = null,
         List<string> layers = null,
-        string sourceComponentId = null)
+        string sourceComponentId = null,
+        List<float[]> uvArrays = null,
+        List<byte[]> colorArrays = null)
     {
         var count = vertexArrays.Count;
 
@@ -82,6 +93,16 @@ public static class MeshBatchProcessor
             throw new ArgumentException("Layers list must have the same length as meshes if provided");
         }
 
+        if (uvArrays != null && count != uvArrays.Count)
+        {
+            throw new ArgumentException("UV list must have the same length as meshes if provided");
+        }
+
+        if (colorArrays != null && count != colorArrays.Count)
+        {
+            throw new ArgumentException("Color list must have the same length as meshes if provided");
+        }
+
         var materialCache = new MaterialCache();
 
         // Assign material IDs and accumulate the combined-array sizes so we avoid two extra Sum()
@@ -89,6 +110,8 @@ public static class MeshBatchProcessor
         var processedMeshes = new List<ProcessedMesh>(count);
         var totalComponentCount = 0;
         var totalIndexCount = 0;
+        var anyUvs = false;
+        var anyColors = false;
         for (var i = 0; i < count; i++)
         {
             var vertices = vertexArrays[i];
@@ -103,6 +126,11 @@ public static class MeshBatchProcessor
             totalComponentCount += vertices.Length;
             totalIndexCount += faces.Length;
 
+            var uvs = uvArrays?[i];
+            var colors = colorArrays?[i];
+            anyUvs |= uvs != null;
+            anyColors |= colors != null;
+
             processedMeshes.Add(new ProcessedMesh
             {
                 Name = names[i],
@@ -110,6 +138,8 @@ public static class MeshBatchProcessor
                 OriginalIndex = i,
                 Vertices = vertices,
                 Faces = faces,
+                Uvs = uvs,
+                Colors = colors,
                 MaterialId = materialId,
                 Metadata = metadataList?[i]
             });
@@ -139,6 +169,20 @@ public static class MeshBatchProcessor
         //   allIndices:  total index count
         var allVertices = new float[totalComponentCount];
         var allIndices = new int[totalIndexCount];
+
+        // Optional combined channels, allocated only when some mesh carries them. UV fill defaults
+        // to (0,0) via array zeroing; colors must be explicitly white (byte default is black).
+        var totalVertexCount = totalComponentCount / 3;
+        var allUvs = anyUvs ? new float[totalVertexCount * 2] : null;
+        byte[] allColors = null;
+        if (anyColors)
+        {
+            allColors = new byte[totalVertexCount * 3];
+            for (var i = 0; i < allColors.Length; i++)
+            {
+                allColors[i] = 255;
+            }
+        }
 
         var componentCursor = 0;          // write head into allVertices, in float components
         var indexCursor = 0;              // write head into allIndices, in indices
@@ -183,6 +227,16 @@ public static class MeshBatchProcessor
                 indexSpan[i] = mesh.Faces[i] + vertexBaseForIndices;
             }
 
+            if (allUvs != null && mesh.Uvs != null)
+            {
+                mesh.Uvs.AsSpan().CopyTo(allUvs.AsSpan(vertexBaseForIndices * 2, meshVertexCount * 2));
+            }
+
+            if (allColors != null && mesh.Colors != null)
+            {
+                mesh.Colors.AsSpan().CopyTo(allColors.AsSpan(vertexBaseForIndices * 3, meshVertexCount * 3));
+            }
+
             componentCursor += meshComponentCount;
             indexCursor += meshIndexCount;
             vertexBaseForIndices += meshVertexCount;
@@ -194,7 +248,8 @@ public static class MeshBatchProcessor
         var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
         using (var ms = new MemoryStream())
         {
-            BinaryGeometryWriter.Write(ms, metadataJson, allVertices, allIndices);
+            BinaryGeometryWriter.Write(ms, metadataJson, allVertices, allIndices,
+                uvs: allUvs, colors: allColors);
             // The blob ships uncompressed over the wire (no transport gzip on dynamic responses or
             // the local WS), so apply an optional gzip pass. Returns the original bytes unchanged
             // when compression doesn't help; the decoder sniffs the leading magic either way.
@@ -215,6 +270,13 @@ public static class MeshBatchProcessor
         public int OriginalIndex { get; set; }
         public float[] Vertices { get; set; }
         public int[] Faces { get; set; }
+
+        /// <summary>Optional u,v floats per vertex; null when this mesh has no texture coordinates.</summary>
+        public float[] Uvs { get; set; }
+
+        /// <summary>Optional r,g,b bytes per vertex; null when this mesh has no vertex colors.</summary>
+        public byte[] Colors { get; set; }
+
         public int MaterialId { get; set; }
         public Dictionary<string, string> Metadata { get; set; }
     }

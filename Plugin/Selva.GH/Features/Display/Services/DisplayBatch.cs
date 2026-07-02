@@ -137,6 +137,10 @@ public class SerializableMaterial
 
     [JsonProperty("transparent")] public bool Transparent { get; set; }
 
+    /// <summary>Optional texture URL/data URI; omitted from JSON when null (untextured stays unchanged on the wire).</summary>
+    [JsonProperty("map", NullValueHandling = NullValueHandling.Ignore)]
+    public string Map { get; set; }
+
     public static SerializableMaterial FromThreeMaterial(ThreeMaterial material)
     {
         return new SerializableMaterial
@@ -145,7 +149,8 @@ public class SerializableMaterial
             Metalness = material.Metalness,
             Roughness = material.Roughness,
             Opacity = material.Opacity,
-            Transparent = material.Transparent
+            Transparent = material.Transparent,
+            Map = string.IsNullOrEmpty(material.Map) ? null : material.Map
         };
     }
 }

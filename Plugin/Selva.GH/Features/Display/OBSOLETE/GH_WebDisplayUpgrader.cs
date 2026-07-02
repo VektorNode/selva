@@ -4,6 +4,38 @@ using SheepMetal.PluginGrasshopper.Upgraders;
 
 namespace Selva.GH.Features.Display.OBSOLETE;
 
+public class GH_WebDisplayUpgrader_To_0_16 : IGH_UpgradeObject
+{
+    public DateTime Version => new DateTime(2026, 7, 2);
+    public Guid UpgradeFrom => new Guid("CEC76466-37FD-4B1B-8C7F-71E5C1FDBA14");
+    public Guid UpgradeTo => new Guid("E4111712-6F0A-4F1B-950F-777EECAEBE01");
+
+    public IGH_DocumentObject Upgrade(IGH_DocumentObject target, GH_Document document)
+    {
+        var oldComponent = target as IGH_Component;
+        if (oldComponent == null)
+        {
+            return null;
+        }
+
+        // Inputs and outputs are unchanged; the new version additionally carries texture
+        // coordinates (for materials with a texture map) and vertex colors into the batch.
+        // Straight 1:1 remap.
+        var helper = new GH_ComponentUpgradeHelper(oldComponent, UpgradeTo);
+        var newComponent = helper
+            .MapInput(0, 0) // Geo
+            .MapInput(1, 1) // Name
+            .MapInput(2, 2) // Layer
+            .MapInput(3, 3) // Metadata
+            .MapInput(4, 4) // T-Material
+            .MapInput(5, 5) // Meshing Settings
+            .MapOutput(0, 0) // Web Display
+            .Execute();
+
+        return newComponent;
+    }
+}
+
 public class GH_WebDisplayUpgrader_To_0_14 : IGH_UpgradeObject
 {
     public DateTime Version => new DateTime(2026, 6, 29);

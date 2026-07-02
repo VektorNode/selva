@@ -78,11 +78,13 @@ public static class DisplayBatchTransformer
         moveVerts(decoded.Vertices);
 
         // Re-embed the same metadata envelope the original blob carried, so the re-encoded blob is
-        // self-contained exactly like the writer's output.
+        // self-contained exactly like the writer's output. UVs and vertex colors are invariant
+        // under position transforms but must be threaded back through or they'd silently vanish.
         var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
         using (var ms = new MemoryStream())
         {
-            BinaryGeometryWriter.Write(ms, metadataJson, decoded.Vertices, decoded.Indices);
+            BinaryGeometryWriter.Write(ms, metadataJson, decoded.Vertices, decoded.Indices,
+                uvs: decoded.Uvs, colors: decoded.Colors);
             return BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
         }
     }

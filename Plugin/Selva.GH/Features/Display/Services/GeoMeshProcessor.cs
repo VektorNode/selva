@@ -20,6 +20,23 @@ public static class GeoMeshProcessor
     /// </returns>
     public static (float[] vertices, int[] faces) ConvertMeshToArrays(Mesh mesh)
     {
+        var (vertices, faces, _, _) = ConvertMeshToArrays(mesh, extractUvs: false, extractColors: false);
+        return (vertices, faces);
+    }
+
+    /// <summary>
+    ///     Same as <see cref="ConvertMeshToArrays(Mesh)" /> but optionally extracts texture
+    ///     coordinates and vertex colors. Each channel is returned only when requested AND the
+    ///     mesh carries a full set (count == vertex count); partial/absent channels return null,
+    ///     so callers can treat null as "mesh has nothing to contribute".
+    /// </summary>
+    /// <returns>
+    ///     - uvs: u,v floats per vertex (vertexCount * 2), or null
+    ///     - colors: r,g,b bytes per vertex (vertexCount * 3), or null
+    /// </returns>
+    public static (float[] vertices, int[] faces, float[] uvs, byte[] colors) ConvertMeshToArrays(
+        Mesh mesh, bool extractUvs, bool extractColors)
+    {
         const int componentsPerVertex = 3;
 
         var meshVertices = mesh.Vertices;
@@ -36,6 +53,37 @@ public static class GeoMeshProcessor
             vertices[vertexIndex++] = vertex.X;
             vertices[vertexIndex++] = vertex.Y;
             vertices[vertexIndex++] = vertex.Z;
+        }
+
+        // Optional channels: only a full per-vertex set is usable (partial sets have no defined
+        // mapping onto the combined vertex array), so anything else contributes null.
+        float[] uvs = null;
+        if (extractUvs && mesh.TextureCoordinates.Count == vertexCount)
+        {
+            var textureCoords = mesh.TextureCoordinates;
+            uvs = new float[vertexCount * 2];
+            var uvIndex = 0;
+            for (var i = 0; i < vertexCount; i++)
+            {
+                var tc = textureCoords[i];
+                uvs[uvIndex++] = tc.X;
+                uvs[uvIndex++] = tc.Y;
+            }
+        }
+
+        byte[] colors = null;
+        if (extractColors && mesh.VertexColors.Count == vertexCount)
+        {
+            var vertexColors = mesh.VertexColors;
+            colors = new byte[vertexCount * 3];
+            var colorIndex = 0;
+            for (var i = 0; i < vertexCount; i++)
+            {
+                var c = vertexColors[i];
+                colors[colorIndex++] = c.R;
+                colors[colorIndex++] = c.G;
+                colors[colorIndex++] = c.B;
+            }
         }
 
         // Triangle -> 3 indices, quad -> 6 (two triangles). Counts are O(1) on MeshFaceList, so we
@@ -67,6 +115,6 @@ public static class GeoMeshProcessor
             }
         }
 
-        return (vertices, faces);
+        return (vertices, faces, uvs, colors);
     }
 }

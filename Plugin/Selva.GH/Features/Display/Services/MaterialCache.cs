@@ -48,8 +48,9 @@ public class MaterialCache
     /// </summary>
     private string GetMaterialKey(ThreeMaterial material)
     {
-        // Create a compact key that uniquely identifies the material
+        // Create a compact key that uniquely identifies the material. Map must participate or two
+        // materials differing only by texture would dedupe into one.
         return
-            $"{material.Color.ToArgb()}|{material.Metalness:F3}|{material.Roughness:F3}|{material.Opacity:F3}|{material.Transparent}";
+            $"{material.Color.ToArgb()}|{material.Metalness:F3}|{material.Roughness:F3}|{material.Opacity:F3}|{material.Transparent}|{material.Map}";
     }
 }
