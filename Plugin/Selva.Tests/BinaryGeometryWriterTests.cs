@@ -8,7 +8,7 @@ namespace Selva.Tests;
 public class BinaryGeometryWriterTests
 {
     private const uint ExpectedMagic = 0x41564C53;
-    private const uint ExpectedVersion = 2;
+    private const uint ExpectedVersion = 3;
 
     [Fact]
     public void Write_EmitsMagicAndVersion()
@@ -65,8 +65,8 @@ public class BinaryGeometryWriterTests
         Assert.Equal(12, result.IndexCount);
 
         var (decodedVerts, decodedIndices, flags) = ReadGeometry(ms.ToArray());
-        // Small batch: int16 verts (bit 0 clear) + uint16 indices (bit 1 set).
-        Assert.Equal(BinaryGeometryWriter.FlagUint16Indices, flags);
+        // Small batch: int16 verts (bit 0 clear) + uint16 indices (bit 1) + delta filter (bit 2).
+        Assert.Equal(BinaryGeometryWriter.FlagUint16Indices | BinaryGeometryWriter.FlagDeltaEncoded, flags);
 
         for (var i = 0; i < vertices.Length; i++)
         {
@@ -196,10 +196,44 @@ public class BinaryGeometryWriterTests
         Assert.Equal(new uint[] { 0, 1, 65536 }, decodedIndices);
     }
 
+    [Fact]
+    public void Write_DeltaFilterRoundtripsExtremeQuantizedJumps()
+    {
+        // X alternates across the full bbox, so quantized values swing between -32767 and +32767 and
+        // per-component deltas (±65534) exceed int16 — exercising the wrapping arithmetic. Index
+        // jumps are similarly non-local.
+        var vertices = new float[]
+        {
+            0, 0, 0,
+            10, 10, 10,
+            0, 0, 0,
+            10, 0, 10,
+        };
+        var indices = new int[] { 0, 3, 1, 3, 0, 2 };
+
+        using var ms = new MemoryStream();
+        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+
+        Assert.False(result.UsedFloat32);
+
+        var (decodedVerts, decodedIndices, flags) = ReadGeometry(ms.ToArray());
+        Assert.Equal(BinaryGeometryWriter.FlagDeltaEncoded, flags & BinaryGeometryWriter.FlagDeltaEncoded);
+
+        for (var i = 0; i < vertices.Length; i++)
+        {
+            Assert.InRange(decodedVerts[i] - vertices[i], -0.001f, 0.001f);
+        }
+
+        for (var i = 0; i < indices.Length; i++)
+        {
+            Assert.Equal((uint)indices[i], decodedIndices[i]);
+        }
+    }
+
     /// <summary>
     ///     Decodes the binary blob the same way the JS parser will: peel envelope, peel geometry
     ///     header, dequantize int16 (or read float32 directly), and read uint16/uint32 indices per
-    ///     the flags word.
+    ///     the flags word — undoing the v3 delta+zigzag filter when its flag is set.
     /// </summary>
     private static (float[] vertices, uint[] indices, uint flags) ReadGeometry(byte[] blob)
     {
@@ -212,6 +246,7 @@ public class BinaryGeometryWriterTests
         br.ReadBytes((int)metadataLen);
 
         var flags = br.ReadUInt32();
+        var deltaEncoded = (flags & BinaryGeometryWriter.FlagDeltaEncoded) != 0;
         var originX = br.ReadDouble();
         var originY = br.ReadDouble();
         var originZ = br.ReadDouble();
@@ -231,11 +266,22 @@ public class BinaryGeometryWriterTests
         }
         else
         {
+            short qx = 0, qy = 0, qz = 0;
             for (var i = 0; i < vertexCount; i++)
             {
-                var qx = br.ReadInt16();
-                var qy = br.ReadInt16();
-                var qz = br.ReadInt16();
+                if (deltaEncoded)
+                {
+                    qx = unchecked((short)(qx + UnZigZag16(br.ReadUInt16())));
+                    qy = unchecked((short)(qy + UnZigZag16(br.ReadUInt16())));
+                    qz = unchecked((short)(qz + UnZigZag16(br.ReadUInt16())));
+                }
+                else
+                {
+                    qx = br.ReadInt16();
+                    qy = br.ReadInt16();
+                    qz = br.ReadInt16();
+                }
+
                 verts[i * 3] = (float)(originX + (qx + 32767) * scaleX);
                 verts[i * 3 + 1] = (float)(originY + (qy + 32767) * scaleY);
                 verts[i * 3 + 2] = (float)(originZ + (qz + 32767) * scaleZ);
@@ -245,11 +291,35 @@ public class BinaryGeometryWriterTests
         var indexCount = br.ReadUInt32();
         var indices = new uint[indexCount];
         var uint16Indices = (flags & BinaryGeometryWriter.FlagUint16Indices) != 0;
-        for (var i = 0; i < indexCount; i++)
+        if (uint16Indices)
         {
-            indices[i] = uint16Indices ? br.ReadUInt16() : br.ReadUInt32();
+            ushort prev = 0;
+            for (var i = 0; i < indexCount; i++)
+            {
+                prev = deltaEncoded ? unchecked((ushort)(prev + UnZigZag16(br.ReadUInt16()))) : br.ReadUInt16();
+                indices[i] = prev;
+            }
+        }
+        else
+        {
+            var prev = 0u;
+            for (var i = 0; i < indexCount; i++)
+            {
+                prev = deltaEncoded ? unchecked((uint)((int)prev + UnZigZag32(br.ReadUInt32()))) : br.ReadUInt32();
+                indices[i] = prev;
+            }
         }
 
         return (verts, indices, flags);
+    }
+
+    private static short UnZigZag16(ushort zz)
+    {
+        return (short)((zz >> 1) ^ -(zz & 1));
+    }
+
+    private static int UnZigZag32(uint zz)
+    {
+        return (int)(zz >> 1) ^ -(int)(zz & 1);
     }
 }

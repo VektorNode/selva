@@ -56,6 +56,7 @@ public static class BinaryGeometryReader
             var flags = br.ReadUInt32();
             var useFloat32 = (flags & BinaryGeometryWriter.FlagFloat32) != 0;
             var useUint16Indices = (flags & BinaryGeometryWriter.FlagUint16Indices) != 0;
+            var deltaEncoded = (flags & BinaryGeometryWriter.FlagDeltaEncoded) != 0;
 
             var originX = br.ReadDouble();
             var originY = br.ReadDouble();
@@ -78,11 +79,23 @@ public static class BinaryGeometryReader
             else
             {
                 // Inverse of the writer's quantization: world = origin + (q + 32767) * scale.
+                // v3 blobs store per-component zigzag deltas; undo the filter with a prefix sum.
+                short qx = 0, qy = 0, qz = 0;
                 for (var i = 0; i < vertexCount; i++)
                 {
-                    var qx = br.ReadInt16();
-                    var qy = br.ReadInt16();
-                    var qz = br.ReadInt16();
+                    if (deltaEncoded)
+                    {
+                        qx = unchecked((short)(qx + UnZigZag16(br.ReadUInt16())));
+                        qy = unchecked((short)(qy + UnZigZag16(br.ReadUInt16())));
+                        qz = unchecked((short)(qz + UnZigZag16(br.ReadUInt16())));
+                    }
+                    else
+                    {
+                        qx = br.ReadInt16();
+                        qy = br.ReadInt16();
+                        qz = br.ReadInt16();
+                    }
+
                     vertices[i * 3] = (float)(originX + (qx + 32767) * scaleX);
                     vertices[i * 3 + 1] = (float)(originY + (qy + 32767) * scaleY);
                     vertices[i * 3 + 2] = (float)(originZ + (qz + 32767) * scaleZ);
@@ -93,21 +106,40 @@ public static class BinaryGeometryReader
             var indices = new int[indexCount];
             if (useUint16Indices)
             {
+                ushort prev = 0;
                 for (var i = 0; i < indexCount; i++)
                 {
-                    indices[i] = br.ReadUInt16();
+                    prev = deltaEncoded
+                        ? unchecked((ushort)(prev + UnZigZag16(br.ReadUInt16())))
+                        : br.ReadUInt16();
+                    indices[i] = prev;
                 }
             }
             else
             {
+                var prev = 0;
                 for (var i = 0; i < indexCount; i++)
                 {
-                    indices[i] = (int)br.ReadUInt32();
+                    prev = deltaEncoded
+                        ? unchecked(prev + UnZigZag32(br.ReadUInt32()))
+                        : (int)br.ReadUInt32();
+                    indices[i] = prev;
                 }
             }
 
             return new Result { Metadata = metadata, Vertices = vertices, Indices = indices };
         }
+    }
+
+    /// <summary>Inverse of the writer's zigzag map: 0,1,2,3 → 0,-1,1,-2.</summary>
+    private static short UnZigZag16(ushort zz)
+    {
+        return (short)((zz >> 1) ^ -(zz & 1));
+    }
+
+    private static int UnZigZag32(uint zz)
+    {
+        return (int)(zz >> 1) ^ -(int)(zz & 1);
     }
 
     /// <summary>

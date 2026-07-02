@@ -83,7 +83,7 @@ public static class DisplayBatchTransformer
         using (var ms = new MemoryStream())
         {
             BinaryGeometryWriter.Write(ms, metadataJson, decoded.Vertices, decoded.Indices);
-            return BlobCompressor.Compress(ms.ToArray());
+            return BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
         }
     }
 

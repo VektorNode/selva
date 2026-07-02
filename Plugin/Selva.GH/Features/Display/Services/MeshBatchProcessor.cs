@@ -198,7 +198,8 @@ public static class MeshBatchProcessor
             // The blob ships uncompressed over the wire (no transport gzip on dynamic responses or
             // the local WS), so apply an optional gzip pass. Returns the original bytes unchanged
             // when compression doesn't help; the decoder sniffs the leading magic either way.
-            batch.CompressedData = BlobCompressor.Compress(ms.ToArray());
+            // GetBuffer + length hands the stream's backing array over without a full ToArray copy.
+            batch.CompressedData = BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
         }
 
         return batch;

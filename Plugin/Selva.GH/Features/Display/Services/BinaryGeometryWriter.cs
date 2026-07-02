@@ -13,13 +13,14 @@ namespace Selva.GH.Features.Display.Services;
 ///     Wire format (little-endian throughout):
 ///
 ///     [4]  magic            = "SLVA" (0x53 0x4C 0x56 0x41)
-///     [4]  version          = uint32 (currently 1)
+///     [4]  version          = uint32 (currently 3; v2 added uint16 indices, v3 the delta filter)
 ///     [4]  metadataLen      = uint32 byte length of metadata JSON
 ///     [N]  metadata         = UTF-8 JSON (materials, groups, sourceComponentId, ...)
 ///
 ///     -- geometry block --
 ///     [4]  flags            = uint32 (bit 0: 0 = int16 quantized, 1 = float32 raw;
-///                                     bit 1: 0 = uint32 indices, 1 = uint16 indices)
+///                                     bit 1: 0 = uint32 indices, 1 = uint16 indices;
+///                                     bit 2: 1 = delta+zigzag filtered, see below)
 ///     [24] origin           = 3 x float64
 ///     [24] scale            = 3 x float64 (step per int16 unit; identity for float32)
 ///     [4]  vertexCount      = uint32 number of vertices (positions = vertexCount * 3 components)
@@ -33,11 +34,20 @@ namespace Selva.GH.Features.Display.Services;
 ///     `BufferAttribute(arr, 3, true)` (`normalized: true`) semantics.
 ///
 ///     For float32: origin = (0,0,0), scale = (1,1,1) and vertices are the raw world positions.
+///
+///     Delta filter (v3, <see cref="FlagDeltaEncoded" />): quantized vertex components are stored as
+///     the wrapped 16-bit difference from the previous vertex's same component (independent x/y/z
+///     predictors), zigzag-mapped to unsigned; indices likewise as the wrapped difference from the
+///     previous index, in their native width. This is a PNG-style pre-filter: welded meshes have
+///     spatially-local vertices and locally-clustered indices, so deltas concentrate near zero and
+///     the downstream <see cref="BlobCompressor" /> DEFLATE pass compresses far better. Float32
+///     vertices are never filtered. Wrapping arithmetic keeps the filter lossless for any input;
+///     the decoder reverses it with a running prefix sum.
 /// </remarks>
 public static class BinaryGeometryWriter
 {
     public const uint Magic = 0x41564C53; // "SLVA" little-endian
-    public const uint Version = 2;
+    public const uint Version = 3;
 
     public const uint FlagFloat32 = 0x1;
 
@@ -47,6 +57,13 @@ public static class BinaryGeometryWriter
     ///     usually the largest part of the blob for unwelded brep meshes.
     /// </summary>
     public const uint FlagUint16Indices = 0x2;
+
+    /// <summary>
+    ///     Bit 2 of the flags word: when set, int16 vertices and the index stream are delta+zigzag
+    ///     filtered (see the class remarks). Always set by the v3 writer; the flag exists so decoders
+    ///     handle pre-v3 blobs (persisted .gh params, DMF files) through the same read path.
+    /// </summary>
+    public const uint FlagDeltaEncoded = 0x4;
 
     /// <summary>Largest vertex index addressable by a uint16 index.</summary>
     private const int MaxUint16Index = 65535;
@@ -181,6 +198,8 @@ public static class BinaryGeometryWriter
                 flags |= FlagUint16Indices;
             }
 
+            flags |= FlagDeltaEncoded;
+
             writer.Write(flags);
             writer.Write(originX);
             writer.Write(originY);
@@ -270,6 +289,7 @@ public static class BinaryGeometryWriter
         try
         {
             var bi = 0;
+            short prevX = 0, prevY = 0, prevZ = 0;
             for (var i = 0; i < vertices.Length; i += 3)
             {
                 // Quantize to [-32767, 32767]. (max-min)/scale = 65534, then subtract 32767 to center.
@@ -277,12 +297,21 @@ public static class BinaryGeometryWriter
                 var qy = (short)(Math.Round((vertices[i + 1] - originY) / scaleY) - 32767);
                 var qz = (short)(Math.Round((vertices[i + 2] - originZ) / scaleZ) - 32767);
 
-                buffer[bi++] = (byte)(qx & 0xFF);
-                buffer[bi++] = (byte)((qx >> 8) & 0xFF);
-                buffer[bi++] = (byte)(qy & 0xFF);
-                buffer[bi++] = (byte)((qy >> 8) & 0xFF);
-                buffer[bi++] = (byte)(qz & 0xFF);
-                buffer[bi++] = (byte)((qz >> 8) & 0xFF);
+                // Delta filter: wrapped 16-bit difference from the previous vertex, zigzag-mapped so
+                // small ± deltas become small unsigned values DEFLATE compresses well.
+                var zx = ZigZag16(unchecked((short)(qx - prevX)));
+                var zy = ZigZag16(unchecked((short)(qy - prevY)));
+                var zz = ZigZag16(unchecked((short)(qz - prevZ)));
+                prevX = qx;
+                prevY = qy;
+                prevZ = qz;
+
+                buffer[bi++] = (byte)(zx & 0xFF);
+                buffer[bi++] = (byte)(zx >> 8);
+                buffer[bi++] = (byte)(zy & 0xFF);
+                buffer[bi++] = (byte)(zy >> 8);
+                buffer[bi++] = (byte)(zz & 0xFF);
+                buffer[bi++] = (byte)(zz >> 8);
             }
 
             output.Write(buffer, 0, byteCount);
@@ -325,11 +354,14 @@ public static class BinaryGeometryWriter
         try
         {
             var bi = 0;
+            ushort prev = 0;
             foreach (var index in indices)
             {
                 var u = (ushort)index;
-                buffer[bi++] = (byte)(u & 0xFF);
-                buffer[bi++] = (byte)((u >> 8) & 0xFF);
+                var zz = ZigZag16(unchecked((short)(u - prev)));
+                prev = u;
+                buffer[bi++] = (byte)(zz & 0xFF);
+                buffer[bi++] = (byte)(zz >> 8);
             }
 
             output.Write(buffer, 0, byteCount);
@@ -351,12 +383,34 @@ public static class BinaryGeometryWriter
         var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
         try
         {
-            Buffer.BlockCopy(indices, 0, buffer, 0, byteCount);
+            var bi = 0;
+            var prev = 0;
+            foreach (var index in indices)
+            {
+                var zz = ZigZag32(index - prev);
+                prev = index;
+                buffer[bi++] = (byte)(zz & 0xFF);
+                buffer[bi++] = (byte)((zz >> 8) & 0xFF);
+                buffer[bi++] = (byte)((zz >> 16) & 0xFF);
+                buffer[bi++] = (byte)(zz >> 24);
+            }
+
             output.Write(buffer, 0, byteCount);
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }
+    }
+
+    /// <summary>Maps a signed delta to unsigned so small ± values stay small: 0,-1,1,-2 → 0,1,2,3.</summary>
+    private static ushort ZigZag16(short delta)
+    {
+        return unchecked((ushort)((delta << 1) ^ (delta >> 15)));
+    }
+
+    private static uint ZigZag32(int delta)
+    {
+        return unchecked((uint)((delta << 1) ^ (delta >> 31)));
     }
 }
