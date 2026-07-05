@@ -107,7 +107,12 @@ function buildCurveLine(
 	const curve = decodeCurve(item.json, rhino);
 	if (!curve) return null;
 
-	const points = tessellate(curve, applyTransforms);
+	let points: THREE.Vector3[];
+	try {
+		points = tessellate(curve, applyTransforms);
+	} finally {
+		deleteRhinoObject(curve);
+	}
 	if (points.length < 2) return null;
 
 	const positions: number[] = [];
@@ -173,6 +178,15 @@ function buildPoint(item: DisplayPoint, applyTransforms: boolean): THREE.Points 
 	return points;
 }
 
+/**
+ * Free a rhino3dm object's WASM-heap memory. rhino3dm objects are emscripten bindings — JS GC
+ * never reclaims their heap allocation, so everything decoded during a solve must be deleted
+ * explicitly or the WASM heap grows monotonically across solves.
+ */
+function deleteRhinoObject(obj: unknown): void {
+	(obj as { delete?: () => void } | null | undefined)?.delete?.();
+}
+
 /** Decode Rhino CommonObject JSON into a rhino3dm Curve (or null on failure). */
 function decodeCurve(json: string, rhino: RhinoModule): InstanceType<RhinoModule['Curve']> | null {
 	try {
@@ -182,6 +196,7 @@ function decodeCurve(json: string, rhino: RhinoModule): InstanceType<RhinoModule
 		if (obj && typeof (obj as { pointAt?: unknown }).pointAt === 'function') {
 			return obj as InstanceType<RhinoModule['Curve']>;
 		}
+		deleteRhinoObject(obj);
 		getLogger().warn('Decoded display-item JSON is not a curve; skipping.');
 		return null;
 	} catch (error) {
@@ -229,7 +244,10 @@ function tryPolylineVertices(
 	// `[ok, Polyline]` tuple). Accept either: unwrap a tuple if we got one, else use it as-is.
 	const result = curve.tryGetPolyline() as unknown;
 	const polyline = (Array.isArray(result) ? result[1] : result) as PolylineLike | null;
-	if (!polyline || typeof polyline.count !== 'number' || polyline.count < 2) return null;
+	if (!polyline || typeof polyline.count !== 'number' || polyline.count < 2) {
+		deleteRhinoObject(polyline);
+		return null;
+	}
 
 	const out: THREE.Vector3[] = [];
 	for (let i = 0; i < polyline.count; i++) {
@@ -238,6 +256,7 @@ function tryPolylineVertices(
 		out.push(new THREE.Vector3(x, y, z));
 	}
 
+	deleteRhinoObject(polyline);
 	return out;
 }
 
@@ -324,6 +343,7 @@ function chordTolerance(curve: InstanceType<RhinoModule['Curve']>): number {
 	).getBoundingBox();
 	const min = box.min;
 	const max = box.max;
+	deleteRhinoObject(box);
 	const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
 	return Math.max(diagonal * CURVE_CHORD_TOLERANCE_RATIO, 1e-6);
 }

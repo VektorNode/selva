@@ -70,11 +70,12 @@ function buildEdgeOverlay(
 ): LineSegments2 {
 	const edges = new THREE.EdgesGeometry(geometry, thresholdAngle);
 
-	// EdgesGeometry yields a position attribute of line-segment endpoint pairs; LineSegmentsGeometry
-	// consumes exactly that flat array.
+	// EdgesGeometry yields a Float32Array of line-segment endpoint pairs; LineSegmentsGeometry
+	// consumes it as-is (round-tripping through Array.from would box every vertex into a JS array
+	// only for setPositions to convert it straight back).
 	const lineGeometry = new LineSegmentsGeometry();
-	lineGeometry.setPositions(Array.from(edges.attributes.position.array));
-	edges.dispose(); // positions copied; the intermediate geometry is no longer needed
+	lineGeometry.setPositions(edges.attributes.position.array as Float32Array);
+	edges.dispose(); // frees only GPU-side state; the CPU array now backs the line geometry
 
 	// LineMaterialParameters omits linewidth/opacity from its type though both exist at runtime.
 	const material = new LineMaterial({ color });

@@ -90,7 +90,10 @@ export const initThree = function (
 	});
 	const getActiveCamera = () => cameraController.getActiveCamera();
 
-	setupEnvironment(scene, config);
+	// The HDR environment decodes asynchronously; if the viewer is disposed before it lands, the
+	// load callback must drop (and dispose) the texture instead of attaching it to a swept scene.
+	let disposed = false;
+	setupEnvironment(scene, config, () => disposed);
 	// The shadow-casting sun (null when sunlight or shadows are off). Its shadow frustum is fitted to
 	// the scene content below and again whenever the host calls updateShadowBounds after a geometry
 	// change — keeping shadow-map texels packed onto the model for crisp shadows at any scale.
@@ -303,6 +306,7 @@ export const initThree = function (
 	};
 
 	const dispose = () => {
+		disposed = true;
 		disposeAnimation();
 		eventHandlers.dispose();
 		if (gizmo || measureTool) {
@@ -319,6 +323,10 @@ export const initThree = function (
 		renderPipeline?.dispose();
 		controls.dispose();
 		renderer.dispose();
+		// Free the GL context itself, not just its objects — browsers cap live WebGL contexts
+		// (~16) and won't otherwise reclaim this one until GC, which can lag across rapid
+		// mount/unmount cycles (e.g. navigating between definitions) and hit that cap.
+		renderer.forceContextLoss();
 
 		scene.traverse((object) => {
 			// Dispose any renderable (mesh, line, points), not just meshes.
@@ -734,11 +742,22 @@ function createAnimationLoop(
 	return { animate, dispose };
 }
 
-function setupEnvironment(scene: THREE.Scene, config: Required<ThreeInitializerOptions>) {
+function setupEnvironment(
+	scene: THREE.Scene,
+	config: Required<ThreeInitializerOptions>,
+	isDisposed: () => boolean
+) {
 	if (config.environment.enableEnvironmentLighting) {
 		new HDRLoader().load(
 			config.environment.hdrPath || '/baseHDR.hdr',
 			function (envMap) {
+				// The viewer can be torn down while the HDR is still fetching/decoding (fast
+				// mount/unmount). dispose() has already swept the scene, so adopting the texture now
+				// would leak it — and onReady must not fire on a dead viewer.
+				if (isDisposed()) {
+					envMap.dispose();
+					return;
+				}
 				if (!envMap?.image) {
 					getLogger().warn('HDR loaded without image data; skipping environment map.');
 					config.events.onReady?.();
@@ -753,6 +772,7 @@ function setupEnvironment(scene: THREE.Scene, config: Required<ThreeInitializerO
 			},
 			undefined,
 			function (error) {
+				if (isDisposed()) return;
 				getLogger().warn('HDR texture could not be loaded, falling back to basic lighting:', error);
 				config.events.onReady?.();
 			}
@@ -990,6 +1010,17 @@ function setupEventHandlers(
 				else if (Array.isArray(clone)) clone.forEach((m) => m.dispose());
 				restorable.material = original;
 				originalMaterials.delete(obj);
+
+				// If the object left the scene while selected (a solve's clearScene only saw — and
+				// disposed — the highlight clone), no later scene traversal can reach the original we
+				// just restored, so it must be disposed here. Compute content is cleared wholesale per
+				// solve, so a detached object's material has no surviving sharers.
+				let root: THREE.Object3D = obj;
+				while (root.parent) root = root.parent;
+				if (root !== scene) {
+					if (original instanceof THREE.Material) original.dispose();
+					else original.forEach((m) => m.dispose());
+				}
 			}
 		});
 		selectedObjects.clear();
