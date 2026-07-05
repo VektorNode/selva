@@ -5,6 +5,8 @@
 **Not in scope yet:** `@selvajs/compute` (separate repo — solve client, `SolveScheduler`, binary geometry parser). Flagged as the single biggest remaining unaudited surface — see "Not yet audited" at the bottom.
 **How to use this doc:** Work the **P0 → P3 table** top to bottom. Each row links to its full write-up further down (unchanged content, just re-homed under a stable ID). Mark the Status column as you go — `☐ open` / `▶ in progress` / `✅ done` — so this stays a living tracker instead of a report you read once.
 
+**Validation pass (2026-07-05):** all P0–P2 findings were re-checked against current source on `beta` via a fan-out of file-level verifiers. Result: ~37 of ~40 spot-checked findings confirmed accurate against live line numbers. Corrections folded in-place (each tagged "verified/Correction 2026-07-05"): §3c is a **live** bug only in `LocalInviteStore` (latent in `LocalComputeServerStore`); T1's CI is three jobs not one (load-bearing claim intact); Q1's deny-direction tests are dead in **both** providers (`ctxIsolation: true` set nowhere), not Supabase-only; the privacy "zero exposure" wording lives **only** in CLAUDE.md, not `docs/providers.md`; §2e row caps vary (200 vs 1000); D2 drift is DB=5 / TS=4 / Zod=3. S1 (plaintext Supabase compute API keys) and D1 (unmigrated stored UISchema blobs) re-confirmed as the top security and data-model risks respectively.
+
 ---
 
 ## Status legend
@@ -31,22 +33,22 @@ These two make every subsequent fix verifiable. Nothing below should be worked w
 
 ## P1 — High priority (security holes, data loss risk, or the hottest perf paths)
 
-| Status | ID       | Item                                                                                                                                            | Section                                                                             |
-| ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| ☐      | **S1**   | Encrypt Supabase compute-server API keys (currently plaintext in DB)                                                                            | [S1](#s1-supabase-compute-server-api-keys-stored-in-plaintext--high-verified)       |
-| ☐      | **1**    | `Promise.all` the auth hook's 4 independent per-request reads + memoize `ensureUser`                                                            | [§1](#1-the-auth-hook--every-authenticated-request-pays-this)                       |
-| ☐      | **1b**   | Supabase `verifyToken`: stop network-round-tripping GoTrue on every request — verify JWT locally                                                | [§1b](#1b-supabase-verifytoken-is-a-network-round-trip-to-gotrue-per-request)       |
-| ☐      | **1c**   | Local `verifyToken`: stop writing `auth-users.json` on every session check                                                                      | [§1c](#1c-local-verifytoken-writes-a-file-during-session-validation)                |
-| ☐      | **2a**   | Shared compute-client cache for the definition-viewer render path (currently re-handshakes Rhino.Compute per page load)                         | [§2a](#2a-definition-viewer-re-creates-the-compute-client-on-every-page-load--high) |
-| ☐      | **2b**   | De-dupe the double project/definition fetch inside the solve endpoint's access gates                                                            | [§2b](#2b-solve-endpoint-fetches-the-project-twice-per-solve--high)                 |
-| ☐      | **2c**   | Port the `/projects` batching pattern to `/library` (per-project access N+1 on the main landing page)                                           | [§2c](#2c-library-per-project-access-n1--high-main-landing-page)                    |
-| ☐      | **3a**   | Local provider: cache `auth-users.json` / `user-data.json` instead of re-reading on every request                                               | [§3a](#3a-no-cache-for-the-two-hottest-files--high-hot-path)                        |
-| ☐      | **3c**   | Fix shared-mutable `EMPTY` fallback aliasing bug (correctness bug, not just perf)                                                               | [§3c](#3c-shared-mutable-empty-fallback--correctness-bug-fix-regardless)            |
-| ☐      | **4a**   | Supabase: stop N+1-ing the Auth admin API for instance-admin checks; add GIN index on `platform_permissions`                                    | [§4a](#4a-instance-admin-checks-n1-the-auth-admin-api--high)                        |
-| ☐      | **D1**   | Decide + implement UISchema versioning story (stored blobs are never migrated on the web side)                                                  | [D1](#d1-stored-uischema-blobs-are-never-migrated-on-the-web-side--rank-1)          |
-| ☐      | **O2**   | Self-update endpoint: add audit events, persist log outside `/tmp`                                                                              | [O2](#o2-self-update-endpoint-under-observable--high)                               |
-| ☐      | **O3**   | Add app↔DB schema-version handshake (self-update never checks/applies Supabase migrations)                                                      | [O3](#o3-no-appdb-schema-handshake--high)                                           |
-| ☐      | **Dep1** | Bump `svelte` → ≥5.55.7 and `@sveltejs/kit` → ≥2.60.1 in the pnpm catalog (4 moderate XSS/ReDoS + 1 moderate + 1 low CVE, exact fix identified) | [Dependency vulnerabilities](#dependency-vulnerabilities-checked-2026-07-05)        |
+| Status | ID       | Item                                                                                                                                                                  | Section                                                                             |
+| ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| ☐      | **S1**   | Encrypt Supabase compute-server API keys (currently plaintext in DB)                                                                                                  | [S1](#s1-supabase-compute-server-api-keys-stored-in-plaintext--high-verified)       |
+| ☐      | **1**    | `Promise.all` the auth hook's 4 independent per-request reads + memoize `ensureUser`                                                                                  | [§1](#1-the-auth-hook--every-authenticated-request-pays-this)                       |
+| ☐      | **1b**   | Supabase `verifyToken`: stop network-round-tripping GoTrue on every request — verify JWT locally                                                                      | [§1b](#1b-supabase-verifytoken-is-a-network-round-trip-to-gotrue-per-request)       |
+| ☐      | **1c**   | Local `verifyToken`: stop writing `auth-users.json` on every session check                                                                                            | [§1c](#1c-local-verifytoken-writes-a-file-during-session-validation)                |
+| ☐      | **2a**   | Shared compute-client cache for the definition-viewer render path (currently re-handshakes Rhino.Compute per page load)                                               | [§2a](#2a-definition-viewer-re-creates-the-compute-client-on-every-page-load--high) |
+| ☐      | **2b**   | De-dupe the double project/definition fetch inside the solve endpoint's access gates                                                                                  | [§2b](#2b-solve-endpoint-fetches-the-project-twice-per-solve--high)                 |
+| ☐      | **2c**   | Port the `/projects` batching pattern to `/library` (per-project access N+1 on the main landing page)                                                                 | [§2c](#2c-library-per-project-access-n1--high-main-landing-page)                    |
+| ☐      | **3a**   | Local provider: cache `auth-users.json` / `user-data.json` instead of re-reading on every request                                                                     | [§3a](#3a-no-cache-for-the-two-hottest-files--high-hot-path)                        |
+| ☐      | **3c**   | Fix shared-mutable `EMPTY` fallback aliasing bug — **live correctness bug in `LocalInviteStore`** (latent-only in `LocalComputeServerStore`); ship the 2-line fix now | [§3c](#3c-shared-mutable-empty-fallback--correctness-bug-fix-regardless)            |
+| ☐      | **4a**   | Supabase: stop N+1-ing the Auth admin API for instance-admin checks; add GIN index on `platform_permissions`                                                          | [§4a](#4a-instance-admin-checks-n1-the-auth-admin-api--high)                        |
+| ☐      | **D1**   | Decide + implement UISchema versioning story (stored blobs are never migrated on the web side)                                                                        | [D1](#d1-stored-uischema-blobs-are-never-migrated-on-the-web-side--rank-1)          |
+| ☐      | **O2**   | Self-update endpoint: add audit events, persist log outside `/tmp`                                                                                                    | [O2](#o2-self-update-endpoint-under-observable--high)                               |
+| ☐      | **O3**   | Add app↔DB schema-version handshake (self-update never checks/applies Supabase migrations)                                                                            | [O3](#o3-no-appdb-schema-handshake--high)                                           |
+| ☐      | **Dep1** | Bump `svelte` → ≥5.55.7 and `@sveltejs/kit` → ≥2.60.1 in the pnpm catalog (4 moderate XSS/ReDoS + 1 moderate + 1 low CVE, exact fix identified)                       | [Dependency vulnerabilities](#dependency-vulnerabilities-checked-2026-07-05)        |
 
 ---
 
@@ -188,14 +190,14 @@ Steps 2–5 are all keyed only by `user.id` with **no data dependency between th
 
 #### 2e. Counting by listing — needs a store-interface addition
 
-Pages fetch up to 1000 full member rows just to read `.items.length`:
+Pages fetch full member/project rows just to read `.items.length` (the `list*` calls do return a `total`, which the pages already use with `.items.length` as fallback — so the fix is avoiding the **full-row fetch** via a `COUNT(*)` path, not the absence of any count):
 
 - `routes/team/+page.server.ts:21-31` (1000 members + 200 projects for two integers; also the two calls are sequential — `Promise.all` them regardless)
-- `routes/team/projects/+page.server.ts:26-37`
-- `routes/team/reclaim/+page.server.ts:39-52`
-- `routes/admin/organizations/+page.server.ts:22-33`
+- `routes/admin/organizations/+page.server.ts:22-33` (1000 members per org)
+- `routes/team/projects/+page.server.ts:26-37` (caps at `limit: 200`, not 1000)
+- `routes/team/reclaim/+page.server.ts:39-52` (caps at `limit: 200`, not 1000)
 
-Fix (store level): add `countMembers(ctx, projectId)` / `countOrgMembers(ctx, orgId)` to `IProjectStore`/`IOrgStore` — SQL `COUNT(*)` on Supabase, trivial on local. Fixes all four pages.
+Fix (store level): add `countMembers(ctx, projectId)` / `countOrgMembers(ctx, orgId)` to `IProjectStore`/`IOrgStore` — SQL `COUNT(*)` on Supabase, trivial on local. Confirmed neither interface has these today. Fixes all four pages.
 
 #### 2f. Sequential cross-org walk for platform projects
 
@@ -238,7 +240,8 @@ Every JSON store follows: `readJsonFile` = full `fs.readFile` + `JSON.parse` per
 
 ### 3c. Shared mutable `EMPTY` fallback — CORRECTNESS BUG (fix regardless)
 
-- `src/data/LocalComputeServerStore.ts:33` and `src/data/LocalInviteStore.ts:17` use a module-level `const EMPTY` object as the missing-file fallback; `readJsonFile` returns it **by reference**. `LocalInviteStore.create` pushes directly into the loaded object → mutations bleed into subsequent "empty" reads.
+- **Live bug — `LocalInviteStore.ts:17`:** module-level `const EMPTY = { invites: [] }`; `readJsonFile` returns it **by reference** on a missing file, and `create` does `file.invites.push(invite)` **directly into the loaded object** → the singleton is permanently polluted, so subsequent "empty" reads see the leaked invite. This one actually fires. Treat as correctness, not perf — fix immediately (verified 2026-07-05).
+- **Latent only — `LocalComputeServerStore.ts:33`:** same risky `const EMPTY` pattern, but `readAll()` rebuilds a fresh object every call and no mutator ever pushes into the loaded object, so the reference never leaks. Harmless today; fix anyway to kill the footgun, but it is **not** an active bug (the doc previously overstated this by lumping it with the Invite store).
 - Sibling stores (`users.ts:73-76`, `userData.ts:31`, `LocalDefinitionStore.ts:30-33`) deliberately use fresh-object `empty()` factories and comment on exactly this hazard.
 - Fix: `const empty = () => ({...})` in both. Two lines.
 
@@ -436,7 +439,7 @@ Four additional audits run while there is one real user: security posture, data-
 
 ### D2. Definition status enum drift — RANK 2 (3-line fix)
 
-- DB CHECK allows `('pending','draft','review','published','archived')` (initial migration line ~476); TS type has no `review` (`definitions/types.ts:28`); Zod has neither `pending` nor `review` (`definitions/schemas.ts:7`). Three definitions of one enum. Reconcile now while zero rows use the divergent values.
+- DB CHECK allows all 5: `('pending','draft','review','published','archived')` (`20260425155514_selva_initial.sql:476`); TS type has **4**, missing only `review` (`definitions/types.ts:28` = `'pending' | 'draft' | 'published' | 'archived'`); Zod has **3**, missing both `pending` and `review` (`definitions/schemas.ts:7` = `['draft','published','archived']`). Three definitions of one enum (verified against source 2026-07-05). Reconcile now while zero rows use the divergent values — and **decide first** whether `pending`/`review` are real states (widen TS+Zod) or dead DB values (tighten the CHECK instead); the direction is a design micro-decision, not mechanical.
 
 ### D3. Audit event payload unversioned — RANK 3
 
@@ -463,7 +466,7 @@ UUID PKs everywhere, no slug/email FKs; storage paths keyed by immutable ids (ne
 
 ### T1. THE finding: selva app tests don't run in CI
 
-- `.github/workflows/test.yml` runs only `pnpm --filter @selvajs/local-provider test`. `@selvajs/selva` is **explicitly skipped** ("unhandled promise rejection in test cleanup (a race)", lines ~81-90); `@selvajs/supabase-provider` skipped (needs live stack).
+- `.github/workflows/test.yml` runs three jobs — `@selvajs/schemas`, `@selvajs/local-provider`, and the .NET suites (`Selva.Tests`, `Selva.Drawing.Tests`) — but on the JS app side runs **only** `pnpm --filter @selvajs/local-provider test`. `@selvajs/selva` is **explicitly skipped** (skip comment verbatim: "178 assertions pass, but the process exits 1 from an unhandled promise rejection in test cleanup (a race between suite teardown and async store writes)"); `@selvajs/supabase-provider` skipped (needs live stack). So the load-bearing claim stands — the selva app suite, the supabase provider, and the deny-direction conformance (see Q1) do not gate PRs — even though CI is not literally "one command."
 - The app's tests are high quality where they exist — access-gate deny cases against a real LocalDataProvider, exhaustive share-link failure paths, route-classification negatives, `api/files` traversal/cross-tenant tests — but **none of it gates PRs**. A logic break in `access.server.ts` that keeps type-checking goes green.
 - **Fix the teardown race and re-enable `@selvajs/selva` in CI before touching hooks/access/providers** — highest-leverage single action in this whole document; converts existing tests from decorative to load-bearing.
 
@@ -484,9 +487,9 @@ Three readers judged the actual test files: are they good, what's deletable, wha
 
 ### Q1. The deny direction of the store conformance suites NEVER RUNS — top finding
 
-- The shared suites in `packages/platform/src/testing/suites/` contain proper cross-org/cross-user rejection tests (`orgStoreSuite` "cannot get an org they do not own", `definitionStoreSuite`/`projectStoreSuite` isolation cases) — but they're gated behind a `ctxIsolation` flag that the **local provider never sets** (by design: local shares all records) and that therefore only runs against **Supabase, which skips without a live stack and is excluded from CI**.
-- Net: the access-denial direction of the entire store layer is tested nowhere that executes. Compounding trap: `test-helpers.ts:readEnv()` silently returns `null` (→ skip) on Node < 22 even when creds ARE present — a misconfigured CI goes green while testing nothing.
-- Fix: CI job with `supabase start` + migrations + `.env.test`; make `readEnv` throw when `SUPABASE_URL` is set but the client can't construct; convert capability-absent silent `return`s in `authProviderSuite`/`emailLinkAuthSuite` to `it.skip` so green ≠ didn't-run.
+- The shared suites in `packages/platform/src/testing/suites/` contain proper cross-org/cross-user rejection tests (`orgStoreSuite` "cannot get an org they do not own", `definitionStoreSuite`/`projectStoreSuite` isolation cases) — but they're gated behind a `ctxIsolation` flag. **Correction (verified 2026-07-05): `ctxIsolation: true` is set NOWHERE in the repo** — grep across all `*.test.ts` returns zero. The local provider omits it (by design: local shares all records), and the Supabase conformance tests _also_ never pass it (even the ones that seed a `secondaryUserId`). So the deny direction is dead in **both** providers, not "Supabase-only" as the doc originally implied — the gate never fires anywhere.
+- Net: the access-denial direction of the entire store layer is tested nowhere that executes. Compounding trap: `readEnv()` in `packages/providers/supabase/src/data/__tests__/test-helpers.ts` (not under `packages/platform`) silently returns `null` (→ skip) on Node < 22 even when creds ARE present — it catches the realtime-js WebSocket construction error and returns `null`, so a misconfigured CI goes green while testing nothing.
+- Fix: CI job with `supabase start` + migrations + `.env.test` **and pass `ctxIsolation: true` from the Supabase conformance invocations** (without that, adding the CI job still runs zero deny tests); make `readEnv` throw when `SUPABASE_URL` is set but the client can't construct; convert capability-absent silent `return`s in `authProviderSuite`/`emailLinkAuthSuite` to `it.skip` so green ≠ didn't-run.
 
 ### Q2. Probable root cause of the CI teardown race (T1)
 
@@ -597,7 +600,7 @@ What the audit passes did NOT cover, split by whether it's worth doing now.
 
 ## P. Privacy-claim audit (point 4 — executed)
 
-**Verdict: the claim is false as written.** CLAUDE.md ("zero exposure to EU data regulations, credentials, or company user records") and `docs/providers.md:16` (public, rendered on the docs site) both overclaim. The marketing landing page makes no privacy claim — the risky wording reaches the public only via the docs.
+**Verdict: the CLAUDE.md claim is false as written.** CLAUDE.md ("zero exposure to EU data regulations, credentials, or company user records") overclaims. **Correction (verified 2026-07-05): `docs/providers.md` does NOT contain the "zero exposure" wording** — the doc originally claimed line 16 repeated it; it does not. The nearest phrasing there is softer and correctly scoped to the auth-provider case ("Identity, credentials, and PII are owned entirely by the auth provider; Selva stores only opaque session tokens, user IDs, and minimal authorization metadata"). So the aggressive claim lives **only in CLAUDE.md** — the public docs surface is smaller than the doc implied, and only CLAUDE.md needs the hard reword. The marketing landing page makes no privacy claim.
 
 **Contradictions found:**
 
@@ -610,7 +613,7 @@ What the audit passes did NOT cover, split by whether it's worth doing now.
 
 **Fixes:**
 
-- Reword CLAUDE.md + `docs/providers.md`: drop "zero exposure"/"exclusively"/"only"; state what IS stored per provider and that the operator is the data controller responsible for retention/erasure.
+- Reword CLAUDE.md (the only place with the "zero exposure" claim): drop "zero exposure"/"exclusively"/"only"; state what IS stored per provider and that the operator is the data controller responsible for retention/erasure. `docs/providers.md` is already appropriately hedged — leave it, or tighten only if you want the "stores only…" line to name the local-provider exception.
 - Erasure: make `SupabaseDataProvider.onUserDeleted` scrub/delete the user's `audit_events` rows and invites by email; purge accepted/expired invites by age.
 - Retention: `pg_cron` (or documented manual) purge policy for `audit_events` + `solve_metrics` — dovetails with B4's retention item.
 - Optional: HMAC the IP before using it as the rate-limit key so no raw IP sits in memory.
