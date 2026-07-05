@@ -39,6 +39,12 @@ jobs:
       - name: Check publish invariants
         run: node scripts/publishable-packages.mjs --check
 
+      # Fail on known vulnerabilities in production dependencies. `--prod`
+      # excludes devDeps (build/test tooling), so this gates what actually ships.
+      # Keeps the svelte/kit XSS class of advisory from silently regressing.
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level moderate
+
       # Generated-code drift gate. `ui-schema.json` is the single source of
       # truth; the committed schema.ts / UISchema.Generated.cs / SchemaVersion.cs
       # are derived. The generators already error if definitions changed without

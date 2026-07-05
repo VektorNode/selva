@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { randomBytes } from 'node:crypto';
-import { isEncryptedSecret, decryptSecret } from '@selvajs/platform';
+import { isEncryptedSecret, decryptSecret } from '@selvajs/platform/computeServer';
 import type { RequestContext } from '@selvajs/platform';
 import { SupabaseComputeServerStore } from '../SupabaseComputeServerStore.js';
 import type { ClientBundle } from '../client.js';
@@ -86,7 +86,7 @@ describe('SupabaseComputeServerStore — apiKey encryption at rest', () => {
 
 	it('decrypts apiKey on read — callers see plaintext', async () => {
 		// Seed the "DB" with an already-encrypted row.
-		const { encryptSecret } = await import('@selvajs/platform');
+		const { encryptSecret } = await import('@selvajs/platform/computeServer');
 		const envelope = encryptSecret('round-trip-key', KEY);
 		const { bundle } = fakeBundle({
 			compute_servers: [
@@ -147,7 +147,7 @@ describe('SupabaseComputeServerStore — apiKey encryption at rest', () => {
 	});
 
 	it('verifySecrets reports key_mismatch when the at-rest key rotated', async () => {
-		const { encryptSecret } = await import('@selvajs/platform');
+		const { encryptSecret } = await import('@selvajs/platform/computeServer');
 		const envelope = encryptSecret('secret', randomBytes(32)); // different key
 		const { bundle } = fakeBundle({
 			compute_servers: [{ id: 's1', label: 'prod', api_key: envelope }]
@@ -161,7 +161,7 @@ describe('SupabaseComputeServerStore — apiKey encryption at rest', () => {
 	});
 
 	it('verifySecrets returns ok when every apiKey decrypts', async () => {
-		const { encryptSecret } = await import('@selvajs/platform');
+		const { encryptSecret } = await import('@selvajs/platform/computeServer');
 		const { bundle } = fakeBundle({
 			compute_servers: [{ id: 's1', label: 'prod', api_key: encryptSecret('k', KEY) }]
 		});

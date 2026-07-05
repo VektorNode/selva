@@ -11,4 +11,4 @@ export {
 	encryptSecret,
 	decryptSecret,
 	decodeSecretKey
-} from '@selvajs/platform';
+} from '@selvajs/platform/computeServer';

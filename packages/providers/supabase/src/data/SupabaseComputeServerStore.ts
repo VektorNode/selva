@@ -1,9 +1,6 @@
 import {
 	isOrgServer,
 	isPlatformServer,
-	decryptSecret,
-	encryptSecret,
-	isEncryptedSecret,
 	type IComputeServerStore,
 	type ComputeConfig,
 	type ComputeServerConfig,
@@ -11,6 +8,9 @@ import {
 	type SecretVerificationFailure,
 	type SecretVerificationReport
 } from '@selvajs/platform';
+// Secret crypto functions come from the server-only subpath (they use
+// `node:crypto`, kept out of the root barrel so client bundles don't pull it in).
+import { decryptSecret, encryptSecret, isEncryptedSecret } from '@selvajs/platform/computeServer';
 import { ProviderError } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 

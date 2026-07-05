@@ -37,6 +37,18 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	private readonly events: IEventSink;
 	private projectProvider?: IProjectStore;
 
+	// Load-once write-through cache — same idiom as `LocalOrgStoreLoader` and the
+	// auth/user-data stores. `definitions-config.json` is the largest and
+	// fastest-growing local doc, re-read on every get/list/getVersion/listVersions,
+	// including the unauthenticated share-link solve path (via the injected
+	// definition provider in `LocalShareLinkStore`). Sole-writer in single-process
+	// local mode → the in-memory copy is authoritative; every mutation reads the
+	// cached object, mutates it, and `writeConfig` persists via temp+rename. This
+	// store is constructed once per provider (and the share-link store gets the
+	// SAME instance injected), so there's exactly one cache over the file. §3b.
+	private cache: DefinitionsConfig | null = null;
+	private loading: Promise<DefinitionsConfig> | null = null;
+
 	static fromEnv(env: Record<string, string | undefined>): LocalDefinitionStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		return new LocalDefinitionStore(env.DATA_PATH);
@@ -57,7 +69,13 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	}
 
 	private async readConfig(): Promise<DefinitionsConfig> {
-		return readJsonFile<DefinitionsConfig>(this.configPath, empty());
+		if (this.cache) return this.cache;
+		this.loading ??= readJsonFile<DefinitionsConfig>(this.configPath, empty()).then((data) => {
+			this.cache = data;
+			this.loading = null;
+			return data;
+		});
+		return this.loading;
 	}
 
 	private live(record: DefinitionRecord | undefined | null): record is DefinitionRecord {
@@ -65,6 +83,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	}
 
 	private async writeConfig(config: DefinitionsConfig): Promise<void> {
+		this.cache = config;
 		await writeJsonFile(this.configPath, config);
 	}
 

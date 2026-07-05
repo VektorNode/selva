@@ -143,12 +143,11 @@ export type {
 } from './computeServer/types.js';
 export { isPlatformServer, isOrgServer } from './computeServer/types.js';
 export type { IComputeServerStore } from './computeServer/interface.js';
-export {
-	isEncryptedSecret,
-	encryptSecret,
-	decryptSecret,
-	decodeSecretKey
-} from './computeServer/secrets.js';
+// NOTE: the at-rest secret crypto FUNCTIONS (`encryptSecret` etc.) are NOT
+// re-exported here — they use `node:crypto` and this barrel is imported by
+// client `.svelte` code, so a browser bundle would fail to resolve them. Import
+// them from `@selvajs/platform/computeServer` (server-only) instead. The report
+// TYPES are erased at build, so they stay here for convenience.
 export type {
 	SecretVerificationReport,
 	SecretVerificationFailure,

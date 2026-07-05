@@ -1,5 +1,6 @@
 import type { IDataProvider, IEventSink, IPlatformProjectGrantStore } from '@selvajs/platform';
-import { ProviderError, decodeSecretKey } from '@selvajs/platform';
+import { ProviderError } from '@selvajs/platform';
+import { decodeSecretKey } from '@selvajs/platform/computeServer';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle } from './client.js';
 import { SupabaseEventSink } from './SupabaseEventSink.js';
