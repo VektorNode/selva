@@ -56,8 +56,33 @@ export interface LocalUserDataStore {
 }
 
 export function createLocalUserDataStore(filePath: string): LocalUserDataStore {
+	// Load-once, write-through cache — same pattern as `LocalOrgStoreLoader` /
+	// the auth-users store. `user-data.json` is read ~4× per authenticated
+	// request (ensureUser, getProfile, getFor + the hook bootstrap). The provider
+	// is the sole writer in single-process local mode, so the in-memory copy is
+	// authoritative. MUST be a single shared instance across the profile,
+	// permission, and data-provider views (LocalDataProvider injects one) — see
+	// those constructors. §3a.
+	let cache: UserDataFile | null = null;
+	let loading: Promise<UserDataFile> | null = null;
+
+	async function load(): Promise<UserDataFile> {
+		if (cache) return cache;
+		loading ??= readJsonFile<UserDataFile>(filePath, empty()).then((data) => {
+			cache = data;
+			loading = null;
+			return data;
+		});
+		return loading;
+	}
+
+	async function persist(file: UserDataFile): Promise<void> {
+		cache = file;
+		await writeJsonFile(filePath, file);
+	}
+
 	async function findOrThrow(userId: string): Promise<{ file: UserDataFile; row: StoredUserData }> {
-		const file = await readJsonFile<UserDataFile>(filePath, empty());
+		const file = await load();
 		const row = file.users.find((u) => u.userId === userId);
 		if (!row) throw new ProviderError(`User-data row "${userId}" not found`, 404);
 		return { file, row };
@@ -65,26 +90,26 @@ export function createLocalUserDataStore(filePath: string): LocalUserDataStore {
 
 	return {
 		async ensure(userId) {
-			const file = await readJsonFile<UserDataFile>(filePath, empty());
+			const file = await load();
 			if (file.users.some((u) => u.userId === userId)) return;
 			file.users.push(emptyRow(userId));
-			await writeJsonFile(filePath, file);
+			await persist(file);
 		},
 
 		async findById(userId) {
-			const { users } = await readJsonFile<UserDataFile>(filePath, empty());
+			const { users } = await load();
 			return users.find((u) => u.userId === userId) ?? null;
 		},
 
 		async listAll() {
-			const { users } = await readJsonFile<UserDataFile>(filePath, empty());
+			const { users } = await load();
 			return users;
 		},
 
 		async updatePermissions(userId, permissions) {
 			const { file, row } = await findOrThrow(userId);
 			row.platformPermissions = permissions;
-			await writeJsonFile(filePath, file);
+			await persist(file);
 		},
 
 		async updateDisplayName(userId, displayName) {
@@ -94,21 +119,21 @@ export function createLocalUserDataStore(filePath: string): LocalUserDataStore {
 			} else {
 				row.displayName = displayName;
 			}
-			await writeJsonFile(filePath, file);
+			await persist(file);
 		},
 
 		async starDefinition(userId, definitionId) {
 			const { file, row } = await findOrThrow(userId);
 			if (!row.starredDefinitions.includes(definitionId)) {
 				row.starredDefinitions.push(definitionId);
-				await writeJsonFile(filePath, file);
+				await persist(file);
 			}
 		},
 
 		async unstarDefinition(userId, definitionId) {
 			const { file, row } = await findOrThrow(userId);
 			row.starredDefinitions = row.starredDefinitions.filter((d) => d !== definitionId);
-			await writeJsonFile(filePath, file);
+			await persist(file);
 		},
 
 		async recordRun(userId, run) {
@@ -118,17 +143,17 @@ export function createLocalUserDataStore(filePath: string): LocalUserDataStore {
 				run,
 				...row.recentRuns.filter((r) => r.definitionId !== run.definitionId)
 			].slice(0, MAX_RECENT_RUNS);
-			await writeJsonFile(filePath, file);
+			await persist(file);
 		},
 
 		async deleteUser(userId) {
-			const file = await readJsonFile<UserDataFile>(filePath, empty());
+			const file = await load();
 			const before = file.users.length;
 			file.users = file.users.filter((u) => u.userId !== userId);
 			if (file.users.length === before) {
 				throw new ProviderError(`User-data row "${userId}" not found`, 404);
 			}
-			await writeJsonFile(filePath, file);
+			await persist(file);
 		}
 	};
 }

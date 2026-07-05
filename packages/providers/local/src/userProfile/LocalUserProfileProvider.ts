@@ -35,8 +35,16 @@ function toProfile(u: StoredUserData): UserProfile {
 export class LocalUserProfileProvider implements IUserProfileStore {
 	private readonly data: LocalUserDataStore;
 
-	constructor(userDataFilePath: string) {
-		this.data = createLocalUserDataStore(userDataFilePath);
+	/**
+	 * Accepts a file path (constructs its own store — for `fromEnv` and
+	 * standalone conformance tests) OR a shared `LocalUserDataStore`. In the
+	 * full provider, `LocalDataProvider` injects ONE store shared with the
+	 * permission store and the data provider, so all three see the same
+	 * load-once write-through cache over `user-data.json` (§3a). Constructing
+	 * separate stores on the same file would run divergent caches.
+	 */
+	constructor(userData: string | LocalUserDataStore) {
+		this.data = typeof userData === 'string' ? createLocalUserDataStore(userData) : userData;
 	}
 
 	static fromEnv(env: Record<string, string | undefined>): LocalUserProfileProvider {

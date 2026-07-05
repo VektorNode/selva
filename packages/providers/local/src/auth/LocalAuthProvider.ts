@@ -94,6 +94,17 @@ export class LocalAuthProvider implements IAuthProvider {
 		);
 	}
 
+	/**
+	 * The underlying identity store, or undefined in stateless (no-DATA_PATH)
+	 * mode. Exposed so callers that need direct seed/read access (tests,
+	 * advanced wiring) share THIS provider's store — and thus its load-once
+	 * write-through cache — instead of constructing a second store on the same
+	 * file, which would run a divergent cache. §3a.
+	 */
+	get userStore(): LocalAuthUserStore | undefined {
+		return this.users;
+	}
+
 	static fromEnv(env: Record<string, string | undefined>): LocalAuthProvider {
 		const hmacSecret = env.SELVA_HMAC_KEY;
 		if (!hmacSecret) throw new Error('Missing required env var: SELVA_HMAC_KEY');

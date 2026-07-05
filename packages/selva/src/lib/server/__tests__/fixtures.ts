@@ -90,7 +90,11 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 	const auth = LocalAuthProvider.fromEnv(env);
 	const data = LocalDataProvider.fromEnv(env, events);
 	const storage = LocalStorageProvider.fromEnv(env);
-	const authUsers = createLocalAuthUserStore(path.join(root, 'auth-users.json'));
+	// Reuse the provider's OWN store (not a second one on the same file) so seed
+	// helpers share its load-once write-through cache — otherwise seeds via this
+	// handle wouldn't be visible to the provider's verifyToken/verifyLogin. §3a.
+	const authUsers = auth.userStore;
+	if (!authUsers) throw new Error('LocalAuthProvider has no user store (DATA_PATH unset in tests)');
 
 	const config: SelvaConfig = {
 		auth,

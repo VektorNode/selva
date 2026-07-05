@@ -128,6 +128,11 @@ export class LocalDataProvider implements IDataProvider {
 		definitions.setProjectProvider(projects);
 		shareLinks.setDefinitionProvider(definitions);
 
+		// ONE user-data store, shared across the profile store, permission store,
+		// and the data provider's ensureUser/deleteUser — so all three read/write
+		// through a single load-once write-through cache over `user-data.json`
+		// (§3a). Previously each constructed its own store on the same file, which
+		// with caching would run three divergent caches.
 		const userData = createLocalUserDataStore(userDataFilePath);
 
 		return new LocalDataProvider(
@@ -138,8 +143,8 @@ export class LocalDataProvider implements IDataProvider {
 				computeServer,
 				invites,
 				shareLinks,
-				userProfile: new LocalUserProfileProvider(userDataFilePath),
-				permissions: new LocalPlatformPermissionStore(userDataFilePath),
+				userProfile: new LocalUserProfileProvider(userData),
+				permissions: new LocalPlatformPermissionStore(userData),
 				platformProjectGrants
 			},
 			userData

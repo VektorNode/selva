@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDefinitionService, getProjectProvider } from '$lib/server/providers.server';
+import { getDefinitionService } from '$lib/server/providers.server';
 import { requireEditableDefinition } from '$lib/server/access.server';
 import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { GuidSchema, UpdateMetadataInputSchema } from '@selvajs/platform/definitions';
@@ -38,7 +38,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		);
 	}
 
-	const { ctx, record } = await requireEditableDefinition(locals, guidParsed.data);
+	const { ctx, record, project } = await requireEditableDefinition(locals, guidParsed.data);
 	const fileExt = ext.slice(1) as 'gh' | 'ghx';
 
 	try {
@@ -46,8 +46,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 		// Validate-and-cache gate: extract the schema from compute BEFORE any
 		// write. Failure rejects the upload with nothing persisted.
-		// See specs/SchemaCaching.md.
-		const project = await getProjectProvider().getProject(ctx, record.projectId);
+		// See specs/SchemaCaching.md. `project` comes from the gate — no re-fetch (§2b).
 		const server = await resolveServerForOrg(ctx, project?.orgId ?? null, {
 			definitionPin: record.computeServerId ?? null
 		});

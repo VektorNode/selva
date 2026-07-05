@@ -40,7 +40,11 @@ interface OnDiskShape {
 	orgDefaults?: Record<string, string>;
 }
 
-const EMPTY: OnDiskShape = { servers: [], orgDefaults: {} };
+// Fresh object per call — `readJsonFile` returns its fallback BY REFERENCE on a
+// missing file, so a shared module-level constant would let its `servers` /
+// `orgDefaults` references escape (via `readAll`) and risk cross-request bleed
+// if any caller mutated them in place. Matches the sibling stores' `empty()`.
+const empty = (): OnDiskShape => ({ servers: [], orgDefaults: {} });
 
 /**
  * Reads/writes compute.config.json. The file is re-read on every read call
@@ -71,7 +75,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 	) {}
 
 	private async readAll(): Promise<OnDiskShape> {
-		const raw = await readJsonFile<OnDiskShape>(this.configFilePath, EMPTY);
+		const raw = await readJsonFile<OnDiskShape>(this.configFilePath, empty());
 		return {
 			servers: raw.servers ?? [],
 			defaultServerId: raw.defaultServerId,

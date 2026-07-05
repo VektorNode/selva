@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import type {
 	AuthUser,
+	DefinitionRecord,
 	OrgPermission,
 	PlatformPermission,
 	Project,
@@ -402,10 +403,13 @@ export async function requireCanViewProject(locals: Locals, projectId: string): 
  */
 export async function requireCanSolve(
 	locals: Locals,
-	projectId: string
+	projectId: string,
+	// Pass the already-loaded project (e.g. the solve endpoint loads it to read
+	// orgId/pin) to skip a redundant `getProject` inside the gate.
+	preloadedProject?: Project
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
-	const project = await loadProjectOr404(ctx, projectId);
+	const project = preloadedProject ?? (await loadProjectOr404(ctx, projectId));
 	const allowed = await contentCheck(async () =>
 		canSolve(await buildProjectAccessInput(ctx, project))
 	);
@@ -413,39 +417,51 @@ export async function requireCanSolve(
 	return { user, ctx, project };
 }
 
-/** Loads the record and gates editing. Returns the record so callers skip a re-fetch. */
+/**
+ * Loads the record and gates editing. Returns the record AND the project it
+ * loads for the gate, so callers skip a re-fetch of either (§2b).
+ */
 export async function requireEditableDefinition(locals: Locals, guid: string) {
 	const { ctx } = requireAuthed(locals);
 	const record = await getDefinitionMeta().get(ctx, guid);
 	if (!record) throw error(404, 'Definition not found');
-	const allowed = await contentCheck(async () => {
-		const [project, member] = await Promise.all([
-			getProjectProvider().getProject(ctx, record.projectId),
-			getProjectProvider().getProjectMember(ctx, record.projectId, ctx.userId)
-		]);
-		return canEditDefinition({
+	// Load project + member once up front; `project` is returned for reuse (§2b).
+	const [project, member] = await Promise.all([
+		getProjectProvider().getProject(ctx, record.projectId),
+		getProjectProvider().getProjectMember(ctx, record.projectId, ctx.userId)
+	]);
+	const allowed = await contentCheck(async () =>
+		canEditDefinition({
 			project,
 			definition: record,
 			member,
 			userId: ctx.userId,
 			platformPermissions: ctx.platformPermissions,
 			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
-		});
-	});
+		})
+	);
 	if (!allowed) throw error(403, 'You do not have permission to edit this definition.');
-	return { record, ctx };
+	return { record, ctx, project };
 }
 
 export async function requireCanEditDefinition(
 	locals: Locals,
 	projectId: string,
-	definitionGuid: string
+	definitionGuid: string,
+	// Callers that already loaded the project and/or definition (e.g. the solve
+	// endpoint) pass them to skip the redundant fetches inside the gate. The
+	// member row still loads here (the caller doesn't have it).
+	preloaded?: { project?: Project | null; definition?: DefinitionRecord | null }
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await contentCheck(async () => {
 		const [project, definition, member] = await Promise.all([
-			getProjectProvider().getProject(ctx, projectId),
-			getDefinitionMeta().get(ctx, definitionGuid),
+			preloaded?.project !== undefined
+				? Promise.resolve(preloaded.project)
+				: getProjectProvider().getProject(ctx, projectId),
+			preloaded?.definition !== undefined
+				? Promise.resolve(preloaded.definition)
+				: getDefinitionMeta().get(ctx, definitionGuid),
 			getProjectProvider().getProjectMember(ctx, projectId, ctx.userId)
 		]);
 		return canEditDefinition({

@@ -9,7 +9,7 @@
 // whether `ctx` is allowed to load this definition, since gates differ across
 // routes (project membership, segment ownership, share-token, admin override).
 
-import { GrasshopperClient } from '@selvajs/compute/grasshopper';
+import type { GrasshopperClient } from '@selvajs/compute/grasshopper';
 import type { UISchema } from '@selvajs/schemas';
 import { fetchSchemaFromCompute } from './schemaExtraction.server';
 import type {
@@ -20,6 +20,7 @@ import type {
 } from '@selvajs/platform';
 import { getStorageProvider, getDefinitionMeta, getProjectProvider } from '../providers.server';
 import { resolveServerForOrg } from '../compute/resolve.server';
+import { getClient } from '../compute/clientCache.server';
 import { env } from '$env/dynamic/private';
 
 export type DefinitionChannel = 'live' | 'draft';
@@ -106,12 +107,14 @@ export async function loadDefinitionForRender(
 		);
 	}
 
+	// Reuse the shared per-server client cache — the same warm client the solve
+	// endpoint uses for this server. Keyed by (serverUrl, apiKey), so a
+	// definition pinned to a different compute instance transparently gets that
+	// instance's own cached client. Only the client is used here (getIO); the
+	// entry's solve scheduler rides along unused.
 	let client: GrasshopperClient;
 	try {
-		client = await GrasshopperClient.create({
-			serverUrl: computeServer.serverUrl,
-			apiKey: computeServer.apiKey
-		});
+		client = (await getClient(computeServer)).client;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		throw new DefinitionLoadError(
