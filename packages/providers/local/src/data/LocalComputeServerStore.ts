@@ -6,7 +6,9 @@ import {
 	type ComputeConfig,
 	type ComputeServerConfig,
 	type PlatformComputeServer,
-	type RequestContext
+	type RequestContext,
+	type SecretVerificationFailure,
+	type SecretVerificationReport
 } from '@selvajs/platform';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 import {
@@ -15,6 +17,14 @@ import {
 	encryptSecret,
 	isEncryptedSecret
 } from './secretCrypto.js';
+
+// Re-exported from `@selvajs/platform` (`computeServer/secrets`) — kept here so
+// the local provider's public surface (index.ts) stays backward-compatible.
+export type {
+	SecretVerificationFailure,
+	SecretVerificationFailureReason,
+	SecretVerificationReport
+} from '@selvajs/platform';
 
 /**
  * On-disk file shape. Single document holding *all* servers (platform +
@@ -31,32 +41,6 @@ interface OnDiskShape {
 }
 
 const EMPTY: OnDiskShape = { servers: [], orgDefaults: {} };
-
-/**
- * Result of {@link LocalComputeServerStore.verifySecrets}. One entry per
- * server whose `apiKey` couldn't be loaded:
- *  - `plaintext_on_disk` — the field exists but isn't an `enc:v1:` envelope.
- *    Either a hand-edit or a migration regression. Security-relevant.
- *  - `key_mismatch`     — envelope is valid but GCM auth tag verification
- *    fails under the current `SELVA_AT_REST_KEY`. The key was rotated or the
- *    data came from another deployment.
- */
-export type SecretVerificationFailureReason = 'key_mismatch' | 'plaintext_on_disk';
-
-export interface SecretVerificationFailure {
-	serverId: string;
-	serverLabel: string;
-	reason: SecretVerificationFailureReason;
-	/** Underlying error message for `key_mismatch`. Absent for plaintext. */
-	cause?: string;
-}
-
-export interface SecretVerificationReport {
-	ok: boolean;
-	failures: SecretVerificationFailure[];
-	/** True if at least one row holds an unencrypted apiKey on disk. */
-	plaintextFound: boolean;
-}
 
 /**
  * Reads/writes compute.config.json. The file is re-read on every read call

@@ -78,16 +78,17 @@ jobs:
       # condition (vitest.config.ts `resolve.conditions: ['source']`), so no
       # platform pre-build step is needed here.
       #
-      # Skipped:
-      #   - @selvajs/supabase-provider — conformance tests need a live Supabase
-      #     stack. They self-skip on Node < 22 (no native WebSocket), but
-      #     filtering at this level keeps CI output clean. Add a separate
-      #     workflow with environment secrets when ready.
-      #   - @selvajs/selva — 178 assertions pass, but the process exits 1 from
-      #     an unhandled promise rejection in test cleanup (a race between
-      #     suite teardown and async store writes). Re-enable here once the
-      #     race is fixed.
-      - run: pnpm --filter @selvajs/local-provider test
+      # @selvajs/supabase-provider IS included: its conformance suites self-skip
+      # cleanly without a live stack (they need Supabase creds in .env.test), but
+      # its no-stack unit tests — e.g. compute-server apiKey at-rest encryption —
+      # run and gate here. A separate workflow with environment secrets can add
+      # the live conformance coverage later.
+      - run: >-
+          pnpm
+          --filter @selvajs/local-provider
+          --filter @selvajs/supabase-provider
+          --filter @selvajs/selva
+          test
 
   # .NET tests for the Rhino-free libraries. Runs on ubuntu in parallel with
   # the JS job. Selva.Tests and Selva.Drawing.Tests both target net8.0 and have

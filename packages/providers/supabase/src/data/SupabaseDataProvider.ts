@@ -1,5 +1,5 @@
 import type { IDataProvider, IEventSink, IPlatformProjectGrantStore } from '@selvajs/platform';
-import { ProviderError } from '@selvajs/platform';
+import { ProviderError, decodeSecretKey } from '@selvajs/platform';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle } from './client.js';
 import { SupabaseEventSink } from './SupabaseEventSink.js';
@@ -63,14 +63,15 @@ export class SupabaseDataProvider implements IDataProvider {
 
 	private constructor(
 		private readonly clients: ClientBundle,
-		events: IEventSink
+		events: IEventSink,
+		secretKey?: Buffer
 	) {
 		this.solveMetrics = new SupabaseSolveMetricSink(clients);
 		this.orgs = new SupabaseOrgStore(clients, events);
 		this.projects = new SupabaseProjectStore(clients, events);
 		this.definitions = new SupabaseDefinitionStore(clients, events);
 		this.invites = new SupabaseInviteStore(clients, events);
-		this.computeServer = new SupabaseComputeServerStore(clients);
+		this.computeServer = new SupabaseComputeServerStore(clients, secretKey);
 		this.shareLinks = new SupabaseShareLinkStore(clients, events);
 		this.userProfile = new SupabaseUserProfileProvider(clients);
 		this.permissions = new SupabasePlatformPermissionStore(clients);
@@ -88,21 +89,42 @@ export class SupabaseDataProvider implements IDataProvider {
 		if (!supabaseUrl) throw new Error('Missing required env var: SUPABASE_URL');
 		if (!anonKey) throw new Error('Missing required env var: SUPABASE_ANON_KEY');
 		if (!serviceRoleKey) throw new Error('Missing required env var: SUPABASE_SERVICE_ROLE_KEY');
+		// Required so compute-server apiKeys are encrypted at rest in the DB —
+		// same guarantee (and same key) as the local provider's on-disk envelope.
+		if (!env.SELVA_AT_REST_KEY) {
+			throw new Error(
+				'Missing required env var: SELVA_AT_REST_KEY (32-byte hex or base64). ' +
+					'Required to encrypt compute-server API keys at rest. ' +
+					"Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+			);
+		}
+		const secretKey = decodeSecretKey(env.SELVA_AT_REST_KEY);
 		const bundle = buildClientBundle({ supabaseUrl, anonKey, serviceRoleKey });
-		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
+		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle), secretKey);
 	}
 
-	static create(opts: BuildClientOptions, events?: IEventSink): SupabaseDataProvider {
+	static create(
+		opts: BuildClientOptions,
+		events?: IEventSink,
+		secretKey?: Buffer
+	): SupabaseDataProvider {
 		const bundle = buildClientBundle(opts);
-		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
+		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle), secretKey);
 	}
 
 	/**
 	 * Build from a pre-existing `ClientBundle`. Useful for tests or advanced
 	 * cases that need to inject a custom event sink or share a bundle externally.
+	 * `secretKey` is optional here — omit it only when the caller never touches
+	 * compute-server apiKeys (writes without a key throw rather than persist
+	 * plaintext).
 	 */
-	static fromBundle(bundle: ClientBundle, events?: IEventSink): SupabaseDataProvider {
-		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
+	static fromBundle(
+		bundle: ClientBundle,
+		events?: IEventSink,
+		secretKey?: Buffer
+	): SupabaseDataProvider {
+		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle), secretKey);
 	}
 
 	/**

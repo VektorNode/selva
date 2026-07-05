@@ -1,5 +1,6 @@
 import type { RequestContext } from '../context.js';
 import type { ComputeConfig, ComputeServerConfig } from './types.js';
+import type { SecretVerificationReport } from './secrets.js';
 
 /**
  * Compute-server configuration. Architecture spec §4.8.
@@ -59,4 +60,14 @@ export interface IComputeServerStore {
 	 * compute config behind.
 	 */
 	deleteByOrg(ctx: RequestContext, orgId: string): Promise<void>;
+
+	/**
+	 * Boot-time integrity check: attempt to decrypt every stored `apiKey` and
+	 * report any that are plaintext-at-rest or fail to decrypt under the current
+	 * `SELVA_AT_REST_KEY`. Does NOT throw — returns a structured report so the
+	 * caller (boot health) decides whether to refuse boot / drive `/api/health`
+	 * to 503. Both encrypting stores (local file, Supabase) implement this;
+	 * optional so a hypothetical non-encrypting store can omit it.
+	 */
+	verifySecrets?(): Promise<SecretVerificationReport>;
 }

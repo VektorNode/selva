@@ -43,6 +43,9 @@
 		"three": "catalog:",
 		"zod": "^4.3.6"
 	},
+	"optionalDependencies": {
+		"@sentry/node": "^10.63.0"
+	},
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
 		"@selvajs/header-auth-provider": "workspace:*",

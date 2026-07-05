@@ -143,6 +143,17 @@ export type {
 } from './computeServer/types.js';
 export { isPlatformServer, isOrgServer } from './computeServer/types.js';
 export type { IComputeServerStore } from './computeServer/interface.js';
+export {
+	isEncryptedSecret,
+	encryptSecret,
+	decryptSecret,
+	decodeSecretKey
+} from './computeServer/secrets.js';
+export type {
+	SecretVerificationReport,
+	SecretVerificationFailure,
+	SecretVerificationFailureReason
+} from './computeServer/secrets.js';
 export type { ResolveOptions } from './computeServer/utils.js';
 export {
 	serversVisibleTo,
@@ -197,6 +208,12 @@ export type {
 // ---------------------------------------------------------------------------
 export type { ISolveMetricSink, SolveMetric, SolveFailureKind } from './metrics/interface.js';
 export { NoopSolveMetricSink } from './metrics/interface.js';
+
+// ---------------------------------------------------------------------------
+// errors (unexpected-error reporting)
+// ---------------------------------------------------------------------------
+export type { IErrorReporter, ErrorContext } from './errors/interface.js';
+export { NoopErrorReporter } from './errors/interface.js';
 
 // ---------------------------------------------------------------------------
 // bindings (server-side resolver for schema inputs marked `source.kind === 'server'`)

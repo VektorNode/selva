@@ -1,11 +1,11 @@
-import { LocalComputeServerStore, type SecretVerificationReport } from '@selvajs/local-provider';
+import type { SecretVerificationReport } from '@selvajs/platform';
 import { providers } from './providers.server.js';
 
 /**
  * Boot-time integrity report. Populated once on first import, then cached.
- * Currently checks at-rest secret decryption (compute server apiKeys) for
- * the local provider; other providers either don't encrypt at this layer
- * (Supabase) or don't expose `verifySecrets`.
+ * Checks at-rest secret decryption (compute server apiKeys) for any provider
+ * that exposes `verifySecrets` — both the local (on-disk) and Supabase (in-DB)
+ * compute-server stores encrypt apiKeys and implement it.
  *
  * Goals:
  *  - Fail loudly at deploy time when `SELVA_AT_REST_KEY` doesn't match what
@@ -30,7 +30,7 @@ async function run(): Promise<BootHealth> {
 	let atRestSecrets: SecretVerificationReport | null = null;
 
 	const store = providers.data.computeServer;
-	if (store instanceof LocalComputeServerStore) {
+	if (typeof store.verifySecrets === 'function') {
 		try {
 			atRestSecrets = await store.verifySecrets();
 		} catch (err) {

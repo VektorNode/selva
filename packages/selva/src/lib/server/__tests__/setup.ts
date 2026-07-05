@@ -11,10 +11,11 @@
  */
 
 import { vi } from 'vitest';
-import { NoopSolveMetricSink } from '@selvajs/platform';
+import { NoopSolveMetricSink, NoopErrorReporter } from '@selvajs/platform';
 
 vi.mock('$lib/server/providers.server', async () => {
 	const { currentTestProviders } = await import('./test-providers.js');
+	const { OrgAssetService } = await import('../organizations/OrgAssetService.js');
 	return {
 		get providers() {
 			return currentTestProviders().config;
@@ -35,6 +36,10 @@ vi.mock('$lib/server/providers.server', async () => {
 			Boolean((currentTestProviders().flags as Record<string, unknown>)[name]),
 		getAuthProvider: () => currentTestProviders().config.auth,
 		getStorageProvider: () => currentTestProviders().config.storage,
+		getOrgAssetService: () => {
+			const cfg = currentTestProviders().config;
+			return new OrgAssetService(cfg.data.orgs, cfg.storage);
+		},
 		getDataProvider: () => currentTestProviders().config.data,
 		getOrganizationProvider: () => currentTestProviders().config.data.orgs,
 		getProjectProvider: () => currentTestProviders().config.data.projects,
@@ -45,6 +50,7 @@ vi.mock('$lib/server/providers.server', async () => {
 		getPermissionStore: () => currentTestProviders().config.data.permissions,
 		getPlatformProjectGrantStore: () => currentTestProviders().config.data.platformProjectGrants,
 		getAuditQuery: () => currentTestProviders().config.data.auditQuery ?? null,
+		getErrorReporter: () => new NoopErrorReporter(),
 		getSolveMetricSink: () =>
 			(currentTestProviders().config.data as { solveMetrics?: unknown }).solveMetrics ??
 			new NoopSolveMetricSink()

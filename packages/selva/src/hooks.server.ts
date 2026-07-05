@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { isHttpError } from '@sveltejs/kit';
 import type { AuthUser, RequestContext } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
-import { providers } from '$lib/server/providers.server';
+import { providers, getErrorReporter } from '$lib/server/providers.server';
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { bootstrapUserSession, wireHeaderAuthBootstrap } from '$lib/server/auth-bootstrap.server';
 import {
@@ -66,6 +66,26 @@ async function isFirstRun(): Promise<boolean> {
 }
 
 /**
+ * Ids of users already registered in the data layer this process. `ensureUser`
+ * is idempotent and rows don't disappear mid-process, so once we've ensured a
+ * user we can skip the call on every subsequent request from that user —
+ * turning a per-request data-layer round-trip (local: a full `user-data.json`
+ * read+parse) into a `Set.has` check. Same one-way-flag reasoning as
+ * `firstRunResolved`.
+ *
+ * Per-process (not shared across instances). That's correct: `ensureUser` is
+ * idempotent, so a second instance simply ensures the same user once itself —
+ * no cross-instance invariant depends on a single call.
+ */
+const ensuredUserIds = new Set<string>();
+
+async function ensureUserOnce(userId: string): Promise<void> {
+	if (ensuredUserIds.has(userId)) return;
+	await providers.data.ensureUser(SYSTEM_CONTEXT, userId);
+	ensuredUserIds.add(userId);
+}
+
+/**
  * Build a per-request context from an authenticated user. Resolves the
  * active-org membership and loads its OrgPermissions into the context.
  *
@@ -77,24 +97,27 @@ async function isFirstRun(): Promise<boolean> {
  *
  * `sessionToken` is forwarded as `adapterContext` so adapters that need the
  * upstream auth token (e.g. Supabase RLS) can pull it off the context.
+ *
+ * Exported for tests: the fixture's `actAs()` mirrors this logic, so a direct
+ * test pins the production function against drift (audit T2/Q4).
  */
-async function buildContext(
+export async function buildContext(
 	user: AuthUser,
-	sessionToken: string | undefined
+	sessionToken: string | undefined,
+	// Pre-fetched by the hook so the four independent per-request reads
+	// (ensureUser, getProfile, getFor, findUserMembership) run in one
+	// `Promise.all` instead of serially. Identity from the auth provider,
+	// authorization from the data layer — both fetched as SYSTEM_CONTEXT during
+	// request bootstrap (the user's own ctx isn't built yet).
+	platformPermissions: RequestContext['platformPermissions'],
+	membership: Awaited<ReturnType<typeof providers.data.orgs.findUserMembership>>
 ): Promise<RequestContext> {
 	let actingOrgId: string | undefined;
 	let orgPermissions: RequestContext['orgPermissions'] = [];
 
-	// Identity from the auth provider, authorization from the data layer.
-	// Both reads run as SYSTEM_CONTEXT during request bootstrap (the user's
-	// own ctx isn't built yet).
-	const platformPermissions = await providers.data.permissions.getFor(SYSTEM_CONTEXT, user.id);
-
-	// Single round-trip via `findUserMembership` (one indexed lookup against
-	// `org_members`). Replaces the prior `listOrgs(50) + getOrgMember-per-org`
-	// loop, which N+1'd on every authed request and silently truncated past
-	// 50 orgs.
-	const membership = await providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id);
+	// `membership` came from `findUserMembership` — one indexed lookup against
+	// `org_members` (replaces the prior `listOrgs(50) + getOrgMember-per-org`
+	// N+1).
 	if (membership) {
 		actingOrgId = membership.org.id;
 		orgPermissions = membership.member.permissions;
@@ -102,7 +125,9 @@ async function buildContext(
 
 	if (!actingOrgId && platformPermissions.includes('instance_admin')) {
 		// Instance admins without an explicit membership row fall back to the
-		// first org so admin tooling stays usable before a switcher exists.
+		// first org so admin tooling stays usable before a switcher exists. This
+		// read genuinely depends on the two above (only fires when there's no
+		// membership and the user is an instance admin), so it stays sequential.
 		const firstOrgPage = await providers.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
 		const firstOrg = firstOrgPage.items[0];
 		if (firstOrg) actingOrgId = firstOrg.id;
@@ -298,22 +323,36 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname)}`);
 		}
 
-		// Make the authenticated user + profile + request context available to route loaders.
-		// The profile lookup is one extra read per authed request; local reads `users.json`
-		// already cached by the auth flow, Supabase will hit the user_profiles table.
-		// Use SYSTEM_CONTEXT for the profile load — ctx itself isn't built yet,
-		// and the user is loading their own profile during request bootstrap.
-		// Local equivalent of Supabase's `handle_new_auth_user` trigger:
-		// guarantees a `user-data.json` row exists for this user before any
-		// data-layer read or write. Idempotent and cheap; Supabase makes it a
-		// no-op (its DB trigger has already run).
-		await providers.data.ensureUser(SYSTEM_CONTEXT, user.id);
+		// Make the authenticated user + profile + request context available to
+		// route loaders. Four independent per-request reads, all keyed only by
+		// `user.id` with no data dependency between them, so they run in one
+		// `Promise.all` — hook latency becomes ~the slowest read instead of the
+		// sum of four. All run as SYSTEM_CONTEXT: `ctx` isn't built yet, and the
+		// user is bootstrapping their own request.
+		//
+		//  1. ensureUser — local equivalent of Supabase's `handle_new_auth_user`
+		//     trigger: guarantees a `user-data.json` row exists. Idempotent, and
+		//     memoized per-process (`ensureUserOnce`) so it's a `Set.has` after
+		//     the first request from a given user. Supabase makes it a no-op.
+		//  2. getProfile — display name / starred / recent runs.
+		//  3. getFor — platform permissions (authorization).
+		//  4. findUserMembership — acting org + org permissions.
+		//
+		// Racing ensureUser (a write-guard) against reads 2–4 is safe: on the
+		// very first request from a brand-new user the reads may land before the
+		// row is seeded, but every read fails soft to empty — `null` profile
+		// (→ emptyProfile), `[]` permissions, no membership — which is exactly
+		// the correct state for a user who has nothing yet.
+		const [, profile, platformPermissions, membership] = await Promise.all([
+			ensureUserOnce(user.id),
+			providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id),
+			providers.data.permissions.getFor(SYSTEM_CONTEXT, user.id),
+			providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id)
+		]);
 
 		event.locals.user = user;
-		event.locals.profile =
-			(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
-			emptyProfile(user.id);
-		event.locals.ctx = await buildContext(user, token);
+		event.locals.profile = profile ?? emptyProfile(user.id);
+		event.locals.ctx = await buildContext(user, token, platformPermissions, membership);
 	} else {
 		// Public page route (e.g. `/`): best-effort session attach. If a valid
 		// session cookie is present we populate locals so the UI can reflect
@@ -359,12 +398,16 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 			}
 		}
 		if (user) {
-			await providers.data.ensureUser(SYSTEM_CONTEXT, user.id);
+			// Same four-read parallelization as the gated path above.
+			const [, profile, platformPermissions, membership] = await Promise.all([
+				ensureUserOnce(user.id),
+				providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id),
+				providers.data.permissions.getFor(SYSTEM_CONTEXT, user.id),
+				providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id)
+			]);
 			event.locals.user = user;
-			event.locals.profile =
-				(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
-				emptyProfile(user.id);
-			event.locals.ctx = await buildContext(user, token);
+			event.locals.profile = profile ?? emptyProfile(user.id);
+			event.locals.ctx = await buildContext(user, token, platformPermissions, membership);
 		}
 	}
 
@@ -458,5 +501,15 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({
 	console.error(
 		`[Unhandled error] ${event.request.method} ${event.url.pathname}\n  ${rendered}${cause}`
 	);
+	// Ship off-box for triage. Only reached for genuinely unexpected errors:
+	// intentional HTTP outcomes (incl. the compute route's `apiError(500)` on a
+	// failed solve) are `HttpError`s handled in the branch above, so compute
+	// failures are never reported here. No-op unless SENTRY_DSN is configured.
+	getErrorReporter().capture(error, {
+		method: event.request.method,
+		route: event.url.pathname,
+		userId: event.locals.ctx?.userId || undefined,
+		orgId: event.locals.ctx?.actingOrgId
+	});
 	return { message: 'An unexpected error occurred.', code: 'INTERNAL' };
 };

@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { env as privateEnv } from '$env/dynamic/private';
-import { LocalComputeServerStore, type SecretVerificationReport } from '@selvajs/local-provider';
-import { findServerById } from '@selvajs/platform';
+import { LocalComputeServerStore } from '@selvajs/local-provider';
+import { findServerById, type SecretVerificationReport } from '@selvajs/platform';
 import { providers, getComputeServerConfigStore } from '$lib/server/providers.server';
 import { requirePermission } from '$lib/server/access.server';
 
@@ -204,7 +204,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const checks: HealthCheck[] = [];
 
 	const store = providers.data.computeServer;
-	if (store instanceof LocalComputeServerStore) {
+	if (typeof store.verifySecrets === 'function') {
 		try {
 			checks.push(atRestSecretsCheck(await store.verifySecrets()));
 		} catch (err) {

@@ -103,14 +103,23 @@ export class LocalAuthProvider implements IAuthProvider {
 		});
 	}
 
-	/** Verify an HMAC session token and return the live user record. */
+	/**
+	 * Verify an HMAC session token and return the live user record.
+	 *
+	 * Runs on EVERY authenticated request, so it stays read-only: one
+	 * `findById` (a cached `auth-users.json` read), no writes. `lastLoginAt` is
+	 * stamped at actual login time in `verifyLogin` — it is a login concern, not
+	 * a per-request activity clock, and the only consumers use it as a
+	 * has-ever-signed-in flag (invited vs. active in the admin/team lists). The
+	 * previous per-request `touchLastLogin` here cost a second full file
+	 * read+parse just to decide (usually) not to write.
+	 */
 	async verifyToken(token: string): Promise<AuthUser | null> {
 		const { valid, userId } = verifyHmacToken(token, this.hmacSecret);
 		if (!valid) return null;
 		if (!this.users) return null;
 		const u = await this.users.findById(userId);
 		if (!u || u.disabled) return null;
-		await this.users.touchLastLogin(u.id).catch(() => {});
 		return toAuthUser(u);
 	}
 

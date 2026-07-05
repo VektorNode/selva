@@ -1,10 +1,15 @@
 import {
 	isOrgServer,
 	isPlatformServer,
+	decryptSecret,
+	encryptSecret,
+	isEncryptedSecret,
 	type IComputeServerStore,
 	type ComputeConfig,
 	type ComputeServerConfig,
-	type RequestContext
+	type RequestContext,
+	type SecretVerificationFailure,
+	type SecretVerificationReport
 } from '@selvajs/platform';
 import { ProviderError } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
@@ -24,7 +29,18 @@ import type { ClientBundle } from './client.js';
  * callers (resolver, page loaders) using helpers in `@selvajs/platform`.
  */
 export class SupabaseComputeServerStore implements IComputeServerStore {
-	constructor(private readonly clients: ClientBundle) {}
+	/**
+	 * `secretKey` (from `SELVA_AT_REST_KEY`) encrypts `api_key` before it is
+	 * written to `compute_servers.api_key` and decrypts it on read, so the
+	 * Rhino.Compute credential never sits in the DB as plaintext — matching the
+	 * local provider's on-disk envelope. Optional only for legacy construction
+	 * paths (tests that never touch apiKeys); a store built without a key throws
+	 * if asked to write or read a secret. Wire it via `SupabaseDataProvider`.
+	 */
+	constructor(
+		private readonly clients: ClientBundle,
+		private readonly secretKey?: Buffer
+	) {}
 
 	async getConfig(ctx: RequestContext): Promise<ComputeConfig> {
 		const client = this.clients.forRequest(ctx);
@@ -53,7 +69,9 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			sharedByServer.set(row.server_id, list);
 		}
 
-		const servers = (serversRes.data ?? []).map((row) => rowToServer(row, sharedByServer));
+		const servers = (serversRes.data ?? []).map((row) =>
+			rowToServer(this.decryptRowApiKey(row), sharedByServer)
+		);
 
 		const orgDefaults: Record<string, string> = {};
 		for (const row of orgDefRes.data ?? []) {
@@ -82,7 +100,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		if (platformOnly.length > 0) {
 			const { error: insErr } = await client
 				.from('compute_servers')
-				.insert(platformOnly.map(serverToRow));
+				.insert(platformOnly.map((s) => serverToRow(this.encryptServerApiKey(s))));
 			if (insErr) throw mapError(insErr);
 
 			// Rebuild the share rows for any non-`all` platform servers.
@@ -123,7 +141,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		if (orgOnly.length > 0) {
 			const { error: insErr } = await client
 				.from('compute_servers')
-				.insert(orgOnly.map(serverToRow));
+				.insert(orgOnly.map((s) => serverToRow(this.encryptServerApiKey(s))));
 			if (insErr) throw mapError(insErr);
 		}
 
@@ -182,6 +200,117 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			.delete()
 			.eq('org_id', orgId);
 		if (shErr) throw mapError(shErr);
+	}
+
+	// ==========================================================================
+	// At-rest secret handling
+	// ==========================================================================
+
+	/**
+	 * Encrypt a server's `apiKey` before it is written to the DB. Idempotent —
+	 * an already-enveloped value is passed through, so a round-trip (read →
+	 * save) never double-encrypts. Throws if the store was built without a key
+	 * but a real secret needs writing, so we never silently persist plaintext.
+	 */
+	private encryptServerApiKey(s: ComputeServerConfig): ComputeServerConfig {
+		if (!s.apiKey) return s;
+		if (isEncryptedSecret(s.apiKey)) return s;
+		if (!this.secretKey) {
+			throw new Error(
+				'Cannot store a compute-server apiKey: SELVA_AT_REST_KEY is not configured. ' +
+					'Set it so secrets are encrypted at rest.'
+			);
+		}
+		return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey) };
+	}
+
+	/**
+	 * Decrypt a row's `api_key` on read. Tolerant, mirroring the local provider:
+	 * a row whose ciphertext can't be authenticated under the current key is
+	 * returned with `api_key: null` and a warning logged, so the page keeps
+	 * rendering (solves against that server fail later at Rhino.Compute). A
+	 * plaintext value that predates encryption is passed through unchanged and
+	 * surfaced by `verifySecrets()` — never silently dropped.
+	 */
+	private decryptRowApiKey(row: ServerRow): ServerRow {
+		if (!row.api_key) return row;
+		if (!isEncryptedSecret(row.api_key)) {
+			// Legacy/hand-inserted plaintext. Pass through so an existing key
+			// keeps working; verifySecrets() flags it for re-save via /admin/compute.
+			console.warn(
+				`[selva] compute_servers row "${row.label}" (${row.id}) has a plaintext api_key. ` +
+					'Re-save it via /admin/compute so it is stored encrypted.'
+			);
+			return row;
+		}
+		if (!this.secretKey) {
+			console.warn(
+				`[selva] Cannot decrypt api_key for compute server "${row.label}" (${row.id}): ` +
+					'SELVA_AT_REST_KEY is not configured. Returning without a key; solves will fail.'
+			);
+			return { ...row, api_key: null };
+		}
+		try {
+			return { ...row, api_key: decryptSecret(row.api_key, this.secretKey) };
+		} catch (cause) {
+			console.warn(
+				`[selva] Could not decrypt api_key for compute server "${row.label}" (${row.id}). ` +
+					'The stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
+					'This server will be returned without an apiKey; solves against it will fail. ' +
+					'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY.',
+				cause
+			);
+			return { ...row, api_key: null };
+		}
+	}
+
+	/**
+	 * Boot-time integrity check over every `compute_servers` row. Uses the
+	 * service client (no request context at boot) to read raw ciphertext, then
+	 * attempts to decrypt each `api_key`. Does NOT throw — returns a structured
+	 * report for boot health to drive `/api/health`.
+	 */
+	async verifySecrets(): Promise<SecretVerificationReport> {
+		const { data, error } = await this.clients.serviceClient
+			.from('compute_servers')
+			.select('id, label, api_key');
+		if (error) throw mapError(error);
+
+		const failures: SecretVerificationFailure[] = [];
+		let plaintextFound = false;
+
+		for (const row of data ?? []) {
+			const apiKey = (row as { api_key: string | null }).api_key;
+			const id = (row as { id: string }).id;
+			const label = (row as { label: string }).label;
+			if (!apiKey) continue;
+			if (!isEncryptedSecret(apiKey)) {
+				plaintextFound = true;
+				failures.push({ serverId: id, serverLabel: label, reason: 'plaintext_on_disk' });
+				continue;
+			}
+			if (!this.secretKey) {
+				failures.push({
+					serverId: id,
+					serverLabel: label,
+					reason: 'key_mismatch',
+					cause: 'SELVA_AT_REST_KEY is not configured'
+				});
+				continue;
+			}
+			try {
+				decryptSecret(apiKey, this.secretKey);
+			} catch (cause) {
+				failures.push({
+					serverId: id,
+					serverLabel: label,
+					reason: 'key_mismatch',
+					cause: cause instanceof Error ? cause.message : String(cause)
+				});
+			}
+		}
+
+		return { ok: failures.length === 0, failures, plaintextFound };
 	}
 }
 
