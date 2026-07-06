@@ -162,6 +162,15 @@
 					`serialize=${(serverTiming.serialize ?? 0).toFixed(0)}ms`
 			);
 		}
+		// Pre-solve prep sub-steps (p_* Server-Timing entries) — names which step a
+		// `load` spike hides in (share token, DB reads, blob fetch, server resolve…).
+		const prepEntries = Object.entries(serverTiming).filter(([k]) => k.startsWith('p_'));
+		if (prepEntries.length > 0) {
+			console.log(
+				`[Compute/browser]   └─ prep: ` +
+					prepEntries.map(([k, v]) => `${k.slice(2)}=${v.toFixed(0)}ms`).join(' ')
+			);
+		}
 		if (serverTiming.rhino_solve !== undefined) {
 			// Splits `solve` above into work ON the compute server vs. the traffic
 			// between the Selva server and Rhino.Compute (transfer + queue). A large
