@@ -118,21 +118,28 @@
 	$effect(() => {
 		if (!isDynamicValueListWidget(item) || !dynamicListHasOptions) return;
 		const validValues = new Set(Object.values(dynamicListOptions));
+		const firstOption = Object.values(dynamicListOptions)[0];
 		// Route through onChange (not commit) — value is a one-way prop here, so writing it
 		// directly from an effect trips Svelte's binding-ownership check.
+		// A NEVER-made selection (empty string/array, e.g. no default on a fresh page)
+		// gets the same first-option fallback as a stale one: an empty selection solves
+		// as an empty string, which cascades through the definition as null-data errors
+		// ("File not found: .dmf", Text→Number conversion failures, …) and the empty
+		// result then gets replayed by the solve caches.
 		if (Array.isArray(value)) {
 			const pruned = value.filter((v) => typeof v === 'string' && validValues.has(v));
-			if (pruned.length !== value.length) {
-				// Fall back to first option when checklist becomes fully empty after pruning
-				onChange(
-					item.paramId,
-					pruned.length > 0 ? pruned : [Object.values(dynamicListOptions)[0]],
-					true
-				);
+			if (value.length === 0 || pruned.length !== value.length) {
+				// Fall back to first option when the checklist is empty (never selected
+				// or fully pruned).
+				onChange(item.paramId, pruned.length > 0 ? pruned : [firstOption], true);
 			}
-		} else if (typeof value === 'string' && value && !validValues.has(value)) {
-			// Fall back to first available option instead of clearing to empty
-			onChange(item.paramId, Object.values(dynamicListOptions)[0], true);
+		} else if (
+			value == null ||
+			value === '' ||
+			(typeof value === 'string' && !validValues.has(value))
+		) {
+			// Stale or never-selected single value — fall back to the first option.
+			onChange(item.paramId, firstOption, true);
 		}
 	});
 
