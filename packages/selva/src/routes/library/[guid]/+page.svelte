@@ -62,18 +62,24 @@
 		//   • parse    — client-side JSON decode + mesh extraction.
 		const solveStart = performance.now();
 
+		// Serialized once so the request size can be logged — a large request body
+		// (e.g. a geometry/file input in `values`) pays the same slow uplink as the
+		// download and shows up server-side as a slow `body` prep mark.
+		const payload = JSON.stringify({
+			inputs: data.schema.inputs,
+			values,
+			definitionUrl: data.ghDefinition,
+			// An explicit version pick takes precedence over the channel pointer.
+			...(data.versionId
+				? { versionId: data.versionId }
+				: data.channel === 'draft' && { channel: 'draft' })
+		});
+		const valuesBytes = JSON.stringify(values).length;
+
 		const res = await fetch('/api/compute', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				inputs: data.schema.inputs,
-				values,
-				definitionUrl: data.ghDefinition,
-				// An explicit version pick takes precedence over the channel pointer.
-				...(data.versionId
-					? { versionId: data.versionId }
-					: data.channel === 'draft' && { channel: 'draft' })
-			}),
+			body: payload,
 			signal
 		});
 
@@ -145,8 +151,11 @@
 		// Effective transfer rate — makes an actually-slow network obvious vs. a small payload.
 		const mbps = downloadMs > 0 ? (sizeMB / (downloadMs / 1000)).toFixed(1) : '∞';
 		const totalMs = ttfbMs + downloadMs + jsonMs + rhinoInitMs + meshMs + outputMs;
+		const reqKB = payload.length / 1024;
+		const reqSize = reqKB >= 1024 ? `${(reqKB / 1024).toFixed(2)} MB` : `${reqKB.toFixed(0)} KB`;
 		console.log(
-			`[Compute/browser] total=${totalMs.toFixed(0)}ms | ` +
+			`[Compute/browser] req=${reqSize} (values ${(valuesBytes / 1024).toFixed(0)} KB) | ` +
+				`total=${totalMs.toFixed(0)}ms | ` +
 				`ttfb=${ttfbMs.toFixed(0)}ms (network≈${networkMs.toFixed(0)} + server ${serverTotal.toFixed(0)}) | ` +
 				`download=${downloadMs.toFixed(0)}ms (${size} @ ${mbps} MB/s) | ` +
 				`json=${jsonMs.toFixed(0)}ms | rhinoInit=${rhinoInitMs.toFixed(0)}ms | ` +
