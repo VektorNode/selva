@@ -170,7 +170,7 @@
 		if (valuesBytes > 256 * 1024) {
 			const inputLabel = (id: string) => {
 				const input = data.schema.inputs.find((i) => i.id === id);
-				return (input as { name?: string } | undefined)?.name ?? id;
+				return input ? `${input.nickname} (${input.paramType})` : id;
 			};
 			const whales = Object.entries(values)
 				.map(([id, v]) => [id, JSON.stringify(v)?.length ?? 0] as const)
