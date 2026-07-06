@@ -162,6 +162,21 @@
 					`serialize=${(serverTiming.serialize ?? 0).toFixed(0)}ms`
 			);
 		}
+		// Cache verdicts (0/1 flags on Server-Timing): whether Selva's response cache
+		// served this solve without calling compute, and whether the .gh definition
+		// had to be re-uploaded to the compute server (cold/stale pointer).
+		if (serverTiming.selva_cache !== undefined) {
+			const cacheMsg = serverTiming.selva_cache
+				? 'Selva-cache HIT — served without calling compute'
+				: 'miss — solved on Rhino.Compute';
+			const reuploadMsg =
+				serverTiming.def_reupload === undefined
+					? ''
+					: serverTiming.def_reupload
+						? ' | definition RE-UPLOADED (cold/stale pointer)'
+						: ' | definition reused on server (no upload)';
+			console.log(`[Compute/browser]   └─ cache: ${cacheMsg}${reuploadMsg}`);
+		}
 		// Pre-solve prep sub-steps (p_* Server-Timing entries) — names which step a
 		// `load` spike hides in (share token, DB reads, blob fetch, server resolve…).
 		const prepEntries = Object.entries(serverTiming).filter(([k]) => k.startsWith('p_'));
