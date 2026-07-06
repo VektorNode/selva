@@ -76,12 +76,24 @@
 		});
 		const valuesBytes = JSON.stringify(values).length;
 
-		const res = await fetch('/api/compute', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: payload,
-			signal
-		});
+		let res: Response;
+		try {
+			res = await fetch('/api/compute', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: payload,
+				signal
+			});
+		} catch (err) {
+			if (signal.aborted) return { outputs: {} };
+			// A TypeError here means the request never completed. With an SSO proxy in
+			// front (e.g. Azure App Proxy), an expired session 302s the fetch to the
+			// IdP, which CORS blocks — only an interactive reload can re-authenticate.
+			throw new Error(
+				'Request blocked — your session may have expired. Reload the page to sign in again.',
+				{ cause: err }
+			);
+		}
 
 		if (signal.aborted) return { outputs: {} };
 
@@ -153,6 +165,22 @@
 		const totalMs = ttfbMs + downloadMs + jsonMs + rhinoInitMs + meshMs + outputMs;
 		const reqKB = payload.length / 1024;
 		const reqSize = reqKB >= 1024 ? `${(reqKB / 1024).toFixed(2)} MB` : `${reqKB.toFixed(0)} KB`;
+		// When the request is heavy, name the inputs responsible — an embedded
+		// geometry/file value pays the slow uplink on every solve.
+		if (valuesBytes > 256 * 1024) {
+			const inputLabel = (id: string) => {
+				const input = data.schema.inputs.find((i) => i.id === id);
+				return (input as { name?: string } | undefined)?.name ?? id;
+			};
+			const whales = Object.entries(values)
+				.map(([id, v]) => [id, JSON.stringify(v)?.length ?? 0] as const)
+				.sort((a, b) => b[1] - a[1])
+				.slice(0, 3);
+			console.log(
+				`[Compute/browser]   └─ request whales: ` +
+					whales.map(([id, n]) => `${inputLabel(id)}=${(n / 1024).toFixed(0)} KB`).join(' | ')
+			);
+		}
 		console.log(
 			`[Compute/browser] req=${reqSize} (values ${(valuesBytes / 1024).toFixed(0)} KB) | ` +
 				`total=${totalMs.toFixed(0)}ms | ` +
