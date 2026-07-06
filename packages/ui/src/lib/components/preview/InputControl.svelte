@@ -115,6 +115,11 @@
 	// change (the user didn't pick the new option), so force a solve — otherwise manual-solve
 	// schemas would keep the prior output on screen, making it look like the auto-picked option
 	// produced it.
+	// Distinguishes "never selected" from "user deliberately cleared": the empty→
+	// first-option fallback below must not fight a real user action (e.g. unchecking
+	// every checklist entry), only fill the initial void.
+	let userTouched = false;
+
 	$effect(() => {
 		if (!isDynamicValueListWidget(item) || !dynamicListHasOptions) return;
 		const validValues = new Set(Object.values(dynamicListOptions));
@@ -128,22 +133,22 @@
 		// result then gets replayed by the solve caches.
 		if (Array.isArray(value)) {
 			const pruned = value.filter((v) => typeof v === 'string' && validValues.has(v));
-			if (value.length === 0 || pruned.length !== value.length) {
-				// Fall back to first option when the checklist is empty (never selected
-				// or fully pruned).
+			if (pruned.length !== value.length || (value.length === 0 && !userTouched)) {
+				// Fall back to first option when the checklist is fully pruned or was
+				// never selected; a user-cleared checklist stays empty.
 				onChange(item.paramId, pruned.length > 0 ? pruned : [firstOption], true);
 			}
 		} else if (
-			value == null ||
-			value === '' ||
-			(typeof value === 'string' && !validValues.has(value))
+			(typeof value === 'string' && value && !validValues.has(value)) ||
+			((value == null || value === '') && !userTouched)
 		) {
-			// Stale or never-selected single value — fall back to the first option.
+			// Stale single value, or never-selected — fall back to the first option.
 			onChange(item.paramId, firstOption, true);
 		}
 	});
 
 	function commit(newValue: SupportedTypes) {
+		userTouched = true;
 		value = newValue;
 		onChange(item.paramId, newValue);
 	}
