@@ -160,6 +160,20 @@
 		}
 		const outputMs = performance.now() - outputStart;
 
+		// Result health: names outputs that came back empty and surfaces GH
+		// errors/warnings — an abnormally fast solve with no meshes usually means an
+		// input state (e.g. a stale dynamic value list selection) killed the heavy
+		// branch, and the empty result then gets replayed by the solve caches.
+		const emptyOutputs = data.schema.outputs.filter((o) => outputs[o.id] == null);
+		const errCount = Array.isArray(solved.errors) ? solved.errors.length : 0;
+		const warnCount = Array.isArray(solved.warnings) ? solved.warnings.length : 0;
+		console.log(
+			`[Compute/browser]   └─ result: ${data.schema.outputs.length - emptyOutputs.length}/${data.schema.outputs.length} outputs populated | ` +
+				`errors=${errCount} warnings=${warnCount}` +
+				(emptyOutputs.length ? ` | EMPTY: ${emptyOutputs.map((o) => o.nickname).join(', ')}` : '') +
+				(errCount > 0 ? ` | first error: ${JSON.stringify(solved.errors[0]).slice(0, 200)}` : '')
+		);
+
 		// Server's own phase breakdown, piggybacked on the response (Server-Timing).
 		// `serverTotal` is the server's headers-to-out wall time, so `ttfb − serverTotal`
 		// isolates request-send + network latency from server work.
@@ -205,7 +219,7 @@
 			console.log(
 				`[Compute/browser]   └─ server: load=${(serverTiming.load ?? 0).toFixed(0)}ms ` +
 					`tree=${(serverTiming.tree ?? 0).toFixed(0)}ms solve=${(serverTiming.solve ?? 0).toFixed(0)}ms ` +
-					`serialize=${(serverTiming.serialize ?? 0).toFixed(0)}ms`
+					`serialize=${(serverTiming.serialize ?? 0).toFixed(0)}ms gzip=${(serverTiming.gzip ?? 0).toFixed(0)}ms`
 			);
 		}
 		// Cache verdicts (0/1 flags on Server-Timing): whether Selva's response cache

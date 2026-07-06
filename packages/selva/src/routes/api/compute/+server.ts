@@ -642,6 +642,19 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		// ASCII JSON Compute returns). Big numbers here usually mean geometry/file
 		// outputs — the payload caches 1 and 3 store, and pointer reuse does NOT shrink.
 		const serializeMs = performance.now() - serializeStart;
+		// Gzip BEFORE the timing snapshot and header construction so its cost is a
+		// measured phase (`gzip` in Server-Timing, included in `total`) — running it
+		// after the snapshot silently inflated the browser's network≈ estimate by the
+		// compression time. Buffered (not streamed) so Content-Length is known and a
+		// connection cut mid-transfer fails hard instead of truncating the JSON.
+		const acceptEncoding = request.headers.get('accept-encoding') ?? '';
+		let compressed: Buffer | null = null;
+		let gzipMs = 0;
+		if (/\bgzip\b/i.test(acceptEncoding) && serialized.length > 1024) {
+			const gzipStart = performance.now();
+			compressed = gzipSync(Buffer.from(serialized));
+			gzipMs = performance.now() - gzipStart;
+		}
 		// Total server-side wall time for this request (headers-out is imminent). The
 		// difference between this and the browser's ttfb is request-send + network
 		// latency; the difference between the browser's `download` and near-zero is the
@@ -655,8 +668,20 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			console.log(
 				`[Compute/server] load=${defLoadMs.toFixed(0)}ms tree=${treeBuildMs.toFixed(0)}ms ` +
 					`solve=${solveMs.toFixed(0)}ms serialize=${serializeMs.toFixed(0)}ms ` +
-					`total=${serverTotalMs.toFixed(0)}ms | result=${formatBytes(serialized.length)}`
+					`gzip=${gzipMs.toFixed(0)}ms total=${serverTotalMs.toFixed(0)}ms | result=${formatBytes(serialized.length)}`
 			);
+			if (compressed) {
+				console.log(
+					`[Compute/server] gzip ${formatBytes(serialized.length)} → ${formatBytes(compressed.byteLength)} ` +
+						`(${(serialized.length / compressed.byteLength).toFixed(1)}×)`
+				);
+			} else {
+				// If this fires for browser requests, a proxy in front is stripping
+				// Accept-Encoding — compression is then impossible end-to-end from here.
+				console.log(
+					`[Compute/server] compression skipped — Accept-Encoding: "${acceptEncoding || '(absent)'}"`
+				);
+			}
 			// Names the step a `load` (or pre-solve) spike hides in.
 			console.log(
 				`[Compute/server] prep breakdown: ` +
@@ -673,6 +698,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			`tree;dur=${treeBuildMs.toFixed(1)}, ` +
 			`solve;dur=${solveMs.toFixed(1)}, ` +
 			`serialize;dur=${serializeMs.toFixed(1)}, ` +
+			`gzip;dur=${gzipMs.toFixed(1)}, ` +
 			`total;dur=${serverTotalMs.toFixed(1)}`;
 		// When the compute server reported its own decode/solve/encode (Server-Timing
 		// from the VektorNode fork), split the solve wall time further: rhino_* is time
@@ -713,35 +739,13 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			Vary: 'Accept-Encoding'
 		};
 
-		// Gzip the payload when the client accepts it. Solve results are large JSON
-		// (geometry) and the slowest link in front of this deployment throttles by
-		// BYTES on the wire (App Proxy tunnel ~1 MB/s per stream), so shrinking the
-		// body speeds the download near-proportionally. Compressed in one buffered
-		// pass (not streamed) so Content-Length is known and sent: a connection cut
-		// mid-transfer then surfaces as a hard network error in the browser instead
-		// of a truncated body that JSON.parse rejects with "Unterminated string".
-		// Caddy's `encode gzip` skips already-encoded responses, so this never
-		// double-compresses; Vary is set on both branches for correct caching.
-		const acceptEncoding = request.headers.get('accept-encoding') ?? '';
-		if (/\bgzip\b/i.test(acceptEncoding) && serialized.length > 1024) {
-			const gzipStart = performance.now();
-			const compressed = gzipSync(Buffer.from(serialized));
+		// Body was compressed above (before the timing snapshot); Caddy's
+		// `encode gzip` skips already-encoded responses, so this never
+		// double-compresses. Vary is set on both branches for correct caching.
+		if (compressed) {
 			responseHeaders['Content-Encoding'] = 'gzip';
 			responseHeaders['Content-Length'] = String(compressed.byteLength);
-			if (COMPUTE_DEBUG) {
-				console.log(
-					`[Compute/server] gzip ${formatBytes(serialized.length)} → ${formatBytes(compressed.byteLength)} ` +
-						`(${(serialized.length / compressed.byteLength).toFixed(1)}×) in ${(performance.now() - gzipStart).toFixed(0)}ms`
-				);
-			}
 			return new Response(new Uint8Array(compressed), { headers: responseHeaders });
-		}
-		// DEBUG: if this fires for browser requests, a proxy in front is stripping
-		// Accept-Encoding — compression is then impossible end-to-end from here.
-		if (COMPUTE_DEBUG) {
-			console.log(
-				`[Compute/server] compression skipped — Accept-Encoding: "${acceptEncoding || '(absent)'}"`
-			);
 		}
 		responseHeaders['Content-Length'] = String(Buffer.byteLength(serialized));
 		return new Response(serialized, { headers: responseHeaders });
