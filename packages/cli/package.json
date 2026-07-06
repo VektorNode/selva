@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/cli",
-	"version": "4.6.13",
+	"version": "4.6.14",
 	"description": "Scaffold and operate a Selva white-label deployment. `npx @selvajs/cli <dir>` to bootstrap, `selva <cmd>` to manage.",
 	"license": "MIT",
 	"publishConfig": {
