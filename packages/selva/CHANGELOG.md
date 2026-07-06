@@ -1,5 +1,11 @@
 # @selvajs/selva
 
+## 4.6.1
+
+### Patch Changes
+
+- 639c796: Patch release
+
 ## 4.6.0
 
 ### Minor Changes
