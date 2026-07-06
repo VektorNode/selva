@@ -19,8 +19,8 @@ catalogs:
       specifier: ^1.49.1
       version: 1.61.1
     '@selvajs/compute':
-      specifier: ^3.0.0-beta.1
-      version: 3.0.0-beta.1
+      specifier: ^3.0.1
+      version: 3.0.1
     '@sveltejs/adapter-auto':
       specifier: ^7.0.1
       version: 7.0.1
@@ -246,7 +246,7 @@ importers:
         version: 5.2.2(svelte@5.55.5(@typescript-eslint/types@8.62.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.0.0-beta.1(three@0.184.0)
+        version: 3.0.1(three@0.184.0)
       '@selvajs/schemas':
         specifier: workspace:*
         version: link:../schemas
@@ -385,7 +385,7 @@ importers:
         version: 1.21.0(svelte@5.55.5(@typescript-eslint/types@8.62.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.0.0-beta.1(three@0.184.0)
+        version: 3.0.1(three@0.184.0)
       '@supabase/supabase-js':
         specifier: ^2.104.1
         version: 2.108.2
@@ -473,7 +473,7 @@ importers:
         version: 1.21.0(svelte@5.55.5(@typescript-eslint/types@8.62.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.0.0-beta.1(three@0.184.0)
+        version: 3.0.1(three@0.184.0)
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
@@ -1348,8 +1348,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@selvajs/compute@3.0.0-beta.1':
-    resolution: {integrity: sha512-7kDBrOFZcO14mHDaB0kjSg7H9NlGd3aXz8ShFQZ+9hPPhZk5U3AQoa6v77LqLOEJwhNiu7xesi2H4AaLw6ufQQ==}
+  '@selvajs/compute@3.0.1':
+    resolution: {integrity: sha512-iZf+lr19vklzsy9bjrJaR0eeyDpk9lxJmBeX5iDGmXCGTu7Sabdrr4bP5Vmaay01u6Y9Tvul8j+1fh8ChgWIOw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       three: '>=0.179.0'
@@ -4502,7 +4502,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
 
-  '@selvajs/compute@3.0.0-beta.1(three@0.184.0)':
+  '@selvajs/compute@3.0.1(three@0.184.0)':
     dependencies:
       fflate: 0.8.3
       rhino3dm: 8.17.0
