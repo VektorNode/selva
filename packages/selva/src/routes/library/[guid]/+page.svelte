@@ -34,6 +34,13 @@
 			throw new Error(`Rate limit reached. Try again in ${Math.ceil(remainingMs / 1000)}s.`);
 		}
 
+		// Browser-side timing. Concise, always on — the server's SELVA_FLAG_COMPUTE_DEBUG
+		// covers the server/Rhino segments but can't reach the browser. `fetch` here is
+		// the full round-trip (server processing + Rhino solve + network); `parse` is the
+		// client-side response decode + mesh extraction. Their difference vs. the server's
+		// [Compute/selva-cache] "(Nms)" line is the request's own overhead + network time.
+		const solveStart = performance.now();
+
 		const res = await fetch('/api/compute', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -67,7 +74,9 @@
 
 		const solved = await res.json();
 		if (signal.aborted) return { outputs: {} };
+		const fetchMs = performance.now() - solveStart;
 
+		const parseStart = performance.now();
 		const processor = new GrasshopperResponseProcessor(solved, false);
 
 		const shouldShowViewer =
@@ -85,6 +94,13 @@
 			outputs[o.id] =
 				byId ?? (name ? processor.getValue({ byName: name }, { parseValues: true }) : undefined);
 		}
+
+		const parseMs = performance.now() - parseStart;
+		console.log(
+			`[Compute/browser] round-trip=${fetchMs.toFixed(0)}ms (server+rhino+network) | ` +
+				`parse=${parseMs.toFixed(0)}ms (${meshes.length} mesh${meshes.length === 1 ? '' : 'es'}) | ` +
+				`total=${(fetchMs + parseMs).toFixed(0)}ms`
+		);
 
 		return {
 			outputs,
