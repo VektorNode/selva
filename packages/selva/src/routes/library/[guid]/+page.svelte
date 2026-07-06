@@ -162,6 +162,35 @@
 					`serialize=${(serverTiming.serialize ?? 0).toFixed(0)}ms`
 			);
 		}
+		if (serverTiming.rhino_solve !== undefined) {
+			// Splits `solve` above into work ON the compute server vs. the traffic
+			// between the Selva server and Rhino.Compute (transfer + queue). A large
+			// compute_link means the compute↔web-server leg is the cost, not solving.
+			console.log(
+				`[Compute/browser]   └─ compute server: decode=${(serverTiming.rhino_decode ?? 0).toFixed(0)}ms ` +
+					`solve=${(serverTiming.rhino_solve ?? 0).toFixed(0)}ms encode=${(serverTiming.rhino_encode ?? 0).toFixed(0)}ms ` +
+					`| compute↔server traffic+queue=${(serverTiming.compute_link ?? 0).toFixed(0)}ms`
+			);
+		}
+		// Network-stack cross-check (Resource Timing): the browser's own measurement
+		// of this fetch, independent of our JS-level timers. transferSize = actual
+		// bytes on the wire; encoded==decoded body size means the response went out
+		// UNCOMPRESSED. startTime filter guards against a stale entry when the
+		// resource buffer (default 250) has overflowed.
+		const resEntry = (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+			.filter((e) => e.name.includes('/api/compute') && e.startTime >= solveStart)
+			.at(-1);
+		if (resEntry && resEntry.responseEnd > 0) {
+			const wireMB = resEntry.transferSize / (1024 * 1024);
+			const compressed =
+				resEntry.encodedBodySize > 0 && resEntry.decodedBodySize > resEntry.encodedBodySize * 1.05;
+			console.log(
+				`[Compute/browser]   └─ wire (network-stack): ${wireMB.toFixed(2)} MB on-wire ` +
+					`(${compressed ? `compressed ${(resEntry.decodedBodySize / resEntry.encodedBodySize).toFixed(1)}×` : 'UNCOMPRESSED'}) | ` +
+					`headers=${(resEntry.responseStart - resEntry.requestStart).toFixed(0)}ms ` +
+					`body=${(resEntry.responseEnd - resEntry.responseStart).toFixed(0)}ms`
+			);
+		}
 
 		return {
 			outputs,
