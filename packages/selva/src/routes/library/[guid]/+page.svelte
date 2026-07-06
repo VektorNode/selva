@@ -62,19 +62,28 @@
 		//   • parse    — client-side JSON decode + mesh extraction.
 		const solveStart = performance.now();
 
+		// Send only input-keyed values. The solve session merges result OUTPUTS back
+		// into the same values map (that's how e.g. dynamic value list options reach
+		// the dropdown), so a naive snapshot re-uploads those output payloads — MBs
+		// of dead weight the server never reads (it only looks up values[input.id]).
+		const inputValues: Record<string, unknown> = {};
+		for (const input of data.schema.inputs) {
+			if (input.id in values) inputValues[input.id] = values[input.id];
+		}
+
 		// Serialized once so the request size can be logged — a large request body
 		// (e.g. a geometry/file input in `values`) pays the same slow uplink as the
 		// download and shows up server-side as a slow `body` prep mark.
 		const payload = JSON.stringify({
 			inputs: data.schema.inputs,
-			values,
+			values: inputValues,
 			definitionUrl: data.ghDefinition,
 			// An explicit version pick takes precedence over the channel pointer.
 			...(data.versionId
 				? { versionId: data.versionId }
 				: data.channel === 'draft' && { channel: 'draft' })
 		});
-		const valuesBytes = JSON.stringify(values).length;
+		const valuesBytes = JSON.stringify(inputValues).length;
 
 		let res: Response;
 		try {
@@ -172,7 +181,7 @@
 				const input = data.schema.inputs.find((i) => i.id === id);
 				return input ? `${input.nickname} (${input.paramType})` : id;
 			};
-			const whales = Object.entries(values)
+			const whales = Object.entries(inputValues)
 				.map(([id, v]) => [id, JSON.stringify(v)?.length ?? 0] as const)
 				.sort((a, b) => b[1] - a[1])
 				.slice(0, 3);
