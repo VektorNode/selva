@@ -181,6 +181,12 @@
 		// Effective transfer rate — makes an actually-slow network obvious vs. a small payload.
 		const mbps = downloadMs > 0 ? (sizeMB / (downloadMs / 1000)).toFixed(1) : '∞';
 		const totalMs = ttfbMs + downloadMs + jsonMs + rhinoInitMs + meshMs + outputMs;
+		// JS heap watermark (Chrome-only, non-standard API): one number per solve. A
+		// monotonic climb across a session — independent of payload size — is the
+		// signature of a retention leak (undisposed meshes / rhino3dm wasm objects).
+		const heapMB = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory
+			?.usedJSHeapSize;
+		const heap = heapMB !== undefined ? ` | heap=${(heapMB / (1024 * 1024)).toFixed(0)} MB` : '';
 		const reqKB = payload.length / 1024;
 		const reqSize = reqKB >= 1024 ? `${(reqKB / 1024).toFixed(2)} MB` : `${reqKB.toFixed(0)} KB`;
 		// When the request is heavy, name the inputs responsible — an embedded
@@ -205,7 +211,7 @@
 				`ttfb=${ttfbMs.toFixed(0)}ms (network≈${networkMs.toFixed(0)} + server ${serverTotal.toFixed(0)}) | ` +
 				`download=${downloadMs.toFixed(0)}ms (${size} @ ${mbps} MB/s) | ` +
 				`json=${jsonMs.toFixed(0)}ms | rhinoInit=${rhinoInitMs.toFixed(0)}ms | ` +
-				`mesh=${meshMs.toFixed(0)}ms (${meshes.length}) | outputs=${outputMs.toFixed(0)}ms`
+				`mesh=${meshMs.toFixed(0)}ms (${meshes.length}) | outputs=${outputMs.toFixed(0)}ms${heap}`
 		);
 		if (serverTiming.total !== undefined) {
 			// Server-side sub-phases (from the response header). solve==0 means a cached
