@@ -30,14 +30,12 @@ public class GH_CreateImage : GH_Component
             "Selva", "Drawing")
     {
     }
-
     protected override Bitmap Icon => Resources.CreateFile;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("C2E8B1A4-7D3F-4C6E-9B25-8F1D3A7E0C9B");
 
     public override bool IsPreviewCapable => true;
     public override BoundingBox ClippingBox => _preview.ClippingBox;
-
     public override void ClearData()
     {
         base.ClearData();

@@ -115,18 +115,19 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
             {
                 DA.SetData(0, new FileDataGoo(exportedFile));
             }
-            else
-            {
-                AddRuntimeMessage(
-                    GH_RuntimeMessageLevel.Error,
-                    "Failed to export block to file");
-            }
+            // On failure, ExportBlockToFile / TryProcessBlockObject already raised a specific
+            // warning or error explaining why, so no generic fallback message is needed here.
         }
         catch (Exception ex)
         {
+            // Surface the exception type + originating location. A bare NullReferenceException
+            // message is always the generic "Object reference not set..." with no clue where it
+            // came from, which makes data-dependent failures look random.
+            var location = ex.StackTrace?.Split('\n')[0]?.Trim();
             AddRuntimeMessage(
                 GH_RuntimeMessageLevel.Error,
-                $"Export failed: {ex.Message}");
+                $"Export failed: {ex.GetType().Name}: {ex.Message}" +
+                (string.IsNullOrEmpty(location) ? "" : $" ({location})"));
         }
     }
 
@@ -162,12 +163,16 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
 
         if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName))
         {
+            // A specific warning was already raised inside TryProcessBlockObject.
             return null;
         }
 
         var base64String = ConvertDocumentToBase64(headlessDoc, format);
         if (string.IsNullOrEmpty(base64String))
         {
+            AddRuntimeMessage(
+                GH_RuntimeMessageLevel.Error,
+                $"Encoding the exported '{format}' file produced no data.");
             return null;
         }
 
@@ -180,27 +185,48 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
 
         if (!blockObj.CastTo<GH_InstanceReference>(out var instanceRef))
         {
+            AddRuntimeMessage(
+                GH_RuntimeMessageLevel.Warning,
+                "Input is not a block instance. Connect a block instance from the model.");
             return false;
         }
 
         var modelIdef = instanceRef.InstanceDefinition;
         if (modelIdef == null)
         {
+            AddRuntimeMessage(
+                GH_RuntimeMessageLevel.Warning,
+                "Block instance has no definition — nothing to export.");
             return false;
         }
 
         blockName = modelIdef.Name;
         CopyBlockRecursive(modelIdef, targetDoc);
 
-        if (_copiedBlockIndices.TryGetValue(blockName, out var idefIndex) &&
-            instanceRef.Value != null)
+        // A block yields no index when its definition contained no exportable geometry — most
+        // often a linked/embedded definition whose objects live in an external file, or an empty
+        // definition. Warn specifically so this isn't confused with a hard export failure.
+        if (!_copiedBlockIndices.TryGetValue(blockName, out var idefIndex))
         {
-            var xform = instanceRef.Value.Xform;
-            targetDoc.Objects.AddInstanceObject(idefIndex, xform);
-            return true;
+            AddRuntimeMessage(
+                GH_RuntimeMessageLevel.Warning,
+                $"Block '{blockName}' has no exportable geometry. Linked or embedded blocks whose " +
+                "geometry lives in an external file cannot be exported directly — bind/explode the " +
+                "block, or export the source geometry instead.");
+            return false;
         }
 
-        return false;
+        if (instanceRef.Value == null)
+        {
+            AddRuntimeMessage(
+                GH_RuntimeMessageLevel.Warning,
+                $"Block '{blockName}' has no placement transform — nothing to export.");
+            return false;
+        }
+
+        var xform = instanceRef.Value.Xform;
+        targetDoc.Objects.AddInstanceObject(idefIndex, xform);
+        return true;
     }
 
     private void CopyBlockRecursive(ModelInstanceDefinition modelIdef, RhinoDoc targetDoc)
@@ -234,7 +260,15 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
     {
         var geometries = new List<GeometryBase>();
 
-        foreach (var modelObj in modelIdef.Objects)
+        // Objects can be null (not just empty) for linked/embedded definitions or ones whose
+        // objects aren't materialized — foreach would NRE on the null before the per-item guard.
+        var objects = modelIdef.Objects;
+        if (objects == null)
+        {
+            return geometries;
+        }
+
+        foreach (var modelObj in objects)
         {
             if (modelObj == null)
             {
@@ -245,7 +279,7 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
             {
                 TryAddNestedBlockReference(modelObj, targetDoc, geometries);
             }
-            else if (modelObj.CastTo<GeometryBase>(out var geom))
+            else if (modelObj.CastTo<GeometryBase>(out var geom) && geom != null)
             {
                 geometries.Add(geom);
             }
@@ -273,7 +307,13 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
         if (_copiedBlockIndices.TryGetValue(nestedModelIdef.Name, out var nestedIdefIndex) &&
             nestedInstanceRef.Value != null)
         {
+            // InstanceDefinitions[index] returns null for a stale/invalid index; guard before .Id.
             var nestedIdef = targetDoc.InstanceDefinitions[nestedIdefIndex];
+            if (nestedIdef == null)
+            {
+                return;
+            }
+
             var xform = nestedInstanceRef.Value.Xform;
 
             geometries.Add(new InstanceReferenceGeometry(nestedIdef.Id, xform));
