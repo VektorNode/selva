@@ -120,24 +120,53 @@
 	// — which throws NREs in downstream geometry components (e.g. Bounding Rectangle) and nulls
 	// every output beyond them. So every terminal state below resolves to a valid option; there
 	// is deliberately no "user cleared it, stay empty" path.
+	//
+	// LOOP BREAKER: a definition whose computed options DEPEND on the selection can oscillate —
+	// auto-pick A → solve → new options exclude A → auto-pick B → solve → … Each cycle force-
+	// solves and re-parses/re-renders the (possibly multi-MB) options, which FREEZES the tab
+	// (each solve result blocks the main thread; the loop never yields). Bound consecutive
+	// system-initiated picks; any real user commit resets the budget.
+	const MAX_CONSECUTIVE_AUTO_PICKS = 3;
+	let autoPickCount = 0;
+
 	$effect(() => {
 		if (!isDynamicValueListWidget(item) || !dynamicListHasOptions) return;
 		const validValues = new Set(Object.values(dynamicListOptions));
 		const firstOption = Object.values(dynamicListOptions)[0];
+		// Already valid → stable; refill the auto-pick budget and stop.
+		const isValid = Array.isArray(value)
+			? value.length > 0 && value.every((v) => typeof v === 'string' && validValues.has(v))
+			: typeof value === 'string' && value !== '' && validValues.has(value);
+		if (isValid) {
+			autoPickCount = 0;
+			return;
+		}
+		if (autoPickCount >= MAX_CONSECUTIVE_AUTO_PICKS) {
+			console.warn(
+				`[InputControl] dynamic value list "${item.paramId}": options keep invalidating the ` +
+					`auto-picked selection (${autoPickCount} consecutive system picks) — the definition's ` +
+					`options likely depend on the selection. Stopping auto-reconciliation to avoid a solve loop.`
+			);
+			return;
+		}
 		if (Array.isArray(value)) {
 			const pruned = value.filter((v) => typeof v === 'string' && validValues.has(v));
 			// Empty (never selected or fully pruned) always falls back to the first option —
 			// a checklist that solves empty produces the same null cascade as a single value.
 			if (pruned.length !== value.length || value.length === 0) {
+				autoPickCount++;
 				onChange(item.paramId, pruned.length > 0 ? pruned : [firstOption], true);
 			}
 		} else if (typeof value !== 'string' || value === '' || !validValues.has(value)) {
 			// Never-selected or stale single value — fall back to the first option.
+			autoPickCount++;
 			onChange(item.paramId, firstOption, true);
 		}
 	});
 
 	function commit(newValue: SupportedTypes) {
+		// A real user pick re-arms the system fallback (see autoPickCount above).
+		autoPickCount = 0;
 		value = newValue;
 		onChange(item.paramId, newValue);
 	}
