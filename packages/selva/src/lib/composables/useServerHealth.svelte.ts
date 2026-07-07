@@ -1,8 +1,6 @@
 import { browser } from '$app/environment';
 
 export interface ServerHealthState {
-	// 'idle' — never checked (no probe sent, server untouched).
-	// 'checking' — a manual check is in flight (possibly retrying a cold server).
 	state: 'idle' | 'checking' | 'ok' | 'warning' | 'error';
 	reachable: boolean;
 	rhinoVersion: string | null;
@@ -10,8 +8,6 @@ export interface ServerHealthState {
 	selvaInstalled: boolean;
 	selvaVersion: string | null;
 	plugins: Record<string, string>;
-	// Live fleet metrics — null when unreachable or the server doesn't report them.
-	// `activeChildren` is read passively (never spawns), so 0 means a genuinely idle pool.
 	activeChildren: number | null;
 	idleSpanSeconds: number | null;
 }

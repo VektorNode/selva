@@ -5,9 +5,7 @@
 	import type { OrgAssetKind } from '@selvajs/platform';
 
 	interface Props {
-		/** Org id the asset belongs to. */
 		orgId: string;
-		/** Which asset this card manages (logo, favicon, …). */
 		kind: OrgAssetKind;
 		/** Current public URL for this asset, or null when unset. */
 		url: string | null;
@@ -31,7 +29,7 @@
 	async function onSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
-		input.value = ''; // allow re-selecting the same file after a failure
+		input.value = '';
 		if (!file) return;
 
 		if (!ACCEPT.split(',').includes(file.type)) {

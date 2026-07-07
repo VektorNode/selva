@@ -12,9 +12,7 @@
 		title?: string | null;
 		mode?: 'fixed' | 'scroll';
 		sidenav?: Snippet;
-		// When true (the default), MainNav renders next to the logo for authed users.
 		showMainNav?: boolean;
-		// Extra items to inject into the right cluster, before UserChip.
 		rightExtras?: Snippet;
 		children: Snippet;
 	}
