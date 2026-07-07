@@ -518,13 +518,14 @@ public class SchemaSynchronizer
                 input.Options = options;
             }
 
+            // VolatileData is only populated during a solution, so it is empty right after
+            // document load — fall back to the connected value list's live selection.
             var selectedValue = ghParam?.VolatileData.AllData(true).FirstOrDefault()?.ScriptVariable();
-            if (selectedValue == null || input.Options == null)
+            var selectedString = selectedValue?.ToString() ?? valueList.GetDefaultValue();
+            if (string.IsNullOrEmpty(selectedString) || input.Options == null)
             {
                 return;
             }
-
-            var selectedString = selectedValue.ToString();
             input.Default = input.Options
                 .Where(kvp => kvp.Value?.ToString() == selectedString)
                 .Select(kvp => (object)kvp.Key)

@@ -45,14 +45,30 @@ describe('HeaderAuthProvider — IAuthProvider surface', () => {
 	it('createUser + getUser round-trips and returns an AuthUser shape', async () => {
 		const created = await provider.createUser('Alice@Example.COM');
 		expect(created.id).toBeTruthy();
-		// Email starts empty — it's filled in on first proxy visit, not at allowlist time.
-		expect(created.email).toBeUndefined();
+		// The stored email column starts empty until first proxy visit, but the
+		// AuthUser view falls back to the UPN so user lists never show bare UUIDs.
+		expect(created.email).toBe('alice@example.com');
 		// UPN/displayName live in metadata (AuthUser is identity-only).
 		expect(created.metadata?.upn).toBe('alice@example.com');
 
 		const fetched = await provider.getUser(created.id);
 		expect(fetched?.id).toBe(created.id);
 		expect(fetched?.metadata?.upn).toBe('alice@example.com');
+	});
+
+	it('materialized email replaces the UPN fallback after first login', async () => {
+		const created = await provider.createUser('alice@tenant.onmicrosoft.com');
+		expect(created.email).toBe('alice@tenant.onmicrosoft.com');
+
+		await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({
+				[DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com',
+				[DEFAULT_HEADERS.email]: 'alice@company.com'
+			})
+		);
+
+		const fetched = await provider.getUser(created.id);
+		expect(fetched?.email).toBe('alice@company.com');
 	});
 
 	it('listUsers paginates with limit + cursor', async () => {

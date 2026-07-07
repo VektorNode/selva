@@ -45,11 +45,19 @@ export const load: PageServerLoad = async ({ locals }) => {
 			userIds.map((id) => auth.getUser(id).catch(() => null as AuthUser | null))
 		);
 		const userById = new Map(users.filter((u): u is AuthUser => !!u).map((u) => [u.id, u]));
-		members = page.items.map((m) => ({
-			...m,
-			email: userById.get(m.userId)?.email,
-			lastLoginAt: userById.get(m.userId)?.lastLoginAt
-		}));
+		members = page.items.map((m) => {
+			const authUser = userById.get(m.userId);
+			const metadataDisplayName =
+				typeof authUser?.metadata?.displayName === 'string'
+					? authUser.metadata.displayName
+					: undefined;
+			return {
+				...m,
+				email: authUser?.email,
+				displayName: metadataDisplayName,
+				lastLoginAt: authUser?.lastLoginAt
+			};
+		});
 		actorRole = page.items.find((m) => m.userId === ctx.userId)?.role ?? null;
 	} catch {
 		// Provider may not support listing — surface empty roster

@@ -83,7 +83,12 @@ export interface HeaderAuthProviderConfig {
 function toAuthUser(u: AllowlistEntry): AuthUser {
 	return {
 		id: u.id,
-		email: u.email,
+		// Pre-first-login rows have no materialized email yet — the UPN is what
+		// the admin typed when allowlisting (their email, for Entra/M365) and is
+		// the only human-readable identifier available. Fall back so user lists
+		// show an address instead of a bare UUID until the real email arrives
+		// via header materialization.
+		email: u.email ?? u.upn,
 		metadata: { upn: u.upn, displayName: u.displayName },
 		createdAt: u.createdAt,
 		lastLoginAt: u.lastLoginAt,
