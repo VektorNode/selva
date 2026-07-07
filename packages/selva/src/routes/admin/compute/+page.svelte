@@ -60,7 +60,9 @@
 		ok: { label: 'Online', color: 'text-green-600 dark:text-green-400' },
 		warning: { label: 'Warning', color: 'text-yellow-600 dark:text-yellow-400' },
 		error: { label: 'Offline', color: 'text-red-600 dark:text-red-400' },
-		checking: { label: 'Checking…', color: 'text-blue-600 dark:text-blue-400' }
+		checking: { label: 'Checking…', color: 'text-blue-600 dark:text-blue-400' },
+		// Reachable but plugins still loading — a booting server, not a fault.
+		loading: { label: 'Loading plugins…', color: 'text-blue-600 dark:text-blue-400' }
 	};
 
 	let servers = $state<ServerEntry[]>([]);
@@ -359,7 +361,7 @@
 {#snippet serverCard(server: ServerEntry, i: number)}
 	{@const health = healthMap[server.id]?.state}
 	{@const sc = statusConfig[health?.state ?? 'idle']}
-	{@const isChecking = health?.state === 'checking'}
+	{@const isChecking = health?.state === 'checking' || health?.state === 'loading'}
 	{@const pluginEntries = Object.entries(health?.plugins ?? {})}
 	{@const isDirty = dirtyIds.has(server.id)}
 	<div
@@ -483,6 +485,8 @@
 					<p class="mt-0.5 text-xs font-medium">
 						{#if health.selvaInstalled}
 							{health.selvaVersion}
+						{:else if !health.ready}
+							<span class="text-muted-foreground">Loading…</span>
 						{:else}
 							<span class="text-red-600 dark:text-red-400">Not installed</span>
 						{/if}

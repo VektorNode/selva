@@ -24,6 +24,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		if (!reachable) {
 			return json({
 				reachable: false,
+				ready: false,
 				rhinoVersion: null,
 				computeVersion: null,
 				selvaInstalled: false,
@@ -43,11 +44,25 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			stats.getIdleSpan()
 		]);
 
+		// The proxy answers `/` (reachable) well before a child finishes loading
+		// Grasshopper add-ons, so a fresh boot briefly reports no Selva. Distinguish
+		// "still loading" from "genuinely not installed" using the plugin inventory:
+		//   - plugins === null  → `/plugins/gh/installed` couldn't be read (no child
+		//     up yet, or it errored) → not ready, the client should keep retrying.
+		//   - plugins === {}    → same story: a child that has finished enumerating
+		//     add-ons always reports at least the ambient ones, so an empty map means
+		//     the inventory isn't populated yet → not ready.
+		//   - plugins populated → Grasshopper has enumerated its add-ons. Whether or
+		//     not Selva is among them is now authoritative → ready.
+		const inventoryLoaded = plugins !== null && Object.keys(plugins).length > 0;
 		const installed = plugins ?? {};
 		const selvaVersion: string | null = installed['Selva'] ?? null;
 
 		return json({
 			reachable: true,
+			// `ready` gates the client's retry loop: once the inventory has loaded we
+			// trust `selvaInstalled` (true or false); until then we're still booting.
+			ready: inventoryLoaded,
 			rhinoVersion: version?.rhino ?? null,
 			computeVersion: version?.compute ?? null,
 			selvaInstalled: selvaVersion !== null,
@@ -59,6 +74,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	} catch {
 		return json({
 			reachable: false,
+			ready: false,
 			rhinoVersion: null,
 			computeVersion: null,
 			selvaInstalled: false,
