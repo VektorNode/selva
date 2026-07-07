@@ -1,5 +1,38 @@
 # @selvajs/ui
 
+## 4.12.5
+
+### Patch Changes
+
+- 1449c8c: Fix a browser freeze (`effect_update_depth_exceeded`) when a dynamic value list's computed options depend on the current selection. Such a definition oscillates — the empty/stale-selection fallback auto-picks a valid option and force-solves, the next solve returns options that exclude that pick, the effect fires again — looping without a fixed point until Svelte's effect scheduler exhausts its update depth and the tab hangs on every solve. The reconciliation effect now caps consecutive system-initiated auto-picks (reset by any real user selection); once the cap is hit it logs a warning naming the input and stops, keeping the empty-value invariant intact. This makes the UI resilient to a definition that can't produce stable value-list options (e.g. one whose upstream errors null out the option source), turning a hard freeze into a bounded warning.
+
+## 4.12.4
+
+### Patch Changes
+
+- 6edd345: A dynamic value list input never dispatches an empty or stale value to solve anymore. The auto-pick fallback had two paths that leaked invalid values into the solve request: a user-cleared selection was honored as empty (but an empty selection is never a valid solve input — there is always at least one option), and the consecutive-auto-pick loop breaker gave up leaving whatever stale value was in place. Every terminal state now resolves to a currently-valid option, so the definition always receives a value it can match.
+
+## 4.12.3
+
+### Patch Changes
+
+- 0815369: Diagnostic logging for the dynamic value list memory investigation: large options-payload parses log size, option count and duration (should fire once per distinct solve result — a storm means memoization is defeated); every system auto-pick on a value list logs itself so a reconciliation loop is visible as a numbered sequence; and the browser solve line includes a JS heap watermark (Chrome) so a retention leak shows as a monotonic climb across a session.
+- 0815369: Bound the dynamic value list auto-pick fallback to 3 consecutive system-initiated picks (reset by any real user selection). A definition whose computed options depend on the current selection could oscillate — auto-pick → force-solve → new options invalidate the pick → auto-pick again — force-solving in an unbounded loop that can run the tab out of memory. The fallback now stops with a console warning identifying the input instead of looping.
+- 0815369: Memoize dynamic value list payload parsing. In compute mode the options payload arrives as a JSON string — several MB for large option lists — and the options map derives from the live values, recomputing on every value change. Each recompute re-parsed the full string and allocated a fresh options object whose new identity re-rendered the entire dropdown subtree; with a measured 6.4 MB payload this drove the tab out of memory when fast (cached) solve results triggered several recomputes in one frame. Repeated payloads (including identical strings from later solves) now return the same parsed object, so unrelated value changes no longer touch the dropdown at all.
+
+## 4.12.2
+
+### Patch Changes
+
+- 739b1cd: Refine the dynamic value list empty-selection fallback: it now only fills a selection that was never made. A user who deliberately clears the selection (e.g. unchecks every checklist entry) is no longer fought by the auto-fallback re-selecting the first option.
+- 739b1cd: Move the solve-request values projection into the solve session itself. The session merges solve outputs into the same values map that inputs live in (so widgets like dynamic value lists can read them), and previously dispatched the whole map to the transport — the Selva app filtered it back down in its own onSolve, but any other app built on `@selvajs/ui` would unknowingly re-upload multi-MB output payloads (a measured 6.4 MB options list) on every solve. `dispatch()` now projects values down to schema-input ids before calling the driver, so every transport — HTTP, WebSocket, or custom — gets input-only values by contract, and the app-level filter is removed as redundant.
+
+## 4.12.1
+
+### Patch Changes
+
+- 0a978ac: Dynamic value list inputs now fall back to the first available option when no selection was ever made (empty string or empty checklist), not only when a previous selection went stale. An empty selection solved as an empty string, cascading through definitions as null-data errors ("File not found", Text→Number conversion failures) and producing geometry-less results that the solve caches then replayed.
+
 ## 4.12.0
 
 ### Minor Changes

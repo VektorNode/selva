@@ -84,14 +84,25 @@ export class LocalDataProvider implements IDataProvider {
 
 	/**
 	 * Cascade hook called after the auth provider deletes a user. Removes the
-	 * matching `user-data.json` row so the data layer doesn't accumulate
-	 * orphans. Tolerates missing rows.
+	 * matching `user-data.json` row and every live org membership so the data
+	 * layer doesn't accumulate orphans — a leftover membership renders as a
+	 * bare user ID in the team roster forever. (Supabase gets the membership
+	 * cascade from FK constraints; local must do it explicitly.) Tolerates
+	 * missing rows.
 	 */
-	async onUserDeleted(_ctx: RequestContext, userId: string): Promise<void> {
+	async onUserDeleted(ctx: RequestContext, userId: string): Promise<void> {
 		try {
 			await this.userData.deleteUser(userId);
 		} catch {
 			// Already absent — nothing to clean up.
+		}
+		// `findUserMembership` returns one live membership at a time; removing
+		// it surfaces the next. Bounded far above any real org count in case a
+		// store bug ever makes removal a no-op.
+		for (let i = 0; i < 100; i++) {
+			const membership = await this.orgs.findUserMembership(ctx, userId);
+			if (!membership) break;
+			await this.orgs.removeOrgMember(ctx, membership.org.id, userId);
 		}
 	}
 

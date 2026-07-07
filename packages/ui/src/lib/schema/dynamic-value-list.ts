@@ -40,6 +40,47 @@ function coercePayload(value: unknown): DynamicValueListPayload | null {
 	return null;
 }
 
+// Memoizes string-payload coercion. In compute mode the payload arrives as a JSON
+// string — potentially several MB for a large options list — and the options map is
+// derived from `values` (TabLayout), so it recomputes on EVERY value change. Without
+// memoization each keystroke/output-merge re-parses megabytes and allocates a fresh
+// options object, whose new identity re-renders the entire dropdown subtree; with a
+// 6.4 MB payload this was measured driving a tab out of memory. Map keys use
+// SameValueZero, so an identical response string from a later solve also hits.
+const coerceCache = new Map<string, DynamicValueListPayload | null>();
+const COERCE_CACHE_MAX = 8;
+
+function coercePayloadMemo(value: unknown): DynamicValueListPayload | null {
+	// Only string payloads are expensive (JSON.parse); objects pass straight through.
+	if (typeof value !== 'string' || value.length < 1024) return coercePayload(value);
+	const hit = coerceCache.get(value);
+	if (hit !== undefined || coerceCache.has(value)) {
+		// Refresh LRU position.
+		coerceCache.delete(value);
+		coerceCache.set(value, hit ?? null);
+		return hit ?? null;
+	}
+	const parseStart = performance.now();
+	const parsed = coercePayload(value);
+	// Diagnostic: an expensive parse should happen ONCE per distinct solve result.
+	// If this line storms in the console, payload memoization is being defeated
+	// (e.g. payload strings differing per recompute) — the pre-memoization churn
+	// pattern that could OOM a tab.
+	if (value.length > 256 * 1024) {
+		const optionCount = parsed?.options ? Object.keys(parsed.options).length : 0;
+		console.info(
+			`[DVL] parsed ${(value.length / (1024 * 1024)).toFixed(1)} MB options payload ` +
+				`(${optionCount} options) in ${(performance.now() - parseStart).toFixed(0)}ms — cache miss`
+		);
+	}
+	if (coerceCache.size >= COERCE_CACHE_MAX) {
+		const oldest = coerceCache.keys().next().value;
+		if (oldest !== undefined) coerceCache.delete(oldest);
+	}
+	coerceCache.set(value, parsed);
+	return parsed;
+}
+
 /** One DynVL routing source: the id keying `values`, plus the schema-side target fallback. */
 interface DynamicValueListSource {
 	id: string;
@@ -87,7 +128,7 @@ export function buildDynamicValueListOptions(
 	const result: Record<string, Record<string, string>> = {};
 
 	for (const source of collectDynamicValueListSources(schema)) {
-		const payload = coercePayload(values[source.id]);
+		const payload = coercePayloadMemo(values[source.id]);
 		if (!payload) continue;
 
 		const targetInputId = payload.targetInputId ?? source.targetInputId;

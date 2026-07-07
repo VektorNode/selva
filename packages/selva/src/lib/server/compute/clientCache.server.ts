@@ -47,6 +47,24 @@ if (COMPUTE_DEBUG_VERBOSE) enableDebugLogging();
 export interface CachedClient {
 	client: GrasshopperClient;
 	scheduler: SolveScheduler;
+	/**
+	 * Last decode/solve/encode reported by the compute server (Server-Timing).
+	 * Written by onServerTiming, read right after scheduler.solve resolves to split
+	 * the solve wall time into on-compute-server work vs. the compute↔web-server
+	 * link (network transfer + queue). Queue-mode schedulers serialize solves, so
+	 * this correlates with the request that just resolved; a Selva-cache hit leaves
+	 * it null (no compute call). Debug aid — a concurrent burst may misattribute
+	 * one request's timing to another.
+	 */
+	rhinoTiming: { last: { decode: number; solve: number; encode: number } | null };
+	/**
+	 * Last solve's cache verdicts from the scheduler's onSettle: whether Selva's
+	 * in-process response cache served it (no compute call at all) and whether the
+	 * definition had to be re-uploaded. Same read-after-solve pattern and
+	 * concurrency caveat as rhinoTiming; surfaced on Server-Timing so the browser
+	 * shows cache behaviour without server log access.
+	 */
+	solveMeta: { last: { fromCache: boolean; definitionReuploaded?: boolean } | null };
 }
 
 const MAX_CACHED_CLIENTS = 16;
@@ -73,6 +91,11 @@ export async function getClient(serverConfig: ComputeServerConfig): Promise<Cach
 		return existing;
 	}
 
+	// Holders for per-request results from the client/scheduler callbacks below;
+	// the route reads them right after each solve resolves to build Server-Timing.
+	const rhinoTiming: CachedClient['rhinoTiming'] = { last: null };
+	const solveMeta: CachedClient['solveMeta'] = { last: null };
+
 	const client = await GrasshopperClient.create({
 		serverUrl: serverConfig.serverUrl,
 		apiKey: serverConfig.apiKey,
@@ -94,28 +117,31 @@ export async function getClient(serverConfig: ComputeServerConfig): Promise<Cach
 		//   • Solve cache (cachesolve): when the server returns a CACHED RESULT it
 		//     skips the solve, so `solve` drops to ~0 while decode/encode still run.
 		// We flag each below so the contrast is obvious in the logs.
-		onServerTiming: COMPUTE_DEBUG
-			? (t) => {
-					const decode = t.decode ?? 0;
-					const solve = t.solve ?? 0;
-					const encode = t.encode ?? 0;
-					// Heuristic thresholds: a genuine parse/solve is many ms; a cache hit
-					// is sub-millisecond. Only meaningful as a relative signal vs. the
-					// first (cold) solve of the same definition.
-					const defCache =
-						decode <= 1 ? 'HIT (definition reused, no re-upload/parse)' : 'miss (full parse)';
-					const solveCache =
-						COMPUTE_SERVER_CACHESOLVE && solve <= 1
-							? 'HIT (cached result, solve skipped)'
-							: COMPUTE_SERVER_CACHESOLVE
-								? 'miss (solved fresh)'
-								: 'off';
-					console.log(
-						`[Compute/rhino-cache] decode=${decode}ms solve=${solve}ms encode=${encode}ms ` +
-							`| definition-cache: ${defCache} | solve-cache (cachesolve): ${solveCache}`
-					);
-				}
-			: undefined
+		onServerTiming: (t) => {
+			const decode = t.decode ?? 0;
+			const solve = t.solve ?? 0;
+			const encode = t.encode ?? 0;
+			// Always recorded (cheap): the route reads this after scheduler.solve to
+			// split solve wall time into on-compute-server work vs. the network link
+			// to the compute server. Only the console.log below is debug-gated.
+			rhinoTiming.last = { decode, solve, encode };
+			if (!COMPUTE_DEBUG) return;
+			// Heuristic thresholds: a genuine parse/solve is many ms; a cache hit
+			// is sub-millisecond. Only meaningful as a relative signal vs. the
+			// first (cold) solve of the same definition.
+			const defCache =
+				decode <= 1 ? 'HIT (definition reused, no re-upload/parse)' : 'miss (full parse)';
+			const solveCache =
+				COMPUTE_SERVER_CACHESOLVE && solve <= 1
+					? 'HIT (cached result, solve skipped)'
+					: COMPUTE_SERVER_CACHESOLVE
+						? 'miss (solved fresh)'
+						: 'off';
+			console.log(
+				`[Compute/rhino-cache] decode=${decode}ms solve=${solve}ms encode=${encode}ms ` +
+					`| definition-cache: ${defCache} | solve-cache (cachesolve): ${solveCache}`
+			);
+		}
 	});
 	const scheduler = client.createScheduler({
 		mode: 'queue',
@@ -131,44 +157,48 @@ export async function getClient(serverConfig: ComputeServerConfig): Promise<Cach
 		// cache. `fromCache === true` means this solve was served from Selva's own
 		// cache — Rhino.Compute was never called (you'll see NO [Compute/timing]
 		// line for it). `false` means it went to the compute server.
-		onSettle: COMPUTE_DEBUG
-			? (_ctx, result) => {
-					if (result.status === 'success') {
-						console.log(
-							`[Compute/selva-cache] ${result.fromCache ? 'HIT  — served from Selva (no compute call)' : 'miss — went to Rhino.Compute'} (${Math.round(result.durationMs)}ms)`
-						);
-						// Definition-cache verdict for a real compute call (not a Selva-cache
-						// HIT). `definitionReuploaded` (@selvajs/compute >= 2.6.0) tells us whether
-						// the server reused its cached definition via the pointer (no upload) or
-						// the client had to re-upload the full .gh because the pointer was
-						// cold/stale. Independent of Server-Timing — works on any compute server.
-						if (!result.fromCache) {
-							console.log(
-								result.definitionReuploaded === true
-									? '[Compute/def-cache] miss — definition RE-UPLOADED (pointer was cold/stale)'
-									: result.definitionReuploaded === false
-										? '[Compute/def-cache] HIT  — definition reused from server cache (no upload)'
-										: '[Compute/def-cache] n/a — reuse disabled or non-reusable definition'
-							);
-						}
-						// Surface real GH errors when present. An errored solve returns HTTP 500
-						// (the lib still returns partial geometry, so the UI works) and is NEVER
-						// cached server-side (cachesolve only stores error-free solves), so such a
-						// definition can't get a solve-cache hit until its errors are fixed.
-						if (!result.fromCache) {
-							const errs = (result.response as { errors?: unknown[] })?.errors;
-							const errCount = Array.isArray(errs) ? errs.length : 0;
-							if (errCount > 0) {
-								console.log(
-									`[Compute/rhino-cache] ${errCount} GH error(s); not cacheable until fixed. First: ${JSON.stringify((errs as unknown[])[0])}`
-								);
-							}
-						}
-					}
+		onSettle: (_ctx, result) => {
+			if (result.status !== 'success') return;
+			// Always recorded (cheap): the route surfaces these verdicts on the
+			// Server-Timing header. Only the console.log below is debug-gated.
+			solveMeta.last = {
+				fromCache: result.fromCache === true,
+				definitionReuploaded: result.definitionReuploaded
+			};
+			if (!COMPUTE_DEBUG) return;
+			console.log(
+				`[Compute/selva-cache] ${result.fromCache ? 'HIT  — served from Selva (no compute call)' : 'miss — went to Rhino.Compute'} (${Math.round(result.durationMs)}ms)`
+			);
+			// Definition-cache verdict for a real compute call (not a Selva-cache
+			// HIT). `definitionReuploaded` (@selvajs/compute >= 2.6.0) tells us whether
+			// the server reused its cached definition via the pointer (no upload) or
+			// the client had to re-upload the full .gh because the pointer was
+			// cold/stale. Independent of Server-Timing — works on any compute server.
+			if (!result.fromCache) {
+				console.log(
+					result.definitionReuploaded === true
+						? '[Compute/def-cache] miss — definition RE-UPLOADED (pointer was cold/stale)'
+						: result.definitionReuploaded === false
+							? '[Compute/def-cache] HIT  — definition reused from server cache (no upload)'
+							: '[Compute/def-cache] n/a — reuse disabled or non-reusable definition'
+				);
+			}
+			// Surface real GH errors when present. An errored solve returns HTTP 500
+			// (the lib still returns partial geometry, so the UI works) and is NEVER
+			// cached server-side (cachesolve only stores error-free solves), so such a
+			// definition can't get a solve-cache hit until its errors are fixed.
+			if (!result.fromCache) {
+				const errs = (result.response as { errors?: unknown[] })?.errors;
+				const errCount = Array.isArray(errs) ? errs.length : 0;
+				if (errCount > 0) {
+					console.log(
+						`[Compute/rhino-cache] ${errCount} GH error(s); not cacheable until fixed. First: ${JSON.stringify((errs as unknown[])[0])}`
+					);
 				}
-			: undefined
+			}
+		}
 	});
-	const entry: CachedClient = { client, scheduler };
+	const entry: CachedClient = { client, scheduler, rhinoTiming, solveMeta };
 
 	// Evict the least-recently-used entry before inserting when at capacity.
 	if (clientCache.size >= MAX_CACHED_CLIENTS) {

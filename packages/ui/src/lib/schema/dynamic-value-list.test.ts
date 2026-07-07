@@ -91,6 +91,23 @@ describe('buildDynamicValueListOptions', () => {
 		expect(result[TARGET]).toEqual({ A: '1' });
 	});
 
+	it('returns the SAME parsed object for repeated large string payloads (memoization)', () => {
+		const schema = schemaWith({ layoutItems: [layoutItem(BAKE, TARGET)] });
+		// Above the 1024-char memoization threshold — the expensive compute-mode path.
+		const bigOptions: Record<string, string> = {};
+		for (let i = 0; i < 100; i++) bigOptions[`option-${i}-${'x'.repeat(20)}`] = String(i);
+		const str = JSON.stringify(payload(TARGET, bigOptions));
+
+		const first = buildDynamicValueListOptions(schema, { [BAKE]: str });
+		// A later solve delivering an identical (even newly-allocated) string must yield
+		// the same object reference — referential stability is what stops the dropdown
+		// subtree from re-rendering on every unrelated values change.
+		const second = buildDynamicValueListOptions(schema, { [BAKE]: String(str) });
+
+		expect(first[TARGET]).toEqual(bigOptions);
+		expect(second[TARGET]).toBe(first[TARGET]);
+	});
+
 	it('dedupes outputs[] over layout for the same id', () => {
 		const schema = schemaWith({
 			outputs: [{ id: BAKE, type: 'dynamicValueList', targetInputId: 'from-outputs' }] as never,

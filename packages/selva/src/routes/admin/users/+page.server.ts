@@ -2,12 +2,13 @@ import type { PageServerLoad } from './$types';
 import type {
 	AuthUser,
 	Invite,
+	OrgMember,
 	OrgPermission,
 	OrgRole,
 	PlatformPermission
 } from '@selvajs/platform';
-import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
+import { listAllOrgMembers } from '$lib/server/org-members.server';
 import {
 	getInviteStore,
 	getOrganizationProvider,
@@ -54,27 +55,34 @@ export const load: PageServerLoad = async ({ locals }) => {
 			const profileById = new Map(profiles.map((p) => [p.userId, p]));
 			const platformByUser = await getPermissionStore().getForBatch(ctx, userIds);
 			const activeOrgId = ctx.actingOrgId;
-			users = await Promise.all(
-				page.items.map(async (u) => {
-					let orgPermissions: OrgPermission[] = [];
-					let orgRole: OrgRole | undefined;
-					if (activeOrgId) {
-						const member = await orgs.getOrgMember(SYSTEM_CONTEXT, activeOrgId, u.id);
-						orgPermissions = member?.permissions ?? [];
-						orgRole = member?.role;
-					}
-					const profile = profileById.get(u.id);
-					const platformPermissions = platformByUser.get(u.id) ?? [];
-					return {
-						...u,
-						displayName: profile?.displayName,
-						platformPermissions,
-						orgRole,
-						orgPermissions,
-						permissions: flattenPermissions(platformPermissions, orgPermissions)
-					};
-				})
-			);
+			// One membership listing instead of a getOrgMember round-trip per user —
+			// the per-user lookup N+1s against remote adapters and re-runs on every
+			// invalidation of this page.
+			let memberByUserId = new Map<string, OrgMember>();
+			if (activeOrgId) {
+				const members = await listAllOrgMembers(orgs, activeOrgId);
+				memberByUserId = new Map(members.map((m) => [m.userId, m]));
+			}
+			users = page.items.map((u) => {
+				const member = memberByUserId.get(u.id);
+				const orgPermissions: OrgPermission[] = member ? [...member.permissions] : [];
+				const orgRole: OrgRole | undefined = member?.role;
+				const profile = profileById.get(u.id);
+				const platformPermissions = platformByUser.get(u.id) ?? [];
+				// Header-auth carries the IdP display name on the identity's
+				// metadata; the profile store only has a value once the user
+				// sets one themselves.
+				const metadataDisplayName =
+					typeof u.metadata?.displayName === 'string' ? u.metadata.displayName : undefined;
+				return {
+					...u,
+					displayName: profile?.displayName ?? metadataDisplayName,
+					platformPermissions,
+					orgRole,
+					orgPermissions,
+					permissions: flattenPermissions(platformPermissions, orgPermissions)
+				};
+			});
 		}
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;

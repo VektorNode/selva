@@ -8,7 +8,11 @@ import {
 	resolveServerForOrg,
 	ComputeServerUnconfiguredError
 } from '$lib/server/compute/resolve.server';
-import { getClient, COMPUTE_DEBUG } from '$lib/server/compute/clientCache.server';
+import {
+	getClient,
+	COMPUTE_DEBUG,
+	type CachedClient
+} from '$lib/server/compute/clientCache.server';
 import { assertSafeRemoteDefinitionUrl } from '$lib/server/compute/safe-url';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import {
@@ -25,6 +29,7 @@ import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.se
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
 import { fetchSchemaFromCompute } from '$lib/server/definitions/schemaExtraction.server';
 import { transformInputParameter } from '$lib/server/compute/transform-input';
+import { gzipSync } from 'node:zlib';
 
 interface ComputeRequest {
 	inputs: (SchemaInput & { minimum?: number; maximum?: number; stepSize?: number })[];
@@ -151,8 +156,27 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	// Reject oversized payloads before buffering.
 	requireMaxBodySize(request, COMPUTE_REQUEST_MAX_BYTES);
 
+	// DEBUG (SELVA_FLAG_COMPUTE_DEBUG): start of server-side work. The solve metric's
+	// `durationMs` wraps ONLY scheduler.solve, so everything before it (auth, DB reads,
+	// definition fetch, input tree build) and the response serialization after it are
+	// otherwise invisible. We time those phases and log a breakdown below.
+	const loadStart = performance.now();
+
+	// Sub-phase marks for the pre-solve "prep" work (body parse, share token, DB
+	// reads, blob fetch, compute-server resolve …). Each mark records time since
+	// the previous one, so the sequence names exactly which step a `load` spike
+	// hides in. Exposed as `p_*` entries on the Server-Timing header and echoed
+	// in the debug log — observed load varying 0.05s–9.6s for the same definition.
+	const prepMarks: [string, number][] = [];
+	let prevMark = performance.now();
+	const mark = (label: string) => {
+		prepMarks.push([label, performance.now() - prevMark]);
+		prevMark = performance.now();
+	};
+
 	try {
 		const body: ComputeRequest = await request.json();
+		mark('body');
 
 		const { inputs, values } = body;
 		const definitionUrl = body.definitionUrl;
@@ -194,6 +218,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			isLocal && guid && !explicitVersionId
 				? await tryResolveShareToken(request, url, guid, channel, { requireSolve: true })
 				: null;
+		mark('shareToken');
 
 		if (!sharedAccess && (!locals.ctx || !locals.user)) {
 			apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
@@ -254,10 +279,12 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' not found`);
 			}
 			if (!record) apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' not found`);
+			mark('defRecord');
 
 			const project = await providers.data.projects.getProject(solveCtx, record.projectId);
 			solveOrgId = project?.orgId ?? null;
 			definitionPin = record.computeServerId ?? null;
+			mark('project');
 
 			if (!sharedAccess) {
 				if (channel === 'draft' || explicitVersionId) {
@@ -269,6 +296,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 					await requireCanSolve(locals, record.projectId, project ?? undefined);
 				}
 			}
+			mark('access');
 
 			const versionId =
 				explicitVersionId ?? (channel === 'live' ? record.liveVersionId : record.draftVersionId);
@@ -282,6 +310,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			localVersionForBackfill = { id: version.id, hasSchema: version.schema !== undefined };
 			metricDefinitionId = guid;
 			metricVersionId = version.id;
+			mark('version');
 
 			try {
 				const bytes = await storage.get(version.fileKey);
@@ -291,6 +320,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				console.error(`Failed to load local definition blob: ${guid}`, err);
 				apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' not found`);
 			}
+			mark('blob');
 		} else {
 			try {
 				definitionSource = await loadRemoteDefinition(definitionUrl);
@@ -302,13 +332,23 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 					`Failed to load definition: ${err instanceof Error ? err.message : String(err)}`
 				);
 			}
+			mark('remoteDef');
 		}
+
+		// Phase boundary: everything above (auth, DB, blob/remote definition fetch) is
+		// the "load" phase; the tree build is measured on its own.
+		const defLoadMs = performance.now() - loadStart;
+		const treeBuildStart = performance.now();
 
 		const inputTree = TreeBuilder.fromInputParams(
 			inputs
 				.filter((input) => input.paramType)
 				.map((input) => transformInputParameter(input, values[input.id]))
 		);
+		const treeBuildMs = performance.now() - treeBuildStart;
+		// Tree build is timed separately above — restart the mark clock so the next
+		// prep mark doesn't absorb it.
+		prevMark = performance.now();
 
 		// Atomic check-and-increment (spec §7); run before solve to avoid wasting compute.
 		if (sharedAccess) {
@@ -320,9 +360,11 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				recordMetric('share_cap');
 				apiError(429, ApiErrorCode.INTERNAL, 'Share link solve cap reached.');
 			}
+			mark('shareCap');
 		}
 
 		const serverConfig = await resolveServerForOrg(solveCtx, solveOrgId, { definitionPin });
+		mark('resolveServer');
 
 		// BRIDGE: remove ~2026-09 — lazy backfill for pre-cached versions. Best-effort.
 		if (localVersionForBackfill && !localVersionForBackfill.hasSchema) {
@@ -333,19 +375,29 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			} catch (err) {
 				console.warn(`[API/Compute] Schema backfill failed for version ${versionId}:`, err);
 			}
+			// Backfill calls the compute server — seconds when it fires. If this shows
+			// up repeatedly for the same definition, setVersionSchema isn't sticking.
+			mark('schemaBackfill');
 		}
 
-		const { scheduler } = await getClient(serverConfig);
+		const { scheduler, rhinoTiming, solveMeta } = await getClient(serverConfig);
+		mark('client');
 
 		// request.signal propagates to Compute; abort kills orphan solves.
 		let solvedDefinition;
+		let solveMs = 0;
+		// Reset so a Selva-cache hit (no compute call) isn't attributed a stale
+		// timing from an earlier request. See the rhinoTiming concurrency caveat.
+		rhinoTiming.last = null;
+		solveMeta.last = null;
 		const solveStart = performance.now();
 		try {
 			solvedDefinition = await scheduler.solve(definitionSource, inputTree, {
 				signal: request.signal
 			});
+			solveMs = performance.now() - solveStart;
 			recordMetric('ok', {
-				durationMs: performance.now() - solveStart,
+				durationMs: solveMs,
 				errorCount: solvedDefinition.errors?.length ?? 0,
 				warningCount: solvedDefinition.warnings?.length ?? 0
 			});
@@ -386,6 +438,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		}
 
 		// Stringify once to measure and catch V8 RangeError on oversized strings.
+		const serializeStart = performance.now();
 		let serialized: string;
 		try {
 			serialized = JSON.stringify(solvedDefinition);
@@ -408,16 +461,115 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				'Solve result is too large to return. This usually means a file output exceeds the supported size.'
 			);
 		}
-		// DEBUG (SELVA_FLAG_COMPUTE_DEBUG): size of the solve result returned to the
-		// browser. `serialized.length` is the JSON byte count (1 byte/char for the
-		// ASCII JSON Compute returns). Big numbers here usually mean geometry/file
-		// outputs — the payload caches 1 and 3 store, and pointer reuse does NOT shrink.
-		if (COMPUTE_DEBUG) {
-			console.log(`[Compute/size] solve result = ${formatBytes(serialized.length)}`);
+		const serializeMs = performance.now() - serializeStart;
+		// Gzip BEFORE the timing snapshot and header construction so its cost is a
+		// measured phase (`gzip` in Server-Timing, included in `total`) — running it
+		// after the snapshot silently inflated the browser's network≈ estimate by the
+		// compression time. Buffered (not streamed) so Content-Length is known and a
+		// connection cut mid-transfer fails hard instead of truncating the JSON.
+		const acceptEncoding = request.headers.get('accept-encoding') ?? '';
+		let compressed: Buffer | null = null;
+		let gzipMs = 0;
+		if (/\bgzip\b/i.test(acceptEncoding) && serialized.length > 1024) {
+			const gzipStart = performance.now();
+			compressed = gzipSync(Buffer.from(serialized));
+			gzipMs = performance.now() - gzipStart;
 		}
-		return new Response(serialized, {
-			headers: { 'Content-Type': 'application/json' }
-		});
+		// Total server-side wall time for this request (headers-out is imminent). The
+		// difference between this and the browser's ttfb is request-send + network
+		// latency; the difference between the browser's `download` and near-zero is the
+		// payload transfer — this is how you find where a "16s with cached compute" goes.
+		const serverTotalMs = performance.now() - loadStart;
+		// DEBUG (SELVA_FLAG_COMPUTE_DEBUG): the server-side overhead the solve metric's
+		// `durationMs` doesn't capture. `load` = auth + DB + definition fetch; `tree` =
+		// input tree build; `serialize` = JSON.stringify of the result. The solve itself
+		// is timed separately (see the solve metric's durationMs and [Compute/selva-cache]).
+		if (COMPUTE_DEBUG) {
+			console.info(
+				`[Compute/server] load=${defLoadMs.toFixed(0)}ms tree=${treeBuildMs.toFixed(0)}ms ` +
+					`solve=${solveMs.toFixed(0)}ms serialize=${serializeMs.toFixed(0)}ms ` +
+					`gzip=${gzipMs.toFixed(0)}ms total=${serverTotalMs.toFixed(0)}ms | result=${formatBytes(serialized.length)}`
+			);
+			if (compressed) {
+				console.info(
+					`[Compute/server] gzip ${formatBytes(serialized.length)} → ${formatBytes(compressed.byteLength)} ` +
+						`(${(serialized.length / compressed.byteLength).toFixed(1)}×)`
+				);
+			} else {
+				// If this fires for browser requests, a proxy in front is stripping
+				// Accept-Encoding — compression is then impossible end-to-end from here.
+				console.info(
+					`[Compute/server] compression skipped — Accept-Encoding: "${acceptEncoding || '(absent)'}"`
+				);
+			}
+			// Names the step a `load` (or pre-solve) spike hides in.
+			console.info(
+				`[Compute/server] prep breakdown: ` +
+					prepMarks.map(([label, ms]) => `${label}=${ms.toFixed(0)}ms`).join(' ')
+			);
+		}
+
+		// Server-Timing header: the browser reads these to attribute its round-trip
+		// (see [Compute/browser] in the library page). Standard header, small, always
+		// sent — lets the frontend separate server work from network transfer without
+		// enabling server debug logging. `total` here == the server's headers-to-out
+		// wall time, so browser `ttfb − total` ≈ network+send latency.
+		let serverTimingHeader =
+			`load;dur=${defLoadMs.toFixed(1)}, ` +
+			`tree;dur=${treeBuildMs.toFixed(1)}, ` +
+			`solve;dur=${solveMs.toFixed(1)}, ` +
+			`serialize;dur=${serializeMs.toFixed(1)}, ` +
+			`gzip;dur=${gzipMs.toFixed(1)}, ` +
+			`total;dur=${serverTotalMs.toFixed(1)}`;
+		// When the compute server reported its own decode/solve/encode (Server-Timing
+		// from the VektorNode fork), split the solve wall time further: rhino_* is time
+		// ON the compute server; compute_link is everything between — network transfer
+		// of the request+result between web server and Rhino.Compute, plus queue wait.
+		// This is the compute↔web-server traffic time. Absent on Selva-cache hits.
+		// Cast: TS narrows `last` to null from the pre-solve reset and can't see the
+		// onServerTiming callback writing to it during the awaited solve.
+		const rhino = rhinoTiming.last as CachedClient['rhinoTiming']['last'];
+		if (rhino) {
+			const onRhinoMs = rhino.decode + rhino.solve + rhino.encode;
+			const computeLinkMs = Math.max(0, solveMs - onRhinoMs);
+			serverTimingHeader +=
+				`, rhino_decode;dur=${rhino.decode.toFixed(1)}` +
+				`, rhino_solve;dur=${rhino.solve.toFixed(1)}` +
+				`, rhino_encode;dur=${rhino.encode.toFixed(1)}` +
+				`, compute_link;dur=${computeLinkMs.toFixed(1)}`;
+		}
+		// Prep sub-phases (p_*): the browser prints these as their own line, naming
+		// the step behind a `load` spike without server log access.
+		for (const [label, ms] of prepMarks) {
+			serverTimingHeader += `, p_${label};dur=${ms.toFixed(1)}`;
+		}
+		// Cache verdicts as 0/1 flags (dur is the only Server-Timing value channel).
+		// selva_cache=1 → served from Selva's response cache, compute never called.
+		// def_reupload=1 → the full .gh was re-uploaded to the compute server.
+		// Cast: same narrowing issue as rhinoTiming above.
+		const settle = solveMeta.last as CachedClient['solveMeta']['last'];
+		if (settle) {
+			serverTimingHeader += `, selva_cache;dur=${settle.fromCache ? 1 : 0}`;
+			if (settle.definitionReuploaded !== undefined) {
+				serverTimingHeader += `, def_reupload;dur=${settle.definitionReuploaded ? 1 : 0}`;
+			}
+		}
+		const responseHeaders: Record<string, string> = {
+			'Content-Type': 'application/json',
+			'Server-Timing': serverTimingHeader,
+			Vary: 'Accept-Encoding'
+		};
+
+		// Body was compressed above (before the timing snapshot); Caddy's
+		// `encode gzip` skips already-encoded responses, so this never
+		// double-compresses. Vary is set on both branches for correct caching.
+		if (compressed) {
+			responseHeaders['Content-Encoding'] = 'gzip';
+			responseHeaders['Content-Length'] = String(compressed.byteLength);
+			return new Response(new Uint8Array(compressed), { headers: responseHeaders });
+		}
+		responseHeaders['Content-Length'] = String(Buffer.byteLength(serialized));
+		return new Response(serialized, { headers: responseHeaders });
 	} catch (err) {
 		if (isHttpError(err)) throw err;
 

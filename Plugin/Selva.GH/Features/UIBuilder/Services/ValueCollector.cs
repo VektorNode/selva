@@ -405,7 +405,16 @@ public class ValueCollector
             }
         }
 
-        return null;
+        // VolatileData is only populated during a solution, so it is empty right after
+        // document load. The connected value list's selection is available immediately.
+        var selected = valueListParam.SelectedItems;
+        if (selected.Count > 1)
+        {
+            return selected.Select(s => s.Expression).ToList();
+        }
+
+        var defaultValue = valueListParam.GetDefaultValue();
+        return string.IsNullOrEmpty(defaultValue) ? null : defaultValue;
     }
 
     /// <summary>

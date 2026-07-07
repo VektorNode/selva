@@ -57,7 +57,7 @@ describe('createAllowlistStore — findByEmail', () => {
 
 	it('matches a materialized email that differs from the upn', async () => {
 		const created = await store.createUser('alice@tenant.onmicrosoft.com');
-		await store.materializeFromHeaders(created.id, { email: 'alice@company.com' });
+		await store.syncFromHeaders(created.id, { email: 'alice@company.com' });
 		expect((await store.findByEmail('alice@company.com'))?.id).toBe(created.id);
 	});
 
@@ -84,10 +84,10 @@ describe('createAllowlistStore — rebindUpn', () => {
 	});
 });
 
-describe('createAllowlistStore — materializeFromHeaders', () => {
+describe('createAllowlistStore — syncFromHeaders', () => {
 	it('fills in empty fields on first sight', async () => {
 		const created = await store.createUser('alice@example.com');
-		await store.materializeFromHeaders(created.id, {
+		await store.syncFromHeaders(created.id, {
 			email: 'alice@example.com',
 			displayName: 'Alice Anderson'
 		});
@@ -96,26 +96,37 @@ describe('createAllowlistStore — materializeFromHeaders', () => {
 		expect(row?.displayName).toBe('Alice Anderson');
 	});
 
-	it('never overwrites an existing value (operator edits are sticky)', async () => {
+	it('replaces a stale value when the header changes — the IdP is the source of truth', async () => {
 		const created = await store.createUser('alice@example.com');
-		// Simulate an operator-edited displayName by writing it directly via
-		// the same materialize call once, then trying to clobber it.
-		await store.materializeFromHeaders(created.id, {
+		// A misconfigured proxy forwarded the OIDC `sub` as the display name;
+		// after the proxy is fixed, the next visit must heal the row.
+		await store.syncFromHeaders(created.id, {
 			email: 'alice@example.com',
-			displayName: 'Operator-Set Name'
+			displayName: 'Ej__G0eDRH1ab4_YZwLd20HrAOHeMAEk14xhmBW5Zfk'
 		});
-		await store.materializeFromHeaders(created.id, {
-			email: 'attacker@elsewhere.com',
-			displayName: 'Attacker Display'
+		await store.syncFromHeaders(created.id, {
+			email: 'alice@example.com',
+			displayName: 'Alice Anderson'
 		});
 		const row = await store.findById(created.id);
-		expect(row?.email).toBe('alice@example.com');
-		expect(row?.displayName).toBe('Operator-Set Name');
+		expect(row?.displayName).toBe('Alice Anderson');
 	});
 
-	it('does not write the file when there is nothing to fill', async () => {
+	it('leaves stored values untouched when a header is absent', async () => {
 		const created = await store.createUser('alice@example.com');
-		await store.materializeFromHeaders(created.id, {
+		await store.syncFromHeaders(created.id, {
+			email: 'alice@example.com',
+			displayName: 'Alice Anderson'
+		});
+		// Proxy stops forwarding the display-name header — no clearing.
+		await store.syncFromHeaders(created.id, { email: 'alice@example.com' });
+		const row = await store.findById(created.id);
+		expect(row?.displayName).toBe('Alice Anderson');
+	});
+
+	it('does not write the file when nothing changed', async () => {
+		const created = await store.createUser('alice@example.com');
+		await store.syncFromHeaders(created.id, {
 			email: 'alice@example.com',
 			displayName: 'Alice'
 		});
@@ -123,7 +134,7 @@ describe('createAllowlistStore — materializeFromHeaders', () => {
 		// Wait long enough for mtime to differ if a write happens (HFS+/APFS
 		// resolution is 1ns, but some filesystems coalesce within 1ms).
 		await new Promise((r) => setTimeout(r, 20));
-		await store.materializeFromHeaders(created.id, {
+		await store.syncFromHeaders(created.id, {
 			email: 'alice@example.com',
 			displayName: 'Alice'
 		});

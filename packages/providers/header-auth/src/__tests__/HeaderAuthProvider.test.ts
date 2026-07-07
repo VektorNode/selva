@@ -45,14 +45,30 @@ describe('HeaderAuthProvider — IAuthProvider surface', () => {
 	it('createUser + getUser round-trips and returns an AuthUser shape', async () => {
 		const created = await provider.createUser('Alice@Example.COM');
 		expect(created.id).toBeTruthy();
-		// Email starts empty — it's filled in on first proxy visit, not at allowlist time.
-		expect(created.email).toBeUndefined();
+		// The stored email column starts empty until first proxy visit, but the
+		// AuthUser view falls back to the UPN so user lists never show bare UUIDs.
+		expect(created.email).toBe('alice@example.com');
 		// UPN/displayName live in metadata (AuthUser is identity-only).
 		expect(created.metadata?.upn).toBe('alice@example.com');
 
 		const fetched = await provider.getUser(created.id);
 		expect(fetched?.id).toBe(created.id);
 		expect(fetched?.metadata?.upn).toBe('alice@example.com');
+	});
+
+	it('materialized email replaces the UPN fallback after first login', async () => {
+		const created = await provider.createUser('alice@tenant.onmicrosoft.com');
+		expect(created.email).toBe('alice@tenant.onmicrosoft.com');
+
+		await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({
+				[DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com',
+				[DEFAULT_HEADERS.email]: 'alice@company.com'
+			})
+		);
+
+		const fetched = await provider.getUser(created.id);
+		expect(fetched?.email).toBe('alice@company.com');
 	});
 
 	it('listUsers paginates with limit + cursor', async () => {
@@ -151,6 +167,27 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 		// Re-read through getUser to confirm it persisted.
 		const refetched = await provider.getUser(created.id);
 		expect(refetched?.email).toBe('alice@example.com');
+	});
+
+	it('updates a stale display name on the next visit after the proxy is corrected', async () => {
+		const created = await provider.createUser('alice@example.com');
+		// A misconfigured proxy forwarded the OIDC `sub` claim as the display name.
+		await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({
+				[DEFAULT_HEADERS.upn]: 'alice@example.com',
+				[DEFAULT_HEADERS.displayName]: 'Ej__G0eDRH1ab4_YZwLd20HrAOHeMAEk14xhmBW5Zfk'
+			})
+		);
+		// Proxy fixed — the very next visit heals the stored row.
+		const result = await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({
+				[DEFAULT_HEADERS.upn]: 'alice@example.com',
+				[DEFAULT_HEADERS.displayName]: 'Alice Anderson'
+			})
+		);
+		expect(result?.metadata?.displayName).toBe('Alice Anderson');
+		const refetched = await provider.getUser(created.id);
+		expect(refetched?.metadata?.displayName).toBe('Alice Anderson');
 	});
 
 	it('resolves a row pre-allowlisted by email when the proxy UPN differs', async () => {

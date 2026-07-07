@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getOrganizationProvider, getPermissionStore } from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
+import { listAllOrgMembers } from '$lib/server/org-members.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import {
@@ -46,24 +47,23 @@ export const GET: RequestHandler = async ({ locals }) => {
 	// Single batch read for platform permissions instead of N round-trips.
 	const userIds = page.items.map((u) => u.id);
 	const platformByUser = await getPermissionStore().getForBatch(locals.ctx!, userIds);
-	const flattened = await Promise.all(
-		page.items.map(async (u) => {
-			let orgPerms: readonly string[] = [];
-			if (orgId) {
-				const member = await orgs.getOrgMember(SYSTEM_CONTEXT, orgId, u.id);
-				orgPerms = member?.permissions ?? [];
-			}
-			const platformPerms = platformByUser.get(u.id) ?? [];
-			return {
-				...u,
-				platformPermissions: platformPerms,
-				permissions: flattenPermissions(
-					platformPerms,
-					orgPerms as Parameters<typeof flattenPermissions>[1]
-				)
-			};
-		})
-	);
+	// One membership listing instead of a getOrgMember round-trip per user.
+	const memberByUserId = new Map<string, { permissions: readonly string[] }>();
+	if (orgId) {
+		for (const m of await listAllOrgMembers(orgs, orgId)) memberByUserId.set(m.userId, m);
+	}
+	const flattened = page.items.map((u) => {
+		const orgPerms = memberByUserId.get(u.id)?.permissions ?? [];
+		const platformPerms = platformByUser.get(u.id) ?? [];
+		return {
+			...u,
+			platformPermissions: platformPerms,
+			permissions: flattenPermissions(
+				platformPerms,
+				orgPerms as Parameters<typeof flattenPermissions>[1]
+			)
+		};
+	});
 	return json({ users: flattened });
 };
 

@@ -32,6 +32,10 @@ vi.mock('$lib/server/providers.server', async () => {
 			return currentTestProviders().definitionService;
 		},
 		getDefinitionService: () => currentTestProviders().definitionService,
+		getOrgAssetService: () => {
+			const config = currentTestProviders().config;
+			return new OrgAssetService(config.data.orgs, config.storage);
+		},
 		flag: (name: string) =>
 			Boolean((currentTestProviders().flags as Record<string, unknown>)[name]),
 		getAuthProvider: () => currentTestProviders().config.auth,

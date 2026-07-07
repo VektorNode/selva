@@ -1,7 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net48;net7.0;net9.0</TargetFrameworks>
+		<!-- net48 (WindowsForms) and net9.0 Grasshopper (transitive WindowsForms) don't
+		     resolve on the macOS SDK; on non-Windows build only net7.0 (Rhino 8 for Mac). -->
+		<TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net48;net7.0;net9.0</TargetFrameworks>
+		<TargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net7.0</TargetFrameworks>
 		<LangVersion>latest</LangVersion>
 		<RootNamespace>Selva.Drawing.RhinoInterop</RootNamespace>
 	</PropertyGroup>

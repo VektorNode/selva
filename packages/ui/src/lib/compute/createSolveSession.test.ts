@@ -67,4 +67,19 @@ describe('createSolveSession.setValue', () => {
 		session.setValue('a', 'y', true);
 		expect(driver.solves.length).toBe(1);
 	});
+
+	it('never echoes output-keyed values back to the driver', () => {
+		const driver = recordingDriver();
+		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
+		// A solve result merges outputs into the session's values map (how widgets
+		// like dynamic value lists read them) — e.g. a multi-MB options payload.
+		session.report({ outputs: { out: { options: { huge: 'payload' } } } });
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(1);
+		expect(driver.solves[0].a).toBe('y');
+		// The output entry lives in session.values for widgets…
+		expect(session.values.out).toBeDefined();
+		// …but must not travel back through the transport.
+		expect(driver.solves[0]).not.toHaveProperty('out');
+	});
 });

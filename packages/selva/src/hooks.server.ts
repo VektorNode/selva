@@ -313,10 +313,16 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		if (!user) {
 			if (isJsonApiRoute) {
 				return applySecurityHeaders(
-					new Response(JSON.stringify({ message: 'Unauthorized', code: 'UNAUTHORIZED' }), {
-						status: 401,
-						headers: { 'Content-Type': 'application/json' }
-					}),
+					new Response(
+						JSON.stringify({
+							message: 'Your session has expired. Sign in again to continue.',
+							code: 'UNAUTHORIZED'
+						}),
+						{
+							status: 401,
+							headers: { 'Content-Type': 'application/json' }
+						}
+					),
 					pathname
 				);
 			}

@@ -22,7 +22,13 @@ export function transformInputParameter(
 		name: input.nickname,
 		nickname: input.nickname || null,
 		description: input.description || '',
-		paramType: input.paramType,
+		// Dynamic value lists ride the ValueList contract on the wire — the plugin's
+		// GetDynamicValueListParameter deliberately reuses TypeName "ValueList" so the
+		// compute fork's existing ValueList input case assigns it. processInput has no
+		// dynamicValueList handler; without this mapping it falls back to Geometry with
+		// a null default and TreeBuilder DROPS the input, so the user's selection never
+		// reaches the definition (the param then solves on its own stale fallback).
+		paramType: input.paramType === 'dynamicValueList' ? 'valueList' : input.paramType,
 		treeAccess: input.inputStructure === 'tree',
 		minimum: input.minimum ?? null,
 		maximum: input.maximum ?? null,
@@ -33,5 +39,14 @@ export function transformInputParameter(
 		default: value ?? input.default
 	};
 
-	return processInput(raw);
+	const processed = processInput(raw);
+	// processInput's default-normalization only understands scalars and innerTree
+	// objects — a plain array default (multi-select widgets, e.g. a dynamic value
+	// list checklist) is dropped as "malformed", which would omit the input from
+	// the solve entirely. Restore it; TreeBuilder.appendFlat handles arrays natively.
+	const effective = value ?? input.default;
+	if (Array.isArray(effective) && processed.default == null) {
+		(processed as { default: unknown }).default = effective;
+	}
+	return processed;
 }

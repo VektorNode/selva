@@ -86,6 +86,26 @@ export function applyValueChange(
 }
 
 /**
+ * Projects the session's live values down to solve INPUTS. Solve outputs are merged
+ * into the same values map after each solve (applySolveResult) so widgets like
+ * dynamic value lists can read them — but they are not solve inputs, and echoing
+ * them back to the driver re-uploads potentially MB-sized payloads (a measured
+ * 6.4 MB options list) that no backend reads. Every transport gets this projection
+ * for free by going through the session's dispatch.
+ */
+export function pickInputValues(
+	schema: UISchema | undefined,
+	values: Record<string, unknown>
+): Record<string, unknown> {
+	if (!schema?.inputs) return values;
+	const picked: Record<string, unknown> = {};
+	for (const input of schema.inputs) {
+		if (input.id in values) picked[input.id] = values[input.id];
+	}
+	return picked;
+}
+
+/**
  * Merges a reported solve result into the state and clears the post-solve lifecycle
  * flags. Missing result arrays are treated as empty.
  */

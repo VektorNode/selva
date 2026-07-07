@@ -12,6 +12,7 @@ import {
 	makeInitialFlags,
 	applyValueChange,
 	applySolveResult,
+	pickInputValues,
 	type SolveSessionState
 } from './solve-session-core';
 
@@ -75,7 +76,9 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 	});
 
 	function dispatch() {
-		args.driver.solve($state.snapshot(state.values));
+		// Input values only: outputs merged into state.values (for widgets that read
+		// them, e.g. dynamic value lists) must not be echoed back to the transport.
+		args.driver.solve(pickInputValues(currentSchema, $state.snapshot(state.values)));
 	}
 
 	return {
