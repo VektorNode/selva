@@ -119,6 +119,25 @@ describe('transformInputParameter — value-list / file / color / generic', () =
 		expect(out).toMatchObject({ paramType: 'ValueList', default: '1' });
 	});
 
+	// Regression: processInput has no dynamicValueList handler, so without the explicit
+	// mapping it fell to the Geometry fallback with a null default — and fromInputParams
+	// then DROPPED the input, so the user's selection never reached the definition.
+	// The plugin's GetDynamicValueListParameter reuses the ValueList wire contract
+	// (TypeName "ValueList"), so ValueList is the correct target type.
+	it('maps dynamicValueList to ValueList, carrying the selected value', () => {
+		const out = transformInputParameter(
+			input({ paramType: 'dynamicValueList', default: '0' }),
+			'3.5'
+		);
+		expect(out).toMatchObject({ paramType: 'ValueList', default: '3.5' });
+	});
+
+	it('maps dynamicValueList checklist (array value) to ValueList, carrying all selections', () => {
+		const out = transformInputParameter(input({ paramType: 'dynamicValueList' }), ['a', 'b']);
+		expect(out.paramType).toBe('ValueList');
+		expect(out.default).toEqual(['a', 'b']);
+	});
+
 	it('maps file to File', () => {
 		const out = transformInputParameter(input({ paramType: 'file' }), { fileName: 'a.3dm' });
 		expect(out.paramType).toBe('File');

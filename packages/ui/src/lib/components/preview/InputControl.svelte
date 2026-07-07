@@ -110,82 +110,34 @@
 	);
 
 	// When a dynamic value list recomputes, a previously-selected value may no longer be an
-	// available option. Prune the stale selection so the control shows a valid option (or empty)
-	// instead of rendering the orphaned raw value as its own label. This is a system-initiated
-	// change (the user didn't pick the new option), so force a solve — otherwise manual-solve
-	// schemas would keep the prior output on screen, making it look like the auto-picked option
-	// produced it.
-	// Distinguishes "never selected" from "user deliberately cleared": the empty→
-	// first-option fallback below must not fight a real user action (e.g. unchecking
-	// every checklist entry), only fill the initial void.
-	let userTouched = false;
-
-	// Loop breaker for the system fallback. A definition whose computed options
-	// DEPEND on the selection can oscillate: auto-pick A → solve → new options
-	// exclude A → auto-pick B → solve → … Each cycle force-solves and re-renders
-	// the option list, which can run a tab out of memory. Bound consecutive
-	// system-initiated picks; any real user commit resets the budget.
-	const MAX_CONSECUTIVE_AUTO_PICKS = 3;
-	let autoPickCount = 0;
-
+	// available option. Prune the stale selection so the control shows a valid option instead
+	// of rendering the orphaned raw value as its own label. This is a system-initiated change
+	// (the user didn't pick the new option), so force a solve — otherwise manual-solve schemas
+	// would keep the prior output on screen, making it look like the auto-picked option produced it.
+	//
+	// INVARIANT: a dynamic value list must never dispatch an empty/null value to solve. There
+	// is always at least one option, and an empty selection reaches the definition as null/""
+	// — which throws NREs in downstream geometry components (e.g. Bounding Rectangle) and nulls
+	// every output beyond them. So every terminal state below resolves to a valid option; there
+	// is deliberately no "user cleared it, stay empty" path.
 	$effect(() => {
 		if (!isDynamicValueListWidget(item) || !dynamicListHasOptions) return;
 		const validValues = new Set(Object.values(dynamicListOptions));
 		const firstOption = Object.values(dynamicListOptions)[0];
-		// Selection is valid → stable state reached; refill the auto-pick budget.
-		const isValid = Array.isArray(value)
-			? value.length > 0 && value.every((v) => typeof v === 'string' && validValues.has(v))
-			: typeof value === 'string' && value !== '' && validValues.has(value);
-		if (isValid) {
-			autoPickCount = 0;
-			return;
-		}
-		if (autoPickCount >= MAX_CONSECUTIVE_AUTO_PICKS) {
-			console.warn(
-				`[InputControl] dynamic value list "${item.paramId}": options keep invalidating the ` +
-					`auto-picked selection (${autoPickCount} consecutive system picks) — the definition's ` +
-					`options likely depend on the selection. Stopping auto-reconciliation to avoid a solve loop.`
-			);
-			return;
-		}
-		// Route through onChange (not commit) — value is a one-way prop here, so writing it
-		// directly from an effect trips Svelte's binding-ownership check.
-		// A NEVER-made selection (empty string/array, e.g. no default on a fresh page)
-		// gets the same first-option fallback as a stale one: an empty selection solves
-		// as an empty string, which cascades through the definition as null-data errors
-		// ("File not found: .dmf", Text→Number conversion failures, …) and the empty
-		// result then gets replayed by the solve caches.
-		// Diagnostic: each system pick logs itself — a runaway sequence of these lines
-		// (pick #1, #2, #3 + the loop-breaker warning) is the solve-loop signature.
-		const logAutoPick = (picked: string) =>
-			console.info(
-				`[DVL] auto-pick #${autoPickCount} on "${item.paramId}": "${picked.slice(0, 60)}" ` +
-					`(was ${JSON.stringify(Array.isArray(value) ? value.slice(0, 3) : value)?.slice(0, 80)})`
-			);
 		if (Array.isArray(value)) {
 			const pruned = value.filter((v) => typeof v === 'string' && validValues.has(v));
-			if (pruned.length !== value.length || (value.length === 0 && !userTouched)) {
-				// Fall back to first option when the checklist is fully pruned or was
-				// never selected; a user-cleared checklist stays empty.
-				autoPickCount++;
-				logAutoPick(pruned.length > 0 ? String(pruned[0]) : firstOption);
+			// Empty (never selected or fully pruned) always falls back to the first option —
+			// a checklist that solves empty produces the same null cascade as a single value.
+			if (pruned.length !== value.length || value.length === 0) {
 				onChange(item.paramId, pruned.length > 0 ? pruned : [firstOption], true);
 			}
-		} else if (
-			(typeof value === 'string' && value && !validValues.has(value)) ||
-			((value == null || value === '') && !userTouched)
-		) {
-			// Stale single value, or never-selected — fall back to the first option.
-			autoPickCount++;
-			logAutoPick(firstOption);
+		} else if (typeof value !== 'string' || value === '' || !validValues.has(value)) {
+			// Never-selected or stale single value — fall back to the first option.
 			onChange(item.paramId, firstOption, true);
 		}
 	});
 
 	function commit(newValue: SupportedTypes) {
-		userTouched = true;
-		// A real user pick re-arms the system fallback (see autoPickCount above).
-		autoPickCount = 0;
 		value = newValue;
 		onChange(item.paramId, newValue);
 	}
