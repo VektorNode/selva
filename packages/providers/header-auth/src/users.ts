@@ -63,14 +63,15 @@ export interface AllowlistStore {
 	listUsers(): Promise<AllowlistEntry[]>;
 	createUser(upn: string): Promise<AllowlistEntry>;
 	/**
-	 * Fill in fields from upstream-proxy headers on first sight. Only writes
-	 * when the row is missing the field — never overwrites operator-edited
-	 * values.
+	 * Mirror identity fields from upstream-proxy headers. The proxy/IdP is the
+	 * source of truth for email and display name: a stored value is replaced
+	 * whenever the forwarded header differs, so IdP-side renames — and fixes to
+	 * a misconfigured proxy that used to forward the wrong claim (e.g. the OIDC
+	 * `sub` as display name) — heal the row on the user's next visit. An absent
+	 * header leaves the stored value untouched; hand-edits to these two fields
+	 * in the allowlist JSON do not survive the user's next login.
 	 */
-	materializeFromHeaders(
-		id: string,
-		fields: { email?: string; displayName?: string }
-	): Promise<void>;
+	syncFromHeaders(id: string, fields: { email?: string; displayName?: string }): Promise<void>;
 	/**
 	 * Repoint a row's UPN to the value the proxy actually forwards. Called once
 	 * after an email-fallback match so subsequent logins resolve via the fast
@@ -129,16 +130,16 @@ export function createAllowlistStore(filePath: string): AllowlistStore {
 			return entry;
 		},
 
-		async materializeFromHeaders(id, fields) {
+		async syncFromHeaders(id, fields) {
 			const file = await readFile(filePath);
 			const user = file.users.find((u) => u.id === id);
 			if (!user) return;
 			let dirty = false;
-			if (!user.email && fields.email) {
+			if (fields.email && user.email !== fields.email) {
 				user.email = fields.email;
 				dirty = true;
 			}
-			if (!user.displayName && fields.displayName) {
+			if (fields.displayName && user.displayName !== fields.displayName) {
 				user.displayName = fields.displayName;
 				dirty = true;
 			}

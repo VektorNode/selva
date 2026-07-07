@@ -169,6 +169,27 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 		expect(refetched?.email).toBe('alice@example.com');
 	});
 
+	it('updates a stale display name on the next visit after the proxy is corrected', async () => {
+		const created = await provider.createUser('alice@example.com');
+		// A misconfigured proxy forwarded the OIDC `sub` claim as the display name.
+		await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({
+				[DEFAULT_HEADERS.upn]: 'alice@example.com',
+				[DEFAULT_HEADERS.displayName]: 'Ej__G0eDRH1ab4_YZwLd20HrAOHeMAEk14xhmBW5Zfk'
+			})
+		);
+		// Proxy fixed — the very next visit heals the stored row.
+		const result = await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({
+				[DEFAULT_HEADERS.upn]: 'alice@example.com',
+				[DEFAULT_HEADERS.displayName]: 'Alice Anderson'
+			})
+		);
+		expect(result?.metadata?.displayName).toBe('Alice Anderson');
+		const refetched = await provider.getUser(created.id);
+		expect(refetched?.metadata?.displayName).toBe('Alice Anderson');
+	});
+
 	it('resolves a row pre-allowlisted by email when the proxy UPN differs', async () => {
 		// Entra norm: admin allowlists by mail, proxy forwards a different UPN.
 		const created = await provider.createUser('alice@company.com');

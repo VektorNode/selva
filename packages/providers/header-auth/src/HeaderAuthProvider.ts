@@ -198,12 +198,14 @@ class HeaderProxyAuth implements IProxyAuth {
 			return null;
 		}
 
-		// First-sight materialization: fill in display-name / email from the
-		// proxy if the row is still bare. Never overwrites operator edits.
-		if ((!entry.email && email) || (!entry.displayName && displayName)) {
-			await this.users.materializeFromHeaders(entry.id, { email, displayName }).catch(() => {});
-			if (email && !entry.email) entry.email = email;
-			if (displayName && !entry.displayName) entry.displayName = displayName;
+		// Mirror email / display-name from the proxy whenever they drift. The
+		// IdP is the source of truth, so IdP renames and corrected proxy
+		// header mappings propagate on the next visit instead of the first
+		// materialized value sticking forever.
+		if ((email && entry.email !== email) || (displayName && entry.displayName !== displayName)) {
+			await this.users.syncFromHeaders(entry.id, { email, displayName }).catch(() => {});
+			if (email) entry.email = email;
+			if (displayName) entry.displayName = displayName;
 		}
 
 		await this.users.touchLastLogin(entry.id).catch(() => {});

@@ -11,6 +11,7 @@ import {
 	type DefinitionRecord,
 	type ShareLink
 } from '@selvajs/platform';
+import { LocalDataProvider } from '../LocalDataProvider.js';
 import { LocalOrgStore, LocalOrgStoreLoader } from '../LocalOrgStore.js';
 import { LocalProjectStore } from '../LocalProjectStore.js';
 import { LocalDefinitionStore } from '../LocalDefinitionStore.js';
@@ -208,6 +209,48 @@ describe('Cross-store cascade', () => {
 		// Org B membership and its project membership are untouched.
 		expect(await orgs.getOrgMember(ctxFor(ownerBId), orgBId, memberId)).not.toBeNull();
 		expect(await projects.getProjectMember(ctxFor(ownerBId), projectBId, memberId)).not.toBeNull();
+	});
+
+	it('onUserDeleted soft-deletes the user’s org memberships (no orphaned roster rows)', async () => {
+		const ownerId = randomUUID();
+		const memberId = randomUUID();
+		const orgId = randomUUID();
+		const now = new Date().toISOString();
+		const ownerCtx = ctxFor(ownerId);
+
+		const dataProvider = LocalDataProvider.fromEnv({
+			DATA_PATH: tempDir,
+			SELVA_AT_REST_KEY: Buffer.alloc(32, 0x42).toString('hex')
+		});
+
+		await dataProvider.orgs.createOrg(ownerCtx, {
+			id: orgId,
+			name: 'Acme',
+			slug: 'acme',
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await dataProvider.orgs.addOrgMember(ownerCtx, {
+			orgId,
+			userId: memberId,
+			role: 'member',
+			permissions: [],
+			joinedAt: now,
+			updatedAt: now,
+			updatedBy: ownerId,
+			deletedAt: null
+		});
+		await dataProvider.ensureUser(SYSTEM_CONTEXT, memberId);
+
+		await dataProvider.onUserDeleted(SYSTEM_CONTEXT, memberId);
+
+		expect(await dataProvider.orgs.getOrgMember(ownerCtx, orgId, memberId)).toBeNull();
+		// Tolerates a user with no memberships and no user-data row.
+		await expect(dataProvider.onUserDeleted(SYSTEM_CONTEXT, memberId)).resolves.toBeUndefined();
 	});
 
 	it('share-link getByTokenHash returns null when parent definition is soft-deleted (§7)', async () => {
