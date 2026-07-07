@@ -3,6 +3,7 @@
 	import UpdateSection from './UpdateSection.svelte';
 	import ChannelSection from './ChannelSection.svelte';
 	import HealthSection from './HealthSection.svelte';
+	import NetworkSection from './NetworkSection.svelte';
 
 	interface PageData {
 		canManageUpdates: boolean;
@@ -481,6 +482,7 @@
 
 	{#if data.isInstanceAdmin}
 		<HealthSection />
+		<NetworkSection />
 	{/if}
 
 	{#if data.canManageUpdates}
