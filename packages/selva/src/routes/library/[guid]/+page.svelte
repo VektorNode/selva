@@ -101,6 +101,16 @@
 
 		if (signal.aborted) return { outputs: {} };
 
+		// Session expiry surfaces two ways: our hook answers 401 (possibly with the
+		// body stripped by an SSO proxy, so don't rely on it), or a proxy/route
+		// redirects the fetch to the login page (200 HTML — would die in JSON.parse).
+		const redirectedToLogin = res.redirected && new URL(res.url).pathname === '/login';
+		if (res.status === 401 || redirectedToLogin) {
+			throw new Error(
+				'Your session has expired. Sign in again in a new tab, then re-run — your inputs are preserved.'
+			);
+		}
+
 		if (!res.ok) {
 			if (res.status === 503) {
 				throw new Error('Compute server is offline or unreachable. Please try again later.');
@@ -112,7 +122,7 @@
 				throw new Error(d.message || `Rate limit reached. Try again in ${retryAfter}s.`);
 			}
 			const d = await res.json().catch(() => ({}));
-			throw new Error(d.message || 'Compute error');
+			throw new Error(d.message || `Compute error (HTTP ${res.status})`);
 		}
 
 		// Headers are in — everything up to here is time-to-first-byte (solve/server).
@@ -127,7 +137,20 @@
 
 		// JSON decode of the payload string.
 		const jsonStart = performance.now();
-		const solved = JSON.parse(bodyText);
+		let solved;
+		try {
+			solved = JSON.parse(bodyText);
+		} catch (err) {
+			// A 200 with a non-JSON body means something between us and the server
+			// (SSO proxy, gateway) replaced the response. Raw SyntaxError is useless
+			// to the user — name the likely fix instead.
+			throw new Error(
+				'Received an invalid response from the server. Reload the page and try again.',
+				{
+					cause: err
+				}
+			);
+		}
 		const processor = new GrasshopperResponseProcessor(solved, false);
 		const jsonMs = performance.now() - jsonStart;
 
