@@ -43,6 +43,13 @@ export class SentryErrorReporter implements IErrorReporter {
 		try {
 			// Dynamic so the package stays optional. `@vite-ignore` keeps the
 			// bundler from trying to resolve it at build time when it's absent.
+			// `@ts-ignore` (not `@ts-expect-error`) because whether the module
+			// resolves at type-check time depends on the environment — it's a real
+			// dep in some installs, absent in others — so we can't assert the error
+			// is always present. The `as unknown as` cast narrows whatever loads to
+			// the two calls we use.
+			// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+			// @ts-ignore -- optional dependency, may be absent at type-check time
 			const sentry = (await import(/* @vite-ignore */ '@sentry/node')) as unknown as SentryLike;
 			sentry.init({
 				dsn: opts.dsn,

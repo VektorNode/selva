@@ -1,0 +1,49 @@
+{
+	"name": "@selvajs/server",
+	"version": "0.1.0",
+	"description": "Transport-agnostic compute/solve server building blocks for apps built on the Selva engine (limits, rate limiting, SSRF guard, input transform)",
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/VektorNode/selva.git",
+		"directory": "packages/server"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./compute": {
+			"source": "./src/compute/index.ts",
+			"types": "./dist/compute/index.d.ts",
+			"import": "./dist/compute/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@selvajs/compute": "catalog:",
+		"@selvajs/schemas": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/node": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	}
+}

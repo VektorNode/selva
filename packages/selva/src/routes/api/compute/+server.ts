@@ -13,7 +13,7 @@ import {
 	COMPUTE_DEBUG,
 	type CachedClient
 } from '$lib/server/compute/clientCache.server';
-import { assertSafeRemoteDefinitionUrl } from '$lib/server/compute/safe-url';
+import { assertSafeRemoteDefinitionUrl, transformInputParameter } from '@selvajs/server/compute';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import {
 	COMPUTE_REQUEST_MAX_BYTES,
@@ -28,7 +28,6 @@ import { getStorageProvider, getSolveMetricSink, providers } from '$lib/server/p
 import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
 import { fetchSchemaFromCompute } from '$lib/server/definitions/schemaExtraction.server';
-import { transformInputParameter } from '$lib/server/compute/transform-input';
 import { gzipSync } from 'node:zlib';
 
 interface ComputeRequest {

@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { transformInputParameter } from '$lib/server/compute/transform-input';
+import { transformInputParameter } from '../transform-input.js';
 import type { SchemaInput } from '@selvajs/schemas';
 
 type Input = SchemaInput & { minimum?: number; maximum?: number; stepSize?: number };

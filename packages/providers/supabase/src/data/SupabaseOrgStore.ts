@@ -12,13 +12,13 @@ import type {
 import {
 	DEFAULT_ORG_PERMISSIONS,
 	ProviderError,
-	auditSoftDelete,
 	actorFrom,
 	NoopEventSink
 } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
+import { stampSoftDelete, stampUpdate } from './rowStamp.js';
 
 /** Explicit column list for `orgs` — every field `rowToOrg` consumes. */
 const ORG_COLUMNS =
@@ -121,11 +121,10 @@ export class SupabaseOrgStore implements IOrgStore {
 		// Callers pass the full merged map; store it wholesale (JSONB column).
 		if (patch.assets !== undefined) row.assets = patch.assets;
 		if (Object.keys(row).length === 0) return;
-		// `updated_at` is set by the trg_orgs_updated_at trigger; `updated_by`
-		// is not, so stamp it here. ctx.userId can be empty in system contexts —
-		// the DB FK is `on delete set null` so passing empty would fail; let it
-		// fall back to whatever's already on the row by omitting in that case.
-		if (ctx.userId) row.updated_by = ctx.userId;
+		// `updated_at` is set by the trg_orgs_updated_at trigger; `stampUpdate`
+		// only adds `updated_by`, and only when ctx.userId is set (empty on
+		// system contexts would violate the `on delete set null` FK).
+		Object.assign(row, stampUpdate(ctx));
 
 		const { error, data } = await this.clients
 			.forRequest(ctx)
@@ -143,8 +142,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		// projects → project_members, definitions. Hard delete is reserved for
 		// the background janitor; user-facing deletes preserve the audit trail.
 		const client = this.clients.forRequest(ctx);
-		const stamp = auditSoftDelete(ctx, ctx.userId);
-		const stampRow = stampToRow(stamp);
+		const stampRow = stampSoftDelete(ctx);
 
 		// Org itself.
 		const { error: orgErr, data: orgData } = await client
@@ -301,9 +299,9 @@ export class SupabaseOrgStore implements IOrgStore {
 		// a duplicate-key error. Mirrors LocalOrgStore.addOrgMember.
 		const row: Record<string, unknown> = {
 			...memberToRow(member),
-			deleted_at: null
+			deleted_at: null,
+			...stampUpdate(ctx)
 		};
-		if (ctx.userId) row.updated_by = ctx.userId;
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
@@ -326,9 +324,9 @@ export class SupabaseOrgStore implements IOrgStore {
 		// Role change re-seeds default permissions. Matches LocalOrgStore.
 		const row: Record<string, unknown> = {
 			role,
-			permissions: [...DEFAULT_ORG_PERMISSIONS[role]]
+			permissions: [...DEFAULT_ORG_PERMISSIONS[role]],
+			...stampUpdate(ctx)
 		};
-		if (ctx.userId) row.updated_by = ctx.userId;
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
@@ -358,8 +356,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		// Replace permissions only. Matches LocalOrgStore.updateOrgMemberPermissions —
 		// distinct from role change so callers can grant a finer-grained set without
 		// re-seeding defaults from the role.
-		const row: Record<string, unknown> = { permissions: [...permissions] };
-		if (ctx.userId) row.updated_by = ctx.userId;
+		const row: Record<string, unknown> = { permissions: [...permissions], ...stampUpdate(ctx) };
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
@@ -387,8 +384,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		// cascade BEFORE the org_member update so RLS policies that gate
 		// project_members on org_member existence still pass for the duration.
 		const client = this.clients.forRequest(ctx);
-		const stamp = auditSoftDelete(ctx, ctx.userId);
-		const stampRow = stampToRow(stamp);
+		const stampRow = stampSoftDelete(ctx);
 
 		const { data: orgProjects, error: projError } = await client
 			.from('projects')
@@ -422,26 +418,6 @@ export class SupabaseOrgStore implements IOrgStore {
 			actorId: actorFrom(ctx)
 		});
 	}
-}
-
-/**
- * Build a row payload from an audit-soft-delete stamp. `updated_by` only
- * goes into the row when ctx.userId is set — passing `''` would violate the
- * `references auth.users(id)` FK on system contexts. The DB trigger sets
- * `updated_at`, but for soft-delete we set it explicitly so it matches
- * `deleted_at` (single timestamp for the deletion event).
- */
-function stampToRow(stamp: {
-	updatedAt: string;
-	updatedBy: string;
-	deletedAt: string;
-}): Record<string, unknown> {
-	const row: Record<string, unknown> = {
-		deleted_at: stamp.deletedAt,
-		updated_at: stamp.updatedAt
-	};
-	if (stamp.updatedBy) row.updated_by = stamp.updatedBy;
-	return row;
 }
 
 // ============================================================================

@@ -12,10 +12,11 @@ import type {
 	Page,
 	UISchema
 } from '@selvajs/platform';
-import { ProviderError, auditSoftDelete, actorFrom, NoopEventSink } from '@selvajs/platform';
+import { ProviderError, actorFrom, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
+import { stampSoftDelete, stampUpdate } from './rowStamp.js';
 
 /** Explicit column list for `definitions` — every field `rowToRecord` consumes. */
 const DEFINITION_COLUMNS =
@@ -151,7 +152,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	async update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void> {
 		const row = patchToRow(patch);
 		if (Object.keys(row).length === 0) return;
-		if (ctx.userId) row.updated_by = ctx.userId;
+		Object.assign(row, stampUpdate(ctx));
 
 		const { data, error } = await this.clients
 			.forRequest(ctx)
@@ -168,16 +169,10 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		// Soft-delete (matches the local provider and spec §9). A retention
 		// sweep running as service-role hard-deletes later, which cascades
 		// versions + share_links via FK.
-		const stamp = auditSoftDelete(ctx, ctx.userId);
-		const row: Record<string, unknown> = {
-			deleted_at: stamp.deletedAt,
-			updated_at: stamp.updatedAt
-		};
-		if (stamp.updatedBy) row.updated_by = stamp.updatedBy;
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('definitions')
-			.update(row)
+			.update(stampSoftDelete(ctx))
 			.eq('guid', guid)
 			.is('deleted_at', null);
 		if (error) throw mapPostgrestError(error);
@@ -314,9 +309,9 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		const row: Record<string, unknown> = {
 			live_version_id: versionId,
 			draft_version_id: versionId,
-			status: 'draft'
+			status: 'draft',
+			...stampUpdate(ctx)
 		};
-		if (ctx.userId) row.updated_by = ctx.userId;
 
 		const { data, error } = await client
 			.from('definitions')
@@ -349,8 +344,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			throw new ProviderError(`Version '${versionId}' not found for this definition`, 404);
 		}
 
-		const row: Record<string, unknown> = { [column]: versionId };
-		if (ctx.userId) row.updated_by = ctx.userId;
+		const row: Record<string, unknown> = { [column]: versionId, ...stampUpdate(ctx) };
 		const { data, error } = await client
 			.from('definitions')
 			.update(row)

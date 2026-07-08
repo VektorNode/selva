@@ -8,10 +8,11 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { ProviderError, auditSoftDelete, actorFrom, NoopEventSink } from '@selvajs/platform';
+import { ProviderError, actorFrom, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
+import { stampSoftDelete, stampUpdate } from './rowStamp.js';
 
 /** Explicit column list for `projects` — every field `rowToProject` consumes. */
 const PROJECT_COLUMNS =
@@ -130,7 +131,7 @@ export class SupabaseProjectStore implements IProjectStore {
 		if (patch.visibility !== undefined) row.visibility = patch.visibility;
 		if (patch.autoJoinOnUpload !== undefined) row.auto_join_on_upload = patch.autoJoinOnUpload;
 		if (Object.keys(row).length === 0) return;
-		if (ctx.userId) row.updated_by = ctx.userId;
+		Object.assign(row, stampUpdate(ctx));
 
 		const { data, error } = await this.clients
 			.forRequest(ctx)
@@ -148,8 +149,7 @@ export class SupabaseProjectStore implements IProjectStore {
 		// project_members, definitions. FK CASCADE doesn't fire on soft-delete,
 		// so the cascade is in app code.
 		const client = this.clients.forRequest(ctx);
-		const stamp = auditSoftDelete(ctx, ctx.userId);
-		const stampRow = stampToRow(stamp);
+		const stampRow = stampSoftDelete(ctx);
 
 		const { data, error } = await client
 			.from('projects')
@@ -261,9 +261,9 @@ export class SupabaseProjectStore implements IProjectStore {
 		// duplicate-key. Mirrors LocalProjectStore.addProjectMember.
 		const row: Record<string, unknown> = {
 			...projectMemberToRow(member),
-			deleted_at: null
+			deleted_at: null,
+			...stampUpdate(ctx)
 		};
-		if (ctx.userId) row.updated_by = ctx.userId;
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('project_members')
@@ -283,8 +283,7 @@ export class SupabaseProjectStore implements IProjectStore {
 		userId: string,
 		role: ProjectRole
 	): Promise<void> {
-		const row: Record<string, unknown> = { role };
-		if (ctx.userId) row.updated_by = ctx.userId;
+		const row: Record<string, unknown> = { role, ...stampUpdate(ctx) };
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('project_members')
@@ -306,11 +305,10 @@ export class SupabaseProjectStore implements IProjectStore {
 	}
 
 	async removeProjectMember(ctx: RequestContext, projectId: string, userId: string): Promise<void> {
-		const stamp = auditSoftDelete(ctx, ctx.userId);
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('project_members')
-			.update(stampToRow(stamp))
+			.update(stampSoftDelete(ctx))
 			.eq('project_id', projectId)
 			.eq('user_id', userId)
 			.is('deleted_at', null);
@@ -416,24 +414,4 @@ function projectMemberToRow(m: ProjectMember): ProjectMemberRow {
 		role: m.role,
 		joined_at: m.joinedAt
 	};
-}
-
-/**
- * Build a row payload from an audit-soft-delete stamp. `updated_by` only goes
- * into the row when ctx.userId is set — passing `''` would violate the
- * `references auth.users(id)` FK on system contexts. The DB trigger sets
- * `updated_at`, but for soft-delete we set it explicitly so it matches
- * `deleted_at` (single timestamp for the deletion event).
- */
-function stampToRow(stamp: {
-	updatedAt: string;
-	updatedBy: string;
-	deletedAt: string;
-}): Record<string, unknown> {
-	const row: Record<string, unknown> = {
-		deleted_at: stamp.deletedAt,
-		updated_at: stamp.updatedAt
-	};
-	if (stamp.updatedBy) row.updated_by = stamp.updatedBy;
-	return row;
 }

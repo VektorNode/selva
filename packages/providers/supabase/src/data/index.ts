@@ -17,6 +17,8 @@ export type {
 	SelvaSchemaClient
 } from './client.js';
 export { mapPostgrestError } from './errors.js';
+export { stampUpdate, stampSoftDelete } from './rowStamp.js';
+export { notDeleted } from './query.js';
 export {
 	toRange,
 	orderColumn,
