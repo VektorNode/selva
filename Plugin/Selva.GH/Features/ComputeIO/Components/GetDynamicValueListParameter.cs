@@ -25,6 +25,13 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     private GH_ValueListDataGoo[] _contextual;
     private DataTree<GH_ValueListDataGoo> _contextualDataTree;
 
+    // The raw selected value strings, exactly as applied by the UI (e.g. "Use Smallest."). Kept
+    // separately from _contextual so the selection can be re-resolved against the option set at
+    // emit time — when a wired initial-options source populates _storedItems on the SAME solve,
+    // the apply may run before those options are read, so resolving eagerly would freeze the wrong
+    // (unmatched, name-not-expression) value. See EmitData.
+    private List<string> _selectedValues;
+
     // The currently-known options (name -> expression). Populated by the UI on apply (LoadItems) and
     // persisted so a saved document round-trips its last-known options for Rhino.Compute.
     private List<(string Name, string Expression)> _storedItems = new List<(string Name, string Expression)>();
@@ -127,7 +134,11 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     /// </summary>
     public void SetValues(IEnumerable<string> values)
     {
-        _contextual = values.Select(ToGoo).ToArray();
+        // Record the raw selection; the goos are (re)built at emit time so the selection resolves
+        // against the option set current on the emitting solve — not whatever _storedItems held at
+        // apply time (which is empty when the apply precedes reading a wired initial-options source).
+        _selectedValues = values.ToList();
+        _contextual = _selectedValues.Select(ToGoo).ToArray();
         ExpireSolution(false);
     }
 
@@ -193,6 +204,7 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     {
         _contextual = null;
         _contextualDataTree = null;
+        _selectedValues = null;
     }
 
     /// <summary>
@@ -244,8 +256,19 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     {
         m_data.Clear();
 
-        if (_contextual != null)
+        // Read wired initial options first so the option set is current before we resolve any
+        // selection. Otherwise a selection applied earlier in this solve (before sources were read)
+        // stays resolved against an empty option set and emits the raw name instead of its expression.
+        var initialOptions = ReadInitialOptionsFromSources();
+        if (initialOptions.Count > 0)
         {
+            _storedItems = initialOptions;
+        }
+
+        // A UI selection re-resolved against the now-current options.
+        if (_selectedValues != null)
+        {
+            _contextual = _selectedValues.Select(ToGoo).ToArray();
             m_data.AppendRange(_contextual, new GH_Path(0));
             return;
         }
@@ -260,10 +283,9 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
             return;
         }
 
-        var initialOptions = ReadInitialOptionsFromSources();
-        if (initialOptions.Count > 0)
+        // No selection yet: emit the first wired option as the default when one exists.
+        if (_storedItems.Count > 0)
         {
-            _storedItems = initialOptions;
             var first = _storedItems[0];
             m_data.Append(new GH_ValueListDataGoo(first.Expression, _storedItems, 0), new GH_Path(0));
             return;
@@ -342,6 +364,21 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
 
         writer.SetString("StoredItems", itemsJson.ToString());
 
+        // Persist the raw UI selection so it round-trips on document reload. Stored as the raw
+        // applied strings (not resolved expressions) so it re-resolves against the option set on
+        // the next solve — matching how a live apply is handled. Without this, the selection is
+        // lost on load and the param emits an empty placeholder until re-applied from the UI.
+        if (_selectedValues != null)
+        {
+            var selectedJson = new JArray();
+            foreach (var value in _selectedValues)
+            {
+                selectedJson.Add(value ?? string.Empty);
+            }
+
+            writer.SetString("SelectedValues", selectedJson.ToString());
+        }
+
         return base.Write(writer);
     }
 
@@ -393,6 +430,23 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
                         item["expression"]?.ToString() ?? ""
                     ));
                 }
+            }
+            catch
+            {
+                // Ignore parse errors
+            }
+        }
+
+        // Restore the persisted UI selection. Stored as raw strings; SetValues re-resolves them
+        // against the option set (including wired sources) on the next solve.
+        string selectedJson = null;
+        if (reader.TryGetString("SelectedValues", ref selectedJson) && !string.IsNullOrEmpty(selectedJson))
+        {
+            try
+            {
+                var array = JArray.Parse(selectedJson);
+                var values = array.Select(token => token?.ToString() ?? string.Empty).ToList();
+                SetValues(values);
             }
             catch
             {
