@@ -212,6 +212,9 @@ const warnedNoAuth = new Set<string>();
 
 function buildHeaders(requestId: string, config: ComputeConfig): HeadersInit {
 	const headers: HeadersInit = {
+		// Caller headers first so the transport's own headers below OVERWRITE them —
+		// a caller can never clobber the request id, content type, or auth.
+		...config.headers,
 		'X-Request-ID': requestId,
 		'Content-Type': 'application/json',
 		...(config.authToken && { Authorization: config.authToken }),

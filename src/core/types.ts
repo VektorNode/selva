@@ -67,6 +67,18 @@ export interface ComputeConfig {
 	apiKey?: string;
 	/** Optional Bearer token for authentication (e.g., when behind a proxy or API gateway) */
 	authToken?: string;
+	/**
+	 * Extra headers sent on every solve / IO request to the compute server.
+	 *
+	 * Merged UNDER the transport's own headers (`X-Request-ID`, `Content-Type`,
+	 * `Authorization`, `RhinoComputeKey`) so a caller can never accidentally
+	 * override auth or the request id. Intended for routing/telemetry hints a
+	 * reverse proxy or load balancer reads — e.g. a definition-affinity key so a
+	 * pool routes repeat solves of one definition to the same VM (its per-VM
+	 * definition/solve caches then hit). A single-node server ignores unknown
+	 * headers, so this is inert until a router exists.
+	 */
+	headers?: Record<string, string>;
 	/** Enable debug logging to the console */
 	debug?: boolean;
 	/** Suppress browser security warnings in the console */

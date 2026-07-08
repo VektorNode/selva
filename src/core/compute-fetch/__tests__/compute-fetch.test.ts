@@ -54,6 +54,42 @@ describe('fetchRhinoCompute — request shape', () => {
 		expect(headers.Authorization).toBe('Bearer xyz');
 	});
 
+	it('sends caller-supplied config.headers on the request', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
+
+		await fetchRhinoCompute(
+			'grasshopper',
+			{},
+			{ ...config, headers: { 'X-Selva-Definition': 'guid-123' } }
+		);
+
+		const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+		expect(headers['X-Selva-Definition']).toBe('guid-123');
+	});
+
+	it('never lets config.headers override the transport/auth headers', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
+
+		await fetchRhinoCompute(
+			'grasshopper',
+			{},
+			{
+				...config,
+				apiKey: 'real-key',
+				headers: {
+					RhinoComputeKey: 'attacker-key',
+					'Content-Type': 'text/plain',
+					'X-Request-ID': 'forged'
+				}
+			}
+		);
+
+		const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+		expect(headers.RhinoComputeKey).toBe('real-key');
+		expect(headers['Content-Type']).toBe('application/json');
+		expect(headers['X-Request-ID']).not.toBe('forged');
+	});
+
 	it('does not warn about missing credentials when an auth token is configured', async () => {
 		// Regression: the warning only checked apiKey, so authToken-authenticated
 		// requests to remote servers logged a spurious "no API key" warning.
