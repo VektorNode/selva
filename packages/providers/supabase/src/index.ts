@@ -12,9 +12,24 @@ export {
 	SupabaseEventSink,
 	SupabaseSolveMetricSink,
 	SupabaseAuditQuery,
-	buildClientBundle
+	buildClientBundle,
+	clientBundleFromEnv,
+	DEFAULT_SCHEMA,
+	mapPostgrestError,
+	toRange,
+	orderColumn,
+	nextCursorFromRange,
+	encodeCursor,
+	decodeCursor
 } from './data/index.js';
-export type { ClientBundle, BuildClientOptions } from './data/index.js';
+export type {
+	ClientBundle,
+	BuildClientOptions,
+	ForRequestOptions,
+	SchemaClient,
+	SelvaSchemaClient,
+	RangeSpec
+} from './data/index.js';
 
 export { SupabaseUserProfileProvider } from './userProfile/index.js';
 

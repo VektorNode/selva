@@ -17,7 +17,15 @@ import {
 	NoopEventSink
 } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
+import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
+
+/** Explicit column list for `orgs` — every field `rowToOrg` consumes. */
+const ORG_COLUMNS =
+	'id, name, slug, owner_id, assets, created_by, updated_by, created_at, updated_at, deleted_at';
+/** Explicit column list for `org_members` — every field `rowToOrgMember` consumes. */
+const ORG_MEMBER_COLUMNS =
+	'org_id, user_id, role, permissions, joined_at, updated_at, updated_by, deleted_at';
 
 /**
  * Org + org-membership store backed by Postgres. The queries rely on RLS
@@ -44,11 +52,11 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error, count } = await this.clients
 			.forRequest(ctx)
 			.from('orgs')
-			.select('*', { count: 'exact' })
+			.select(ORG_COLUMNS, { count: 'exact' })
 			.is('deleted_at', null)
 			.order(orderColumn(opts?.orderBy), { ascending: direction === 'asc' })
 			.range(range.from, range.to);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		const items = (data ?? []).map(rowToOrg);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
@@ -57,11 +65,11 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('orgs')
-			.select('*')
+			.select(ORG_COLUMNS)
 			.eq('id', id)
 			.is('deleted_at', null)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return data ? rowToOrg(data) : null;
 	}
 
@@ -69,18 +77,18 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('orgs')
-			.select('*')
+			.select(ORG_COLUMNS)
 			.eq('slug', slug)
 			.is('deleted_at', null)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return data ? rowToOrg(data) : null;
 	}
 
 	async createOrg(ctx: RequestContext, org: Organization): Promise<void> {
 		const client = this.clients.forRequest(ctx);
 		const { error } = await client.from('orgs').insert(orgToRow(org));
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 
 		// Seed owner membership so user-scoped queries can see the org post-create.
 		// Service-role bypasses RLS, but the same code path runs for user-scoped
@@ -98,7 +106,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			},
 			{ onConflict: 'org_id,user_id' }
 		);
-		if (memberError) throw mapError(memberError);
+		if (memberError) throw mapPostgrestError(memberError);
 		await this.events.emit({ type: 'org.created', orgId: org.id, actorId: actorFrom(ctx) });
 	}
 
@@ -126,7 +134,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('id', id)
 			.is('deleted_at', null)
 			.select('id');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data || data.length === 0) throw new ProviderError(`Org '${id}' not found`, 404);
 	}
 
@@ -145,7 +153,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('id', id)
 			.is('deleted_at', null)
 			.select('id');
-		if (orgErr) throw mapError(orgErr);
+		if (orgErr) throw mapPostgrestError(orgErr);
 		if (!orgData || orgData.length === 0) throw new ProviderError(`Org '${id}' not found`, 404);
 
 		// Cascade: org_members.
@@ -154,7 +162,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.update(stampRow)
 			.eq('org_id', id)
 			.is('deleted_at', null);
-		if (omErr) throw mapError(omErr);
+		if (omErr) throw mapPostgrestError(omErr);
 
 		// Cascade: projects in this org. Fetch IDs first so we can cascade to
 		// project_members and definitions in app code (Postgres FK CASCADE only
@@ -164,7 +172,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.select('id')
 			.eq('org_id', id)
 			.is('deleted_at', null);
-		if (projFetchErr) throw mapError(projFetchErr);
+		if (projFetchErr) throw mapPostgrestError(projFetchErr);
 		const projectIds = (orgProjects ?? []).map((p) => p.id as string);
 
 		const { error: projErr } = await client
@@ -172,7 +180,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.update(stampRow)
 			.eq('org_id', id)
 			.is('deleted_at', null);
-		if (projErr) throw mapError(projErr);
+		if (projErr) throw mapPostgrestError(projErr);
 
 		if (projectIds.length > 0) {
 			const { error: pmErr } = await client
@@ -180,14 +188,14 @@ export class SupabaseOrgStore implements IOrgStore {
 				.update(stampRow)
 				.in('project_id', projectIds)
 				.is('deleted_at', null);
-			if (pmErr) throw mapError(pmErr);
+			if (pmErr) throw mapPostgrestError(pmErr);
 
 			const { error: defErr } = await client
 				.from('definitions')
 				.update(stampRow)
 				.in('project_id', projectIds)
 				.is('deleted_at', null);
-			if (defErr) throw mapError(defErr);
+			if (defErr) throw mapPostgrestError(defErr);
 		}
 
 		// Hard-delete tables that have no `deleted_at` column. SQL CASCADE on
@@ -195,23 +203,23 @@ export class SupabaseOrgStore implements IOrgStore {
 		// clean these up here. Pending invites to a dead org are unredeemable;
 		// stale compute config is operational state with no audit need.
 		const { error: invErr } = await client.from('invites').delete().eq('org_id', id);
-		if (invErr) throw mapError(invErr);
+		if (invErr) throw mapPostgrestError(invErr);
 
 		const { error: cdErr } = await client
 			.from('compute_server_org_defaults')
 			.delete()
 			.eq('org_id', id);
-		if (cdErr) throw mapError(cdErr);
+		if (cdErr) throw mapPostgrestError(cdErr);
 
 		const { error: shErr } = await client.from('compute_server_shares').delete().eq('org_id', id);
-		if (shErr) throw mapError(shErr);
+		if (shErr) throw mapPostgrestError(shErr);
 
 		const { error: csErr } = await client
 			.from('compute_servers')
 			.delete()
 			.eq('scope', 'org')
 			.eq('owner_org_id', id);
-		if (csErr) throw mapError(csErr);
+		if (csErr) throw mapPostgrestError(csErr);
 
 		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });
 	}
@@ -228,12 +236,12 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error, count } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
-			.select('*', { count: 'exact' })
+			.select(ORG_MEMBER_COLUMNS, { count: 'exact' })
 			.eq('org_id', orgId)
 			.is('deleted_at', null)
 			.order('joined_at', { ascending: (opts?.orderDir ?? 'desc') === 'asc' })
 			.range(range.from, range.to);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		const items = (data ?? []).map(rowToOrgMember);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
@@ -246,12 +254,12 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
-			.select('*')
+			.select(ORG_MEMBER_COLUMNS)
 			.eq('org_id', orgId)
 			.eq('user_id', userId)
 			.is('deleted_at', null)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return data ? rowToOrgMember(data) : null;
 	}
 
@@ -266,14 +274,14 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
-			.select('*, org:orgs!inner(*)')
+			.select(`${ORG_MEMBER_COLUMNS}, org:orgs!inner(${ORG_COLUMNS})`)
 			.eq('user_id', userId)
 			.is('deleted_at', null)
 			.is('org.deleted_at', null)
 			.order('joined_at', { ascending: true })
 			.limit(1)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data) return null;
 
 		// PostgREST embeds the related row as `org` per the alias above. Strip
@@ -300,7 +308,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.forRequest(ctx)
 			.from('org_members')
 			.upsert(row, { onConflict: 'org_id,user_id' });
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'org_member.added',
 			orgId: member.orgId,
@@ -329,7 +337,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('user_id', userId)
 			.is('deleted_at', null)
 			.select('user_id');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data || data.length === 0)
 			throw new ProviderError(`Org member '${userId}' not found`, 404);
 		await this.events.emit({
@@ -360,7 +368,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('user_id', userId)
 			.is('deleted_at', null)
 			.select('user_id');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data || data.length === 0)
 			throw new ProviderError(`Org member '${userId}' not found`, 404);
 		await this.events.emit({
@@ -387,7 +395,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.select('id')
 			.eq('org_id', orgId)
 			.is('deleted_at', null);
-		if (projError) throw mapError(projError);
+		if (projError) throw mapPostgrestError(projError);
 
 		const projectIds = (orgProjects ?? []).map((p) => p.id as string);
 		if (projectIds.length > 0) {
@@ -397,7 +405,7 @@ export class SupabaseOrgStore implements IOrgStore {
 				.in('project_id', projectIds)
 				.eq('user_id', userId)
 				.is('deleted_at', null);
-			if (pmError) throw mapError(pmError);
+			if (pmError) throw mapPostgrestError(pmError);
 		}
 
 		const { error } = await client
@@ -406,7 +414,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('org_id', orgId)
 			.eq('user_id', userId)
 			.is('deleted_at', null);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'org_member.removed',
 			orgId,
@@ -521,32 +529,4 @@ function memberToRow(m: OrgMember): OrgMemberRow {
 		permissions: m.permissions ?? [],
 		joined_at: m.joinedAt
 	};
-}
-
-// ============================================================================
-// Error translation
-// ============================================================================
-interface PostgrestError {
-	code?: string;
-	message?: string;
-	details?: string;
-}
-
-function mapError(e: unknown): Error {
-	const pg = e as PostgrestError;
-	if (pg?.code === '23505') {
-		return new ProviderError(pg.message ?? 'Duplicate record', 409);
-	}
-	if (pg?.code === '23503') {
-		return new ProviderError(pg.message ?? 'Foreign key violation', 409);
-	}
-	if (e instanceof Error) return e;
-	if (e && typeof e === 'object') {
-		const obj = e as { message?: string; details?: string; hint?: string; code?: string };
-		const msg = obj.message ?? obj.details ?? obj.hint ?? 'Unknown Postgres error';
-		const err = new Error(obj.code ? `[${obj.code}] ${msg}` : msg);
-		Object.assign(err, obj);
-		return err;
-	}
-	return new Error(String(e));
 }

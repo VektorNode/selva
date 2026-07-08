@@ -11,8 +11,16 @@ import {
 // Secret crypto functions come from the server-only subpath (they use
 // `node:crypto`, kept out of the root barrel so client bundles don't pull it in).
 import { decryptSecret, encryptSecret, isEncryptedSecret } from '@selvajs/platform/computeServer';
-import { ProviderError } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
+import { mapPostgrestError } from './errors.js';
+
+/** Explicit column list for `compute_servers` — every field `rowToServer` consumes. */
+const SERVER_COLUMNS =
+	'id, scope, owner_org_id, shared_with_all, label, server_url, api_key, timeout_ms, retry_count';
+/** Columns from the share join table read in `getConfig`. */
+const SHARE_COLUMNS = 'server_id, org_id';
+/** Columns from the per-org default table read in `getConfig`. */
+const ORG_DEFAULT_COLUMNS = 'org_id, default_server_id';
 
 /**
  * Compute-server config backed by three tables:
@@ -46,9 +54,9 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		const client = this.clients.forRequest(ctx);
 
 		const [serversRes, sharesRes, orgDefRes, platDefRes] = await Promise.all([
-			client.from('compute_servers').select('*'),
-			client.from('compute_server_shares').select('*'),
-			client.from('compute_server_org_defaults').select('*'),
+			client.from('compute_servers').select(SERVER_COLUMNS),
+			client.from('compute_server_shares').select(SHARE_COLUMNS),
+			client.from('compute_server_org_defaults').select(ORG_DEFAULT_COLUMNS),
 			client
 				.from('compute_server_platform_default')
 				.select('default_server_id')
@@ -56,10 +64,10 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 				.maybeSingle()
 		]);
 
-		if (serversRes.error) throw mapError(serversRes.error);
-		if (sharesRes.error) throw mapError(sharesRes.error);
-		if (orgDefRes.error) throw mapError(orgDefRes.error);
-		if (platDefRes.error) throw mapError(platDefRes.error);
+		if (serversRes.error) throw mapPostgrestError(serversRes.error);
+		if (sharesRes.error) throw mapPostgrestError(sharesRes.error);
+		if (orgDefRes.error) throw mapPostgrestError(orgDefRes.error);
+		if (platDefRes.error) throw mapPostgrestError(platDefRes.error);
 
 		// Build per-server `sharedWith` allowlists from the join table.
 		const sharedByServer = new Map<string, string[]>();
@@ -95,13 +103,13 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 
 		// Replace-all of platform rows.
 		const { error: delErr } = await client.from('compute_servers').delete().eq('scope', 'platform');
-		if (delErr) throw mapError(delErr);
+		if (delErr) throw mapPostgrestError(delErr);
 
 		if (platformOnly.length > 0) {
 			const { error: insErr } = await client
 				.from('compute_servers')
 				.insert(platformOnly.map((s) => serverToRow(this.encryptServerApiKey(s))));
-			if (insErr) throw mapError(insErr);
+			if (insErr) throw mapPostgrestError(insErr);
 
 			// Rebuild the share rows for any non-`all` platform servers.
 			const shareRows = platformOnly.flatMap((s) =>
@@ -111,7 +119,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			);
 			if (shareRows.length > 0) {
 				const { error: shErr } = await client.from('compute_server_shares').insert(shareRows);
-				if (shErr) throw mapError(shErr);
+				if (shErr) throw mapPostgrestError(shErr);
 			}
 		}
 
@@ -119,7 +127,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			.from('compute_server_platform_default')
 			.update({ default_server_id: defaultServerId ?? null })
 			.eq('singleton', true);
-		if (defErr) throw mapError(defErr);
+		if (defErr) throw mapPostgrestError(defErr);
 	}
 
 	async saveOrgServers(
@@ -136,13 +144,13 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			.delete()
 			.eq('scope', 'org')
 			.eq('owner_org_id', orgId);
-		if (delErr) throw mapError(delErr);
+		if (delErr) throw mapPostgrestError(delErr);
 
 		if (orgOnly.length > 0) {
 			const { error: insErr } = await client
 				.from('compute_servers')
 				.insert(orgOnly.map((s) => serverToRow(this.encryptServerApiKey(s))));
-			if (insErr) throw mapError(insErr);
+			if (insErr) throw mapPostgrestError(insErr);
 		}
 
 		if (defaultServerId === null) {
@@ -150,12 +158,12 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 				.from('compute_server_org_defaults')
 				.delete()
 				.eq('org_id', orgId);
-			if (error) throw mapError(error);
+			if (error) throw mapPostgrestError(error);
 		} else if (typeof defaultServerId === 'string') {
 			const { error } = await client
 				.from('compute_server_org_defaults')
 				.upsert({ org_id: orgId, default_server_id: defaultServerId });
-			if (error) throw mapError(error);
+			if (error) throw mapPostgrestError(error);
 		}
 	}
 
@@ -166,13 +174,13 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 				.from('compute_server_org_defaults')
 				.delete()
 				.eq('org_id', orgId);
-			if (error) throw mapError(error);
+			if (error) throw mapPostgrestError(error);
 			return;
 		}
 		const { error } = await client
 			.from('compute_server_org_defaults')
 			.upsert({ org_id: orgId, default_server_id: serverId });
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 	}
 
 	async deleteByOrg(ctx: RequestContext, orgId: string): Promise<void> {
@@ -184,7 +192,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			.from('compute_server_org_defaults')
 			.delete()
 			.eq('org_id', orgId);
-		if (defErr) throw mapError(defErr);
+		if (defErr) throw mapPostgrestError(defErr);
 
 		// Org-private servers owned by this org.
 		const { error: srvErr } = await client
@@ -192,14 +200,14 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			.delete()
 			.eq('scope', 'org')
 			.eq('owner_org_id', orgId);
-		if (srvErr) throw mapError(srvErr);
+		if (srvErr) throw mapPostgrestError(srvErr);
 
 		// Strip this org from any platform server share allowlist.
 		const { error: shErr } = await client
 			.from('compute_server_shares')
 			.delete()
 			.eq('org_id', orgId);
-		if (shErr) throw mapError(shErr);
+		if (shErr) throw mapPostgrestError(shErr);
 	}
 
 	// ==========================================================================
@@ -274,7 +282,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		const { data, error } = await this.clients.serviceClient
 			.from('compute_servers')
 			.select('id, label, api_key');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 
 		const failures: SecretVerificationFailure[] = [];
 		let plaintextFound = false;
@@ -371,21 +379,4 @@ function serverToRow(s: ComputeServerConfig): ServerRow {
 		owner_org_id: s.ownerOrgId,
 		shared_with_all: false
 	};
-}
-
-interface PostgrestError {
-	code?: string;
-	message?: string;
-}
-
-function mapError(e: unknown): Error {
-	const pg = e as PostgrestError;
-	if (pg?.code === '23505') return new ProviderError(pg.message ?? 'Duplicate record', 409);
-	if (pg?.code === '23503') return new ProviderError(pg.message ?? 'Foreign key violation', 409);
-	if (e instanceof Error) return e;
-	if (e && typeof e === 'object') {
-		const obj = e as { message?: string; code?: string };
-		return new Error(obj.code ? `[${obj.code}] ${obj.message ?? ''}` : (obj.message ?? String(e)));
-	}
-	return new Error(String(e));
 }

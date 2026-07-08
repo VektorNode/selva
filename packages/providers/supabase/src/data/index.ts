@@ -8,5 +8,20 @@ export { SupabaseDataProvider } from './SupabaseDataProvider.js';
 export { SupabaseEventSink } from './SupabaseEventSink.js';
 export { SupabaseSolveMetricSink } from './SupabaseSolveMetricSink.js';
 export { SupabaseAuditQuery } from './SupabaseAuditQuery.js';
-export { buildClientBundle } from './client.js';
-export type { ClientBundle, BuildClientOptions } from './client.js';
+export { buildClientBundle, clientBundleFromEnv, DEFAULT_SCHEMA } from './client.js';
+export type {
+	ClientBundle,
+	BuildClientOptions,
+	ForRequestOptions,
+	SchemaClient,
+	SelvaSchemaClient
+} from './client.js';
+export { mapPostgrestError } from './errors.js';
+export {
+	toRange,
+	orderColumn,
+	nextCursorFromRange,
+	encodeCursor,
+	decodeCursor
+} from './pagination.js';
+export type { RangeSpec } from './pagination.js';

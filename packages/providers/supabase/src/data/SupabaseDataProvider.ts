@@ -2,7 +2,7 @@ import type { IDataProvider, IEventSink, IPlatformProjectGrantStore } from '@sel
 import { ProviderError } from '@selvajs/platform';
 import { decodeSecretKey } from '@selvajs/platform/computeServer';
 import type { ClientBundle, BuildClientOptions } from './client.js';
-import { buildClientBundle } from './client.js';
+import { buildClientBundle, clientBundleFromEnv } from './client.js';
 import { SupabaseEventSink } from './SupabaseEventSink.js';
 import { SupabaseSolveMetricSink } from './SupabaseSolveMetricSink.js';
 import { SupabaseAuditQuery } from './SupabaseAuditQuery.js';
@@ -84,12 +84,10 @@ export class SupabaseDataProvider implements IDataProvider {
 		env: Record<string, string | undefined>,
 		events?: IEventSink
 	): SupabaseDataProvider {
-		const supabaseUrl = env.SUPABASE_URL;
-		const anonKey = env.SUPABASE_ANON_KEY;
-		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-		if (!supabaseUrl) throw new Error('Missing required env var: SUPABASE_URL');
-		if (!anonKey) throw new Error('Missing required env var: SUPABASE_ANON_KEY');
-		if (!serviceRoleKey) throw new Error('Missing required env var: SUPABASE_SERVICE_ROLE_KEY');
+		// Bundle-only env parse (URL + anon + service-role) is shared with
+		// `clientBundleFromEnv`; the full data provider additionally requires the
+		// at-rest key below.
+		const bundle = clientBundleFromEnv(env);
 		// Required so compute-server apiKeys are encrypted at rest in the DB —
 		// same guarantee (and same key) as the local provider's on-disk envelope.
 		if (!env.SELVA_AT_REST_KEY) {
@@ -100,7 +98,6 @@ export class SupabaseDataProvider implements IDataProvider {
 			);
 		}
 		const secretKey = decodeSecretKey(env.SELVA_AT_REST_KEY);
-		const bundle = buildClientBundle({ supabaseUrl, anonKey, serviceRoleKey });
 		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle), secretKey);
 	}
 

@@ -22,6 +22,7 @@
 
 ## Architecture
 
+- **[Scaling.md](./Scaling.md)** — Current limits of the compute/data path and the staged scaling roadmap
 - **[ADR 0001 — Pre-Step Producers](./adr/0001-pre-step-producers.md)**
 - **[ADR 0002 — Grasshopper Bridge Seam](./adr/0002-grasshopper-bridge-seam.md)**
 - **[ADR 0003 — Large File Output Streaming](./adr/0003-large-file-output-streaming.md)**
@@ -30,6 +31,7 @@
 
 - **[Solve / Input Race Conditions](./plans/solve-input-race-conditions.md)** — Fixing lost-update and double-solve bugs in the GH ↔ web bridge
 - **[Mesh Texture Support](./plans/mesh-texture-support.md)** — Optional UV chunk in the binary mesh format for textured display
+- **[Embeddable Server Layer](./plans/embeddable-server-layer.md)** — Finish the "build your own app on the engine" contract: schema-aware client bundle, exported store utilities, published compute server stack
 
 ## Release Management
 
