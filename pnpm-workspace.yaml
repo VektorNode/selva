@@ -8,7 +8,10 @@ catalogs:
     '@iconify/svelte': ^5.2.1
     '@lucide/svelte': ^1.11.0
     '@playwright/test': ^1.49.1
-    '@selvajs/compute': ^3.0.1
+    # Needs the `ComputeConfig.headers` hook (ADR 0004 D2). Landed in
+    # ../selva-compute; publish it as 3.1.0-beta.3, then drop the
+    # `link:../selva-compute` override in package.json.
+    '@selvajs/compute': ^3.1.0-beta.3
     '@sveltejs/adapter-auto': ^7.0.1
     '@sveltejs/kit': 2.69.1
     '@sveltejs/vite-plugin-svelte': ^6.2.4

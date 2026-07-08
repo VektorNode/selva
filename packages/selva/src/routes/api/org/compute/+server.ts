@@ -10,6 +10,7 @@ import {
 	type ComputeServerConfig,
 	type OrgComputeServer
 } from '@selvajs/platform';
+import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
 
 /**
  * Per-org compute endpoint. Manages this org's own servers
@@ -174,5 +175,9 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	}
 
 	await provider.saveOrgServers(ctx, orgId, next, incoming.defaultServerId);
+	// Drop warm clients for this org's servers whose URL/key rotated or that were
+	// removed — keyed on `id`, they wouldn't age out on their own (ADR 0004).
+	const prevOrgServers = existing.servers.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId);
+	evictChangedServers(prevOrgServers, next);
 	return new Response(null, { status: 204 });
 };

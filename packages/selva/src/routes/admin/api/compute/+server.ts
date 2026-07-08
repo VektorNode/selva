@@ -8,6 +8,7 @@ import {
 	type ComputeServerConfig,
 	type PlatformComputeServer
 } from '@selvajs/platform';
+import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
 
 /**
  * Admin platform-server endpoint. `manage_compute` only. Reads/writes the
@@ -120,6 +121,9 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		);
 
 		await provider.savePlatformServers(locals.ctx!, next, incoming.defaultServerId);
+		// Drop warm clients for servers whose URL/key rotated or that were removed —
+		// keyed on `id`, they wouldn't age out on their own (ADR 0004).
+		evictChangedServers(platformServers(existing), next);
 		return new Response(null, { status: 204 });
 	} catch (err) {
 		console.error('[Compute PUT] Failed:', err);

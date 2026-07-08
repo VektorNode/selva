@@ -108,13 +108,14 @@ export async function loadDefinitionForRender(
 	}
 
 	// Reuse the shared per-server client cache — the same warm client the solve
-	// endpoint uses for this server. Keyed by (serverUrl, apiKey), so a
+	// endpoint uses for this server. Keyed by server `id` (ADR 0004 D1), so a
 	// definition pinned to a different compute instance transparently gets that
 	// instance's own cached client. Only the client is used here (getIO); the
 	// entry's solve scheduler rides along unused.
 	let client: GrasshopperClient;
 	try {
-		client = (await getClient(computeServer)).client;
+		// Definition guid rides on `X-Selva-Definition` for pool affinity (ADR 0004 D2).
+		client = (await getClient(computeServer, { definitionGuid: record.guid })).client;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		throw new DefinitionLoadError(

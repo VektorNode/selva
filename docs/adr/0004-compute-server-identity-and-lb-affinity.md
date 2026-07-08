@@ -1,11 +1,13 @@
 # ADR 0004 — Compute-Server Identity is the ID; Solves Route by Definition Affinity
 
-> **Status: Accepted (2026-07-08). Decision only — not the load-balancer build.** Establishes two
-> forward-compatible invariants ahead of extracting the compute stack into `@selvajs/server`
+> **Status: Accepted (2026-07-08). Its two K2 invariants are now implemented (2026-07-08); the
+> load balancer itself is still unbuilt.** Establishes two forward-compatible invariants ahead of
+> extracting the compute stack into `@selvajs/server`
 > ([embeddable-server-layer.md](../plans/embeddable-server-layer.md), items K1–K3): (1) a compute
 > **server's identity is its `id`, never its URL**; (2) when cross-VM load balancing arrives, solves
-> **route by definition-guid affinity**, not round-robin. Neither the LB, autoscaling, nor pool
-> membership is built here. This ADR exists so the code written between now and then — most
+> **route by definition-guid affinity**, not round-robin. Both landed in K2 (id-keyed cache with an
+> explicit config-write eviction hook; `X-Selva-Definition` on the wire) — see Sequencing. Neither the
+> LB, autoscaling, nor pool membership is built here. This ADR exists so the code written between now and then — most
 > importantly the `getClient(...)` API that K2 makes public — doesn't bake in an identity scheme that
 > a later semver-minor can't change.
 
@@ -82,9 +84,18 @@ Concretely, before K2 publishes:
 ### D2 — Solves route by definition-guid affinity. Put the guid on the wire now.
 
 Every solve / `getIO` request to a compute server carries the definition guid as a header
-(`X-Selva-Definition`). This is one line today and it is the whole forward-compatibility purchase: it
-lets **any** future router — nginx `hash ... consistent`, a cloud LB, or app-level pool selection — do
-definition affinity without parsing the solve POST body.
+(`X-Selva-Definition`). This is the whole forward-compatibility purchase: it lets **any** future router
+— nginx `hash ... consistent`, a cloud LB, or app-level pool selection — do definition affinity without
+parsing the solve POST body.
+
+> **Implementation note (K2):** this was _not_ one line — the published `@selvajs/compute` client owned
+> its own `fetch` with no header seam, so K2 first added an optional `ComputeConfig.headers` hook to the
+> client (merged _under_ the transport's own `RhinoComputeKey`/`Authorization`/`X-Request-ID` so a
+> caller can never clobber auth), then set it at client-create time in `createClientCache`. Because the
+> warm client is per-server and the `SolveScheduler` has no per-request header option, the guid is fixed
+> for a given warm client's lifetime rather than truly per-request — which is correct for the routing law
+> below (a router picks the pool member from the guid _before_ `getClient`, so within one member the
+> header is inert metadata anyway).
 
 The routing law is recorded, not implemented: when a pool exists, `member = hash(definitionGuid) mod
 poolSize` with a liveness fallback. Until then there is exactly one member and the header is inert
@@ -132,11 +143,16 @@ metadata (also useful in compute-side access logs immediately).
 This ADR gates K2 (the client-cache extraction) in [embeddable-server-layer.md](../plans/embeddable-server-layer.md):
 
 1. **Now (this ADR):** decision recorded. No code required to _accept_ it.
-2. **With K2, as part of the extraction (not a separate PR):**
-   - Change the client-cache key from `serverUrl + apiKey` to server `id`.
-   - Add the config-write eviction hook (dispose the scheduler for a rotated `id`).
-   - Export `getClient(serverIdentity)` with `serverIdentity` opaque.
-   - Emit `X-Selva-Definition` on solve / `getIO` requests.
+2. **✅ Done with K2 (2026-07-08), as part of the extraction:**
+   - ✅ Client-cache key changed from `serverUrl + apiKey` to server `id`
+     ([client-cache.ts](../../packages/server/src/compute/client-cache.ts)).
+   - ✅ Config-write eviction hook added ([`evictChangedServers`](../../packages/selva/src/lib/server/compute/evictChangedServers.ts),
+     called from the admin + org compute PUT routes; disposes the scheduler for a rotated/removed `id`).
+   - ✅ `getClient` takes an opaque `ServerIdentity` (`serverIdentity()` constructor); `evict`/`disposeAll` exported.
+   - ✅ `X-Selva-Definition` emitted on solve / `getIO` — via a new `ComputeConfig.headers` hook in
+     `@selvajs/compute` (see the D2 implementation note). **Publish gate:** that compute change is
+     unpublished; Selva pins `^3.1.0-beta.3` and resolves it through a temporary `link:../selva-compute`
+     override until it ships.
 3. **Deferred until demand:** pool membership on `ComputeServerConfig` (additive), the router
    (`resolveServerForOrg` returns members + pick-by-hash with liveness fallback), the LB/autoscaling.
 

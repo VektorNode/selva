@@ -18,3 +18,13 @@ export {
 export { isSafeRemoteDefinitionUrl, assertSafeRemoteDefinitionUrl } from './safe-url.js';
 
 export { transformInputParameter } from './transform-input.js';
+
+export {
+	createClientCache,
+	serverIdentity,
+	type ClientCache,
+	type ClientCacheConfig,
+	type CachedClient,
+	type ResolvedServer,
+	type ServerIdentity
+} from './client-cache.js';

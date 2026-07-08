@@ -379,7 +379,11 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			mark('schemaBackfill');
 		}
 
-		const { scheduler, rhinoTiming, solveMeta } = await getClient(serverConfig);
+		// Definition-guid affinity key on the wire (ADR 0004 D2). Local definitions
+		// carry a guid; remote-URL solves have none, so the header is simply absent.
+		const { scheduler, rhinoTiming, solveMeta } = await getClient(serverConfig, {
+			definitionGuid: guid ?? undefined
+		});
 		mark('client');
 
 		// request.signal propagates to Compute; abort kills orphan solves.
