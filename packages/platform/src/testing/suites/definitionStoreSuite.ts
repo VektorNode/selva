@@ -522,6 +522,51 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(byProject.items.map((r) => r.guid)).not.toContain(guid);
 		});
 
+		it('deleteByProject soft-deletes every definition in the project, leaving others', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			// Two published definitions in the target project, one in another —
+			// the cascade must tombstone the target project's and leave the rest.
+			const a = makeUuid();
+			const b = makeUuid();
+			const other = makeUuid();
+			await store.create(
+				ctx(scope.ownerId),
+				record(scope, { guid: a, projectId: scope.projectId, status: 'published' })
+			);
+			await store.create(
+				ctx(scope.ownerId),
+				record(scope, { guid: b, projectId: scope.projectId, status: 'published' })
+			);
+			await store.create(
+				ctx(scope.ownerId),
+				record(scope, { guid: other, projectId: scope.secondaryProjectId, status: 'published' })
+			);
+
+			await store.deleteByProject(ctx(scope.ownerId), scope.projectId);
+
+			// Both target-project definitions gone from every read path…
+			expect(await store.get(ctx(scope.ownerId), a)).toBeNull();
+			expect(await store.get(ctx(scope.ownerId), b)).toBeNull();
+			const targetList = await store.listByProject(ctx(scope.ownerId), scope.projectId, {
+				limit: 500
+			});
+			expect(targetList.items).toHaveLength(0);
+			const all = await store.list(ctx(scope.ownerId), { limit: 500 });
+			expect(all.items.map((r) => r.guid)).not.toContain(a);
+			expect(all.items.map((r) => r.guid)).not.toContain(b);
+			// …but the other project's definition survives.
+			expect(await store.get(ctx(scope.ownerId), other)).not.toBeNull();
+		});
+
+		it('deleteByProject is a no-op when the project has no definitions', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			await expect(
+				store.deleteByProject(ctx(scope.ownerId), scope.secondaryProjectId)
+			).resolves.toBeUndefined();
+		});
+
 		it('listPublic returns published records, not pending', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();

@@ -167,12 +167,26 @@ export class SupabaseProjectStore implements IProjectStore {
 			.is('deleted_at', null);
 		if (pmErr) throw mapPostgrestError(pmErr);
 
-		const { error: defErr } = await client
+		// Cascade to definitions. `select('guid')` returns the tombstoned rows so
+		// we emit one `definition.deleted` per record — parity with the single
+		// `delete` path and with `SupabaseDefinitionStore.deleteByProject` /
+		// `LocalProjectStore.deleteProject`. (Kept inline rather than delegating to
+		// the definition store to avoid a cross-store constructor dependency; the
+		// behavior must stay identical to `deleteByProject`.)
+		const { data: deletedDefs, error: defErr } = await client
 			.from('definitions')
 			.update(stampRow)
 			.eq('project_id', id)
-			.is('deleted_at', null);
+			.is('deleted_at', null)
+			.select('guid');
 		if (defErr) throw mapPostgrestError(defErr);
+		for (const row of deletedDefs ?? []) {
+			await this.events.emit({
+				type: 'definition.deleted',
+				definitionId: row.guid,
+				actorId: actorFrom(ctx)
+			});
+		}
 
 		await this.events.emit({ type: 'project.deleted', projectId: id, actorId: actorFrom(ctx) });
 	}

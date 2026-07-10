@@ -136,8 +136,11 @@ export class LocalDataProvider implements IDataProvider {
 		// - canEditDefinition needs the project store for `listPublic`
 		// - share-link resolution needs the definition store to enforce the §7
 		//   soft-delete cascade (Supabase does the equivalent via JOIN)
+		// - deleteProject needs the definition store to cascade the soft-delete
+		//   to the project's definitions (Supabase does the equivalent inline)
 		definitions.setProjectProvider(projects);
 		shareLinks.setDefinitionProvider(definitions);
+		projects.setDefinitionProvider(definitions);
 
 		// ONE user-data store, shared across the profile store, permission store,
 		// and the data provider's ensureUser/deleteUser — so all three read/write

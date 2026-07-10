@@ -30,6 +30,15 @@ export interface IDefinitionStore {
 	update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void>;
 	delete(ctx: RequestContext, guid: string): Promise<void>;
 
+	/**
+	 * Cascade hook: soft-delete every live definition in a project. Called by
+	 * `IProjectStore.deleteProject` — a deleted project must never keep serving
+	 * its definitions (they surface in the library/public listings independent
+	 * of the project row). No-op when the project has none. Mirrors the
+	 * `deleteByProject` cascade hooks on `IPlatformProjectGrantStore`.
+	 */
+	deleteByProject(ctx: RequestContext, projectId: string): Promise<void>;
+
 	/** Atomic +1 on the solve counter. No-op if the record doesn't exist. */
 	incrementSolveCount(ctx: RequestContext, guid: string): Promise<void>;
 

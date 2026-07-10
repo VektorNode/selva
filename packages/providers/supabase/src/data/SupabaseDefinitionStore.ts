@@ -183,6 +183,28 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		});
 	}
 
+	async deleteByProject(ctx: RequestContext, projectId: string): Promise<void> {
+		// Cascade from `deleteProject` — soft-delete every live definition in the
+		// project in one statement. `select('guid')` returns the affected rows so
+		// we can emit a `definition.deleted` per record (parity with the local
+		// provider and the single-`delete` path above).
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('definitions')
+			.update(stampSoftDelete(ctx))
+			.eq('project_id', projectId)
+			.is('deleted_at', null)
+			.select('guid');
+		if (error) throw mapPostgrestError(error);
+		for (const row of data ?? []) {
+			await this.events.emit({
+				type: 'definition.deleted',
+				definitionId: row.guid,
+				actorId: actorFrom(ctx)
+			});
+		}
+	}
+
 	async incrementSolveCount(ctx: RequestContext, guid: string): Promise<void> {
 		const { error } = await this.clients.forRequest(ctx).rpc('increment_run_count', { g: guid });
 		if (error) throw mapPostgrestError(error);

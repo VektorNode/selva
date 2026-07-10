@@ -243,6 +243,29 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		});
 	}
 
+	async deleteByProject(ctx: RequestContext, projectId: string): Promise<void> {
+		const config = await this.readConfig();
+		// One read-modify-write pass over the cached config so the whole cascade
+		// lands in a single `writeConfig`. Collect the affected guids first, then
+		// emit one `definition.deleted` per tombstoned record after the write.
+		const affected: DefinitionRecord[] = [];
+		for (const record of Object.values(config.definitions)) {
+			if (record.projectId === projectId && this.live(record)) {
+				Object.assign(record, auditSoftDelete(ctx, record.updatedBy ?? record.ownerId));
+				affected.push(record);
+			}
+		}
+		if (affected.length === 0) return;
+		await this.writeConfig(config);
+		for (const record of affected) {
+			await this.events.emit({
+				type: 'definition.deleted',
+				definitionId: record.guid,
+				actorId: actorFrom(ctx)
+			});
+		}
+	}
+
 	async incrementSolveCount(_ctx: RequestContext, guid: string): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
