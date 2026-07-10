@@ -18,6 +18,7 @@ export const GITHUB_URL = 'https://github.com/vektornode/selva';
 /** Primary navigation shown in the site header. */
 export const primaryNav: NavLink[] = [
 	{ label: 'Docs', href: '/docs' },
+	{ label: 'Architecture', href: '/architecture' },
 	{ label: 'GitHub', href: GITHUB_URL, external: true }
 ];
 

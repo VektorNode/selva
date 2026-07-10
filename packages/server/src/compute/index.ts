@@ -28,3 +28,21 @@ export {
 	type ResolvedServer,
 	type ServerIdentity
 } from './client-cache.js';
+
+export {
+	createRemoteDefinitionFetcher,
+	readBodyWithCap,
+	type RemoteDefinitionFetcher,
+	type RemoteDefinitionConfig
+} from './remote-definition.js';
+
+export {
+	runSolvePipeline,
+	COMPUTE_CONTRACT_VERSION,
+	COMPUTE_VERSION_HEADER,
+	type SolvePipelineArgs,
+	type SolveOutcome,
+	type SolveEnvelope,
+	type SolvePhaseMetrics,
+	type PipelineInput
+} from './solve-pipeline.js';
