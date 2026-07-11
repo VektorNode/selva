@@ -99,9 +99,18 @@ interface PendingItem {
 	definition: SolveDefinition;
 	dataTree: DataTree[];
 	ctx: SolveContext;
+	/** Monotonic solve() ordinal — used to keep older items' late settles from overwriting newer state. */
+	seq: number;
 	resolve: (response: GrasshopperComputeResponse) => void;
 	reject: (error: RhinoComputeError) => void;
 	externalSignal?: AbortSignal;
+	/**
+	 * Abort listener attached while the item waits in a queue, so a signal
+	 * firing pre-execution settles it instead of being silently ignored.
+	 * Removed when execution starts (the in-flight controller takes over) or
+	 * when the item settles by any other path.
+	 */
+	queuedAbortHandler?: () => void;
 	/** Set once the promise has been settled, so a late executor rejection becomes a no-op. */
 	settled?: { error: RhinoComputeError } | { ok: true };
 }
@@ -217,6 +226,11 @@ export class SolveScheduler {
 	private _lastError: RhinoComputeError | null = null;
 	private _lastDurationMs: number | null = null;
 
+	/** Ordinal handed to each solve() call. */
+	private solveSeq = 0;
+	/** seq of the solve that last wrote _lastResult/_lastError — see writeLastState. */
+	private lastStateSeq = 0;
+
 	private disposed = false;
 
 	constructor(
@@ -314,12 +328,17 @@ export class SolveScheduler {
 	 * - Rejects with `code: ErrorCodes.ABORTED` when the call was canceled via
 	 *   caller-supplied signal or `cancelAll()`.
 	 *
-	 * Caller-supplied `signal` cancels just this call (rejects with `ABORTED`).
+	 * Caller-supplied `signal` cancels just this call (rejects with `ABORTED`) —
+	 * including while the call is still queued, before execution starts.
 	 *
 	 * A {@link DefinitionRef} definition is keyed by its `key` (result cache and
 	 * server-pointer map alike) without materializing bytes — `load()` runs only
 	 * when an upload is unavoidable. Its immutability contract is trusted here:
 	 * a reused key serves the other content's cached solve.
+	 *
+	 * Responses served from the cache (and via `lastResult`) are shared objects,
+	 * not copies — treat them as immutable. Mutating one poisons every later
+	 * cache hit for that key.
 	 */
 	solve(
 		definition: SolveDefinition,
@@ -336,25 +355,36 @@ export class SolveScheduler {
 		}
 
 		const key = hashSolveInput(definition, dataTree);
+		const seq = ++this.solveSeq;
 		const ctx: SolveContext = {
 			key,
 			enqueuedAt: Date.now(),
 			startedAt: null
 		};
 
+		// An already-aborted signal rejects before anything else — including the
+		// cache: the documented contract is ABORTED, not a result.
+		if (options?.signal?.aborted) {
+			return Promise.reject(this.makeAbortError(ctx));
+		}
+
 		// Cache hit — return synchronously-resolved promise
 		if (this.cacheEnabled) {
 			const cached = this.readCache(key);
 			if (cached) {
+				// This call is now the newest result. In latest-wins mode that means
+				// any older in-flight/pending solve is stale — supersede it, or its
+				// later completion would overwrite this hit and snap the UI back.
+				if (this.mode === 'latest-wins') {
+					this.supersedeCurrent();
+				}
 				const result: SolveResult = {
 					status: 'success',
 					response: cached,
 					durationMs: 0,
 					fromCache: true
 				};
-				this._lastResult = cached;
-				this._lastError = null;
-				this._lastDurationMs = 0;
+				this.writeLastState(seq, { result: cached, durationMs: 0 });
 				this.runHook(this.onStart, ctx);
 				this.runHook(this.onSettle, ctx, result);
 				this.notify();
@@ -367,34 +397,76 @@ export class SolveScheduler {
 				definition,
 				dataTree,
 				ctx,
+				seq,
 				resolve,
 				reject,
 				externalSignal: options?.signal
 			};
 
-			// External signal cancellation — reject immediately if already aborted
-			if (item.externalSignal?.aborted) {
-				this.settleError(item, this.makeAbortError(ctx));
-				return;
+			// A signal firing while the item waits in a queue must settle it as
+			// ABORTED and drop it — not leave it to run a full solve anyway. The
+			// listener is removed when execution starts or the item settles.
+			if (item.externalSignal) {
+				item.queuedAbortHandler = () => this.abortQueuedItem(item);
+				item.externalSignal.addEventListener('abort', item.queuedAbortHandler, { once: true });
 			}
 
 			this.enqueue(item);
 		});
 	}
 
+	/**
+	 * Record last-result state, but only if no newer solve has written since —
+	 * a slow solve settling late must not overwrite the state a newer solve
+	 * (or cache hit) already published.
+	 */
+	private writeLastState(
+		seq: number,
+		state:
+			| { result: GrasshopperComputeResponse; durationMs: number }
+			| { error: RhinoComputeError; durationMs: number }
+	): boolean {
+		if (seq < this.lastStateSeq) return false;
+		this.lastStateSeq = seq;
+		if ('result' in state) {
+			this._lastResult = state.result;
+			this._lastError = null;
+		} else {
+			this._lastError = state.error;
+		}
+		this._lastDurationMs = state.durationMs;
+		return true;
+	}
+
+	/** latest-wins: supersede the pending item and abort everything in flight. */
+	private supersedeCurrent(): void {
+		if (this.pendingForLatestWins) {
+			this.supersede(this.pendingForLatestWins);
+			this.pendingForLatestWins = null;
+		}
+		for (const inflight of this.inFlight) {
+			this.supersede(inflight);
+			inflight.controller.abort();
+		}
+	}
+
+	/** Settle a still-queued item as ABORTED and remove it from its queue. */
+	private abortQueuedItem(item: PendingItem): void {
+		if (this.pendingForLatestWins === item) {
+			this.pendingForLatestWins = null;
+		}
+		const queued = this.fifoQueue.indexOf(item);
+		if (queued >= 0) this.fifoQueue.splice(queued, 1);
+
+		this.rejectAsAborted(item);
+		this.notify();
+	}
+
 	private enqueue(item: PendingItem): void {
 		switch (this.mode) {
 			case 'latest-wins': {
-				// Reject any pending one as superseded
-				if (this.pendingForLatestWins) {
-					this.supersede(this.pendingForLatestWins);
-					this.pendingForLatestWins = null;
-				}
-				// Abort any in-flight one as superseded
-				for (const inflight of this.inFlight) {
-					this.supersede(inflight);
-					inflight.controller.abort();
-				}
+				// Reject any pending / abort any in-flight one as superseded
+				this.supersedeCurrent();
 				// Run immediately if no slot is taken
 				if (this.inFlight.size === 0) {
 					this.execute(item);
@@ -429,6 +501,9 @@ export class SolveScheduler {
 		this.inFlight.add(inflight);
 		item.ctx.startedAt = Date.now();
 
+		// Hand abort handling over from the queued-phase listener to the
+		// in-flight controller.
+		this.removeQueuedAbortHandler(item);
 		const externalAbortHandler = () => controller.abort();
 		item.externalSignal?.addEventListener('abort', externalAbortHandler, { once: true });
 
@@ -456,9 +531,7 @@ export class SolveScheduler {
 			// Already superseded mid-flight — drop the late success silently.
 			if (!this.settleSuccess(item, response)) return;
 
-			this._lastResult = response;
-			this._lastError = null;
-			this._lastDurationMs = durationMs;
+			this.writeLastState(item.seq, { result: response, durationMs });
 
 			this.runHook(this.onSettle, item.ctx, {
 				status: 'success',
@@ -471,11 +544,12 @@ export class SolveScheduler {
 			const durationMs = performance.now() - startTime;
 			// Resolve the error against the (possibly already-settled) item *before*
 			// settling: if this was superseded mid-flight, normalizeExecutionError
-			// returns the original cause, and _lastError must reflect it either way.
+			// returns the original cause, and _lastError should reflect it — unless
+			// a newer solve already published state, which this late settle must
+			// not clobber (writeLastState's seq guard).
 			const err = this.normalizeExecutionError(error, inflight);
 
-			this._lastError = err;
-			this._lastDurationMs = durationMs;
+			this.writeLastState(item.seq, { error: err, durationMs });
 
 			if (this.settleError(item, err)) {
 				this.runHook(this.onSettle, item.ctx, { status: 'error', error: err, durationMs });
@@ -580,6 +654,7 @@ export class SolveScheduler {
 	private settleError(item: PendingItem, err: RhinoComputeError): boolean {
 		if (item.settled) return false;
 		item.settled = { error: err };
+		this.removeQueuedAbortHandler(item);
 		item.reject(err);
 		return true;
 	}
@@ -593,8 +668,17 @@ export class SolveScheduler {
 	private settleSuccess(item: PendingItem, response: GrasshopperComputeResponse): boolean {
 		if (item.settled) return false;
 		item.settled = { ok: true };
+		this.removeQueuedAbortHandler(item);
 		item.resolve(response);
 		return true;
+	}
+
+	/** Detach the queued-phase abort listener, if one is still attached. */
+	private removeQueuedAbortHandler(item: PendingItem): void {
+		if (item.queuedAbortHandler && item.externalSignal) {
+			item.externalSignal.removeEventListener('abort', item.queuedAbortHandler);
+		}
+		item.queuedAbortHandler = undefined;
 	}
 
 	private isAbortLikeError(error: unknown): boolean {
@@ -649,7 +733,8 @@ export class SolveScheduler {
 				this.runHook(this.onSettle, inflight.ctx, {
 					status: 'error',
 					error: err,
-					durationMs: inflight.ctx.startedAt ? performance.now() - inflight.ctx.startedAt : 0
+					// startedAt is a Date.now() timestamp — measure with the same clock.
+					durationMs: inflight.ctx.startedAt ? Date.now() - inflight.ctx.startedAt : 0
 				});
 			}
 			inflight.controller.abort();
@@ -658,7 +743,12 @@ export class SolveScheduler {
 	}
 
 	private rejectAsAborted(item: PendingItem): void {
-		this.settleError(item, this.makeAbortError(item.ctx));
+		const err = this.makeAbortError(item.ctx);
+		// Queued items get the same settle hook as in-flight ones, so consumers
+		// pairing solve() calls with settles don't leak "in progress" indicators.
+		if (this.settleError(item, err)) {
+			this.runHook(this.onSettle, item.ctx, { status: 'error', error: err, durationMs: 0 });
+		}
 	}
 
 	// --------------------------------------------------------------------------

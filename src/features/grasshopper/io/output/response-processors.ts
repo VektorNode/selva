@@ -1,6 +1,6 @@
 import { FileData } from '@/core/files/types';
 import { GrasshopperComputeResponse, DataItem } from '../../types';
-import { decodeRhinoGeometry } from './rhino-decoder';
+import { decodeRhinoGeometry, disposeRhinoObjects } from './rhino-decoder';
 
 export interface ParsedContext {
 	[key: string]: any;
@@ -18,6 +18,14 @@ export interface GetValuesOptions {
 
 export interface GetValuesResult<T = ParsedContext> {
 	values: T;
+	/**
+	 * Free every rhino3dm WASM object decoded into `values`. When a `rhino`
+	 * instance was passed, decoded geometry lives on the WASM heap and is never
+	 * garbage-collected — call this once the values are consumed, or the heap
+	 * grows monotonically across solves. Idempotent; a no-op when nothing was
+	 * decoded. `values` must not be used after disposal.
+	 */
+	dispose: () => void;
 }
 
 // -----------------------------------------------------------------------------
@@ -191,7 +199,7 @@ export function getValues<T = ParsedContext>(
 		});
 	}
 
-	return { values: result as T };
+	return { values: result as T, dispose: () => disposeRhinoObjects(result) };
 }
 
 /** Decode every file-data item in a response into {@link FileData} objects. */
@@ -216,6 +224,9 @@ export function extractFileData(response: GrasshopperComputeResponse): FileData[
  * Read one parameter's value(s) from a response — `byName` matches a `ParamName`,
  * `byId` matches an item ID. Returns `undefined` if absent, a single value for one
  * match, or an array for several.
+ *
+ * When a `rhino` instance is passed, decoded geometry lives on the WASM heap —
+ * free it with {@link disposeRhinoObjects} once consumed.
  *
  * @param parseOptions.parseValues - Parse raw data into formatted values (default true).
  * @param parseOptions.rhino - Rhino3dm instance for geometry decoding.

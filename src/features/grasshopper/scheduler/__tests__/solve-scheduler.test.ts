@@ -292,6 +292,110 @@ describe('SolveScheduler', () => {
 			await expect(b).rejects.toMatchObject({ message: expect.stringMatching(/aborted/i) });
 		});
 
+		// Regression (ISSUES.md 46): the external signal was only checked at solve()
+		// entry and listened to in execute() — a signal firing while the item sat in
+		// the queue was silently ignored, the item later ran a full compute, and the
+		// promise resolved with a result instead of rejecting ABORTED.
+		it('aborting a QUEUED solve rejects it and never executes it', async () => {
+			const { executor, queue } = deferredExecutor();
+			const onSettle = vi.fn();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				maxConcurrent: 1,
+				onSettle
+			});
+
+			const a = scheduler.solve('def', [{ ParamName: 'a', InnerTree: {} } as any]);
+			const ctrlB = new AbortController();
+			const b = scheduler.solve('def', [{ ParamName: 'b', InnerTree: {} } as any], {
+				signal: ctrlB.signal
+			});
+			expect(scheduler.queueDepth).toBe(1);
+
+			ctrlB.abort(); // b is still queued — a holds the only slot
+
+			await expect(b).rejects.toMatchObject({ code: ErrorCodes.ABORTED });
+			expect(scheduler.queueDepth).toBe(0);
+			// The aborted item settles like any other (no leaked "in progress" state).
+			expect(onSettle.mock.calls.some((c) => c[1]?.status === 'error')).toBe(true);
+
+			// Releasing a must NOT start b — it was dropped from the queue.
+			queue[0].release(makeResponse('a'));
+			await a;
+			await new Promise((r) => setTimeout(r, 0));
+			expect(queue).toHaveLength(1);
+		});
+
+		it('aborting the pending latest-wins item rejects it without executing', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'latest-wins' });
+
+			const a = scheduler.solve('def', [{ ParamName: 'a', InnerTree: {} } as any]);
+			const ctrlB = new AbortController();
+			const b = scheduler.solve('def', [{ ParamName: 'b', InnerTree: {} } as any], {
+				signal: ctrlB.signal
+			});
+
+			ctrlB.abort(); // b is pending behind the (superseded, still-flushing) a
+
+			await expect(b).rejects.toMatchObject({ code: ErrorCodes.ABORTED });
+			await expect(a).rejects.toMatchObject({ code: ErrorCodes.SUPERSEDED });
+			// Only a ever reached the executor.
+			await new Promise((r) => setTimeout(r, 0));
+			expect(queue).toHaveLength(1);
+		});
+
+		// Regression (ISSUES.md 51): startedAt is Date.now() but cancelAll measured
+		// with performance.now() — durations were huge negative numbers (~ -1.7e12).
+		it('cancelAll reports a sane durationMs for in-flight items', async () => {
+			const { executor } = deferredExecutor();
+			const onSettle = vi.fn();
+			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'queue', onSettle });
+
+			scheduler.solve('def', [{ ParamName: 'a', InnerTree: {} } as any]).catch(() => {});
+			scheduler.cancelAll();
+
+			const errorSettle = onSettle.mock.calls.find((c) => c[1]?.status === 'error');
+			expect(errorSettle).toBeDefined();
+			expect(errorSettle![1].durationMs).toBeGreaterThanOrEqual(0);
+			expect(errorSettle![1].durationMs).toBeLessThan(60_000);
+		});
+
+		// Regression (ISSUES.md 52): a cancelled solve's late executor rejection
+		// overwrote _lastError even after a NEWER solve had already succeeded.
+		it('a late rejection from a cancelled solve does not clobber newer state', async () => {
+			// Deliberately ignores the abort signal, like a transport that only
+			// notices the cancel when its socket errors much later.
+			const pending: Array<{
+				release: (r: GrasshopperComputeResponse) => void;
+				fail: (e: Error) => void;
+			}> = [];
+			const executor: SolveExecutor = () =>
+				new Promise((resolve, reject) => pending.push({ release: resolve, fail: reject }));
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'parallel',
+				maxConcurrent: 2
+			});
+
+			// A: in flight, then cancelled — its executor promise stays pending.
+			const a = scheduler.solve('def', [{ ParamName: 'a', InnerTree: {} } as any]);
+			scheduler.cancelAll();
+			await expect(a).rejects.toMatchObject({ code: ErrorCodes.ABORTED });
+
+			// C: a fresh solve succeeds.
+			const c = scheduler.solve('def', [{ ParamName: 'c', InnerTree: {} } as any]);
+			await vi.waitFor(() => expect(pending.length).toBe(2));
+			pending[1].release(makeResponse('c'));
+			await c;
+			expect(scheduler.lastError).toBeNull();
+
+			// A's transport error finally lands — newer state must survive.
+			pending[0].fail(new Error('late transport failure'));
+			await new Promise((r) => setTimeout(r, 0));
+			expect(scheduler.lastError).toBeNull();
+			expect(scheduler.lastResult?.filename).toBe('c');
+		});
+
 		it('per-call signal aborts only that call', async () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
@@ -407,6 +511,61 @@ describe('SolveScheduler', () => {
 			await vi.waitFor(() => expect(queue.length).toBe(4));
 			queue[3].release(makeResponse('1-again'));
 			expect((await recheck).filename).toBe('1-again');
+		});
+
+		// Regression (ISSUES.md 50): a cache hit returned before enqueue(), so in
+		// latest-wins mode it didn't supersede the older in-flight solve — which
+		// later completed, overwrote lastResult, and snapped the UI back.
+		it('latest-wins: a cache hit supersedes the older in-flight solve', async () => {
+			const { executor, queue } = deferredExecutor();
+			const onSettle = vi.fn();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'latest-wins',
+				cache: true,
+				onSettle
+			});
+
+			// Prime the cache with input X.
+			const treeX = [{ ParamName: 'x', InnerTree: {} } as any];
+			const prime = scheduler.solve('def', treeX);
+			queue[0].release(makeResponse('x-cached'));
+			await prime;
+
+			// Y goes in flight, then X arrives and hits the cache.
+			const treeY = [{ ParamName: 'y', InnerTree: {} } as any];
+			const y = scheduler.solve('def', treeY);
+			await vi.waitFor(() => expect(queue.length).toBe(2));
+			const x = await scheduler.solve('def', treeX);
+			expect(x.filename).toBe('x-cached');
+
+			// Y was superseded — its later completion must not overwrite the hit.
+			await expect(y).rejects.toMatchObject({ code: ErrorCodes.SUPERSEDED });
+			queue[1].release(makeResponse('y-stale'));
+			await new Promise((r) => setTimeout(r, 0));
+			expect(scheduler.lastResult?.filename).toBe('x-cached');
+			const successSettles = onSettle.mock.calls.filter((c) => c[1]?.status === 'success');
+			expect(successSettles.map((c) => c[1].response.filename)).toEqual(['x-cached', 'x-cached']);
+		});
+
+		// Regression (ISSUES.md 67): the cache was consulted before the
+		// already-aborted-signal check, so an aborted call could resolve.
+		it('an already-aborted signal rejects ABORTED even on a cache hit', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: true
+			});
+
+			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
+			const prime = scheduler.solve('def', tree);
+			queue[0].release(makeResponse('cached'));
+			await prime;
+
+			const ctrl = new AbortController();
+			ctrl.abort();
+			await expect(scheduler.solve('def', tree, { signal: ctrl.signal })).rejects.toMatchObject({
+				code: ErrorCodes.ABORTED
+			});
 		});
 
 		// Decision 2026-07-11 (ISSUES.md 114): an errored solve is a valid,
