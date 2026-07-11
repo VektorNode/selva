@@ -216,12 +216,28 @@ move into the package later; H1's app-layer approach makes it optional.
 3. **H2 hash** — export a SHA-256 `hashSolveInput` variant from this package, or
    export `stableStringify` and hash app-side? Former keeps keying logic in one
    place; latter avoids a new public API on the package.
-4. **Status gating** — cache only `published`/`live` versions? ~~Skip errored
-   solves (mirror `cacheerroredsolves`)?~~ **Answered 2026-07-11: no — errored
-   solves are valid GH results and are cached (see addendum R2 / ISSUES.md
-   114).** Per-org isolation in the key to prevent cross-tenant reads?
-   Per-definition `cachePolicy` off-switch (addendum R9): where does the author
-   set it — definition settings UI, version metadata, or schema flag?
+4. **Status gating** — ~~cache only `published`/`live` versions?~~ **Answered
+   2026-07-11 (channel-gating rule, decided with the user):** durable /
+   server-side result caches are **live-only**; in-process and byte caches
+   **deliberately include drafts**. Concretely: (a) **H1's durable L2
+   reads+writes only live-channel solves** — draft versions are solved a
+   handful of times then abandoned, so persisting them is pure eviction churn
+   and storage cost; (b) once the per-solve cache-override seam (K6) exists,
+   the app **sends `cachesolve: false` on draft-channel solves** so draft
+   results stop occupying the Rhino server's RAM/disk — a first concrete
+   consumer of that seam; (c) the scheduler's **L1 keeps caching drafts** (the
+   editor re-solving the same draft inputs is one of its hottest legitimate
+   uses; TTL+LRU bound the cost); (d) the **definition-byte cache keeps
+   drafts** too — draft iteration re-solves the same multi-MB blob dozens of
+   times per session, and bytes are content-safe regardless of channel. No
+   correctness angle anywhere: all keys are content/version-derived, so a
+   re-uploaded draft can never be served stale. ~~Skip errored solves (mirror
+   `cacheerroredsolves`)?~~ **Answered 2026-07-11: no — errored solves are
+   valid GH results and are cached (see addendum R2 / ISSUES.md 114).** Still
+   open: per-org isolation in the key to prevent cross-tenant reads?
+   Per-definition `cachePolicy` off-switch (addendum R9): decided 2026-07-11 —
+   definition **record** field + settings UI (single policy enum, result
+   caches only); see the selva-side K6 design discussion.
 5. **F1 enumeration** — how does an author declare the discrete input space to
    batch-solve? New schema metadata on inputs, or an admin "generate bundle" UI
    that walks enumerable inputs?
