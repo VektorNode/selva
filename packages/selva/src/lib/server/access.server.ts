@@ -5,7 +5,6 @@ import type {
 	OrgPermission,
 	PlatformPermission,
 	Project,
-	ProjectAccessInput,
 	RequestContext
 } from '@selvajs/platform';
 import {
@@ -20,6 +19,7 @@ import {
 	canEditProjectSettings,
 	canEditDefinition
 } from '@selvajs/platform';
+import { createProjectAccessInputBuilder } from '@selvajs/server/access';
 import {
 	getProjectProvider,
 	getDefinitionMeta,
@@ -143,91 +143,23 @@ async function loadProjectOr404(ctx: RequestContext, projectId: string): Promise
 	return project;
 }
 
-/**
- * Build the rule input for any project-scope rule. Fetches exactly the rows
- * the rule will consult based on `project.visibility`:
- *
- * - `platform` → grants
- * - `private`  → caller's project member row
- * - `org` / `public` → caller's project member row (for canEdit/canManage) and
- *   org member row (for canView). Cross-org public skips the org row.
- *
- * Other fields default to safe values; pass `overrides` for the rare callers
- * that already loaded a row (e.g. tests, batched listing pages).
- */
-async function buildProjectAccessInput(
-	ctx: RequestContext,
-	project: Project,
-	overrides: Partial<ProjectAccessInput> = {}
-): Promise<ProjectAccessInput> {
-	const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
-	const enablePlatformProjects = flag('ENABLE_PLATFORM_PROJECTS');
-
-	let member: ProjectAccessInput['member'] = null;
-	let orgMember: ProjectAccessInput['orgMember'] = null;
-	let platformGrants: ProjectAccessInput['platformGrants'] = [];
-
-	if (project.visibility === 'platform') {
-		// When the flag is off the rule short-circuits before reading grants —
-		// skip the lookup to keep "feature disabled" cheap.
-		if (enablePlatformProjects) {
-			platformGrants = await getPlatformProjectGrantStore().listByProject(ctx, project.id);
-		}
-	} else if (project.visibility === 'private') {
-		member = await getProjectProvider().getProjectMember(ctx, project.id, ctx.userId);
-	} else {
-		const skipOrgMember = project.visibility === 'public' && allowCrossOrgPublic;
-		[member, orgMember] = await Promise.all([
-			getProjectProvider().getProjectMember(ctx, project.id, ctx.userId),
-			skipOrgMember
-				? Promise.resolve(null)
-				: getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId)
-		]);
-	}
-
-	return {
-		orgPermissions: ctx.orgPermissions,
-		platformPermissions: ctx.platformPermissions,
-		project,
-		member,
-		orgMember,
-		allowCrossOrgPublic,
-		enablePlatformProjects,
-		platformGrants,
-		actingOrgId: ctx.actingOrgId ?? null,
-		userId: ctx.userId,
-		...overrides
-	};
-}
-
-/**
- * Build a `ProjectAccessInput` from caller-provided rows without any I/O.
- * Used by listing pages that have already batch-loaded membership for many
- * projects; the route layer's per-row predicate calls this instead of
- * `buildProjectAccessInput` to avoid an N+1 fetch.
- */
-export function projectAccessInputFromRows(
-	ctx: RequestContext,
-	project: Project,
-	rows: {
-		member?: ProjectAccessInput['member'];
-		orgMember?: ProjectAccessInput['orgMember'];
-		platformGrants?: ProjectAccessInput['platformGrants'];
-	}
-): ProjectAccessInput {
-	return {
-		orgPermissions: ctx.orgPermissions,
-		platformPermissions: ctx.platformPermissions,
-		project,
-		member: rows.member ?? null,
-		orgMember: rows.orgMember ?? null,
+// Rule-input assembly (the "which rows does each visibility need" knowledge)
+// lives in `@selvajs/server/access`; this binding wires it to the app's
+// lazily-initialized providers and flag reads.
+const accessInputs = createProjectAccessInputBuilder({
+	getProjectMember: (ctx, projectId, userId) =>
+		getProjectProvider().getProjectMember(ctx, projectId, userId),
+	getOrgMember: (ctx, orgId, userId) => getOrganizationProvider().getOrgMember(ctx, orgId, userId),
+	listPlatformGrants: (ctx, projectId) =>
+		getPlatformProjectGrantStore().listByProject(ctx, projectId),
+	flags: () => ({
 		allowCrossOrgPublic: flag('ALLOW_CROSS_ORG_PUBLIC'),
-		enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS'),
-		platformGrants: rows.platformGrants ?? [],
-		actingOrgId: ctx.actingOrgId ?? null,
-		userId: ctx.userId
-	};
-}
+		enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
+	})
+});
+
+const buildProjectAccessInput = accessInputs.buildProjectAccessInput;
+export const projectAccessInputFromRows = accessInputs.projectAccessInputFromRows;
 
 export async function requireCanEdit(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);

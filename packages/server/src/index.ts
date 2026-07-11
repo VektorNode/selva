@@ -12,8 +12,9 @@
  * render loader) at `@selvajs/server/definitions`, the provider wiring
  * (registry-driven `createSelvaProviders`) at `@selvajs/server/providers`,
  * the HMAC token codec at `@selvajs/server/tokens`, error reporting at
- * `@selvajs/server/errors`, and HTTP hardening helpers at
- * `@selvajs/server/http`.
+ * `@selvajs/server/errors`, HTTP hardening helpers at `@selvajs/server/http`,
+ * access-rule input assembly at `@selvajs/server/access`, and deployment/ops
+ * helpers at `@selvajs/server/ops`.
  */
 
 export * from './compute/index.js';
@@ -22,3 +23,5 @@ export * from './providers/index.js';
 export * from './tokens/index.js';
 export * from './errors/index.js';
 export * from './http/index.js';
+export * from './access/index.js';
+export * from './ops/index.js';

@@ -17,8 +17,11 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { env } from '$env/dynamic/private';
+import type { ReleaseChannel } from '@selvajs/server/ops';
 
-export type ReleaseChannel = 'stable' | 'beta';
+// One definition of the channel union — `@selvajs/server/ops` owns it (the
+// semver comparison there is channel-aware); re-exported for app consumers.
+export type { ReleaseChannel };
 
 // Filename of the persisted channel, in the deployment dir.
 const CHANNEL_FILE = 'selva-channel.json';

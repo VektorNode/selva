@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { isHttpError } from '@sveltejs/kit';
 import type { AuthUser, RequestContext } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
-import { applySecurityHeaders } from '@selvajs/server/http';
+import { applySecurityHeaders, createRouteClassifier } from '@selvajs/server/http';
 import { providers, getErrorReporter } from '$lib/server/providers.server';
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { bootstrapUserSession, wireHeaderAuthBootstrap } from '$lib/server/auth-bootstrap.server';
@@ -147,12 +147,14 @@ export async function buildContext(
 // Route classification
 // ============================================================================
 //
-// Auth gating is **deny-by-default**. Every request goes through `needsAuth`
-// unless its path matches one of the explicit allowlists below. Adding a new
-// top-level route is therefore safe — forgetting to update these lists makes
-// it gated (a loud 401/redirect), not silently public.
-
-/** Exact-match public pages — no session needed. */
+// Auth gating is **deny-by-default**: the classifier (mechanics in
+// `@selvajs/server/http`) gates every request unless its path matches one of
+// the explicit allowlists below. Adding a new top-level route is therefore
+// safe — forgetting to update these lists makes it gated (a loud
+// 401/redirect), not silently public. The VALUES here are this app's policy.
+// Named (not inlined into the classifier config) because the best-effort
+// session attach below also needs it: public *pages* get locals populated for
+// a signed-in user, public prefixes/APIs don't.
 const PUBLIC_PAGE_ROUTES: ReadonlySet<string> = new Set([
 	'/', // landing — guests see it; authed users get redirected by +page.server.ts
 	'/login',
@@ -160,57 +162,33 @@ const PUBLIC_PAGE_ROUTES: ReadonlySet<string> = new Set([
 	'/accept-invite'
 ]);
 
-/**
- * Public path *prefixes*. `/auth/` covers the OAuth start + callback flow
- * (the user has no session yet by definition). `/logout` is a form-action
- * page — the action destroys the session, then redirects.
- */
-const PUBLIC_PATH_PREFIXES: readonly string[] = ['/auth/', '/logout'];
-
-/**
- * API endpoints that must answer without a session — currently just the
- * load-balancer health probe. Anything added here must be safe to expose
- * to anonymous callers.
- */
-const PUBLIC_API_ROUTES: ReadonlySet<string> = new Set(['/api/health']);
-
-/**
- * The blob proxy is *self-gating*: `/api/files/[...path]` classifies every
- * path against the asset-class registry and applies per-class auth itself —
- * public branding (logo/favicon) serves to anyone, while org/project assets
- * 401 when no session is attached. So the hook must NOT deny it up front;
- * instead it's treated like a public route (best-effort session attach) and
- * the route makes the real decision. This is the ONLY `/api/*` prefix allowed
- * to carry its own authorization — every other API route stays deny-by-default.
- */
-const SELF_GATING_API_PREFIX = '/api/files/';
-
-/**
- * Static-asset paths the SvelteKit/adapter-node serves directly. We
- * recognize them so the auth gate doesn't trip and we can apply
- * cache-control headers.
- */
-const STATIC_ASSET_PREFIXES: readonly string[] = ['/_app/', '/favicon/'];
-const STATIC_ASSET_PATHS: ReadonlySet<string> = new Set(['/favicon.svg', '/robots.txt']);
+const routeClassifier = createRouteClassifier({
+	publicPages: PUBLIC_PAGE_ROUTES,
+	// `/auth/` covers the OAuth start + callback flow (the user has no session
+	// yet by definition). `/logout` is a form-action page — the action destroys
+	// the session, then redirects.
+	publicPrefixes: ['/auth/', '/logout'],
+	// Endpoints that must answer without a session — currently just the
+	// load-balancer health probe. Anything added here must be safe to expose
+	// to anonymous callers.
+	publicApis: ['/api/health'],
+	// The blob proxy is *self-gating*: `/api/files/[...path]` classifies every
+	// path against the asset-class registry and applies per-class auth itself —
+	// public branding (logo/favicon) serves to anyone, while org/project assets
+	// 401 when no session is attached. So the hook must NOT deny it up front;
+	// the route makes the real decision. This is the ONLY `/api/*` prefix
+	// allowed to carry its own authorization.
+	selfGatingPrefix: '/api/files/',
+	// Static-asset paths SvelteKit/adapter-node serves directly — recognized so
+	// the auth gate doesn't trip and cache-control headers can apply.
+	staticPrefixes: ['/_app/', '/favicon/'],
+	staticPaths: ['/favicon.svg', '/robots.txt']
+});
 
 // Exported for tests so the auth-gate boundary has regression coverage —
 // these predicates are the deny-by-default policy and a bug in either is
 // security-relevant.
-export function isStaticAsset(pathname: string): boolean {
-	if (STATIC_ASSET_PATHS.has(pathname)) return true;
-	return STATIC_ASSET_PREFIXES.some((p) => pathname.startsWith(p));
-}
-
-export function isSelfGatingApiRoute(pathname: string): boolean {
-	return pathname.startsWith(SELF_GATING_API_PREFIX);
-}
-
-export function isPublicRoute(pathname: string): boolean {
-	if (PUBLIC_PAGE_ROUTES.has(pathname)) return true;
-	if (PUBLIC_API_ROUTES.has(pathname)) return true;
-	if (isSelfGatingApiRoute(pathname)) return true;
-	return PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p));
-}
+export const { isStaticAsset, isSelfGatingApiRoute, isPublicRoute } = routeClassifier;
 
 export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
 	event.locals.providers = providers;
