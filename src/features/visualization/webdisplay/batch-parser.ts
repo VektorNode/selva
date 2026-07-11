@@ -9,6 +9,7 @@ import { applyTextureMap } from './texture-cache';
 import type { ParsedBinaryMeshBatch } from './binary-parser';
 import type {
 	DisplayBatch,
+	MaterialAppearanceOptions,
 	MaterialGroup,
 	MeshBatchParsingOptions,
 	SerializableMaterial
@@ -72,7 +73,7 @@ export async function parseMeshBatchObject(
 	/** @internal Timings threaded from an outer entry point; not a caller option. */
 	telemetry?: ParseTelemetry
 ): Promise<THREE.Mesh[]> {
-	const { mergeByMaterial = true, applyTransforms = true, debug = false } = options ?? {};
+	const { mergeByMaterial = true, applyTransforms = true, debug = false, material } = options ?? {};
 	const { parseTime = 0, perfStart = debug ? performance.now() : 0 } = telemetry ?? {};
 
 	try {
@@ -86,6 +87,7 @@ export async function parseMeshBatchObject(
 			mergeByMaterial,
 			applyTransforms,
 			debug,
+			material,
 			parseTime,
 			decodeTime,
 			perfStart,
@@ -118,7 +120,7 @@ export async function parseMeshBatchBlob(
 	blob: ArrayBuffer | Uint8Array,
 	options?: MeshBatchParsingOptions
 ): Promise<THREE.Mesh[]> {
-	const { mergeByMaterial = true, applyTransforms = true, debug = false } = options ?? {};
+	const { mergeByMaterial = true, applyTransforms = true, debug = false, material } = options ?? {};
 
 	const perfStart = debug ? performance.now() : 0;
 
@@ -133,6 +135,7 @@ export async function parseMeshBatchBlob(
 			mergeByMaterial,
 			applyTransforms,
 			debug,
+			material,
 			parseTime: 0,
 			decodeTime,
 			perfStart,
@@ -148,6 +151,7 @@ interface BuildOptions {
 	mergeByMaterial: boolean;
 	applyTransforms: boolean;
 	debug: boolean;
+	material?: MaterialAppearanceOptions;
 	parseTime: number;
 	decodeTime: number;
 	perfStart: number;
@@ -168,6 +172,7 @@ function buildMeshesFromParsed(
 		mergeByMaterial,
 		applyTransforms,
 		debug,
+		material: materialAppearance,
 		parseTime,
 		decodeTime,
 		perfStart,
@@ -210,7 +215,10 @@ function buildMeshesFromParsed(
 	// Vertex colors are batch-wide when present (meshes without real colors carry a white fill,
 	// which multiplies to identity), so the material can enable vertexColors unconditionally.
 	const materials = materialsSrc.map((m) =>
-		createMaterial(m, { vertexColors: parsed.colors != null })
+		createMaterial(m, {
+			vertexColors: parsed.colors != null,
+			appearance: materialAppearance
+		})
 	);
 
 	const meshes: THREE.Mesh[] = [];
@@ -310,9 +318,11 @@ function maybeRotateFloat32Vertices(
 
 function createMaterial(
 	matData: SerializableMaterial,
-	options?: { vertexColors?: boolean }
+	options?: { vertexColors?: boolean; appearance?: MaterialAppearanceOptions }
 ): THREE.MeshPhysicalMaterial {
 	const color = parseColor(matData.color);
+	const vertexColors = options?.vertexColors ?? false;
+	const appearance = options?.appearance;
 
 	const material = new THREE.MeshPhysicalMaterial({
 		color,
@@ -320,8 +330,10 @@ function createMaterial(
 		roughness: matData.roughness,
 		opacity: matData.opacity,
 		transparent: matData.transparent,
-		vertexColors: options?.vertexColors ?? false,
-		side: THREE.DoubleSide,
+		vertexColors,
+		// Cull back faces for closed solids (crisper silhouette, less overdraw); keep both sides for
+		// open surfaces. Caller-controlled since Rhino emits both — default DoubleSide is the safe read.
+		side: appearance?.cullBackfaces ? THREE.FrontSide : THREE.DoubleSide,
 		// Reduced polygon offset to minimize artifacts
 		// Only use minimal offset to prevent z-fighting on coplanar faces
 		polygonOffset: true,
@@ -332,6 +344,19 @@ function createMaterial(
 		depthTest: true
 	});
 
+	// HDR image-based-lighting reflection strength. Left at three's default (1) unless the caller
+	// dials it: <1 flattens reflections toward a matte/technical read, >1 pushes a glossier look.
+	if (appearance?.envMapIntensity != null) {
+		material.envMapIntensity = appearance.envMapIntensity;
+	}
+
+	// Vertex colors arrive as raw sRGB bytes, but three's vertex-color path multiplies them into the
+	// (linear) working space with no decode — so they render washed out. Patch the vertex shader to
+	// sRGB→linear decode `color` before use. Only meshes with real vertex colors take this path.
+	if (vertexColors) {
+		applyVertexColorSRGBDecode(material);
+	}
+
 	// Texture loading is async (image decode); the cache assigns `material.map` when ready and
 	// flags needsUpdate, so the mesh renders untextured for at most the first frames. Hash-keyed
 	// asset URLs are immutable, so each texture is fetched and decoded once per session.
@@ -340,6 +365,29 @@ function createMaterial(
 	}
 
 	return material;
+}
+
+/**
+ * Patch a material's vertex shader to decode its per-vertex `color` attribute from sRGB to linear.
+ * three.js uploads vertex colors verbatim and its `color_vertex` chunk multiplies them straight into
+ * the linear working color space (unlike textures, which carry a `colorSpace` and get decoded) — so
+ * sRGB-authored vertex colors render too bright without this. Done in the shader (not a CPU pass over
+ * the buffer) to keep the hot per-solve parse cheap; the decode is a handful of GPU ops per vertex.
+ */
+function applyVertexColorSRGBDecode(material: THREE.Material): void {
+	material.onBeforeCompile = (shader) => {
+		shader.vertexShader = shader.vertexShader.replace(
+			'#include <color_vertex>',
+			`#include <color_vertex>
+			#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )
+				vColor.rgb = mix(
+					vColor.rgb / 12.92,
+					pow( ( vColor.rgb + 0.055 ) / 1.055, vec3( 2.4 ) ),
+					step( vec3( 0.04045 ), vColor.rgb )
+				);
+			#endif`
+		);
+	};
 }
 
 // ============================================================================

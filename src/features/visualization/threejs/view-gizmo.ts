@@ -57,6 +57,10 @@ export function createViewGizmo(deps: ViewGizmoDeps): ViewGizmo {
 	const raycaster = new THREE.Raycaster();
 	const gizmoCamera = new THREE.OrthographicCamera(-2, 2, 2, -2, 0, 4);
 	gizmoCamera.position.set(0, 0, 2);
+	// This camera is never rendered, so nothing else computes its matrixWorld — and
+	// Raycaster.setFromCamera doesn't either. Without this the ray originates at the identity
+	// position (z = 0, the cube's mid-plane) and the camera-facing axis sprites sit behind it.
+	gizmoCamera.updateMatrixWorld();
 
 	// Map a clicked axis sprite to the world-space view direction (from target toward camera).
 	const AXIS_DIRECTIONS: Record<string, THREE.Vector3> = {

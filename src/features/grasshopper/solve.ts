@@ -193,8 +193,12 @@ export async function solveByCacheKey(
 
 /**
  * Shared solve body: apply optional settings, POST, and split the server's
- * `pointer` (its cache key) off the response. Stripping via shallow copy rather
- * than `delete` keeps any already-observed response object unmutated.
+ * `pointer` (its cache key) off the response. `algo` — the request's full
+ * base64 definition echoed back on every solve — is stripped too: keeping it
+ * pins a multi-MB copy per response, multiplied by every cache holding
+ * responses (the scheduler's LRU alone up to `maxEntries` times). Stripping via
+ * shallow copy rather than `delete` keeps any already-observed response object
+ * unmutated.
  */
 async function runSolve(
 	args: GrasshopperRequestSchema,
@@ -204,18 +208,17 @@ async function runSolve(
 
 	const result = await fetchRhinoCompute<GrasshopperComputeResponse>('grasshopper', args, config);
 
-	if ('pointer' in result) {
-		const { pointer, ...rest } = result as GrasshopperComputeResponse & { pointer?: unknown };
-		const response = rest as GrasshopperComputeResponse;
-		warnOnEmptyInnerTrees(response, config.debug);
-		return {
-			response,
-			cacheKey: typeof pointer === 'string' ? pointer : null
-		};
-	}
-
-	warnOnEmptyInnerTrees(result, config.debug);
-	return { response: result, cacheKey: null };
+	const {
+		pointer,
+		algo: _algo,
+		...rest
+	} = result as GrasshopperComputeResponse & { pointer?: unknown; algo?: unknown };
+	const response = rest as GrasshopperComputeResponse;
+	warnOnEmptyInnerTrees(response, config.debug);
+	return {
+		response,
+		cacheKey: typeof pointer === 'string' ? pointer : null
+	};
 }
 
 // ============================================================================

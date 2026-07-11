@@ -51,6 +51,72 @@ describe('extractFilesFromComputeResponse — decode half', () => {
 	});
 });
 
+/**
+ * Zip-slip defense (issue 94): `subFolder`/`fileName`/`fileType` are server-controlled;
+ * traversal segments, absolute paths, and drive letters must never survive into archive paths.
+ */
+describe('extractFilesFromComputeResponse — archive path sanitization', () => {
+	it('strips ".." traversal segments from subFolder', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: '../../..', fileName: 'evil', fileType: '.txt' })
+		]);
+		expect(file.path).toBe('evil.txt');
+	});
+
+	it('strips traversal segments embedded in fileName', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ fileName: '../../etc/passwd', fileType: '' })
+		]);
+		expect(file.path).toBe('etc/passwd');
+	});
+
+	it('makes an absolute subFolder relative', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: '/etc', fileName: 'a', fileType: '.txt' })
+		]);
+		expect(file.path).toBe('etc/a.txt');
+	});
+
+	it('normalizes backslash paths and drops drive letters', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'C:\\..\\Windows', fileName: 'a', fileType: '.txt' })
+		]);
+		expect(file.path).toBe('Windows/a.txt');
+	});
+
+	it('keeps legitimate nested subFolders intact', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'nested/dir', fileName: 'a', fileType: '.json' })
+		]);
+		expect(file.path).toBe('nested/dir/a.json');
+	});
+
+	it('skips an item whose name sanitizes to nothing', async () => {
+		const files = await extractFilesFromComputeResponse([
+			fd({ fileName: '..', fileType: '' }),
+			fd({ data: 'kept' })
+		]);
+		expect(files).toHaveLength(1);
+		expect(files[0].content).toBe('kept');
+	});
+
+	it('sanitizes external file names too', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: true,
+				blob: async () => ({ arrayBuffer: async () => new Uint8Array([1]).buffer })
+			})
+		);
+		const files = await extractFilesFromComputeResponse([], {
+			fileName: '../escape.bin',
+			filePath: 'https://example.com/escape.bin'
+		});
+		expect(files).toHaveLength(1);
+		expect(files[0].path).toBe('escape.bin');
+	});
+});
+
 describe('extractFilesFromComputeResponse — fetch half', () => {
 	const ref: FileBaseInfo = { fileName: 'extra.bin', filePath: 'https://example.com/extra.bin' };
 

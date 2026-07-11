@@ -93,6 +93,16 @@ export function normalizeDefaultWithWarning(input: InputParamSchema): {
 		// Convert each branch to an array of parsed data
 		const tree: Record<string, any[]> = {};
 		for (const [branch, items] of Object.entries(innerTree)) {
+			// Mirror the flatten path's Array.isArray guard: a non-array branch value must degrade to
+			// a MALFORMED_DEFAULT warning, not a raw TypeError that aborts the whole definition-IO fetch.
+			if (!Array.isArray(items)) {
+				const message = `Input "${input.name ?? 'unknown'}" default had a non-array innerTree branch ("${branch}"); the default was dropped.`;
+				getLogger().warn('Unexpected structure in input.default innerTree:', input.default);
+				return {
+					schema: { ...input, default: null },
+					warning: { code: 'MALFORMED_DEFAULT', message }
+				};
+			}
 			tree[branch] = (items as any[]).map((item) => {
 				const data = itemData(item);
 				const type = itemType(item);

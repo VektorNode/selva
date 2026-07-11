@@ -102,13 +102,36 @@ export const downloadFileData = async (
  * @param dataItems - `FileData` items from the compute response.
  * @returns The decoded files.
  */
+/**
+ * Reduce a server-controlled path field to safe relative segments for use inside the zip
+ * (zip-slip defense): backslashes normalize to `/`, and empty, `.`, `..`, and drive-letter
+ * segments are dropped so no entry can escape the extraction directory via traversal or an
+ * absolute path. Returns '' when nothing safe remains.
+ */
+const sanitizeArchivePath = (raw: string): string =>
+	raw
+		.replace(/\\/g, '/')
+		.split('/')
+		.map((segment) => segment.trim())
+		.filter(
+			(segment) =>
+				segment !== '' && segment !== '.' && segment !== '..' && !/^[a-zA-Z]:$/.test(segment)
+		)
+		.join('/');
+
 const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 	const processedFiles: ProcessedFile[] = [];
 
 	dataItems.forEach((item) => {
-		const fileName = `${item.fileName}${item.fileType}`;
-		const filePath =
-			item.subFolder && item.subFolder.trim() !== '' ? `${item.subFolder}/${fileName}` : fileName;
+		const fileName = sanitizeArchivePath(`${item.fileName}${item.fileType}`);
+		if (fileName === '') {
+			getLogger().warn(
+				`Skipping file with unusable name "${item.fileName}${item.fileType}": no safe archive path remains after sanitization.`
+			);
+			return;
+		}
+		const subFolder = item.subFolder ? sanitizeArchivePath(item.subFolder) : '';
+		const filePath = subFolder !== '' ? `${subFolder}/${fileName}` : fileName;
 
 		if (item.isBase64Encoded === true && item.data) {
 			// `decodeBase64ToBinary` already returns a correctly-bounded view;
@@ -167,10 +190,16 @@ const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> 
 				}
 				const fileBlob = await response.blob();
 				const arrayBuffer = await fileBlob.arrayBuffer();
+				// Same zip-slip defense as decodeResponseFiles — the name lands in the archive.
+				const safeName = sanitizeArchivePath(file.fileName);
+				if (safeName === '') {
+					getLogger().warn(`Skipping fetched file with unusable name: ${file.fileName}`);
+					return null;
+				}
 				return {
-					fileName: file.fileName,
+					fileName: safeName,
 					content: new Uint8Array(arrayBuffer),
-					path: file.fileName
+					path: safeName
 				} as ProcessedFile;
 			} catch (error) {
 				getLogger().error(`Error fetching additional file from URL: ${file.filePath}`, error);

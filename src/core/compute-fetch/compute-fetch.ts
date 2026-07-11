@@ -257,46 +257,62 @@ export function composeSignal(
 	callerSignal: AbortSignal | undefined,
 	timeoutMs: number | undefined
 ): { signal: AbortSignal | undefined; cleanup: () => void } {
-	const signals: AbortSignal[] = [];
-	let cleanup = () => {};
+	const noCleanup = () => {};
+	const wantsTimeout = typeof timeoutMs === 'number' && timeoutMs > 0;
 
-	if (callerSignal) signals.push(callerSignal);
+	if (!callerSignal && !wantsTimeout) return { signal: undefined, cleanup: noCleanup };
+	if (callerSignal && !wantsTimeout) return { signal: callerSignal, cleanup: noCleanup };
 
-	if (timeoutMs && timeoutMs > 0) {
-		if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-			signals.push(AbortSignal.timeout(timeoutMs));
-		} else {
-			// Fallback for runtimes without AbortSignal.timeout
-			const ctrl = new AbortController();
-			const id = setTimeout(() => ctrl.abort(), timeoutMs);
-			cleanup = () => clearTimeout(id);
-			signals.push(ctrl.signal);
-		}
+	const supportsTimeout =
+		typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function';
+
+	// Timeout only: nothing is registered on a caller signal, so there is nothing to clean up on
+	// the modern path (the pending timer is small and self-expires at timeoutMs).
+	if (!callerSignal) {
+		if (supportsTimeout) return { signal: AbortSignal.timeout(timeoutMs!), cleanup: noCleanup };
+		const ctrl = new AbortController();
+		const id = setTimeout(() => ctrl.abort(), timeoutMs);
+		return { signal: ctrl.signal, cleanup: () => clearTimeout(id) };
 	}
 
-	if (signals.length === 0) return { signal: undefined, cleanup };
-	if (signals.length === 1) return { signal: signals[0], cleanup };
-
-	if (typeof AbortSignal !== 'undefined' && typeof (AbortSignal as any).any === 'function') {
-		return { signal: (AbortSignal as any).any(signals) as AbortSignal, cleanup };
-	}
-
-	// Manual composition fallback
+	// Caller signal + timeout: composed manually rather than with AbortSignal.any — `any` offers no
+	// way to unregister its dependent link on the caller's signal, so an app reusing one long-lived
+	// signal across many solves accumulates a registration per attempt for the full timeoutMs after
+	// each response (and forever on Node versions with the known AbortSignal.any leak).
 	const ctrl = new AbortController();
-	const onAbort = () => ctrl.abort();
-	for (const s of signals) {
+
+	let timeoutSignal: AbortSignal;
+	let timerId: ReturnType<typeof setTimeout> | undefined;
+	if (supportsTimeout) {
+		timeoutSignal = AbortSignal.timeout(timeoutMs!);
+	} else {
+		const timeoutCtrl = new AbortController();
+		timerId = setTimeout(() => timeoutCtrl.abort(), timeoutMs);
+		timeoutSignal = timeoutCtrl.signal;
+	}
+
+	const sources = [callerSignal, timeoutSignal];
+	// Forward the source's reason so fetch rejects with the right error name
+	// ('TimeoutError' vs 'AbortError'), matching AbortSignal.any semantics.
+	const onAbort = function (this: AbortSignal) {
+		ctrl.abort(this.reason);
+	};
+
+	for (const s of sources) {
 		if (s.aborted) {
-			ctrl.abort();
+			ctrl.abort(s.reason);
 			break;
 		}
 		s.addEventListener('abort', onAbort, { once: true });
 	}
-	const prevCleanup = cleanup;
-	cleanup = () => {
-		prevCleanup();
-		for (const s of signals) s.removeEventListener('abort', onAbort);
+
+	return {
+		signal: ctrl.signal,
+		cleanup: () => {
+			if (timerId !== undefined) clearTimeout(timerId);
+			for (const s of sources) s.removeEventListener('abort', onAbort);
+		}
 	};
-	return { signal: ctrl.signal, cleanup };
 }
 
 // ============================================================================

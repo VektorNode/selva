@@ -10,7 +10,7 @@
 // THREE.JS VISUALIZATION
 // ============================================================================
 
-export { initThree } from './threejs/three-initializer.js';
+export { initThree, materialAppearanceForStyle } from './threejs/three-initializer.js';
 export { createCameraController } from './threejs/camera-controller.js';
 export type {
 	CameraController,
@@ -57,7 +57,7 @@ export {
 	FLAG_HAS_VERTEX_COLORS
 } from './webdisplay/binary-parser';
 export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './webdisplay/binary-parser';
-export { clearTextureCache } from './webdisplay/texture-cache';
+export { clearTextureCache, setTextureAnisotropy } from './webdisplay/texture-cache';
 
 // ============================================================================
 // TYPE EXPORTS
@@ -70,6 +70,8 @@ export type {
 	EnvironmentConfig,
 	FloorConfig,
 	RenderConfig,
+	RenderStyle,
+	RenderStylePreset,
 	ControlsConfig,
 	GridConfig,
 	GizmoConfig,
@@ -80,6 +82,7 @@ export type {
 
 export type {
 	MeshBatchParsingOptions,
+	MaterialAppearanceOptions,
 	MeshExtractionOptions,
 	SerializableMaterial,
 	MeshMetadata,

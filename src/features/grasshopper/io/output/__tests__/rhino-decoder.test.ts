@@ -71,27 +71,32 @@ describe('decodeRhinoGeometry — registered decoders', () => {
 		});
 		const decode = vi.fn(() => ({ recovered: true }));
 		const rhino = fakeRhino(decode);
-		// Decoder throws → caught → CommonObject.decode runs on the extracted payload.
-		const result = decodeRhinoGeometry({ data: { p: 1 } }, 'My.Throwing.Type', rhino);
-		expect(decode).toHaveBeenCalledWith({ p: 1 });
+		// Decoder throws → caught → CommonObject.decode runs on the full envelope.
+		const envelope = { version: 10000, archive3dm: 70, opennurbs: 4294967295, data: 'AAEC' };
+		const result = decodeRhinoGeometry(envelope, 'My.Throwing.Type', rhino);
+		expect(decode).toHaveBeenCalledWith(envelope);
 		expect(result).toEqual({ recovered: true });
 	});
 });
 
 describe('decodeRhinoGeometry — CommonObject fallback', () => {
-	it('decodes an unregistered type via CommonObject.decode using the `data` payload', () => {
+	it('decodes an unregistered type via CommonObject.decode, fed the FULL envelope', () => {
+		// CommonObject.decode expects the whole rhino3dm serialization envelope
+		// {version, archive3dm, opennurbs, data} — not the unwrapped base64 `data` string.
 		const decode = vi.fn((p) => ({ brep: p }));
 		const rhino = fakeRhino(decode);
-		const result = decodeRhinoGeometry({ data: { opennurbs: true } }, 'Rhino.Geometry.Brep', rhino);
-		expect(decode).toHaveBeenCalledWith({ opennurbs: true });
-		expect(result).toEqual({ brep: { opennurbs: true } });
+		const envelope = { version: 10000, archive3dm: 70, opennurbs: 4294967295, data: 'AAEC' };
+		const result = decodeRhinoGeometry(envelope, 'Rhino.Geometry.Brep', rhino);
+		expect(decode).toHaveBeenCalledWith(envelope);
+		expect(result).toEqual({ brep: envelope });
 	});
 
-	it('reads the `value` payload when `data` is absent', () => {
+	it('passes through a payload that is not an envelope (no base64 `data` string)', () => {
 		const decode = vi.fn((p) => ({ ok: p }));
 		const rhino = fakeRhino(decode);
-		decodeRhinoGeometry({ value: { v: 1 } }, 'Rhino.Geometry.Mesh', rhino);
-		expect(decode).toHaveBeenCalledWith({ v: 1 });
+		const raw = { value: { v: 1 } };
+		expect(decodeRhinoGeometry(raw, 'Rhino.Geometry.Mesh', rhino)).toBe(raw);
+		expect(decode).not.toHaveBeenCalled();
 	});
 
 	it('returns the raw input when there is no decoder and no extractable payload', () => {
@@ -103,7 +108,7 @@ describe('decodeRhinoGeometry — CommonObject fallback', () => {
 		const rhino = fakeRhino(() => {
 			throw new Error('bad archive');
 		});
-		const raw = { data: { broken: true } };
+		const raw = { data: 'not-a-valid-archive' };
 		const result = decodeRhinoGeometry(raw, 'Rhino.Geometry.Brep', rhino) as {
 			__decodeError: boolean;
 			type: string;

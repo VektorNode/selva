@@ -627,3 +627,42 @@ The scheme regex lacks the `i` flag (`HTTP://…` rejected with a wrong message 
 - `read-field.test.ts` has no prototype-key (`toString`/`constructor`) or mutate-after-first-read case (issues 91, 106).
 - `handle-files.test.ts` never exercises the decode-failure skip branch, duplicate-path rename, browser guard, or traversal characters in `subFolder`/`fileName` (issue 94). `camel-case.ts` and `warnings.ts` have no tests at all.
 - `validate-server-url.test.ts` covers none of: query/fragment URLs, whitespace, credentials, uppercase scheme, trailing-dot/IP bypass, IPv6 literals (issues 97-98, 112). `compute-server-stats.test.ts` has zero `monitor()` or dispose-race coverage (issue 113).
+
+---
+
+# Caching Re-review — Known Issues
+
+Second pass over the solve-caching surface (2026-07-11), companion to `CACHING.md` (whose "Re-review addendum" holds the design-level findings — durable-cache keying, Redis notes, app-side issues in the `selva` repo). This section tracks only the **package-level bugs** that pass found. Numbering continues from the core audit. All issues below were verified against the code by hand.
+
+**Overlap with the 2026-07-06 Grasshopper audit** — the re-review independently re-confirmed several already-tracked issues; they are not renumbered here:
+
+- Sampled `Uint8Array` hashing inside the dataTree → cache-key collision = **issue 56**. New consequence recorded in `CACHING.md` R1: it also defeats the planned durable-cache "store canonical inputs, compare on hit" defense, since the canonical string is itself lossy.
+- Aborting a queued solve silently ignored (dead request still burns a full compute) = **issue 46**. At 1000 users behind the app's `queue`-mode scheduler this is a load problem, not just a contract violation.
+- Definition hashed twice per solve on the event loop = **issue 57**.
+- `algo` retained in responses/cache = **issue 58**. Upgraded by the re-review: `runSolve` strips `pointer` but not `algo`, and a grep of both repos found **no consumer of `response.algo`** — so the full base64 definition is also shipped to every browser on every solve for nothing. Strip it at the source (or in the app pipeline) — see `CACHING.md` addendum, "M3 is understated".
+- `[undefined]` ≡ `[]` stringify collision = **issue 53**; 32-bit final hash birthday risk = **issue 68** (now also `CACHING.md` H2, where it blocks durable keying).
+
+## High severity
+
+### 114. Errored-solve caching is intended — but the log and flag semantics contradict it ✅
+
+`scheduler/solve-scheduler.ts:436` — api/docs (downgraded from bug — decision 2026-07-11)
+`writeCache` caches every resolved response, including those with GH `errors`. **Decision (2026-07-11): that is correct behavior.** In Grasshopper an errored solve is still a valid, deterministic result — definitions raise GH errors by design (guarded components, validation branches; `types.ts:205-207` documents exactly this), so replaying one from cache is right. What remains wrong: (a) the consuming app's debug log ("an errored solve is NEVER cached") describes only Rhino's server-side `cachesolve` and is misleading about this cache; (b) asymmetry — Rhino-side errored-solve caching is opt-in (`cacheerroredsolves`) while the Selva cache always includes them, with no `CacheOptions` to express either choice. Fix: correct the app-side log wording; optionally add `CacheOptions.cacheErroredSolves` (default **true**, matching the decision) for consumers that want Rhino-flag parity. The durable cache (CACHING.md H1) should likewise store errored solves.
+
+### 115. No in-flight coalescing — identical concurrent solves all execute ✅
+
+`scheduler/solve-scheduler.ts:328, 367-402` — perf
+The cache is consulted only at `solve()` entry; there is no `key → in-flight promise` map. N identical requests arriving while the first is still solving all enqueue and all execute — in `queue` mode they serialize and re-solve one after another, each _missing_ the cache that the first will only populate on completion. Rhino's `cachesolve` softens the repeats server-side (when enabled), but each still pays a full round trip, and any durable L2 built on this scheduler inherits the cold-key stampede. Fix: coalesce by key — subsequent `solve()` calls for a key with an in-flight execution share its promise (careful with per-call abort semantics: a shared solve should only abort when all subscribers have aborted).
+
+## Low severity
+
+### 116. Cache hits return a shared mutable reference ✅
+
+`scheduler/solve-scheduler.ts:661` — bug (latent)
+`readCache` returns the stored `response` object itself, and `_lastResult` shares it. Any consumer that mutates a response (processors, viewers) poisons every subsequent hit for that key. The main app path serializes the response immediately (safe), but the scheduler is public API with no documented immutability contract. Fix: document that responses from the scheduler must be treated as immutable (a defensive `structuredClone` on read is too expensive for multi-MB responses to be the default).
+
+## Test gaps (caching re-review)
+
+- No test pinning that a response with non-empty `errors` IS cached — now the intended, decided behavior (issue 114).
+- No test issuing two identical `solve()` calls while the first is in flight and asserting executor call count (issue 115).
+- No test mutating a cache-hit response and asserting the next hit is unaffected (issue 116).

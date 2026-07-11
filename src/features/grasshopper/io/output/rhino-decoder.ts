@@ -41,9 +41,16 @@ function findDecoder(rhinoType: string): RhinoDecoder | undefined {
 	return undefined;
 }
 
-function extractPayload(parsedData: any): any {
-	if (!parsedData || typeof parsedData !== 'object') return null;
-	return (parsedData as any).data ?? (parsedData as any).value ?? null;
+/**
+ * Whether the parsed item looks like a rhino3dm serialization envelope
+ * (`{version, archive3dm, opennurbs, data: "<base64>"}`). `CommonObject.decode` expects the WHOLE
+ * envelope — unwrapping `.data` first hands it the bare base64 string, which throws or decodes to
+ * garbage (see the correct usage in display-items-parser.ts).
+ */
+function isDecodableEnvelope(parsedData: unknown): parsedData is object {
+	return Boolean(
+		parsedData && typeof parsedData === 'object' && typeof (parsedData as any).data === 'string'
+	);
 }
 
 // -----------------------------------------------------------------------------
@@ -64,10 +71,9 @@ export function decodeRhinoGeometry(
 		}
 	}
 
-	// Fallback using CommonObject.decode
+	// Fallback using CommonObject.decode — fed the full envelope, not the unwrapped payload.
 	try {
-		const payload = extractPayload(parsedData);
-		if (payload) return rhino.CommonObject.decode(payload);
+		if (isDecodableEnvelope(parsedData)) return rhino.CommonObject.decode(parsedData);
 	} catch (error) {
 		getLogger().warn(`Failed to decode ${rhinoType} with CommonObject:`, error);
 		return { __decodeError: true, type: rhinoType, raw: parsedData };

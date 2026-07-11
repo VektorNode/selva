@@ -63,13 +63,31 @@ export function processInputWithError(rawInput: InputParamSchema): {
 	// shape the per-type parsers expect (pure — does not mutate rawInput). An
 	// unrecognized default shape nulls the value AND returns a warning so the
 	// drop is surfaced to the client via parseErrors instead of vanishing.
-	const { schema, warning } = normalizeDefaultWithWarning({ ...rawInput, paramType });
-	const defaultWarningError: InputParseError | undefined = warning && {
-		inputName: rawInput.name || 'unknown',
-		paramType,
-		message: warning.message,
-		code: warning.code
-	};
+	let schema: InputParamSchema = { ...rawInput, paramType };
+	let defaultWarningError: InputParseError | undefined;
+	try {
+		const { schema: normalized, warning } = normalizeDefaultWithWarning(schema);
+		schema = normalized;
+		defaultWarningError = warning && {
+			inputName: rawInput.name || 'unknown',
+			paramType,
+			message: warning.message,
+			code: warning.code
+		};
+	} catch (error) {
+		// A default too malformed for the normalizer to even walk is bad server/user data, not a
+		// programming bug — null it and report per-input rather than aborting the whole
+		// definition-IO fetch over one input.
+		schema = { ...schema, default: null };
+		defaultWarningError = {
+			inputName: rawInput.name || 'unknown',
+			paramType,
+			message: `Input "${rawInput.name ?? 'unknown'}" default could not be normalized and was dropped: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
+			code: 'MALFORMED_DEFAULT'
+		};
+	}
 	const parser = INPUT_TYPE_PARSERS.get(paramType);
 
 	try {

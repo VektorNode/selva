@@ -6,21 +6,36 @@ through Rhino Compute.
 ## Quick Start
 
 ```typescript
-import { GrasshopperClient } from '@rhino-compute/core';
+import { GrasshopperClient, TreeBuilder, GrasshopperResponseProcessor } from '@selvajs/compute';
 
-const client = new GrasshopperClient({
-	serverUrl: 'https://compute.rhino3d.com',
+// The constructor is private — create() validates the server is reachable first.
+const client = await GrasshopperClient.create({
+	serverUrl: 'http://localhost:5000',
 	apiKey: 'YOUR_API_KEY'
 });
 
-// Fetch definition inputs/outputs
-const { inputs, outputs } = await client.getIO('https://example.com/definition.gh');
+try {
+	// Fetch definition inputs/outputs
+	const { inputs, outputs } = await client.getIO('https://example.com/definition.gh');
 
-// Solve with values
-const result = await client.solve('https://example.com/definition.gh', { radius: 10, height: 20 });
+	// Build the input data tree from the definition's parameters, then set values by name
+	const inputTree = TreeBuilder.fromInputParams(inputs);
+	TreeBuilder.replaceTreeValue(inputTree, 'radius', 10);
+	TreeBuilder.replaceTreeValue(inputTree, 'height', 20);
 
-console.log(result.data); // Parsed output data
+	// Solve
+	const result = await client.solve('https://example.com/definition.gh', inputTree);
+
+	// Extract typed output values from the response's data trees
+	const { values } = new GrasshopperResponseProcessor(result).getValues();
+	console.log(values);
+} finally {
+	await client.dispose();
+}
 ```
+
+A complete runnable version of this flow lives in
+[`examples/simple_example.ts`](../../../examples/simple_example.ts).
 
 ## Core Concepts
 
@@ -31,8 +46,9 @@ This library automatically discovers and types these for you.
 
 ### 2. Data Trees
 
-Grasshopper uses a hierarchical data structure called "data trees" to organize information. This
-library handles conversion between JavaScript arrays/objects and Grasshopper's tree format.
+Grasshopper uses a hierarchical data structure called "data trees" to organize information. Inputs
+and outputs travel as `DataTree[]`; `TreeBuilder` builds and edits them without hand-writing branch
+paths.
 
 ### 3. Type Safety
 
@@ -43,7 +59,7 @@ and compile-time validation.
 
 ```
 grasshopper/
-├── client/              # High-level GrasshopperClient class
+├── client/              # High-level GrasshopperClient class + response processor
 ├── solve.ts             # Low-level solve operation
 ├── io/                  # Input/output handling
 │   ├── input/           # Input parsing: normalize-default, input-type-parsers, input-processors
@@ -64,7 +80,6 @@ grasshopper/
 
 - **Type Detection** - Automatically identifies Number, Text, Boolean, Geometry, etc.
 - **Validation** - Enforces min/max bounds, required fields
-- **Grouping** - Organizes inputs by category for UI generation
 - **Defaults** - Handles default values, including data trees
 
 ### Output Processing
@@ -84,63 +99,54 @@ grasshopper/
 ### Basic Solve
 
 ```typescript
-const result = await client.solve('https://example.com/box.gh', { width: 5, height: 10, depth: 3 });
+const { inputs } = await client.getIO('https://example.com/box.gh');
 
-// Access parsed outputs
-const boxes = result.data.boxes; // Typed as Brep[]
+const inputTree = TreeBuilder.fromInputParams(inputs);
+TreeBuilder.replaceTreeValue(inputTree, 'width', 5);
+TreeBuilder.replaceTreeValue(inputTree, 'height', 10);
+TreeBuilder.replaceTreeValue(inputTree, 'depth', 3);
+
+const result = await client.solve('https://example.com/box.gh', inputTree);
+
+// Extract parsed outputs (keyed by output parameter name)
+const { values } = new GrasshopperResponseProcessor(result).getValues();
 ```
 
 ### Working with Data Trees
 
 ```typescript
-// Single values
-const result = await client.solve(definitionUrl, {
-	count: 5
-});
+// Single values and arrays both go through replaceTreeValue
+TreeBuilder.replaceTreeValue(inputTree, 'count', 5);
+TreeBuilder.replaceTreeValue(inputTree, 'points', [
+	[0, 0, 0],
+	[1, 1, 1],
+	[2, 2, 2]
+]);
 
-// Arrays (become {0} branch)
-const result = await client.solve(definitionUrl, {
-	points: [
-		[0, 0, 0],
-		[1, 1, 1],
-		[2, 2, 2]
-	]
-});
-
-// Data trees (explicit paths)
-const result = await client.solve(definitionUrl, {
-	values: {
-		'{0}': [1, 2, 3],
-		'{1}': [4, 5, 6]
-	}
-});
+// Read a value back out of a tree
+const count = TreeBuilder.getTreeValue(inputTree, 'count');
 ```
 
-### Grouped Inputs (for UI generation)
+See [`data-tree/README.md`](data-tree/README.md) for branch paths and multi-branch trees.
+
+### Per-Call Options
 
 ```typescript
-const { inputs } = await client.getIO(definitionUrl);
-
-// Group inputs by category
-import { groupInputs } from '@rhino-compute/core';
-const grouped = groupInputs(inputs, {
-	showUngrouped: true,
-	capitalize: true
+// Cancel or bound an individual solve without touching the client config
+const controller = new AbortController();
+const result = await client.solve(definitionUrl, inputTree, {
+	signal: controller.signal,
+	timeoutMs: 120_000
 });
-
-// Result:
-// {
-//   "Geometry": { inputs: [...] },
-//   "Settings": { inputs: [...] },
-//   "Advanced": { inputs: [...] }
-// }
 ```
 
 ### Error Handling
 
 ```typescript
+import { RhinoComputeError } from '@selvajs/compute';
+
 try {
-	const result = await client.solve(definitionUrl, values);
+	const result = await client.solve(definitionUrl, inputTree);
 
 	if (result.errors?.length) {
 		console.error('Computation errors:', result.errors);
@@ -164,13 +170,16 @@ try {
 High-level client for Grasshopper operations.
 
 ```typescript
-const client = new GrasshopperClient(config);
+const client = await GrasshopperClient.create(config);
 
-// Fetch definition metadata
-await client.getIO(url);
+// Fetch parsed definition metadata: { inputs, outputs, parseErrors }
+await client.getIO(definition); // definition: URL string, base64 string, or Uint8Array
 
-// Solve with values
-await client.solve(url, values);
+// Solve with a data tree
+await client.solve(definition, dataTree, options?); // → GrasshopperComputeResponse
+
+// Release resources (pending schedulers etc.)
+await client.dispose();
 ```
 
 ## Advanced Topics
@@ -214,17 +223,12 @@ interface GrasshopperComputeConfig {
 
 ## Related Documentation
 
-- [Input Parsers](io/input/input-parsers/README.md) - Extending input type support
+- [Input Parsers](io/input/README.md) - Extending input type support
 - [Core Types](types.ts) - Complete type definitions
 - [Compute Fetch](../../core/compute-fetch/) - Low-level HTTP operations
 
 ## Examples
 
-TODO: Create examples
-
-See the `examples/` directory for complete working examples:
-
-- Basic solve operations
-- UI generation from definition I/O
-- Data tree manipulation
-- Error handling patterns
+See [`examples/`](../../../examples/) for complete working examples, starting with
+[`simple_example.ts`](../../../examples/simple_example.ts) (client creation → getIO → TreeBuilder →
+solve → response processing).

@@ -5,7 +5,7 @@ import { getLogger } from '@/core';
 
 import { parseDisplayItems } from '../display-items/display-items-parser';
 
-import { parseMeshBatch } from './batch-parser';
+import { parseMeshBatchObject } from './batch-parser';
 
 import type { DataItem, GrasshopperComputeResponse } from '@/features/grasshopper/types';
 import type { DisplayBatch, MeshExtractionOptions, MeshBatchParsingOptions } from './types';
@@ -152,9 +152,18 @@ async function processDataBranch(
 			...parsingOptions
 		};
 
-		const batchMeshes = await parseMeshBatch(item.data, mergedParsingOptions);
+		// Parse the JSON envelope once — it contains the full multi-MB base64 SLVA blob as a string,
+		// so letting the mesh parser and the display-item extractor each parse it doubles both the
+		// synchronous main-thread CPU and the transient string memory.
+		const batch = extractBatch(item.data);
+		if (!batch) {
+			getLogger().error('Error parsing display batch envelope: invalid JSON');
+			continue;
+		}
 
-		const batchItems = parseDisplayItems(extractBatchItems(item.data), {
+		const batchMeshes = await parseMeshBatchObject(batch, mergedParsingOptions);
+
+		const batchItems = parseDisplayItems(batch.items, {
 			rhino,
 			applyTransforms: mergedParsingOptions.applyTransforms
 		});
@@ -178,12 +187,11 @@ async function processDataBranch(
 }
 
 /**
- * Pulls the `items` array off a raw DisplayBatch payload, tolerating either a parsed object or a
+ * Resolves a raw DisplayBatch payload to a parsed object, tolerating either a parsed object or a
  * JSON string (the blob-bearing `item.data` is the same envelope the mesh parser reads).
  */
-function extractBatchItems(data: unknown): DisplayBatch['items'] {
-	const batch = typeof data === 'string' ? safeParse(data) : (data as DisplayBatch | undefined);
-	return batch?.items;
+function extractBatch(data: unknown): DisplayBatch | undefined {
+	return typeof data === 'string' ? safeParse(data) : (data as DisplayBatch | undefined);
 }
 
 function safeParse(s: string): DisplayBatch | undefined {

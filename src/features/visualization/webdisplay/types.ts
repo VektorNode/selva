@@ -106,6 +106,31 @@ export interface MeshBatchParsingOptions {
 	applyTransforms?: boolean;
 	/** Enable performance monitoring in console. Defaults to false. */
 	debug?: boolean;
+	/**
+	 * Appearance dials applied to every material built from this batch. These drive how "rendered"
+	 * vs "matte technical" the meshes look; they are set once at parse time (materials are rebuilt
+	 * per solve). Runtime restyling of an already-built scene lives in the viewer's `setRenderStyle`.
+	 */
+	material?: MaterialAppearanceOptions;
+}
+
+/**
+ * How compute meshes read visually. Bundled so a caller can pick a coherent look ('technical' vs
+ * 'rendered') by setting all three together rather than dialing each in isolation.
+ */
+export interface MaterialAppearanceOptions {
+	/**
+	 * Multiplier on the HDR image-based-lighting reflection strength. ~0.5 reads matte/technical,
+	 * ~1.3 reads glossy/presentation. Default 1 (three.js's own default — unchanged look).
+	 */
+	envMapIntensity?: number;
+	/**
+	 * Cull back faces (`THREE.FrontSide`) instead of rendering both sides (`THREE.DoubleSide`).
+	 * FrontSide gives cleaner interior shading, a crisper silhouette, and less overdraw on closed
+	 * solids — but open surfaces (which Rhino also emits) then vanish when viewed from behind.
+	 * Default false (keep DoubleSide) to stay safe for surface geometry.
+	 */
+	cullBackfaces?: boolean;
 }
 
 /**

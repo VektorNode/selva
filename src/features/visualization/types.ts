@@ -51,6 +51,35 @@ export type RenderConfig = {
 	aoIntensity?: number;
 };
 
+/**
+ * A coherent visual look. Seeds the initial render defaults (tone mapping, AO, edges, grid, IBL
+ * strength) at construction and can be re-applied live via `setRenderStyle`.
+ *
+ * - 'technical': matte, drawing-like — neutral tone mapping, low IBL, edges + grid on, AO on.
+ *   Reads like a CAD shaded view (Rhino/Onshape).
+ * - 'rendered':  presentation — ACES-filmic tone mapping, stronger IBL, edges off, AO on. Reads
+ *   like a Keyshot/Fusion render.
+ */
+export type RenderStyle = 'technical' | 'rendered';
+
+/**
+ * The dials a {@link RenderStyle} sets. Single source of truth shared by construction-time defaults
+ * and the runtime `setRenderStyle`, so the two never drift. `envMapIntensity` and `cullBackfaces`
+ * are parse-time material choices (see the batch parser's `material` option); the rest are viewer
+ * dials applied to the live scene.
+ */
+export type RenderStylePreset = {
+	toneMapping: THREE.ToneMapping;
+	toneMappingExposure: number;
+	/** IBL reflection strength on compute materials. */
+	envMapIntensity: number;
+	/** Cull back faces on compute meshes (crisper solids; hides open surfaces from behind). */
+	cullBackfaces: boolean;
+	ambientOcclusion: boolean;
+	edges: boolean;
+	grid: boolean;
+};
+
 /** Crisp boundary/crease edge overlays on meshes. See `addEdges`. */
 export type EdgesConfig = {
 	/** Auto-attach edge overlays to meshes as they load. Default false (opt-in). */
@@ -125,6 +154,13 @@ export type MeasureConfig = {
 
 export type ThreeInitializerOptions = {
 	sceneScale?: 'mm' | 'cm' | 'm' | 'inches' | 'feet';
+	/**
+	 * Pick a coherent look up front — seeds sensible defaults for tone mapping, AO, edges, grid, and
+	 * IBL strength (see {@link RenderStyle}). Individual `render`/`edges`/`grid` options still win
+	 * when set explicitly, so this only fills in what you leave unspecified. Omit for the plain
+	 * per-field defaults (no style applied). Re-apply later via the init result's `setRenderStyle`.
+	 */
+	renderStyle?: RenderStyle;
 	camera?: CameraConfig;
 	lighting?: LightingConfig;
 	environment?: EnvironmentConfig;

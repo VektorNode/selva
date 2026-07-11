@@ -292,8 +292,13 @@ export interface GrasshopperComputeResponse
 	cachesolve: boolean;
 	/** Model units (always present in response) */
 	modelunits: RhinoModelUnit;
-	/** Base64 encoded algorithm (always present in response) */
-	algo: string;
+	/**
+	 * The server echoes the request's full base64 definition back as `algo`, but the client strips
+	 * it before returning — retaining it would pin a multi-MB copy of the definition per response,
+	 * multiplied by every cache that holds responses. Always `undefined` on client-returned
+	 * responses (inherited optional field from {@link GrasshopperDefinitionSource}).
+	 */
+	algo?: string | null;
 	/** Filename of the definition (always present in response) */
 	filename: string | null;
 	/** Data version */

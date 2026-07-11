@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /**
@@ -9,11 +10,18 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
  * this when `render.ambientOcclusion` is enabled, and otherwise renders with a plain
  * `renderer.render` so the cheap path stays cheap (the chosen tradeoff — see cad-viewer-plan.md).
  *
- * Pipeline: RenderPass → GTAOPass → OutputPass. GTAO (ground-truth AO) is the modern replacement for
- * SSAO/SAO — better contact shadows in crevices, the "engineered" depth cue. `screenSpaceRadius` is
- * on so the AO radius is in screen space, which keeps it scale-robust across the viewer's mm→m
- * scenes without per-scene tuning. OutputPass applies tone mapping + color space (taking over the
- * roles the renderer did directly in the non-composer path).
+ * Pipeline: RenderPass → GTAOPass → SMAAPass → OutputPass. GTAO (ground-truth AO) is the modern
+ * replacement for SSAO/SAO — better contact shadows in crevices, the "engineered" depth cue.
+ * `screenSpaceRadius` is on so the AO radius is in screen space, which keeps it scale-robust across
+ * the viewer's mm→m scenes without per-scene tuning.
+ *
+ * SMAA restores antialiasing on this path. The EffectComposer renders into an offscreen target, so
+ * the WebGLRenderer's own MSAA (`antialias: true`) does nothing here — without a dedicated AA pass,
+ * enabling AO would visibly *worsen* edge quality. SMAA is chosen over TAA because TAA's temporal
+ * jitter smears during OrbitControls drags; SMAA is single-frame, cheap, and stable while orbiting.
+ *
+ * OutputPass applies tone mapping + color space last (taking over the roles the renderer did
+ * directly in the non-composer path), so SMAA operates on the pre-tonemapped image as intended.
  *
  * Camera swaps: the active camera can flip perspective↔ortho. Rather than rebuild the composer, we
  * retarget the passes' `camera` each render via {@link setCamera}.
@@ -53,6 +61,11 @@ export function createRenderPipeline(
 	gtaoPass.updateGtaoMaterial({ screenSpaceRadius: true });
 	composer.addPass(gtaoPass);
 
+	// Restore antialiasing lost when rendering through the composer's offscreen target (see header).
+	// Sized by composer.setSize below, like every other pass.
+	const smaaPass = new SMAAPass();
+	composer.addPass(smaaPass);
+
 	const outputPass = new OutputPass();
 	composer.addPass(outputPass);
 
@@ -64,10 +77,11 @@ export function createRenderPipeline(
 
 	return {
 		render: (deltaTime) => composer.render(deltaTime),
+		// composer.setSize propagates the pixel-ratio-multiplied size to every pass; calling
+		// pass.setSize(w, h) here again would knock the AO/AA targets back down to logical CSS size.
 		setSize: (w, h, pixelRatio) => {
 			composer.setPixelRatio(pixelRatio);
 			composer.setSize(w, h);
-			gtaoPass.setSize(w, h);
 		},
 		setCamera: (cam) => {
 			renderPass.camera = cam;
@@ -77,6 +91,7 @@ export function createRenderPipeline(
 		dispose: () => {
 			composer.dispose();
 			gtaoPass.dispose();
+			smaaPass.dispose();
 			outputPass.dispose();
 		}
 	};

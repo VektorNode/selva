@@ -19,6 +19,30 @@ const textureCache = new Map<string, THREE.Texture>();
 const inFlight = new Map<string, Promise<THREE.Texture>>();
 
 /**
+ * Max anisotropic-filtering samples applied to color maps, keeping textures sharp at grazing angles
+ * (floors, long walls receding to the horizon) instead of blurring. The ceiling is hardware-defined
+ * (`renderer.capabilities.getMaxAnisotropy()`, typically 16); the viewer reports it once at init via
+ * {@link setTextureAnisotropy}. Defaults to 1 (three's default — no anisotropy) so the module is
+ * correct even if the viewer never calls in.
+ */
+let maxAnisotropy = 1;
+
+/**
+ * Set the anisotropy applied to all color-map textures. Call once from the viewer with
+ * `renderer.capabilities.getMaxAnisotropy()`. Retroactively updates already-cached textures so
+ * textures decoded before this call still benefit.
+ */
+export function setTextureAnisotropy(value: number): void {
+	maxAnisotropy = Math.max(1, value);
+	for (const texture of textureCache.values()) {
+		if (texture.anisotropy !== maxAnisotropy) {
+			texture.anisotropy = maxAnisotropy;
+			texture.needsUpdate = true;
+		}
+	}
+}
+
+/**
  * Assigns a texture to `material.map`, synchronously when cached, otherwise asynchronously once
  * the image is fetched and decoded (flagging `needsUpdate` — the mesh renders untextured for at
  * most the first frames). Load failures log a warning and leave the material untextured rather
@@ -65,6 +89,8 @@ function loadTexture(url: string): Promise<THREE.Texture> {
 				(texture) => {
 					// Color maps are sRGB; without this the render is washed out.
 					texture.colorSpace = THREE.SRGBColorSpace;
+					// Keep textures crisp at grazing angles (see maxAnisotropy).
+					texture.anisotropy = maxAnisotropy;
 					textureCache.set(url, texture);
 					inFlight.delete(url);
 					resolve(texture);

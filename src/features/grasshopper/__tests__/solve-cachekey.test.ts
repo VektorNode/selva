@@ -75,6 +75,17 @@ describe('solveGrasshopperDefinitionWithCacheKey', () => {
 		const { cacheKey } = await solveGrasshopperDefinitionWithCacheKey([], DEF, config);
 		expect(cacheKey).toBeNull();
 	});
+
+	it('strips the echoed algo from the response (issue 58 — cached responses pinned the definition)', async () => {
+		fetchMock.mockResolvedValueOnce(okSolve({ algo: 'aHVnZS1iYXNlNjQtZGVmaW5pdGlvbg==' }));
+
+		const { response } = await solveGrasshopperDefinitionWithCacheKey([], DEF, config);
+
+		// The server echoes the full base64 definition back on every solve; keeping it
+		// would multiply a multi-MB copy into every cache that holds responses.
+		expect(response).not.toHaveProperty('algo');
+		expect(response).toHaveProperty('values');
+	});
 });
 
 describe('solveByCacheKey — fast path', () => {

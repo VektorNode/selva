@@ -3,7 +3,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 
 import { getLogger } from '@/core';
-import { ThreeInitializerOptions } from '../types';
+import type { ThreeInitializerOptions, RenderStyle, RenderStylePreset } from '../types';
+import type { MaterialAppearanceOptions } from '../webdisplay/types';
 import { createCameraController, type CameraController } from './camera-controller';
 import { createGrid, type Grid } from './grid';
 import { createViewGizmo, type ViewGizmo } from './view-gizmo';
@@ -11,8 +12,48 @@ import { addEdges } from './edges';
 import { createRenderPipeline, type RenderPipeline } from './render-pipeline';
 import { createLabelLayer, type LabelLayer } from './label-layer';
 import { createMeasureTool, type MeasureTool } from './measure';
+import { setTextureAnisotropy } from '../webdisplay/texture-cache';
 
 const defaultUp = new THREE.Vector3(0, 0, 1);
+
+/**
+ * The two render-style looks, as concrete dial values. Single source of truth: consumed by
+ * `applyDefaults` to seed construction-time defaults AND by `setRenderStyle` to re-apply a look at
+ * runtime, so the two paths can never drift. See {@link RenderStyle} for what each look reads like.
+ */
+const RENDER_STYLE_PRESETS: Record<RenderStyle, RenderStylePreset> = {
+	technical: {
+		toneMapping: THREE.NeutralToneMapping,
+		toneMappingExposure: 1,
+		envMapIntensity: 0.5,
+		cullBackfaces: false,
+		ambientOcclusion: true,
+		edges: true,
+		grid: true
+	},
+	rendered: {
+		toneMapping: THREE.ACESFilmicToneMapping,
+		toneMappingExposure: 1,
+		envMapIntensity: 1.3,
+		cullBackfaces: false,
+		ambientOcclusion: true,
+		edges: false,
+		grid: false
+	}
+};
+
+/**
+ * The material-parse options implied by a render style — feed these into the batch parser's
+ * `material` option so meshes are built to match the look (backface culling, IBL strength). Kept
+ * out of the viewer's runtime dials because they're baked at parse time, not toggleable in place.
+ */
+export function materialAppearanceForStyle(style: RenderStyle): MaterialAppearanceOptions {
+	const preset = RENDER_STYLE_PRESETS[style];
+	return {
+		envMapIntensity: preset.envMapIntensity,
+		cullBackfaces: preset.cullBackfaces
+	};
+}
 
 /** Map an up vector to the grid's ground-plane axis (the axis the grid is laid perpendicular to). */
 function upToGroundPlane(up: THREE.Vector3): 'x' | 'y' | 'z' {
@@ -48,6 +89,19 @@ export const initThree = function (
 	/** Toggle ambient occlusion at runtime — builds or tears down the postprocessing pipeline. */
 	setAmbientOcclusion: (enabled: boolean) => void;
 	/**
+	 * Apply a coherent look to the already-loaded scene: 'technical' (matte/CAD — edges, grid, low
+	 * IBL, neutral tone mapping) or 'rendered' (presentation — stronger IBL, ACES tone mapping, no
+	 * edges). Retunes viewer-owned dials only; per-material parse choices are set via the batch
+	 * parser's `material` option. Handy for comparing the two looks in a live viewer.
+	 */
+	setRenderStyle: (style: 'technical' | 'rendered') => void;
+	/**
+	 * The parse-time material options (backface culling, IBL strength) matching the active render
+	 * style — feed into the batch parser's `material` option so freshly-loaded meshes are built to
+	 * match the look. Returns undefined when no style is active. See `setRenderStyle`.
+	 */
+	getMaterialAppearance: () => MaterialAppearanceOptions | undefined;
+	/**
 	 * Refit the sun's shadow frustum to the current scene content for crisp shadows. Call after
 	 * loading or replacing geometry (e.g. after `updateScene`). No-op when sunlight/shadows are off.
 	 */
@@ -77,6 +131,9 @@ export const initThree = function (
 	// and ortho camera from it. Without this, a Z-up scene would orbit and frame as if Y-up.
 	camera.up.copy(sceneUp);
 	const renderer = setupRenderer(canvas, config);
+	// Report the GPU's max anisotropy to the texture cache so color maps stay sharp at grazing angles.
+	// One-time; retroactively upgrades any texture already decoded this session.
+	setTextureAnisotropy(renderer.capabilities.getMaxAnisotropy());
 	const controls = setupControls(camera, canvas, config);
 
 	// Tracks whichever camera (perspective or orthographic) is live; the controller swaps it.
@@ -247,6 +304,73 @@ export const initThree = function (
 
 	if (config.render.ambientOcclusion) renderPipeline = buildPipeline();
 
+	/**
+	 * Apply a coherent look to the *already-built* scene at runtime — a quick way to compare the two
+	 * presets in a live viewer. It retunes only what the viewer owns after load: tone mapping/exposure,
+	 * AO on/off, edge & grid visibility, and `envMapIntensity` on every compute material currently in
+	 * the scene. It does NOT rebuild geometry, so per-material choices baked at parse time (backface
+	 * culling, vertex-color decode) are unaffected — set those via the batch parser's `material` option.
+	 *
+	 * - 'technical': matte, drawing-like. Neutral tone mapping, low IBL, edges + grid on, AO on.
+	 * - 'rendered':  presentation. ACES-filmic tone mapping, stronger IBL, edges off, AO on.
+	 */
+	const setRenderStyle = (style: RenderStyle) => {
+		const preset = RENDER_STYLE_PRESETS[style];
+		activeRenderStyle = style;
+
+		// Tone mapping lives on the renderer (plain path) and is mirrored into the composer's OutputPass
+		// when AO is active. Rebuild the pipeline so the composer picks up the new tone mapping.
+		renderer.toneMapping = preset.toneMapping;
+		renderer.toneMappingExposure = preset.toneMappingExposure;
+		config.render.toneMapping = preset.toneMapping;
+		config.render.toneMappingExposure = preset.toneMappingExposure;
+
+		if (renderPipeline) {
+			// Rebuild so the composer's OutputPass adopts the new tone mapping, then honor the target AO.
+			setAmbientOcclusion(false);
+			setAmbientOcclusion(preset.ambientOcclusion);
+		} else {
+			setAmbientOcclusion(preset.ambientOcclusion);
+		}
+
+		// Retune IBL reflection strength on every compute mesh material in the scene.
+		scene.traverse((object) => {
+			if (object.userData.source !== 'compute') return;
+			const mesh = object as Partial<THREE.Mesh> & THREE.Object3D;
+			const materials = Array.isArray(mesh.material)
+				? mesh.material
+				: mesh.material
+					? [mesh.material]
+					: [];
+			for (const material of materials) {
+				if ('envMapIntensity' in material) {
+					(material as THREE.MeshStandardMaterial).envMapIntensity = preset.envMapIntensity;
+				}
+			}
+		});
+
+		// Edge overlays live as children tagged 'edge-overlay'; toggle their visibility in place.
+		scene.traverse((object) => {
+			if (object.userData.kind === 'edge-overlay') object.visible = preset.edges;
+		});
+
+		if (grid) grid.object.visible = preset.grid;
+	};
+
+	// The style whose look is currently applied (null until the caller passes `renderStyle` or calls
+	// setRenderStyle). Seeded from the raw option, not `config.renderStyle` — the latter is coerced to
+	// a non-null default by Required<>, which would wrongly report a style when none was chosen.
+	// Drives `getMaterialAppearance()` so the host feeds the parser matching material options.
+	let activeRenderStyle: RenderStyle | null = options?.renderStyle ?? null;
+
+	/**
+	 * The parse-time material options (backface culling, IBL strength) that match the active style —
+	 * pass into the batch parser's `material` option so newly-loaded meshes are built to match the
+	 * look. Returns undefined when no style is active (plain per-field defaults).
+	 */
+	const getMaterialAppearance = (): MaterialAppearanceOptions | undefined =>
+		activeRenderStyle ? materialAppearanceForStyle(activeRenderStyle) : undefined;
+
 	// Resize checked every frame so buffer resize and render happen in the same frame,
 	// preventing visible blank frames on resize
 	const { animate, dispose: disposeAnimation } = createAnimationLoop(
@@ -359,6 +483,8 @@ export const initThree = function (
 		measureTool,
 		applyEdges,
 		setAmbientOcclusion,
+		setRenderStyle,
+		getMaterialAppearance,
 		updateShadowBounds,
 		dispose,
 		fitToView: eventHandlers.fitToView,
@@ -433,8 +559,16 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 
 	const defaults = scaleDefaults[scale];
 
+	// A chosen render style seeds the tone-mapping / AO / edges / grid defaults. It sits BELOW explicit
+	// per-field options (those still win) and ABOVE the plain per-field defaults — so it only fills
+	// what the caller left unspecified. Null when no style is chosen (plain defaults apply).
+	const style: RenderStylePreset | null = options.renderStyle
+		? RENDER_STYLE_PRESETS[options.renderStyle]
+		: null;
+
 	return {
 		sceneScale: scale,
+		renderStyle: options.renderStyle ?? 'technical',
 		camera: {
 			// Default 3/4 iso for a Z-up scene: back-left and ABOVE (height on +Z).
 			position:
@@ -480,10 +614,10 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 			shadowMapSize: options.render?.shadowMapSize || 2048,
 			antialias: options.render?.antialias ?? true,
 			pixelRatio: options.render?.pixelRatio || Math.min(window.devicePixelRatio, 2),
-			toneMapping: options.render?.toneMapping || THREE.NeutralToneMapping,
-			toneMappingExposure: options.render?.toneMappingExposure ?? 1,
+			toneMapping: options.render?.toneMapping || style?.toneMapping || THREE.NeutralToneMapping,
+			toneMappingExposure: options.render?.toneMappingExposure ?? style?.toneMappingExposure ?? 1,
 			preserveDrawingBuffer: options.render?.preserveDrawingBuffer ?? false,
-			ambientOcclusion: options.render?.ambientOcclusion ?? false,
+			ambientOcclusion: options.render?.ambientOcclusion ?? style?.ambientOcclusion ?? false,
 			aoIntensity: options.render?.aoIntensity ?? 1
 		},
 		controls: {
@@ -497,8 +631,8 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 			maxDistance: options.controls?.maxDistance || Infinity
 		},
 		grid: {
-			// Defaults mirror createGrid's so the two never drift.
-			enabled: options.grid?.enabled ?? false,
+			// Defaults mirror createGrid's so the two never drift. A render style can switch the grid on.
+			enabled: options.grid?.enabled ?? style?.grid ?? false,
 			cellSize: options.grid?.cellSize ?? 1,
 			majorEvery: options.grid?.majorEvery ?? 10,
 			cellColor: options.grid?.cellColor ?? 0x888888,
@@ -512,8 +646,8 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 			enabled: options.gizmo?.enabled ?? false
 		},
 		edges: {
-			// Defaults mirror addEdges' so the two never drift.
-			enabled: options.edges?.enabled ?? false,
+			// Defaults mirror addEdges' so the two never drift. A render style can switch edges on.
+			enabled: options.edges?.enabled ?? style?.edges ?? false,
 			color: options.edges?.color ?? 0x222222,
 			width: options.edges?.width ?? 1.5,
 			thresholdAngle: options.edges?.thresholdAngle ?? 30
@@ -676,8 +810,10 @@ function createAnimationLoop(
 		if (width === 0 || height === 0) return;
 
 		const pixelRatio = Math.min(window.devicePixelRatio, 2);
-		const newW = Math.round(width * pixelRatio);
-		const newH = Math.round(height * pixelRatio);
+		// Must floor, not round: renderer.setSize floors the buffer size, and a mismatched rounding
+		// here makes the comparison never settle — the resize branch would then run every frame.
+		const newW = Math.floor(width * pixelRatio);
+		const newH = Math.floor(height * pixelRatio);
 
 		if (renderer.domElement.width !== newW || renderer.domElement.height !== newH) {
 			renderer.setPixelRatio(pixelRatio);
