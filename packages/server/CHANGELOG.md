@@ -1,5 +1,11 @@
 # @selvajs/server
 
+## 0.2.0-beta.1
+
+### Patch Changes
+
+- Local version bump for @selvajs/server (not yet published to npm).
+
 ## 0.2.0-beta.0
 
 ### Minor Changes
