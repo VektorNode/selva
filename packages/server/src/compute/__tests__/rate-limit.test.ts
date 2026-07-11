@@ -66,4 +66,41 @@ describe('createComputeRateLimiter', () => {
 		// A different limiter instance is unaffected.
 		expect(other.check('user:alice').allowed).toBe(true);
 	});
+
+	// peek + clear support failure-counting flows (login limiting): peek gates
+	// the attempt without spending budget, check records a failure, clear
+	// forgives on success.
+	describe('peek / clear', () => {
+		it('peek never increments the counter', () => {
+			for (let i = 0; i < 1000; i++) expect(limiter.peek('ip:1.2.3.4').allowed).toBe(true);
+			// Full budget still available after all those peeks.
+			for (let i = 0; i < MAX_PER_WINDOW; i++) {
+				expect(limiter.check('ip:1.2.3.4').allowed).toBe(true);
+			}
+		});
+
+		it('peek reports a full bucket with retryAfter, still without mutating it', () => {
+			for (let i = 0; i < MAX_PER_WINDOW; i++) limiter.check('ip:1.2.3.4');
+			const result = limiter.peek('ip:1.2.3.4');
+			expect(result.allowed).toBe(false);
+			expect(result.retryAfter).toBeGreaterThan(0);
+		});
+
+		it('peek allows again once the window expires', () => {
+			for (let i = 0; i < MAX_PER_WINDOW; i++) limiter.check('ip:1.2.3.4');
+			expect(limiter.peek('ip:1.2.3.4').allowed).toBe(false);
+			vi.advanceTimersByTime(WINDOW_MS + 1);
+			expect(limiter.peek('ip:1.2.3.4').allowed).toBe(true);
+		});
+
+		it('clear drops only the given key', () => {
+			for (let i = 0; i < MAX_PER_WINDOW; i++) {
+				limiter.check('ip:1.2.3.4');
+				limiter.check('ip:5.6.7.8');
+			}
+			limiter.clear('ip:1.2.3.4');
+			expect(limiter.peek('ip:1.2.3.4').allowed).toBe(true);
+			expect(limiter.peek('ip:5.6.7.8').allowed).toBe(false);
+		});
+	});
 });

@@ -14,7 +14,7 @@ import * as supa from '@selvajs/supabase-provider';
 import * as header from '@selvajs/header-auth-provider';
 import { DefinitionService } from './definitions/DefinitionService.js';
 import { OrgAssetService } from './organizations/OrgAssetService.js';
-import { SentryErrorReporter } from './errors/SentryErrorReporter.js';
+import { SentryErrorReporter } from '@selvajs/server/errors';
 
 // Provider wiring lives in `@selvajs/server/providers`
 // (`createSelvaProviders`): env-driven selection over the registry below, an

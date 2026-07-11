@@ -9,10 +9,16 @@
  *
  * The full compute subsurface is also available at `@selvajs/server/compute`,
  * the definitions slice (DefinitionService, schema extraction/validation,
- * render loader) at `@selvajs/server/definitions`, and the provider wiring
- * (registry-driven `createSelvaProviders`) at `@selvajs/server/providers`.
+ * render loader) at `@selvajs/server/definitions`, the provider wiring
+ * (registry-driven `createSelvaProviders`) at `@selvajs/server/providers`,
+ * the HMAC token codec at `@selvajs/server/tokens`, error reporting at
+ * `@selvajs/server/errors`, and HTTP hardening helpers at
+ * `@selvajs/server/http`.
  */
 
 export * from './compute/index.js';
 export * from './definitions/index.js';
 export * from './providers/index.js';
+export * from './tokens/index.js';
+export * from './errors/index.js';
+export * from './http/index.js';

@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { isHttpError } from '@sveltejs/kit';
 import type { AuthUser, RequestContext } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
+import { applySecurityHeaders } from '@selvajs/server/http';
 import { providers, getErrorReporter } from '$lib/server/providers.server';
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { bootstrapUserSession, wireHeaderAuthBootstrap } from '$lib/server/auth-bootstrap.server';
@@ -229,13 +230,13 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	// Static assets bypass every gate below — no auth, no first-run check,
 	// just resolve and let the cache-control headers below handle them.
 	if (isStaticAsset(pathname)) {
-		return applySecurityHeaders(await resolve(event), pathname);
+		return applyResponseHeaders(await resolve(event), pathname);
 	}
 
 	// `/api/health` is a load-balancer probe — must answer without auth or
 	// first-run gating. Short-circuit before any of the gates below run.
 	if (pathname === '/api/health') {
-		return applySecurityHeaders(await resolve(event), pathname);
+		return applyResponseHeaders(await resolve(event), pathname);
 	}
 
 	const publicRoute = isPublicRoute(pathname);
@@ -253,7 +254,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	if (!publicRoute) {
 		if (await isFirstRun()) {
 			if (isJsonApiRoute) {
-				return applySecurityHeaders(
+				return applyResponseHeaders(
 					new Response(JSON.stringify({ message: 'Setup required', code: 'SETUP_REQUIRED' }), {
 						status: 503,
 						headers: { 'Content-Type': 'application/json' }
@@ -312,7 +313,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 		if (!user) {
 			if (isJsonApiRoute) {
-				return applySecurityHeaders(
+				return applyResponseHeaders(
 					new Response(
 						JSON.stringify({
 							message: 'Your session has expired. Sign in again to continue.',
@@ -417,7 +418,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		}
 	}
 
-	return applySecurityHeaders(await resolve(event), pathname);
+	return applyResponseHeaders(await resolve(event), pathname);
 };
 
 // ============================================================================
@@ -425,35 +426,16 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 // ============================================================================
 //
 // Applied to every response we produce — both successful resolves and the
-// 401/503 short-circuits above. Cheap browser hardening that doesn't
-// require UI verification:
-//
-//   - X-Content-Type-Options: nosniff — disables MIME sniffing.
-//   - Referrer-Policy: strict-origin-when-cross-origin — strips the path
-//     and query from cross-origin Referer headers; matches modern browser
-//     defaults but pins the behavior in case the default ever drifts.
-//   - Permissions-Policy: opt out of browser APIs we don't use, so XSS
-//     can't enable them.
-//   - HSTS in production only — locking dev (http://localhost) into HTTPS
-//     would brick local development across the org.
-//
-// **Intentionally NOT set here** (deferred to the UI freeze):
-//   - Content-Security-Policy + frame-ancestors. The selva app is built
-//     for iframe embedding (per its own package description), so a strict
-//     CSP needs UI-phase validation against real consumer sites before
-//     it can ship.
-//   - X-Frame-Options. Same iframe-embedding constraint.
-function applySecurityHeaders(response: Response, pathname: string): Response {
-	response.headers.set('X-Content-Type-Options', 'nosniff');
-	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-	response.headers.set(
-		'Permissions-Policy',
-		'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()'
-	);
-	// eslint-disable-next-line no-restricted-properties -- NODE_ENV is OS-level, set by Node/Vite, not loaded from .env
-	if (process.env.NODE_ENV === 'production') {
-		response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-	}
+// 401/503 short-circuits above. The browser-hardening set (nosniff,
+// Referrer-Policy, Permissions-Policy, HSTS in production; CSP and frame
+// headers deliberately omitted for iframe embedding) lives in
+// `@selvajs/server/http` — see `applySecurityHeaders` there for the rationale.
+// Cache-control stays here: it encodes THIS app's asset layout.
+function applyResponseHeaders(response: Response, pathname: string): Response {
+	applySecurityHeaders(response, {
+		// eslint-disable-next-line no-restricted-properties -- NODE_ENV is OS-level, set by Node/Vite, not loaded from .env
+		hsts: process.env.NODE_ENV === 'production'
+	});
 
 	// Cache-control: hashed build assets are immutable; other static assets
 	// get a short TTL.
