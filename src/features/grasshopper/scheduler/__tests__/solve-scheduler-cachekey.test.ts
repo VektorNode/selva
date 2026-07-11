@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { SolveScheduler, type SolveExecutor, type CacheKeyExecutor } from '../solve-scheduler';
+import type { SolveDefinition } from '../../definition-ref';
 import type {
 	GrasshopperComputeConfig,
 	GrasshopperComputeResponse
@@ -41,7 +42,7 @@ function recordingCacheKeyExecutor(
 		missed: boolean;
 	}
 ) {
-	const calls: Array<{ definition: string | Uint8Array; cacheKey: string | null }> = [];
+	const calls: Array<{ definition: SolveDefinition; cacheKey: string | null }> = [];
 	const executor: CacheKeyExecutor = async (definition, _dataTree, cacheKey) => {
 		calls.push({ definition, cacheKey });
 		const { cacheKey: out, missed } = behavior({ cacheKey, n: calls.length });

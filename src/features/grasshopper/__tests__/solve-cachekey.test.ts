@@ -17,6 +17,8 @@ import {
 	solveGrasshopperDefinitionWithCacheKey,
 	solveGrasshopperDefinition
 } from '../solve';
+import type { DefinitionRef } from '../definition-ref';
+import { ErrorCodes } from '@/core/errors';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
@@ -154,5 +156,64 @@ describe('solveGrasshopperDefinition still strips pointer (unchanged public shap
 		fetchMock.mockResolvedValueOnce(okSolve({ pointer: 'md5_ABC' }));
 		const res = await solveGrasshopperDefinition([], DEF, config);
 		expect(res).not.toHaveProperty('pointer');
+	});
+});
+
+describe('DefinitionRef — bytes are materialized only when an upload is unavoidable', () => {
+	// [104, 105] = "hi" → base64 "aGk="
+	const refOf = (key = 'version-uuid-1'): DefinitionRef & { load: ReturnType<typeof vi.fn> } => ({
+		key,
+		load: vi.fn(async () => new Uint8Array([104, 105]))
+	});
+
+	it('pointer hit never calls load()', async () => {
+		fetchMock.mockResolvedValueOnce(okSolve({ pointer: 'md5_ABC' }));
+		const ref = refOf();
+
+		const { missed } = await solveByCacheKey([], 'md5_ABC', ref, config);
+
+		expect(missed).toBe(false);
+		expect(ref.load).not.toHaveBeenCalled();
+		expect(body().pointer).toBe('md5_ABC');
+		expect(body().algo).toBeNull();
+	});
+
+	it('pointer miss calls load() exactly once and uploads the loaded bytes', async () => {
+		fetchMock
+			.mockResolvedValueOnce(loadFailed())
+			.mockResolvedValueOnce(okSolve({ pointer: 'md5_NEW' }));
+		const ref = refOf();
+
+		const { missed, cacheKey } = await solveByCacheKey([], 'md5_OLD', ref, config);
+
+		expect(missed).toBe(true);
+		expect(cacheKey).toBe('md5_NEW');
+		expect(ref.load).toHaveBeenCalledTimes(1);
+		expect(body(1).algo).toBe('aGk=');
+	});
+
+	it('first solve (no known pointer) materializes once for the upload', async () => {
+		fetchMock.mockResolvedValueOnce(okSolve());
+		const ref = refOf();
+
+		await solveGrasshopperDefinitionWithCacheKey([], ref, config);
+
+		expect(ref.load).toHaveBeenCalledTimes(1);
+		expect(body().algo).toBe('aGk=');
+	});
+
+	it('wraps a load() failure in a RhinoComputeError naming the ref, without fetching', async () => {
+		const ref: DefinitionRef = {
+			key: 'version-uuid-broken',
+			load: async () => {
+				throw new Error('storage down');
+			}
+		};
+
+		await expect(solveGrasshopperDefinition([], ref, config)).rejects.toMatchObject({
+			code: ErrorCodes.INVALID_INPUT,
+			message: expect.stringContaining('version-uuid-broken')
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });

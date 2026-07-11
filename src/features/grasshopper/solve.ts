@@ -10,6 +10,7 @@ import {
 	GrasshopperComputeResponse,
 	DataTree
 } from './types';
+import { isDefinitionRef, type SolveDefinition } from './definition-ref';
 
 /**
  * The exact message the server throws when it can neither resolve a `pointer`
@@ -99,6 +100,7 @@ export interface SolveWithCacheKey {
  *   - A base64-encoded string of the .gh file
  *   - A plain string (will be base64-encoded)
  *   - A Uint8Array of the .gh file (will be base64-encoded)
+ *   - A `DefinitionRef` (bytes are loaded via `ref.load()` for the upload)
  * @param config - Compute configuration (server URL, API key, etc. along with optional timeout, units, etc.)
  * @returns An object containing the compute result and extracted file data.
  *
@@ -115,7 +117,7 @@ export interface SolveWithCacheKey {
  */
 export async function solveGrasshopperDefinition(
 	dataTree: DataTree[],
-	definition: string | Uint8Array,
+	definition: SolveDefinition,
 	config: GrasshopperComputeConfig
 ): Promise<GrasshopperComputeResponse> {
 	if (config.debug) {
@@ -125,7 +127,8 @@ export async function solveGrasshopperDefinition(
 		);
 	}
 
-	const { response } = await runSolve(prepareGrasshopperArgs(definition, dataTree), config);
+	const bytes = await materializeDefinition(definition);
+	const { response } = await runSolve(prepareGrasshopperArgs(bytes, dataTree), config);
 	return response;
 }
 
@@ -141,7 +144,7 @@ export async function solveGrasshopperDefinition(
  */
 export async function solveGrasshopperDefinitionWithCacheKey(
 	dataTree: DataTree[],
-	definition: string | Uint8Array,
+	definition: SolveDefinition,
 	config: GrasshopperComputeConfig
 ): Promise<SolveWithCacheKey> {
 	if (config.debug) {
@@ -151,7 +154,8 @@ export async function solveGrasshopperDefinitionWithCacheKey(
 		);
 	}
 
-	return runSolve(prepareGrasshopperArgs(definition, dataTree), config);
+	const bytes = await materializeDefinition(definition);
+	return runSolve(prepareGrasshopperArgs(bytes, dataTree), config);
 }
 
 /**
@@ -159,7 +163,9 @@ export async function solveGrasshopperDefinitionWithCacheKey(
  * skipping the (potentially multi-MB) base64 upload. If the key has been evicted
  * from the server's definition cache — `DEFINITION_LOAD_FAILED` — transparently
  * retry once with the full `definition` and report the fresh cache key so the
- * caller can update its mapping.
+ * caller can update its mapping. A `DefinitionRef` definition is only
+ * materialized (`ref.load()`) inside that miss branch — a pointer hit never
+ * touches the bytes.
  *
  * @returns The solve result plus the (possibly refreshed) cache key, and whether
  *   the fast path missed (so callers can record the new key / track hit rate).
@@ -168,7 +174,7 @@ export async function solveGrasshopperDefinitionWithCacheKey(
 export async function solveByCacheKey(
 	dataTree: DataTree[],
 	cacheKey: string,
-	definition: string | Uint8Array,
+	definition: SolveDefinition,
 	config: GrasshopperComputeConfig
 ): Promise<SolveWithCacheKey & { missed: boolean }> {
 	if (config.debug) {
@@ -186,8 +192,30 @@ export async function solveByCacheKey(
 	} catch (error) {
 		if (!isDefinitionLoadMiss(error)) throw error;
 		// Cache miss — fall back to the full upload and capture the fresh key.
-		const full = await runSolve(prepareGrasshopperArgs(definition, dataTree), config);
+		const bytes = await materializeDefinition(definition);
+		const full = await runSolve(prepareGrasshopperArgs(bytes, dataTree), config);
 		return { ...full, missed: true };
+	}
+}
+
+/**
+ * Resolve a definition to uploadable form: a `DefinitionRef` is materialized
+ * via `load()` (failures are wrapped so callers get a `RhinoComputeError`
+ * naming the ref, not an opaque loader exception); other forms pass through.
+ */
+async function materializeDefinition(definition: SolveDefinition): Promise<string | Uint8Array> {
+	if (!isDefinitionRef(definition)) return definition;
+	try {
+		return await definition.load();
+	} catch (error) {
+		throw new RhinoComputeError(
+			`Failed to load definition bytes for ref '${definition.key}'`,
+			ErrorCodes.INVALID_INPUT,
+			{
+				context: { definitionKey: definition.key },
+				originalError: error instanceof Error ? error : new Error(String(error))
+			}
+		);
 	}
 }
 

@@ -3,6 +3,7 @@ import type { RetryPolicy } from '@/core/types';
 import { getLogger } from '@/core/utils/logger';
 
 import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } from '../types';
+import type { SolveDefinition } from '../definition-ref';
 import { hashSolveInput, hashDefinition } from './stable-hash';
 
 /**
@@ -22,6 +23,15 @@ export interface CacheOptions {
 	maxEntries?: number;
 	/** Time-to-live in ms. Set to `0` for no expiry (default). */
 	ttlMs?: number;
+	/**
+	 * Cache responses that carry Grasshopper `errors`. Default `true`: an
+	 * errored solve is a valid, deterministic result — definitions raise GH
+	 * errors by design (guarded components, validation branches), so replaying
+	 * one from cache is correct. Set `false` for parity with Rhino's opt-in
+	 * `cacheerroredsolves` server flag, e.g. when a definition's errors are
+	 * transient (external data sources) rather than functions of the inputs.
+	 */
+	cacheErroredSolves?: boolean;
 }
 
 export interface SolveSchedulerOptions {
@@ -86,7 +96,7 @@ interface CacheEntry {
 const SERVER_CACHE_KEYS_MAX = 100;
 
 interface PendingItem {
-	definition: string | Uint8Array;
+	definition: SolveDefinition;
 	dataTree: DataTree[];
 	ctx: SolveContext;
 	resolve: (response: GrasshopperComputeResponse) => void;
@@ -105,7 +115,7 @@ interface InFlightItem extends PendingItem {
  * without a real Compute server, and decouples it from the client class.
  */
 export type SolveExecutor = (
-	definition: string | Uint8Array,
+	definition: SolveDefinition,
 	dataTree: DataTree[],
 	config: GrasshopperComputeConfig
 ) => Promise<GrasshopperComputeResponse>;
@@ -122,7 +132,7 @@ export type SolveExecutor = (
  * decoupled from the transport.
  */
 export type CacheKeyExecutor = (
-	definition: string | Uint8Array,
+	definition: SolveDefinition,
 	dataTree: DataTree[],
 	cacheKey: string | null,
 	config: GrasshopperComputeConfig
@@ -131,12 +141,13 @@ export type CacheKeyExecutor = (
 /**
  * Whether a definition is worth solving by server cache key. Binary and
  * base64/plain-string definitions are uploaded in full, so referencing them by
- * key on later solves saves the (potentially huge) payload. An `http(s)://` URL
- * is already a reference — the server keys it by URL and there's nothing to
- * re-upload — so the fast path adds no value there.
+ * key on later solves saves the (potentially huge) payload — and a
+ * `DefinitionRef` additionally saves the `load()` itself on a pointer hit. An
+ * `http(s)://` URL is already a reference — the server keys it by URL and
+ * there's nothing to re-upload — so the fast path adds no value there.
  */
-function isReusableDefinition(definition: string | Uint8Array): boolean {
-	if (definition instanceof Uint8Array) return true;
+function isReusableDefinition(definition: SolveDefinition): boolean {
+	if (typeof definition !== 'string') return true;
 	return !/^https?:\/\//i.test(definition);
 }
 
@@ -183,6 +194,7 @@ export class SolveScheduler {
 	private readonly cacheEnabled: boolean;
 	private readonly cacheMax: number;
 	private readonly cacheTtl: number;
+	private readonly cacheErroredSolves: boolean;
 	private readonly cache = new Map<string, CacheEntry>();
 
 	/** Optional cache-key-aware executor and whether server-def-cache reuse is on. */
@@ -226,6 +238,7 @@ export class SolveScheduler {
 		const cacheConfig = typeof cacheOpt === 'object' ? cacheOpt : {};
 		this.cacheMax = cacheConfig.maxEntries ?? 50;
 		this.cacheTtl = cacheConfig.ttlMs ?? 0;
+		this.cacheErroredSolves = cacheConfig.cacheErroredSolves ?? true;
 
 		// On by default when the client wired a cache-key executor — it's a pure
 		// win for reusable definitions and falls back safely on a miss.
@@ -302,9 +315,14 @@ export class SolveScheduler {
 	 *   caller-supplied signal or `cancelAll()`.
 	 *
 	 * Caller-supplied `signal` cancels just this call (rejects with `ABORTED`).
+	 *
+	 * A {@link DefinitionRef} definition is keyed by its `key` (result cache and
+	 * server-pointer map alike) without materializing bytes — `load()` runs only
+	 * when an upload is unavoidable. Its immutability contract is trusted here:
+	 * a reused key serves the other content's cached solve.
 	 */
 	solve(
-		definition: string | Uint8Array,
+		definition: SolveDefinition,
 		dataTree: DataTree[],
 		options?: { signal?: AbortSignal }
 	): Promise<GrasshopperComputeResponse> {
@@ -476,7 +494,7 @@ export class SolveScheduler {
 	 * server cache key from the result so later solves can reference it.
 	 */
 	private async runExecutor(
-		definition: string | Uint8Array,
+		definition: SolveDefinition,
 		dataTree: DataTree[],
 		config: GrasshopperComputeConfig
 	): Promise<{ response: GrasshopperComputeResponse; definitionReuploaded?: boolean }> {
@@ -663,6 +681,7 @@ export class SolveScheduler {
 
 	private writeCache(key: string, response: GrasshopperComputeResponse): void {
 		if (!this.cacheEnabled) return;
+		if (!this.cacheErroredSolves && response.errors && response.errors.length > 0) return;
 		this.cache.set(key, { response, insertedAt: Date.now() });
 		while (this.cache.size > this.cacheMax) {
 			const oldest = this.cache.keys().next().value;

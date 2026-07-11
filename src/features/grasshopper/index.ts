@@ -28,6 +28,8 @@ export type {
 // COMPUTATION
 // ============================================================================
 export { solveGrasshopperDefinition } from './solve';
+export { isDefinitionRef } from './definition-ref';
+export type { DefinitionRef, SolveDefinition } from './definition-ref';
 
 // ============================================================================
 // I/O PROCESSING

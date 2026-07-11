@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SolveScheduler, type SolveExecutor } from '../solve-scheduler';
 import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import type { SolveDefinition } from '../../definition-ref';
 import type {
 	GrasshopperComputeConfig,
 	GrasshopperComputeResponse
@@ -27,7 +28,7 @@ function makeResponse(tag: string): GrasshopperComputeResponse {
  */
 function deferredExecutor() {
 	const queue: Array<{
-		definition: string | Uint8Array;
+		definition: SolveDefinition;
 		dataTree: any[];
 		signal: AbortSignal | undefined;
 		release: (response: GrasshopperComputeResponse) => void;
@@ -406,6 +407,52 @@ describe('SolveScheduler', () => {
 			await vi.waitFor(() => expect(queue.length).toBe(4));
 			queue[3].release(makeResponse('1-again'));
 			expect((await recheck).filename).toBe('1-again');
+		});
+
+		// Decision 2026-07-11 (ISSUES.md 114): an errored solve is a valid,
+		// deterministic GH result and IS cached by default.
+		it('caches responses with GH errors by default', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: true
+			});
+
+			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
+			const errored = { ...makeResponse('errored'), errors: ['guard tripped'] };
+
+			const first = scheduler.solve('def', tree);
+			queue[0].release(errored);
+			await first;
+
+			const second = await scheduler.solve('def', tree);
+			expect(second.errors).toEqual(['guard tripped']);
+			expect(queue).toHaveLength(1); // served from cache
+		});
+
+		it('skips caching errored solves when cacheErroredSolves is false', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: { cacheErroredSolves: false }
+			});
+
+			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
+
+			const first = scheduler.solve('def', tree);
+			queue[0].release({ ...makeResponse('errored'), errors: ['guard tripped'] });
+			await first;
+
+			// Not cached — the identical input executes again...
+			const secondPromise = scheduler.solve('def', tree);
+			await vi.waitFor(() => expect(queue.length).toBe(2));
+			queue[1].release(makeResponse('clean'));
+			await secondPromise;
+
+			// ...while error-free responses still cache normally.
+			const third = await scheduler.solve('def', tree);
+			expect(third.filename).toBe('clean');
+			expect(queue).toHaveLength(2);
 		});
 	});
 

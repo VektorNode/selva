@@ -7,6 +7,7 @@ import { ComputeConfig, RetryPolicy } from '@/core/types';
 import { fetchDefinitionIO, fetchParsedDefinitionIO, solveGrasshopperDefinition } from '..';
 import { solveByCacheKey, solveGrasshopperDefinitionWithCacheKey } from '../solve';
 import { GrasshopperComputeConfig, GrasshopperComputeResponse, DataTree } from '../types';
+import { isDefinitionRef, type SolveDefinition } from '../definition-ref';
 import {
 	SolveScheduler,
 	SolveSchedulerOptions,
@@ -25,6 +26,13 @@ export interface SolveOptions {
 	signal?: AbortSignal;
 	timeoutMs?: number;
 	retry?: RetryPolicy;
+}
+
+/** Compact description of a definition for error context — never the full payload. */
+function describeDefinition(definition: SolveDefinition): string {
+	if (isDefinitionRef(definition)) return `ref:${definition.key}`;
+	if (typeof definition === 'string' && definition.length < 200) return definition;
+	return '...content...';
 }
 
 /**
@@ -132,7 +140,7 @@ export default class GrasshopperClient {
 	 * @throws {RhinoComputeError} with code COMPUTATION_ERROR if computation fails
 	 */
 	public async solve(
-		definition: string | Uint8Array,
+		definition: SolveDefinition,
 		dataTree: DataTree[],
 		options?: SolveOptions
 	): Promise<GrasshopperComputeResponse> {
@@ -150,6 +158,8 @@ export default class GrasshopperClient {
 				);
 			} else if (definition instanceof Uint8Array && definition.length === 0) {
 				throw new RhinoComputeError('Definition content is empty', ErrorCodes.INVALID_INPUT);
+			} else if (isDefinitionRef(definition) && !definition.key.trim()) {
+				throw new RhinoComputeError('DefinitionRef key is empty', ErrorCodes.INVALID_INPUT);
 			}
 
 			// Per-call options override the client's stored config for this request only
@@ -201,10 +211,7 @@ export default class GrasshopperClient {
 				ErrorCodes.COMPUTATION_ERROR,
 				{
 					context: {
-						definition:
-							typeof definition === 'string' && definition.length < 200
-								? definition
-								: '...content...',
+						definition: describeDefinition(definition),
 						inputs: dataTree
 					},
 					originalError: error instanceof Error ? error : new Error(String(error))
@@ -230,7 +237,7 @@ export default class GrasshopperClient {
 	public createScheduler(options?: SolveSchedulerOptions): SolveScheduler {
 		this.ensureNotDisposed();
 		const executor = (
-			definition: string | Uint8Array,
+			definition: SolveDefinition,
 			dataTree: DataTree[],
 			config: GrasshopperComputeConfig
 		) => solveGrasshopperDefinition(dataTree, definition, config);
