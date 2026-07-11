@@ -3,38 +3,71 @@
  * @internal
  */
 
+import { isDefinitionRef, type SolveDefinition } from '../definition-ref';
+
 /**
  * Deterministic stringify with sorted keys. {a:1,b:2} and {b:2,a:1} produce
  * the same string. Safely handles circular references and non-finite numbers.
+ *
+ * The output is a cache key, so the invariant that matters is: two payloads
+ * that serialize differently on the wire must stringify differently here
+ * (false misses are harmless; false hits serve the wrong cached solve).
  */
 export function stableStringify(value: unknown): string {
-	const seen = new WeakSet<object>();
+	// Tracks the current recursion path only (entries are removed on the way
+	// out), so genuine cycles read "[Circular]" while shared non-circular
+	// references stringify by content each time they appear.
+	const path = new WeakSet<object>();
 
 	const stringify = (v: unknown): string => {
-		if (v === null || v === undefined) return JSON.stringify(v);
+		if (v === undefined) return 'undefined';
+		if (v === null) return 'null';
 		if (typeof v === 'number') {
-			return Number.isFinite(v) ? String(v) : JSON.stringify(null);
+			return Number.isFinite(v) ? String(v) : 'null';
 		}
 		if (typeof v === 'string' || typeof v === 'boolean') return JSON.stringify(v);
-		if (typeof v === 'bigint') return JSON.stringify(v.toString());
+		// Unquoted `n` suffix keeps 1n distinct from the string "1".
+		if (typeof v === 'bigint') return `${v}n`;
 		if (v instanceof Uint8Array) {
-			// Use length + sample instead of full buffer to avoid stringifying large data
-			const sample =
-				v.length > 64 ? Array.from(v.slice(0, 32)).concat(Array.from(v.slice(-32))) : Array.from(v);
-			return JSON.stringify({ __u8: true, len: v.length, sample });
+			// Full-content hash in one linear pass — sampling head/tail let two
+			// buffers differing only in the middle share a cache key.
+			return `{"__u8":${v.length},"hash":"${fnv1aBytes(v)}"}`;
 		}
 		if (Array.isArray(v)) {
-			return `[${v.map(stringify).join(',')}]`;
+			if (path.has(v)) return '"[Circular]"';
+			path.add(v);
+			const parts: string[] = [];
+			// Indexed access (not .map) so holes stringify like undefined instead
+			// of vanishing from the joined output.
+			for (let i = 0; i < v.length; i++) parts.push(stringify(v[i]));
+			path.delete(v);
+			return `[${parts.join(',')}]`;
 		}
 		if (typeof v === 'object') {
-			if (seen.has(v as object)) return JSON.stringify('[Circular]');
-			seen.add(v as object);
-			const keys = Object.keys(v as object).sort();
-			const parts = keys.map((k) => `${JSON.stringify(k)}:${stringify((v as any)[k])}`);
-			return `{${parts.join(',')}}`;
+			if (path.has(v)) return '"[Circular]"';
+			path.add(v);
+			let out: string;
+			if (typeof (v as { toJSON?: unknown }).toJSON === 'function') {
+				// Matches wire behavior: JSON.stringify calls toJSON (Date → ISO string).
+				out = stringify((v as { toJSON: () => unknown }).toJSON());
+			} else if (v instanceof Map) {
+				const entries = [...v.entries()].map(([k, val]) => `[${stringify(k)},${stringify(val)}]`);
+				out = `{"__map":[${entries.sort().join(',')}]}`;
+			} else if (v instanceof Set) {
+				const items = [...v.values()].map(stringify);
+				out = `{"__set":[${items.sort().join(',')}]}`;
+			} else {
+				const keys = Object.keys(v as object).sort();
+				const parts = keys.map(
+					(k) => `${JSON.stringify(k)}:${stringify((v as Record<string, unknown>)[k])}`
+				);
+				out = `{${parts.join(',')}}`;
+			}
+			path.delete(v);
+			return out;
 		}
 		// Fallback for functions, symbols, etc.
-		return JSON.stringify(null);
+		return 'null';
 	};
 
 	return stringify(value);
@@ -74,12 +107,18 @@ export function fnv1aBytes(bytes: Uint8Array): string {
  * hashed over its full content (`fnv1aBytes`) — a length-only or sampled key
  * would let two different `.gh` files collide and serve one's cached solve for
  * the other. `.gh` files are small enough that a single linear pass is
- * negligible. (Note this differs from `stableStringify`'s sampled handling of a
- * `Uint8Array` found *inside* the dataTree, where sampling is a deliberate
- * per-solve perf tradeoff.)
+ * negligible. A {@link DefinitionRef} is keyed by its `key` alone — the
+ * caller-declared identity of immutable bytes — so no bytes are materialized
+ * or hashed at all.
+ *
+ * The key keeps the definition and tree hashes as separate parts rather than
+ * collapsing them into one 32-bit hash: a single FNV pass over the pair would
+ * birthday-collide quadratically in cache size, while requiring both 32-bit
+ * parts (plus lengths) to collide at once makes that negligible.
  */
-export function hashSolveInput(definition: string | Uint8Array, dataTree: unknown): string {
-	return fnv1a(`${hashDefinition(definition)}|${stableStringify(dataTree)}`);
+export function hashSolveInput(definition: SolveDefinition, dataTree: unknown): string {
+	const tree = stableStringify(dataTree);
+	return `${hashDefinition(definition)}|t:${tree.length}:${fnv1a(tree)}`;
 }
 
 /**
@@ -87,9 +126,12 @@ export function hashSolveInput(definition: string | Uint8Array, dataTree: unknow
  * server-cache-key map so the same definition reuses its `pointer` across solves
  * with different inputs. Same full-content hashing as {@link hashSolveInput}: a
  * binary definition is hashed over all its bytes so two distinct `.gh` files of
- * equal length can't share a cache key.
+ * equal length can't share a cache key. A {@link DefinitionRef} is keyed by its
+ * `key` verbatim (refs are short identities like UUIDs, safe as Map keys) —
+ * its immutability contract makes the key equivalent to a content hash.
  */
-export function hashDefinition(definition: string | Uint8Array): string {
+export function hashDefinition(definition: SolveDefinition): string {
+	if (isDefinitionRef(definition)) return `r:${definition.key}`;
 	// Hash strings too (don't return the raw definition): a multi-MB base64 `.gh`
 	// would otherwise become the literal Map key in serverCacheKeys / the cache.
 	return typeof definition === 'string'

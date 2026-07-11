@@ -82,13 +82,23 @@ local `Map` stays as L1; this is the shared L2.
 not one global LRU:**
 
 ```
-solve request (live channel only — draft solves never touch L2)
-  → L2 read: (versionId, sha256(canonical inputs)) → hit: return stored
-    gzipped envelope (R6), near-CPU-free
-  → miss: scheduler L1 (tiny hot cache; drafts included) → Rhino `cachesolve`
-    → actual solve
-  ← L2 write-through when: live channel AND the definition's quota allows
+ONE RESULT CACHE PER CHANNEL (revalidation amendment, 2026-07-11):
+
+live solve   → L2 read: (orgId, definitionId, versionId, sha256(inputs))
+               → hit: return stored gzipped envelope (R6), near-CPU-free
+               → miss: scheduler with { cache: false } (L1 skipped)
+                 → Rhino `cachesolve` → actual solve
+               ← L2 write-through when the definition's quota allows
+
+draft solve  → scheduler L1 only (tiny hot memo for the editor's iteration
+               loop) + { cachesolve: false } → never touches L2
 ```
+
+Rationale for L1-draft-only: an L1 hit returns a response object that still
+pays `JSON.stringify` + `gzipSync` per request (B8's event-loop stall), while
+an L2 hit returns the pre-gzipped envelope — strictly cheaper. Running both
+for live solves double-stores every result and doubles what must be debugged.
+One cache per path, each with one job.
 
 - **Per-definition entry quota** — each definition gets its own budget of
   cached solves; eviction is LRU _within_ the definition. A slider-heavy
@@ -142,6 +152,44 @@ shared store) is a **config change, not a redesign**:
 - Single-flight (R4) stays ABOVE the interface: in-process coalescing first;
   the Redis `SET NX` lease is an optional backend capability added when the
   Redis impl lands — the interface must not require it of the memory impl.
+
+**Revalidation amendments (2026-07-11, architecture/maintainability pass):**
+
+1. **Root-cause fix for the fileKey trap:** version numbers become
+   **monotonic** (`nextVersionNumber` stored on the definition record, never
+   decremented) — delete-latest + re-upload can no longer reuse a number, so
+   `fileKey` becomes genuinely immutable. `versionId` keying stays as
+   belt-and-braces, but no future cache can be poisoned by the gap-reuse
+   behavior. Pre-release = free to change.
+2. **One result cache per channel** (see the flow above): live → L2 only
+   (scheduler called with `{ cache: false }`); draft → L1 only. The K6
+   per-solve flags are therefore REQUIRED infrastructure for L2, not
+   optional hygiene.
+3. **L2 hook = injected closure in `runSolvePipeline`**: the pipeline accepts
+   optional `solveCache?: { lookup(inputKey), store(inputKey, gzippedBytes) }`
+   and computes `inputKey` from the TRANSFORMED tree (R13). The app passes
+   the closure ONLY for live-channel solves with quota > 0 — channel gating
+   by hook presence, zero policy conditionals in the package.
+4. **Single-flight correction:** the scheduler has NO in-flight coalescing
+   (verified against source 2026-07-11 — ISSUES.md 115's status overstates
+   it), and with L1 draft-only it's the wrong place anyway. Dogpile
+   protection for live solves = `Map<inputKey, Promise>` next to the L2
+   lookup, above the `ISolveResultCache` interface.
+5. **Backend statelessness:** the per-definition quota is passed at write
+   time — `set(key, bytes, { maxEntriesForDefinition })` — so backends hold
+   no policy, only data.
+6. **Impl homes:** memory backend lives in `@selvajs/server` (platform ships
+   only the interface + a Noop, matching the existing provider pattern);
+   Redis backend is a later optional module.
+7. **Key namespace includes `orgId`** — access gates precede every lookup so
+   it isn't strictly needed, but it's free defense-in-depth and closes the
+   open per-org-isolation question.
+8. **One env family, one release:** all cache knobs named consistently and
+   parsed in `resolveComputeLimits` / documented in `.env.example`; ALL
+   `@selvajs/compute` changes (DefinitionRef + per-solve cache flags,
+   optionally B7 queue bounds) ship in ONE minor release to pay the publish
+   gate once. B8's async `zlib.gzip` rides along with the pipeline hook
+   (same lines of code).
 
 **Why app-layer, not in this package:** the durable key wants `versionId`
 (immutable → **no TTL needed**, results valid forever), which the package doesn't
@@ -609,6 +657,14 @@ the same reason — a URL is mutable.
 This also answers the selva audit's open research question 5 ("confirm version
 blobs are truly immutable per fileKey") — they are **not**; the getIO-result
 cache follow-up (audit §2a) must key on `versionId` too.
+
+**Root-cause fix decided (revalidation, 2026-07-11):** in addition to
+`versionId` keying, `uploadVersion`'s gap-reuse gets fixed at the source —
+version numbers become **monotonic** via a `nextVersionNumber` counter on the
+definition record (never decremented on delete). After that, `fileKey` is
+genuinely immutable too and the trap class is gone for every future cache;
+`versionId` keying remains as belt-and-braces. Pre-first-release, so the
+behavior change is free.
 
 ### What must happen in `@selvajs/compute` (THIS repo) — the package seam
 
