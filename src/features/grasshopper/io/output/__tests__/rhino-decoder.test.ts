@@ -49,10 +49,25 @@ describe('decodeRhinoGeometry — registered decoders', () => {
 		expect(result.to).toEqual([1, 1, 1]);
 	});
 
-	it('returns null from the Point decoder when the payload is malformed', () => {
-		// The Point3d decoder guards on `typeof d.X === 'number'`; a bad shape yields null,
-		// not a thrown error, and null short-circuits before the CommonObject fallback.
-		expect(decodeRhinoGeometry({ nope: true }, 'Rhino.Geometry.Point3d', fakeRhino())).toBeNull();
+	it('a decoder returning null falls through instead of short-circuiting (issue 60)', () => {
+		// The Point3d decoder guards on `typeof d.X === 'number'`; a bad shape yields
+		// null, which now means "not my shape — try the fallback". A non-envelope
+		// payload then passes through raw. Previously the null was returned directly,
+		// so prefix collisions (LineCurve → Line decoder) silently decoded to null.
+		expect(decodeRhinoGeometry({ nope: true }, 'Rhino.Geometry.Point3d', fakeRhino())).toEqual({
+			nope: true
+		});
+	});
+
+	it('a prefix-collided type reaches the CommonObject fallback (issue 60)', () => {
+		// Rhino.Geometry.LineCurve startsWith-matches the Rhino.Geometry.Line decoder,
+		// whose {From, To} guard fails on the CommonObject envelope — the envelope must
+		// then reach CommonObject.decode instead of decoding to null.
+		const envelope = { version: 10000, archive3dm: 70, opennurbs: 0, data: 'BASE64' };
+		const decode = vi.fn(() => ({ decodedCurve: true }));
+		const result = decodeRhinoGeometry(envelope, 'Rhino.Geometry.LineCurve', fakeRhino(decode));
+		expect(decode).toHaveBeenCalledWith(envelope);
+		expect(result).toEqual({ decodedCurve: true });
 	});
 
 	it('matches a decoder by prefix when the exact type is not registered', () => {

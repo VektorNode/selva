@@ -9,12 +9,13 @@
  * They assert what the code does today, so any later deepening of the decode
  * dispatch can be proven behavior-identical.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	getValues,
 	getValue,
 	extractFileData
 } from '@/features/grasshopper/io/output/response-processors';
+import { disposeRhinoObjects } from '@/features/grasshopper/io/output/rhino-decoder';
 import type { DataItem, GrasshopperComputeResponse } from '@/features/grasshopper/types';
 
 // --- local builders ---------------------------------------------------------
@@ -202,5 +203,90 @@ describe('extractFileData', () => {
 	it('ignores non-FileData items', () => {
 		const res = response(param('n', [item('System.Int32', '1')]));
 		expect(extractFileData(res)).toEqual([]);
+	});
+});
+
+// --- WASM disposal (issue 48) --------------------------------------------------
+
+/**
+ * Fake emscripten binding: exposes delete()/isDeleted() like real rhino3dm
+ * objects. A fake `rhino` module whose Point3d decoder returns these lets the
+ * tests observe heap frees without loading WASM.
+ */
+function makeWasmObject() {
+	let deleted = false;
+	return {
+		delete: vi.fn(() => {
+			if (deleted) throw new Error('double delete');
+			deleted = true;
+		}),
+		isDeleted: () => deleted
+	};
+}
+
+function fakeRhino(created: ReturnType<typeof makeWasmObject>[]) {
+	return {
+		Point: class {
+			constructor() {
+				const obj = makeWasmObject();
+				created.push(obj);
+				return obj;
+			}
+		}
+	};
+}
+
+describe('getValues().dispose / disposeRhinoObjects — issue 48', () => {
+	const pointJson = JSON.stringify({ X: 1, Y: 2, Z: 3 });
+
+	it('dispose() deletes every decoded WASM object exactly once, idempotently', () => {
+		const created: ReturnType<typeof makeWasmObject>[] = [];
+		const res = response(
+			param('a', [item('Rhino.Geometry.Point3d', pointJson)]),
+			param('b', [
+				item('Rhino.Geometry.Point3d', pointJson),
+				item('Rhino.Geometry.Point3d', pointJson)
+			])
+		);
+
+		const result = getValues(res, false, { rhino: fakeRhino(created) });
+		expect(created).toHaveLength(3);
+		expect(created.every((o) => !o.isDeleted())).toBe(true);
+
+		result.dispose();
+		expect(created.every((o) => o.isDeleted())).toBe(true);
+
+		// Second dispose is a no-op — no double-delete throw.
+		expect(() => result.dispose()).not.toThrow();
+		for (const o of created) expect(o.delete).toHaveBeenCalledTimes(1);
+	});
+
+	it('dispose() leaves plain values untouched and is safe without rhino', () => {
+		const res = response(param('n', [item('System.Int32', '42')]));
+		const result = getValues(res);
+		expect(() => result.dispose()).not.toThrow();
+		expect(result.values.n).toBe(42);
+	});
+
+	it('disposeRhinoObjects frees getValue results, including aggregated arrays', () => {
+		const created: ReturnType<typeof makeWasmObject>[] = [];
+		const res = response(
+			param('pts', [
+				item('Rhino.Geometry.Point3d', pointJson),
+				item('Rhino.Geometry.Point3d', pointJson)
+			])
+		);
+
+		const value = getValue(res, { byName: 'pts' }, { rhino: fakeRhino(created) });
+		expect(Array.isArray(value)).toBe(true);
+
+		disposeRhinoObjects(value);
+		expect(created.every((o) => o.isDeleted())).toBe(true);
+	});
+
+	it('disposeRhinoObjects deletes an aliased object only once', () => {
+		const obj = makeWasmObject();
+		disposeRhinoObjects([obj, { nested: obj }]);
+		expect(obj.delete).toHaveBeenCalledTimes(1);
 	});
 });

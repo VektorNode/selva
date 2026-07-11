@@ -65,7 +65,13 @@ export function decodeRhinoGeometry(
 	const decoder = findDecoder(rhinoType);
 	if (decoder) {
 		try {
-			return decoder(rhino, parsedData);
+			// A decoder returning null means "shape didn't match" — fall through to
+			// the envelope fallback instead of returning null. This matters for
+			// prefix collisions: `Rhino.Geometry.LineCurve` matches the
+			// `Rhino.Geometry.Line` decoder but is a CommonObject envelope, not a
+			// {From, To} pair, and must reach `CommonObject.decode` below.
+			const decoded = decoder(rhino, parsedData);
+			if (decoded != null) return decoded;
 		} catch (error) {
 			getLogger().warn(`Failed to decode Rhino type ${rhinoType}:`, error);
 		}

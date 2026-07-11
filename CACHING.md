@@ -9,7 +9,49 @@ and a downloadable "pre-solved" definition format.
 
 Categories: **cache** (caching layer), **perf** (throughput/latency), **correctness**
 (collision/poisoning risk), **feature** (new capability), **seam** (missing
-extension point). Nothing here is fixed yet.
+extension point). ~~Nothing here is fixed yet.~~ **See the status dashboard
+below — everything owned by THIS repo has shipped (2026-07-11, uncommitted on
+`beta`); everything still open lives in the `selva` repo.**
+
+## Status dashboard (2026-07-11)
+
+Every work item in this file, split by owning repo. Findings are detailed in
+their own sections below; `ISSUES.md` numbers cross-reference the bug tracker.
+
+**`@selvajs/compute` (THIS repo) — all required work done; two optional items open:**
+
+| Item                                 | Status                | Where                                                                                          |
+| ------------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------- |
+| DefinitionRef package seam (M1 half) | ✅ DONE               | `definition-ref.ts`; identity keying, lazy `load()`, 6 pinned tests                            |
+| M3 — strip `algo`                    | ✅ DONE               | stripped at the source in `runSolve` + regression test (ISSUES 58) — persist-path strip moot   |
+| R1 — sampled `Uint8Array` hashing    | ✅ FIXED              | full-content `fnv1aBytes` in the tree path (ISSUES 56)                                         |
+| R2 — errored-solve caching flag      | ✅ DONE               | `CacheOptions.cacheErroredSolves`, default `true` per decision (ISSUES 114)                    |
+| R3 — dead queued solves (pkg half)   | ✅ FIXED              | queued-phase abort listener settles ABORTED + prunes queue (ISSUES 46)                         |
+| R11 — shared mutable cache hits      | ✅ DONE               | immutability contract documented on `solve()` (ISSUES 116)                                     |
+| R12 — stringify edge collisions      | ✅ FIXED              | `[undefined]`/sparse arrays now distinct (ISSUES 53); `NaN→null` matches the wire, kept        |
+| R7 — double definition hash          | 🟡 PARTIAL            | gone for `DefinitionRef`; string/bytes callers still hash twice (ISSUES 57) — refs are the fix |
+| H2 — durable keying export           | 🟡 PARTIAL            | 32-bit collision bugs fixed (two-part key, ISSUES 68); SHA-256 export awaits open question 3   |
+| H3 — in-scheduler cache seam         | ⏸ DEFERRED by design  | H1 lives app-layer (amendment 3); revisit only if the durable cache moves in-package           |
+| R4 — single-flight (pkg half)        | ⏸ CLOSED by design    | coalescing belongs app-side next to the L2 lookup (amendment 4), not in the scheduler          |
+| R5 — queue bounds (pkg half)         | ⬜ OPTIONAL, not done | `maxConcurrent` option exists; queue-depth cap / queue-wait deadline (B7) unimplemented        |
+| R9 — per-solve `skipCache` (pkg)     | ⬜ OPTIONAL, not done | only needed if L1 flooding shows in `selva_cache` telemetry                                    |
+
+**`selva` / `@selvajs/server` (app repo) — all still TODO:**
+
+| Item                                  | Status                  | Notes                                                                            |
+| ------------------------------------- | ----------------------- | -------------------------------------------------------------------------------- |
+| H1 — durable L2 solve cache           | ⬜ TODO, design decided | one-cache-per-channel, per-definition quota, gzipped envelopes (R6), orgId key   |
+| Definition-byte cache (M1 app half)   | ⬜ TODO, design decided | `versionId → bytes` LRU in `@selvajs/server`, wired as `DefinitionRef.load()`    |
+| Monotonic version numbers             | ⬜ TODO, decided        | `nextVersionNumber` on the definition record — root-cause fix for fileKey reuse  |
+| R4 — single-flight map                | ⬜ TODO, decided        | `Map<inputKey, Promise>` next to the L2 lookup                                   |
+| M2 — client-side result memo          | ⬜ TODO                 | small LRU in `createSolveSession`                                                |
+| R2 — misleading "never cached" log    | ⬜ TODO                 | fix wording in `client-cache.ts:222-224`                                         |
+| R3 — wire disconnect signals (verify) | ⬜ TODO                 | confirm the route passes request-abort signals so the package fix actually bites |
+| R5 — concurrency + load shedding      | ⬜ TODO                 | `maxConcurrent` sized to Rhino pool, queue cap + 503 shed, queue-wait deadline   |
+| R8 — config folded into durable key   | ⬜ TODO                 | modelunits/tolerances/`COMPUTE_CONTRACT_VERSION` in the H1 key                   |
+| R9 — `solveCacheLimit` on definition  | ⬜ TODO, shape decided  | one number: absent = inherit, 0 = off, N = quota                                 |
+| R10 — per-request definition header   | ⬜ TODO (future)        | before any affinity routing ships                                                |
+| F1 — pre-solved bundle (+ prewarm)    | ⬜ TODO                 | after H1; R13's post-transform keying applies here                               |
 
 **Related trackers:**
 
@@ -63,6 +105,8 @@ pre-solved bundle (F1) feasible.
 ## High severity
 
 ### H1. No durable / shared solve cache — the structural gap — cache/perf
+
+> **Status: TODO (selva repo)** — design fully decided (see the revalidation amendments and the dashboard at the top); package prerequisites shipped 2026-07-11.
 
 The only result cache (baseline #2) is 20 entries, 5-min TTL, and
 **process-local**. At 1000 users:
@@ -198,6 +242,8 @@ isolation) next to auth is right. See H2 for the one package change this needs.
 
 ### H2. `hashSolveInput` is 32-bit and `@internal` — unsafe as a durable key — correctness/seam
 
+> **Status: PARTIAL (this repo)** — the 32-bit collision bugs are fixed (two-part `defHash|treeHash` key, ISSUES 53-56/68), so the in-process key is sound. The SHA-256/`stableStringify` export for durable keying still awaits open question 3.
+
 `src/features/grasshopper/scheduler/stable-hash.ts:81` — 32-bit FNV-1a, 8-hex
 chars, marked `@internal`, not re-exported from any barrel.
 
@@ -213,6 +259,8 @@ of `hashSolveInput`, or just export `stableStringify` (`stable-hash.ts:10`) and
 let the app hash. This is the ONLY package change H1 strictly requires.
 
 ### H3. No pluggable cache seam in `SolveScheduler` — seam
+
+> **Status: DEFERRED BY DESIGN** — H1 lives app-layer above the scheduler (revalidation amendment 3); revisit only if the durable cache should ever move in-package.
 
 `solve-scheduler.ts:186` — the cache is a hardcoded `private Map` with private
 `readCache`/`writeCache`. No `CacheStore` interface, no injection point.
@@ -236,6 +284,8 @@ so the decision is explicit.
 
 ### M1. Local `.gh` blob refetched from storage on every solve — perf
 
+> **Status: package half DONE / app half TODO** — the `DefinitionRef` seam shipped in this repo 2026-07-11; the `versionId → bytes` cache and route wiring remain in `selva`.
+
 `selva/packages/selva/src/routes/api/compute/+server.ts:315` —
 `storage.get(version.fileKey)` runs on every local solve. Remote URLs get the
 byte cache (baseline); local versions do not. Version blobs are ~~immutable per
@@ -251,6 +301,8 @@ pointer path.
 
 ### M2. Client-side solve session has no result memo — perf
 
+> **Status: TODO (selva repo, ui)**.
+
 `selva/packages/ui/src/lib/compute/createSolveSession.svelte.ts` — abort-on-newer
 exists, but there is no `(inputHash → result)` memo. Dragging a slider back to a
 prior value re-hits the server.
@@ -260,6 +312,8 @@ slider-scrub storms before they leave the browser. Pairs with the scheduler's
 existing `latest-wins` mode.
 
 ### M3. Strip `algo` before persisting cached results — perf/correctness
+
+> **Status: DONE (this repo)** — `algo` is stripped at the source in `runSolve` (regression-tested, ISSUES 58), so a persist-path strip is moot: responses never carry it.
 
 `GrasshopperComputeResponse.algo` (`types.ts:296`) carries the full base64
 definition inside every response. If H1 persists responses verbatim, every cache
@@ -277,6 +331,8 @@ before persisting; rehydrate is unaffected (the processor reads `values`, not
 ## Feature asks
 
 ### F1. Pre-solved, downloadable definition bundle — feature
+
+> **Status: TODO (selva repo)** — blocked on H1.
 
 Ask: pre-solve a definition (e.g. 100 input combos), package as a file a user
 can download and run **without compute**.
@@ -406,6 +462,8 @@ live only here.
 
 #### R1. Sampled `Uint8Array` hashing collides — and defeats H2's defense-in-depth — correctness
 
+> **Status: FIXED (this repo, 2026-07-11)** — tree `Uint8Array`s are keyed by a full-content hash (ISSUES 56); the lossy-canonical objection to H2's defense is gone.
+
 `stable-hash.ts:20-25`: a `Uint8Array` _inside the dataTree_ is stringified as
 `{len, first 32 + last 32 bytes}`. Two binary inputs of equal length differing
 only in the middle (plausible for structured binary formats with fixed headers/
@@ -417,6 +475,8 @@ durable key (and its stored-canonical comparison) must hash binary inputs over
 definition already gets a full-content pass in the same key.
 
 #### R2. Errored solves ARE cached by the in-process cache — resolved as intended (decision 2026-07-11)
+
+> **Status: package DONE / app log TODO** — `CacheOptions.cacheErroredSolves` shipped (default `true`, both behaviors test-pinned, ISSUES 114). The misleading `client-cache.ts` log wording remains to fix in `selva`.
 
 `solve-scheduler.ts:436` — `writeCache` runs on every resolved response with no
 gate on `response.errors`, and the debug log in `client-cache.ts:222-224` ("an
@@ -436,6 +496,8 @@ as `ISSUES.md` 114 (downgraded to api/docs).
 
 #### R3. Queued solves whose client disconnected still execute — perf/correctness
 
+> **Status: package FIXED / app wiring to verify** — queued items now settle ABORTED on signal fire (ISSUES 46). Verify the `selva` route actually passes request-disconnect signals so this bites.
+
 `solve-scheduler.ts:358` checks `externalSignal.aborted` only at `solve()`
 entry; the abort listener is attached in `execute()` (`:415`). An `AbortSignal`
 that fires while the item waits in `fifoQueue`/`pendingForLatestWins` never
@@ -448,6 +510,8 @@ queue on abort.
 
 #### R4. No single-flight / stampede protection anywhere — perf
 
+> **Status: package half CLOSED BY DESIGN / app half TODO** — coalescing belongs next to the L2 lookup (revalidation amendment 4); the `Map<inputKey, Promise>` remains to build in `selva`.
+
 Cache lookup happens only at `solve()` call time (`solve-scheduler.ts:328`).
 N identical requests arriving while the first is still solving all enqueue and
 all execute — there is no `key → in-flight promise` coalescing. Rhino's
@@ -459,6 +523,8 @@ a `Map<key, Promise>` coalescing identical in-flight solves — cheap and safe;
 stale-while-revalidate. The plan above doesn't mention dogpiles at all.
 
 #### R5. All solves per server serialize through one queue with no backpressure — perf
+
+> **Status: TODO (mostly selva)** — concurrency sizing, queue cap + shedding, queue-wait deadline are app config/behavior; optional package queue bounds (B7) also unimplemented.
 
 `client-cache.ts:190-193` creates the shared scheduler with `mode: 'queue'` and
 no `maxConcurrent` → **1** (`solve-scheduler.ts:220`). Every user solving on the
@@ -476,6 +542,8 @@ directly inside the audit's B1 (Rhino saturation) context.
 
 #### R6. Cache the serialized+gzipped envelope, not the response object — perf (H1 design)
 
+> **Status: TODO (selva repo)** — part of H1's write path.
+
 If H1 stores `GrasshopperComputeResponse` objects, every L2 _hit_ still pays
 `JSON.stringify` (RangeError ceiling ~512 MB; configured cap
 `computeResponseMaxBytes` defaults to **300 MB**, `limits.ts:134`) plus
@@ -488,6 +556,8 @@ gunzip fallback (rare).
 
 #### R7. Definition bytes are FNV-hashed twice per solve on the event loop — perf
 
+> **Status: PARTIAL (this repo)** — `DefinitionRef` solves skip hashing entirely (ISSUES 57); string/`Uint8Array` callers still hash twice. Adopting refs in the app is the intended fix.
+
 `scheduler.solve` hashes the full definition in `hashSolveInput`
 (`solve-scheduler.ts:320`) and `runExecutor` hashes it **again** at `:491`. For
 a multi-MB `.gh` that is two full synchronous passes per request on the Node
@@ -499,6 +569,8 @@ computes once per blob), or accept a caller-supplied definition identity
 
 #### R8. Solve-affecting config is not in the key — correctness (durable only)
 
+> **Status: TODO (selva repo)** — fold into H1's durable key.
+
 `hashSolveInput` covers definition + dataTree, but `modelunits`, tolerances and
 `dataversion` change results too (`solve.ts:263-273`). Safe today because
 config is fixed per scheduler and schedulers are per server id. A durable
@@ -508,6 +580,8 @@ solve-affecting config subset, `COMPUTE_CONTRACT_VERSION`, and (decide) the
 compute server's Rhino version. Extends open question 3.
 
 #### R9. Per-definition cache policy — non-determinism AND wide input spaces (H1/F1)
+
+> **Status: TODO (selva repo, shape decided)** — one `solveCacheLimit` number on the definition record; optional package `skipCache` per-solve seam not built.
 
 Two distinct reasons the durable cache needs a per-definition on/off switch
 (2026-07-11 direction: this is a wanted feature, likely selva-side since the
@@ -536,6 +610,8 @@ be bundled; a wide-space one can only bundle explicitly enumerated combos).
 
 #### R10. `X-Selva-Definition` header is stale on shared clients — correctness (future)
 
+> **Status: TODO (selva repo, future)** — required before affinity routing ships.
+
 `client-cache.ts:110,185-187` — the header is baked at client _build_ time from
 whichever definition first touched that server; every later definition on the
 same warm client sends the wrong guid. Inert-ish today (bad access-log
@@ -547,6 +623,8 @@ per-definition client keying) before any pool router ships.
 
 #### R11. Cache hits return a shared mutable reference — correctness (latent)
 
+> **Status: DONE (this repo, 2026-07-11)** — immutability contract documented on `SolveScheduler.solve()` (ISSUES 116).
+
 `readCache` returns the stored `response` object itself (`solve-scheduler.ts:661`);
 `_lastResult` shares it too. Any consumer that mutates a response poisons every
 subsequent hit. The app path serializes immediately (safe), but the package is
@@ -555,12 +633,16 @@ ever cheap enough — it isn't for 100 MB responses).
 
 #### R12. `stableStringify` canonicalization edge collisions — correctness (edge)
 
+> **Status: FIXED (this repo, 2026-07-11)** — `[undefined]`, sparse arrays, shared refs, Dates/Maps/Sets, and bigint all canonicalize distinctly now (ISSUES 53-55). `NaN`/`Infinity` → `null` is kept deliberately: it matches the wire payload.
+
 `[undefined]` stringifies to `[]` (Array.join drops `undefined`), and
 `NaN`/`Infinity` collapse to `null` (`stable-hash.ts:14-27`) — distinct inputs,
 identical keys. Unlikely in JSON-derived trees; fix in the SHA-256 canonical
 form (explicit sentinels) rather than patching the 32-bit path.
 
 #### R13. F1 key derivation must happen post-transform — correctness (F1)
+
+> **Status: PENDING F1 (selva repo)** — design constraint, no action until F1.
 
 The bundle viewer computes lookup keys client-side without a server. The key
 must be derived from the **transformed input tree** (`transformInputParameter`
@@ -667,6 +749,18 @@ genuinely immutable too and the trap class is gone for every future cache;
 behavior change is free.
 
 ### What must happen in `@selvajs/compute` (THIS repo) — the package seam
+
+> **Status (2026-07-11): IMPLEMENTED** — items 1–6 below all shipped (currently
+> uncommitted on `beta`): `DefinitionRef` lives in
+> `src/features/grasshopper/definition-ref.ts` (exported from the barrel),
+> `hashSolveInput`/`hashDefinition` key refs by `r:${key}` with no byte
+> hashing, `serverCacheKeys` keys by `ref.key` without materializing,
+> `solveByCacheKey` calls `ref.load()` only inside the miss/upload branch, and
+> all six pinned tests exist (`solve-scheduler-definition-ref.test.ts`,
+> `solve-cachekey.test.ts`). Also landed same day: the `stable-hash`
+> collision fixes (ISSUES.md 53–56, 68 — the R1 "canonical inputs are lossy"
+> blocker is gone), `CacheOptions.cacheErroredSolves` (ISSUES.md 114), and the
+> scheduler abort/supersede/state fixes (ISSUES.md 46, 50–52, 67, 116).
 
 One coherent, backward-compatible API change (publish as minor):
 

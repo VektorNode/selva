@@ -4,7 +4,9 @@
  * has no test: the unit-scale table, and that the entry returns cleanly (no scene
  * work, no throw) for responses that carry no Display component.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
 
 import { SCALE_FACTORS, getThreeMeshesFromComputeResponse } from '../webdisplay-parser';
 import type { GrasshopperComputeResponse } from '@/features/grasshopper/types';
@@ -38,6 +40,28 @@ describe('getThreeMeshesFromComputeResponse', () => {
 		]);
 		const meshes = await getThreeMeshesFromComputeResponse(res);
 		expect(meshes).toEqual([]);
+	});
+
+	it('JSON-parses each Display envelope exactly once', async () => {
+		// The envelope string carries the full base64 SLVA blob, so a second parse (one per
+		// consumer: mesh parser + display-item extractor) doubles main-thread CPU and transient
+		// memory. Pin that the orchestration parses it once and threads the object to both.
+		const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+		const envelope = JSON.stringify(batch);
+		const res = response([
+			{ ParamName: 'display', InnerTree: { '{0}': [{ type: 'Display', data: envelope, id: '' }] } }
+		]);
+
+		const parseSpy = vi.spyOn(JSON, 'parse');
+		try {
+			const meshes = await getThreeMeshesFromComputeResponse(res);
+			// The single parse must still feed the mesh pipeline.
+			expect(meshes.length).toBeGreaterThan(0);
+			const envelopeParses = parseSpy.mock.calls.filter(([arg]) => arg === envelope).length;
+			expect(envelopeParses).toBe(1);
+		} finally {
+			parseSpy.mockRestore();
+		}
 	});
 
 	it('does not throw when scaling and auto-position are disabled on an empty response', async () => {

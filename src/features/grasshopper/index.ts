@@ -42,7 +42,7 @@ export type {
 	GetValuesResult,
 	ParsedContext
 } from './io/output/response-processors';
-export { registerDecoder } from './io/output/rhino-decoder';
+export { registerDecoder, disposeRhinoObjects } from './io/output/rhino-decoder';
 
 // ============================================================================
 // DATA STRUCTURES

@@ -120,12 +120,12 @@ export async function solveGrasshopperDefinition(
 	definition: SolveDefinition,
 	config: GrasshopperComputeConfig
 ): Promise<GrasshopperComputeResponse> {
-	if (config.debug) {
-		warnIfClientSide(
-			'solveGrasshopperDefinition',
-			config.suppressBrowserWarning ?? config.suppressClientSideWarning
-		);
-	}
+	// Not gated on `debug`: exposing an API key in the browser is a security
+	// concern in every configuration. `suppressBrowserWarning` is the opt-out.
+	warnIfClientSide(
+		'solveGrasshopperDefinition',
+		config.suppressBrowserWarning ?? config.suppressClientSideWarning
+	);
 
 	const bytes = await materializeDefinition(definition);
 	const { response } = await runSolve(prepareGrasshopperArgs(bytes, dataTree), config);
@@ -147,12 +147,10 @@ export async function solveGrasshopperDefinitionWithCacheKey(
 	definition: SolveDefinition,
 	config: GrasshopperComputeConfig
 ): Promise<SolveWithCacheKey> {
-	if (config.debug) {
-		warnIfClientSide(
-			'solveGrasshopperDefinitionWithCacheKey',
-			config.suppressBrowserWarning ?? config.suppressClientSideWarning
-		);
-	}
+	warnIfClientSide(
+		'solveGrasshopperDefinitionWithCacheKey',
+		config.suppressBrowserWarning ?? config.suppressClientSideWarning
+	);
 
 	const bytes = await materializeDefinition(definition);
 	return runSolve(prepareGrasshopperArgs(bytes, dataTree), config);
@@ -177,12 +175,10 @@ export async function solveByCacheKey(
 	definition: SolveDefinition,
 	config: GrasshopperComputeConfig
 ): Promise<SolveWithCacheKey & { missed: boolean }> {
-	if (config.debug) {
-		warnIfClientSide(
-			'solveByCacheKey',
-			config.suppressBrowserWarning ?? config.suppressClientSideWarning
-		);
-	}
+	warnIfClientSide(
+		'solveByCacheKey',
+		config.suppressBrowserWarning ?? config.suppressClientSideWarning
+	);
 
 	const pointerArgs: GrasshopperRequestSchema = { algo: null, pointer: cacheKey, values: dataTree };
 
