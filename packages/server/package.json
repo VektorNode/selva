@@ -1,7 +1,7 @@
 {
 	"name": "@selvajs/server",
 	"version": "0.1.0",
-	"description": "Transport-agnostic compute/solve server building blocks for apps built on the Selva engine (limits, rate limiting, SSRF guard, input transform)",
+	"description": "Transport-agnostic compute/solve/definitions server building blocks for apps built on the Selva engine (limits, rate limiting, SSRF guard, input transform, solve pipeline, definition service + render loader)",
 	"license": "MIT",
 	"publishConfig": {
 		"access": "public"
@@ -24,6 +24,16 @@
 			"source": "./src/compute/index.ts",
 			"types": "./dist/compute/index.d.ts",
 			"import": "./dist/compute/index.js"
+		},
+		"./definitions": {
+			"source": "./src/definitions/index.ts",
+			"types": "./dist/definitions/index.d.ts",
+			"import": "./dist/definitions/index.js"
+		},
+		"./providers": {
+			"source": "./src/providers/index.ts",
+			"types": "./dist/providers/index.d.ts",
+			"import": "./dist/providers/index.js"
 		}
 	},
 	"files": [
@@ -39,6 +49,7 @@
 	},
 	"dependencies": {
 		"@selvajs/compute": "catalog:",
+		"@selvajs/platform": "workspace:*",
 		"@selvajs/schemas": "workspace:*"
 	},
 	"devDependencies": {

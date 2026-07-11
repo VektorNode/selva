@@ -834,7 +834,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.11.0",
+					"default": "2.12.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {
@@ -868,7 +868,7 @@
 				},
 				"layout": { "$ref": "#/definitions/LayoutConfig" }
 			},
-			"required": ["id", "name", "inputs", "outputs", "layout"],
+			"required": ["id", "name", "schemaVersion", "inputs", "outputs", "layout"],
 			"additionalProperties": false
 		},
 

@@ -93,7 +93,8 @@ export function handleApiError(err: unknown, fallback: string): never {
 	// Already a SvelteKit HTTP error (raised via apiError or error()): pass through.
 	if (isHttpError(err)) throw err;
 	// Schema extraction is the upload validation gate (specs/SchemaCaching.md):
-	// compute unreachable → 503, no valid Schema output → 422.
+	// compute unreachable → 503; no valid Schema output, or a schema format
+	// newer than this app supports ('unsupported') → 422.
 	if (err instanceof SchemaExtractionError) {
 		if (err.kind === 'unreachable') {
 			apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, err.message);

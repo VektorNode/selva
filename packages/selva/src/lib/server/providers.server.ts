@@ -1,25 +1,14 @@
 import { env } from '$env/dynamic/private';
-import { pathToFileURL } from 'node:url';
-import { resolve as resolvePath } from 'node:path';
-import { existsSync } from 'node:fs';
 import type {
-	IAuthProvider,
-	IDataProvider,
 	IErrorReporter,
-	IStorageProvider,
 	ISolveMetricSink,
 	SelvaBranding,
 	SelvaConfig,
-	SelvaConfigFactory,
 	SelvaFlags,
 	TenancyMode
 } from '@selvajs/platform';
-import {
-	defineConfig,
-	isFlagEnabled,
-	NoopSolveMetricSink,
-	NoopErrorReporter
-} from '@selvajs/platform';
+import { NoopErrorReporter } from '@selvajs/platform';
+import { createSelvaProviders, type ProviderRegistry } from '@selvajs/server/providers';
 import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
 import * as header from '@selvajs/header-auth-provider';
@@ -27,145 +16,34 @@ import { DefinitionService } from './definitions/DefinitionService.js';
 import { OrgAssetService } from './organizations/OrgAssetService.js';
 import { SentryErrorReporter } from './errors/SentryErrorReporter.js';
 
-/**
- * Provider wiring source. Two modes:
- *
- *   Default — providers are picked from env vars (SELVA_AUTH_PROVIDER etc.)
- *   and instantiated via the bundled provider implementations. New deployments
- *   need only a .env file — no selva.config.js.
- *
- *   Override — set `SELVA_CONFIG_PATH` to point at an external
- *   `selva.config.js` (absolute or CWD-relative). The runtime loads it
- *   dynamically at boot, replacing the default env-driven wiring entirely.
- *   Use this only when you need a custom provider not shipped in the box.
- *
- * The override path must resolve to an actual `.js` file — there's no TS
- * compiler at runtime.
- */
+// Provider wiring lives in `@selvajs/server/providers`
+// (`createSelvaProviders`): env-driven selection over the registry below, an
+// external `selva.config.js` override via SELVA_CONFIG_PATH, and lazy
+// memoized instantiation (nothing touches provider secrets at import/build
+// time). This file is the app's composition root: the registry of bundled
+// provider implementations, the service singletons, and error reporting.
 
-type Env = Record<string, string | undefined>;
-
-function envBool(e: Env, key: string): boolean {
-	const v = e[key]?.toLowerCase();
-	return v === 'true' || v === '1' || v === 'yes';
-}
-
-function pickAuth(e: Env): IAuthProvider {
-	const choice = (e.SELVA_AUTH_PROVIDER ?? 'local').toLowerCase();
-	switch (choice) {
-		case 'local':
-			return local.LocalAuthProvider.fromEnv(e);
-		case 'supabase':
-			return supa.SupabaseAuthProvider.fromEnv(e);
-		case 'header':
-			return header.HeaderAuthProvider.fromEnv(e);
-		default:
-			throw new Error(
-				`Unknown SELVA_AUTH_PROVIDER="${choice}". Expected: local | supabase | header.`
-			);
+/** The provider implementations bundled with the Selva app. */
+const registry: ProviderRegistry = {
+	auth: {
+		local: (e) => local.LocalAuthProvider.fromEnv(e),
+		supabase: (e) => supa.SupabaseAuthProvider.fromEnv(e),
+		header: (e) => header.HeaderAuthProvider.fromEnv(e)
+	},
+	data: {
+		local: (e) => local.LocalDataProvider.fromEnv(e),
+		supabase: (e) => supa.SupabaseDataProvider.fromEnv(e)
+	},
+	storage: {
+		local: (e) => local.LocalStorageProvider.fromEnv(e),
+		supabase: (e) => supa.SupabaseStorageProvider.fromEnv(e)
 	}
-}
+};
 
-function pickData(e: Env): IDataProvider {
-	const choice = (e.SELVA_DATA_PROVIDER ?? 'local').toLowerCase();
-	switch (choice) {
-		case 'local':
-			return local.LocalDataProvider.fromEnv(e);
-		case 'supabase':
-			return supa.SupabaseDataProvider.fromEnv(e);
-		default:
-			throw new Error(`Unknown SELVA_DATA_PROVIDER="${choice}". Expected: local | supabase.`);
-	}
-}
-
-function pickStorage(e: Env): IStorageProvider {
-	const choice = (e.SELVA_STORAGE_PROVIDER ?? 'local').toLowerCase();
-	switch (choice) {
-		case 'local':
-			return local.LocalStorageProvider.fromEnv(e);
-		case 'supabase':
-			return supa.SupabaseStorageProvider.fromEnv(e);
-		default:
-			throw new Error(`Unknown SELVA_STORAGE_PROVIDER="${choice}". Expected: local | supabase.`);
-	}
-}
-
-/**
- * Per-solve metric sink. Supabase's data provider carries a `solveMetrics`
- * sink built from its own client bundle — reuse it so timings persist
- * automatically. Other backends (local) have no metrics table; left undefined,
- * which falls back to `NoopSolveMetricSink` in `getSolveMetricSink()`.
- */
-function pickSolveMetrics(data: IDataProvider): ISolveMetricSink | undefined {
-	const candidate = (data as { solveMetrics?: unknown }).solveMetrics;
-	if (candidate && typeof (candidate as { record?: unknown }).record === 'function') {
-		return candidate as ISolveMetricSink;
-	}
-	return undefined;
-}
-
-function pickTenancy(e: Env): TenancyMode {
-	const choice = (e.SELVA_TENANCY ?? 'single').toLowerCase();
-	if (choice !== 'single' && choice !== 'multi') {
-		throw new Error(`Unknown SELVA_TENANCY="${choice}". Expected: single | multi.`);
-	}
-	return choice;
-}
-
-const defaultConfig = defineConfig((e) => {
-	const data = pickData(e);
-	return {
-		tenancy: pickTenancy(e),
-		flags: {
-			ALLOW_CROSS_ORG_PUBLIC: envBool(e, 'SELVA_FLAG_ALLOW_CROSS_ORG_PUBLIC'),
-			ALLOW_ORG_COMPUTE_OVERRIDE: envBool(e, 'SELVA_FLAG_ALLOW_ORG_COMPUTE_OVERRIDE'),
-			ALLOW_ORG_CREATION: envBool(e, 'SELVA_FLAG_ALLOW_ORG_CREATION'),
-			ENABLE_PLATFORM_PROJECTS: envBool(e, 'SELVA_FLAG_ENABLE_PLATFORM_PROJECTS'),
-			ENABLE_SHARING: envBool(e, 'SELVA_FLAG_ENABLE_SHARING')
-		},
-		branding: {
-			name: e.SELVA_BRAND_NAME,
-			copyrightName: e.SELVA_BRAND_COPYRIGHT_NAME,
-			tagline: e.SELVA_BRAND_TAGLINE,
-			description: e.SELVA_BRAND_DESCRIPTION
-		},
-		auth: pickAuth(e),
-		data,
-		storage: pickStorage(e),
-		solveMetrics: pickSolveMetrics(data)
-	};
+const runtime = await createSelvaProviders(env, {
+	registry,
+	configPath: env.SELVA_CONFIG_PATH
 });
-
-async function loadRawConfig(): Promise<SelvaConfig | SelvaConfigFactory> {
-	const override = env.SELVA_CONFIG_PATH;
-	if (!override) {
-		return defaultConfig;
-	}
-
-	const abs = resolvePath(process.cwd(), override);
-	if (!existsSync(abs)) {
-		throw new Error(`SELVA_CONFIG_PATH=${override} resolved to ${abs} which does not exist.`);
-	}
-	// Dynamic specifier — Vite must not pre-resolve this at build time, hence
-	// @vite-ignore. pathToFileURL keeps Windows absolute paths valid as ESM
-	// specifiers.
-	const mod = (await import(/* @vite-ignore */ pathToFileURL(abs).href)) as {
-		default: SelvaConfig | SelvaConfigFactory;
-	};
-	return mod.default;
-}
-
-// Loading the *config source* (default factory, or the SELVA_CONFIG_PATH
-// override module) is cheap and secret-free — a factory is just a function.
-// We do that eagerly. We do NOT invoke the factory here: calling it runs
-// pickAuth/pickData/pickStorage → provider.fromEnv(), which validates required
-// secrets (SELVA_HMAC_KEY etc.). Doing that at import time would make merely
-// *building* the app require a full runtime env, which breaks `vite build` and
-// any tool that loads the SSR bundle. So provider instantiation is deferred to
-// first use via resolveProviders().
-const _raw = await loadRawConfig();
-
-let _providers: SelvaConfig | undefined;
 
 /**
  * Memoized provider wiring. The first call instantiates providers from env
@@ -174,23 +52,7 @@ let _providers: SelvaConfig | undefined;
  * happens lazily on the first request, never at build time.
  */
 export function resolveProviders(): SelvaConfig {
-	if (_providers) return _providers;
-	_providers = typeof _raw === 'function' ? _raw(env) : _raw;
-
-	// One-line boot summary so operators can confirm at a glance what got wired
-	// without grepping env vars or reading the config file. Provider names come
-	// from the IAuthProvider.name field; data/storage adapters don't expose a
-	// name, so we infer from the constructor.
-	console.info(
-		`[selva] providers wired: ` +
-			`auth=${_providers.auth.name} ` +
-			`data=${_providers.data.constructor.name} ` +
-			`storage=${_providers.storage.constructor.name} ` +
-			`tenancy=${_providers.tenancy ?? 'single'}` +
-			(env.SELVA_CONFIG_PATH ? ` config=${env.SELVA_CONFIG_PATH}` : '')
-	);
-
-	return _providers;
+	return runtime.resolve();
 }
 
 /**
@@ -205,7 +67,7 @@ export const providers = new Proxy({} as SelvaConfig, {
 });
 
 export function getTenancy(): TenancyMode {
-	return resolveProviders().tenancy ?? 'single';
+	return runtime.tenancy();
 }
 
 /**
@@ -213,21 +75,12 @@ export function getTenancy(): TenancyMode {
  * null-check. White-label deployments override via SELVA_BRAND_* env vars.
  */
 export function getBranding(): Required<SelvaBranding> {
-	const brand = resolveProviders().branding ?? {};
-	const name = brand.name?.trim() || 'Selva';
-	return {
-		name,
-		copyrightName: brand.copyrightName?.trim() || name,
-		tagline: brand.tagline?.trim() || 'Turn Grasshopper definitions into tools anyone can use.',
-		description:
-			brand.description?.trim() ||
-			`Build and deploy interactive web applications powered by Grasshopper definitions with ${name}.`
-	};
+	return runtime.branding();
 }
 
 /** Use this rather than reading flags directly — omitted flags resolve to false. */
 export function flag(name: keyof SelvaFlags): boolean {
-	return isFlagEnabled(resolveProviders(), name);
+	return runtime.flag(name);
 }
 
 let _definitionService: DefinitionService | undefined;
@@ -292,17 +145,12 @@ export function getPlatformProjectGrantStore() {
 	return resolveProviders().data.platformProjectGrants;
 }
 
-let _solveMetricSink: ISolveMetricSink | undefined;
-
 /**
  * Per-solve timing sink. Defaults to `NoopSolveMetricSink` when the config
  * omits `solveMetrics`, so the compute route can always record unconditionally.
  */
 export function getSolveMetricSink(): ISolveMetricSink {
-	if (!_solveMetricSink) {
-		_solveMetricSink = resolveProviders().solveMetrics ?? new NoopSolveMetricSink();
-	}
-	return _solveMetricSink;
+	return runtime.solveMetricSink();
 }
 
 /**

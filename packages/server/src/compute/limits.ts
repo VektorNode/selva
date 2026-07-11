@@ -32,7 +32,7 @@ export function readPositiveInt(env: EnvRecord, name: string, fallback: number):
 	if (!raw) return fallback;
 	const parsed = Number(raw);
 	if (!Number.isFinite(parsed) || parsed <= 0) {
-		console.warn(`[computeLimits] Invalid ${name}=${raw}, falling back to ${fallback}`);
+		console.warn(`[selva] Invalid ${name}=${raw}, falling back to ${fallback}`);
 		return fallback;
 	}
 	return Math.floor(parsed);
@@ -48,7 +48,7 @@ export function readBool(env: EnvRecord, name: string, fallback: boolean): boole
 	const v = raw.trim().toLowerCase();
 	if (v === 'true' || v === '1' || v === 'yes' || v === 'on') return true;
 	if (v === 'false' || v === '0' || v === 'no' || v === 'off') return false;
-	console.warn(`[computeLimits] Invalid ${name}=${raw}, falling back to ${fallback}`);
+	console.warn(`[selva] Invalid ${name}=${raw}, falling back to ${fallback}`);
 	return fallback;
 }
 

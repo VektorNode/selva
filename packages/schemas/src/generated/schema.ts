@@ -509,7 +509,7 @@ export interface UISchema {
 	/**
 	 * Semantic version of the schema format (MAJOR.MINOR.PATCH)
 	 */
-	schemaVersion?: string;
+	schemaVersion: string;
 	/**
 	 * Minimum plugin version required to load this schema
 	 */
@@ -589,6 +589,9 @@ export const ACCEPTED_FILE_FORMATS = [
 	'.dxf',
 	'.stl'
 ] as const;
+
+/** Current UISchema format version (from ui-schema.json's schemaVersion default). */
+export const UI_SCHEMA_VERSION = '2.12.0';
 
 // ============================================================================
 // TYPE GUARDS
