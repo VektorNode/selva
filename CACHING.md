@@ -78,6 +78,71 @@ The only result cache (baseline #2) is 20 entries, 5-min TTL, and
 branch (`+server.ts:402`). Redis for hot / blob storage for cold. The package's
 local `Map` stays as L1; this is the shared L2.
 
+**Decided structure (2026-07-11, with the user) — definition-scoped quotas,
+not one global LRU:**
+
+```
+solve request (live channel only — draft solves never touch L2)
+  → L2 read: (versionId, sha256(canonical inputs)) → hit: return stored
+    gzipped envelope (R6), near-CPU-free
+  → miss: scheduler L1 (tiny hot cache; drafts included) → Rhino `cachesolve`
+    → actual solve
+  ← L2 write-through when: live channel AND the definition's quota allows
+```
+
+- **Per-definition entry quota** — each definition gets its own budget of
+  cached solves; eviction is LRU _within_ the definition. A slider-heavy
+  definition churns only its own entries instead of evicting everyone else's
+  (solves R9's wide-input-space problem structurally, not with an off-switch).
+  Old versions' entries age out naturally inside the definition's quota.
+- **The per-definition policy is ONE number:** `solveCacheLimit` on the
+  definition record — absent = inherit the global env default
+  (`SOLVE_CACHE_DEFAULT_MAX_ENTRIES`), `0` = caching off (the
+  non-determinism escape hatch), `N` = cap. This **supersedes the earlier
+  `'inherit' | 'off'` enum decision** (K6 flag-shape) — one field, one input
+  box in definition settings ("0 disables"), strictly simpler.
+- **Global byte budget as the ops backstop** — entries range KB→100s of MB,
+  so a count quota can't bound memory: `SOLVE_CACHE_MAX_TOTAL_MB` (in-memory)
+  / `maxmemory allkeys-lru` (Redis) evicts across everything regardless of
+  per-definition counts. Authors think in counts; operators think in bytes;
+  both knobs exist.
+- Keying by `versionId` means publish = fresh keyspace, rollback = old
+  entries hit again, invalidation = nothing to build.
+
+**Pluggable-store contract (decided 2026-07-11)** — the in-memory
+implementation ships first, but the interface is written so Redis (or any
+shared store) is a **config change, not a redesign**:
+
+- `ISolveResultCache` is a `@selvajs/platform` provider interface (same
+  pattern as storage/auth/metrics), selected via env
+  (`SOLVE_CACHE_PROVIDER=memory | redis`). The solve pipeline only talks to
+  the interface.
+- **Async API from day one** — the memory impl returns promises too;
+  otherwise every call site changes shape when a network store arrives (the
+  H3 sync-fast-path lesson, applied preemptively).
+- **Entries are opaque bytes** — the gzipped envelope (R6) + a small metadata
+  header. Memory stores the same buffer Redis would; hits stay near-CPU-free
+  in both backends, and there is no serialization drift between impls.
+- **Best-effort contract** — `get` may miss at any time (restart, eviction,
+  network blip); `set` may silently drop. Correctness never depends on cache
+  presence — this is what makes backends interchangeable AND what makes the
+  no-correctness-TTL versionId keying safe under any eviction policy.
+- **Quota semantics work in both**: per-definition count quota + LRU-within-
+  definition = `Map` + counters in memory, per-definition sorted set
+  (score = last access) in Redis. The interface passes
+  `(definitionId, versionId, inputKey)` so the backend organizes its own
+  keyspace; eviction is backend-internal, budgets are config.
+- **The byte cap moves with the backend**: in-memory it's
+  `SOLVE_CACHE_MAX_TOTAL_MB` inside the Node heap; on Redis the backstop is
+  the server's `maxmemory allkeys-lru` — sized independently of the app
+  (this is the "raise the total cap by adding Redis" upgrade path), and the
+  cache becomes shared across app instances for free.
+- Key prefixes (`solve:`, `rl:`) reserved so one Redis can also serve the B5
+  rate limiter and still split later (already in the Redis notes below).
+- Single-flight (R4) stays ABOVE the interface: in-process coalescing first;
+  the Redis `SET NX` lease is an optional backend capability added when the
+  Redis impl lands — the interface must not require it of the memory impl.
+
 **Why app-layer, not in this package:** the durable key wants `versionId`
 (immutable → **no TTL needed**, results valid forever), which the package doesn't
 know about. Keeping correctness (collision-safety, status gating, per-org
@@ -236,8 +301,11 @@ move into the package later; H1's app-layer approach makes it optional.
    valid GH results and are cached (see addendum R2 / ISSUES.md 114).** Still
    open: per-org isolation in the key to prevent cross-tenant reads?
    Per-definition `cachePolicy` off-switch (addendum R9): decided 2026-07-11 —
-   definition **record** field + settings UI (single policy enum, result
-   caches only); see the selva-side K6 design discussion.
+   definition **record** field + settings UI, result caches only. **Shape
+   revised same day:** a single number `solveCacheLimit` (absent = inherit
+   global default, `0` = off, `N` = per-definition entry quota) instead of the
+   briefly-decided `'inherit' | 'off'` enum — see the "Decided structure"
+   block under H1.
 5. **F1 enumeration** — how does an author declare the discrete input space to
    batch-solve? New schema metadata on inputs, or an admin "generate bundle" UI
    that walks enumerable inputs?

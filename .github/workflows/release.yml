@@ -34,8 +34,9 @@ jobs:
 
       # OIDC trusted publishing requires npm >= 11.5.1; the npm bundled with
       # the Node version here is too old to perform the OIDC token exchange.
+      # Pinned to the 11.x line because npm 12 dropped support for Node 20.
       - name: Upgrade npm for OIDC publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
