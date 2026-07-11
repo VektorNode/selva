@@ -1,5 +1,12 @@
 # @selvajs/platform
 
+## 0.14.3-beta.0
+
+### Patch Changes
+
+- Updated dependencies [2673995]
+  - @selvajs/schemas@4.7.0-beta.0
+
 ## 0.14.2
 
 ### Patch Changes
