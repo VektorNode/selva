@@ -45,9 +45,10 @@ export function createLabelLayer(container: HTMLElement, scene: THREE.Scene): La
 	dom.style.left = '0';
 	// The overlay must never intercept viewer interaction. CSS2DRenderer sizes its root div to the
 	// renderer size and stacks it above the canvas; without an explicit non-interactive, clipped box
-	// it can cover the canvas and swallow orbit/clicks. Pin it to the container and clip overflow.
-	dom.style.width = '100%';
-	dom.style.height = '100%';
+	// it can cover the canvas and swallow orbit/clicks. Note the box is sized in PIXELS by
+	// `setSize` (CSS2DRenderer overwrites width/height styles and bases its projection math on the
+	// same values, so percentage sizing can't work here) — the host's resize handling must call
+	// `setSize` whenever the container resizes, exactly as it does for the WebGL renderer.
 	dom.style.overflow = 'hidden';
 	dom.style.pointerEvents = 'none';
 	// Stack above the canvas and any host overlays (e.g. blur/loading scrims) that share the

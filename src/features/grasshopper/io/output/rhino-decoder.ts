@@ -57,23 +57,74 @@ function isDecodableEnvelope(parsedData: unknown): parsedData is object {
 // Geometry Decoding
 // -----------------------------------------------------------------------------
 
+/**
+ * Sentinel returned by {@link decodeRhinoGeometry} when a decode was attempted
+ * and failed hard (a registered decoder or `CommonObject.decode` threw). Carries
+ * the original payload so callers can log or retry. Use
+ * {@link isRhinoDecodeError} to detect it.
+ */
+export interface RhinoDecodeError {
+	__decodeError: true;
+	/** The Rhino type name the failed decode was attempted for. */
+	type: string;
+	/** The original (undecoded) payload. */
+	raw: unknown;
+}
+
+/** Type guard for the {@link RhinoDecodeError} sentinel. */
+export function isRhinoDecodeError(value: unknown): value is RhinoDecodeError {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		(value as RhinoDecodeError).__decodeError === true
+	);
+}
+
+function makeDecodeError(rhinoType: string, raw: unknown): RhinoDecodeError {
+	return { __decodeError: true, type: rhinoType, raw };
+}
+
+/**
+ * Decode one typed payload from a solve response into a rhino3dm object.
+ *
+ * Failure signaling is a single coherent scheme (issue 85) — every call yields
+ * exactly one of three outcomes:
+ *
+ * 1. **Decoded value** — a registered decoder recognized the shape, or the
+ *    payload was a rhino3dm serialization envelope and `CommonObject.decode`
+ *    succeeded.
+ * 2. **Raw passthrough** (`=== parsedData`) — no decode path *applied*: no
+ *    decoder matched the type (or the matched decoder returned `null`, meaning
+ *    "not my shape") and the payload is not a decodable envelope. Not an error;
+ *    the caller keeps the parsed JSON as-is.
+ * 3. **{@link RhinoDecodeError} sentinel** — a decode was *attempted and threw*
+ *    (a registered decoder threw and no envelope fallback could recover, or
+ *    `CommonObject.decode` threw). Detect with {@link isRhinoDecodeError}.
+ *
+ * A decoder returning `null` is a soft miss, never an error: it falls through
+ * to the envelope fallback. This matters for prefix collisions — e.g.
+ * `Rhino.Geometry.LineCurve` matches the `Rhino.Geometry.Line` decoder but is
+ * a CommonObject envelope, not a `{From, To}` pair, and must reach
+ * `CommonObject.decode`.
+ */
 export function decodeRhinoGeometry(
 	parsedData: unknown,
 	rhinoType: string,
 	rhino: RhinoModule
 ): unknown {
 	const decoder = findDecoder(rhinoType);
+	// A throwing decoder is a hard failure (unlike a null return, which is a
+	// soft "not my shape" miss) — remember it so that when no envelope fallback
+	// can recover we return the error sentinel instead of silently passing the
+	// raw payload through as if no decode had ever been attempted.
+	let decoderThrew = false;
 	if (decoder) {
 		try {
-			// A decoder returning null means "shape didn't match" — fall through to
-			// the envelope fallback instead of returning null. This matters for
-			// prefix collisions: `Rhino.Geometry.LineCurve` matches the
-			// `Rhino.Geometry.Line` decoder but is a CommonObject envelope, not a
-			// {From, To} pair, and must reach `CommonObject.decode` below.
 			const decoded = decoder(rhino, parsedData);
 			if (decoded != null) return decoded;
 		} catch (error) {
 			getLogger().warn(`Failed to decode Rhino type ${rhinoType}:`, error);
+			decoderThrew = true;
 		}
 	}
 
@@ -82,10 +133,10 @@ export function decodeRhinoGeometry(
 		if (isDecodableEnvelope(parsedData)) return rhino.CommonObject.decode(parsedData);
 	} catch (error) {
 		getLogger().warn(`Failed to decode ${rhinoType} with CommonObject:`, error);
-		return { __decodeError: true, type: rhinoType, raw: parsedData };
+		return makeDecodeError(rhinoType, parsedData);
 	}
 
-	return parsedData;
+	return decoderThrew ? makeDecodeError(rhinoType, parsedData) : parsedData;
 }
 
 // -----------------------------------------------------------------------------
@@ -167,7 +218,7 @@ export function decodeRhinoObject<T extends Record<string, unknown>>(
 		if (!value || typeof value !== 'object') continue;
 
 		const v: any = value;
-		const maybeType = typeof v.type === 'string' ? v.type : undefined;
+		const maybeType = !Array.isArray(v) && typeof v.type === 'string' ? v.type : undefined;
 
 		if (maybeType) {
 			out[key] = decodeRhinoGeometry(v, maybeType, rhino);
@@ -175,9 +226,35 @@ export function decodeRhinoObject<T extends Record<string, unknown>>(
 		}
 
 		if (deep) {
-			out[key] = decodeRhinoObject(v as any, rhino, options);
+			// Arrays must stay arrays (issue 61): recursing into decodeRhinoObject
+			// would object-spread `[a, b]` into `{0: a, 1: b}`, breaking
+			// Array.isArray/.map downstream. Map over elements instead.
+			out[key] = Array.isArray(v)
+				? decodeDeepArray(v, rhino, options)
+				: decodeRhinoObject(v as any, rhino, options);
 		}
 	}
 
 	return out as T;
+}
+
+/**
+ * Deep-mode helper: decode every element of an array while preserving the
+ * array shape. Type-tagged elements decode via {@link decodeRhinoGeometry},
+ * nested arrays recurse, plain objects recurse through
+ * {@link decodeRhinoObject} (so `keys`/`skipKeys` filtering still applies to
+ * their fields), and primitives pass through untouched.
+ */
+function decodeDeepArray(
+	arr: unknown[],
+	rhino: RhinoModule,
+	options: DecodeRhinoOptions
+): unknown[] {
+	return arr.map((el) => {
+		if (!el || typeof el !== 'object') return el;
+		if (Array.isArray(el)) return decodeDeepArray(el, rhino, options);
+		const maybeType = typeof (el as any).type === 'string' ? (el as any).type : undefined;
+		if (maybeType) return decodeRhinoGeometry(el, maybeType, rhino);
+		return decodeRhinoObject(el as Record<string, unknown>, rhino, options);
+	});
 }

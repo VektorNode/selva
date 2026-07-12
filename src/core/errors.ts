@@ -9,6 +9,17 @@ export const ErrorCodes = {
 	COMPUTATION_ERROR: 'COMPUTATION_ERROR',
 	TIMEOUT_ERROR: 'TIMEOUT_ERROR',
 	CORS_ERROR: 'CORS_ERROR',
+	/** HTTP 404 — the endpoint path does not exist on the server (usually a typo'd route or wrong server). Never retried. */
+	NOT_FOUND: 'NOT_FOUND',
+	/** HTTP 429 — the server is rate-limiting requests. Retried by default (honors `Retry-After`); see `RetryPolicy.retryOn429`. */
+	RATE_LIMIT: 'RATE_LIMIT',
+	/**
+	 * The server answered 2xx but the body is deterministically not JSON (the
+	 * response declared a non-JSON `Content-Type`, e.g. an HTML captive-portal or
+	 * proxy login page, or a misconfigured endpoint). Never retried — refetching
+	 * returns the same page.
+	 */
+	INVALID_RESPONSE: 'INVALID_RESPONSE',
 	UNKNOWN_ERROR: 'UNKNOWN_ERROR',
 	INVALID_STATE: 'INVALID_STATE',
 	INVALID_INPUT: 'INVALID_INPUT',

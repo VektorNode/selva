@@ -51,6 +51,17 @@ const DEFAULT_RETRY: Required<RetryPolicy> = {
 
 const RETRYABLE_STATUS = new Set([502, 503, 504]);
 
+/**
+ * Absolute ceiling for a server-supplied `Retry-After` wait. The server's
+ * stated window wins over `retryPolicy.maxDelayMs` (retrying earlier all but
+ * guarantees another 429), but a bad/hostile header must not park the client
+ * for minutes — anything above this cap is clamped.
+ */
+const RETRY_AFTER_CAP_MS = 60_000;
+
+/** Upper bound for the raw server body stored on error `context.responseBody`. */
+const MAX_CONTEXT_BODY_CHARS = 4096;
+
 function resolveRetryPolicy(policy: RetryPolicy | undefined): Required<RetryPolicy> {
 	if (!policy) return DEFAULT_RETRY;
 	return {
@@ -105,6 +116,12 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 // Error Handling
 // ============================================================================
 
+/** Truncate a server body for storage on error context — bounded, with an honest marker. */
+function truncateBody(body: string): string {
+	if (body.length <= MAX_CONTEXT_BODY_CHARS) return body;
+	return `${body.slice(0, MAX_CONTEXT_BODY_CHARS)}… [truncated ${body.length - MAX_CONTEXT_BODY_CHARS} chars]`;
+}
+
 function throwHttpError(
 	response: Response,
 	fullUrl: string,
@@ -112,7 +129,8 @@ function throwHttpError(
 	requestSize: number,
 	serverUrl: string,
 	errorBody: string,
-	serverCode?: string
+	serverCode?: string,
+	rawBody?: string
 ): never {
 	const { status, statusText } = response;
 
@@ -124,25 +142,30 @@ function throwHttpError(
 	const trimmed = errorBody.trim();
 	const bodyHint = trimmed ? ` — ${trimmed.slice(0, 200)}${trimmed.length > 200 ? '…' : ''}` : '';
 
+	// context.responseBody holds the RAW server body (what actually came over the
+	// wire), bounded to MAX_CONTEXT_BODY_CHARS so a huge body isn't pinned for the
+	// error's lifetime. `errorBody` may have been rewritten into a synthesized
+	// message (500 exception shape) — that goes in the message, not the context.
+	const storedBody = rawBody ?? errorBody;
 	const context = {
 		url: fullUrl,
 		requestId,
 		method: 'POST',
 		requestSize,
 		serverUrl,
-		responseBody: errorBody || undefined,
+		responseBody: storedBody ? truncateBody(storedBody) : undefined,
 		responseHeaders
 	};
 
 	const errorMap: Record<number, { message: string; code: ErrorCode }> = {
 		401: { message: `HTTP ${status}: ${statusText}${bodyHint}`, code: ErrorCodes.AUTH_ERROR },
 		403: { message: `HTTP ${status}: ${statusText}${bodyHint}`, code: ErrorCodes.AUTH_ERROR },
-		404: { message: `Endpoint not found: ${fullUrl}`, code: ErrorCodes.NETWORK_ERROR },
+		404: { message: `Endpoint not found: ${fullUrl}`, code: ErrorCodes.NOT_FOUND },
 		413: {
 			message: `Request too large: ${(requestSize / 1024).toFixed(2)}KB`,
 			code: ErrorCodes.VALIDATION_ERROR
 		},
-		429: { message: `Rate limit exceeded${bodyHint}`, code: ErrorCodes.NETWORK_ERROR },
+		429: { message: `Rate limit exceeded${bodyHint}`, code: ErrorCodes.RATE_LIMIT },
 		500: { message: `Server error: ${statusText}${bodyHint}`, code: ErrorCodes.COMPUTATION_ERROR },
 		502: {
 			message: `Service unavailable: ${statusText}${bodyHint}`,
@@ -319,6 +342,27 @@ export function composeSignal(
 // Response Processing
 // ============================================================================
 
+/**
+ * Surface the server's per-request timing breakdown (if it sent one and a
+ * caller is listening). Best-effort: a throwing callback must not fail the
+ * request. Called on the success path AND the 500-with-values partial-success
+ * path — solves that completed with Grasshopper errors carry real timings too.
+ */
+function fireServerTiming(
+	response: Response,
+	onServerTiming: ((timing: ServerTiming) => void) | undefined,
+	debug?: boolean
+): void {
+	if (!onServerTiming) return;
+	const timing = parseServerTiming(response.headers.get('Server-Timing'));
+	if (!timing) return;
+	try {
+		onServerTiming(timing);
+	} catch (err) {
+		if (debug) log(`   onServerTiming callback threw: ${err}`, true);
+	}
+}
+
 async function handleResponse(
 	response: Response,
 	fullUrl: string,
@@ -332,8 +376,10 @@ async function handleResponse(
 	const responseTime = Math.round(performance.now() - startTime);
 
 	if (!response.ok) {
-		// Read body once and reuse
-		let errorBody = await response.text();
+		// Read body once and reuse. `rawBody` stays what came over the wire (stored
+		// on error context); `errorBody` may be rewritten into a friendlier message.
+		const rawBody = await response.text();
+		let errorBody = rawBody;
 
 		// Enhanced logging for errors
 		if (debug) {
@@ -354,11 +400,10 @@ async function handleResponse(
 		// A machine-readable code the server may tag onto its error body (e.g.
 		// "definition_not_cached"). Unlike the human `message`, it isn't scrubbed in
 		// the server's production (non-debug) mode, so it's the reliable signal for
-		// classifying the error (see throwHttpError → mapServerErrorCode).
+		// classifying the error (see throwHttpError → mapServerErrorCode). It can
+		// ride any error status, not just 500, so read it here.
 		let serverCode: string | undefined;
 
-		// The machine code (e.g. `definition_not_cached`) can ride any error status,
-		// not just 500, and must outrank the status-based mapping — so read it here.
 		try {
 			const parsedForCode = JSON.parse(errorBody);
 			if (typeof parsedForCode?.code === 'string') serverCode = parsedForCode.code;
@@ -384,6 +429,7 @@ async function handleResponse(
 							log(`   Warnings: ${JSON.stringify(parsed.warnings, null, 2)}`, true);
 						}
 					}
+					fireServerTiming(response, onServerTiming, debug);
 					return parsed;
 				}
 
@@ -422,28 +468,45 @@ async function handleResponse(
 			}
 		}
 
-		throwHttpError(response, fullUrl, requestId, requestSize, serverUrl, errorBody, serverCode);
+		throwHttpError(
+			response,
+			fullUrl,
+			requestId,
+			requestSize,
+			serverUrl,
+			errorBody,
+			serverCode,
+			rawBody
+		);
 	}
 
 	log(`✅ Request [${requestId}] completed in ${responseTime}ms`, debug);
 
-	// Surface the server's per-request timing breakdown (if it sent one and a
-	// caller is listening). Best-effort: a throwing callback must not fail the
-	// request, since the body parse below is the real result.
-	if (onServerTiming) {
-		const timing = parseServerTiming(response.headers.get('Server-Timing'));
-		if (timing) {
-			try {
-				onServerTiming(timing);
-			} catch (err) {
-				if (debug) log(`   onServerTiming callback threw: ${err}`, true);
-			}
-		}
-	}
+	fireServerTiming(response, onServerTiming, debug);
 
 	try {
 		return await response.json();
 	} catch (error) {
+		// Classify by the declared Content-Type (issue 87). A 2xx that DECLARES a
+		// non-JSON body (HTML from a captive portal, a reverse-proxy login page, a
+		// misconfigured endpoint) is deterministic — refetching returns the same
+		// page — so fail immediately with INVALID_RESPONSE (never retried). A body
+		// that fails to parse under a JSON (or absent) Content-Type means the
+		// stream was likely cut mid-body — as transient as any network error — and
+		// keeps the retryable NETWORK_ERROR classification.
+		const contentType = (response.headers.get('Content-Type') ?? '').toLowerCase();
+		const declaredNonJson = contentType !== '' && !contentType.includes('json');
+		if (declaredNonJson) {
+			throw new RhinoComputeError(
+				`Server returned a non-JSON response (Content-Type: ${contentType}) — check the server URL / proxy configuration`,
+				ErrorCodes.INVALID_RESPONSE,
+				{
+					statusCode: response.status,
+					context: { url: fullUrl, requestId, contentType },
+					originalError: error instanceof Error ? error : new Error(String(error))
+				}
+			);
+		}
 		throw new RhinoComputeError('Failed to parse JSON response', ErrorCodes.NETWORK_ERROR, {
 			statusCode: response.status,
 			context: {
@@ -510,11 +573,14 @@ async function attemptFetch(
 
 		if (isRetryableStatus && attempt < totalAttempts - 1) {
 			const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'));
-			// Clamp Retry-After to maxDelayMs so a bad header can't force an
-			// arbitrarily long sleep. backoffDelay already clamps.
+			// The server's stated Retry-After window wins over maxDelayMs — retrying
+			// before it all but guarantees another 429 and burns an attempt. It is
+			// only clamped by the absolute RETRY_AFTER_CAP_MS safety cap (or by a
+			// caller-configured maxDelayMs that is even larger), so a bad header
+			// can't force a pathological sleep. backoffDelay already clamps itself.
 			const delayMs =
 				retryAfterMs !== null
-					? Math.min(retryAfterMs, retryPolicy.maxDelayMs)
+					? Math.min(retryAfterMs, Math.max(retryPolicy.maxDelayMs, RETRY_AFTER_CAP_MS))
 					: backoffDelay(attempt, retryPolicy);
 			// Drain the body so the connection can be reused on the next attempt.
 			// On the *final* attempt we deliberately fall through — handleResponse
@@ -526,7 +592,7 @@ async function attemptFetch(
 				delayMs,
 				cause: new RhinoComputeError(
 					`HTTP ${response.status} ${response.statusText} (will retry)`,
-					ErrorCodes.NETWORK_ERROR,
+					response.status === 429 ? ErrorCodes.RATE_LIMIT : ErrorCodes.NETWORK_ERROR,
 					{ statusCode: response.status, context: { requestId: ctx.requestId } }
 				)
 			};
@@ -564,21 +630,42 @@ async function attemptFetch(
 				};
 			}
 
-			// Timeout — retryable up to attempts limit
-			const fatal = new RhinoComputeError(
-				`Request timed out after ${ctx.config.timeoutMs}ms`,
-				ErrorCodes.TIMEOUT_ERROR,
-				{
-					context: {
-						serverUrl: ctx.config.serverUrl,
-						timeoutMs: ctx.config.timeoutMs,
-						url: ctx.fullUrl,
-						requestId: ctx.requestId,
-						endpoint: ctx.endpoint,
-						requestSize: ctx.requestSize
-					}
-				}
-			);
+			// Only claim a timeout when we actually armed one (issue 88). Without a
+			// configured timeoutMs, a non-caller abort came from the runtime itself
+			// (e.g. an undici socket teardown) — as transient as any network drop, so
+			// it stays retryable, but it is NOT a timeout: report it truthfully
+			// instead of "timed out after undefinedms" / TIMEOUT_ERROR.
+			const timeoutArmed = typeof ctx.config.timeoutMs === 'number' && ctx.config.timeoutMs > 0;
+			const fatal = timeoutArmed
+				? new RhinoComputeError(
+						`Request timed out after ${ctx.config.timeoutMs}ms`,
+						ErrorCodes.TIMEOUT_ERROR,
+						{
+							context: {
+								serverUrl: ctx.config.serverUrl,
+								timeoutMs: ctx.config.timeoutMs,
+								url: ctx.fullUrl,
+								requestId: ctx.requestId,
+								endpoint: ctx.endpoint,
+								requestSize: ctx.requestSize
+							},
+							originalError: error
+						}
+					)
+				: new RhinoComputeError(
+						`Request aborted by the runtime (${error.name}): ${error.message}`,
+						ErrorCodes.NETWORK_ERROR,
+						{
+							context: {
+								serverUrl: ctx.config.serverUrl,
+								url: ctx.fullUrl,
+								requestId: ctx.requestId,
+								endpoint: ctx.endpoint,
+								requestSize: ctx.requestSize
+							},
+							originalError: error
+						}
+					);
 			if (attempt < totalAttempts - 1) {
 				return {
 					ok: false,
@@ -590,22 +677,39 @@ async function attemptFetch(
 			return { ok: false, retry: false, cause: fatal };
 		}
 
-		// Network error (TypeError) — retryable
+		// Network error (TypeError) — retryable (issue 90).
+		//
+		// Duplicate-POST caveat: a connection reset can strike after the body was
+		// sent, in which case the server may already have executed this POST and a
+		// retry runs it again. Compute solves are deterministic, so a duplicate is
+		// wasted work rather than corruption; RetryPolicy documents the risk and
+		// defaults to attempts: 0.
+		//
+		// In a real browser, a fetch TypeError with no response is most often a
+		// CORS misconfiguration (the browser hides the details by design), so it is
+		// classified CORS_ERROR there to stop callers chasing phantom network
+		// failures. Retries are kept in both environments: the same TypeError is
+		// also what a flaky/offline network produces, and there is no way to tell
+		// them apart.
 		if (error instanceof TypeError) {
-			const fatal = new RhinoComputeError(
-				`Network error: ${error.message}`,
-				ErrorCodes.NETWORK_ERROR,
-				{
-					context: {
-						serverUrl: ctx.config.serverUrl,
-						url: ctx.fullUrl,
-						requestId: ctx.requestId,
-						endpoint: ctx.endpoint,
-						requestSize: ctx.requestSize
-					},
-					originalError: error
-				}
-			);
+			const inBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+			const errorContext = {
+				serverUrl: ctx.config.serverUrl,
+				url: ctx.fullUrl,
+				requestId: ctx.requestId,
+				endpoint: ctx.endpoint,
+				requestSize: ctx.requestSize
+			};
+			const fatal = inBrowser
+				? new RhinoComputeError(
+						`Request failed: ${error.message} — in a browser this usually means a CORS misconfiguration on the server (or a network failure; the browser does not distinguish them)`,
+						ErrorCodes.CORS_ERROR,
+						{ context: errorContext, originalError: error }
+					)
+				: new RhinoComputeError(`Network error: ${error.message}`, ErrorCodes.NETWORK_ERROR, {
+						context: errorContext,
+						originalError: error
+					});
 			if (attempt < totalAttempts - 1) {
 				return {
 					ok: false,
@@ -616,13 +720,15 @@ async function attemptFetch(
 			}
 			return { ok: false, retry: false, cause: fatal };
 		}
-
 		// RhinoComputeError thrown from handleResponse — already has full context.
 		// Retryable only if it carries a retryable status code.
 		if (error instanceof RhinoComputeError) {
 			const status = error.statusCode;
-			// A 2xx whose body failed to parse (NETWORK_ERROR from handleResponse)
-			// means the stream was cut mid-body — as transient as any network error.
+			// A 2xx whose body failed to parse UNDER A JSON CONTENT-TYPE
+			// (NETWORK_ERROR from handleResponse) means the stream was cut mid-body —
+			// as transient as any network error. A 2xx that declared a non-JSON body
+			// arrives here as INVALID_RESPONSE (deterministic — captive portal /
+			// login page) and deliberately does NOT match: it is never retried.
 			const isTruncatedSuccess =
 				error.code === ErrorCodes.NETWORK_ERROR &&
 				status !== undefined &&
@@ -675,6 +781,20 @@ async function attemptFetch(
  * given endpoint returns. Callers supply the response type via `R` (defaulting
  * to `unknown`, which forces an explicit narrowing before use).
  *
+ * Timeout semantics: `config.timeoutMs` is a PER-ATTEMPT timeout, re-armed for
+ * every retry. With `retry: { attempts: N }` the worst-case wall clock is
+ * `(N + 1) × timeoutMs` plus backoff sleeps (and a server `Retry-After` can
+ * stretch a single sleep up to 60s). For a hard overall deadline, pass
+ * `config.signal` (e.g. `AbortSignal.timeout(totalMs)`) — a caller abort wins
+ * immediately, including during backoff.
+ *
+ * Retry caveats: requests are POSTs, so a retry after a mid-flight connection
+ * loss may re-execute a request the server already ran (see {@link RetryPolicy}).
+ * A 2xx response that declares a non-JSON `Content-Type` (captive portal,
+ * proxy login page) fails immediately with `INVALID_RESPONSE` and is never
+ * retried; a body that fails to parse under a JSON content-type is treated as
+ * a truncated stream and is retried.
+ *
  * @typeParam R - The expected response shape. The caller names it at the call site.
  * @param endpoint - The Compute API endpoint (e.g., 'grasshopper', 'io', 'mesh').
  * @param args - Pre-prepared arguments for the request body.
@@ -726,16 +846,17 @@ export async function fetchRhinoCompute<R = unknown>(
 		config
 	};
 
-	let lastError: RhinoComputeError | null = null;
-
-	for (let attempt = 0; attempt < totalAttempts; attempt++) {
+	// Every iteration ends in `return` or `throw` (issue 105): attemptFetch never
+	// asks to retry on the final attempt (all its retry branches are gated on
+	// `attempt < totalAttempts - 1`), so the exhausted-retries error is the final
+	// attempt's own `result.cause` — there is no post-loop fallback to reach.
+	for (let attempt = 0; ; attempt++) {
 		const result = await attemptFetch(ctx, retryPolicy, attempt, totalAttempts);
 
 		if (result.ok) return result.value as R;
 
 		if (!result.retry) throw result.cause;
 
-		lastError = result.cause;
 		if (config.debug) {
 			log(
 				`🔁 Request [${requestId}] retrying after ${result.delayMs}ms (attempt ${attempt + 2}/${totalAttempts}): ${result.cause.message}`,
@@ -749,16 +870,8 @@ export async function fetchRhinoCompute<R = unknown>(
 			// Caller cancelled during backoff
 			throw new RhinoComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
 				context: { endpoint, requestId, requestSize },
-				originalError: lastError
+				originalError: result.cause
 			});
 		}
 	}
-
-	// Exhausted retries — throw the last seen error
-	throw (
-		lastError ??
-		new RhinoComputeError('Unknown error after retries', ErrorCodes.UNKNOWN_ERROR, {
-			context: { endpoint, requestId, requestSize }
-		})
-	);
 }

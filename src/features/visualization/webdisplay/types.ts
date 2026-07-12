@@ -23,11 +23,17 @@ export interface SerializableMaterial {
  * Metadata for a single mesh within a batch.
  *
  * Offsets and counts are expressed in **vertex-count units** (not float components) and
- * **index-count units**. To address the typed-array storage:
- *   - vertex component offset = `vertexStart * 3`
- *   - vertex component count  = `vertexCount * 3`
- *   - index byte offset       = `indexStart * 4`
- *   - index count             = `indexCount`
+ * **index-count units** — i.e. element offsets into the decoded typed arrays, which is how
+ * consumers address them (`indices.subarray(indexStart, indexStart + indexCount)`). To address
+ * the typed-array storage:
+ *   - vertex component offset  = `vertexStart * 3`
+ *   - vertex component count   = `vertexCount * 3`
+ *   - index element offset     = `indexStart`
+ *   - index count              = `indexCount`
+ *
+ * If you need *byte* offsets, multiply by the element size, which depends on the blob's flags:
+ * indices are 2 bytes each for `FLAG_UINT16_INDICES` (wire v2+) blobs and 4 bytes for uint32
+ * blobs; vertex components are 2 bytes (int16 quantized) or 4 bytes (`FLAG_FLOAT32`).
  */
 export interface MeshMetadata {
 	name: string;

@@ -1,6 +1,7 @@
 import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 import { decodeBase64ToBinary } from '@/core/utils/encoding';
+import { readField } from '@/core/utils/read-field';
 
 import { FileBaseInfo, FileData, ProcessedFile } from './types';
 
@@ -42,13 +43,19 @@ export const extractFilesFromComputeResponse = async (
  * Packages multiple files into a single ZIP file and triggers a browser download.
  *
  * @param downloadableFiles - An array of FileData items from the compute response.
- * @param additionalFiles - Optional additional files to include in the ZIP (fetched from URLs).
  * @param fileFoldername - The name of the ZIP file (without extension).
+ * @param additionalFiles - Optional additional files to include in the ZIP (fetched from URLs).
  * @throws Will throw an error if the file handling or download fails.
  *
  * @example
- * await downloadDataFromComputeResponse(fileData, null, 'my-export');
+ * await downloadFileData(fileData, 'my-export');
  * // Downloads 'my-export.zip'
+ *
+ * @example
+ * await downloadFileData(fileData, 'my-export', [
+ *   { fileName: 'readme.txt', filePath: 'https://example.com/readme.txt' }
+ * ]);
+ * // Downloads 'my-export.zip' including the fetched readme.txt
  */
 export const downloadFileData = async (
 	downloadableFiles: FileData[],
@@ -90,19 +97,6 @@ export const downloadFileData = async (
 };
 
 /**
- * Decode the inline files carried in a compute response into `ProcessedFile`s.
- *
- * Pure and synchronous: base64 items are decoded to binary, plain-text items are
- * passed through, and the archive path is derived from `subFolder` + name.
- * Degrades per-file like {@link fetchRemoteFiles}: an item with no usable `data`
- * or with undecodable base64 is logged and skipped, never aborting the batch.
- * This is the half of file handling that both public entry points share; it
- * never touches the network and never throws.
- *
- * @param dataItems - `FileData` items from the compute response.
- * @returns The decoded files.
- */
-/**
  * Reduce a server-controlled path field to safe relative segments for use inside the zip
  * (zip-slip defense): backslashes normalize to `/`, and empty, `.`, `..`, and drive-letter
  * segments are dropped so no entry can escape the extraction directory via traversal or an
@@ -119,41 +113,75 @@ const sanitizeArchivePath = (raw: string): string =>
 		)
 		.join('/');
 
+/**
+ * Lenient read of the `isBase64Encoded` wire flag: some server branches serialize
+ * booleans as strings (`"true"`/`"True"`), which must still count as base64 rather
+ * than silently dropping the file (issue 95).
+ */
+const isBase64Flag = (flag: unknown): boolean =>
+	flag === true || (typeof flag === 'string' && flag.trim().toLowerCase() === 'true');
+
+/**
+ * Decode the inline files carried in a compute response into `ProcessedFile`s.
+ *
+ * Pure and synchronous: base64 items are decoded to binary, plain-text items are
+ * passed through, and the archive path is derived from `subFolder` + name.
+ * Degrades per-file like {@link fetchRemoteFiles}: an item with no usable `data`
+ * or with undecodable base64 is logged and skipped, never aborting the batch.
+ * This is the half of file handling that both public entry points share; it
+ * never touches the network and never throws.
+ *
+ * Wire fields are read case-insensitively via {@link readField}: mcneel-branch
+ * servers serialize PascalCase (`FileName`, `Data`, `IsBase64Encoded`, …) while
+ * the VektorNode fork uses camelCase — both must decode (issue 95).
+ *
+ * @param dataItems - `FileData` items from the compute response.
+ * @returns The decoded files.
+ */
 const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 	const processedFiles: ProcessedFile[] = [];
 
 	dataItems.forEach((item) => {
-		const fileName = sanitizeArchivePath(`${item.fileName}${item.fileType}`);
+		const rawName = readField<string>(item, 'fileName') ?? '';
+		const rawType = readField<string>(item, 'fileType') ?? '';
+		const fileName = sanitizeArchivePath(`${rawName}${rawType}`);
 		if (fileName === '') {
 			getLogger().warn(
-				`Skipping file with unusable name "${item.fileName}${item.fileType}": no safe archive path remains after sanitization.`
+				`Skipping file with unusable name "${rawName}${rawType}": no safe archive path remains after sanitization.`
 			);
 			return;
 		}
-		const subFolder = item.subFolder ? sanitizeArchivePath(item.subFolder) : '';
+		const rawSubFolder = readField<string>(item, 'subFolder');
+		const subFolder = rawSubFolder ? sanitizeArchivePath(rawSubFolder) : '';
 		const filePath = subFolder !== '' ? `${subFolder}/${fileName}` : fileName;
 
-		if (item.isBase64Encoded === true && item.data) {
+		// Only a genuinely absent/empty body is unusable — the flag's exact type
+		// must never decide that (issue 95).
+		const data = readField<unknown>(item, 'data');
+		if (typeof data !== 'string' || data === '') {
+			getLogger().warn(`Skipping file "${filePath}": item carries no usable data.`);
+			return;
+		}
+
+		if (isBase64Flag(readField<unknown>(item, 'isBase64Encoded'))) {
 			// `decodeBase64ToBinary` already returns a correctly-bounded view;
 			// re-wrapping `.buffer` would discard its byteOffset/byteLength and
 			// expose the whole (possibly pooled) backing buffer as corrupt content.
 			try {
 				processedFiles.push({
 					fileName,
-					content: decodeBase64ToBinary(item.data),
+					content: decodeBase64ToBinary(data),
 					path: filePath
 				});
 			} catch (err) {
 				getLogger().warn(`Skipping file "${filePath}": base64 decode failed.`, err);
 			}
-		} else if (item.isBase64Encoded === false && item.data) {
+		} else {
 			processedFiles.push({
 				fileName,
-				content: item.data,
+				content: data,
 				path: filePath
 			});
-		} else {
-			getLogger().warn(`Skipping file "${filePath}": item carries no usable data.`);
 		}
 	});
 
@@ -188,18 +216,19 @@ const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> 
 					getLogger().warn(`Failed to fetch additional file from URL: ${file.filePath}`);
 					return null;
 				}
-				const fileBlob = await response.blob();
-				const arrayBuffer = await fileBlob.arrayBuffer();
+				// One step, no intermediate Blob allocation (issue 111).
+				const arrayBuffer = await response.arrayBuffer();
 				// Same zip-slip defense as decodeResponseFiles — the name lands in the archive.
 				const safeName = sanitizeArchivePath(file.fileName);
 				if (safeName === '') {
 					getLogger().warn(`Skipping fetched file with unusable name: ${file.fileName}`);
 					return null;
 				}
+				const subFolder = file.subFolder ? sanitizeArchivePath(file.subFolder) : '';
 				return {
 					fileName: safeName,
 					content: new Uint8Array(arrayBuffer),
-					path: safeName
+					path: subFolder !== '' ? `${subFolder}/${safeName}` : safeName
 				} as ProcessedFile;
 			} catch (error) {
 				getLogger().error(`Error fetching additional file from URL: ${file.filePath}`, error);
@@ -213,6 +242,10 @@ const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> 
 
 /**
  * Compose the decoded response files with any fetched external files.
+ *
+ * Archive paths are de-duplicated here — on the path both public entry points
+ * share — so `extractFilesFromComputeResponse` consumers keying by `path` never
+ * lose files silently, matching the zip path's rename behavior (issue 111).
  *
  * @param dataItems - `FileData` items from the compute response.
  * @param additionalFiles - Optional external file references to fetch and include.
@@ -229,7 +262,14 @@ const processFiles = async (
 		processedFiles.push(...(await fetchRemoteFiles(filesArray)));
 	}
 
-	return processedFiles;
+	const taken = new Set<string>();
+	return processedFiles.map((file) => {
+		const path = uniqueArchivePath(file.path, taken);
+		taken.add(path);
+		if (path === file.path) return file;
+		getLogger().warn(`Duplicate archive path "${file.path}" — storing as "${path}".`);
+		return { ...file, path, fileName: path.slice(path.lastIndexOf('/') + 1) };
+	});
 };
 
 /**
@@ -245,9 +285,13 @@ async function createAndDownloadZip(files: ProcessedFile[], zipName: string): Pr
 	// Convert files to fflate format. Zip entries are keyed by path, so two
 	// files with the same path would silently overwrite each other — rename
 	// collisions ("model.txt" → "model-2.txt") instead of losing data.
+	// (processFiles already de-duplicates; this is a cheap second line of
+	// defense in case callers construct ProcessedFiles themselves.)
 	const zipData: Record<string, Uint8Array> = {};
+	const taken = new Set<string>();
 	files.forEach((file) => {
-		const path = uniqueZipPath(file.path, zipData);
+		const path = uniqueArchivePath(file.path, taken);
+		taken.add(path);
 		if (path !== file.path) {
 			getLogger().warn(`Duplicate archive path "${file.path}" — storing as "${path}".`);
 		}
@@ -268,9 +312,8 @@ async function createAndDownloadZip(files: ProcessedFile[], zipName: string): Pr
  * First archive path not already taken in `taken`, disambiguating with a
  * numeric suffix before the extension: `dir/model.txt` → `dir/model-2.txt`.
  */
-function uniqueZipPath(path: string, taken: Record<string, Uint8Array>): string {
-	const has = (p: string) => Object.prototype.hasOwnProperty.call(taken, p);
-	if (!has(path)) return path;
+function uniqueArchivePath(path: string, taken: ReadonlySet<string>): string {
+	if (!taken.has(path)) return path;
 	const slash = path.lastIndexOf('/');
 	const dot = path.lastIndexOf('.');
 	const stemEnd = dot > slash ? dot : path.length;
@@ -278,7 +321,7 @@ function uniqueZipPath(path: string, taken: Record<string, Uint8Array>): string 
 	const ext = path.slice(stemEnd);
 	for (let i = 2; ; i++) {
 		const candidate = `${stem}-${i}${ext}`;
-		if (!has(candidate)) return candidate;
+		if (!taken.has(candidate)) return candidate;
 	}
 }
 

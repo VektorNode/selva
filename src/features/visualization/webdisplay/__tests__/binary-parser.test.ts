@@ -277,6 +277,34 @@ describe('parseBinaryMeshBatch', () => {
 			expect(Array.from(fromCompressed.vertices)).toEqual(Array.from(fromRaw.vertices));
 			expect(fromCompressed.flags).toBe(fromRaw.flags);
 		});
+
+		it('rejects a header that OVERSTATES uncompressedLen (issue 18: no silent zero-padded tail)', () => {
+			// Without the length check, the pre-sized inflate buffer's unwritten tail stays zero and
+			// zeros silently decode as geometry downstream.
+			const vertices = new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0]);
+			const indices = new Uint32Array([0, 1, 2]);
+			const base64 = encodeBatchPayload(vertices, indices, EMPTY_METADATA);
+			const slva = new Uint8Array(Buffer.from(base64, 'base64'));
+
+			const wrapped = wrapSlvz(slva);
+			const view = new DataView(wrapped.buffer, wrapped.byteOffset, wrapped.byteLength);
+			view.setUint32(4, slva.length + 64, true); // overstate the declared length
+
+			expect(() => parseBinaryMeshBatch(wrapped)).toThrow(/SLVZ/);
+		});
+
+		it('rejects a header that UNDERSTATES uncompressedLen', () => {
+			const vertices = new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0]);
+			const indices = new Uint32Array([0, 1, 2]);
+			const base64 = encodeBatchPayload(vertices, indices, EMPTY_METADATA);
+			const slva = new Uint8Array(Buffer.from(base64, 'base64'));
+
+			const wrapped = wrapSlvz(slva);
+			const view = new DataView(wrapped.buffer, wrapped.byteOffset, wrapped.byteLength);
+			view.setUint32(4, slva.length - 16, true); // understate the declared length
+
+			expect(() => parseBinaryMeshBatch(wrapped)).toThrow(/SLVZ/);
+		});
 	});
 
 	describe('input forms', () => {
@@ -426,6 +454,47 @@ describe('parseBinaryMeshBatch', () => {
 			view.setUint32(4, BINARY_MESH_VERSION, true);
 			view.setUint32(8, 100, true); // claim 100 metadata bytes
 			expect(() => parseBinaryMeshBatch(buf)).toThrow(/metadata/i);
+		});
+
+		it('rejects indices that reference vertices past vertexCount (issue 19)', () => {
+			// Hand-build a v1 blob (float32 verts, uint32 indices) whose last index points one past
+			// the vertex buffer — downstream mesh assembly would otherwise silently corrupt geometry.
+			const metadata = utf8('{"materials":[],"groups":[]}');
+			const vertCount = 3;
+			const indices = [0, 1, 3]; // 3 is out of range for vertexCount 3
+			const total = 12 + metadata.length + 4 + 48 + 4 + vertCount * 3 * 4 + 4 + indices.length * 4;
+			const buf = new ArrayBuffer(total);
+			const view = new DataView(buf);
+			const u8 = new Uint8Array(buf);
+			let o = 0;
+			view.setUint32(o, BINARY_MESH_MAGIC, true);
+			o += 4;
+			view.setUint32(o, 1, true); // version 1
+			o += 4;
+			view.setUint32(o, metadata.length, true);
+			o += 4;
+			u8.set(metadata, o);
+			o += metadata.length;
+			view.setUint32(o, FLAG_FLOAT32, true);
+			o += 4;
+			for (let i = 0; i < 6; i++) {
+				view.setFloat64(o, i < 3 ? 0 : 1, true); // origin (0,0,0), scale (1,1,1)
+				o += 8;
+			}
+			view.setUint32(o, vertCount, true);
+			o += 4;
+			for (const f of [0, 0, 0, 1, 0, 0, 1, 1, 0]) {
+				view.setFloat32(o, f, true);
+				o += 4;
+			}
+			view.setUint32(o, indices.length, true);
+			o += 4;
+			for (const idx of indices) {
+				view.setUint32(o, idx, true);
+				o += 4;
+			}
+
+			expect(() => parseBinaryMeshBatch(buf)).toThrow(/out of range/i);
 		});
 	});
 });

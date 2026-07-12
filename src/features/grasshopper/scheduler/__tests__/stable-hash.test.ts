@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { hashSolveInput, stableStringify, fnv1a, fnv1aBytes } from '../stable-hash';
+import {
+	hashSolveInput,
+	hashSolveInputForDefinition,
+	hashDefinition,
+	stableStringify,
+	fnv1a,
+	fnv1aBytes
+} from '../stable-hash';
 
 describe('stableStringify', () => {
 	it('is key-order independent for objects', () => {
@@ -167,5 +174,17 @@ describe('hashSolveInput', () => {
 	it('keeps definition and tree hashes as separate key parts', () => {
 		const key = hashSolveInput('def.gh', tree);
 		expect(key).toMatch(/^s:\d+:[0-9a-f]{8}\|t:\d+:[0-9a-f]{8}$/);
+	});
+
+	// Issue 57: the scheduler computes hashDefinition once at solve() entry and
+	// threads it through instead of re-hashing. That refactor is only sound if
+	// composing the precomputed definition hash yields byte-identical keys.
+	it('hashSolveInputForDefinition(hashDefinition(d), t) equals hashSolveInput(d, t)', () => {
+		const binary = new Uint8Array([1, 2, 3, 4]);
+		for (const def of ['def.gh', binary] as const) {
+			expect(hashSolveInputForDefinition(hashDefinition(def), tree)).toBe(
+				hashSolveInput(def, tree)
+			);
+		}
 	});
 });

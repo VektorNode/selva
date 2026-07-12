@@ -3,7 +3,7 @@ import { inflateSync } from 'fflate';
 import { decodeBase64ToBinary } from '@/core/utils/encoding';
 import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 
-import type { MaterialGroup, SerializableMaterial } from './types';
+import type { MaterialGroup, SerializableMaterial } from './types.js';
 
 // ============================================================================
 // WIRE FORMAT CONSTANTS
@@ -64,6 +64,16 @@ export const UV_FORMAT_FLOAT32 = 1;
 const HEADER_PREAMBLE_BYTES = 4 /* magic */ + 4 /* version */ + 4; /* metadataLen */
 const GEOMETRY_HEADER_BYTES =
 	4 /* flags */ + 24 /* origin (3 x f64) */ + 24 /* scale (3 x f64) */ + 4; /* vertexCount */
+
+/**
+ * The SLVA wire format is little-endian. Header fields use explicit-LE `DataView` reads, but the
+ * zero-copy geometry readers below construct typed-array views in *host* byte order — a deliberate
+ * trade: rewriting the hot geometry paths onto per-element DataView reads would cost far more than
+ * it buys, since every mainstream JS target (x86, ARM, WASM) is little-endian. This one-time check
+ * makes the assumption explicit: on a big-endian host the parser refuses to decode rather than
+ * silently returning byte-swapped garbage.
+ */
+const HOST_IS_LITTLE_ENDIAN = new Uint16Array(new Uint8Array([1, 0]).buffer)[0] === 1;
 
 // ============================================================================
 // PARSED TYPES
@@ -148,6 +158,13 @@ export interface ParsedBinaryMeshBatch {
 export function parseBinaryMeshBatch(
 	input: ArrayBuffer | Uint8Array | string
 ): ParsedBinaryMeshBatch {
+	if (!HOST_IS_LITTLE_ENDIAN) {
+		throw new RhinoComputeError(
+			'SLVA parsing requires a little-endian host: the zero-copy geometry readers view the wire bytes in host byte order.',
+			ErrorCodes.ENVIRONMENT_ERROR
+		);
+	}
+
 	const bytes = maybeDecompress(toUint8Array(input));
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
@@ -298,6 +315,7 @@ export function parseBinaryMeshBatch(
 				? decodeDeltaIndices16(indicesView)
 				: decodeDeltaIndices32(indicesView);
 	}
+	validateIndicesInRange(indicesView, vertexCount);
 	offset += indicesByteLength;
 
 	// Optional trailing chunks (UV first, then colors). Blobs from pre-chunk writers simply end
@@ -482,15 +500,30 @@ function maybeDecompress(bytes: Uint8Array): Uint8Array {
 		});
 	}
 
+	let out: Uint8Array;
 	try {
-		const out = inflateSync(deflated, { out: new Uint8Array(uncompressedLen) });
-		return out;
+		// One byte of slack past the declared length: fflate returns a subarray trimmed to the byte
+		// count actually written, so an understating header (stream longer than declared) lands on
+		// length uncompressedLen + 1 and an overstating one (stream shorter) below uncompressedLen —
+		// either way the check below catches the mismatch instead of a zero-padded/truncated tail
+		// silently decoding as geometry.
+		out = inflateSync(deflated, { out: new Uint8Array(uncompressedLen + 1) });
 	} catch (error) {
 		throw fail(
 			`Failed to inflate SLVZ blob: ${error instanceof Error ? error.message : String(error)}`,
 			{ uncompressedLen, deflatedBytes: deflated.byteLength }
 		);
 	}
+
+	if (out.byteLength !== uncompressedLen) {
+		throw fail('SLVZ payload inflated to a different size than the header declares.', {
+			declaredLen: uncompressedLen,
+			actualLen: out.byteLength,
+			deflatedBytes: deflated.byteLength
+		});
+	}
+
+	return out;
 }
 
 function decodeUtf8(bytes: Uint8Array): string {
@@ -555,6 +588,26 @@ function readUint32Array(buffer: ArrayBufferLike, byteOffset: number, count: num
 	const copy = new Uint8Array(count * 4);
 	copy.set(new Uint8Array(buffer, byteOffset, count * 4));
 	return new Uint32Array(copy.buffer);
+}
+
+/**
+ * Rejects blobs whose index stream references vertices past `vertexCount`. Downstream mesh
+ * assembly trusts indices arithmetically (rebasing, `subarray` slicing), so an out-of-range index
+ * would otherwise corrupt geometry silently instead of failing the parse. A uint16 index stream
+ * can't exceed a vertex count above 65535, so that case skips the scan.
+ */
+function validateIndicesInRange(indices: Uint16Array | Uint32Array, vertexCount: number): void {
+	if (indices.length === 0) return;
+	if (indices instanceof Uint16Array && vertexCount > 0xffff) return;
+	for (let i = 0; i < indices.length; i++) {
+		if (indices[i]! >= vertexCount) {
+			throw fail('Index out of range of vertexCount.', {
+				indexPosition: i,
+				indexValue: indices[i],
+				vertexCount
+			});
+		}
+	}
 }
 
 /** Inverse of the writer's zigzag map: 0,1,2,3 → 0,-1,1,-2. */

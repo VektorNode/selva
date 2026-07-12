@@ -1,5 +1,6 @@
 import { ErrorCodes, RhinoComputeError } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
+import { readField } from '@/core/utils/read-field';
 import ComputeServerStats from '@/core/server/compute-server-stats';
 import { validateServerUrl } from '@/core/server/validate-server-url';
 import { ComputeConfig, RetryPolicy } from '@/core/types';
@@ -33,6 +34,49 @@ function describeDefinition(definition: SolveDefinition): string {
 	if (isDefinitionRef(definition)) return `ref:${definition.key}`;
 	if (typeof definition === 'string' && definition.length < 200) return definition;
 	return '...content...';
+}
+
+/** One input parameter's footprint in the error-context summary (issue 83). */
+export interface DataTreeSummaryEntry {
+	/** The input's `ParamName` (`<unnamed>` when absent). */
+	param: string;
+	/** Total items across all branches. */
+	items: number;
+	/** Approximate payload size: summed `data` string lengths across items. */
+	bytes: number;
+}
+
+/**
+ * Compact summary of the input data tree for error context — never the full
+ * payload (issue 83). Trees can embed multi-MB geometry/base64; attaching them
+ * to thrown errors pins those buffers in every logger/telemetry/error-boundary
+ * that retains the error. Param names, item counts, and byte sizes are enough
+ * to correlate a failure with its inputs.
+ *
+ * Reads `ParamName`/`InnerTree` case-insensitively and never throws — error
+ * construction must not fail on a malformed tree.
+ */
+function summarizeDataTree(dataTree: DataTree[]): DataTreeSummaryEntry[] {
+	if (!Array.isArray(dataTree)) return [];
+
+	return dataTree.map((tree) => {
+		let items = 0;
+		let bytes = 0;
+
+		const innerTree = readField<Record<string, unknown>>(tree, 'innerTree');
+		if (innerTree && typeof innerTree === 'object') {
+			for (const branch of Object.values(innerTree)) {
+				if (!Array.isArray(branch)) continue;
+				items += branch.length;
+				for (const item of branch) {
+					const data = (item as { data?: unknown } | null)?.data;
+					if (typeof data === 'string') bytes += data.length;
+				}
+			}
+		}
+
+		return { param: readField<string>(tree, 'paramName') ?? '<unnamed>', items, bytes };
+	});
 }
 
 /**
@@ -137,7 +181,12 @@ export default class GrasshopperClient {
 	 *
 	 * @throws {RhinoComputeError} with code INVALID_INPUT if definition is empty
 	 * @throws {RhinoComputeError} with code NETWORK_ERROR if server is offline
-	 * @throws {RhinoComputeError} with code COMPUTATION_ERROR if computation fails
+	 * @throws {RhinoComputeError} with code COMPUTATION_ERROR if computation fails.
+	 *   On a partial-success response (some outputs computed, some errored) the
+	 *   error's `context.values` carries the outputs that did compute — pass
+	 *   `{ values } as GrasshopperComputeResponse` to the response processors to
+	 *   render them. `context.inputSummary` describes the inputs (param names,
+	 *   item counts, byte sizes) without pinning the full data tree.
 	 */
 	public async solve(
 		definition: SolveDefinition,
@@ -184,13 +233,17 @@ export default class GrasshopperClient {
 					ErrorCodes.COMPUTATION_ERROR,
 					{
 						context: {
-							definition:
-								typeof definition === 'string' && definition.length < 200
-									? definition
-									: '...content...',
-							inputs: dataTree,
+							definition: describeDefinition(definition),
+							// Summary only — attaching the full dataTree would pin
+							// multi-MB input buffers in telemetry (issue 83).
+							inputSummary: summarizeDataTree(dataTree),
 							errors: result.errors,
-							warnings: result.warnings
+							warnings: result.warnings,
+							// The outputs that DID compute (issue 63): the transport
+							// parses partial values out of the 500 body, so hand them
+							// to callers who want to render what succeeded and inspect
+							// what failed (e.g. via getValues on { values }).
+							values: result.values
 						}
 					}
 				);
@@ -212,7 +265,8 @@ export default class GrasshopperClient {
 				{
 					context: {
 						definition: describeDefinition(definition),
-						inputs: dataTree
+						// Summary only — never the full dataTree (issue 83).
+						inputSummary: summarizeDataTree(dataTree)
 					},
 					originalError: error instanceof Error ? error : new Error(String(error))
 				}

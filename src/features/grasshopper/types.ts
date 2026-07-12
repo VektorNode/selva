@@ -49,11 +49,29 @@ export type InnerTreeData = {
 };
 
 /**
- * Tree with parameter metadata (used in compute responses)
+ * Tree with parameter metadata (used in compute requests and responses).
+ *
+ * Field casing varies by server branch: stock mcneel compute (8.x/9.x)
+ * serializes `Resthopper.IO.DataTree` in PascalCase (`ParamName`/`InnerTree`
+ * — the C# class carries no `[JsonProperty]` attributes), while
+ * camelCase-serializing forks return `paramName`/`innerTree` instead. This
+ * client always *sends* PascalCase (see `DataTree.toCompute()` in
+ * `data-tree.ts`), so the PascalCase fields remain the canonical/required
+ * shape; the optional camelCase fields exist so responses from camelCase
+ * forks are representable without casts. Code that must read trees across
+ * both server families should use `readField`/`hasField`
+ * (`@/core/utils/read-field`, case-insensitive) rather than direct property
+ * access — `warnOnEmptyInnerTrees` in `solve.ts` is the reference example.
  */
 export interface DataTree {
+	/** PascalCase — stock mcneel servers, and the request shape this client sends. */
 	InnerTree: InnerTreeData;
+	/** PascalCase — stock mcneel servers, and the request shape this client sends. */
 	ParamName: string;
+	/** camelCase — sent instead of `InnerTree` by camelCase server forks. */
+	innerTree?: InnerTreeData;
+	/** camelCase — sent instead of `ParamName` by camelCase server forks. */
+	paramName?: string;
 }
 
 // ============================================================================
@@ -61,7 +79,12 @@ export interface DataTree {
 // ============================================================================
 
 /**
- * Output types supported from Grasshopper/Rhino Compute
+ * Output types supported from Grasshopper/Rhino Compute.
+ *
+ * The trailing `(string & {})` keeps the union open — servers can return any
+ * GOO type name — without collapsing the whole union to `string` the way a
+ * bare `| string` does, so the known literals keep driving autocomplete and
+ * `Extract<>`-style narrowing.
  */
 export type OutputType =
 	| 'System.String'
@@ -78,7 +101,7 @@ export type OutputType =
 	| 'Rhino.Geometry.Vector3d'
 	| 'Rhino.Geometry.Plane'
 	| 'Rhino.Geometry.Box'
-	| string;
+	| (string & {});
 
 /**
  * Union type for all possible default value types
@@ -255,8 +278,10 @@ export interface GrasshopperComputeConfig extends ComputeConfig {
  *
  * The VektorNode/compute.rhino3d@Compute8 server fork standardized IO
  * serialization to camelCase (`[JsonProperty("paramType")]` etc.), so this is
- * already the on-the-wire shape — `fetchDefinitionIO` reads it straight through
- * with no key conversion. The field+casing contract is pinned against the
+ * already the on-the-wire shape. Note that `fetchDefinitionIO` still normalizes
+ * the payload before returning it (PascalCase fallbacks for stock mcneel
+ * servers, array guards, diagnostics coercion) — see `normalizeInputSchema` /
+ * `normalizeOutputSchema`. The field+casing contract is pinned against the
  * server source in `tests/contract/server-contract.test.ts`.
  */
 export interface IoResponseSchema {
@@ -285,12 +310,25 @@ export interface GrasshopperRequestSchema
 /**
  * Response from Grasshopper compute server
  * Includes all schema fields + computed results
+ *
+ * `pointer` is deliberately excluded (`Omit`): the solve layer (`runSolve` in
+ * `solve.ts`) splits the server's echoed `pointer` off as the solve's
+ * `cacheKey` and strips it from the returned response, so client-returned
+ * responses never carry it.
+ *
+ * The schema-echo fields (`cachesolve`/`modelunits`/`dataversion`) stay
+ * optional as inherited from {@link GrasshopperBaseSchema}: the server echoes
+ * them back when set, but nothing client-side enforces their presence — don't
+ * rely on them without a fallback.
  */
 export interface GrasshopperComputeResponse
-	extends GrasshopperBaseSchema, GrasshopperDefinitionSource {
-	/** Whether cache was used (always present in response) */
-	cachesolve: boolean;
-	/** Model units (always present in response) */
+	extends GrasshopperBaseSchema, Omit<GrasshopperDefinitionSource, 'pointer'> {
+	/**
+	 * Model units the definition was solved in. Every conforming server response
+	 * carries this (it drives downstream scaling, e.g. the webdisplay parser),
+	 * but note it is not validated client-side — a non-conforming server or
+	 * hand-built mock may omit it at runtime.
+	 */
 	modelunits: RhinoModelUnit;
 	/**
 	 * The server echoes the request's full base64 definition back as `algo`, but the client strips
@@ -301,8 +339,6 @@ export interface GrasshopperComputeResponse
 	algo?: string | null;
 	/** Filename of the definition (always present in response) */
 	filename: string | null;
-	/** Data version */
-	dataversion: 7 | 8;
 	/** Recursion level used */
 	recursionlevel?: number;
 	/** Output values organized by parameter */

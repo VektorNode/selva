@@ -41,12 +41,20 @@ export interface CameraController {
 	 * singularity.
 	 */
 	setViewDirection(direction: THREE.Vector3, animate?: boolean): void;
+	/**
+	 * Frame an arbitrary world-space box (e.g. a double-clicked object) from the current view
+	 * direction, moving the *active* camera — in 2D mode that means resizing the ortho frustum, not
+	 * just translating. No-op on an empty box.
+	 */
+	frameBounds(box: THREE.Box3, animate?: boolean): void;
 	/** Enable/disable orbit rotation at runtime (pan/zoom unaffected). */
 	setRotateEnabled(enabled: boolean): void;
 	/** Whether rotation is currently enabled. */
 	isRotateEnabled(): boolean;
 	/** Keep the orthographic frustum aspect in sync on canvas resize. Called by the resize loop. */
 	updateAspect(width: number, height: number): void;
+	/** Cancel any in-flight camera tween. Call on viewer teardown so ticks can't touch disposed controls. */
+	dispose(): void;
 }
 
 interface CameraControllerDeps {
@@ -111,11 +119,24 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 
 	const active = (): THREE.Camera => (projection === 'perspective' ? perspective : ortho);
 
+	// The one in-flight camera tween, if any. Starting a new tween cancels the previous one (two
+	// concurrent loops would fight, each lerping from its own snapshot), and dispose() cancels it so
+	// no tick can touch disposed controls after teardown.
+	let activeTween: TweenHandle | null = null;
+	const cancelTween = () => {
+		activeTween?.cancel();
+		activeTween = null;
+	};
+
 	// Sizes the ortho frustum so its on-screen content matches the perspective view at the current
 	// distance — the apparent height of the perspective view at the target plane is
 	// 2 * distance * tan(fov/2). Half-height drives top/bottom; aspect drives left/right.
 	const syncOrthoFrustum = () => {
-		const distance = perspective.position.distanceTo(controls.target);
+		// While ortho is active, the ORTHO camera is the one presets/fit move (OrbitControls only
+		// changes its zoom); the perspective camera's distance is stale until the next 3D switch.
+		// Measure whichever camera is live so presets and resizes in 2D size the frustum correctly.
+		const reference = projection === 'orthographic' ? ortho : perspective;
+		const distance = reference.position.distanceTo(controls.target);
 		const halfH = distance * Math.tan((perspective.fov * Math.PI) / 360);
 		const halfW = halfH * aspect;
 		ortho.left = -halfW;
@@ -129,15 +150,30 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 
 	const setProjection = (next: CameraProjection) => {
 		if (next === projection) return;
+		// A tween mid-flight would keep lerping the OLD active camera after the swap.
+		cancelTween();
 
 		// Carry position/target across so the switch doesn't jump.
 		if (next === 'orthographic') {
 			ortho.position.copy(perspective.position);
 			ortho.up.copy(perspective.up);
 			ortho.lookAt(controls.target);
+			// OrbitControls dollies an ortho camera via `zoom`, not position — start each 2D session
+			// at 1 so the freshly-derived frustum isn't still multiplied by zoom left over from a
+			// previous 2D session (which showed as a zoom jump on every 2D→3D→2D round-trip).
+			ortho.zoom = 1;
 			syncOrthoFrustum();
 		} else {
-			perspective.position.copy(ortho.position);
+			// Carry the ortho dolly back as perspective DISTANCE so the switch preserves apparent
+			// size: the ortho view shows a half-height of top/zoom at the target plane, and the
+			// perspective camera shows the same at distance = halfH / tan(fov/2). Copying position
+			// alone would discard any zooming done in 2D.
+			const halfH = (ortho.top - ortho.bottom) / (2 * ortho.zoom);
+			const distance = halfH / Math.tan((perspective.fov * Math.PI) / 360);
+			const direction = ortho.position.clone().sub(controls.target);
+			if (direction.lengthSq() < 1e-12) direction.copy(up);
+			direction.normalize();
+			perspective.position.copy(controls.target).add(direction.multiplyScalar(distance));
 		}
 
 		projection = next;
@@ -146,12 +182,16 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		onActiveCameraChange(active());
 	};
 
-	const setViewDirection = (direction: THREE.Vector3, animate = true) => {
-		const box = computeContentBox(scene);
-		const center = box.isEmpty() ? controls.target.clone() : box.getCenter(new THREE.Vector3());
-		const size = box.isEmpty() ? new THREE.Vector3(1, 1, 1) : box.getSize(new THREE.Vector3());
-		const maxDim = Math.max(size.x, size.y, size.z) || 1;
-
+	// Shared framing move: position the ACTIVE camera along `direction` at the distance that fits
+	// `maxDim`, retargeting controls at `center`. In ortho mode the dolly zoom is reset and the
+	// frustum re-derived (per tick while animating) — moving position alone wouldn't change the
+	// apparent size of an orthographic view.
+	const frame = (
+		center: THREE.Vector3,
+		maxDim: number,
+		direction: THREE.Vector3,
+		animate: boolean
+	) => {
 		// Distance to fit the content for the perspective camera; ortho reuses it via syncOrthoFrustum.
 		const fov = perspective.fov * (Math.PI / 180);
 		const distance = (maxDim / (2 * Math.tan(fov / 2))) * 1.5;
@@ -163,8 +203,13 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		const toPosition = center.clone().add(dir.clone().multiplyScalar(distance));
 
 		const cam = active();
+		// Framing means fitting: a leftover ortho dolly (OrbitControls zooms ortho via `zoom`) would
+		// keep multiplying the freshly-derived frustum and defeat the fit.
+		if (projection === 'orthographic') ortho.zoom = 1;
+
+		cancelTween();
 		if (animate) {
-			animateMove(cam, controls, toPosition, center, () => {
+			activeTween = animateMove(cam, controls, toPosition, center, () => {
 				if (projection === 'orthographic') syncOrthoFrustum();
 			});
 		} else {
@@ -173,6 +218,25 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 			if (projection === 'orthographic') syncOrthoFrustum();
 			controls.update();
 		}
+	};
+
+	const setViewDirection = (direction: THREE.Vector3, animate = true) => {
+		const box = computeContentBox(scene);
+		const center = box.isEmpty() ? controls.target.clone() : box.getCenter(new THREE.Vector3());
+		const size = box.isEmpty() ? new THREE.Vector3(1, 1, 1) : box.getSize(new THREE.Vector3());
+		const maxDim = Math.max(size.x, size.y, size.z) || 1;
+		frame(center, maxDim, direction, animate);
+	};
+
+	const frameBounds = (box: THREE.Box3, animate = true) => {
+		if (box.isEmpty()) return;
+		const center = box.getCenter(new THREE.Vector3());
+		const size = box.getSize(new THREE.Vector3());
+		const maxDim = Math.max(size.x, size.y, size.z) || 1;
+		// Keep the user's current viewing direction; only the distance/target change.
+		const direction = active().position.clone().sub(controls.target);
+		if (direction.lengthSq() < 1e-12) direction.copy(VIEW_DIRECTIONS.iso);
+		frame(center, maxDim, direction.normalize(), animate);
 	};
 
 	const setView = (preset: ViewPreset, animate = true) => {
@@ -198,9 +262,11 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		},
 		setView,
 		setViewDirection,
+		frameBounds,
 		setRotateEnabled,
 		isRotateEnabled: () => controls.enableRotate,
-		updateAspect
+		updateAspect,
+		dispose: cancelTween
 	};
 }
 
@@ -262,7 +328,16 @@ function nudgeOffPole(dir: THREE.Vector3, up: THREE.Vector3): THREE.Vector3 {
 
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
-/** Tween camera position + controls target. Mirrors the initializer's double-click tween. */
+/** Handle to a running camera tween, so callers can stop it (new move, projection swap, teardown). */
+interface TweenHandle {
+	cancel(): void;
+}
+
+/**
+ * Tween camera position + controls target. Returns a cancel handle: the controller cancels the
+ * previous tween before starting a new one (two loops would fight over the camera) and on
+ * dispose() so no tick touches disposed controls after teardown.
+ */
 function animateMove(
 	camera: THREE.Camera,
 	controls: OrbitControls,
@@ -270,19 +345,30 @@ function animateMove(
 	toTarget: THREE.Vector3,
 	onTick: () => void,
 	durationMs = 250
-): void {
+): TweenHandle {
 	const fromPosition = camera.position.clone();
 	const fromTarget = controls.target.clone();
 	const startTime = performance.now();
+	let rafId: number | null = null;
 
 	const tick = () => {
+		rafId = null;
 		const t = easeOut(Math.min((performance.now() - startTime) / durationMs, 1));
 		camera.position.lerpVectors(fromPosition, toPosition, t);
 		controls.target.lerpVectors(fromTarget, toTarget, t);
 		onTick();
 		controls.update();
-		if (t < 1) requestAnimationFrame(tick);
+		if (t < 1) rafId = requestAnimationFrame(tick);
 	};
 
-	requestAnimationFrame(tick);
+	rafId = requestAnimationFrame(tick);
+
+	return {
+		cancel: () => {
+			if (rafId !== null) {
+				cancelAnimationFrame(rafId);
+				rafId = null;
+			}
+		}
+	};
 }

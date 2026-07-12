@@ -3,24 +3,66 @@ import * as THREE from 'three';
 import { applyOffset, computeCombinedBoundingBox } from '../threejs/three-helpers.js';
 import { getLogger } from '@/core';
 
-import { parseDisplayItems } from '../display-items/display-items-parser';
+import { parseDisplayItems } from '../display-items/display-items-parser.js';
 
-import { parseMeshBatchObject } from './batch-parser';
+import { parseMeshBatchObject } from './batch-parser.js';
 
 import type { DataItem, GrasshopperComputeResponse } from '@/features/grasshopper/types';
-import type { DisplayBatch, MeshExtractionOptions, MeshBatchParsingOptions } from './types';
+import type { DisplayBatch, MeshExtractionOptions, MeshBatchParsingOptions } from './types.js';
 import type { RhinoModule } from 'rhino3dm';
 
 // Constants
+
+/**
+ * Metres per model unit, keyed by Rhino `UnitSystem` name (the `modelunits` string on the compute
+ * response). Imperial factors are the exact international definitions (1 in = 0.0254 m,
+ * 1 ft = 0.3048 m, 1 mi = 1609.344 m). Units not in this table scale 1 and log a one-time warning
+ * — see {@link getScaleFactor}.
+ */
 export const SCALE_FACTORS: Record<string, number> = {
-	Millimeters: 1 / 1000,
-	Centimeters: 1 / 100,
+	// Metric
+	Angstroms: 1e-10,
+	Nanometers: 1e-9,
+	Microns: 1e-6,
+	Millimeters: 1e-3,
+	Centimeters: 1e-2,
+	Decimeters: 0.1,
 	Meters: 1,
-	Inches: 1 / 39.37,
-	Feet: 1 / 3.28084
+	Dekameters: 10,
+	Hectometers: 100,
+	Kilometers: 1000,
+	Megameters: 1e6,
+	Gigameters: 1e9,
+	// Imperial (exact: 1 inch = 0.0254 m)
+	Microinches: 0.0254e-6,
+	Mils: 0.0254e-3,
+	Inches: 0.0254,
+	Feet: 0.3048,
+	Yards: 0.9144,
+	Miles: 1609.344,
+	NauticalMiles: 1852
 };
 
+/**
+ * Wire `type` token identifying a Selva Display payload. The real wire value is namespaced (e.g.
+ * `Selva.GH.Features.Display.Services.DisplayBatch`), so dispatch matches exact dot-separated
+ * tokens — never substrings, which would misroute any unrelated type merely containing "Display".
+ */
 const DISPLAY_COMPONENT_TYPE = 'Display';
+const DISPLAY_BATCH_TYPE = 'DisplayBatch';
+
+/**
+ * True when a wire `type` denotes a Display payload: one of its dot-separated tokens is exactly
+ * `Display` or `DisplayBatch`. Matches the bare `Display` used by older servers and the namespaced
+ * `Selva.GH.Features.Display.Services.DisplayBatch`, but not e.g. `System.DisplayText`.
+ */
+function isDisplayItemType(type: string): boolean {
+	const tokens = type.split('.');
+	return tokens.includes(DISPLAY_COMPONENT_TYPE) || tokens.includes(DISPLAY_BATCH_TYPE);
+}
+
+/** Unknown-unit names already warned about, so a per-solve parse doesn't spam the log. */
+const warnedUnknownUnits = new Set<string>();
 
 /**
  * Extracts and processes display meshes from a ComputePointerResponse using the Grasshopper WebDisplay component.
@@ -28,7 +70,9 @@ const DISPLAY_COMPONENT_TYPE = 'Display';
  * This is the primary entry point for extracting mesh geometry from Grasshopper compute responses.
  * It handles all aspects of mesh processing: decompression, coordinate transformation, scaling, and positioning.
  *
- * **Note:** Mesh decompression happens asynchronously in a Web Worker to prevent UI blocking.
+ * **Note:** The entire pipeline (base64 decode, inflate, dequantization, mesh construction) runs
+ * synchronously on the calling thread — large batches will block the UI for their duration. The
+ * function is `async` only so its shape can stay stable if parsing moves off-thread later.
  *
  * @param data - The ComputePointerResponse containing Grasshopper output trees.
  * @param options - Configuration for mesh extraction and parsing behavior. All options are optional with sensible defaults.
@@ -39,7 +83,7 @@ const DISPLAY_COMPONENT_TYPE = 'Display';
  * - Only works with the WebDisplay component of GHHeadless.
  * - Requires changes to Rhino.Compute (see https://github.com/TheVessen/compute.rhino3d).
  * - Provides a performant way to display mesh data in Three.js.
- * - Decompression is performed in a Web Worker for non-blocking UI updates.
+ * - All decoding is synchronous on the main thread; there is no Web Worker offload today.
  * - Supports mesh metadata (names, user data) if provided in the compute response.
  *
  * @internal Internal helper: high-level extraction remains public via visualization module, but this
@@ -101,10 +145,23 @@ export async function getThreeMeshesFromComputeResponse(
 }
 
 /**
- * Gets the scale factor for the given unit type.
+ * Gets the metres-per-unit scale factor for the given Rhino unit name. Unknown units fall back to
+ * 1 (no scaling) with a one-time warning per unit name — a kilometers model rendering 1000× off
+ * should at least say why.
  */
 function getScaleFactor(modelUnits: string): number {
-	return SCALE_FACTORS[modelUnits] ?? 1;
+	const factor = SCALE_FACTORS[modelUnits];
+	if (factor !== undefined) {
+		return factor;
+	}
+	if (!warnedUnknownUnits.has(modelUnits)) {
+		warnedUnknownUnits.add(modelUnits);
+		getLogger().warn(
+			`Unknown Rhino model unit "${modelUnits}" — geometry will not be scaled (factor 1). ` +
+				`Known units: ${Object.keys(SCALE_FACTORS).join(', ')}.`
+		);
+	}
+	return 1;
 }
 
 /**
@@ -143,7 +200,7 @@ async function processDataBranch(
 	debug: boolean
 ): Promise<void> {
 	for (const item of branch) {
-		if (!item.type.includes(DISPLAY_COMPONENT_TYPE)) continue;
+		if (!isDisplayItemType(item.type)) continue;
 
 		const mergedParsingOptions = {
 			mergeByMaterial: true,

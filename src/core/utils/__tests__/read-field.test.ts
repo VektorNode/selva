@@ -30,6 +30,38 @@ describe('readField', () => {
 	it('preserves a present-but-null value (distinct from absent)', () => {
 		expect(readField({ x: null }, 'x')).toBeNull();
 	});
+
+	// Issue 91: the exact-match path used `name in record`, which walks the
+	// prototype chain — probing a payload for an Object.prototype-named field
+	// returned a function instead of undefined.
+	it('does not read inherited prototype keys', () => {
+		expect(readField({}, 'toString')).toBeUndefined();
+		expect(readField({}, 'constructor')).toBeUndefined();
+		expect(readField({}, 'hasOwnProperty')).toBeUndefined();
+		expect(readField({ a: 1 }, 'ToString')).toBeUndefined();
+	});
+
+	it('reads an OWN key that shadows a prototype name', () => {
+		expect(readField({ toString: 'own' }, 'toString')).toBe('own');
+		expect(readField({ toString: 'own' }, 'ToString')).toBe('own');
+	});
+
+	// Issue 106: the lowered-key cache was built on first read and never
+	// refreshed, so keys added afterwards were invisible to cased lookups.
+	it('sees keys added after the first read (cache staleness)', () => {
+		const payload: Record<string, unknown> = { First: 1 };
+		expect(readField(payload, 'first')).toBe(1); // primes the cache
+		payload.Second = 2;
+		expect(readField(payload, 'second')).toBe(2); // cased lookup, post-mutation
+		expect(hasField(payload, 'SECOND')).toBe(true);
+	});
+
+	it('still serves repeated cased reads of an unmutated object', () => {
+		const payload = { InnerTree: 1, ParamName: 'x' };
+		expect(readField(payload, 'innertree')).toBe(1);
+		expect(readField(payload, 'paramname')).toBe('x');
+		expect(readField(payload, 'innerTree')).toBe(1);
+	});
 });
 
 describe('hasField', () => {
@@ -46,5 +78,11 @@ describe('hasField', () => {
 	it('is false when the key is absent or input is not an object', () => {
 		expect(hasField({ a: 1 }, 'b')).toBe(false);
 		expect(hasField(null, 'x')).toBe(false);
+	});
+
+	// Issue 91: `hasField({}, 'constructor')` returned true via the prototype chain.
+	it('is false for inherited prototype keys', () => {
+		expect(hasField({}, 'constructor')).toBe(false);
+		expect(hasField({}, 'toString')).toBe(false);
 	});
 });

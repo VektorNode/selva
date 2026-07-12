@@ -1,4 +1,4 @@
-import { RhinoComputeError } from '@/core/errors';
+import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core';
 import { isDataTreeDefault } from '../../data-tree/tree-path';
 import type {
@@ -37,9 +37,14 @@ export interface InputTypeParser<T extends InputParam = InputParam> {
 }
 
 // ============================================================================
-// Value transformers (ported verbatim from the old input-parsers.ts)
+// Value transformers (ported from the old input-parsers.ts)
 // ============================================================================
 
+/**
+ * Coerce one raw default value to `T`, or return `null` when it can't be
+ * coerced. Transformers never throw — the caller decides whether a `null`
+ * is filtered (array items) or surfaced as a parse error (scalars).
+ */
 type ValueTransformer<T> = (value: unknown) => T | null;
 
 /**
@@ -69,26 +74,41 @@ function coerceDefault<T>(
 	return setUndefinedOnEmpty ? undefined : value;
 }
 
-const numericTransformer: ValueTransformer<number> = (value) => {
-	if (typeof value === 'number') return value;
+/**
+ * @internal Shared with `normalize-default.ts` so tree-access items are parsed
+ * with the exact same rules as scalar/array defaults (issue: the tree path used
+ * to hand-roll `Number(data)`, turning a blank double into `0`).
+ */
+export const numericTransformer: ValueTransformer<number> = (value) => {
+	if (typeof value === 'number') return Number.isFinite(value) ? value : null;
 	if (typeof value === 'string') {
 		const trimmed = value.trim();
 		// `Number('')` is 0, so reject empty/whitespace before coercing — an empty
 		// default should drop to null, not silently become 0.
 		if (trimmed === '') return null;
+		// `Number()` also accepts hex/binary/octal literals ('0x10' → 16) and
+		// 'Infinity' — neither is a value a Grasshopper numeric default can
+		// legitimately hold (Infinity even survives applyRounding). Only decimal
+		// and exponent notation are accepted.
+		if (/^[+-]?0[xbo]/i.test(trimmed)) return null;
 		const parsed = Number(trimmed);
-		return Number.isNaN(parsed) ? null : parsed;
+		return Number.isFinite(parsed) ? parsed : null;
 	}
 	return null;
 };
 
-const booleanTransformer: ValueTransformer<boolean> = (value) => {
+/**
+ * @internal Shared with `normalize-default.ts` (see {@link numericTransformer}).
+ * Trims like the numeric transformer and follows the {@link ValueTransformer}
+ * contract: `null` on a bad value, never a throw — bad array items are filtered
+ * like non-string junk, and the boolean parser surfaces bad scalars itself.
+ */
+export const booleanTransformer: ValueTransformer<boolean> = (value) => {
 	if (typeof value === 'boolean') return value;
 	if (typeof value === 'string') {
-		const lower = value.toLowerCase();
+		const lower = value.trim().toLowerCase();
 		if (lower === 'true') return true;
 		if (lower === 'false') return false;
-		throw new Error(`Invalid boolean string: "${value}"`);
 	}
 	return null;
 };
@@ -189,14 +209,29 @@ function getInputStepSize(value: number, roundingTolerance: number): number {
 }
 
 /**
+ * A server-authored `stepSize` (read off the wire by `normalizeInputSchema`),
+ * or `undefined` when absent/unusable — callers fall back to the heuristic.
+ */
+function serverStepSize(schema: InputParamSchema): number | undefined {
+	return typeof schema.stepSize === 'number' &&
+		Number.isFinite(schema.stepSize) &&
+		schema.stepSize > 0
+		? schema.stepSize
+		: undefined;
+}
+
+/**
  * Computes the coerced default + stepSize for a Number/Integer input.
- * Mirrors the old `processNumericInput` exactly.
+ * Mirrors the old `processNumericInput`, plus: a server-provided
+ * `schema.stepSize` is honored verbatim; the default/min/max heuristic is
+ * only the fallback when the server didn't author one.
  */
 function computeNumeric(
 	schema: InputParamSchema,
 	roundingTolerance = 1e-8
 ): { default: NumericInputType['default']; stepSize: number } {
 	const isIntegerType = schema.paramType === 'Integer';
+	const serverStep = serverStepSize(schema);
 
 	// A tree-access default is a DataTreeDefault keyed by branch paths; pass it
 	// through untouched (numeric constraints are applied later by TreeBuilder).
@@ -207,8 +242,25 @@ function computeNumeric(
 	if (isDataTreeDefault(schema.default)) {
 		return {
 			default: schema.default as NumericInputType['default'],
-			stepSize: isIntegerType ? 1 : 0.1
+			stepSize: serverStep ?? (isIntegerType ? 1 : 0.1)
 		};
+	}
+
+	// A scalar string default that isn't blank and doesn't parse (locale comma
+	// '1,5', 'Infinity', hex, plain junk) is bad input — surface it as a parse
+	// error instead of silently collapsing the default to `undefined`. Blank
+	// strings still mean "no default" (deliberate, see numericTransformer);
+	// array items keep the filter semantics.
+	if (
+		typeof schema.default === 'string' &&
+		schema.default.trim() !== '' &&
+		numericTransformer(schema.default) === null
+	) {
+		throw new RhinoComputeError(
+			`Invalid numeric default "${schema.default}" for input "${schema.name || 'unknown'}"`,
+			ErrorCodes.VALIDATION_ERROR,
+			{ context: { inputName: schema.name, default: schema.default } }
+		);
 	}
 
 	let value = coerceDefault(schema.default, numericTransformer, true);
@@ -219,7 +271,7 @@ function computeNumeric(
 		} else if (typeof value === 'number') {
 			value = Math.round(value);
 		}
-		return { default: value as NumericInputType['default'], stepSize: 1 };
+		return { default: value as NumericInputType['default'], stepSize: serverStep ?? 1 };
 	}
 
 	const firstValue = Array.isArray(value) ? value[0] : value;
@@ -241,7 +293,9 @@ function computeNumeric(
 		stepSource = schema.maximum;
 	}
 
-	const stepSize = stepSource !== undefined ? getInputStepSize(stepSource, roundingTolerance) : 0.1;
+	const stepSize =
+		serverStep ??
+		(stepSource !== undefined ? getInputStepSize(stepSource, roundingTolerance) : 0.1);
 
 	// Apply precision to all numeric values
 	let decimalPlaces = 0;
@@ -299,6 +353,12 @@ const numericParser: InputTypeParser<NumericInputType> = {
 	},
 	fallback(schema, base) {
 		const isList = (schema.atMost ?? 1) > 1;
+		// The safe default must respect the input's own floor: with minimum > 0 a
+		// plain 0 would render a slider default below its own range.
+		const safeValue =
+			typeof schema.minimum === 'number' && Number.isFinite(schema.minimum) && schema.minimum > 0
+				? schema.minimum
+				: 0;
 		return {
 			...base,
 			paramType: schema.paramType as 'Number' | 'Integer',
@@ -306,7 +366,9 @@ const numericParser: InputTypeParser<NumericInputType> = {
 			maximum: schema.maximum,
 			atLeast: schema.atLeast,
 			atMost: schema.atMost,
-			default: isList ? [0] : 0
+			// The parse path always sets a stepSize — the fallback param must too.
+			stepSize: serverStepSize(schema) ?? (schema.paramType === 'Integer' ? 1 : 0.1),
+			default: isList ? [safeValue] : safeValue
 		};
 	}
 };
@@ -314,13 +376,32 @@ const numericParser: InputTypeParser<NumericInputType> = {
 const booleanParser: InputTypeParser<BooleanInputType> = {
 	types: ['Boolean'],
 	parse(schema, base) {
-		let value: unknown;
-		try {
-			value = coerceDefault(schema.default, booleanTransformer, false);
-		} catch (error) {
-			// Mirror old processBooleanInput: re-throw as RhinoComputeError.
-			if (error instanceof Error) throw new RhinoComputeError(error.message);
-			throw error;
+		// Tree-access defaults pass through untouched for TreeBuilder, same
+		// rationale as computeNumeric's guard.
+		if (isDataTreeDefault(schema.default)) {
+			return {
+				...base,
+				paramType: 'Boolean',
+				default: schema.default as BooleanInputType['default']
+			};
+		}
+		const value = coerceDefault(schema.default, booleanTransformer, false);
+		// The transformer follows the ValueTransformer contract (null on bad input,
+		// never a throw), so bad ARRAY items are filtered like non-string junk —
+		// one 'maybe' in ['true','maybe'] no longer aborts the whole array. A bad
+		// SCALAR survives coercion verbatim (setUndefinedOnEmpty=false); surface it
+		// as a parse error instead of shipping a non-boolean default.
+		if (
+			value !== undefined &&
+			value !== null &&
+			typeof value !== 'boolean' &&
+			!Array.isArray(value)
+		) {
+			throw new RhinoComputeError(
+				`Invalid boolean default "${String(value)}" for input "${schema.name || 'unknown'}"`,
+				ErrorCodes.VALIDATION_ERROR,
+				{ context: { inputName: schema.name, default: schema.default } }
+			);
 		}
 		return { ...base, paramType: 'Boolean', default: value as BooleanInputType['default'] };
 	},
@@ -353,11 +434,25 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 			throw RhinoComputeError.missingValues(schema.nickname || 'unnamed', 'ValueList');
 		}
 
-		// Out-of-range default only warns — it still succeeds (pinned behavior).
+		let defaultValue = schema.default as string | undefined;
 		if (schema.default !== undefined && schema.default !== null) {
+			// A tree/array-shaped default can't index the values map — `String()`
+			// would silently turn it into '[object Object]'. Reject it properly.
+			if (typeof schema.default === 'object') {
+				throw new RhinoComputeError(
+					`ValueList input "${schema.nickname || 'unnamed'}" default is not a string-able value`,
+					ErrorCodes.VALIDATION_ERROR,
+					{ context: { inputName: schema.name, default: schema.default } }
+				);
+			}
 			const defaultLower = String(schema.default).toLowerCase();
-			const exists = Object.keys(schema.values).some((key) => key.toLowerCase() === defaultLower);
-			if (!exists) {
+			// Membership is case-insensitive, but downstream lookups (`values[default]`)
+			// are not — return the canonical-cased key on a match.
+			const match = Object.keys(schema.values).find((key) => key.toLowerCase() === defaultLower);
+			if (match !== undefined) {
+				defaultValue = match;
+			} else {
+				// Out-of-range default only warns — it still succeeds (pinned behavior).
 				getLogger().warn(
 					`ValueList input "${schema.nickname || 'unnamed'}" default value "${schema.default}" is not in available values`
 				);
@@ -368,16 +463,19 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 			...base,
 			paramType: 'ValueList',
 			values: schema.values as Record<string, string>,
-			default: schema.default as string | undefined
+			default: defaultValue
 		};
 	},
 	fallback(schema, base) {
-		const isList = (schema.atMost ?? 1) > 1;
+		// A ValueList only falls back when its values map is missing/empty or its
+		// default couldn't be interpreted — either way the default can't be
+		// validated against the map, so drop it (never fabricate `[undefined]` or
+		// keep a value provably absent from an empty map).
 		return {
 			...base,
 			paramType: 'ValueList',
-			values: schema.values ?? {},
-			default: isList ? ([schema.default] as any) : schema.default
+			values: schema.values && typeof schema.values === 'object' ? schema.values : {},
+			default: undefined
 		};
 	}
 };

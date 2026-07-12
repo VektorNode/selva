@@ -42,7 +42,7 @@ async function performCustomJob(config) {
 	} catch (error) {
 		if (error instanceof RhinoComputeError) {
 			// Handle specific error codes (e.g. AUTH_ERROR, COMPUTATION_ERROR)
-			console.error(`Status ${error.status}: ${error.message}`);
+			console.error(`[${error.code}] ${error.message} (HTTP ${error.statusCode ?? 'n/a'})`);
 		}
 	}
 }
@@ -61,8 +61,10 @@ async function checkServer(url, apiKey) {
 	try {
 		if (await stats.isServerOnline()) {
 			const info = await stats.getServerStats();
-			console.log(`Server Version: ${info.version}`);
-			console.log(`Active Children: ${info.activeChildren.length}`);
+			// version is an object: { rhino, compute, git_sha }
+			console.log(`Compute Version: ${info.version?.compute}`);
+			// activeChildren is a count (number), absent if the read failed
+			console.log(`Active Children: ${info.activeChildren ?? 'unknown'}`);
 		}
 	} finally {
 		await stats.dispose(); // Always dispose to clear monitoring timeouts

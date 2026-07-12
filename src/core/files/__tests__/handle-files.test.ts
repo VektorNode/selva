@@ -105,7 +105,7 @@ describe('extractFilesFromComputeResponse — archive path sanitization', () => 
 			'fetch',
 			vi.fn().mockResolvedValue({
 				ok: true,
-				blob: async () => ({ arrayBuffer: async () => new Uint8Array([1]).buffer })
+				arrayBuffer: async () => new Uint8Array([1]).buffer
 			})
 		);
 		const files = await extractFilesFromComputeResponse([], {
@@ -125,7 +125,7 @@ describe('extractFilesFromComputeResponse — fetch half', () => {
 			'fetch',
 			vi.fn().mockResolvedValue({
 				ok: true,
-				blob: async () => ({ arrayBuffer: async () => new Uint8Array([9, 9]).buffer })
+				arrayBuffer: async () => new Uint8Array([9, 9]).buffer
 			})
 		);
 
@@ -134,6 +134,25 @@ describe('extractFilesFromComputeResponse — fetch half', () => {
 		const fetched = files.find((f) => f.fileName === 'extra.bin');
 		expect(fetched).toBeDefined();
 		expect(Array.from(fetched!.content as Uint8Array)).toEqual([9, 9]);
+	});
+
+	// Issue 111: remote files may specify a subFolder instead of always landing at zip root.
+	it('honors an optional subFolder on external files (sanitized)', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: true,
+				arrayBuffer: async () => new Uint8Array([7]).buffer
+			})
+		);
+
+		const files = await extractFilesFromComputeResponse([], {
+			fileName: 'extra.bin',
+			filePath: 'https://example.com/extra.bin',
+			subFolder: '../extras/docs'
+		});
+		expect(files).toHaveLength(1);
+		expect(files[0].path).toBe('extras/docs/extra.bin');
 	});
 
 	// The swallow is deliberate: a failed remote fetch must drop that file and let
@@ -152,5 +171,116 @@ describe('extractFilesFromComputeResponse — fetch half', () => {
 		const files = await extractFilesFromComputeResponse([fd({ data: 'kept' })], ref);
 		expect(files).toHaveLength(1);
 		expect(files[0].content).toBe('kept');
+	});
+});
+
+/**
+ * Issue 95: wire payloads arrive PascalCase from mcneel-branch servers and with
+ * string-typed booleans from others; neither shape may silently drop files.
+ */
+describe('extractFilesFromComputeResponse — wire-shape leniency (issue 95)', () => {
+	it('decodes a fully PascalCase payload (mcneel-branch server)', async () => {
+		const item = {
+			FileName: 'model',
+			Data: 'hello pascal',
+			FileType: '.txt',
+			IsBase64Encoded: false,
+			SubFolder: 'nested'
+		} as unknown as FileData;
+
+		const [file] = await extractFilesFromComputeResponse([item]);
+		expect(file).toMatchObject({
+			fileName: 'model.txt',
+			content: 'hello pascal',
+			path: 'nested/model.txt'
+		});
+	});
+
+	it('treats a string "true" isBase64Encoded flag as base64', async () => {
+		const bytes = new Uint8Array([10, 20, 30]);
+		const [file] = await extractFilesFromComputeResponse([
+			fd({
+				data: base64ByteArray(bytes),
+				fileType: '.bin',
+				isBase64Encoded: 'true' as unknown as boolean
+			})
+		]);
+		expect(file.content).toBeInstanceOf(Uint8Array);
+		expect(Array.from(file.content as Uint8Array)).toEqual([10, 20, 30]);
+	});
+
+	it('treats a string "false" flag as plain text', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ data: 'plain', isBase64Encoded: 'false' as unknown as boolean })
+		]);
+		expect(file.content).toBe('plain');
+	});
+
+	it('keeps a file whose flag is missing but whose data is present (plain-text fallback)', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ data: 'still here', isBase64Encoded: undefined as unknown as boolean })
+		]);
+		expect(file.content).toBe('still here');
+	});
+
+	it('skips only when data is genuinely absent', async () => {
+		const files = await extractFilesFromComputeResponse([
+			fd({ data: undefined as unknown as string, isBase64Encoded: true }),
+			fd({ data: 'kept' })
+		]);
+		expect(files).toHaveLength(1);
+		expect(files[0].content).toBe('kept');
+	});
+});
+
+describe('extractFilesFromComputeResponse — decode-failure skip branch', () => {
+	it('skips an undecodable base64 item and keeps the rest of the batch', async () => {
+		const files = await extractFilesFromComputeResponse([
+			fd({ data: '!!!not-base64!!!', isBase64Encoded: true, fileName: 'broken', fileType: '.bin' }),
+			fd({ data: 'kept' })
+		]);
+		expect(files).toHaveLength(1);
+		expect(files[0].content).toBe('kept');
+	});
+});
+
+/**
+ * Issue 111: duplicate archive paths must be renamed on the extract path too, not
+ * just inside the zip — consumers keying by `path` must never lose files.
+ */
+describe('extractFilesFromComputeResponse — duplicate-path rename', () => {
+	it('renames colliding paths with a numeric suffix before the extension', async () => {
+		const files = await extractFilesFromComputeResponse([
+			fd({ data: 'first' }),
+			fd({ data: 'second' }),
+			fd({ data: 'third' })
+		]);
+		expect(files.map((f) => f.path)).toEqual(['model.txt', 'model-2.txt', 'model-3.txt']);
+		expect(files.map((f) => f.fileName)).toEqual(['model.txt', 'model-2.txt', 'model-3.txt']);
+		expect(files.map((f) => f.content)).toEqual(['first', 'second', 'third']);
+	});
+
+	it('renames collisions between inline and fetched files', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: true,
+				arrayBuffer: async () => new Uint8Array([1]).buffer
+			})
+		);
+
+		const files = await extractFilesFromComputeResponse([fd({ fileName: 'model' })], {
+			fileName: 'model.txt',
+			filePath: 'https://example.com/model.txt'
+		});
+		expect(files.map((f) => f.path).sort()).toEqual(['model-2.txt', 'model.txt']);
+	});
+
+	it('leaves same-name files in different subFolders untouched', async () => {
+		const files = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'a' }),
+			fd({ subFolder: 'b' })
+		]);
+		expect(files.map((f) => f.path)).toEqual(['a/model.txt', 'b/model.txt']);
 	});
 });

@@ -36,6 +36,15 @@ export function processInput(rawInput: InputParamSchema): InputParam {
  * On success: `{ input, error: undefined }`.
  * On a recoverable validation failure: `{ input: <safe default>, error: {...} }`.
  *
+ * A single input can fail TWICE — a malformed default (normalization warning)
+ * on an input whose type parser then also throws. `errors` carries every
+ * failure; `error` remains the primary one (the parser error when present,
+ * else the default warning) for convenience.
+ *
+ * Error entries report the RAW declared `paramType` per the
+ * {@link InputParseError} docs — not the canonicalized casing — so clients can
+ * match on the casing they sent.
+ *
  * Unexpected (non-RhinoComputeError) failures still throw — they indicate a
  * programming bug, not bad user input.
  *
@@ -44,13 +53,16 @@ export function processInput(rawInput: InputParamSchema): InputParam {
 export function processInputWithError(rawInput: InputParamSchema): {
 	input: InputParam;
 	error?: InputParseError;
+	errors?: InputParseError[];
 } {
 	const baseInput: BaseInputType = {
 		description: rawInput.description,
 		name: rawInput.name,
 		nickname: rawInput.nickname,
 		treeAccess: rawInput.treeAccess,
-		groupName: rawInput.groupName ?? '',
+		// `null`/absent means "no group" — keep it absent instead of collapsing it
+		// to '' and erasing the absent-vs-empty distinction.
+		groupName: rawInput.groupName ?? undefined,
 		id: rawInput.id
 	};
 
@@ -70,7 +82,8 @@ export function processInputWithError(rawInput: InputParamSchema): {
 		schema = normalized;
 		defaultWarningError = warning && {
 			inputName: rawInput.name || 'unknown',
-			paramType,
+			// InputParseError.paramType is documented as the RAW declared type.
+			paramType: rawInput.paramType,
 			message: warning.message,
 			code: warning.code
 		};
@@ -81,7 +94,7 @@ export function processInputWithError(rawInput: InputParamSchema): {
 		schema = { ...schema, default: null };
 		defaultWarningError = {
 			inputName: rawInput.name || 'unknown',
-			paramType,
+			paramType: rawInput.paramType,
 			message: `Input "${rawInput.name ?? 'unknown'}" default could not be normalized and was dropped: ${
 				error instanceof Error ? error.message : String(error)
 			}`,
@@ -95,20 +108,28 @@ export function processInputWithError(rawInput: InputParamSchema): {
 			throw RhinoComputeError.unknownParamType(paramType, rawInput.name);
 		}
 		// A malformed-default warning rides through on the otherwise-successful parse.
-		return { input: parser.parse(schema, baseInput), error: defaultWarningError };
+		return {
+			input: parser.parse(schema, baseInput),
+			error: defaultWarningError,
+			...(defaultWarningError && { errors: [defaultWarningError] })
+		};
 	} catch (error) {
 		if (error instanceof RhinoComputeError) {
 			getLogger().error(`Validation error for input ${rawInput.name || 'unknown'}:`, error.message);
+			const parserError: InputParseError = {
+				inputName: rawInput.name || 'unknown',
+				paramType: rawInput.paramType,
+				message: error.message,
+				code: error.code
+			};
 			// The parser owns its own fallback; an unknown type falls back to the
-			// geometry-shaped safe default (matching the old behavior).
+			// geometry-shaped safe default (matching the old behavior). BOTH
+			// failures are reported when the default warning and the parser error
+			// occurred on the same input — the warning must not be shadowed.
 			return {
 				input: (parser ?? UNKNOWN_TYPE_FALLBACK).fallback(schema, baseInput),
-				error: {
-					inputName: rawInput.name || 'unknown',
-					paramType,
-					message: error.message,
-					code: error.code
-				}
+				error: parserError,
+				errors: defaultWarningError ? [defaultWarningError, parserError] : [parserError]
 			};
 		}
 
@@ -146,9 +167,9 @@ export function processInputsWithErrors(rawInputs: InputParamSchema[]): {
 	const inputs: InputParam[] = [];
 	const parseErrors: InputParseError[] = [];
 	for (const raw of rawInputs) {
-		const { input, error } = processInputWithError(raw);
+		const { input, errors } = processInputWithError(raw);
 		inputs.push(input);
-		if (error) parseErrors.push(error);
+		if (errors) parseErrors.push(...errors);
 	}
 	return { inputs, parseErrors };
 }

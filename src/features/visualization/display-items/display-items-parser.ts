@@ -14,7 +14,8 @@ import type { RhinoModule } from 'rhino3dm';
  * Builds THREE.js objects from the non-mesh display items on a DisplayBatch — curves (decoded from
  * Rhino-native JSON via rhino3dm and tessellated to a fat `Line2`) and points (raw positions
  * rendered as one {@link THREE.Points}). Mirrors the mesh path's coordinate handling: every position
- * goes through {@link rhinoToThree} so items land in the same frame as meshes.
+ * goes through {@link rhinoToThree}, which is the identity — the Three scene IS Rhino's Z-up frame,
+ * so items land at their Rhino coordinates, same as meshes (see `../coordinate-transform.ts`).
  *
  * selva-compute does not own the rhino3dm WASM instance (it is heavy and the host app initializes
  * it once); the caller threads it in, same as the response decoder. If no instance is supplied,
@@ -40,7 +41,13 @@ const CURVE_MAX_TURN_RADIANS = 0.05;
 export interface DisplayItemParseOptions {
 	/** rhino3dm instance for decoding curve JSON. Omit to skip curves (points still render). */
 	rhino?: RhinoModule;
-	/** Apply the Rhino Z-up → Three Y-up transform. Defaults to true (matches the mesh path). */
+	/**
+	 * No-op. Historically toggled the Rhino Z-up → Three Y-up rotation, but the pipeline now keeps
+	 * one coordinate frame end to end ({@link rhinoToThree} is the identity), so this flag no longer
+	 * changes the result. Do NOT pre-rotate your own geometry to compensate — none is applied.
+	 *
+	 * @deprecated Retained only so existing call sites compile unchanged; has no effect.
+	 */
 	applyTransforms?: boolean;
 }
 
@@ -66,13 +73,16 @@ export function parseDisplayItems(
 				break;
 			}
 			case 'point': {
-				objects.push(buildPoint(item, applyTransforms));
+				const point = buildPoint(item, applyTransforms);
+				if (point) objects.push(point);
 				break;
 			}
 			default: {
-				// Exhaustiveness guard: a new kind added to the union without a case here is a
-				// compile error. At runtime an unrecognized kind from a newer producer is skipped.
-				const unknown = item as { kind?: string };
+				// Exhaustiveness guard: assigning to `never` makes a new kind added to the union
+				// without a case here a compile error. At runtime (plain-JS callers, newer
+				// producers) an unrecognized kind still reaches this branch and is skipped.
+				const unhandled: never = item;
+				const unknown = unhandled as { kind?: string };
 				getLogger().warn(`Skipping unknown display item kind: ${String(unknown.kind)}`);
 				break;
 			}
@@ -110,6 +120,11 @@ function buildCurveLine(
 	let points: THREE.Vector3[];
 	try {
 		points = tessellate(curve, applyTransforms);
+	} catch (error) {
+		// WASM calls (pointAt / tryGetPolyline / getBoundingBox) can throw on malformed geometry.
+		// Log and skip this curve so one bad item never aborts the whole batch (contract above).
+		getLogger().warn('Failed to tessellate curve display item; skipping.', error);
+		return null;
 	} finally {
 		deleteRhinoObject(curve);
 	}
@@ -148,14 +163,31 @@ function buildCurveLine(
 	return line;
 }
 
-/** Render a single point as a one-vertex THREE.Points. */
-function buildPoint(item: DisplayPoint, applyTransforms: boolean): THREE.Points {
-	const { x, y, z } = rhinoToThree(
-		item.position.X,
-		item.position.Y,
-		item.position.Z,
-		applyTransforms
-	);
+/**
+ * Render a single point as a one-vertex THREE.Points. Returns null (with a warning) when the item's
+ * position is missing or non-finite — display items arrive as network JSON, so a malformed point
+ * must be skipped rather than throwing or pushing NaN into the buffer (a NaN vertex poisons the
+ * bounding sphere and can break camera fit-to-view for the whole scene).
+ */
+function buildPoint(item: DisplayPoint, applyTransforms: boolean): THREE.Points | null {
+	// Validate before trusting the declared type: `position` comes off the wire.
+	const { position } = item as { position?: { X?: unknown; Y?: unknown; Z?: unknown } };
+	if (
+		!position ||
+		typeof position.X !== 'number' ||
+		!Number.isFinite(position.X) ||
+		typeof position.Y !== 'number' ||
+		!Number.isFinite(position.Y) ||
+		typeof position.Z !== 'number' ||
+		!Number.isFinite(position.Z)
+	) {
+		getLogger().warn(
+			`Skipping point display item with missing or non-finite position (id: ${String(item.id)}).`
+		);
+		return null;
+	}
+
+	const { x, y, z } = rhinoToThree(position.X, position.Y, position.Z, applyTransforms);
 
 	const geometry = new THREE.BufferGeometry();
 	geometry.setAttribute('position', new THREE.Float32BufferAttribute([x, y, z], 3));
@@ -206,10 +238,10 @@ function decodeCurve(json: string, rhino: RhinoModule): InstanceType<RhinoModule
 }
 
 /**
- * Tessellate a curve to THREE points, applying the shared coordinate transform.
+ * Tessellate a curve to THREE points (passed through the shared — identity — coordinate mapping).
  *
  * Most curves Grasshopper emits are linear — a line is 2 vertices, a polyline is N+1 — yet uniform
- * sampling would inflate every one to {@link CURVE_TESSELLATION_SEGMENTS}+1 points. So we first ask
+ * sampling would inflate every one to {@link CURVE_INITIAL_SEGMENTS}+1 points. So we first ask
  * rhino3dm if the curve *is* a polyline (covers lines, polylines, and degree-1 nurbs/polycurves) and
  * emit its exact vertices when so. Only genuinely curved geometry (arcs, nurbs, polycurves with
  * curved spans) falls through to {@link sampleUniform}.
@@ -348,27 +380,50 @@ function chordTolerance(curve: InstanceType<RhinoModule['Curve']>): number {
 	return Math.max(diagonal * CURVE_CHORD_TOLERANCE_RATIO, 1e-6);
 }
 
-/** Angle (radians) of the turn at `b` along the path a→b→c. 0 = straight, π = full reversal. */
+/**
+ * Angle (radians) of the turn at `b` along the path a→b→c. 0 = straight, π = full reversal.
+ *
+ * Scalar math on purpose: this runs once per subdivision test inside a recursion that can evaluate
+ * ~2^12 spans per curve, so `Vector3.clone()` temporaries here caused measurable GC churn (and
+ * module-scope scratch vectors would be unsafe across the recursive calls).
+ */
 function turnAngle(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number {
-	const ab = b.clone().sub(a);
-	const bc = c.clone().sub(b);
-	const lenAb = ab.length();
-	const lenBc = bc.length();
+	const abx = b.x - a.x;
+	const aby = b.y - a.y;
+	const abz = b.z - a.z;
+	const bcx = c.x - b.x;
+	const bcy = c.y - b.y;
+	const bcz = c.z - b.z;
+
+	const lenAb = Math.sqrt(abx * abx + aby * aby + abz * abz);
+	const lenBc = Math.sqrt(bcx * bcx + bcy * bcy + bcz * bcz);
 	if (lenAb === 0 || lenBc === 0) return 0;
 
-	const cos = Math.max(-1, Math.min(1, ab.dot(bc) / (lenAb * lenBc)));
+	const dot = abx * bcx + aby * bcy + abz * bcz;
+	const cos = Math.max(-1, Math.min(1, dot / (lenAb * lenBc)));
 	return Math.acos(cos);
 }
 
-/** Perpendicular distance from point `p` to the segment a→b (clamped to the segment endpoints). */
+/**
+ * Perpendicular distance from point `p` to the segment a→b (clamped to the segment endpoints).
+ * Scalar math for the same allocation-churn reason as {@link turnAngle}.
+ */
 function distanceToSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): number {
-	const ab = b.clone().sub(a);
-	const lengthSq = ab.lengthSq();
+	const abx = b.x - a.x;
+	const aby = b.y - a.y;
+	const abz = b.z - a.z;
+	const lengthSq = abx * abx + aby * aby + abz * abz;
 	if (lengthSq === 0) return p.distanceTo(a);
 
-	const t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / lengthSq));
-	const projection = a.clone().addScaledVector(ab, t);
-	return p.distanceTo(projection);
+	const apx = p.x - a.x;
+	const apy = p.y - a.y;
+	const apz = p.z - a.z;
+	const t = Math.max(0, Math.min(1, (apx * abx + apy * aby + apz * abz) / lengthSq));
+
+	const dx = apx - abx * t;
+	const dy = apy - aby * t;
+	const dz = apz - abz * t;
+	return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
 /** Shared color/opacity → THREE material params. Opacity < 1 flips `transparent` on. */

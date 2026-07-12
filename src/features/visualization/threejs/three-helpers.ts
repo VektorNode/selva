@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { getLogger } from '@/core';
 
+import { SHARED_MATERIALS } from './three-materials';
+
 // Camera configuration constants
 const CAMERA_CONFIG = {
 	HUGE_THRESHOLD: 10000,
@@ -75,20 +77,17 @@ export function updateScene(
 
 	camera.updateProjectionMatrix();
 
-	// Only reposition camera and controls on first frame
+	// Only reposition camera and controls on first frame.
+	// Zoom limits (min/maxDistance) are deliberately NOT touched here: they are owned by the
+	// host via setupControls, and overwriting them per solve silently discarded user-supplied
+	// configuration after the first geometry update.
 	if (!initialPositionSet) {
 		const distance = maxDim * CAMERA_CONFIG.INITIAL_DISTANCE_MULTIPLIER;
 
 		camera.position.set(center.x + distance * 0.8, center.y + distance, center.z + distance * 1.2);
 		controls.target.copy(center);
-		controls.minDistance = camera.near * 2;
-		controls.maxDistance = camera.far * 0.9;
 
 		controls.update();
-	} else {
-		// Update control constraints to match new frustum
-		controls.minDistance = camera.near * 2;
-		controls.maxDistance = camera.far * 0.9;
 	}
 }
 
@@ -132,13 +131,15 @@ export function parseColor(colorString: string): THREE.Color {
 		}
 	}
 
-	// Try CSS named color
-	try {
-		return new THREE.Color(trimmed.toLowerCase());
-	} catch {
-		getLogger().warn(`Invalid color string: ${colorString}, using white`);
-		return new THREE.Color(0xffffff);
+	// Try CSS named color. `new THREE.Color(name)` never throws on unknown names (it logs its own
+	// warning and leaves the color white), so validate against three's CSS name table instead.
+	const named = trimmed.toLowerCase();
+	if (named in THREE.Color.NAMES) {
+		return new THREE.Color(THREE.Color.NAMES[named as keyof typeof THREE.Color.NAMES]);
 	}
+
+	getLogger().warn(`Invalid color string: ${colorString}, using white`);
+	return new THREE.Color(0xffffff);
 }
 
 /**
@@ -185,12 +186,15 @@ const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer']);
 /**
  * Clears the given THREE.Scene by removing all top-level content children (everything except
  * persistent infrastructure, see {@link PERSISTENT_SCENE_IDS}) and recursively disposing of their
- * geometry and materials.
+ * geometry and materials — except the shared singleton materials (see {@link SHARED_MATERIALS}),
+ * which outlive any one solve.
  *
  * Removes at the top level rather than traversing for meshes, so parent Groups
  * don't accumulate as ghost nodes after their mesh children are disposed.
+ *
+ * @internal exported for tests; production callers go through {@link updateScene}.
  */
-function clearScene(scene: THREE.Scene): void {
+export function clearScene(scene: THREE.Scene): void {
 	// Snapshot children — we mutate the array via removeFromParent during iteration
 	const topLevel = [...scene.children];
 
@@ -216,6 +220,11 @@ function clearScene(scene: THREE.Scene): void {
 			if (!material) return;
 			const materials = Array.isArray(material) ? material : [material];
 			materials.forEach((material) => {
+				// Module-scope singletons (METAL_MATERIAL et al.) are shared across meshes and across
+				// solves — disposing one here would force a shader rebuild on its next use and free
+				// textures still referenced by surviving objects.
+				if (SHARED_MATERIALS.has(material)) return;
+
 				// Walk only own enumerable properties — `for...in` on a Three.js material
 				// also iterates the prototype chain, which is needlessly expensive.
 				for (const value of Object.values(material)) {

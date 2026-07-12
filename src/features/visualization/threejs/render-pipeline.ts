@@ -86,6 +86,16 @@ export function createRenderPipeline(
 		setCamera: (cam) => {
 			renderPass.camera = cam;
 			gtaoPass.camera = cam;
+			// GTAOPass bakes the camera type into its AO shader as a define at construction; merely
+			// reassigning `camera` leaves the old projection's depth/view-position reconstruction
+			// active (garbage AO after a perspective ⇄ ortho toggle). Refresh the define — and force a
+			// shader recompile — whenever the projection type actually changes. Near/far/projection
+			// uniforms need no handling here: GTAOPass.render() re-reads them from `camera` per frame.
+			const isPerspective = (cam as Partial<THREE.PerspectiveCamera>).isPerspectiveCamera ? 1 : 0;
+			if (gtaoPass.gtaoMaterial.defines.PERSPECTIVE_CAMERA !== isPerspective) {
+				gtaoPass.gtaoMaterial.defines.PERSPECTIVE_CAMERA = isPerspective;
+				gtaoPass.gtaoMaterial.needsUpdate = true;
+			}
 		},
 		// composer.dispose() doesn't free added passes — dispose them explicitly.
 		dispose: () => {

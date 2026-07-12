@@ -244,17 +244,19 @@ export class TreeBuilder {
 	 * - Use with `InnerTree[]` when modifying compute API results
 	 * - `DataTree` is the high-level builder; `InnerTree` is the Rhino Compute format
 	 *
+	 * Copy-on-write: returns a new array; the caller's array is never mutated.
+	 *
 	 * @overload For TreeBuilder instances (high-level builder)
-	 * @param trees - Array of TreeBuilder instances to modify
+	 * @param trees - Array of TreeBuilder instances to read from (not mutated)
 	 * @param paramName - The parameter name to set or replace
 	 * @param newValue - The new value (scalar, array, or TreeBuilder structure)
-	 * @returns A new/modified TreeBuilder array with the updated parameter
+	 * @returns A new TreeBuilder array with the updated parameter
 	 *
 	 * @overload For compiled InnerTree (low-level API format)
-	 * @param trees - The compiled InnerTree array (typically from `client.solve()`)
+	 * @param trees - The compiled InnerTree array (typically from `client.solve()`; not mutated)
 	 * @param paramName - The parameter name to set or replace
 	 * @param newValue - The new value (scalar, array, or TreeBuilder structure)
-	 * @returns A new/modified InnerTree array with the updated parameter
+	 * @returns A new InnerTree array with the updated parameter
 	 *
 	 * @example
 	 * ```ts
@@ -293,7 +295,9 @@ export class TreeBuilder {
 		const builder = TreeBuilder.buildFromValue(paramName, newValue);
 
 		if (isBuilderArray) {
-			const builders = trees as TreeBuilder[];
+			// Copy-on-write: never mutate the caller's array (e.g. pristine
+			// defaults from fromInputParams must survive slider updates).
+			const builders = (trees as TreeBuilder[]).slice();
 			const idx = builders.findIndex((t) => t.getParamName() === paramName);
 			if (idx !== -1) builders[idx] = builder;
 			else builders.push(builder);
@@ -303,7 +307,7 @@ export class TreeBuilder {
 		// Empty arrays land here too — see the "empty array" characterization
 		// test in data-tree.test.ts: pins the current behavior of returning the
 		// compute-format shape rather than a TreeBuilder.
-		const dataTrees = trees as DataTree[];
+		const dataTrees = (trees as DataTree[]).slice();
 		const compiled = builder.toComputeFormat();
 		const idx = dataTrees.findIndex((t) => t.ParamName === paramName);
 		if (idx !== -1) dataTrees[idx] = compiled;
@@ -416,9 +420,12 @@ export class TreeBuilder {
 		const items = tree.InnerTree[firstKey];
 
 		if (Array.isArray(items)) {
-			return items
-				.map((item) => (item?.data !== undefined ? TreeBuilder.deserializeValue(item.data) : null))
-				.filter((v): v is DataTreeValue => v !== null);
+			// Preserve nulls (legitimate GH items) so indices don't shift; an
+			// item without `data` deserializes to null in place. "Param not
+			// found" is signalled only by a missing/empty tree, never by nulls.
+			return items.map((item) =>
+				item?.data !== undefined ? TreeBuilder.deserializeValue(item.data) : null
+			);
 		}
 
 		if (items?.data !== undefined) return [TreeBuilder.deserializeValue(items.data)];
@@ -427,16 +434,22 @@ export class TreeBuilder {
 
 	/**
 	 * Parse a TreeBuilder path string like "{0;1;2}" into [0, 1, 2].
+	 * Negative indices ("{-1;2}") and the root path "{}" are valid.
 	 *
 	 * @param pathStr - Path string
 	 * @returns Array of path indices
+	 * @throws Error when the path string is not a valid Grasshopper branch path.
+	 *   Malformed keys must never silently collapse to a default branch —
+	 *   two distinct unparseable keys would merge their items into one branch.
 	 */
 	public static parsePathString(pathStr: string): number[] {
-		// Allow the legitimate root path "{}" alongside "{0;1;2}"
+		// Allow the legitimate root path "{}" alongside "{0;1;2}" / "{-1;2}"
 		const match = pathStr.match(TREE_PATH_RE);
 		if (!match) {
-			getLogger().warn(`Invalid TreeBuilder path format: ${pathStr}, using [0]`);
-			return [0];
+			throw new Error(
+				`Invalid Grasshopper tree path: "${pathStr}". ` +
+					`Expected "{}", "{0}", or "{0;1;2}" (negative indices allowed, no empty segments).`
+			);
 		}
 		// Root path "{}" — the (optional) capture group is undefined/empty.
 		if (!match[1]) return [];
@@ -512,10 +525,15 @@ export class TreeBuilder {
 				return data;
 			}
 		}
-		// Try to parse as number. Guard against ''/whitespace: Number('') === 0,
-		// which would silently turn empty strings into numeric zero.
-		if (data.trim() !== '' && !isNaN(Number(data))) {
-			return Number(data);
+		// Coerce to number only when the string is the *canonical* form of a
+		// finite number, i.e. it round-trips exactly (String(Number(s)) === s).
+		// API responses encode numbers as strings ('42', '3.14', '1e+21'), and
+		// those must come back numeric — but non-canonical numeric-looking
+		// strings ('007', '1e5', 'Infinity', '', '  5') were strings on the
+		// wire and must stay strings.
+		const num = Number(data);
+		if (Number.isFinite(num) && String(num) === data) {
+			return num;
 		}
 		// Try to parse as boolean
 		if (data === 'true') return true;

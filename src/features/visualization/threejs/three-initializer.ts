@@ -124,13 +124,19 @@ export const initThree = function (
 
 	const sceneUp = config.environment?.sceneUp || defaultUp;
 
+	// The configured pixel ratio is the single source of truth for every DPR consumer — renderer
+	// setup, the per-frame resize check, and the AO pipeline. Resolving it once here means a
+	// host-configured value (e.g. `pixelRatio: 1` for performance) is never silently overridden
+	// after the first resize check. (applyDefaults always sets it; the fallback is type narrowing.)
+	const pixelRatio = config.render.pixelRatio ?? Math.min(window.devicePixelRatio, 2);
+
 	const scene = createScene(config);
 	const camera = createCamera(config, canvas);
 	// Set the camera's up to the scene up BEFORE OrbitControls/the controller read it — OrbitControls
 	// captures the orbit basis from camera.up at construction, and the controller derives its presets
 	// and ortho camera from it. Without this, a Z-up scene would orbit and frame as if Y-up.
 	camera.up.copy(sceneUp);
-	const renderer = setupRenderer(canvas, config);
+	const renderer = setupRenderer(canvas, config, pixelRatio);
 	// Report the GPU's max anisotropy to the texture cache so color maps stay sharp at grazing angles.
 	// One-time; retroactively upgrades any texture already decoded this session.
 	setTextureAnisotropy(renderer.capabilities.getMaxAnisotropy());
@@ -211,7 +217,7 @@ export const initThree = function (
 
 	const eventHandlers =
 		config.events.enableEventHandlers !== false
-			? setupEventHandlers(canvas, scene, getActiveCamera, camera, controls, config)
+			? setupEventHandlers(canvas, scene, cameraController, config)
 			: { dispose: () => {}, fitToView: () => {}, clearSelection: () => {} };
 
 	// A drag to orbit/pan ends with a `click` on mouseup. Without guarding, that release click would
@@ -276,7 +282,6 @@ export const initThree = function (
 
 	const buildPipeline = (): RenderPipeline => {
 		const { width, height } = getCanvasSize();
-		const pixelRatio = Math.min(window.devicePixelRatio, 2);
 		const pipeline = createRenderPipeline(
 			renderer,
 			scene,
@@ -381,6 +386,7 @@ export const initThree = function (
 		cameraController,
 		controls,
 		getCanvasSize,
+		pixelRatio,
 		config.events.onFrame,
 		grid,
 		gizmo,
@@ -395,17 +401,17 @@ export const initThree = function (
 	// geometry later (via updateScene) should call updateShadowBounds again afterwards.
 	updateShadowBounds();
 
-	// Dispose one object's renderable resources (geometry + materials), recursing into children so
-	// Groups of lines/points clean up fully.
+	// Dispose one object's renderable resources (geometry + materials + their textures), recursing
+	// into children so Groups of lines/points clean up fully.
 	const disposeObjectTree = (root: THREE.Object3D) => {
 		root.traverse((object) => {
 			const renderable = object as Partial<THREE.Mesh> & THREE.Object3D;
 			if (!renderable.geometry && !renderable.material) return;
 			renderable.geometry?.dispose();
 			if (Array.isArray(renderable.material)) {
-				renderable.material.forEach((material) => material.dispose());
-			} else {
-				renderable.material?.dispose();
+				renderable.material.forEach(disposeMaterialWithTextures);
+			} else if (renderable.material) {
+				disposeMaterialWithTextures(renderable.material);
 			}
 		});
 	};
@@ -445,6 +451,9 @@ export const initThree = function (
 		gizmo?.dispose();
 		grid?.dispose();
 		renderPipeline?.dispose();
+		// Stop any in-flight camera tween — its rAF ticks would otherwise keep touching the disposed
+		// controls for up to the tween duration after teardown.
+		cameraController.dispose();
 		controls.dispose();
 		renderer.dispose();
 		// Free the GL context itself, not just its objects — browsers cap live WebGL contexts
@@ -459,9 +468,9 @@ export const initThree = function (
 
 			renderable.geometry?.dispose();
 			if (Array.isArray(renderable.material)) {
-				renderable.material.forEach((material) => material.dispose());
-			} else {
-				renderable.material?.dispose();
+				renderable.material.forEach(disposeMaterialWithTextures);
+			} else if (renderable.material) {
+				disposeMaterialWithTextures(renderable.material);
 			}
 		});
 
@@ -679,6 +688,21 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 }
 
 /**
+ * Dispose a material together with any textures it references (`map`, `roughnessMap`, …), matching
+ * `clearScene`'s texture sweep (three-helpers) so no teardown path leaks GPU textures across viewer
+ * mount/unmount cycles. Walks own enumerable properties only — `for...in` would needlessly iterate
+ * the prototype chain.
+ */
+export function disposeMaterialWithTextures(material: THREE.Material): void {
+	for (const value of Object.values(material)) {
+		if (value instanceof THREE.Texture) {
+			value.dispose();
+		}
+	}
+	material.dispose();
+}
+
+/**
  * Viewer aids (grid, floor, label overlay, measure markers) are not scene *content* — exclude them
  * from fit-to-view bounds and other content queries. Tagged via `userData.id` at creation.
  */
@@ -759,33 +783,6 @@ function createScene(config: Required<ThreeInitializerOptions>): THREE.Scene {
 	return scene;
 }
 
-function animateCameraTo(
-	camera: THREE.PerspectiveCamera,
-	controls: OrbitControls,
-	toPosition: THREE.Vector3,
-	toTarget: THREE.Vector3,
-	durationMs = 200
-): void {
-	const fromPosition = camera.position.clone();
-	const fromTarget = controls.target.clone();
-	const startTime = performance.now();
-
-	const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
-
-	const tick = () => {
-		const elapsed = performance.now() - startTime;
-		const t = easeOut(Math.min(elapsed / durationMs, 1));
-
-		camera.position.lerpVectors(fromPosition, toPosition, t);
-		controls.target.lerpVectors(fromTarget, toTarget, t);
-		controls.update();
-
-		if (t < 1) requestAnimationFrame(tick);
-	};
-
-	requestAnimationFrame(tick);
-}
-
 // Resize applied before render so buffer clear and draw happen in the same frame,
 // preventing visible blank frames when the canvas is resized
 function createAnimationLoop(
@@ -796,6 +793,8 @@ function createAnimationLoop(
 	cameraController: CameraController,
 	controls: OrbitControls,
 	getCanvasSize: () => { width: number; height: number },
+	// The resolved config.render.pixelRatio — the single source of truth for DPR (see initThree).
+	pixelRatio: number,
 	onFrame?: (delta: number) => void,
 	grid?: Grid | null,
 	gizmo?: ViewGizmo | null,
@@ -809,7 +808,6 @@ function createAnimationLoop(
 		const { width, height } = getCanvasSize();
 		if (width === 0 || height === 0) return;
 
-		const pixelRatio = Math.min(window.devicePixelRatio, 2);
 		// Must floor, not round: renderer.setSize floors the buffer size, and a mismatched rounding
 		// here makes the comparison never settle — the resize branch would then run every frame.
 		const newW = Math.floor(width * pixelRatio);
@@ -896,6 +894,9 @@ function setupEnvironment(
 				}
 				if (!envMap?.image) {
 					getLogger().warn('HDR loaded without image data; skipping environment map.');
+					// The texture object still holds GPU/CPU resources even without usable image data —
+					// dispose it, since it will never be attached to the scene.
+					envMap?.dispose();
 					config.events.onReady?.();
 					return;
 				}
@@ -1024,10 +1025,10 @@ function createCamera(
 	return camera;
 }
 
-// Logarithmic depth buffer improves depth precision for mixed scales (mm to km)
 function setupRenderer(
 	canvas: HTMLCanvasElement,
-	config: Required<ThreeInitializerOptions>
+	config: Required<ThreeInitializerOptions>,
+	pixelRatio: number
 ): THREE.WebGLRenderer {
 	const renderer = new THREE.WebGLRenderer({
 		antialias: config.render.antialias,
@@ -1035,7 +1036,12 @@ function setupRenderer(
 		alpha: true,
 		powerPreference: 'high-performance',
 		preserveDrawingBuffer: config.render.preserveDrawingBuffer,
-		logarithmicDepthBuffer: true
+		// Deliberately NOT logarithmic: three's depth-based post passes (our GTAO pipeline) reconstruct
+		// view-space positions assuming standard perspective depth and do not support log-encoded
+		// depth — with it on, AO is computed from wrong depths (haloing, wrong-scale occlusion). The
+		// per-scale near/far defaults (see applyDefaults) keep standard depth precision adequate for
+		// the viewer's scene scales. If log depth is ever needed, AO must be disabled with it.
+		logarithmicDepthBuffer: false
 	});
 
 	const parent = canvas.parentElement;
@@ -1049,7 +1055,7 @@ function setupRenderer(
 	}
 
 	renderer.setSize(width, height, false);
-	renderer.setPixelRatio(config.render.pixelRatio || Math.min(window.devicePixelRatio, 2));
+	renderer.setPixelRatio(pixelRatio);
 
 	if (config.render.enableShadows) {
 		renderer.shadowMap.enabled = true;
@@ -1068,9 +1074,7 @@ function setupRenderer(
 function setupEventHandlers(
 	canvas: HTMLCanvasElement,
 	scene: THREE.Scene,
-	getActiveCamera: () => THREE.Camera,
-	camera: THREE.PerspectiveCamera,
-	controls: OrbitControls,
+	cameraController: CameraController,
 	config: Required<ThreeInitializerOptions>
 ): {
 	dispose: () => void;
@@ -1082,6 +1086,7 @@ function setupEventHandlers(
 	const raycaster = new THREE.Raycaster();
 	const mouse = new THREE.Vector2();
 	const mouseDownPosition = new THREE.Vector2();
+	const getActiveCamera = () => cameraController.getActiveCamera();
 
 	// An object is hittable only if every ancestor is also visible. Three.js's
 	// recursive intersect doesn't enforce that — it can hit a visible Mesh inside
@@ -1105,25 +1110,11 @@ function setupEventHandlers(
 			return;
 		}
 
-		const center = box.getCenter(new THREE.Vector3());
-		const size = box.getSize(new THREE.Vector3());
-
-		const maxDim = Math.max(size.x, size.y, size.z);
-		const fov = camera.fov * (Math.PI / 180);
-		let distance = maxDim / (2 * Math.tan(fov / 2));
-
-		distance *= 1.5;
-
-		// View direction from the current camera→target. If those coincide (camera sitting on its
-		// target, e.g. after a degenerate fit), fall back to a sensible 3/4 iso so we never produce a
-		// zero/NaN direction that collapses the view.
-		const direction = camera.position.clone().sub(controls.target);
-		if (direction.lengthSq() < 1e-12) direction.set(0.8, 1, 1.2);
-		direction.normalize();
-		camera.position.copy(center.clone().add(direction.multiplyScalar(distance)));
-
-		controls.target.copy(center);
-		controls.update();
+		// Delegate the move to the camera controller: it frames from the current view direction and
+		// repositions whichever camera is LIVE, re-deriving the ortho frustum in 2D mode — whereas
+		// moving the perspective camera directly would change nothing visible in 2D (and silently
+		// drag the invisible perspective camera out of sync).
+		cameraController.frameBounds(box, false);
 	};
 
 	const selectionColorObj =
@@ -1257,16 +1248,11 @@ function setupEventHandlers(
 		const box = new THREE.Box3().setFromObject(target);
 		if (box.isEmpty()) return;
 
-		const center = box.getCenter(new THREE.Vector3());
-		const size = box.getSize(new THREE.Vector3());
-		const maxDim = Math.max(size.x, size.y, size.z);
-		const fov = camera.fov * (Math.PI / 180);
-		const distance = (maxDim / (2 * Math.tan(fov / 2))) * 1.5;
-
-		const direction = camera.position.clone().sub(controls.target).normalize();
-		const targetPosition = center.clone().add(direction.multiplyScalar(distance));
-
-		animateCameraTo(camera, controls, targetPosition, center);
+		// Frame the clicked object via the controller so the ACTIVE camera moves (ortho included —
+		// its frustum is re-derived, since translating an ortho camera alone zooms nothing). The
+		// controller's tween is cancellable: a rapid second double-click replaces the first tween
+		// instead of running a competing loop, and dispose() stops it outright.
+		cameraController.frameBounds(box, true);
 	};
 
 	const handleKeydown = (event: KeyboardEvent) => {

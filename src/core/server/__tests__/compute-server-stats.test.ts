@@ -17,6 +17,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ComputeServerStats from '../compute-server-stats';
+import { setLogger } from '../../utils/logger';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
 const SERVER = 'http://localhost:6500';
@@ -150,6 +151,22 @@ describe('getActiveChildren', () => {
 		await stats.dispose();
 	});
 
+	// Issue 113: parseInt would happily read "302 Found…" as 302 children — a
+	// redirect/error page must be rejected, not fed into purgeAllChildren.
+	it('rejects a garbage-prefixed body instead of parsing its leading digits', async () => {
+		route({ '/activechildren': () => res('302 Found - redirecting') });
+		const stats = new ComputeServerStats(SERVER);
+		await expect(stats.getActiveChildren()).resolves.toBeNull();
+		await stats.dispose();
+	});
+
+	it('rejects non-integer numeric bodies', async () => {
+		route({ '/activechildren': () => res('2.5') });
+		const stats = new ComputeServerStats(SERVER);
+		await expect(stats.getActiveChildren()).resolves.toBeNull();
+		await stats.dispose();
+	});
+
 	it('returns null on a non-2xx response', async () => {
 		route({ '/activechildren': () => res('', { ok: false, status: 500 }) });
 		const stats = new ComputeServerStats(SERVER);
@@ -218,7 +235,8 @@ describe('API key header', () => {
 		const stats = new ComputeServerStats(SERVER, 'secret-key');
 		await stats.getVersion();
 		const init = fetchMock.mock.calls[0][1] as RequestInit;
-		expect((init.headers as Record<string, string>)['RhinoComputeKey']).toBe('secret-key');
+		// Header keys are Headers-normalized (lowercased); look up case-insensitively.
+		expect(new Headers(init.headers).get('RhinoComputeKey')).toBe('secret-key');
 		await stats.dispose();
 	});
 
@@ -227,7 +245,34 @@ describe('API key header', () => {
 		const stats = new ComputeServerStats(SERVER);
 		await stats.getVersion();
 		const init = fetchMock.mock.calls[0][1] as RequestInit;
-		expect((init.headers as Record<string, string>)['RhinoComputeKey']).toBeUndefined();
+		expect(new Headers(init.headers).get('RhinoComputeKey')).toBeNull();
+		await stats.dispose();
+	});
+});
+
+/**
+ * Issue 113: caller headers must OVERRIDE the defaults after key normalization —
+ * a differently-cased `Content-Type` must not survive as a duplicate key that the
+ * runtime would combine into "application/json, text/plain".
+ */
+describe('header merge normalization', () => {
+	it('a caller Content-Type overrides the default regardless of key casing', async () => {
+		fetchMock.mockResolvedValue(res('ok'));
+		const stats = new ComputeServerStats(SERVER, 'k');
+		// fetchWithTimeout is private; exercised directly since no public method
+		// passes custom headers today, but the merge must already be correct.
+		await (
+			stats as unknown as {
+				fetchWithTimeout: (url: string, init?: RequestInit) => Promise<Response>;
+			}
+		).fetchWithTimeout(`${SERVER}/`, { headers: { 'CONTENT-TYPE': 'text/plain' } });
+
+		const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+		const contentTypeKeys = Object.keys(headers).filter((k) => k.toLowerCase() === 'content-type');
+		expect(contentTypeKeys).toHaveLength(1);
+		expect(headers[contentTypeKeys[0]]).toBe('text/plain');
+		// Defaults not overridden must survive the merge.
+		expect(new Headers(headers).get('RhinoComputeKey')).toBe('k');
 		await stats.dispose();
 	});
 });
@@ -279,7 +324,8 @@ describe('purgeCache', () => {
 		const stats = new ComputeServerStats(SERVER, 'k');
 		await stats.purgeCache();
 		const init = fetchMock.mock.calls[0][1] as RequestInit;
-		expect((init.headers as Record<string, string>)['RhinoComputeKey']).toBe('k');
+		// Header keys are Headers-normalized (lowercased); look up case-insensitively.
+		expect(new Headers(init.headers).get('RhinoComputeKey')).toBe('k');
 		await stats.dispose();
 	});
 
@@ -467,5 +513,75 @@ describe('disposal', () => {
 		const stats = new ComputeServerStats(SERVER);
 		await stats.dispose();
 		await expect(stats.dispose()).resolves.toBeUndefined();
+	});
+});
+
+describe('monitor', () => {
+	afterEach(() => setLogger(null));
+
+	// Issue 113: 0/negative/NaN intervalMs previously produced a hot ~1 ms polling loop.
+	it('throws RangeError for zero, negative, sub-floor, NaN, and Infinity intervalMs', async () => {
+		const stats = new ComputeServerStats(SERVER);
+		const cb = () => {};
+		expect(() => stats.monitor(cb, 0)).toThrow(RangeError);
+		expect(() => stats.monitor(cb, -5)).toThrow(RangeError);
+		expect(() => stats.monitor(cb, 50)).toThrow(RangeError);
+		expect(() => stats.monitor(cb, NaN)).toThrow(RangeError);
+		expect(() => stats.monitor(cb, Infinity)).toThrow(RangeError);
+		await stats.dispose();
+	});
+
+	it('accepts an intervalMs at the floor and polls immediately', async () => {
+		route({
+			'/version': () => res(JSON.stringify({ rhino: '8', compute: '1', git_sha: null })),
+			'/activechildren?initialize=false': () => res('1'),
+			'/': () => res('compute.rhino3d running')
+		});
+		const stats = new ComputeServerStats(SERVER);
+		const seen: unknown[] = [];
+		const stop = stats.monitor((s) => seen.push(s), 100);
+		await vi.waitFor(() => expect(seen.length).toBeGreaterThan(0));
+		stop();
+		expect(seen[0]).toMatchObject({ isOnline: true });
+		await stats.dispose();
+	});
+
+	// Issue 113: dispose() racing an in-flight poll is normal shutdown — the
+	// nested INVALID_STATE throw must not surface as an error-level log.
+	it('does not error-log when dispose() races an in-flight poll', async () => {
+		let resolveFetch!: (r: Response) => void;
+		fetchMock.mockImplementation(() => new Promise<Response>((r) => (resolveFetch = r)));
+
+		const errorSpy = vi.fn();
+		setLogger({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: errorSpy });
+
+		const stats = new ComputeServerStats(SERVER);
+		stats.monitor(() => {}, 1000);
+
+		// The initial poll's fetch is now in flight; dispose before it resolves.
+		await stats.dispose();
+		resolveFetch(res('compute.rhino3d running'));
+
+		// Let the poll's continuation (nested ensureNotDisposed throw) settle.
+		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(errorSpy).not.toHaveBeenCalled();
+	});
+
+	it('does not invoke the callback after dispose()', async () => {
+		let resolveFetch!: (r: Response) => void;
+		fetchMock.mockImplementation(() => new Promise<Response>((r) => (resolveFetch = r)));
+
+		const stats = new ComputeServerStats(SERVER);
+		const callback = vi.fn();
+		stats.monitor(callback, 1000);
+
+		await stats.dispose();
+		resolveFetch(res('compute.rhino3d running'));
+		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(callback).not.toHaveBeenCalled();
 	});
 });

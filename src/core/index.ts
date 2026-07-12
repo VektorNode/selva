@@ -12,8 +12,13 @@
  * import { fetchRhinoCompute, RhinoComputeError } from '@selvajs/compute/core';
  *
  * try {
- *   const data = await fetchRhinoCompute('rhino/health', null, config);
- *   console.log('Server is healthy:', data);
+ *   // POST to the Grasshopper solve endpoint (fetchRhinoCompute always POSTs JSON)
+ *   const data = await fetchRhinoCompute(
+ *     'grasshopper',
+ *     { pointer: definitionUrl, values: inputTree },
+ *     config
+ *   );
+ *   console.log('Solve response:', data);
  * } catch (error) {
  *   if (error instanceof RhinoComputeError) {
  *     console.error(`API Error [${error.code}]: ${error.message}`);
@@ -28,7 +33,8 @@
  * const stats = new ComputeServerStats(serverUrl, apiKey);
  * if (await stats.isServerOnline()) {
  *   const info = await stats.getServerStats();
- *   console.log(`Compute Version: ${info.version}`);
+ *   // version is an object: { rhino, compute, git_sha }
+ *   console.log(`Compute Version: ${info.version?.compute}`);
  * }
  * await stats.dispose();
  * ```

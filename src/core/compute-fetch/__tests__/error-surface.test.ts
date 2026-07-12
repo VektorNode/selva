@@ -14,6 +14,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchRhinoCompute } from '../compute-fetch';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
+import type { RhinoComputeError } from '@/core/errors';
+
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
 const config = { serverUrl: 'http://localhost:6500' };
 
@@ -65,6 +67,52 @@ describe('Compute8 server-exception body is surfaced to the user', () => {
 			throw new Error('should have thrown');
 		} catch (e) {
 			expect((e as Error).message).toContain('Malformed JSON received');
+		}
+	});
+});
+
+describe('error context.responseBody holds the raw, bounded server body (issue 104)', () => {
+	it('stores the raw wire body, not the synthesized message', async () => {
+		const raw = serverException('Invalid argument: Radius must be positive', true);
+		fetchMock.mockResolvedValueOnce(
+			createMockResponse(null, {
+				ok: false,
+				status: 500,
+				statusText: 'Internal Server Error',
+				body: raw
+			})
+		);
+
+		try {
+			await fetchRhinoCompute('grasshopper', {}, config);
+			throw new Error('should have thrown');
+		} catch (e) {
+			const err = e as RhinoComputeError;
+			// The context must hold what actually came over the wire — the message
+			// rewrite ("<type>: <message>\n<stack>") belongs to err.message only.
+			expect(err.context?.responseBody).toBe(raw);
+		}
+	});
+
+	it('truncates a huge body to a bounded size with an honest marker', async () => {
+		const raw = 'x'.repeat(10_000);
+		fetchMock.mockResolvedValueOnce(
+			createMockResponse(null, {
+				ok: false,
+				status: 401,
+				statusText: 'Unauthorized',
+				body: raw
+			})
+		);
+
+		try {
+			await fetchRhinoCompute('grasshopper', {}, config);
+			throw new Error('should have thrown');
+		} catch (e) {
+			const body = (e as RhinoComputeError).context?.responseBody as string;
+			expect(body.length).toBeLessThan(5_000);
+			expect(body).toMatch(/truncated 5904 chars/);
+			expect(body.startsWith('xxxx')).toBe(true);
 		}
 	});
 });

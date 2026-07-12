@@ -37,7 +37,10 @@ export interface DisplayItemBase extends DisplayIdentity {
 	opacity?: number;
 }
 
-/** A world position in Rhino's Z-up frame, in Rhino's `{X,Y,Z}` casing. Rotated to Three on parse. */
+/**
+ * A world position in Rhino's Z-up frame, in Rhino's `{X,Y,Z}` casing. Used unchanged on parse —
+ * the Three scene IS Rhino's Z-up frame, so no rotation is applied (see `../coordinate-transform.ts`).
+ */
 export interface DisplayPosition {
 	X: number;
 	Y: number;
@@ -62,7 +65,7 @@ export interface DisplayCurve extends DisplayItemBase {
 /** A single point, shipped raw (no rhino3dm decode), rendered as one vertex of a `THREE.Points`. */
 export interface DisplayPoint extends DisplayItemBase {
 	kind: 'point';
-	/** World position in Rhino Z-up; the shared Rhino→Three transform is applied on parse. */
+	/** World position in Rhino Z-up, used directly — the Three scene shares Rhino's Z-up frame. */
 	position: DisplayPosition;
 	// Future: size?: number — point size in px. Add here only; scoped to points by the union.
 }

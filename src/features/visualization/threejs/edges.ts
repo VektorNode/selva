@@ -34,6 +34,29 @@ const DEFAULT_EDGE_WIDTH = 1.5;
 const DEFAULT_THRESHOLD_ANGLE = 30;
 
 /**
+ * Extracted edge geometry, cached per source `BufferGeometry` (and per crease angle, since the
+ * angle changes which edges survive). N meshes sharing one geometry — the common case for
+ * instanced/repeated parts — get one extraction and one GPU buffer instead of N identical ones.
+ *
+ * Reference-counted so {@link removeEdges} only disposes a line geometry once its last overlay is
+ * gone. The WeakMap keys on the source geometry, so entries vanish with the content they describe;
+ * overlays disposed by whole-scene clears (which bypass removeEdges) just leave a refcount behind
+ * on an entry that becomes unreachable together with its source geometry.
+ */
+interface EdgeGeometryEntry {
+	geometry: LineSegmentsGeometry;
+	refCount: number;
+}
+const edgeGeometryCache = new WeakMap<THREE.BufferGeometry, Map<number, EdgeGeometryEntry>>();
+
+/** Where an overlay's (possibly shared) line geometry came from, for refcounted disposal. */
+interface EdgeOverlayUserData {
+	kind: string;
+	edgeSource?: THREE.BufferGeometry;
+	edgeThresholdAngle?: number;
+}
+
+/**
  * Walk an object subtree and attach an edge overlay to every `Mesh` found, returning the created
  * overlays (so callers can dispose them explicitly if they don't clear the whole subtree). Meshes
  * that already carry an overlay are skipped, so this is safe to call more than once.
@@ -62,31 +85,83 @@ export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineS
 	return created;
 }
 
+/** Get (or extract and cache) the shared edge line geometry for a source geometry + crease angle. */
+function acquireEdgeGeometry(
+	geometry: THREE.BufferGeometry,
+	thresholdAngle: number
+): LineSegmentsGeometry {
+	let byAngle = edgeGeometryCache.get(geometry);
+	if (!byAngle) {
+		byAngle = new Map();
+		edgeGeometryCache.set(geometry, byAngle);
+	}
+
+	let entry = byAngle.get(thresholdAngle);
+	if (!entry) {
+		const edges = new THREE.EdgesGeometry(geometry, thresholdAngle);
+
+		// EdgesGeometry yields a Float32Array of line-segment endpoint pairs; LineSegmentsGeometry
+		// consumes it as-is (round-tripping through Array.from would box every vertex into a JS array
+		// only for setPositions to convert it straight back).
+		const lineGeometry = new LineSegmentsGeometry();
+		lineGeometry.setPositions(edges.attributes.position.array as Float32Array);
+		edges.dispose(); // frees only GPU-side state; the CPU array now backs the line geometry
+
+		entry = { geometry: lineGeometry, refCount: 0 };
+		byAngle.set(thresholdAngle, entry);
+	}
+
+	entry.refCount += 1;
+	return entry.geometry;
+}
+
+/** Refcounted inverse of {@link acquireEdgeGeometry}: dispose only when the last overlay is gone. */
+function releaseEdgeGeometry(overlay: LineSegments2): void {
+	const userData = overlay.userData as EdgeOverlayUserData;
+	const byAngle = userData.edgeSource && edgeGeometryCache.get(userData.edgeSource);
+	const entry =
+		userData.edgeThresholdAngle != null ? byAngle?.get(userData.edgeThresholdAngle) : undefined;
+
+	if (!entry || entry.geometry !== overlay.geometry) {
+		// Not (or no longer) cache-managed — dispose directly.
+		overlay.geometry.dispose();
+		return;
+	}
+
+	entry.refCount -= 1;
+	if (entry.refCount <= 0) {
+		entry.geometry.dispose();
+		byAngle!.delete(userData.edgeThresholdAngle!);
+	}
+}
+
 function buildEdgeOverlay(
 	geometry: THREE.BufferGeometry,
 	color: THREE.Color,
 	width: number,
 	thresholdAngle: number
 ): LineSegments2 {
-	const edges = new THREE.EdgesGeometry(geometry, thresholdAngle);
-
-	// EdgesGeometry yields a Float32Array of line-segment endpoint pairs; LineSegmentsGeometry
-	// consumes it as-is (round-tripping through Array.from would box every vertex into a JS array
-	// only for setPositions to convert it straight back).
-	const lineGeometry = new LineSegmentsGeometry();
-	lineGeometry.setPositions(edges.attributes.position.array as Float32Array);
-	edges.dispose(); // frees only GPU-side state; the CPU array now backs the line geometry
+	const lineGeometry = acquireEdgeGeometry(geometry, thresholdAngle);
 
 	// LineMaterialParameters omits linewidth/opacity from its type though both exist at runtime.
 	const material = new LineMaterial({ color });
 	(material as LineMaterial & { linewidth: number }).linewidth = width;
 	// Pull edges slightly toward the camera in depth so they don't z-fight the shaded surface.
+	// The fat-line quads face the screen, so their depth slope is ~0 and the slope-scaled factor
+	// term contributes nothing — the constant `units` term has to do the work. -1 unit is a single
+	// depth ULP, which still stipples at glancing angles / far zoom on 24-bit depth buffers; a few
+	// ULPs clears the surface reliably without visibly floating the edges.
 	material.polygonOffset = true;
 	material.polygonOffsetFactor = -1;
-	material.polygonOffsetUnits = -1;
+	material.polygonOffsetUnits = -4;
 
 	const overlay = new LineSegments2(lineGeometry, material);
 	overlay.userData.kind = EDGE_USERDATA_KIND;
+	// Remember which cache entry backs this overlay so removeEdges can refcount its disposal. The
+	// strong reference is fine: the overlay is a child of the mesh that owns the source geometry,
+	// so their lifetimes already coincide.
+	overlay.userData.edgeSource = geometry;
+	overlay.userData.edgeThresholdAngle = thresholdAngle;
 	overlay.raycast = () => {}; // never pickable; clicks should hit the mesh, not its outline
 	return overlay;
 }
@@ -107,7 +182,7 @@ export function removeEdges(root: THREE.Object3D): number {
 	});
 
 	for (const overlay of overlays) {
-		overlay.geometry.dispose();
+		releaseEdgeGeometry(overlay); // geometry may be shared across overlays — refcounted dispose
 		(overlay.material as LineMaterial).dispose();
 		overlay.removeFromParent();
 	}

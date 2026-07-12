@@ -55,13 +55,32 @@ describe('fetchDefinitionIO load diagnostics', () => {
 		expect(res).not.toHaveProperty('loadWarnings');
 	});
 
-	it('filters blank/non-string entries defensively', async () => {
+	it('drops blank/null entries but keeps non-string diagnostics by coercion', async () => {
 		fetchMock.mockResolvedValue(
 			createMockResponse(ioResponse({ errors: ['real', '', '   ', null, 42] }))
 		);
 
 		const res = await fetchDefinitionIO(DEF, CONFIG);
-		expect(res.loadErrors).toEqual(['real']);
+		// Blank strings and null vanish; a non-string entry is still information
+		// the server reported — it must survive as a string, not be dropped.
+		expect(res.loadErrors).toEqual(['real', '42']);
+	});
+
+	it('coerces object diagnostics to their message field (issue 78)', async () => {
+		// A server fork reporting errors as { message } objects used to yield an
+		// empty inputs list with NO explanation — the diagnostics were all dropped.
+		fetchMock.mockResolvedValue(
+			createMockResponse(
+				ioResponse({
+					errors: [{ message: 'Could not load assembly Foo.gha' }, { code: 7 }],
+					warnings: [{ Message: 'Obsolete component' }] // PascalCase message read too
+				})
+			)
+		);
+
+		const res = await fetchDefinitionIO(DEF, CONFIG);
+		expect(res.loadErrors).toEqual(['Could not load assembly Foo.gha', '{"code":7}']);
+		expect(res.loadWarnings).toEqual(['Obsolete component']);
 	});
 });
 

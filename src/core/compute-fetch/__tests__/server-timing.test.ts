@@ -77,6 +77,27 @@ describe('onServerTiming callback', () => {
 		expect(onServerTiming).not.toHaveBeenCalled();
 	});
 
+	it('fires on the 500 partial-success path too (values + errors — issue 103)', async () => {
+		const onServerTiming = vi.fn();
+		fetchMock.mockResolvedValueOnce(
+			createMockResponse(null, {
+				ok: false,
+				status: 500,
+				statusText: 'Internal Server Error',
+				body: JSON.stringify({ values: [{ ParamName: 'out' }], errors: ['boom'], warnings: [] }),
+				headers: { 'Server-Timing': 'decode;dur=2, solve;dur=77, encode;dur=4' }
+			})
+		);
+
+		const res = await fetchRhinoCompute('grasshopper', {}, { ...config, onServerTiming });
+
+		// The partial-success body is returned, not thrown — and its timing (often
+		// the slowest solves) must not be dropped from telemetry.
+		expect(res).toMatchObject({ errors: ['boom'] });
+		expect(onServerTiming).toHaveBeenCalledTimes(1);
+		expect(onServerTiming).toHaveBeenCalledWith(expect.objectContaining({ solve: 77 }));
+	});
+
 	it('a throwing callback does not fail the request', async () => {
 		const onServerTiming = vi.fn(() => {
 			throw new Error('boom');

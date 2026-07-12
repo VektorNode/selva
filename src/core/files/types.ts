@@ -11,11 +11,11 @@
 export type FileData = {
 	/** Base filename without extension (e.g., "model") */
 	fileName: string;
-	/** File content as a base64-encoded or plain string, depending on {@link IsBase64Encoded} */
+	/** File content as a base64-encoded or plain string, depending on {@link FileData.isBase64Encoded} */
 	data: string;
-	/** File extension including the dot (e.g., ".3dm", ".json"). Appended to {@link FileName} to create the full filename */
+	/** File extension including the dot (e.g., ".3dm", ".json"). Appended to {@link FileData.fileName} to create the full filename */
 	fileType: string;
-	/** Whether {@link Data} is base64-encoded. If true, must be decoded to binary before use. If false, can be used as a plain text string */
+	/** Whether {@link FileData.data} is base64-encoded. If true, must be decoded to binary before use. If false, can be used as a plain text string */
 	isBase64Encoded: boolean;
 	/** Directory path for organizing the file in archive structures (e.g., ZIP). Typically empty string for root-level files, or a path like "subfolder/nested" */
 	subFolder: string;
@@ -58,4 +58,6 @@ export type FileBaseInfo = {
 	fileName: string;
 	/** URL to fetch the file from. Must be accessible from the runtime environment */
 	filePath: string;
+	/** Optional directory path for organizing the fetched file in archive structures (e.g., "extras/docs"). When omitted, the file lands at the archive root. Sanitized the same way as {@link FileData.subFolder} */
+	subFolder?: string;
 };

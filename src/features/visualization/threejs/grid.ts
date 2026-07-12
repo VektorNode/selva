@@ -162,6 +162,7 @@ export function createGrid(options: GridOptions = {}): Grid {
 			mesh.visible = visible;
 		},
 		dispose: () => {
+			mesh.removeFromParent(); // don't leave a dead mesh in the scene graph
 			geometry.dispose();
 			material.dispose();
 		}

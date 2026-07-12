@@ -117,8 +117,23 @@ export function fnv1aBytes(bytes: Uint8Array): string {
  * parts (plus lengths) to collide at once makes that negligible.
  */
 export function hashSolveInput(definition: SolveDefinition, dataTree: unknown): string {
+	return hashSolveInputForDefinition(hashDefinition(definition), dataTree);
+}
+
+/**
+ * Build the solve cache key from an already-computed definition hash (a
+ * {@link hashDefinition} result) plus the data tree. Split out so a caller
+ * that needs the definition hash anyway (the scheduler keys its
+ * server-cache-key map by it) computes it once at `solve()` entry and threads
+ * it through, instead of paying a second linear FNV pass over a potentially
+ * multi-MB base64 definition per solve.
+ *
+ * Invariant: `hashSolveInputForDefinition(hashDefinition(d), t)` produces the
+ * exact same key as `hashSolveInput(d, t)` — cache-key semantics are unchanged.
+ */
+export function hashSolveInputForDefinition(definitionHash: string, dataTree: unknown): string {
 	const tree = stableStringify(dataTree);
-	return `${hashDefinition(definition)}|t:${tree.length}:${fnv1a(tree)}`;
+	return `${definitionHash}|t:${tree.length}:${fnv1a(tree)}`;
 }
 
 /**

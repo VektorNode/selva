@@ -27,11 +27,18 @@ export function readField<T = unknown>(obj: unknown, name: string): T | undefine
 	if (!obj || typeof obj !== 'object') return undefined;
 
 	const record = obj as Record<string, unknown>;
-	if (name in record) return record[name] as T;
+	// Own-property check, NOT `name in record`: the `in` operator walks the
+	// prototype chain, so probing a payload for e.g. `toString` would return
+	// `Object.prototype.toString` instead of `undefined`. The fast path must
+	// match the case-insensitive fallback's own-enumerable-key semantics.
+	if (hasOwn(record, name)) return record[name] as T;
 
 	const key = lowerKeyMap(record).get(name.toLowerCase());
 	return key === undefined ? undefined : (record[key] as T);
 }
+
+const hasOwn = (record: object, key: string): boolean =>
+	Object.prototype.hasOwnProperty.call(record, key);
 
 /**
  * True when `obj` has a key matching `name` (case-insensitively). Distinguishes
@@ -41,28 +48,38 @@ export function readField<T = unknown>(obj: unknown, name: string): T | undefine
 export function hasField(obj: unknown, name: string): boolean {
 	if (!obj || typeof obj !== 'object') return false;
 	const record = obj as Record<string, unknown>;
-	if (name in record) return true;
+	// Own-property check only — see `readField` for why `in` is wrong here.
+	if (hasOwn(record, name)) return true;
 	return lowerKeyMap(record).has(name.toLowerCase());
 }
 
 /**
  * Per-object cache of `lowercased key → actual key`, so reading N fields off
- * the same payload object costs one `Object.keys` scan instead of N. Keyed by
- * object identity (WeakMap), which assumes payloads are immutable wire data —
- * keys added to an object after its first read are not seen. First matching
- * key wins, preserving the original linear-scan order.
+ * the same payload object costs one lowercasing scan instead of N. Keyed by
+ * object identity (WeakMap). Payloads are normally immutable wire data, but
+ * in-place enrichment does happen, so staleness is detected via a cheap
+ * key-count check: if the object's own-key count differs from what the cached
+ * map was built from, the map is rebuilt. (An `Object.keys` call per lookup is
+ * cheap; the expensive part — lowercasing every key — stays cached.)
+ *
+ * Known limitation: a mutation that REPLACES a key while keeping the total
+ * count identical (delete one, add another) is not detected. That shape of
+ * mutation doesn't occur in this codebase; full detection would cost as much
+ * as not caching at all. First matching key wins, preserving the original
+ * linear-scan order.
  */
-const lowerKeyCache = new WeakMap<object, Map<string, string>>();
+const lowerKeyCache = new WeakMap<object, { keyCount: number; map: Map<string, string> }>();
 
 function lowerKeyMap(record: Record<string, unknown>): Map<string, string> {
-	let map = lowerKeyCache.get(record);
-	if (!map) {
-		map = new Map();
-		for (const key of Object.keys(record)) {
-			const lower = key.toLowerCase();
-			if (!map.has(lower)) map.set(lower, key);
-		}
-		lowerKeyCache.set(record, map);
+	const keys = Object.keys(record);
+	const cached = lowerKeyCache.get(record);
+	if (cached && cached.keyCount === keys.length) return cached.map;
+
+	const map = new Map<string, string>();
+	for (const key of keys) {
+		const lower = key.toLowerCase();
+		if (!map.has(lower)) map.set(lower, key);
 	}
+	lowerKeyCache.set(record, { keyCount: keys.length, map });
 	return map;
 }

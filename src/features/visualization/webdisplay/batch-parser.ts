@@ -1,19 +1,21 @@
 import * as THREE from 'three';
 
-import { parseColor } from '../threejs/three-helpers';
+import { parseColor } from '../threejs/three-helpers.js';
 import { getLogger } from '@/core';
+import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 
-import { FLAG_FLOAT32, parseBinaryMeshBatch } from './binary-parser';
-import { applyTextureMap } from './texture-cache';
+import { FLAG_FLOAT32, parseBinaryMeshBatch } from './binary-parser.js';
+import { applyTextureMap } from './texture-cache.js';
 
-import type { ParsedBinaryMeshBatch } from './binary-parser';
+import type { ParsedBinaryMeshBatch } from './binary-parser.js';
 import type {
 	DisplayBatch,
 	MaterialAppearanceOptions,
 	MaterialGroup,
 	MeshBatchParsingOptions,
+	MeshMetadata,
 	SerializableMaterial
-} from './types';
+} from './types.js';
 
 /**
  * Internal-only telemetry threaded from an outer entry point (e.g. the JSON
@@ -32,9 +34,14 @@ interface ParseTelemetry {
  * base64-encoded into the outer JSON envelope. We `JSON.parse` the small envelope, then hand the
  * blob to `parseBinaryMeshBatch` which decodes the geometry without ever turning it into a string.
  *
+ * An invalid JSON envelope (not a batch at all) logs and returns `[]` — that is the
+ * "genuinely absent data" case. A batch whose *blob* is corrupt, truncated, or unsupported throws
+ * instead of silently rendering an empty scene.
+ *
  * @param batchJson - JSON string containing the batched mesh data
  * @param options - Rendering options
  * @returns Promise resolving to array of Three.js mesh objects
+ * @throws {RhinoComputeError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatch(
 	batchJson: string,
@@ -44,16 +51,19 @@ export async function parseMeshBatch(
 
 	const perfStart = debug ? performance.now() : 0;
 
+	// Narrow catch: only the envelope JSON.parse is allowed to degrade to []. Blob parse errors
+	// from parseMeshBatchObject propagate — see that entry point's contract.
+	let batch: DisplayBatch;
+	const parseStart = performance.now();
 	try {
-		const parseStart = performance.now();
-		const batch: DisplayBatch = JSON.parse(batchJson);
-		const parseTime = performance.now() - parseStart;
-
-		return await parseMeshBatchObject(batch, options, { parseTime, perfStart });
+		batch = JSON.parse(batchJson);
 	} catch (error) {
-		getLogger().error('Error parsing mesh batch:', error);
+		getLogger().error('Error parsing mesh batch envelope JSON:', error);
 		return [];
 	}
+	const parseTime = performance.now() - parseStart;
+
+	return await parseMeshBatchObject(batch, options, { parseTime, perfStart });
 }
 
 /**
@@ -63,9 +73,14 @@ export async function parseMeshBatch(
  * over the blob. The function stays `async` so callers don't have to change shape if we move
  * parsing into a worker later.
  *
+ * A batch with no `compressedData` (genuinely empty/absent geometry) resolves to `[]`. A corrupt,
+ * truncated, or unsupported blob throws so callers get a signal instead of a silent empty scene —
+ * `getThreeMeshesFromComputeResponse` documents (and now delivers) exactly that rethrow.
+ *
  * @param batch - DisplayBatch object
  * @param options - Rendering options
  * @returns Promise resolving to array of Three.js mesh objects
+ * @throws {RhinoComputeError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatchObject(
 	batch: DisplayBatch,
@@ -76,32 +91,33 @@ export async function parseMeshBatchObject(
 	const { mergeByMaterial = true, applyTransforms = true, debug = false, material } = options ?? {};
 	const { parseTime = 0, perfStart = debug ? performance.now() : 0 } = telemetry ?? {};
 
-	try {
-		const decodeStart = performance.now();
-		const parsed = parseBinaryMeshBatch(batch.compressedData);
-		const decodeTime = performance.now() - decodeStart;
-
-		const blobBytes = debug ? approximateBase64DecodedBytes(batch.compressedData) : 0;
-
-		return buildMeshesFromParsed(parsed, {
-			mergeByMaterial,
-			applyTransforms,
-			debug,
-			material,
-			parseTime,
-			decodeTime,
-			perfStart,
-			blobBytes,
-			fallback: {
-				materials: batch.materials,
-				groups: batch.groups,
-				sourceComponentId: batch.sourceComponentId
-			}
-		});
-	} catch (error) {
-		getLogger().error('Error parsing mesh batch object:', error);
+	if (!batch.compressedData) {
+		// No blob at all — an items-only or empty batch. This is the one entry-point path that
+		// legitimately yields [] rather than throwing.
 		return [];
 	}
+
+	const decodeStart = performance.now();
+	const parsed = parseBinaryMeshBatch(batch.compressedData);
+	const decodeTime = performance.now() - decodeStart;
+
+	const blobBytes = debug ? approximateBase64DecodedBytes(batch.compressedData) : 0;
+
+	return buildMeshesFromParsed(parsed, {
+		mergeByMaterial,
+		applyTransforms,
+		debug,
+		material,
+		parseTime,
+		decodeTime,
+		perfStart,
+		blobBytes,
+		fallback: {
+			materials: batch.materials,
+			groups: batch.groups,
+			sourceComponentId: batch.sourceComponentId
+		}
+	});
 }
 
 /**
@@ -115,6 +131,7 @@ export async function parseMeshBatchObject(
  * @param blob - Raw blob bytes from a binary WebSocket frame.
  * @param options - Rendering options.
  * @returns Promise resolving to array of Three.js mesh objects.
+ * @throws {RhinoComputeError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatchBlob(
 	blob: ArrayBuffer | Uint8Array,
@@ -124,27 +141,22 @@ export async function parseMeshBatchBlob(
 
 	const perfStart = debug ? performance.now() : 0;
 
-	try {
-		const decodeStart = performance.now();
-		const parsed = parseBinaryMeshBatch(blob);
-		const decodeTime = performance.now() - decodeStart;
+	const decodeStart = performance.now();
+	const parsed = parseBinaryMeshBatch(blob);
+	const decodeTime = performance.now() - decodeStart;
 
-		const blobBytes = blob.byteLength;
+	const blobBytes = blob.byteLength;
 
-		return buildMeshesFromParsed(parsed, {
-			mergeByMaterial,
-			applyTransforms,
-			debug,
-			material,
-			parseTime: 0,
-			decodeTime,
-			perfStart,
-			blobBytes
-		});
-	} catch (error) {
-		getLogger().error('Error parsing mesh batch blob:', error);
-		return [];
-	}
+	return buildMeshesFromParsed(parsed, {
+		mergeByMaterial,
+		applyTransforms,
+		debug,
+		material,
+		parseTime: 0,
+		decodeTime,
+		perfStart,
+		blobBytes
+	});
 }
 
 interface BuildOptions {
@@ -189,6 +201,17 @@ function buildMeshesFromParsed(
 	const sourceComponentId = fallback?.sourceComponentId ?? parsed.metadata.sourceComponentId;
 
 	const isFloat32 = (parsed.flags & FLAG_FLOAT32) !== 0;
+
+	// Group metadata arrives as embedded (or envelope) JSON and is used arithmetically below —
+	// unchecked, a bad vertexStart/indexStart wraps rebased indices into a Uint32Array, `subarray`
+	// silently clamps, and an out-of-range materialId feeds `undefined` into `new THREE.Mesh`.
+	// Fail the parse instead of silently corrupting the render.
+	validateGroupMetadata(
+		groups,
+		materialsSrc.length,
+		parsed.vertices.length / 3,
+		parsed.indices.length
+	);
 
 	// Dequantize once up-front into a single Float32Array. Downstream code (per-group merging,
 	// computeVertexNormals, ground-offset) all expect world-unit floats, and a single
@@ -263,6 +286,95 @@ function buildMeshesFromParsed(
 	}
 
 	return Promise.resolve(meshes);
+}
+
+// ============================================================================
+// GROUP METADATA VALIDATION
+// ============================================================================
+
+function metadataFail(message: string, context: Record<string, unknown>): RhinoComputeError {
+	return new RhinoComputeError(message, ErrorCodes.VALIDATION_ERROR, { context });
+}
+
+/**
+ * Validates the batch's group/mesh metadata against the decoded geometry buffers before any of it
+ * is used arithmetically. Throws a VALIDATION_ERROR on the first inconsistency (out-of-range
+ * `materialId`, non-integer or negative offsets/counts, or vertex/index windows that overrun the
+ * buffers) so malformed or version-skewed metadata fails the parse loudly.
+ */
+function validateGroupMetadata(
+	groups: MaterialGroup[],
+	materialCount: number,
+	totalVertexCount: number,
+	totalIndexCount: number
+): void {
+	for (const group of groups) {
+		if (
+			!Number.isInteger(group.materialId) ||
+			group.materialId < 0 ||
+			group.materialId >= materialCount
+		) {
+			throw metadataFail('Group materialId out of range of the materials array.', {
+				materialId: group.materialId,
+				materialCount
+			});
+		}
+
+		for (const mesh of group.meshes) {
+			const fields = {
+				vertexStart: mesh.vertexStart,
+				vertexCount: mesh.vertexCount,
+				indexStart: mesh.indexStart,
+				indexCount: mesh.indexCount
+			};
+			for (const [field, value] of Object.entries(fields)) {
+				if (!Number.isInteger(value) || value < 0) {
+					throw metadataFail(`Mesh metadata field "${field}" must be a non-negative integer.`, {
+						meshName: mesh.name,
+						field,
+						value
+					});
+				}
+			}
+
+			if (mesh.vertexStart + mesh.vertexCount > totalVertexCount) {
+				throw metadataFail('Mesh vertex window exceeds the batch vertex buffer.', {
+					meshName: mesh.name,
+					vertexStart: mesh.vertexStart,
+					vertexCount: mesh.vertexCount,
+					totalVertexCount
+				});
+			}
+
+			if (mesh.indexStart + mesh.indexCount > totalIndexCount) {
+				throw metadataFail('Mesh index window exceeds the batch index buffer.', {
+					meshName: mesh.name,
+					indexStart: mesh.indexStart,
+					indexCount: mesh.indexCount,
+					totalIndexCount
+				});
+			}
+		}
+	}
+}
+
+/**
+ * Asserts an index value falls inside its mesh's declared vertex window
+ * `[vertexStart, vertexStart + vertexCount)`. Rebasing (`index - vertexStart`) writes into an
+ * unsigned array, so a violation would otherwise wrap to ~4 billion and corrupt the geometry.
+ */
+function assertIndexInWindow(indexValue: number, meshMeta: MeshMetadata): void {
+	if (
+		indexValue < meshMeta.vertexStart ||
+		indexValue >= meshMeta.vertexStart + meshMeta.vertexCount
+	) {
+		throw metadataFail("Index references a vertex outside its mesh's vertex window.", {
+			meshName: meshMeta.name,
+			indexValue,
+			vertexStart: meshMeta.vertexStart,
+			vertexCount: meshMeta.vertexCount
+		});
+	}
 }
 
 // ============================================================================
@@ -453,12 +565,10 @@ function createMergedMesh(
 			meshMeta.indexStart + meshMeta.indexCount
 		);
 		const indexShift = vertexWriteCursor - meshMeta.vertexStart;
-		if (indexShift === 0) {
-			mergedIndices.set(indicesSlice, indexWriteCursor);
-		} else {
-			for (let i = 0; i < indicesSlice.length; i++) {
-				mergedIndices[indexWriteCursor + i] = indicesSlice[i]! + indexShift;
-			}
+		for (let i = 0; i < indicesSlice.length; i++) {
+			const indexValue = indicesSlice[i]!;
+			assertIndexInWindow(indexValue, meshMeta);
+			mergedIndices[indexWriteCursor + i] = indexValue + indexShift;
 		}
 
 		vertexWriteCursor += meshMeta.vertexCount;
@@ -528,7 +638,9 @@ function createIndividualMeshes(
 		const rebasedIndices = new Uint32Array(indicesSlice.length);
 		const baseIndex = meshMeta.vertexStart;
 		for (let i = 0; i < indicesSlice.length; i++) {
-			rebasedIndices[i] = indicesSlice[i]! - baseIndex;
+			const indexValue = indicesSlice[i]!;
+			assertIndexInWindow(indexValue, meshMeta);
+			rebasedIndices[i] = indexValue - baseIndex;
 		}
 
 		const geometry = new THREE.BufferGeometry();

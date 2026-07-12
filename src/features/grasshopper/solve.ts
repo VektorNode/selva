@@ -1,5 +1,5 @@
 import { fetchRhinoCompute, RhinoComputeError, ErrorCodes } from '@/core';
-import { base64ByteArray, encodeStringToBase64, isBase64 } from '@/core/utils/encoding';
+import { base64ByteArray, detectBase64Payload, encodeStringToBase64 } from '@/core/utils/encoding';
 import { getLogger } from '@/core/utils/logger';
 import { readField } from '@/core/utils/read-field';
 import { warnIfClientSide } from '@/core/utils/warnings';
@@ -81,8 +81,11 @@ export function warnOnEmptyInnerTrees(response: GrasshopperComputeResponse, debu
  * definition — stable for identical content. A caller that holds it can solve
  * the same definition again by reference (`pointer: cacheKey`) instead of
  * re-uploading the full base64, which matters a lot for large (multi-MB)
- * definitions on a live UI. `null` when the server didn't return one (e.g. a
- * URL-pointer solve).
+ * definitions on a live UI. For a URL-pointer solve the server echoes the
+ * request schema back, so `cacheKey` is the definition URL itself (already a
+ * reference — nothing gained by re-pointing at it). `null` only when the
+ * server's response carried no `pointer` at all — do NOT use `null` to detect
+ * URL-pointer solves.
  */
 export interface SolveWithCacheKey {
 	response: GrasshopperComputeResponse;
@@ -273,12 +276,14 @@ export function prepareGrasshopperArgs(
 	} else if (/^https?:\/\//i.test(definition)) {
 		// URL → use as pointer reference
 		args.pointer = definition;
-	} else if (isBase64(definition)) {
-		// Already base64 → use as-is
-		args.algo = definition;
 	} else {
-		// Plain string → encode to base64
-		args.algo = encodeStringToBase64(definition);
+		// Base64 detection is a heuristic (see detectBase64Payload): only long
+		// (≥64 data chars), canonical base64 is passed through — normalized, so
+		// newline-wrapped/unpadded definitions reach the server decodable instead
+		// of double-encoded. Everything else (incl. short base64-shaped strings
+		// like "test") is treated as a plain string and encoded. Pass a
+		// Uint8Array to bypass sniffing entirely.
+		args.algo = detectBase64Payload(definition) ?? encodeStringToBase64(definition);
 	}
 
 	return args;

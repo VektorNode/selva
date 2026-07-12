@@ -4,7 +4,7 @@ import { getLogger } from '@/core/utils/logger';
 
 import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } from '../types';
 import type { SolveDefinition } from '../definition-ref';
-import { hashSolveInput, hashDefinition } from './stable-hash';
+import { hashSolveInputForDefinition, hashDefinition } from './stable-hash';
 
 /**
  * Scheduling mode — controls how concurrent `solve()` calls interact.
@@ -98,6 +98,13 @@ const SERVER_CACHE_KEYS_MAX = 100;
 interface PendingItem {
 	definition: SolveDefinition;
 	dataTree: DataTree[];
+	/**
+	 * Definition hash computed once at `solve()` entry ({@link hashDefinition})
+	 * and threaded through to {@link SolveScheduler.runExecutor}, so the
+	 * (potentially multi-MB) definition is never linearly hashed a second time
+	 * for the server-cache-key map.
+	 */
+	definitionHash: string;
 	ctx: SolveContext;
 	/** Monotonic solve() ordinal — used to keep older items' late settles from overwriting newer state. */
 	seq: number;
@@ -354,7 +361,11 @@ export class SolveScheduler {
 			);
 		}
 
-		const key = hashSolveInput(definition, dataTree);
+		// Hash the definition once here; the hash is both part of the solve key
+		// and (threaded via the pending item) the server-cache-key map's key, so
+		// runExecutor never re-hashes the potentially multi-MB definition.
+		const definitionHash = hashDefinition(definition);
+		const key = hashSolveInputForDefinition(definitionHash, dataTree);
 		const seq = ++this.solveSeq;
 		const ctx: SolveContext = {
 			key,
@@ -396,6 +407,7 @@ export class SolveScheduler {
 			const item: PendingItem = {
 				definition,
 				dataTree,
+				definitionHash,
 				ctx,
 				seq,
 				resolve,
@@ -522,6 +534,7 @@ export class SolveScheduler {
 			const { response, definitionReuploaded } = await this.runExecutor(
 				item.definition,
 				item.dataTree,
+				item.definitionHash,
 				config
 			);
 			const durationMs = performance.now() - startTime;
@@ -566,10 +579,15 @@ export class SolveScheduler {
 	 * Run the solve, using the server-definition-cache fast path when it's
 	 * enabled and the definition is reusable. Learns/updates the definition's
 	 * server cache key from the result so later solves can reference it.
+	 *
+	 * `definitionHash` is the {@link hashDefinition} result already computed at
+	 * `solve()` entry — threaded through rather than recomputed, so each solve
+	 * pays exactly one linear pass over the definition (issue 57).
 	 */
 	private async runExecutor(
 		definition: SolveDefinition,
 		dataTree: DataTree[],
+		definitionHash: string,
 		config: GrasshopperComputeConfig
 	): Promise<{ response: GrasshopperComputeResponse; definitionReuploaded?: boolean }> {
 		if (
@@ -580,7 +598,7 @@ export class SolveScheduler {
 			return { response: await this.executor(definition, dataTree, config) };
 		}
 
-		const defKey = hashDefinition(definition);
+		const defKey = definitionHash;
 		const knownKey = this.serverCacheKeys.get(defKey) ?? null;
 
 		const result = await this.cacheKeyExecutor(definition, dataTree, knownKey, config);

@@ -11,11 +11,19 @@ import { normalizeInputSchema, normalizeOutputSchema } from './normalize-schema'
 
 /**
  * Fetches raw input/output schemas from a Grasshopper definition.
- * Returns unprocessed data exactly as received from the Rhino Compute API (camelCased).
+ *
+ * "Raw" means no per-type parsing (no default coercion, no discriminated-union
+ * typing) — but NOT byte-for-byte wire data. The response IS normalized:
+ * per-param field KEYS are canonicalized to camelCase across server branches
+ * ({@link normalizeInputSchema} / {@link normalizeOutputSchema}, with honest
+ * fallbacks for missing required fields), missing/non-array `inputs`/`outputs`
+ * coerce to `[]`, and server load diagnostics surface as
+ * `loadWarnings`/`loadErrors` (coerced to strings). Field VALUES — notably
+ * `default` and the `values` dropdown-label map — pass through verbatim.
  *
  * @param definition - The Grasshopper definition (URL, base64 string, or Uint8Array)
  * @param config - Compute configuration (server URL, API key, etc.)
- * @returns Raw inputs and outputs with no type processing
+ * @returns Key-normalized inputs and outputs with no per-type processing
  * @throws {RhinoComputeError} If fetch fails or response is invalid
  *
  * @public Use `fetchParsedDefinitionIO()` for processed, type-safe inputs
@@ -84,13 +92,42 @@ export async function fetchDefinitionIO(
 
 /**
  * Coerce a server `errors`/`warnings` array (typed `any[]`) into a clean
- * `string[]`, or `undefined` when there's nothing to report. Filters non-string
- * and blank entries defensively.
+ * `string[]`, or `undefined` when there's nothing to report.
+ *
+ * Non-string diagnostics are KEPT, not dropped: a server fork reporting errors
+ * as `{ message }` objects must not yield a mysteriously empty inputs list with
+ * zero explanation (the exact failure this surfacing exists to prevent).
+ * Objects coerce to their `message` field when it's a non-blank string, else
+ * to JSON; other primitives via `String(...)`. Only `null`/`undefined` and
+ * blank entries are discarded.
  */
 function nonEmptyStrings(value: unknown): string[] | undefined {
 	if (!Array.isArray(value)) return undefined;
-	const cleaned = value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+	const cleaned = value.map(coerceDiagnostic).filter((v): v is string => v !== undefined);
 	return cleaned.length > 0 ? cleaned : undefined;
+}
+
+/** One diagnostic entry → non-blank string, or `undefined` when there's nothing to say. */
+function coerceDiagnostic(value: unknown): string | undefined {
+	if (value === null || value === undefined) return undefined;
+	let text: string;
+	if (typeof value === 'string') {
+		text = value;
+	} else if (typeof value === 'object') {
+		const message = readField<unknown>(value, 'message');
+		if (typeof message === 'string' && message.trim().length > 0) {
+			text = message;
+		} else {
+			try {
+				text = JSON.stringify(value) ?? String(value);
+			} catch {
+				text = String(value);
+			}
+		}
+	} else {
+		text = String(value);
+	}
+	return text.trim().length > 0 ? text : undefined;
 }
 
 /**

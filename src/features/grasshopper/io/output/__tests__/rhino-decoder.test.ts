@@ -11,7 +11,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { RhinoModule } from 'rhino3dm';
 
-import { registerDecoder, decodeRhinoGeometry, decodeRhinoObject } from '../rhino-decoder';
+import {
+	registerDecoder,
+	decodeRhinoGeometry,
+	decodeRhinoObject,
+	isRhinoDecodeError
+} from '../rhino-decoder';
 
 /** Minimal rhino3dm stand-in. `Point`/`Line` record their args so we can assert on them. */
 function fakeRhino(decode: (payload: unknown) => unknown = () => ({ decoded: true })): RhinoModule {
@@ -135,6 +140,41 @@ describe('decodeRhinoGeometry — CommonObject fallback', () => {
 	});
 });
 
+describe('decodeRhinoGeometry — failure signaling contract (issue 85)', () => {
+	it('a throwing decoder with no envelope fallback is a hard failure, not a silent passthrough', () => {
+		// Previously this fell through to `return parsedData` — indistinguishable
+		// from a soft "no decoder matched" miss. A decode was attempted and threw,
+		// so under the coherent scheme it must yield the sentinel.
+		registerDecoder('My.Throwing.NoEnvelope', () => {
+			throw new Error('decoder blew up');
+		});
+		const raw = { not: 'an envelope' };
+		const result = decodeRhinoGeometry(raw, 'My.Throwing.NoEnvelope', fakeRhino());
+		expect(isRhinoDecodeError(result)).toBe(true);
+		expect((result as { raw: unknown }).raw).toBe(raw);
+	});
+
+	it('isRhinoDecodeError distinguishes the sentinel from passthrough and decoded values', () => {
+		const rhino = fakeRhino(() => {
+			throw new Error('bad archive');
+		});
+		const sentinel = decodeRhinoGeometry({ data: 'bad' }, 'Rhino.Geometry.Brep', rhino);
+		expect(isRhinoDecodeError(sentinel)).toBe(true);
+
+		// Passthrough (soft miss) and decoded results are not errors.
+		expect(
+			isRhinoDecodeError(decodeRhinoGeometry({ v: 1 }, 'Rhino.Geometry.Mesh', fakeRhino()))
+		).toBe(false);
+		expect(
+			isRhinoDecodeError(
+				decodeRhinoGeometry({ X: 1, Y: 2, Z: 3 }, 'Rhino.Geometry.Point3d', fakeRhino())
+			)
+		).toBe(false);
+		expect(isRhinoDecodeError(null)).toBe(false);
+		expect(isRhinoDecodeError('nope')).toBe(false);
+	});
+});
+
 describe('registerDecoder', () => {
 	it('registers a custom decoder that decodeRhinoGeometry then uses', () => {
 		registerDecoder('My.Custom.Widget', (_rhino, data) => ({ widget: data }));
@@ -208,5 +248,53 @@ describe('decodeRhinoObject', () => {
 		const obj = { a: null, b: 5, c: 'text' } as unknown as Record<string, unknown>;
 		const out = decodeRhinoObject(obj, rhino);
 		expect(out).toEqual({ a: null, b: 5, c: 'text' });
+	});
+});
+
+describe('decodeRhinoObject — deep mode preserves arrays (issue 61)', () => {
+	const pt = (n: number) => ({ type: 'Rhino.Geometry.Point3d', X: n, Y: n, Z: n });
+
+	it('keeps an array of geometry an array, with every element decoded', () => {
+		// Regression: deep mode recursed arrays into decodeRhinoObject, whose
+		// `{ ...obj }` spread turned [pt1, pt2] into {0: pt1, 1: pt2}.
+		const rhino = fakeRhino();
+		const out = decodeRhinoObject({ points: [pt(1), pt(2)] }, rhino, { deep: true }) as Record<
+			string,
+			any
+		>;
+
+		expect(Array.isArray(out.points)).toBe(true);
+		expect(out.points).toHaveLength(2);
+		expect(out.points[0].location).toEqual([1, 1, 1]);
+		expect(out.points[1].location).toEqual([2, 2, 2]);
+	});
+
+	it('recurses through nested arrays and plain objects inside arrays', () => {
+		const rhino = fakeRhino();
+		const obj = {
+			groups: [[pt(1)], { inner: pt(2) }, 'plain', 3, null]
+		};
+		const out = decodeRhinoObject(obj, rhino, { deep: true }) as Record<string, any>;
+
+		expect(Array.isArray(out.groups)).toBe(true);
+		expect(Array.isArray(out.groups[0])).toBe(true);
+		expect(out.groups[0][0].location).toEqual([1, 1, 1]);
+		expect(out.groups[1].inner.location).toEqual([2, 2, 2]);
+		// Primitives and null pass through untouched.
+		expect(out.groups.slice(2)).toEqual(['plain', 3, null]);
+	});
+
+	it('leaves arrays untouched in shallow mode (unchanged behavior)', () => {
+		const rhino = fakeRhino();
+		const obj = { points: [pt(1)] };
+		const out = decodeRhinoObject(obj, rhino) as Record<string, any>;
+		expect(out.points).toEqual([pt(1)]);
+	});
+
+	it('does not mutate the input arrays', () => {
+		const rhino = fakeRhino();
+		const original = [pt(1)];
+		decodeRhinoObject({ points: original }, rhino, { deep: true });
+		expect(original[0]).toEqual(pt(1));
 	});
 });

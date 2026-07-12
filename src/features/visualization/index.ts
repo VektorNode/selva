@@ -41,23 +41,35 @@ export * as Materials from './threejs/three-materials.js';
 // WEB DISPLAY PARSING
 // ============================================================================
 
-export { getThreeMeshesFromComputeResponse, SCALE_FACTORS } from './webdisplay/webdisplay-parser';
+export {
+	getThreeMeshesFromComputeResponse,
+	SCALE_FACTORS
+} from './webdisplay/webdisplay-parser.js';
 export {
 	parseMeshBatch,
 	parseMeshBatchObject,
 	parseMeshBatchBlob
-} from './webdisplay/batch-parser';
+} from './webdisplay/batch-parser.js';
 export {
 	parseBinaryMeshBatch,
 	BINARY_MESH_MAGIC,
+	COMPRESSED_MESH_MAGIC,
 	BINARY_MESH_VERSION,
+	MIN_SUPPORTED_VERSION,
 	FLAG_FLOAT32,
+	FLAG_UINT16_INDICES,
 	FLAG_DELTA_ENCODED,
 	FLAG_HAS_UVS,
-	FLAG_HAS_VERTEX_COLORS
-} from './webdisplay/binary-parser';
-export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './webdisplay/binary-parser';
-export { clearTextureCache, setTextureAnisotropy } from './webdisplay/texture-cache';
+	FLAG_HAS_VERTEX_COLORS,
+	UV_FORMAT_UINT16,
+	UV_FORMAT_FLOAT32
+} from './webdisplay/binary-parser.js';
+export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './webdisplay/binary-parser.js';
+export {
+	clearTextureCache,
+	setTextureAnisotropy,
+	TEXTURE_CACHE_MAX_ENTRIES
+} from './webdisplay/texture-cache.js';
 
 // ============================================================================
 // TYPE EXPORTS
@@ -78,7 +90,7 @@ export type {
 	EdgesConfig,
 	MeasureConfig,
 	EventConfig
-} from './types';
+} from './types.js';
 
 export type {
 	MeshBatchParsingOptions,
@@ -90,7 +102,7 @@ export type {
 	DisplayBatch,
 	/** @deprecated Use {@link DisplayBatch}. */
 	MeshBatch
-} from './webdisplay/types';
+} from './webdisplay/types.js';
 
 export type {
 	DisplayItem,
@@ -99,7 +111,7 @@ export type {
 	DisplayItemBase,
 	DisplayIdentity,
 	DisplayPosition
-} from './display-items/types';
+} from './display-items/types.js';
 
-export { parseDisplayItems } from './display-items/display-items-parser';
-export type { DisplayItemParseOptions } from './display-items/display-items-parser';
+export { parseDisplayItems } from './display-items/display-items-parser.js';
+export type { DisplayItemParseOptions } from './display-items/display-items-parser.js';

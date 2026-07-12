@@ -61,6 +61,14 @@ interface MeasureDeps {
 	canvas: HTMLCanvasElement;
 	scene: THREE.Scene;
 	getActiveCamera: () => THREE.Camera;
+	/**
+	 * The current orbit target (e.g. `controls.target`). Used to scale the line/point pick
+	 * threshold with the view: the tolerance is a fraction of the camera→target distance, so it
+	 * stays roughly constant on screen wherever the user has framed the model. Optional for
+	 * backward compatibility — without it the perspective fallback is the camera's distance to the
+	 * world origin, which misjudges the threshold for off-origin content. Thread it in when you can.
+	 */
+	getViewTarget?: () => THREE.Vector3;
 	labelLayer: LabelLayer;
 	options?: MeasureOptions;
 }
@@ -95,6 +103,26 @@ export function makeFormatter(displayUnit?: string): (n: number) => string {
 }
 
 /**
+ * World-space raycast threshold for picking lines/points (which have no surface area and are only
+ * "hit" when the ray passes within this distance of them). A fixed fraction of the view size keeps
+ * the grab band roughly constant on screen as the user zooms:
+ * - perspective: fraction of the camera→target distance (the framed view size). Falls back to the
+ *   camera's distance to the world origin when no target is supplied — see `MeasureDeps.getViewTarget`.
+ * - orthographic: fraction of the visible frustum height, `(top − bottom) / zoom`. Ortho zoom
+ *   changes `camera.zoom`, not the camera position, so distance-based scaling would never react.
+ * @internal exported for tests
+ */
+export function pickThreshold(camera: THREE.Camera, viewTarget?: THREE.Vector3): number {
+	if ((camera as THREE.OrthographicCamera).isOrthographicCamera) {
+		const ortho = camera as THREE.OrthographicCamera;
+		const visibleHeight = Math.abs(ortho.top - ortho.bottom) / (ortho.zoom || 1);
+		return visibleHeight * LINE_PICK_FRACTION;
+	}
+	const viewScale = viewTarget ? camera.position.distanceTo(viewTarget) : camera.position.length();
+	return (viewScale || 1) * LINE_PICK_FRACTION;
+}
+
+/**
  * The vertex indices to consider snapping to for a given hit, by object type:
  * - Mesh: the three vertices of the struck triangle (`hit.face`).
  * - Line / LineSegments: the two endpoints of the struck segment (`hit.index`, `hit.index + 1`).
@@ -108,11 +136,21 @@ function snapCandidateIndices(hit: THREE.Intersection): number[] | null {
 		return hit.face ? [hit.face.a, hit.face.b, hit.face.c] : null;
 	}
 	if (obj instanceof THREE.Points) {
+		// Points.raycast resolves indexed geometry itself: `hit.index` is always a position index.
 		return hit.index != null ? [hit.index] : null;
 	}
-	// THREE.Line / LineSegments / LineLoop. `hit.index` is the first vertex of the struck segment.
+	// THREE.Line / LineSegments / LineLoop. For non-indexed geometry `hit.index` is the first
+	// vertex of the struck segment; for INDEXED geometry it is a cursor into the index buffer
+	// (three r184 Line.raycast reports the loop counter, not the resolved vertex), so the segment's
+	// endpoints must be looked up through the index before reading the position attribute.
 	if (obj instanceof THREE.Line) {
-		return hit.index != null ? [hit.index, hit.index + 1] : null;
+		if (hit.index == null) return null;
+		const index = obj.geometry.index;
+		if (index) {
+			if (hit.index + 1 >= index.count) return null; // stale/inconsistent hit; keep raw point
+			return [index.getX(hit.index), index.getX(hit.index + 1)];
+		}
+		return [hit.index, hit.index + 1];
 	}
 	return null;
 }
@@ -164,7 +202,7 @@ export function snapToVertex(
 }
 
 export function createMeasureTool(deps: MeasureDeps): MeasureTool {
-	const { canvas, scene, getActiveCamera, labelLayer, options = {} } = deps;
+	const { canvas, scene, getActiveCamera, getViewTarget, labelLayer, options = {} } = deps;
 	const snapPixels = options.snapPixels ?? DEFAULT_SNAP_PIXELS;
 	const color = new THREE.Color(options.color ?? DEFAULT_COLOR);
 	const fmt = makeFormatter(options.displayUnit);
@@ -281,10 +319,9 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 
 		// Lines and points have no surface area, so they're only "hit" when the ray passes within a
 		// world-space threshold of them — left at the default ~1 unit they're nearly impossible to
-		// click. Scale the threshold with the view size (camera distance to the orbit target, here the
-		// origin) so the pick tolerance stays roughly constant on screen as the user zooms.
-		const viewScale = camera.position.length();
-		const threshold = viewScale * LINE_PICK_FRACTION;
+		// click. Scale the threshold with the view (camera→target distance, or the ortho frustum
+		// height under zoom) so the pick tolerance stays roughly constant on screen — see pickThreshold.
+		const threshold = pickThreshold(camera, getViewTarget?.());
 		raycaster.params.Line!.threshold = threshold;
 		raycaster.params.Points!.threshold = threshold;
 
@@ -296,9 +333,31 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 		return snapToVertex(hits[0], camera, { width: rect.width, height: rect.height }, snapPixels);
 	};
 
+	// Coalesce hover raycasts to one per animation frame: mousemove can fire far more often than
+	// the display refreshes, and a full-scene recursive raycast per event hitches on large models.
+	// Only the latest event matters for the preview, so intermediate ones are simply dropped.
+	let pendingMove: MouseEvent | null = null;
+	let moveRaf = 0;
+
+	const cancelPendingMove = () => {
+		if (moveRaf) {
+			cancelAnimationFrame(moveRaf);
+			moveRaf = 0;
+		}
+		pendingMove = null;
+	};
+
 	const handleMove = (event: MouseEvent): void => {
 		if (!enabled) return;
-		showHover(pickPoint(event));
+		pendingMove = event;
+		if (moveRaf) return;
+		moveRaf = requestAnimationFrame(() => {
+			moveRaf = 0;
+			const latest = pendingMove;
+			pendingMove = null;
+			if (!enabled || !latest) return;
+			showHover(pickPoint(latest));
+		});
 	};
 
 	const handleClick = (event: MouseEvent): boolean => {
@@ -321,6 +380,7 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 		setEnabled: (value) => {
 			enabled = value;
 			if (!value) {
+				cancelPendingMove();
 				clear();
 				showHover(null);
 			}
@@ -330,6 +390,7 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 		handleMove,
 		clear,
 		dispose: () => {
+			cancelPendingMove();
 			clear();
 			if (hoverMarker) {
 				hoverMarker.geometry.dispose();

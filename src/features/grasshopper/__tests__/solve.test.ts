@@ -28,14 +28,45 @@ describe('solve', () => {
 			expect(isBase64(result.algo!)).toBe(true);
 		});
 
-		it('should pass through existing base64 string', () => {
-			const base64Definition = Buffer.from('test').toString('base64');
+		it('should pass through existing base64 string (realistic definition-sized input)', () => {
+			// Real definitions are KB–MB; the detection floor is 64 base64 chars.
+			const base64Definition = Buffer.from(
+				new Uint8Array(256).map((_, i) => (i * 7 + 3) & 0xff)
+			).toString('base64');
 			const dataTree: any[] = [];
 
 			const result = prepareGrasshopperArgs(base64Definition, dataTree);
 
 			expect(result.algo).toBe(base64Definition);
 			expect(result.pointer).toBeNull();
+		});
+
+		// Issues 69/92: short base64-shaped strings ("test", "dGVzdA==") used to
+		// be sent raw, so the documented "plain string (will be base64-encoded)"
+		// contract silently failed and the server decoded garbage. Detection now
+		// requires ≥64 canonical base64 chars — anything shorter is treated as a
+		// plain string and encoded.
+		it('encodes short base64-shaped strings as plain text', () => {
+			for (const definition of ['test', 'Data2024', Buffer.from('test').toString('base64')]) {
+				const result = prepareGrasshopperArgs(definition, []);
+				expect(result.algo).toBe(Buffer.from(definition, 'utf-8').toString('base64'));
+				expect(result.pointer).toBeNull();
+			}
+		});
+
+		// Issue 92 (reverse direction): newline-wrapped/unpadded base64 used to
+		// fail the strict check and get double-encoded — the server then decoded
+		// once and received base64 text instead of the definition bytes.
+		it('normalizes wrapped/unpadded base64 instead of double-encoding it', () => {
+			// 91 bytes → 124 base64 chars ending in '==', so the unpadded case is real.
+			const canonical = Buffer.from(new Uint8Array(91).map((_, i) => i + 1)).toString('base64');
+			expect(canonical.endsWith('==')).toBe(true);
+
+			const wrapped = canonical.replace(/(.{20})/g, '$1\r\n');
+			expect(prepareGrasshopperArgs(wrapped, []).algo).toBe(canonical);
+
+			const unpadded = canonical.replace(/=+$/, '');
+			expect(prepareGrasshopperArgs(unpadded, []).algo).toBe(canonical);
 		});
 
 		it('should encode Uint8Array to base64', () => {

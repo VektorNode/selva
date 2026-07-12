@@ -13,6 +13,8 @@ export const EMISSIVE_MATERIAL = new THREE.MeshPhysicalMaterial({
 	transparent: false,
 	alphaTest: 0.0,
 	polygonOffset: true,
+	polygonOffsetFactor: 1,
+	polygonOffsetUnits: 1,
 	side: THREE.FrontSide,
 	dithering: true
 });
@@ -32,6 +34,8 @@ export const METAL_MATERIAL = new THREE.MeshPhysicalMaterial({
 	alphaTest: 0.0,
 	depthTest: true,
 	polygonOffset: true,
+	polygonOffsetFactor: 1,
+	polygonOffsetUnits: 1,
 	side: THREE.FrontSide,
 	dithering: true
 });
@@ -49,9 +53,13 @@ export const CONCRETE_MATERIAL = new THREE.MeshPhysicalMaterial({
 	thickness: 0.0,
 	depthWrite: true,
 	transparent: false,
-	alphaTest: 0.5,
+	// No alphaTest: concrete has no alpha map, and a nonzero alphaTest needlessly switches the
+	// shader onto the alpha-test path.
+	alphaTest: 0.0,
 	depthTest: true,
 	polygonOffset: true,
+	polygonOffsetFactor: 1,
+	polygonOffsetUnits: 1,
 	side: THREE.FrontSide,
 	dithering: true
 });
@@ -79,9 +87,13 @@ export const GLASS_MATERIAL = new THREE.MeshPhysicalMaterial({
 	color: new THREE.Color(0xffffff),
 	metalness: 0.0,
 	roughness: 0.0,
+	// Transmission alone models the see-through look; stacking a low `opacity` on top would
+	// attenuate twice and render glass much darker than intended (opacity stays at its default 1).
 	transmission: 0.95,
 	transparent: true,
-	opacity: 0.3,
+	// A depth-writing transparent DoubleSide surface culls whatever sorts behind it — objects
+	// behind glass would intermittently vanish depending on draw order.
+	depthWrite: false,
 	envMapIntensity: 1.0,
 	clearcoat: 1.0,
 	clearcoatRoughness: 0.0,
@@ -128,3 +140,19 @@ export const WOOD_MATERIAL = new THREE.MeshPhysicalMaterial({
 	polygonOffsetFactor: 1,
 	polygonOffsetUnits: 1
 });
+
+/**
+ * The module-scope singleton materials above, as a set. Scene-clearing code must NOT dispose a
+ * material in this set: they are shared across meshes and across solves, and `dispose()` on a
+ * still-referenced material forces a shader program rebuild on its next use (and would free any
+ * textures they gain later while other objects still use them).
+ */
+export const SHARED_MATERIALS: ReadonlySet<THREE.Material> = new Set<THREE.Material>([
+	EMISSIVE_MATERIAL,
+	METAL_MATERIAL,
+	CONCRETE_MATERIAL,
+	PLASTIC_MATERIAL,
+	GLASS_MATERIAL,
+	RUBBER_MATERIAL,
+	WOOD_MATERIAL
+]);

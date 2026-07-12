@@ -428,6 +428,118 @@ describe('parseMeshBatch (JSON entry point)', () => {
 		const meshes = await parseMeshBatch('not-json', { applyTransforms: false });
 		expect(meshes).toEqual([]);
 	});
+
+	it('rethrows blob parse errors instead of degrading to an empty scene (issue 35)', async () => {
+		// Valid envelope JSON, corrupt blob: only the invalid-envelope case may return [].
+		const envelope = JSON.stringify({ materials: [], groups: [], compressedData: 'AAAAAAAA' });
+
+		await expect(parseMeshBatch(envelope, { applyTransforms: false })).rejects.toThrow(/SLVA/i);
+	});
+});
+
+describe('error contract (issue 35)', () => {
+	it('parseMeshBatchObject resolves [] for a batch with no compressedData (genuinely empty)', async () => {
+		const batch = { materials: [], groups: [] } as unknown as Parameters<
+			typeof parseMeshBatchObject
+		>[0];
+
+		await expect(parseMeshBatchObject(batch, { applyTransforms: false })).resolves.toEqual([]);
+	});
+
+	it('parseMeshBatchObject rejects on a corrupt blob', async () => {
+		const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+		batch.compressedData = 'AAAAAAAA'; // decodes, but is not a SLVA/SLVZ blob
+
+		await expect(parseMeshBatchObject(batch, { applyTransforms: false })).rejects.toThrow(/SLVA/i);
+	});
+
+	it('parseMeshBatchBlob rejects on truncated blob bytes', async () => {
+		const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+		const blob = decodeBase64ToBinary(batch.compressedData);
+
+		await expect(
+			parseMeshBatchBlob(blob.subarray(0, 8), { applyTransforms: false })
+		).rejects.toThrow();
+	});
+});
+
+describe('group metadata validation (issue 19)', () => {
+	/** Re-encodes the built batch so the blob's embedded metadata carries the tampered groups. */
+	function reencode(built: ReturnType<typeof buildMeshBatch>): void {
+		built.batch.compressedData = encodeBatchPayload(built.rawVertices, built.rawFaces, {
+			materials: built.batch.materials,
+			groups: built.batch.groups,
+			sourceComponentId: built.batch.sourceComponentId
+		});
+	}
+
+	it('rejects an out-of-range materialId instead of building a mesh with undefined material', async () => {
+		const built = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+		built.batch.groups[0]!.materialId = 5;
+		reencode(built);
+
+		await expect(parseMeshBatchObject(built.batch, { applyTransforms: false })).rejects.toThrow(
+			/materialId/i
+		);
+	});
+
+	it('rejects a vertex window that overruns the vertex buffer instead of clamping silently', async () => {
+		const built = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+		built.batch.groups[0]!.meshes[0]!.vertexStart = 1000;
+		reencode(built);
+
+		await expect(parseMeshBatchObject(built.batch, { applyTransforms: false })).rejects.toThrow(
+			/vertex window/i
+		);
+	});
+
+	it('rejects an index window that overruns the index buffer', async () => {
+		const built = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+		built.batch.groups[0]!.meshes[0]!.indexCount = 10_000;
+		reencode(built);
+
+		await expect(parseMeshBatchObject(built.batch, { applyTransforms: false })).rejects.toThrow(
+			/index window/i
+		);
+	});
+
+	it('rejects non-integer or negative metadata fields', async () => {
+		const built = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+		built.batch.groups[0]!.meshes[0]!.vertexCount = -1;
+		reencode(built);
+
+		await expect(parseMeshBatchObject(built.batch, { applyTransforms: false })).rejects.toThrow(
+			/non-negative integer/i
+		);
+	});
+
+	it('rejects indices outside their mesh vertex window on the merged path (no Uint32 wrap)', async () => {
+		// Swap the two meshes' vertexStart values: each mesh's indices now sit outside its declared
+		// window. Unchecked, `index - vertexStart` wraps into ~4 billion inside a Uint32Array.
+		const built = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+		const [meshA, meshB] = built.batch.groups[0]!.meshes;
+		const tmp = meshA!.vertexStart;
+		meshA!.vertexStart = meshB!.vertexStart;
+		meshB!.vertexStart = tmp;
+		reencode(built);
+
+		await expect(
+			parseMeshBatchObject(built.batch, { mergeByMaterial: true, applyTransforms: false })
+		).rejects.toThrow(/outside its mesh/i);
+	});
+
+	it('rejects indices outside their mesh vertex window on the individual path', async () => {
+		const built = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+		const [meshA, meshB] = built.batch.groups[0]!.meshes;
+		const tmp = meshA!.vertexStart;
+		meshA!.vertexStart = meshB!.vertexStart;
+		meshB!.vertexStart = tmp;
+		reencode(built);
+
+		await expect(
+			parseMeshBatchObject(built.batch, { mergeByMaterial: false, applyTransforms: false })
+		).rejects.toThrow(/outside its mesh/i);
+	});
 });
 
 describe('parseMeshBatchBlob (binary entry point)', () => {

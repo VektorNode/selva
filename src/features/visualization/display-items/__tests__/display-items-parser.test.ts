@@ -129,4 +129,94 @@ describe('parseDisplayItems', () => {
 		expect(objs).toHaveLength(1);
 		expect(objs[0]).toBeInstanceOf(THREE.Points);
 	});
+
+	it('narrows the DisplayItem union exhaustively (compile-time never guard)', () => {
+		// Mirrors the parser's default-case guard: if a new kind is added to the DisplayItem union
+		// and this switch (or the parser's) doesn't handle it, the `never` assignment below becomes
+		// a compile error — the guarantee documented in types.ts.
+		const label = (item: DisplayItem): string => {
+			switch (item.kind) {
+				case 'curve':
+					return `curve:${item.name}`;
+				case 'point':
+					return `point:${item.name}`;
+				default: {
+					const unhandled: never = item;
+					return String(unhandled);
+				}
+			}
+		};
+
+		expect(
+			label({ kind: 'point', id: 'c:0', name: 'P', layer: '', position: { X: 0, Y: 0, Z: 0 } })
+		).toBe('point:P');
+		expect(label({ kind: 'curve', id: 'c:1', name: 'E', layer: '', json: '{}' })).toBe('curve:E');
+	});
+
+	it('skips a curve whose tessellation throws without aborting the rest of the batch', () => {
+		// A rhino stand-in whose decode returns a throwing curve for {"bad":true} JSON and a good
+		// straight-line curve otherwise — so one WASM-style failure sits between healthy items.
+		const goodCurve = {
+			isPolyline: () => false,
+			domain: [0, 1],
+			pointAt: (t: number) => [t, 0, 0],
+			getBoundingBox: () => ({ min: [0, 0, 0], max: [1, 0, 0] })
+		};
+		const badCurve = {
+			isPolyline: () => false,
+			domain: [0, 1],
+			pointAt: () => {
+				throw new Error('WASM pointAt failure');
+			},
+			getBoundingBox: () => ({ min: [0, 0, 0], max: [1, 0, 0] })
+		};
+		const rhino = {
+			CommonObject: {
+				decode: (parsed: { bad?: boolean }) => (parsed.bad ? badCurve : goodCurve)
+			}
+		} as unknown as RhinoModule;
+
+		const items: DisplayItem[] = [
+			{ kind: 'curve', id: 'c:0', name: 'bad', layer: '', json: '{"bad":true}' },
+			{ kind: 'point', id: 'c:1', name: 'P', layer: '', position: { X: 0, Y: 0, Z: 0 } },
+			{ kind: 'curve', id: 'c:2', name: 'good', layer: '', json: '{}' }
+		];
+
+		const objs = parseDisplayItems(items, { rhino });
+		expect(objs).toHaveLength(2);
+		expect(objs[0]).toBeInstanceOf(THREE.Points);
+		expect(objs[1]).toBeInstanceOf(Line2);
+		expect(objs[1].name).toBe('good');
+	});
+
+	it('skips points with missing or non-finite positions instead of throwing or emitting NaN', () => {
+		const items = [
+			{ kind: 'point', id: 'c:0', name: 'no-position', layer: '' },
+			{ kind: 'point', id: 'c:1', name: 'partial', layer: '', position: { X: 1, Y: 2 } },
+			{ kind: 'point', id: 'c:2', name: 'nan', layer: '', position: { X: NaN, Y: 0, Z: 0 } },
+			{
+				kind: 'point',
+				id: 'c:3',
+				name: 'infinite',
+				layer: '',
+				position: { X: 0, Y: Infinity, Z: 0 }
+			},
+			{
+				kind: 'point',
+				id: 'c:4',
+				name: 'string-coord',
+				layer: '',
+				position: { X: '1', Y: 2, Z: 3 }
+			},
+			{ kind: 'point', id: 'c:5', name: 'valid', layer: '', position: { X: 4, Y: 5, Z: 6 } }
+		] as unknown as DisplayItem[];
+
+		const objs = parseDisplayItems(items);
+		expect(objs).toHaveLength(1);
+
+		const points = objs[0] as THREE.Points;
+		expect(points.name).toBe('valid');
+		const pos = points.geometry.getAttribute('position');
+		expect([pos.getX(0), pos.getY(0), pos.getZ(0)]).toEqual([4, 5, 6]);
+	});
 });

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
-import { snapToVertex, makeFormatter } from '../measure';
+import { snapToVertex, makeFormatter, pickThreshold } from '../measure';
 
 const SCREEN = { width: 800, height: 600 };
 
@@ -89,6 +89,34 @@ describe('snapToVertex', () => {
 		expect(result.y).toBeCloseTo(0, 5);
 	});
 
+	it('resolves indexed line hits through the index buffer (hit.index is a cursor)', () => {
+		// Regression for silently wrong measurements on indexed polylines: three's Line.raycast
+		// (r184) reports `hit.index` as the loop cursor into the INDEX buffer, not a position index.
+		// Here the only drawn segment is vertices (2,3) via index entry 0 — reading positions 0/1
+		// directly (the old bug) would land on the decoy vertices and keep the raw point.
+		const geometry = new THREE.BufferGeometry().setFromPoints([
+			new THREE.Vector3(-1, -1, 0), // decoy: what the old code would have read
+			new THREE.Vector3(-1, -0.9, 0), // decoy
+			new THREE.Vector3(1, 1, 0),
+			new THREE.Vector3(-1, 1, 0)
+		]);
+		geometry.setIndex([2, 3]);
+		const line = new THREE.Line(geometry, new THREE.LineBasicMaterial());
+		line.updateMatrixWorld(true);
+
+		// Hit near the segment's right endpoint (1,1,0); cursor 0 = first index-buffer entry.
+		const hit = {
+			distance: 0,
+			point: new THREE.Vector3(0.95, 1, 0),
+			object: line,
+			index: 0
+		} as THREE.Intersection;
+
+		const result = snapToVertex(hit, frontCamera(), SCREEN, 12);
+		expect(result.x).toBeCloseTo(1, 5);
+		expect(result.y).toBeCloseTo(1, 5);
+	});
+
 	it('snaps to the struck vertex of a Points object', () => {
 		const geometry = new THREE.BufferGeometry().setFromPoints([
 			new THREE.Vector3(0, 0, 0),
@@ -148,5 +176,38 @@ describe('makeFormatter', () => {
 
 	it('falls back to meters for an unknown unit', () => {
 		expect(makeFormatter('Furlongs')(2)).toBe('2.00 m');
+	});
+});
+
+describe('pickThreshold', () => {
+	// The line/point grab band must track the framed view, not the camera's distance to the world
+	// origin (regression: off-origin content made the threshold far too large or too small).
+	const FRACTION = 0.015; // LINE_PICK_FRACTION
+
+	it('scales with the camera→target distance in perspective', () => {
+		const camera = new THREE.PerspectiveCamera();
+		camera.position.set(100, 0, 0); // far from the origin…
+		const target = new THREE.Vector3(96, 0, 3); // …but close to what the user framed (distance 5)
+
+		expect(pickThreshold(camera, target)).toBeCloseTo(5 * FRACTION, 6);
+	});
+
+	it('falls back to the distance to the world origin without a target', () => {
+		const camera = new THREE.PerspectiveCamera();
+		camera.position.set(0, 0, 10);
+
+		expect(pickThreshold(camera)).toBeCloseTo(10 * FRACTION, 6);
+	});
+
+	it('tracks orthographic zoom, not camera position', () => {
+		const camera = new THREE.OrthographicCamera(-2, 2, 2, -2, 0.1, 100);
+		camera.position.set(0, 0, 50); // ortho zoom moves camera.zoom, never the position
+
+		const atZoom1 = pickThreshold(camera);
+		camera.zoom = 4;
+		const atZoom4 = pickThreshold(camera);
+
+		expect(atZoom1).toBeCloseTo(4 * FRACTION, 6); // (top − bottom) / zoom = 4
+		expect(atZoom4).toBeCloseTo(atZoom1 / 4, 6); // zooming in shrinks the world-space band
 	});
 });

@@ -179,6 +179,98 @@ describe('getValue', () => {
 	});
 });
 
+// --- missing / alternate-cased fields (issue 62) ------------------------------
+
+describe('resilience to missing or alternate-cased response fields — issue 62', () => {
+	it('skips params with no InnerTree instead of throwing (warnings-only partial success)', () => {
+		// This is exactly what client.solve returns on a warnings-only partial
+		// success: a param that produced nothing ships without InnerTree.
+		const res = {
+			values: [{ ParamName: 'out' }, param('ok', [item('System.Int32', '1')])],
+			warnings: ['some component warned'],
+			errors: []
+		} as unknown as GrasshopperComputeResponse;
+
+		expect(() => getValues(res)).not.toThrow();
+		expect(getValues(res).values).toEqual({ ok: 1 });
+		expect(() => getValue(res, { byName: 'out' })).not.toThrow();
+		expect(getValue(res, { byName: 'out' })).toBeUndefined();
+		expect(() => extractFileData(res)).not.toThrow();
+		expect(extractFileData(res)).toEqual([]);
+	});
+
+	it('reads camelCase paramName/innerTree (server-branch casing drift)', () => {
+		const res = {
+			values: [{ paramName: 'n', innerTree: { '{0}': [item('System.Int32', '7')] } }]
+		} as unknown as GrasshopperComputeResponse;
+
+		expect(getValues(res).values.n).toBe(7);
+		expect(getValue(res, { byName: 'n' })).toBe(7);
+	});
+
+	it('tolerates a null InnerTree and a response with no values array', () => {
+		const nullTree = {
+			values: [{ ParamName: 'x', InnerTree: null }]
+		} as unknown as GrasshopperComputeResponse;
+		expect(getValues(nullTree).values).toEqual({});
+		expect(getValue(nullTree, { byName: 'x' })).toBeUndefined();
+
+		const noValues = { warnings: ['w'] } as unknown as GrasshopperComputeResponse;
+		expect(getValues(noValues).values).toEqual({});
+		expect(getValue(noValues, { byName: 'x' })).toBeUndefined();
+		expect(extractFileData(noValues)).toEqual([]);
+	});
+
+	it('skips null items and items without a type instead of throwing', () => {
+		const res = {
+			values: [
+				{
+					ParamName: 'p',
+					InnerTree: { '{0}': [null, { data: 'no-type', id: '' }, item('System.Int32', '2')] }
+				}
+			]
+		} as unknown as GrasshopperComputeResponse;
+
+		expect(() => getValues(res)).not.toThrow();
+		// The typeless item still yields its raw data; the int decodes.
+		expect(getValues(res).values.p).toEqual(['no-type', 2]);
+	});
+});
+
+// --- memoization (issue 84) ----------------------------------------------------
+
+describe('parsed-JSON memoization — issue 84', () => {
+	it('does not re-run JSON.parse on repeated reads of the same response', () => {
+		const res = response(
+			param('o', [item('SomeType', '{"a":1}')]),
+			param('n', [item('System.Int32', '5')])
+		);
+
+		const parseSpy = vi.spyOn(JSON, 'parse');
+		try {
+			const first = getValues(res).values;
+			const callsAfterFirst = parseSpy.mock.calls.length;
+			expect(callsAfterFirst).toBeGreaterThan(0);
+
+			const second = getValues(res).values;
+			expect(parseSpy.mock.calls.length).toBe(callsAfterFirst); // no re-parse
+			expect(second).toEqual(first);
+
+			// getValue over the same response reuses the memo too.
+			expect(getValue(res, { byName: 'o' })).toEqual({ a: 1 });
+			expect(parseSpy.mock.calls.length).toBe(callsAfterFirst);
+		} finally {
+			parseSpy.mockRestore();
+		}
+	});
+
+	it('a fresh (structurally identical) response is parsed independently', () => {
+		const make = () => response(param('o', [item('SomeType', '{"a":1}')]));
+		expect(getValues(make()).values.o).toEqual({ a: 1 });
+		expect(getValues(make()).values.o).toEqual({ a: 1 });
+	});
+});
+
 // --- extractFileData ---------------------------------------------------------
 
 describe('extractFileData', () => {

@@ -20,10 +20,14 @@ CAD/computational design workflows.
 
 ## Installation
 
-This module is part of `rhino-compute-core`. Import from the `threejs` subpath:
+This module is part of `@selvajs/compute`. Import from the `visualization` subpath:
 
 ```typescript
-import { initThree, updateScene, getMeshesFromDoc } from 'rhino-compute-core/threejs';
+import {
+	initThree,
+	updateScene,
+	getThreeMeshesFromComputeResponse
+} from '@selvajs/compute/visualization';
 ```
 
 ---
@@ -33,21 +37,29 @@ import { initThree, updateScene, getMeshesFromDoc } from 'rhino-compute-core/thr
 ### Basic Setup
 
 ```typescript
-import { initThree, updateScene } from 'rhino-compute-core/threejs';
-import { RhinoComputeClient } from 'rhino-compute-core/api';
+import {
+	initThree,
+	updateScene,
+	getThreeMeshesFromComputeResponse
+} from '@selvajs/compute/visualization';
+import { GrasshopperClient, TreeBuilder } from '@selvajs/compute';
 
 // 1. Initialize Three.js scene
 const canvas = document.querySelector('canvas');
 const { scene, camera, controls, dispose } = initThree(canvas);
 
 // 2. Run compute job
-const client = new RhinoComputeClient({ serverUrl: 'http://localhost:6500' });
-const result = await client.solveFromUrl(definitionUrl, { width: 100, height: 50 });
+const client = await GrasshopperClient.create({ serverUrl: 'http://localhost:6500' });
+const io = await client.getIO(definitionUrl);
+const inputTree = TreeBuilder.fromInputParams(io.inputs);
+const result = await client.solve(definitionUrl, inputTree);
 
-// 3. Extract and display meshes (works only in combination with selva plugin and custom branch of rhino.compute)
-const meshes = getMeshesFromDoc(result.rawResponse);
-updateScene(scene, meshes, camera, controls);
+// 3. Extract and display meshes (works only in combination with the Selva plugin
+//    and the custom branch of rhino.compute)
+const meshes = await getThreeMeshesFromComputeResponse(result);
+updateScene(scene, meshes, camera, controls, false);
 
 // 4. Cleanup when done
+await client.dispose();
 dispose();
 ```

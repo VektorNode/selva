@@ -78,6 +78,21 @@ describe('solveGrasshopperDefinitionWithCacheKey', () => {
 		expect(cacheKey).toBeNull();
 	});
 
+	// Issue 70: a URL-pointer solve does NOT report null — the server echoes the
+	// request schema back, so the cacheKey is the definition URL itself. Callers
+	// must not use `null` to detect URL-pointer solves.
+	it('returns the URL itself as cacheKey for a URL-pointer solve', async () => {
+		const url = 'https://example.com/definition.gh';
+		fetchMock.mockResolvedValueOnce(okSolve({ pointer: url }));
+
+		const { cacheKey } = await solveGrasshopperDefinitionWithCacheKey([], url, config);
+
+		expect(cacheKey).toBe(url);
+		// Sent as a pointer reference, not uploaded.
+		expect(body().pointer).toBe(url);
+		expect(body().algo).toBeNull();
+	});
+
 	it('strips the echoed algo from the response (issue 58 — cached responses pinned the definition)', async () => {
 		fetchMock.mockResolvedValueOnce(okSolve({ algo: 'aHVnZS1iYXNlNjQtZGVmaW5pdGlvbg==' }));
 

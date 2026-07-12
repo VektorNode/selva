@@ -30,16 +30,19 @@ export default class ComputeServerStats {
 	private activeMonitors: Set<() => void> = new Set();
 	private activeTimeouts: Set<ReturnType<typeof setTimeout>> = new Set();
 
-	/**
-	 * @param serverUrl - Base URL of the Rhino Compute server with http:// or https:// scheme (e.g., 'http://localhost:6500')
-	 * @param apiKey - Optional API key for authentication
-	 */
 	/** Timeout (ms) for the fast read/monitoring endpoints. */
 	private static readonly DEFAULT_TIMEOUT_MS = 5000;
 
 	/** Timeout (ms) for child-lifecycle POSTs — a cold Windows child can take ~30s to spawn. */
 	private static readonly LIFECYCLE_TIMEOUT_MS = 60_000;
 
+	/** Floor for `monitor()`'s `intervalMs` — anything lower hot-loops the server. */
+	private static readonly MIN_MONITOR_INTERVAL_MS = 100;
+
+	/**
+	 * @param serverUrl - Base URL of the Rhino Compute server with http:// or https:// scheme (e.g., 'http://localhost:6500')
+	 * @param apiKey - Optional API key for authentication
+	 */
 	constructor(serverUrl: string, apiKey?: string) {
 		this.serverUrl = validateServerUrl(serverUrl);
 		this.apiKey = apiKey;
@@ -71,13 +74,20 @@ export default class ComputeServerStats {
 	): Promise<Response> {
 		// Merge caller headers OVER the defaults instead of `{ headers: …, ...init }`,
 		// where any `init.headers` would silently replace the whole set (dropping
-		// the API key). `new Headers()` normalizes all three HeadersInit shapes.
-		const headers: Record<string, string> = this.buildHeaders();
+		// the API key). BOTH sides go through `new Headers()` so every key is
+		// normalized (lowercased) identically — a caller's `Content-Type` replaces
+		// the default instead of coexisting as a differently-cased duplicate that
+		// the runtime would combine into "application/json, text/plain".
+		const merged = new Headers(this.buildHeaders());
 		if (init.headers) {
 			new Headers(init.headers).forEach((value, key) => {
-				headers[key] = value;
+				merged.set(key, value);
 			});
 		}
+		const headers: Record<string, string> = {};
+		merged.forEach((value, key) => {
+			headers[key] = value;
+		});
 		const requestInit: RequestInit = { ...init, headers };
 		if (timeoutMs > 0 && !requestInit.signal) {
 			requestInit.signal = AbortSignal.timeout(timeoutMs);
@@ -151,15 +161,15 @@ export default class ComputeServerStats {
 				return null;
 			}
 
-			const text = await response.text();
-			const count = parseInt(text.trim(), 10);
-
-			if (isNaN(count)) {
+			// Strict integer parse: `parseInt` would accept garbage-prefixed bodies
+			// (e.g. an HTML error page starting "302 Found" → 302 children).
+			const text = (await response.text()).trim();
+			if (!/^\d+$/.test(text)) {
 				getLogger().warn('[ComputeServerStats] Invalid active children response:', text);
 				return null;
 			}
 
-			return count;
+			return parseInt(text, 10);
 		} catch (err) {
 			getLogger().warn('[ComputeServerStats] Error fetching active children:', err);
 			return null;
@@ -559,8 +569,10 @@ export default class ComputeServerStats {
 	 * Continuously monitor server stats at specified interval.
 	 *
 	 * @param callback - Function called with stats on each interval
-	 * @param intervalMs - Milliseconds between checks (default: 5000)
+	 * @param intervalMs - Milliseconds between checks (default: 5000). Must be a
+	 *   finite number of at least 100 ms — lower values would hot-loop the server.
 	 * @returns Function to stop monitoring
+	 * @throws {RangeError} If `intervalMs` is not a finite number >= 100.
 	 *
 	 * @example
 	 * ```typescript
@@ -577,6 +589,13 @@ export default class ComputeServerStats {
 		intervalMs: number = 5000
 	): () => void {
 		this.ensureNotDisposed();
+
+		if (!Number.isFinite(intervalMs) || intervalMs < ComputeServerStats.MIN_MONITOR_INTERVAL_MS) {
+			throw new RangeError(
+				`monitor() intervalMs must be a finite number >= ${ComputeServerStats.MIN_MONITOR_INTERVAL_MS}ms, ` +
+					`got ${intervalMs}. Sub-${ComputeServerStats.MIN_MONITOR_INTERVAL_MS}ms polling would hot-loop the server.`
+			);
+		}
 
 		let active = true;
 		let currentTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -604,7 +623,13 @@ export default class ComputeServerStats {
 					getLogger().error('[ComputeServerStats] Monitor callback threw:', err);
 				}
 			} catch (err) {
-				getLogger().error('[ComputeServerStats] Failed to fetch stats during monitor:', err);
+				if (!active || this.disposed) {
+					// dispose()/stop racing an in-flight poll is normal shutdown, not an
+					// error — the nested ensureNotDisposed() throw is expected here.
+					getLogger().debug('[ComputeServerStats] Monitor poll cancelled during shutdown:', err);
+				} else {
+					getLogger().error('[ComputeServerStats] Failed to fetch stats during monitor:', err);
+				}
 			}
 
 			if (active && !this.disposed) {

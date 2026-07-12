@@ -139,6 +139,60 @@ describe('GrasshopperClient.solve (e2e through transport)', () => {
 		});
 		await client.dispose();
 	});
+
+	it('preserves partial-success values and summarizes inputs on the thrown error (issues 63/83)', async () => {
+		const partial = {
+			values: [
+				{
+					ParamName: 'computed',
+					InnerTree: { '{0}': [{ type: 'System.Int32', data: '42', id: '' }] }
+				}
+			],
+			errors: ['Solve exception: one component failed'],
+			warnings: ['minor warning']
+		};
+		route({
+			'/': onlineServer,
+			'/grasshopper': () =>
+				createMockResponse(null, {
+					ok: false,
+					status: 500,
+					statusText: 'Internal Server Error',
+					body: JSON.stringify(partial)
+				})
+		});
+
+		const dataTree = [
+			{
+				ParamName: 'radius',
+				InnerTree: {
+					'{0}': [
+						{ type: 'System.Double', data: '5' },
+						{ type: 'System.Double', data: '2.5' }
+					]
+				}
+			}
+		] as any;
+
+		const client = await GrasshopperClient.create({ serverUrl: SERVER });
+		const error: any = await client.solve('http://example.com/def.gh', dataTree).catch((e) => e);
+		await client.dispose();
+
+		expect(error.code).toBe('COMPUTATION_ERROR');
+
+		// Issue 63: the outputs that DID compute travel on the error context so
+		// callers can render partial results.
+		expect(error.context.values).toEqual(partial.values);
+		expect(error.context.errors).toEqual(partial.errors);
+		expect(error.context.warnings).toEqual(partial.warnings);
+
+		// Issue 83: the full dataTree must NOT be pinned by the error — only a
+		// compact summary (param names, item counts, byte sizes).
+		expect(error.context.inputs).toBeUndefined();
+		expect(error.context.inputSummary).toEqual([
+			{ param: 'radius', items: 2, bytes: '5'.length + '2.5'.length }
+		]);
+	});
 });
 
 describe('GrasshopperClient.getIO (e2e through transport + parser pipeline)', () => {

@@ -18,14 +18,24 @@ import type { CameraController } from './camera-controller';
  *
  * Caller responsibilities (mirror ViewHelper's own contract):
  *  - call {@link ViewGizmo.render} *after* the main scene render each frame (overlay viewport),
- *  - call {@link ViewGizmo.update} each frame (no-op now; kept for API symmetry),
  *  - forward pointer clicks to {@link ViewGizmo.handleClick}.
  */
 export interface ViewGizmo {
 	render(renderer: THREE.WebGLRenderer): void;
+	/**
+	 * @deprecated No-op, kept only for API stability. This wrapper never uses ViewHelper's
+	 * click→animate path (see module comment) — view changes snap instantly through the camera
+	 * controller — so there is never a gizmo animation to advance. Safe to stop calling.
+	 */
 	update(delta: number): void;
 	/** Hit-test a click. Returns true if it hit the gizmo (and a view change started). */
 	handleClick(event: MouseEvent): boolean;
+	/**
+	 * @deprecated Always `false`, kept only for API stability. Gizmo clicks snap the view
+	 * instantly rather than animating (deliberately — ViewHelper's built-in animation assumes a
+	 * Y-up world and rolls the view in this Z-up scene), so there is no animation window to gate
+	 * input on.
+	 */
 	readonly isAnimating: boolean;
 	/** Show/hide the gizmo at runtime. Hidden = not rendered and not click-hittable. */
 	setVisible(visible: boolean): void;
@@ -128,16 +138,14 @@ export function createViewGizmo(deps: ViewGizmoDeps): ViewGizmo {
 			helper.render(renderer);
 			renderer.autoClear = prevAutoClear;
 		},
-		// ViewHelper.update() unconditionally rewrites camera.position from (center, radius, q1) — at
-		// rest (radius 0, center origin) that pins the camera to the origin every frame, blanking the
-		// view. It's only meant to run while a click-snap is animating, so guard on `animating`.
-		update: (delta) => {
-			if (helper.animating) helper.update(delta);
-		},
+		// Deliberately a no-op (see the interface docs): ViewHelper.update() only exists to advance
+		// its click-snap animation, which this wrapper never starts (handleClick snaps via the
+		// camera controller instead). Calling helper.update() outside an animation would rewrite
+		// camera.position from (center=origin, radius=0) and blank the view.
+		update: () => {},
 		handleClick,
-		get isAnimating() {
-			return helper.animating;
-		},
+		// Honestly constant (see the interface docs): nothing here ever animates.
+		isAnimating: false,
 		setVisible: (value) => {
 			visible = value;
 		},
