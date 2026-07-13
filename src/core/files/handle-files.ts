@@ -5,21 +5,7 @@ import { readField } from '@/core/utils/read-field';
 
 import { FileBaseInfo, FileData, ProcessedFile } from './types';
 
-/**
- * Extracts and processes files from compute response data without downloading them.
- * Returns an array of ProcessedFile objects that can be used programmatically.
- *
- * @param downloadableFiles - An array of FileData items from the compute response.
- * @param additionalFiles - Optional additional files to include (fetched from URLs).
- * @returns A Promise resolving to an array of ProcessedFile objects.
- * @throws Will throw an error if file processing fails.
- *
- * @example
- * const files = await extractFilesFromComputeResponse(fileData);
- * files.forEach(file => {
- *   console.log(`File: ${file.fileName}, Size: ${file.content.length}`);
- * });
- */
+/** Extracts and processes files from compute response data without downloading them. */
 export const extractFilesFromComputeResponse = async (
 	downloadableFiles: FileData[],
 	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
@@ -38,25 +24,7 @@ export const extractFilesFromComputeResponse = async (
 	}
 };
 
-/**
- * Downloads files from a compute response as a ZIP archive.
- * Packages multiple files into a single ZIP file and triggers a browser download.
- *
- * @param downloadableFiles - An array of FileData items from the compute response.
- * @param fileFoldername - The name of the ZIP file (without extension).
- * @param additionalFiles - Optional additional files to include in the ZIP (fetched from URLs).
- * @throws Will throw an error if the file handling or download fails.
- *
- * @example
- * await downloadFileData(fileData, 'my-export');
- * // Downloads 'my-export.zip'
- *
- * @example
- * await downloadFileData(fileData, 'my-export', [
- *   { fileName: 'readme.txt', filePath: 'https://example.com/readme.txt' }
- * ]);
- * // Downloads 'my-export.zip' including the fetched readme.txt
- */
+/** Downloads files from a compute response as a ZIP archive. */
 export const downloadFileData = async (
 	downloadableFiles: FileData[],
 	fileFoldername: string,
@@ -272,13 +240,7 @@ const processFiles = async (
 	});
 };
 
-/**
- * Creates a ZIP archive from processed files and triggers a browser download.
- *
- * @param files - An array of ProcessedFile objects to include in the ZIP.
- * @param zipName - The name of the ZIP file (without extension).
- * @returns A Promise that resolves when the ZIP is generated and download is triggered.
- */
+/** Creates a ZIP archive from processed files and triggers a browser download. */
 async function createAndDownloadZip(files: ProcessedFile[], zipName: string): Promise<void> {
 	const { zip, strToU8 } = await import('fflate');
 
@@ -325,13 +287,7 @@ function uniqueArchivePath(path: string, taken: ReadonlySet<string>): string {
 	}
 }
 
-/**
- * Saves a Blob object as a file in the user's browser.
- *
- * @param blob - The Blob object representing the file content.
- * @param filename - The name to give the downloaded file (including extension).
- * @throws {RhinoComputeError} If not running in a browser environment.
- */
+/** Saves a Blob object as a file in the user's browser. */
 function saveFile(blob: Blob, filename: string) {
 	if (typeof document === 'undefined') {
 		throw new RhinoComputeError(

@@ -5,10 +5,11 @@ import type { DataTreeDefault } from '../types';
  * the root path `{}`. This is the single source of truth for the branch-path
  * shape (`DataTreePath`); anything testing "does this string name a branch?"
  * should use this rather than re-inlining the regex.
+ *
+ * Matches `{}`, `{0}`, `{0;1;2}`, and negative indices like `{-1;2}` (GH_Path
+ * allows them) — but NOT empty segments like `{0;}` / `{;}` / `{0;;1}`, which
+ * would otherwise split to phantom 0s (`Number('') === 0`).
  */
-// Matches `{}`, `{0}`, `{0;1;2}`, and negative indices like `{-1;2}` (GH_Path
-// allows them) — but NOT empty segments like `{0;}` / `{;}` / `{0;;1}`, which
-// would otherwise split to phantom 0s (`Number('') === 0`).
 export const TREE_PATH_RE = /^\{(-?\d+(?:;-?\d+)*)?\}$/;
 
 /**

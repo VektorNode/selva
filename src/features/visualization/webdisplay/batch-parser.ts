@@ -17,11 +17,7 @@ import type {
 	SerializableMaterial
 } from './types.js';
 
-/**
- * Internal-only telemetry threaded from an outer entry point (e.g. the JSON
- * `parseMeshBatch` measuring its own `JSON.parse` cost) into the shared build
- * step. Never part of any public options surface — callers don't supply timings.
- */
+/** Internal telemetry only (not exposed in public options). */
 interface ParseTelemetry {
 	parseTime?: number;
 	perfStart?: number;
@@ -288,10 +284,6 @@ function buildMeshesFromParsed(
 	return Promise.resolve(meshes);
 }
 
-// ============================================================================
-// GROUP METADATA VALIDATION
-// ============================================================================
-
 function metadataFail(message: string, context: Record<string, unknown>): RhinoComputeError {
 	return new RhinoComputeError(message, ErrorCodes.VALIDATION_ERROR, { context });
 }
@@ -376,10 +368,6 @@ function assertIndexInWindow(indexValue: number, meshMeta: MeshMetadata): void {
 		});
 	}
 }
-
-// ============================================================================
-// DEQUANTIZATION
-// ============================================================================
 
 /**
  * Reconstructs world-unit float32 positions from int16 quantized values.

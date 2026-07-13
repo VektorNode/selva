@@ -41,10 +41,6 @@ export default class GrasshopperResponseProcessor {
 	 * const { values } = processor.getValues();
 	 * ```
 	 *
-	 * @example
-	 * ```ts
-	 * const { values } = processor.getValues(true); // keyed by param ID
-	 * ```
 	 */
 	public getValues<T = ParsedContext>(
 		byId: boolean = false,
@@ -97,9 +93,6 @@ export default class GrasshopperResponseProcessor {
 			...options
 		};
 
-		// Dynamically import visualization module to avoid coupling three.js at module load time.
-		// Narrow the try/catch to the import only — errors from mesh extraction itself should
-		// propagate so callers can debug them, not get re-wrapped as "failed to load".
 		let getThreeMeshesFromComputeResponse: typeof import('@/features/visualization').getThreeMeshesFromComputeResponse;
 		try {
 			({ getThreeMeshesFromComputeResponse } = await import('@/features/visualization'));
@@ -116,11 +109,6 @@ export default class GrasshopperResponseProcessor {
 		return getThreeMeshesFromComputeResponse(this.response, mergedOptions);
 	}
 
-	/**
-	 * Raw file entries packaged in the response (textures, JSON, CAD exports, …).
-	 * Produced by the Selva **Block to File** / **Geometry To File** components on
-	 * the VektorNode rhino.compute branch.
-	 */
 	private getFileData(): FileData[] {
 		return extractFileData(this.response);
 	}

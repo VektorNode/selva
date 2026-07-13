@@ -9,8 +9,7 @@ function getNodeBuffer(): typeof Buffer | undefined {
 /**
  * Encodes a string to base64 (Node 20+ safe)
  *
- * @internal Internal encoding helper — kept internal to `@selvajs/compute`.
- *
+ * @internal
  * @param str - String to encode
  * @returns Base64 encoded string
  */
@@ -24,16 +23,11 @@ export function encodeStringToBase64(str: string): string {
 }
 
 /**
- * Checks if a string is SYNTACTICALLY valid base64 (strict form: length a
- * multiple of 4, alphabet chars, at most 2 trailing `=`).
+ * Checks if a string is syntactically valid base64 (strict form: length a multiple of 4).
+ * Note: this is validity checking, not detection — `"test"` is valid base64 here.
+ * To detect whether an untyped string should be treated as base64 content, use {@link detectBase64Payload}.
  *
- * @internal Internal encoding helper — kept internal to `@selvajs/compute`.
- *
- * This is a validity check, NOT a detection heuristic — short human strings
- * like `"test"` are syntactically valid base64 and return `true` here. To
- * decide whether an untyped string SHOULD be treated as base64 content (vs. a
- * plain string that needs encoding), use {@link detectBase64Payload}.
- *
+ * @internal
  * @param str - String to check
  * @returns True if the string is valid base64
  */
@@ -45,12 +39,8 @@ export function isBase64(str: string): boolean {
 }
 
 /**
- * Minimum length (in base64 data characters, padding excluded) for
- * {@link detectBase64Payload} to treat a bare string as base64 content.
- * 64 chars ≈ 48 decoded bytes — far below any real Grasshopper definition
- * (smallest .gh files are hundreds of bytes), but above virtually every
- * human-authored plain string that happens to use only base64 alphabet
- * characters (`"test"`, `"Data2024"`, identifiers, hashes-as-words, …).
+ * Minimum base64 length to treat bare strings as base64 content (excludes padding).
+ * 64 chars ≈ 48 decoded bytes — high enough to avoid false positives on human strings.
  *
  * @internal
  */
@@ -60,32 +50,13 @@ export const BASE64_DETECT_MIN_LENGTH = 64;
 const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 /**
- * Detection heuristic: is this untyped string base64-encoded CONTENT (as
- * opposed to a plain string that still needs encoding)?
+ * Detects whether an untyped string is base64-encoded content.
+ * Uses normalization, length checks, and canonical round-trip validation.
+ * Perfect detection is impossible — pass `Uint8Array` instead if exact detection is required.
  *
- * @internal Internal encoding helper — kept internal to `@selvajs/compute`.
- *
- * Perfect detection is impossible — `"test"` is valid base64 — so this errs
- * toward encoding. A string is accepted as base64 only when, after
- * forgiving-base64 whitespace/padding normalization, ALL of the following hold:
- *
- * 1. It contains only base64 alphabet characters with a legal length
- *    (`len % 4 !== 1`); newline-wrapped and unpadded inputs are accepted, so
- *    valid-but-non-strict base64 no longer gets double-encoded.
- * 2. It is at least {@link BASE64_DETECT_MIN_LENGTH} data characters long —
- *    real definitions are KB–MB, short human strings are not.
- * 3. It is canonical: re-encoding the decoded bytes reproduces it exactly
- *    (checked cheaply — the unused trailing bits of the final character must
- *    be zero — no O(n) decode needed).
- *
- * Residual ambiguity: a ≥64-char plain string composed exclusively of base64
- * alphabet characters (no spaces or punctuation) with a canonical length/tail
- * is still detected as base64. Callers that must be exact should pass a
- * `Uint8Array` (or a URL) instead of a bare string — bytes are never sniffed.
- *
+ * @internal
  * @param str - String to inspect
- * @returns The canonical (whitespace-stripped, padded) base64 form when the
- *   string is confidently base64 content, else `null` (treat as plain text).
+ * @returns Canonical base64 form when confident, else `null` (treat as plain text)
  */
 export function detectBase64Payload(str: string): string | null {
 	if (!str) return null;
@@ -110,20 +81,13 @@ export function detectBase64Payload(str: string): string | null {
 }
 
 /**
- * Decodes a base64 string to binary data (Uint8Array)
+ * Decodes a base64 string to binary data (Uint8Array).
+ * Normalizes and validates input per WHATWG forgiving-base64 so both runtimes fail consistently.
  *
- * @internal Internal encoding helper — kept internal to `@selvajs/compute`.
- *
- * Input is normalized and validated per WHATWG forgiving-base64 (whitespace
- * stripped, padding checked) BEFORE decoding, so both runtimes fail the same
- * way: without this, Node's `Buffer.from(x, 'base64')` silently decodes
- * malformed input into garbage while browser `atob` throws a bare
- * `InvalidCharacterError` DOMException.
- *
+ * @internal
  * @param base64File - Base64 encoded string
  * @returns Decoded binary data as Uint8Array
- * @throws {RhinoComputeError} `ENCODING_ERROR` if the input is not valid
- *   base64, or `INVALID_STATE` if no decoder exists in this environment.
+ * @throws {RhinoComputeError} `ENCODING_ERROR` if invalid, or `INVALID_STATE` if decoder unavailable
  */
 export function decodeBase64ToBinary(base64File: string): Uint8Array {
 	// Forgiving-base64 normalization: strip ASCII whitespace (wrapped /
@@ -165,11 +129,10 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
 }
 
 /**
- * UTF-8 byte length of a string (what actually goes over the wire), without
- * allocating an encoded copy — `TextEncoder.encode` on a multi-MB request body
- * would double its memory just to measure it.
+ * UTF-8 byte length of a string without allocating an encoded copy.
+ * Avoids doubling memory on large strings that `TextEncoder.encode` would require.
  *
- * @internal Internal encoding helper — kept internal to `@selvajs/compute`.
+ * @internal
  */
 export function utf8ByteLength(str: string): number {
 	const Buffer = getNodeBuffer();
@@ -202,11 +165,9 @@ export function utf8ByteLength(str: string): number {
 
 /**
  * Encodes binary data (Uint8Array) to base64 string.
+ * Uses Node's `Buffer` when available, falls back to `btoa` in browsers/workers.
  *
- * @internal Internal encoding helper — kept internal to `@selvajs/compute`.
- *
- * Uses Node's `Buffer` when available (faster, single allocation) and falls
- * back to `btoa` over a latin-1 string in browsers/workers.
+ * @internal
  */
 export function base64ByteArray(bytes: Uint8Array): string {
 	const Buffer = getNodeBuffer();

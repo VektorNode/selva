@@ -3,12 +3,7 @@ import { readField, hasField } from '@/core/utils/read-field';
 import { booleanTransformer, numericTransformer } from './input-type-parsers';
 import type { InputParamSchema } from '../../types';
 
-/**
- * A non-fatal reason `normalizeDefault` could not (fully) interpret a raw
- * `default`. The schema is still returned (with `default` nulled, or with the
- * unparseable tree items dropped) so parsing continues; the caller folds this
- * into the client-visible `parseErrors`.
- */
+/** A non-fatal reason normalizeDefault couldn't interpret a raw default. */
 export interface NormalizeDefaultWarning {
 	code: 'MALFORMED_DEFAULT';
 	message: string;
@@ -44,49 +39,9 @@ const NUMERIC_ITEM_TYPES = new Set([
 const INTEGER_ITEM_TYPES = new Set(['System.Int32', 'System.Int64']);
 
 /**
- * @internal Shared, type-independent normalization of a raw input's `default`.
- *
- * This is the first step of the input-type parser pipeline: it flattens the
- * raw Grasshopper innerTree default into the shape the per-type parsers
- * expect, BEFORE type dispatch. The flat-vs-tree decision depends only on
- * `treeAccess` / `atMost`, never on the param type — which is why it lives here
- * as one shared step rather than inside each parser.
- *
- * Pure: returns a new schema with a normalized `default`; never mutates the
- * input. Replaces the old in-place `preProcessInputDefault`.
- *
- * ## Casing
- *
- * The `default` wrapper's keys are read case-insensitively via {@link readField}
- * because their casing depends on the server branch: the nested DataTree is
- * PascalCase (`ParamName` / `InnerTree`) on mcneel 8.x/9.x AND on VektorNode
- * Compute8 (the fork camelCases the surrounding IO schema but can't attribute
- * the external `Resthopper.IO.DataTree`). A previous version literal-matched
- * lowercase `innerTree`, which only worked because a now-removed global
- * `camelcaseKeys` pass had flattened the casing first — so once that pass was
- * dropped, every connected default silently collapsed to `null`. Reading the
- * field case-insensitively makes this robust across all three branches without
- * re-introducing the global camelCasing that corrupted value-list label keys.
- *
- * Behavior:
- * - Non-object / null / ARRAY default → returned unchanged (arrays are a
- *   supported `processInputs` input shape; `coerceDefault` handles them).
- * - Object without an innerTree key → default becomes `null` and a
- *   `MALFORMED_DEFAULT` warning is returned (this is a genuinely unexpected
- *   shape, not a casing quirk — the old code only logged and silently nulled,
- *   so the data-loss was invisible on the client).
- * - Empty innerTree → default becomes `undefined`.
- * - tree-access (`treeAccess` or `atMost > 1`) → default becomes a
- *   `Record<branch, parsed[]>` with per-item type-aware parsing that reuses the
- *   scalar value transformers: blank numeric items are dropped (never `0`),
- *   unparseable numeric/boolean items are dropped AND surfaced via a
- *   `MALFORMED_DEFAULT` warning, and integral items are rounded like the
- *   scalar Integer path.
- * - otherwise → flatten all branch items: 0 → `undefined`, 1 → the value,
- *   N → the array.
- *
- * Returns the normalized schema plus an optional `warning`. Callers that don't
- * need the warning channel read `.schema` off the result.
+ * Normalizes a raw input's `default` by flattening the innerTree structure.
+ * Reads `default` keys case-insensitively (casing varies by server branch).
+ * Returns the normalized schema plus an optional `warning` for malformed defaults.
  */
 export function normalizeDefaultWithWarning(input: InputParamSchema): {
 	schema: InputParamSchema;

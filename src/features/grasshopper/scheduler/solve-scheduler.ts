@@ -307,10 +307,6 @@ export class SolveScheduler {
 		this.onSuperseded = options.onSuperseded;
 	}
 
-	// --------------------------------------------------------------------------
-	// Public state
-	// --------------------------------------------------------------------------
-
 	get isSolving(): boolean {
 		return this.inFlight.size > 0;
 	}
@@ -339,10 +335,7 @@ export class SolveScheduler {
 		return this._lastDurationMs;
 	}
 
-	// --------------------------------------------------------------------------
-	// Subscribe — minimal observable. Called whenever observable state changes.
-	// --------------------------------------------------------------------------
-
+	/** Subscribe to state changes. */
 	subscribe(listener: () => void): () => void {
 		this.subscribers.add(listener);
 		return () => this.subscribers.delete(listener);
@@ -357,10 +350,6 @@ export class SolveScheduler {
 			}
 		}
 	}
-
-	// --------------------------------------------------------------------------
-	// solve()
-	// --------------------------------------------------------------------------
 
 	/**
 	 * Schedule a solve. Returns a promise that:

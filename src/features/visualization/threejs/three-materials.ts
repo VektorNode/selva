@@ -141,12 +141,7 @@ export const WOOD_MATERIAL = new THREE.MeshPhysicalMaterial({
 	polygonOffsetUnits: 1
 });
 
-/**
- * The module-scope singleton materials above, as a set. Scene-clearing code must NOT dispose a
- * material in this set: they are shared across meshes and across solves, and `dispose()` on a
- * still-referenced material forces a shader program rebuild on its next use (and would free any
- * textures they gain later while other objects still use them).
- */
+/** Shared singleton materials; must not be disposed (rebuilds shaders, frees textures). */
 export const SHARED_MATERIALS: ReadonlySet<THREE.Material> = new Set<THREE.Material>([
 	EMISSIVE_MATERIAL,
 	METAL_MATERIAL,

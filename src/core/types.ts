@@ -1,6 +1,4 @@
-/**
- * Rhino model unit types supported by Rhino.Compute
- */
+// Rhino model unit types supported by Rhino.Compute
 export type RhinoModelUnit =
 	| 'None'
 	| 'Microns'
@@ -30,25 +28,12 @@ export type RhinoModelUnit =
 	| 'Parsecs'
 	| 'Unset';
 
-// ============================================================================
 // Config
-// ============================================================================
 
-/**
- * Retry policy for transient errors (network, 502, 503, 504, optionally 429).
- *
- * Retries use exponential backoff with jitter, capped at `maxDelayMs`.
- * If the server returns `Retry-After`, that value is honored instead — even
- * above `maxDelayMs` (the server's stated window wins), up to an absolute
- * 60s safety cap.
- *
- * Duplicate-POST caveat: every compute request is a POST. A network error can
- * strike after the body was sent but before the response arrived — in that
- * window the server may already have executed the request, and a retry runs it
- * again. Compute solves are deterministic/idempotent so this is normally just
- * wasted work, but callers wrapping non-idempotent endpoints should keep
- * `attempts` at 0 (the default).
- */
+// Retry policy: exponential backoff, respects Retry-After header (up to 60s safety cap).
+// WHY: Duplicate-POST risk — network errors after send but before response may have
+// already executed the request on the server. Compute is idempotent, but non-idempotent
+// endpoints should set `attempts: 0`.
 export interface RetryPolicy {
 	/** Maximum number of retry attempts after the initial request (default: 0). */
 	attempts?: number;
@@ -61,32 +46,15 @@ export interface RetryPolicy {
 }
 
 export interface ComputeConfig {
-	/**
-	 * The base URL of the Rhino Compute server (e.g., http://localhost:6500).
-	 *
-	 * This should point at the `rhino.compute` front (the reverse proxy), not a
-	 * bare `compute.geometry` child process. `ComputeServerStats` relies on the
-	 * proxy liveness root `/` and proxy-only endpoints like `/activechildren`,
-	 * `/idlespan`, and the child-lifecycle controls; targeting a bare
-	 * `compute.geometry` would make those 404 even though `/grasshopper` would
-	 * still solve.
-	 */
+	// WHY: must target the proxy, not bare compute.geometry child process.
+	// ComputeServerStats needs proxy endpoints like / and /activechildren.
 	serverUrl: string;
 	/** Optional API key for authenticating with the server (RhinoComputeKey) */
 	apiKey?: string;
 	/** Optional Bearer token for authentication (e.g., when behind a proxy or API gateway) */
 	authToken?: string;
-	/**
-	 * Extra headers sent on every solve / IO request to the compute server.
-	 *
-	 * Merged UNDER the transport's own headers (`X-Request-ID`, `Content-Type`,
-	 * `Authorization`, `RhinoComputeKey`) so a caller can never accidentally
-	 * override auth or the request id. Intended for routing/telemetry hints a
-	 * reverse proxy or load balancer reads — e.g. a definition-affinity key so a
-	 * pool routes repeat solves of one definition to the same VM (its per-VM
-	 * definition/solve caches then hit). A single-node server ignores unknown
-	 * headers, so this is inert until a router exists.
-	 */
+	// WHY: merged UNDER auth/request-id headers so they can't be overridden.
+	// Use for routing hints (e.g. definition affinity) that reverse proxies read.
 	headers?: Record<string, string>;
 	/** Enable debug logging to the console */
 	debug?: boolean;
@@ -94,18 +62,9 @@ export interface ComputeConfig {
 	suppressBrowserWarning?: boolean;
 	/** @deprecated Renamed to `suppressBrowserWarning`. */
 	suppressClientSideWarning?: boolean;
-	/**
-	 * Per-**attempt** timeout in milliseconds. Set to `0` to disable (useful for
-	 * long solves where any timeout is the wrong answer). Default: no timeout.
-	 *
-	 * This is NOT a total deadline: the timeout is re-armed for every retry
-	 * attempt, so with `retry: { attempts: N }` the worst-case wall clock is
-	 * `(N + 1) × timeoutMs` plus backoff sleeps between attempts. Callers that
-	 * need a hard overall deadline should pass their own `signal` (e.g. from
-	 * `AbortSignal.timeout(totalMs)`), which wins over any pending retry.
-	 *
-	 * Uses `AbortSignal.timeout` so the timer is not throttled when the tab is hidden.
-	 */
+	// WHY: per-attempt timeout (not total deadline). Re-armed on each retry, so
+	// worst-case = (attempts + 1) × timeoutMs + backoff. Pass your own signal for
+	// a hard overall deadline. Using AbortSignal.timeout avoids tab throttling.
 	timeoutMs?: number;
 	/**
 	 * Retry policy for transient errors. Default: no retries.
@@ -117,37 +76,16 @@ export interface ComputeConfig {
 	 * (e.g. on component unmount or when superseding a stale solve).
 	 */
 	signal?: AbortSignal;
-	/**
-	 * Optional callback invoked with the server's per-request `Server-Timing`
-	 * breakdown when the response carries one (the `/grasshopper` solve endpoint
-	 * emits `decode;dur=N, solve;dur=N, encode;dur=N` on every response).
-	 *
-	 * Fires once per request, before the parsed body is returned — on success
-	 * and on the HTTP-500 partial-success path (a solve that completed with
-	 * Grasshopper errors still carries real timings, often the slowest ones).
-	 * The transport stays response-type-agnostic — this is a side
-	 * channel for telemetry, it does not change what a call returns. Use it to
-	 * feed a perf monitor or surface "solve took Nms" without server log access.
-	 *
-	 * `requestId` is the same id sent as the `X-Request-ID` header and used in
-	 * this library's own debug logs — use it to correlate a timing entry with
-	 * a specific request when multiple solves are in flight concurrently.
-	 */
+	// WHY: telemetry side-channel. Fires once per request (before return), including
+	// on partial-success (HTTP 500 with real timings). Doesn't change behavior.
+	// requestId matches X-Request-ID header for correlating with debug logs.
 	onServerTiming?: (timing: ServerTiming, requestId: string) => void;
 }
 
-/**
- * Parsed `Server-Timing` metrics from a Compute response. Durations are in
- * milliseconds. Any metric the server omits is `undefined`. `raw` is the
- * original header value, preserved so callers can read non-standard metrics.
- */
+// Server-Timing metrics (ms). `raw` preserves non-standard metrics.
 export interface ServerTiming {
-	/** Time the server spent decoding the request (deserialize + load definition). */
 	decode?: number;
-	/** Time spent actually solving the Grasshopper definition. */
 	solve?: number;
-	/** Time spent encoding the response (serialize geometry). */
 	encode?: number;
-	/** The raw `Server-Timing` header value, e.g. `decode;dur=3, solve;dur=120, encode;dur=8`. */
 	raw: string;
 }

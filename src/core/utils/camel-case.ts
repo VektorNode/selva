@@ -21,7 +21,6 @@ import { getLogger } from './logger';
  */
 export function toCamelCase(str: string, options: { preserveSpaces?: boolean } = {}): string {
 	const { preserveSpaces = false } = options;
-	// Whitespace acts as a separator unless we're explicitly preserving it.
 	const sep = preserveSpaces ? /[-_]+(.)?/g : /[\s\-_]+(.)?/g;
 	let out = str.trim().replace(sep, (_, c: string | undefined) => (c ? c.toUpperCase() : ''));
 	// Lowercase a leading acronym run in full — all uppercase letters up to

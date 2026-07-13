@@ -78,11 +78,8 @@ export interface MaterialGroup {
  * later labels/icons) also travel — those ride as JSON alongside the mesh blob, not inside it.
  */
 export interface DisplayBatch {
-	/** Array of unique materials */
 	materials: SerializableMaterial[];
-	/** Groups of meshes organized by material */
 	groups: MaterialGroup[];
-	/** Base64-encoded binary blob (SLVA wire format). */
 	compressedData: string;
 	/** InstanceGuid of the WebDisplay GH component that produced this batch.
 	 *  Combined with MeshMetadata.originalIndex to backtrack any mesh to its GH source. */
@@ -102,15 +99,12 @@ export interface DisplayBatch {
  */
 export type MeshBatch = DisplayBatch;
 
-/**
- * Options for parsing mesh batch data.
- */
 export interface MeshBatchParsingOptions {
-	/** Merge meshes with same material into single geometry (better performance). Defaults to true. */
+	/** Merge meshes with same material into single geometry. Defaults to true. */
 	mergeByMaterial?: boolean;
-	/** Apply coordinate system transformations (Rhino Z-up to Three.js Y-up). Defaults to true. */
+	/** Apply coordinate system transformations. Defaults to true. */
 	applyTransforms?: boolean;
-	/** Enable performance monitoring in console. Defaults to false. */
+	/** Enable performance monitoring. Defaults to false. */
 	debug?: boolean;
 	/**
 	 * Appearance dials applied to every material built from this batch. These drive how "rendered"

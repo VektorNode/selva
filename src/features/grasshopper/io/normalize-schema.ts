@@ -68,7 +68,6 @@ export function normalizeInputSchema(raw: unknown): InputParamSchema {
 		atLeast: readField<number>(raw, 'atLeast') ?? 1,
 		atMost: readField<number>(raw, 'atMost') ?? 1,
 		stepSize: typeof stepSize === 'number' && Number.isFinite(stepSize) ? stepSize : undefined,
-		// Value passed through verbatim — keys inside are normalized downstream.
 		default: readField(raw, 'default'),
 		values: readField<Record<string, string>>(raw, 'values'),
 		acceptedFormats: readField<string[]>(raw, 'acceptedFormats'),
@@ -77,11 +76,9 @@ export function normalizeInputSchema(raw: unknown): InputParamSchema {
 }
 
 /**
- * @internal Canonicalize a raw `/io` output record's field casing. Same
- * rationale as {@link normalizeInputSchema}: outputs are `Name` / `Nickname` /
- * `ParamType` / `Id` (PascalCase) on upstream-tracking branches. Missing
- * required fields fall back to `''` (see the missing-wire-fields note above)
- * instead of being cast into the declared type.
+ * @internal Canonicalize a raw `/io` output record's field casing.
+ *
+ * Same rationale as {@link normalizeInputSchema}.
  */
 export function normalizeOutputSchema(raw: unknown): OutputParamSchema {
 	return {

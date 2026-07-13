@@ -1,12 +1,7 @@
 /**
- * Non-mesh display items: curves, points, and later labels/icons.
- *
- * These ride as JSON inside a {@link DisplayBatch} alongside the binary mesh blob — they are a
- * separate pipeline from the SLVA mesh path in `../webdisplay`. Curves arrive as Rhino-native JSON
- * (decoded via rhino3dm and tessellated on the web); points arrive as raw `{X,Y,Z}` positions.
- *
- * The union is STRICT and discriminated on `kind`. The parser narrows on it and uses a
- * `never`-exhaustiveness check, so adding a new kind is a compile error until it is handled.
+ * Non-mesh display items: curves and points. Ride as JSON inside {@link DisplayBatch} alongside
+ * the binary mesh blob. The union is STRICT and discriminated on `kind`; the parser uses a
+ * `never`-exhaustiveness check, so adding a new kind is a compile error until handled.
  */
 
 /**
@@ -67,7 +62,6 @@ export interface DisplayPoint extends DisplayItemBase {
 	kind: 'point';
 	/** World position in Rhino Z-up, used directly — the Three scene shares Rhino's Z-up frame. */
 	position: DisplayPosition;
-	// Future: size?: number — point size in px. Add here only; scoped to points by the union.
 }
 
 /**

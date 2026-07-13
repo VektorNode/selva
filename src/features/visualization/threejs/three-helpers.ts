@@ -4,7 +4,6 @@ import { getLogger } from '@/core';
 
 import { SHARED_MATERIALS } from './three-materials';
 
-// Camera configuration constants
 const CAMERA_CONFIG = {
 	HUGE_THRESHOLD: 10000,
 	LARGE_THRESHOLD: 1000,
@@ -22,15 +21,7 @@ const CAMERA_CONFIG = {
 	INITIAL_DISTANCE_MULTIPLIER: 4
 };
 
-/**
- * Updates the scene with the given meshes and camera settings.
- * If initialPositionSet is false, it positions the camera and sets the controls target based on the bounding boxes of the meshes.
- * @param scene - The THREE.Scene object to update.
- * @param meshes - An array of THREE.Mesh objects to add to the scene.
- * @param camera - The THREE.PerspectiveCamera object to position.
- * @param controls - The OrbitControls object to update.
- * @param initialPositionSet - A boolean indicating whether the initial position of the camera and controls have been set.
- */
+/** Updates scene with meshes and positions camera on first call. */
 export function updateScene(
 	scene: THREE.Scene,
 	meshes: THREE.Object3D[],
@@ -91,19 +82,7 @@ export function updateScene(
 	}
 }
 
-// =========================
-// Helper functions
-// =========================
-
-/**
- * Parses a color string in multiple formats to a THREE.Color object.
- * Supported formats:
- * - Hex: "#C7A5A5", "C7A5A5"
- * - RGB: "199, 165, 165"
- * - CSS named colors: "red", "blue", etc.
- * @param colorString - The color string to parse.
- * @returns A THREE.Color object.
- */
+/** Parses color strings (hex, RGB, CSS names). */
 export function parseColor(colorString: string): THREE.Color {
 	if (!colorString || typeof colorString !== 'string') {
 		getLogger().warn(`Invalid color input: ${colorString}, using white`);
@@ -172,28 +151,10 @@ export function computeCombinedBoundingBox(meshes: THREE.Object3D[]): THREE.Box3
 	return combinedBoundingBox;
 }
 
-/**
- * `userData.id`s of scene infrastructure that is created once at init and must survive content
- * updates: the floor, the grid, and the CSS2D label layer's group. Compute content
- * (meshes/lines/points) carries no such id and is cleared on every solve.
- *
- * A second persistence mechanism exists alongside this one: objects tagged `userData.source ===
- * 'user'` (added via the viewer's `addUserGeometry`) also survive solves — see {@link clearScene}.
- * Use that for user-drawn geometry; this set is reserved for init-time viewer infrastructure.
- */
+/** IDs of scene infrastructure that survives content updates (floor, grid, label layer). */
 const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer']);
 
-/**
- * Clears the given THREE.Scene by removing all top-level content children (everything except
- * persistent infrastructure, see {@link PERSISTENT_SCENE_IDS}) and recursively disposing of their
- * geometry and materials — except the shared singleton materials (see {@link SHARED_MATERIALS}),
- * which outlive any one solve.
- *
- * Removes at the top level rather than traversing for meshes, so parent Groups
- * don't accumulate as ghost nodes after their mesh children are disposed.
- *
- * @internal exported for tests; production callers go through {@link updateScene}.
- */
+/** Removes all compute content except persistent infrastructure and shared materials. */
 export function clearScene(scene: THREE.Scene): void {
 	// Snapshot children — we mutate the array via removeFromParent during iteration
 	const topLevel = [...scene.children];

@@ -1,7 +1,3 @@
-/**
- * Error types and codes for `@selvajs/compute`.
- */
-
 export const ErrorCodes = {
 	NETWORK_ERROR: 'NETWORK_ERROR',
 	AUTH_ERROR: 'AUTH_ERROR',
@@ -84,10 +80,6 @@ export class RhinoComputeError extends Error {
 			(this as { cause?: unknown }).cause = options.originalError;
 		}
 	}
-
-	// ============================================================================
-	// Static Validation Error Helpers
-	// ============================================================================
 
 	/**
 	 * Create an error for missing/empty values

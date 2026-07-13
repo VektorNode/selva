@@ -27,10 +27,7 @@ export function readField<T = unknown>(obj: unknown, name: string): T | undefine
 	if (!obj || typeof obj !== 'object') return undefined;
 
 	const record = obj as Record<string, unknown>;
-	// Own-property check, NOT `name in record`: the `in` operator walks the
-	// prototype chain, so probing a payload for e.g. `toString` would return
-	// `Object.prototype.toString` instead of `undefined`. The fast path must
-	// match the case-insensitive fallback's own-enumerable-key semantics.
+	// Own-property check to avoid prototype chain lookups (see lowerKeyMap for full explanation).
 	if (hasOwn(record, name)) return record[name] as T;
 
 	const key = lowerKeyMap(record).get(name.toLowerCase());
@@ -48,25 +45,15 @@ const hasOwn = (record: object, key: string): boolean =>
 export function hasField(obj: unknown, name: string): boolean {
 	if (!obj || typeof obj !== 'object') return false;
 	const record = obj as Record<string, unknown>;
-	// Own-property check only — see `readField` for why `in` is wrong here.
+	// Own-property check only.
 	if (hasOwn(record, name)) return true;
 	return lowerKeyMap(record).has(name.toLowerCase());
 }
 
 /**
- * Per-object cache of `lowercased key → actual key`, so reading N fields off
- * the same payload object costs one lowercasing scan instead of N. Keyed by
- * object identity (WeakMap). Payloads are normally immutable wire data, but
- * in-place enrichment does happen, so staleness is detected via a cheap
- * key-count check: if the object's own-key count differs from what the cached
- * map was built from, the map is rebuilt. (An `Object.keys` call per lookup is
- * cheap; the expensive part — lowercasing every key — stays cached.)
- *
- * Known limitation: a mutation that REPLACES a key while keeping the total
- * count identical (delete one, add another) is not detected. That shape of
- * mutation doesn't occur in this codebase; full detection would cost as much
- * as not caching at all. First matching key wins, preserving the original
- * linear-scan order.
+ * Per-object cache of lowercased key → actual key. Invalidated by key-count changes.
+ * Known limitation: key replacement without count change goes undetected (acceptable
+ * since this mutation pattern doesn't occur in this codebase).
  */
 const lowerKeyCache = new WeakMap<object, { keyCount: number; map: Map<string, string> }>();
 

@@ -42,21 +42,10 @@ const SYSTEM_TYPES = {
 
 const RHINO_GEOMETRY_PREFIX = 'Rhino.Geometry.';
 
-// Only relevant is Selva plugin is used
 const EXCLUDED_TYPES = ['WebDisplay'];
 const FILE_DATA_TYPE = 'FileData';
 
-// -----------------------------------------------------------------------------
-// Utilities
-// -----------------------------------------------------------------------------
-
-/**
- * Checks if a given type string should be excluded by verifying if it contains
- * any of the substrings defined in the `EXCLUDED_TYPES` list.
- *
- * @param type - The string representation of the type to check.
- * @returns `true` if the type matches any excluded pattern; otherwise, `false`.
- */
+/** Checks if a type is excluded by EXCLUDED_TYPES. */
 function isExcludedType(type: string): boolean {
 	return EXCLUDED_TYPES.some((t) => type.includes(t));
 }

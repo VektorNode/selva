@@ -1,49 +1,25 @@
-/**
- * Grasshopper types
- */
+// Grasshopper types
 
 import type { ComputeConfig, RhinoModelUnit } from '@/core/types';
 
-// ============================================================================
 // DATA TREE TYPES
-// ============================================================================
 
-/**
- * Grasshopper-style data tree branch path
- * @example "{0}", "{0;0}", "{0;1;2}"
- */
+// Grasshopper-style data tree branch path: e.g. "{0}", "{0;0}", "{0;1;2}"
 export type DataTreePath = `{${string}}`;
 
-/**
- * Represents a data item in a data tree
- */
+// Represents a data item in a data tree
 export interface DataItem {
-	/** The type of the data, inferred from the Grasshopper GOO class */
 	type: string;
-	/** The actual returned data as a string that may need to be parsed */
 	data: string;
-	/** The grasshopper refrence id of the output */
 	id: string;
 }
 
-/**
- * Grasshopper-style data tree for input defaults
- * @example
- * ```typescript
- * const numericTree: DataTreeDefault<number> = {
- *   "{0}": [1, 2, 3],
- *   "{0;0}": [4, 5],
- *   "{1}": [6]
- * };
- * ```
- */
+// Grasshopper-style data tree for input defaults: { "{0}": [1, 2, 3], "{0;0}": [4, 5] }
 export type DataTreeDefault<T = any> = {
 	[K in DataTreePath]?: T[];
 };
 
-/**
- * Data structure for InnerTreeData matching Rhino Compute responses
- */
+// Data structure matching Rhino Compute responses
 export type InnerTreeData = {
 	[path in DataTreePath]: DataItem[];
 };
@@ -74,18 +50,10 @@ export interface DataTree {
 	paramName?: string;
 }
 
-// ============================================================================
 // INPUT / OUTPUT PARAMETER TYPES
-// ============================================================================
 
-/**
- * Output types supported from Grasshopper/Rhino Compute.
- *
- * The trailing `(string & {})` keeps the union open — servers can return any
- * GOO type name — without collapsing the whole union to `string` the way a
- * bare `| string` does, so the known literals keep driving autocomplete and
- * `Extract<>`-style narrowing.
- */
+// Output types from Grasshopper/Rhino Compute.
+// `(string & {})` keeps union open for unknown GOO types while preserving autocomplete.
 export type OutputType =
 	| 'System.String'
 	| 'System.Double'
