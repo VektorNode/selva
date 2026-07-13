@@ -4,10 +4,6 @@ import { utf8ByteLength } from '../utils/encoding';
 
 import type { ComputeConfig, RetryPolicy, ServerTiming } from '../types';
 
-// ============================================================================
-// Server-Timing
-// ============================================================================
-
 /**
  * Parse a `Server-Timing` header value into typed durations (ms).
  *
@@ -37,10 +33,6 @@ export function parseServerTiming(headerValue: string | null): ServerTiming | nu
 	}
 	return sawMetric ? timing : null;
 }
-
-// ============================================================================
-// Retry Policy
-// ============================================================================
 
 const DEFAULT_RETRY: Required<RetryPolicy> = {
 	attempts: 0,
@@ -111,10 +103,6 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 		signal?.addEventListener('abort', onAbort, { once: true });
 	});
 }
-
-// ============================================================================
-// Error Handling
-// ============================================================================
 
 /** Truncate a server body for storage on error context — bounded, with an honest marker. */
 function truncateBody(body: string): string {
@@ -208,10 +196,6 @@ function mapServerErrorCode(serverCode?: string): ErrorCode | undefined {
 			return undefined;
 	}
 }
-
-// ============================================================================
-// Request Helpers
-// ============================================================================
 
 function buildUrl(endpoint: string, serverUrl: string): string {
 	const base = serverUrl.replace(/\/+$/, '');
@@ -337,10 +321,6 @@ export function composeSignal(
 		}
 	};
 }
-
-// ============================================================================
-// Response Processing
-// ============================================================================
 
 /**
  * Surface the server's per-request timing breakdown (if it sent one and a
@@ -518,10 +498,6 @@ async function handleResponse(
 		});
 	}
 }
-
-// ============================================================================
-// Single attempt
-// ============================================================================
 
 interface AttemptContext {
 	endpoint: string;
@@ -767,10 +743,6 @@ async function attemptFetch(
 		cleanup();
 	}
 }
-
-// ============================================================================
-// Main Function
-// ============================================================================
 
 /**
  * Generic Rhino Compute fetch function.

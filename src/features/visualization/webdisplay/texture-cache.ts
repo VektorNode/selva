@@ -2,10 +2,6 @@ import * as THREE from 'three';
 
 import { getLogger } from '@/core';
 
-// ============================================================================
-// TEXTURE CACHE
-// ============================================================================
-
 /**
  * Maximum number of decoded textures retained by the module-level cache. When a fresh load pushes
  * the cache past this bound, the least-recently-used entry is evicted and its GPU texture disposed.

@@ -42,28 +42,12 @@
  * @module core
  */
 
-// ============================================================================
-// COMPUTE FETCH (Low-level HTTP client)
-// ============================================================================
-
 export { fetchRhinoCompute } from './compute-fetch/compute-fetch';
-
-// ============================================================================
-// SERVER STATS
-// ============================================================================
 
 export { default as ComputeServerStats } from './server/compute-server-stats';
 
-// ============================================================================
-// ERROR HANDLING
-// ============================================================================
-
 export { RhinoComputeError, ErrorCodes } from './errors';
 export type { ErrorCode } from './errors';
-
-// ============================================================================
-// UTILITIES
-// ============================================================================
 
 // Logging
 export type { Logger } from './utils/logger';
@@ -74,10 +58,6 @@ export { toCamelCase, camelcaseKeys } from './utils/camel-case';
 
 // Configuration
 export type { ComputeConfig, RhinoModelUnit, RetryPolicy, ServerTiming } from './types';
-
-// ============================================================================
-// FILE HANDLING (generic zip / base64 / download — not Grasshopper-specific)
-// ============================================================================
 
 export { extractFilesFromComputeResponse, downloadFileData } from './files/handle-files';
 export type { ProcessedFile, FileData, FileBaseInfo } from './files/types';

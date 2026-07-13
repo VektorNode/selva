@@ -178,10 +178,6 @@ export class TreeBuilder {
 		return this.paramName;
 	}
 
-	// ============================================================================
-	// Static Factory Methods
-	// ============================================================================
-
 	/**
 	 * Create DataTrees from an array of InputParam definitions.
 	 * Handles tree access, numeric constraints, and value parsing.
@@ -466,13 +462,7 @@ export class TreeBuilder {
 		return `{${path.join(';')}}` as DataTreePath;
 	}
 
-	// ============================================================================
-	// Private Helper Methods
-	// ============================================================================
-
-	/**
-	 * Apply numeric constraints to all tree values.
-	 */
+	/** Apply numeric constraints to all tree values. */
 	private applyNumericConstraints(
 		min: number | null | undefined,
 		max: number | null | undefined,
