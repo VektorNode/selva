@@ -93,7 +93,15 @@ export type RenderConfig = {
  *   well-lit regardless of the HDR, without washing colour out. The polished "product shot" look.
  * - 'showcase': punchier presentation — ACES, stronger IBL/fill and a touch more exposure.
  */
-export type Look = 'studio' | 'technical' | 'showcase';
+/**
+ * The look values as a runtime array — the single source of truth. {@link Look} is derived from it, so
+ * the type and the enumerable list can never drift. Consumers (e.g. a viewer's style picker) iterate
+ * this instead of hardcoding the names, so adding or renaming a look here updates them automatically.
+ * 'technical' is first because it's the default.
+ */
+export const LOOKS = ['technical', 'studio', 'showcase'] as const;
+
+export type Look = (typeof LOOKS)[number];
 
 /**
  * The lighting/material dials a {@link Look} sets. Single source of truth shared by construction-time

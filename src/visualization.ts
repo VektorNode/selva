@@ -6,6 +6,8 @@
  * @module visualization
  */
 export { initThree } from './features/visualization/threejs/three-initializer.js';
+export { LOOKS } from './features/visualization/types.js';
+export type { Look } from './features/visualization/types.js';
 export {
 	updateScene,
 	parseColor,

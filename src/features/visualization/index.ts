@@ -11,6 +11,7 @@
 // ============================================================================
 
 export { initThree, materialAppearanceForLook } from './threejs/three-initializer.js';
+export { LOOKS } from './types.js';
 export { createCameraController } from './threejs/camera-controller.js';
 export type {
 	CameraController,
