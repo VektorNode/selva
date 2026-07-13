@@ -1,5 +1,11 @@
 # @selvajs/selva
 
+## 4.7.0-beta.2
+
+### Minor Changes
+
+- 594b5ad: Adding advanced caching
+
 ## 4.6.21-beta.1
 
 ### Patch Changes

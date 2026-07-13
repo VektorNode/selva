@@ -16,6 +16,7 @@
     "@selvajs/server": "0.1.0"
   },
   "changesets": [
+    "quiet-snakes-press",
     "schema-version-required",
     "server-definitions-slice",
     "server-local-publish",
