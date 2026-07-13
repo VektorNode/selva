@@ -143,7 +143,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         pManager.AddTextParameter("Layer", "L", "Layer for grouping in scene manager (e.g. 'Structure/Walls')",
             GH_ParamAccess.tree, "");
         pManager.AddTextParameter("Metadata", "D", "Metadata for the mesh (Format: 'Key=Value')", GH_ParamAccess.tree);
-        pManager.AddParameter(new Param_ThreeMaterial("T-Material", "TM", "ThreeMaterial for display", "Selva",
+        pManager.AddParameter(new Param_ThreeMaterial("Material", "M", "Material for web display", "Selva",
             "Display", GH_ParamAccess.tree));
         pManager.AddParameter(new Param_MeshParameters(), "Meshing Settings", "MS",
             "Meshing settings to use. Default is FastRenderMesh.", GH_ParamAccess.item);

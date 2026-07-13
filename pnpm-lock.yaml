@@ -19,8 +19,8 @@ catalogs:
       specifier: ^1.49.1
       version: 1.61.1
     '@selvajs/compute':
-      specifier: ^3.1.0-beta.5
-      version: 3.1.0-beta.5
+      specifier: ^3.1.0-beta.6
+      version: 3.1.0-beta.6
     '@sveltejs/adapter-auto':
       specifier: ^7.0.1
       version: 7.0.1
@@ -247,7 +247,7 @@ importers:
         version: 5.2.2(svelte@5.56.4(@typescript-eslint/types@8.62.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.1.0-beta.5(three@0.184.0)
+        version: 3.1.0-beta.6(three@0.184.0)
       '@selvajs/schemas':
         specifier: workspace:*
         version: link:../schemas
@@ -386,7 +386,7 @@ importers:
         version: 1.21.0(svelte@5.56.4(@typescript-eslint/types@8.62.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.1.0-beta.5(three@0.184.0)
+        version: 3.1.0-beta.6(three@0.184.0)
       '@supabase/supabase-js':
         specifier: ^2.104.1
         version: 2.108.2
@@ -472,7 +472,7 @@ importers:
     dependencies:
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.1.0-beta.5(three@0.184.0)
+        version: 3.1.0-beta.6(three@0.184.0)
       '@selvajs/platform':
         specifier: workspace:*
         version: link:../platform
@@ -506,7 +506,7 @@ importers:
         version: 1.21.0(svelte@5.56.4(@typescript-eslint/types@8.62.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.1.0-beta.5(three@0.184.0)
+        version: 3.1.0-beta.6(three@0.184.0)
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
@@ -1434,8 +1434,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@selvajs/compute@3.1.0-beta.5':
-    resolution: {integrity: sha512-JR2olkTASzkU+irD9MPhei8Op8O5nO5k5fudlNywdMdBqrPbqe2jzDl0MhF0vNSzxKWXspp/fEDqd3G3VeWAUg==}
+  '@selvajs/compute@3.1.0-beta.6':
+    resolution: {integrity: sha512-+Wh02UFj+HpMdJ7f+gIp4QNhQPx3+RErV871J6a8arH2sSmK6p/M3SZFXgbaFooDGgjvVAI0jmmqsiTaxGtX3w==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       three: '>=0.179.0'
@@ -4732,7 +4732,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
 
-  '@selvajs/compute@3.1.0-beta.5(three@0.184.0)':
+  '@selvajs/compute@3.1.0-beta.6(three@0.184.0)':
     dependencies:
       fflate: 0.8.3
       rhino3dm: 8.17.0
