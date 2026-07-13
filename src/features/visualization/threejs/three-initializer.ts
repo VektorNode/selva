@@ -564,6 +564,11 @@ export const initThree = function (
 	};
 
 	const dispose = () => {
+		// Idempotent: a second call would re-run forceContextLoss() on an already-lost
+		// context, throwing "INVALID_OPERATION: loseContext: context already lost".
+		// Double-dispose happens naturally (React StrictMode effect double-invoke, hosts
+		// that unmount twice), so guard on the flag we already track.
+		if (disposed) return;
 		disposed = true;
 		disposeAnimation();
 		eventHandlers.dispose();
