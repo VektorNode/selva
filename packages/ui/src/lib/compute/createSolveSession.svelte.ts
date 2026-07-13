@@ -203,11 +203,21 @@ export function createRequestResponseDriver(
 		}
 		try {
 			const result = await onSolve(values, signal);
-			if (signal.aborted) return;
+			if (signal.aborted) {
+				// Discarded on purpose (superseded/cancelled) — never memoized or reported.
+				console.debug('[Compute/session] solve completed after abort — result discarded');
+				return;
+			}
 			memo.set(values, result);
 			getReporter().report(result);
 		} catch (err) {
-			if (signal.aborted) return;
+			if (signal.aborted) {
+				console.debug('[Compute/session] solve aborted (superseded, cancelled, or timed out)');
+				return;
+			}
+			// reportError only sets reactive state; without this line a transport
+			// failure leaves no console trace at all.
+			console.warn('[Compute/session] solve failed:', err);
 			getReporter().reportError(err instanceof Error ? err.message : String(err));
 		}
 	}, options);

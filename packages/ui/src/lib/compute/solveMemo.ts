@@ -50,6 +50,9 @@ export function createSolveMemo(max = 16): SolveMemo {
 			// Refresh recency: re-insert at the tail.
 			entries.delete(key);
 			entries.set(key, hit);
+			// A memo hit skips the transport entirely, so no other log line fires —
+			// this debug line is the only trace it wasn't a fresh solve.
+			console.debug(`[Compute/memo] HIT — served from client memo (${entries.size}/${max})`);
 			return hit;
 		},
 		set(values, result) {
@@ -60,9 +63,13 @@ export function createSolveMemo(max = 16): SolveMemo {
 				const oldest = entries.keys().next().value;
 				if (oldest === undefined) break;
 				entries.delete(oldest);
+				console.debug(`[Compute/memo] evicted LRU entry (cap ${max})`);
 			}
 		},
 		clear() {
+			if (entries.size > 0) {
+				console.debug(`[Compute/memo] cleared ${entries.size} entries (definition changed)`);
+			}
 			entries.clear();
 		}
 	};

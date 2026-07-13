@@ -12,8 +12,10 @@ import { definitionRef } from '$lib/server/compute/definitionByteCache.server';
 import {
 	buildSolveCacheHook,
 	resolveSolveCacheQuota,
-	solveCacheSingleFlight
+	solveCacheSingleFlight,
+	solveCacheStats
 } from '$lib/server/compute/solveCache.server';
+import { definitionByteCacheStats } from '$lib/server/compute/definitionByteCache.server';
 import {
 	runSolvePipeline,
 	type PipelineInput,
@@ -154,18 +156,22 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			failureKind: SolveFailureKind,
 			extra: { durationMs?: number; errorCount?: number; warningCount?: number } = {}
 		) => {
-			void getSolveMetricSink().record(solveCtx, {
-				definitionUrl,
-				definitionId: metricDefinitionId,
-				versionId: metricVersionId,
-				channel,
-				orgId: solveOrgId,
-				durationMs: extra.durationMs ?? 0,
-				ok: failureKind === 'ok',
-				failureKind,
-				errorCount: extra.errorCount ?? 0,
-				warningCount: extra.warningCount ?? 0
-			});
+			getSolveMetricSink()
+				.record(solveCtx, {
+					definitionUrl,
+					definitionId: metricDefinitionId,
+					versionId: metricVersionId,
+					channel,
+					orgId: solveOrgId,
+					durationMs: extra.durationMs ?? 0,
+					ok: failureKind === 'ok',
+					failureKind,
+					errorCount: extra.errorCount ?? 0,
+					warningCount: extra.warningCount ?? 0
+				})
+				// Sinks are contracted not to throw, but nothing enforces it — a bad sink
+				// must surface as a log line, not an unhandled rejection.
+				.catch((err) => console.error('[API/Compute] solve-metric record failed:', err));
 		};
 
 		// Per-key rate limit; runs before DB reads so throttled callers don't burn quota.
@@ -448,6 +454,21 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			console.info(
 				`[Compute/server] prep breakdown: ` +
 					prepMarks.map(([label, ms]) => `${label}=${ms.toFixed(0)}ms`).join(' ')
+			);
+			// Aggregate cache counters — the only place evictions/quota-drops surface
+			// (per-request Server-Timing only carries hit/miss verdicts).
+			const l2 = solveCacheStats();
+			if (l2) {
+				console.info(
+					`[Compute/l2-cache] hits=${l2.hits} misses=${l2.misses} writes=${l2.writes} ` +
+						`quotaEvictions=${l2.quotaEvictions} byteEvictions=${l2.byteEvictions} ` +
+						`entries=${l2.entries} retained=${formatBytes(l2.bytes)}`
+				);
+			}
+			const db = definitionByteCacheStats();
+			console.info(
+				`[Compute/def-bytes] hits=${db.hits} misses=${db.misses} evictions=${db.evictions} ` +
+					`entries=${db.entries} retained=${formatBytes(db.bytes)}`
 			);
 		}
 

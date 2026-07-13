@@ -33,13 +33,26 @@ export interface SolveCacheSingleFlight {
 	inFlight(): number;
 }
 
-export function createSolveCacheSingleFlight(): SolveCacheSingleFlight {
+export interface SolveCacheSingleFlightOptions {
+	/**
+	 * Fired when a caller joins an already-in-flight key instead of running its
+	 * own work — the coalescing win this module exists for, otherwise invisible.
+	 */
+	onJoin?: (key: string) => void;
+}
+
+export function createSolveCacheSingleFlight(
+	options: SolveCacheSingleFlightOptions = {}
+): SolveCacheSingleFlight {
 	const inflight = new Map<string, Promise<unknown>>();
 
 	return {
 		run<T>(key: string, work: () => Promise<T>): Promise<T> {
 			const existing = inflight.get(key);
-			if (existing) return existing as Promise<T>;
+			if (existing) {
+				options.onJoin?.(key);
+				return existing as Promise<T>;
+			}
 
 			// `.finally` releases the key on both settle paths. Start the work inside
 			// the promise chain so a synchronous throw in `work` still rejects the

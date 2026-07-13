@@ -164,7 +164,11 @@ export function isSafeRemoteDefinitionUrl(raw: string): boolean {
  * any rejection.
  */
 export async function assertSafeRemoteDefinitionUrl(raw: string): Promise<string> {
+	// Security-relevant event: the thrown message is deliberately generic (no
+	// oracle for the caller), so log the specifics server-side instead — which
+	// host was blocked and by which layer.
 	if (!isSafeRemoteDefinitionUrl(raw)) {
+		console.warn(`[Compute/ssrf] blocked remote definition URL (literal filter): ${hostOf(raw)}`);
 		throw new Error('Remote definition URL is not allowed');
 	}
 
@@ -177,10 +181,24 @@ export async function assertSafeRemoteDefinitionUrl(raw: string): Promise<string
 	try {
 		resolved = await lookup(host, { all: true });
 	} catch {
+		console.warn(`[Compute/ssrf] blocked remote definition URL (DNS lookup failed): ${host}`);
 		throw new Error('Remote definition URL is not allowed');
 	}
 	if (resolved.length === 0 || resolved.some((r) => isBlockedIp(r.address))) {
+		const blocked = resolved.filter((r) => isBlockedIp(r.address)).map((r) => r.address);
+		console.warn(
+			`[Compute/ssrf] blocked remote definition URL (resolves to blocked IP ${blocked.join(', ') || 'none'}): ${host}`
+		);
 		throw new Error('Remote definition URL is not allowed');
 	}
 	return raw;
+}
+
+/** Best-effort hostname for logging; falls back to a truncated raw string. */
+function hostOf(raw: string): string {
+	try {
+		return new URL(raw).hostname;
+	} catch {
+		return raw.slice(0, 120);
+	}
 }

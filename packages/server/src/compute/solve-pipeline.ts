@@ -253,7 +253,11 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		if (stored) {
 			const hit = buildEnvelopeFromCacheEntry(stored, inputKey, args);
 			if (hit) return hit;
-			// Corrupt/tampered entry → fall through and solve as a miss.
+			// Corrupt/tampered entry → fall through and solve as a miss. Warn: a
+			// silently-poisoned cache would otherwise look like an eternal cold key.
+			console.warn(
+				`[Compute/l2-cache] corrupt or hash-mismatched entry for key ${inputKey.slice(0, 16)}… — discarding, solving fresh`
+			);
 		}
 	}
 

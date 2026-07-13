@@ -289,12 +289,18 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				return existing;
 			}
 
+			// A build is a Rhino.Compute handshake — expensive, and repeated builds for
+			// the same id mean churn (LRU thrash or config-rotation evictions).
+			debugLog(`[Compute/client-cache] miss — building warm client for server ${key}`);
 			const entry = await build(server, opts?.definitionGuid);
 
 			// Evict the least-recently-used entry before inserting when at capacity.
 			if (cache.size >= maxCachedClients) {
 				const oldestKey = cache.keys().next().value;
 				if (oldestKey !== undefined) {
+					debugLog(
+						`[Compute/client-cache] LRU evicted warm client for server ${oldestKey} (cap ${maxCachedClients})`
+					);
 					cache.get(oldestKey)?.scheduler.dispose();
 					cache.delete(oldestKey);
 				}
@@ -308,12 +314,14 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			const key = id as string;
 			const entry = cache.get(key);
 			if (entry) {
+				debugLog(`[Compute/client-cache] evicted warm client for server ${key} (config change)`);
 				entry.scheduler.dispose();
 				cache.delete(key);
 			}
 		},
 
 		disposeAll(): void {
+			debugLog(`[Compute/client-cache] disposing all ${cache.size} warm client(s)`);
 			for (const entry of cache.values()) entry.scheduler.dispose();
 			cache.clear();
 		}

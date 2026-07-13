@@ -37,6 +37,7 @@ import {
 	SOLVE_CACHE_DEFAULT_MAX_ENTRIES,
 	SOLVE_CACHE_MAX_TOTAL_BYTES
 } from '$lib/server/computeLimits';
+import { COMPUTE_DEBUG } from './clientCache.server';
 
 // Single instance. `memory` mounts the in-process backend; anything else is a
 // no-op (`off`). Only the memory backend exposes `stats()`, so keep a typed
@@ -49,7 +50,14 @@ const memoryCache: MemorySolveResultCache | null =
 const cache: ISolveResultCache = memoryCache ?? new NoopSolveResultCache();
 
 /** In-process single-flight (R4), shared across the instance. */
-export const solveCacheSingleFlight = createSolveCacheSingleFlight();
+export const solveCacheSingleFlight = createSolveCacheSingleFlight({
+	onJoin: (key) => {
+		if (COMPUTE_DEBUG) {
+			// Key = org:version:inputs-json — truncate the inputs tail for the log.
+			console.log(`[Compute/single-flight] coalesced onto in-flight solve ${key.slice(0, 96)}…`);
+		}
+	}
+});
 
 /** True when a real L2 backend is mounted (not the Noop). */
 export const solveCacheEnabled = memoryCache !== null;
@@ -82,15 +90,24 @@ export function buildSolveCacheHook(params: {
 	const { ctx, orgId, definitionId, versionId, quota, configSubset } = params;
 	return {
 		configSubset,
-		lookup: (inputKey) => cache.get(ctx, { orgId, definitionId, versionId, inputKey }),
+		lookup: (inputKey) =>
+			cache.get(ctx, { orgId, definitionId, versionId, inputKey }).catch((err) => {
+				// The pipeline treats any rejection as a miss; log it here so a faulting
+				// backend doesn't silently disable caching (every solve re-solving).
+				console.warn(`[Compute/l2-cache] lookup failed for definition ${definitionId}:`, err);
+				return null;
+			}),
 		store: (inputKey, entry) => {
 			// Fire-and-forget: the solve already succeeded and was returned, so a
-			// cache write must never turn into a request error. Best-effort by contract.
+			// cache write must never turn into a request error. Best-effort by contract
+			// — but log the failure, or a permanently-broken backend is invisible.
 			void cache
 				.set(ctx, { orgId, definitionId, versionId, inputKey }, entry, {
 					maxEntriesForDefinition: quota
 				})
-				.catch(() => {});
+				.catch((err) => {
+					console.warn(`[Compute/l2-cache] store failed for definition ${definitionId}:`, err);
+				});
 		}
 	};
 }
