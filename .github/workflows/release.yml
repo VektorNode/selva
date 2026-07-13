@@ -268,7 +268,7 @@ jobs:
           fi
 
       - name: Build & publish beta
-        if: steps.check.outputs.is_beta == 'true'
+        if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta == 'true'
         run: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
