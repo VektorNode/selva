@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 
 import { getLogger } from '@/core';
-import type { ThreeInitializerOptions, RenderStyle, RenderStylePreset } from '../types';
+import type { ThreeInitializerOptions, Look, LookPreset } from '../types';
 import type { MaterialAppearanceOptions } from '../webdisplay/types';
 import { createCameraController, type CameraController } from './camera-controller';
 import { createGrid, type Grid } from './grid';
@@ -16,39 +16,63 @@ import { setTextureAnisotropy } from '../webdisplay/texture-cache';
 
 const defaultUp = new THREE.Vector3(0, 0, 1);
 
+/** The look applied when the caller passes no `look` option. */
+const DEFAULT_LOOK: Look = 'technical';
+
 /**
- * The two render-style looks, as concrete dial values. Single source of truth: consumed by
- * `applyDefaults` to seed construction-time defaults AND by `setRenderStyle` to re-apply a look at
- * runtime, so the two paths can never drift. See {@link RenderStyle} for what each look reads like.
+ * The ready-to-go looks, as concrete lighting/material dial values. Single source of truth: consumed
+ * by `applyDefaults` to seed construction-time defaults AND by `setLook` to re-apply a look at
+ * runtime, so the two paths can never drift. A look carries ONLY lighting/material — never edges or
+ * grid (those are independent overlays). See {@link Look} for what each reads like.
+ *
+ * Every look ships with `ambientOcclusion: false`: GTAO is a heavy full-screen postprocessing path
+ * that can dominate frame time, so it stays opt-in (via `render.ambientOcclusion` or the runtime
+ * `setAmbientOcclusion(true)`) rather than costing every viewer 60fps by default.
  */
-const RENDER_STYLE_PRESETS: Record<RenderStyle, RenderStylePreset> = {
+export const LOOK_PRESETS: Record<Look, LookPreset> = {
+	// The default "just works" look: ACES + hemisphere fill + lifted HDR so products are well-lit
+	// regardless of the environment map, while ambient stays low so colour doesn't wash out.
+	studio: {
+		toneMapping: THREE.ACESFilmicToneMapping,
+		toneMappingExposure: 1,
+		envMapIntensity: 1.3,
+		environmentIntensity: 1.2,
+		hemisphereIntensity: 1.0,
+		ambientIntensity: 0.3,
+		cullBackfaces: false,
+		ambientOcclusion: false
+	},
+	// Flat CAD/drawing look: neutral tone mapping, low IBL, no fill — full flat ambient only.
 	technical: {
 		toneMapping: THREE.NeutralToneMapping,
 		toneMappingExposure: 1,
 		envMapIntensity: 0.5,
+		environmentIntensity: 1,
+		hemisphereIntensity: 0,
+		ambientIntensity: 1,
 		cullBackfaces: false,
-		ambientOcclusion: true,
-		edges: true,
-		grid: true
+		ambientOcclusion: false
 	},
-	rendered: {
+	// Punchier presentation: like studio but stronger IBL/fill and a touch more exposure.
+	showcase: {
 		toneMapping: THREE.ACESFilmicToneMapping,
-		toneMappingExposure: 1,
-		envMapIntensity: 1.3,
+		toneMappingExposure: 1.05,
+		envMapIntensity: 1.6,
+		environmentIntensity: 1.35,
+		hemisphereIntensity: 1.2,
+		ambientIntensity: 0.25,
 		cullBackfaces: false,
-		ambientOcclusion: true,
-		edges: false,
-		grid: false
+		ambientOcclusion: false
 	}
 };
 
 /**
- * The material-parse options implied by a render style — feed these into the batch parser's
- * `material` option so meshes are built to match the look (backface culling, IBL strength). Kept
- * out of the viewer's runtime dials because they're baked at parse time, not toggleable in place.
+ * The material-parse options implied by a look — feed these into the batch parser's `material` option
+ * so meshes are built to match it (backface culling, IBL strength). Kept out of the viewer's runtime
+ * dials because they're baked at parse time, not toggleable in place.
  */
-export function materialAppearanceForStyle(style: RenderStyle): MaterialAppearanceOptions {
-	const preset = RENDER_STYLE_PRESETS[style];
+export function materialAppearanceForLook(look: Look): MaterialAppearanceOptions {
+	const preset = LOOK_PRESETS[look];
 	return {
 		envMapIntensity: preset.envMapIntensity,
 		cullBackfaces: preset.cullBackfaces
@@ -94,13 +118,40 @@ export const initThree = function (
 	 * edges). Retunes viewer-owned dials only; per-material parse choices are set via the batch
 	 * parser's `material` option. Handy for comparing the two looks in a live viewer.
 	 */
-	setRenderStyle: (style: 'technical' | 'rendered') => void;
 	/**
-	 * The parse-time material options (backface culling, IBL strength) matching the active render
-	 * style — feed into the batch parser's `material` option so freshly-loaded meshes are built to
-	 * match the look. Returns undefined when no style is active. See `setRenderStyle`.
+	 * Switch the viewer to a ready-to-go look at runtime ('studio' | 'technical' | 'showcase'). Retunes
+	 * lighting/material only (tone mapping, fill, IBL, AO) — never edges/grid. A straight preset apply:
+	 * overwrites any granular lighting dials you set earlier.
 	 */
-	getMaterialAppearance: () => MaterialAppearanceOptions | undefined;
+	setLook: (look: 'studio' | 'technical' | 'showcase') => void;
+	/**
+	 * Retune the fill lights at runtime: the direction-aware hemisphere fill (sky/ground) and the flat
+	 * ambient. Raising `hemisphereIntensity` is the most effective way to lift shadowed / under-facing
+	 * surfaces a dark HDR leaves black. A positive `hemisphereIntensity` lazily creates the hemisphere
+	 * light if the viewer was built without one; `0` switches it off.
+	 */
+	setFillLights: (opts: {
+		hemisphereIntensity?: number;
+		hemisphereSkyColor?: THREE.Color | number;
+		hemisphereGroundColor?: THREE.Color | number;
+		ambientIntensity?: number;
+	}) => void;
+	/**
+	 * Set the uniform multiplier on the HDR's image-based lighting (`scene.environmentIntensity`) at
+	 * runtime — normalizes brightness across HDRs of differing exposure so the scene isn't at the
+	 * mercy of whichever HDR is loaded. Applies immediately, even before the HDR finishes decoding.
+	 */
+	setEnvironmentIntensity: (intensity: number) => void;
+	/** Set renderer tone-mapping exposure at runtime. Higher lifts shadows and overall brightness. */
+	setToneMappingExposure: (exposure: number) => void;
+	/** Set GTAO strength at runtime (0–1). No-op when ambient occlusion isn't active. */
+	setAoIntensity: (intensity: number) => void;
+	/**
+	 * The parse-time material options (backface culling, IBL strength) matching the active look — feed
+	 * into the batch parser's `material` option so freshly-loaded meshes are built to match it. See
+	 * `setLook`.
+	 */
+	getMaterialAppearance: () => MaterialAppearanceOptions;
 	/**
 	 * Refit the sun's shadow frustum to the current scene content for crisp shadows. Call after
 	 * loading or replacing geometry (e.g. after `updateScene`). No-op when sunlight/shadows are off.
@@ -157,10 +208,12 @@ export const initThree = function (
 	// load callback must drop (and dispose) the texture instead of attaching it to a swept scene.
 	let disposed = false;
 	setupEnvironment(scene, config, () => disposed);
-	// The shadow-casting sun (null when sunlight or shadows are off). Its shadow frustum is fitted to
-	// the scene content below and again whenever the host calls updateShadowBounds after a geometry
-	// change — keeping shadow-map texels packed onto the model for crisp shadows at any scale.
-	const sunlight = setupLighting(scene, config);
+	// Scene lights. The shadow-casting sun (null when sunlight or shadows are off) has its shadow
+	// frustum fitted to the scene content below and again whenever the host calls updateShadowBounds
+	// after a geometry change — keeping shadow-map texels packed onto the model for crisp shadows at
+	// any scale. The ambient + optional hemisphere fill are retunable at runtime via the setters below.
+	const lights = setupLighting(scene, config);
+	const sunlight = lights.sun;
 
 	/**
 	 * Refit the sun's shadow frustum to the current scene content. Call after loading or replacing
@@ -291,7 +344,8 @@ export const initThree = function (
 			{
 				toneMapping: config.render.toneMapping ?? THREE.NeutralToneMapping,
 				toneMappingExposure: config.render.toneMappingExposure ?? 1,
-				aoIntensity: config.render.aoIntensity
+				aoIntensity: config.render.aoIntensity,
+				aoPixelRatio: config.render.aoPixelRatio
 			}
 		);
 		pipeline.setSize(Math.max(1, width), Math.max(1, height), pixelRatio);
@@ -310,18 +364,93 @@ export const initThree = function (
 	if (config.render.ambientOcclusion) renderPipeline = buildPipeline();
 
 	/**
-	 * Apply a coherent look to the *already-built* scene at runtime — a quick way to compare the two
-	 * presets in a live viewer. It retunes only what the viewer owns after load: tone mapping/exposure,
-	 * AO on/off, edge & grid visibility, and `envMapIntensity` on every compute material currently in
-	 * the scene. It does NOT rebuild geometry, so per-material choices baked at parse time (backface
-	 * culling, vertex-color decode) are unaffected — set those via the batch parser's `material` option.
-	 *
-	 * - 'technical': matte, drawing-like. Neutral tone mapping, low IBL, edges + grid on, AO on.
-	 * - 'rendered':  presentation. ACES-filmic tone mapping, stronger IBL, edges off, AO on.
+	 * Retune the fill lights at runtime — the direction-aware hemisphere fill and the flat ambient.
+	 * Raising the hemisphere intensity is the most effective way to lift shadowed/under-facing
+	 * surfaces that a dark HDR leaves black, without washing the whole scene flat the way ambient does.
+	 * Pass `hemisphereIntensity: 0` to switch the fill off; a positive value creates the light lazily
+	 * if the viewer was built without one.
 	 */
-	const setRenderStyle = (style: RenderStyle) => {
-		const preset = RENDER_STYLE_PRESETS[style];
-		activeRenderStyle = style;
+	const setFillLights = (opts: {
+		hemisphereIntensity?: number;
+		hemisphereSkyColor?: THREE.Color | number;
+		hemisphereGroundColor?: THREE.Color | number;
+		ambientIntensity?: number;
+	}) => {
+		if (opts.ambientIntensity !== undefined) {
+			lights.ambient.intensity = opts.ambientIntensity;
+		}
+		if (
+			opts.hemisphereIntensity !== undefined &&
+			!lights.hemisphere &&
+			opts.hemisphereIntensity > 0
+		) {
+			// Built without a hemisphere light — create one on first positive intensity so hosts can
+			// enable the fill purely at runtime.
+			lights.hemisphere = new THREE.HemisphereLight(
+				opts.hemisphereSkyColor ?? config.lighting.hemisphereSkyColor,
+				opts.hemisphereGroundColor ?? config.lighting.hemisphereGroundColor,
+				opts.hemisphereIntensity
+			);
+			lights.hemisphere.position.copy(config.environment.sceneUp ?? defaultUp);
+			scene.add(lights.hemisphere);
+		}
+		if (lights.hemisphere) {
+			if (opts.hemisphereIntensity !== undefined)
+				lights.hemisphere.intensity = opts.hemisphereIntensity;
+			if (opts.hemisphereSkyColor !== undefined)
+				lights.hemisphere.color.set(opts.hemisphereSkyColor);
+			if (opts.hemisphereGroundColor !== undefined)
+				lights.hemisphere.groundColor.set(opts.hemisphereGroundColor);
+		}
+	};
+
+	/**
+	 * Set the uniform multiplier on the HDR's image-based lighting (`scene.environmentIntensity`).
+	 * Normalizes brightness across HDRs of differing exposure — lift a dim HDR or tame a bright one —
+	 * so the scene isn't at the mercy of whichever HDR is loaded. Applies immediately, even before the
+	 * HDR has finished decoding.
+	 */
+	const setEnvironmentIntensity = (intensity: number) => {
+		config.environment.environmentIntensity = intensity;
+		scene.environmentIntensity = intensity;
+	};
+
+	/** Set renderer tone-mapping exposure at runtime. Higher lifts shadows and overall brightness. */
+	const setToneMappingExposure = (exposure: number) => {
+		config.render.toneMappingExposure = exposure;
+		renderer.toneMappingExposure = exposure;
+		// When AO is on, tone mapping is applied by the composer's OutputPass — rebuild so it adopts
+		// the new exposure.
+		if (renderPipeline) {
+			setAmbientOcclusion(false);
+			setAmbientOcclusion(true);
+		}
+	};
+
+	/** Set GTAO strength at runtime (0 = off-looking, 1 = full). No-op when AO isn't active. */
+	const setAoIntensity = (intensity: number) => {
+		config.render.aoIntensity = intensity;
+		if (renderPipeline) {
+			setAmbientOcclusion(false);
+			setAmbientOcclusion(true);
+		}
+	};
+
+	/**
+	 * Apply a ready-to-go look to the *already-built* scene at runtime — a quick way to switch looks in
+	 * a live viewer. It retunes only LIGHTING/MATERIAL: tone mapping/exposure, hemisphere fill +
+	 * ambient, HDR environment intensity, AO on/off, and `envMapIntensity` on every compute material
+	 * currently in the scene. It deliberately does NOT touch edges or grid (those are independent
+	 * overlays — toggle them via `grid.setVisible()` / `applyEdges`). It does not rebuild geometry, so
+	 * parse-time material choices (backface culling, vertex-color decode) are unaffected — set those via
+	 * the batch parser's `material` option (see `getMaterialAppearance`).
+	 *
+	 * Note: this is a straight preset apply. Any dial you set earlier via a granular setter
+	 * (`setToneMappingExposure`, `setFillLights`, …) is overwritten to the new look's value.
+	 */
+	const setLook = (look: Look) => {
+		const preset = LOOK_PRESETS[look];
+		activeLook = look;
 
 		// Tone mapping lives on the renderer (plain path) and is mirrored into the composer's OutputPass
 		// when AO is active. Rebuild the pipeline so the composer picks up the new tone mapping.
@@ -329,6 +458,15 @@ export const initThree = function (
 		renderer.toneMappingExposure = preset.toneMappingExposure;
 		config.render.toneMapping = preset.toneMapping;
 		config.render.toneMappingExposure = preset.toneMappingExposure;
+
+		// Fill lighting + HDR normalization: studio/showcase add hemisphere fill and lift the environment
+		// so shadowed surfaces read well regardless of the HDR; technical zeroes the fill back to a flat
+		// CAD look. Applied through the same setters a host would call.
+		setFillLights({
+			hemisphereIntensity: preset.hemisphereIntensity,
+			ambientIntensity: preset.ambientIntensity
+		});
+		setEnvironmentIntensity(preset.environmentIntensity);
 
 		if (renderPipeline) {
 			// Rebuild so the composer's OutputPass adopts the new tone mapping, then honor the target AO.
@@ -353,28 +491,18 @@ export const initThree = function (
 				}
 			}
 		});
-
-		// Edge overlays live as children tagged 'edge-overlay'; toggle their visibility in place.
-		scene.traverse((object) => {
-			if (object.userData.kind === 'edge-overlay') object.visible = preset.edges;
-		});
-
-		if (grid) grid.object.visible = preset.grid;
 	};
 
-	// The style whose look is currently applied (null until the caller passes `renderStyle` or calls
-	// setRenderStyle). Seeded from the raw option, not `config.renderStyle` — the latter is coerced to
-	// a non-null default by Required<>, which would wrongly report a style when none was chosen.
-	// Drives `getMaterialAppearance()` so the host feeds the parser matching material options.
-	let activeRenderStyle: RenderStyle | null = options?.renderStyle ?? null;
+	// The look currently applied. Always a real look (the default is 'studio'), seeded from the same
+	// resolved value as the construction defaults. Drives `getMaterialAppearance()`.
+	let activeLook: Look = config.look;
 
 	/**
-	 * The parse-time material options (backface culling, IBL strength) that match the active style —
-	 * pass into the batch parser's `material` option so newly-loaded meshes are built to match the
-	 * look. Returns undefined when no style is active (plain per-field defaults).
+	 * The parse-time material options (backface culling, IBL strength) that match the active look —
+	 * pass into the batch parser's `material` option so newly-loaded meshes are built to match it.
 	 */
-	const getMaterialAppearance = (): MaterialAppearanceOptions | undefined =>
-		activeRenderStyle ? materialAppearanceForStyle(activeRenderStyle) : undefined;
+	const getMaterialAppearance = (): MaterialAppearanceOptions =>
+		materialAppearanceForLook(activeLook);
 
 	// Resize checked every frame so buffer resize and render happen in the same frame,
 	// preventing visible blank frames on resize
@@ -492,7 +620,11 @@ export const initThree = function (
 		measureTool,
 		applyEdges,
 		setAmbientOcclusion,
-		setRenderStyle,
+		setLook,
+		setFillLights,
+		setEnvironmentIntensity,
+		setToneMappingExposure,
+		setAoIntensity,
 		getMaterialAppearance,
 		updateShadowBounds,
 		dispose,
@@ -504,7 +636,8 @@ export const initThree = function (
 	};
 };
 
-function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitializerOptions> {
+// Exported for unit testing the option-precedence logic (initThree itself needs a real WebGL canvas).
+export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitializerOptions> {
 	const scale = options.sceneScale || 'm';
 
 	// All Rhino geometry is normalized to METERS (1 unit = 1 meter), sceneScale just changes the viewing perspective
@@ -568,16 +701,17 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 
 	const defaults = scaleDefaults[scale];
 
-	// A chosen render style seeds the tone-mapping / AO / edges / grid defaults. It sits BELOW explicit
-	// per-field options (those still win) and ABOVE the plain per-field defaults — so it only fills
-	// what the caller left unspecified. Null when no style is chosen (plain defaults apply).
-	const style: RenderStylePreset | null = options.renderStyle
-		? RENDER_STYLE_PRESETS[options.renderStyle]
-		: null;
+	// The chosen look seeds the lighting/material defaults (tone mapping, AO, IBL, fill). It sits BELOW
+	// explicit per-field options (those still win) and ABOVE the plain per-field defaults — so it only
+	// fills what the caller left unspecified. Always a real preset: the default IS a look ('studio'),
+	// so there's no "no look" state to represent. A look never touches edges/grid — those resolve from
+	// their own configs below.
+	const look = options.look ?? DEFAULT_LOOK;
+	const preset = LOOK_PRESETS[look];
 
 	return {
 		sceneScale: scale,
-		renderStyle: options.renderStyle ?? 'technical',
+		look,
 		camera: {
 			// Default 3/4 iso for a Z-up scene: back-left and ABOVE (height on +Z).
 			position:
@@ -600,15 +734,26 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 				options.lighting?.sunlightPosition ||
 				new THREE.Vector3(defaults.lightDistance, defaults.lightDistance, defaults.lightHeight),
 			ambientLightColor: options.lighting?.ambientLightColor || new THREE.Color(0x404040),
-			ambientLightIntensity: options.lighting?.ambientLightIntensity ?? 1,
-			sunlightColor: options.lighting?.sunlightColor || 0xffffff // Default to white sunlight
+			// The look sets ambient (low on studio/showcase, where the hemisphere fill carries the lift
+			// instead; full on technical). Explicit option still wins.
+			ambientLightIntensity: options.lighting?.ambientLightIntensity ?? preset.ambientIntensity,
+			sunlightColor: options.lighting?.sunlightColor || 0xffffff, // Default to white sunlight
+			// Direction-aware fill. The look decides whether it's on (a positive hemisphereIntensity is
+			// what actually creates the light in setupLighting); an explicit option overrides.
+			enableHemisphereLight:
+				options.lighting?.enableHemisphereLight ?? preset.hemisphereIntensity > 0,
+			hemisphereSkyColor: options.lighting?.hemisphereSkyColor ?? 0xdfe6ff,
+			// A slightly warm ground tint reads as bounced light and keeps fill from desaturating colour.
+			hemisphereGroundColor: options.lighting?.hemisphereGroundColor ?? 0x6b5f52,
+			hemisphereIntensity: options.lighting?.hemisphereIntensity ?? preset.hemisphereIntensity
 		},
 		environment: {
 			hdrPath: options.environment?.hdrPath || '/baseHDR.hdr',
 			backgroundColor: options.environment?.backgroundColor || new THREE.Color(0xf0f0f0),
 			enableEnvironmentLighting: options.environment?.enableEnvironmentLighting ?? true,
 			sceneUp: options.environment?.sceneUp || defaultUp,
-			showEnvironment: options.environment?.showEnvironment ?? false
+			showEnvironment: options.environment?.showEnvironment ?? false,
+			environmentIntensity: options.environment?.environmentIntensity ?? preset.environmentIntensity
 		},
 		floor: {
 			enabled: options.floor?.enabled ?? false,
@@ -623,11 +768,14 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 			shadowMapSize: options.render?.shadowMapSize || 2048,
 			antialias: options.render?.antialias ?? true,
 			pixelRatio: options.render?.pixelRatio || Math.min(window.devicePixelRatio, 2),
-			toneMapping: options.render?.toneMapping || style?.toneMapping || THREE.NeutralToneMapping,
-			toneMappingExposure: options.render?.toneMappingExposure ?? style?.toneMappingExposure ?? 1,
+			// ?? not || so an explicit NoToneMapping (=== 0) is honoured rather than falling through.
+			toneMapping: options.render?.toneMapping ?? preset.toneMapping,
+			toneMappingExposure: options.render?.toneMappingExposure ?? preset.toneMappingExposure,
 			preserveDrawingBuffer: options.render?.preserveDrawingBuffer ?? false,
-			ambientOcclusion: options.render?.ambientOcclusion ?? style?.ambientOcclusion ?? false,
-			aoIntensity: options.render?.aoIntensity ?? 1
+			ambientOcclusion: options.render?.ambientOcclusion ?? preset.ambientOcclusion,
+			aoIntensity: options.render?.aoIntensity ?? 1,
+			// Cap AO buffers at 1× by default — the biggest lever on GTAO cost on high-DPI displays.
+			aoPixelRatio: options.render?.aoPixelRatio ?? 1
 		},
 		controls: {
 			enableDamping: options.controls?.enableDamping ?? false,
@@ -640,8 +788,9 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 			maxDistance: options.controls?.maxDistance || Infinity
 		},
 		grid: {
-			// Defaults mirror createGrid's so the two never drift. A render style can switch the grid on.
-			enabled: options.grid?.enabled ?? style?.grid ?? false,
+			// Defaults mirror createGrid's so the two never drift. Grid is an independent overlay — a
+			// look never toggles it.
+			enabled: options.grid?.enabled ?? false,
 			cellSize: options.grid?.cellSize ?? 1,
 			majorEvery: options.grid?.majorEvery ?? 10,
 			cellColor: options.grid?.cellColor ?? 0x888888,
@@ -655,8 +804,9 @@ function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitiali
 			enabled: options.gizmo?.enabled ?? false
 		},
 		edges: {
-			// Defaults mirror addEdges' so the two never drift. A render style can switch edges on.
-			enabled: options.edges?.enabled ?? style?.edges ?? false,
+			// Defaults mirror addEdges' so the two never drift. Edges are an independent overlay — a
+			// look never toggles them.
+			enabled: options.edges?.enabled ?? false,
 			color: options.edges?.color ?? 0x222222,
 			width: options.edges?.width ?? 1.5,
 			thresholdAngle: options.edges?.thresholdAngle ?? 30
@@ -902,6 +1052,9 @@ function setupEnvironment(
 				}
 				envMap.mapping = THREE.EquirectangularReflectionMapping;
 				scene.environment = envMap;
+				// Normalize the HDR's IBL contribution so brightness is consistent across HDRs of
+				// differing exposure, instead of dim-HDR-looks-dim / bright-HDR-blows-out.
+				scene.environmentIntensity = config.environment.environmentIntensity ?? 1;
 				if (config.environment.showEnvironment) {
 					scene.background = envMap;
 				}
@@ -919,22 +1072,46 @@ function setupEnvironment(
 	}
 }
 
+/** The lights created by {@link setupLighting}, handed back so runtime setters can retune them. */
+type SceneLights = {
+	ambient: THREE.AmbientLight;
+	/** Hemisphere fill light — null unless `lighting.enableHemisphereLight`. */
+	hemisphere: THREE.HemisphereLight | null;
+	/**
+	 * Shadow-casting sun. Null when sunlight is disabled or shadows are off — the caller uses it only
+	 * to refit the shadow frustum on geometry change (see `fitShadowToContent`), so null means nothing
+	 * to refit.
+	 */
+	sun: THREE.DirectionalLight | null;
+};
+
 /**
- * Set up scene lighting. Returns the shadow-casting sun, if any, so the caller can refit its shadow
- * frustum to the scene whenever geometry changes (see `fitShadowToContent`). Returns null when
- * sunlight is disabled or shadows are off — there is then nothing to refit.
+ * Set up scene lighting. Returns handles to the created lights so the caller can refit the sun's
+ * shadow frustum on geometry change and retune fill lights at runtime.
  */
-function setupLighting(
-	scene: THREE.Scene,
-	config: Required<ThreeInitializerOptions>
-): THREE.DirectionalLight | null {
-	const ambientLight = new THREE.AmbientLight(
+function setupLighting(scene: THREE.Scene, config: Required<ThreeInitializerOptions>): SceneLights {
+	const ambient = new THREE.AmbientLight(
 		config.lighting.ambientLightColor,
 		config.lighting.ambientLightIntensity
 	);
-	scene.add(ambientLight);
+	scene.add(ambient);
 
-	if (!config.lighting.enableSunlight) return null;
+	// Hemisphere fill: soft sky-from-above / ground-from-below light that lifts occluded and
+	// downward-facing surfaces the HDR may leave dark. Aligned to the scene up so "sky" is genuinely
+	// up in a Z-up scene (a HemisphereLight defaults to +Y up).
+	let hemisphere: THREE.HemisphereLight | null = null;
+	if (config.lighting.enableHemisphereLight) {
+		hemisphere = new THREE.HemisphereLight(
+			config.lighting.hemisphereSkyColor,
+			config.lighting.hemisphereGroundColor,
+			config.lighting.hemisphereIntensity
+		);
+		const up = config.environment.sceneUp ?? defaultUp;
+		hemisphere.position.copy(up);
+		scene.add(hemisphere);
+	}
+
+	if (!config.lighting.enableSunlight) return { ambient, hemisphere, sun: null };
 
 	const sunlight = new THREE.DirectionalLight(
 		config.lighting.sunlightColor ?? 0xffffff,
@@ -947,7 +1124,7 @@ function setupLighting(
 
 	if (!config.render.enableShadows) {
 		scene.add(sunlight);
-		return null;
+		return { ambient, hemisphere, sun: null };
 	}
 
 	sunlight.castShadow = true;
@@ -967,7 +1144,7 @@ function setupLighting(
 	// A DirectionalLight aims at its target's world position; the target must be in the scene graph
 	// for its matrix to update. fitShadowToContent moves this target to the content centre.
 	scene.add(sunlight.target);
-	return sunlight;
+	return { ambient, hemisphere, sun: sunlight };
 }
 
 function addFloor(scene: THREE.Scene, config: Required<ThreeInitializerOptions>) {

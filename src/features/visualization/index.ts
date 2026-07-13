@@ -10,7 +10,7 @@
 // THREE.JS VISUALIZATION
 // ============================================================================
 
-export { initThree, materialAppearanceForStyle } from './threejs/three-initializer.js';
+export { initThree, materialAppearanceForLook } from './threejs/three-initializer.js';
 export { createCameraController } from './threejs/camera-controller.js';
 export type {
 	CameraController,
@@ -82,8 +82,8 @@ export type {
 	EnvironmentConfig,
 	FloorConfig,
 	RenderConfig,
-	RenderStyle,
-	RenderStylePreset,
+	Look,
+	LookPreset,
 	ControlsConfig,
 	GridConfig,
 	GizmoConfig,

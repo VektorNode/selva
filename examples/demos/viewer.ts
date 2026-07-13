@@ -28,6 +28,10 @@ const pg = createPlayground({
 		edges: { width: 1.5 },
 		measure: { enabled: true },
 		render: { aoIntensity: 0.9 },
+		// Turn on HDR-based lighting for this demo. baseHDR.hdr has a bright sky and a near-black floor
+		// — the classic case where product undersides fall into detail-swallowing shadow. The Lighting
+		// section below drives the hemisphere fill / environment intensity / exposure that fix it.
+		environment: { enableEnvironmentLighting: true, hdrPath: '/baseHDR.hdr' },
 		events: {
 			onObjectSelected: (obj) =>
 				pg.setStatus(
@@ -43,6 +47,10 @@ const pg = createPlayground({
 });
 
 const { viewer } = pg;
+// Dev convenience: expose the viewer handle (and THREE) so the demo can be driven from the console
+// or a headless screenshot script. Harmless in the example bundle; not part of the library API.
+(window as unknown as { viewer: typeof viewer; THREE: typeof THREE }).viewer = viewer;
+(window as unknown as { viewer: typeof viewer; THREE: typeof THREE }).THREE = THREE;
 const defaultHint = 'Click a mesh to select.\nDouble-click to zoom.\nEnable Measure, then click two points.';
 
 let meshCount = 0;
@@ -189,8 +197,38 @@ pg.addButton('Clear Measurement', () => viewer.measureTool?.clear());
 // ── Rendering ─────────────────────────────────────────────────────────────────
 pg.addSection('Rendering');
 pg.addToggle('Ambient Occlusion', false, (on) => viewer.setAmbientOcclusion(on));
-pg.addSelect('Render Style', ['technical', 'rendered'], 'technical', (v) =>
-	viewer.setRenderStyle(v as 'technical' | 'rendered')
+
+// ── Look presets ──────────────────────────────────────────────────────────────
+// A `look` is a ready-to-go lighting preset. The viewer defaults to 'technical' (flat CAD shading) —
+// this demo passed no `look` option. 'studio' is the polished product-shot look (ACES + hemisphere
+// fill + lifted HDR); 'showcase' is punchier. Switching look retunes ONLY lighting/material; it never
+// touches the grid, edges, or gizmo above. The Lighting sliders below let you tweak individual dials
+// on top — note that switching look re-applies the preset and overrides those tweaks.
+pg.addSection('Look');
+pg.addSelect('Look', ['technical', 'studio', 'showcase'], 'technical', (v) =>
+	viewer.setLook(v as 'studio' | 'technical' | 'showcase')
+);
+
+// ── Lighting (granular overrides) ─────────────────────────────────────────────
+// This demo's HDR has a bright sky and a near-black floor, so mesh undersides fall into deep shadow
+// under the default 'technical' look (no fill). Drag "Hemisphere Fill" up to lift them — or just pick
+// the 'studio' look above, which does this for you. The trick to lifting shadows WITHOUT washing
+// colour out: let the direction-aware "Hemisphere Fill" carry the lift while keeping "Ambient" low.
+pg.addSection('Lighting');
+pg.addSlider('Hemisphere Fill', { min: 0, max: 3, step: 0.05, value: 1.0 }, (v) =>
+	viewer.setFillLights({ hemisphereIntensity: v })
+);
+pg.addSlider('Ambient', { min: 0, max: 3, step: 0.05, value: 0.3 }, (v) =>
+	viewer.setFillLights({ ambientIntensity: v })
+);
+pg.addSlider('Environment Intensity', { min: 0, max: 3, step: 0.05, value: 1.2 }, (v) =>
+	viewer.setEnvironmentIntensity(v)
+);
+pg.addSlider('Exposure', { min: 0.2, max: 3, step: 0.05, value: 1 }, (v) =>
+	viewer.setToneMappingExposure(v)
+);
+pg.addSlider('AO Intensity', { min: 0, max: 1, step: 0.05, value: 0.9 }, (v) =>
+	viewer.setAoIntensity(v)
 );
 
 randomScene();

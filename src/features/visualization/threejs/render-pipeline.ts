@@ -41,6 +41,12 @@ export interface RenderPipelineOptions {
 	toneMappingExposure: number;
 	/** AO strength 0–1. Default 1. */
 	aoIntensity?: number;
+	/**
+	 * Cap on the device-pixel-ratio used for the composer's (AO) buffers. AO is low-frequency, so
+	 * rendering below the display DPR is nearly invisible but far cheaper. `setSize`'s incoming
+	 * pixelRatio is clamped to this. Default 1.
+	 */
+	aoPixelRatio?: number;
 }
 
 export function createRenderPipeline(
@@ -73,6 +79,9 @@ export function createRenderPipeline(
 	renderer.toneMapping = options.toneMapping;
 	renderer.toneMappingExposure = options.toneMappingExposure;
 
+	// Clamp the composer's DPR so GTAO's buffers don't render at the full display resolution (4× the
+	// pixels on a DPR-2 Retina panel). AO is low-frequency; a 1× buffer upscales near-invisibly.
+	const aoPixelRatioCap = options.aoPixelRatio ?? 1;
 	composer.setSize(width, height);
 
 	return {
@@ -80,7 +89,7 @@ export function createRenderPipeline(
 		// composer.setSize propagates the pixel-ratio-multiplied size to every pass; calling
 		// pass.setSize(w, h) here again would knock the AO/AA targets back down to logical CSS size.
 		setSize: (w, h, pixelRatio) => {
-			composer.setPixelRatio(pixelRatio);
+			composer.setPixelRatio(Math.min(pixelRatio, aoPixelRatioCap));
 			composer.setSize(w, h);
 		},
 		setCamera: (cam) => {

@@ -15,6 +15,20 @@ export type LightingConfig = {
 	ambientLightColor?: THREE.Color;
 	ambientLightIntensity?: number;
 	sunlightColor?: THREE.Color | number;
+	/**
+	 * Add a hemisphere fill light (sky color from above, ground color from below). Unlike the flat
+	 * ambient, this gives soft *direction-aware* fill, so downward- and side-facing surfaces never
+	 * collapse to black when the HDR's lower hemisphere is dark. The single biggest lever for keeping
+	 * results well-lit regardless of which HDR is loaded. Default false (opt-in) — enabling it shifts
+	 * the look. See {@link LightingConfig.hemisphereIntensity}.
+	 */
+	enableHemisphereLight?: boolean;
+	/** Hemisphere fill sky color (lights upward-facing surfaces). Default white. */
+	hemisphereSkyColor?: THREE.Color | number;
+	/** Hemisphere fill ground color (lights downward-facing surfaces). Default a mid grey. */
+	hemisphereGroundColor?: THREE.Color | number;
+	/** Hemisphere fill strength. Default 0.6. Only applies when {@link LightingConfig.enableHemisphereLight}. */
+	hemisphereIntensity?: number;
 };
 
 export type EnvironmentConfig = {
@@ -23,6 +37,13 @@ export type EnvironmentConfig = {
 	enableEnvironmentLighting?: boolean;
 	sceneUp?: THREE.Vector3;
 	showEnvironment?: boolean;
+	/**
+	 * Uniform multiplier on the HDR's image-based lighting contribution (`scene.environmentIntensity`).
+	 * Normalizes brightness across HDRs of differing exposure — raise it to lift a dim HDR, lower it to
+	 * tame a blown-out one — so the scene doesn't render dim-or-blown purely because of the HDR chosen.
+	 * Default 1 (three.js default, unchanged look).
+	 */
+	environmentIntensity?: number;
 };
 
 export type FloorConfig = {
@@ -49,35 +70,61 @@ export type RenderConfig = {
 	ambientOcclusion?: boolean;
 	/** AO strength 0–1 when {@link RenderConfig.ambientOcclusion} is on. Default 1. */
 	aoIntensity?: number;
+	/**
+	 * Device-pixel-ratio cap for the ambient-occlusion postprocessing buffers. AO is low-frequency, so
+	 * rendering its buffers below the display DPR is nearly invisible but hugely cheaper — on a Retina
+	 * display (DPR 2) full-resolution AO means 4× the pixels through GTAO's per-pixel sample loops,
+	 * which can dominate frame time. Default 1 (AO buffers at 1× regardless of display DPR). Raise
+	 * toward the display DPR for sharper AO at higher cost; only relevant when AO is enabled.
+	 */
+	aoPixelRatio?: number;
 };
 
 /**
- * A coherent visual look. Seeds the initial render defaults (tone mapping, AO, edges, grid, IBL
- * strength) at construction and can be re-applied live via `setRenderStyle`.
+ * A ready-to-go visual look. A `look` is a named bundle of LIGHTING/MATERIAL defaults only — it is
+ * deliberately decoupled from the CAD overlays (edges, grid), which are driven independently by
+ * {@link EdgesConfig}/{@link GridConfig}. Pick one and the viewer looks professional with zero other
+ * config; every individual `lighting`/`environment`/`render` option still overrides the preset. Seeds
+ * construction defaults and can be re-applied live via `setLook`.
  *
- * - 'technical': matte, drawing-like — neutral tone mapping, low IBL, edges + grid on, AO on.
- *   Reads like a CAD shaded view (Rhino/Onshape).
- * - 'rendered':  presentation — ACES-filmic tone mapping, stronger IBL, edges off, AO on. Reads
- *   like a Keyshot/Fusion render.
+ * - 'technical' (default): matte, drawing-like — neutral tone mapping, low IBL, no fill. Reads like a
+ *   CAD shaded view (Rhino/Onshape).
+ * - 'studio': balanced presentation — ACES tone mapping, hemisphere fill + lifted HDR so results are
+ *   well-lit regardless of the HDR, without washing colour out. The polished "product shot" look.
+ * - 'showcase': punchier presentation — ACES, stronger IBL/fill and a touch more exposure.
  */
-export type RenderStyle = 'technical' | 'rendered';
+export type Look = 'studio' | 'technical' | 'showcase';
 
 /**
- * The dials a {@link RenderStyle} sets. Single source of truth shared by construction-time defaults
- * and the runtime `setRenderStyle`, so the two never drift. `envMapIntensity` and `cullBackfaces`
- * are parse-time material choices (see the batch parser's `material` option); the rest are viewer
- * dials applied to the live scene.
+ * The lighting/material dials a {@link Look} sets. Single source of truth shared by construction-time
+ * defaults and the runtime `setLook`, so the two never drift. `envMapIntensity` and `cullBackfaces`
+ * are parse-time material choices (see the batch parser's `material` option, exposed via
+ * `materialAppearanceForLook`); the rest are applied to the live scene. A look does NOT carry edges
+ * or grid — those are independent overlay concerns.
  */
-export type RenderStylePreset = {
+export type LookPreset = {
 	toneMapping: THREE.ToneMapping;
 	toneMappingExposure: number;
-	/** IBL reflection strength on compute materials. */
+	/** IBL reflection strength on compute materials (parse-time material choice). */
 	envMapIntensity: number;
-	/** Cull back faces on compute meshes (crisper solids; hides open surfaces from behind). */
+	/**
+	 * Uniform multiplier on the HDR's image-based lighting (`scene.environmentIntensity`). The
+	 * 'studio'/'showcase' looks lift this above 1 so results stay bright regardless of the HDR.
+	 */
+	environmentIntensity: number;
+	/**
+	 * Hemisphere fill strength. The 'studio'/'showcase' looks turn it on (direction-aware fill that
+	 * lifts shadowed / under-facing surfaces a dark HDR leaves black); 'technical' keeps it 0.
+	 */
+	hemisphereIntensity: number;
+	/**
+	 * Flat ambient strength. Kept low on 'studio'/'showcase' so the hemisphere fill carries the lift
+	 * without the flat white ambient desaturating colour.
+	 */
+	ambientIntensity: number;
+	/** Cull back faces on compute meshes (parse-time material choice; crisper solids). */
 	cullBackfaces: boolean;
 	ambientOcclusion: boolean;
-	edges: boolean;
-	grid: boolean;
 };
 
 /** Crisp boundary/crease edge overlays on meshes. See `addEdges`. */
@@ -155,12 +202,13 @@ export type MeasureConfig = {
 export type ThreeInitializerOptions = {
 	sceneScale?: 'mm' | 'cm' | 'm' | 'inches' | 'feet';
 	/**
-	 * Pick a coherent look up front — seeds sensible defaults for tone mapping, AO, edges, grid, and
-	 * IBL strength (see {@link RenderStyle}). Individual `render`/`edges`/`grid` options still win
-	 * when set explicitly, so this only fills in what you leave unspecified. Omit for the plain
-	 * per-field defaults (no style applied). Re-apply later via the init result's `setRenderStyle`.
+	 * Pick a ready-to-go visual look up front — seeds professional lighting/material defaults (tone
+	 * mapping, AO, IBL strength, hemisphere fill; see {@link Look}). Individual `lighting`/
+	 * `environment`/`render` options still win when set explicitly, so this only fills in what you
+	 * leave unspecified. A look does NOT touch edges/grid (those are independent overlays). Defaults
+	 * to 'technical'. Re-apply later via the init result's `setLook`.
 	 */
-	renderStyle?: RenderStyle;
+	look?: Look;
 	camera?: CameraConfig;
 	lighting?: LightingConfig;
 	environment?: EnvironmentConfig;

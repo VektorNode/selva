@@ -17,8 +17,8 @@ const pg = createPlayground({ title: 'Display Items' });
 
 pg.addSection('Display Items');
 pg.addButton('Reload sample', () => void load());
-pg.addSelect('Render Style', ['technical', 'rendered'], 'technical', (v) =>
-	pg.viewer.setRenderStyle(v as 'technical' | 'rendered')
+pg.addSelect('Look', ['technical', 'studio', 'showcase'], 'technical', (v) =>
+	pg.viewer.setLook(v as 'studio' | 'technical' | 'showcase')
 );
 
 async function load() {

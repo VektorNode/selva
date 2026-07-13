@@ -36,11 +36,12 @@ function stubRenderer(): THREE.WebGLRenderer {
 	} as unknown as THREE.WebGLRenderer;
 }
 
-function makePipeline(camera: THREE.Camera) {
+function makePipeline(camera: THREE.Camera, aoPixelRatio?: number) {
 	const scene = new THREE.Scene();
 	const pipeline = createRenderPipeline(stubRenderer(), scene, camera, 800, 600, {
 		toneMapping: THREE.NeutralToneMapping,
-		toneMappingExposure: 1
+		toneMappingExposure: 1,
+		aoPixelRatio
 	});
 	const gtaoPass = gtaoInstances[gtaoInstances.length - 1] as GTAOPass;
 	return { pipeline, gtaoPass };
@@ -94,16 +95,37 @@ describe('render pipeline GTAO camera swap (issue 5)', () => {
 });
 
 describe('render pipeline sizing (issues 1/7)', () => {
-	it('setSize propagates the configured pixel ratio to the AO pass render targets', () => {
+	it('caps the AO pixel ratio at 1 by default (AO buffers stay at CSS size, not display DPR)', () => {
 		const { pipeline, gtaoPass } = makePipeline(new THREE.PerspectiveCamera(20, 1, 0.1, 100));
+
+		// Display DPR 2, but AO defaults to a 1× cap — GTAO renders at logical size, not 4× the pixels.
+		pipeline.setSize(400, 300, 2);
+
+		expect(gtaoPass.width).toBe(400);
+		expect(gtaoPass.height).toBe(300);
+		expect(gtaoPass.gtaoRenderTarget.width).toBe(400);
+		expect(gtaoPass.gtaoRenderTarget.height).toBe(300);
+	});
+
+	it('an explicit aoPixelRatio raises the AO buffer resolution (still capped, not knocked to CSS)', () => {
+		const { pipeline, gtaoPass } = makePipeline(new THREE.PerspectiveCamera(20, 1, 0.1, 100), 2);
 
 		pipeline.setSize(400, 300, 2);
 
-		// The composer multiplies by pixel ratio and pushes the DPR size to every pass — nothing
-		// knocks the AO buffers back down to logical CSS size.
+		// Cap of 2 with display DPR 2 → full-resolution AO buffers, propagated to every pass.
 		expect(gtaoPass.width).toBe(800);
 		expect(gtaoPass.height).toBe(600);
 		expect(gtaoPass.gtaoRenderTarget.width).toBe(800);
 		expect(gtaoPass.gtaoRenderTarget.height).toBe(600);
+	});
+
+	it('the AO cap never upsamples beyond the incoming pixel ratio', () => {
+		// aoPixelRatio 2 but display DPR 1 → clamp to 1, no upsampling.
+		const { pipeline, gtaoPass } = makePipeline(new THREE.PerspectiveCamera(20, 1, 0.1, 100), 2);
+
+		pipeline.setSize(400, 300, 1);
+
+		expect(gtaoPass.width).toBe(400);
+		expect(gtaoPass.height).toBe(300);
 	});
 });

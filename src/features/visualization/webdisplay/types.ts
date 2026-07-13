@@ -107,9 +107,9 @@ export interface MeshBatchParsingOptions {
 	/** Enable performance monitoring. Defaults to false. */
 	debug?: boolean;
 	/**
-	 * Appearance dials applied to every material built from this batch. These drive how "rendered"
+	 * Appearance dials applied to every material built from this batch. These drive how "studio"
 	 * vs "matte technical" the meshes look; they are set once at parse time (materials are rebuilt
-	 * per solve). Runtime restyling of an already-built scene lives in the viewer's `setRenderStyle`.
+	 * per solve). Runtime restyling of an already-built scene lives in the viewer's `setLook`.
 	 */
 	material?: MaterialAppearanceOptions;
 }
