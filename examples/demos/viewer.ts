@@ -189,5 +189,8 @@ pg.addButton('Clear Measurement', () => viewer.measureTool?.clear());
 // ── Rendering ─────────────────────────────────────────────────────────────────
 pg.addSection('Rendering');
 pg.addToggle('Ambient Occlusion', false, (on) => viewer.setAmbientOcclusion(on));
+pg.addSelect('Render Style', ['technical', 'rendered'], 'technical', (v) =>
+	viewer.setRenderStyle(v as 'technical' | 'rendered')
+);
 
 randomScene();

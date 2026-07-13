@@ -17,6 +17,9 @@ const pg = createPlayground({ title: 'Display Items' });
 
 pg.addSection('Display Items');
 pg.addButton('Reload sample', () => void load());
+pg.addSelect('Render Style', ['technical', 'rendered'], 'technical', (v) =>
+	pg.viewer.setRenderStyle(v as 'technical' | 'rendered')
+);
 
 async function load() {
 	pg.setStatus('Loading rhino3dm + response…');
