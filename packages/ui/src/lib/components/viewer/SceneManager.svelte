@@ -18,7 +18,11 @@
 	// @selvajs/compute. They aren't scene content, so they're hidden from the object list.
 	const HELPER_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
 
-	const getSceneObjects = () => {
+	// Content objects of the scene, recomputed only when a solve bumps `sceneVersion` (scene.children is
+	// a plain array the library mutates in place, so that counter is the sole reactive trigger). Derived
+	// — not a function — so the several template sites that read it share one walk per solve instead of
+	// re-filtering scene.children on every render.
+	const sceneObjects = $derived.by(() => {
 		void sceneVersion;
 		return scene.children.filter(
 			(obj) =>
@@ -26,20 +30,19 @@
 				!(obj instanceof THREE.Light) &&
 				!HELPER_IDS.has(obj.userData?.id)
 		);
-	};
+	});
 
-	const getLayerGroups = () => {
-		const objects = getSceneObjects();
+	// Content grouped by layer. Derived from `sceneObjects`, so the grouping map is rebuilt once per
+	// solve rather than every time the list renders.
+	const layerGroups = $derived.by(() => {
 		const groups = new SvelteMap<string, THREE.Object3D[]>();
-
-		for (const obj of objects) {
+		for (const obj of sceneObjects) {
 			const layer: string = obj.userData?.layer || obj.userData?.category || 'Default';
 			if (!groups.has(layer)) groups.set(layer, []);
 			groups.get(layer)!.push(obj);
 		}
-
 		return groups;
-	};
+	});
 
 	let hiddenUuids = new SvelteSet<string>();
 
@@ -59,8 +62,7 @@
 
 	const toggleObject = (object: THREE.Object3D) => {
 		if (selectedUuids.has(object.uuid) && selectedUuids.size > 1) {
-			const allObjects = getSceneObjects();
-			const selected = allObjects.filter((o) => selectedUuids.has(o.uuid));
+			const selected = sceneObjects.filter((o) => selectedUuids.has(o.uuid));
 			const allHidden = selected.every((o) => hiddenUuids.has(o.uuid));
 			for (const o of selected) setObjectVisible(o, allHidden);
 		} else {
@@ -104,23 +106,25 @@
 
 	let searchQuery = $state('');
 
-	const getFilteredLayerGroups = () => {
-		const groups = getLayerGroups();
-		if (!searchQuery.trim()) return groups;
+	// Layer groups after the search filter. Derived from `layerGroups` + `searchQuery`, so filtering
+	// runs once per search keystroke — not twice per render (it's read by both the list and the
+	// empty-state check below).
+	const filteredLayerGroups = $derived.by(() => {
+		if (!searchQuery.trim()) return layerGroups;
 		const q = searchQuery.toLowerCase();
 		const filtered = new SvelteMap<string, THREE.Object3D[]>();
-		for (const [layerName, objects] of groups) {
+		for (const [layerName, objects] of layerGroups) {
 			const matchingObjects = layerName.toLowerCase().includes(q)
 				? objects
 				: objects.filter((obj) => getObjectLabel(obj).toLowerCase().includes(q));
 			if (matchingObjects.length > 0) filtered.set(layerName, matchingObjects);
 		}
 		return filtered;
-	};
+	});
 
 	const getFlatVisibleUuids = (): string[] => {
 		const result: string[] = [];
-		for (const [layerName, objects] of getFilteredLayerGroups()) {
+		for (const [layerName, objects] of filteredLayerGroups) {
 			if (!collapsedLayers.has(layerName)) {
 				for (const obj of objects) result.push(obj.uuid);
 			}
@@ -182,7 +186,7 @@
 	</div>
 
 	<div class="py-1 flex-1 overflow-y-auto">
-		{#each [...getFilteredLayerGroups()] as [layerName, objects] (layerName)}
+		{#each [...filteredLayerGroups] as [layerName, objects] (layerName)}
 			{@const layerHidden = isLayerHidden(objects)}
 			{@const layerPartial = isLayerPartial(objects)}
 			{@const collapsed = collapsedLayers.has(layerName)}
@@ -285,12 +289,12 @@
 		{/each}
 
 		<!-- Empty state -->
-		{#if getSceneObjects().length === 0}
+		{#if sceneObjects.length === 0}
 			<div class="py-12 flex flex-col items-center justify-center text-center">
 				<EyeOff class="mb-2 h-5 w-5 text-muted-foreground/30" />
 				<p class="text-xs text-muted-foreground">{t.noObjects}</p>
 			</div>
-		{:else if getFilteredLayerGroups().size === 0}
+		{:else if filteredLayerGroups.size === 0}
 			<div class="py-12 flex flex-col items-center justify-center text-center">
 				<Search class="mb-2 h-5 w-5 text-muted-foreground/30" />
 				<p class="text-xs text-muted-foreground">

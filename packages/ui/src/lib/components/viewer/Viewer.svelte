@@ -107,6 +107,7 @@
 	let cameraController: CameraController | null = null;
 	let measureTool: MeasureTool | null = null;
 	let grid: Grid | null = null;
+	let applyEdges: ((root: THREE.Object3D) => void) | null = null;
 	let fitToView: (() => void) | null = null;
 	let viewerInitialized = false;
 	let sceneVersion = $state(0);
@@ -143,12 +144,15 @@
 	onMount(() => {
 		if (!canvas) return;
 
+		// Only options that differ from the library defaults. The default look is already 'technical'
+		// (flat ambient + HDR image-based lighting; baseHDR loads by default), so we just switch off the
+		// sun and shadows it doesn't need — and turn on the grid/measure/edges/click this viewer uses.
 		const opts: ThreeInitializerOptions = {
+			lighting: { enableSunlight: false },
+			render: { enableShadows: false },
 			environment: { backgroundColor: config.backgroundColor },
-			controls: {},
 			// Build the grid so it can be toggled at runtime, but start hidden (off by default).
 			grid: { enabled: config.showToolsMenu && config.showGridToggle },
-			gizmo: { enabled: false },
 			measure: { enabled: config.showToolsMenu },
 			events: {
 				onMeshMetadataClicked: config.enableMeshClick
@@ -170,6 +174,7 @@
 		measureTool = init.measureTool;
 		grid = init.grid;
 		grid?.setVisible(gridVisible);
+		applyEdges = init.applyEdges;
 		fitToView = init.fitToView;
 		projection = init.cameraController.getProjection();
 
@@ -208,6 +213,9 @@
 	$effect(() => {
 		if (scene && camera && controls) {
 			updateScene(scene, meshes, camera, controls, viewerInitialized);
+			// Attach crease edges to the freshly-loaded meshes. updateScene clears and re-adds content
+			// each solve, so re-run over the scene root every time; addEdges is idempotent per mesh.
+			applyEdges?.(scene);
 			untrack(() => sceneVersion++);
 
 			if (!viewerInitialized && meshes.length > 0) {
