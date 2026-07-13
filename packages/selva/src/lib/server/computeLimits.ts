@@ -62,3 +62,12 @@ export const COMPUTE_CACHE_ERRORED_SOLVES = limits.computeCacheErroredSolves;
 // Max in-flight solves per compute server (scheduler maxConcurrent) — size to
 // the server's compute.geometry child count. See ComputeLimits for rationale.
 export const COMPUTE_MAX_CONCURRENT = limits.computeMaxConcurrentSolves;
+
+// Backpressure (audit B7): queue-depth cap and queue-wait deadline. Both 0 =
+// unbounded/off (nothing sheds). See ComputeLimits for tuning guidance.
+export const COMPUTE_MAX_QUEUE_DEPTH = limits.computeMaxQueueDepth;
+export const COMPUTE_QUEUE_WAIT_MS = limits.computeQueueWaitMs;
+
+// Total-byte budget for the in-process definition-byte cache (keyed on immutable
+// version id). 0 disables. See ComputeLimits.computeDefinitionByteCacheBytes.
+export const COMPUTE_DEFINITION_BYTE_CACHE_BYTES = limits.computeDefinitionByteCacheBytes;

@@ -39,6 +39,23 @@ export function readPositiveInt(env: EnvRecord, name: string, fallback: number):
 }
 
 /**
+ * Parse a non-negative integer env value — like {@link readPositiveInt} but `0`
+ * is a valid value (used by knobs where `0` means "disable", e.g. a cache
+ * budget). Returns `fallback` when absent, and warns + falls back when present
+ * but not a finite non-negative number.
+ */
+export function readNonNegativeInt(env: EnvRecord, name: string, fallback: number): number {
+	const raw = env[name];
+	if (!raw) return fallback;
+	const parsed = Number(raw);
+	if (!Number.isFinite(parsed) || parsed < 0) {
+		console.warn(`[selva] Invalid ${name}=${raw}, falling back to ${fallback}`);
+		return fallback;
+	}
+	return Math.floor(parsed);
+}
+
+/**
  * Parse a boolean env flag. Accepts `true/1/yes/on` (case-insensitive) as true
  * and `false/0/no/off` as false; any other / absent value falls back.
  */
@@ -125,6 +142,33 @@ export interface ComputeLimits {
 	 * app instances each apply their own cap.
 	 */
 	computeMaxConcurrentSolves: number;
+	/**
+	 * Backpressure — max solves allowed to WAIT in the per-server FIFO queue (i.e.
+	 * excluding the `computeMaxConcurrentSolves` already in flight). A solve that
+	 * arrives to a full queue is shed immediately (scheduler `QUEUE_FULL`, mapped
+	 * to HTTP 503 + `Retry-After`) instead of piling up unbounded. `0` = unbounded
+	 * (the pre-shedding default): the queue grows without limit, matching prior
+	 * behavior. Size it to roughly 2–3× `computeMaxConcurrentSolves` once the
+	 * Rhino pool's real capacity is known — shedding fast beats a hung request.
+	 */
+	computeMaxQueueDepth: number;
+	/**
+	 * Backpressure — longest (ms) a solve may sit QUEUED before it starts
+	 * executing; still-waiting past this it's shed (scheduler `QUEUE_TIMEOUT` →
+	 * HTTP 503 + `Retry-After`) rather than burning compute on a stale request.
+	 * Bounds tail latency: the scheduler's `timeoutMs` clock starts at execution,
+	 * so without this a solve's total wait is unbounded and invisible. `0` = no
+	 * queue deadline (the default). A sensible tuned value is ≈ `maxSolveDurationMs`.
+	 */
+	computeQueueWaitMs: number;
+	/**
+	 * Total-byte budget (bytes) for the in-process definition-byte cache keyed on
+	 * immutable version id. A warm entry lets a solve skip `storage.get` entirely,
+	 * and a pointer-known solve never loads bytes at all. `0` disables the cache
+	 * (every solve re-reads storage). Sized as a total-byte LRU because definitions
+	 * span KB→hundreds of MB; env value is MB, converted here.
+	 */
+	computeDefinitionByteCacheBytes: number;
 }
 
 /**
@@ -154,6 +198,16 @@ export function resolveComputeLimits(env: EnvRecord): ComputeLimits {
 		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true),
 		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false),
 		// 4 matches rhino.compute's default --childcount; tune to the actual VM.
-		computeMaxConcurrentSolves: readPositiveInt(env, 'COMPUTE_MAX_CONCURRENT', 4)
+		computeMaxConcurrentSolves: readPositiveInt(env, 'COMPUTE_MAX_CONCURRENT', 4),
+		// Both 0 (unbounded / no deadline) by default — nothing sheds until an
+		// operator who's measured their pool opts in. readNonNegativeInt so `0` is a
+		// valid "disabled" value, not treated as invalid.
+		computeMaxQueueDepth: readNonNegativeInt(env, 'COMPUTE_MAX_QUEUE_DEPTH', 0),
+		computeQueueWaitMs: readNonNegativeInt(env, 'COMPUTE_QUEUE_WAIT_MS', 0),
+		// Env is MB; 0 disables. Default 256 MB holds a handful of typical
+		// definitions warm without pinning gigabytes. readNonNegativeInt so `0`
+		// (disable) is honored rather than treated as invalid.
+		computeDefinitionByteCacheBytes:
+			readNonNegativeInt(env, 'COMPUTE_DEFINITION_BYTE_CACHE_MB', 256) * MB
 	};
 }

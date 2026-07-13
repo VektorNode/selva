@@ -43,6 +43,8 @@ function baseConfig() {
 	return {
 		maxSolveDurationMs: 30_000,
 		maxConcurrentSolves: 4,
+		maxQueueDepth: 0,
+		queueWaitMs: 0,
 		cachesolve: true,
 		cacheerroredsolves: false,
 		reuseServerDefinitionCache: true,
@@ -170,6 +172,24 @@ describe('createClientCache — scheduler concurrency (audit B6)', () => {
 		// serializing every solve on the server — the option must always be set.
 		expect(createdSchedulerOptions[0].mode).toBe('queue');
 		expect(createdSchedulerOptions[0].maxConcurrent).toBe(7);
+	});
+});
+
+describe('createClientCache — scheduler backpressure (audit B7)', () => {
+	it('forwards non-zero queue bounds to the scheduler', async () => {
+		const cache = createClientCache({ ...baseConfig(), maxQueueDepth: 12, queueWaitMs: 90_000 });
+		await cache.getClient(server('s1'));
+		expect(createdSchedulerOptions[0].maxQueueDepth).toBe(12);
+		expect(createdSchedulerOptions[0].queueWaitMs).toBe(90_000);
+	});
+
+	it('maps a 0 (disabled) queue bound to undefined so the scheduler stays unbounded', async () => {
+		// The scheduler treats undefined as unbounded/no-deadline; passing 0 would
+		// shed EVERY queued solve. Our `0 = off` convention must become undefined.
+		const cache = createClientCache({ ...baseConfig(), maxQueueDepth: 0, queueWaitMs: 0 });
+		await cache.getClient(server('s1'));
+		expect(createdSchedulerOptions[0].maxQueueDepth).toBeUndefined();
+		expect(createdSchedulerOptions[0].queueWaitMs).toBeUndefined();
 	});
 });
 

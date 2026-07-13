@@ -13,16 +13,53 @@ import { gunzipSync } from 'node:zlib';
 import type { GrasshopperClient, InputParam, SolveScheduler } from '@selvajs/compute';
 
 // --- Mock @selvajs/compute -------------------------------------------------
+// The factory is hoisted above module top-level, so the RhinoComputeError
+// stand-in is declared INSIDE it. The pipeline classifies shed outcomes with
+// `err instanceof RhinoComputeError && err.code === ErrorCodes.QUEUE_*`, so the
+// mock must export a real class + the code constants. Tests import the mocked
+// `RhinoComputeError` below to construct instances the pipeline recognizes.
 vi.mock('@selvajs/compute', () => {
+	class RhinoComputeError extends Error {
+		code: string;
+		statusCode?: number;
+		context?: Record<string, unknown>;
+		constructor(
+			message: string,
+			code: string,
+			options?: { statusCode?: number; context?: Record<string, unknown> }
+		) {
+			super(message);
+			this.name = 'RhinoComputeError';
+			this.code = code;
+			this.statusCode = options?.statusCode;
+			this.context = options?.context;
+		}
+	}
 	return {
 		TreeBuilder: {
 			fromInputParams: (params: unknown[]) => ({ __tree: true, count: params.length })
 		},
 		// transform-input.ts (imported by the pipeline) calls processInput; return
 		// the raw shape as an InputParam so filtering/mapping runs end-to-end.
-		processInput: (raw: InputParam) => raw
+		processInput: (raw: InputParam) => raw,
+		RhinoComputeError,
+		ErrorCodes: { QUEUE_FULL: 'QUEUE_FULL', QUEUE_TIMEOUT: 'QUEUE_TIMEOUT' }
 	};
 });
+
+// The mocked class, typed loosely for constructing test errors. The `as` cast
+// keeps the 3-arg (message, code, options) signature the pipeline's mock uses.
+import { RhinoComputeError as MockRhinoComputeError } from '@selvajs/compute';
+const makeShedError = (
+	message: string,
+	code: 'QUEUE_FULL' | 'QUEUE_TIMEOUT' | 'UNKNOWN_ERROR',
+	options?: { statusCode?: number; context?: Record<string, unknown> }
+) =>
+	new (MockRhinoComputeError as unknown as new (
+		m: string,
+		c: string,
+		o?: { statusCode?: number; context?: Record<string, unknown> }
+	) => Error)(message, code, options);
 
 import {
 	runSolvePipeline,
@@ -196,6 +233,33 @@ describe('runSolvePipeline — failure outcomes', () => {
 		expect(outcome.kind).toBe('client_abort');
 	});
 
+	it('R3: a client disconnect while QUEUED forwards the signal and settles client_abort without a result', async () => {
+		// Models the queued-disconnect path the package fix (ISSUES 46) closes: the
+		// signal fires while the item waits in the FIFO, the scheduler settles it
+		// ABORTED (rejects with AbortError) and never runs compute. The pipeline's
+		// job — verified here — is to (a) hand the request signal to scheduler.solve
+		// so that prune can happen, and (b) classify the aborted-signal reject as
+		// client_abort (→ 499), never leaking a compute result.
+		const controller = new AbortController();
+		let seenSignal: AbortSignal | undefined;
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				signal: controller.signal,
+				client: fakeClient(async (_d, _t, opts) => {
+					seenSignal = opts.signal;
+					// The disconnect arrives while queued: abort, then settle ABORTED —
+					// compute output is never produced (the loader throws, never returns).
+					controller.abort();
+					const e = new Error('aborted while queued');
+					e.name = 'AbortError';
+					throw e;
+				})
+			})
+		);
+		expect(seenSignal).toBe(controller.signal); // scheduler CAN observe the disconnect
+		expect(outcome.kind).toBe('client_abort'); // → 499, not a 500/compute_error
+	});
+
 	it('classifies any other throw as compute_error carrying the original error', async () => {
 		const boom = new TypeError('fetch failed');
 		const outcome = await runSolvePipeline(
@@ -218,6 +282,57 @@ describe('runSolvePipeline — failure outcomes', () => {
 			})
 		);
 		expect(outcome.kind).toBe('too_large');
+	});
+
+	it('classifies a QUEUE_FULL rejection as shed(queue_full) with a Retry-After hint', async () => {
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				client: fakeClient(async () => {
+					throw makeShedError('queue full', 'QUEUE_FULL', {
+						statusCode: 503,
+						context: { queueDepth: 8, maxQueueDepth: 8 }
+					});
+				})
+			})
+		);
+		expect(outcome.kind).toBe('shed');
+		if (outcome.kind !== 'shed') return;
+		expect(outcome.reason).toBe('queue_full');
+		expect(outcome.retryAfterSeconds).toBeGreaterThan(0);
+		expect(outcome.message).toBeTruthy();
+	});
+
+	it('classifies a QUEUE_TIMEOUT rejection as shed(queue_timeout)', async () => {
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				client: fakeClient(async () => {
+					throw makeShedError('queued too long', 'QUEUE_TIMEOUT', {
+						statusCode: 503,
+						context: { waitedMs: 5000, queueWaitMs: 3000 }
+					});
+				})
+			})
+		);
+		expect(outcome.kind).toBe('shed');
+		if (outcome.kind !== 'shed') return;
+		expect(outcome.reason).toBe('queue_timeout');
+		expect(outcome.retryAfterSeconds).toBeGreaterThan(0);
+	});
+
+	it('does NOT shed a RhinoComputeError with an unrelated code (stays compute_error)', async () => {
+		const boom = makeShedError('server exploded', 'UNKNOWN_ERROR', {
+			statusCode: 500
+		});
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				client: fakeClient(async () => {
+					throw boom;
+				})
+			})
+		);
+		expect(outcome.kind).toBe('compute_error');
+		if (outcome.kind !== 'compute_error') return;
+		expect(outcome.error).toBe(boom);
 	});
 });
 
@@ -319,6 +434,51 @@ describe('runSolvePipeline — Server-Timing', () => {
 		const st = outcome.envelope.headers['Server-Timing'];
 		expect(st).not.toContain('selva_cache');
 		expect(st).not.toContain('rhino_decode');
+	});
+
+	it('emits def_bytes=skipped when the byteRefOutcome shows load() never ran (pointer solve)', async () => {
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				byteRefOutcome: { loaded: false, fromCache: false },
+				client: fakeClient(async () => ({ errors: [], warnings: [] }))
+			})
+		);
+		expect(outcome.kind).toBe('ok');
+		if (outcome.kind !== 'ok') return;
+		expect(outcome.envelope.headers['Server-Timing']).toContain('def_bytes;desc=skipped');
+	});
+
+	it('emits def_bytes=hit when bytes were served from the warm cache', async () => {
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				byteRefOutcome: { loaded: true, fromCache: true },
+				client: fakeClient(async () => ({ errors: [], warnings: [] }))
+			})
+		);
+		expect(outcome.kind).toBe('ok');
+		if (outcome.kind !== 'ok') return;
+		expect(outcome.envelope.headers['Server-Timing']).toContain('def_bytes;desc=hit');
+	});
+
+	it('emits def_bytes=miss when the loader was called', async () => {
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				byteRefOutcome: { loaded: true, fromCache: false },
+				client: fakeClient(async () => ({ errors: [], warnings: [] }))
+			})
+		);
+		expect(outcome.kind).toBe('ok');
+		if (outcome.kind !== 'ok') return;
+		expect(outcome.envelope.headers['Server-Timing']).toContain('def_bytes;desc=miss');
+	});
+
+	it('omits def_bytes entirely for a raw-bytes solve (no byteRefOutcome)', async () => {
+		const outcome = await runSolvePipeline(
+			baseArgs({ client: fakeClient(async () => ({ errors: [], warnings: [] })) })
+		);
+		expect(outcome.kind).toBe('ok');
+		if (outcome.kind !== 'ok') return;
+		expect(outcome.envelope.headers['Server-Timing']).not.toContain('def_bytes');
 	});
 
 	it('never attributes rhino timing to a Selva-cache hit (no compute call of ours)', async () => {

@@ -42,6 +42,17 @@ export interface IDefinitionStore {
 	/** Atomic +1 on the solve counter. No-op if the record doesn't exist. */
 	incrementSolveCount(ctx: RequestContext, guid: string): Promise<void>;
 
+	/**
+	 * Atomically reserve the next `versionNumber` for a new version: returns the
+	 * current `nextVersionNumber` and advances the counter by 1 in a single
+	 * operation (so concurrent uploads never collide on a number/fileKey). The
+	 * counter is monotonic and NEVER decremented — deleting the latest version
+	 * does not free its number, so a delete-then-reupload mints a fresh number and
+	 * fresh `fileKey` instead of overwriting the deleted blob's key. Throws if the
+	 * definition doesn't exist.
+	 */
+	reserveNextVersionNumber(ctx: RequestContext, guid: string): Promise<number>;
+
 	// Versions (immutable rows)
 	createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void>;
 	/** Newest first by `versionNumber`. */

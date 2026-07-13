@@ -103,6 +103,18 @@ export interface ClientCacheConfig {
 	 * (`ComputeLimits.computeMaxConcurrentSolves`).
 	 */
 	maxConcurrentSolves: number;
+	/**
+	 * Backpressure — max solves that may WAIT in the FIFO queue (excludes the
+	 * in-flight `maxConcurrentSolves`). `0` = unbounded (`ComputeLimits.
+	 * computeMaxQueueDepth`); a full queue sheds new solves with `QUEUE_FULL`.
+	 */
+	maxQueueDepth: number;
+	/**
+	 * Backpressure — max ms a solve may sit queued before executing; `0` = no
+	 * deadline (`ComputeLimits.computeQueueWaitMs`). A too-long wait sheds with
+	 * `QUEUE_TIMEOUT`.
+	 */
+	queueWaitMs: number;
 	/** Concise cache/timing logs. When false, `onDebugLog` is never invoked. */
 	debug: boolean;
 	/** VERBOSE lib-level logging (full solve request/response incl. geometry). */
@@ -208,6 +220,11 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			// solve on this server through a single slot while the compute VM's
 			// other compute.geometry children idle (audit B6) — always pass it.
 			maxConcurrent: config.maxConcurrentSolves,
+			// Backpressure (audit B7). The scheduler treats undefined as
+			// unbounded/no-deadline, so map our `0`-means-off convention to undefined
+			// rather than passing 0 (which would shed EVERY queued solve).
+			maxQueueDepth: config.maxQueueDepth || undefined,
+			queueWaitMs: config.queueWaitMs || undefined,
 			timeoutMs: config.maxSolveDurationMs,
 			cache: { maxEntries: 20, ttlMs: 5 * 60_000 },
 			// Solve large definitions by server cache-key (pointer) instead of

@@ -48,20 +48,20 @@ their own sections below (historical `ISSUES.md` numbers kept for reference).
 **`selva` / `@selvajs/server` (app repo) — see the
 [implementation plan](#selva-side-implementation-plan-2026-07-13) for sequencing:**
 
-| Item                                  | Status                     | Notes                                                                                                             |
-| ------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| H1 — durable L2 solve cache           | ⬜ TODO, design decided    | one-cache-per-channel, per-definition quota, gzipped envelopes (R6), orgId key                                    |
-| Definition-byte cache (M1 app half)   | ⬜ TODO, design decided    | `versionId → bytes` LRU in `@selvajs/server`, wired as `DefinitionRef.load()`                                     |
-| Monotonic version numbers             | ⬜ TODO, decided           | `nextVersionNumber` on the definition record — root-cause fix for fileKey reuse                                   |
-| R4 — single-flight map                | ⬜ TODO, decided           | `Map<inputKey, Promise>` next to the L2 lookup                                                                    |
-| M2 — client-side result memo          | ⬜ TODO                    | small LRU in `createSolveSession`                                                                                 |
-| R2 — misleading "never cached" log    | ⬜ TODO                    | fix wording in `client-cache.ts` onSettle debug lines                                                             |
-| R3 — wire disconnect signals (verify) | ⬜ TODO                    | confirm the route passes request-abort signals so the package fix actually bites                                  |
-| R5 — concurrency + load shedding      | 🟡 PARTIAL (audit B6 done) | `COMPUTE_MAX_CONCURRENT` shipped 2026-07-12; queue cap + 503 shed + queue-wait deadline adoption remain (Phase 2) |
-| R8 — config folded into durable key   | ⬜ TODO                    | modelunits/tolerances/`COMPUTE_CONTRACT_VERSION` in the H1 key                                                    |
-| R9 — `solveCacheLimit` on definition  | ⬜ TODO, shape decided     | one number: absent = inherit, 0 = off, N = quota                                                                  |
-| R10 — per-request definition header   | ⬜ TODO (future)           | before any affinity routing ships                                                                                 |
-| F1 — pre-solved bundle (+ prewarm)    | ⬜ TODO                    | after H1; R13's post-transform keying applies here                                                                |
+| Item                                  | Status                  | Notes                                                                                                                                                                                             |
+| ------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1 — durable L2 solve cache           | ⬜ TODO, design decided | one-cache-per-channel, per-definition quota, gzipped envelopes (R6), orgId key                                                                                                                    |
+| Definition-byte cache (M1 app half)   | ✅ DONE (2026-07-13)    | `definition-byte-cache.ts` byte-budget LRU keyed on version id; wired as `DefinitionRef` in the solve route; `def_bytes` Server-Timing verdict; `COMPUTE_DEFINITION_BYTE_CACHE_MB` (0 disables)   |
+| Monotonic version numbers             | ✅ DONE (2026-07-13)    | `nextVersionNumber` counter on the record + atomic `reserveNextVersionNumber` (both providers, Supabase RPC/migration, conformance); `uploadVersion` no longer reuses numbers after delete-latest |
+| R4 — single-flight map                | ⬜ TODO, decided        | `Map<inputKey, Promise>` next to the L2 lookup                                                                                                                                                    |
+| M2 — client-side result memo          | ⬜ TODO                 | small LRU in `createSolveSession`                                                                                                                                                                 |
+| R2 — misleading "never cached" log    | ⬜ TODO                 | fix wording in `client-cache.ts` onSettle debug lines                                                                                                                                             |
+| R3 — wire disconnect signals (verify) | ⬜ TODO                 | confirm the route passes request-abort signals so the package fix actually bites                                                                                                                  |
+| R5 — concurrency + load shedding      | ✅ DONE (2026-07-13)    | `COMPUTE_MAX_CONCURRENT` (B6) + queue cap / queue-wait deadline / 503-shed (B7) all shipped; both queue knobs default `0`=unbounded. R4 single-flight rides with Phase 3 (L2)                     |
+| R8 — config folded into durable key   | ⬜ TODO                 | modelunits/tolerances/`COMPUTE_CONTRACT_VERSION` in the H1 key                                                                                                                                    |
+| R9 — `solveCacheLimit` on definition  | ⬜ TODO, shape decided  | one number: absent = inherit, 0 = off, N = quota                                                                                                                                                  |
+| R10 — per-request definition header   | ⬜ TODO (future)        | before any affinity routing ships                                                                                                                                                                 |
+| F1 — pre-solved bundle (+ prewarm)    | ⬜ TODO                 | after H1; R13's post-transform keying applies here                                                                                                                                                |
 
 **Related trackers:**
 
@@ -112,56 +112,104 @@ progress` / `✅ done`.
      package contract change; app test re-pinned to the new behavior + a new
      test pins the no-authored-stepSize fallback.
 
-### Phase 1 — definition-byte path (DC / M1 app half) — S, biggest per-solve I/O win
+### Phase 1 — definition-byte path (DC / M1 app half) — ✅ DONE (2026-07-13)
 
-- ☐ **1.1** Byte-cache module in `@selvajs/server/compute`
+Landed: byte-budget LRU keyed on immutable version id (`definition-byte-cache.ts`),
+wired as a `DefinitionRef` in the solve route so pointer-known solves move zero
+bytes; `def_bytes;desc=hit|miss|skipped` Server-Timing verdict; monotonic
+`nextVersionNumber` root-cause fix across both providers + Supabase migration
+(`EXPECTED_MIGRATION_HEAD` → `20260713120000`). Full build + svelte-check + server
+(214) + app (198) + provider conformance suites green. Per-item notes below.
+
+- ✅ **1.1** Byte-cache module in `@selvajs/server/compute`
   (`definition-byte-cache.ts`): `versionId → Uint8Array`, LRU evicted by
   **total byte budget** (definitions are multi-MB — not entry count), no TTL
   (version ids are immutable), `getOrLoad(versionId, load)` returning a
   `DefinitionRef`-compatible loader, hit/miss counters exposed. Env knob
   `COMPUTE_DEFINITION_BYTE_CACHE_MB` (0 disables) in `resolveComputeLimits`.
-- ☐ **1.2** Solve route: replace the eager `storage.get(version.fileKey)`
-  (`api/compute/+server.ts` local-definition branch) with
-  `DefinitionRef { key: version.id, load: byteCache.getOrLoad(version.id, () => storage.get(version.fileKey)) }`
-  passed into `runSolvePipeline` (the pipeline's `definitionSource` type widens
-  to `SolveDefinition`). Pointer-known solves then move ZERO bytes.
-- ☐ **1.3** Server-Timing verdict `def_bytes;desc=hit|miss|skipped` next to the
-  existing `selva_cache`/`def_reupload` entries so the win is measurable from
-  the browser. (`skipped` = byte-less pointer solve — `load()` never called.)
-- ☐ **1.4** Render path: `loadForRender`/getIO + schema re-extraction read
-  bytes through the SAME byte cache (they need real bytes; the byte-less path
-  is solve-only).
-- ☐ **1.5** Monotonic version numbers (root-cause fileKey fix):
-  `nextVersionNumber` counter on the definition record, never decremented —
-  `DefinitionService.uploadVersion` stops reusing numbers after
-  delete-latest. Platform type + both providers + Supabase migration +
-  conformance test pinning delete-then-upload mints a FRESH number/fileKey.
-  Pre-release, so no compat path needed.
-- ☐ **1.6** Tests: byte-budget LRU eviction; `versionId` keying (two versions
-  sharing a reused `fileKey` never collide — the trap this design exists for);
-  route-level "second solve of same version does not hit storage".
+- ✅ **1.2** Solve route replaces the eager `storage.get(version.fileKey)`
+  (`api/compute/+server.ts` local-definition branch) with a
+  `DefinitionRef { key: version.id, load: () => storage.get(version.fileKey) }`
+  from `definitionRef(version.id, …)` (app-side `definitionByteCache.server.ts`),
+  passed into `runSolvePipeline` (whose `definitionSource` now widens to
+  `SolveDefinition`). Pointer-known solves move ZERO bytes; a missing blob now
+  surfaces at solve time (compute_error) instead of an upfront 404, and the
+  schema-backfill bridge materializes via `ref.load()` (warming the entry).
+- ✅ **1.3** Server-Timing verdict `def_bytes;desc=hit|miss|skipped` emitted next
+  to `selva_cache`/`def_reupload` via a per-ref `ByteRefOutcome` the pipeline
+  reads after the solve. (`skipped` = byte-less pointer solve — `load()` never
+  called.) 4 pinned pipeline tests.
+- ✅ **1.4** Verified there is NO separate server-side render/getIO byte path:
+  the library page renders from the cached `version.schema`, and upload-time
+  schema extraction runs on in-hand bytes (no version id yet, correctly NOT
+  cached). The solve route was the sole `storage.get(version.fileKey)` consumer
+  and now goes through the byte cache — so this item is covered by 1.2, not a
+  second wiring site. (`loadDefinitionBytes` helper exists for a future path.)
+- ✅ **1.5** Monotonic version numbers (root-cause fileKey fix): `nextVersionNumber`
+  counter on the definition record + atomic `reserveNextVersionNumber` on
+  `IDefinitionStore` (local: config-lock-serialized read+bump with a legacy
+  max()-seed fallback; Supabase: SECURITY DEFINER `reserve_next_version_number`
+  RPC returning the pre-bump value). `DefinitionService.uploadVersion` reserves
+  instead of `max(existing)+1`; `create` seeds the counter at 2.
+  Migration `20260713120000_selva_next_version_number.sql` (column + backfill +
+  RPC), `EXPECTED_MIGRATION_HEAD` bumped. Conformance tests pin
+  delete-then-reserve minting a FRESH number.
+- ✅ **1.6** Tests: `definition-byte-cache.test.ts` (byte-budget LRU eviction,
+  version-id keying / reused-fileKey non-collision, over-budget pass-through,
+  budget-0 disable, per-ref hit/miss/skipped outcome); `def_bytes` pipeline
+  tests; `definition-service.test.ts` (uploadVersion reserves + derives fileKey
+  from the reserved number, never lists versions); conformance
+  reserveNextVersionNumber suite. Note: the route-level "second solve does not
+  hit storage" was covered at the byte-cache seam (a warm `getOrLoad` never calls
+  the loader) rather than a full HTTP harness — the existing compute route tests
+  deliberately avoid the live-compute shell for the same reason.
 - Note: remote-URL definitions stay on the existing TTL byte cache (URLs are
-  mutable); drafts ARE byte-cached (channel decision 4d).
+  mutable); local versions are byte-cached by immutable id (drafts included,
+  channel decision 4d).
 
-### Phase 2 — backpressure adoption (R5 app half / audit B7) — XS–S
+### Phase 2 — backpressure adoption (R5 app half / audit B7) — ✅ DONE (2026-07-13)
 
-- ☐ **2.1** Thread `maxQueueDepth` + `queueWaitMs` through
-  `ClientCacheConfig` → `createScheduler` (same pattern as
-  `maxConcurrentSolves`); env knobs `COMPUTE_MAX_QUEUE_DEPTH` /
-  `COMPUTE_QUEUE_WAIT_MS` in `resolveComputeLimits` + `.env.example` (both
-  copies). Defaults: pick a queue depth ≈ 2–3× `COMPUTE_MAX_CONCURRENT`, wait
-  ≈ solve deadline (or leave both unbounded-by-default and tune later — decide
-  at implementation).
-- ☐ **2.2** Outcome mapping: `runSolvePipeline` classifies
-  `QUEUE_FULL`/`QUEUE_TIMEOUT` rejections (they carry `statusCode: 503` +
-  context) as a new `SolveOutcome` kind (`shed`), and the route maps it to
-  **503 + `Retry-After`** instead of the generic 500 path. This is the
-  fast-fail the audit's B1 "queue/backpressure UX" needs under the hood.
-- ☐ **2.3** Verify R3 wiring: the route already forwards the request abort
-  signal into `scheduler.solve` — add/confirm a test that a client disconnect
-  while QUEUED settles ABORTED (maps to the existing 499 path) and never
-  executes.
-- ☐ **2.4** Update audit tracker rows B7 (and B1's queue bullet) when landed.
+Landed: `maxQueueDepth` + `queueWaitMs` threaded through `ClientCacheConfig` →
+`createScheduler` (env `COMPUTE_MAX_QUEUE_DEPTH` / `COMPUTE_QUEUE_WAIT_MS`, both
+`0` = unbounded by default — nothing sheds until an operator opts in); a new
+`shed` `SolveOutcome` classifying `QUEUE_FULL`/`QUEUE_TIMEOUT` rejections →
+route maps to **503 + `Retry-After`**; a `shed` `SolveFailureKind` for the
+metric record; R3 abort-while-queued wiring verified. Full build + check +
+server (220) + app (198) + all 16 test tasks green, lint 0 errors. Per-item
+notes below.
+
+- ✅ **2.1** `computeMaxQueueDepth` / `computeQueueWaitMs` added to
+  `ComputeLimits` (`readNonNegativeInt` so `0` is valid) and threaded through
+  `ClientCacheConfig` → `createScheduler` beside `maxConcurrentSolves`. Env
+  knobs `COMPUTE_MAX_QUEUE_DEPTH` / `COMPUTE_QUEUE_WAIT_MS` in
+  `resolveComputeLimits`, exported from `computeLimits.ts`, wired in
+  `clientCache.server.ts`, documented in both `.env.example` copies.
+  **Default: both `0` = unbounded / no deadline** (prior behavior — the queue
+  grows without limit). Chose unbounded-by-default over an inferred cap because
+  there's no production load data yet; blindly shedding could reject legitimate
+  bursts. `0` maps to `undefined` at the `createScheduler` call (passing `0`
+  would shed EVERY queued solve). Tuning guidance in the env docs: depth ≈ 2–3×
+  `COMPUTE_MAX_CONCURRENT`, wait ≈ `MAX_SOLVE_DURATION_MS`.
+- ✅ **2.2** `runSolvePipeline` classifies `RhinoComputeError` with
+  `code === QUEUE_FULL | QUEUE_TIMEOUT` (checked BEFORE the generic
+  `compute_error` return) into a new `SolveOutcome` kind
+  `shed { reason: 'queue_full' | 'queue_timeout'; retryAfterSeconds; message }`.
+  The route maps `shed` to a raw **503 + `Retry-After`** Response (apiError
+  can't set the header — mirrors the rate-limit 429 path) and records the new
+  `shed` `SolveFailureKind`. `shed` flows through the free-text `failure_kind`
+  column (no migration / CHECK constraint) in both metric stores.
+- ✅ **2.3** Verified R3 wiring: the route already forwards `request.signal`
+  into `scheduler.solve` (so the package's queued-abort prune, ISSUES 46, can
+  bite) and the pipeline classifies an aborted-signal AbortError as
+  `client_abort` → 499. Added a pipeline test proving a disconnect-while-queued
+  forwards the signal, settles `client_abort`, and never leaks a compute result.
+- ✅ **2.4** Audit tracker rows B7 / B1 queue bullet updated (see
+  `data-access-efficiency-audit.md`).
+- Note: the package's `maxQueueDepth`/`queueWaitMs` + `QUEUE_FULL`/
+  `QUEUE_TIMEOUT` codes shipped in `@selvajs/compute@3.1.0-beta.5`; this phase
+  is pure app-side adoption. Single-flight (R4) and concurrency sizing beyond
+  `COMPUTE_MAX_CONCURRENT` stay out of scope — R4 lands with the L2 cache
+  (Phase 3), and sizing is an operator tuning task, not code.
 
 ### Phase 3 — durable L2 solve cache (H1 + H2 app side) — M, the structural win
 

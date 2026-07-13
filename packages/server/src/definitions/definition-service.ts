@@ -52,7 +52,7 @@ export interface CreateDefinitionRecord {
  *   blob and is filtered out of list endpoints by default.
  *
  *   uploadVersion — append-only:
- *     1. Resolve next versionNumber from the version list
+ *     1. Reserve next versionNumber from the record's monotonic counter
  *     2. Upload blob to versions/v{N}.{ext}
  *     3. Insert DefinitionVersion row
  *     4. Advance draft pointer (live unchanged)
@@ -90,6 +90,8 @@ export class DefinitionService {
 			computeServerId: input.computeServerId,
 			status: 'pending',
 			solveCount: 0,
+			// v1 is created below with versionNumber 1, so the next upload reserves 2.
+			nextVersionNumber: 2,
 			liveVersionId: null,
 			draftVersionId: null,
 			createdAt: now,
@@ -150,9 +152,11 @@ export class DefinitionService {
 		const existing = await this.data.definitions.get(ctx, guid);
 		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
 
-		// Highest existing versionNumber + 1; covers gaps from deletions.
-		const versions = await this.data.definitions.listVersions(ctx, guid, { limit: 1 });
-		const next = (versions.items[0]?.versionNumber ?? 0) + 1;
+		// Reserve the next version number from the record's monotonic counter — NOT
+		// max(existing)+1, which reused a number after delete-latest and collided
+		// the `fileKey` (stale blob served for new content). The counter only ever
+		// advances, so a delete-then-reupload gets a fresh number and fresh key.
+		const next = await this.data.definitions.reserveNextVersionNumber(ctx, guid);
 
 		const versionId = randomUUID();
 		const fileKey = definitionPaths.version(guid, next, ext);

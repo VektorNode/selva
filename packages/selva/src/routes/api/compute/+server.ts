@@ -8,7 +8,9 @@ import {
 } from '$lib/server/compute/resolve.server';
 import { getClient, COMPUTE_DEBUG } from '$lib/server/compute/clientCache.server';
 import { loadRemoteDefinition } from '$lib/server/compute/remoteDefinition.server';
-import { runSolvePipeline, type PipelineInput } from '@selvajs/server/compute';
+import { definitionRef } from '$lib/server/compute/definitionByteCache.server';
+import { runSolvePipeline, type PipelineInput, type ByteCacheRef } from '@selvajs/server/compute';
+import type { SolveDefinition } from '@selvajs/compute';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import {
 	COMPUTE_REQUEST_MAX_BYTES,
@@ -95,7 +97,14 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			);
 		}
 
-		let definitionSource: Uint8Array;
+		// Local definitions solve by reference: a byte-cache `DefinitionRef` whose
+		// bytes the scheduler loads ONLY when an upload is unavoidable (pointer-known
+		// re-solves move zero bytes). Remote-URL definitions carry raw fetched bytes.
+		let definitionSource: SolveDefinition;
+		// The byte-cache ref for a local solve — its `.load()` materializes bytes for
+		// schema backfill, and its `.outcome` drives the `def_bytes` Server-Timing
+		// verdict. Null for remote-URL solves (raw bytes, no ref).
+		let localDefinitionRef: ByteCacheRef | null = null;
 		// BRIDGE: remove ~2026-09 — lazy schema backfill for pre-cached versions.
 		let localVersionForBackfill: { id: string; hasSchema: boolean } | null = null;
 		// BYO compute routing per org (spec §3); null for remote definitions.
@@ -209,14 +218,18 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			metricVersionId = version.id;
 			mark('version');
 
-			try {
+			// Solve by reference: the scheduler materializes bytes lazily (only on an
+			// unavoidable upload), and the byte cache serves a warm entry without
+			// touching storage. Keyed on the immutable version id — NEVER the fileKey,
+			// which a delete-latest-then-reupload can reuse for different content. A
+			// missing blob now surfaces at solve time (compute_error → 500) rather than
+			// as an upfront 404, since we no longer eagerly read it here.
+			localDefinitionRef = definitionRef(version.id, async () => {
 				const bytes = await storage.get(version.fileKey);
 				if (!bytes) throw new Error(`Version blob missing: ${version.fileKey}`);
-				definitionSource = bytes;
-			} catch (err) {
-				console.error(`Failed to load local definition blob: ${guid}`, err);
-				apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' not found`);
-			}
+				return bytes;
+			});
+			definitionSource = localDefinitionRef;
 			mark('blob');
 		} else {
 			try {
@@ -253,10 +266,13 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		mark('resolveServer');
 
 		// BRIDGE: remove ~2026-09 — lazy backfill for pre-cached versions. Best-effort.
-		if (localVersionForBackfill && !localVersionForBackfill.hasSchema) {
+		if (localVersionForBackfill && !localVersionForBackfill.hasSchema && localDefinitionRef) {
 			const versionId = localVersionForBackfill.id;
 			try {
-				const schema = await fetchSchemaFromCompute(definitionSource, serverConfig);
+				// Schema extraction needs real bytes — materialize through the byte
+				// cache (warms the entry the upcoming solve's `load()` would hit).
+				const bytes = await localDefinitionRef.load();
+				const schema = await fetchSchemaFromCompute(bytes, serverConfig);
 				await providers.data.definitions.setVersionSchema(solveCtx, versionId, schema);
 			} catch (err) {
 				console.warn(`[API/Compute] Schema backfill failed for version ${versionId}:`, err);
@@ -277,6 +293,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		// map to metrics + HTTP status; it never throws for an expected failure.
 		const outcome = await runSolvePipeline({
 			definitionSource,
+			byteRefOutcome: localDefinitionRef?.outcome,
 			inputs,
 			values,
 			client,
@@ -306,6 +323,23 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				413,
 				ApiErrorCode.INTERNAL,
 				'Solve result is too large to return. This usually means a file output exceeds the supported size.'
+			);
+		}
+		if (outcome.kind === 'shed') {
+			// Scheduler backpressure shed this solve before it ran (queue full or
+			// queue-wait deadline). 503 + Retry-After so the client backs off and
+			// retries — a fast fail, not a hung request. Built as a raw Response
+			// because apiError can't set Retry-After.
+			recordMetric('shed', { durationMs: outcome.durationMs });
+			return new Response(
+				JSON.stringify({ message: outcome.message, retryAfter: outcome.retryAfterSeconds }),
+				{
+					status: 503,
+					headers: {
+						'Content-Type': 'application/json',
+						'Retry-After': String(outcome.retryAfterSeconds)
+					}
+				}
 			);
 		}
 		if (outcome.kind === 'compute_error') {

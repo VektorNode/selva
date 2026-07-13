@@ -3,10 +3,18 @@
 export {
 	resolveComputeLimits,
 	readPositiveInt,
+	readNonNegativeInt,
 	readBool,
 	type ComputeLimits,
 	type EnvRecord
 } from './limits.js';
+
+export {
+	createDefinitionByteCache,
+	type DefinitionByteCache,
+	type ByteCacheRef,
+	type ByteCacheStats
+} from './definition-byte-cache.js';
 
 export {
 	createComputeRateLimiter,

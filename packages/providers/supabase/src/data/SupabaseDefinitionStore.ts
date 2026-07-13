@@ -20,7 +20,7 @@ import { stampSoftDelete, stampUpdate } from './rowStamp.js';
 
 /** Explicit column list for `definitions` — every field `rowToRecord` consumes. */
 const DEFINITION_COLUMNS =
-	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, display_name, description, category, tags, cover_image, status, run_count, live_version_id, draft_version_id, created_at, updated_at, deleted_at';
+	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, display_name, description, category, tags, cover_image, status, run_count, next_version_number, live_version_id, draft_version_id, created_at, updated_at, deleted_at';
 /** Explicit column list for `definition_versions` — every field `rowToVersion` consumes. */
 const DEFINITION_VERSION_COLUMNS =
 	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema, schema_extracted_at';
@@ -210,6 +210,20 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		if (error) throw mapPostgrestError(error);
 	}
 
+	async reserveNextVersionNumber(ctx: RequestContext, guid: string): Promise<number> {
+		// Atomic reserve-and-increment in one SQL function — no read-modify-write
+		// race. Returns the reserved number; raises no_data_found (mapped to 404)
+		// when the definition is missing or soft-deleted.
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.rpc('reserve_next_version_number', { g: guid });
+		if (error) throw mapPostgrestError(error);
+		if (typeof data !== 'number') {
+			throw new ProviderError(`Definition '${guid}' not found`, 404);
+		}
+		return data;
+	}
+
 	// ============================================================================
 	// Versions (spec §6)
 	// ============================================================================
@@ -397,6 +411,7 @@ interface DefinitionRow {
 	cover_image: string | null;
 	status: DefinitionStatus;
 	run_count: number | string;
+	next_version_number: number | string;
 	live_version_id: string | null;
 	draft_version_id: string | null;
 	created_at: string;
@@ -435,6 +450,10 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 		coverImage: row.cover_image ?? undefined,
 		status: row.status,
 		solveCount: typeof row.run_count === 'string' ? Number(row.run_count) : row.run_count,
+		nextVersionNumber:
+			typeof row.next_version_number === 'string'
+				? Number(row.next_version_number)
+				: row.next_version_number,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		deletedAt: row.deleted_at ?? null
@@ -457,6 +476,7 @@ function recordToRow(r: DefinitionRecord): Record<string, unknown> {
 		cover_image: r.coverImage ?? null,
 		status: r.status,
 		run_count: r.solveCount,
+		next_version_number: r.nextVersionNumber,
 		created_at: r.createdAt,
 		updated_at: r.updatedAt,
 		deleted_at: r.deletedAt ?? null

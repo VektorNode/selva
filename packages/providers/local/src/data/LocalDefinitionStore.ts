@@ -275,6 +275,37 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		await this.writeConfig(config);
 	}
 
+	async reserveNextVersionNumber(_ctx: RequestContext, guid: string): Promise<number> {
+		const config = await this.readConfig();
+		const existing = config.definitions[guid];
+		if (!this.live(existing)) throw new ProviderError(`Definition '${guid}' not found`, 404);
+		// The whole read-modify-write is serialized by the config lock, so the
+		// read + increment is atomic against concurrent uploads. Never reads the
+		// version list — the counter alone advances, so a deleted latest version's
+		// number is never handed out again.
+		const current = existing.nextVersionNumber ?? this.highestVersionNumber(config, guid) + 1;
+		existing.nextVersionNumber = current + 1;
+		existing.updatedAt = new Date().toISOString();
+		await this.writeConfig(config);
+		return current;
+	}
+
+	/**
+	 * Highest `versionNumber` currently on disk for a definition (0 if none). Only
+	 * used as the seed when a legacy record predates `nextVersionNumber`; new
+	 * records carry the counter and never take this path.
+	 */
+	private highestVersionNumber(
+		config: { definitionVersions: Record<string, DefinitionVersion> },
+		definitionId: string
+	): number {
+		let max = 0;
+		for (const v of Object.values(config.definitionVersions)) {
+			if (v.definitionId === definitionId && v.versionNumber > max) max = v.versionNumber;
+		}
+		return max;
+	}
+
 	// ============================================================================
 	// Versions (spec §6)
 	// ============================================================================

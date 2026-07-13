@@ -20,11 +20,19 @@
  * see {@link COMPUTE_CONTRACT_VERSION} and {@link COMPUTE_VERSION_HEADER}.
  */
 
-import { TreeBuilder, type GrasshopperComputeResponse, type InputParam } from '@selvajs/compute';
+import {
+	ErrorCodes,
+	RhinoComputeError,
+	TreeBuilder,
+	type GrasshopperComputeResponse,
+	type InputParam,
+	type SolveDefinition
+} from '@selvajs/compute';
 import type { SchemaInput } from '@selvajs/schemas';
 import { gzipSync } from 'node:zlib';
 import { transformInputParameter } from './transform-input.js';
 import type { CachedClient } from './client-cache.js';
+import type { ByteRefOutcome } from './definition-byte-cache.js';
 
 // ============================================================================
 // Wire contract version (audit D5)
@@ -53,8 +61,20 @@ export type PipelineInput = SchemaInput & {
 };
 
 export interface SolvePipelineArgs {
-	/** The `.gh` bytes to solve (stored blob or remote fetch — resolved by the caller). */
-	definitionSource: Uint8Array;
+	/**
+	 * The definition to solve. Either raw `.gh` bytes (remote fetch, or a caller
+	 * that resolved them eagerly) or a `DefinitionRef` — an identity-keyed lazy
+	 * loader (from the definition-byte cache) whose bytes the scheduler
+	 * materializes ONLY when an upload is unavoidable. A pointer-known solve of a
+	 * `DefinitionRef` moves zero bytes.
+	 */
+	definitionSource: SolveDefinition;
+	/**
+	 * When `definitionSource` is a byte-cache `DefinitionRef`, its mutable outcome
+	 * so the pipeline can emit the `def_bytes` Server-Timing verdict (skipped =
+	 * `load` never ran, hit = warm cache, miss = loader). Omit for raw-bytes solves.
+	 */
+	byteRefOutcome?: ByteRefOutcome;
 	/** Persisted input params; only those with a `paramType` are sent to the solve. */
 	inputs: PipelineInput[];
 	/** User-chosen values keyed by input id; missing keys fall back to the schema default. */
@@ -118,9 +138,10 @@ export interface SolveEnvelope {
 /**
  * Discriminated result. `ok` carries the envelope; every other variant names an
  * expected failure the transport maps to a status code (the app route maps
- * timeout→504, client_abort→499, too_large→413; `compute_error` re-surfaces the
- * original error for the generic 500/503 path). `durationMs` on the error
- * variants is the solve wall time up to the failure, for the metric record.
+ * timeout→504, client_abort→499, too_large→413, shed→503+Retry-After;
+ * `compute_error` re-surfaces the original error for the generic 500/503 path).
+ * `durationMs` on the error variants is the solve wall time up to the failure,
+ * for the metric record.
  */
 export type SolveOutcome =
 	| {
@@ -133,6 +154,19 @@ export type SolveOutcome =
 	| { kind: 'timeout'; durationMs: number; message: string }
 	| { kind: 'client_abort'; durationMs: number }
 	| { kind: 'too_large' }
+	/**
+	 * Scheduler backpressure shed the solve before it executed — the per-server
+	 * queue was full (`QUEUE_FULL`) or it sat queued past the wait deadline
+	 * (`QUEUE_TIMEOUT`). Retryable: the route maps this to 503 + `Retry-After`.
+	 * `retryAfterSeconds` is a suggested backoff hint for the client.
+	 */
+	| {
+			kind: 'shed';
+			durationMs: number;
+			reason: 'queue_full' | 'queue_timeout';
+			retryAfterSeconds: number;
+			message: string;
+	  }
 	| { kind: 'compute_error'; durationMs: number; error: unknown };
 
 // ============================================================================
@@ -183,6 +217,30 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 				durationMs,
 				message: `Solve exceeded the ${Math.round(args.maxSolveDurationMs / 1000)}s deadline.`
 			};
+		}
+		// Scheduler backpressure (audit B7): a full queue or an over-deadline queue
+		// wait sheds the solve BEFORE compute runs. Classify these as `shed` (503 +
+		// Retry-After) rather than the generic 500 `compute_error` path — they're
+		// load signals, not failures, and the client should back off and retry.
+		if (err instanceof RhinoComputeError) {
+			if (err.code === ErrorCodes.QUEUE_FULL) {
+				return {
+					kind: 'shed',
+					durationMs,
+					reason: 'queue_full',
+					retryAfterSeconds: 1,
+					message: 'Compute server is at capacity. Retry shortly.'
+				};
+			}
+			if (err.code === ErrorCodes.QUEUE_TIMEOUT) {
+				return {
+					kind: 'shed',
+					durationMs,
+					reason: 'queue_timeout',
+					retryAfterSeconds: 1,
+					message: 'Compute request waited too long in the queue. Retry shortly.'
+				};
+			}
 		}
 		return { kind: 'compute_error', durationMs, error: err };
 	}
@@ -238,6 +296,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		serverTotalMs,
 		rhino,
 		settle,
+		byteRefOutcome: args.byteRefOutcome,
 		prepMarks: args.prepMarks ?? []
 	});
 
@@ -292,6 +351,7 @@ interface ServerTimingParts {
 	serverTotalMs: number;
 	rhino: CachedClient['rhinoTiming']['last'];
 	settle: CachedClient['solveMeta']['last'];
+	byteRefOutcome?: ByteRefOutcome;
 	prepMarks: [string, number][];
 }
 
@@ -333,6 +393,15 @@ function buildServerTiming(parts: ServerTimingParts): string {
 		if (settle.definitionReuploaded !== undefined) {
 			header += `, def_reupload;dur=${settle.definitionReuploaded ? 1 : 0}`;
 		}
+	}
+
+	// Byte-cache verdict for `DefinitionRef` solves: skipped = the scheduler never
+	// materialized bytes (pointer-known solve — the whole point of this path), hit
+	// = warm byte cache, miss = fell through to storage. Absent for raw-bytes solves.
+	const byteRef = parts.byteRefOutcome;
+	if (byteRef) {
+		const verdict = !byteRef.loaded ? 'skipped' : byteRef.fromCache ? 'hit' : 'miss';
+		header += `, def_bytes;desc=${verdict}`;
 	}
 
 	return header;

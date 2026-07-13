@@ -100,6 +100,7 @@ function record(
 		displayName: overrides.displayName ?? 'Test',
 		status: overrides.status ?? 'published',
 		solveCount: overrides.solveCount ?? 0,
+		nextVersionNumber: overrides.nextVersionNumber ?? 2,
 		liveVersionId: overrides.liveVersionId ?? null,
 		draftVersionId: overrides.draftVersionId ?? null,
 		createdAt: overrides.createdAt ?? now,
@@ -275,6 +276,53 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 				threw = true;
 			}
 			expect(threw).toBe(false);
+		});
+
+		it('reserveNextVersionNumber returns the record counter then advances it', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid, nextVersionNumber: 2 }));
+
+			const first = await store.reserveNextVersionNumber(ctx(scope.ownerId), guid);
+			const second = await store.reserveNextVersionNumber(ctx(scope.ownerId), guid);
+			expect(first).toBe(2);
+			expect(second).toBe(3);
+			// Counter persisted, never reused.
+			const got = await store.get(ctx(scope.ownerId), guid);
+			expect(got?.nextVersionNumber).toBe(4);
+		});
+
+		it('reserveNextVersionNumber mints a FRESH number after delete-latest (fileKeys never collide)', async () => {
+			// The whole reason the counter exists: max(existing)+1 reused a number
+			// after deleting the latest version, colliding the fileKey. The monotonic
+			// counter must hand out a number BEYOND any deleted version's.
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid, nextVersionNumber: 2 }));
+
+			// Simulate an upload of v2 (reserve, create), then delete it.
+			const n2 = await store.reserveNextVersionNumber(ctx(scope.ownerId), guid);
+			expect(n2).toBe(2);
+			const v2 = version(guid, n2, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v2);
+			await store.deleteVersion(ctx(scope.ownerId), v2.id);
+
+			// The next reservation must be 3 — NOT 2 again — even though the highest
+			// surviving version number is now 1 (v1 was never created here; the point
+			// is the counter ignores the version list entirely).
+			const n3 = await store.reserveNextVersionNumber(ctx(scope.ownerId), guid);
+			expect(n3).toBe(3);
+			expect(n3).not.toBe(n2);
+		});
+
+		it('reserveNextVersionNumber throws for a missing definition', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			await expect(
+				store.reserveNextVersionNumber(ctx(scope.ownerId), makeUuid())
+			).rejects.toThrow();
 		});
 
 		it('update advances updatedBy to the caller', async () => {
