@@ -107,8 +107,8 @@
 	let cameraController: CameraController | null = null;
 	let measureTool: MeasureTool | null = null;
 	let grid: Grid | null = null;
-	let applyEdges: ((root: THREE.Object3D) => void) | null = null;
 	let fitToView: (() => void) | null = null;
+	let applyEdges: ((root: THREE.Object3D) => void) | null = null;
 	let viewerInitialized = false;
 	let sceneVersion = $state(0);
 	let hideButton = $state(false);
