@@ -45,6 +45,15 @@ export type {
 } from './features/grasshopper';
 
 // ============================================================================
+// SOLVE KEYING (Reproduce the scheduler's solve key in an app-layer cache / bundle)
+// ============================================================================
+
+export { stableStringify, hashDefinition, hashSolveInput } from './features/grasshopper';
+// The definition forms these keying helpers (and `SolveScheduler.solve`) accept.
+export { isDefinitionRef } from './features/grasshopper';
+export type { DefinitionRef, SolveDefinition } from './features/grasshopper';
+
+// ============================================================================
 // COMPUTE FUNCTIONS (Low-level API)
 // ============================================================================
 

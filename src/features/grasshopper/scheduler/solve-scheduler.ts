@@ -37,6 +37,23 @@ export interface CacheOptions {
 export interface SolveSchedulerOptions {
 	mode?: SchedulerMode;
 	maxConcurrent?: number;
+	/**
+	 * Backpressure — cap on how many calls may wait in the FIFO queue (i.e.
+	 * excluding the ones already in flight). When the queue is full, a new
+	 * `solve()` is shed immediately with `code: QUEUE_FULL` (retryable, meant to
+	 * map to HTTP 503 + Retry-After) instead of piling up unbounded. Bounds the
+	 * miss path under load. Only applies to `queue` / `parallel` modes —
+	 * `latest-wins` has an intrinsic depth of 1. Default: unbounded.
+	 */
+	maxQueueDepth?: number;
+	/**
+	 * Backpressure — max time (ms) a call may sit queued before it starts
+	 * executing. If it's still waiting after this long it's shed with
+	 * `code: QUEUE_TIMEOUT` rather than burning compute on a stale request.
+	 * Bounds tail latency. Only applies to `queue` / `parallel` modes. Default:
+	 * no deadline.
+	 */
+	queueWaitMs?: number;
 	timeoutMs?: number;
 	retry?: RetryPolicy;
 	/** Enable response caching keyed by hash of (definition, dataTree). */
@@ -118,6 +135,11 @@ interface PendingItem {
 	 * when the item settles by any other path.
 	 */
 	queuedAbortHandler?: () => void;
+	/**
+	 * Queue-wait deadline timer ({@link SolveSchedulerOptions.queueWaitMs}).
+	 * Cleared when the item starts executing or settles by any other path.
+	 */
+	queueWaitTimer?: ReturnType<typeof setTimeout>;
 	/** Set once the promise has been settled, so a late executor rejection becomes a no-op. */
 	settled?: { error: RhinoComputeError } | { ok: true };
 }
@@ -173,6 +195,7 @@ function isReusableDefinition(definition: SolveDefinition): boolean {
  * Sits between your application code and the underlying compute call,
  * adding:
  * - Configurable scheduling (latest-wins for sliders, queue for jobs)
+ * - Backpressure (bounded queue depth + queue-wait deadline) for the miss path
  * - In-flight cancellation (per-call signal + cancelAll)
  * - Optional response caching for repeated inputs
  * - Lifecycle hooks for UI indicators (start / settle / superseded)
@@ -204,6 +227,8 @@ export class SolveScheduler {
 
 	private readonly mode: SchedulerMode;
 	private readonly maxConcurrent: number;
+	private readonly maxQueueDepth: number | undefined;
+	private readonly queueWaitMs: number | undefined;
 	private readonly timeoutMs: number | undefined;
 	private readonly retry: RetryPolicy | undefined;
 
@@ -251,6 +276,17 @@ export class SolveScheduler {
 		this.baseConfig = baseConfig;
 		this.mode = options.mode ?? 'latest-wins';
 		this.maxConcurrent = Math.max(1, options.maxConcurrent ?? (this.mode === 'parallel' ? 4 : 1));
+		// Backpressure bounds — only meaningful for queue/parallel (latest-wins has
+		// depth 1). A non-positive maxQueueDepth is treated as unbounded rather than
+		// "shed everything", which would silently break the scheduler.
+		this.maxQueueDepth =
+			options.maxQueueDepth !== undefined && options.maxQueueDepth > 0
+				? Math.floor(options.maxQueueDepth)
+				: undefined;
+		this.queueWaitMs =
+			options.queueWaitMs !== undefined && options.queueWaitMs > 0
+				? options.queueWaitMs
+				: undefined;
 		this.timeoutMs = options.timeoutMs;
 		this.retry = options.retry;
 
@@ -334,6 +370,10 @@ export class SolveScheduler {
 	 *   newer values arrived (latest-wins mode).
 	 * - Rejects with `code: ErrorCodes.ABORTED` when the call was canceled via
 	 *   caller-supplied signal or `cancelAll()`.
+	 * - Rejects with `code: ErrorCodes.QUEUE_FULL` when `maxQueueDepth` is set and
+	 *   the queue was already full (backpressure; `statusCode: 503`).
+	 * - Rejects with `code: ErrorCodes.QUEUE_TIMEOUT` when `queueWaitMs` is set and
+	 *   the call sat queued longer than that before starting (`statusCode: 503`).
 	 *
 	 * Caller-supplied `signal` cancels just this call (rejects with `ABORTED`) —
 	 * including while the call is still queued, before execution starts.
@@ -474,6 +514,70 @@ export class SolveScheduler {
 		this.notify();
 	}
 
+	/**
+	 * Backpressure: settle an incoming item as QUEUE_FULL without ever enqueuing
+	 * it. The structured context lets an HTTP layer map it to 503 + Retry-After.
+	 */
+	private shedAsQueueFull(item: PendingItem): void {
+		const err = new RhinoComputeError(
+			'Solve queue is full; request shed (backpressure)',
+			ErrorCodes.QUEUE_FULL,
+			{
+				statusCode: 503,
+				context: {
+					key: item.ctx.key,
+					queueDepth: this.fifoQueue.length,
+					maxQueueDepth: this.maxQueueDepth
+				}
+			}
+		);
+		if (this.settleError(item, err)) {
+			this.runHook(this.onSettle, item.ctx, { status: 'error', error: err, durationMs: 0 });
+		}
+		this.notify();
+	}
+
+	/**
+	 * Arm the queue-wait deadline for an item about to be queued. If the item is
+	 * still waiting when it fires, it's shed as QUEUE_TIMEOUT and removed from the
+	 * queue. Cleared on execute/settle via {@link clearQueueWaitTimer}.
+	 */
+	private armQueueWaitTimer(item: PendingItem): void {
+		if (this.queueWaitMs === undefined) return;
+		const waitMs = this.queueWaitMs;
+		item.queueWaitTimer = setTimeout(() => {
+			// Only meaningful if it's still queued and unsettled.
+			if (item.settled) return;
+			const queued = this.fifoQueue.indexOf(item);
+			if (queued >= 0) this.fifoQueue.splice(queued, 1);
+
+			const err = new RhinoComputeError(
+				`Solve waited longer than ${waitMs}ms in queue; shed (backpressure)`,
+				ErrorCodes.QUEUE_TIMEOUT,
+				{
+					statusCode: 503,
+					context: {
+						key: item.ctx.key,
+						waitedMs: Date.now() - item.ctx.enqueuedAt,
+						queueWaitMs: waitMs
+					}
+				}
+			);
+			if (this.settleError(item, err)) {
+				this.runHook(this.onSettle, item.ctx, { status: 'error', error: err, durationMs: 0 });
+			}
+			this.notify();
+		}, waitMs);
+	}
+
+	/** Clear a queued item's wait-deadline timer, if one is pending. */
+	private clearQueueWaitTimer(item: PendingItem): void {
+		if (item.queueWaitTimer !== undefined) {
+			clearTimeout(item.queueWaitTimer);
+			item.queueWaitTimer = undefined;
+		}
+	}
+
 	private enqueue(item: PendingItem): void {
 		switch (this.mode) {
 			case 'latest-wins': {
@@ -494,7 +598,16 @@ export class SolveScheduler {
 				// default (1 for queue, 4 for parallel), set in the constructor.
 				if (this.inFlight.size < this.maxConcurrent) {
 					this.execute(item);
+				} else if (
+					this.maxQueueDepth !== undefined &&
+					this.fifoQueue.length >= this.maxQueueDepth
+				) {
+					// Backpressure: the queue is full. Shed the *newest* call (this one)
+					// so already-accepted work keeps its place, and give the caller an
+					// immediate, honest QUEUE_FULL rather than an unbounded wait.
+					this.shedAsQueueFull(item);
 				} else {
+					this.armQueueWaitTimer(item);
 					this.fifoQueue.push(item);
 				}
 				break;
@@ -513,6 +626,8 @@ export class SolveScheduler {
 		this.inFlight.add(inflight);
 		item.ctx.startedAt = Date.now();
 
+		// The item is now running: it can no longer time out in the queue.
+		this.clearQueueWaitTimer(item);
 		// Hand abort handling over from the queued-phase listener to the
 		// in-flight controller.
 		this.removeQueuedAbortHandler(item);
@@ -672,6 +787,7 @@ export class SolveScheduler {
 	private settleError(item: PendingItem, err: RhinoComputeError): boolean {
 		if (item.settled) return false;
 		item.settled = { error: err };
+		this.clearQueueWaitTimer(item);
 		this.removeQueuedAbortHandler(item);
 		item.reject(err);
 		return true;
@@ -686,6 +802,7 @@ export class SolveScheduler {
 	private settleSuccess(item: PendingItem, response: GrasshopperComputeResponse): boolean {
 		if (item.settled) return false;
 		item.settled = { ok: true };
+		this.clearQueueWaitTimer(item);
 		this.removeQueuedAbortHandler(item);
 		item.resolve(response);
 		return true;

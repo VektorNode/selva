@@ -1,6 +1,6 @@
 /**
  * Regression tests for `normalizeInputSchema` / `normalizeOutputSchema`
- * (ISSUES.md 77): missing required wire fields get honest fallbacks instead of
+ * (issue 77): missing required wire fields get honest fallbacks instead of
  * `as string`/`as number` casts, a missing paramType surfaces as a per-input
  * parse error downstream, and `groupName` keeps its null-vs-'' distinction.
  */

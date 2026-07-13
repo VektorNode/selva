@@ -16,25 +16,25 @@ below — everything owned by THIS repo has shipped (2026-07-11, uncommitted on
 ## Status dashboard (2026-07-11)
 
 Every work item in this file, split by owning repo. Findings are detailed in
-their own sections below; `ISSUES.md` numbers cross-reference the bug tracker.
+their own sections below; issue numbers cross-reference the former issue tracker (removed 2026-07-12 after all findings were fixed).
 
 **`@selvajs/compute` (THIS repo) — all required work done; two optional items open:**
 
-| Item                                 | Status                | Where                                                                                          |
-| ------------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------- |
-| DefinitionRef package seam (M1 half) | ✅ DONE               | `definition-ref.ts`; identity keying, lazy `load()`, 6 pinned tests                            |
-| M3 — strip `algo`                    | ✅ DONE               | stripped at the source in `runSolve` + regression test (ISSUES 58) — persist-path strip moot   |
-| R1 — sampled `Uint8Array` hashing    | ✅ FIXED              | full-content `fnv1aBytes` in the tree path (ISSUES 56)                                         |
-| R2 — errored-solve caching flag      | ✅ DONE               | `CacheOptions.cacheErroredSolves`, default `true` per decision (ISSUES 114)                    |
-| R3 — dead queued solves (pkg half)   | ✅ FIXED              | queued-phase abort listener settles ABORTED + prunes queue (ISSUES 46)                         |
-| R11 — shared mutable cache hits      | ✅ DONE               | immutability contract documented on `solve()` (ISSUES 116)                                     |
-| R12 — stringify edge collisions      | ✅ FIXED              | `[undefined]`/sparse arrays now distinct (ISSUES 53); `NaN→null` matches the wire, kept        |
-| R7 — double definition hash          | 🟡 PARTIAL            | gone for `DefinitionRef`; string/bytes callers still hash twice (ISSUES 57) — refs are the fix |
-| H2 — durable keying export           | 🟡 PARTIAL            | 32-bit collision bugs fixed (two-part key, ISSUES 68); SHA-256 export awaits open question 3   |
-| H3 — in-scheduler cache seam         | ⏸ DEFERRED by design  | H1 lives app-layer (amendment 3); revisit only if the durable cache moves in-package           |
-| R4 — single-flight (pkg half)        | ⏸ CLOSED by design    | coalescing belongs app-side next to the L2 lookup (amendment 4), not in the scheduler          |
-| R5 — queue bounds (pkg half)         | ⬜ OPTIONAL, not done | `maxConcurrent` option exists; queue-depth cap / queue-wait deadline (B7) unimplemented        |
-| R9 — per-solve `skipCache` (pkg)     | ⬜ OPTIONAL, not done | only needed if L1 flooding shows in `selva_cache` telemetry                                    |
+| Item                                 | Status                | Where                                                                                                                                                                                                |
+| ------------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DefinitionRef package seam (M1 half) | ✅ DONE               | `definition-ref.ts`; identity keying, lazy `load()`, 6 pinned tests                                                                                                                                  |
+| M3 — strip `algo`                    | ✅ DONE               | stripped at the source in `runSolve` + regression test (ISSUES 58) — persist-path strip moot                                                                                                         |
+| R1 — sampled `Uint8Array` hashing    | ✅ FIXED              | full-content `fnv1aBytes` in the tree path (ISSUES 56)                                                                                                                                               |
+| R2 — errored-solve caching flag      | ✅ DONE               | `CacheOptions.cacheErroredSolves`, default `true` per decision (ISSUES 114)                                                                                                                          |
+| R3 — dead queued solves (pkg half)   | ✅ FIXED              | queued-phase abort listener settles ABORTED + prunes queue (ISSUES 46)                                                                                                                               |
+| R11 — shared mutable cache hits      | ✅ DONE               | immutability contract documented on `solve()` (ISSUES 116)                                                                                                                                           |
+| R12 — stringify edge collisions      | ✅ FIXED              | `[undefined]`/sparse arrays now distinct (ISSUES 53); `NaN→null` matches the wire, kept                                                                                                              |
+| R7 — double definition hash          | 🟡 PARTIAL            | gone for `DefinitionRef`; string/bytes callers still hash twice (ISSUES 57) — refs are the fix                                                                                                       |
+| H2 — durable keying export           | ✅ DONE (2026-07-13)  | `stableStringify`/`hashDefinition`/`hashSolveInput` exported from the barrel (+ `DefinitionRef`/`SolveDefinition`). SHA-256 deferred — FNV-1a two-part key stands until F1 needs a wider public hash |
+| H3 — in-scheduler cache seam         | ⏸ DEFERRED by design  | H1 lives app-layer (amendment 3); revisit only if the durable cache moves in-package                                                                                                                 |
+| R4 — single-flight (pkg half)        | ⏸ CLOSED by design    | coalescing belongs app-side next to the L2 lookup (amendment 4), not in the scheduler                                                                                                                |
+| R5 — queue bounds (pkg half)         | ✅ DONE (2026-07-13)  | `maxQueueDepth` → `QUEUE_FULL` (503), `queueWaitMs` → `QUEUE_TIMEOUT` (503); tested. App still sizes `maxConcurrent` + maps 503s                                                                     |
+| R9 — per-solve `skipCache` (pkg)     | ⬜ OPTIONAL, not done | only needed if L1 flooding shows in `selva_cache` telemetry                                                                                                                                          |
 
 **`selva` / `@selvajs/server` (app repo) — all still TODO:**
 
@@ -215,7 +215,7 @@ shared store) is a **config change, not a redesign**:
    the closure ONLY for live-channel solves with quota > 0 — channel gating
    by hook presence, zero policy conditionals in the package.
 4. **Single-flight correction:** the scheduler has NO in-flight coalescing
-   (verified against source 2026-07-11 — ISSUES.md 115's status overstates
+   (verified against source 2026-07-11 — issue 115's status overstates
    it), and with L1 draft-only it's the wrong place anyway. Dogpile
    protection for live solves = `Map<inputKey, Promise>` next to the L2
    lookup, above the `ISolveResultCache` interface.
@@ -242,7 +242,7 @@ isolation) next to auth is right. See H2 for the one package change this needs.
 
 ### H2. `hashSolveInput` is 32-bit and `@internal` — unsafe as a durable key — correctness/seam
 
-> **Status: PARTIAL (this repo)** — the 32-bit collision bugs are fixed (two-part `defHash|treeHash` key, ISSUES 53-56/68), so the in-process key is sound. The SHA-256/`stableStringify` export for durable keying still awaits open question 3.
+> **Status: DONE (this repo, 2026-07-13)** — the 32-bit collision bugs were already fixed (two-part `defHash|treeHash` key, ISSUES 53-56/68), and the keying helpers (`stableStringify`/`hashDefinition`/`hashSolveInput`, plus the `DefinitionRef`/`SolveDefinition` surface) are now exported from the barrel for durable/bundle keying. SHA-256 deferred (open question 3) — the app can hash the exported canonical form itself if it wants a wider digest.
 
 `src/features/grasshopper/scheduler/stable-hash.ts:81` — 32-bit FNV-1a, 8-hex
 chars, marked `@internal`, not re-exported from any barrel.
@@ -382,9 +382,15 @@ move into the package later; H1's app-layer approach makes it optional.
 2. **H1 store** — Redis-only, blob-only, or tiered? Ties into the audit's B5
    (Redis for the rate limiter at multi-instance) — one Redis dependency could
    serve both.
-3. **H2 hash** — export a SHA-256 `hashSolveInput` variant from this package, or
-   export `stableStringify` and hash app-side? Former keeps keying logic in one
-   place; latter avoids a new public API on the package.
+3. **H2 hash** — ~~export a SHA-256 `hashSolveInput` variant from this package, or
+   export `stableStringify` and hash app-side?~~ **Answered 2026-07-13:** export
+   the existing keying helpers (`stableStringify` + `hashDefinition` +
+   `hashSolveInput`) so the app reuses the _exact_ canonicalize+hash path
+   (key-parity requirement), and **defer SHA-256** — the collision bugs that
+   motivated a wider hash are fixed on the FNV-1a two-part key, so a second hash
+   path is speculative until F1's public-hash need is concrete. If the app wants
+   SHA-256 it can hash the exported `stableStringify` output itself. Revisit
+   only if birthday-collision risk at durable-cache scale proves real.
 4. **Status gating** — ~~cache only `published`/`live` versions?~~ **Answered
    2026-07-11 (channel-gating rule, decided with the user):** durable /
    server-side result caches are **live-only**; in-process and byte caches
@@ -402,7 +408,7 @@ move into the package later; H1's app-layer approach makes it optional.
    correctness angle anywhere: all keys are content/version-derived, so a
    re-uploaded draft can never be served stale. ~~Skip errored solves (mirror
    `cacheerroredsolves`)?~~ **Answered 2026-07-11: no — errored solves are
-   valid GH results and are cached (see addendum R2 / ISSUES.md 114).** Still
+   valid GH results and are cached (see addendum R2 / issue 114).** Still
    open: per-org isolation in the key to prevent cross-tenant reads?
    Per-definition `cachePolicy` off-switch (addendum R9): decided 2026-07-11 —
    definition **record** field + settings UI, result caches only. **Shape
@@ -425,7 +431,7 @@ A second pass over the same surface, verifying the findings above against the
 code and hunting for what the first pass missed. Everything above stands, with
 these corrections and additions. Same categories.
 
-**Tracker links:** the package-level _bugs_ below are filed in `ISSUES.md` —
+**Tracker links:** the package-level _bugs_ below were filed in the former issue tracker (removed 2026-07-12 after all findings were fixed) —
 R2 → issue 114, R4 → issue 115, R11 → issue 116; R1/R3/R7/R12 and the `algo`
 echo were already tracked there as issues 56/46/57/53/58 (see the overlap note
 atop the "Caching Re-review" section there). App-side findings (R5, R10) are
@@ -492,7 +498,7 @@ wording, and optionally add `CacheOptions.cacheErroredSolves` (default **true**)
 for consumers wanting Rhino-flag parity. Answers open question 4's "skip
 errored solves?" — no. Genuinely _transient_ failures (network, plugin crash)
 reject rather than resolve, so they never reach the cache either way. Tracked
-as `ISSUES.md` 114 (downgraded to api/docs).
+as issue 114 (downgraded to api/docs).
 
 #### R3. Queued solves whose client disconnected still execute — perf/correctness
 
@@ -758,9 +764,9 @@ behavior change is free.
 > `solveByCacheKey` calls `ref.load()` only inside the miss/upload branch, and
 > all six pinned tests exist (`solve-scheduler-definition-ref.test.ts`,
 > `solve-cachekey.test.ts`). Also landed same day: the `stable-hash`
-> collision fixes (ISSUES.md 53–56, 68 — the R1 "canonical inputs are lossy"
-> blocker is gone), `CacheOptions.cacheErroredSolves` (ISSUES.md 114), and the
-> scheduler abort/supersede/state fixes (ISSUES.md 46, 50–52, 67, 116).
+> collision fixes (issue 53–56, 68 — the R1 "canonical inputs are lossy"
+> blocker is gone), `CacheOptions.cacheErroredSolves` (issue 114), and the
+> scheduler abort/supersede/state fixes (issues 46, 50–52, 67, 116).
 
 One coherent, backward-compatible API change (publish as minor):
 

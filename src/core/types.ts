@@ -128,8 +128,12 @@ export interface ComputeConfig {
 	 * The transport stays response-type-agnostic — this is a side
 	 * channel for telemetry, it does not change what a call returns. Use it to
 	 * feed a perf monitor or surface "solve took Nms" without server log access.
+	 *
+	 * `requestId` is the same id sent as the `X-Request-ID` header and used in
+	 * this library's own debug logs — use it to correlate a timing entry with
+	 * a specific request when multiple solves are in flight concurrently.
 	 */
-	onServerTiming?: (timing: ServerTiming) => void;
+	onServerTiming?: (timing: ServerTiming, requestId: string) => void;
 }
 
 /**

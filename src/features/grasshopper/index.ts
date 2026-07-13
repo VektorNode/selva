@@ -24,6 +24,11 @@ export type {
 	SolveResult
 } from './scheduler/solve-scheduler';
 
+// Stable keying helpers — exported so an app-layer durable cache or a
+// pre-solved bundle viewer can reproduce the scheduler's exact solve key.
+// See `scheduler/stable-hash.ts` for the key-parity contract.
+export { stableStringify, hashDefinition, hashSolveInput } from './scheduler/stable-hash';
+
 // ============================================================================
 // COMPUTATION
 // ============================================================================

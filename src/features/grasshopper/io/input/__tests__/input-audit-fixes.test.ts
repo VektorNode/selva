@@ -1,6 +1,6 @@
 /**
  * Regression tests for the grasshopper input-parsing audit fixes
- * (ISSUES.md 64, 65, 66, 73, 74, 75, 76): tree defaults parsed with the scalar
+ * (issue 64, 65, 66, 73, 74, 75, 76): tree defaults parsed with the scalar
  * transformers, array defaults supported, server stepSize honored, strict
  * numeric/boolean edge cases, dual error reporting with raw paramType, the
  * ValueList cluster, and the numeric fallback shape.

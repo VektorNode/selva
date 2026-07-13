@@ -64,8 +64,24 @@ describe('onServerTiming callback', () => {
 
 		expect(onServerTiming).toHaveBeenCalledTimes(1);
 		expect(onServerTiming).toHaveBeenCalledWith(
-			expect.objectContaining({ decode: 2, solve: 50, encode: 4 })
+			expect.objectContaining({ decode: 2, solve: 50, encode: 4 }),
+			expect.any(String)
 		);
+	});
+
+	it('passes the same requestId sent as the X-Request-ID header', async () => {
+		const onServerTiming = vi.fn();
+		fetchMock.mockResolvedValueOnce(
+			createMockResponse({ values: [] }, { headers: { 'Server-Timing': 'solve;dur=1' } })
+		);
+
+		await fetchRhinoCompute('grasshopper', {}, { ...config, onServerTiming });
+
+		const sentHeaders = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+		const [, requestId] = onServerTiming.mock.calls[0];
+		expect(requestId).toBe(sentHeaders['X-Request-ID']);
+		expect(requestId).toEqual(expect.any(String));
+		expect(requestId.length).toBeGreaterThan(0);
 	});
 
 	it('does not fire when the response has no Server-Timing header', async () => {
@@ -95,7 +111,10 @@ describe('onServerTiming callback', () => {
 		// the slowest solves) must not be dropped from telemetry.
 		expect(res).toMatchObject({ errors: ['boom'] });
 		expect(onServerTiming).toHaveBeenCalledTimes(1);
-		expect(onServerTiming).toHaveBeenCalledWith(expect.objectContaining({ solve: 77 }));
+		expect(onServerTiming).toHaveBeenCalledWith(
+			expect.objectContaining({ solve: 77 }),
+			expect.any(String)
+		);
 	});
 
 	it('a throwing callback does not fail the request', async () => {

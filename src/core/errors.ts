@@ -34,6 +34,19 @@ export const ErrorCodes = {
 	/** Scheduler / caller-supplied AbortSignal: this call was aborted. */
 	ABORTED: 'ABORTED',
 	/**
+	 * Scheduler backpressure: the queue was already at `maxQueueDepth` when this
+	 * call arrived, so it was shed immediately rather than queued. Retryable — the
+	 * caller (or an HTTP layer, as 503 + Retry-After) should back off and retry.
+	 * The error `context` carries `{ queueDepth, maxQueueDepth }`.
+	 */
+	QUEUE_FULL: 'QUEUE_FULL',
+	/**
+	 * Scheduler backpressure: this call sat queued longer than `queueWaitMs`
+	 * without starting, so it was shed before wasting compute on a stale request.
+	 * Retryable. The error `context` carries `{ waitedMs, queueWaitMs }`.
+	 */
+	QUEUE_TIMEOUT: 'QUEUE_TIMEOUT',
+	/**
 	 * A solve referenced a definition by `pointer` (server-side cache key), but the
 	 * server no longer holds that definition (evicted / GC'd / a different child in
 	 * the pool / server restarted). The caller should retry with the full

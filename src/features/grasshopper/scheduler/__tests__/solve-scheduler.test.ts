@@ -275,6 +275,132 @@ describe('SolveScheduler', () => {
 		});
 	});
 
+	describe('backpressure (queue bounds)', () => {
+		it('sheds the newest call with QUEUE_FULL when the queue is full', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				maxConcurrent: 1,
+				maxQueueDepth: 1
+			});
+
+			// a: in flight. b: fills the single queue slot. c: shed.
+			const a = scheduler.solve('def', [{ ParamName: 'a', InnerTree: {} } as any]);
+			const b = scheduler.solve('def', [{ ParamName: 'b', InnerTree: {} } as any]);
+			const c = scheduler.solve('def', [{ ParamName: 'c', InnerTree: {} } as any]);
+
+			expect(scheduler.inFlightCount).toBe(1);
+			expect(scheduler.queueDepth).toBe(1);
+
+			await expect(c).rejects.toMatchObject({
+				code: ErrorCodes.QUEUE_FULL,
+				statusCode: 503,
+				context: { queueDepth: 1, maxQueueDepth: 1 }
+			});
+
+			// a and b are untouched: already-accepted work keeps its place.
+			queue[0].release(makeResponse('a'));
+			expect((await a).filename).toBe('a');
+			await vi.waitFor(() => expect(queue.length).toBe(2));
+			queue[1].release(makeResponse('b'));
+			expect((await b).filename).toBe('b');
+		});
+
+		it('treats maxQueueDepth as unbounded by default (no shedding)', async () => {
+			const { executor } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				maxConcurrent: 1
+			});
+
+			const promises = Array.from({ length: 5 }, (_, i) =>
+				scheduler.solve('def', [{ ParamName: `p${i}`, InnerTree: {} } as any]).catch((e) => e)
+			);
+			expect(scheduler.queueDepth).toBe(4);
+			// None shed.
+			scheduler.cancelAll();
+			const results = await Promise.all(promises);
+			expect(results.every((r) => r.code === ErrorCodes.ABORTED)).toBe(true);
+		});
+
+		it('does not apply backpressure in latest-wins mode', async () => {
+			const { executor } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'latest-wins',
+				maxQueueDepth: 1
+			});
+
+			const a = scheduler.solve('def', [{ ParamName: 'a', InnerTree: {} } as any]).catch((e) => e);
+			// A second call supersedes rather than being shed as QUEUE_FULL.
+			const b = scheduler.solve('def', [{ ParamName: 'b', InnerTree: {} } as any]).catch((e) => e);
+			expect((await a).code).toBe(ErrorCodes.SUPERSEDED);
+			scheduler.cancelAll();
+			expect((await b).code).toBe(ErrorCodes.ABORTED);
+		});
+
+		it('sheds a call with QUEUE_TIMEOUT after queueWaitMs', async () => {
+			vi.useFakeTimers();
+			try {
+				const { executor, queue } = deferredExecutor();
+				const scheduler = new SolveScheduler(executor, baseConfig, {
+					mode: 'queue',
+					maxConcurrent: 1,
+					queueWaitMs: 1000
+				});
+
+				const a = scheduler.solve('def', [{ ParamName: 'a', InnerTree: {} } as any]);
+				const b = scheduler
+					.solve('def', [{ ParamName: 'b', InnerTree: {} } as any])
+					.catch((e) => e);
+
+				expect(scheduler.queueDepth).toBe(1);
+
+				// b waits past its deadline while a is still in flight.
+				await vi.advanceTimersByTimeAsync(1001);
+
+				const bErr = await b;
+				expect(bErr.code).toBe(ErrorCodes.QUEUE_TIMEOUT);
+				expect(bErr.statusCode).toBe(503);
+				expect(bErr.context.queueWaitMs).toBe(1000);
+				expect(scheduler.queueDepth).toBe(0);
+
+				// a is unaffected.
+				queue[0].release(makeResponse('a'));
+				expect((await a).filename).toBe('a');
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('clears the queue-wait timer once the item starts executing', async () => {
+			vi.useFakeTimers();
+			try {
+				const { executor, queue } = deferredExecutor();
+				const scheduler = new SolveScheduler(executor, baseConfig, {
+					mode: 'queue',
+					maxConcurrent: 1,
+					queueWaitMs: 1000
+				});
+
+				const a = scheduler.solve('def', [{ ParamName: 'a', InnerTree: {} } as any]);
+				const b = scheduler.solve('def', [{ ParamName: 'b', InnerTree: {} } as any]);
+
+				// a finishes, b promotes to in-flight before its deadline.
+				queue[0].release(makeResponse('a'));
+				await a;
+				await vi.waitFor(() => expect(queue.length).toBe(2));
+				expect(scheduler.inFlightCount).toBe(1);
+
+				// Advancing past the old deadline must NOT time b out — it's running.
+				await vi.advanceTimersByTimeAsync(2000);
+				queue[1].release(makeResponse('b'));
+				expect((await b).filename).toBe('b');
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
+
 	describe('cancellation', () => {
 		it('cancelAll rejects pending and aborts in-flight', async () => {
 			const { executor } = deferredExecutor();
@@ -292,7 +418,7 @@ describe('SolveScheduler', () => {
 			await expect(b).rejects.toMatchObject({ message: expect.stringMatching(/aborted/i) });
 		});
 
-		// Regression (ISSUES.md 46): the external signal was only checked at solve()
+		// Regression (issue 46): the external signal was only checked at solve()
 		// entry and listened to in execute() — a signal firing while the item sat in
 		// the queue was silently ignored, the item later ran a full compute, and the
 		// promise resolved with a result instead of rejecting ABORTED.
@@ -345,7 +471,7 @@ describe('SolveScheduler', () => {
 			expect(queue).toHaveLength(1);
 		});
 
-		// Regression (ISSUES.md 51): startedAt is Date.now() but cancelAll measured
+		// Regression (issue 51): startedAt is Date.now() but cancelAll measured
 		// with performance.now() — durations were huge negative numbers (~ -1.7e12).
 		it('cancelAll reports a sane durationMs for in-flight items', async () => {
 			const { executor } = deferredExecutor();
@@ -361,7 +487,7 @@ describe('SolveScheduler', () => {
 			expect(errorSettle![1].durationMs).toBeLessThan(60_000);
 		});
 
-		// Regression (ISSUES.md 52): a cancelled solve's late executor rejection
+		// Regression (issue 52): a cancelled solve's late executor rejection
 		// overwrote _lastError even after a NEWER solve had already succeeded.
 		it('a late rejection from a cancelled solve does not clobber newer state', async () => {
 			// Deliberately ignores the abort signal, like a transport that only
@@ -513,7 +639,7 @@ describe('SolveScheduler', () => {
 			expect((await recheck).filename).toBe('1-again');
 		});
 
-		// Regression (ISSUES.md 50): a cache hit returned before enqueue(), so in
+		// Regression (issue 50): a cache hit returned before enqueue(), so in
 		// latest-wins mode it didn't supersede the older in-flight solve — which
 		// later completed, overwrote lastResult, and snapped the UI back.
 		it('latest-wins: a cache hit supersedes the older in-flight solve', async () => {
@@ -547,7 +673,7 @@ describe('SolveScheduler', () => {
 			expect(successSettles.map((c) => c[1].response.filename)).toEqual(['x-cached', 'x-cached']);
 		});
 
-		// Regression (ISSUES.md 67): the cache was consulted before the
+		// Regression (issue 67): the cache was consulted before the
 		// already-aborted-signal check, so an aborted call could resolve.
 		it('an already-aborted signal rejects ABORTED even on a cache hit', async () => {
 			const { executor, queue } = deferredExecutor();
@@ -568,7 +694,7 @@ describe('SolveScheduler', () => {
 			});
 		});
 
-		// Decision 2026-07-11 (ISSUES.md 114): an errored solve is a valid,
+		// Decision 2026-07-11 (issue 114): an errored solve is a valid,
 		// deterministic GH result and IS cached by default.
 		it('caches responses with GH errors by default', async () => {
 			const { executor, queue } = deferredExecutor();

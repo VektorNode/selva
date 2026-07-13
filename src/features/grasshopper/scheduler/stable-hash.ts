@@ -1,6 +1,15 @@
 /**
  * Stable hashing for solve deduplication and caching.
- * @internal
+ *
+ * The public keying surface here — {@link stableStringify}, {@link hashDefinition},
+ * {@link hashSolveInput} — is exported from the package barrel so a durable
+ * (app-layer) cache or a pre-solved bundle viewer can reproduce the *exact*
+ * canonicalize-and-hash path the scheduler's in-process cache uses. Key parity
+ * across the two layers is a correctness requirement: a durable-cache key that
+ * canonicalizes even slightly differently would miss every entry the scheduler
+ * wrote (harmless) or, worse, collide differently (not). The FNV plumbing
+ * (`fnv1a`/`fnv1aBytes`) and the pre-hashed-definition fast path
+ * (`hashSolveInputForDefinition`) stay internal.
  */
 
 import { isDefinitionRef, type SolveDefinition } from '../definition-ref';
@@ -88,6 +97,7 @@ function fnv1aCore(length: number, codeAt: (i: number) => number): string {
 
 /**
  * 32-bit FNV-1a— fast, no dependencies. Returns unsigned hex string.
+ * @internal
  */
 export function fnv1a(input: string): string {
 	return fnv1aCore(input.length, (i) => input.charCodeAt(i));
@@ -95,6 +105,7 @@ export function fnv1a(input: string): string {
 
 /**
  * 32-bit FNV-1a over raw bytes. Returns unsigned hex string.
+ * @internal
  */
 export function fnv1aBytes(bytes: Uint8Array): string {
 	return fnv1aCore(bytes.length, (i) => bytes[i]);
@@ -130,6 +141,8 @@ export function hashSolveInput(definition: SolveDefinition, dataTree: unknown): 
  *
  * Invariant: `hashSolveInputForDefinition(hashDefinition(d), t)` produces the
  * exact same key as `hashSolveInput(d, t)` — cache-key semantics are unchanged.
+ *
+ * @internal
  */
 export function hashSolveInputForDefinition(definitionHash: string, dataTree: unknown): string {
 	const tree = stableStringify(dataTree);

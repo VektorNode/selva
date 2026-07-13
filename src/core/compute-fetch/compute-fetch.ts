@@ -350,14 +350,15 @@ export function composeSignal(
  */
 function fireServerTiming(
 	response: Response,
-	onServerTiming: ((timing: ServerTiming) => void) | undefined,
+	requestId: string,
+	onServerTiming: ((timing: ServerTiming, requestId: string) => void) | undefined,
 	debug?: boolean
 ): void {
 	if (!onServerTiming) return;
 	const timing = parseServerTiming(response.headers.get('Server-Timing'));
 	if (!timing) return;
 	try {
-		onServerTiming(timing);
+		onServerTiming(timing, requestId);
 	} catch (err) {
 		if (debug) log(`   onServerTiming callback threw: ${err}`, true);
 	}
@@ -371,7 +372,7 @@ async function handleResponse(
 	serverUrl: string,
 	startTime: number,
 	debug?: boolean,
-	onServerTiming?: (timing: ServerTiming) => void
+	onServerTiming?: (timing: ServerTiming, requestId: string) => void
 ): Promise<any> {
 	const responseTime = Math.round(performance.now() - startTime);
 
@@ -429,7 +430,7 @@ async function handleResponse(
 							log(`   Warnings: ${JSON.stringify(parsed.warnings, null, 2)}`, true);
 						}
 					}
-					fireServerTiming(response, onServerTiming, debug);
+					fireServerTiming(response, requestId, onServerTiming, debug);
 					return parsed;
 				}
 
@@ -482,7 +483,7 @@ async function handleResponse(
 
 	log(`✅ Request [${requestId}] completed in ${responseTime}ms`, debug);
 
-	fireServerTiming(response, onServerTiming, debug);
+	fireServerTiming(response, requestId, onServerTiming, debug);
 
 	try {
 		return await response.json();
