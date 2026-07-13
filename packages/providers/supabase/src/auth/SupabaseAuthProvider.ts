@@ -332,22 +332,16 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	}
 
 	async touchLastLogin(id: string): Promise<void> {
-		// 60-second debounce. Matches the local provider.
-		const { data, error } = await this.admin
-			.from('user_profiles')
-			.select('last_login_at')
-			.eq('user_id', id)
-			.maybeSingle();
-		if (error) return;
-
-		if (data?.last_login_at) {
-			const prev = Date.parse(data.last_login_at);
-			if (Number.isFinite(prev) && Date.now() - prev < 60_000) return;
-		}
+		// 60-second debounce, done in a single UPDATE: the WHERE clause skips the
+		// write when the stamp is recent, so a login storm from one user costs one
+		// no-op round-trip instead of a select + conditional update. Matches the
+		// local provider's debounce window.
+		const cutoff = new Date(Date.now() - 60_000).toISOString();
 		await this.admin
 			.from('user_profiles')
 			.update({ last_login_at: new Date().toISOString() })
-			.eq('user_id', id);
+			.eq('user_id', id)
+			.or(`last_login_at.is.null,last_login_at.lt.${cutoff}`);
 	}
 
 	// OAuth lives on `this.oauth` (typed `IOAuthAuth`); see `SupabaseOAuthAuth`

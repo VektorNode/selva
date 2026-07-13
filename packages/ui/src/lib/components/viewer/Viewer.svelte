@@ -173,8 +173,14 @@
 		fitToView = init.fitToView;
 		projection = init.cameraController.getProjection();
 
+		const renderer = init.renderer;
+
 		return () => {
 			init.dispose();
+			// `{#key definitionKey}` recreates the canvas + WebGLRenderer + GL context
+			// on every definition switch; browsers cap live contexts (~16). Explicitly
+			// drop this one so the GPU-side context is released now rather than at GC.
+			renderer.forceContextLoss();
 		};
 	});
 

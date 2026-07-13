@@ -4,7 +4,7 @@ import type {
 	RequestContext,
 	UserManagementResult
 } from '@selvajs/platform';
-import { ProviderError, hasPermission, PlatformPermissionSchema } from '@selvajs/platform';
+import { ProviderError, hasPermission, ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 import type { ClientBundle } from '../data/client.js';
 
 /**
@@ -116,8 +116,10 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 	}
 }
 
+const VALID_PERMISSIONS = new Set<string>(ALL_PLATFORM_PERMISSIONS);
+
 function filterValid(raw: readonly string[]): PlatformPermission[] {
-	return raw.filter((p): p is PlatformPermission => PlatformPermissionSchema.safeParse(p).success);
+	return raw.filter((p): p is PlatformPermission => VALID_PERMISSIONS.has(p));
 }
 
 function assertCanRead(ctx: RequestContext, userId: string): void {

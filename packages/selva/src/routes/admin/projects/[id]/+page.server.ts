@@ -76,13 +76,15 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	let orgList: Organization[] = [];
 	let userOptions: UserOption[] = [];
 	try {
-		const grants = await getPlatformProjectGrantStore().listByProject(SYSTEM_CONTEXT, id);
-		const orgsPage = await getOrganizationProvider().listOrgs(SYSTEM_CONTEXT, { limit: 1000 });
+		// These three reads are independent — run them together instead of serially.
+		const auth = getAuthProvider();
+		const [grants, orgsPage, usersPage] = await Promise.all([
+			getPlatformProjectGrantStore().listByProject(SYSTEM_CONTEXT, id),
+			getOrganizationProvider().listOrgs(SYSTEM_CONTEXT, { limit: 1000 }),
+			auth.listUsers?.({ limit: 1000 }) ?? Promise.resolve(null)
+		]);
 		orgList = orgsPage.items;
 		const orgById = new Map(orgList.map((o) => [o.id, o]));
-
-		const auth = getAuthProvider();
-		const usersPage = (await auth.listUsers?.({ limit: 1000 })) ?? null;
 		const userById = new Map<string, { email?: string }>();
 		if (usersPage) {
 			for (const u of usersPage.items) userById.set(u.id, { email: u.email });

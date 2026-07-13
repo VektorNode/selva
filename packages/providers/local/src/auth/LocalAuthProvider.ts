@@ -16,6 +16,11 @@ import { paginate } from '../data/pagination.js';
 
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
 
+// Session HMAC secret strength floor. Mirrors `MIN_TOKEN_SECRET_LENGTH` (share/invite
+// tokens) and the 32-byte `SELVA_AT_REST_KEY` rule so a weak session secret can't reach
+// prod. Kept local — the local provider has no `@selvajs/server` dependency.
+const MIN_HMAC_SECRET_LENGTH = 32;
+
 function toAuthUser(
 	u: Pick<StoredAuthUser, 'id' | 'email' | 'createdAt' | 'lastLoginAt' | 'disabled'>
 ): AuthUser {
@@ -108,6 +113,12 @@ export class LocalAuthProvider implements IAuthProvider {
 	static fromEnv(env: Record<string, string | undefined>): LocalAuthProvider {
 		const hmacSecret = env.SELVA_HMAC_KEY;
 		if (!hmacSecret) throw new Error('Missing required env var: SELVA_HMAC_KEY');
+		if (hmacSecret.length < MIN_HMAC_SECRET_LENGTH) {
+			throw new Error(
+				`SELVA_HMAC_KEY must be at least ${MIN_HMAC_SECRET_LENGTH} characters ` +
+					`(got ${hmacSecret.length}). Generate one with: openssl rand -base64 32`
+			);
+		}
 		return new LocalAuthProvider({
 			hmacSecret,
 			usersFilePath: env.DATA_PATH ? path.join(env.DATA_PATH, 'auth-users.json') : undefined
