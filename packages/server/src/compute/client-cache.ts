@@ -258,14 +258,18 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 								: '[Compute/def-cache] n/a — reuse disabled or non-reusable definition'
 					);
 				}
-				// Surface real GH errors when present. An errored solve is NEVER cached
-				// server-side (cachesolve only stores error-free solves).
+				// Surface real GH errors when present. Whether an errored solve is cached is
+				// config-gated by `cacheerroredsolves` (default false → errored solves are
+				// re-run each time; true → the error result is cached like any other, per R2).
 				if (!result.fromCache) {
 					const errs = (result.response as { errors?: unknown[] })?.errors;
 					const errCount = Array.isArray(errs) ? errs.length : 0;
 					if (errCount > 0) {
+						const cacheNote = config.cacheerroredsolves
+							? 'cached (cacheerroredsolves on)'
+							: 'not cached (cacheerroredsolves off) — re-run until fixed';
 						debugLog(
-							`[Compute/rhino-cache] ${errCount} GH error(s); not cacheable until fixed. First: ${JSON.stringify((errs as unknown[])[0])}`
+							`[Compute/rhino-cache] ${errCount} GH error(s); ${cacheNote}. First: ${JSON.stringify((errs as unknown[])[0])}`
 						);
 					}
 				}

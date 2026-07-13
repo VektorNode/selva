@@ -7,6 +7,7 @@ import type { UISchema } from '@selvajs/schemas';
 import { readExternalValue } from '../external/storage';
 import type { SolveFn, SolveResult } from '../types/solveFn';
 import { createComputeThrottle } from './computeThrottle.svelte';
+import { createSolveMemo } from './solveMemo';
 import {
 	buildInitialValues,
 	makeInitialFlags,
@@ -25,6 +26,12 @@ export interface SolveDriver {
 	solve(values: Record<string, unknown>): void;
 	cancel(): void;
 	readonly isSolving: boolean;
+	/**
+	 * Drops any cached solve results the driver holds. Optional — only drivers with a
+	 * client-side memo (the request/response driver) implement it. Called on rebuild so a
+	 * definition swap can't serve a stale result from a prior definition's input space.
+	 */
+	clearCache?(): void;
 }
 
 export interface SolveSession {
@@ -134,6 +141,9 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 
 		rebuild(schema, scopeKey) {
 			currentSchema = schema;
+			// Drop the driver's result memo: the new definition has its own input space, so
+			// a matching input key from the prior definition must not serve its stale result.
+			args.driver.clearCache?.();
 			state.meshes = [];
 			state.error = '';
 			state.computeErrors = [];
@@ -177,10 +187,24 @@ export function createRequestResponseDriver(
 	getReporter: () => SolveReporter,
 	options: { timeout?: number } = {}
 ): SolveDriver {
+	// M2: a small LRU memoizing completed solves by their input values. A slider dragged
+	// back to a value already solved this session reports instantly without a network
+	// round-trip. The check lives inside the throttled computeFn so the throttle's
+	// latest-wins ordering still holds — a hit only serves after the throttle picks these
+	// values as the ones to run.
+	const memo = createSolveMemo();
+
 	const throttle = createComputeThrottle<Record<string, unknown>>(async (values, signal) => {
+		const cached = memo.get(values);
+		if (cached !== undefined) {
+			if (signal.aborted) return;
+			getReporter().report(cached);
+			return;
+		}
 		try {
 			const result = await onSolve(values, signal);
 			if (signal.aborted) return;
+			memo.set(values, result);
 			getReporter().report(result);
 		} catch (err) {
 			if (signal.aborted) return;
@@ -197,6 +221,9 @@ export function createRequestResponseDriver(
 		},
 		get isSolving() {
 			return throttle.isComputing;
+		},
+		clearCache() {
+			memo.clear();
 		}
 	};
 }

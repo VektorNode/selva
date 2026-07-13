@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { createSolveSession, type SolveDriver } from './createSolveSession.svelte';
+import { describe, expect, it, vi } from 'vitest';
+import {
+	createSolveSession,
+	createRequestResponseDriver,
+	type SolveDriver,
+	type SolveReporter
+} from './createSolveSession.svelte';
 import type { UISchema } from '@selvajs/schemas';
+import type { SolveResult } from '../types/solveFn';
 
 // Covers the reactive wrapper's dispatch decisions — specifically the `forceSolve` path
 // added for dynamic-value-list reconciliation. The pure transition logic is pinned in
@@ -81,5 +87,82 @@ describe('createSolveSession.setValue', () => {
 		expect(session.values.out).toBeDefined();
 		// …but must not travel back through the transport.
 		expect(driver.solves[0]).not.toHaveProperty('out');
+	});
+});
+
+// M2: the request/response driver's client-side result memo. Verifies a slider returning
+// to a solved value serves from memory (no onSolve call) and that a definition rebuild
+// drops the memo so a stale result can't cross the swap.
+describe('createRequestResponseDriver — client memo', () => {
+	// Collects reported results so the memo hit/miss can be observed without a session.
+	function collectingReporter(): SolveReporter & { reports: SolveResult[]; errors: string[] } {
+		const reports: SolveResult[] = [];
+		const errors: string[] = [];
+		return {
+			reports,
+			errors,
+			report: (r) => reports.push(r),
+			reportError: (m) => errors.push(m)
+		};
+	}
+
+	// Lets the throttle's fire-and-forget executeCompute settle.
+	const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+	it('serves a repeated input from the memo without calling onSolve again', async () => {
+		const onSolve = vi.fn(
+			async (values: Record<string, unknown>): Promise<SolveResult> => ({
+				outputs: { echo: values.a }
+			})
+		);
+		const reporter = collectingReporter();
+		const driver = createRequestResponseDriver(onSolve, () => reporter);
+
+		driver.solve({ a: 1 });
+		await flush();
+		driver.solve({ a: 2 });
+		await flush();
+		driver.solve({ a: 1 }); // repeat — should hit the memo
+		await flush();
+
+		expect(onSolve).toHaveBeenCalledTimes(2); // only the two distinct inputs
+		expect(reporter.reports).toHaveLength(3); // but all three solves reported
+		expect(reporter.reports[2]).toEqual({ outputs: { echo: 1 } });
+	});
+
+	it('clearCache drops the memo so the next identical solve re-runs', async () => {
+		const onSolve = vi.fn(async (): Promise<SolveResult> => ({ outputs: {} }));
+		const reporter = collectingReporter();
+		const driver = createRequestResponseDriver(onSolve, () => reporter);
+
+		driver.solve({ a: 1 });
+		await flush();
+		driver.clearCache?.();
+		driver.solve({ a: 1 }); // memo cleared → real solve again
+		await flush();
+
+		expect(onSolve).toHaveBeenCalledTimes(2);
+	});
+
+	it('session.rebuild clears the driver memo (no cross-definition stale hit)', async () => {
+		const onSolve = vi.fn(async (): Promise<SolveResult> => ({ outputs: {} }));
+		const reporter = collectingReporter();
+		let clears = 0;
+		// Wrap the real driver to observe clearCache being invoked from rebuild.
+		const base = createRequestResponseDriver(onSolve, () => reporter);
+		const driver: SolveDriver = {
+			solve: base.solve,
+			cancel: base.cancel,
+			get isSolving() {
+				return base.isSolving;
+			},
+			clearCache() {
+				clears += 1;
+				base.clearCache?.();
+			}
+		};
+		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
+		session.rebuild(schema(true), 's2');
+		expect(clears).toBe(1);
 	});
 });

@@ -7,7 +7,7 @@ import type { RequestContext } from '../context.js';
  * is a wide (SHA-256) hash of the transformed input tree plus the solve-affecting
  * config subset (H2/R8). A hit skips compute entirely.
  *
- * Design contract (decided 2026-07-11, see CACHING.md H1):
+ * Design contract (decided 2026-07-11):
  *
  * - **Async from day one.** The memory backend returns promises too, so no call
  *   site changes shape when a network store (Redis) arrives later.
