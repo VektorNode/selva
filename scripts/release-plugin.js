@@ -232,33 +232,36 @@ const existingTags = execFileSync('git', ['tag', '--list', tag], {
 }).trim();
 if (existingTags) die(`Tag ${tag} already exists.`);
 
-// Release off main, and only when in sync with the remote — otherwise the final
-// `git push` can be rejected, leaving a local tag for a version that never ships.
-// Skipped under --dry-run (the fetch hits the network and nothing gets pushed).
+// Release off main or beta, and only when in sync with the remote — otherwise
+// the final `git push` can be rejected, leaving a local tag for a version that
+// never ships. The plugin-release.yml workflow triggers purely on the
+// `plugin-v*` tag, regardless of source branch — beta is the normal channel
+// for --beta releases. Skipped under --dry-run (the fetch hits the network
+// and nothing gets pushed).
 if (!DRY_RUN) {
 	const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
 		cwd: projectRoot,
 		encoding: 'utf8'
 	}).trim();
-	if (branch !== 'main') {
-		die(`On branch "${branch}", not "main". Releases are cut from main.`);
+	if (branch !== 'main' && branch !== 'beta') {
+		die(`On branch "${branch}", not "main" or "beta". Releases are cut from one of those.`);
 	}
 
 	try {
-		execFileSync('git', ['fetch', 'origin', 'main', '--quiet'], { cwd: projectRoot });
+		execFileSync('git', ['fetch', 'origin', branch, '--quiet'], { cwd: projectRoot });
 	} catch {
-		die('Could not fetch origin/main. Check your network/remote.');
+		die(`Could not fetch origin/${branch}. Check your network/remote.`);
 	}
 	const local = execFileSync('git', ['rev-parse', 'HEAD'], {
 		cwd: projectRoot,
 		encoding: 'utf8'
 	}).trim();
-	const remote = execFileSync('git', ['rev-parse', 'origin/main'], {
+	const remote = execFileSync('git', ['rev-parse', `origin/${branch}`], {
 		cwd: projectRoot,
 		encoding: 'utf8'
 	}).trim();
 	if (local !== remote) {
-		die('Local main is not in sync with origin/main. Pull/push so they match, then retry.');
+		die(`Local ${branch} is not in sync with origin/${branch}. Pull/push so they match, then retry.`);
 	}
 }
 
