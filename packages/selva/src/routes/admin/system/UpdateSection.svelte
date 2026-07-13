@@ -8,7 +8,7 @@
 		CircleX,
 		ArrowUpCircle
 	} from '@lucide/svelte';
-	import { deriveOutcome, type OutcomeSeverity } from './update-outcome';
+	import { deriveOutcome, type OutcomeSeverity } from '$lib/update-outcome';
 
 	interface Props {
 		currentVersion?: string;

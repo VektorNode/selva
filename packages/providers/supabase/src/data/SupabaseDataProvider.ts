@@ -1,6 +1,12 @@
-import type { IDataProvider, IEventSink, IPlatformProjectGrantStore } from '@selvajs/platform';
+import type {
+	IDataProvider,
+	IEventSink,
+	IPlatformProjectGrantStore,
+	SchemaVersionReport
+} from '@selvajs/platform';
 import { ProviderError } from '@selvajs/platform';
 import { decodeSecretKey } from '@selvajs/platform/computeServer';
+import { EXPECTED_MIGRATION_HEAD } from './migrationHead.js';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle, clientBundleFromEnv } from './client.js';
 import { SupabaseEventSink } from './SupabaseEventSink.js';
@@ -55,6 +61,8 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly permissions: SupabasePlatformPermissionStore;
 	readonly platformProjectGrants: IPlatformProjectGrantStore;
 	readonly auditQuery: SupabaseAuditQuery;
+	/** The sink every store emits into — exposed per `IDataProvider.events`. */
+	readonly events: IEventSink;
 	/**
 	 * Per-solve timing sink, built from the same client bundle. Exposed so the
 	 * app's provider wiring can hand it to `SelvaConfig.solveMetrics` without
@@ -67,6 +75,7 @@ export class SupabaseDataProvider implements IDataProvider {
 		events: IEventSink,
 		secretKey?: Buffer
 	) {
+		this.events = events;
 		this.solveMetrics = new SupabaseSolveMetricSink(clients);
 		this.orgs = new SupabaseOrgStore(clients, events);
 		this.projects = new SupabaseProjectStore(clients, events);
@@ -131,6 +140,63 @@ export class SupabaseDataProvider implements IDataProvider {
 	 */
 	getClientBundle(): ClientBundle {
 		return this.clients;
+	}
+
+	/**
+	 * App↔DB schema handshake (audit O3). Calls `selva.migration_head()` — a
+	 * SECURITY DEFINER function shipped in this package's migrations — and
+	 * compares it against the head this build expects. Three failure shapes:
+	 * the RPC itself is missing (database never applied the handshake
+	 * migration), the head is empty (no migrations pushed at all), or the head
+	 * is lexicographically behind (operator updated the app but forgot
+	 * `supabase db push`). Never throws; boot health consumes the report.
+	 */
+	async verifySchemaVersion(): Promise<SchemaVersionReport> {
+		const expected = EXPECTED_MIGRATION_HEAD;
+		const pushHint =
+			'Apply the pending Supabase migrations: sync them into your project ' +
+			'(see @selvajs/supabase-provider sync-migrations) and run `npx supabase db push`.';
+		try {
+			const { data, error } = await this.clients.serviceClient.rpc('migration_head');
+			if (error) {
+				return {
+					ok: false,
+					expected,
+					actual: null,
+					message:
+						`selva.migration_head() is not available (${error.message ?? error.code ?? 'unknown error'}) ` +
+						`— the database schema is behind this app version. ${pushHint}`
+				};
+			}
+			const actual = typeof data === 'string' ? data : '';
+			if (!actual) {
+				return {
+					ok: false,
+					expected,
+					actual: '',
+					message: `The database reports no applied migrations. ${pushHint}`
+				};
+			}
+			// Timestamp prefixes are fixed-width, so lexicographic order is
+			// chronological. A head AHEAD of the app (rolled-back app, newer DB) is
+			// tolerated — the schema is append-only/additive by convention.
+			const ok = actual >= expected;
+			return {
+				ok,
+				expected,
+				actual,
+				message: ok
+					? undefined
+					: `Database migration head ${actual} is behind the app's expected ${expected}. ${pushHint}`
+			};
+		} catch (err) {
+			return {
+				ok: false,
+				expected,
+				actual: null,
+				message: `Schema handshake failed: ${err instanceof Error ? err.message : String(err)}`
+			};
+		}
 	}
 
 	/**

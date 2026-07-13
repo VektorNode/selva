@@ -48,6 +48,8 @@ export class LocalDataProvider implements IDataProvider {
 	readonly userProfile: IUserProfileStore;
 	readonly permissions: IPlatformPermissionStore;
 	readonly platformProjectGrants: IPlatformProjectGrantStore;
+	/** The sink the stores emit into (Noop unless injected) — per `IDataProvider.events`. */
+	readonly events?: IEventSink;
 
 	private readonly userData: LocalUserDataStore;
 
@@ -55,6 +57,7 @@ export class LocalDataProvider implements IDataProvider {
 		stores: Omit<IDataProvider, 'ensureUser' | 'onUserDeleted'>,
 		userData: LocalUserDataStore
 	) {
+		this.events = stores.events;
 		this.orgs = stores.orgs;
 		this.projects = stores.projects;
 		this.definitions = stores.definitions;
@@ -159,7 +162,8 @@ export class LocalDataProvider implements IDataProvider {
 				shareLinks,
 				userProfile: new LocalUserProfileProvider(userData),
 				permissions: new LocalPlatformPermissionStore(userData),
-				platformProjectGrants
+				platformProjectGrants,
+				events
 			},
 			userData
 		);

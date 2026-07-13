@@ -58,3 +58,7 @@ export const COMPUTE_REUSE_DEFINITION_CACHE = limits.computeReuseDefinitionCache
 // Server-side solve-result cache (`cachesolve`) + errored-solve caching opt-in.
 export const COMPUTE_SERVER_CACHESOLVE = limits.computeServerCachesolve;
 export const COMPUTE_CACHE_ERRORED_SOLVES = limits.computeCacheErroredSolves;
+
+// Max in-flight solves per compute server (scheduler maxConcurrent) — size to
+// the server's compute.geometry child count. See ComputeLimits for rationale.
+export const COMPUTE_MAX_CONCURRENT = limits.computeMaxConcurrentSolves;

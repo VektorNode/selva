@@ -1,13 +1,14 @@
 import { env } from '$env/dynamic/private';
 import type {
 	IErrorReporter,
+	IEventSink,
 	ISolveMetricSink,
 	SelvaBranding,
 	SelvaConfig,
 	SelvaFlags,
 	TenancyMode
 } from '@selvajs/platform';
-import { NoopErrorReporter } from '@selvajs/platform';
+import { NoopErrorReporter, NoopEventSink } from '@selvajs/platform';
 import { createSelvaProviders, type ProviderRegistry } from '@selvajs/server/providers';
 import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
@@ -160,6 +161,20 @@ export function getSolveMetricSink(): ISolveMetricSink {
  */
 export function getAuditQuery() {
 	return providers.data.auditQuery ?? null;
+}
+
+// Never-null via the Noop fallback, so emitters record unconditionally.
+const noopEventSink = new NoopEventSink();
+
+/**
+ * Write-side event sink for routes with no store mutation to piggyback on
+ * (e.g. the self-update lifecycle events, audit O2). Prefers the explicit
+ * `SelvaConfig.events`, then the data provider's own sink, then a no-op —
+ * mirroring how the stores themselves are wired.
+ */
+export function getEventSink(): IEventSink {
+	const p = resolveProviders();
+	return p.events ?? p.data.events ?? noopEventSink;
 }
 
 // ============================================================================

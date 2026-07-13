@@ -59,21 +59,28 @@ export interface CachedClient {
 	client: GrasshopperClient;
 	scheduler: SolveScheduler;
 	/**
-	 * Last decode/solve/encode reported by the compute server (Server-Timing).
-	 * Written by onServerTiming, read right after scheduler.solve resolves to split
-	 * the solve wall time into on-compute-server work vs. the compute↔web-server
-	 * link. Queue-mode schedulers serialize solves, so this correlates with the
-	 * request that just resolved; a Selva-cache hit leaves it null (no compute
-	 * call). Debug aid — a concurrent burst may misattribute one request's timing.
+	 * Last decode/solve/encode reported by the compute server (Server-Timing),
+	 * written by onServerTiming. `seq` increments on every write. The scheduler
+	 * runs up to `maxConcurrentSolves` solves at once, so `last` alone can't be
+	 * trusted per-request: callers snapshot `seq` before their solve and
+	 * attribute `last` only when exactly one write happened since (necessarily
+	 * theirs — see the guard in `runSolvePipeline`), dropping the segment
+	 * otherwise instead of misattributing another request's timing.
 	 */
-	rhinoTiming: { last: { decode: number; solve: number; encode: number } | null };
+	rhinoTiming: { last: { decode: number; solve: number; encode: number } | null; seq: number };
 	/**
 	 * Last solve's cache verdicts from the scheduler's onSettle: whether the
 	 * in-process response cache served it (no compute call) and whether the
-	 * definition had to be re-uploaded. Same read-after-solve pattern and
-	 * concurrency caveat as rhinoTiming.
+	 * definition had to be re-uploaded. `seq` increments on EVERY settle
+	 * (success or error); `last` is only written on success. Same
+	 * snapshot-and-attribute pattern as rhinoTiming — onSettle always fires
+	 * before the corresponding `scheduler.solve()` promise resolves, so at the
+	 * caller's read point its own settle is included in `seq`.
 	 */
-	solveMeta: { last: { fromCache: boolean; definitionReuploaded?: boolean } | null };
+	solveMeta: {
+		last: { fromCache: boolean; definitionReuploaded?: boolean } | null;
+		seq: number;
+	};
 }
 
 /**
@@ -90,6 +97,12 @@ export interface ClientCacheConfig {
 	cacheerroredsolves: boolean;
 	/** Reference large definitions by server cache key (pointer) instead of re-uploading. */
 	reuseServerDefinitionCache: boolean;
+	/**
+	 * Max in-flight solves per compute server (scheduler `maxConcurrent`; excess
+	 * FIFO-queues). Size to the server's `compute.geometry` child count
+	 * (`ComputeLimits.computeMaxConcurrentSolves`).
+	 */
+	maxConcurrentSolves: number;
 	/** Concise cache/timing logs. When false, `onDebugLog` is never invoked. */
 	debug: boolean;
 	/** VERBOSE lib-level logging (full solve request/response incl. geometry). */
@@ -136,9 +149,10 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 
 	async function build(server: ResolvedServer, definitionGuid?: string): Promise<CachedClient> {
 		// Holders for per-request results from the client/scheduler callbacks; the
-		// caller reads them right after each solve resolves to build Server-Timing.
-		const rhinoTiming: CachedClient['rhinoTiming'] = { last: null };
-		const solveMeta: CachedClient['solveMeta'] = { last: null };
+		// caller reads them right after each solve resolves to build Server-Timing,
+		// using the seq counters to detect (and drop) ambiguous concurrent writes.
+		const rhinoTiming: CachedClient['rhinoTiming'] = { last: null, seq: 0 };
+		const solveMeta: CachedClient['solveMeta'] = { last: null, seq: 0 };
 
 		const clientConfig: GrasshopperComputeConfig = {
 			serverUrl: server.serverUrl,
@@ -160,6 +174,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				const solve = t.solve ?? 0;
 				const encode = t.encode ?? 0;
 				// Always recorded (cheap): the caller reads this after scheduler.solve.
+				rhinoTiming.seq += 1;
 				rhinoTiming.last = { decode, solve, encode };
 				if (!config.debug) return;
 				// Heuristic thresholds: a genuine parse/solve is many ms; a cache hit
@@ -189,6 +204,10 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 		const client = await GrasshopperClient.create(clientConfig);
 		const scheduler = client.createScheduler({
 			mode: 'queue',
+			// Queue mode defaults maxConcurrent to 1, which would serialize every
+			// solve on this server through a single slot while the compute VM's
+			// other compute.geometry children idle (audit B6) — always pass it.
+			maxConcurrent: config.maxConcurrentSolves,
 			timeoutMs: config.maxSolveDurationMs,
 			cache: { maxEntries: 20, ttlMs: 5 * 60_000 },
 			// Solve large definitions by server cache-key (pointer) instead of
@@ -199,6 +218,9 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			// this solve was served from the app's own cache — Rhino.Compute was never
 			// called. `false` means it went to the compute server.
 			onSettle: (_ctx, result) => {
+				// Count EVERY settle (success or error) so the caller's attribution
+				// guard sees all concurrent activity, not just successful writes.
+				solveMeta.seq += 1;
 				if (result.status !== 'success') return;
 				// Always recorded (cheap): the caller surfaces these on Server-Timing.
 				solveMeta.last = {

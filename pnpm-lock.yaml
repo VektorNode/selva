@@ -19,8 +19,8 @@ catalogs:
       specifier: ^1.49.1
       version: 1.61.1
     '@selvajs/compute':
-      specifier: ^3.1.0-beta.3
-      version: 3.1.0-beta.3
+      specifier: ^3.1.0-beta.5
+      version: 3.1.0-beta.5
     '@sveltejs/adapter-auto':
       specifier: ^7.0.1
       version: 7.0.1
@@ -247,7 +247,7 @@ importers:
         version: 5.2.2(svelte@5.56.4(@typescript-eslint/types@8.62.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.1.0-beta.3(three@0.184.0)
+        version: 3.1.0-beta.5(three@0.184.0)
       '@selvajs/schemas':
         specifier: workspace:*
         version: link:../schemas
@@ -386,7 +386,7 @@ importers:
         version: 1.21.0(svelte@5.56.4(@typescript-eslint/types@8.62.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.1.0-beta.3(three@0.184.0)
+        version: 3.1.0-beta.5(three@0.184.0)
       '@supabase/supabase-js':
         specifier: ^2.104.1
         version: 2.108.2
@@ -472,13 +472,16 @@ importers:
     dependencies:
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.1.0-beta.3(three@0.184.0)
+        version: 3.1.0-beta.5(three@0.184.0)
       '@selvajs/platform':
         specifier: workspace:*
         version: link:../platform
       '@selvajs/schemas':
         specifier: workspace:*
         version: link:../schemas
+      '@sentry/node':
+        specifier: '>=8'
+        version: 10.63.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -503,7 +506,7 @@ importers:
         version: 1.21.0(svelte@5.56.4(@typescript-eslint/types@8.62.0))
       '@selvajs/compute':
         specifier: 'catalog:'
-        version: 3.1.0-beta.3(three@0.184.0)
+        version: 3.1.0-beta.5(three@0.184.0)
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
@@ -1431,8 +1434,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@selvajs/compute@3.1.0-beta.3':
-    resolution: {integrity: sha512-6q8g6lj1/7CFaV+TyhMLEZkPuutRStXFXE+o96ZSYWkKfMzIQotaONfa8A4ZAzZq/20JdUqWw9iJcADvUoasqA==}
+  '@selvajs/compute@3.1.0-beta.5':
+    resolution: {integrity: sha512-JR2olkTASzkU+irD9MPhei8Op8O5nO5k5fudlNywdMdBqrPbqe2jzDl0MhF0vNSzxKWXspp/fEDqd3G3VeWAUg==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       three: '>=0.179.0'
@@ -4033,7 +4036,6 @@ snapshots:
       es-module-lexer: 2.3.0
       magic-string: 0.30.21
       module-details-from-path: 1.0.4
-    optional: true
 
   '@apm-js-collab/code-transformer@0.15.0':
     dependencies:
@@ -4043,7 +4045,6 @@ snapshots:
       meriyah: 6.1.4
       semifies: 1.0.0
       source-map: 0.6.1
-    optional: true
 
   '@apm-js-collab/tracing-hooks@0.10.1':
     dependencies:
@@ -4052,7 +4053,6 @@ snapshots:
       module-details-from-path: 1.0.4
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@babel/runtime@7.29.7': {}
 
@@ -4564,16 +4564,13 @@ snapshots:
   '@opentelemetry/api-logs@0.214.0':
     dependencies:
       '@opentelemetry/api': 1.9.1
-    optional: true
 
-  '@opentelemetry/api@1.9.1':
-    optional: true
+  '@opentelemetry/api@1.9.1': {}
 
   '@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/semantic-conventions': 1.41.1
-    optional: true
 
   '@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -4583,14 +4580,12 @@ snapshots:
       require-in-the-middle: 8.0.1
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/resources@2.9.0(@opentelemetry/api@1.9.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/core': 2.9.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/semantic-conventions': 1.41.1
-    optional: true
 
   '@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -4599,7 +4594,6 @@ snapshots:
       '@opentelemetry/resources': 2.9.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/sdk-trace': 2.9.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/semantic-conventions': 1.41.1
-    optional: true
 
   '@opentelemetry/sdk-trace@2.9.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -4607,10 +4601,8 @@ snapshots:
       '@opentelemetry/core': 2.9.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/resources': 2.9.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/semantic-conventions': 1.41.1
-    optional: true
 
-  '@opentelemetry/semantic-conventions@1.41.1':
-    optional: true
+  '@opentelemetry/semantic-conventions@1.41.1': {}
 
   '@playwright/test@1.61.1':
     dependencies:
@@ -4740,18 +4732,16 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
 
-  '@selvajs/compute@3.1.0-beta.3(three@0.184.0)':
+  '@selvajs/compute@3.1.0-beta.5(three@0.184.0)':
     dependencies:
       fflate: 0.8.3
       rhino3dm: 8.17.0
     optionalDependencies:
       three: 0.184.0
 
-  '@sentry/conventions@0.12.0':
-    optional: true
+  '@sentry/conventions@0.12.0': {}
 
-  '@sentry/core@10.63.0':
-    optional: true
+  '@sentry/core@10.63.0': {}
 
   '@sentry/node-core@10.63.0(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))':
     dependencies:
@@ -4764,7 +4754,6 @@ snapshots:
       '@opentelemetry/core': 2.9.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/instrumentation': 0.214.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/sdk-trace-base': 2.9.0(@opentelemetry/api@1.9.1)
-    optional: true
 
   '@sentry/node@10.63.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))':
     dependencies:
@@ -4782,7 +4771,6 @@ snapshots:
       - '@opentelemetry/core'
       - '@opentelemetry/exporter-trace-otlp-http'
       - supports-color
-    optional: true
 
   '@sentry/opentelemetry@10.63.0(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))':
     dependencies:
@@ -4791,7 +4779,6 @@ snapshots:
       '@opentelemetry/sdk-trace-base': 2.9.0(@opentelemetry/api@1.9.1)
       '@sentry/conventions': 0.12.0
       '@sentry/core': 10.63.0
-    optional: true
 
   '@sentry/server-utils@10.63.0':
     dependencies:
@@ -4803,7 +4790,6 @@ snapshots:
       magic-string: 0.30.21
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@shikijs/core@3.23.0':
     dependencies:
@@ -5476,8 +5462,7 @@ snapshots:
 
   assertion-error@2.0.1: {}
 
-  astring@1.9.0:
-    optional: true
+  astring@1.9.0: {}
 
   axobject-query@4.1.0: {}
 
@@ -5552,8 +5537,7 @@ snapshots:
     dependencies:
       readdirp: 5.0.0
 
-  cjs-module-lexer@2.2.0:
-    optional: true
+  cjs-module-lexer@2.2.0: {}
 
   cli-cursor@5.0.0:
     dependencies:
@@ -5842,8 +5826,7 @@ snapshots:
 
   es-module-lexer@1.7.0: {}
 
-  es-module-lexer@2.3.0:
-    optional: true
+  es-module-lexer@2.3.0: {}
 
   es-toolkit@1.49.0: {}
 
@@ -6244,7 +6227,6 @@ snapshots:
       cjs-module-lexer: 2.2.0
       es-module-lexer: 2.3.0
       module-details-from-path: 1.0.4
-    optional: true
 
   import-meta-resolve@4.2.0: {}
 
@@ -6482,8 +6464,7 @@ snapshots:
 
   merge2@1.4.1: {}
 
-  meriyah@6.1.4:
-    optional: true
+  meriyah@6.1.4: {}
 
   mermaid-isomorphic@3.1.0(playwright@1.61.1):
     dependencies:
@@ -6563,8 +6544,7 @@ snapshots:
       svelte: 5.56.4(@typescript-eslint/types@8.62.0)
       svelte-toolbelt: 0.7.1(svelte@5.56.4(@typescript-eslint/types@8.62.0))
 
-  module-details-from-path@1.0.4:
-    optional: true
+  module-details-from-path@1.0.4: {}
 
   mri@1.2.0: {}
 
@@ -6820,7 +6800,6 @@ snapshots:
       module-details-from-path: 1.0.4
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   resolve-from@4.0.0: {}
 
@@ -6932,8 +6911,7 @@ snapshots:
 
   scule@1.3.0: {}
 
-  semifies@1.0.0:
-    optional: true
+  semifies@1.0.0: {}
 
   semver@7.8.5: {}
 
@@ -7013,8 +6991,7 @@ snapshots:
 
   source-map-js@1.2.1: {}
 
-  source-map@0.6.1:
-    optional: true
+  source-map@0.6.1: {}
 
   space-separated-tokens@2.0.2: {}
 

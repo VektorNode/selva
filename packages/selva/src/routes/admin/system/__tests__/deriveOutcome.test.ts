@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { deriveOutcome } from '../update-outcome';
+import { deriveOutcome } from '$lib/update-outcome';
 
 describe('deriveOutcome', () => {
 	it('is pending while the run has not finished', () => {

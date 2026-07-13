@@ -40,13 +40,27 @@ export function transformInputParameter(
 	};
 
 	const processed = processInput(raw);
-	// processInput's default-normalization only understands scalars and innerTree
-	// objects — a plain array default (multi-select widgets, e.g. a dynamic value
-	// list checklist) is dropped as "malformed", which would omit the input from
-	// the solve entirely. Restore it; TreeBuilder.appendFlat handles arrays natively.
+	// Two cases where processInput drops a default we must carry anyway (the
+	// default IS what TreeBuilder puts on the wire; a dropped default means the
+	// input is omitted from the solve and the user's selection never reaches
+	// Grasshopper):
+	//  - a plain array default (multi-select widgets, e.g. a dynamic value list
+	//    checklist) is dropped as "malformed"; TreeBuilder.appendFlat handles
+	//    arrays natively.
+	//  - since @selvajs/compute 3.1.0-beta.5, the ValueList fallback drops a
+	//    scalar default it can't validate against a `values` map — and
+	//    `SchemaInput` never carries the option map (it lives on the layout
+	//    item's config), so every app value-list selection lands here.
 	const effective = value ?? input.default;
-	if (Array.isArray(effective) && processed.default == null) {
-		(processed as { default: unknown }).default = effective;
+	if (processed.default == null && effective != null) {
+		if (Array.isArray(effective)) {
+			(processed as { default: unknown }).default = effective;
+		} else if (processed.paramType === 'ValueList' && typeof effective !== 'object') {
+			// Scoped to ValueList: for other types a dropped scalar default means
+			// the package rejected it as unparseable — restoring it would ship
+			// garbage to Grasshopper.
+			(processed as { default: unknown }).default = effective;
+		}
 	}
 	return processed;
 }

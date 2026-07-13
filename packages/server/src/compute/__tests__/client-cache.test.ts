@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // --- Mock @selvajs/compute -------------------------------------------------
 const createdConfigs: any[] = [];
+const createdSchedulerOptions: any[] = [];
 const disposedSchedulers: any[] = [];
 
 vi.mock('@selvajs/compute', () => {
@@ -21,7 +22,8 @@ vi.mock('@selvajs/compute', () => {
 			return new GrasshopperClient(config);
 		}
 		constructor(public config: any) {}
-		createScheduler() {
+		createScheduler(options: any) {
+			createdSchedulerOptions.push(options);
 			const scheduler = {
 				disposed: false,
 				dispose() {
@@ -40,6 +42,7 @@ import { createClientCache, serverIdentity } from '../client-cache.js';
 function baseConfig() {
 	return {
 		maxSolveDurationMs: 30_000,
+		maxConcurrentSolves: 4,
 		cachesolve: true,
 		cacheerroredsolves: false,
 		reuseServerDefinitionCache: true,
@@ -56,6 +59,7 @@ const server = (id: string, over: Partial<{ serverUrl: string; apiKey: string }>
 
 beforeEach(() => {
 	createdConfigs.length = 0;
+	createdSchedulerOptions.length = 0;
 	disposedSchedulers.length = 0;
 });
 
@@ -154,6 +158,62 @@ describe('createClientCache — X-Selva-Definition (ADR 0004 D2)', () => {
 		const cache = createClientCache(baseConfig());
 		await cache.getClient(server('s1'));
 		expect(createdConfigs[0].headers).toBeUndefined();
+	});
+});
+
+describe('createClientCache — scheduler concurrency (audit B6)', () => {
+	it('forwards maxConcurrentSolves as the scheduler maxConcurrent in queue mode', async () => {
+		const cache = createClientCache({ ...baseConfig(), maxConcurrentSolves: 7 });
+		await cache.getClient(server('s1'));
+		expect(createdSchedulerOptions).toHaveLength(1);
+		// Queue mode with NO maxConcurrent defaults to 1 in the scheduler,
+		// serializing every solve on the server — the option must always be set.
+		expect(createdSchedulerOptions[0].mode).toBe('queue');
+		expect(createdSchedulerOptions[0].maxConcurrent).toBe(7);
+	});
+});
+
+describe('createClientCache — per-request telemetry sequence counters', () => {
+	it('onServerTiming bumps rhinoTiming.seq on every write', async () => {
+		const cache = createClientCache(baseConfig());
+		const entry = await cache.getClient(server('s1'));
+		expect(entry.rhinoTiming).toEqual({ last: null, seq: 0 });
+		createdConfigs[0].onServerTiming({ decode: 5, solve: 100, encode: 3 });
+		expect(entry.rhinoTiming.seq).toBe(1);
+		expect(entry.rhinoTiming.last).toEqual({ decode: 5, solve: 100, encode: 3 });
+		createdConfigs[0].onServerTiming({ decode: 1, solve: 2, encode: 3 });
+		expect(entry.rhinoTiming.seq).toBe(2);
+		expect(entry.rhinoTiming.last).toEqual({ decode: 1, solve: 2, encode: 3 });
+	});
+
+	it('onSettle bumps solveMeta.seq on every settle but writes last only on success', async () => {
+		const cache = createClientCache(baseConfig());
+		const entry = await cache.getClient(server('s1'));
+		const onSettle = createdSchedulerOptions[0].onSettle;
+		expect(entry.solveMeta).toEqual({ last: null, seq: 0 });
+
+		onSettle(
+			{ key: 'k' },
+			{
+				status: 'success',
+				fromCache: false,
+				definitionReuploaded: false,
+				durationMs: 10,
+				response: {}
+			}
+		);
+		expect(entry.solveMeta.seq).toBe(1);
+		expect(entry.solveMeta.last).toEqual({ fromCache: false, definitionReuploaded: false });
+
+		// An error settle must still count toward seq (the attribution guard in
+		// the pipeline needs to see ALL concurrent activity) without clobbering last.
+		onSettle({ key: 'k' }, { status: 'error', error: new Error('x'), durationMs: 5 });
+		expect(entry.solveMeta.seq).toBe(2);
+		expect(entry.solveMeta.last).toEqual({ fromCache: false, definitionReuploaded: false });
+
+		onSettle({ key: 'k' }, { status: 'success', fromCache: true, durationMs: 0, response: {} });
+		expect(entry.solveMeta.seq).toBe(3);
+		expect(entry.solveMeta.last).toEqual({ fromCache: true, definitionReuploaded: undefined });
 	});
 });
 

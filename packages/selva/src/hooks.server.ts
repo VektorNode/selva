@@ -3,8 +3,10 @@ import { isHttpError } from '@sveltejs/kit';
 import type { AuthUser, RequestContext } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
 import { applySecurityHeaders, createRouteClassifier } from '@selvajs/server/http';
-import { providers, getErrorReporter } from '$lib/server/providers.server';
+import { providers, getErrorReporter, getEventSink } from '$lib/server/providers.server';
 import { getBootHealth } from '$lib/server/bootHealth.server';
+import { env } from '$env/dynamic/private';
+import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
 import { bootstrapUserSession, wireHeaderAuthBootstrap } from '$lib/server/auth-bootstrap.server';
 import {
 	getRefreshToken,
@@ -201,6 +203,18 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	if (!bootHealthKicked) {
 		bootHealthKicked = true;
 		void getBootHealth();
+		// If a self-update was in flight when this process came up, reconcile its
+		// outcome into the audit log (system.update.finished / rolled_back /
+		// failed). No-op when no pending-update state file exists — see
+		// selfUpdate.server.ts for the full lifecycle.
+		const deploymentDir = findDeploymentDir(env);
+		if (deploymentDir) {
+			startUpdateOutcomeReconciler({
+				deploymentDir,
+				emit: (e) => getEventSink().emit(e),
+				report: (err) => getErrorReporter().capture(err, { tags: { origin: 'selfUpdate' } })
+			});
+		}
 	}
 
 	const { pathname } = event.url;

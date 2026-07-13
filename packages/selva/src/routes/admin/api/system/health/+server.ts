@@ -5,7 +5,11 @@ import { writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { env as privateEnv } from '$env/dynamic/private';
 import { LocalComputeServerStore } from '@selvajs/local-provider';
-import { findServerById, type SecretVerificationReport } from '@selvajs/platform';
+import {
+	findServerById,
+	type SchemaVersionReport,
+	type SecretVerificationReport
+} from '@selvajs/platform';
 import { providers, getComputeServerConfigStore } from '$lib/server/providers.server';
 import { requirePermission } from '$lib/server/access.server';
 
@@ -76,6 +80,38 @@ function atRestSecretsCheck(report: SecretVerificationReport | null): HealthChec
 			: 'The stored ciphertext does not match the current SELVA_AT_REST_KEY (rotated key or ' +
 				'restored backup). Re-enter the affected keys via /admin/compute, or restore the ' +
 				'original SELVA_AT_REST_KEY, then run this check again.'
+	};
+}
+
+function schemaVersionCheck(report: SchemaVersionReport | null): HealthCheck {
+	const base = { id: 'schema-version', label: 'Database schema' };
+
+	if (report === null) {
+		return {
+			...base,
+			status: 'not_applicable',
+			summary:
+				'The active data provider migrates with the app — there is no separate schema to verify.'
+		};
+	}
+
+	if (report.ok) {
+		return {
+			...base,
+			status: 'ok',
+			summary: `Database migration head ${report.actual} satisfies the app's expected ${report.expected}.`
+		};
+	}
+
+	return {
+		...base,
+		status: 'degraded',
+		summary:
+			report.message ??
+			`Database migration head ${report.actual ?? 'unavailable'} is behind the app's expected ${report.expected}.`,
+		remediation:
+			'Sync the provider migrations into your Supabase project and run `npx supabase db push`, ' +
+			'then restart the app. `selva doctor` runs the same check from the CLI.'
 	};
 }
 
@@ -218,6 +254,16 @@ export const GET: RequestHandler = async ({ locals }) => {
 		}
 	} else {
 		checks.push(atRestSecretsCheck(null));
+	}
+
+	// Live app↔DB schema handshake (audit O3) — unlike boot health this re-runs
+	// on every request, so an operator sees green right after `db push` without
+	// restarting first (the boot report itself stays stale by design).
+	const data = providers.data;
+	if (typeof data.verifySchemaVersion === 'function') {
+		checks.push(schemaVersionCheck(await data.verifySchemaVersion()));
+	} else {
+		checks.push(schemaVersionCheck(null));
 	}
 
 	// Reachability + writability run in parallel — independent of each other

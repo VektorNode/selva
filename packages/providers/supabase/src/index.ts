@@ -9,6 +9,7 @@ export {
 	SupabaseComputeServerStore,
 	SupabaseShareLinkStore,
 	SupabaseDataProvider,
+	EXPECTED_MIGRATION_HEAD,
 	SupabaseEventSink,
 	SupabaseSolveMetricSink,
 	SupabaseAuditQuery,

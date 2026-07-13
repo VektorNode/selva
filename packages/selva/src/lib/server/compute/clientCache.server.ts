@@ -16,6 +16,7 @@ import { env } from '$env/dynamic/private';
 import type { ComputeServerConfig } from '@selvajs/platform';
 import {
 	COMPUTE_CACHE_ERRORED_SOLVES,
+	COMPUTE_MAX_CONCURRENT,
 	COMPUTE_REUSE_DEFINITION_CACHE,
 	COMPUTE_SERVER_CACHESOLVE,
 	MAX_SOLVE_DURATION_MS
@@ -35,6 +36,7 @@ export const COMPUTE_DEBUG_VERBOSE = ['true', '1', 'yes'].includes(
 
 const cache = createClientCache({
 	maxSolveDurationMs: MAX_SOLVE_DURATION_MS,
+	maxConcurrentSolves: COMPUTE_MAX_CONCURRENT,
 	cachesolve: COMPUTE_SERVER_CACHESOLVE,
 	cacheerroredsolves: COMPUTE_CACHE_ERRORED_SOLVES,
 	reuseServerDefinitionCache: COMPUTE_REUSE_DEFINITION_CACHE,

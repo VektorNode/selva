@@ -26,13 +26,23 @@ export interface PlatformPermissionStoreConformanceOptions {
 		store: IPlatformPermissionStore;
 		seedUser: () => Promise<string>;
 	}>;
+	/**
+	 * Optional: disable a user in the adapter's auth backend, in a way the
+	 * store's enabled-admin invariant queries observe. When present, the
+	 * disabled-admin exclusion tests run (Permissions.md §10 counts only
+	 * *enabled* instance_admins). Adapters whose permission store can't see
+	 * disabled state (local — documented boundary) omit it; the tests then
+	 * show as skipped rather than silently green.
+	 */
+	disableUser?: (userId: string) => Promise<void>;
 	cleanup?: () => Promise<void> | void;
 }
 
 export function runPlatformPermissionStoreConformance(
 	opts: PlatformPermissionStoreConformanceOptions
 ): void {
-	const { name, createStore, cleanup } = opts;
+	const { name, createStore, disableUser, cleanup } = opts;
+	const itWithDisable = disableUser ? it : it.skip;
 
 	function adminCtx(userId: string): RequestContext {
 		return {
@@ -173,6 +183,40 @@ export function runPlatformPermissionStoreConformance(
 				system: true
 			};
 			expect(await store.countInstanceAdminsExcluding(sysCtx, adminId)).toBe(0);
+		});
+
+		itWithDisable('hasInstanceAdmin ignores disabled admins', async () => {
+			const { store, seedUser } = await createStore();
+			const adminId = await seedUser();
+			const sysCtx: RequestContext = {
+				userId: '',
+				platformPermissions: [],
+				orgPermissions: [],
+				system: true
+			};
+			await store.set(adminCtx(adminId), adminId, ['instance_admin']);
+			expect(await store.hasInstanceAdmin(sysCtx)).toBe(true);
+			await disableUser!(adminId);
+			expect(await store.hasInstanceAdmin(sysCtx)).toBe(false);
+		});
+
+		itWithDisable('countInstanceAdminsExcluding ignores disabled admins', async () => {
+			const { store, seedUser } = await createStore();
+			const adminA = await seedUser();
+			const adminB = await seedUser();
+			await store.set(adminCtx(adminA), adminA, ['instance_admin']);
+			await store.set(adminCtx(adminA), adminB, ['instance_admin']);
+			const sysCtx: RequestContext = {
+				userId: '',
+				platformPermissions: [],
+				orgPermissions: [],
+				system: true
+			};
+			await disableUser!(adminB);
+			// adminB holds the grant but is disabled — must not count as the
+			// "other admin" that would allow demoting/disabling adminA.
+			expect(await store.countInstanceAdminsExcluding(sysCtx, adminA)).toBe(0);
+			expect(await store.countInstanceAdminsExcluding(sysCtx, adminB)).toBe(1);
 		});
 
 		it('getForBatch returns a map keyed by userId', async () => {

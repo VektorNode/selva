@@ -32,7 +32,11 @@
 		'share_link.revoked': 'Share link · revoked',
 		'invite.created': 'Invite · created',
 		'invite.accepted': 'Invite · accepted',
-		'invite.revoked': 'Invite · revoked'
+		'invite.revoked': 'Invite · revoked',
+		'system.update.started': 'System update · started',
+		'system.update.finished': 'System update · finished',
+		'system.update.rolled_back': 'System update · rolled back',
+		'system.update.failed': 'System update · FAILED'
 	};
 
 	const TARGET_KIND_LABEL: Record<string, string> = {

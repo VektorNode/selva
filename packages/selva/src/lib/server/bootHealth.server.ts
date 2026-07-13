@@ -1,4 +1,4 @@
-import type { SecretVerificationReport } from '@selvajs/platform';
+import type { SchemaVersionReport, SecretVerificationReport } from '@selvajs/platform';
 import { providers } from './providers.server.js';
 
 /**
@@ -21,6 +21,14 @@ import { providers } from './providers.server.js';
 export interface BootHealth {
 	checkedAt: string;
 	atRestSecrets: SecretVerificationReport | null;
+	/**
+	 * App↔DB schema handshake (audit O3) — null when the data provider doesn't
+	 * implement it (local provider: schema and app ship together). A not-ok
+	 * report degrades `/api/health` to 503, which also makes the self-update
+	 * runner's health probe roll back an update whose migrations weren't
+	 * applied, instead of leaving a skewed app serving PGRST errors.
+	 */
+	schemaVersion: SchemaVersionReport | null;
 }
 
 let cached: BootHealth | null = null;
@@ -65,9 +73,35 @@ async function run(): Promise<BootHealth> {
 		);
 	}
 
+	let schemaVersion: SchemaVersionReport | null = null;
+	const data = providers.data;
+	if (typeof data.verifySchemaVersion === 'function') {
+		try {
+			schemaVersion = await data.verifySchemaVersion();
+		} catch (err) {
+			// The contract says it must not throw; treat a throw as a failed check.
+			console.error('[selva][boot] verifySchemaVersion threw — treating as failure', err);
+			schemaVersion = {
+				ok: false,
+				expected: '(unknown)',
+				actual: null,
+				message: err instanceof Error ? err.message : String(err)
+			};
+		}
+	}
+
+	if (schemaVersion && !schemaVersion.ok) {
+		console.error(
+			`[selva][boot] Database schema handshake failed (expected head ${schemaVersion.expected}, ` +
+				`got ${schemaVersion.actual ?? 'unavailable'}). /api/health will return 503. ` +
+				(schemaVersion.message ?? '')
+		);
+	}
+
 	return {
 		checkedAt: new Date().toISOString(),
-		atRestSecrets
+		atRestSecrets,
+		schemaVersion
 	};
 }
 
@@ -101,5 +135,7 @@ export function getBootHealthSync(): BootHealth | null {
 }
 
 export function isDegraded(report: BootHealth): boolean {
-	return report.atRestSecrets !== null && !report.atRestSecrets.ok;
+	if (report.atRestSecrets !== null && !report.atRestSecrets.ok) return true;
+	if (report.schemaVersion !== null && !report.schemaVersion.ok) return true;
+	return false;
 }

@@ -59,11 +59,18 @@ describe('transformInputParameter — number / integer', () => {
 		expect(out.default).toBe(3);
 	});
 
-	it('forces stepSize to 1 for integers', () => {
+	it('honors a schema-authored stepSize verbatim for integers (compute ≥3.1.0-beta.5)', () => {
+		// The package used to force integer stepSize to 1; since beta.5 a
+		// server-authored stepSize wins and the 1-heuristic is only the fallback.
 		const out = transformInputParameter(
 			input({ paramType: 'integer', stepSize: 0.5, default: 2 }),
 			4
 		);
+		expect(out).toMatchObject({ paramType: 'Integer', stepSize: 0.5, default: 4 });
+	});
+
+	it('falls back to stepSize 1 for integers without an authored stepSize', () => {
+		const out = transformInputParameter(input({ paramType: 'integer', default: 2 }), 4);
 		expect(out).toMatchObject({ paramType: 'Integer', stepSize: 1, default: 4 });
 	});
 });

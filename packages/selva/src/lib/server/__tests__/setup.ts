@@ -11,7 +11,7 @@
  */
 
 import { vi } from 'vitest';
-import { NoopSolveMetricSink, NoopErrorReporter } from '@selvajs/platform';
+import { NoopSolveMetricSink, NoopErrorReporter, NoopEventSink } from '@selvajs/platform';
 
 vi.mock('$lib/server/providers.server', async () => {
 	const { currentTestProviders } = await import('./test-providers.js');
@@ -50,6 +50,7 @@ vi.mock('$lib/server/providers.server', async () => {
 		getPermissionStore: () => currentTestProviders().config.data.permissions,
 		getPlatformProjectGrantStore: () => currentTestProviders().config.data.platformProjectGrants,
 		getAuditQuery: () => currentTestProviders().config.data.auditQuery ?? null,
+		getEventSink: () => currentTestProviders().config.data.events ?? new NoopEventSink(),
 		getErrorReporter: () => new NoopErrorReporter(),
 		getSolveMetricSink: () =>
 			(currentTestProviders().config.data as { solveMetrics?: unknown }).solveMetrics ??

@@ -49,8 +49,8 @@ function fakeClient(solve: SolveStub): CachedClient {
 	return {
 		client: {} as GrasshopperClient,
 		scheduler: { solve } as unknown as SolveScheduler,
-		rhinoTiming: { last: null },
-		solveMeta: { last: null }
+		rhinoTiming: { last: null, seq: 0 },
+		solveMeta: { last: null, seq: 0 }
 	};
 }
 
@@ -246,11 +246,15 @@ describe('runSolvePipeline — Server-Timing', () => {
 	});
 
 	it('splits solve into rhino_* + compute_link when the client reported server timing', async () => {
-		// The real onServerTiming callback fires DURING the solve, after the
-		// pipeline has reset the holder — so populate it inside the solve stub, not
-		// before the call (which the pipeline's pre-solve reset would wipe).
+		// The real callbacks fire DURING the solve: onServerTiming per compute
+		// call, onSettle per settle — each bumps its seq. Mimic both so the
+		// pipeline's attribution guard (exactly one write since the snapshot,
+		// settle not fromCache) sees this request's own telemetry.
 		const client: CachedClient = fakeClient(async () => {
+			client.rhinoTiming.seq += 1;
 			client.rhinoTiming.last = { decode: 5, solve: 20, encode: 3 };
+			client.solveMeta.seq += 1;
+			client.solveMeta.last = { fromCache: false, definitionReuploaded: false };
 			return { errors: [], warnings: [] };
 		});
 		const outcome = await runSolvePipeline(baseArgs({ client }));
@@ -264,9 +268,8 @@ describe('runSolvePipeline — Server-Timing', () => {
 	});
 
 	it('surfaces selva_cache + def_reupload verdicts as 0/1 flags', async () => {
-		// Populate during the solve (the onSettle callback's real timing), not
-		// before — the pipeline resets solveMeta before it runs.
 		const client: CachedClient = fakeClient(async () => {
+			client.solveMeta.seq += 1;
 			client.solveMeta.last = { fromCache: true, definitionReuploaded: false };
 			return { errors: [], warnings: [] };
 		});
@@ -278,17 +281,61 @@ describe('runSolvePipeline — Server-Timing', () => {
 		expect(st).toContain('def_reupload;dur=0');
 	});
 
-	it('resets stale telemetry holders before solving', async () => {
-		// A warm client carrying a previous request's timing must not leak it into
-		// this solve's Server-Timing when the current solve reports nothing.
+	it('does not attribute stale telemetry a previous request left on the warm client', async () => {
+		// The holders are shared per-server. Data written before this solve's
+		// snapshot (seq unchanged during the solve) must not leak into this
+		// request's Server-Timing.
 		const client = fakeClient(async () => ({ errors: [], warnings: [] }));
-		client.rhinoTiming.last = { decode: 99, solve: 99, encode: 99 };
-		client.solveMeta.last = { fromCache: true };
+		client.rhinoTiming = { last: { decode: 99, solve: 99, encode: 99 }, seq: 3 };
+		client.solveMeta = { last: { fromCache: true }, seq: 5 };
 		const outcome = await runSolvePipeline(baseArgs({ client }));
 		expect(outcome.kind).toBe('ok');
 		if (outcome.kind !== 'ok') return;
-		// Holders were reset to null before solve; the stub never repopulated them.
 		expect(outcome.envelope.headers['Server-Timing']).not.toContain('rhino_decode');
 		expect(outcome.envelope.headers['Server-Timing']).not.toContain('selva_cache');
+	});
+
+	it('drops telemetry when a concurrent request also settled in the window (audit B6)', async () => {
+		// With maxConcurrentSolves > 1 two solves can interleave. More than one
+		// settle since this request's snapshot makes the shared slots ambiguous —
+		// the pipeline must omit the segments rather than report another
+		// request's cache verdict / rhino timing as ours.
+		const client: CachedClient = fakeClient(async () => {
+			// Our own solve's callbacks…
+			client.rhinoTiming.seq += 1;
+			client.rhinoTiming.last = { decode: 5, solve: 20, encode: 3 };
+			client.solveMeta.seq += 1;
+			client.solveMeta.last = { fromCache: false, definitionReuploaded: false };
+			// …then a concurrent request settles before we read.
+			client.rhinoTiming.seq += 1;
+			client.rhinoTiming.last = { decode: 1, solve: 1, encode: 1 };
+			client.solveMeta.seq += 1;
+			client.solveMeta.last = { fromCache: true };
+			return { errors: [], warnings: [] };
+		});
+		const outcome = await runSolvePipeline(baseArgs({ client }));
+		expect(outcome.kind).toBe('ok');
+		if (outcome.kind !== 'ok') return;
+		const st = outcome.envelope.headers['Server-Timing'];
+		expect(st).not.toContain('selva_cache');
+		expect(st).not.toContain('rhino_decode');
+	});
+
+	it('never attributes rhino timing to a Selva-cache hit (no compute call of ours)', async () => {
+		// Our request was served from the in-process cache while a concurrent
+		// request's compute call produced the only rhino timing in the window.
+		const client: CachedClient = fakeClient(async () => {
+			client.rhinoTiming.seq += 1; // the OTHER request's compute call
+			client.rhinoTiming.last = { decode: 7, solve: 70, encode: 7 };
+			client.solveMeta.seq += 1; // our own settle — a cache hit
+			client.solveMeta.last = { fromCache: true };
+			return { errors: [], warnings: [] };
+		});
+		const outcome = await runSolvePipeline(baseArgs({ client }));
+		expect(outcome.kind).toBe('ok');
+		if (outcome.kind !== 'ok') return;
+		const st = outcome.envelope.headers['Server-Timing'];
+		expect(st).toContain('selva_cache;dur=1');
+		expect(st).not.toContain('rhino_decode');
 	});
 });

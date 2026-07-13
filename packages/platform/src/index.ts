@@ -130,7 +130,7 @@ export { withCacheBust } from './storage/cacheBust.js';
 // ---------------------------------------------------------------------------
 // data (composition root)
 // ---------------------------------------------------------------------------
-export type { IDataProvider } from './data/interface.js';
+export type { IDataProvider, SchemaVersionReport } from './data/interface.js';
 
 // ---------------------------------------------------------------------------
 // computeServer

@@ -115,6 +115,16 @@ export interface ComputeLimits {
 	 * honoring the flag. Conservative default off.
 	 */
 	computeCacheErroredSolves: boolean;
+	/**
+	 * Max in-flight solves this app instance sends to ONE compute server
+	 * (forwarded as the SolveScheduler's `maxConcurrent`; excess solves FIFO-queue).
+	 * Size it to the server's `compute.geometry` child count — Rhino.Compute
+	 * spawns N children per VM precisely to run N solves concurrently, and a
+	 * lower value idles that capacity while users queue (audit B6: the scheduler's
+	 * queue-mode default is 1, which serialized ALL solves per server). Multiple
+	 * app instances each apply their own cap.
+	 */
+	computeMaxConcurrentSolves: number;
 }
 
 /**
@@ -142,6 +152,8 @@ export function resolveComputeLimits(env: EnvRecord): ComputeLimits {
 		definitionCacheTtlMs: readPositiveInt(env, 'DEFINITION_CACHE_TTL_MS', 5 * 60 * 1000),
 		computeReuseDefinitionCache: readBool(env, 'COMPUTE_REUSE_DEFINITION_CACHE', true),
 		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true),
-		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false)
+		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false),
+		// 4 matches rhino.compute's default --childcount; tune to the actual VM.
+		computeMaxConcurrentSolves: readPositiveInt(env, 'COMPUTE_MAX_CONCURRENT', 4)
 	};
 }

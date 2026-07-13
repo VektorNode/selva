@@ -1,14 +1,24 @@
 import { spawn } from 'child_process';
 import { join } from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
+import { actorFrom } from '@selvajs/platform';
 import type { RequestHandler } from './$types';
 import { requirePermission } from '$lib/server/access.server';
 import { checkForUpdate } from '$lib/server/updateCheck.server';
 import { readChannel, channelTag, type ReleaseChannel } from '$lib/server/releaseChannel.server';
+import { getEventSink, getErrorReporter } from '$lib/server/providers.server';
+import {
+	findDeploymentDir,
+	startUpdateOutcomeReconciler,
+	updateLogPath,
+	updateStatePath,
+	type PendingUpdateState
+} from '$lib/server/selfUpdate.server';
 
-// Where the bash wrapper mirrors all script output. The SSE stream dies the
+// Where the bash wrapper mirrors all script output (`updateLogPath` — in the
+// deployment dir so it survives reboots, audit O2). The SSE stream dies the
 // moment `pm2 stop selva-compute` succeeds (selva-compute IS the SSE server),
 // so the frontend loses visibility into everything that happens after — npm
 // update output, pm2 start result, health-probe results, rollback decisions.
@@ -16,7 +26,8 @@ import { readChannel, channelTag, type ReleaseChannel } from '$lib/server/releas
 // process is back up, the frontend polls GET on this same route to fetch the
 // full log and reveal what happened during the blackout. One log per update —
 // the wrapper truncates at start, so we never carry stale content forward.
-const UPDATE_LOG_PATH = '/tmp/selva-update.log';
+// The runner's `[EXIT] code=N` marker in the same log also drives the
+// post-restart audit-event reconciliation (`selfUpdate.server.ts`).
 
 // Strip ANSI escape codes from terminal output
 function stripAnsi(str: string): string {
@@ -64,12 +75,12 @@ function shellQuote(s: string): string {
 //     AND through stdout (visible to SSE while the connection is still up).
 //   - The runner appends its output directly to the same log file.
 //   - The frontend tolerates the SSE blackout by polling the log file.
-function buildLauncher(runnerScript: string, prelude: string[] = []): string {
+function buildLauncher(runnerScript: string, logPath: string, prelude: string[] = []): string {
 	const echoes = prelude.map((line) => `echo ${shellQuote(line)}`).join('\n');
 	// Note: runner script is embedded via a QUOTED heredoc so no variable
 	// expansion happens — the runner text is written verbatim.
 	return `
-LOGFILE=${shellQuote(UPDATE_LOG_PATH)}
+LOGFILE=${shellQuote(logPath)}
 RUNNER=/tmp/selva-update-runner.sh
 mkdir -p "$(dirname "$LOGFILE")"
 : > "$LOGFILE"
@@ -152,6 +163,7 @@ TAG=${distTag}
 # this script is to update the app; leaving it down is the worst possible
 # outcome.
 on_exit() {
+  CODE=$?
   STATUS=$(pm2 jlist 2>/dev/null | node -e "
     try {
       const list = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
@@ -164,6 +176,9 @@ on_exit() {
     pm2 start "$ECOSYSTEM" --update-env >/dev/null 2>&1 || \\
       echo "[RECOVER] pm2 start failed — manual intervention required: cd $(dirname "$ECOSYSTEM") && pm2 start ecosystem.config.cjs"
   fi
+  # Terminal marker: the restarted app's outcome reconciler greps this to turn
+  # the run into an audit event (selfUpdate.server.ts). Keep the format stable.
+  echo "[EXIT] code=$CODE"
 }
 trap on_exit EXIT
 
@@ -325,16 +340,10 @@ exit 6
 
 // Selva self-updates as a CLI-scaffolded npm deployment: the deployment dir
 // holds a package.json that depends on @selvajs/selva, and update means
-// `npm update @selvajs/*` + pm2 restart. We probe the cwd upward for the
-// installed package as proof we're in such a deployment.
-//
-// `INSTALL_DIR` lets an operator pin the deployment root explicitly (useful
-// when the SvelteKit process cwd isn't the install dir).
+// `npm update @selvajs/*` + pm2 restart. Deployment-dir detection (cwd-upward
+// probe, `INSTALL_DIR` override) lives in `selfUpdate.server.ts`, shared with
+// the outcome reconciler and the log path.
 type UpdatePlan = { cwd: string; args: string[] };
-
-function isDeploymentDir(dir: string): boolean {
-	return existsSync(join(dir, 'node_modules', '@selvajs', 'selva', 'package.json'));
-}
 
 // All @selvajs/* packages move together — fixing a provider-only bug without
 // bumping the runtime is a supported flow.
@@ -356,21 +365,8 @@ function npmInstallArgs(channel: ReleaseChannel): string[] {
 }
 
 function detectUpdatePlan(channel: ReleaseChannel): UpdatePlan | null {
-	const args = npmInstallArgs(channel);
-	if (env.INSTALL_DIR && isDeploymentDir(env.INSTALL_DIR)) {
-		return { cwd: env.INSTALL_DIR, args };
-	}
-
-	let dir = process.cwd();
-	for (let i = 0; i < 6; i++) {
-		if (isDeploymentDir(dir)) {
-			return { cwd: dir, args };
-		}
-		const parent = join(dir, '..');
-		if (parent === dir) break;
-		dir = parent;
-	}
-	return null;
+	const dir = findDeploymentDir(env);
+	return dir ? { cwd: dir, args: npmInstallArgs(channel) } : null;
 }
 
 // POST - Run update and stream output via Server-Sent Events.
@@ -395,6 +391,33 @@ export const POST: RequestHandler = async ({ locals }) => {
 		);
 	}
 
+	// Capture the runtime version BEFORE we touch anything, so we can:
+	// (a) detect a no-op update and warn, (b) roll back to the prior version
+	// if the new process fails to come up healthy.
+	const versionBefore = readRuntimeVersion(plan.cwd);
+	const actorId = locals.ctx ? actorFrom(locals.ctx) : 'system';
+
+	// Audit trail (O2): `started` now; the terminal event is emitted by the
+	// outcome reconciler after the app restarts (this process is killed
+	// mid-update). The state file is the reconciler's emission token.
+	const pending: PendingUpdateState = {
+		startedAt: new Date().toISOString(),
+		actorId,
+		channel,
+		fromVersion: versionBefore
+	};
+	try {
+		writeFileSync(updateStatePath(plan.cwd), JSON.stringify(pending, null, '\t'));
+	} catch (err) {
+		console.error('[selfUpdate] could not persist pending-update state:', err);
+	}
+	await getEventSink().emit({
+		type: 'system.update.started',
+		channel,
+		fromVersion: versionBefore,
+		actorId
+	});
+
 	const stream = new ReadableStream({
 		start(controller) {
 			const encoder = new TextEncoder();
@@ -405,11 +428,6 @@ export const POST: RequestHandler = async ({ locals }) => {
 			}
 
 			try {
-				// Capture the runtime version BEFORE we touch anything, so we
-				// can: (a) detect a no-op update and warn, (b) roll back to the
-				// prior version if the new process fails to come up healthy.
-				const versionBefore = readRuntimeVersion(plan.cwd);
-
 				// Prelude lines are passed to the bash wrapper rather than
 				// sendEvent'd directly so they end up in both the SSE stream
 				// (via bash stdout) AND the log file (via tee). Without this,
@@ -437,7 +455,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 					channelTag(channel)
 				);
 				const cmd = 'bash';
-				const args = ['-c', buildLauncher(runnerScript, prelude)];
+				const args = ['-c', buildLauncher(runnerScript, updateLogPath(plan.cwd), prelude)];
 
 				// Prepend the deployment's node_modules/.bin to PATH so the bash
 				// script finds the project-local pm2 (and any other tooling
@@ -462,6 +480,16 @@ export const POST: RequestHandler = async ({ locals }) => {
 					stdio: ['ignore', 'pipe', 'pipe']
 				});
 				child.unref();
+
+				// Covers the outcomes that DON'T restart this process (pre-flight
+				// "already up to date", early failures): this process is still
+				// alive to reconcile them. A real update kills this process; the
+				// restarted one re-arms the reconciler from hooks.server.ts.
+				startUpdateOutcomeReconciler({
+					deploymentDir: plan.cwd,
+					emit: (e) => getEventSink().emit(e),
+					report: (err) => getErrorReporter().capture(err, { tags: { origin: 'selfUpdate' } })
+				});
 
 				// Kill the process if it runs longer than 15 minutes.
 				// The child is detached (its own process group), so signal the
@@ -570,10 +598,10 @@ export const GET: RequestHandler = async ({ locals, url, fetch }) => {
 
 	let body = '';
 	try {
-		body = readFileSync(UPDATE_LOG_PATH, 'utf8');
+		body = readFileSync(updateLogPath(findDeploymentDir(env)), 'utf8');
 	} catch {
-		// Log doesn't exist (no update has run, or /tmp was wiped). Empty body
-		// is correct — the frontend treats no content as "nothing to show yet".
+		// Log doesn't exist (no update has run yet). Empty body is correct —
+		// the frontend treats no content as "nothing to show yet".
 	}
 	return new Response(body, {
 		headers: {

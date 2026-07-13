@@ -156,11 +156,15 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 	const treeBuildMs = performance.now() - treeBuildStart;
 
 	// --- solve --------------------------------------------------------------
-	// Reset the per-request telemetry holders so a Selva-cache hit (no compute
-	// call) isn't attributed a stale timing from an earlier request on this warm
-	// client. See the rhinoTiming/solveMeta concurrency caveat in client-cache.
-	client.rhinoTiming.last = null;
-	client.solveMeta.last = null;
+	// Snapshot the shared telemetry sequence counters. The holders live on the
+	// warm client and are written by every request on this server; with
+	// maxConcurrentSolves > 1 another request can write them mid-flight. After
+	// the solve, a slot is attributed to THIS request only when exactly one
+	// write happened since this snapshot — for solveMeta that single settle is
+	// necessarily ours (onSettle fires before scheduler.solve() resolves).
+	// Anything ambiguous is dropped from Server-Timing, never misattributed.
+	const settleSeqBefore = client.solveMeta.seq;
+	const rhinoSeqBefore = client.rhinoTiming.seq;
 
 	let result: GrasshopperComputeResponse;
 	const solveStart = performance.now();
@@ -213,6 +217,17 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 
 	const serverTotalMs = performance.now() - args.loadStartMs;
 
+	// --- per-request telemetry attribution (see snapshot above) -------------
+	// settle: ours iff exactly one settle happened since the snapshot. rhino:
+	// only meaningful when the settle is ours AND it was a real compute call
+	// (a Selva-cache hit never reaches the server), and only unambiguous when
+	// exactly one Server-Timing callback fired in the window.
+	const settle = client.solveMeta.seq === settleSeqBefore + 1 ? client.solveMeta.last : null;
+	const rhino =
+		settle && !settle.fromCache && client.rhinoTiming.seq === rhinoSeqBefore + 1
+			? client.rhinoTiming.last
+			: null;
+
 	// --- Server-Timing envelope (the versioned wire contract) ---------------
 	const serverTiming = buildServerTiming({
 		defLoadMs: args.defLoadMs,
@@ -221,8 +236,8 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		serializeMs,
 		gzipMs,
 		serverTotalMs,
-		rhino: client.rhinoTiming.last,
-		settle: client.solveMeta.last,
+		rhino,
+		settle,
 		prepMarks: args.prepMarks ?? []
 	});
 

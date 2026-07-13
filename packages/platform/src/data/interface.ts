@@ -22,7 +22,22 @@ import type { IInviteStore } from '../invites/interface.js';
 import type { IUserProfileStore } from '../userProfile/interface.js';
 import type { IPlatformPermissionStore } from '../permissions/interface.js';
 import type { IAuditQuery } from '../events/audit.js';
+import type { IEventSink } from '../events/interface.js';
 import type { RequestContext } from '../context.js';
+
+/**
+ * Result of the app↔DB schema handshake (audit O3). `expected` is the
+ * migration head the running app was built against; `actual` is what the
+ * database reports (`null` when the database can't even answer — e.g. the
+ * handshake function itself was never migrated in).
+ */
+export interface SchemaVersionReport {
+	ok: boolean;
+	expected: string;
+	actual: string | null;
+	/** Operator-facing explanation + recovery hint when not ok. */
+	message?: string;
+}
 
 export interface IDataProvider {
 	orgs: IOrgStore;
@@ -40,6 +55,26 @@ export interface IDataProvider {
 	 * `/admin/audit` UI degrades to its "no backend wired" state.
 	 */
 	auditQuery?: IAuditQuery;
+	/**
+	 * The write-side event sink this provider's stores emit into. Optional —
+	 * exposed so app code with no store mutation to piggyback on (e.g. the
+	 * self-update route, audit O2) can emit domain events into the same log.
+	 * Callers fall back to `NoopEventSink` when absent.
+	 */
+	events?: IEventSink;
+
+	/**
+	 * App↔DB schema handshake (audit O3). Optional — implemented by adapters
+	 * whose schema is migrated out-of-band (Supabase: `supabase db push` is a
+	 * manual operator step the app can't run itself). Boot health calls this
+	 * structurally (same pattern as `IComputeServerStore.verifySecrets`) and
+	 * drives `/api/health` to 503 when the database is behind the app, so
+	 * monitoring — and the self-update runner's health probe — catch schema
+	 * skew instead of surfacing it as per-request store errors.
+	 *
+	 * MUST NOT throw: report failure via `ok: false`.
+	 */
+	verifySchemaVersion?(): Promise<SchemaVersionReport>;
 
 	/**
 	 * Idempotently register a user in the data layer. Called by `hooks.server.ts`
