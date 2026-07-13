@@ -6,6 +6,13 @@ export type CameraConfig = {
 	near?: number;
 	far?: number;
 	target?: THREE.Vector3;
+	/**
+	 * Refit the perspective camera's near plane to the camera↔content gap every frame (default true).
+	 * Recovers depth-buffer precision when zoomed out (precision ∝ near/z²), which is what stops
+	 * distant surfaces z-fighting. `near` stays the lower bound — the plane is only raised, never
+	 * lowered below it.
+	 */
+	dynamicNear?: boolean;
 };
 
 export type LightingConfig = {
@@ -145,6 +152,8 @@ export type EdgesConfig = {
 	width?: number;
 	/** Crease angle (degrees): keep edges where faces differ by more than this. Default 30. */
 	thresholdAngle?: number;
+	/** Fade an overlay out as its mesh shrinks on screen, so far zoom-outs stay clean. Default true. */
+	distanceFade?: boolean;
 };
 
 export type ControlsConfig = {

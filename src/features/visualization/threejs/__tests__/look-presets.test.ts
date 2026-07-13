@@ -33,7 +33,6 @@ describe('LOOK_PRESETS', () => {
 		expect(LOOK_PRESETS.studio.toneMapping).toBe(THREE.ACESFilmicToneMapping);
 		expect(LOOK_PRESETS.studio.hemisphereIntensity).toBeGreaterThan(0);
 		expect(LOOK_PRESETS.studio.ambientIntensity).toBeLessThan(1);
-		expect(LOOK_PRESETS.studio.environmentIntensity).toBeGreaterThan(1);
 	});
 
 	it('technical is the flat CAD look (neutral, no fill, full ambient)', () => {

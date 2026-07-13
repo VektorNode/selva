@@ -9,6 +9,7 @@ import { createCameraController, type CameraController } from './camera-controll
 import { createGrid, type Grid } from './grid';
 import { createViewGizmo, type ViewGizmo } from './view-gizmo';
 import { addEdges } from './edges';
+import { createNearPlaneFitter, type NearPlaneFitter } from './near-plane';
 import { createRenderPipeline, type RenderPipeline } from './render-pipeline';
 import { createLabelLayer, type LabelLayer } from './label-layer';
 import { createMeasureTool, type MeasureTool } from './measure';
@@ -31,15 +32,18 @@ const DEFAULT_LOOK: Look = 'technical';
  * `setAmbientOcclusion(true)`) rather than costing every viewer 60fps by default.
  */
 export const LOOK_PRESETS: Record<Look, LookPreset> = {
-	// The default "just works" look: ACES + hemisphere fill + lifted HDR so products are well-lit
-	// regardless of the environment map, while ambient stays low so colour doesn't wash out.
+	// Soft, even product shot: ACES with generous, balanced fill (hemisphere + a little flat ambient)
+	// so the whole object stays legible and shadows read open — the safe, neutral default. IBL and fill
+	// are kept modest so their contributions don't triple-stack (env + hemisphere + ambient) and push
+	// midtones toward white — ACES then desaturates that lift, which reads as "washed out". Distinct
+	// from `showcase`: this fills the shadows in; showcase deliberately lets them fall off for drama.
 	studio: {
 		toneMapping: THREE.ACESFilmicToneMapping,
 		toneMappingExposure: 1,
-		envMapIntensity: 1.3,
-		environmentIntensity: 1.2,
-		hemisphereIntensity: 1.0,
-		ambientIntensity: 0.3,
+		envMapIntensity: 1.0,
+		environmentIntensity: 1.0,
+		hemisphereIntensity: 0.75,
+		ambientIntensity: 0.4,
 		cullBackfaces: false,
 		ambientOcclusion: false
 	},
@@ -54,14 +58,18 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 		cullBackfaces: false,
 		ambientOcclusion: false
 	},
-	// Punchier presentation: like studio but stronger IBL/fill and a touch more exposure.
+	// Dramatic hero shot: pushes exposure and reflective IBL for glossy pop, but deliberately pulls the
+	// flat fill DOWN (low ambient, lean hemisphere) so light-to-shadow falloff stays strong and form
+	// reads with contrast. Where `studio` fills the shadows in for even legibility, showcase lets them
+	// fall off. Still trimmed below the old triple-stacked values so the punch doesn't tip into the
+	// ACES wash — the drama comes from higher exposure + IBL against lower fill, not from stacking lift.
 	showcase: {
 		toneMapping: THREE.ACESFilmicToneMapping,
-		toneMappingExposure: 1.05,
-		envMapIntensity: 1.6,
-		environmentIntensity: 1.35,
-		hemisphereIntensity: 1.2,
-		ambientIntensity: 0.25,
+		toneMappingExposure: 1.15,
+		envMapIntensity: 1.4,
+		environmentIntensity: 1.25,
+		hemisphereIntensity: 0.35,
+		ambientIntensity: 0.15,
 		cullBackfaces: false,
 		ambientOcclusion: false
 	}
@@ -246,6 +254,21 @@ export const initThree = function (
 		? createViewGizmo({ camera, domElement: canvas, controller: cameraController })
 		: null;
 
+	// Per-frame near-plane fitting: recovers depth precision when zoomed out (see near-plane.ts).
+	// Ground-plane normals cap the fit where an always-visible aid (grid under the camera, floor)
+	// would otherwise be clipped at grazing views.
+	const groundNormals: THREE.Vector3[] = [];
+	if (grid) {
+		const plane = config.grid.plane ?? 'z';
+		groundNormals.push(
+			new THREE.Vector3(plane === 'x' ? 1 : 0, plane === 'y' ? 1 : 0, plane === 'z' ? 1 : 0)
+		);
+	}
+	if (config.floor.enabled) groundNormals.push(sceneUp.clone().normalize());
+	const nearFitter: NearPlaneFitter | null = config.camera.dynamicNear
+		? createNearPlaneFitter({ camera, scene, groundNormals })
+		: null;
+
 	// HTML label overlay (CSS2D) and the measurement tool built on it. Both opt-in; the label layer
 	// is only created when something needs it (currently the measure tool).
 	const labelContainer = canvas.parentElement ?? canvas;
@@ -319,7 +342,8 @@ export const initThree = function (
 		addEdges(root, {
 			color: config.edges.color,
 			width: config.edges.width,
-			thresholdAngle: config.edges.thresholdAngle
+			thresholdAngle: config.edges.thresholdAngle,
+			distanceFade: config.edges.distanceFade
 		});
 	};
 
@@ -520,7 +544,8 @@ export const initThree = function (
 		grid,
 		gizmo,
 		() => renderPipeline,
-		labelLayer
+		labelLayer,
+		nearFitter
 	);
 	animate();
 
@@ -730,7 +755,8 @@ export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeI
 			fov: options.camera?.fov || 20,
 			near: options.camera?.near || defaults.near,
 			far: options.camera?.far || defaults.far,
-			target: options.camera?.target || new THREE.Vector3(0, 0, 0)
+			target: options.camera?.target || new THREE.Vector3(0, 0, 0),
+			dynamicNear: options.camera?.dynamicNear ?? true
 		},
 		lighting: {
 			enableSunlight: options.lighting?.enableSunlight ?? true,
@@ -815,7 +841,8 @@ export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeI
 			enabled: options.edges?.enabled ?? false,
 			color: options.edges?.color ?? 0x222222,
 			width: options.edges?.width ?? 1.5,
-			thresholdAngle: options.edges?.thresholdAngle ?? 30
+			thresholdAngle: options.edges?.thresholdAngle ?? 30,
+			distanceFade: options.edges?.distanceFade ?? true
 		},
 		measure: {
 			// Visual defaults live in createMeasureTool; only `enabled` needs a value here, the rest
@@ -922,7 +949,8 @@ function createAnimationLoop(
 	grid?: Grid | null,
 	gizmo?: ViewGizmo | null,
 	getRenderPipeline?: () => RenderPipeline | null,
-	labelLayer?: LabelLayer | null
+	labelLayer?: LabelLayer | null,
+	nearFitter?: NearPlaneFitter | null
 ): { animate: () => void; dispose: () => void } {
 	let animationId: number | null = null;
 	let lastTime = performance.now();
@@ -968,6 +996,10 @@ function createAnimationLoop(
 
 		// Advance the gizmo's fade/spin animation (no-op when idle).
 		if (gizmo) gizmo.update(delta);
+
+		// Refit the perspective near plane to the camera↔content gap (after controls moved the
+		// camera, before anything renders) so depth precision tracks the viewing distance.
+		if (nearFitter) nearFitter.update();
 
 		onFrame?.(delta);
 

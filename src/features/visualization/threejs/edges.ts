@@ -12,8 +12,16 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
  * `LineMaterial` family as curves (Phase 1) — so edges get controllable thickness, not the 1px cap
  * of `THREE.LineSegments`. The overlay is added as a *child* of each mesh, so it inherits the mesh's
  * transform and is disposed when the mesh subtree is cleared.
+ *
+ * Depth strategy: edges render at TRUE depth; the mesh's own surface is pushed back a hair with
+ * polygonOffset instead (see {@link setSurfaceDepthOffset}). Biasing the lines toward the camera —
+ * the obvious alternative — needs a multi-ULP constant offset to survive glancing angles (fat-line
+ * quads face the screen, so the slope-scaled factor term is nil), and a depth ULP grows ~quadratically
+ * with distance: zoomed out, that constant becomes a meter-scale pull that makes hidden edges bleed
+ * through whatever mesh is in front. Offsetting the surfaces instead lets the slope-proportional
+ * factor term do the glancing-angle work, keeps the constant term at quantization scale, and leaves
+ * occlusion of hidden edges exact.
  */
-
 export interface EdgeOptions {
 	/** Edge color. Default near-black. */
 	color?: THREE.ColorRepresentation;
@@ -24,6 +32,11 @@ export interface EdgeOptions {
 	 * Default 30. Higher = fewer edges (only sharp creases); lower = more (catches gentle bends).
 	 */
 	thresholdAngle?: number;
+	/**
+	 * Fade an overlay out as its mesh shrinks on screen (default true). Constant-px edges on a mesh
+	 * covering only tens of pixels alias into dark noise; fading them keeps far zoom-outs clean.
+	 */
+	distanceFade?: boolean;
 }
 
 /** Tag on edge overlays so pick/fit/clear logic can recognize and skip or dispose them. */
@@ -32,6 +45,34 @@ export const EDGE_USERDATA_KIND = 'edge-overlay';
 const DEFAULT_EDGE_COLOR = 0x222222;
 const DEFAULT_EDGE_WIDTH = 1.5;
 const DEFAULT_THRESHOLD_ANGLE = 30;
+
+// Screen-coverage fade band, as the projected diameter of an overlay's bounding sphere in px:
+// fully opaque at/above FADE_START_PX, fully gone at/below FADE_END_PX, linear between.
+const FADE_START_PX = 80;
+const FADE_END_PX = 20;
+
+// Surface push-back (see module doc): factor scales with the polygon's depth slope and carries the
+// glancing-angle work; units stays at quantization scale so a mesh in front of another mesh's edges
+// occludes them except within ~2 depth ULPs — versus the multi-ULP (meters, zoomed out) bleed range
+// a constant line-side bias had.
+const SURFACE_OFFSET_FACTOR = 1;
+const SURFACE_OFFSET_UNITS = 2;
+
+/**
+ * Push a mesh's shaded surface slightly back in depth (or restore it), so its edge overlay — drawn
+ * at true depth — wins the depth test without any bias of its own. Mutates the mesh's material(s)
+ * in place; materials shared across meshes are fine, since every mesh under an `addEdges` root gets
+ * the same treatment.
+ */
+function setSurfaceDepthOffset(mesh: THREE.Mesh, enabled: boolean): void {
+	const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+	for (const material of materials) {
+		if (!material) continue;
+		material.polygonOffset = enabled;
+		material.polygonOffsetFactor = enabled ? SURFACE_OFFSET_FACTOR : 0;
+		material.polygonOffsetUnits = enabled ? SURFACE_OFFSET_UNITS : 0;
+	}
+}
 
 /**
  * Extracted edge geometry, cached per source `BufferGeometry` (and per crease angle, since the
@@ -67,6 +108,12 @@ export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineS
 	const color = new THREE.Color(options.color ?? DEFAULT_EDGE_COLOR);
 	const width = options.width ?? DEFAULT_EDGE_WIDTH;
 	const thresholdAngle = options.thresholdAngle ?? DEFAULT_THRESHOLD_ANGLE;
+	const distanceFade = options.distanceFade ?? true;
+
+	// One material shared by every overlay this call creates: N meshes get one uniform set instead
+	// of N, and a live color/width change is one assignment. Per-overlay distance fade still works —
+	// each overlay writes the shared opacity in its own onBeforeRender, and uniforms upload per draw.
+	const material = createEdgeMaterial(color, width, distanceFade);
 
 	const created: LineSegments2[] = [];
 
@@ -77,10 +124,13 @@ export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineS
 		if (object.children.some((c) => c.userData?.kind === EDGE_USERDATA_KIND)) return; // already done
 		if (!object.geometry) return;
 
-		const overlay = buildEdgeOverlay(object.geometry, color, width, thresholdAngle);
+		const overlay = buildEdgeOverlay(object.geometry, material, thresholdAngle, distanceFade);
 		object.add(overlay); // child → inherits transform, disposed with the parent subtree
+		setSurfaceDepthOffset(object, true); // surface recedes a hair so the true-depth edges win
 		created.push(overlay);
 	});
+
+	if (created.length === 0) material.dispose(); // no overlay adopted it
 
 	return created;
 }
@@ -135,25 +185,29 @@ function releaseEdgeGeometry(overlay: LineSegments2): void {
 	}
 }
 
-function buildEdgeOverlay(
-	geometry: THREE.BufferGeometry,
+function createEdgeMaterial(
 	color: THREE.Color,
 	width: number,
-	thresholdAngle: number
-): LineSegments2 {
-	const lineGeometry = acquireEdgeGeometry(geometry, thresholdAngle);
-
+	distanceFade: boolean
+): LineMaterial {
 	// LineMaterialParameters omits linewidth/opacity from its type though both exist at runtime.
 	const material = new LineMaterial({ color });
 	(material as LineMaterial & { linewidth: number }).linewidth = width;
-	// Pull edges slightly toward the camera in depth so they don't z-fight the shaded surface.
-	// The fat-line quads face the screen, so their depth slope is ~0 and the slope-scaled factor
-	// term contributes nothing — the constant `units` term has to do the work. -1 unit is a single
-	// depth ULP, which still stipples at glancing angles / far zoom on 24-bit depth buffers; a few
-	// ULPs clears the surface reliably without visibly floating the edges.
-	material.polygonOffset = true;
-	material.polygonOffsetFactor = -1;
-	material.polygonOffsetUnits = -4;
+	// No depth bias here — edges render at true depth and the mesh surface recedes instead (see
+	// setSurfaceDepthOffset), so edges can't bleed through meshes in front of them.
+	// Fading needs blending; set once here rather than per draw, since flipping `transparent` after
+	// the render list is built wouldn't re-sort the object into the transparent pass.
+	if (distanceFade) material.transparent = true;
+	return material;
+}
+
+function buildEdgeOverlay(
+	geometry: THREE.BufferGeometry,
+	material: LineMaterial,
+	thresholdAngle: number,
+	distanceFade: boolean
+): LineSegments2 {
+	const lineGeometry = acquireEdgeGeometry(geometry, thresholdAngle);
 
 	const overlay = new LineSegments2(lineGeometry, material);
 	overlay.userData.kind = EDGE_USERDATA_KIND;
@@ -163,7 +217,66 @@ function buildEdgeOverlay(
 	overlay.userData.edgeSource = geometry;
 	overlay.userData.edgeThresholdAngle = thresholdAngle;
 	overlay.raycast = () => {}; // never pickable; clicks should hit the mesh, not its outline
+	if (distanceFade) enableDistanceFade(overlay);
 	return overlay;
+}
+
+const _fadeCenter = new THREE.Vector3();
+const _fadeCameraPos = new THREE.Vector3();
+
+/**
+ * Projected diameter of the overlay's bounding sphere on screen, in px — the "how big does this
+ * mesh read" signal driving the distance fade. Returns Infinity ("don't fade") when the camera is
+ * inside the sphere or the projection is unknown.
+ */
+function projectedDiameterPx(
+	overlay: LineSegments2,
+	camera: THREE.Camera,
+	viewportHeightPx: number
+): number {
+	if (!overlay.geometry.boundingSphere) overlay.geometry.computeBoundingSphere();
+	const sphere = overlay.geometry.boundingSphere;
+	if (!sphere || sphere.radius <= 0) return Infinity;
+
+	const radius = sphere.radius * overlay.matrixWorld.getMaxScaleOnAxis();
+	_fadeCenter.copy(sphere.center).applyMatrix4(overlay.matrixWorld);
+
+	if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+		const perspective = camera as THREE.PerspectiveCamera;
+		const distance = _fadeCameraPos
+			.setFromMatrixPosition(camera.matrixWorld)
+			.distanceTo(_fadeCenter);
+		if (distance <= radius) return Infinity; // camera inside the mesh — no fade
+		const tanHalfFov = Math.tan(THREE.MathUtils.degToRad(perspective.fov) * 0.5);
+		return (radius / (distance * tanHalfFov)) * viewportHeightPx;
+	}
+	if ((camera as THREE.OrthographicCamera).isOrthographicCamera) {
+		const ortho = camera as THREE.OrthographicCamera;
+		const worldHeight = (ortho.top - ortho.bottom) / ortho.zoom;
+		return worldHeight > 0 ? ((2 * radius) / worldHeight) * viewportHeightPx : Infinity;
+	}
+	return Infinity;
+}
+
+/**
+ * Fade this overlay by its on-screen size (see FADE_START_PX/FADE_END_PX). Hooked into
+ * onBeforeRender so the opacity is written immediately before *this* overlay's draw — uniforms
+ * upload per draw call, so overlays sharing one material still fade independently. Chains
+ * LineSegments2's own onBeforeRender, which keeps the material's resolution uniform in sync.
+ */
+function enableDistanceFade(overlay: LineSegments2): void {
+	// Assign via the Object3D base type: LineSegments2's typings narrow onBeforeRender to
+	// (renderer) only, but the renderer actually calls it with (renderer, scene, camera, …).
+	(overlay as THREE.Object3D).onBeforeRender = (renderer, _scene, camera) => {
+		LineSegments2.prototype.onBeforeRender.call(overlay, renderer);
+		const material = overlay.material as LineMaterial;
+		const coverage = projectedDiameterPx(overlay, camera, material.resolution.y);
+		material.opacity = THREE.MathUtils.clamp(
+			(coverage - FADE_END_PX) / (FADE_START_PX - FADE_END_PX),
+			0,
+			1
+		);
+	};
 }
 
 /** Whether an object is an edge overlay (for pick/fit filters elsewhere). */
@@ -181,10 +294,17 @@ export function removeEdges(root: THREE.Object3D): number {
 		if (object instanceof LineSegments2 && isEdgeOverlay(object)) overlays.push(object);
 	});
 
+	// One addEdges call shares one material across its overlays — dispose each distinct one once.
+	// (If `root` covers only part of a call's overlays, survivors self-heal: three recompiles a
+	// disposed-but-still-referenced material on its next use.)
+	const materials = new Set<LineMaterial>();
 	for (const overlay of overlays) {
 		releaseEdgeGeometry(overlay); // geometry may be shared across overlays — refcounted dispose
-		(overlay.material as LineMaterial).dispose();
+		materials.add(overlay.material as LineMaterial);
+		// Undo the surface push-back that existed only for this overlay's benefit.
+		if (overlay.parent instanceof THREE.Mesh) setSurfaceDepthOffset(overlay.parent, false);
 		overlay.removeFromParent();
 	}
+	materials.forEach((material) => material.dispose());
 	return overlays.length;
 }
