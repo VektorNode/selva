@@ -151,6 +151,47 @@ export function computeCombinedBoundingBox(meshes: THREE.Object3D[]): THREE.Box3
 	return combinedBoundingBox;
 }
 
+/**
+ * userData.id of objects that are viewer *aids*, not content — the grid, floor, CSS2D label layer and
+ * measure markers. Excluded from every content-bounds query: the grid especially is a huge plane that
+ * re-centers on the camera each frame, so including it would make fit-to-view frame the camera's
+ * position instead of the geometry.
+ */
+const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
+
+/** True if the object or any ancestor is a viewer aid (grid/floor/labels/measure markers). */
+function isViewerAid(object: THREE.Object3D): boolean {
+	let current: THREE.Object3D | null = object;
+	while (current) {
+		if (typeof current.userData.id === 'string' && VIEWER_AID_IDS.has(current.userData.id)) {
+			return true;
+		}
+		current = current.parent;
+	}
+	return false;
+}
+
+/**
+ * Axis-aligned world bounds of the scene's renderable *content* — every visible mesh/line/points, with
+ * viewer aids (grid/floor/labels/measure) excluded. The single content-bounds function: shared by
+ * fit-to-view, pick-threshold scaling, camera framing (`setView`), and shadow-frustum fitting so they
+ * all measure exactly the same box. Returns an empty Box3 when there is no content.
+ *
+ * Refreshes world matrices once up front (one traversal) so `expandByObject` reads current transforms
+ * regardless of when the caller invokes this — cheaper and more correct than updating per object.
+ */
+export function computeContentBounds(scene: THREE.Scene): THREE.Box3 {
+	scene.updateMatrixWorld(true);
+	const box = new THREE.Box3();
+	scene.traverse((object) => {
+		const renderable = object as Partial<THREE.Mesh> & THREE.Object3D;
+		if (object.visible && !isViewerAid(object) && renderable.geometry) {
+			box.expandByObject(object);
+		}
+	});
+	return box;
+}
+
 /** IDs of scene infrastructure that survives content updates (floor, grid, label layer). */
 const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer']);
 

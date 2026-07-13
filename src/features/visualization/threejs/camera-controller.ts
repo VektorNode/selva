@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-import { computeCombinedBoundingBox } from './three-helpers';
+import { computeContentBounds } from './three-helpers';
 
 /**
  * Runtime camera control for the viewer: preset views (top/front/…), a true 2D/3D toggle
@@ -221,7 +221,7 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 	};
 
 	const setViewDirection = (direction: THREE.Vector3, animate = true) => {
-		const box = computeContentBox(scene);
+		const box = computeContentBounds(scene);
 		const center = box.isEmpty() ? controls.target.clone() : box.getCenter(new THREE.Vector3());
 		const size = box.isEmpty() ? new THREE.Vector3(1, 1, 1) : box.getSize(new THREE.Vector3());
 		const maxDim = Math.max(size.x, size.y, size.z) || 1;
@@ -268,37 +268,6 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		updateAspect,
 		dispose: cancelTween
 	};
-}
-
-/** userData.id of objects that are viewer aids, not content — excluded from view framing. */
-const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
-
-/** True if the object or any ancestor is a viewer aid (grid/floor/labels/measure markers). */
-function isViewerAid(object: THREE.Object3D): boolean {
-	let current: THREE.Object3D | null = object;
-	while (current) {
-		if (typeof current.userData.id === 'string' && VIEWER_AID_IDS.has(current.userData.id)) {
-			return true;
-		}
-		current = current.parent;
-	}
-	return false;
-}
-
-/**
- * Bounding box of renderable scene content. Excludes viewer aids — crucially the grid, a huge plane
- * that re-centers on the camera every frame; including it would make `setView` frame the grid (i.e.
- * wherever the camera is) instead of the actual content, so a preset view wouldn't recenter.
- */
-function computeContentBox(scene: THREE.Scene): THREE.Box3 {
-	const renderables: THREE.Object3D[] = [];
-	scene.traverse((object) => {
-		const r = object as Partial<THREE.Mesh> & THREE.Object3D;
-		if (object.visible && !isViewerAid(object) && r.geometry) {
-			renderables.push(object);
-		}
-	});
-	return computeCombinedBoundingBox(renderables);
 }
 
 /**

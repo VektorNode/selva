@@ -12,6 +12,7 @@ import { addEdges } from './edges';
 import { createRenderPipeline, type RenderPipeline } from './render-pipeline';
 import { createLabelLayer, type LabelLayer } from './label-layer';
 import { createMeasureTool, type MeasureTool } from './measure';
+import { computeContentBounds } from './three-helpers';
 import { setTextureAnisotropy } from '../webdisplay/texture-cache';
 
 const defaultUp = new THREE.Vector3(0, 0, 1);
@@ -855,39 +856,6 @@ export function disposeMaterialWithTextures(material: THREE.Material): void {
 		}
 	}
 	material.dispose();
-}
-
-/**
- * Viewer aids (grid, floor, label overlay, measure markers) are not scene *content* — exclude them
- * from fit-to-view bounds and other content queries. Tagged via `userData.id` at creation.
- */
-const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
-function isViewerAid(object: THREE.Object3D): boolean {
-	let current: THREE.Object3D | null = object;
-	while (current) {
-		if (typeof current.userData.id === 'string' && VIEWER_AID_IDS.has(current.userData.id)) {
-			return true;
-		}
-		current = current.parent;
-	}
-	return false;
-}
-
-/**
- * Axis-aligned bounds of the scene's renderable *content* — every visible mesh/line/points, with
- * viewer aids excluded. The grid (a huge camera-tracking plane) and the floor would otherwise
- * dominate the box. Shared by fit-to-view, pick-threshold scaling, and shadow-frustum fitting so
- * they all measure the same thing. Returns an empty Box3 when there is no content.
- */
-function computeContentBounds(scene: THREE.Scene): THREE.Box3 {
-	const box = new THREE.Box3();
-	scene.traverse((object) => {
-		const renderable = object as Partial<THREE.Mesh> & THREE.Object3D;
-		if (object.visible && !isViewerAid(object) && renderable.geometry) {
-			box.expandByObject(object);
-		}
-	});
-	return box;
 }
 
 /**
