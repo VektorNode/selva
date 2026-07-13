@@ -29,10 +29,20 @@ import {
 	type SolveDefinition
 } from '@selvajs/compute';
 import type { SchemaInput } from '@selvajs/schemas';
-import { gzipSync } from 'node:zlib';
+import { gzip } from 'node:zlib';
+import { promisify } from 'node:util';
 import { transformInputParameter } from './transform-input.js';
 import type { CachedClient } from './client-cache.js';
 import type { ByteRefOutcome } from './definition-byte-cache.js';
+import { deriveSolveCacheInputKey, type SolveCacheConfigSubset } from './solve-cache-key.js';
+import {
+	decodeSolveCacheEntry,
+	encodeSolveCacheEntry,
+	gunzipEntryBody
+} from './solve-cache-envelope.js';
+
+/** Async gzip (audit B8) — off the event loop, unlike the old `gzipSync`. */
+const gzipAsync = promisify(gzip);
 
 // ============================================================================
 // Wire contract version (audit D5)
@@ -106,6 +116,31 @@ export interface SolvePipelineArgs {
 	 * Server-Timing entries. The caller assembles these; the pipeline only echoes.
 	 */
 	prepMarks?: [string, number][];
+	/**
+	 * Optional durable L2 solve cache (H1). Present ONLY for live-channel solves
+	 * whose definition has a caching quota > 0 — its presence IS the channel gate
+	 * (zero policy conditionals in the pipeline). When set, the pipeline derives
+	 * the wide input key from the transformed tree + `configSubset`, checks
+	 * `lookup` before solving (a hit skips compute entirely, returning the stored
+	 * gzipped envelope), and write-throughs `store` on a successful solve.
+	 */
+	solveCache?: SolvePipelineCacheHook;
+}
+
+/**
+ * The app-supplied L2 hook. The app binds `lookup`/`store` to the org/definition/
+ * version scope and the definition's quota; the pipeline supplies the SHA-256
+ * `inputKey` (derived from the transformed tree + `configSubset`) and the opaque
+ * encoded entry bytes. Both are best-effort — `lookup` may miss/throw (treated as
+ * a miss), `store` is fire-and-forget.
+ */
+export interface SolvePipelineCacheHook {
+	/** Solve-affecting config folded into the key (R8) — model units, tolerances, server id. */
+	configSubset: SolveCacheConfigSubset;
+	/** Fetch a stored entry for `inputKey`, or `null` on miss. Must not reject fatally. */
+	lookup(inputKey: string): Promise<Uint8Array | null>;
+	/** Store the encoded entry for `inputKey`. Fire-and-forget; best-effort. */
+	store(inputKey: string, entry: Uint8Array): void;
 }
 
 /** Phase timings the pipeline measured; the caller uses them for debug logging. */
@@ -119,6 +154,12 @@ export interface SolvePhaseMetrics {
 	serializedBytes: number;
 	/** Gzipped length in bytes, or null when compression was skipped. */
 	compressedBytes: number | null;
+	/**
+	 * L2 durable-cache verdict: `true` = served from L2 (no solve ran), `false` =
+	 * L2 consulted and missed (solved), `null` = L2 not consulted (no hook — draft
+	 * or caching off). Drives the `l2_cache` Server-Timing entry.
+	 */
+	l2CacheHit: boolean | null;
 }
 
 /** A ready-to-send response: body + headers + the solve result + phase metrics. */
@@ -129,8 +170,13 @@ export interface SolveEnvelope {
 	encoding?: 'gzip';
 	/** Fully-assembled response headers (Content-Type/-Length/-Encoding, Vary, Server-Timing, version). */
 	headers: Record<string, string>;
-	/** The solved definition — the caller reads `errors`/`warnings` for its metric record. */
-	result: GrasshopperComputeResponse;
+	/**
+	 * The solved definition object, present only on a fresh (non-L2) solve. Absent
+	 * on an L2 hit — the pipeline serves the stored gzipped body without ever
+	 * materializing the object. The caller reads `errorCount`/`warningCount` off
+	 * the `ok` outcome for its metric record, not this field.
+	 */
+	result?: GrasshopperComputeResponse;
 	/** Phase timings, for the caller's optional debug breakdown. */
 	metrics: SolvePhaseMetrics;
 }
@@ -188,6 +234,28 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 			.map((input): InputParam => transformInputParameter(input, args.values[input.id]))
 	);
 	const treeBuildMs = performance.now() - treeBuildStart;
+
+	// --- L2 durable cache lookup (H1) ---------------------------------------
+	// Derive the wide key from the TRANSFORMED tree (R13) + config subset (R8),
+	// then check the injected hook. Present only for cacheable live solves — its
+	// presence is the channel gate. A hit skips the solve entirely and serves the
+	// stored gzipped envelope; the derived key is reused for the write-through on
+	// a miss. Lookup is best-effort: any rejection is swallowed to a miss.
+	let inputKey: string | null = null;
+	if (args.solveCache) {
+		inputKey = deriveSolveCacheInputKey(inputTree, args.solveCache.configSubset).hash;
+		let stored: Uint8Array | null = null;
+		try {
+			stored = await args.solveCache.lookup(inputKey);
+		} catch {
+			stored = null;
+		}
+		if (stored) {
+			const hit = buildEnvelopeFromCacheEntry(stored, inputKey, args);
+			if (hit) return hit;
+			// Corrupt/tampered entry → fall through and solve as a miss.
+		}
+	}
 
 	// --- solve --------------------------------------------------------------
 	// Snapshot the shared telemetry sequence counters. The holders live on the
@@ -265,12 +333,39 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 	// in Server-Timing, included in `total`). Buffered (not streamed) so
 	// Content-Length is known and a connection cut mid-transfer fails hard
 	// instead of truncating the JSON.
+	// gzip is async (audit B8) — a multi-MB `gzipSync` blocked the event loop for
+	// every other request on this instance. Two independent reasons to compress:
+	//   - the client advertised gzip AND the body clears the 1 KB break-even (tiny
+	//     bodies aren't worth compressing for the wire);
+	//   - an L2 write-through is pending — the entry stores compressed bytes so
+	//     every future hit is near-CPU-free, so we compress even a small body (it
+	//     will be cached), just not for the wire below the threshold.
+	const clientWantsGzip = /\bgzip\b/i.test(args.acceptEncoding);
+	const worthSendingGzip = clientWantsGzip && serialized.length > 1024;
+	const willCache = args.solveCache != null;
 	let compressed: Buffer | null = null;
 	let gzipMs = 0;
-	if (/\bgzip\b/i.test(args.acceptEncoding) && serialized.length > 1024) {
+	if (worthSendingGzip || willCache) {
 		const gzipStart = performance.now();
-		compressed = gzipSync(Buffer.from(serialized));
+		compressed = await gzipAsync(Buffer.from(serialized));
 		gzipMs = performance.now() - gzipStart;
+	}
+
+	// --- L2 write-through (H1) ----------------------------------------------
+	// On a cacheable solve with a compressed body, store the gzipped envelope so
+	// future hits are near-CPU-free. Fire-and-forget through the hook; the store
+	// itself is best-effort (may silently drop under quota/byte pressure).
+	if (args.solveCache && inputKey && compressed) {
+		const entry = encodeSolveCacheEntry(
+			{
+				errorCount: result.errors?.length ?? 0,
+				warningCount: result.warnings?.length ?? 0,
+				serializedBytes: serialized.length,
+				inputHash: inputKey
+			},
+			new Uint8Array(compressed)
+		);
+		args.solveCache.store(inputKey, entry);
 	}
 
 	const serverTotalMs = performance.now() - args.loadStartMs;
@@ -286,6 +381,11 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 			? client.rhinoTiming.last
 			: null;
 
+	// Send gzip to the client only when it's worth it for the wire — a body
+	// compressed solely to feed the L2 write-through (or one below the 1 KB
+	// break-even) goes out uncompressed.
+	const sendCompressed = compressed && worthSendingGzip ? compressed : null;
+
 	// --- Server-Timing envelope (the versioned wire contract) ---------------
 	const serverTiming = buildServerTiming({
 		defLoadMs: args.defLoadMs,
@@ -297,6 +397,8 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		rhino,
 		settle,
 		byteRefOutcome: args.byteRefOutcome,
+		// L2 was consulted (hook present) and missed — otherwise not consulted.
+		l2CacheHit: args.solveCache ? false : null,
 		prepMarks: args.prepMarks ?? []
 	});
 
@@ -314,16 +416,23 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		gzipMs,
 		serverTotalMs,
 		serializedBytes: serialized.length,
-		compressedBytes: compressed?.byteLength ?? null
+		compressedBytes: sendCompressed?.byteLength ?? null,
+		l2CacheHit: args.solveCache ? false : null
 	};
 
 	let envelope: SolveEnvelope;
-	if (compressed) {
+	if (sendCompressed) {
 		// A downstream proxy's `encode gzip` skips already-encoded responses, so
 		// this never double-compresses. Vary is set on both branches.
 		headers['Content-Encoding'] = 'gzip';
-		headers['Content-Length'] = String(compressed.byteLength);
-		envelope = { body: new Uint8Array(compressed), encoding: 'gzip', headers, result, metrics };
+		headers['Content-Length'] = String(sendCompressed.byteLength);
+		envelope = {
+			body: new Uint8Array(sendCompressed),
+			encoding: 'gzip',
+			headers,
+			result,
+			metrics
+		};
 	} else {
 		headers['Content-Length'] = String(Buffer.byteLength(serialized));
 		envelope = { body: serialized, headers, result, metrics };
@@ -335,6 +444,84 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		solveMs,
 		errorCount: result.errors?.length ?? 0,
 		warningCount: result.warnings?.length ?? 0
+	};
+}
+
+// ============================================================================
+// L2 cache-hit envelope
+// ============================================================================
+
+/**
+ * Build the `ok` outcome from a stored L2 entry — the near-CPU-free hit path (no
+ * solve, no `JSON.stringify`, no gzip). Returns `null` when the entry is corrupt
+ * or its stored `inputHash` doesn't match the requesting key (defense-in-depth
+ * against a wide-hash collision), so the caller falls through and solves.
+ */
+function buildEnvelopeFromCacheEntry(
+	entryBytes: Uint8Array,
+	inputKey: string,
+	args: SolvePipelineArgs
+): (SolveOutcome & { kind: 'ok' }) | null {
+	const decoded = decodeSolveCacheEntry(entryBytes);
+	// A collision that produced the same storage key still can't serve the wrong
+	// geometry: the stored hash must match the requesting key's hash.
+	if (!decoded || decoded.header.inputHash !== inputKey) return null;
+
+	const { header, gzippedBody } = decoded;
+	const clientWantsGzip = /\bgzip\b/i.test(args.acceptEncoding);
+	const serverTotalMs = performance.now() - args.loadStartMs;
+
+	const serverTiming = buildServerTiming({
+		defLoadMs: args.defLoadMs,
+		treeBuildMs: 0,
+		solveMs: 0,
+		serializeMs: 0,
+		gzipMs: 0,
+		serverTotalMs,
+		rhino: null,
+		settle: null,
+		byteRefOutcome: args.byteRefOutcome,
+		l2CacheHit: true,
+		prepMarks: args.prepMarks ?? []
+	});
+
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json',
+		'Server-Timing': serverTiming,
+		[COMPUTE_VERSION_HEADER]: String(COMPUTE_CONTRACT_VERSION),
+		Vary: 'Accept-Encoding'
+	};
+
+	const metrics: SolvePhaseMetrics = {
+		treeBuildMs: 0,
+		solveMs: 0,
+		serializeMs: 0,
+		gzipMs: 0,
+		serverTotalMs,
+		serializedBytes: header.serializedBytes,
+		compressedBytes: clientWantsGzip ? gzippedBody.byteLength : null,
+		l2CacheHit: true
+	};
+
+	let envelope: SolveEnvelope;
+	if (clientWantsGzip) {
+		// Serve the stored compressed bytes verbatim — the whole point of R6.
+		headers['Content-Encoding'] = 'gzip';
+		headers['Content-Length'] = String(gzippedBody.byteLength);
+		envelope = { body: new Uint8Array(gzippedBody), encoding: 'gzip', headers, metrics };
+	} else {
+		// Rare non-gzip client: gunzip back to the JSON string for the response.
+		const json = gunzipEntryBody(gzippedBody);
+		headers['Content-Length'] = String(Buffer.byteLength(json));
+		envelope = { body: json, headers, metrics };
+	}
+
+	return {
+		kind: 'ok',
+		envelope,
+		solveMs: 0,
+		errorCount: header.errorCount,
+		warningCount: header.warningCount
 	};
 }
 
@@ -352,6 +539,8 @@ interface ServerTimingParts {
 	rhino: CachedClient['rhinoTiming']['last'];
 	settle: CachedClient['solveMeta']['last'];
 	byteRefOutcome?: ByteRefOutcome;
+	/** L2 verdict: true=hit, false=miss (consulted), null=not consulted. */
+	l2CacheHit: boolean | null;
 	prepMarks: [string, number][];
 }
 
@@ -402,6 +591,12 @@ function buildServerTiming(parts: ServerTimingParts): string {
 	if (byteRef) {
 		const verdict = !byteRef.loaded ? 'skipped' : byteRef.fromCache ? 'hit' : 'miss';
 		header += `, def_bytes;desc=${verdict}`;
+	}
+
+	// Durable L2 verdict (H1): 1 = hit (no solve ran), 0 = miss (consulted then
+	// solved). Absent when the L2 wasn't consulted (draft channel / caching off).
+	if (parts.l2CacheHit !== null) {
+		header += `, l2_cache;dur=${parts.l2CacheHit ? 1 : 0}`;
 	}
 
 	return header;

@@ -71,3 +71,14 @@ export const COMPUTE_QUEUE_WAIT_MS = limits.computeQueueWaitMs;
 // Total-byte budget for the in-process definition-byte cache (keyed on immutable
 // version id). 0 disables. See ComputeLimits.computeDefinitionByteCacheBytes.
 export const COMPUTE_DEFINITION_BYTE_CACHE_BYTES = limits.computeDefinitionByteCacheBytes;
+
+// Durable L2 solve cache (H1): per-definition default quota (inherited when a
+// definition's solveCacheLimit is absent) + global byte backstop. See
+// ComputeLimits for rationale.
+export const SOLVE_CACHE_DEFAULT_MAX_ENTRIES = limits.solveCacheDefaultMaxEntries;
+export const SOLVE_CACHE_MAX_TOTAL_BYTES = limits.solveCacheMaxTotalBytes;
+
+// L2 backend selection: 'memory' mounts the in-process cache, 'off' (default) a
+// no-op. Read directly (not through resolveComputeLimits — it selects an impl,
+// not a numeric knob).
+export const SOLVE_CACHE_PROVIDER = (env.SOLVE_CACHE_PROVIDER ?? 'off').toLowerCase();

@@ -228,6 +228,28 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got!.updatedAt >= created.updatedAt).toBe(true);
 		});
 
+		it('solveCacheLimit round-trips: absent → inherit, set → value, null → cleared', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+
+			// Absent on create → undefined (inherit the global default).
+			expect((await store.get(ctx(scope.ownerId), guid))?.solveCacheLimit).toBeUndefined();
+
+			// Set a per-definition quota.
+			await store.update(ctx(scope.ownerId), guid, { solveCacheLimit: 25 });
+			expect((await store.get(ctx(scope.ownerId), guid))?.solveCacheLimit).toBe(25);
+
+			// 0 means "caching off" and must persist as 0 (distinct from absent/inherit).
+			await store.update(ctx(scope.ownerId), guid, { solveCacheLimit: 0 });
+			expect((await store.get(ctx(scope.ownerId), guid))?.solveCacheLimit).toBe(0);
+
+			// null clears back to inherit.
+			await store.update(ctx(scope.ownerId), guid, { solveCacheLimit: null });
+			expect((await store.get(ctx(scope.ownerId), guid))?.solveCacheLimit).toBeUndefined();
+		});
+
 		it('update on missing guid throws ProviderError with status 404', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();

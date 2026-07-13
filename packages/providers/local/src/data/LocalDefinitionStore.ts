@@ -223,6 +223,9 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			...(patch.computeServerId !== undefined && {
 				computeServerId: clearable(patch.computeServerId) as string | undefined
 			}),
+			...(patch.solveCacheLimit !== undefined && {
+				solveCacheLimit: clearable(patch.solveCacheLimit) as number | undefined
+			}),
 			...(patch.status !== undefined && { status: patch.status }),
 			...(patch.ownerId !== undefined && { ownerId: patch.ownerId }),
 			...auditUpdate(ctx, existing.updatedBy ?? existing.ownerId)

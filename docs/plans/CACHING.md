@@ -48,20 +48,20 @@ their own sections below (historical `ISSUES.md` numbers kept for reference).
 **`selva` / `@selvajs/server` (app repo) — see the
 [implementation plan](#selva-side-implementation-plan-2026-07-13) for sequencing:**
 
-| Item                                  | Status                  | Notes                                                                                                                                                                                             |
-| ------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| H1 — durable L2 solve cache           | ⬜ TODO, design decided | one-cache-per-channel, per-definition quota, gzipped envelopes (R6), orgId key                                                                                                                    |
-| Definition-byte cache (M1 app half)   | ✅ DONE (2026-07-13)    | `definition-byte-cache.ts` byte-budget LRU keyed on version id; wired as `DefinitionRef` in the solve route; `def_bytes` Server-Timing verdict; `COMPUTE_DEFINITION_BYTE_CACHE_MB` (0 disables)   |
-| Monotonic version numbers             | ✅ DONE (2026-07-13)    | `nextVersionNumber` counter on the record + atomic `reserveNextVersionNumber` (both providers, Supabase RPC/migration, conformance); `uploadVersion` no longer reuses numbers after delete-latest |
-| R4 — single-flight map                | ⬜ TODO, decided        | `Map<inputKey, Promise>` next to the L2 lookup                                                                                                                                                    |
-| M2 — client-side result memo          | ⬜ TODO                 | small LRU in `createSolveSession`                                                                                                                                                                 |
-| R2 — misleading "never cached" log    | ⬜ TODO                 | fix wording in `client-cache.ts` onSettle debug lines                                                                                                                                             |
-| R3 — wire disconnect signals (verify) | ⬜ TODO                 | confirm the route passes request-abort signals so the package fix actually bites                                                                                                                  |
-| R5 — concurrency + load shedding      | ✅ DONE (2026-07-13)    | `COMPUTE_MAX_CONCURRENT` (B6) + queue cap / queue-wait deadline / 503-shed (B7) all shipped; both queue knobs default `0`=unbounded. R4 single-flight rides with Phase 3 (L2)                     |
-| R8 — config folded into durable key   | ⬜ TODO                 | modelunits/tolerances/`COMPUTE_CONTRACT_VERSION` in the H1 key                                                                                                                                    |
-| R9 — `solveCacheLimit` on definition  | ⬜ TODO, shape decided  | one number: absent = inherit, 0 = off, N = quota                                                                                                                                                  |
-| R10 — per-request definition header   | ⬜ TODO (future)        | before any affinity routing ships                                                                                                                                                                 |
-| F1 — pre-solved bundle (+ prewarm)    | ⬜ TODO                 | after H1; R13's post-transform keying applies here                                                                                                                                                |
+| Item                                  | Status               | Notes                                                                                                                                                                                                              |
+| ------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| H1 — durable L2 solve cache           | ✅ DONE (2026-07-13) | `ISolveResultCache` + memory backend + pipeline hook + `solveCacheLimit`; one-cache-per-channel, per-definition quota, gzipped envelopes (R6), orgId key. Off by default (`SOLVE_CACHE_PROVIDER=off`)              |
+| Definition-byte cache (M1 app half)   | ✅ DONE (2026-07-13) | `definition-byte-cache.ts` byte-budget LRU keyed on version id; wired as `DefinitionRef` in the solve route; `def_bytes` Server-Timing verdict; `COMPUTE_DEFINITION_BYTE_CACHE_MB` (0 disables)                    |
+| Monotonic version numbers             | ✅ DONE (2026-07-13) | `nextVersionNumber` counter on the record + atomic `reserveNextVersionNumber` (both providers, Supabase RPC/migration, conformance); `uploadVersion` no longer reuses numbers after delete-latest                  |
+| R4 — single-flight map                | ✅ DONE (2026-07-13) | `Map<key, Promise>` coalescing (`solve-cache-single-flight.ts`), wired in the route above the L2 lookup; coalesced solves run on a non-aborting signal                                                             |
+| M2 — client-side result memo          | ⬜ TODO              | small LRU in `createSolveSession`                                                                                                                                                                                  |
+| R2 — misleading "never cached" log    | ⬜ TODO              | fix wording in `client-cache.ts` onSettle debug lines                                                                                                                                                              |
+| R3 — wire disconnect signals (verify) | ⬜ TODO              | confirm the route passes request-abort signals so the package fix actually bites                                                                                                                                   |
+| R5 — concurrency + load shedding      | ✅ DONE (2026-07-13) | `COMPUTE_MAX_CONCURRENT` (B6) + queue cap / queue-wait deadline / 503-shed (B7) all shipped; both queue knobs default `0`=unbounded. R4 single-flight rides with Phase 3 (L2)                                      |
+| R8 — config folded into durable key   | ✅ DONE (2026-07-13) | `COMPUTE_CONTRACT_VERSION` + `computeServerId` folded into the L2 key; modelunits/tolerances/dataversion fields ready (package defaults today, wired when the app pins them)                                       |
+| R9 — `solveCacheLimit` on definition  | ✅ DONE (2026-07-13) | one number (absent = inherit, 0 = off, N = quota) on the record + both providers + migration + settings UI; consulted before the L2 hook. Package `skipCache` per-solve seam still open (L1 double-store accepted) |
+| R10 — per-request definition header   | ⬜ TODO (future)     | before any affinity routing ships                                                                                                                                                                                  |
+| F1 — pre-solved bundle (+ prewarm)    | ⬜ TODO              | after H1; R13's post-transform keying applies here                                                                                                                                                                 |
 
 **Related trackers:**
 
@@ -211,51 +211,72 @@ notes below.
   `COMPUTE_MAX_CONCURRENT` stay out of scope — R4 lands with the L2 cache
   (Phase 3), and sizing is an operator tuning task, not code.
 
-### Phase 3 — durable L2 solve cache (H1 + H2 app side) — M, the structural win
+### Phase 3 — durable L2 solve cache (H1 + H2 app side) — ✅ DONE (2026-07-13)
 
-Design fully decided under [H1](#h1-no-durable--shared-solve-cache--the-structural-gap--cacheperf)
-and its amendments; this is the build list.
+Landed: the full durable L2 solve cache. `ISolveResultCache` platform interface
+(+ Noop), in-memory backend in `@selvajs/server` (per-definition count quota +
+LRU-within-definition + global byte backstop), post-transform SHA-256 keying via
+the package's `stableStringify`, an injected `solveCache` hook in
+`runSolvePipeline` (hit → stored gzipped envelope, near-CPU-free; miss → solve +
+write-through), in-process single-flight (R4), `solveCacheLimit` on the
+definition record across both providers + Supabase migration + settings UI, async
+`zlib.gzip` (B8), and an `l2_cache;dur=0|1` Server-Timing verdict. Off by default
+(`SOLVE_CACHE_PROVIDER=off`); mount `memory` + set a quota to enable. Full build +
+check + server suite (246) + provider conformance green. Per-item notes below.
 
-- ☐ **3.1** `ISolveResultCache` provider interface in `@selvajs/platform`
-  (+ `NoopSolveResultCache`), async from day one, entries = opaque gzipped
-  envelope bytes + small metadata header, best-effort contract (`get` may
-  miss, `set` may drop), quota passed at write time
-  (`set(key, bytes, { maxEntriesForDefinition })`), key parts
-  `(orgId, definitionId, versionId, inputKey)`. Env selection
-  `SOLVE_CACHE_PROVIDER=memory|off` (Redis later — interface must not require
-  its capabilities).
-- ☐ **3.2** Memory backend in `@selvajs/server`: per-definition count quota +
-  LRU-within-definition, global byte backstop `SOLVE_CACHE_MAX_TOTAL_MB`,
-  default per-definition quota `SOLVE_CACHE_DEFAULT_MAX_ENTRIES`.
-- ☐ **3.3** Keying (H2/R8/R13): `inputKey = sha256(stableStringify(transformedTree) + configSubset)`
-  computed **post-transform** in the pipeline, using the package's exported
-  `stableStringify` (key parity) + node `crypto` SHA-256 app-side.
-  `configSubset` folds in modelunits/tolerances/`dataversion` +
-  `COMPUTE_CONTRACT_VERSION`. Store the canonical string (or its full hash
-  preimage length + prefix) in the entry header for hit-time comparison —
-  defense-in-depth against collision.
-- ☐ **3.4** Pipeline hook (amendment 3): `runSolvePipeline` accepts optional
-  `solveCache?: { lookup(inputKey), store(inputKey, envelope) }`; on hit,
-  return the stored pre-gzipped envelope (near-CPU-free); on miss, solve then
-  write-through on the success branch. The app passes the closure ONLY for
-  live-channel solves with quota > 0 — channel gating by hook presence, zero
-  policy conditionals in the package/pipeline.
-- ☐ **3.5** Single-flight (R4): `Map<inputKey, Promise>` wrapped around the
-  L2 lookup+solve, above the `ISolveResultCache` interface.
-- ☐ **3.6** `solveCacheLimit` on the definition record (R9, shape decided:
-  absent = inherit, `0` = off, `N` = quota): platform type/schema, both
-  providers (+ Supabase migration — bump `EXPECTED_MIGRATION_HEAD`, O3),
-  definition-settings UI (one number input, "0 disables"), consulted before
-  every L2 read/write.
-- ☐ **3.7** B8 rides along: switch the pipeline's `gzipSync` to async
-  `zlib.gzip` while touching those exact lines (audit B8 — event-loop stall).
-- ☐ **3.8** Observability: `l2_cache;dur=0|1` Server-Timing verdict next to
-  `selva_cache`; hit/miss/entry-count/byte counters on the memory backend.
-- ☐ **3.9** Tests: quota eviction within one definition doesn't evict
-  another's entries; `0` disables; org isolation in the key; hit returns
-  byte-identical envelope; single-flight coalesces N concurrent identical
-  solves into one compute call; version bump = fresh keyspace (no
-  invalidation logic to test — that's the point).
+- ✅ **3.1** `ISolveResultCache` in `@selvajs/platform`
+  (`solveCache/interface.ts` + `NoopSolveResultCache`), async, entries = opaque
+  bytes, best-effort (`get` misses / `set` drops silently), quota at write time
+  `set(key, bytes, { maxEntriesForDefinition })`, key parts
+  `(orgId, definitionId, versionId, inputKey)`. Backend selected app-side by
+  `SOLVE_CACHE_PROVIDER=memory|off` (the interface requires no Redis capability).
+- ✅ **3.2** Memory backend `memory-solve-cache.ts` in `@selvajs/server`:
+  per-definition count quota + LRU-within-definition (a per-def key list drives
+  scoped eviction), global byte backstop `SOLVE_CACHE_MAX_TOTAL_MB` (global-LRU),
+  default per-definition quota `SOLVE_CACHE_DEFAULT_MAX_ENTRIES`. Oversized single
+  entry served-then-evicted; stats counters exposed.
+- ✅ **3.3** Keying (`solve-cache-key.ts`): `inputKey = sha256(stableStringify({
+v: COMPUTE_CONTRACT_VERSION, tree: transformedTree, config }))` computed
+  post-transform in the pipeline, using the package's exported `stableStringify`
+  (key parity) + node `crypto`. `configSubset` folds in modelunits/tolerances/
+  dataversion/`computeServerId` (the app wires `computeServerId`; the others are
+  package defaults today, fields ready). Canonical preimage + a per-entry
+  `inputHash` stored in the envelope header; a hit verifies the hash matches
+  before serving (collision defense-in-depth).
+- ✅ **3.4** Pipeline hook: `runSolvePipeline` accepts optional
+  `solveCache: { configSubset, lookup(inputKey), store(inputKey, entry) }`. On
+  hit `buildEnvelopeFromCacheEntry` returns the stored gzipped body (or gunzips
+  for a non-gzip client) with no solve; on miss it solves then write-throughs the
+  encoded envelope on success. Entry format `solve-cache-envelope.ts` (4-byte
+  length prefix + JSON header + gzipped body). The app passes the hook ONLY for
+  cacheable live solves — presence is the channel gate, zero policy conditionals
+  in the pipeline. **Small-body fix:** a body under the 1 KB gzip break-even is
+  still compressed+cached when a hook is present (it just isn't sent gzipped).
+- ✅ **3.5** Single-flight (R4) `solve-cache-single-flight.ts`:
+  `Map<key, Promise>` coalescing concurrent identical solves, released on settle
+  (success OR failure). Wired in the route above the L2 lookup; a coalesced solve
+  runs on a non-aborting signal so one caller's disconnect can't 499 every waiter
+  (uncoalesced solves keep `request.signal` for R3 orphan-cancel).
+- ✅ **3.6** `solveCacheLimit` on the definition record (absent = inherit,
+  `0` = off, `N` = quota): platform `DefinitionRecord`/`Patch` + Zod
+  `UpdateMetadataInputSchema`, both providers (local patch clause; Supabase 5
+  mapper spots), migration `20260713140000_selva_solve_cache_limit.sql`
+  (`EXPECTED_MIGRATION_HEAD` → `20260713140000`), settings UI number input in
+  `DefinitionEditDrawer` (blank = inherit, 0 disables), consulted via
+  `resolveSolveCacheQuota` before building the L2 hook.
+- ✅ **3.7** B8: pipeline `gzipSync` → async `zlib.gzip` (`promisify`) — the
+  multi-MB compress no longer blocks the event loop.
+- ✅ **3.8** Observability: `l2_cache;dur=0|1` Server-Timing verdict (1 = hit,
+  0 = miss/consulted, absent = not consulted) next to `selva_cache`; the memory
+  backend exposes hit/miss/write/quotaEvictions/byteEvictions/entries/bytes via
+  `solveCacheStats()`.
+- ✅ **3.9** Tests: memory-cache round-trip, per-definition quota eviction NOT
+  crossing definitions, LRU recency, byte backstop across definitions, oversized
+  pass-through, `0` disables, org isolation, replace-in-place, version-bump fresh
+  keyspace; key determinism + config fold; envelope round-trip + corruption→miss;
+  single-flight coalesce/release/shared-rejection; pipeline L2 hit/miss/collision-
+  reject/best-effort-lookup-failure; provider conformance `solveCacheLimit`
+  round-trip (inherit/set/0/clear). Server suite 220 → 246.
 - **Open decision (small package follow-up, does NOT block 3.1–3.9):**
   per-solve `skipCache`/`cachesolve` overrides on `scheduler.solve()` (K6/R9
   pkg half) are not in the release. Until they exist: live solves keep L1 on
@@ -332,7 +353,7 @@ pre-solved bundle (F1) feasible.
 
 ### H1. No durable / shared solve cache — the structural gap — cache/perf
 
-> **Status: TODO (selva repo)** — design fully decided (see the revalidation amendments and the dashboard at the top); package prerequisites shipped 2026-07-11.
+> **Status: ✅ DONE (selva repo, 2026-07-13)** — the durable L2 (`ISolveResultCache` + memory backend + pipeline hook + `solveCacheLimit`) shipped per the design below; off by default (`SOLVE_CACHE_PROVIDER=off`). See Phase 3 in the implementation plan for the per-item landing notes.
 
 The only result cache (baseline #2) is 20 entries, 5-min TTL, and
 **process-local**. At 1000 users:
@@ -468,7 +489,7 @@ isolation) next to auth is right. See H2 for the one package change this needs.
 
 ### H2. `hashSolveInput` is 32-bit and `@internal` — unsafe as a durable key — correctness/seam
 
-> **Status: PARTIAL (this repo)** — the 32-bit collision bugs are fixed (two-part `defHash|treeHash` key, ISSUES 53-56/68), so the in-process key is sound. The SHA-256/`stableStringify` export for durable keying still awaits open question 3.
+> **Status: ✅ DONE (2026-07-13)** — the 32-bit collision bugs are fixed (two-part `defHash|treeHash` key, ISSUES 53-56/68), and open question 3 is resolved: the package exports `stableStringify`/`hashDefinition`/`hashSolveInput` and the app hashes SHA-256 over the canonical string app-side (`solve-cache-key.ts`), storing the preimage hash in the entry header for hit-time comparison.
 
 `src/features/grasshopper/scheduler/stable-hash.ts:81` — 32-bit FNV-1a, 8-hex
 chars, marked `@internal`, not re-exported from any barrel.

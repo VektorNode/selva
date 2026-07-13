@@ -51,6 +51,9 @@ export const UpdateMetadataInputSchema = z.object({
 	tags: z.array(z.string().max(64)).max(20).nullable().optional(),
 	projectId: GuidSchema.optional(),
 	computeServerId: GuidSchema.nullable().optional(),
+	// L2 cache quota (R9): 0 = off, N = per-definition entry cap, null = inherit
+	// the global default. Bounded so a settings typo can't request a runaway quota.
+	solveCacheLimit: z.number().int().min(0).max(100_000).nullable().optional(),
 	status: DefinitionStatusSchema.optional()
 });
 

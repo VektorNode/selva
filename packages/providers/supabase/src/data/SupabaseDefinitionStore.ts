@@ -20,7 +20,7 @@ import { stampSoftDelete, stampUpdate } from './rowStamp.js';
 
 /** Explicit column list for `definitions` — every field `rowToRecord` consumes. */
 const DEFINITION_COLUMNS =
-	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, display_name, description, category, tags, cover_image, status, run_count, next_version_number, live_version_id, draft_version_id, created_at, updated_at, deleted_at';
+	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, solve_cache_limit, display_name, description, category, tags, cover_image, status, run_count, next_version_number, live_version_id, draft_version_id, created_at, updated_at, deleted_at';
 /** Explicit column list for `definition_versions` — every field `rowToVersion` consumes. */
 const DEFINITION_VERSION_COLUMNS =
 	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema, schema_extracted_at';
@@ -404,6 +404,7 @@ interface DefinitionRow {
 	created_by?: string | null;
 	updated_by?: string | null;
 	compute_server_id: string | null;
+	solve_cache_limit: number | string | null;
 	display_name: string;
 	description: string | null;
 	category: string | null;
@@ -443,6 +444,12 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 		liveVersionId: row.live_version_id,
 		draftVersionId: row.draft_version_id,
 		computeServerId: row.compute_server_id ?? undefined,
+		solveCacheLimit:
+			row.solve_cache_limit == null
+				? undefined
+				: typeof row.solve_cache_limit === 'string'
+					? Number(row.solve_cache_limit)
+					: row.solve_cache_limit,
 		displayName: row.display_name,
 		description: row.description ?? undefined,
 		category: row.category ?? undefined,
@@ -470,6 +477,7 @@ function recordToRow(r: DefinitionRecord): Record<string, unknown> {
 		live_version_id: r.liveVersionId,
 		draft_version_id: r.draftVersionId,
 		compute_server_id: r.computeServerId ?? null,
+		solve_cache_limit: r.solveCacheLimit ?? null,
 		display_name: r.displayName,
 		description: r.description ?? null,
 		category: r.category ?? null,
@@ -494,6 +502,7 @@ function patchToRow(patch: DefinitionRecordPatch): Record<string, unknown> {
 	if (patch.coverImage !== undefined) row.cover_image = patch.coverImage;
 	if (patch.projectId !== undefined) row.project_id = patch.projectId;
 	if (patch.computeServerId !== undefined) row.compute_server_id = patch.computeServerId;
+	if (patch.solveCacheLimit !== undefined) row.solve_cache_limit = patch.solveCacheLimit;
 	if (patch.status !== undefined) row.status = patch.status;
 	if (patch.ownerId !== undefined) row.owner_id = patch.ownerId;
 	return row;

@@ -169,6 +169,24 @@ export interface ComputeLimits {
 	 * span KB→hundreds of MB; env value is MB, converted here.
 	 */
 	computeDefinitionByteCacheBytes: number;
+	/**
+	 * Default per-definition entry quota for the durable L2 solve cache (H1), used
+	 * when a definition's `solveCacheLimit` is absent (inherit). A definition may
+	 * override this; `0` on the definition turns caching off for it. This global
+	 * default `0` means the L2 is effectively off until an operator sets a quota —
+	 * safe because the memory backend also ships only under
+	 * `SOLVE_CACHE_PROVIDER=memory`. Counts, not bytes: authors think in "how many
+	 * solves to remember"; the byte backstop below is the operator's memory guard.
+	 */
+	solveCacheDefaultMaxEntries: number;
+	/**
+	 * Global byte backstop (bytes) across ALL definitions' L2 entries, evicted
+	 * global-LRU regardless of per-definition counts. Entries range KB→100s of MB,
+	 * so a count quota alone can't bound memory. `0` disables the backstop (rely on
+	 * per-definition counts only — not recommended in the memory backend). Env value
+	 * is MB, converted here. On Redis this moves to `maxmemory allkeys-lru`.
+	 */
+	solveCacheMaxTotalBytes: number;
 }
 
 /**
@@ -208,6 +226,12 @@ export function resolveComputeLimits(env: EnvRecord): ComputeLimits {
 		// definitions warm without pinning gigabytes. readNonNegativeInt so `0`
 		// (disable) is honored rather than treated as invalid.
 		computeDefinitionByteCacheBytes:
-			readNonNegativeInt(env, 'COMPUTE_DEFINITION_BYTE_CACHE_MB', 256) * MB
+			readNonNegativeInt(env, 'COMPUTE_DEFINITION_BYTE_CACHE_MB', 256) * MB,
+		// L2 durable solve cache (H1). Default per-definition quota 0 = inherit-to-off
+		// until an operator opts in; the memory backend also only mounts under
+		// SOLVE_CACHE_PROVIDER=memory, so nothing caches by accident. Byte backstop
+		// 512 MB caps total heap use across all definitions (env is MB).
+		solveCacheDefaultMaxEntries: readNonNegativeInt(env, 'SOLVE_CACHE_DEFAULT_MAX_ENTRIES', 0),
+		solveCacheMaxTotalBytes: readNonNegativeInt(env, 'SOLVE_CACHE_MAX_TOTAL_MB', 512) * MB
 	};
 }

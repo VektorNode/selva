@@ -69,6 +69,13 @@ export interface DefinitionRecord {
 	updatedBy: string;
 	/** Falls back to the org default, then the platform default. */
 	computeServerId?: string;
+	/**
+	 * Durable L2 solve-cache quota for this definition (H1/R9). Absent = inherit
+	 * the global default (`SOLVE_CACHE_DEFAULT_MAX_ENTRIES`); `0` = caching off
+	 * (the non-determinism / wide-input-space escape hatch); `N` = keep at most N
+	 * cached solves for this definition. One number, one settings input.
+	 */
+	solveCacheLimit?: number;
 	displayName: string;
 	description?: string;
 	category?: string;
@@ -116,6 +123,8 @@ export interface DefinitionRecordPatch {
 	coverImage?: string | null;
 	projectId?: string;
 	computeServerId?: string | null;
+	/** L2 cache quota (see {@link DefinitionRecord.solveCacheLimit}); `null` clears to inherit. */
+	solveCacheLimit?: number | null;
 	status?: DefinitionStatus;
 	/** Ownership transfer. */
 	ownerId?: string;

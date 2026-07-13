@@ -17,6 +17,31 @@ export {
 } from './definition-byte-cache.js';
 
 export {
+	createMemorySolveResultCache,
+	type MemorySolveResultCache,
+	type SolveCacheStats
+} from './memory-solve-cache.js';
+
+export {
+	deriveSolveCacheInputKey,
+	type SolveCacheConfigSubset,
+	type SolveCacheInputKey
+} from './solve-cache-key.js';
+
+export {
+	encodeSolveCacheEntry,
+	decodeSolveCacheEntry,
+	gunzipEntryBody,
+	type EnvelopeHeader,
+	type DecodedSolveCacheEntry
+} from './solve-cache-envelope.js';
+
+export {
+	createSolveCacheSingleFlight,
+	type SolveCacheSingleFlight
+} from './solve-cache-single-flight.js';
+
+export {
 	createComputeRateLimiter,
 	type ComputeRateLimiter,
 	type ComputeRateLimiterConfig,
@@ -49,6 +74,7 @@ export {
 	COMPUTE_CONTRACT_VERSION,
 	COMPUTE_VERSION_HEADER,
 	type SolvePipelineArgs,
+	type SolvePipelineCacheHook,
 	type SolveOutcome,
 	type SolveEnvelope,
 	type SolvePhaseMetrics,
