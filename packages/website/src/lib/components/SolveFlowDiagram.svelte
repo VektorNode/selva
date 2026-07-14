@@ -109,7 +109,7 @@
 		'p-out': { col: 1, row: 7, h: 64, pinY: rowY(7), sub: 'size-guard · gzip · Server-Timing' },
 		// Selva server — @selvajs/compute library, in-process (col 2). Pinned so
 		// c-cache lines up with p-tree's handoff.
-		'c-cache': { col: 2, row: 4, h: 96, pinY: rowY(5), sub: 'identical solve in last 5 min?' },
+		'c-cache': { col: 2, row: 4, h: 120, pinY: rowY(5), sub: 'L2 (if on) + 5-min response cache' },
 		'c-pointer': { col: 2, row: 5, h: 84, sub: 'md5 pointer or re-upload' },
 		'c-http': { col: 2, row: 7, h: 64, pinY: rowY(7), sub: 'auth · retry · abort rides along' },
 		// Rhino.Compute VM (col 3)
@@ -570,7 +570,8 @@
 						{#if step.calls}
 							<!-- The discrete backend calls this step makes, numbered so the true
 							     round-trip count is visible, each tagged with WHERE it goes and
-							     whether it's cached (all uncached here = hits storage every solve). -->
+							     whether it's cached (the three rows are uncached; the .gh blob is
+							     now lazy + byte-cached, skipped on a pointer solve). -->
 							<ol class="mt-1.5 space-y-1">
 								{#each step.calls as call, i (call.name)}
 									<li class="text-[10px] leading-tight">
@@ -598,8 +599,8 @@
 							<div
 								class="mt-2 rounded border border-dashed border-amber-500/40 bg-amber-500/6 px-1.5 py-1 text-[9.5px] leading-snug text-amber-700 dark:text-amber-300"
 							>
-								<span class="font-semibold">gap:</span> version blob is immutable → cacheable, but re-read
-								every solve
+								<span class="font-semibold">gap:</span>
+								{step.gap}
 							</div>
 						{/if}
 						{#if step.caches}

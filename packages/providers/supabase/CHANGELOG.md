@@ -1,5 +1,12 @@
 # @selvajs/supabase-provider
 
+## 0.14.4-beta.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @selvajs/platform@0.15.0-beta.1
+
 ## 0.14.4-beta.0
 
 ### Patch Changes

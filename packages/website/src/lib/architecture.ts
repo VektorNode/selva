@@ -129,16 +129,34 @@ export const LAYERS: Record<Layer, LayerInfo> = {
 
 export const CACHES: CacheEntry[] = [
 	{
+		id: 'client-memo',
+		name: 'Client solve memo',
+		layer: 'browser',
+		what: 'Stable hash of the solve input values → the finished solve result, sitting in front of the request/response driver. Dragging a slider back to a value already solved this session returns instantly — no request leaves the browser at all.',
+		keyedBy: 'a stable, key-sorted serialization of the input values',
+		policy:
+			'LRU, max 16 entries, no TTL. Only completed solves are stored, so a hit is always a full result.',
+		invalidation: 'clear() when the active definition changes; LRU age-out otherwise.',
+		scope: 'per-tab',
+		lifetime: '16 entries (LRU)',
+		files: [
+			'packages/ui/src/lib/compute/solveMemo.ts:42',
+			'packages/ui/src/lib/compute/createSolveSession.svelte.ts:195'
+		]
+	},
+	{
 		id: 'texture',
 		name: 'Texture cache',
 		layer: 'browser',
-		what: 'Texture URL → decoded THREE.Texture, plus an in-flight map so concurrent loads of the same URL share one download.',
-		keyedBy: 'texture URL (content-hashed, immutable)',
-		policy: 'Unbounded map, no TTL — safe because content-hashed URLs never change meaning.',
-		invalidation: 'clearTextureCache() on viewer teardown.',
+		what: 'Texture key → decoded THREE.Texture, plus an in-flight map so concurrent loads of the same key share one download.',
+		keyedBy: 'texture URL (content-hashed; long data-URIs are FNV-1a hashed)',
+		policy:
+			'LRU, max 64 entries, no TTL — safe because content-hashed keys never change meaning; an evicted texture is disposed.',
+		invalidation:
+			'LRU eviction; clearTextureCache() on viewer teardown bumps a generation guard so a load resolving after a clear is discarded.',
 		scope: 'per-tab',
-		lifetime: 'whole session',
-		files: ['selva-compute/src/features/visualization/webdisplay/texture-cache.ts:18']
+		lifetime: '64 entries (LRU)',
+		files: ['packages/compute/src/features/visualization/webdisplay/texture-cache.ts:12']
 	},
 	{
 		id: 'dvl',
@@ -150,7 +168,10 @@ export const CACHES: CacheEntry[] = [
 		invalidation: 'LRU age-out only; lives for the page lifetime.',
 		scope: 'per-tab',
 		lifetime: '8 entries (LRU)',
-		files: ['packages/ui/src/lib/schema/dynamic-value-list.ts:50']
+		files: [
+			'packages/ui/src/lib/schema/dynamic-value-list.ts:50',
+			'packages/ui/src/lib/schema/dynamic-value-list.ts:51'
+		]
 	},
 	{
 		id: 'warm-client',
@@ -164,8 +185,25 @@ export const CACHES: CacheEntry[] = [
 		scope: 'per-process',
 		lifetime: '16 servers (LRU)',
 		files: [
-			'packages/server/src/compute/client-cache.ts:129',
-			'packages/selva/src/lib/server/compute/clientCache.server.ts:36'
+			'packages/server/src/compute/client-cache.ts:146',
+			'packages/selva/src/lib/server/compute/clientCache.server.ts:39'
+		]
+	},
+	{
+		id: 'def-bytes',
+		name: 'Definition-byte cache',
+		layer: 'selva-server',
+		what: 'Version id → the .gh bytes, read lazily. The solve no longer eagerly pulls the blob off storage — the scheduler asks for bytes only when an upload is unavoidable, and a warm entry then serves them without touching storage. A pointer-known re-solve moves ZERO definition bytes.',
+		keyedBy:
+			'the immutable version id (never the fileKey — a delete-then-reupload can reuse a fileKey for different content)',
+		policy:
+			'LRU by total byte budget (default 256 MB, env COMPUTE_DEFINITION_BYTE_CACHE_MB; 0 disables). No TTL — version ids are immutable. An entry larger than the whole budget is served but never retained.',
+		invalidation: 'Byte-budget LRU only; nothing ever goes stale.',
+		scope: 'per-process',
+		lifetime: '256 MB budget',
+		files: [
+			'packages/server/src/compute/definition-byte-cache.ts:93',
+			'packages/selva/src/lib/server/compute/definitionByteCache.server.ts:19'
 		]
 	},
 	{
@@ -174,11 +212,30 @@ export const CACHES: CacheEntry[] = [
 		layer: 'selva-server',
 		what: 'Remote definition URL → the fetched .gh bytes, so repeat solves of a URL-referenced definition skip the download (and its SSRF checks are behind the same door).',
 		keyedBy: 'the definition URL',
-		policy: 'TTL (5 min default, env-tunable); max 50 entries, oldest 10 evicted in a batch.',
+		policy:
+			'TTL (5 min default, env DEFINITION_CACHE_TTL_MS); max 50 entries, oldest 10 evicted in a batch.',
 		invalidation: 'TTL expiry only.',
 		scope: 'per-process',
 		lifetime: '5 min TTL',
 		files: ['packages/server/src/compute/remote-definition.ts:97']
+	},
+	{
+		id: 'l2-solve',
+		name: 'Durable solve cache (L2)',
+		layer: 'selva-server',
+		what: 'Full solve request → the finished, gzipped solve response, held in the Selva server. A hit returns the stored envelope without building a tree, calling compute, or re-serializing. OFF by default — an operator opts in with SOLVE_CACHE_PROVIDER=memory and a quota. Only live-channel, non-explicit-version local solves are eligible.',
+		keyedBy:
+			'(orgId, definitionId, versionId, inputKey) — org first for cross-tenant defense, version keys the keyspace to immutable bytes, plus the compute-server id (two servers can yield different geometry)',
+		policy:
+			'Two-dimensional eviction: a per-definition entry-count quota (default 0 = off, env SOLVE_CACHE_DEFAULT_MAX_ENTRIES) so one slider-heavy definition only churns its own entries, plus a global byte backstop (default 512 MB, env SOLVE_CACHE_MAX_TOTAL_MB). No TTL.',
+		invalidation:
+			'Count-quota + byte-backstop LRU; a publish is a fresh version keyspace so there is nothing to invalidate — old entries just age out.',
+		scope: 'per-process',
+		lifetime: 'quota + 512 MB',
+		files: [
+			'packages/server/src/compute/memory-solve-cache.ts:71',
+			'packages/selva/src/lib/server/compute/solveCache.server.ts'
+		]
 	},
 	{
 		id: 'schema',
@@ -188,12 +245,12 @@ export const CACHES: CacheEntry[] = [
 		keyedBy: 'the version (its .gh bytes are immutable)',
 		policy: 'Permanent — a version’s bytes never change, so its schema never expires.',
 		invalidation:
-			'Never; a new upload is a new version row. (A lazy backfill fills pre-cache versions on their next solve — bridge until ~2026-09.)',
+			'Re-extracted on render if the stored schema version is stale (ADR 0005 — the stored schema is a disposable cache). A lazy backfill fills pre-cache versions on their next solve — bridge until ~2026-09.',
 		scope: 'db-shared',
 		lifetime: 'permanent',
 		files: [
-			'packages/selva/src/lib/server/definitions/DefinitionService.ts:119',
-			'packages/selva/src/lib/server/definitions/loadForRender.server.ts:134'
+			'packages/server/src/definitions/definition-service.ts:121',
+			'packages/server/src/definitions/load-for-render.ts:162'
 		]
 	},
 	{
@@ -207,8 +264,8 @@ export const CACHES: CacheEntry[] = [
 		scope: 'per-process',
 		lifetime: '5 min TTL · 20 entries',
 		files: [
-			'selva-compute/src/features/grasshopper/scheduler/solve-scheduler.ts:186',
-			'packages/server/src/compute/client-cache.ts:193'
+			'packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:239',
+			'packages/server/src/compute/client-cache.ts:229'
 		]
 	},
 	{
@@ -222,7 +279,7 @@ export const CACHES: CacheEntry[] = [
 			'On a server-side miss the solve transparently re-uploads once and learns the fresh key; dropped when the server stops returning one.',
 		scope: 'per-process',
 		lifetime: '100 entries (LRU)',
-		files: ['selva-compute/src/features/grasshopper/scheduler/solve-scheduler.ts:192']
+		files: ['packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:245']
 	},
 	{
 		id: 'vm-def',
@@ -235,7 +292,7 @@ export const CACHES: CacheEntry[] = [
 			'The VM GCs independently; cache/purge does NOT clear it. A stale pointer just triggers one re-upload.',
 		scope: 'vm-shared',
 		lifetime: 'VM-managed',
-		files: ['selva-compute/src/features/grasshopper/solve.ts:168 (miss → re-upload)']
+		files: ['packages/compute/src/features/grasshopper/solve.ts:175 (miss → re-upload)']
 	},
 	{
 		id: 'vm-solve',
@@ -249,8 +306,8 @@ export const CACHES: CacheEntry[] = [
 		scope: 'vm-shared',
 		lifetime: 'VM-managed · survives restarts',
 		files: [
-			'selva-compute/src/features/grasshopper/solve.ts:267',
-			'selva-compute/src/core/server/compute-server-stats.ts:308 (purge)'
+			'packages/compute/src/features/grasshopper/solve.ts:299 (cachesolve flag)',
+			'packages/compute/src/core/server/compute-server-stats.ts:318 (purge)'
 		]
 	}
 ];
@@ -286,10 +343,16 @@ export const FLOW_CONTROLS: FlowControl[] = [
 		files: ['packages/server/src/compute/rate-limit.ts']
 	},
 	{
+		name: 'Single-flight coalescer',
+		where: 'Selva server',
+		what: 'Concurrent identical live solves (same org + version + inputs) collapse into one pipeline run; every waiter is served that one result. A hot-key burst hits compute once. The shared run uses a non-aborting signal, so one caller disconnecting can’t cancel the solve for the others.',
+		files: ['packages/server/src/compute/solve-cache-single-flight.ts']
+	},
+	{
 		name: 'Scheduler queue',
 		where: 'Compute client',
 		what: 'Cloud solves run in queue mode: FIFO, one at a time per compute server, each runs to completion. (The plugin preview uses latest-wins instead.)',
-		files: ['packages/server/src/compute/client-cache.ts:190']
+		files: ['packages/server/src/compute/client-cache.ts:229']
 	}
 ];
 
@@ -312,11 +375,16 @@ export const CLOUD_STEPS: FlowStep[] = [
 		id: 'b-throttle',
 		layer: 'browser',
 		title: 'The solve throttle decides',
-		oneliner: 'One request in flight, latest values win — no queue builds up in the browser.',
+		oneliner:
+			'One request in flight, latest values win — and a client memo answers a repeat value without touching the network.',
 		detail:
-			'If a solve is already running, the new values go into a single pending slot, overwriting whatever was waiting there. When the in-flight solve settles, the pending values fire — so the server only ever sees the newest state, and a slow solve can’t pile up requests behind it.',
-		files: ['packages/ui/src/lib/compute/computeThrottle.svelte.ts:27'],
-		gates: ['1 in flight · latest wins']
+			'If a solve is already running, the new values go into a single pending slot, overwriting whatever was waiting there. When the in-flight solve settles, the pending values fire — so the server only ever sees the newest state, and a slow solve can’t pile up requests behind it. Before firing, a small client-side memo (LRU 16, keyed on a stable hash of the input values) is consulted: dragging a slider back to a value already solved this session returns instantly, with no request leaving the browser at all.',
+		files: [
+			'packages/ui/src/lib/compute/computeThrottle.svelte.ts:27',
+			'packages/ui/src/lib/compute/createSolveSession.svelte.ts:195'
+		],
+		gates: ['1 in flight · latest wins'],
+		caches: [{ id: 'client-memo', note: 'repeat value → instant, no network' }]
 	},
 	{
 		id: 'b-post',
@@ -353,10 +421,10 @@ export const CLOUD_STEPS: FlowStep[] = [
 		layer: 'selva-server',
 		title: 'Load the definition',
 		oneliner:
-			'Four backend reads — three rows + the .gh blob — and all four are UNCACHED: they hit storage on every solve.',
+			'Three uncached DB reads for the rows — but the .gh blob is now read LAZILY through the definition-byte cache, not on every solve.',
 		detail:
-			'For a stored definition (local:guid) this is FOUR separate backend reads, in order: the definition record, its project (for the org + compute-server pin), the live/draft version row, then the version’s .gh blob from object storage. A permission check runs between the project read and the version read. None of these four are cached — they hit Postgres/disk on EVERY solve, including a solve that later hits the response cache. The response cache upstream is what actually makes a repeat solve cheap; it short-circuits before the compute call, but these reads still run. (The remote-definition cache does NOT apply here — it only guards the separate remote-URL branch, where a definition is fetched from an https:// URL. The version-schema cache saves a compute schema-extraction call on upload/render, not this blob fetch.)',
-		files: ['packages/selva/src/routes/api/compute/+server.ts:170'],
+			'For a stored definition (local:guid) three rows are read in order: the definition record, its project (for the org + compute-server pin), and the live/draft version row. A permission check runs between the project read and the version read. These three rows still hit Postgres/disk on every solve. The .gh blob is different now: instead of an eager storage.get, the route hands the scheduler a byte-cache reference (keyed on the immutable version id) whose bytes are materialized ONLY when an upload is unavoidable — and even then a warm entry serves them without touching storage. A pointer-known re-solve moves zero definition bytes. This closed what used to be an optimization gap: the blob was re-read on every solve; now it isn’t. (The remote-definition cache still only guards the separate remote-URL branch. The version-schema cache saves a compute schema-extraction call on upload/render, not this fetch.)',
+		files: ['packages/selva/src/routes/api/compute/+server.ts:198'],
 		calls: [
 			{
 				name: 'definitions.get',
@@ -380,28 +448,27 @@ export const CLOUD_STEPS: FlowStep[] = [
 				note: 'the live/draft version row'
 			},
 			{
-				name: 'storage.get(blob)',
+				name: 'definitionRef.load()',
 				kind: 'storage',
 				target: 'Supabase storage',
-				cached: 'uncached',
-				note: 'the version’s .gh bytes'
+				cached: 'cached',
+				note: 'the version’s .gh bytes — lazy, byte-cached, skipped on a pointer-known re-solve'
 			}
 		],
-		// A real, code-verified optimization gap — surfaced like the Redis note.
-		gap: 'The version .gh blob is content-immutable (a new upload is a new version row), so it’s a natural cache candidate — the same shape as the response cache. Today it’s re-read from storage on every solve. Not cached yet.',
+		caches: [{ id: 'def-bytes', note: 'version id → .gh bytes; lazy, skipped on a pointer solve' }],
 		variants: {
 			localfs: {
 				oneliner:
-					'Four backend reads — three JSON files + the .gh blob — and all four are UNCACHED: they hit disk on every solve.',
+					'Three uncached JSON-file reads for the rows — the .gh blob is read lazily through the definition-byte cache, not on every solve.',
 				detail:
-					'With the local provider every store is a JSON file with atomic writes, and blobs live on disk next to them — same interfaces, same four reads, just no database. None are cached: each solve re-reads all four from disk. The response cache upstream is what makes a repeat solve cheap. (The remote-definition cache only guards the separate remote-URL branch; the version-schema cache saves a compute call on upload, not this blob fetch.)',
+					'With the local provider every store is a JSON file with atomic writes, and blobs live on disk next to them — same interfaces, same three row reads, just no database. The .gh blob is not read eagerly: the route hands the scheduler a byte-cache reference (keyed on the immutable version id) whose bytes load only when an upload is unavoidable, served warm without touching disk on a repeat. (The remote-definition cache only guards the separate remote-URL branch; the version-schema cache saves a compute call on upload, not this fetch.)',
 				files: ['packages/providers/local/src/storage/LocalStorageProvider.ts:42']
 			},
 			supabase: {
 				oneliner:
-					'Four backend reads — three Postgres rows under RLS + the .gh blob — and all four are UNCACHED: they hit Supabase on every solve.',
+					'Three uncached Postgres row reads under RLS — the .gh blob is read lazily through the definition-byte cache, not on every solve.',
 				detail:
-					'Each request gets one of three Supabase clients, fail-closed: a system context gets the service-role client (bypasses RLS), a session token gets a JWT-header client (queries run as that user, RLS enforced), anything else gets the anon client — memoized per request. The three rows and the storage blob are all fetched fresh on every solve; none are cached. The response cache upstream is what makes a repeat solve cheap. (The remote-definition cache only guards the separate remote-URL branch; the version-schema cache saves a compute call on upload, not this blob fetch.)',
+					'Each request gets one of three Supabase clients, fail-closed: a system context gets the service-role client (bypasses RLS), a session token gets a JWT-header client (queries run as that user, RLS enforced), anything else gets the anon client — memoized per request. The three rows are fetched fresh every solve. The .gh blob is not: the route hands the scheduler a byte-cache reference (keyed on the immutable version id) that loads bytes only on an unavoidable upload and serves warm entries without touching storage. (The remote-definition cache only guards the separate remote-URL branch; the version-schema cache saves a compute call on upload, not this fetch.)',
 				files: ['packages/providers/supabase/src/storage/SupabaseStorageProvider.ts:92']
 			}
 		}
@@ -439,11 +506,17 @@ export const CLOUD_STEPS: FlowStep[] = [
 		layer: 'compute-client',
 		title: 'Response cache check',
 		oneliner:
-			'Same definition + same values solved in the last 5 minutes? Answered from memory — the network is never touched.',
+			'Two in-memory response caches short-circuit here: the durable L2 (if enabled) and the scheduler’s 5-minute response cache.',
 		detail:
-			'The scheduler hashes the definition bytes together with the exact input tree. On a hit the stored response returns instantly and shows up as selva_cache;dur=1 in the Server-Timing header. This is the cache that makes “wiggle a slider back to where it was” free.',
-		files: ['selva-compute/src/features/grasshopper/scheduler/solve-scheduler.ts:328'],
-		caches: [{ id: 'sched-response', note: 'HIT = instant response, no compute call' }]
+			'First, for an eligible live-channel solve, the pipeline consults the durable L2 cache (keyed on org + version + inputs); a hit returns the stored gzipped envelope without building a tree or calling compute — l2_cache;dur=1. If L2 is off or misses, the scheduler hashes the definition bytes together with the exact input tree; a hit there returns the stored response instantly as selva_cache;dur=1. Both are what make “wiggle a slider back to where it was” free server-side. The L2 is off by default — an operator opts in with SOLVE_CACHE_PROVIDER.',
+		files: [
+			'packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:412',
+			'packages/server/src/compute/solve-pipeline.ts:160'
+		],
+		caches: [
+			{ id: 'l2-solve', note: 'durable HIT = stored envelope, no solve (if enabled)' },
+			{ id: 'sched-response', note: 'HIT = instant response, no compute call' }
+		]
 	},
 	{
 		id: 'c-pointer',
@@ -453,7 +526,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			'A known definition is sent as a tiny md5 pointer instead of re-uploading megabytes of .gh.',
 		detail:
 			'The first solve uploads the definition; Rhino.Compute answers with a cache key. The pointer map remembers it, and every later solve sends just the key. If the server has meanwhile dropped the definition, the solve fails with definition_not_cached and the client transparently re-uploads once — visible as def_reupload;dur=1.',
-		files: ['selva-compute/src/features/grasshopper/scheduler/solve-scheduler.ts:478'],
+		files: ['packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:699'],
 		caches: [{ id: 'pointer-map', note: 'definition hash → server-side md5 key' }]
 	},
 	{
@@ -464,7 +537,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			'The actual network hop: auth header, request id, definition-affinity header, retry with backoff.',
 		detail:
 			'One POST to the Rhino.Compute proxy with RhinoComputeKey auth, an X-Request-ID, and X-Selva-Definition carrying the definition guid (routing/telemetry metadata for a future server pool). Transient failures (429/502/503/504) retry with exponential backoff and jitter; the browser’s abort signal rides along, so closing the tab cancels the solve upstream.',
-		files: ['selva-compute/src/core/compute-fetch/compute-fetch.ts:484']
+		files: ['packages/compute/src/core/compute-fetch/compute-fetch.ts:484']
 	},
 	{
 		id: 'r-solve',
@@ -474,7 +547,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			'Two VM-side caches first: the parsed definition (decode) and the finished result (cachesolve).',
 		detail:
 			'The VM keeps uploaded definitions parsed in memory — a pointer hit means decode ≈ 0 ms. With cachesolve on (Selva’s default), an identical request returns the stored result without re-running Grasshopper at all — solve ≈ 0 ms. Both survive Selva restarts and are shared by every client of that server. Otherwise headless Grasshopper actually solves.',
-		files: ['selva-compute/src/features/grasshopper/solve.ts:267'],
+		files: ['packages/compute/src/features/grasshopper/solve.ts:299'],
 		caches: [
 			{ id: 'vm-def', note: 'parsed .gh held under its md5 key' },
 			{ id: 'vm-solve', note: 'identical request → stored result' }
@@ -498,6 +571,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			'The browser splits its own round-trip timing (ttfb/download/parse) against the Server-Timing header to attribute latency. Meshes go to the WebDisplay viewer; textures load through the texture cache so a re-render never re-decodes an image, and huge value-list payloads parse once through their own small LRU.',
 		files: ['packages/selva/src/routes/library/[guid]/+page.svelte:142'],
 		caches: [
+			{ id: 'client-memo', note: 'this result is memoized for a value re-visit' },
 			{ id: 'texture', note: 'decoded textures reused across solves' },
 			{ id: 'dvl', note: 'multi-MB option lists parsed once' }
 		]
@@ -515,9 +589,13 @@ export const LOCAL_STEPS: FlowStep[] = [
 		title: 'A slider moves',
 		oneliner: 'Value updates batch in a 50 ms window and queue while Grasshopper is mid-solve.',
 		detail:
-			'The plugin preview UI collects value changes for 50 ms and sends them as one update. If Grasshopper is still solving, updates keep queueing — when the solve finishes, only the latest state is applied.',
-		files: ['packages/plugin-ui/src/lib/websocket/websocket.svelte.ts:337'],
-		gates: ['50 ms batch · latest wins']
+			'The plugin preview UI collects value changes for 50 ms and sends them as one update. If Grasshopper is still solving, updates keep queueing — when the solve finishes, only the latest state is applied. The same client-side solve memo (LRU 16) the cloud path uses sits in front of the driver here too: a value already solved this session is served from memory without touching the socket.',
+		files: [
+			'packages/plugin-ui/src/lib/websocket/websocket.svelte.ts:337',
+			'packages/ui/src/lib/compute/createSolveSession.svelte.ts:195'
+		],
+		gates: ['50 ms batch · latest wins'],
+		caches: [{ id: 'client-memo', note: 'repeat value → served from memory, no socket send' }]
 	},
 	{
 		id: 'l-ws',
@@ -559,6 +637,7 @@ export const LOCAL_STEPS: FlowStep[] = [
 			'The mesh batches land in the same WebDisplay viewer. The texture cache and value-list parse cache work identically — they belong to the viewer, not the transport.',
 		files: ['packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts:133'],
 		caches: [
+			{ id: 'client-memo', note: 'this result is memoized for a value re-visit' },
 			{ id: 'texture', note: 'decoded textures reused across solves' },
 			{ id: 'dvl', note: 'multi-MB option lists parsed once' }
 		]
@@ -587,8 +666,18 @@ export const SERVER_TIMING: TimingEntry[] = [
 		meaning: 'solve minus rhino_* — network + queue between Selva and the VM'
 	},
 	{
+		metric: 'l2_cache;dur=1',
+		meaning:
+			'served from the durable L2 solve cache — no tree build, no compute (dur=0 = consulted then solved; absent = not eligible)'
+	},
+	{
 		metric: 'selva_cache;dur=1',
-		meaning: 'served from the in-process response cache — compute never called'
+		meaning: 'served from the scheduler’s in-process response cache — compute never called'
+	},
+	{
+		metric: 'def_bytes;desc=skipped|hit|miss',
+		meaning:
+			'byte-cache verdict — skipped = pointer solve moved no .gh bytes; hit = warm byte cache; miss = read from storage'
 	},
 	{
 		metric: 'def_reupload;dur=1',

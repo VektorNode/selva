@@ -1,5 +1,12 @@
 # @selvajs/local-provider
 
+## 0.12.8-beta.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @selvajs/platform@0.15.0-beta.1
+
 ## 0.12.8-beta.0
 
 ### Patch Changes

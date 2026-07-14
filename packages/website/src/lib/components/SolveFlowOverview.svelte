@@ -65,7 +65,7 @@
 			h: 120,
 			tone: 'server',
 			title: '1. Load definition',
-			body: '4 uncached reads: 3 rows + the .gh blob — every solve'
+			body: '3 uncached row reads; the .gh blob is lazy + byte-cached'
 		},
 		{
 			id: 'check',

@@ -1,5 +1,12 @@
 # @selvajs/server
 
+## 0.2.0-beta.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @selvajs/platform@0.15.0-beta.1
+
 ## 0.2.0-beta.3
 
 ### Minor Changes

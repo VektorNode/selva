@@ -231,8 +231,8 @@
 	</div>
 
 	{#if mode === 'cloud'}
-		<!-- Scaling note: how a shared store (Redis) would change this. Framed as a
-		     future option, not part of today's architecture. -->
+		<!-- Scaling note: the in-process caches are per-instance; the L2 solve cache is
+		     the pluggable seam where a shared store (Redis) drops in. -->
 		<aside
 			class="border-border bg-muted/40 mt-8 rounded-lg border border-l-2 border-l-cyan-500/60 p-4"
 		>
@@ -241,26 +241,33 @@
 				<span
 					class="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-600 dark:text-cyan-400"
 				>
-					not built yet
+					seam built · shared backend not yet
 				</span>
 			</div>
 			<p class="text-muted-foreground mt-2 text-sm leading-relaxed">
-				The two caches inside <span class="font-mono text-xs">@selvajs/compute</span> — the
+				Most of the server-side caches — the
 				<a href="#cache-sched-response" class="text-violet-600 hover:underline dark:text-violet-400"
 					>response cache</a
 				>
-				and the
+				and
 				<a href="#cache-pointer-map" class="text-violet-600 hover:underline dark:text-violet-400"
 					>pointer map</a
 				>
-				— live in the Selva server’s memory, so each server instance has its own copy. Run several instances
-				behind a load balancer and a solve cached on instance A is a miss on instance B. A shared store
-				like Redis would <strong>replace those in-process caches</strong>, so the whole fleet reads
-				and writes one cache. It slots in exactly where the cyan
-				<span class="font-mono text-xs">@selvajs/compute</span> box sits — same call site, different
-				backing — with no change to the browser or the compute VM. The VM-side caches (<span
-					class="whitespace-nowrap">definition cache</span
-				>, <span class="font-mono text-xs">cachesolve</span>) are already shared server-side, so
+				inside <span class="font-mono text-xs">@selvajs/compute</span>, plus the
+				<a href="#cache-def-bytes" class="text-violet-600 hover:underline dark:text-violet-400"
+					>definition-byte cache</a
+				>
+				— live in one server instance’s memory, so each instance has its own copy. Run several instances
+				behind a load balancer and a solve cached on instance A is a miss on instance B. The
+				<a href="#cache-l2-solve" class="text-violet-600 hover:underline dark:text-violet-400"
+					>durable L2 solve cache</a
+				>
+				is the seam for fixing exactly this: it’s a pluggable
+				<span class="font-mono text-xs">ISolveResultCache</span> with an in-memory backend today,
+				and a shared backend like Redis would drop in behind the same interface so the whole fleet
+				reads and writes one cache — no change to the browser or the compute VM. The VM-side caches
+				(<span class="whitespace-nowrap">definition cache</span>,
+				<span class="font-mono text-xs">cachesolve</span>) are already shared server-side, so
 				they’re unaffected.
 			</p>
 		</aside>
@@ -419,11 +426,11 @@
 		<h2 class="text-2xl font-bold tracking-tight">Every cache, in one table</h2>
 		<p class="text-muted-foreground mt-2 max-w-2xl text-sm leading-relaxed">
 			{#if mode === 'cloud'}
-				Nine caches sit on the cloud solve path — two in the browser, three in the Selva server, two
-				in the compute client, two on the compute VM itself.
+				Twelve caches sit on the cloud solve path — three in the browser, five in the Selva server,
+				two in the compute client, two on the compute VM itself.
 			{:else}
-				Local mode only keeps the two browser-side viewer caches — everything else belongs to the
-				cloud path.
+				Local mode keeps the three browser-side caches — the client solve memo plus the two viewer
+				caches; everything else belongs to the cloud path.
 			{/if}
 		</p>
 		<div class="border-border mt-6 overflow-x-auto rounded-lg border">
