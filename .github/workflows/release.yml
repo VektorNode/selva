@@ -178,7 +178,7 @@ jobs:
           echo "No changesets and all published versions match npm — skipping."
           echo "should_run=false" >> "$GITHUB_OUTPUT"
 
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v4
         if: steps.check.outputs.should_run == 'true'
 
       - uses: actions/setup-node@v4
@@ -233,11 +233,13 @@ jobs:
 
       - name: Test
         if: steps.check.outputs.should_run == 'true'
-        # @selvajs/local-provider is the only suite with hard coverage
-        # requirements today. @selvajs/selva's tests pass assertions but
-        # exit 1 from a cleanup race — see the issue tracker. Run the
-        # ones we trust here; the rest are best-effort.
-        run: pnpm --filter=@selvajs/local-provider test
+        # Run EVERY package's test task before publishing — a regression in
+        # compute/server/ui must not ship to npm green. Same command as the PR
+        # test workflow; turbo caches by input hash. The supabase live-stack
+        # suites self-skip without .env.test creds (none in CI); everything
+        # else — compute, server security suites, ui, plugin-ui, selva, cli,
+        # local-provider — gates here.
+        run: pnpm exec turbo run test
 
       # ── beta path: version (pre-release), commit the bump back, publish ───
       # In pre mode, plain `changeset publish` publishes under the `beta`

@@ -55,9 +55,9 @@ cd packages/schemas && pnpm run generate:cs     # Generate C# only
 pnpm clean                  # Remove node_modules, .svelte-kit, and pnpm-lock.yaml
 pnpm rebuild                # clean + install + build
 
-# Testing (@selvajs/compute external package)
-# Run tests for the @selvajs/compute npm package (development only)
-# pnpm test                  # (When @selvajs/compute is developed locally)
+# Testing a single in-repo package
+cd packages/compute && pnpm test           # @selvajs/compute suite (~800 tests)
+cd packages/server && pnpm test            # @selvajs/server (limits, SSRF guard, rate-limit, ...)
 ```
 
 ### .NET (Plugin)
@@ -148,7 +148,7 @@ Located in `Plugin/Selva.GH/Features/`:
 
 ### Core Package Architecture (`@selvajs/compute`)
 
-Modular exports for tree-shaking:
+In-repo at `packages/compute` (published to npm as `@selvajs/compute`). Modular exports for tree-shaking:
 
 - Main export: General utilities and types
 - `/grasshopper`: Rhino Compute client, data tree handling, input/output parsers
@@ -201,7 +201,7 @@ This architecture means Selva has **zero exposure to EU data regulations, creden
 ## Requirements
 
 - [pnpm](https://pnpm.io) >= 10.0.0 (Node.js package manager — version pinned in `packageManager`, activated via Corepack)
-- Node.js >= 18.0.0
+- Node.js >= 22.0.0
 - .NET SDK 7.0+ (for plugin development)
 - Rhino 8 or 9 (for using the plugin — Rhino 7 is not supported)
 - Rhino.Compute server — the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support

@@ -17,14 +17,17 @@ selva/
 │
 ├── packages/                       # TypeScript / Svelte workspace
 │   ├── schemas/                    # ui-schema.json + TS/C# code generators
+│   ├── compute/                    # @selvajs/compute — Rhino.Compute client, data-tree + Three.js helpers
 │   ├── platform/                   # Provider interfaces (auth, data, storage, ...)
 │   ├── providers/
 │   │   ├── local/                  # Filesystem-backed provider (@selvajs/local-provider)
 │   │   ├── supabase/               # Supabase provider (@selvajs/supabase-provider)
 │   │   └── header-auth/            # Forward-auth provider (@selvajs/header-auth-provider)
+│   ├── server/                     # @selvajs/server — transport-agnostic solve/compute server building blocks
 │   ├── ui/                         # Shared Svelte components, theme, primitives
 │   ├── plugin-ui/                  # Plugin UI — schema designer + preview, embedded into Selva.gha
 │   ├── selva/                      # @selvajs/selva — deployable Selva app (cloud mode)
+│   ├── website/                    # @selvajs/website — docs/marketing site
 │   ├── cli/                        # @selvajs/cli — scaffold and operate a Selva deployment
 │   └── config/                     # Shared ESLint/Vite/Prettier config
 │

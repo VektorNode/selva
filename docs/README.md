@@ -29,9 +29,13 @@
 
 ## Plans
 
-- **[Solve / Input Race Conditions](./plans/solve-input-race-conditions.md)** — Fixing lost-update and double-solve bugs in the GH ↔ web bridge
-- **[Mesh Texture Support](./plans/mesh-texture-support.md)** — Optional UV chunk in the binary mesh format for textured display
-- **[Embeddable Server Layer](./plans/embeddable-server-layer.md)** — Finish the "build your own app on the engine" contract: schema-aware client bundle, exported store utilities, published compute server stack
+- **[Pre-OSS Hardening](./plans/pre-oss-hardening.md)** — Consolidated pre-open-source audit findings (CI/CD, npm publishing, OSS/docs), prioritized P0–P3
+- **[Data Access Efficiency Audit](./plans/data-access-efficiency-audit.md)** — Pre-scale audit of the compute/data path with open efficiency items
+- **[API v1 Redesign](./plans/api-redesign-plan.md)** — One versioned `/api/v1` surface for both browser and token-based clients
+- **[Token-based API Auth](./plans/token-plan.md)** — Personal access tokens (PATs) + managed public API; MCP designed-but-deferred
+- **[Pre-solved Bundle + Prewarm](./plans/presolve-bundle.md)** — Ship a pre-solved definition bundle and prewarm the solve caches (F1)
+
+Completed plans are archived under [`./plans/archive/`](./plans/archive/).
 
 ## Release Management
 

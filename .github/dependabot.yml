@@ -47,3 +47,25 @@ updates:
     open-pull-requests-limit: 5
     commit-message-prefix: 'ci(actions):'
     rebase-strategy: 'auto'
+
+  # NuGet — the C# Grasshopper plugin. Dependabot scans every *.csproj under the
+  # given directory tree, so '/Plugin' covers Selva.GH, Selva.Rhino, Selva.Schema,
+  # Selva.Drawing and their test projects.
+  - package-ecosystem: 'nuget'
+    directory: '/Plugin'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '04:00'
+    open-pull-requests-limit: 5
+    reviewers:
+      - 'VektorNode/maintainers'
+    commit-message-prefix: 'chore(deps):'
+    commit-message-prefix-scope: 'nuget'
+    rebase-strategy: 'auto'
+    ignore:
+      # The Grasshopper package version is pinned per-target-framework to the
+      # Rhino 8 / Rhino 9 SDK line (net9 rides a `-wip` prerelease). Bumping it
+      # changes the minimum Rhino the plugin loads in — a deliberate call, not a
+      # dependency chore. Let Dependabot patch everything else, never this.
+      - dependency-name: 'Grasshopper'

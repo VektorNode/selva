@@ -8,8 +8,11 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/VektorNode/selva.git",
+		"url": "git+https://github.com/VektorNode/selva.git",
 		"directory": "packages/server"
+	},
+	"engines": {
+		"node": ">=22.0.0"
 	},
 	"type": "module",
 	"main": "./dist/index.js",
@@ -63,19 +66,24 @@
 	},
 	"files": [
 		"dist",
-		"src"
+		"src",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
 	],
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
+		"prepack": "node ../../scripts/prepack.js",
+		"postpack": "node ../../scripts/prepack.js --restore",
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@selvajs/compute": "workspace:^",
-		"@selvajs/platform": "workspace:*",
-		"@selvajs/schemas": "workspace:*"
+		"@selvajs/platform": "workspace:^",
+		"@selvajs/schemas": "workspace:^"
 	},
 	"peerDependencies": {
 		"@sentry/node": ">=8"

@@ -4,6 +4,9 @@
 	"description": "Forward-auth provider for Selva: trusts identity headers from an upstream reverse proxy (Caddy forward_auth, oauth2-proxy, …). Auth-only — pair with any data/storage/permissions provider.",
 	"license": "MIT",
 	"private": true,
+	"engines": {
+		"node": ">=22.0.0"
+	},
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",

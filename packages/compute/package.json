@@ -1,13 +1,14 @@
 {
 	"name": "@selvajs/compute",
 	"version": "3.1.0-beta.11",
-	"packageManager": "pnpm@10.18.0",
+	"packageManager": "pnpm@10.33.0",
 	"description": "TypeScript library for Rhino Compute Server - Grasshopper and RhinoCommon",
 	"author": "VektorNode",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/VektorNode/selva-compute.git"
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/compute"
 	},
 	"type": "module",
 	"keywords": [
@@ -33,33 +34,53 @@
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js",
-			"require": "./dist/index.cjs"
+			"import": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
 		},
 		"./grasshopper": {
-			"types": "./dist/grasshopper.d.ts",
-			"import": "./dist/grasshopper.js",
-			"require": "./dist/grasshopper.cjs"
+			"import": {
+				"types": "./dist/grasshopper.d.ts",
+				"default": "./dist/grasshopper.js"
+			},
+			"require": {
+				"types": "./dist/grasshopper.d.cts",
+				"default": "./dist/grasshopper.cjs"
+			}
 		},
 		"./visualization": {
-			"types": "./dist/visualization.d.ts",
-			"import": "./dist/visualization.js",
-			"require": "./dist/visualization.cjs"
+			"import": {
+				"types": "./dist/visualization.d.ts",
+				"default": "./dist/visualization.js"
+			},
+			"require": {
+				"types": "./dist/visualization.d.cts",
+				"default": "./dist/visualization.cjs"
+			}
 		},
 		"./core": {
-			"types": "./dist/core.d.ts",
-			"import": "./dist/core.js",
-			"require": "./dist/core.cjs"
+			"import": {
+				"types": "./dist/core.d.ts",
+				"default": "./dist/core.js"
+			},
+			"require": {
+				"types": "./dist/core.d.cts",
+				"default": "./dist/core.cjs"
+			}
 		}
 	},
 	"files": [
 		"dist",
 		"README.md",
-		"LICENSE.md"
+		"LICENSE"
 	],
 	"engines": {
-		"node": ">=20.0.0"
+		"node": ">=22.0.0"
 	},
 	"publishConfig": {
 		"access": "public",
@@ -84,6 +105,8 @@
 		"test:stats:live": "vitest run tests/contract/compute-server-stats.live.test.ts",
 		"type-check": "tsc --noEmit",
 		"build-docs": "typedoc",
+		"prepack": "node ../../scripts/prepack.js",
+		"postpack": "node ../../scripts/prepack.js --restore",
 		"prepublishOnly": "pnpm build",
 		"release": "changeset publish",
 		"prepare": "husky"

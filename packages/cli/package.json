@@ -6,6 +6,11 @@
 	"publishConfig": {
 		"access": "public"
 	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/cli"
+	},
 	"type": "module",
 	"bin": {
 		"cli": "./bin/cli.js",
@@ -16,7 +21,7 @@
 		"src"
 	],
 	"engines": {
-		"node": ">=20.6.0"
+		"node": ">=22.0.0"
 	},
 	"scripts": {
 		"start": "node ./bin/cli.js",

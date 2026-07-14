@@ -6,7 +6,7 @@
 	"type": "module",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/vektornode/selva.git"
+		"url": "git+https://github.com/vektornode/selva.git"
 	},
 	"bugs": "https://github.com/vektornode/selva/issues",
 	"homepage": "https://github.com/vektornode/selva",
@@ -59,6 +59,9 @@
 		"*.{ts,tsx,svelte}": [
 			"eslint --fix",
 			"prettier --write"
+		],
+		"packages/compute/**/*.{ts,svelte}": [
+			"eslint --fix --config packages/compute/eslint.config.mjs"
 		],
 		"*.{json,yaml,yml,md}": [
 			"prettier --write"

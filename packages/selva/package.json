@@ -6,6 +6,11 @@
 	"publishConfig": {
 		"access": "public"
 	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/selva"
+	},
 	"type": "module",
 	"main": "./build/index.js",
 	"files": [
@@ -13,7 +18,7 @@
 		"templates"
 	],
 	"engines": {
-		"node": ">=20.6.0"
+		"node": ">=22.0.0"
 	},
 	"scripts": {
 		"dev": "vite dev",
