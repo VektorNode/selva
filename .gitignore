@@ -88,6 +88,12 @@ skills-lock.json
 .turbo/
 **/.turbo/
 
+# Test coverage + TS incremental build info
+coverage/
+**/coverage/
+*.tsbuildinfo
+**/*.tsbuildinfo
+
 # Grasshopper definitions
 *.gh
 *.ghx
@@ -102,6 +108,11 @@ Plugin/Selva.GH/*.lscache
 
 # Definitions config files (production, not checked in)
 definitions-config.json
+
+# Shared assets synced into each app's static/ by scripts/sync-shared-assets.js
+# (canonical copy lives in assets/shared/ — see assets/shared/README.md)
+packages/plugin-ui/static/baseHDR.hdr
+packages/ui/static/baseHDR.hdr
 
 
 # Terraform

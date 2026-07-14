@@ -5,7 +5,9 @@
 	"version": "0.10.0",
 	"type": "module",
 	"scripts": {
+		"predev": "node ../../scripts/sync-shared-assets.js",
 		"dev": "vite dev",
+		"prebuild": "node ../../scripts/sync-shared-assets.js",
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
