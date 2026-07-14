@@ -22,16 +22,41 @@ Co-locating makes format changes one atomic PR and readable end-to-end before op
       `workspace:^`; removed the now-unused `@selvajs/compute` catalog entry.
 - [x] `pnpm install` — workspace link resolves; compute builds all 4 entry points.
 
-## Known state / deferred (per decision: import first, unify toolchain later)
+## Toolchain unification — DONE
 
-- **Toolchain divergence is LIVE.** Compute pins newer devDeps (eslint 10, TS 6, vite 8,
-  @types/node 26) than the monorepo catalog (eslint 9, TS 5, vite 7, node 22). With
-  `shared-workspace-lockfile: true`, pnpm hoisted **vite 8.1.4** to root, so
-  `@sveltejs/vite-plugin-svelte 6.2.4` in `selva` + `ui` now shows an **unmet vite peer**
-  (wants ^6.3||^7). This is a warning, not a failure — but it's why a dedicated
-  toolchain-unification pass is the next task after this import verifies green.
-  Compute's devDeps were intentionally left pinned (not `catalog:`) so it stays
-  self-consistent until that pass.
+Whole monorepo upgraded to the newer majors (the direction compute already used), in
+verified stages:
+
+- **vite 7 → 8** (catalog) + `@sveltejs/vite-plugin-svelte` 6 → 7. `@sveltejs/kit 2.69.1`
+  already accepts vite 8 (no kit bump). `@selvajs/config` peer ranges widened for vite 8 +
+  eslint 10.
+- **typescript 5.9 → 6.0** (catalog) + `typescript-eslint`/`@typescript-eslint/*` → 8.64.
+  Type-check 19/19 clean, zero code changes.
+- **eslint 9 → 10** (catalog) + `@eslint/js` → 10, `eslint-plugin-svelte` → 3.20. Two new
+  eslint-10 recommended rules (`no-useless-assignment`, `preserve-caught-error`) demoted to
+  `warn` in the shared config — both fire on idiomatic code (try/catch fallback initializers,
+  Svelte `$bindable(null)`, rethrows already carrying `cause`).
+- **@types/node** held at the **22.x** line (matches CI publish runtime; compute's aspirational
+  `^26` was pulled down to catalog — types must not promise APIs absent at runtime).
+- **compute devDeps** migrated from pinned → `catalog:` for all shared toolchain deps; eslint
+  ecosystem + coverage-v8/vitest aligned. All peer warnings cleared.
+
+### eslint-10 config gotcha (fixed — don't regress)
+
+typescript-eslint 8.64+ throws a **parse-time** error ("No tsconfigRootDir was set, and
+multiple candidate TSConfigRootDirs are present") that eslint 9 silently tolerated. It was
+masked by eslint's `--cache`; a cleared-cache lint exposed it. Two fixes in the shared config
+([packages/config/eslint.config.js](../../packages/config/eslint.config.js)) + root config:
+
+1. **Plain-JS files** (`**/*.{js,mjs,cjs}` — the CLI package, build/config scripts) get the
+   untyped parser (`projectService: false, project: null, program: null`) — they're in no
+   tsconfig.
+2. **compute is `ignores`-d from the root `eslint .`** (it has its OWN tsconfig +
+   `eslint.config.mjs`, which would be a second candidate root). It's linted by its own `lint`
+   script, chained into the root `lint`/`lint:fix` in package.json.
+
+Final: `pnpm build` (12/12), `pnpm type-check` (19/19), `pnpm lint` (0 errors, warnings-only)
+all green.
 
 ## Remaining before merge
 

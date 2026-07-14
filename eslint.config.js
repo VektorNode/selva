@@ -32,7 +32,13 @@ export default [
 			'packages/*/vitest.config.ts',
 			'packages/*/*/vitest.config.ts',
 			'packages/*/playwright.config.ts',
-			'packages/*/*/playwright.config.ts'
+			'packages/*/*/playwright.config.ts',
+			// @selvajs/compute is a standalone package with its OWN tsconfig and
+			// eslint.config.mjs. Type-aware linting from this root would see two
+			// candidate tsconfig roots (repo root + compute) and error under
+			// typescript-eslint 8.64+. It's linted by its own `lint` script,
+			// invoked from the root `lint` command (see package.json).
+			'packages/compute/**'
 		]
 	},
 	{
