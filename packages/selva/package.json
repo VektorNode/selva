@@ -30,7 +30,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"@selvajs/compute": "catalog:",
+		"@selvajs/compute": "workspace:^",
 		"@supabase/supabase-js": "^2.104.1",
 		"@sveltejs/kit": "catalog:",
 		"bits-ui": "^2.18.0",
