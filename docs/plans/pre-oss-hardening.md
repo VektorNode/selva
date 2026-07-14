@@ -96,6 +96,14 @@ Status: 2026-07-14. Repo ~2 months from open-sourcing. Findings from a three-way
 - [x] **CI re-validates `main`** — `test.yml` now also triggers on `push: [main]` and a weekly cron
       (Mon 06:00 UTC), so admin/direct merges and post-auto-merge `main` no longer skip validation.
       Concurrency group keyed on workflow + ref so the push and PR runs don't cancel each other.
+- [x] **Shared `setup` composite action** (`.github/actions/setup`) — extracted the repeated
+      checkout + pnpm + Node 22 + frozen-install preamble from `test.yml` and `e2e.yml` into one
+      place, so the Node version is defined once and can't drift again. The two release workflows
+      keep their bespoke preambles on purpose (conditional setup, registry auth, npm-for-OIDC
+      upgrade, full history). A cross-workflow **remote turbo cache** was evaluated and **skipped**:
+      Test only builds selva's _deps_ while E2E builds selva _itself_, so they barely share the
+      expensive artifact, and they run concurrently (race) — the local `.turbo` cache + `restore-keys`
+      already covers the across-commit reuse that matters, without a per-workflow cache server.
 
 ## P2 — repo weight
 

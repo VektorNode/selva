@@ -1,32 +1,21 @@
 name: Setup workspace
 description: >-
-  Checkout, pnpm, Node, and a frozen install — the shared preamble for every
-  workflow that touches the pnpm workspace. Owning the Node version here means it
-  can't drift between workflows (the reason e2e/plugin-release once lagged at 20).
+  Checkout, pnpm, Node, and a frozen install — the shared preamble for the
+  workspace CI jobs (test, e2e). Owning the Node version here means it can't
+  drift between workflows (the reason e2e/plugin-release once lagged at 20).
+  The release workflows keep their own bespoke preambles (conditional setup,
+  registry auth, npm upgrade, full history) and deliberately don't use this.
 
 inputs:
   node-version:
     description: Node major to install.
     required: false
     default: '22'
-  registry-url:
-    description: >-
-      npm registry URL to configure (sets up .npmrc auth for publishing). Leave
-      empty for CI jobs that only read the workspace.
-    required: false
-    default: ''
-  install:
-    description: Run `pnpm install --frozen-lockfile`. Set 'false' to skip.
-    required: false
-    default: 'true'
 
 runs:
   using: composite
   steps:
     - uses: actions/checkout@v4
-      with:
-        # changesets needs full history to diff versions; harmless elsewhere.
-        fetch-depth: ${{ inputs.registry-url != '' && 0 || 1 }}
 
     - uses: pnpm/action-setup@v4
 
@@ -34,9 +23,7 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: pnpm
-        registry-url: ${{ inputs.registry-url }}
 
     - name: Install dependencies
-      if: inputs.install == 'true'
       shell: bash
       run: pnpm install --frozen-lockfile
