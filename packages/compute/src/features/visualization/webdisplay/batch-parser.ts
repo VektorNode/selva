@@ -416,6 +416,16 @@ function maybeRotateFloat32Vertices(
 // MATERIAL CONSTRUCTION
 // ============================================================================
 
+// A near-pure metal has no diffuse response, so under the low-IBL 'technical' look it goes flat and
+// reads as painted card. Real architectural sheet metal is coated, not a bare mirror — so materials
+// that are meaningfully metallic get a thin satin clearcoat: a glossy dielectric layer whose
+// highlight and environment response are independent of the base metalness/envMap, so folds catch
+// light even when the IBL is dialed down. Below this metalness the material is treated as
+// plastic/matte and left untouched.
+const METAL_CLEARCOAT_THRESHOLD = 0.5;
+const METAL_CLEARCOAT = 0.5;
+const METAL_CLEARCOAT_ROUGHNESS = 0.3;
+
 function createMaterial(
 	matData: SerializableMaterial,
 	options?: { vertexColors?: boolean; appearance?: MaterialAppearanceOptions }
@@ -448,6 +458,13 @@ function createMaterial(
 	// dials it: <1 flattens reflections toward a matte/technical read, >1 pushes a glossier look.
 	if (appearance?.envMapIntensity != null) {
 		material.envMapIntensity = appearance.envMapIntensity;
+	}
+
+	// Metals get a satin clearcoat so coated sheet metal reads as coated, not flat, under low IBL
+	// (see the constants above). Plastics/matte fall below the threshold and stay bare.
+	if (matData.metalness > METAL_CLEARCOAT_THRESHOLD) {
+		material.clearcoat = METAL_CLEARCOAT;
+		material.clearcoatRoughness = METAL_CLEARCOAT_ROUGHNESS;
 	}
 
 	// Vertex colors arrive as raw sRGB bytes, but three's vertex-color path multiplies them into the

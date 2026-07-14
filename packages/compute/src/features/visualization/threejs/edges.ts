@@ -23,13 +23,23 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
  * occlusion of hidden edges exact.
  */
 export interface EdgeOptions {
-	/** Edge color. Default near-black. */
+	/**
+	 * Force a single edge color for every overlay. When omitted (the default), each overlay derives
+	 * its color from its own mesh's material — a darkened tint of the surface — so edges read as the
+	 * object's own outline rather than a uniform black frame. Meshes with no readable material color
+	 * fall back to {@link DEFAULT_EDGE_COLOR}.
+	 */
 	color?: THREE.ColorRepresentation;
+	/**
+	 * How far to darken the derived edge color toward black, 0–1 (default 0.75). Only applies when
+	 * `color` is omitted. Higher = darker edges; 0 leaves edges the surface color, 1 makes them black.
+	 */
+	darken?: number;
 	/** Edge thickness in CSS px. Default 1.5. */
 	width?: number;
 	/**
 	 * Crease angle in degrees: an edge is kept only where its two faces differ by more than this.
-	 * Default 30. Higher = fewer edges (only sharp creases); lower = more (catches gentle bends).
+	 * Default 44. Higher = fewer edges (only sharp creases); lower = more (catches gentle bends).
 	 */
 	thresholdAngle?: number;
 	/**
@@ -44,7 +54,8 @@ export const EDGE_USERDATA_KIND = 'edge-overlay';
 
 const DEFAULT_EDGE_COLOR = 0x222222;
 const DEFAULT_EDGE_WIDTH = 1.5;
-const DEFAULT_THRESHOLD_ANGLE = 30;
+const DEFAULT_THRESHOLD_ANGLE = 44;
+const DEFAULT_DARKEN = 0.75;
 
 // Screen-coverage fade band, as the projected diameter of an overlay's bounding sphere in px:
 // fully opaque at/above FADE_START_PX, fully gone at/below FADE_END_PX, linear between.
@@ -105,15 +116,26 @@ interface EdgeOverlayUserData {
  * Skips the floor and the grid (they're aids, not content) and anything already tagged as an edge.
  */
 export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineSegments2[] {
-	const color = new THREE.Color(options.color ?? DEFAULT_EDGE_COLOR);
+	const forcedColor = options.color != null ? new THREE.Color(options.color) : null;
+	const darken = THREE.MathUtils.clamp(options.darken ?? DEFAULT_DARKEN, 0, 1);
 	const width = options.width ?? DEFAULT_EDGE_WIDTH;
 	const thresholdAngle = options.thresholdAngle ?? DEFAULT_THRESHOLD_ANGLE;
 	const distanceFade = options.distanceFade ?? true;
 
-	// One material shared by every overlay this call creates: N meshes get one uniform set instead
-	// of N, and a live color/width change is one assignment. Per-overlay distance fade still works —
-	// each overlay writes the shared opacity in its own onBeforeRender, and uniforms upload per draw.
-	const material = createEdgeMaterial(color, width, distanceFade);
+	// Overlays sharing a color share a material: with a forced color that's one material for the whole
+	// call; when deriving per-mesh, meshes of the same surface color (instanced/repeated parts) still
+	// collapse onto one. Keyed by the resulting hex so we build each distinct color's uniforms once.
+	const materialsByColor = new Map<number, LineMaterial>();
+	const materialFor = (mesh: THREE.Mesh): LineMaterial => {
+		const color = forcedColor ?? deriveEdgeColor(mesh, darken);
+		const key = color.getHex();
+		let material = materialsByColor.get(key);
+		if (!material) {
+			material = createEdgeMaterial(color, width, distanceFade);
+			materialsByColor.set(key, material);
+		}
+		return material;
+	};
 
 	const created: LineSegments2[] = [];
 
@@ -124,15 +146,34 @@ export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineS
 		if (object.children.some((c) => c.userData?.kind === EDGE_USERDATA_KIND)) return; // already done
 		if (!object.geometry) return;
 
-		const overlay = buildEdgeOverlay(object.geometry, material, thresholdAngle, distanceFade);
+		const overlay = buildEdgeOverlay(
+			object.geometry,
+			materialFor(object),
+			thresholdAngle,
+			distanceFade
+		);
 		object.add(overlay); // child → inherits transform, disposed with the parent subtree
 		setSurfaceDepthOffset(object, true); // surface recedes a hair so the true-depth edges win
 		created.push(overlay);
 	});
 
-	if (created.length === 0) material.dispose(); // no overlay adopted it
+	// Dispose any material no overlay adopted (e.g. all meshes were skipped, so nothing referenced it).
+	if (created.length === 0) materialsByColor.forEach((material) => material.dispose());
 
 	return created;
+}
+
+/**
+ * Edge color for a mesh when no color is forced: the mesh's own surface color darkened toward black
+ * by `darken` (0 = surface color, 1 = black), so edges read as the object's darker outline. Falls
+ * back to {@link DEFAULT_EDGE_COLOR} when no material color is readable. Multiplicative darkening
+ * preserves hue and desaturates gently; a near-black surface just yields near-black edges.
+ */
+function deriveEdgeColor(mesh: THREE.Mesh, darken: number): THREE.Color {
+	const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+	const source = (material as { color?: THREE.Color } | null)?.color;
+	if (!source) return new THREE.Color(DEFAULT_EDGE_COLOR);
+	return source.clone().multiplyScalar(1 - darken);
 }
 
 /** Get (or extract and cache) the shared edge line geometry for a source geometry + crease angle. */

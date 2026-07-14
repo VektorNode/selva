@@ -120,6 +120,7 @@
 	let grid: Grid | null = null;
 	let applyEdges: ((root: THREE.Object3D) => void) | null = null;
 	let setLook: ((look: Look) => void) | null = null;
+	let updateGridScale: (() => void) | null = null;
 	let fitToView: (() => void) | null = null;
 	let viewerInitialized = false;
 	let sceneVersion = $state(0);
@@ -201,6 +202,7 @@
 		grid?.setVisible(gridVisible);
 		applyEdges = init.applyEdges;
 		setLook = init.setLook;
+		updateGridScale = init.updateGridScale;
 		fitToView = init.fitToView;
 		projection = init.cameraController.getProjection();
 
@@ -263,6 +265,8 @@
 			// toggling edges is handled directly by toggleEdges(), so it must not re-trigger a full solve.
 			untrack(() => {
 				if (edgesVisible) applyEdges?.(scene!);
+				// Rescale the grid to the new content's extent so cells and fade match the part size.
+				updateGridScale?.();
 				sceneVersion++;
 			});
 

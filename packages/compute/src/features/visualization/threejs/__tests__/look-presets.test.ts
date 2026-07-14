@@ -35,10 +35,13 @@ describe('LOOK_PRESETS', () => {
 		expect(LOOK_PRESETS.studio.ambientIntensity).toBeLessThan(1);
 	});
 
-	it('technical is the flat CAD look (neutral, no fill, full ambient)', () => {
+	it('technical is the clean shaded CAD look (neutral, IBL-led, low flat ambient + light fill)', () => {
 		expect(LOOK_PRESETS.technical.toneMapping).toBe(THREE.NeutralToneMapping);
-		expect(LOOK_PRESETS.technical.hemisphereIntensity).toBe(0);
-		expect(LOOK_PRESETS.technical.ambientIntensity).toBe(1);
+		// IBL-led: env carries the shading (near full), flat ambient is only a thin floor, and a little
+		// hemisphere fill lifts under-facing surfaces — no more form-killing full flat ambient.
+		expect(LOOK_PRESETS.technical.envMapIntensity).toBeGreaterThanOrEqual(0.8);
+		expect(LOOK_PRESETS.technical.hemisphereIntensity).toBeGreaterThan(0);
+		expect(LOOK_PRESETS.technical.ambientIntensity).toBeLessThan(0.5);
 		expect(LOOK_PRESETS.technical.environmentIntensity).toBe(1);
 	});
 
@@ -65,9 +68,9 @@ describe('applyDefaults — look seeds lighting defaults', () => {
 		const config = applyDefaults({ look: 'technical' });
 		expect(config.look).toBe('technical');
 		expect(config.render.toneMapping).toBe(THREE.NeutralToneMapping);
-		expect(config.lighting.hemisphereIntensity).toBe(0);
-		expect(config.lighting.enableHemisphereLight).toBe(false); // 0 intensity → no fill light
-		expect(config.lighting.ambientLightIntensity).toBe(1);
+		expect(config.lighting.hemisphereIntensity).toBe(LOOK_PRESETS.technical.hemisphereIntensity);
+		expect(config.lighting.enableHemisphereLight).toBe(true); // positive fill → hemisphere light on
+		expect(config.lighting.ambientLightIntensity).toBe(LOOK_PRESETS.technical.ambientIntensity);
 	});
 
 	it('enables the hemisphere light when the look has positive fill', () => {

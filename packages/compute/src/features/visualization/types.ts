@@ -146,11 +146,19 @@ export type LookPreset = {
 export type EdgesConfig = {
 	/** Auto-attach edge overlays to meshes as they load. Default false (opt-in). */
 	enabled?: boolean;
-	/** Edge color. Default near-black. */
+	/**
+	 * Force a single edge color for all meshes. Omit (the default) to derive each mesh's edge color
+	 * from its own surface material, darkened by `darken` — so edges read as the object's own outline.
+	 */
 	color?: THREE.ColorRepresentation;
+	/**
+	 * How far derived edge colors are darkened toward black, 0–1 (default 0.75). Ignored when `color`
+	 * is set.
+	 */
+	darken?: number;
 	/** Edge thickness in CSS px. Default 1.5. */
 	width?: number;
-	/** Crease angle (degrees): keep edges where faces differ by more than this. Default 30. */
+	/** Crease angle (degrees): keep edges where faces differ by more than this. Default 44. */
 	thresholdAngle?: number;
 	/** Fade an overlay out as its mesh shrinks on screen, so far zoom-outs stay clean. Default true. */
 	distanceFade?: boolean;

@@ -24,13 +24,62 @@ describe('addEdges', () => {
 		expect(created[0].userData.kind).toBe(EDGE_USERDATA_KIND);
 	});
 
-	it('honors color and width on the edge material', () => {
+	it('honors a forced color and width on the edge material', () => {
 		const mesh = meshWithBox();
 		const [overlay] = addEdges(mesh, { color: '#ff0000', width: 4 });
 
 		const mat = overlay.material as LineSegments2['material'] & { linewidth: number };
 		expect(mat.color.getHexString()).toBe('ff0000');
 		expect(mat.linewidth).toBe(4);
+	});
+
+	it('derives the edge color from the mesh material, darkened toward black', () => {
+		const surface = new THREE.MeshStandardMaterial({ color: 0x804020 });
+		const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), surface);
+		const [overlay] = addEdges(mesh, { darken: 0.5 });
+
+		// Darkening is a multiplyScalar in Color's linear space (where physical darkening belongs),
+		// so compare to that, not naive sRGB-byte halving.
+		const expected = surface.color.clone().multiplyScalar(0.5);
+		expect((overlay.material as LineMaterial).color.getHexString()).toBe(expected.getHexString());
+		// darken=1 collapses to black; darken=0 leaves the surface color untouched.
+		expect(
+			(
+				addEdges(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), surface.clone()), { darken: 1 })[0]
+					.material as LineMaterial
+			).color.getHexString()
+		).toBe('000000');
+		expect(
+			(
+				addEdges(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), surface.clone()), { darken: 0 })[0]
+					.material as LineMaterial
+			).color.getHexString()
+		).toBe(surface.color.getHexString());
+	});
+
+	it('meshes of the same surface color share one derived material; different colors do not', () => {
+		const root = new THREE.Group();
+		const red = () =>
+			new THREE.Mesh(
+				new THREE.BoxGeometry(1, 1, 1),
+				new THREE.MeshStandardMaterial({ color: 0xff0000 })
+			);
+		const blue = new THREE.Mesh(
+			new THREE.BoxGeometry(1, 1, 1),
+			new THREE.MeshStandardMaterial({ color: 0x0000ff })
+		);
+		root.add(red(), red(), blue);
+
+		const [a, b, c] = addEdges(root);
+		expect(a.material).toBe(b.material); // same surface color → one material
+		expect(c.material).not.toBe(a.material); // different color → its own material
+	});
+
+	it('falls back to the default edge color when the mesh material has no color', () => {
+		// A material lacking a `.color` (e.g. a depth material) can't seed an edge color.
+		const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshDepthMaterial());
+		const [overlay] = addEdges(mesh);
+		expect((overlay.material as LineMaterial).color.getHexString()).toBe('222222');
 	});
 
 	it('skips the floor, the grid, and existing overlays', () => {
@@ -86,7 +135,9 @@ describe('addEdges', () => {
 		expect(surfaceMat.polygonOffsetUnits).toBe(0);
 	});
 
-	it('overlays from one call share one material; separate calls get their own', () => {
+	it('same-color overlays in one call share a material; separate calls get their own', () => {
+		// Both boxes carry a default (white) MeshStandardMaterial, so their derived edge color matches
+		// and they collapse onto one material within the call.
 		const root = new THREE.Group();
 		root.add(meshWithBox(), meshWithBox());
 		const [a, b] = addEdges(root);

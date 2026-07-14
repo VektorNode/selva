@@ -32,8 +32,30 @@ export interface Grid {
 	readonly object: THREE.Mesh;
 	/** Keep the fade centered on the camera so the grid feels infinite as you move. Call per frame. */
 	update(cameraPosition: THREE.Vector3): void;
+	/**
+	 * Rescale the grid's cell spacing and fade radius to the loaded content's extent. Call after a
+	 * geometry change (e.g. right after `updateScene`) so a part that is 3 units or 3000 units wide
+	 * both get sensibly-sized cells and a fade that reaches past the model. No-op for empty/degenerate
+	 * bounds — the grid keeps its last (or default) scale. See {@link Grid.fitToContent}'s impl notes.
+	 */
+	fitToContent(bounds: THREE.Box3): void;
 	setVisible(visible: boolean): void;
 	dispose(): void;
+}
+
+/**
+ * Round a value to a "nice" 1/2/5 × 10ⁿ step — the spacing conventions used by rulers and CAD grids,
+ * so cells land on human-readable multiples (…, 0.5, 1, 2, 5, 10, 20, 50, …) rather than arbitrary
+ * fractions like 1.37. Returns the largest nice step ≤ `value` (floored on the mantissa) so cells
+ * never come out finer than the target and alias into a solid sheet.
+ */
+function niceStep(value: number): number {
+	if (!(value > 0) || !Number.isFinite(value)) return 1;
+	const exponent = Math.floor(Math.log10(value));
+	const power = Math.pow(10, exponent);
+	const mantissa = value / power; // in [1, 10)
+	const niceMantissa = mantissa >= 5 ? 5 : mantissa >= 2 ? 2 : 1;
+	return niceMantissa * power;
 }
 
 const GRID_VERTEX = /* glsl */ `
@@ -110,8 +132,11 @@ export function createGrid(options: GridOptions = {}): Grid {
 				? new THREE.Vector2(0, 1) // x, y
 				: new THREE.Vector2(1, 2); // y, z
 
-	const size = fadeDistance * 2.5; // comfortably larger than the fade radius
-	const geometry = new THREE.PlaneGeometry(size, size);
+	// The plane must comfortably outreach the fade radius, else the grid ends before it has faded and
+	// shows a hard rectangular edge. Built as a unit plane and sized purely by scale so fitToContent
+	// can regrow it without recreating geometry — the same rotation onto the world plane still applies.
+	const PLANE_TO_FADE_RATIO = 2.5;
+	const geometry = new THREE.PlaneGeometry(1, 1);
 
 	// PlaneGeometry is in the XY plane by default; rotate it onto the requested world plane.
 	if (plane === 'y') geometry.rotateX(-Math.PI / 2);
@@ -139,6 +164,12 @@ export function createGrid(options: GridOptions = {}): Grid {
 	mesh.userData.id = 'grid'; // excluded from raycasting/fit-to-view, like the floor
 	mesh.renderOrder = -1; // draw before content so transparent geometry blends over it
 
+	// Live scale of the (unit) plane and current fade radius; fitToContent mutates both, `update`
+	// reads planeScale each frame to size the camera-tracking plane. Seeded from the constructor's
+	// fadeDistance so an un-fitted grid still covers its fade.
+	let fadeRadius = fadeDistance;
+	let planeScale = fadeDistance * PLANE_TO_FADE_RATIO;
+
 	const center = new THREE.Vector3();
 
 	return {
@@ -157,6 +188,31 @@ export function createGrid(options: GridOptions = {}): Grid {
 				center.set(0, cameraPosition.y, cameraPosition.z);
 			}
 			material.uniforms.uCenter.value.copy(center);
+			// Size the unit plane to the current scale. The rotation baked into the geometry means the
+			// plane's local XY spans the two world in-plane axes, so a uniform scale is correct on any
+			// plane orientation.
+			mesh.scale.setScalar(planeScale);
+		},
+		fitToContent: (bounds) => {
+			if (bounds.isEmpty()) return;
+			// Use the two in-plane axes' extent (not the full 3D diagonal) as the "how big is this on
+			// the ground" measure — a tall thin part shouldn't blow the cell size up by its height.
+			const sizeVec = bounds.getSize(new THREE.Vector3());
+			const axisComponent = (v: THREE.Vector3, i: number) => (i === 0 ? v.x : i === 1 ? v.y : v.z);
+			const inPlaneExtent = Math.max(
+				axisComponent(sizeVec, axes.x),
+				axisComponent(sizeVec, axes.y)
+			);
+			if (!(inPlaneExtent > 0) || !Number.isFinite(inPlaneExtent)) return;
+
+			// Aim for ~20 minor cells across the part, snapped to a nice 1/2/5 step so labels stay
+			// readable; majorEvery keeps the coarser reference lines. Fade reaches ~2× past the part so
+			// the grid extends beyond it without a visible edge, and the plane outreaches the fade.
+			const TARGET_CELLS_ACROSS = 20;
+			material.uniforms.uCell.value = niceStep(inPlaneExtent / TARGET_CELLS_ACROSS);
+			fadeRadius = inPlaneExtent * 2;
+			material.uniforms.uFade.value = fadeRadius;
+			planeScale = fadeRadius * PLANE_TO_FADE_RATIO;
 		},
 		setVisible: (visible) => {
 			mesh.visible = visible;

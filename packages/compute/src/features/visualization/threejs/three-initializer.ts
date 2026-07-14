@@ -47,14 +47,21 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 		cullBackfaces: false,
 		ambientOcclusion: false
 	},
-	// Flat CAD/drawing look: neutral tone mapping, low IBL, no fill — full flat ambient only.
+	// Clean shaded CAD look: neutral tone mapping, IBL-led so the object keeps FORM. The old dial
+	// (ambient 1 + IBL 0.5) was the classic PBR wash — a full flat ambient adds the same value to
+	// every face regardless of orientation, flattening shading toward a milky grey, while the one
+	// light that actually shapes the surface (the HDR env) was cut to half. Rebalanced per the
+	// community rule "let the env map carry the fill, keep flat ambient low": IBL back up to near
+	// full, a little direction-aware hemisphere fill to lift under-facing surfaces (what ambient was
+	// really being used for), and flat ambient dropped to a thin floor so nothing goes pure black.
+	// Still a flat, even, edge-friendly read — just with shape and a hint of material response back.
 	technical: {
 		toneMapping: THREE.NeutralToneMapping,
 		toneMappingExposure: 1,
-		envMapIntensity: 0.5,
+		envMapIntensity: 0.9,
 		environmentIntensity: 1,
-		hemisphereIntensity: 0,
-		ambientIntensity: 1,
+		hemisphereIntensity: 0.35,
+		ambientIntensity: 0.25,
 		cullBackfaces: false,
 		ambientOcclusion: false
 	},
@@ -166,6 +173,12 @@ export const initThree = function (
 	 * loading or replacing geometry (e.g. after `updateScene`). No-op when sunlight/shadows are off.
 	 */
 	updateShadowBounds: () => void;
+	/**
+	 * Rescale the grid's cell spacing and fade radius to the current scene content, so parts of any
+	 * size get readable cells and a fade that reaches past the model. Call after loading or replacing
+	 * geometry (e.g. after `updateScene`). No-op when the grid is off or there's no content.
+	 */
+	updateGridScale: () => void;
 	dispose: () => void;
 	fitToView: () => void;
 	clearSelection: () => void;
@@ -216,7 +229,7 @@ export const initThree = function (
 	// The HDR environment decodes asynchronously; if the viewer is disposed before it lands, the
 	// load callback must drop (and dispose) the texture instead of attaching it to a swept scene.
 	let disposed = false;
-	setupEnvironment(scene, config, () => disposed);
+	setupEnvironment(scene, renderer, config, () => disposed);
 	// Scene lights. The shadow-casting sun (null when sunlight or shadows are off) has its shadow
 	// frustum fitted to the scene content below and again whenever the host calls updateShadowBounds
 	// after a geometry change — keeping shadow-map texels packed onto the model for crisp shadows at
@@ -249,6 +262,16 @@ export const initThree = function (
 			})
 		: null;
 	if (grid) scene.add(grid.object);
+
+	/**
+	 * Rescale the grid's cell spacing and fade radius to the current scene content, so a part that is
+	 * a few units or a few thousand units wide both get sensibly-sized cells and a fade that reaches
+	 * past the model. Call after loading or replacing geometry (e.g. right after `updateScene`). No-op
+	 * when there's no grid or no content. Cheap: one bounds traversal, no per-frame cost.
+	 */
+	const updateGridScale = () => {
+		if (grid) grid.fitToContent(computeContentBounds(scene));
+	};
 
 	const gizmo = config.gizmo.enabled
 		? createViewGizmo({ camera, domElement: canvas, controller: cameraController })
@@ -340,7 +363,8 @@ export const initThree = function (
 	// host *intends* edges, but an explicit call should never be silently ignored).
 	const applyEdges = (root: THREE.Object3D) => {
 		addEdges(root, {
-			color: config.edges.color,
+			color: config.edges.color, // undefined → derive from each mesh's surface color
+			darken: config.edges.darken,
 			width: config.edges.width,
 			thresholdAngle: config.edges.thresholdAngle,
 			distanceFade: config.edges.distanceFade
@@ -551,9 +575,11 @@ export const initThree = function (
 
 	scene.up.set(sceneUp.x, sceneUp.y, sceneUp.z);
 
-	// Initial fit so any geometry already present at construction casts crisp shadows. Hosts that add
-	// geometry later (via updateScene) should call updateShadowBounds again afterwards.
+	// Initial fit so any geometry already present at construction casts crisp shadows and the grid is
+	// scaled to it. Hosts that add geometry later (via updateScene) should call updateShadowBounds and
+	// updateGridScale again afterwards.
 	updateShadowBounds();
+	updateGridScale();
 
 	// Dispose one object's renderable resources (geometry + materials + their textures), recursing
 	// into children so Groups of lines/points clean up fully.
@@ -658,6 +684,7 @@ export const initThree = function (
 		setAoIntensity,
 		getMaterialAppearance,
 		updateShadowBounds,
+		updateGridScale,
 		dispose,
 		fitToView: eventHandlers.fitToView,
 		clearSelection: eventHandlers.clearSelection,
@@ -766,8 +793,8 @@ export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeI
 				options.lighting?.sunlightPosition ||
 				new THREE.Vector3(defaults.lightDistance, defaults.lightDistance, defaults.lightHeight),
 			ambientLightColor: options.lighting?.ambientLightColor || new THREE.Color(0x404040),
-			// The look sets ambient (low on studio/showcase, where the hemisphere fill carries the lift
-			// instead; full on technical). Explicit option still wins.
+			// The look sets ambient low across the board — the hemisphere fill + env carry the lift, so
+			// flat ambient is only a thin floor keeping shadows off pure black. Explicit option still wins.
 			ambientLightIntensity: options.lighting?.ambientLightIntensity ?? preset.ambientIntensity,
 			sunlightColor: options.lighting?.sunlightColor || 0xffffff, // Default to white sunlight
 			// Direction-aware fill. The look decides whether it's on (a positive hemisphereIntensity is
@@ -839,9 +866,12 @@ export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeI
 			// Defaults mirror addEdges' so the two never drift. Edges are an independent overlay — a
 			// look never toggles them.
 			enabled: options.edges?.enabled ?? false,
-			color: options.edges?.color ?? 0x222222,
+			// No color default: leaving it undefined lets addEdges derive each mesh's edge color from
+			// its own surface material (darkened). Set a color explicitly to force one uniform tint.
+			color: options.edges?.color,
+			darken: options.edges?.darken,
 			width: options.edges?.width ?? 1.5,
-			thresholdAngle: options.edges?.thresholdAngle ?? 30,
+			thresholdAngle: options.edges?.thresholdAngle ?? 44,
 			distanceFade: options.edges?.distanceFade ?? true
 		},
 		measure: {
@@ -1033,6 +1063,7 @@ function createAnimationLoop(
 
 function setupEnvironment(
 	scene: THREE.Scene,
+	renderer: THREE.WebGLRenderer,
 	config: Required<ThreeInitializerOptions>,
 	isDisposed: () => boolean
 ) {
@@ -1056,12 +1087,30 @@ function setupEnvironment(
 					return;
 				}
 				envMap.mapping = THREE.EquirectangularReflectionMapping;
-				scene.environment = envMap;
+
+				// Prefilter the raw equirect HDR through PMREM: this builds the roughness-aware mip
+				// chain a MeshStandardMaterial samples for image-based lighting. Without it, three
+				// falls back to sampling the equirect map directly and a rough surface reads a near-
+				// mirror level — reflections stay unnaturally sharp/busy and specular highlights
+				// sparkle, which is a big part of the "not quite right" look. The prefiltered cube is
+				// what drives IBL; the raw equirect is kept only if it's also shown as the background.
+				const pmrem = new THREE.PMREMGenerator(renderer);
+				pmrem.compileEquirectangularShader();
+				const prefiltered = pmrem.fromEquirectangular(envMap).texture;
+				pmrem.dispose();
+
+				scene.environment = prefiltered;
 				// Normalize the HDR's IBL contribution so brightness is consistent across HDRs of
 				// differing exposure, instead of dim-HDR-looks-dim / bright-HDR-blows-out.
 				scene.environmentIntensity = config.environment.environmentIntensity ?? 1;
 				if (config.environment.showEnvironment) {
+					// Background wants the full-resolution equirect, not the low-res prefiltered probe —
+					// so keep the raw map for that and let it dispose with the scene background sweep.
 					scene.background = envMap;
+				} else {
+					// The raw equirect was only an input to PMREM; the prefiltered probe has superseded
+					// it for IBL and nothing else references it, so release it now.
+					envMap.dispose();
 				}
 				config.events.onReady?.();
 			},

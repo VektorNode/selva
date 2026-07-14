@@ -82,7 +82,7 @@ jobs:
       SELVA_AT_REST_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       DATA_PATH: /tmp/selva-build
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # changesets needs full history to compute version diffs
           fetch-depth: 0

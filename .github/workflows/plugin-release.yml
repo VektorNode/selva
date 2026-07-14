@@ -41,7 +41,7 @@ jobs:
   plugin-release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # ── Version guard ────────────────────────────────────────────────────
       # The tag IS the release version; the .gha/.yak version comes from the

@@ -303,7 +303,7 @@ importers:
   packages/platform:
     dependencies:
       '@selvajs/schemas':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../schemas
       zod:
         specifier: ^4.3.6
@@ -402,7 +402,7 @@ importers:
   packages/providers/local:
     dependencies:
       '@selvajs/platform':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../platform
       sharp:
         specifier: ^0.34.5
@@ -424,7 +424,7 @@ importers:
   packages/providers/supabase:
     dependencies:
       '@selvajs/platform':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../platform
       '@supabase/supabase-js':
         specifier: ^2.104.1
@@ -553,10 +553,10 @@ importers:
         specifier: workspace:^
         version: link:../compute
       '@selvajs/platform':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../platform
       '@selvajs/schemas':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../schemas
       '@sentry/node':
         specifier: '>=8'
