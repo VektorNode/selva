@@ -6,5 +6,11 @@ export default defineConfig({
 		// condition so editing platform types doesn't require an upstream
 		// rebuild between iterations.
 		conditions: ['source']
+	},
+	test: {
+		// Stateless source-resolution tests — threads pool without isolation
+		// skips worker-spawn overhead.
+		pool: 'threads',
+		isolate: false
 	}
 });

@@ -25,6 +25,10 @@ export default defineConfig({
 	},
 	test: {
 		include: ['src/**/*.{test,spec}.ts'],
-		environment: 'node'
+		environment: 'node',
+		// Pure-TS logic tests, no shared state — threads pool without isolation
+		// skips worker-spawn overhead.
+		pool: 'threads',
+		isolate: false
 	}
 });

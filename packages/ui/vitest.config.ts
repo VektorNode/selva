@@ -18,6 +18,10 @@ export default defineConfig({
 	},
 	test: {
 		include: ['src/**/*.{test,spec}.ts'],
-		environment: 'node'
+		environment: 'node',
+		// Pure schema/logic + rune-module tests, no shared state — threads pool
+		// without isolation skips worker-spawn overhead.
+		pool: 'threads',
+		isolate: false
 	}
 });

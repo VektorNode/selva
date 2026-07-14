@@ -6,6 +6,12 @@ export default defineConfig({
 	test: {
 		globals: true,
 		environment: 'node',
+		// Pure-logic suite with no shared filesystem/global state — run in the
+		// threads pool without per-file isolation to skip worker-process spawn
+		// overhead (~20% faster). Do NOT copy this to suites that own a tmpdir or
+		// mutate a global holder (selva, local-provider) — they need isolation.
+		pool: 'threads',
+		isolate: false,
 		coverage: {
 			provider: 'v8',
 			reporter: ['text', 'json', 'html'],
