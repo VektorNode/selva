@@ -2,8 +2,9 @@
 
 > **Status: Accepted (2026-07-08). Its two K2 invariants are now implemented (2026-07-08); the
 > load balancer itself is still unbuilt.** Establishes two forward-compatible invariants ahead of
-> extracting the compute stack into `@selvajs/server`
-> ([embeddable-server-layer.md](../plans/embeddable-server-layer.md), items K1–K3): (1) a compute
+> extracting the compute stack into [`@selvajs/server`](../../packages/server/) (the former
+> `docs/plans/embeddable-server-layer.md` tracker, items K1–K3; deleted 2026-07-13 once its
+> work shipped): (1) a compute
 > **server's identity is its `id`, never its URL**; (2) when cross-VM load balancing arrives, solves
 > **route by definition-guid affinity**, not round-robin. Both landed in K2 (id-keyed cache with an
 > explicit config-write eviction hook; `X-Selva-Definition` on the wire) — see Sequencing. Neither the
@@ -29,8 +30,8 @@ function clientCacheKey(serverConfig: ComputeServerConfig): string {
 }
 ```
 
-This is fine as a private in-process detail. But [embeddable-server-layer.md](../plans/embeddable-server-layer.md)
-K2 turns `getClient` into **published API** — `getClient(serverIdentity)`. If the identity is
+This is fine as a private in-process detail. But the `@selvajs/server` extraction (K2)
+turns `getClient` into **published API** — `getClient(serverIdentity)`. If the identity is
 `serverUrl + apiKey`, then the day a "server" becomes a _pool of URLs behind one id_ (the whole point
 of cross-VM balancing), every caller keyed on URL is wrong, and the fix is a breaking change to a
 0.x→1.x-defining API.
@@ -140,7 +141,7 @@ metadata (also useful in compute-side access logs immediately).
 
 ## Sequencing
 
-This ADR gates K2 (the client-cache extraction) in [embeddable-server-layer.md](../plans/embeddable-server-layer.md):
+This ADR gated K2, the client-cache extraction into [`@selvajs/server`](../../packages/server/):
 
 1. **Now (this ADR):** decision recorded. No code required to _accept_ it.
 2. **✅ Done with K2 (2026-07-08), as part of the extraction:**

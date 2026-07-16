@@ -190,13 +190,25 @@ Restart Rhino completely after installation.
 
 ## Data Privacy & Compliance
 
-**User data isolation is by design.** All authentication, credentials, and personal information (PII) are owned exclusively by the auth provider. Selva stores only:
+**Selva minimizes the personal data it holds, but it does hold some — and the operator is the data controller.** Whoever deploys Selva is responsible for data residency, retention, and responding to erasure requests. This section states what is actually stored; do not describe Selva as having "zero exposure" to data-protection law.
+
+**What Selva stores in every deployment:**
 
 - Opaque session tokens (in cookies)
-- User ID and permissions (minimal authorization data)
-- Optional provider-specific metadata (non-sensitive only)
+- User id + permissions (authorization data)
+- Display names (`user_profiles.display_name`)
+- Invite email addresses (`invites.email`) — retained after an invite is accepted or expires
+- Audit-event payloads (`audit_events.data`), which embed an email for `invite.created` (see the `DomainEvent` union in `packages/platform/src/events/interface.ts`)
+- Solve telemetry (`solve_metrics`), keyed by `actor_id` and deliberately **not** FK-cascaded, so it survives deletion of the definition or user it refers to
 
-This architecture means Selva has **zero exposure to EU data regulations, credentials, or company user records**. The provider handles all data residency, retention, and compliance.
+**How much the auth provider owns depends on which provider you run:**
+
+- **Supabase provider** — credentials and identity live in Supabase `auth.users`; Selva holds only the authorization data above. This is the case the "provider owns it" framing describes.
+- **Local provider** — **Selva _is_ the auth provider.** `auth-users.json` stores email addresses and PBKDF2 password hashes on the deployment's own disk (`packages/providers/local/src/auth/users.ts`). No third party is involved, and no credential isolation claim applies.
+
+**Known gaps (tracked in [the pre-scale audit](./docs/plans/0.data-access-efficiency-audit.md), item P1):** `SupabaseDataProvider.onUserDeleted` is a no-op relying on FK cascade, so it does not scrub the deleted user's `audit_events` rows or invites-by-email; there is no retention policy on `audit_events` or `solve_metrics`. Deleting a user today does not fully erase their personal data. Close these before making any erasure guarantee to a customer.
+
+Login IPs are processed by the rate limiter but stay in-memory, expire within the rate-limit window, and are never persisted.
 
 ## Requirements
 

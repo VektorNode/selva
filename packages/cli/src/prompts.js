@@ -10,8 +10,6 @@ function envBool(v) {
 	return TRUTHY.has(String(v).toLowerCase());
 }
 
-// Non-interactive sibling of collectConfig: read from env, validate strictly,
-// fail loud for security-relevant fields (no safe defaults).
 export function collectConfigFromEnv(env = process.env) {
 	const tenancy = pick(env.SELVA_TENANCY, ['single', 'multi'], 'single', 'SELVA_TENANCY');
 	const auth = pick(
@@ -61,8 +59,6 @@ export function collectConfigFromEnv(env = process.env) {
 	}
 
 	if (auth === 'header') {
-		// Same loopback default as the prompt — header-auth without network
-		// isolation is the documented worst-case footgun.
 		values.HOST = env.HOST || '127.0.0.1';
 		if (data !== 'local') {
 			values.HEADER_AUTH_DATA_DIR = requireEnv(env, 'HEADER_AUTH_DATA_DIR');
@@ -102,7 +98,6 @@ export function collectConfigFromEnv(env = process.env) {
 	}
 	values.ORIGIN = origin;
 
-	// Pass-through: SELVA_FLAG_* vars written verbatim; unset = empty string.
 	const flagNames = [
 		'ALLOW_ORG_CREATION',
 		'ALLOW_CROSS_ORG_PUBLIC',
@@ -140,9 +135,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	p.intro(pc.bgCyan(pc.black(isInit ? ' selva init ' : ' Selva — new deployment ')));
 
 	// Brand prompts (SELVA_BRAND_NAME / COPYRIGHT_NAME / TAGLINE / DESCRIPTION)
-	// are skipped for now — the runtime falls back to "Selva" defaults when
-	// these env vars are absent. To re-enable, add a brand prompt block here
-	// and write the values into `values` below.
 
 	const tenancy = await p.select({
 		message: 'Tenancy mode',
@@ -300,7 +292,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 			cancelOn(dataDir);
 			providerValues.HEADER_AUTH_DATA_DIR = String(dataDir);
 		} else if (defaults.HEADER_AUTH_DATA_DIR) {
-			// Preserve an explicit override if the operator set one previously.
 			providerValues.HEADER_AUTH_DATA_DIR = defaults.HEADER_AUTH_DATA_DIR;
 		}
 
@@ -397,10 +388,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		initialValue: defaults.BOOTSTRAP_INSTANCE_ADMIN_EMAIL ?? '',
 		validate: (v) => {
 			if (!v) {
-				// Blank is allowed in single-tenant non-header. Header-auth and
-				// multi-tenant both need the email — without it there is no
-				// supported path to first-admin (header-auth) or the first
-				// random signup gets staff perms (multi-tenant).
 				return adminRequired ? 'Required for this configuration.' : undefined;
 			}
 			if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'Not a valid email.';
@@ -435,7 +422,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		cancelOn(value);
 		origin = String(value);
 
-		// Plain HTTP kills Secure cookies in production (login appears to succeed, then anon).
 		if (origin.startsWith('http://')) {
 			p.note(
 				'Sessions use Secure cookies in production; browsers will silently\n' +
@@ -528,7 +514,6 @@ function stringValue(v) {
 	return String(v);
 }
 
-// Header-auth security: deployment IS the boundary (runtime enforcement impossible).
 function headerAuthSecurityWarning() {
 	return [
 		'Header-auth trusts identity headers from the upstream proxy. Anyone who',

@@ -29,11 +29,10 @@
 
 ## Plans
 
-- **[Pre-OSS Hardening](./plans/pre-oss-hardening.md)** — Consolidated pre-open-source audit findings (CI/CD, npm publishing, OSS/docs), prioritized P0–P3
-- **[Data Access Efficiency Audit](./plans/data-access-efficiency-audit.md)** — Pre-scale audit of the compute/data path with open efficiency items
-- **[API v1 Redesign](./plans/api-redesign-plan.md)** — One versioned `/api/v1` surface for both browser and token-based clients
-- **[Token-based API Auth](./plans/token-plan.md)** — Personal access tokens (PATs) + managed public API; MCP designed-but-deferred
-- **[Pre-solved Bundle + Prewarm](./plans/presolve-bundle.md)** — Ship a pre-solved definition bundle and prewarm the solve caches (F1)
+- **[0. Data Access Efficiency Audit](./plans/0.data-access-efficiency-audit.md)** — Pre-scale audit of the compute/data path with open efficiency items
+- **[1. API v1 Redesign](./plans/1.api-redesign-plan.md)** — One versioned `/api/v1` surface for both browser and token-based clients
+- **[2. Token-based API Auth](./plans/2.token-plan.md)** — Personal access tokens (PATs) + managed public API; MCP designed-but-deferred
+- **[3. Pre-solved Bundle + Prewarm](./plans/3.presolve-bundle.md)** — Ship a pre-solved definition bundle and prewarm the solve caches (F1)
 
 Completed plans are archived under [`./plans/archive/`](./plans/archive/).
 

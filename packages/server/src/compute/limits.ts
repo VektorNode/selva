@@ -88,7 +88,9 @@ export interface ComputeLimits {
 	/**
 	 * Largest .gh definition accepted on upload AND the largest remote definition
 	 * fetched for compute — kept in lockstep so a remote URL can't smuggle a file
-	 * past the upload cap.
+	 * past the upload cap. Defaults to 50 MB to match Rhino.Compute's own
+	 * `RHINO_COMPUTE_MAX_REQUEST_SIZE` default: a larger file 413s at compute
+	 * regardless, so accepting it here only defers the failure.
 	 */
 	maxGhFileSize: number;
 	maxImageFileSize: number;
@@ -96,6 +98,9 @@ export interface ComputeLimits {
 	 * /api/compute JSON *request* body cap (inputs + values, not the .gh). A
 	 * `file`-widget input embeds geometry as base64 in `values`; must stay <=
 	 * the adapter-node global BODY_SIZE_LIMIT or the global backstop rejects first.
+	 * Defaults to 210 MB: the client allows a 150 MB raw file, base64 inflates it
+	 * to ~200 MB on the wire, plus JSON envelope slack — and it matches the
+	 * `BODY_SIZE_LIMIT=210M` shipped in `.env.example`.
 	 */
 	computeRequestMaxBytes: number;
 	/**
@@ -103,6 +108,10 @@ export interface ComputeLimits {
 	 * in the response; guards V8's ~512 MB single-string wall (a `JSON.stringify`
 	 * `RangeError`) and browser-tab OOM. Defensive backstop → clear 413 instead of
 	 * an opaque crash (real fix is out-of-band streaming, ADR 0003).
+	 *
+	 * 300 MB is intentional and NOT a dev leftover — sized above any legitimate
+	 * inline payload but below the V8 string wall. Unlike the request cap it is
+	 * not bounded by BODY_SIZE_LIMIT, which only applies to inbound bodies.
 	 */
 	computeResponseMaxBytes: number;
 	/** Hard cap on fetching a remote definition — tracks `maxGhFileSize`. */
@@ -195,14 +204,14 @@ export interface ComputeLimits {
  * this once at its composition root with `$env/dynamic/private`.
  */
 export function resolveComputeLimits(env: EnvRecord): ComputeLimits {
-	const maxGhFileSize = readPositiveInt(env, 'MAX_GH_FILE_SIZE_BYTES', 300 * MB);
+	const maxGhFileSize = readPositiveInt(env, 'MAX_GH_FILE_SIZE_BYTES', 50 * MB);
 	return {
 		maxSolveDurationMs: readPositiveInt(env, 'MAX_SOLVE_DURATION_MS', 100_000),
 		rateLimitWindowMs: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_WINDOW_MS', 100_000),
 		rateLimitMaxRequests: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_MAX', 120),
 		maxGhFileSize,
 		maxImageFileSize: readPositiveInt(env, 'MAX_IMAGE_FILE_SIZE_BYTES', 10 * MB),
-		computeRequestMaxBytes: readPositiveInt(env, 'COMPUTE_REQUEST_MAX_BYTES', 300 * MB),
+		computeRequestMaxBytes: readPositiveInt(env, 'COMPUTE_REQUEST_MAX_BYTES', 210 * MB),
 		computeResponseMaxBytes: readPositiveInt(env, 'COMPUTE_RESPONSE_MAX_BYTES', 300 * MB),
 		// Tracks the upload cap so a remote URL can't smuggle a larger file.
 		remoteDefinitionMaxBytes: maxGhFileSize,

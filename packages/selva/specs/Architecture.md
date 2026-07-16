@@ -326,11 +326,12 @@ Workflow: edit `ui-schema.json` → run `pnpm generate:all` → both sides see t
 
 ## 10. Data privacy posture
 
-Quoted from the project's stated stance (CLAUDE.md):
+Selva minimizes the personal data it holds, but it holds some, and **the operator is the data controller** — not the auth provider. See [CLAUDE.md](../../../CLAUDE.md#data-privacy--compliance) for the authoritative inventory of what is stored; the summary:
 
-> User data isolation is by design. All authentication, credentials, and PII are owned exclusively by the auth provider. Selva stores only opaque session tokens, user IDs, permissions, and optional non-sensitive provider metadata.
+- Under the **Supabase** provider, credentials and identity live in Supabase `auth.users`, and Selva keeps authorization data, display names, invite emails, audit-event payloads, and solve telemetry.
+- Under the **local** provider, Selva _is_ the auth provider: `auth-users.json` holds emails and PBKDF2 password hashes on the deployment's own disk.
 
-This means Selva itself has zero exposure to GDPR-class data — the auth provider owns residency, retention, and breach surface. The provider abstraction is the load-bearing piece for this claim: any new provider must keep the line in the same place.
+The provider abstraction moves where _credentials_ live; it does not move Selva out of the compliance surface. Erasure is currently incomplete (audit item P1) — `onUserDeleted` does not scrub `audit_events` or invites, and `solve_metrics` is intentionally not FK-cascaded.
 
 ---
 

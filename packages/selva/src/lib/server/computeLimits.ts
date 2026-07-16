@@ -30,12 +30,11 @@ export const MAX_SOLVE_DURATION_MS = limits.maxSolveDurationMs;
 export const RATE_LIMIT_WINDOW_MS = limits.rateLimitWindowMs;
 export const RATE_LIMIT_MAX_REQUESTS = limits.rateLimitMaxRequests;
 
-// Upload + payload caps.
-// TEMP (dev): defaults raised to 300 MB in `@selvajs/server` so large dev
-// definitions don't hit the Selva-side gate. NOTE: the Rhino.Compute server
-// still caps at RHINO_COMPUTE_MAX_REQUEST_SIZE (default 50 MB), so uploads past
-// that 413 at compute regardless. Revert the package defaults to 50 MB / 210 MB
-// before release (or set the *_BYTES env vars for this deployment).
+// Upload + payload caps. Defaults live in `@selvajs/server` (`resolveComputeLimits`),
+// which documents the sizing of each; override per-deployment via the *_BYTES env
+// vars. NOTE: the Rhino.Compute server caps at RHINO_COMPUTE_MAX_REQUEST_SIZE
+// (default 50 MB), so raising MAX_GH_FILE_SIZE past that only defers the 413 to
+// compute — raise it there too.
 export const MAX_GH_FILE_SIZE = limits.maxGhFileSize;
 export const MAX_IMAGE_FILE_SIZE = limits.maxImageFileSize;
 
