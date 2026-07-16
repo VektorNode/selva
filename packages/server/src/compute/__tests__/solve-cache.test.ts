@@ -177,12 +177,6 @@ describe('deriveSolveCacheInputKey', () => {
 		const b = deriveSolveCacheInputKey(tree, { computeServerId: 's2' });
 		expect(a.hash).not.toBe(b.hash);
 	});
-
-	it('exposes the canonical preimage for hit-time comparison', () => {
-		const k = deriveSolveCacheInputKey(tree, { computeServerId: 's1' });
-		expect(k.canonical).toContain('"tree"');
-		expect(k.canonical).toContain('"config"');
-	});
 });
 
 // ============================================================================

@@ -4,8 +4,9 @@
  * The in-process L1 cache keys on a 32-bit FNV hash — fine for a 20-entry Map,
  * unsafe for a durable, cross-user cache where a collision serves user A's
  * geometry to user B (CONTEXT.md L92–97 records exactly this bug shipping once).
- * So the L2 key is a wide SHA-256 hash, and the entry stores the canonical
- * preimage so a hit can compare it byte-for-byte (defense-in-depth).
+ * So the L2 key is a wide SHA-256 hash (SHA-256 collisions aren't a realistic
+ * threat, so hash-to-hash comparison at hit time is defense-in-depth enough —
+ * no byte-for-byte preimage comparison is done or needed).
  *
  * What goes into the key:
  *   - The **transformed** input tree (R13) — the exact tree handed to the
@@ -49,11 +50,9 @@ export interface SolveCacheConfigSubset {
 	computeServerId?: string;
 }
 
-/** The canonical preimage + its SHA-256 digest. Store both in the L2 entry header. */
+/** The SHA-256 digest of the canonical preimage — the `inputKey` part of the storage key. */
 export interface SolveCacheInputKey {
-	/** The canonical string that was hashed (for hit-time byte comparison). */
-	canonical: string;
-	/** SHA-256 hex of {@link canonical} — the `inputKey` part of the storage key. */
+	/** SHA-256 hex of the canonical `{ v, tree, config }` string. */
 	hash: string;
 }
 
@@ -81,5 +80,5 @@ export function deriveSolveCacheInputKey(
 		config
 	});
 	const hash = createHash('sha256').update(canonical).digest('hex');
-	return { canonical, hash };
+	return { hash };
 }
