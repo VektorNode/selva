@@ -10,7 +10,8 @@ import type {
 	IPlatformPermissionStore,
 	IPlatformProjectGrantStore,
 	IEventSink,
-	RequestContext
+	RequestContext,
+	UserErasureOptions
 } from '@selvajs/platform';
 import { NoopEventSink } from '@selvajs/platform';
 import * as path from 'node:path';
@@ -92,8 +93,17 @@ export class LocalDataProvider implements IDataProvider {
 	 * bare user ID in the team roster forever. (Supabase gets the membership
 	 * cascade from FK constraints; local must do it explicitly.) Tolerates
 	 * missing rows.
+	 *
+	 * `opts.email` is accepted for interface parity but unused: the local
+	 * provider persists no audit_events or solve_metrics (Supabase-only tables),
+	 * and its invite set is small and operator-visible on disk. The email-keyed
+	 * erasure that closes audit P1 is a Supabase concern.
 	 */
-	async onUserDeleted(ctx: RequestContext, userId: string): Promise<void> {
+	async onUserDeleted(
+		ctx: RequestContext,
+		userId: string,
+		_opts?: UserErasureOptions
+	): Promise<void> {
 		try {
 			await this.userData.deleteUser(userId);
 		} catch {

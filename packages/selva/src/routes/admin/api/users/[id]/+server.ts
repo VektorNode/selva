@@ -125,15 +125,20 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		}
 	}
 
+	// Capture the email BEFORE deletion — `onUserDeleted` needs it to scrub
+	// invite/audit rows keyed by email, but the auth user is gone by then.
+	const target = await getAuthProvider().getUser(id);
+	const email = target?.email;
+
 	const result = await getAuthProvider().deleteUser(id);
 	if (result === 'not_found') apiError(404, ApiErrorCode.NOT_FOUND, 'User not found');
 	if (result === 'not_supported')
 		apiError(501, ApiErrorCode.INTERNAL, 'User deletion not supported by this auth provider');
 
-	// Cascade: drop the user-data row. Supabase no-ops (FK cascade); local
-	// removes the row from `user-data.json`. Symmetric to the `ensureUser`
-	// hook in `hooks.server.ts`.
-	await getDataProvider().onUserDeleted(SYSTEM_CONTEXT, id);
+	// Cascade + erasure: drop the user-data row and scrub personal data not
+	// reachable by FK cascade (audit rows, invites-by-email, solve telemetry).
+	// Supabase erases those explicitly; local removes its JSON rows + memberships.
+	await getDataProvider().onUserDeleted(SYSTEM_CONTEXT, id, { email });
 
 	return new Response(null, { status: 204 });
 };

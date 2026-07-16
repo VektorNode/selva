@@ -131,7 +131,8 @@ export { withCacheBust } from './storage/cacheBust.js';
 // ---------------------------------------------------------------------------
 // data (composition root)
 // ---------------------------------------------------------------------------
-export type { IDataProvider, SchemaVersionReport } from './data/interface.js';
+export type { IDataProvider, SchemaVersionReport, UserErasureOptions } from './data/interface.js';
+export { ERASED_ACTOR_ID } from './data/interface.js';
 
 // ---------------------------------------------------------------------------
 // computeServer
