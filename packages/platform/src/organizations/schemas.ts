@@ -1,6 +1,35 @@
 import { z } from 'zod';
 
-/** Lowercase alphanumeric with internal hyphens, 3–63 chars. */
+/**
+ * Top-level path segments a tenant slug must never equal, so a slug can never
+ * shadow (or be shadowed by) a route (audit D4). Two forces meet here:
+ *  - Reserved multi-org namespace: `/o/{slug}/` is the decided shape for
+ *    per-org URLs (see ADR 0006). `o` is reserved even though the length gate
+ *    below already makes a 1-char slug impossible — belt-and-suspenders, and it
+ *    documents intent for anyone relaxing the length rule later.
+ *  - Existing flat top-level routes: reserving these keeps a future move to
+ *    `/o/{slug}/…` (or any flat tenant route) collision-free from day one,
+ *    before any external link is minted against a slug.
+ * Lowercase; the slug is lowercased/matched case-insensitively so `Admin` can't
+ * slip through. Keep in sync with the route tree's top-level directories.
+ */
+export const RESERVED_SLUGS: readonly string[] = [
+	'o',
+	'api',
+	'admin',
+	'auth',
+	'login',
+	'logout',
+	'setup',
+	'team',
+	'library',
+	'projects',
+	'accept-invite'
+];
+
+const RESERVED_SLUG_SET = new Set(RESERVED_SLUGS);
+
+/** Lowercase alphanumeric with internal hyphens, 3–63 chars, not a reserved word. */
 export const SlugSchema = z
 	.string()
 	.min(3, 'Slug must be at least 3 characters')
@@ -8,7 +37,10 @@ export const SlugSchema = z
 	.regex(
 		/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/,
 		'Slug must be lowercase alphanumeric with hyphens (no leading/trailing/consecutive hyphens)'
-	);
+	)
+	.refine((s) => !RESERVED_SLUG_SET.has(s), {
+		message: 'Slug is reserved and cannot be used'
+	});
 
 export const OrgRoleSchema = z.enum(['owner', 'admin', 'member']);
 export type OrgRole = z.infer<typeof OrgRoleSchema>;

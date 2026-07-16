@@ -1,4 +1,4 @@
-import type { DomainEvent, IEventSink } from '@selvajs/platform';
+import { AUDIT_EVENT_VERSION, type DomainEvent, type IEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 
 /**
@@ -18,6 +18,7 @@ export class SupabaseEventSink implements IEventSink {
 			const { error } = await this.clients.serviceClient.from('audit_events').insert({
 				type: event.type,
 				actor_id: event.actorId,
+				event_version: AUDIT_EVENT_VERSION,
 				data: event
 			});
 			if (error) {

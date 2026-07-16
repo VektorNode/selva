@@ -86,6 +86,14 @@ export type DomainEvent =
 
 export type DomainEventType = DomainEvent['type'];
 
+/**
+ * Schema version of the persisted `DomainEvent` payload (audit D3). A durable
+ * sink (e.g. Supabase `audit_events.event_version`) stamps every row with this
+ * so a later reader dispatches on an explicit version instead of inferring the
+ * shape. Bump when the union's persisted form changes in a non-additive way.
+ */
+export const AUDIT_EVENT_VERSION = 1;
+
 export interface IEventSink {
 	/**
 	 * Record a domain event. Called by stores AFTER a successful mutation; a

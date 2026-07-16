@@ -39,6 +39,7 @@ export {
 	OrgAssetKindSchema,
 	ALL_ORG_ASSET_KINDS,
 	SlugSchema,
+	RESERVED_SLUGS,
 	CreateOrgSchema,
 	UpdateOrgSchema,
 	ALL_ORG_PERMISSIONS,
@@ -193,7 +194,7 @@ export {
 // events
 // ---------------------------------------------------------------------------
 export type { DomainEvent, DomainEventType, IEventSink } from './events/interface.js';
-export { actorFrom, NoopEventSink } from './events/interface.js';
+export { actorFrom, NoopEventSink, AUDIT_EVENT_VERSION } from './events/interface.js';
 export type {
 	AuditEventRow,
 	AuditCursor,

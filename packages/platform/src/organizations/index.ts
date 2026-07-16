@@ -14,6 +14,7 @@ export {
 	OrgAssetKindSchema,
 	ALL_ORG_ASSET_KINDS,
 	SlugSchema,
+	RESERVED_SLUGS,
 	CreateOrgSchema,
 	UpdateOrgSchema,
 	ALL_ORG_PERMISSIONS,
