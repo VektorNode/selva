@@ -105,8 +105,8 @@ export function createSolveMemo(max = 16): SolveMemo {
 			entries.delete(key);
 			entries.set(key, hit);
 			// A memo hit skips the transport entirely, so no other log line fires —
-			// this debug line is the only trace it wasn't a fresh solve.
-			console.debug(`[Compute/memo] HIT — served from client memo (${entries.size}/${max})`);
+			// this line is the only trace it wasn't a fresh solve.
+			console.info(`[Compute/memo] HIT — served from client memo (${entries.size}/${max})`);
 			// Clone on the way out: the viewer disposes what it renders, so the retained
 			// entry must never be the instance handed to it (audit C1).
 			if (!hit.meshes?.length) return hit;
@@ -126,12 +126,12 @@ export function createSolveMemo(max = 16): SolveMemo {
 				const oldest = entries.keys().next().value;
 				if (oldest === undefined) break;
 				evict(oldest);
-				console.debug(`[Compute/memo] evicted LRU entry (cap ${max})`);
+				console.info(`[Compute/memo] evicted LRU entry (cap ${max})`);
 			}
 		},
 		clear() {
 			if (entries.size > 0) {
-				console.debug(`[Compute/memo] cleared ${entries.size} entries (definition changed)`);
+				console.info(`[Compute/memo] cleared ${entries.size} entries (definition changed)`);
 			}
 			entries.forEach(disposeSceneObjects);
 			entries.clear();
