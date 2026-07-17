@@ -49,7 +49,22 @@ public static class SchemaMigrator
             json["schemaVersion"] = versionStr;
         }
 
-        var version = Version.Parse(versionStr);
+        // Guard the parse: `schemaVersion` is untrusted input (it arrives from a
+        // .gh file that may be hand-edited or corrupt), and a bare Version.Parse
+        // throws FormatException/ArgumentException/OverflowException depending on
+        // the garbage. Mirror ValidateCompatibility and surface the same
+        // IncompatibleSchemaException, which callers already translate into a
+        // clear "Incompatible schema" message instead of a raw parse failure.
+        Version version;
+        try
+        {
+            version = Version.Parse(versionStr);
+        }
+        catch (Exception ex)
+        {
+            throw new IncompatibleSchemaException(
+                $"Invalid schema version format '{versionStr}': {ex.Message}");
+        }
 
         if (version < SchemaVersion.CURRENT)
         {
