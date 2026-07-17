@@ -6,7 +6,7 @@ import type {
 	SchemaVersionReport,
 	UserErasureOptions
 } from '@selvajs/platform';
-import { ERASED_ACTOR_ID, ProviderError } from '@selvajs/platform';
+import { ERASED_ACTOR_ID, NoopLogger, ProviderError, type ILogger } from '@selvajs/platform';
 import { decodeSecretKey } from '@selvajs/platform/computeServer';
 import { EXPECTED_MIGRATION_HEAD } from './migrationHead.js';
 import type { ClientBundle, BuildClientOptions } from './client.js';
@@ -75,15 +75,16 @@ export class SupabaseDataProvider implements IDataProvider {
 	private constructor(
 		private readonly clients: ClientBundle,
 		events: IEventSink,
-		secretKey?: Buffer
+		secretKey?: Buffer,
+		logger: ILogger = new NoopLogger()
 	) {
 		this.events = events;
-		this.solveMetrics = new SupabaseSolveMetricSink(clients);
+		this.solveMetrics = new SupabaseSolveMetricSink(clients, { logger });
 		this.orgs = new SupabaseOrgStore(clients, events);
 		this.projects = new SupabaseProjectStore(clients, events);
 		this.definitions = new SupabaseDefinitionStore(clients, events);
 		this.invites = new SupabaseInviteStore(clients, events);
-		this.computeServer = new SupabaseComputeServerStore(clients, secretKey);
+		this.computeServer = new SupabaseComputeServerStore(clients, secretKey, logger);
 		this.shareLinks = new SupabaseShareLinkStore(clients, events);
 		this.userProfile = new SupabaseUserProfileProvider(clients);
 		this.permissions = new SupabasePlatformPermissionStore(clients);
@@ -93,7 +94,8 @@ export class SupabaseDataProvider implements IDataProvider {
 
 	static fromEnv(
 		env: Record<string, string | undefined>,
-		events?: IEventSink
+		events?: IEventSink,
+		logger: ILogger = new NoopLogger()
 	): SupabaseDataProvider {
 		// Bundle-only env parse (URL + anon + service-role) is shared with
 		// `clientBundleFromEnv`; the full data provider additionally requires the
@@ -109,16 +111,27 @@ export class SupabaseDataProvider implements IDataProvider {
 			);
 		}
 		const secretKey = decodeSecretKey(env.SELVA_AT_REST_KEY);
-		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle), secretKey);
+		return new SupabaseDataProvider(
+			bundle,
+			events ?? new SupabaseEventSink(bundle, { logger }),
+			secretKey,
+			logger
+		);
 	}
 
 	static create(
 		opts: BuildClientOptions,
 		events?: IEventSink,
-		secretKey?: Buffer
+		secretKey?: Buffer,
+		logger: ILogger = new NoopLogger()
 	): SupabaseDataProvider {
 		const bundle = buildClientBundle(opts);
-		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle), secretKey);
+		return new SupabaseDataProvider(
+			bundle,
+			events ?? new SupabaseEventSink(bundle, { logger }),
+			secretKey,
+			logger
+		);
 	}
 
 	/**
@@ -131,9 +144,15 @@ export class SupabaseDataProvider implements IDataProvider {
 	static fromBundle(
 		bundle: ClientBundle,
 		events?: IEventSink,
-		secretKey?: Buffer
+		secretKey?: Buffer,
+		logger: ILogger = new NoopLogger()
 	): SupabaseDataProvider {
-		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle), secretKey);
+		return new SupabaseDataProvider(
+			bundle,
+			events ?? new SupabaseEventSink(bundle, { logger }),
+			secretKey,
+			logger
+		);
 	}
 
 	/**

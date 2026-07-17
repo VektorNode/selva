@@ -154,7 +154,10 @@ async function computeReachabilityCheck(locals: App.Locals): Promise<HealthCheck
 	const timer = setTimeout(() => controller.abort(), COMPUTE_PING_TIMEOUT_MS);
 	try {
 		const headers: Record<string, string> = {};
-		if (server.apiKey) headers['RhinoComputeKey'] = server.apiKey;
+		if (server.hasApiKey) {
+			const apiKey = await getComputeServerConfigStore().getServerApiKey(locals.ctx!, server.id);
+			if (apiKey) headers['RhinoComputeKey'] = apiKey;
+		}
 		const res = await fetch(new URL('/healthcheck', server.serverUrl).toString(), {
 			signal: controller.signal,
 			headers

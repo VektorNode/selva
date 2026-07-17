@@ -14,7 +14,10 @@ type AnyListOptions = ListOptions | DefinitionListOptions;
  */
 export function paginate<T>(items: T[], opts?: AnyListOptions): Page<T> {
 	const limit = Math.min(Math.max(1, opts?.limit ?? DEFAULT_PAGE_LIMIT), MAX_PAGE_LIMIT);
-	const offset = opts?.cursor ? parseInt(opts.cursor, 10) || 0 : 0;
+	// Clamp at 0: a negative cursor would reach `Array.slice(-n)` and serve the
+	// TAIL of the list to a caller who asked for the head. Garbage parses to NaN,
+	// which `|| 0` already maps to the first page.
+	const offset = Math.max(0, opts?.cursor ? parseInt(opts.cursor, 10) || 0 : 0);
 	const slice = items.slice(offset, offset + limit);
 	const nextOffset = offset + slice.length;
 	return {

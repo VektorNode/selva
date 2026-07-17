@@ -25,4 +25,22 @@ export function checkComputeRateLimit(key: string): RateLimitResult {
 	return limiter.check(key);
 }
 
+/**
+ * Requests charged to `key` this window. Lets a test assert *which* bucket a
+ * request consumed — the route's choice of `share:{linkId}` vs `user:{userId}`
+ * is a security property, and an allow/deny verdict alone can't express it.
+ */
+export function computeRateLimitCount(key: string): number {
+	return limiter.count(key);
+}
+
+/**
+ * Test seam — drop all buckets. The limiter is module-global and the app's
+ * tests share one process, so a test that fills a bucket would otherwise leak
+ * that state into every test after it. Production code never calls this.
+ */
+export function resetComputeRateLimit(): void {
+	limiter.reset();
+}
+
 export type { RateLimitResult };

@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createComputeRateLimiter, type ComputeRateLimiter } from '../rate-limit.js';
+import {
+	createComputeRateLimiter,
+	DEFAULT_MAX_KEYS,
+	type ComputeRateLimiter
+} from '../rate-limit.js';
 
 const WINDOW_MS = 100_000;
 const MAX_PER_WINDOW = 120;
@@ -65,6 +69,78 @@ describe('createComputeRateLimiter', () => {
 		expect(limiter.check('user:alice').allowed).toBe(false);
 		// A different limiter instance is unaffected.
 		expect(other.check('user:alice').allowed).toBe(true);
+	});
+
+	// The bucket Map is process-local and long-lived: without these it grows with
+	// every distinct key ever seen (each user, share link, login IP — forever).
+	describe('bucket eviction', () => {
+		it('sweeps expired buckets once a sweep interval has passed', () => {
+			for (let i = 0; i < 50; i++) limiter.check(`user:${i}`);
+			expect(limiter.size()).toBe(50);
+
+			// Buckets are now expired, but nothing revisits them on their own.
+			vi.advanceTimersByTime(WINDOW_MS + 1);
+			expect(limiter.size()).toBe(50);
+
+			// Any call past the sweep interval collects the dead ones.
+			limiter.check('user:latecomer');
+			expect(limiter.size()).toBe(1);
+		});
+
+		it('sweeping never resurrects budget for a still-live bucket', () => {
+			for (let i = 0; i < MAX_PER_WINDOW; i++) limiter.check('user:alice');
+			expect(limiter.check('user:alice').allowed).toBe(false);
+
+			// Advance far enough to trigger a sweep, but not past alice's reset.
+			vi.advanceTimersByTime(WINDOW_MS - 1);
+			for (let i = 0; i < 20; i++) limiter.check(`user:filler${i}`);
+
+			expect(limiter.check('user:alice').allowed).toBe(false);
+		});
+
+		it('caps retained buckets when every bucket is still live', () => {
+			const capped = createComputeRateLimiter({
+				windowMs: WINDOW_MS,
+				maxPerWindow: MAX_PER_WINDOW,
+				maxKeys: 10
+			});
+			// No bucket has expired, so the sweep frees nothing — the cap must.
+			for (let i = 0; i < 200; i++) capped.check(`user:${i}`);
+			expect(capped.size()).toBeLessThanOrEqual(10);
+		});
+
+		it('evicts the buckets nearest their reset first', () => {
+			const capped = createComputeRateLimiter({
+				windowMs: WINDOW_MS,
+				maxPerWindow: MAX_PER_WINDOW,
+				maxKeys: 2
+			});
+			capped.check('user:oldest');
+			vi.advanceTimersByTime(1);
+			capped.check('user:middle');
+			vi.advanceTimersByTime(1);
+			// Spend newest's budget so a surviving bucket is observable via peek.
+			for (let i = 0; i < MAX_PER_WINDOW; i++) capped.check('user:newest');
+
+			expect(capped.size()).toBeLessThanOrEqual(2);
+			// The freshest bucket keeps its state; the oldest was forgiven.
+			expect(capped.peek('user:newest').allowed).toBe(false);
+		});
+
+		it('peek drives the sweep too, without recording anything', () => {
+			for (let i = 0; i < 50; i++) limiter.check(`ip:${i}`);
+			vi.advanceTimersByTime(WINDOW_MS + 1);
+
+			limiter.peek('ip:observer');
+
+			// The 50 dead buckets are gone, and peek added none of its own.
+			expect(limiter.size()).toBe(0);
+		});
+
+		it('exposes the resolved defaults on config', () => {
+			expect(limiter.config.maxKeys).toBe(DEFAULT_MAX_KEYS);
+			expect(limiter.config.sweepIntervalMs).toBe(WINDOW_MS);
+		});
 	});
 
 	// peek + clear support failure-counting flows (login limiting): peek gates

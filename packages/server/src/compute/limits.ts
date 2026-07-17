@@ -18,21 +18,40 @@
  * env — they carry their own defaults.
  */
 
+import { NoopLogger, type ILogger } from '@selvajs/platform';
+
 const MB = 1024 * 1024;
 
 /** Env source: any string→string map. `$env/dynamic/private` satisfies this. */
 export type EnvRecord = Record<string, string | undefined>;
 
 /**
+ * Optional structured logger for the env-parsing diagnostics below. Defaults to
+ * `NoopLogger`: this is library code, so an embedder that wires nothing gets
+ * silence rather than unsolicited stdout writes. The app passes its real logger.
+ */
+const noop = new NoopLogger();
+
+/**
  * Parse a positive integer env value. Returns `fallback` when absent, and warns
  * + falls back when present but not a finite positive number.
  */
-export function readPositiveInt(env: EnvRecord, name: string, fallback: number): number {
+export function readPositiveInt(
+	env: EnvRecord,
+	name: string,
+	fallback: number,
+	logger: ILogger = noop
+): number {
 	const raw = env[name];
 	if (!raw) return fallback;
 	const parsed = Number(raw);
 	if (!Number.isFinite(parsed) || parsed <= 0) {
-		console.warn(`[selva] Invalid ${name}=${raw}, falling back to ${fallback}`);
+		logger.warn('Invalid env value, falling back to default', {
+			component: 'selva',
+			envVar: name,
+			value: raw,
+			fallback
+		});
 		return fallback;
 	}
 	return Math.floor(parsed);
@@ -44,12 +63,22 @@ export function readPositiveInt(env: EnvRecord, name: string, fallback: number):
  * budget). Returns `fallback` when absent, and warns + falls back when present
  * but not a finite non-negative number.
  */
-export function readNonNegativeInt(env: EnvRecord, name: string, fallback: number): number {
+export function readNonNegativeInt(
+	env: EnvRecord,
+	name: string,
+	fallback: number,
+	logger: ILogger = noop
+): number {
 	const raw = env[name];
 	if (!raw) return fallback;
 	const parsed = Number(raw);
 	if (!Number.isFinite(parsed) || parsed < 0) {
-		console.warn(`[selva] Invalid ${name}=${raw}, falling back to ${fallback}`);
+		logger.warn('Invalid env value, falling back to default', {
+			component: 'selva',
+			envVar: name,
+			value: raw,
+			fallback
+		});
 		return fallback;
 	}
 	return Math.floor(parsed);
@@ -59,13 +88,23 @@ export function readNonNegativeInt(env: EnvRecord, name: string, fallback: numbe
  * Parse a boolean env flag. Accepts `true/1/yes/on` (case-insensitive) as true
  * and `false/0/no/off` as false; any other / absent value falls back.
  */
-export function readBool(env: EnvRecord, name: string, fallback: boolean): boolean {
+export function readBool(
+	env: EnvRecord,
+	name: string,
+	fallback: boolean,
+	logger: ILogger = noop
+): boolean {
 	const raw = env[name];
 	if (raw == null || raw === '') return fallback;
 	const v = raw.trim().toLowerCase();
 	if (v === 'true' || v === '1' || v === 'yes' || v === 'on') return true;
 	if (v === 'false' || v === '0' || v === 'no' || v === 'off') return false;
-	console.warn(`[selva] Invalid ${name}=${raw}, falling back to ${fallback}`);
+	logger.warn('Invalid env value, falling back to default', {
+		component: 'selva',
+		envVar: name,
+		value: raw,
+		fallback
+	});
 	return fallback;
 }
 
@@ -214,48 +253,55 @@ export interface ComputeLimits {
  * always yields the same limits, and nothing is read ambiently. The app calls
  * this once at its composition root with `$env/dynamic/private`.
  */
-export function resolveComputeLimits(env: EnvRecord): ComputeLimits {
-	const maxGhFileSize = readPositiveInt(env, 'MAX_GH_FILE_SIZE_BYTES', 50 * MB);
+export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): ComputeLimits {
+	const maxGhFileSize = readPositiveInt(env, 'MAX_GH_FILE_SIZE_BYTES', 50 * MB, logger);
 	return {
-		maxSolveDurationMs: readPositiveInt(env, 'MAX_SOLVE_DURATION_MS', 100_000),
-		rateLimitWindowMs: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_WINDOW_MS', 100_000),
-		rateLimitMaxRequests: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_MAX', 120),
+		maxSolveDurationMs: readPositiveInt(env, 'MAX_SOLVE_DURATION_MS', 100_000, logger),
+		rateLimitWindowMs: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_WINDOW_MS', 100_000, logger),
+		rateLimitMaxRequests: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_MAX', 120, logger),
 		maxGhFileSize,
-		maxImageFileSize: readPositiveInt(env, 'MAX_IMAGE_FILE_SIZE_BYTES', 10 * MB),
-		computeRequestMaxBytes: readPositiveInt(env, 'COMPUTE_REQUEST_MAX_BYTES', 210 * MB),
-		computeResponseMaxBytes: readPositiveInt(env, 'COMPUTE_RESPONSE_MAX_BYTES', 300 * MB),
+		maxImageFileSize: readPositiveInt(env, 'MAX_IMAGE_FILE_SIZE_BYTES', 10 * MB, logger),
+		computeRequestMaxBytes: readPositiveInt(env, 'COMPUTE_REQUEST_MAX_BYTES', 210 * MB, logger),
+		computeResponseMaxBytes: readPositiveInt(env, 'COMPUTE_RESPONSE_MAX_BYTES', 300 * MB, logger),
 		// Tracks the upload cap so a remote URL can't smuggle a larger file.
 		remoteDefinitionMaxBytes: maxGhFileSize,
 		remoteDefinitionFetchTimeoutMs: readPositiveInt(
 			env,
 			'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
-			30_000
+			30_000,
+			logger
 		),
-		definitionCacheTtlMs: readPositiveInt(env, 'DEFINITION_CACHE_TTL_MS', 5 * 60 * 1000),
-		computeReuseDefinitionCache: readBool(env, 'COMPUTE_REUSE_DEFINITION_CACHE', true),
-		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true),
-		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false),
+		definitionCacheTtlMs: readPositiveInt(env, 'DEFINITION_CACHE_TTL_MS', 5 * 60 * 1000, logger),
+		computeReuseDefinitionCache: readBool(env, 'COMPUTE_REUSE_DEFINITION_CACHE', true, logger),
+		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true, logger),
+		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false, logger),
 		// 4 matches rhino.compute's default --childcount; tune to the actual VM.
-		computeMaxConcurrentSolves: readPositiveInt(env, 'COMPUTE_MAX_CONCURRENT', 4),
+		computeMaxConcurrentSolves: readPositiveInt(env, 'COMPUTE_MAX_CONCURRENT', 4, logger),
 		// Both 0 (unbounded / no deadline) by default — nothing sheds until an
 		// operator who's measured their pool opts in. readNonNegativeInt so `0` is a
 		// valid "disabled" value, not treated as invalid.
-		computeMaxQueueDepth: readNonNegativeInt(env, 'COMPUTE_MAX_QUEUE_DEPTH', 0),
-		computeQueueWaitMs: readNonNegativeInt(env, 'COMPUTE_QUEUE_WAIT_MS', 0),
+		computeMaxQueueDepth: readNonNegativeInt(env, 'COMPUTE_MAX_QUEUE_DEPTH', 0, logger),
+		computeQueueWaitMs: readNonNegativeInt(env, 'COMPUTE_QUEUE_WAIT_MS', 0, logger),
 		// Env is MB; 0 disables. Default 256 MB holds a handful of typical
 		// definitions warm without pinning gigabytes. readNonNegativeInt so `0`
 		// (disable) is honored rather than treated as invalid.
 		computeDefinitionByteCacheBytes:
-			readNonNegativeInt(env, 'COMPUTE_DEFINITION_BYTE_CACHE_MB', 256) * MB,
+			readNonNegativeInt(env, 'COMPUTE_DEFINITION_BYTE_CACHE_MB', 256, logger) * MB,
 		// Per-warm-client L1 response cache budget. Env is MB; 0 disables the L1.
 		// Default 256 MB: enough to keep a scrub session's recent responses warm
 		// without letting 20 × 300 MB worst-case entries pin gigabytes (audit C2).
-		computeResponseCacheBytes: readNonNegativeInt(env, 'COMPUTE_RESPONSE_CACHE_MB', 256) * MB,
+		computeResponseCacheBytes:
+			readNonNegativeInt(env, 'COMPUTE_RESPONSE_CACHE_MB', 256, logger) * MB,
 		// L2 durable solve cache (H1). Default per-definition quota 0 = inherit-to-off
 		// until an operator opts in; the memory backend also only mounts under
 		// SOLVE_CACHE_PROVIDER=memory, so nothing caches by accident. Byte backstop
 		// 512 MB caps total heap use across all definitions (env is MB).
-		solveCacheDefaultMaxEntries: readNonNegativeInt(env, 'SOLVE_CACHE_DEFAULT_MAX_ENTRIES', 0),
-		solveCacheMaxTotalBytes: readNonNegativeInt(env, 'SOLVE_CACHE_MAX_TOTAL_MB', 512) * MB
+		solveCacheDefaultMaxEntries: readNonNegativeInt(
+			env,
+			'SOLVE_CACHE_DEFAULT_MAX_ENTRIES',
+			0,
+			logger
+		),
+		solveCacheMaxTotalBytes: readNonNegativeInt(env, 'SOLVE_CACHE_MAX_TOTAL_MB', 512, logger) * MB
 	};
 }

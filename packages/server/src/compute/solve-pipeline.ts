@@ -29,6 +29,7 @@ import {
 	type SolveDefinition
 } from '@selvajs/compute';
 import type { SchemaInput } from '@selvajs/schemas';
+import { NoopLogger, type ILogger } from '@selvajs/platform';
 import { gzip } from 'node:zlib';
 import { promisify } from 'node:util';
 import { transformInputParameter } from './transform-input.js';
@@ -88,6 +89,12 @@ export interface SolvePipelineArgs {
 	byteRefOutcome?: ByteRefOutcome;
 	/** Persisted input params; only those with a `paramType` are sent to the solve. */
 	inputs: PipelineInput[];
+	/**
+	 * Structured logger for pipeline diagnostics (e.g. a corrupt L2 cache entry).
+	 * Optional; defaults to `NoopLogger` so this library never writes to stdout
+	 * unless the embedder asks for it.
+	 */
+	logger?: ILogger;
 	/** User-chosen values keyed by input id; missing keys fall back to the schema default. */
 	values: Record<string, unknown>;
 	/** Warm client bundle from `createClientCache().getClient(...)`. */
@@ -256,8 +263,9 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 			if (hit) return hit;
 			// Corrupt/tampered entry → fall through and solve as a miss. Warn: a
 			// silently-poisoned cache would otherwise look like an eternal cold key.
-			console.warn(
-				`[Compute/l2-cache] corrupt or hash-mismatched entry for key ${inputKey.slice(0, 16)}… — discarding, solving fresh`
+			(args.logger ?? new NoopLogger()).warn(
+				'Discarding corrupt or hash-mismatched L2 cache entry, solving fresh',
+				{ component: 'Compute/l2-cache', inputKeyPrefix: inputKey.slice(0, 16) }
 			);
 		}
 	}

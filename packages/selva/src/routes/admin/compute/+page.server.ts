@@ -12,9 +12,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const tenancy = getTenancy();
 	try {
 		const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
-		const servers = platformServers(config).map(({ apiKey, ...rest }) => ({
+		const servers = platformServers(config).map(({ apiKey: _apiKey, hasApiKey, ...rest }) => ({
 			...rest,
-			hasApiKey: !!apiKey
+			hasApiKey: !!hasApiKey
 		}));
 
 		// Org list drives the per-server "Available to" allowlist control. Skip

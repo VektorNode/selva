@@ -21,6 +21,7 @@ import type {
 	IStorageProvider,
 	RequestContext
 } from '@selvajs/platform';
+import { NoopLogger, type ILogger } from '@selvajs/platform';
 import { fetchSchemaFromCompute } from './schema-extraction.js';
 
 export type DefinitionChannel = 'live' | 'draft';
@@ -75,8 +76,16 @@ export interface DefinitionLoaderDeps {
 	 * casing/serialization mismatches are visible.
 	 */
 	computeDebug?: boolean;
-	/** Diagnostic sink; defaults to `console.warn`. */
+	/**
+	 * Legacy diagnostic sink, kept for callers that already pass one. When set it
+	 * receives the rendered strings and `logger` is not used for these warnings.
+	 */
 	onWarn?: (message: string, detail?: string) => void;
+	/**
+	 * Structured logger for the diagnostics below. Defaults to `NoopLogger`, so a
+	 * consumer that wires nothing gets silence rather than unsolicited stdout.
+	 */
+	logger?: ILogger;
 }
 
 export type DefinitionLoader = (
@@ -105,7 +114,8 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 		getClient,
 		fetchSchema = fetchSchemaFromCompute,
 		computeDebug = false,
-		onWarn = (message, detail) => (detail ? console.warn(message, detail) : console.warn(message))
+		onWarn,
+		logger = new NoopLogger()
 	} = deps;
 
 	return async function loadDefinitionForRender(ctx, record, channel, explicitVersionId) {
@@ -181,10 +191,18 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 			// plugin behind the app) would just go stale again next render.
 			if (!freshCache && fetchedSchema.schemaVersion === UI_SCHEMA_VERSION) {
 				definitions.setVersionSchema(ctx, version.id, fetchedSchema).catch((err) => {
-					onWarn(
-						`[loadForRender] schema cache refresh failed for version ${version.id}: ` +
-							`${err instanceof Error ? err.message : String(err)}`
-					);
+					if (onWarn) {
+						onWarn(
+							`[loadForRender] schema cache refresh failed for version ${version.id}: ` +
+								`${err instanceof Error ? err.message : String(err)}`
+						);
+						return;
+					}
+					logger.warn('Schema cache refresh failed', {
+						component: 'loadForRender',
+						versionId: version.id,
+						err: err instanceof Error ? (err.stack ?? err.message) : String(err)
+					});
 				});
 			}
 
@@ -204,21 +222,34 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 			const ioLooksBroken =
 				definition.inputs.length === 0 || ioParseErrors.length > 0 || ioLoadErrors.length > 0;
 			if (ioLooksBroken) {
-				onWarn(
-					`[loadForRender] IO health for '${record.guid}':`,
-					JSON.stringify({
-						inputCount: definition.inputs.length,
-						outputCount: definition.outputs?.length,
-						parseErrors: ioParseErrors,
-						loadErrors: ioLoadErrors,
-						loadWarnings: (definition as { loadWarnings?: unknown }).loadWarnings
-					})
-				);
+				const health = {
+					inputCount: definition.inputs.length,
+					outputCount: definition.outputs?.length,
+					parseErrors: ioParseErrors,
+					loadErrors: ioLoadErrors,
+					loadWarnings: (definition as { loadWarnings?: unknown }).loadWarnings
+				};
+				if (onWarn) {
+					onWarn(`[loadForRender] IO health for '${record.guid}':`, JSON.stringify(health));
+				} else {
+					logger.warn('Definition IO looks unhealthy', {
+						component: 'loadForRender',
+						definitionGuid: record.guid,
+						...health
+					});
+				}
 				if (computeDebug) {
 					const rawIO = await client
 						.getRawIO(definitionSource)
 						.catch((e) => ({ error: String(e) }));
-					onWarn('[loadForRender] raw /io:', JSON.stringify(rawIO).slice(0, 3000));
+					const rendered = JSON.stringify(rawIO).slice(0, 3000);
+					if (onWarn) onWarn('[loadForRender] raw /io:', rendered);
+					else
+						logger.debug('Raw /io wire shape', {
+							component: 'loadForRender',
+							definitionGuid: record.guid,
+							rawIO: rendered
+						});
 				}
 			}
 

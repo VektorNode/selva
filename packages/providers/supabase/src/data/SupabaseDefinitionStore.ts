@@ -21,9 +21,21 @@ import { stampSoftDelete, stampUpdate } from './rowStamp.js';
 /** Explicit column list for `definitions` — every field `rowToRecord` consumes. */
 const DEFINITION_COLUMNS =
 	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, solve_cache_limit, display_name, description, category, tags, cover_image, status, run_count, next_version_number, live_version_id, draft_version_id, created_at, updated_at, deleted_at';
-/** Explicit column list for `definition_versions` — every field `rowToVersion` consumes. */
+/**
+ * Explicit column list for `definition_versions`, minus the `schema` JSONB.
+ * `schema` can be hundreds of KB per row, so the list projection leaves it out
+ * and `listVersions` returns rows with `schema: undefined`; only `getVersion`
+ * (which reads one row, for a caller that needs the schema) pulls it in.
+ */
 const DEFINITION_VERSION_COLUMNS =
-	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema, schema_extracted_at';
+	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at';
+/**
+ * `getVersion`'s projection — the list columns plus the `schema` JSONB. Spelled
+ * out rather than interpolated: supabase-js infers the row type from the literal
+ * column string, and a template literal degrades it to `string`.
+ */
+const DEFINITION_VERSION_COLUMNS_WITH_SCHEMA =
+	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at, schema';
 
 /**
  * Definition metadata + version store backed by Postgres. Spec §6 versioning:
@@ -264,7 +276,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('definition_versions')
-			.select(DEFINITION_VERSION_COLUMNS)
+			.select(DEFINITION_VERSION_COLUMNS_WITH_SCHEMA)
 			.eq('id', versionId)
 			.maybeSingle();
 		if (error) throw mapPostgrestError(error);

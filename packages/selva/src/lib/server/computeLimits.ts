@@ -18,8 +18,14 @@
 
 import { env } from '$env/dynamic/private';
 import { resolveComputeLimits } from '@selvajs/server/compute';
+// Limits resolve at module scope (before the pino swap), so the forwarding
+// logger is required here — a captured one would pin the boot placeholder.
+import { lazyLogger } from '$lib/server/providers.server';
 
-const limits = resolveComputeLimits(env);
+// The logger surfaces malformed env values (e.g. a non-numeric
+// COMPUTE_RATE_LIMIT_MAX silently falling back to its default) — without it
+// those warnings would go nowhere.
+const limits = resolveComputeLimits(env, lazyLogger);
 
 // Maximum solve duration — single source of truth for the /api/compute timeout.
 // See `@selvajs/server` `ComputeLimits.maxSolveDurationMs` for the full rationale

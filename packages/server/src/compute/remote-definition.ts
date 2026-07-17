@@ -16,6 +16,7 @@
  */
 
 import { assertSafeRemoteDefinitionUrl } from './safe-url.js';
+import { NoopLogger, type ILogger } from '@selvajs/platform';
 
 /** Injected limits — the app derives these from its env-resolved `ComputeLimits`. */
 export interface RemoteDefinitionConfig {
@@ -31,6 +32,12 @@ export interface RemoteDefinitionConfig {
 	 * passes `() => Date.now()`.
 	 */
 	now: () => number;
+	/**
+	 * Structured logger for the SSRF guard's block diagnostics. Optional; defaults
+	 * to `NoopLogger` so an embedder that wires nothing gets silence rather than
+	 * unsolicited stdout writes.
+	 */
+	logger?: ILogger;
 }
 
 export interface RemoteDefinitionFetcher {
@@ -95,13 +102,14 @@ export function createRemoteDefinitionFetcher(
 	config: RemoteDefinitionConfig
 ): RemoteDefinitionFetcher {
 	const cache = new Map<string, { data: Uint8Array; fetchedAt: number }>();
+	const logger = config.logger ?? new NoopLogger();
 
 	return {
 		async load(url: string): Promise<Uint8Array> {
 			// Resolves the host and rejects when any resolved IP is private/loopback/
 			// link-local — covers literal-encoding bypasses (integer/octal/hex/short-form,
 			// IPv4-mapped IPv6) and public names that point inward. Throws on rejection.
-			await assertSafeRemoteDefinitionUrl(url);
+			await assertSafeRemoteDefinitionUrl(url, logger);
 
 			const now = config.now();
 			const cached = cache.get(url);

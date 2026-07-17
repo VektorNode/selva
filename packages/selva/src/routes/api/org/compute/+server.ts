@@ -53,7 +53,7 @@ function requireFlag() {
 	}
 }
 
-type OrgServerPayload = Omit<OrgComputeServer, 'apiKey'> & { hasApiKey: boolean };
+type OrgServerPayload = Omit<OrgComputeServer, 'apiKey' | 'hasApiKey'> & { hasApiKey: boolean };
 type SharedServerPayload = Pick<
 	ComputeServerConfig,
 	'id' | 'label' | 'serverUrl' | 'scope' | 'timeoutMs' | 'retryCount'
@@ -73,8 +73,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 		.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId)
 		.map((s) => {
 			const orgServer = s as OrgComputeServer;
-			const { apiKey, ...rest } = orgServer;
-			return { ...rest, hasApiKey: !!apiKey };
+			const { apiKey: _apiKey, hasApiKey, ...rest } = orgServer;
+			return { ...rest, hasApiKey: !!hasApiKey };
 		});
 
 	// Platform + own servers visible to this org (read-only catalog) — used
@@ -134,7 +134,8 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const provider = getComputeServerConfigStore();
-	const existing = await provider.getConfig(ctx);
+	// Needs every key: unchanged servers keep their stored key across the write.
+	const existing = await provider.getConfig(ctx, { includeApiKeys: true });
 	const storedKeyById = new Map(
 		existing.servers
 			.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId)

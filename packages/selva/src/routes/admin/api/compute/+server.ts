@@ -9,6 +9,7 @@ import {
 	type PlatformComputeServer
 } from '@selvajs/platform';
 import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
+import { renderThrown } from '@selvajs/server/logging';
 
 /**
  * Admin platform-server endpoint. `manage_compute` only. Reads/writes the
@@ -16,7 +17,7 @@ import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
  * `orgDefaults` are handled by `/api/org/compute`.
  */
 
-type ServerPayload = Omit<PlatformComputeServer, 'apiKey'> & { hasApiKey: boolean };
+type ServerPayload = Omit<PlatformComputeServer, 'apiKey' | 'hasApiKey'> & { hasApiKey: boolean };
 
 interface IncomingServer {
 	id: string;
@@ -40,9 +41,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 	try {
 		const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
 		const servers = platformServers(config).map(
-			({ apiKey, ...rest }): ServerPayload => ({
+			({ apiKey: _apiKey, hasApiKey, ...rest }): ServerPayload => ({
 				...rest,
-				hasApiKey: !!apiKey
+				hasApiKey: !!hasApiKey
 			})
 		);
 		return json({
@@ -50,7 +51,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 			defaultServerId: config.defaultServerId
 		});
 	} catch (err) {
-		console.error('[Compute GET] Failed:', err);
+		locals.log.error('Failed to load compute config', {
+			component: 'Compute GET',
+			err: renderThrown(err)
+		});
 		apiError(500, ApiErrorCode.INTERNAL, 'Failed to load compute config');
 	}
 };
@@ -108,7 +112,9 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const provider = getComputeServerConfigStore();
-		const existing = await provider.getConfig(locals.ctx!);
+		// One of the few reads that genuinely needs every key: unchanged servers
+		// keep their stored key, and `evictChangedServers` diffs on key rotation.
+		const existing = await provider.getConfig(locals.ctx!, { includeApiKeys: true });
 		const storedKeyById = new Map(platformServers(existing).map((s) => [s.id, s.apiKey]));
 
 		const next: ComputeServerConfig[] = incoming.servers.map(
@@ -126,7 +132,10 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		evictChangedServers(platformServers(existing), next);
 		return new Response(null, { status: 204 });
 	} catch (err) {
-		console.error('[Compute PUT] Failed:', err);
+		locals.log.error('Failed to save compute config', {
+			component: 'Compute PUT',
+			err: renderThrown(err)
+		});
 		apiError(500, ApiErrorCode.INTERNAL, 'Failed to save compute config');
 	}
 };

@@ -1,5 +1,6 @@
 import type { SchemaVersionReport, SecretVerificationReport } from '@selvajs/platform';
-import { providers } from './providers.server.js';
+import { renderThrown } from '@selvajs/server/logging';
+import { getLogger, providers } from './providers.server.js';
 
 /**
  * Boot-time integrity report. Populated once on first import, then cached.
@@ -42,7 +43,10 @@ async function run(): Promise<BootHealth> {
 		try {
 			atRestSecrets = await store.verifySecrets();
 		} catch (err) {
-			console.error('[selva][boot] verifySecrets threw — treating as failure', err);
+			getLogger().error('verifySecrets threw — treating as failure', {
+				component: 'boot',
+				err: renderThrown(err)
+			});
 			atRestSecrets = {
 				ok: false,
 				plaintextFound: false,
@@ -60,16 +64,19 @@ async function run(): Promise<BootHealth> {
 
 	if (atRestSecrets && !atRestSecrets.ok) {
 		for (const f of atRestSecrets.failures) {
-			console.error(
-				`[selva][boot] compute server "${f.serverLabel}" (${f.serverId}): ${f.reason}${
-					f.cause ? ` — ${f.cause}` : ''
-				}`
-			);
+			getLogger().error('At-rest secret verification failed for compute server', {
+				component: 'boot',
+				serverLabel: f.serverLabel,
+				serverId: f.serverId,
+				reason: f.reason,
+				cause: f.cause
+			});
 		}
-		console.error(
-			'[selva][boot] At-rest secret verification failed. /api/health will return 503. ' +
+		getLogger().error(
+			'At-rest secret verification failed. /api/health will return 503. ' +
 				'Recover by re-entering the affected apiKeys via /admin/compute, or by ' +
-				'restoring the original SELVA_AT_REST_KEY. See docs/Troubleshooting.md.'
+				'restoring the original SELVA_AT_REST_KEY. See docs/Troubleshooting.md.',
+			{ component: 'boot' }
 		);
 	}
 
@@ -80,7 +87,10 @@ async function run(): Promise<BootHealth> {
 			schemaVersion = await data.verifySchemaVersion();
 		} catch (err) {
 			// The contract says it must not throw; treat a throw as a failed check.
-			console.error('[selva][boot] verifySchemaVersion threw — treating as failure', err);
+			getLogger().error('verifySchemaVersion threw — treating as failure', {
+				component: 'boot',
+				err: renderThrown(err)
+			});
 			schemaVersion = {
 				ok: false,
 				expected: '(unknown)',
@@ -91,11 +101,12 @@ async function run(): Promise<BootHealth> {
 	}
 
 	if (schemaVersion && !schemaVersion.ok) {
-		console.error(
-			`[selva][boot] Database schema handshake failed (expected head ${schemaVersion.expected}, ` +
-				`got ${schemaVersion.actual ?? 'unavailable'}). /api/health will return 503. ` +
-				(schemaVersion.message ?? '')
-		);
+		getLogger().error('Database schema handshake failed. /api/health will return 503.', {
+			component: 'boot',
+			expected: schemaVersion.expected,
+			actual: schemaVersion.actual ?? 'unavailable',
+			detail: schemaVersion.message
+		});
 	}
 
 	return {

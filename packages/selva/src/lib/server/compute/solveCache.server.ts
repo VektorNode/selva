@@ -32,11 +32,13 @@ import {
 	type ISolveResultCache,
 	type RequestContext
 } from '@selvajs/platform';
+import { renderThrown } from '@selvajs/server/logging';
 import {
 	SOLVE_CACHE_PROVIDER,
 	SOLVE_CACHE_DEFAULT_MAX_ENTRIES,
 	SOLVE_CACHE_MAX_TOTAL_BYTES
 } from '$lib/server/computeLimits';
+import { getLogger } from '$lib/server/providers.server';
 import { COMPUTE_DEBUG } from './clientCache.server';
 
 // Single instance. `memory` mounts the in-process backend; anything else is a
@@ -54,7 +56,10 @@ export const solveCacheSingleFlight = createSolveCacheSingleFlight({
 	onJoin: (key) => {
 		if (COMPUTE_DEBUG) {
 			// Key = org:version:inputs-json — truncate the inputs tail for the log.
-			console.log(`[Compute/single-flight] coalesced onto in-flight solve ${key.slice(0, 96)}…`);
+			getLogger().debug('Coalesced onto in-flight solve', {
+				component: 'Compute/single-flight',
+				key: `${key.slice(0, 96)}…`
+			});
 		}
 	}
 });
@@ -94,7 +99,11 @@ export function buildSolveCacheHook(params: {
 			cache.get(ctx, { orgId, definitionId, versionId, inputKey }).catch((err) => {
 				// The pipeline treats any rejection as a miss; log it here so a faulting
 				// backend doesn't silently disable caching (every solve re-solving).
-				console.warn(`[Compute/l2-cache] lookup failed for definition ${definitionId}:`, err);
+				getLogger().warn('L2 cache lookup failed', {
+					component: 'Compute/l2-cache',
+					definitionId,
+					err: renderThrown(err)
+				});
 				return null;
 			}),
 		store: (inputKey, entry) => {
@@ -106,7 +115,11 @@ export function buildSolveCacheHook(params: {
 					maxEntriesForDefinition: quota
 				})
 				.catch((err) => {
-					console.warn(`[Compute/l2-cache] store failed for definition ${definitionId}:`, err);
+					getLogger().warn('L2 cache store failed', {
+						component: 'Compute/l2-cache',
+						definitionId,
+						err: renderThrown(err)
+					});
 				});
 		}
 	};

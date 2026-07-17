@@ -3,7 +3,8 @@ import { isHttpError } from '@sveltejs/kit';
 import type { AuthUser, RequestContext } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
 import { applySecurityHeaders, createRouteClassifier } from '@selvajs/server/http';
-import { providers, getErrorReporter, getEventSink } from '$lib/server/providers.server';
+import { renderThrown, resolveRequestId, REQUEST_ID_HEADER } from '@selvajs/server/logging';
+import { providers, getErrorReporter, getEventSink, getLogger } from '$lib/server/providers.server';
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { env } from '$env/dynamic/private';
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
@@ -195,6 +196,19 @@ export const { isStaticAsset, isSelfGatingApiRoute, isPublicRoute } = routeClass
 export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
 	event.locals.providers = providers;
 
+	// Correlation, bound once per request. Every downstream `locals.log` record
+	// inherits these fields, so no call site has to thread a request id — which
+	// is precisely what the pre-pino `console.*` calls could not do.
+	// `event.url.pathname` (never `event.url.search`): query strings carry share
+	// tokens, and a log record outlives the token's usefulness to an attacker.
+	const requestId = resolveRequestId(event.request.headers);
+	event.locals.requestId = requestId;
+	event.locals.log = getLogger().child({
+		requestId,
+		method: event.request.method,
+		route: event.url.pathname
+	});
+
 	if (!headerAuthBootstrapWired) {
 		wireHeaderAuthBootstrap();
 		headerAuthBootstrapWired = true;
@@ -222,13 +236,13 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	// Static assets bypass every gate below — no auth, no first-run check,
 	// just resolve and let the cache-control headers below handle them.
 	if (isStaticAsset(pathname)) {
-		return applyResponseHeaders(await resolve(event), pathname);
+		return applyResponseHeaders(await resolve(event), pathname, requestId);
 	}
 
 	// `/api/health` is a load-balancer probe — must answer without auth or
 	// first-run gating. Short-circuit before any of the gates below run.
 	if (pathname === '/api/health') {
-		return applyResponseHeaders(await resolve(event), pathname);
+		return applyResponseHeaders(await resolve(event), pathname, requestId);
 	}
 
 	const publicRoute = isPublicRoute(pathname);
@@ -251,7 +265,8 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 						status: 503,
 						headers: { 'Content-Type': 'application/json' }
 					}),
-					pathname
+					pathname,
+					requestId
 				);
 			}
 			redirect(303, '/setup');
@@ -316,7 +331,8 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 							headers: { 'Content-Type': 'application/json' }
 						}
 					),
-					pathname
+					pathname,
+					requestId
 				);
 			}
 			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname)}`);
@@ -380,18 +396,19 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 				const noHeaders = proxyAuth.hasNoIdentityHeaders(event.request.headers);
 				const configured = proxyAuth.configuredHeaderNames.join(', ');
 				if (noHeaders) {
-					console.warn(
-						`[HeaderAuth] /login was hit and NONE of the configured identity headers ` +
-							`(${configured}) arrived on the request. The forward-auth proxy is not ` +
-							`reaching this process, or it is not forwarding the configured headers. ` +
-							`See the @selvajs/header-auth-provider README "Verification" section.`
+					event.locals.log.warn(
+						'/login was hit and NONE of the configured identity headers arrived. The ' +
+							'forward-auth proxy is not reaching this process, or is not forwarding the ' +
+							'configured headers. See the @selvajs/header-auth-provider README ' +
+							'"Verification" section.',
+						{ component: 'HeaderAuth', configuredHeaders: configured }
 					);
 				} else {
-					console.warn(
-						`[HeaderAuth] /login was hit but the UPN header was missing or the user is ` +
-							`not allowlisted. Configured headers: ${configured}. Some headers arrived ` +
-							`but identification still failed — check that the UPN header is populated ` +
-							`and that the user has been added to header-allowlist.json.`
+					event.locals.log.warn(
+						'/login was hit but the UPN header was missing or the user is not allowlisted. ' +
+							'Some headers arrived but identification still failed — check that the UPN ' +
+							'header is populated and that the user has been added to header-allowlist.json.',
+						{ component: 'HeaderAuth', configuredHeaders: configured }
 					);
 				}
 			}
@@ -410,7 +427,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		}
 	}
 
-	return applyResponseHeaders(await resolve(event), pathname);
+	return applyResponseHeaders(await resolve(event), pathname, requestId);
 };
 
 // ============================================================================
@@ -423,11 +440,15 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 // headers deliberately omitted for iframe embedding) lives in
 // `@selvajs/server/http` — see `applySecurityHeaders` there for the rationale.
 // Cache-control stays here: it encodes THIS app's asset layout.
-function applyResponseHeaders(response: Response, pathname: string): Response {
+function applyResponseHeaders(response: Response, pathname: string, requestId: string): Response {
 	applySecurityHeaders(response, {
-		// eslint-disable-next-line no-restricted-properties -- NODE_ENV is OS-level, set by Node/Vite, not loaded from .env
 		hsts: process.env.NODE_ENV === 'production'
 	});
+
+	// Echo the correlation id. A user reporting "request X failed" gives an
+	// operator the exact key to grep the logs with — the reason this passes
+	// through every response path, including the 401/503 short-circuits.
+	response.headers.set(REQUEST_ID_HEADER, requestId);
 
 	// Cache-control: hashed build assets are immutable; other static assets
 	// get a short TTL.
@@ -462,25 +483,22 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({
 	// Log enough context to diagnose without grepping: route, method, and the
 	// underlying cause chain. SvelteKit's default logging drops `cause`, which
 	// is where provider adapters tend to stash the real reason (Supabase
-	// network error, fs EACCES, etc.).
-	// Render the thrown value usefully regardless of its shape. Errors print
-	// their stack; everything else (provider adapters occasionally reject with
-	// a plain `{ message, status }` object, not an Error) is JSON-serialized so
-	// it doesn't collapse to a useless "[object Object]".
-	const rendered =
-		error instanceof Error
-			? (error.stack ?? error.message)
-			: (() => {
-					try {
-						return JSON.stringify(error);
-					} catch {
-						return String(error);
-					}
-				})();
-	const cause = error instanceof Error && error.cause ? `\n  caused by: ${error.cause}` : '';
-	console.error(
-		`[Unhandled error] ${event.request.method} ${event.url.pathname}\n  ${rendered}${cause}`
-	);
+	// network error, fs EACCES, etc.). `err`/`cause` stay separate fields rather
+	// than being concatenated into the message, so the message groups cleanly
+	// while the stack remains searchable.
+	//
+	// `locals.log` carries requestId/method/route already, but handleError can
+	// fire before `handle` populated locals (e.g. a throw in an earlier hook), so
+	// fall back to the root logger and re-state the fields.
+	const log =
+		event.locals.log ??
+		getLogger().child({ method: event.request.method, route: event.url.pathname });
+	log.error('Unhandled error', {
+		component: 'handleError',
+		status,
+		err: renderThrown(error),
+		cause: error instanceof Error && error.cause ? String(error.cause) : undefined
+	});
 	// Ship off-box for triage. Only reached for genuinely unexpected errors:
 	// intentional HTTP outcomes (incl. the compute route's `apiError(500)` on a
 	// failed solve) are `HttpError`s handled in the branch above, so compute

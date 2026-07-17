@@ -35,6 +35,7 @@ import { getStorageProvider, getSolveMetricSink, providers } from '$lib/server/p
 import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
 import { fetchSchemaFromCompute } from '$lib/server/definitions/schemaExtraction.server';
+import { renderThrown } from '@selvajs/server/logging';
 
 interface ComputeRequest {
 	inputs: PipelineInput[];
@@ -47,13 +48,6 @@ interface ComputeRequest {
 	 * instead of the channel pointer; editor-only, never share-token accessible.
 	 */
 	versionId?: string;
-}
-
-/** Human-readable byte size for debug logs (e.g. 1536 -> "1.5 KB"). */
-function formatBytes(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 // The transport-agnostic solve pipeline (input tree build → solve → serialize +
@@ -172,7 +166,12 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				})
 				// Sinks are contracted not to throw, but nothing enforces it — a bad sink
 				// must surface as a log line, not an unhandled rejection.
-				.catch((err) => console.error('[API/Compute] solve-metric record failed:', err));
+				.catch((err) =>
+					locals.log.error('Solve-metric record failed', {
+						component: 'API/Compute',
+						err: renderThrown(err)
+					})
+				);
 		};
 
 		// Per-key rate limit; runs before DB reads so throttled callers don't burn quota.
@@ -201,7 +200,11 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			try {
 				record = await providers.data.definitions.get(solveCtx, guid);
 			} catch (err) {
-				console.error(`Failed to load local definition: ${guid}`, err);
+				locals.log.error('Failed to load local definition', {
+					component: 'API/Compute',
+					guid,
+					err: renderThrown(err)
+				});
 				apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' not found`);
 			}
 			if (!record) apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' not found`);
@@ -256,7 +259,11 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			try {
 				definitionSource = await loadRemoteDefinition(definitionUrl);
 			} catch (err) {
-				console.error(`Failed to fetch definition from ${definitionUrl}:`, err);
+				locals.log.error('Failed to fetch remote definition', {
+					component: 'API/Compute',
+					definitionUrl,
+					err: renderThrown(err)
+				});
 				apiError(
 					400,
 					ApiErrorCode.VALIDATION_FAILED,
@@ -296,7 +303,11 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				const schema = await fetchSchemaFromCompute(bytes, serverConfig);
 				await providers.data.definitions.setVersionSchema(solveCtx, versionId, schema);
 			} catch (err) {
-				console.warn(`[API/Compute] Schema backfill failed for version ${versionId}:`, err);
+				locals.log.warn('Schema backfill failed', {
+					component: 'API/Compute',
+					versionId,
+					err: renderThrown(err)
+				});
 			}
 			// Backfill calls the compute server — seconds when it fires. If this shows
 			// up repeatedly for the same definition, setVersionSchema isn't sticking.
@@ -419,11 +430,13 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		// was returned, so a failed counter write must not turn into a request
 		// error. Share-link cap counting is separate (above).
 		if (metricDefinitionId) {
-			providers.data.definitions
-				.incrementSolveCount(solveCtx, metricDefinitionId)
-				.catch((err) =>
-					console.warn(`[API/Compute] solveCount increment failed for ${metricDefinitionId}:`, err)
-				);
+			providers.data.definitions.incrementSolveCount(solveCtx, metricDefinitionId).catch((err) =>
+				locals.log.warn('solveCount increment failed', {
+					component: 'API/Compute',
+					definitionId: metricDefinitionId,
+					err: renderThrown(err)
+				})
+			);
 		}
 
 		const { envelope } = outcome;
@@ -433,44 +446,62 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		// input tree build; `serialize` = JSON.stringify of the result. The solve itself
 		// is timed separately (see the solve metric's durationMs and [Compute/selva-cache]).
 		if (COMPUTE_DEBUG) {
-			console.info(
-				`[Compute/server] load=${defLoadMs.toFixed(0)}ms tree=${metrics.treeBuildMs.toFixed(0)}ms ` +
-					`solve=${metrics.solveMs.toFixed(0)}ms serialize=${metrics.serializeMs.toFixed(0)}ms ` +
-					`gzip=${metrics.gzipMs.toFixed(0)}ms total=${metrics.serverTotalMs.toFixed(0)}ms | result=${formatBytes(metrics.serializedBytes)}`
-			);
+			locals.log.debug('Solve server-side phase breakdown', {
+				component: 'Compute/server',
+				loadMs: Math.round(defLoadMs),
+				treeBuildMs: Math.round(metrics.treeBuildMs),
+				solveMs: Math.round(metrics.solveMs),
+				serializeMs: Math.round(metrics.serializeMs),
+				gzipMs: Math.round(metrics.gzipMs),
+				serverTotalMs: Math.round(metrics.serverTotalMs),
+				serializedBytes: metrics.serializedBytes
+			});
 			if (metrics.compressedBytes !== null) {
-				console.info(
-					`[Compute/server] gzip ${formatBytes(metrics.serializedBytes)} → ${formatBytes(metrics.compressedBytes)} ` +
-						`(${(metrics.serializedBytes / metrics.compressedBytes).toFixed(1)}×)`
-				);
+				locals.log.debug('Response gzipped', {
+					component: 'Compute/server',
+					serializedBytes: metrics.serializedBytes,
+					compressedBytes: metrics.compressedBytes,
+					ratio: Number((metrics.serializedBytes / metrics.compressedBytes).toFixed(1))
+				});
 			} else {
 				// If this fires for browser requests, a proxy in front is stripping
 				// Accept-Encoding — compression is then impossible end-to-end from here.
 				const acceptEncoding = request.headers.get('accept-encoding') ?? '';
-				console.info(
-					`[Compute/server] compression skipped — Accept-Encoding: "${acceptEncoding || '(absent)'}"`
-				);
+				locals.log.debug('Compression skipped', {
+					component: 'Compute/server',
+					acceptEncoding,
+					hasAcceptEncoding: acceptEncoding !== ''
+				});
 			}
 			// Names the step a `load` (or pre-solve) spike hides in.
-			console.info(
-				`[Compute/server] prep breakdown: ` +
-					prepMarks.map(([label, ms]) => `${label}=${ms.toFixed(0)}ms`).join(' ')
-			);
+			locals.log.debug('Prep breakdown', {
+				component: 'Compute/server',
+				...Object.fromEntries(prepMarks.map(([label, ms]) => [`p_${label}Ms`, Math.round(ms)]))
+			});
 			// Aggregate cache counters — the only place evictions/quota-drops surface
 			// (per-request Server-Timing only carries hit/miss verdicts).
 			const l2 = solveCacheStats();
 			if (l2) {
-				console.info(
-					`[Compute/l2-cache] hits=${l2.hits} misses=${l2.misses} writes=${l2.writes} ` +
-						`quotaEvictions=${l2.quotaEvictions} byteEvictions=${l2.byteEvictions} ` +
-						`entries=${l2.entries} retained=${formatBytes(l2.bytes)}`
-				);
+				locals.log.debug('L2 solve-cache counters', {
+					component: 'Compute/l2-cache',
+					hits: l2.hits,
+					misses: l2.misses,
+					writes: l2.writes,
+					quotaEvictions: l2.quotaEvictions,
+					byteEvictions: l2.byteEvictions,
+					entries: l2.entries,
+					retainedBytes: l2.bytes
+				});
 			}
 			const db = definitionByteCacheStats();
-			console.info(
-				`[Compute/def-bytes] hits=${db.hits} misses=${db.misses} evictions=${db.evictions} ` +
-					`entries=${db.entries} retained=${formatBytes(db.bytes)}`
-			);
+			locals.log.debug('Definition byte-cache counters', {
+				component: 'Compute/def-bytes',
+				hits: db.hits,
+				misses: db.misses,
+				evictions: db.evictions,
+				entries: db.entries,
+				retainedBytes: db.bytes
+			});
 		}
 
 		// Re-key the (possibly coalesced) envelope to THIS request's Accept-Encoding
@@ -493,7 +524,10 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		}
 
 		const message = err instanceof Error ? err.message : 'Unknown error';
-		console.error('[API/Compute] Error:', message);
+		locals.log.error('Solve request failed', {
+			component: 'API/Compute',
+			err: renderThrown(err)
+		});
 
 		if (err instanceof TypeError && message === 'fetch failed') {
 			apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, 'Compute server is unreachable');

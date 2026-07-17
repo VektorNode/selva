@@ -7,6 +7,7 @@ import {
 	type Organization,
 	type Project
 } from '@selvajs/platform';
+import { renderThrown } from '@selvajs/server/logging';
 import { getAuthProvider } from '$lib/server/auth.server';
 import {
 	getDataProvider,
@@ -42,7 +43,7 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, locals }) => {
 		const tenancy = getTenancy();
 		const data = await request.formData();
 		const companyName = (data.get('companyName') as string | null)?.trim() ?? '';
@@ -104,7 +105,10 @@ export const actions = {
 			try {
 				await getUserProfileStore().updateProfile(SYSTEM_CONTEXT, user.id, { displayName });
 			} catch (err) {
-				console.error('[setup] display name update failed:', err);
+				locals.log.error('Display name update failed', {
+					component: 'setup',
+					err: renderThrown(err)
+				});
 			}
 		}
 
@@ -151,7 +155,10 @@ export const actions = {
 					deletedAt: null
 				});
 			} catch (err) {
-				console.error('[setup] org/project bootstrap failed:', err);
+				locals.log.error('Org/project bootstrap failed', {
+					component: 'setup',
+					err: renderThrown(err)
+				});
 			}
 		}
 

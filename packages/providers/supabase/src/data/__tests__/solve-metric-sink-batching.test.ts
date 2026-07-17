@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { RequestContext, SolveMetric } from '@selvajs/platform';
+import { NoopLogger, type ILogger, type RequestContext, type SolveMetric } from '@selvajs/platform';
 import { SupabaseSolveMetricSink } from '../SupabaseSolveMetricSink.js';
 import type { ClientBundle } from '../client.js';
+
+/**
+ * Fake logger — the sink takes an injected `ILogger` (defaulting to
+ * `NoopLogger`), so its diagnostics are captured by passing this in rather than
+ * by spying on `console`.
+ */
+function fakeLogger(): ILogger & { error: ReturnType<typeof vi.fn> } {
+	const logger = new NoopLogger() as ILogger & { error: ReturnType<typeof vi.fn> };
+	logger.error = vi.fn();
+	return logger;
+}
 
 /**
  * Batching behaviour, exercised against a fake client so these run without a
@@ -106,11 +117,11 @@ describe('SupabaseSolveMetricSink batching', () => {
 
 	it('drops the oldest rows once the buffer cap is exceeded', async () => {
 		const { bundle, inserts } = fakeBundle();
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 		const sink = new SupabaseSolveMetricSink(bundle, {
 			maxBatchSize: 1000,
 			maxBufferSize: 2,
-			flushIntervalMs: 60_000
+			flushIntervalMs: 60_000,
+			logger: fakeLogger()
 		});
 
 		await sink.record(ctx, metric({ durationMs: 1 }));
@@ -153,12 +164,12 @@ describe('SupabaseSolveMetricSink batching', () => {
 
 	it('swallows a failing flush and clears the batch', async () => {
 		const { bundle, inserts } = fakeBundle({ fail: true });
-		const err = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const sink = new SupabaseSolveMetricSink(bundle, { maxBatchSize: 1 });
+		const logger = fakeLogger();
+		const sink = new SupabaseSolveMetricSink(bundle, { maxBatchSize: 1, logger });
 
 		await sink.record(ctx, metric());
 		await expect(sink.flush()).resolves.toBeUndefined();
-		expect(err).toHaveBeenCalled();
+		expect(logger.error).toHaveBeenCalled();
 
 		// The failed batch is not retried on the next flush.
 		await sink.flush();

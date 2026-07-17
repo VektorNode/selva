@@ -251,8 +251,15 @@ matter how clever the cache. The strategy shifts:
   provider is single-instance by design). What blocks horizontal scaling is
   exactly the in-process state: the FIFO queue, the warm-client LRU, the remote
   definition byte cache, and the fixed-window rate limiter. The job queue
-  externalizes the first; the rest are acceptable per-instance or move to
-  Redis/Postgres when a second instance appears.
+  externalizes the first; the caches are acceptable per-instance, where a split
+  costs only hit rate.
+- **The rate limiter is the exception, and needs a decision before instance two.**
+  Splitting its buckets across N instances doesn't degrade a cache — it multiplies
+  the enforced rate by N, since each instance independently admits a full window
+  per key. Either accept N× and size the configured limit for it, or move the
+  limiter to a shared store; the state sits behind `createComputeRateLimiter` so
+  a Redis implementation slots in without touching call sites. (Memory growth is
+  already handled — buckets self-evict.)
 
 ---
 

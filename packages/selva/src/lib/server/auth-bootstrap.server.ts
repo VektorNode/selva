@@ -11,6 +11,7 @@ import {
 import {
 	getAuthProvider,
 	getDataProvider,
+	getLogger,
 	getOrganizationProvider,
 	getPermissionStore,
 	getProjectProvider,
@@ -209,10 +210,11 @@ export function wireHeaderAuthBootstrap(): void {
 		// this hook. Without a warning the operator sees `user:null` indefinitely
 		// and has no signal that they need to upgrade or hand-seed the allowlist.
 		if (env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL?.trim()) {
-			console.warn(
-				'[selva] BOOTSTRAP_INSTANCE_ADMIN_EMAIL is set but the installed ' +
-					'@selvajs/header-auth-provider does not expose setBootstrapAllowlistPolicy. ' +
-					'Upgrade the provider, or hand-seed header-allowlist.json.'
+			getLogger().warn(
+				'BOOTSTRAP_INSTANCE_ADMIN_EMAIL is set but the installed @selvajs/header-auth-provider ' +
+					'does not expose setBootstrapAllowlistPolicy. Upgrade the provider, or hand-seed ' +
+					'header-allowlist.json.',
+				{ component: 'auth-bootstrap' }
 			);
 		}
 		return;

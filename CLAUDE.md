@@ -210,6 +210,8 @@ Restart Rhino completely after installation.
 
 Login IPs are processed by the rate limiter but stay in-memory, expire within the rate-limit window, and are never persisted.
 
+**Logs are an escape hatch that erasure cannot follow.** `onUserDeleted` scrubs rows; it has no reach into stdout, which on a real deployment has already shipped to a collector and may be indexed by a third party. So a log line carrying personal data outlives every erasure guarantee above. Do not log a whole domain object — an `invite.created` payload embeds the invitee's email, and `console.error('...', { event })` was silently copying it to stdout until 2026-07-17. Log identifiers (`eventType`, `actorId`, `userId`), never payloads. The pino redaction list (`packages/server/src/logging/PinoLogger.ts`) scrubs by **credential field name** (`token`, `apiKey`, …) and will NOT catch an email nested in a payload — it's a backstop for accidents, not a licence to log objects.
+
 ## Requirements
 
 - [pnpm](https://pnpm.io) >= 10.0.0 (Node.js package manager — version pinned in `packageManager`, activated via Corepack)

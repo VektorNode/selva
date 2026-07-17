@@ -12,12 +12,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const serverId = url.searchParams.get('serverId');
 	if (!serverId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'serverId required');
 
-	// Admin route — read the full config; admin can probe any server.
-	const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
+	// Admin route — read the full config; admin can probe any server. Only the
+	// probed server's key is decrypted.
+	const store = getComputeServerConfigStore();
+	const config = await store.getConfig(locals.ctx!);
 	const server = findServerById(config, serverId);
 	if (!server) apiError(404, ApiErrorCode.NOT_FOUND, 'Server not found');
 
-	const stats = new ComputeServerStats(server.serverUrl, server.apiKey);
+	const apiKey = server.hasApiKey ? await store.getServerApiKey(locals.ctx!, server.id) : undefined;
+	const stats = new ComputeServerStats(server.serverUrl, apiKey);
 	try {
 		// Probe liveness first; only fan out to version/plugins when reachable.
 		const reachable = await stats.isServerOnline();

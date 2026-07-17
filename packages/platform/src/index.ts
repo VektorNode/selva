@@ -144,7 +144,7 @@ export type {
 	OrgComputeServer
 } from './computeServer/types.js';
 export { isPlatformServer, isOrgServer } from './computeServer/types.js';
-export type { IComputeServerStore } from './computeServer/interface.js';
+export type { IComputeServerStore, GetConfigOptions } from './computeServer/interface.js';
 // NOTE: the at-rest secret crypto FUNCTIONS (`encryptSecret` etc.) are NOT
 // re-exported here — they use `node:crypto` and this barrel is imported by
 // client `.svelte` code, so a browser bundle would fail to resolve them. Import
@@ -225,6 +225,12 @@ export { NoopSolveResultCache } from './solveCache/interface.js';
 // ---------------------------------------------------------------------------
 export type { IErrorReporter, ErrorContext } from './errors/interface.js';
 export { NoopErrorReporter } from './errors/interface.js';
+
+// ---------------------------------------------------------------------------
+// logging (structured operator-facing log records)
+// ---------------------------------------------------------------------------
+export type { ILogger, LogFields, LogLevel } from './logging/interface.js';
+export { NoopLogger } from './logging/interface.js';
 
 // ---------------------------------------------------------------------------
 // bindings (server-side resolver for schema inputs marked `source.kind === 'server'`)

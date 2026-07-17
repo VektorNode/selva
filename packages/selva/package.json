@@ -41,6 +41,7 @@
 		"bits-ui": "^2.18.0",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
+		"pino": "^10.3.1",
 		"rhino3dm": "8.17.0",
 		"sharp": "^0.34.5",
 		"tailwind-merge": "catalog:",
@@ -52,6 +53,7 @@
 		"@sentry/node": "^10.63.0"
 	},
 	"devDependencies": {
+		"@playwright/test": "catalog:",
 		"@selvajs/config": "workspace:*",
 		"@selvajs/header-auth-provider": "workspace:*",
 		"@selvajs/local-provider": "workspace:*",
@@ -60,7 +62,6 @@
 		"@selvajs/server": "workspace:*",
 		"@selvajs/supabase-provider": "workspace:*",
 		"@selvajs/ui": "workspace:*",
-		"@playwright/test": "catalog:",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@types/three": "catalog:",
 		"rimraf": "catalog:",

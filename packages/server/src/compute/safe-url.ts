@@ -1,5 +1,6 @@
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { NoopLogger, type ILogger } from '@selvajs/platform';
 
 /**
  * SSRF guard for `loadRemoteDefinition`. Without it an authenticated user could
@@ -163,12 +164,19 @@ export function isSafeRemoteDefinitionUrl(raw: string): boolean {
  * so callers can `await assertSafeRemoteDefinitionUrl(url)` inline. Throws on
  * any rejection.
  */
-export async function assertSafeRemoteDefinitionUrl(raw: string): Promise<string> {
+export async function assertSafeRemoteDefinitionUrl(
+	raw: string,
+	logger: ILogger = new NoopLogger()
+): Promise<string> {
 	// Security-relevant event: the thrown message is deliberately generic (no
 	// oracle for the caller), so log the specifics server-side instead — which
 	// host was blocked and by which layer.
 	if (!isSafeRemoteDefinitionUrl(raw)) {
-		console.warn(`[Compute/ssrf] blocked remote definition URL (literal filter): ${hostOf(raw)}`);
+		logger.warn('Blocked remote definition URL', {
+			component: 'Compute/ssrf',
+			reason: 'literal-filter',
+			host: hostOf(raw)
+		});
 		throw new Error('Remote definition URL is not allowed');
 	}
 
@@ -181,14 +189,21 @@ export async function assertSafeRemoteDefinitionUrl(raw: string): Promise<string
 	try {
 		resolved = await lookup(host, { all: true });
 	} catch {
-		console.warn(`[Compute/ssrf] blocked remote definition URL (DNS lookup failed): ${host}`);
+		logger.warn('Blocked remote definition URL', {
+			component: 'Compute/ssrf',
+			reason: 'dns-lookup-failed',
+			host
+		});
 		throw new Error('Remote definition URL is not allowed');
 	}
 	if (resolved.length === 0 || resolved.some((r) => isBlockedIp(r.address))) {
 		const blocked = resolved.filter((r) => isBlockedIp(r.address)).map((r) => r.address);
-		console.warn(
-			`[Compute/ssrf] blocked remote definition URL (resolves to blocked IP ${blocked.join(', ') || 'none'}): ${host}`
-		);
+		logger.warn('Blocked remote definition URL', {
+			component: 'Compute/ssrf',
+			reason: 'resolves-to-blocked-ip',
+			host,
+			blockedIps: blocked
+		});
 		throw new Error('Remote definition URL is not allowed');
 	}
 	return raw;

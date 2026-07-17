@@ -38,10 +38,12 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 			if (sentChunks >= mb) {
 				controller.close();
 				const secs = (performance.now() - start) / 1000;
-				console.log(
-					`[Compute/diag] streamed ${mb} MB in ${secs.toFixed(1)}s ` +
-						`(${(mb / secs).toFixed(1)} MB/s, server-side view)`
-				);
+				locals.log.debug('Streamed throughput probe (server-side view)', {
+					component: 'Compute/diag',
+					megabytes: mb,
+					durationSec: Number(secs.toFixed(1)),
+					throughputMbPerSec: Number((mb / secs).toFixed(1))
+				});
 				return;
 			}
 			const chunk = new Uint8Array(CHUNK_BYTES);

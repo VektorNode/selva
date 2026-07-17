@@ -44,8 +44,33 @@ describe('LocalComputeServerStore — apiKey encryption at rest', () => {
 			'a1'
 		);
 
-		const got = await store.getConfig(SYSTEM_CONTEXT);
+		const got = await store.getConfig(SYSTEM_CONTEXT, { includeApiKeys: true });
 		expect(got.servers[0].apiKey).toBe('super-secret-value');
+	});
+
+	it('omits apiKey unless includeApiKeys is set, but still reports hasApiKey', async () => {
+		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
+		await store.savePlatformServers(
+			SYSTEM_CONTEXT,
+			[makePlatformServer({ apiKey: 'super-secret-value' })],
+			'a1'
+		);
+
+		const got = await store.getConfig(SYSTEM_CONTEXT);
+		expect(got.servers[0].apiKey).toBeUndefined();
+		expect(got.servers[0].hasApiKey).toBe(true);
+	});
+
+	it('getServerApiKey returns one decrypted key, and undefined for an unknown id', async () => {
+		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
+		await store.savePlatformServers(
+			SYSTEM_CONTEXT,
+			[makePlatformServer({ apiKey: 'super-secret-value' })],
+			'a1'
+		);
+
+		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'a1')).toBe('super-secret-value');
+		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'nope')).toBeUndefined();
 	});
 
 	it('does not write the plaintext apiKey to disk', async () => {
@@ -75,9 +100,12 @@ describe('LocalComputeServerStore — apiKey encryption at rest', () => {
 		);
 
 		const reader = new LocalComputeServerStore(configPath, OTHER_KEY);
-		const got = await reader.getConfig(SYSTEM_CONTEXT);
+		const got = await reader.getConfig(SYSTEM_CONTEXT, { includeApiKeys: true });
 		expect(got.servers).toHaveLength(1);
 		expect(got.servers[0].apiKey).toBeUndefined();
+
+		// The same tolerance on the single-key path the solve now uses.
+		expect(await reader.getServerApiKey(SYSTEM_CONTEXT, 'a1')).toBeUndefined();
 	});
 
 	it('verifySecrets reports key_mismatch when the at-rest key has rotated', async () => {
@@ -168,7 +196,12 @@ describe('LocalComputeServerStore — apiKey encryption at rest', () => {
 		);
 
 		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
-		await expect(store.getConfig(SYSTEM_CONTEXT)).rejects.toThrow(/unencrypted apiKey/);
+		await expect(store.getConfig(SYSTEM_CONTEXT, { includeApiKeys: true })).rejects.toThrow(
+			/unencrypted apiKey/
+		);
+		// The key-free read never touches the secret, so it cannot detect this —
+		// `verifySecrets` is the boot-time guard that does.
+		await expect(store.getConfig(SYSTEM_CONTEXT)).resolves.toBeDefined();
 	});
 
 	it('preserves servers with no apiKey', async () => {

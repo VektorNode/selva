@@ -340,9 +340,13 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		const config = await this.readConfig();
 		const parent = config.definitions[definitionId];
 		if (!this.live(parent)) return paginate([], opts);
+		// `schema` is stripped to match the interface contract (and Supabase, which
+		// leaves the column out of the list projection): listed rows are metadata
+		// only, and callers who need the schema go through `getVersion`.
 		const rows = Object.values(config.definitionVersions)
 			.filter((v) => v.definitionId === definitionId)
-			.sort((a, b) => b.versionNumber - a.versionNumber);
+			.sort((a, b) => b.versionNumber - a.versionNumber)
+			.map(({ schema: _schema, ...rest }) => rest);
 		return paginate(rows, opts);
 	}
 

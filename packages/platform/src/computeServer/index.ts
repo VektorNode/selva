@@ -5,7 +5,7 @@ export type {
 	OrgComputeServer
 } from './types.js';
 export { isPlatformServer, isOrgServer } from './types.js';
-export type { IComputeServerStore } from './interface.js';
+export type { IComputeServerStore, GetConfigOptions } from './interface.js';
 // At-rest secret crypto (uses `node:crypto`). Server-only — deliberately NOT
 // re-exported from the root barrel, which client `.svelte` code imports and
 // where a browser bundle can't resolve `node:crypto`. Import these from

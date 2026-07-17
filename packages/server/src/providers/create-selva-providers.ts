@@ -33,7 +33,7 @@ import type {
 	SelvaFlags,
 	TenancyMode
 } from '@selvajs/platform';
-import { isFlagEnabled, NoopSolveMetricSink } from '@selvajs/platform';
+import { isFlagEnabled, NoopSolveMetricSink, NoopLogger, type ILogger } from '@selvajs/platform';
 import { readBool, type EnvRecord } from '../compute/limits.js';
 
 export type ProviderFactory<T> = (env: EnvRecord) => T;
@@ -59,8 +59,17 @@ export interface CreateSelvaProvidersOptions {
 	 * export (a `SelvaConfig` or factory) replaces the env-driven wiring.
 	 */
 	configPath?: string;
-	/** Boot-summary sink, called once on first `resolve()`. Default: `console.info`. */
+	/**
+	 * Boot-summary sink, called once on first `resolve()`. Kept for callers that
+	 * want the rendered one-line string. Default: none — the summary goes to
+	 * `logger` instead, so this library never writes to stdout unbidden.
+	 */
 	onBoot?: (summary: string) => void;
+	/**
+	 * Structured logger. Receives the boot summary as fields on first `resolve()`
+	 * when `onBoot` is not supplied. Defaults to `NoopLogger`.
+	 */
+	logger?: ILogger;
 }
 
 export interface SelvaProviderRuntime {
@@ -190,7 +199,7 @@ export async function createSelvaProviders(
 	options: CreateSelvaProvidersOptions
 ): Promise<SelvaProviderRuntime> {
 	const raw = await loadConfigSource(options);
-	const onBoot = options.onBoot ?? console.info;
+	const logger = options.logger ?? new NoopLogger();
 
 	let config: SelvaConfig | undefined;
 	let solveMetricSink: ISolveMetricSink | undefined;
@@ -203,14 +212,27 @@ export async function createSelvaProviders(
 		// wired without grepping env vars or reading the config file. Provider
 		// names come from the IAuthProvider.name field; data/storage adapters
 		// don't expose a name, so we infer from the constructor.
-		onBoot(
-			`[selva] providers wired: ` +
-				`auth=${config.auth.name} ` +
-				`data=${config.data.constructor.name} ` +
-				`storage=${config.storage.constructor.name} ` +
-				`tenancy=${config.tenancy ?? 'single'}` +
-				(options.configPath ? ` config=${options.configPath}` : '')
-		);
+		const wiring = {
+			component: 'selva',
+			auth: config.auth.name,
+			data: config.data.constructor.name,
+			storage: config.storage.constructor.name,
+			tenancy: config.tenancy ?? 'single',
+			...(options.configPath ? { configPath: options.configPath } : {})
+		};
+
+		if (options.onBoot) {
+			options.onBoot(
+				`[selva] providers wired: ` +
+					`auth=${wiring.auth} ` +
+					`data=${wiring.data} ` +
+					`storage=${wiring.storage} ` +
+					`tenancy=${wiring.tenancy}` +
+					(options.configPath ? ` config=${options.configPath}` : '')
+			);
+		} else {
+			logger.info('Providers wired', wiring);
+		}
 
 		return config;
 	}

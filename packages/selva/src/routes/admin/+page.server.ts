@@ -1,6 +1,7 @@
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getOrganizationProvider } from '$lib/server/providers.server';
-import { hasPermission, type PlatformPermission } from '@selvajs/platform';
+import { hasPermission, type ILogger, type PlatformPermission } from '@selvajs/platform';
+import { renderThrown } from '@selvajs/server/logging';
 import pkg from '../../../package.json';
 import type { PageServerLoad } from './$types';
 
@@ -18,14 +19,17 @@ interface AdminOrg {
  * multi-tenant). Returns null if no org exists yet or the lookup fails — the
  * cards just hide.
  */
-async function loadAdminOrg(ctx: App.Locals['ctx']): Promise<AdminOrg | null> {
+async function loadAdminOrg(ctx: App.Locals['ctx'], log: ILogger): Promise<AdminOrg | null> {
 	if (!ctx) return null;
 	try {
 		const page = await getOrganizationProvider().listOrgs(ctx, { limit: 1 });
 		const org = page.items[0];
 		return org ? { id: org.id, name: org.name, assets: org.assets ?? {} } : null;
 	} catch (err) {
-		console.error('Failed to load admin org for asset cards:', err);
+		log.error('Failed to load admin org for asset cards', {
+			component: 'admin',
+			err: renderThrown(err)
+		});
 		return null;
 	}
 }
@@ -44,7 +48,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	// Branding-asset management is an org-admin action — only resolve the org for
 	// users who can manage it. The upload routes enforce the same permission.
-	const org = canManageOrg ? await loadAdminOrg(ctx) : null;
+	const org = canManageOrg ? await loadAdminOrg(ctx, locals.log) : null;
 
 	if (!canSeeUserStats) {
 		return { stats: { users: null }, platformPermissions, version: pkg.version, org };
@@ -60,7 +64,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		};
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
-		console.error('Failed to load admin dashboard:', err);
+		locals.log.error('Failed to load admin dashboard', {
+			component: 'admin',
+			err: renderThrown(err)
+		});
 		return { stats: { users: null }, platformPermissions, version: pkg.version, org };
 	}
 };

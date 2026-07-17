@@ -1,4 +1,5 @@
 import type { ISolveMetricSink, RequestContext, SolveMetric } from '@selvajs/platform';
+import { NoopLogger, type ILogger } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 
 type MetricRow = {
@@ -25,6 +26,11 @@ export interface SolveMetricSinkOptions {
 	 * stalled or failing backend cannot grow the buffer without bound.
 	 */
 	maxBufferSize?: number;
+	/**
+	 * Structured logger for flush failures and buffer drops. Optional; defaults to
+	 * `NoopLogger` so this library never writes to stdout unless the app wires one.
+	 */
+	logger?: ILogger;
 }
 
 const DEFAULT_MAX_BATCH_SIZE = 100;
@@ -56,6 +62,7 @@ export class SupabaseSolveMetricSink implements ISolveMetricSink {
 	private readonly maxBatchSize: number;
 	private readonly flushIntervalMs: number;
 	private readonly maxBufferSize: number;
+	private readonly logger: ILogger;
 
 	constructor(
 		private readonly clients: ClientBundle,
@@ -64,6 +71,7 @@ export class SupabaseSolveMetricSink implements ISolveMetricSink {
 		this.maxBatchSize = opts.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE;
 		this.flushIntervalMs = opts.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
 		this.maxBufferSize = opts.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE;
+		this.logger = opts.logger ?? new NoopLogger();
 	}
 
 	async record(ctx: RequestContext, metric: SolveMetric): Promise<void> {
@@ -86,7 +94,10 @@ export class SupabaseSolveMetricSink implements ISolveMetricSink {
 		if (this.buffer.length > this.maxBufferSize) {
 			const dropped = this.buffer.length - this.maxBufferSize;
 			this.buffer.splice(0, dropped);
-			console.error(`[SupabaseSolveMetricSink] buffer full, dropped ${dropped} metric(s)`);
+			this.logger.error('Metric buffer full, dropped oldest metrics', {
+				component: 'SupabaseSolveMetricSink',
+				dropped
+			});
 		}
 
 		if (this.buffer.length >= this.maxBatchSize) {
@@ -144,12 +155,18 @@ export class SupabaseSolveMetricSink implements ISolveMetricSink {
 		try {
 			const { error } = await this.clients.serviceClient.from('solve_metrics').insert(batch);
 			if (error) {
-				console.error('[SupabaseSolveMetricSink] insert failed:', error.message, {
-					count: batch.length
+				this.logger.error('Metric batch insert failed', {
+					component: 'SupabaseSolveMetricSink',
+					count: batch.length,
+					err: error.message
 				});
 			}
 		} catch (err) {
-			console.error('[SupabaseSolveMetricSink] unexpected error:', err, { count: batch.length });
+			this.logger.error('Unexpected error writing metric batch', {
+				component: 'SupabaseSolveMetricSink',
+				count: batch.length,
+				err: err instanceof Error ? (err.stack ?? err.message) : String(err)
+			});
 		}
 	}
 }

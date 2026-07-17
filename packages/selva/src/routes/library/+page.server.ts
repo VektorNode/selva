@@ -7,6 +7,7 @@ import {
 	getPlatformProjectGrantStore
 } from '$lib/server/providers.server';
 import { projectAccessInputFromRows } from '$lib/server/access.server';
+import { renderThrown } from '@selvajs/server/logging';
 import { SYSTEM_CONTEXT, canView } from '@selvajs/platform';
 import type { DefinitionRecord, Project, OrgMember } from '@selvajs/platform';
 
@@ -101,7 +102,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			projectMap
 		};
 	} catch (err) {
-		console.error('[App Home] Failed to load definitions:', err);
+		locals.log.error('Failed to load definitions', {
+			component: 'App Home',
+			err: renderThrown(err)
+		});
 		return {
 			records: [] as DefinitionRecord[],
 			starredRecords: [] as DefinitionRecord[],

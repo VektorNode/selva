@@ -1,4 +1,10 @@
-import { AUDIT_EVENT_VERSION, type DomainEvent, type IEventSink } from '@selvajs/platform';
+import {
+	AUDIT_EVENT_VERSION,
+	NoopLogger,
+	type DomainEvent,
+	type IEventSink,
+	type ILogger
+} from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 
 /**
@@ -11,7 +17,14 @@ import type { ClientBundle } from './client.js';
  * write is logged and swallowed so the response still completes.
  */
 export class SupabaseEventSink implements IEventSink {
-	constructor(private readonly clients: ClientBundle) {}
+	private readonly logger: ILogger;
+
+	constructor(
+		private readonly clients: ClientBundle,
+		opts: { logger?: ILogger } = {}
+	) {
+		this.logger = opts.logger ?? new NoopLogger();
+	}
 
 	async emit(event: DomainEvent): Promise<void> {
 		try {
@@ -22,10 +35,23 @@ export class SupabaseEventSink implements IEventSink {
 				data: event
 			});
 			if (error) {
-				console.error('[SupabaseEventSink] insert failed:', error.message, { event });
+				// Only the event's identifiers are logged, never the whole event: an
+				// `invite.created` payload embeds the invitee's email address, and log
+				// records outlive and out-travel the audit row itself.
+				this.logger.error('Audit event insert failed', {
+					component: 'SupabaseEventSink',
+					eventType: event.type,
+					actorId: event.actorId,
+					err: error.message
+				});
 			}
 		} catch (err) {
-			console.error('[SupabaseEventSink] unexpected error:', err, { event });
+			this.logger.error('Unexpected error writing audit event', {
+				component: 'SupabaseEventSink',
+				eventType: event.type,
+				actorId: event.actorId,
+				err: err instanceof Error ? (err.stack ?? err.message) : String(err)
+			});
 		}
 	}
 }

@@ -55,12 +55,17 @@ export interface IDefinitionStore {
 
 	// Versions (immutable rows)
 	createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void>;
-	/** Newest first by `versionNumber`. */
+	/**
+	 * Newest first by `versionNumber`. Listed rows carry metadata only — `schema`
+	 * is always `undefined` here regardless of what is stored, because it is a
+	 * large blob no list caller needs. Use `getVersion` when you need the schema.
+	 */
 	listVersions(
 		ctx: RequestContext,
 		definitionId: string,
 		opts?: ListOptions
 	): Promise<Page<DefinitionVersion>>;
+	/** The full row, including the cached `schema` when one has been extracted. */
 	getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null>;
 
 	/**

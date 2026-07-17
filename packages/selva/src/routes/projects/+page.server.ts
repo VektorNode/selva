@@ -7,6 +7,7 @@ import {
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { projectAccessInputFromRows } from '$lib/server/access.server';
+import { renderThrown } from '@selvajs/server/logging';
 import {
 	hasPermission,
 	canView,
@@ -174,7 +175,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		};
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
-		console.error('Failed to load definitions page:', err);
+		locals.log.error('Failed to load definitions page', {
+			component: 'projects',
+			err: renderThrown(err)
+		});
 		return {
 			projects: [] as ProjectWithMembers[],
 			records: [] as DefinitionRecord[],

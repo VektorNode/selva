@@ -36,12 +36,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (action !== 'purge' && action !== 'shutdown')
 		apiError(400, ApiErrorCode.VALIDATION_FAILED, "action must be 'purge' or 'shutdown'");
 
-	// Admin route — read the full config; admin can act on any server.
-	const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
+	// Admin route — read the full config; admin can act on any server. Only the
+	// targeted server's key is decrypted.
+	const store = getComputeServerConfigStore();
+	const config = await store.getConfig(locals.ctx!);
 	const server = findServerById(config, serverId);
 	if (!server) apiError(404, ApiErrorCode.NOT_FOUND, 'Server not found');
 
-	const stats = new ComputeServerStats(server.serverUrl, server.apiKey);
+	const apiKey = server.hasApiKey ? await store.getServerApiKey(locals.ctx!, server.id) : undefined;
+	const stats = new ComputeServerStats(server.serverUrl, apiKey);
 	try {
 		if (action === 'purge') {
 			const result = await stats.purgeAllChildren();

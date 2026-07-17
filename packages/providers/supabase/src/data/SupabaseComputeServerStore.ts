@@ -4,19 +4,33 @@ import {
 	type IComputeServerStore,
 	type ComputeConfig,
 	type ComputeServerConfig,
+	type GetConfigOptions,
 	type RequestContext,
 	type SecretVerificationFailure,
-	type SecretVerificationReport
+	type SecretVerificationReport,
+	type ILogger
 } from '@selvajs/platform';
+import { NoopLogger } from '@selvajs/platform';
 // Secret crypto functions come from the server-only subpath (they use
 // `node:crypto`, kept out of the root barrel so client bundles don't pull it in).
 import { decryptSecret, encryptSecret, isEncryptedSecret } from '@selvajs/platform/computeServer';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 
-/** Explicit column list for `compute_servers` — every field `rowToServer` consumes. */
+/**
+ * Explicit column list for `compute_servers`, minus the encrypted `api_key`.
+ * Reading a key costs a decrypt per row, so the default projection leaves it
+ * out entirely and `getConfig` reports only whether one is set.
+ */
 const SERVER_COLUMNS =
-	'id, scope, owner_org_id, shared_with_all, label, server_url, api_key, timeout_ms, retry_count';
+	'id, scope, owner_org_id, shared_with_all, label, server_url, timeout_ms, retry_count, has_api_key';
+/**
+ * Projection for the `includeApiKeys` path — the base columns plus the secret.
+ * Spelled out rather than interpolated: supabase-js infers the row type from
+ * the literal column string, and a template literal degrades it to `string`.
+ */
+const SERVER_COLUMNS_WITH_KEY =
+	'id, scope, owner_org_id, shared_with_all, label, server_url, timeout_ms, retry_count, has_api_key, api_key';
 /** Columns from the share join table read in `getConfig`. */
 const SHARE_COLUMNS = 'server_id, org_id';
 /** Columns from the per-org default table read in `getConfig`. */
@@ -44,17 +58,31 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 	 * local provider's on-disk envelope. Optional only for legacy construction
 	 * paths (tests that never touch apiKeys); a store built without a key throws
 	 * if asked to write or read a secret. Wire it via `SupabaseDataProvider`.
+	 *
+	 * `logger` is optional and defaults to `NoopLogger` — this is library code, so
+	 * it stays silent unless the app wires a real logger in.
 	 */
+	private readonly logger: ILogger;
+
 	constructor(
 		private readonly clients: ClientBundle,
-		private readonly secretKey?: Buffer
-	) {}
+		private readonly secretKey?: Buffer,
+		logger?: ILogger
+	) {
+		this.logger = logger ?? new NoopLogger();
+	}
 
-	async getConfig(ctx: RequestContext): Promise<ComputeConfig> {
+	async getConfig(ctx: RequestContext, opts: GetConfigOptions = {}): Promise<ComputeConfig> {
 		const client = this.clients.forRequest(ctx);
+		const withKeys = opts.includeApiKeys === true;
 
 		const [serversRes, sharesRes, orgDefRes, platDefRes] = await Promise.all([
-			client.from('compute_servers').select(SERVER_COLUMNS),
+			// Two literal selects rather than one interpolated column string:
+			// supabase-js derives the row type from the literal, so a computed one
+			// resolves to a ParserError instead of a row.
+			withKeys
+				? client.from('compute_servers').select(SERVER_COLUMNS_WITH_KEY)
+				: client.from('compute_servers').select(SERVER_COLUMNS),
 			client.from('compute_server_shares').select(SHARE_COLUMNS),
 			client.from('compute_server_org_defaults').select(ORG_DEFAULT_COLUMNS),
 			client
@@ -78,7 +106,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		}
 
 		const servers = (serversRes.data ?? []).map((row) =>
-			rowToServer(this.decryptRowApiKey(row), sharedByServer)
+			rowToServer(withKeys ? this.decryptRowApiKey(row) : row, sharedByServer, withKeys)
 		);
 
 		const orgDefaults: Record<string, string> = {};
@@ -91,6 +119,24 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			defaultServerId: platDefRes.data?.default_server_id ?? undefined,
 			orgDefaults
 		};
+	}
+
+	/**
+	 * One server's decrypted key — the solve path's entry point, replacing a
+	 * whole-table read + N decrypts with a single-row lookup and one decrypt.
+	 * Tolerant in the same way `decryptRowApiKey` is: an unknown id or an
+	 * unreadable ciphertext yields `undefined` rather than throwing.
+	 */
+	async getServerApiKey(ctx: RequestContext, serverId: string): Promise<string | undefined> {
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('compute_servers')
+			.select('id, label, api_key')
+			.eq('id', serverId)
+			.maybeSingle();
+		if (error) throw mapPostgrestError(error);
+		if (!data) return undefined;
+		return this.decryptRowApiKey(data as ServerRow).api_key ?? undefined;
 	}
 
 	async savePlatformServers(
@@ -245,28 +291,32 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		if (!isEncryptedSecret(row.api_key)) {
 			// Legacy/hand-inserted plaintext. Pass through so an existing key
 			// keeps working; verifySecrets() flags it for re-save via /admin/compute.
-			console.warn(
-				`[selva] compute_servers row "${row.label}" (${row.id}) has a plaintext api_key. ` +
-					'Re-save it via /admin/compute so it is stored encrypted.'
+			this.logger.warn(
+				'Compute server row has a plaintext api_key; re-save it via /admin/compute so it is stored encrypted',
+				{ component: 'selva', serverLabel: row.label, serverId: row.id }
 			);
 			return row;
 		}
 		if (!this.secretKey) {
-			console.warn(
-				`[selva] Cannot decrypt api_key for compute server "${row.label}" (${row.id}): ` +
-					'SELVA_AT_REST_KEY is not configured. Returning without a key; solves will fail.'
+			this.logger.warn(
+				'Cannot decrypt api_key: SELVA_AT_REST_KEY is not configured. Returning without a key; solves will fail',
+				{ component: 'selva', serverLabel: row.label, serverId: row.id }
 			);
 			return { ...row, api_key: null };
 		}
 		try {
 			return { ...row, api_key: decryptSecret(row.api_key, this.secretKey) };
 		} catch (cause) {
-			console.warn(
-				`[selva] Could not decrypt api_key for compute server "${row.label}" (${row.id}). ` +
-					'The stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
-					'This server will be returned without an apiKey; solves against it will fail. ' +
-					'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY.',
-				cause
+			this.logger.warn(
+				'Could not decrypt api_key: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
+					'This server is returned without an apiKey and solves against it will fail. ' +
+					'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY',
+				{
+					component: 'selva',
+					serverLabel: row.label,
+					serverId: row.id,
+					err: cause instanceof Error ? (cause.stack ?? cause.message) : String(cause)
+				}
 			);
 			return { ...row, api_key: null };
 		}
@@ -329,17 +379,32 @@ interface ServerRow {
 	shared_with_all: boolean;
 	label: string;
 	server_url: string;
-	api_key: string | null;
+	/** Absent unless the row was read with `SERVER_COLUMNS_WITH_KEY`. */
+	api_key?: string | null;
+	/** Generated column — true when a key is stored, without reading it. */
+	has_api_key?: boolean;
 	timeout_ms: number | null;
 	retry_count: number | null;
 }
 
-function rowToServer(row: ServerRow, sharedByServer: Map<string, string[]>): ComputeServerConfig {
+/**
+ * `withKey` mirrors the projection the row was read with. It gates `apiKey`
+ * explicitly rather than trusting the row's shape, so a key can never ride along
+ * on a read that didn't ask for one.
+ */
+function rowToServer(
+	row: ServerRow,
+	sharedByServer: Map<string, string[]>,
+	withKey: boolean
+): ComputeServerConfig {
 	const common = {
 		id: row.id,
 		label: row.label,
 		serverUrl: row.server_url,
-		apiKey: row.api_key ?? undefined,
+		apiKey: withKey ? (row.api_key ?? undefined) : undefined,
+		// Prefer the generated column; fall back to the key itself for rows read
+		// with the key-bearing projection on a DB predating the column.
+		hasApiKey: row.has_api_key ?? !!row.api_key,
 		timeoutMs: row.timeout_ms ?? undefined,
 		retryCount: row.retry_count ?? undefined
 	};
@@ -356,7 +421,13 @@ function rowToServer(row: ServerRow, sharedByServer: Map<string, string[]>): Com
 	return { ...common, scope: 'org', ownerOrgId: row.owner_org_id };
 }
 
-function serverToRow(s: ComputeServerConfig): ServerRow {
+/**
+ * Insert shape. Deliberately not `ServerRow`: `has_api_key` is generated by the
+ * database and rejected on write, so the writable columns are their own type.
+ */
+type ServerWriteRow = Omit<ServerRow, 'has_api_key'>;
+
+function serverToRow(s: ComputeServerConfig): ServerWriteRow {
 	const base = {
 		id: s.id,
 		label: s.label,

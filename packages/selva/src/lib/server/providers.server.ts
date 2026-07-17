@@ -2,7 +2,10 @@ import { env } from '$env/dynamic/private';
 import type {
 	IErrorReporter,
 	IEventSink,
+	ILogger,
 	ISolveMetricSink,
+	LogFields,
+	LogLevel,
 	SelvaBranding,
 	SelvaConfig,
 	SelvaFlags,
@@ -16,6 +19,7 @@ import * as header from '@selvajs/header-auth-provider';
 import { DefinitionService } from './definitions/DefinitionService.js';
 import { OrgAssetService } from './organizations/OrgAssetService.js';
 import { SentryErrorReporter } from '@selvajs/server/errors';
+import { ConsoleLogger, createLogger, renderThrown } from '@selvajs/server/logging';
 
 // Provider wiring lives in `@selvajs/server/providers`
 // (`createSelvaProviders`): env-driven selection over the registry below, an
@@ -24,16 +28,35 @@ import { SentryErrorReporter } from '@selvajs/server/errors';
 // time). This file is the app's composition root: the registry of bundled
 // provider implementations, the service singletons, and error reporting.
 
+/**
+ * Forwards to whatever the root logger currently is, rather than capturing it.
+ *
+ * Provider wiring runs at module scope, while `_logger` starts as a console
+ * placeholder and is swapped for pino once its async load resolves (see the
+ * Logging section below). A provider handed `getLogger()` directly at
+ * construction would pin the placeholder for the process's whole life; this
+ * indirection keeps a long-lived provider on the current logger.
+ */
+export const lazyLogger: ILogger = {
+	debug: (m: string, f?: LogFields) => getLogger().debug(m, f),
+	info: (m: string, f?: LogFields) => getLogger().info(m, f),
+	warn: (m: string, f?: LogFields) => getLogger().warn(m, f),
+	error: (m: string, f?: LogFields) => getLogger().error(m, f),
+	child: (f: LogFields) => getLogger().child(f)
+};
+
 /** The provider implementations bundled with the Selva app. */
 const registry: ProviderRegistry = {
 	auth: {
 		local: (e) => local.LocalAuthProvider.fromEnv(e),
 		supabase: (e) => supa.SupabaseAuthProvider.fromEnv(e),
-		header: (e) => header.HeaderAuthProvider.fromEnv(e)
+		header: (e) => header.HeaderAuthProvider.fromEnv(e, lazyLogger)
 	},
 	data: {
 		local: (e) => local.LocalDataProvider.fromEnv(e),
-		supabase: (e) => supa.SupabaseDataProvider.fromEnv(e)
+		// `events` is the second param and stays defaulted — the app wires its
+		// event sink separately (see getEventSink below); the logger is third.
+		supabase: (e) => supa.SupabaseDataProvider.fromEnv(e, undefined, lazyLogger)
 	},
 	storage: {
 		local: (e) => local.LocalStorageProvider.fromEnv(e),
@@ -43,7 +66,8 @@ const registry: ProviderRegistry = {
 
 const runtime = await createSelvaProviders(env, {
 	registry,
-	configPath: env.SELVA_CONFIG_PATH
+	configPath: env.SELVA_CONFIG_PATH,
+	logger: lazyLogger
 });
 
 /**
@@ -178,6 +202,71 @@ export function getEventSink(): IEventSink {
 }
 
 // ============================================================================
+// Logging
+// ============================================================================
+
+// Same eager-init-then-swap shape as the error reporter below, with one
+// deliberate difference: the placeholder is a real ConsoleLogger, never a
+// no-op. Logging must not have a window where warnings vanish — an operator
+// debugging a boot failure is reading exactly these lines. So records written
+// before pino resolves land on the console, and the swap only upgrades the
+// formatting.
+const LOG_LEVEL: LogLevel = parseLogLevel(env.LOG_LEVEL);
+
+let _logger: ILogger = new ConsoleLogger({}, LOG_LEVEL);
+
+/**
+ * The app's root logger. Structured, correlated, and pino-backed when `pino` is
+ * installed (it ships with the app; the base `@selvajs/server` install treats it
+ * as an optional peer and falls back to the console).
+ *
+ * Prefer a request-scoped child — `event.locals.log` — inside route handlers, so
+ * records carry `requestId`/`route`. Use this root logger for boot, shutdown and
+ * background work that belongs to no request.
+ */
+export function getLogger(): ILogger {
+	return _logger;
+}
+
+/**
+ * `LOG_LEVEL` is operator input, so an unrecognized value must not crash boot
+ * (or silently disable logging). Default to `info`, and to `debug` in dev where
+ * the extra detail is the point.
+ */
+function parseLogLevel(raw: string | undefined): LogLevel {
+	const value = raw?.trim().toLowerCase();
+	if (value === 'debug' || value === 'info' || value === 'warn' || value === 'error') return value;
+	// The compute debug flags emit at `debug`. An operator who turned one on has
+	// asked for that output in so many words, so honor it without also demanding
+	// LOG_LEVEL=debug — otherwise the flag would silently do nothing in
+	// production, which is exactly where it gets reached for.
+	if (
+		isTruthyFlag(env.SELVA_FLAG_COMPUTE_DEBUG) ||
+		isTruthyFlag(env.SELVA_FLAG_COMPUTE_DEBUG_VERBOSE)
+	)
+		return 'debug';
+	return env.NODE_ENV === 'development' ? 'debug' : 'info';
+}
+
+/** Matches the flag spelling accepted elsewhere (`clientCache.server.ts`). */
+function isTruthyFlag(raw: string | undefined): boolean {
+	return ['true', '1', 'yes'].includes((raw ?? '').toLowerCase());
+}
+
+// Eager, fire-and-forget: `getLogger()` stays sync for the same reason
+// `getErrorReporter()` does — its callers (hooks, process handlers) can't await.
+void createLogger({
+	level: LOG_LEVEL,
+	// Pretty output in dev, newline-delimited JSON in production for the
+	// collector. `pino-pretty` is a devDependency, so this silently degrades to
+	// JSON if it's absent.
+	pretty: env.NODE_ENV === 'development',
+	base: { service: 'selva', release: env.SELVA_RELEASE }
+}).then((logger) => {
+	_logger = logger;
+});
+
+// ============================================================================
 // Error reporting
 // ============================================================================
 
@@ -212,7 +301,7 @@ if (env.SENTRY_DSN) {
 	}).then((reporter) => {
 		if (reporter) {
 			_errorReporter = reporter;
-			console.log('[ErrorReporter] Sentry error tracking enabled.');
+			getLogger().info('Sentry error tracking enabled', { component: 'ErrorReporter' });
 		}
 	});
 }
@@ -228,11 +317,23 @@ const ERROR_HOOKS_FLAG = '__selvaProcessErrorHooksRegistered';
 if (!(globalThis as Record<string, unknown>)[ERROR_HOOKS_FLAG]) {
 	(globalThis as Record<string, unknown>)[ERROR_HOOKS_FLAG] = true;
 	process.on('unhandledRejection', (reason) => {
-		console.error('[unhandledRejection]', reason);
+		getLogger().error('Unhandled promise rejection', {
+			component: 'process',
+			origin: 'unhandledRejection',
+			err: renderThrown(reason)
+		});
 		getErrorReporter().capture(reason, { tags: { origin: 'unhandledRejection' } });
 	});
 	process.on('uncaughtException', (error) => {
+		// Also write straight to the console here: Node is about to exit, and a
+		// buffered/async log transport may never flush. The duplicate line is a
+		// cheap price for not losing the record that explains the crash.
 		console.error('[uncaughtException]', error);
+		getLogger().error('Uncaught exception', {
+			component: 'process',
+			origin: 'uncaughtException',
+			err: renderThrown(error)
+		});
 		getErrorReporter().capture(error, { tags: { origin: 'uncaughtException' } });
 	});
 }

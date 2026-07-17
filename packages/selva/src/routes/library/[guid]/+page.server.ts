@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
-import type { RequestContext } from '@selvajs/platform';
+import type { ILogger, RequestContext } from '@selvajs/platform';
+import { renderThrown } from '@selvajs/server/logging';
 import {
 	getDefinitionMeta,
 	getProjectProvider,
@@ -61,7 +62,7 @@ export const load = (async ({ params, locals, request, url }) => {
 		// load this definition (user session or share-token ctx, which carries
 		// actingOrgId). Best-effort: a missing project/org or read failure just
 		// yields no logo — branding is non-essential and must never break a solve.
-		const orgLogoUrl = await resolveOrgLogo(ctx, record.projectId);
+		const orgLogoUrl = await resolveOrgLogo(ctx, record.projectId, locals.log);
 
 		return {
 			schema: loaded.schema,
@@ -98,12 +99,20 @@ export const load = (async ({ params, locals, request, url }) => {
 				);
 			}
 			if (err.kind === 'connect') {
-				console.error('[PageLoad] Compute server connection failed:', err.message);
+				locals.log.error('Compute server connection failed', {
+					component: 'PageLoad',
+					guid,
+					err: renderThrown(err)
+				});
 				throw error(503, err.message);
 			}
 			if (err.kind === 'schema') {
-				console.error('[PageLoad] Definition loading failed:', err.message);
-				// eslint-disable-next-line no-restricted-properties -- NODE_ENV is OS-level, set by Node/Vite, not loaded from .env
+				locals.log.error('Definition loading failed', {
+					component: 'PageLoad',
+					guid,
+					err: renderThrown(err)
+				});
+
 				if (process.env.NODE_ENV === 'development') {
 					const hint = `\n\nTroubleshooting:\n1. Check /api/health/compute to diagnose server connectivity\n2. Check the browser console for more details`;
 					throw error(500, `Failed to load definition from ${clientDefUrl}: ${err.message}${hint}`);
@@ -114,7 +123,11 @@ export const load = (async ({ params, locals, request, url }) => {
 		}
 
 		if (err instanceof Error) {
-			console.warn(`[App Load] Failed to load definition '${guid}':`, err);
+			locals.log.warn('Failed to load definition', {
+				component: 'App Load',
+				guid,
+				err: renderThrown(err)
+			});
 			throw error(400, `Failed to load definition '${guid}': ${err.message}`);
 		}
 		throw err;
@@ -126,14 +139,22 @@ export const load = (async ({ params, locals, request, url }) => {
  * org. Best-effort and self-contained: any miss or read error returns null so a
  * branding lookup can never fail the render path.
  */
-async function resolveOrgLogo(ctx: RequestContext, projectId: string): Promise<string | null> {
+async function resolveOrgLogo(
+	ctx: RequestContext,
+	projectId: string,
+	log: ILogger
+): Promise<string | null> {
 	try {
 		const project = await getProjectProvider().getProject(ctx, projectId);
 		if (!project?.orgId) return null;
 		const org = await getOrganizationProvider().getOrg(ctx, project.orgId);
 		return org?.assets?.logo ?? null;
 	} catch (err) {
-		console.warn('[App Load] Failed to resolve org logo:', err);
+		log.warn('Failed to resolve org logo', {
+			component: 'App Load',
+			projectId,
+			err: renderThrown(err)
+		});
 		return null;
 	}
 }

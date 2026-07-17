@@ -6,6 +6,7 @@ import { json } from '@sveltejs/kit';
 import { actorFrom } from '@selvajs/platform';
 import type { RequestHandler } from './$types';
 import { requirePermission } from '$lib/server/access.server';
+import { renderThrown } from '@selvajs/server/logging';
 import { checkForUpdate } from '$lib/server/updateCheck.server';
 import { readChannel, channelTag, type ReleaseChannel } from '$lib/server/releaseChannel.server';
 import { getEventSink, getErrorReporter } from '$lib/server/providers.server';
@@ -409,7 +410,10 @@ export const POST: RequestHandler = async ({ locals }) => {
 	try {
 		writeFileSync(updateStatePath(plan.cwd), JSON.stringify(pending, null, '\t'));
 	} catch (err) {
-		console.error('[selfUpdate] could not persist pending-update state:', err);
+		locals.log.error('Could not persist pending-update state', {
+			component: 'selfUpdate',
+			err: renderThrown(err)
+		});
 	}
 	await getEventSink().emit({
 		type: 'system.update.started',
@@ -470,9 +474,8 @@ export const POST: RequestHandler = async ({ locals }) => {
 				const child = spawn(cmd, args, {
 					cwd: plan.cwd,
 					env: {
-						// eslint-disable-next-line no-restricted-properties -- OS env for the spawned child, not .env config
 						PATH: `${localBin}:${process.env.PATH ?? ''}`,
-						// eslint-disable-next-line no-restricted-properties -- OS env for the spawned child, not .env config
+
 						HOME: process.env.HOME,
 						INSTALL_DIR: plan.cwd
 					},

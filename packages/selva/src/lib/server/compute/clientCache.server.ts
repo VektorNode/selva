@@ -13,6 +13,7 @@
 
 import { createClientCache, type CachedClient } from '@selvajs/server/compute';
 import { env } from '$env/dynamic/private';
+import { getLogger } from '$lib/server/providers.server';
 import type { ComputeServerConfig } from '@selvajs/platform';
 import {
 	COMPUTE_CACHE_ERRORED_SOLVES,
@@ -48,7 +49,7 @@ const cache = createClientCache({
 	responseCacheMaxBytes: COMPUTE_RESPONSE_CACHE_BYTES,
 	debug: COMPUTE_DEBUG,
 	debugVerbose: COMPUTE_DEBUG_VERBOSE,
-	onDebugLog: (message) => console.log(message)
+	onDebugLog: (message) => getLogger().debug(message, { component: 'Compute/client-cache' })
 });
 
 /**

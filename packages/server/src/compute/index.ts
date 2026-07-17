@@ -43,6 +43,7 @@ export {
 
 export {
 	createComputeRateLimiter,
+	DEFAULT_MAX_KEYS,
 	type ComputeRateLimiter,
 	type ComputeRateLimiterConfig,
 	type RateLimitResult

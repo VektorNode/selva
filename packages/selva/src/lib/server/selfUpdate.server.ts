@@ -18,7 +18,9 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DomainEvent } from '@selvajs/platform';
+import { renderThrown } from '@selvajs/server/logging';
 import { deriveOutcome } from '$lib/update-outcome';
+import { getLogger } from './providers.server.js';
 
 // ============================================================================
 // Deployment-dir detection + durable paths
@@ -175,7 +177,10 @@ export function startUpdateOutcomeReconciler(deps: ReconcilerDeps): void {
 			try {
 				result = await reconcileUpdateOutcome(deps);
 			} catch (err) {
-				console.error('[selfUpdate] outcome reconciliation failed:', err);
+				getLogger().error('Outcome reconciliation failed', {
+					component: 'selfUpdate',
+					err: renderThrown(err)
+				});
 				result = 'still_running';
 			}
 			if (result === 'still_running' && polls < MAX_POLLS) return;

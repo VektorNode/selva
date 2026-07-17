@@ -1,5 +1,17 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { resolveComputeLimits, readPositiveInt, readNonNegativeInt } from '../limits.js';
+import { NoopLogger, type ILogger } from '@selvajs/platform';
+
+/**
+ * Fake logger — the env readers take an injected `ILogger` (defaulting to
+ * `NoopLogger`), so the diagnostics are captured by passing this in rather than
+ * by spying on `console`.
+ */
+function fakeLogger(): ILogger & { warn: ReturnType<typeof vi.fn> } {
+	const logger = new NoopLogger() as ILogger & { warn: ReturnType<typeof vi.fn> };
+	logger.warn = vi.fn();
+	return logger;
+}
 
 const MB = 1024 * 1024;
 
@@ -108,9 +120,17 @@ describe('readPositiveInt', () => {
 		['negative', '-5'],
 		['Infinity', 'Infinity']
 	])('warns and falls back on %s', (_label, raw) => {
+		const logger = fakeLogger();
+		expect(readPositiveInt({ X: raw }, 'X', 7, logger)).toBe(7);
+		expect(logger.warn).toHaveBeenCalledOnce();
+		// The variable data belongs in fields, not interpolated into the message.
+		expect(logger.warn.mock.calls[0][1]).toMatchObject({ envVar: 'X', value: raw, fallback: 7 });
+	});
+
+	it('stays silent by default, so library code never writes to stdout unbidden', () => {
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		expect(readPositiveInt({ X: raw }, 'X', 7)).toBe(7);
-		expect(warn).toHaveBeenCalledOnce();
+		expect(readPositiveInt({ X: 'abc' }, 'X', 7)).toBe(7);
+		expect(warn).not.toHaveBeenCalled();
 	});
 });
 
@@ -125,8 +145,9 @@ describe('readNonNegativeInt', () => {
 	});
 
 	it('warns and falls back on a negative value', () => {
-		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		expect(readNonNegativeInt({ X: '-1' }, 'X', 7)).toBe(7);
-		expect(warn).toHaveBeenCalledOnce();
+		const logger = fakeLogger();
+		expect(readNonNegativeInt({ X: '-1' }, 'X', 7, logger)).toBe(7);
+		expect(logger.warn).toHaveBeenCalledOnce();
+		expect(logger.warn.mock.calls[0][1]).toMatchObject({ envVar: 'X', value: '-1', fallback: 7 });
 	});
 });
