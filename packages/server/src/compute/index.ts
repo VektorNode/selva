@@ -71,6 +71,7 @@ export {
 
 export {
 	runSolvePipeline,
+	adaptEnvelopeToEncoding,
 	COMPUTE_CONTRACT_VERSION,
 	COMPUTE_VERSION_HEADER,
 	type SolvePipelineArgs,

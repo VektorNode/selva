@@ -31,6 +31,11 @@ export interface SolveMetricSinkConformanceOptions {
 	/** Read every persisted metric back, normalized to `RecordedSolveMetric`. */
 	readRows: () => Promise<RecordedSolveMetric[]>;
 	/**
+	 * Force a buffering sink to write everything it holds. Called before every
+	 * `readRows`. Omit for sinks that persist synchronously on `record`.
+	 */
+	flushSink?: (sink: ISolveMetricSink) => Promise<void> | void;
+	/**
 	 * Build a sink whose backing store is broken so writes fail. Used to prove
 	 * `record` swallows errors. Omit if the adapter can't simulate a failure;
 	 * the throw-safety test is skipped when absent.
@@ -61,10 +66,16 @@ function baseMetric(overrides: Partial<SolveMetric> = {}): SolveMetric {
 }
 
 export function runSolveMetricSinkConformance(opts: SolveMetricSinkConformanceOptions): void {
-	const { name, createSink, readRows, createFailingSink, cleanup } = opts;
+	const { name, createSink, readRows, flushSink, createFailingSink, cleanup } = opts;
 
 	describe(`ISolveMetricSink conformance: ${name}`, () => {
 		let sink: ISolveMetricSink;
+
+		/** Read persisted rows, first draining anything the sink is buffering. */
+		async function drainAndRead(): Promise<RecordedSolveMetric[]> {
+			if (flushSink) await flushSink(sink);
+			return readRows();
+		}
 
 		beforeEach(async () => {
 			sink = await createSink();
@@ -78,20 +89,20 @@ export function runSolveMetricSinkConformance(opts: SolveMetricSinkConformanceOp
 			const metric = baseMetric();
 			await sink.record(sysCtx('user-1'), metric);
 
-			const rows = await readRows();
+			const rows = await drainAndRead();
 			expect(rows).toHaveLength(1);
 			expect(rows[0]).toMatchObject({ ...metric, actorId: 'user-1' });
 		});
 
 		it('records the actor from the RequestContext', async () => {
 			await sink.record(sysCtx('user-xyz'), baseMetric());
-			const rows = await readRows();
+			const rows = await drainAndRead();
 			expect(rows[0].actorId).toBe('user-xyz');
 		});
 
 		it('falls back to "system" when the context has no user id', async () => {
 			await sink.record(sysCtx(''), baseMetric());
-			const rows = await readRows();
+			const rows = await drainAndRead();
 			expect(rows[0].actorId).toBe('system');
 		});
 
@@ -100,13 +111,13 @@ export function runSolveMetricSinkConformance(opts: SolveMetricSinkConformanceOp
 				sysCtx('user-1'),
 				baseMetric({ ok: false, failureKind: 'timeout', durationMs: 0 })
 			);
-			const rows = await readRows();
+			const rows = await drainAndRead();
 			expect(rows[0]).toMatchObject({ ok: false, failureKind: 'timeout', durationMs: 0 });
 		});
 
 		it('persists error/warning counts on an otherwise-ok solve', async () => {
 			await sink.record(sysCtx('user-1'), baseMetric({ errorCount: 2, warningCount: 5 }));
-			const rows = await readRows();
+			const rows = await drainAndRead();
 			expect(rows[0]).toMatchObject({ ok: true, errorCount: 2, warningCount: 5 });
 		});
 
@@ -120,15 +131,17 @@ export function runSolveMetricSinkConformance(opts: SolveMetricSinkConformanceOp
 					orgId: null
 				})
 			);
-			const rows = await readRows();
+			const rows = await drainAndRead();
 			expect(rows[0]).toMatchObject({ definitionId: null, versionId: null, orgId: null });
 		});
 
 		if (createFailingSink) {
 			it('does not throw when the backing write fails', async () => {
 				const failing = await createFailingSink();
-				// The contract: record swallows the failure and resolves.
+				// The contract: record swallows the failure and resolves. For a
+				// buffering sink the write happens on flush, so that must swallow too.
 				await expect(failing.record(sysCtx('user-1'), baseMetric())).resolves.toBeUndefined();
+				if (flushSink) await expect(flushSink(failing)).resolves.not.toThrow();
 			});
 		}
 	});

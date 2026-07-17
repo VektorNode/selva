@@ -40,6 +40,7 @@ import {
 	encodeSolveCacheEntry,
 	gunzipEntryBody
 } from './solve-cache-envelope.js';
+import { gunzipSync } from 'node:zlib';
 
 /** Async gzip (audit B8) — off the event loop, unlike the old `gzipSync`. */
 const gzipAsync = promisify(gzip);
@@ -449,6 +450,52 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		errorCount: result.errors?.length ?? 0,
 		warningCount: result.warnings?.length ?? 0
 	};
+}
+
+// ============================================================================
+// Per-waiter encoding adaptation (audit C5)
+// ============================================================================
+
+/**
+ * Re-key a coalesced envelope to a single waiter's `Accept-Encoding` (audit C5).
+ *
+ * The single-flight coalescer (R4) runs ONE pipeline execution for N identical
+ * concurrent solves and hands every waiter the same {@link SolveEnvelope}. That
+ * envelope's wire form — gzip body + `Content-Encoding: gzip`, or the plain JSON
+ * string — is baked from the FIRST caller's `Accept-Encoding`. A later waiter
+ * with a different `Accept-Encoding` would otherwise receive a body labelled with
+ * the wrong encoding: a non-gzip client joining a gzip flight gets gzip bytes it
+ * cannot decode (`Vary` can't help — this is one object shared across waiters,
+ * not a cache lookup). Encoding is not in the coalesce key by design, so mixed
+ * clients still coalesce; this adapts the shared result to each waiter instead.
+ *
+ * Returns the body + headers to send THIS waiter. Only the correctness-critical
+ * direction is adapted — a gzip envelope served to a non-gzip waiter is gunzipped
+ * back to JSON. The reverse (a plain-JSON envelope to a gzip-capable waiter) is
+ * left uncompressed: gzip is an optimisation the client advertises, never a
+ * requirement, so sending it plain is correct, just not maximally small. The
+ * common all-gzip case returns the envelope's own body/headers untouched.
+ */
+export function adaptEnvelopeToEncoding(
+	envelope: SolveEnvelope,
+	acceptEncoding: string
+): { body: string | Uint8Array; headers: Record<string, string> } {
+	const waiterWantsGzip = /\bgzip\b/i.test(acceptEncoding);
+
+	// The only mismatch that corrupts the response: a gzip body handed to a waiter
+	// that did not advertise gzip. Gunzip it back to the JSON string and drop the
+	// encoding headers. Every other combination is already wire-correct.
+	if (envelope.encoding === 'gzip' && !waiterWantsGzip) {
+		const json = gunzipSync(
+			envelope.body instanceof Uint8Array ? envelope.body : Buffer.from(envelope.body)
+		).toString('utf8');
+		const headers = { ...envelope.headers };
+		delete headers['Content-Encoding'];
+		headers['Content-Length'] = String(Buffer.byteLength(json));
+		return { body: json, headers };
+	}
+
+	return { body: envelope.body, headers: envelope.headers };
 }
 
 // ============================================================================

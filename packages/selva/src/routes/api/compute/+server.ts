@@ -18,6 +18,7 @@ import {
 import { definitionByteCacheStats } from '$lib/server/compute/definitionByteCache.server';
 import {
 	runSolvePipeline,
+	adaptEnvelopeToEncoding,
 	type PipelineInput,
 	type ByteCacheRef,
 	type SolvePipelineCacheHook
@@ -472,13 +473,18 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			);
 		}
 
+		// Re-key the (possibly coalesced) envelope to THIS request's Accept-Encoding
+		// (audit C5). A single-flight join hands every waiter the first caller's
+		// envelope, whose gzip/plain wire form was baked from the first caller's
+		// header; a non-gzip waiter joining a gzip flight would otherwise get a
+		// gzip body it can't decode. This adapts the shared result per waiter.
+		const wire = adaptEnvelopeToEncoding(envelope, request.headers.get('accept-encoding') ?? '');
 		// `body` is a `Uint8Array` (gzip) or the JSON `string`; both are valid
 		// BodyInit at runtime. The union widens past the DOM lib's BodyInit type, so
 		// hand `Response` the concrete branch.
-		return new Response(
-			typeof envelope.body === 'string' ? envelope.body : new Uint8Array(envelope.body),
-			{ headers: envelope.headers }
-		);
+		return new Response(typeof wire.body === 'string' ? wire.body : new Uint8Array(wire.body), {
+			headers: wire.headers
+		});
 	} catch (err) {
 		if (isHttpError(err)) throw err;
 

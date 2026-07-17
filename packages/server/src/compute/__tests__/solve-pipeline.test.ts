@@ -66,6 +66,7 @@ const makeShedError = (
 
 import {
 	runSolvePipeline,
+	adaptEnvelopeToEncoding,
 	COMPUTE_CONTRACT_VERSION,
 	COMPUTE_VERSION_HEADER,
 	deriveSolveCacheInputKey,
@@ -203,6 +204,67 @@ describe('runSolvePipeline — gzip', () => {
 		expect(outcome.kind).toBe('ok');
 		if (outcome.kind !== 'ok') return;
 		expect(outcome.envelope.encoding).toBeUndefined();
+	});
+});
+
+describe('adaptEnvelopeToEncoding — coalesced per-waiter re-key (audit C5)', () => {
+	// Build a real gzip envelope the way the pipeline does, so the adapter is
+	// exercised against genuine compressed bytes rather than a hand-rolled stub.
+	async function gzipEnvelope() {
+		const big = { values: Array.from({ length: 500 }, (_, i) => ({ i, s: 'xxxxxxxxxx' })) };
+		const outcome = await runSolvePipeline(
+			baseArgs({ acceptEncoding: 'gzip', client: fakeClient(async () => big) })
+		);
+		if (outcome.kind !== 'ok') throw new Error('expected ok');
+		return { envelope: outcome.envelope, body: big };
+	}
+
+	it('gunzips a gzip envelope for a non-gzip waiter (the C5 bug)', async () => {
+		const { envelope, body } = await gzipEnvelope();
+		expect(envelope.encoding).toBe('gzip'); // first caller's flight was gzip
+
+		// A waiter that did NOT advertise gzip joins the same flight.
+		const wire = adaptEnvelopeToEncoding(envelope, 'br');
+
+		// It must get decodable JSON, not the mislabelled gzip bytes.
+		expect(typeof wire.body).toBe('string');
+		expect(JSON.parse(wire.body as string)).toEqual(body);
+		expect(wire.headers['Content-Encoding']).toBeUndefined();
+		expect(wire.headers['Content-Length']).toBe(String(Buffer.byteLength(wire.body as string)));
+		// The shared envelope is not mutated — other waiters still see gzip.
+		expect(envelope.headers['Content-Encoding']).toBe('gzip');
+	});
+
+	it('gunzips for a waiter with an empty Accept-Encoding', async () => {
+		const { envelope, body } = await gzipEnvelope();
+		const wire = adaptEnvelopeToEncoding(envelope, '');
+		expect(typeof wire.body).toBe('string');
+		expect(JSON.parse(wire.body as string)).toEqual(body);
+		expect(wire.headers['Content-Encoding']).toBeUndefined();
+	});
+
+	it('passes a gzip envelope through untouched for a gzip waiter', async () => {
+		const { envelope } = await gzipEnvelope();
+		const wire = adaptEnvelopeToEncoding(envelope, 'gzip, br');
+		expect(wire.body).toBe(envelope.body); // same reference — no re-encode
+		expect(wire.headers).toBe(envelope.headers);
+		expect(wire.headers['Content-Encoding']).toBe('gzip');
+	});
+
+	it('passes a plain-JSON envelope through untouched for any waiter', async () => {
+		// First caller lacked gzip → plain-string body, no Content-Encoding.
+		const big = { values: Array.from({ length: 500 }, (_, i) => ({ i, s: 'xxxxxxxxxx' })) };
+		const outcome = await runSolvePipeline(
+			baseArgs({ acceptEncoding: 'br', client: fakeClient(async () => big) })
+		);
+		if (outcome.kind !== 'ok') throw new Error('expected ok');
+		expect(outcome.envelope.encoding).toBeUndefined();
+
+		// A gzip-capable waiter joining it gets the plain body — correct, if not
+		// maximally small (gzip is an optimisation, never a requirement).
+		const wire = adaptEnvelopeToEncoding(outcome.envelope, 'gzip');
+		expect(wire.body).toBe(outcome.envelope.body);
+		expect(wire.headers['Content-Encoding']).toBeUndefined();
 	});
 });
 
