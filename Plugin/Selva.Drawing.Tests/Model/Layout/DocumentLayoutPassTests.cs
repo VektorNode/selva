@@ -311,6 +311,38 @@ public class DocumentLayoutPassTests
 		Assert.Equal("", FindFirstText(pages[0].Content));
 	}
 
+	[Fact]
+	public void Fallback_page_for_all_null_sections_keeps_chrome_bands()
+	{
+		// A non-empty sections list that yields no pages (all entries null) must produce the
+		// same chrome-only page as an empty sections list. The old fallback paginated with
+		// zero band heights, so header/footer rects came back empty and the chrome rendered
+		// unanchored at the paper's bottom-left corner.
+		DocumentLayout Make(Section[] sections) => new DocumentLayout
+		{
+			Sections = sections,
+			PaperSize = TenByTen,
+			Margins = NoMargin,
+			Header = new GroupElement
+			{
+				Children = new DrawElement[] { new TextElement { Text = "hdr", Position = Point2D.Zero } },
+				BoundsOverride = new BoundingBox(0, 0, 10, 2),
+			},
+			HeaderHeight = 2,
+			HeaderPlacement = ChromePlacement.Content,
+		};
+
+		var emptyPages = DocumentLayoutPass.Paginate(Make(System.Array.Empty<Section>()));
+		var nullPages = DocumentLayoutPass.Paginate(Make(new Section[] { null }));
+
+		var expected = emptyPages[0].Content.ComputeBounds();
+		var actual = nullPages[0].Content.ComputeBounds();
+		Assert.Equal(expected.MinX, actual.MinX, 6);
+		Assert.Equal(expected.MinY, actual.MinY, 6);
+		Assert.Equal(expected.MaxX, actual.MaxX, 6);
+		Assert.Equal(expected.MaxY, actual.MaxY, 6);
+	}
+
 	private static GroupElement ScaleHeader() => new GroupElement
 	{
 		Children = new DrawElement[] { new TextElement { Text = "{scale}", Position = Point2D.Zero } },

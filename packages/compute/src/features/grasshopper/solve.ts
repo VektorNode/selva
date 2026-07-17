@@ -1,4 +1,5 @@
 import { fetchRhinoCompute, RhinoComputeError, ErrorCodes } from '@/core';
+import { getResponseWireSize, setResponseWireSize } from '@/core/compute-fetch/wire-size';
 import { base64ByteArray, detectBase64Payload, encodeStringToBase64 } from '@/core/utils/encoding';
 import { getLogger } from '@/core/utils/logger';
 import { readField } from '@/core/utils/read-field';
@@ -241,6 +242,14 @@ async function runSolve(
 		...rest
 	} = result as GrasshopperComputeResponse & { pointer?: unknown; algo?: unknown };
 	const response = rest as GrasshopperComputeResponse;
+	// The wire-size hint follows object identity, so the stripped copy must
+	// re-register it — minus the echoed `algo`, which is no longer retained (it
+	// can dwarf the actual outputs for a large definition).
+	const wireSize = getResponseWireSize(result);
+	if (wireSize !== undefined) {
+		const algoLength = typeof _algo === 'string' ? _algo.length : 0;
+		setResponseWireSize(response, Math.max(0, wireSize - algoLength));
+	}
 	warnOnEmptyInnerTrees(response, config.debug);
 	return {
 		response,

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SolveScheduler, type SolveExecutor } from '../solve-scheduler';
 import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { setResponseWireSize } from '@/core/compute-fetch/wire-size';
 import type { SolveDefinition } from '../../definition-ref';
 import type {
 	GrasshopperComputeConfig,
@@ -637,6 +638,95 @@ describe('SolveScheduler', () => {
 			await vi.waitFor(() => expect(queue.length).toBe(4));
 			queue[3].release(makeResponse('1-again'));
 			expect((await recheck).filename).toBe('1-again');
+		});
+
+		// Byte budget (audit C2): entries are bounded by total bytes alongside the
+		// entry count, sized by the wire-size hint (or a stringify fallback).
+		it('evicts LRU when retained bytes exceed maxBytes', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: { maxEntries: 50, maxBytes: 250 }
+			});
+
+			const trees = ['a', 'b', 'c'].map((n) => [{ ParamName: n, InnerTree: {} } as any]);
+			for (let i = 0; i < 3; i++) {
+				const p = scheduler.solve('def', trees[i]);
+				await vi.waitFor(() => expect(queue.length).toBe(i + 1));
+				const response = makeResponse(String(i + 1));
+				setResponseWireSize(response, 100);
+				queue[i].release(response);
+				await p;
+			}
+
+			// 3 × 100 bytes > 250 → the oldest entry was evicted.
+			expect(scheduler.cacheStats()).toEqual({ entries: 2, bytes: 200 });
+			const recheck = scheduler.solve('def', trees[0]);
+			await vi.waitFor(() => expect(queue.length).toBe(4));
+			queue[3].release(makeResponse('1-again'));
+			expect((await recheck).filename).toBe('1-again');
+
+			// The two newer entries survived — served without the executor.
+			expect((await scheduler.solve('def', trees[2])).filename).toBe('3');
+		});
+
+		it('never retains a single response larger than the whole byte budget', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: { maxBytes: 500 }
+			});
+
+			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
+			const first = scheduler.solve('def', tree);
+			const oversized = makeResponse('big');
+			setResponseWireSize(oversized, 1000);
+			queue[0].release(oversized);
+			expect((await first).filename).toBe('big'); // served through…
+
+			expect(scheduler.cacheStats()).toEqual({ entries: 0, bytes: 0 }); // …never retained
+			const second = scheduler.solve('def', tree);
+			await vi.waitFor(() => expect(queue.length).toBe(2));
+			queue[1].release(makeResponse('big-again'));
+			expect((await second).filename).toBe('big-again');
+		});
+
+		it('sizes a response without a wire-size hint via the stringify fallback', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: { maxBytes: 10 } // smaller than any stringified makeResponse
+			});
+
+			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
+			const first = scheduler.solve('def', tree);
+			queue[0].release(makeResponse('one')); // no hint → stringify fallback → oversized
+			await first;
+
+			expect(scheduler.cacheStats().entries).toBe(0);
+		});
+
+		it('releases an entry’s bytes when it expires via ttl', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: { ttlMs: 10, maxBytes: 1000 }
+			});
+
+			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
+			const first = scheduler.solve('def', tree);
+			const response = makeResponse('one');
+			setResponseWireSize(response, 100);
+			queue[0].release(response);
+			await first;
+			expect(scheduler.cacheStats()).toEqual({ entries: 1, bytes: 100 });
+
+			await new Promise((r) => setTimeout(r, 20));
+			const second = scheduler.solve('def', tree); // expired read drops the entry
+			expect(scheduler.cacheStats()).toEqual({ entries: 0, bytes: 0 });
+			await vi.waitFor(() => expect(queue.length).toBe(2));
+			queue[1].release(makeResponse('two'));
+			await second;
 		});
 
 		// Regression (issue 50): a cache hit returned before enqueue(), so in

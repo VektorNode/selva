@@ -235,10 +235,16 @@ public sealed class Table : LayoutElement
 		var overflowRows = new List<IReadOnlyList<TableCell>>(Rows.Count - fitsRowCount);
 		for (var i = fitsRowCount; i < Rows.Count; i++) overflowRows.Add(Rows[i]);
 
+		// Pin the full table's resolved column widths onto both fragments. Auto columns size
+		// to the widest cell present, so letting each fragment re-derive them from its own
+		// row subset makes the column edges jump at the page break whenever the widest cell
+		// lands in the other half.
+		var pinnedWidths = ResolvePinnedColumnWidths(context);
+
 		var stripeCount = RowStripeFills?.Count ?? 0;
-		var fitsTable = CloneWithRows(fitsRows, Origin, StripeOffset);
+		var fitsTable = CloneWithRows(fitsRows, Origin, StripeOffset, pinnedWidths);
 		var overflowTable = CloneWithRows(overflowRows, Point2D.Zero,
-			stripeCount > 0 ? (StripeOffset + fitsRowCount) % stripeCount : 0);
+			stripeCount > 0 ? (StripeOffset + fitsRowCount) % stripeCount : 0, pinnedWidths);
 
 		var fitsResolved = fitsTable.Resolve(context);
 		var fitsBounds = fitsResolved?.ComputeBounds() ?? BoundingBox.Empty;
@@ -246,7 +252,55 @@ public sealed class Table : LayoutElement
 		return SplitResult.Partial(fitsResolved, overflowTable, fitsHeight);
 	}
 
-	private Table CloneWithRows(IReadOnlyList<IReadOnlyList<TableCell>> rows, Point2D origin, int stripeOffset)
+	// Column widths the whole table resolves to under this context, as absolute tracks.
+	// Only needed when a column depends on content (Auto) or on remaining space (Star with
+	// infinite context falls back to auto-sizing) — a fully absolute column set can't drift.
+	private IReadOnlyList<GridLength> ResolvePinnedColumnWidths(LayoutContext context)
+	{
+		var columnCount = InferColumnCount();
+		if (columnCount == 0) return ColumnWidths;
+
+		var declared = ResolveColumnWidths(columnCount);
+		var allAbsolute = true;
+		foreach (var w in declared)
+		{
+			if (w.Type != GridLength.Kind.Absolute) { allAbsolute = false; break; }
+		}
+		if (allAbsolute) return declared;
+
+		var gridCells = new List<GridCell>();
+		var rowIndex = 0;
+		if (Header != null && Header.Count > 0)
+		{
+			AddRow(gridCells, Header, rowIndex, isHeader: true, columnCount: columnCount, columnWidths: declared);
+			rowIndex++;
+		}
+		foreach (var row in Rows)
+		{
+			AddRow(gridCells, row, rowIndex, isHeader: false, columnCount: columnCount, columnWidths: declared);
+			rowIndex++;
+		}
+		var rowTracks = new GridLength[rowIndex];
+		for (var i = 0; i < rowTracks.Length; i++)
+			rowTracks[i] = RowHeight.HasValue ? GridLength.Absolute(RowHeight.Value) : GridLength.Auto;
+
+		var grid = new Grid
+		{
+			Columns = declared,
+			Rows = rowTracks,
+			Cells = gridCells,
+			Origin = Origin,
+		};
+		var (layout, _) = grid.ComputeLayout(context);
+
+		var pinned = new GridLength[layout.ColWidths.Length];
+		for (var i = 0; i < pinned.Length; i++)
+			pinned[i] = GridLength.Absolute(layout.ColWidths[i]);
+		return pinned;
+	}
+
+	private Table CloneWithRows(IReadOnlyList<IReadOnlyList<TableCell>> rows, Point2D origin, int stripeOffset,
+		IReadOnlyList<GridLength> columnWidths)
 	{
 		return new Table
 		{
@@ -255,7 +309,7 @@ public sealed class Table : LayoutElement
 			Metadata = Metadata,
 			Header = Header,
 			Rows = rows,
-			ColumnWidths = ColumnWidths,
+			ColumnWidths = columnWidths,
 			ColumnAlignments = ColumnAlignments,
 			RowHeight = RowHeight,
 			CellPadding = CellPadding,

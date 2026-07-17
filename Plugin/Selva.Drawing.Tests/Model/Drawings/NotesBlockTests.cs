@@ -66,4 +66,25 @@ public class NotesBlockTests
 		var without = new NotesBlock { Notes = new[] { "x" } };
 		Assert.True(withTitle.ComputeBounds().Height > without.ComputeBounds().Height);
 	}
+
+	[Fact]
+	public void Title_gap_is_exactly_TitleSpacing()
+	{
+		// The old spacer-child implementation delivered TitleSpacing + NoteSpacing between
+		// title and first note (the spacer picked up stack spacing on both sides). Total
+		// height must decompose as titleHeight + TitleSpacing + notesHeight.
+		var notes = new[] { "First note", "Second note" };
+		var titleOnly = new NotesBlock { Title = "GENERAL NOTES" };
+		var notesOnly = new NotesBlock { Notes = notes };
+		var combined = new NotesBlock
+		{
+			Title = "GENERAL NOTES",
+			Notes = notes,
+			TitleSpacing = 2.0,
+			NoteSpacing = 1.5,
+		};
+
+		var expected = titleOnly.ComputeBounds().Height + 2.0 + notesOnly.ComputeBounds().Height;
+		Assert.Equal(expected, combined.ComputeBounds().Height, 6);
+	}
 }

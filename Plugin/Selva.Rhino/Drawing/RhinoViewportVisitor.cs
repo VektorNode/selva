@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using Rhino.Display;
 using Rhino.Geometry;
@@ -441,7 +442,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         _display.DrawLine(new Line(Map(d.B), Map(dimB)), dimColor);
         _display.DrawLine(new Line(Map(dimA), Map(dimB)), dimColor);
 
-        var label = string.IsNullOrEmpty(d.Label) ? len.ToString("0.##") : d.Label;
+        var label = string.IsNullOrEmpty(d.Label) ? len.ToString("0.##", CultureInfo.InvariantCulture) : d.Label;
         var size = d.Style?.TextSize ?? 2.5;
         if (size > 0)
         {
@@ -516,7 +517,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         _display.DrawPolyline(new Polyline(pts), dimColor, 1);
 
         var label = string.IsNullOrEmpty(d.Label)
-            ? (Math.Abs(theta) * 180.0 / Math.PI).ToString("0.##") + "°"
+            ? (Math.Abs(theta) * 180.0 / Math.PI).ToString("0.##", CultureInfo.InvariantCulture) + "°"
             : d.Label;
         var size = d.Style?.TextSize ?? 2.5;
         if (size > 0)

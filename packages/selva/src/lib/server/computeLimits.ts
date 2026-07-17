@@ -71,6 +71,10 @@ export const COMPUTE_QUEUE_WAIT_MS = limits.computeQueueWaitMs;
 // version id). 0 disables. See ComputeLimits.computeDefinitionByteCacheBytes.
 export const COMPUTE_DEFINITION_BYTE_CACHE_BYTES = limits.computeDefinitionByteCacheBytes;
 
+// Per-warm-client byte budget for the scheduler L1 response cache (audit C2).
+// 0 disables the L1. See ComputeLimits.computeResponseCacheBytes.
+export const COMPUTE_RESPONSE_CACHE_BYTES = limits.computeResponseCacheBytes;
+
 // Durable L2 solve cache (H1): per-definition default quota (inherited when a
 // definition's solveCacheLimit is absent) + global byte backstop. See
 // ComputeLimits for rationale.

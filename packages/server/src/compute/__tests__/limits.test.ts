@@ -33,6 +33,13 @@ describe('resolveComputeLimits', () => {
 			expect(resolveComputeLimits({}).computeResponseMaxBytes).toBe(300 * MB);
 		});
 
+		it('byte-budgets the per-client L1 response cache at 256 MB, with 0 = off (audit C2)', () => {
+			expect(resolveComputeLimits({}).computeResponseCacheBytes).toBe(256 * MB);
+			expect(
+				resolveComputeLimits({ COMPUTE_RESPONSE_CACHE_MB: '0' }).computeResponseCacheBytes
+			).toBe(0);
+		});
+
 		it('keeps every payload cap under V8 single-string wall (~512 MB)', () => {
 			const limits = resolveComputeLimits({});
 			// A `file` output is base64-embedded and JSON.stringify'd into one string;

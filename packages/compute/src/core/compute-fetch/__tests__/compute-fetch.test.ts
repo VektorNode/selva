@@ -11,6 +11,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchRhinoCompute } from '@/core/compute-fetch/compute-fetch';
+import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
 import { setLogger } from '@/core/utils/logger';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
@@ -116,6 +117,13 @@ describe('fetchRhinoCompute — request shape', () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ values: [], extra: 7 }));
 		const res = await fetchRhinoCompute('grasshopper', {}, config);
 		expect(res).toEqual({ values: [], extra: 7 });
+	});
+
+	it('records the response wire size for downstream byte-budgeted caches', async () => {
+		const body = JSON.stringify({ values: [1, 2, 3] });
+		fetchMock.mockResolvedValueOnce(createMockResponse(null, { body }));
+		const res = await fetchRhinoCompute('grasshopper', {}, config);
+		expect(getResponseWireSize(res)).toBe(body.length);
 	});
 });
 

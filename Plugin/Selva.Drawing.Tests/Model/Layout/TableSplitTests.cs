@@ -141,6 +141,42 @@ public class TableSplitTests
 			$"fits height {fitsBounds.Height} exceeded budget {budget} — TrySplit measured rows too small");
 	}
 
+	[Fact]
+	public void Split_fragments_keep_the_full_tables_column_widths()
+	{
+		// Auto column whose widest cell (30mm) sits in the rows that spill to the next page.
+		// Both fragments must keep the full table's resolved widths — re-deriving per fragment
+		// made the column edge jump at the page break.
+		var rows = new IReadOnlyList<TableCell>[]
+		{
+			new[] { CellElement(width: 10, height: 5), CellElement(width: 5, height: 5) },
+			new[] { CellElement(width: 10, height: 5), CellElement(width: 5, height: 5) },
+			new[] { CellElement(width: 30, height: 5), CellElement(width: 5, height: 5) },
+			new[] { CellElement(width: 30, height: 5), CellElement(width: 5, height: 5) },
+		};
+		var table = new Table
+		{
+			ColumnWidths = new[] { GridLength.Auto, GridLength.Star() },
+			Rows = rows,
+			CellPadding = Margins.Zero,
+			Border = null,
+		};
+
+		// Budget fits 2 of the 4 rows; context width 100 → auto col 30, star col 70.
+		var split = table.TrySplit(12, ContextWithHeight(12));
+		Assert.NotNull(split.Fits);
+		var overflow = Assert.IsType<Table>(split.Overflow);
+
+		Assert.Equal(GridLength.Kind.Absolute, overflow.ColumnWidths[0].Type);
+		Assert.Equal(30, overflow.ColumnWidths[0].Value, 6);
+		Assert.Equal(GridLength.Kind.Absolute, overflow.ColumnWidths[1].Type);
+		Assert.Equal(70, overflow.ColumnWidths[1].Value, 6);
+
+		// The fits half rendered with the same pinned widths: its bounds span the full 100mm
+		// even though its own widest first-column cell is only 10mm.
+		Assert.Equal(100, split.Fits.ComputeBounds().Width, 6);
+	}
+
 	private static Table MakeTable(double? header, double[] rowHeights)
 	{
 		IReadOnlyList<TableCell> headerCells = header.HasValue

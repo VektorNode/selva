@@ -179,6 +179,17 @@ export interface ComputeLimits {
 	 */
 	computeDefinitionByteCacheBytes: number;
 	/**
+	 * Total-byte budget (bytes) for EACH warm client's in-process solve-response
+	 * cache (the scheduler L1 — the `fromCache` layer in front of Rhino.Compute).
+	 * Responses range KB→100s of MB (`computeResponseMaxBytes` allows 300 MB), so
+	 * the L1's entry-count cap alone can't bound heap; this adds a byte LRU on
+	 * top. Applies PER warm client — worst-case heap is this × the number of
+	 * distinct compute servers kept warm (`maxCachedClients`, default 16), though
+	 * real deployments run 1–2 servers. `0` disables the L1 response cache
+	 * entirely (every solve goes to compute or the L2). Env value is MB.
+	 */
+	computeResponseCacheBytes: number;
+	/**
 	 * Default per-definition entry quota for the durable L2 solve cache (H1), used
 	 * when a definition's `solveCacheLimit` is absent (inherit). A definition may
 	 * override this; `0` on the definition turns caching off for it. This global
@@ -236,6 +247,10 @@ export function resolveComputeLimits(env: EnvRecord): ComputeLimits {
 		// (disable) is honored rather than treated as invalid.
 		computeDefinitionByteCacheBytes:
 			readNonNegativeInt(env, 'COMPUTE_DEFINITION_BYTE_CACHE_MB', 256) * MB,
+		// Per-warm-client L1 response cache budget. Env is MB; 0 disables the L1.
+		// Default 256 MB: enough to keep a scrub session's recent responses warm
+		// without letting 20 × 300 MB worst-case entries pin gigabytes (audit C2).
+		computeResponseCacheBytes: readNonNegativeInt(env, 'COMPUTE_RESPONSE_CACHE_MB', 256) * MB,
 		// L2 durable solve cache (H1). Default per-definition quota 0 = inherit-to-off
 		// until an operator opts in; the memory backend also only mounts under
 		// SOLVE_CACHE_PROVIDER=memory, so nothing caches by accident. Byte backstop

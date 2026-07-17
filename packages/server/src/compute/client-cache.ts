@@ -115,6 +115,13 @@ export interface ClientCacheConfig {
 	 * `QUEUE_TIMEOUT`.
 	 */
 	queueWaitMs: number;
+	/**
+	 * Byte budget for this client's in-process solve-response cache (scheduler
+	 * L1), evicted LRU alongside its entry-count cap. Applies per warm client —
+	 * total worst-case heap is this × `maxCachedClients`. `0` disables the L1
+	 * response cache entirely (`ComputeLimits.computeResponseCacheBytes`).
+	 */
+	responseCacheMaxBytes: number;
 	/** Concise cache/timing logs. When false, `onDebugLog` is never invoked. */
 	debug: boolean;
 	/** VERBOSE lib-level logging (full solve request/response incl. geometry). */
@@ -226,7 +233,13 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			maxQueueDepth: config.maxQueueDepth || undefined,
 			queueWaitMs: config.queueWaitMs || undefined,
 			timeoutMs: config.maxSolveDurationMs,
-			cache: { maxEntries: 20, ttlMs: 5 * 60_000 },
+			// L1 response cache: count-capped AND byte-budgeted (audit C2) — entries
+			// can be as large as the response cap allows, so the count alone would
+			// let 20 × max-response-size pin gigabytes per warm client. `0` = off.
+			cache:
+				config.responseCacheMaxBytes > 0
+					? { maxEntries: 20, ttlMs: 5 * 60_000, maxBytes: config.responseCacheMaxBytes }
+					: false,
 			// Solve large definitions by server cache-key (pointer) instead of
 			// re-uploading the full binary every solve. On a stale-pointer miss the
 			// client transparently re-uploads.

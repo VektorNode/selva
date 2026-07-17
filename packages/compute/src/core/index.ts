@@ -43,6 +43,7 @@
  */
 
 export { fetchRhinoCompute } from './compute-fetch/compute-fetch';
+export { getResponseWireSize, setResponseWireSize } from './compute-fetch/wire-size';
 
 export { default as ComputeServerStats } from './server/compute-server-stats';
 

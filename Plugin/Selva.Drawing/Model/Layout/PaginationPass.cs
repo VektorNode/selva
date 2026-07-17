@@ -27,8 +27,9 @@ public static class PaginationPass
 	{
 		template = template ?? new PageTemplate();
 
-		var resolvedHeader = ResolveLayout(template.Header);
-		var resolvedFooter = ResolveLayout(template.Footer);
+		var bandWidth = BandWidth(paper, margins);
+		var resolvedHeader = ResolveLayout(template.Header, bandWidth);
+		var resolvedFooter = ResolveLayout(template.Footer, bandWidth);
 
 		var headerHeight = ResolveBandHeight(template.HeaderHeight, resolvedHeader);
 		var footerHeight = ResolveBandHeight(template.FooterHeight, resolvedFooter);
@@ -282,6 +283,26 @@ public static class PaginationPass
 	// post-layout extent, which silently zeroes out the chrome band reservation.
 	public static DrawElement ResolveLayout(DrawElement element)
 		=> LayoutPass.Resolve(element, new LayoutContext(BoundingBox.Empty));
+
+	// Band-width-aware variant for band-height measurement: the per-page chrome resolve wraps
+	// text to the band width (ResolveChromeForPage), so the measurement must wrap to the same
+	// width — an unconstrained measure sees one long line and reserves a band that's too short,
+	// letting the wrapped header spill over the body.
+	public static DrawElement ResolveLayout(DrawElement element, double bandWidth)
+	{
+		var ctx = bandWidth > 0 && !double.IsPositiveInfinity(bandWidth)
+			? new LayoutContext(new BoundingBox(0, 0, bandWidth, double.PositiveInfinity))
+			: new LayoutContext(BoundingBox.Empty);
+		return LayoutPass.Resolve(element, ctx);
+	}
+
+	// Horizontal extent of the chrome bands for a given paper/margins (bands span the page
+	// rect's width in every placement mode). Infinite when the paper is degenerate.
+	public static double BandWidth(PaperSize paper, Margins margins)
+	{
+		var rect = ContentRect(paper, margins);
+		return rect.IsEmpty ? double.PositiveInfinity : rect.Width;
+	}
 
 	// Per-page chrome: resolve the raw template against the band rect (so width-aware
 	// children fill/wrap to the band), then substitute this page's tokens into the result.

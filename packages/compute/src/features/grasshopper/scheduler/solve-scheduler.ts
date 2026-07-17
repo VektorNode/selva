@@ -1,6 +1,7 @@
 import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 import type { RetryPolicy } from '@/core/types';
 import { getLogger } from '@/core/utils/logger';
+import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
 
 import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } from '../types';
 import type { SolveDefinition } from '../definition-ref';
@@ -21,6 +22,16 @@ export type SchedulerMode = 'latest-wins' | 'queue' | 'parallel';
 export interface CacheOptions {
 	/** Maximum entries kept in the LRU. Default: 50. */
 	maxEntries?: number;
+	/**
+	 * Total byte budget for retained responses, evicted LRU alongside
+	 * `maxEntries` (both bounds apply). Responses range KB→100s of MB, so an
+	 * entry count alone can't bound heap. Sizing uses the response's wire size
+	 * (JSON text length, recorded at the fetch boundary — no re-serialization);
+	 * a response without that hint (custom executor) is sized by a one-off
+	 * `JSON.stringify`. A single response larger than the whole budget is
+	 * served but never retained. `0` = no byte bound (count-only, default).
+	 */
+	maxBytes?: number;
 	/** Time-to-live in ms. Set to `0` for no expiry (default). */
 	ttlMs?: number;
 	/**
@@ -107,6 +118,8 @@ export type SolveResult =
 interface CacheEntry {
 	response: GrasshopperComputeResponse;
 	insertedAt: number;
+	/** Wire size (or stringify-fallback estimate) counted against `maxBytes`. */
+	sizeBytes: number;
 }
 
 /** Cap on the definition→server-cache-key map so it can't grow without bound. */
@@ -190,6 +203,21 @@ function isReusableDefinition(definition: SolveDefinition): boolean {
 }
 
 /**
+ * Fallback sizing for a response that never crossed the fetch boundary (custom
+ * executor, hand-built test responses) and so carries no wire-size hint. A full
+ * stringify — linear, once per cache write, never on the hit path. Responses
+ * are JSON-derived, but guard anyway: an unserializable one is sized 0 (cached
+ * under the count bound only) rather than failing the solve.
+ */
+function estimateResponseSize(response: GrasshopperComputeResponse): number {
+	try {
+		return JSON.stringify(response)?.length ?? 0;
+	} catch {
+		return 0;
+	}
+}
+
+/**
  * Robust scheduler for Grasshopper solves.
  *
  * Sits between your application code and the underlying compute call,
@@ -234,9 +262,12 @@ export class SolveScheduler {
 
 	private readonly cacheEnabled: boolean;
 	private readonly cacheMax: number;
+	private readonly cacheMaxBytes: number;
 	private readonly cacheTtl: number;
 	private readonly cacheErroredSolves: boolean;
 	private readonly cache = new Map<string, CacheEntry>();
+	/** Sum of `sizeBytes` across retained cache entries. */
+	private cacheBytes = 0;
 
 	/** Optional cache-key-aware executor and whether server-def-cache reuse is on. */
 	private readonly cacheKeyExecutor?: CacheKeyExecutor;
@@ -294,6 +325,7 @@ export class SolveScheduler {
 		this.cacheEnabled = cacheOpt !== undefined && cacheOpt !== false;
 		const cacheConfig = typeof cacheOpt === 'object' ? cacheOpt : {};
 		this.cacheMax = cacheConfig.maxEntries ?? 50;
+		this.cacheMaxBytes = Math.max(0, cacheConfig.maxBytes ?? 0);
 		this.cacheTtl = cacheConfig.ttlMs ?? 0;
 		this.cacheErroredSolves = cacheConfig.cacheErroredSolves ?? true;
 
@@ -884,7 +916,7 @@ export class SolveScheduler {
 		const entry = this.cache.get(key);
 		if (!entry) return null;
 		if (this.cacheTtl > 0 && Date.now() - entry.insertedAt > this.cacheTtl) {
-			this.cache.delete(key);
+			this.dropCacheEntry(key);
 			return null;
 		}
 		// LRU touch
@@ -896,16 +928,43 @@ export class SolveScheduler {
 	private writeCache(key: string, response: GrasshopperComputeResponse): void {
 		if (!this.cacheEnabled) return;
 		if (!this.cacheErroredSolves && response.errors && response.errors.length > 0) return;
-		this.cache.set(key, { response, insertedAt: Date.now() });
-		while (this.cache.size > this.cacheMax) {
+		// Prefer the wire-size hint recorded at the fetch boundary; a response
+		// that never crossed the fetch layer (custom executor, tests) pays a
+		// one-off stringify here — once per fresh solve, never per hit.
+		const sizeBytes = getResponseWireSize(response) ?? estimateResponseSize(response);
+		// An entry larger than the whole byte budget would evict everything
+		// (including itself) — serve it through, retain nothing.
+		if (this.cacheMaxBytes > 0 && sizeBytes > this.cacheMaxBytes) return;
+		this.dropCacheEntry(key); // replace-in-place: release the old copy's bytes
+		this.cache.set(key, { response, insertedAt: Date.now(), sizeBytes });
+		this.cacheBytes += sizeBytes;
+		while (
+			(this.cache.size > this.cacheMax ||
+				(this.cacheMaxBytes > 0 && this.cacheBytes > this.cacheMaxBytes)) &&
+			this.cache.size > 0
+		) {
 			const oldest = this.cache.keys().next().value;
 			if (oldest === undefined) break;
-			this.cache.delete(oldest);
+			this.dropCacheEntry(oldest);
 		}
+	}
+
+	/** Remove one cache entry and release its bytes from the running total. */
+	private dropCacheEntry(key: string): void {
+		const entry = this.cache.get(key);
+		if (!entry) return;
+		this.cache.delete(key);
+		this.cacheBytes -= entry.sizeBytes;
 	}
 
 	clearCache(): void {
 		this.cache.clear();
+		this.cacheBytes = 0;
+	}
+
+	/** Observability snapshot of the response cache (entries + retained bytes). */
+	cacheStats(): { entries: number; bytes: number } {
+		return { entries: this.cache.size, bytes: this.cacheBytes };
 	}
 
 	// --------------------------------------------------------------------------
@@ -917,7 +976,7 @@ export class SolveScheduler {
 		this.disposed = true;
 		this.cancelAll();
 		this.subscribers.clear();
-		this.cache.clear();
+		this.clearCache();
 	}
 
 	private runHook<H extends (...args: any[]) => void>(

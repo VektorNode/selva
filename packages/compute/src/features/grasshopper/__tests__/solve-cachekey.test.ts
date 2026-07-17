@@ -19,6 +19,7 @@ import {
 } from '../solve';
 import type { DefinitionRef } from '../definition-ref';
 import { ErrorCodes } from '@/core/errors';
+import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
@@ -102,6 +103,19 @@ describe('solveGrasshopperDefinitionWithCacheKey', () => {
 		// would multiply a multi-MB copy into every cache that holds responses.
 		expect(response).not.toHaveProperty('algo');
 		expect(response).toHaveProperty('values');
+	});
+
+	it('re-registers the wire size on the stripped response, minus the echoed algo', async () => {
+		// Byte-budgeted caches size entries by the wire-size hint; the hint follows
+		// object identity, so the algo-stripped copy must carry it — discounted by
+		// the echo the copy no longer retains (audit C2).
+		const echoedAlgo = 'aHVnZS1iYXNlNjQtZGVmaW5pdGlvbg==';
+		const wireBody = JSON.stringify({ values: [], pointer: 'md5_ABC', algo: echoedAlgo });
+		fetchMock.mockResolvedValueOnce(createMockResponse(null, { body: wireBody }));
+
+		const { response } = await solveGrasshopperDefinitionWithCacheKey([], DEF, config);
+
+		expect(getResponseWireSize(response)).toBe(wireBody.length - echoedAlgo.length);
 	});
 });
 

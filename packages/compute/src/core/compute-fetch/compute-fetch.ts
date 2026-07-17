@@ -1,6 +1,7 @@
 import { RhinoComputeError, ErrorCodes, type ErrorCode } from '../errors';
 import { getLogger } from '../utils/logger';
 import { utf8ByteLength } from '../utils/encoding';
+import { setResponseWireSize } from './wire-size';
 
 import type { ComputeConfig, RetryPolicy, ServerTiming } from '../types';
 
@@ -398,6 +399,7 @@ async function handleResponse(
 				const parsed = JSON.parse(errorBody);
 				// If it has values, it's a partial success with errors
 				if (parsed?.values && (parsed.errors || parsed.warnings)) {
+					setResponseWireSize(parsed, errorBody.length);
 					if (debug) {
 						log(
 							`⚠️ Request [${requestId}] completed with Grasshopper errors in ${responseTime}ms`,
@@ -466,7 +468,13 @@ async function handleResponse(
 	fireServerTiming(response, requestId, onServerTiming, debug);
 
 	try {
-		return await response.json();
+		// text-then-parse (what `response.json()` does internally) so the body's
+		// wire size rides along with the parsed object — downstream byte-budgeted
+		// caches read it instead of re-serializing a potentially huge tree.
+		const rawBody = await response.text();
+		const parsed = JSON.parse(rawBody);
+		setResponseWireSize(parsed, rawBody.length);
+		return parsed;
 	} catch (error) {
 		// Classify by the declared Content-Type (issue 87). A 2xx that DECLARES a
 		// non-JSON body (HTML from a captive portal, a reverse-proxy login page, a

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -487,7 +488,7 @@ public static class ParameterTypeHelper
                 return true;
             }
 
-            value = (T)Convert.ChangeType(raw, typeof(T));
+            value = (T)Convert.ChangeType(raw, typeof(T), CultureInfo.InvariantCulture);
             return true;
         }
         catch
