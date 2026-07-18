@@ -19,6 +19,20 @@ function bytes(text: string): Uint8Array {
 	return new TextEncoder().encode(text);
 }
 
+/**
+ * Fast content fingerprint (FNV-1a) for large-payload comparison. A single
+ * linear pass — orders of magnitude cheaper than vitest's `toEqual` deep
+ * walk over a megabyte-scale typed array.
+ */
+function checksum(data: Uint8Array): number {
+	let h = 0x811c9dc5;
+	for (let i = 0; i < data.length; i++) {
+		h ^= data[i];
+		h = Math.imul(h, 0x01000193);
+	}
+	return h >>> 0;
+}
+
 export function runStorageProviderConformance(opts: StorageProviderConformanceOptions): void {
 	const { name, createStorage } = opts;
 
@@ -121,6 +135,12 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			expect(got).toEqual(binary);
 		});
 
+		// Runs with a raised timeout: the round-trip itself is ~1ms, but this test
+		// carries fixed worker overhead (~1.5s locally) that inflates several-fold
+		// on a loaded CI runner where all packages' suites run concurrently — enough
+		// to blow the default 5s. Comparison uses a checksum, not `toEqual`, whose
+		// element-by-element deep walk over a million-entry Uint8Array alone cost
+		// >1.5s.
 		it('handles large data', async () => {
 			const storage = await createStorage();
 			const large = new Uint8Array(1024 * 1024); // 1 MB
@@ -129,8 +149,10 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			}
 			await storage.put('large/file.bin', large);
 			const got = await storage.get('large/file.bin');
-			expect(got).toEqual(large);
-		});
+			expect(got).not.toBeNull();
+			expect(got!.length).toBe(large.length);
+			expect(checksum(got!)).toBe(checksum(large));
+		}, 30_000);
 
 		it('put with contentType is stored', async () => {
 			const storage = await createStorage();
