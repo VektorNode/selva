@@ -6,12 +6,15 @@ export default defineConfig({
 	test: {
 		globals: true,
 		environment: 'node',
-		// Pure-logic suite with no shared filesystem/global state — run in the
-		// threads pool without per-file isolation to skip worker-process spawn
-		// overhead (~20% faster). Do NOT copy this to suites that own a tmpdir or
-		// mutate a global holder (selva, local-provider) — they need isolation.
+		// Per-file isolation is REQUIRED: several suites use `vi.mock()` to replace
+		// modules (render-pipeline's GTAOPass, solve-scheduler-hash-memo's
+		// stable-hash, grasshopper-response-processor's file downloader). With
+		// `isolate: false` the module graph is shared across files in one worker,
+		// so whichever file imports the target first wins and the mock silently
+		// never applies — the failure is order-dependent, so it passes locally and
+		// fails on CI. If you want the ~20% speedup back, first remove every
+		// `vi.mock` from this package.
 		pool: 'threads',
-		isolate: false,
 		coverage: {
 			provider: 'v8',
 			reporter: ['text', 'json', 'html'],
