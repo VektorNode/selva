@@ -267,11 +267,14 @@ public class WebSocketTransport : IDisposable
 
         // Send each binary blob as a separate binary WebSocket frame. WebSocket preserves message
         // order (TCP), so these frames always arrive after the JSON envelope above.
-        if (_webSocketServer != null && _webSocketServer.IsRunning)
+        // Capture the server field once: Stop() nulls it from a thread-pool thread, so re-reading
+        // it per iteration NREs mid-stream when the component is disabled during a solve.
+        var server = _webSocketServer;
+        if (server != null && server.IsRunning)
         {
             foreach (var blob in binaryBlobs)
             {
-                await _webSocketServer.BroadcastBinaryAsync(blob);
+                await server.BroadcastBinaryAsync(blob);
             }
         }
     }
@@ -407,14 +410,16 @@ public class WebSocketTransport : IDisposable
     /// </summary>
     private Task BroadcastAsync(object payload)
     {
-        if (_webSocketServer == null || !_webSocketServer.IsRunning)
+        // Capture once — Stop() nulls the field from another thread between check and use.
+        var server = _webSocketServer;
+        if (server == null || !server.IsRunning)
         {
             return Task.CompletedTask;
         }
 
         // Use the same secure settings for outbound messages for consistency.
         var json = JsonConvert.SerializeObject(payload, SecureSerializerSettings);
-        return _webSocketServer.BroadcastAsync(json);
+        return server.BroadcastAsync(json);
     }
 
     private void HandleClientConnected(object sender, WebSocket _)

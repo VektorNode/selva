@@ -60,6 +60,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// <summary>
     ///     Override Locked property to handle right-click disable/enable.
     ///
+    ///     Unlock recovery: locking tears down document subscriptions without a falling edge, so
+    ///     the solve after unlock sees EnableRising == false. SolveInstance therefore also keys the
+    ///     rebind on EventManager.IsRegistered — do not narrow that condition back to edges only.
+    ///
     ///     IMPORTANT invariant: on lock we only tear down what InitializeDependencies wires per-document
     ///     (servers + DocumentEventManager document-side subscriptions). We do NOT detach the
     ///     component-side handlers (_onSolutionStarted/_onSolutionEnded/_onDocumentModified) — they
@@ -141,9 +145,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         // Register document events only when enabled. Re-registration is needed on the rising
-        // edge (off→on) or when the document changed under us — not on every solve.
-        // EventManager itself is idempotent, but skipping the call keeps the hot path lean.
-        if (enable && (transition.EnableRising || _currentDocument != document))
+        // edge (off→on), when the document changed under us, or when the subscriptions were torn
+        // down without a falling edge: right-click lock → unlock never solves with enable=false,
+        // so _lastEnable stays true and EnableRising alone would skip the rebind — leaving
+        // SolutionStart/End dead and wedging IsBusy after the first value update.
+        var rebind = enable && (transition.EnableRising
+                                || _currentDocument != document
+                                || !_service.EventManager.IsRegistered);
+        if (rebind)
         {
             _currentDocument = document;
             _service.EventManager.RegisterEvents(document);
@@ -152,7 +161,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         // Handle current state
         if (enable)
         {
-            HandleEnabledState(DA, document, transition);
+            HandleEnabledState(DA, document, rebind);
         }
         else
         {
@@ -273,30 +282,33 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// <summary>
     ///     Handle enabled state
     /// </summary>
-    private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, StateTransition transition)
+    private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, bool rebind)
     {
-        if (!_service.ServerManager.IsRunning)
+        var wasRunning = _service.ServerManager.IsRunning;
+
+        // Start servers when they're down — but also route through StartServersAsync on a rebind
+        // even if they look up: StartServersAsync records the "should be running" intent, so a
+        // stop still in flight from a fast disable→enable is skipped instead of landing after
+        // this solve and stranding dead servers on an enabled component.
+        if (!wasRunning || rebind)
         {
-            // Start servers using the ServerLifecycleManager (async fire-and-forget)
             _ = Task.Run(async () =>
             {
                 try
                 {
                     var started = await _service.ServerManager.StartServersAsync(_sessionId);
 
-                    if (started)
-                    // Show Web UI URL if embedded assets are available
+                    // Show Web UI URL if embedded assets are available. Only on an actual
+                    // cold start — a no-op re-confirm shouldn't re-post the remark.
+                    if (started && !wasRunning && _service.ServerManager.HttpPort.HasValue)
                     {
-                        if (_service.ServerManager.HttpPort.HasValue)
+                        var wsPort = _service.ServerManager.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
+                        var httpPort = _service.ServerManager.HttpPort.Value;
+                        RhinoApp.InvokeOnUiThread(new Action(() =>
                         {
-                            var wsPort = _service.ServerManager.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
-                            var httpPort = _service.ServerManager.HttpPort.Value;
-                            RhinoApp.InvokeOnUiThread(new Action(() =>
-                            {
-                                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                                    $"Web UI available at: http://localhost:{httpPort}/?session={_sessionId}&wsPort={wsPort}");
-                            }));
-                        }
+                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                                $"Web UI available at: http://localhost:{httpPort}/?session={_sessionId}&wsPort={wsPort}");
+                        }));
                     }
                 }
                 catch (Exception ex)
@@ -307,11 +319,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     }));
                 }
             });
+        }
 
+        if (!wasRunning)
+        {
             Message = ComponentMessageFormatter.CreateDisplayMessage(true, true, _embeddedSchema, _sessionId);
         }
 
-        if (_embeddedSchema != null && transition.EnableRising)
+        if (_embeddedSchema != null && rebind)
         {
             // Remove any parameters deleted while component was off
             _embeddedSchema = _service.SchemaSynchronizer.ValidateSchema(_embeddedSchema, document);

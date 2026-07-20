@@ -32,6 +32,13 @@ public class DocumentEventManager : IDisposable
     private GH_Document _currentDocument;
     private bool _disposed;
 
+    /// <summary>
+    ///     Whether document-side subscriptions are currently attached. The component uses this to
+    ///     detect teardowns that happen without an enable falling edge (right-click lock → unlock
+    ///     never re-solves with enable=false, so edge detection alone misses the re-registration).
+    /// </summary>
+    public bool IsRegistered => _eventsRegistered;
+
     // Trailing-edge debounce timer for UndoStateChanged — fires 600ms after the last event.
     private Timer _documentModifiedTimer;
     private bool _eventsRegistered;

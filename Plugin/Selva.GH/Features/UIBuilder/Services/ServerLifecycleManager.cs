@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Utilities.Helpers;
@@ -10,14 +11,24 @@ namespace Selva.GH.Features.UIBuilder.Services;
 /// <summary>
 ///     Manages the lifecycle of LocalWebServer and WebSocketServer.
 ///     Handles server startup, shutdown, and concurrent access prevention.
+///
+///     Concurrency model: start and stop transitions are serialized by <see cref="_transitionGate" />,
+///     and <see cref="_desiredRunning" /> records the latest caller intent. Both are needed — the gate
+///     alone can't order a delayed stop (disconnect-notify grace period) against a newer start, and
+///     "if (IsRunning) Stop()" check-then-act let a stop overlapping a start no-op entirely, orphaning
+///     servers on a disabled component.
 /// </summary>
 public class ServerLifecycleManager : IDisposable
 {
     private readonly WebSocketTransport _webSocketTransport;
-    private readonly object _lock = new object();
+    private readonly SemaphoreSlim _transitionGate = new SemaphoreSlim(1, 1);
     private readonly LocalWebServer _webServer;
     private bool _disposed;
-    private bool _isStarting;
+
+    // Latest intent: set true at the top of StartServersAsync, false at the top of the stop
+    // entry points — before either takes the gate. Transitions re-check it under the gate so the
+    // most recent request wins regardless of execution order.
+    private volatile bool _desiredRunning;
 
     public ServerLifecycleManager(LocalWebServer webServer, WebSocketTransport webSocketTransport)
     {
@@ -39,30 +50,12 @@ public class ServerLifecycleManager : IDisposable
         }
 
         _disposed = true;
+        _desiredRunning = false;
 
-        // Synchronous cleanup only — avoid async/.Wait() which deadlocks on the main thread.
-        // Clients will detect the dropped connection on their own.
-        try
-        {
-            if (_webSocketTransport.IsRunning)
-            {
-                _webSocketTransport.Stop();
-            }
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            if (_webServer.IsRunning)
-            {
-                _webServer.Stop();
-            }
-        }
-        catch
-        {
-        }
+        // Synchronous best-effort cleanup — no async/.Wait() (deadlocks on the main thread) and no
+        // gate wait (Dispose must not block). An in-flight start observes _desiredRunning == false
+        // after binding and tears itself down.
+        StopCore();
     }
 
     public async Task<bool> StartServersAsync(string sessionId)
@@ -72,19 +65,22 @@ public class ServerLifecycleManager : IDisposable
             throw new ArgumentNullException(nameof(sessionId));
         }
 
-        // Prevent concurrent starts
-        lock (_lock)
-        {
-            if (_isStarting || IsRunning)
-            {
-                return IsRunning;
-            }
+        _desiredRunning = true;
 
-            _isStarting = true;
-        }
-
+        await _transitionGate.WaitAsync().ConfigureAwait(false);
         try
         {
+            if (!_desiredRunning)
+            {
+                // A stop was requested after this start queued — the newer intent wins.
+                return false;
+            }
+
+            if (IsRunning)
+            {
+                return true;
+            }
+
             // Start embedded web server first (production mode only - check if resources exist)
             var hasEmbeddedAssets = HasEmbeddedWebAssets();
             if (_webServer != null && !_webServer.IsRunning && hasEmbeddedAssets)
@@ -99,7 +95,15 @@ public class ServerLifecycleManager : IDisposable
 #if DEBUG
                 Logger.Log($"[ServerLifecycleManager] {msg}");
 #endif
-            });
+            }).ConfigureAwait(false);
+
+            if (!_desiredRunning)
+            {
+                // Disabled while binding — tear down what we just built instead of leaving
+                // servers accepting clients on a disabled component.
+                StopCore();
+                return false;
+            }
 
             Logger.Log(
                 $"[ServerLifecycleManager] WebSocket server started on port {_webSocketTransport.WebSocketPort}");
@@ -109,53 +113,46 @@ public class ServerLifecycleManager : IDisposable
         {
             Logger.Error("[ServerLifecycleManager] Failed to start servers", ex);
 
-            // Cleanup on failure
-            await StopServersAsync();
+            // Cleanup on failure. Direct StopCore — StopServersAsync would deadlock on the gate.
+            StopCore();
             return false;
         }
         finally
         {
-            lock (_lock)
-            {
-                _isStarting = false;
-            }
+            _transitionGate.Release();
         }
     }
 
     public async Task StopServersAsync()
     {
-        await Task.Run(() =>
+        _desiredRunning = false;
+
+        await _transitionGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            try
+            if (_desiredRunning)
             {
-                if (_webSocketTransport.IsRunning)
-                {
-                    _webSocketTransport.Stop();
-                    Logger.Log("[ServerLifecycleManager] WebSocket server stopped");
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("[ServerLifecycleManager] Error stopping WebSocket server", ex);
+                // Re-enabled while this stop was queued or delayed (fast disable→enable) —
+                // leave the servers up rather than stranding an enabled component.
+                return;
             }
 
-            try
-            {
-                if (_webServer != null && _webServer.IsRunning)
-                {
-                    _webServer.Stop();
-                    Logger.Log("[ServerLifecycleManager] HTTP server stopped");
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("[ServerLifecycleManager] Error stopping HTTP server", ex);
-            }
-        });
+            // Socket closes block up to ClientCloseTimeoutMs per client — keep them off the
+            // calling thread (this is reached from UI-thread continuations).
+            await Task.Run(StopCore).ConfigureAwait(false);
+        }
+        finally
+        {
+            _transitionGate.Release();
+        }
     }
 
     public async Task StopServersAndNotifyAsync(string reason = null)
     {
+        // Record the intent before the notify grace period, so a start queued during the
+        // delay is ordered correctly against this stop.
+        _desiredRunning = false;
+
         if (_webSocketTransport.IsRunning)
         {
             try
@@ -171,6 +168,39 @@ public class ServerLifecycleManager : IDisposable
         }
 
         await StopServersAsync();
+    }
+
+    /// <summary>
+    ///     Stops both servers. Callers must hold <see cref="_transitionGate" /> (or be on the
+    ///     Dispose / in-flight-start paths, which are documented exceptions).
+    /// </summary>
+    private void StopCore()
+    {
+        try
+        {
+            if (_webSocketTransport.IsRunning)
+            {
+                _webSocketTransport.Stop();
+                Logger.Log("[ServerLifecycleManager] WebSocket server stopped");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("[ServerLifecycleManager] Error stopping WebSocket server", ex);
+        }
+
+        try
+        {
+            if (_webServer != null && _webServer.IsRunning)
+            {
+                _webServer.Stop();
+                Logger.Log("[ServerLifecycleManager] HTTP server stopped");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("[ServerLifecycleManager] Error stopping HTTP server", ex);
+        }
     }
 
     /// <summary>
