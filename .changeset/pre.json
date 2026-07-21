@@ -19,6 +19,7 @@
   "changesets": [
     "beta-hardening-release",
     "compute-monorepo-import",
+    "platform-logging-interface",
     "platform-solve-cache-interface",
     "quiet-snakes-press",
     "schema-version-required",
