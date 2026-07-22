@@ -3,6 +3,7 @@ title: Permissions & Orgs
 group: Concepts
 order: 4
 published: true
+description: 'How organizations, roles, and per-resource permissions decide who can see and do what.'
 ---
 
 # Permissions & Organizations

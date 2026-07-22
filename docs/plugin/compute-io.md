@@ -3,6 +3,7 @@ title: Compute I/O
 group: Plugin
 order: 5
 published: true
+description: 'Interactive value lists and selections that flow between the definition and the UI.'
 ---
 
 # Compute I/O

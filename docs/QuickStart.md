@@ -3,6 +3,7 @@ title: Local Dev Setup
 group: Get Started
 order: 4
 published: true
+description: 'Run the whole app on your own machine with hot reload before committing to servers.'
 ---
 
 # Local Dev Setup

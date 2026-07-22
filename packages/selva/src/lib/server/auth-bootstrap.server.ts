@@ -17,7 +17,7 @@ import {
 	getProjectProvider,
 	getTenancy
 } from './providers.server.js';
-import { slugify } from './slug.js';
+import { slugify } from '@selvajs/platform';
 
 /**
  * Shared post-verification flow used by every IdP-callback route (OAuth,

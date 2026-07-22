@@ -19,7 +19,7 @@ import {
 } from '$lib/server/providers.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-import { slugify } from '$lib/server/slug';
+import { slugify } from '@selvajs/platform';
 import { env } from '$env/dynamic/private';
 
 // Redirect away if a platform admin already exists — setup is only for a

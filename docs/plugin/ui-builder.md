@@ -3,6 +3,7 @@ title: UI Builder
 group: Plugin
 order: 2
 published: true
+description: 'Map Grasshopper parameters to web controls with the drag-and-drop schema designer.'
 ---
 
 # UI Builder

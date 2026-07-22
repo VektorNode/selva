@@ -3,6 +3,7 @@ title: Plugin overview
 group: Plugin
 order: 1
 published: true
+description: 'The Grasshopper side: components, the schema designer, and how the .gha is put together.'
 ---
 
 # The Selva plugin

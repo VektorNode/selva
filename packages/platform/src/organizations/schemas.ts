@@ -29,6 +29,22 @@ export const RESERVED_SLUGS: readonly string[] = [
 
 const RESERVED_SLUG_SET = new Set(RESERVED_SLUGS);
 
+/**
+ * Coerce an arbitrary name into a slug candidate: lowercase, non-alphanumeric
+ * runs collapsed to single hyphens, trimmed of edge hyphens, capped at 63 chars.
+ * Produces the shape `SlugSchema` validates — but does not itself guarantee
+ * validity (a name of all-symbols yields `''`, and reserved words pass through);
+ * run the result through `SlugSchema` where a valid slug is required.
+ */
+export function slugify(name: string): string {
+	return name
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-|-$/g, '')
+		.slice(0, 63);
+}
+
 /** Lowercase alphanumeric with internal hyphens, 3–63 chars, not a reserved word. */
 export const SlugSchema = z
 	.string()

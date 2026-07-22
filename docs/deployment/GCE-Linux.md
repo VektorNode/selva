@@ -3,6 +3,7 @@ title: Linux VM Deploy (GCE / Ubuntu)
 group: Deployment
 order: 1
 published: true
+description: 'A concrete, end-to-end deploy onto an Ubuntu VM on Google Compute Engine.'
 ---
 
 # Deploying Selva to a Linux VM (GCE / Ubuntu)

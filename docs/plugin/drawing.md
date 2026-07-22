@@ -3,6 +3,7 @@ title: Drawing
 group: Plugin
 order: 6
 published: true
+description: 'Build document-model drawings and render them to SVG or PDF from a definition.'
 ---
 
 # Drawing

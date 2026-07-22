@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SlugSchema, RESERVED_SLUGS } from '../schemas.js';
+import { SlugSchema, RESERVED_SLUGS, slugify } from '../schemas.js';
 
 /**
  * Reserved-slug guard (audit D4). A tenant slug must never equal a top-level
@@ -38,5 +38,31 @@ describe('SlugSchema', () => {
 		// The guard is exact-match, not substring — `team-alpha` is not `team`.
 		expect(SlugSchema.safeParse('team-alpha').success).toBe(true);
 		expect(SlugSchema.safeParse('my-api').success).toBe(true);
+	});
+});
+
+describe('slugify', () => {
+	it('lowercases, trims, and hyphenates non-alphanumeric runs', () => {
+		expect(slugify('  Acme Studio!! ')).toBe('acme-studio');
+		expect(slugify('Foo___Bar / Baz')).toBe('foo-bar-baz');
+	});
+
+	it('strips leading and trailing hyphens', () => {
+		expect(slugify('---hello---')).toBe('hello');
+		expect(slugify('!leading and trailing.')).toBe('leading-and-trailing');
+	});
+
+	it('caps output at 63 characters', () => {
+		expect(slugify('a'.repeat(100))).toHaveLength(63);
+	});
+
+	it('yields an empty string when nothing survives (caller must still validate)', () => {
+		expect(slugify('!!!')).toBe('');
+		// It does not itself guarantee validity — the output must pass SlugSchema.
+		expect(SlugSchema.safeParse(slugify('!!!')).success).toBe(false);
+	});
+
+	it('produces slugs that SlugSchema accepts for ordinary names', () => {
+		expect(SlugSchema.safeParse(slugify('Acme Studio')).success).toBe(true);
 	});
 });

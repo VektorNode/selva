@@ -3,6 +3,7 @@ title: What is Selva
 group: Concepts
 order: 1
 published: true
+description: 'Turn a Grasshopper definition into a web app — the problem it solves and the two halves that make it work.'
 ---
 
 # What is Selva

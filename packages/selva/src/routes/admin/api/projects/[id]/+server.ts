@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
 import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { slugify } from '$lib/server/slug';
+import { slugify } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 
 const UpdatePlatformProjectBody = z

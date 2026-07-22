@@ -3,6 +3,7 @@ title: Caching
 group: Concepts
 order: 5
 published: true
+description: 'Where Selva caches — browser, server, and compute — and how to reason about freshness.'
 ---
 
 # Caching

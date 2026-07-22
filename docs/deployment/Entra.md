@@ -3,6 +3,7 @@ title: Entra SSO (oauth2-proxy + Caddy)
 group: Deployment
 order: 2
 published: true
+description: 'Put Selva behind Microsoft Entra ID single sign-on with oauth2-proxy and Caddy.'
 ---
 
 # Entra SSO via oauth2-proxy + Caddy

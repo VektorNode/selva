@@ -3,6 +3,7 @@ title: File I/O
 group: Plugin
 order: 4
 published: true
+description: 'Export geometry and block instances to files for download from the deployed app.'
 ---
 
 # File I/O

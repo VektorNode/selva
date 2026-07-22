@@ -3,6 +3,7 @@ title: Display
 group: Plugin
 order: 3
 published: true
+description: 'Configure how geometry is materialized and rendered in the browser 3D viewer.'
 ---
 
 # Display

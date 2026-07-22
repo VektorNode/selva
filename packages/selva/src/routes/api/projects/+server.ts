@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanCreateProject } from '$lib/server/access.server';
 import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { slugify } from '$lib/server/slug';
+import { slugify } from '@selvajs/platform';
 import { ProjectVisibilitySchema, ProviderError, type Project } from '@selvajs/platform';
 
 const MAX_SLUG_ATTEMPTS = 25;

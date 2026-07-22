@@ -3,6 +3,7 @@ title: Security & Limits
 group: Concepts
 order: 6
 published: true
+description: 'Request limits, SSRF guards, rate limiting, and the boundaries that keep a deployment safe.'
 ---
 
 # Security & Limits

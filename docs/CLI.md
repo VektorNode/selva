@@ -3,6 +3,7 @@ title: CLI
 group: Get Started
 order: 3
 published: true
+description: 'Scaffold, configure, and operate a Selva deployment from the command line.'
 ---
 
 # Selva CLI

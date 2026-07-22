@@ -3,6 +3,7 @@ title: Providers
 group: Concepts
 order: 3
 published: true
+description: 'Bring your own backend: auth, data, and storage are pluggable interfaces you pick at deploy time.'
 ---
 
 # Providers: bring your own backend

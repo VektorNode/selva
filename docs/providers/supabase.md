@@ -3,6 +3,7 @@ title: Supabase provider
 group: Providers
 order: 2
 published: true
+description: 'Auth, Postgres, and Storage on Supabase, with identity living in the provider.'
 ---
 
 # Supabase provider

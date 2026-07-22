@@ -1,13 +1,4 @@
-export function getDefaultValue(paramType: string): unknown {
-	switch (paramType) {
-		case 'number':
-		case 'integer':
-			return 0;
-		case 'boolean':
-			return false;
-		case 'text':
-			return '';
-		default:
-			return null;
-	}
-}
+// Moved to @selvajs/schemas so server-side callers can share it without pulling
+// in the UI package. Re-exported here to keep existing `@selvajs/ui` importers
+// working.
+export { getDefaultValue } from '@selvajs/schemas';

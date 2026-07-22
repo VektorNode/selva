@@ -3,6 +3,7 @@ title: Admin Guide
 group: Concepts
 order: 7
 published: true
+description: 'Day-to-day operation: registering compute servers, managing users, and the admin surfaces.'
 ---
 
 # Admin Guide

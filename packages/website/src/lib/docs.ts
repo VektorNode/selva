@@ -14,6 +14,8 @@ interface DocFrontmatter {
 	group?: string;
 	/** Sort order within a group (lower first). Defaults to 0. */
 	order?: number;
+	/** One-line summary shown on index/overview cards. Optional. */
+	description?: string;
 }
 
 interface DocModule {
@@ -26,12 +28,18 @@ export interface DocEntry {
 	title: string;
 	group: string;
 	order: number;
+	description?: string;
 	load: () => Promise<DocModule>;
 }
 
 export interface DocSidebarGroup {
 	title: string;
 	links: { label: string; href: string }[];
+}
+
+export interface DocIndexGroup {
+	title: string;
+	entries: DocEntry[];
 }
 
 // Glob the repo-root docs folder. Lazy so each route only pulls its own doc.
@@ -78,6 +86,7 @@ export const docs: DocEntry[] = Object.entries(modules)
 			title: meta.title ?? titleFromSlug(slug),
 			group: meta.group ?? 'Docs',
 			order: meta.order ?? 0,
+			description: meta.description,
 			published: meta.published === true,
 			load
 		};
@@ -89,8 +98,18 @@ export function getDoc(slug: string): DocEntry | undefined {
 	return docs.find((d) => d.slug === slug);
 }
 
-/** Grouped, ordered sidebar built from published docs. */
-export function getDocsSidebar(): DocSidebarGroup[] {
+// Fixed group order for both the sidebar and the docs index. Groups not listed
+// here fall to the end, alphabetically. Keeps "Get Started" first, reference
+// material last, regardless of per-doc `order`.
+const GROUP_ORDER = ['Get Started', 'Concepts', 'Plugin', 'Providers', 'Deployment'];
+
+function groupRank(title: string): number {
+	const i = GROUP_ORDER.indexOf(title);
+	return i === -1 ? GROUP_ORDER.length : i;
+}
+
+/** Docs grouped and ordered, the shared basis for the sidebar and index. */
+function groupedDocs(): DocIndexGroup[] {
 	const groups = new Map<string, DocEntry[]>();
 	for (const doc of docs) {
 		const list = groups.get(doc.group) ?? [];
@@ -98,10 +117,36 @@ export function getDocsSidebar(): DocSidebarGroup[] {
 		groups.set(doc.group, list);
 	}
 
-	return [...groups.entries()].map(([title, entries]) => ({
-		title,
-		links: entries
-			.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title))
-			.map((d) => ({ label: d.title, href: `/docs/${d.slug}` }))
+	return [...groups.entries()]
+		.sort(([a], [b]) => groupRank(a) - groupRank(b) || a.localeCompare(b))
+		.map(([title, entries]) => ({
+			title,
+			entries: entries.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title))
+		}));
+}
+
+/** Grouped, ordered sidebar built from published docs. */
+export function getDocsSidebar(): DocSidebarGroup[] {
+	return groupedDocs().map((g) => ({
+		title: g.title,
+		links: g.entries.map((d) => ({ label: d.title, href: `/docs/${d.slug}` }))
 	}));
+}
+
+/** Grouped, ordered docs with descriptions — for the /docs index cards. */
+export function getDocsIndex(): DocIndexGroup[] {
+	return groupedDocs();
+}
+
+/** Flat, reading-order list of docs — powers prev/next navigation. */
+export function getDocsFlat(): DocEntry[] {
+	return groupedDocs().flatMap((g) => g.entries);
+}
+
+/** The previous and next doc around a slug, in reading order. */
+export function getDocNeighbors(slug: string): { prev?: DocEntry; next?: DocEntry } {
+	const flat = getDocsFlat();
+	const i = flat.findIndex((d) => d.slug === slug);
+	if (i === -1) return {};
+	return { prev: flat[i - 1], next: flat[i + 1] };
 }

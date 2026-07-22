@@ -3,6 +3,7 @@ title: Build your own app
 group: Get Started
 order: 6
 published: true
+description: 'Embed the Selva viewer and controls in your own product using the @selvajs/* packages.'
 ---
 
 # Build your own app
