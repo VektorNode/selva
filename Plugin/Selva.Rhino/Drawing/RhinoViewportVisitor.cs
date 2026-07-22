@@ -169,7 +169,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
     // against — so the preview's glyph metrics line up with the background rect we draw.
     private static string ResolveFontFace(string? fontFamily)
     {
-        if (string.IsNullOrEmpty(fontFamily)) return "Inter";
+        if (fontFamily == null || fontFamily.Length == 0) return "Inter";
         var comma = fontFamily.IndexOf(',');
         var first = comma < 0 ? fontFamily : fontFamily.Substring(0, comma);
         return first.Trim().Trim('"', '\'');
