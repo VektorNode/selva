@@ -91,7 +91,7 @@ internal static class PathToCurves
 
     // Reconstruct an ArcCurve from SVG endpoint-parameterization. Falls back to null when
     // the arc collapses to a line (radii too small) — caller skips it.
-    private static Curve ArcCurveFromSvg(ModelPoint from, PathSeg.ArcTo a)
+    private static Curve? ArcCurveFromSvg(ModelPoint from, PathSeg.ArcTo a)
     {
         var rx = Math.Abs(a.RadiusX);
         var ry = Math.Abs(a.RadiusY);
@@ -141,7 +141,7 @@ internal static class PathToCurves
         return arc.IsValid ? arc : (Arc?)null;
     }
 
-    private static NurbsCurve EllipticalNurbs(ModelPoint from, PathSeg.ArcTo a)
+    private static NurbsCurve? EllipticalNurbs(ModelPoint from, PathSeg.ArcTo a)
     {
         // Sample the SVG arc at fixed angular steps and fit a degree-3 NURBS through the
         // points. Preview-quality only — accurate enough that planar-brep tolerance is happy.

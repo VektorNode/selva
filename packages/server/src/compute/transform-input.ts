@@ -8,8 +8,8 @@ import type { SchemaInput } from '@selvajs/schemas';
  * ValueList/Geometry/File/Color), normalizes the lowercase UI paramType to its
  * PascalCase form, and falls back gracefully on underspecified inputs — so we no longer
  * maintain a parallel hand-rolled transform that silently coerced valueList/file/color
- * to Text and drifted from the package (and from the parapet app, which already delegates
- * here). `values`/`acceptedFormats` are absent on `SchemaInput` (they live on the layout
+ * to Text and drifted from the package (whose consumers already delegate here).
+ * `values`/`acceptedFormats` are absent on `SchemaInput` (they live on the layout
  * item's config), so valueList/file inputs fall back to carrying the selected value with
  * no option list — the same value that reaches Grasshopper.
  */

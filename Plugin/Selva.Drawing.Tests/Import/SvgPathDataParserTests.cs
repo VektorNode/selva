@@ -16,10 +16,10 @@ public class SvgPathDataParserTests
         var svg = $"<svg width='100' height='100'><path d='{d}'/></svg>";
         var el = new SvgImporter().Import(svg);
         // GroupElement(Y-flip) → PathElement
-        return FindPath(el);
+        return FindPath(el)!;
     }
 
-    private static Path FindPath(DrawElement el)
+    private static Path? FindPath(DrawElement el)
     {
         switch (el)
         {

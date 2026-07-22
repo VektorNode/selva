@@ -94,6 +94,50 @@ describe('render pipeline GTAO camera swap (issue 5)', () => {
 	});
 });
 
+describe('render pipeline edge detection (edge-overlay-performance plan, phase 3)', () => {
+	function makeEdgePipeline(options: { ambientOcclusion?: boolean; edgeDetection?: boolean }) {
+		const scene = new THREE.Scene();
+		return createRenderPipeline(
+			stubRenderer(),
+			scene,
+			new THREE.PerspectiveCamera(20, 1, 0.1, 100),
+			800,
+			600,
+			{
+				toneMapping: THREE.NeutralToneMapping,
+				toneMappingExposure: 1,
+				...options
+			}
+		);
+	}
+
+	it('constructs the edge pass disabled by default and toggles it at runtime', () => {
+		const pipeline = makeEdgePipeline({});
+		expect(pipeline.edgeDetectionEnabled()).toBe(false);
+
+		pipeline.setEdgeDetection(true);
+		expect(pipeline.edgeDetectionEnabled()).toBe(true);
+
+		pipeline.setEdgeDetection(false);
+		expect(pipeline.edgeDetectionEnabled()).toBe(false);
+	});
+
+	it('honors edgeDetection: true at construction', () => {
+		const pipeline = makeEdgePipeline({ edgeDetection: true });
+		expect(pipeline.edgeDetectionEnabled()).toBe(true);
+	});
+
+	it('can be built without the GTAO pass (edges-only pipeline)', () => {
+		makeEdgePipeline({ ambientOcclusion: false, edgeDetection: true });
+		expect(gtaoInstances).toHaveLength(0);
+	});
+
+	it('builds GTAO by default (existing callers unchanged)', () => {
+		makeEdgePipeline({});
+		expect(gtaoInstances).toHaveLength(1);
+	});
+});
+
 describe('render pipeline sizing (issues 1/7)', () => {
 	it('caps the AO pixel ratio at 1 by default (AO buffers stay at CSS size, not display DPR)', () => {
 		const { pipeline, gtaoPass } = makePipeline(new THREE.PerspectiveCamera(20, 1, 0.1, 100));

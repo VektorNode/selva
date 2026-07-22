@@ -7,7 +7,7 @@ published: true
 
 # UI Builder
 
-The heart of the plugin. The **UI Builder** component links a Grasshopper definition to its schema and runs the WebSocket bridge (port 8765) that the schema designer connects to.
+The heart of the plugin. The **UI Bridge** component (canvas name "UI Bridge", in Selva → UI) links a Grasshopper definition to its schema and runs the WebSocket bridge (default port 8765) that the schema designer connects to.
 
 ## What it does
 
@@ -18,7 +18,7 @@ The heart of the plugin. The **UI Builder** component links a Grasshopper defini
 
 ## Using it
 
-1. Drop the UI Builder onto your definition.
+1. Drop the UI Bridge onto your definition.
 2. Open the schema designer (the plugin UI).
 3. Drag inputs into web controls, group and lay them out.
 4. Save. The schema is written into the `.gh`.

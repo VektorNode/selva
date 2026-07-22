@@ -3,6 +3,16 @@
 	"version": "0.14.4-beta.1",
 	"description": "Supabase (Auth + Postgres + Storage) implementations of @selvajs/platform interfaces",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"selva",
+		"provider",
+		"supabase",
+		"auth",
+		"postgres"
+	],
 	"publishConfig": {
 		"access": "public"
 	},

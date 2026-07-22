@@ -30,5 +30,6 @@ Full setup, header names, proxy examples, and the self-test: [header-auth-provid
 
 ## Next
 
+- [Entra SSO walkthrough (oauth2-proxy + Caddy)](../deployment/Entra.md) — the concrete end-to-end runbook
 - [Providers overview](../providers.md)
 - [Get Started](../getting-started/overview.md)

@@ -4,7 +4,6 @@
 	import {
 		initThree,
 		updateScene,
-		removeEdges,
 		LOOKS,
 		type Look,
 		type ThreeInitializerOptions,
@@ -119,6 +118,8 @@
 	let measureTool: MeasureTool | null = null;
 	let grid: Grid | null = null;
 	let applyEdges: ((root: THREE.Object3D) => void) | null = null;
+	let clearEdges: ((root: THREE.Object3D) => void) | null = null;
+	let invalidate: (() => void) | null = null;
 	let setLook: ((look: Look) => void) | null = null;
 	let updateGridScale: (() => void) | null = null;
 	let fitToView: (() => void) | null = null;
@@ -201,6 +202,8 @@
 		grid = init.grid;
 		grid?.setVisible(gridVisible);
 		applyEdges = init.applyEdges;
+		clearEdges = init.clearEdges;
+		invalidate = init.invalidate;
 		setLook = init.setLook;
 		updateGridScale = init.updateGridScale;
 		fitToView = init.fitToView;
@@ -236,6 +239,7 @@
 		if (!grid) return;
 		gridVisible = !gridVisible;
 		grid.setVisible(gridVisible);
+		invalidate?.();
 	}
 
 	function setRenderStyle(look: Look) {
@@ -244,12 +248,13 @@
 		setLook(look);
 	}
 
-	// Add/remove crease-edge overlays on the current scene content. addEdges is idempotent per mesh, so
-	// a redundant apply is harmless; removeEdges is its refcounted inverse.
+	// Add/remove crease-edge overlays on the current scene content. applyEdges is idempotent per mesh
+	// (and attaches large meshes' overlays async, off the main thread); clearEdges is its inverse —
+	// it also cancels in-flight attaches and stands down the screen-space fallback for capped meshes.
 	function applyEdgeState() {
 		if (!scene) return;
 		if (edgesVisible) applyEdges?.(scene);
-		else removeEdges(scene);
+		else clearEdges?.(scene);
 	}
 
 	function toggleEdges() {
@@ -268,6 +273,8 @@
 				// Rescale the grid to the new content's extent so cells and fade match the part size.
 				updateGridScale?.();
 				sceneVersion++;
+				// New solve content — repaint now rather than on the render loop's safety interval.
+				invalidate?.();
 			});
 
 			if (!viewerInitialized && meshes.length > 0) {

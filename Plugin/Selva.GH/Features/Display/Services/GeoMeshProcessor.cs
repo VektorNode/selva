@@ -91,6 +91,7 @@ public static class GeoMeshProcessor
         var faces = new int[meshFaces.TriangleCount * 3 + meshFaces.QuadCount * 6];
 
         var faceIndex = 0;
+        var ngonCount = 0;
         for (var i = 0; i < faceCount; i++)
         {
             var face = meshFaces[i];
@@ -111,8 +112,16 @@ public static class GeoMeshProcessor
             }
             else
             {
-                Console.WriteLine("NGON detected. This component only supports triangles and quads.");
+                // Counted, reported once after the loop: a console write per skipped face turned
+                // ngon-heavy meshes into an IO storm inside the parallel extraction pass.
+                ngonCount++;
             }
+        }
+
+        if (ngonCount > 0)
+        {
+            Console.WriteLine(
+                $"Skipped {ngonCount} ngon face(s); this component only supports triangles and quads.");
         }
 
         return (vertices, faces, uvs, colors);

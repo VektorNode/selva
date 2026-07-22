@@ -29,9 +29,11 @@ export { createViewGizmo } from './features/visualization/threejs/view-gizmo.js'
 export type { ViewGizmo } from './features/visualization/threejs/view-gizmo.js';
 export {
 	addEdges,
+	addEdgesAsync,
 	removeEdges,
 	isEdgeOverlay,
-	EDGE_USERDATA_KIND
+	EDGE_USERDATA_KIND,
+	EDGES_SKIPPED_TRIANGLE_CAP
 } from './features/visualization/threejs/edges.js';
 export type { EdgeOptions } from './features/visualization/threejs/edges.js';
 export { createRenderPipeline } from './features/visualization/threejs/render-pipeline.js';
@@ -39,6 +41,8 @@ export type {
 	RenderPipeline,
 	RenderPipelineOptions
 } from './features/visualization/threejs/render-pipeline.js';
+export { EdgeDetectionPass } from './features/visualization/threejs/edge-detection-pass.js';
+export type { EdgeDetectionOptions } from './features/visualization/threejs/edge-detection-pass.js';
 export { createLabelLayer } from './features/visualization/threejs/label-layer.js';
 export type { LabelLayer, LabelHandle } from './features/visualization/threejs/label-layer.js';
 export { createMeasureTool, snapToVertex } from './features/visualization/threejs/measure.js';

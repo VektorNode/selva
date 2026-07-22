@@ -4,6 +4,7 @@ import { bench, describe } from 'vitest';
 
 import { boxField, planarGrid, smoothSphere, triangleCount } from '@tests/helpers/bench-geometry';
 
+import { extractEdgeSegments } from '../edge-extract';
 import { addEdges, removeEdges } from '../edges';
 
 /**
@@ -66,12 +67,28 @@ console.log(
 		[...fixtures, soup].map((f) => `${f.label}=${f.segments}`).join(', ')
 );
 
-describe('EdgesGeometry extraction @44°', () => {
+describe('EdgesGeometry extraction @44° (three baseline)', () => {
 	for (const fixture of [...fixtures, soup]) {
 		bench(
 			fixture.label,
 			() => {
 				new THREE.EdgesGeometry(fixture.geometry, THRESHOLD_ANGLE).dispose();
+			},
+			FEW
+		);
+	}
+});
+
+describe('extractEdgeSegments @44° (edge-extract replacement)', () => {
+	for (const fixture of [...fixtures, soup]) {
+		const positions = fixture.geometry.attributes.position.array as Float32Array;
+		const index = fixture.geometry.index
+			? (fixture.geometry.index.array as Uint32Array | Uint16Array)
+			: null;
+		bench(
+			fixture.label,
+			() => {
+				extractEdgeSegments(positions, index, THRESHOLD_ANGLE);
 			},
 			FEW
 		);

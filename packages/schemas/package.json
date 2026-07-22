@@ -3,6 +3,16 @@
 	"version": "4.7.0-beta.0",
 	"description": "Schema definitions, generated TypeScript types, and code generators for Selva",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"json-schema",
+		"codegen",
+		"typescript",
+		"csharp",
+		"selva"
+	],
 	"publishConfig": {
 		"access": "public"
 	},

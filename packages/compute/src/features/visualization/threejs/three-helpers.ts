@@ -195,6 +195,13 @@ export function computeContentBounds(scene: THREE.Scene): THREE.Box3 {
 /** IDs of scene infrastructure that survives content updates (floor, grid, label layer). */
 const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer']);
 
+/**
+ * `geometry.userData` tag marking a geometry owned by the cross-solve geometry cache
+ * (webdisplay/geometry-cache.ts). `clearScene` must NOT dispose these — the cache keeps them alive
+ * (GPU buffers included) so the next solve can reuse them; the cache disposes on eviction instead.
+ */
+export const CACHED_GEOMETRY_USERDATA_FLAG = 'selvaGeometryCache';
+
 /** Removes all compute content except persistent infrastructure and shared materials. */
 export function clearScene(scene: THREE.Scene): void {
 	// Snapshot children — we mutate the array via removeFromParent during iteration
@@ -216,7 +223,10 @@ export function clearScene(scene: THREE.Scene): void {
 			const renderable = child as Partial<THREE.Mesh> & THREE.Object3D;
 			if (!renderable.geometry && !renderable.material) return;
 
-			renderable.geometry?.dispose();
+			// Cache-owned geometries survive scene rebuilds — the cache disposes them on eviction.
+			if (!renderable.geometry?.userData?.[CACHED_GEOMETRY_USERDATA_FLAG]) {
+				renderable.geometry?.dispose();
+			}
 
 			const material = renderable.material;
 			if (!material) return;

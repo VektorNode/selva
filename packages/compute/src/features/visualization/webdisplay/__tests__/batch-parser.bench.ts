@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+import { deflateSync, inflateSync } from 'fflate';
 import { bench, describe } from 'vitest';
 
 import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
@@ -32,6 +34,18 @@ const heavy = buildMeshBatch({
 });
 const heavyJson = JSON.stringify(heavy.batch);
 
+// Slow benches get fixed iteration counts instead of a time budget (mirrors edges.bench.ts).
+const FEW = { time: 0, warmupTime: 0, warmupIterations: 1, iterations: 3 } as const;
+
+// Multi-million-triangle workload — the display-pipeline audit case: 500 meshes × 2002 verts
+// ≈ 1M verts / 1M triangles, matching the edge-bench scale so stage costs line up.
+const xheavy = buildMeshBatch({
+	materialCount: 8,
+	meshCount: 500,
+	vertsPerMesh: 2002,
+	seed: 4
+});
+
 describe('parseBinaryMeshBatch (decode only)', () => {
 	bench('realistic (~200k verts)', () => {
 		parseBinaryMeshBatch(realistic.batch.compressedData);
@@ -40,6 +54,66 @@ describe('parseBinaryMeshBatch (decode only)', () => {
 	bench('heavy (~800k verts)', () => {
 		parseBinaryMeshBatch(heavy.batch.compressedData);
 	});
+
+	bench(
+		'xheavy (~1M verts / 1M tri)',
+		() => {
+			parseBinaryMeshBatch(xheavy.batch.compressedData);
+		},
+		FEW
+	);
+});
+
+describe('full parse path at 1M tri (audit: where the per-solve time goes)', () => {
+	bench(
+		'parseMeshBatchObject, merged',
+		async () => {
+			await parseMeshBatchObject(xheavy.batch, { mergeByMaterial: true, applyTransforms: true });
+		},
+		FEW
+	);
+
+	bench(
+		'parseMeshBatchObject, individual meshes',
+		async () => {
+			await parseMeshBatchObject(xheavy.batch, { mergeByMaterial: false, applyTransforms: true });
+		},
+		FEW
+	);
+
+	// computeVertexNormals isolated — it runs per built geometry inside the parse above.
+	const parsed = parseBinaryMeshBatch(xheavy.batch.compressedData);
+	const positions = new Float32Array(parsed.vertices.length);
+	for (let i = 0; i < positions.length; i++) positions[i] = Number(parsed.vertices[i]);
+	const indices = parsed.indices.slice();
+	bench(
+		'computeVertexNormals alone (1M tri, one geometry)',
+		() => {
+			const geometry = new THREE.BufferGeometry();
+			geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+			geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+			geometry.computeVertexNormals();
+			geometry.dispose();
+		},
+		FEW
+	);
+
+	// The SLVZ inflate the C# side applies to real payloads (the builder emits raw SLVA, so the
+	// decode benches above never pay it). Deflate once here; bench the inflate the client runs.
+	const rawBase64 = xheavy.batch.compressedData;
+	const rawBytes = Uint8Array.from(atob(rawBase64), (c) => c.charCodeAt(0));
+	const deflated = deflateSync(rawBytes, { level: 6 });
+	// eslint-disable-next-line no-console
+	console.log(
+		`[batch-parser.bench] xheavy blob: raw ${(rawBytes.length / 1e6).toFixed(1)} MB, deflated ${(deflated.length / 1e6).toFixed(1)} MB`
+	);
+	bench(
+		'inflateSync of the 1M-tri blob (SLVZ path, main thread)',
+		() => {
+			inflateSync(deflated, { out: new Uint8Array(rawBytes.length + 1) });
+		},
+		FEW
+	);
 });
 
 describe('parseMeshBatchObject (decode + dequantize + assemble)', () => {

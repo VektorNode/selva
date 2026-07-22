@@ -222,7 +222,7 @@ public class TitleBlockTests
 		Assert.Equal(placed.Width / 2.0, placed.Height, 6);
 	}
 
-	private static ImageElement FindImage(DrawElement element)
+	private static ImageElement? FindImage(DrawElement element)
 	{
 		switch (element)
 		{

@@ -158,6 +158,64 @@ export interface ParsedBinaryMeshBatch {
 export function parseBinaryMeshBatch(
 	input: ArrayBuffer | Uint8Array | string
 ): ParsedBinaryMeshBatch {
+	const raw = parseBinaryMeshBatchRaw(input);
+
+	let vertices: Int16Array | Float32Array;
+	if (raw.isFloat32) {
+		vertices = raw.vertexData as Float32Array;
+	} else if (raw.deltaEncoded) {
+		vertices = decodeDeltaVertices(raw.vertexData as Uint16Array);
+	} else {
+		vertices = raw.vertexData as Int16Array;
+	}
+
+	let indices = raw.indexData;
+	if (raw.deltaEncoded) {
+		indices =
+			indices instanceof Uint16Array
+				? decodeDeltaIndices16(indices)
+				: decodeDeltaIndices32(indices);
+	}
+	validateIndicesInRange(indices, raw.vertexCount);
+
+	return {
+		metadata: raw.metadata,
+		flags: raw.flags,
+		vertices,
+		indices,
+		origin: raw.origin,
+		scale: raw.scale,
+		uvs: raw.uvs,
+		colors: raw.colors
+	};
+}
+
+/**
+ * Raw wire-value view of a blob: geometry arrays are exactly as stored — zigzag-mapped deltas when
+ * the blob carries the delta filter — while metadata, UVs, and colors are fully decoded (they're
+ * small). For consumers that hand the heavy decoding to a worker (`mesh-assembly.ts`); everyone
+ * else wants {@link parseBinaryMeshBatch}, which returns reconstructed absolute values.
+ */
+export interface RawBinaryMeshBatch {
+	metadata: BinaryMeshMetadata;
+	flags: number;
+	/** Wire vertex components: zigzag deltas (Uint16) when `deltaEncoded` and not float32. */
+	vertexData: Uint16Array | Int16Array | Float32Array;
+	/** Wire indices: zigzag deltas when `deltaEncoded`. NOT validated against vertexCount. */
+	indexData: Uint16Array | Uint32Array;
+	isFloat32: boolean;
+	deltaEncoded: boolean;
+	vertexCount: number;
+	origin: [number, number, number];
+	scale: [number, number, number];
+	uvs: Float32Array | null;
+	colors: Uint8Array | null;
+}
+
+/** See {@link RawBinaryMeshBatch}. Same validation/throw behavior as the decoding parser. */
+export function parseBinaryMeshBatchRaw(
+	input: ArrayBuffer | Uint8Array | string
+): RawBinaryMeshBatch {
 	if (!HOST_IS_LITTLE_ENDIAN) {
 		throw new RhinoComputeError(
 			'SLVA parsing requires a little-endian host: the zero-copy geometry readers view the wire bytes in host byte order.',
@@ -270,16 +328,14 @@ export function parseBinaryMeshBatch(
 	// that alignment in the underlying buffer — a wrapper Uint8Array could violate it. Fall back
 	// to a fresh copy if so.
 	const absoluteOffset = bytes.byteOffset + offset;
-	let verticesView: Int16Array | Float32Array;
+	let vertexData: Uint16Array | Int16Array | Float32Array;
 	if (useFloat32) {
-		verticesView = readFloat32Vertices(bytes.buffer, absoluteOffset, componentCount);
+		vertexData = readFloat32Vertices(bytes.buffer, absoluteOffset, componentCount);
 	} else if (deltaEncoded) {
-		// The raw stream holds zigzag-mapped deltas (unsigned); prefix-sum into absolute int16.
-		verticesView = decodeDeltaVertices(
-			readUint16Array(bytes.buffer, absoluteOffset, componentCount)
-		);
+		// Left as raw zigzag deltas — parseBinaryMeshBatch (or the assembly worker) prefix-sums them.
+		vertexData = readUint16Array(bytes.buffer, absoluteOffset, componentCount);
 	} else {
-		verticesView = readInt16Vertices(bytes.buffer, absoluteOffset, componentCount);
+		vertexData = readInt16Vertices(bytes.buffer, absoluteOffset, componentCount);
 	}
 	offset += verticesByteLength;
 
@@ -306,16 +362,9 @@ export function parseBinaryMeshBatch(
 		});
 	}
 
-	let indicesView = useUint16Indices
+	const indexData = useUint16Indices
 		? readUint16Array(bytes.buffer, bytes.byteOffset + offset, indexCount)
 		: readUint32Array(bytes.buffer, bytes.byteOffset + offset, indexCount);
-	if (deltaEncoded) {
-		indicesView =
-			indicesView instanceof Uint16Array
-				? decodeDeltaIndices16(indicesView)
-				: decodeDeltaIndices32(indicesView);
-	}
-	validateIndicesInRange(indicesView, vertexCount);
 	offset += indicesByteLength;
 
 	// Optional trailing chunks (UV first, then colors). Blobs from pre-chunk writers simply end
@@ -335,8 +384,11 @@ export function parseBinaryMeshBatch(
 	return {
 		metadata,
 		flags,
-		vertices: verticesView,
-		indices: indicesView,
+		vertexData,
+		indexData,
+		isFloat32: useFloat32,
+		deltaEncoded,
+		vertexCount,
 		origin: [originX, originY, originZ],
 		scale: [scaleX, scaleY, scaleZ],
 		uvs,

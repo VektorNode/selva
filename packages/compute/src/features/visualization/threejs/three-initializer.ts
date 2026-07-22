@@ -8,7 +8,7 @@ import type { MaterialAppearanceOptions } from '../webdisplay/types';
 import { createCameraController, type CameraController } from './camera-controller';
 import { createGrid, type Grid } from './grid';
 import { createViewGizmo, type ViewGizmo } from './view-gizmo';
-import { addEdges } from './edges';
+import { EDGES_SKIPPED_TRIANGLE_CAP, addEdgesAsync, removeEdges } from './edges';
 import { createNearPlaneFitter, type NearPlaneFitter } from './near-plane';
 import { createRenderPipeline, type RenderPipeline } from './render-pipeline';
 import { createLabelLayer, type LabelLayer } from './label-layer';
@@ -123,9 +123,24 @@ export const initThree = function (
 	measureTool: MeasureTool | null;
 	/**
 	 * Attach edge overlays to the meshes under `root` (no-op unless `edges.enabled`). Call after
-	 * loading meshes via `updateScene`, since meshes arrive after init.
+	 * loading meshes via `updateScene`, since meshes arrive after init. Extraction for large meshes
+	 * runs off-thread — their overlays attach a beat later; meshes over `edges.maxTriangles` are
+	 * skipped and (by default) covered by the screen-space edge fallback instead.
 	 */
 	applyEdges: (root: THREE.Object3D) => void;
+	/**
+	 * Remove edge overlays under `root` — the toggle-off counterpart of `applyEdges`. Prefer this
+	 * over calling `removeEdges` directly: it also cancels in-flight async attaches' fallout and
+	 * stands down the screen-space edge fallback if it was active.
+	 */
+	clearEdges: (root: THREE.Object3D) => void;
+	/**
+	 * Request a repaint from the on-demand render loop. Camera motion, resizes, pointer input, and
+	 * the built-in setters invalidate automatically; call this after mutating the scene externally
+	 * (e.g. `updateScene`, adding user geometry) so the change shows immediately rather than on the
+	 * next safety repaint. No-op (harmless) when `render.onDemand` is false.
+	 */
+	invalidate: () => void;
 	/** Toggle ambient occlusion at runtime — builds or tears down the postprocessing pipeline. */
 	setAmbientOcclusion: (enabled: boolean) => void;
 	/**
@@ -358,17 +373,56 @@ export const initThree = function (
 		canvas.addEventListener('mousemove', handleToolMove, { passive: true });
 	}
 
+	// Repaint request for the on-demand render loop (audit P4). Forward-declared so setters defined
+	// before the loop exists can call it; rebound to the loop's real invalidate once it's created.
+	let requestRender: () => void = () => {};
+
 	// Edge overlays: bind the configured options into a closure the consumer calls after loading
 	// meshes. Always applies when called explicitly (the `edges.enabled` flag governs whether the
 	// host *intends* edges, but an explicit call should never be silently ignored).
+	// Async path: extraction for large meshes runs in a worker, so a heavy solve never stalls the
+	// main thread — their overlays pop in a beat later; small meshes still attach synchronously.
+	// Cancellation (scene cleared by the next solve, clearEdges toggles) is handled inside.
+	// Once attached, meshes skipped for exceeding the triangle cap switch the screen-space edge
+	// fallback on (and a later solve without such meshes switches it back off).
 	const applyEdges = (root: THREE.Object3D) => {
-		addEdges(root, {
+		void addEdgesAsync(root, {
 			color: config.edges.color, // undefined → derive from each mesh's surface color
 			darken: config.edges.darken,
 			width: config.edges.width,
 			thresholdAngle: config.edges.thresholdAngle,
-			distanceFade: config.edges.distanceFade
+			distanceFade: config.edges.distanceFade,
+			maxTriangles: config.edges.maxTriangles,
+			maxSegments: config.edges.maxSegments
+		}).then(() => {
+			updateEdgeFallback(root);
+			requestRender(); // overlays may have attached after the solve's own repaint
 		});
+	};
+
+	/** Turn the screen-space fallback on/off to match whether capped-out meshes are present. */
+	const updateEdgeFallback = (root: THREE.Object3D) => {
+		if (config.edges.screenSpaceFallback === false) return;
+		let hasSkippedMeshes = false;
+		root.traverse((object) => {
+			if (object.userData?.edgesSkipped === EDGES_SKIPPED_TRIANGLE_CAP) hasSkippedMeshes = true;
+		});
+		if (hasSkippedMeshes !== edgeFallbackActive) {
+			edgeFallbackActive = hasSkippedMeshes;
+			syncPipeline();
+		}
+	};
+
+	// The inverse of applyEdges: removes overlays (cancelling in-flight attaches) and stands down
+	// the screen-space fallback. Hosts toggling edges off should call this rather than bare
+	// removeEdges, or the fallback pass would keep drawing lines for capped meshes.
+	const clearEdges = (root: THREE.Object3D) => {
+		removeEdges(root);
+		if (edgeFallbackActive) {
+			edgeFallbackActive = false;
+			syncPipeline();
+		}
+		requestRender();
 	};
 
 	const parent = canvas.parentElement;
@@ -377,12 +431,17 @@ export const initThree = function (
 			? { width: parent.clientWidth, height: parent.clientHeight }
 			: { width: window.innerWidth, height: window.innerHeight };
 
-	// Optional AO postprocessing pipeline. Held in a mutable so it can be toggled at runtime
-	// (setAmbientOcclusion below); the loop reads it through getRenderPipeline each frame. When null,
-	// the loop uses the plain renderer.render path. Retargeted to the active camera every frame.
+	// Optional postprocessing pipeline (AO and/or the screen-space edge fallback). Held in a mutable
+	// so it can be toggled at runtime; the loop reads it through getRenderPipeline each frame. When
+	// null, the loop uses the plain renderer.render path. Retargeted to the active camera every frame.
 	let renderPipeline: RenderPipeline | null = null;
+	let aoEnabled = !!config.render.ambientOcclusion;
+	// True while meshes over the edge triangle cap are in the scene and the config wants the
+	// screen-space approximation for them (see EdgesConfig.screenSpaceFallback).
+	let edgeFallbackActive = false;
+	let builtWithAo = false;
 
-	const buildPipeline = (): RenderPipeline => {
+	const buildPipeline = (withAo: boolean): RenderPipeline => {
 		const { width, height } = getCanvasSize();
 		const pipeline = createRenderPipeline(
 			renderer,
@@ -393,24 +452,48 @@ export const initThree = function (
 			{
 				toneMapping: config.render.toneMapping ?? THREE.NeutralToneMapping,
 				toneMappingExposure: config.render.toneMappingExposure ?? 1,
+				ambientOcclusion: withAo,
 				aoIntensity: config.render.aoIntensity,
-				aoPixelRatio: config.render.aoPixelRatio
+				aoPixelRatio: config.render.aoPixelRatio,
+				// Constructed disabled (cheap until toggled); syncPipeline flips it via setEdgeDetection.
+				edgeDetection: false
 			}
 		);
 		pipeline.setSize(Math.max(1, width), Math.max(1, height), pixelRatio);
 		return pipeline;
 	};
 
-	const setAmbientOcclusion = (enabled: boolean) => {
-		if (enabled && !renderPipeline) {
-			renderPipeline = buildPipeline();
-		} else if (!enabled && renderPipeline) {
-			renderPipeline.dispose();
+	/** Reconcile the pipeline with what's wanted: AO presence is baked at construction, edges toggle live. */
+	const syncPipeline = () => {
+		const wantPipeline = aoEnabled || edgeFallbackActive;
+		if (!wantPipeline) {
+			renderPipeline?.dispose();
 			renderPipeline = null;
+			requestRender();
+			return;
 		}
+		if (!renderPipeline || builtWithAo !== aoEnabled) {
+			renderPipeline?.dispose();
+			renderPipeline = buildPipeline(aoEnabled);
+			builtWithAo = aoEnabled;
+		}
+		renderPipeline.setEdgeDetection(edgeFallbackActive);
+		requestRender();
 	};
 
-	if (config.render.ambientOcclusion) renderPipeline = buildPipeline();
+	/** Dispose and rebuild the pipeline (if one is wanted) so construction-time options re-apply. */
+	const rebuildPipeline = () => {
+		renderPipeline?.dispose();
+		renderPipeline = null;
+		syncPipeline();
+	};
+
+	const setAmbientOcclusion = (enabled: boolean) => {
+		aoEnabled = enabled;
+		syncPipeline();
+	};
+
+	syncPipeline();
 
 	/**
 	 * Retune the fill lights at runtime — the direction-aware hemisphere fill and the flat ambient.
@@ -451,6 +534,7 @@ export const initThree = function (
 			if (opts.hemisphereGroundColor !== undefined)
 				lights.hemisphere.groundColor.set(opts.hemisphereGroundColor);
 		}
+		requestRender();
 	};
 
 	/**
@@ -462,27 +546,22 @@ export const initThree = function (
 	const setEnvironmentIntensity = (intensity: number) => {
 		config.environment.environmentIntensity = intensity;
 		scene.environmentIntensity = intensity;
+		requestRender();
 	};
 
 	/** Set renderer tone-mapping exposure at runtime. Higher lifts shadows and overall brightness. */
 	const setToneMappingExposure = (exposure: number) => {
 		config.render.toneMappingExposure = exposure;
 		renderer.toneMappingExposure = exposure;
-		// When AO is on, tone mapping is applied by the composer's OutputPass — rebuild so it adopts
-		// the new exposure.
-		if (renderPipeline) {
-			setAmbientOcclusion(false);
-			setAmbientOcclusion(true);
-		}
+		// When the composer path is active, tone mapping is applied by its OutputPass — rebuild so it
+		// adopts the new exposure.
+		if (renderPipeline) rebuildPipeline();
 	};
 
 	/** Set GTAO strength at runtime (0 = off-looking, 1 = full). No-op when AO isn't active. */
 	const setAoIntensity = (intensity: number) => {
 		config.render.aoIntensity = intensity;
-		if (renderPipeline) {
-			setAmbientOcclusion(false);
-			setAmbientOcclusion(true);
-		}
+		if (renderPipeline) rebuildPipeline();
 	};
 
 	/**
@@ -517,13 +596,11 @@ export const initThree = function (
 		});
 		setEnvironmentIntensity(preset.environmentIntensity);
 
-		if (renderPipeline) {
-			// Rebuild so the composer's OutputPass adopts the new tone mapping, then honor the target AO.
-			setAmbientOcclusion(false);
-			setAmbientOcclusion(preset.ambientOcclusion);
-		} else {
-			setAmbientOcclusion(preset.ambientOcclusion);
-		}
+		// Rebuild (if a pipeline is active) so the composer's OutputPass adopts the new tone mapping,
+		// honoring the look's AO choice.
+		aoEnabled = preset.ambientOcclusion;
+		if (renderPipeline) rebuildPipeline();
+		else syncPipeline();
 
 		// Retune IBL reflection strength on every compute mesh material in the scene.
 		scene.traverse((object) => {
@@ -540,6 +617,7 @@ export const initThree = function (
 				}
 			}
 		});
+		requestRender();
 	};
 
 	// The look currently applied. Always a real look (the default is 'studio'), seeded from the same
@@ -555,7 +633,11 @@ export const initThree = function (
 
 	// Resize checked every frame so buffer resize and render happen in the same frame,
 	// preventing visible blank frames on resize
-	const { animate, dispose: disposeAnimation } = createAnimationLoop(
+	const {
+		animate,
+		dispose: disposeAnimation,
+		invalidate
+	} = createAnimationLoop(
 		renderer,
 		scene,
 		camera,
@@ -569,8 +651,10 @@ export const initThree = function (
 		gizmo,
 		() => renderPipeline,
 		labelLayer,
-		nearFitter
+		nearFitter,
+		config.render.onDemand ?? true
 	);
+	requestRender = invalidate;
 	animate();
 
 	scene.up.set(sceneUp.x, sceneUp.y, sceneUp.z);
@@ -676,6 +760,8 @@ export const initThree = function (
 		gizmo,
 		measureTool,
 		applyEdges,
+		clearEdges,
+		invalidate,
 		setAmbientOcclusion,
 		setLook,
 		setFillLights,
@@ -834,7 +920,9 @@ export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeI
 			ambientOcclusion: options.render?.ambientOcclusion ?? preset.ambientOcclusion,
 			aoIntensity: options.render?.aoIntensity ?? 1,
 			// Cap AO buffers at 1× by default — the biggest lever on GTAO cost on high-DPI displays.
-			aoPixelRatio: options.render?.aoPixelRatio ?? 1
+			aoPixelRatio: options.render?.aoPixelRatio ?? 1,
+			// On-demand rendering (audit P4): draw only when something changed. Opt-out flag.
+			onDemand: options.render?.onDemand ?? true
 		},
 		controls: {
 			enableDamping: options.controls?.enableDamping ?? false,
@@ -980,10 +1068,52 @@ function createAnimationLoop(
 	gizmo?: ViewGizmo | null,
 	getRenderPipeline?: () => RenderPipeline | null,
 	labelLayer?: LabelLayer | null,
-	nearFitter?: NearPlaneFitter | null
-): { animate: () => void; dispose: () => void } {
+	nearFitter?: NearPlaneFitter | null,
+	// On-demand rendering (audit P4): render only when something changed. False = legacy every-frame.
+	onDemand: boolean = true
+): { animate: () => void; dispose: () => void; invalidate: () => void } {
 	let animationId: number | null = null;
 	let lastTime = performance.now();
+
+	// The loop always *ticks* (updates are cheap); it only *renders* when: invalidate() was called
+	// (scene content, style toggles, async edge attach), the active camera moved — a matrix compare
+	// catches every driver: damping, presets, gizmo snaps, near-plane refits — or the safety repaint
+	// interval elapsed, which bounds the staleness of any mutation that forgot to invalidate.
+	let renderRequested = true; // first frame always renders
+	let lastRenderTime = 0;
+	const IDLE_REPAINT_INTERVAL_MS = 500;
+	const lastWorldMatrix = new THREE.Matrix4();
+	const lastProjectionMatrix = new THREE.Matrix4();
+	let lastCamera: THREE.Camera | null = null;
+	const invalidate = () => {
+		renderRequested = true;
+	};
+
+	const cameraMoved = (activeCamera: THREE.Camera): boolean => {
+		// matrixWorld is normally refreshed by renderer.render — which we're deciding whether to
+		// call — so refresh it here first (cheap: a camera has no deep subtree).
+		activeCamera.updateMatrixWorld();
+		const moved =
+			lastCamera !== activeCamera ||
+			!lastWorldMatrix.equals(activeCamera.matrixWorld) ||
+			!lastProjectionMatrix.equals(activeCamera.projectionMatrix);
+		if (moved) {
+			lastCamera = activeCamera;
+			lastWorldMatrix.copy(activeCamera.matrixWorld);
+			lastProjectionMatrix.copy(activeCamera.projectionMatrix);
+		}
+		return moved;
+	};
+
+	// Pointer/wheel activity is a catch-all for click-driven scene mutations (measure points,
+	// selection highlights) whose code paths predate on-demand rendering.
+	const canvas = renderer.domElement;
+	const pointerEvents = ['pointerdown', 'pointerup', 'wheel'] as const;
+	if (onDemand) {
+		for (const type of pointerEvents) {
+			canvas.addEventListener(type, invalidate, { passive: true });
+		}
+	}
 
 	const checkResize = () => {
 		const { width, height } = getCanvasSize();
@@ -1005,6 +1135,7 @@ function createAnimationLoop(
 			getRenderPipeline?.()?.setSize(width, height, pixelRatio);
 			// CSS2D overlay matches the canvas's CSS size (not the pixel-ratio buffer size).
 			labelLayer?.setSize(width, height);
+			invalidate();
 		}
 	};
 
@@ -1034,6 +1165,20 @@ function createAnimationLoop(
 		onFrame?.(delta);
 
 		const activeCamera = getActiveCamera();
+
+		// On-demand gate: skip the draw (the expensive part, especially with the AO composer) when
+		// nothing changed. Ticking continues regardless, so damping/tweens re-trigger via the camera
+		// compare on their next movement.
+		if (onDemand) {
+			const shouldRender =
+				renderRequested ||
+				cameraMoved(activeCamera) ||
+				now - lastRenderTime >= IDLE_REPAINT_INTERVAL_MS;
+			if (!shouldRender) return;
+			renderRequested = false;
+			lastRenderTime = now;
+		}
+
 		const renderPipeline = getRenderPipeline?.();
 		if (renderPipeline) {
 			// AO path: composer owns the render. Retarget to the active camera in case 2D/3D swapped.
@@ -1056,9 +1201,14 @@ function createAnimationLoop(
 			cancelAnimationFrame(animationId);
 			animationId = null;
 		}
+		if (onDemand) {
+			for (const type of pointerEvents) {
+				canvas.removeEventListener(type, invalidate);
+			}
+		}
 	};
 
-	return { animate, dispose };
+	return { animate, dispose, invalidate };
 }
 
 function setupEnvironment(

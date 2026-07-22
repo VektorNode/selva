@@ -3,6 +3,17 @@
 	"version": "4.7.0-beta.3",
 	"description": "Selva — self-contained Grasshopper-driven web app. Install, configure via .env, deploy.",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"grasshopper",
+		"rhino",
+		"rhino-compute",
+		"parametric-design",
+		"web-app",
+		"sveltekit"
+	],
 	"publishConfig": {
 		"access": "public"
 	},

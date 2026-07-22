@@ -6,10 +6,10 @@
 	"type": "module",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/vektornode/selva.git"
+		"url": "git+https://github.com/VektorNode/selva.git"
 	},
-	"bugs": "https://github.com/vektornode/selva/issues",
-	"homepage": "https://github.com/vektornode/selva",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"homepage": "https://github.com/VektorNode/selva",
 	"engines": {
 		"node": ">=22.0.0",
 		"pnpm": ">=10.0.0"

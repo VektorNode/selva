@@ -74,7 +74,7 @@ public class PaginationTemplateTests
 
 		var headerTexts = new List<string>();
 		for (var i = 0; i < pages.Count; i++)
-			headerTexts.Add(FindFirstText(pages[i].Content));
+			headerTexts.Add(FindFirstText(pages[i].Content)!);
 
 		Assert.Equal("Page 1 of 3", headerTexts[0]);
 		Assert.Equal("Page 2 of 3", headerTexts[1]);
@@ -282,7 +282,7 @@ public class PaginationTemplateTests
 		};
 
 	// Walks the resolved page tree and returns the Text of the first TextElement encountered.
-	private static string FindFirstText(DrawElement element)
+	private static string? FindFirstText(DrawElement element)
 	{
 		switch (element)
 		{

@@ -178,10 +178,7 @@ public static class MeshBatchProcessor
         if (anyColors)
         {
             allColors = new byte[totalVertexCount * 3];
-            for (var i = 0; i < allColors.Length; i++)
-            {
-                allColors[i] = 255;
-            }
+            allColors.AsSpan().Fill(255); // vectorized white fill (a byte loop was measurable here)
         }
 
         var componentCursor = 0;          // write head into allVertices, in float components

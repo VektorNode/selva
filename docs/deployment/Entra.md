@@ -1,3 +1,10 @@
+---
+title: Entra SSO (oauth2-proxy + Caddy)
+group: Deployment
+order: 2
+published: true
+---
+
 # Entra SSO via oauth2-proxy + Caddy
 
 How to put a Selva (header-auth) deployment behind Microsoft Entra login using plain Caddy and oauth2-proxy.

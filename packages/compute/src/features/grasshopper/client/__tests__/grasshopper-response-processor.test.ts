@@ -1,6 +1,6 @@
 /**
- * Tests for the GrasshopperResponseProcessor class — the public wrapper selva and
- * parapet use to read solve results. The underlying free functions (`getValues`,
+ * Tests for the GrasshopperResponseProcessor class — the public wrapper consumers
+ * use to read solve results. The underlying free functions (`getValues`,
  * `getValue`, `extractFileData`) are tested in response-processors.test.ts; here we
  * pin the CLASS behavior: that it threads the response through to them, merges its
  * `debug` flag into mesh extraction, and forwards extracted files to the downloader.

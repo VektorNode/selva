@@ -370,6 +370,7 @@ public class DocumentEventManager : IDisposable
         }
         catch (Exception ex)
         {
+            _ = ex; // referenced only by the DEBUG log below
 #if DEBUG
             Logger.Error("[UIBuilder] DetectAndBroadcastMetadataChanges failed", ex);
 #endif

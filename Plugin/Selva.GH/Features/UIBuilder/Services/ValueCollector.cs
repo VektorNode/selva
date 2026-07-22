@@ -677,7 +677,7 @@ public class ValueCollector
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // Fall through to default behavior
             }

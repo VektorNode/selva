@@ -171,6 +171,58 @@ definition`) the `solveByCacheKey` primitive transparently falls back to a full
   `buildMeshesFromParsed`. The parsers now always emit identity-scaled meshes;
   pinned by the updated `batch-parser` suite.
 
+## Display-pipeline performance
+
+The concepts (these outlive whatever plan doc introduced them):
+
+- **Geometry cache** (`webdisplay/geometry-cache.ts`) — cross-solve
+  `BufferGeometry` reuse keyed by a content fingerprint of the wire windows a
+  geometry is built from. The viewer rebuilds the scene every solve, so only
+  content identity survives; `clearScene` skips cache-owned geometries and the
+  cache disposes on LRU eviction (256 MB budget).
+- **Assembly worker** (`webdisplay/mesh-assembly.ts`) — delta-decode +
+  dequantize + merge + vertex normals as a single zero-capture pure function,
+  run in a blob-URL Worker for batches ≥ 50k triangles. Its cache keys are
+  pinned byte-identical to the sync path's (`mesh-assembly.test.ts`).
+- **Edge segment cache / edge worker** (`threejs/edge-extract.ts`, `edges.ts`)
+  — same pattern for crease-edge extraction, plus triangle/segment caps and a
+  screen-space fallback pass (`threejs/edge-detection-pass.ts`).
+- **On-demand render loop** (`threejs/three-initializer.ts`) — draws only on
+  invalidate()/camera motion/pointer input, with a 500 ms safety repaint;
+  `render.onDemand: false` restores the continuous loop.
+
+**Benchmarks are the durable measurement instrument**, not any doc:
+`pnpm bench` runs `edges.bench.ts` and `batch-parser.bench.ts` (1M-triangle
+fixtures from `tests/helpers/bench-geometry.ts` / `mesh-batch-builder.ts`;
+`BENCH_HEAVY=1` adds 4M). Re-run before/after touching these paths.
+
+Reference numbers (Apple M2, node, three r179, 2026-07-22 — rerun locally
+rather than trusting these):
+
+| Path (1M triangles)                    | before      | after                                                  |
+| -------------------------------------- | ----------- | ------------------------------------------------------ |
+| edge extraction (main thread)          | ~2.9 s      | ~0 ms (worker; ~0.65 s inside)                         |
+| edges toggle, 100×5k-tri unique meshes | ~750 ms     | ~13 ms (segment cache)                                 |
+| batch parse, unchanged re-solve        | ~150–170 ms | ~80 ms node / ~cache-hit + no GPU re-upload in browser |
+| batch parse, changed content (browser) | ~150–170 ms | ~20–30 ms main thread, rest in worker                  |
+| idle rendering                         | every frame | ~2 fps safety repaints                                 |
+
+Not yet measured: real-browser end-to-end (GPU upload, worker latency,
+repaint feel), and the C# encode-side changes (no net8 runtime on the dev
+machine — run `dotnet test` + profile in Rhino).
+
 ## Known follow-ups
 
-_(none currently)_
+- **Server-side re-encode of unchanged inputs** — the plugin re-meshes/welds/
+  quantizes/deflates every input per solve even when only one changed.
+  Client-side caches absorb the client half; pick this up only if profiling
+  shows encode time significant vs. solve time on large scenes.
+- **Cloud transport base64** — `WebDisplayGoo.ToComputeJson` inlines the
+  geometry blob as base64 in the values JSON (~33% inflation + transient
+  strings). Local WS mode is binary and unaffected. Revisit when cloud
+  deployments carry heavy geometry; needs a protocol change (side-channel the
+  blob).
+- **Fat-branch encode parallelism** — encode parallelism is per-branch, so one
+  giant branch quantizes+deflates serially in its background task. Low
+  priority; only shows up as delayed result arrival on single-branch
+  definitions with many MB of geometry.

@@ -92,7 +92,7 @@ public class DrawingViewTests
 		Assert.Equal("PLAN", FindCaption(resolved));
 	}
 
-	private static string FindCaption(DrawElement element)
+	private static string? FindCaption(DrawElement element)
 	{
 		switch (element)
 		{
@@ -210,7 +210,7 @@ public class DrawingViewTests
 		};
 		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
 		var scaledGroup = FindFirstScaledGroup(resolved);
-		var rewrittenLabel = FindFirstText(scaledGroup);
+		var rewrittenLabel = FindFirstText(scaledGroup!)!;
 		Assert.Equal(30.0, rewrittenLabel.Style.FontSize, 6);
 	}
 
@@ -237,7 +237,7 @@ public class DrawingViewTests
 		};
 		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
 		var scaledGroup = FindFirstScaledGroup(resolved);
-		var rewrittenLabel = FindFirstText(scaledGroup);
+		var rewrittenLabel = FindFirstText(scaledGroup!)!;
 		Assert.Equal(10.0, rewrittenLabel.BackgroundPadding, 6);
 		Assert.Equal(5.0, rewrittenLabel.BackgroundCornerRadius, 6);
 		Assert.Equal(2.0, rewrittenLabel.Style.LetterSpacing, 6);
@@ -261,14 +261,14 @@ public class DrawingViewTests
 		};
 		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
 		var scaledGroup = FindFirstScaledGroup(resolved);
-		var rewritten = FindFirstPath(scaledGroup);
+		var rewritten = FindFirstPath(scaledGroup!)!;
 		Assert.Equal(2.5, rewritten.Stroke.Width, 6);
 		Assert.Equal(40.0, rewritten.Stroke.DashArray[0], 6);
 		Assert.Equal(20.0, rewritten.Stroke.DashArray[1], 6);
 		Assert.Equal(10.0, rewritten.Stroke.DashOffset, 6);
 	}
 
-	private static GroupElement FindFirstScaledGroup(DrawElement element)
+	private static GroupElement? FindFirstScaledGroup(DrawElement element)
 	{
 		if (element is GroupElement g)
 		{
@@ -282,7 +282,7 @@ public class DrawingViewTests
 		return null;
 	}
 
-	private static TextElement FindFirstText(DrawElement element)
+	private static TextElement? FindFirstText(DrawElement element)
 	{
 		if (element is TextElement t) return t;
 		if (element is GroupElement g)
@@ -296,7 +296,7 @@ public class DrawingViewTests
 		return null;
 	}
 
-	private static PathElement FindFirstPath(DrawElement element)
+	private static PathElement? FindFirstPath(DrawElement element)
 	{
 		if (element is PathElement p) return p;
 		if (element is GroupElement g)

@@ -179,7 +179,7 @@ public class TableSplitTests
 
 	private static Table MakeTable(double? header, double[] rowHeights)
 	{
-		IReadOnlyList<TableCell> headerCells = header.HasValue
+		IReadOnlyList<TableCell>? headerCells = header.HasValue
 			? new[] { CellElement(width: 5, height: header.Value) }
 			: null;
 		var rows = rowHeights

@@ -85,6 +85,13 @@ export type RenderConfig = {
 	 * toward the display DPR for sharper AO at higher cost; only relevant when AO is enabled.
 	 */
 	aoPixelRatio?: number;
+	/**
+	 * Render only when something changed (camera motion, invalidate(), pointer input, resize), with
+	 * a ~500 ms safety repaint, instead of every animation frame. Default true — cuts idle GPU/battery
+	 * to ~2 fps worth of work, which matters especially with ambient occlusion on. Set false to
+	 * restore the legacy continuous loop.
+	 */
+	onDemand?: boolean;
 };
 
 /**
@@ -162,6 +169,15 @@ export type EdgesConfig = {
 	thresholdAngle?: number;
 	/** Fade an overlay out as its mesh shrinks on screen, so far zoom-outs stay clean. Default true. */
 	distanceFade?: boolean;
+	/** Skip overlay extraction for meshes above this triangle count. Default 4M. See `EdgeOptions`. */
+	maxTriangles?: number;
+	/** Overlays above this segment count render opaque (no distance fade). Default 2M. */
+	maxSegments?: number;
+	/**
+	 * When a mesh is skipped for exceeding `maxTriangles`, approximate its edges with the
+	 * screen-space edge-detection pass (constant cost in triangle count). Default true.
+	 */
+	screenSpaceFallback?: boolean;
 };
 
 export type ControlsConfig = {

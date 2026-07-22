@@ -8,8 +8,9 @@
 		<AssemblyName>Selva</AssemblyName>
 		<EnableDynamicLoading>true</EnableDynamicLoading>
 		<TargetExt>.gha</TargetExt>
-		<NoWarn>NU1701</NoWarn>
-		<LangVersion>latest</LangVersion>
+		<!-- CA1416: System.Drawing platform checks — the plugin always runs inside Rhino,
+		     which supplies working GDI+ on every platform it ships on. -->
+		<NoWarn>NU1701;CA1416</NoWarn>
 		<GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
 		<AssemblyName>Selva</AssemblyName>
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
@@ -22,10 +23,7 @@
 		<FileVersion>0.15.4.0</FileVersion>
 		<InformationalVersion>0.15.4-beta.5</InformationalVersion>
 		<Title>Selva</Title>
-		<Company>VektorNode</Company>
 		<Description>Web-based UI builder for Grasshopper with real-time parameter interaction</Description>
-		<Authors>Felix Brunold, VektorNode</Authors>
-		<Copyright>Copyright © 2025 Selva Authors</Copyright>
 	</PropertyGroup>
 
 	<ItemGroup>

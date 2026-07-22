@@ -80,8 +80,7 @@ all green.
    No `NPM_TOKEN` fallback exists by design.
 2. **Archive `VektorNode/selva-compute`** on GitHub (Settings → Archive) with a README pointer
    to this monorepo. Do NOT deprecate the npm package — `@selvajs/compute` keeps publishing
-   under the same name; only the source repo is retired. External consumers (parapet, parafa)
-   are unaffected.
+   under the same name; only the source repo is retired. External consumers are unaffected.
 
 ## Verification
 

@@ -333,7 +333,7 @@ public class DocumentLayoutPassTests
 		};
 
 		var emptyPages = DocumentLayoutPass.Paginate(Make(System.Array.Empty<Section>()));
-		var nullPages = DocumentLayoutPass.Paginate(Make(new Section[] { null }));
+		var nullPages = DocumentLayoutPass.Paginate(Make(new Section[] { null! }));
 
 		var expected = emptyPages[0].Content.ComputeBounds();
 		var actual = nullPages[0].Content.ComputeBounds();
@@ -356,7 +356,7 @@ public class DocumentLayoutPassTests
 				.MoveTo(0, 0).LineTo(w, 0).LineTo(w, h).LineTo(0, h).Close().Build(),
 		};
 
-	private static string FindFirstText(DrawElement element)
+	private static string? FindFirstText(DrawElement element)
 	{
 		switch (element)
 		{

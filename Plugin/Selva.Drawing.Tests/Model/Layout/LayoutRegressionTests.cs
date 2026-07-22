@@ -49,7 +49,7 @@ public class LayoutRegressionTests
 	[Fact]
 	public void Table_stripes_continue_across_page_split()
 	{
-		var stripes = new Fill[] { null, new Fill { Color = Color.Rgb(0.9f, 0.9f, 0.9f) } };
+		var stripes = new Fill[] { null!, new Fill { Color = Color.Rgb(0.9f, 0.9f, 0.9f) } };
 		var rows = new IReadOnlyList<TableCell>[]
 		{
 			new[] { new TableCell { Text = "a" } },

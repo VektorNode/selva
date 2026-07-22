@@ -45,10 +45,6 @@ Read it top-down: **your app** is the product; it pulls in the viewer (`ui`), th
 
 Take only what you need. For example, just `@selvajs/ui` + `@selvajs/compute` for the viewer and compute in an otherwise-bespoke app.
 
-## The pattern
-
-A product built this way is a SvelteKit app that consumes the `@selvajs/*` packages as its engine, with its own domain, branding, and UI on top. Selva provides the viewer, compute pipeline, schema contract, and a provider; everything the user sees is yours. Selva is the engine, your app is the product.
-
 ## Getting started
 
 These are standard npm packages. Install what you need and point the compute client at your Rhino.Compute server ([step 1](overview.md)).

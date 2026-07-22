@@ -1,10 +1,11 @@
 {
 	"name": "@selvajs/compute",
 	"version": "3.1.0-beta.12",
-	"packageManager": "pnpm@10.33.0",
 	"description": "TypeScript library for Rhino Compute Server - Grasshopper and RhinoCommon",
 	"author": "VektorNode",
 	"license": "MIT",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/VektorNode/selva.git",
@@ -108,9 +109,7 @@
 		"build-docs": "typedoc",
 		"prepack": "node ../../scripts/prepack.js",
 		"postpack": "node ../../scripts/prepack.js --restore",
-		"prepublishOnly": "pnpm build",
-		"release": "changeset publish",
-		"prepare": "husky"
+		"prepublishOnly": "pnpm build"
 	},
 	"lint-staged": {
 		"*.{ts,js,mjs,svelte,json,md}": "prettier --write",
@@ -129,7 +128,6 @@
 		}
 	},
 	"devDependencies": {
-		"@changesets/cli": "^2.30.0",
 		"@eslint/js": "^10.0.1",
 		"@types/node": "catalog:",
 		"@types/three": "catalog:",
@@ -138,7 +136,6 @@
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.20.0",
 		"globals": "^17.5.0",
-		"husky": "^9.1.7",
 		"lint-staged": "^17.0.7",
 		"prettier": "catalog:",
 		"prettier-plugin-svelte": "^3.5.1",

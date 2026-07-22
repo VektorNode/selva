@@ -36,13 +36,20 @@ public class ThreeMaterialGoo : IGH_Goo
             return new ThreeMaterialGoo();
         }
 
-        var settings = new JsonSerializerSettings
+        // Grasshopper duplicates goos liberally during solves and data-tree ops, so this must be
+        // cheap. ThreeMaterial is a flat bag of value types + one string — a memberwise copy is a
+        // faithful deep copy (the previous Newtonsoft serialize+parse round-trip paid reflection
+        // per duplication for the same result).
+        var copy = new ThreeMaterial
         {
-            Converters = new List<JsonConverter> { new ColorJsonConverter() }
+            Color = Value.Color,
+            Metalness = Value.Metalness,
+            Roughness = Value.Roughness,
+            Opacity = Value.Opacity,
+            Transparent = Value.Transparent,
+            Map = Value.Map
         };
-        var json = JsonConvert.SerializeObject(Value, settings);
-        var copy = JsonConvert.DeserializeObject<ThreeMaterial>(json, settings);
-        return new ThreeMaterialGoo(copy ?? Value);
+        return new ThreeMaterialGoo(copy);
     }
 
     public IGH_GooProxy EmitProxy()

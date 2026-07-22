@@ -3,6 +3,16 @@
 	"version": "5.0.0-beta.3",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"svelte",
+		"sveltekit",
+		"components",
+		"ui",
+		"selva"
+	],
 	"publishConfig": {
 		"access": "public"
 	},

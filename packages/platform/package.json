@@ -3,6 +3,16 @@
 	"version": "0.15.0-beta.2",
 	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"selva",
+		"providers",
+		"auth",
+		"interfaces",
+		"platform"
+	],
 	"publishConfig": {
 		"access": "public"
 	},

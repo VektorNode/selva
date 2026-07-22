@@ -13,7 +13,7 @@ Exports geometry, blocks, and data to files the web app can serve for download.
 | -------------------- | ------------------------------------------------ |
 | **Geometry to File** | Exports geometry to a file output.               |
 | **Block to File**    | Exports a block instance to a file.              |
-| **Data to File**     | Exports arbitrary data to a file.                |
+| **Create File**      | Exports arbitrary data to a file.                |
 | **File from Path**   | Wraps an existing file on disk as a file output. |
 | **Bake Files**       | Bakes file outputs for delivery.                 |
 

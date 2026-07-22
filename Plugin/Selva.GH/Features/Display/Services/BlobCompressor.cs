@@ -70,9 +70,16 @@ public static class BlobCompressor
             return Trimmed(buffer, length);
         }
 
-        byte[] deflated;
+        // Write the 8-byte container header up front, then deflate straight into the same stream —
+        // both header fields are known before compressing, so building the compressed body in a
+        // separate stream and copying it behind a header (the previous shape) paid a full extra
+        // copy of the compressed payload for nothing.
         using (var ms = new MemoryStream())
+        using (var writer = new BinaryWriter(ms))
         {
+            writer.Write(CompressedMagic);
+            writer.Write((uint)length);
+
             // Optimal, measured against the alternatives on delta-filtered mesh payloads (2.7 MB
             // welded grid): Fastest is ~7x quicker (4 ms vs 30 ms) but 36% larger on the wire;
             // SmallestSize doubles the time for <1% size. Encoding runs inside the component's
@@ -82,21 +89,12 @@ public static class BlobCompressor
                 deflate.Write(buffer, 0, length);
             }
 
-            deflated = ms.ToArray();
-        }
+            // Header + body must be an actual net win, else ship the original bytes.
+            if (ms.Length >= length)
+            {
+                return Trimmed(buffer, length);
+            }
 
-        // Container overhead is 8 bytes; only keep the compressed form if it's an actual net win.
-        if (deflated.Length + 8 >= length)
-        {
-            return Trimmed(buffer, length);
-        }
-
-        using (var ms = new MemoryStream(deflated.Length + 8))
-        using (var writer = new BinaryWriter(ms))
-        {
-            writer.Write(CompressedMagic);
-            writer.Write((uint)length);
-            writer.Write(deflated);
             return ms.ToArray();
         }
     }

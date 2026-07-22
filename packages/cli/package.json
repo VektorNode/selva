@@ -3,6 +3,16 @@
 	"version": "4.7.0-beta.3",
 	"description": "Scaffold and operate a Selva white-label deployment. `npx @selvajs/cli <dir>` to bootstrap, `selva <cmd>` to manage.",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"selva",
+		"grasshopper",
+		"cli",
+		"scaffolding",
+		"deployment"
+	],
 	"publishConfig": {
 		"access": "public"
 	},

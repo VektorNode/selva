@@ -36,7 +36,7 @@ Turn Grasshopper definitions into full web applications — with a live schema d
 
 ## Requirements
 
-- Node.js >= 18.0.0
+- Node.js >= 22.0.0
 - .NET SDK 7.0+
 - Rhino 8 or 9 (Rhino 7 is not supported)
 - Rhino.Compute server (the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support)
@@ -47,4 +47,4 @@ See [docs/QuickStart.md](./docs/QuickStart.md) for setup and development instruc
 
 ---
 
-[MIT License](./LICENSE)
+[MIT License](./LICENSE) · [Third-party notices](./NOTICE.md)

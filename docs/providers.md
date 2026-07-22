@@ -55,4 +55,5 @@ For an in-house identity service, a different DB, or an S3-compatible store, see
 ## Next
 
 - [Architecture](architecture.md): where providers sit.
+- [Permissions & Organizations](permissions.md): the authorization model providers store.
 - [Get Started](getting-started/overview.md): deploy with a provider.

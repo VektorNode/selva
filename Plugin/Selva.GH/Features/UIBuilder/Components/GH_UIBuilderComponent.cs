@@ -53,7 +53,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// </summary>
     private bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
 
-    public override Guid ComponentGuid => new Guid("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
+    public override Guid ComponentGuid => new Guid("593BC967-797A-4B1A-9B76-C2133F6B08E2");
 
     protected override Bitmap Icon => Resources.UIBridge;
 
@@ -110,6 +110,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
         pManager.AddGenericParameter("Schema", "Schema", "Current UI schema", GH_ParamAccess.item);
+        pManager.AddTextParameter("URL", "URL",
+            "Web UI URL for this session (empty until the servers are running)", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
@@ -310,6 +312,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                                 $"Web UI available at: http://localhost:{httpPort}/?session={_sessionId}&wsPort={wsPort}");
                         }));
                     }
+
+                    // The URL output was empty while the servers were still coming up —
+                    // refresh once after a cold start so it picks up the live ports.
+                    if (started && !wasRunning)
+                    {
+                        RhinoApp.InvokeOnUiThread(new Action(() =>
+                            GHDocumentMutator.ScheduleComponentExpire(document, this, true)));
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -337,6 +347,45 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
+        SetUrlOutput(DA);
+    }
+
+    /// <summary>
+    ///     Build the session URL, or null while the WebSocket transport isn't running yet.
+    ///     Falls back to the dev server when no embedded web server is available.
+    /// </summary>
+    private string TryBuildSessionUrl()
+    {
+        if (_service?.WebSocketTransport?.IsRunning != true)
+        {
+            return null;
+        }
+
+        var wsPort = _service.WebSocketTransport.WebSocketPort;
+        var baseUrl = _service.WebServer?.IsRunning == true
+            ? _service.WebServer.BaseUrl
+            : "http://localhost:5173";
+        return $"{baseUrl}/?session={_sessionId}&wsPort={wsPort}";
+    }
+
+    /// <summary>
+    ///     Set the URL output when present — the obsolete subclass registers only the Schema output.
+    /// </summary>
+    private void SetUrlOutput(IGH_DataAccess DA)
+    {
+        if (Params.Output.Count > 1)
+        {
+            DA.SetData(1, TryBuildSessionUrl());
+        }
+    }
+
+    /// <summary>
+    ///     Carry the embedded schema/values across a component upgrade (old instance → this).
+    /// </summary>
+    internal void TransferStateFrom(GH_UIBuilderComponent other)
+    {
+        _embeddedSchema = other._embeddedSchema;
+        _embeddedValues = other._embeddedValues;
     }
 
     /// <summary>
@@ -384,13 +433,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         try
         {
-            // Get WebSocket port from WebSocketTransport
-            var wsPort = _service?.WebSocketTransport?.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
-
-            // Use embedded web server if available, otherwise fall back to dev server
-            var url = _service?.WebServer?.IsRunning == true
-                ? $"{_service.WebServer.BaseUrl}/?session={_sessionId}&wsPort={wsPort}"
-                : $"http://localhost:5173/?session={_sessionId}&wsPort={wsPort}";
+            var url = TryBuildSessionUrl()
+                      ?? $"http://localhost:5173/?session={_sessionId}&wsPort={AppConfig.WebSocket.DefaultPort}";
 
             Process.Start(new ProcessStartInfo
             {

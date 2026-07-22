@@ -22,7 +22,14 @@ export { createGrid } from './threejs/grid.js';
 export type { Grid, GridOptions } from './threejs/grid.js';
 export { createViewGizmo } from './threejs/view-gizmo.js';
 export type { ViewGizmo } from './threejs/view-gizmo.js';
-export { addEdges, removeEdges, isEdgeOverlay, EDGE_USERDATA_KIND } from './threejs/edges.js';
+export {
+	addEdges,
+	addEdgesAsync,
+	removeEdges,
+	isEdgeOverlay,
+	EDGE_USERDATA_KIND,
+	EDGES_SKIPPED_TRIANGLE_CAP
+} from './threejs/edges.js';
 export type { EdgeOptions } from './threejs/edges.js';
 export { createRenderPipeline } from './threejs/render-pipeline.js';
 export type { RenderPipeline, RenderPipelineOptions } from './threejs/render-pipeline.js';
