@@ -27,6 +27,7 @@
     "server-definitions-slice",
     "server-local-publish",
     "server-provider-wiring",
-    "server-second-wave-utilities"
+    "server-second-wave-utilities",
+    "share-slugify-and-default-value"
   ]
 }
