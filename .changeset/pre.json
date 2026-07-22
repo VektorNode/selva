@@ -21,6 +21,7 @@
     "compute-monorepo-import",
     "platform-logging-interface",
     "platform-solve-cache-interface",
+    "providers-get-server-api-key",
     "quiet-snakes-press",
     "schema-version-required",
     "server-definitions-slice",
