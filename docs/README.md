@@ -49,16 +49,20 @@
 
 ## Plans
 
-- **[0. Data Access Efficiency Audit](./plans/0.data-access-efficiency-audit.md)** — Pre-scale audit of the compute/data path with open efficiency items
-- **[1. API v1 Redesign](./plans/1.api-redesign-plan.md)** — One versioned `/api/v1` surface for both browser and token-based clients
-- **[2. Token-based API Auth](./plans/2.token-plan.md)** — Personal access tokens (PATs) + managed public API; MCP designed-but-deferred
-- **[3. Pre-solved Bundle + Prewarm](./plans/3.presolve-bundle.md)** — Ship a pre-solved definition bundle and prewarm the solve caches (F1)
-- **[4. Edge Overlay Performance](./plans/4.edge-overlay-performance.md)** — Edge rendering cost in the Three.js viewer
-- **[5. Display Pipeline Performance Audit](./plans/5.display-pipeline-performance-audit.md)** — End-to-end display pipeline profiling
-- **[5. Plugin Compat Gate](./plans/5.plugin-compat-gate.md)** — Plugin/app compatibility gating
+See **[plans/README.md](./plans/README.md)** for the authoritative status + implementation order.
+
+- **[Data Access Efficiency Audit](./plans/data-access-efficiency-audit.md)** — Pre-scale audit of the compute/data path with open efficiency items
+- **[API v1 Redesign](./plans/api-redesign-plan.md)** — One versioned `/api/v1` surface for both browser and token-based clients
+- **[Token-based API Auth](./plans/token-plan.md)** — Personal access tokens (PATs) + managed public API; MCP designed-but-deferred
+- **[Pre-solved Bundle + Prewarm](./plans/presolve-bundle.md)** — Ship a pre-solved definition bundle and prewarm the solve caches (F1)
+- **[Visualization Package](./plans/visualization-package.md)** — Extract a headless `@selvajs/visualization` (parse + scene + render + session)
+- **[Compute Package Cleanup](./plans/compute-package-cleanup.md)** — Rhino.Compute-focused `@selvajs/compute` with smaller files + cleaner API (follows visualization-package)
+- **[Plugin Compat Gate](./plans/plugin-compat-gate.md)** — Plugin/app compatibility gating
+- **[Edge Overlay — open residue](./plans/edge-overlay-open.md)** — Remaining edge-rendering items (full plan archived)
+- **[Display Pipeline — open residue](./plans/display-pipeline-open.md)** — Remaining display-pipeline items (full audit archived)
 - **[Verify slider-drag solve path](./plans/verify-slider-drag-solve-path.md)** — Trace of the slider-drag solve path
 
-Completed plans are archived under [`./plans/archive/`](./plans/archive/).
+Completed/superseded plans are archived under [`./plans/archive/`](./plans/archive/).
 
 ## Release Management
 

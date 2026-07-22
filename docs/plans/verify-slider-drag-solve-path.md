@@ -1,7 +1,7 @@
 # [Verify]: Drive a real slider drag end-to-end and measure what one drag actually costs
 
 **Status:** open · **Labels:** `verification` · **Blocking:** a fix already shipped on this assumption (B9) and several more are queued behind it
-**Related:** audit items B9 (done), C4, 4b, B5-lb in [0.data-access-efficiency-audit.md](./0.data-access-efficiency-audit.md)
+**Related:** audit items B9 (done), C4, 4b, B5-lb in [data-access-efficiency-audit.md](./data-access-efficiency-audit.md)
 
 ## What do we currently believe?
 

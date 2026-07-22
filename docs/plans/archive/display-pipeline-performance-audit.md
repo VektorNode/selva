@@ -7,7 +7,7 @@
 > unchanged inputs in the plugin), P3 (cloud transport binary side-channel),
 > and P5's fat-branch parallelism** — each is a design effort of its own; see
 > "Implementation status" at the bottom. Companion to
-> `4.edge-overlay-performance.md` (edges were the first symptom of the themes
+> `edge-overlay-performance.md` (edges were the first symptom of the themes
 > below; that plan's Phases 1–3 are shipped and excluded here).
 > Benchmarks: `packages/compute` `pnpm bench` — `batch-parser.bench.ts` gained a
 > 1M-triangle "xheavy" workload plus isolated `computeVertexNormals` /

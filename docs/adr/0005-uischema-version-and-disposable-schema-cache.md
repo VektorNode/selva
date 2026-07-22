@@ -1,7 +1,7 @@
 # ADR 0005 — Stored UISchemas Are a Disposable Cache; Compute Owns Migration
 
 > **Status: Accepted (2026-07-11), implemented same day.** Resolves audit item
-> [D1](../plans/0.data-access-efficiency-audit.md) (stored UISchema blobs never migrated on the web
+> [D1](../plans/data-access-efficiency-audit.md) (stored UISchema blobs never migrated on the web
 > side — RANK 1) ahead of extracting the definitions slice into
 > [`@selvajs/server`](../../packages/server/) (the former `docs/plans/embeddable-server-layer.md`
 > tracker, item K4; deleted 2026-07-13 once its work shipped), so the migration
