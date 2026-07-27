@@ -171,12 +171,22 @@ public sealed class Grid : LayoutElement
 		var resolvedCells = new DrawElement[Cells.Count];
 		var cellBounds = new BoundingBox[Cells.Count];
 
-		// Pass 1: measure each cell unconstrained so Auto tracks know their natural sizes.
+		// Pass 1: measure each cell against the grid's own budget so Auto tracks know their
+		// natural sizes. The budget is a ceiling, not an assignment — content smaller than a
+		// cell still reports its natural size, and Pass 2 re-resolves everything against the
+		// real cell rect once tracks are known.
+		//
+		// Measuring with an empty context instead would let a self-sizing child (an auto-fit
+		// DrawingView) report an unbounded natural size, which then becomes the Auto track's
+		// size: a tall view in a 2x2 grid sized the grid to 808 mm on a 227 mm content rect and
+		// ran off the page. Auto tracks grow to fit their content, so an overlarge measurement
+		// here is never clamped later.
+		var measureContext = MeasureContext(context);
 		for (var i = 0; i < Cells.Count; i++)
 		{
 			var c = Cells[i];
 			var resolved = c.Content is LayoutElement nested
-				? nested.Resolve(new LayoutContext(BoundingBox.Empty))
+				? nested.Resolve(measureContext)
 				: c.Content;
 			resolvedCells[i] = resolved;
 			cellBounds[i] = resolved?.ComputeBounds() ?? BoundingBox.Empty;
@@ -222,6 +232,36 @@ public sealed class Grid : LayoutElement
 			ResolvedCells = resolvedCells,
 			CellBounds = cellBounds,
 		}, new BoundingBox(0, 0, totalWidth, totalHeight));
+	}
+
+	// Ceiling for the Pass 1 natural-size measurement: no single cell may measure larger than
+	// the grid's own budget. Falls back to an empty context when the grid itself is
+	// unconstrained, which preserves the "measure naturally" behaviour for auto-fit pages.
+	//
+	// This is a ceiling, not a per-track allocation — dividing by the track count would cap a
+	// cell at an equal share even when its neighbours need far less, shrinking wide content
+	// and leaving the rest of the sheet blank. Track sizing happens in ResolveTrackSizes from
+	// these measurements; Pass 2 then re-resolves each cell against its real rect.
+	private LayoutContext MeasureContext(LayoutContext context)
+	{
+		var w = TrackCeiling(context.AvailableWidth, Columns.Count, ColumnSpacing);
+		var h = TrackCeiling(context.AvailableHeight, Rows.Count, RowSpacing);
+		if (double.IsPositiveInfinity(w) && double.IsPositiveInfinity(h))
+			return new LayoutContext(BoundingBox.Empty);
+		return new LayoutContext(new BoundingBox(0, 0, w, h));
+	}
+
+	// Room available to one track: the axis budget less inter-track spacing, divided by the
+	// track count. Unlike a Stack — where a modest child can pass its surplus along — grid
+	// tracks are laid out simultaneously, so each cell must be measured against its own share
+	// or the tracks sum past the axis. ResolveTrackSizes still redistributes afterwards, so a
+	// cell that measures smaller than its share leaves room for Star tracks to absorb.
+	private static double TrackCeiling(double available, int trackCount, double spacing)
+	{
+		if (double.IsInfinity(available) || available <= 0) return double.PositiveInfinity;
+		var count = Math.Max(1, trackCount);
+		var usable = available - spacing * Math.Max(0, count - 1);
+		return usable > 0 ? usable / count : double.PositiveInfinity;
 	}
 
 	private static double SpanSize(double[] sizes, int start, int span, double spacing)

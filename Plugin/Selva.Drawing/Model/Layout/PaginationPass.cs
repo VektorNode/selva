@@ -242,17 +242,28 @@ public static class PaginationPass
 		if (element is LayoutElement layout)
 			return layout.TrySplit(availableHeight, context);
 
-		var bounds = element.ComputeBounds();
+		// A GroupElement is a primitive, but it can still *contain* layout elements — a Page
+		// branch holding several DrawingViews arrives exactly like this, since composing a
+		// single branch wraps it in a Group rather than a Stack. Measuring the group without
+		// resolving it first would size those views against no context at all, so they keep
+		// their natural size and run off the sheet. Resolve through the group with the page
+		// context so the views auto-fit to the content rect before they are measured.
+		var measured = element is GroupElement ? LayoutPass.Resolve(element, context) : element;
+
+		var bounds = measured.ComputeBounds();
 		var height = bounds.IsEmpty ? 0 : bounds.Height;
 		if (height <= availableHeight + 1e-6)
-			return SplitResult.AllFits(element, height);
-		return SplitResult.NothingFits(element);
+			return SplitResult.AllFits(measured, height);
+		return SplitResult.NothingFits(measured);
 	}
 
 	private static SplitResult ForcePlaceElement(DrawElement element, double availableHeight, LayoutContext context)
 	{
 		if (element is LayoutElement layout)
 			return layout.ForcePlace(availableHeight, context);
+		// Same as TrySplitElement: resolve through a Group so any layout elements inside it
+		// size against the page before being force-placed.
+		if (element is GroupElement) element = LayoutPass.Resolve(element, context);
 		// Primitives are atomic: place whole (oversize) and move on.
 		var bounds = element.ComputeBounds();
 		return SplitResult.AllFits(element, bounds.IsEmpty ? 0 : bounds.Height);

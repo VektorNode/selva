@@ -473,19 +473,23 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		if (element == null) return;
 
 		// Mirror legacy emission semantics: when both stroke and fill are null, draw a
-		// black hairline. When fill is null but stroke is not, stroke only. When fill is
-		// set, fill (and optionally stroke).
-		var pen = element.Stroke != null ? CreatePen(element.Stroke) : null;
+		// default-weight black line. When fill is null but stroke is not, stroke only. When
+		// fill is set, fill (and optionally stroke).
+		var pen = CreatePen(element.Stroke);
 		var hasHatch = element.Fill != null && element.Fill.Pattern != HatchPattern.None;
 		var brush = (element.Fill != null && !hasHatch)
 			? new XSolidBrush(ToXColor(element.Fill.Color, (float)element.Fill.Opacity))
 			: null;
 
-		if (pen == null && brush == null && !hasHatch)
+		// Keyed off Stroke being absent, not off pen being null: a Stroke with Width = 0 is an
+		// explicit "no outline" and must stay unstroked, otherwise suppressing an outline would
+		// hand back the default-weight line the caller just asked to remove.
+		if (element.Stroke == null && brush == null && !hasHatch)
 		{
-			// Legacy "unstyled curve" => fill='none' stroke='black' stroke-width unspecified.
-			// PdfSharpCore needs an explicit width — mirror SvgRenderer's default Stroke width.
-			pen = CreatePen(new Stroke { Color = Color.Black, Width = 0.25 });
+			// Legacy "unstyled curve" => fill='none' stroke='black'. Both renderers name this
+			// width explicitly; SVG used to leave it implicit and inherit the spec default of
+			// 1.0 mm, so the same curve came out 4x heavier there than here.
+			pen = CreatePen(new Stroke { Color = Color.Black, Width = Stroke.UnstyledPathWidthMm });
 		}
 
 		if (hasHatch)
@@ -512,7 +516,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			if (pen != null) _gfx.DrawPath(pen, brush, xpath);
 			else _gfx.DrawPath(brush, xpath);
 		}
-		else
+		else if (pen != null)
 		{
 			// Stroke-only: draw each subpath as its own XGraphicsPath. PdfSharpCore's
 			// StartFigure() boundary inside a single path doesn't reliably prevent disjoint
@@ -617,6 +621,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 		var stroke = element.Stroke ?? new Stroke();
 		var pen = CreatePen(stroke);
+		if (pen == null) return; // Width = 0: leader line not drawn.
 
 		for (var i = 0; i < element.Points.Count - 1; i++)
 		{
@@ -664,32 +669,40 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		}
 
 		// Pattern stroking — clipped to the boundary so lines don't leak outside.
-		var line = element.LineStyle ?? new Stroke { Width = 0.18 };
+		var line = element.LineStyle ?? new Stroke { Width = Stroke.HatchWidthMm };
 		var pen = CreatePen(line);
 
 		switch (element.Pattern)
 		{
 			case HatchPatternKind.Solid:
 			{
+				// Fill-only: needs no pen, so a zero-width LineStyle still fills.
 				var solid = new XSolidBrush(ToXColor(line.Color, (float)line.Opacity));
 				_gfx.DrawPath(solid, xpath);
 				break;
 			}
 			case HatchPatternKind.Lines:
-				DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees, element.Spacing, pen);
+				if (pen != null) DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees, element.Spacing, pen);
 				break;
 			case HatchPatternKind.CrossHatch:
-				DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees, element.Spacing, pen);
-				DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees + 90.0, element.Spacing, pen);
+				if (pen != null)
+				{
+					DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees, element.Spacing, pen);
+					DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees + 90.0, element.Spacing, pen);
+				}
 				break;
 			case HatchPatternKind.Dots:
+				// Dots are filled discs sized from the line width, not stroked.
 				DrawHatchDotsClipped(xpath, bounds, element.Spacing, line);
 				break;
 		}
 
 		// Always trace the boundary so the region is legible even when the pattern is sparse.
-		foreach (var sub in PdfPathBuilder.BuildSubpaths(element.Boundary))
-			_gfx.DrawPath(pen, sub);
+		if (pen != null)
+		{
+			foreach (var sub in PdfPathBuilder.BuildSubpaths(element.Boundary))
+				_gfx.DrawPath(pen, sub);
+		}
 	}
 
 	public void Visit(SymbolElement element)
@@ -804,42 +817,46 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var angleDeg = Math.Atan2(uy, ux) * 180.0 / Math.PI;
 		if (angleDeg > 90 || angleDeg < -90) angleDeg += 180;
 
+		// StrokeWidth = 0 suppresses the dimension's linework; the label still draws, since a
+		// dimension with no visible line is still a legible annotation.
 		var pen = CreatePen(new Stroke { Color = style.Color, Width = style.StrokeWidth });
-
-		// Extension lines.
-		_gfx.DrawLine(pen, extStartA.X, extStartA.Y, extEndA.X, extEndA.Y);
-		_gfx.DrawLine(pen, extStartB.X, extStartB.Y, extEndB.X, extEndB.Y);
-
-		if (style.TextPlacement == DimensionTextPlacement.BreakLine)
+		if (pen != null)
 		{
-			var textWidth = FontMetrics.Measure(text, style.FontFamily, ts).Width;
-			var textHalfWidth = textWidth * 0.5 + ts * style.TextSidePaddingFactor;
-			var midWorldX = (dimA.X + dimB.X) * 0.5;
-			var midWorldY = (dimA.Y + dimB.Y) * 0.5;
-			var gapAx = midWorldX - ux * textHalfWidth;
-			var gapAy = midWorldY - uy * textHalfWidth;
-			var gapBx = midWorldX + ux * textHalfWidth;
-			var gapBy = midWorldY + uy * textHalfWidth;
+			// Extension lines.
+			_gfx.DrawLine(pen, extStartA.X, extStartA.Y, extEndA.X, extEndA.Y);
+			_gfx.DrawLine(pen, extStartB.X, extStartB.Y, extEndB.X, extEndB.Y);
 
-			DrawDimSegment(pen, dimA.X, dimA.Y, gapAx, gapAy, style.TickKind, flipArrows, arrowSize, startTick: true, endTick: false);
-			DrawDimSegment(pen, gapBx, gapBy, dimB.X, dimB.Y, style.TickKind, flipArrows, arrowSize, startTick: false, endTick: true);
-		}
-		else
-		{
-			DrawDimSegment(pen, dimA.X, dimA.Y, dimB.X, dimB.Y, style.TickKind, flipArrows, arrowSize, startTick: true, endTick: true);
-		}
+			if (style.TextPlacement == DimensionTextPlacement.BreakLine)
+			{
+				var textWidth = FontMetrics.Measure(text, style.FontFamily, ts).Width;
+				var textHalfWidth = textWidth * 0.5 + ts * style.TextSidePaddingFactor;
+				var midWorldX = (dimA.X + dimB.X) * 0.5;
+				var midWorldY = (dimA.Y + dimB.Y) * 0.5;
+				var gapAx = midWorldX - ux * textHalfWidth;
+				var gapAy = midWorldY - uy * textHalfWidth;
+				var gapBx = midWorldX + ux * textHalfWidth;
+				var gapBy = midWorldY + uy * textHalfWidth;
 
-		if (flipArrows && style.TickKind == DimensionTickKind.Arrow)
-		{
-			var stub = arrowSize * 1.5;
-			var outAx = dimA.X - ux * stub;
-			var outAy = dimA.Y - uy * stub;
-			var outBx = dimB.X + ux * stub;
-			var outBy = dimB.Y + uy * stub;
-			_gfx.DrawLine(pen, outAx, outAy, dimA.X, dimA.Y);
-			DrawArrowhead(pen, new Point2D(outAx, outAy), new Point2D(dimA.X, dimA.Y), arrowSize);
-			_gfx.DrawLine(pen, outBx, outBy, dimB.X, dimB.Y);
-			DrawArrowhead(pen, new Point2D(outBx, outBy), new Point2D(dimB.X, dimB.Y), arrowSize);
+				DrawDimSegment(pen, dimA.X, dimA.Y, gapAx, gapAy, style.TickKind, flipArrows, arrowSize, startTick: true, endTick: false);
+				DrawDimSegment(pen, gapBx, gapBy, dimB.X, dimB.Y, style.TickKind, flipArrows, arrowSize, startTick: false, endTick: true);
+			}
+			else
+			{
+				DrawDimSegment(pen, dimA.X, dimA.Y, dimB.X, dimB.Y, style.TickKind, flipArrows, arrowSize, startTick: true, endTick: true);
+			}
+
+			if (flipArrows && style.TickKind == DimensionTickKind.Arrow)
+			{
+				var stub = arrowSize * 1.5;
+				var outAx = dimA.X - ux * stub;
+				var outAy = dimA.Y - uy * stub;
+				var outBx = dimB.X + ux * stub;
+				var outBy = dimB.Y + uy * stub;
+				_gfx.DrawLine(pen, outAx, outAy, dimA.X, dimA.Y);
+				DrawArrowhead(pen, new Point2D(outAx, outAy), new Point2D(dimA.X, dimA.Y), arrowSize);
+				_gfx.DrawLine(pen, outBx, outBy, dimB.X, dimB.Y);
+				DrawArrowhead(pen, new Point2D(outBx, outBy), new Point2D(dimB.X, dimB.Y), arrowSize);
+			}
 		}
 
 		var textStyle = new TextStyle
@@ -905,6 +922,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			&& style.TickKind == DimensionTickKind.Arrow
 			&& arcLen < arrowSize * 3.0;
 
+		// StrokeWidth = 0 suppresses the arc and arrowheads; the label still draws.
 		var pen = CreatePen(new Stroke { Color = style.Color, Width = style.StrokeWidth });
 
 		// Build the arc as a Path so we reuse the SVG-arc-to-cubic flattener.
@@ -912,9 +930,13 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			.MoveTo(arcStartX, arcStartY)
 			.ArcTo(new Point2D(arcEndX, arcEndY), radius, radius, 0, absTheta > Math.PI, !sweepCcw)
 			.Build();
-		_gfx.DrawPath(pen, PdfPathBuilder.Build(arcPath));
+		if (pen != null) _gfx.DrawPath(pen, PdfPathBuilder.Build(arcPath));
 
-		if (style.TickKind == DimensionTickKind.Arrow && !flipArrows)
+		if (pen == null)
+		{
+			// No linework to draw — fall through to the label below.
+		}
+		else if (style.TickKind == DimensionTickKind.Arrow && !flipArrows)
 		{
 			// Tangent at start = perpendicular to radial vector, oriented along sweep.
 			double tStartX, tStartY;
@@ -1190,9 +1212,21 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		if (bounds.IsEmpty) return;
 
 		var scale = fill.PatternScale > 0 ? fill.PatternScale : 1.0;
-		var lineWidth = 0.3 * scale;
+		var tile = fill.ResolvedTileMm > 0 ? fill.ResolvedTileMm : Fill.DefaultPatternTileMm;
 		var color = ToXColor(fill.Color, (float)fill.Opacity);
-		var pen = new XPen(color, lineWidth);
+		// Build the pattern pen through CreatePen rather than newing an XPen directly, so hatch
+		// linework can never emit the device-dependent `0 w`. This width is generated rather
+		// than authored, so a tiny PatternScale must not silently erase the pattern — floor it
+		// at the visibility threshold instead, which keeps a dense hatch drawn.
+		var lineWidth = fill.PatternLineWidthMm > 0
+			? fill.PatternLineWidthMm
+			: Stroke.HatchPatternWidthMm * scale;
+		var pen = CreatePen(new Stroke
+		{
+			Color = fill.Color,
+			Opacity = fill.Opacity,
+			Width = Math.Max(lineWidth, Stroke.MinVisibleWidthMm * 2),
+		});
 		var brush = new XSolidBrush(color);
 
 		var state = _gfx.Save();
@@ -1202,17 +1236,17 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		{
 			case HatchPattern.Lines:
 				// SVG pattern emits lines at 45° relative to the tile; PatternAngle adds on top.
-				DrawHatchLines(bounds, 45.0 + fill.PatternAngle, 4.0 * scale, pen);
+				DrawHatchLines(bounds, 45.0 + fill.PatternAngle, tile, pen);
 				break;
 			case HatchPattern.CrossHatch:
-				DrawHatchLines(bounds, 45.0 + fill.PatternAngle, 4.0 * scale, pen);
-				DrawHatchLines(bounds, -45.0 + fill.PatternAngle, 4.0 * scale, pen);
+				DrawHatchLines(bounds, 45.0 + fill.PatternAngle, tile, pen);
+				DrawHatchLines(bounds, -45.0 + fill.PatternAngle, tile, pen);
 				break;
 			case HatchPattern.Dots:
-				DrawHatchDots(bounds, 4.0 * scale, 0.4 * scale, brush);
+				DrawHatchDots(bounds, tile, tile * 0.1, brush);
 				break;
 			case HatchPattern.Brick:
-				DrawHatchBrick(bounds, 4.0 * scale, fill.PatternAngle, pen);
+				DrawHatchBrick(bounds, tile, fill.PatternAngle, pen);
 				break;
 		}
 
@@ -1366,9 +1400,17 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	// Style → PdfSharpCore primitive helpers
 	// ============================================================================
 
-	private static XPen CreatePen(Stroke stroke)
+	// Returns null when the stroke is not visible, so callers skip the draw entirely. Never
+	// emit a zero-width pen: it reaches the content stream as `0 w`, which PDF defines as the
+	// thinnest line the *device* can render — a sliver on screen, one dot on a laser printer,
+	// near-invisible on an imagesetter. That operator is why the same file used to print at a
+	// different weight on every machine.
+	private XPen CreatePen(Stroke stroke)
 	{
-		var pen = new XPen(ToXColor(stroke.Color, (float)stroke.Opacity), stroke.Width);
+		if (stroke == null || !stroke.IsVisible) return null;
+
+		var widthMm = stroke.Width;
+		var pen = new XPen(ToXColor(stroke.Color, (float)stroke.Opacity), widthMm);
 
 		switch (stroke.Cap)
 		{
@@ -1384,15 +1426,16 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		}
 		pen.MiterLimit = stroke.MiterLimit;
 
-		if (stroke.DashArray != null && stroke.DashArray.Count > 0 && stroke.Width > 0)
+		if (stroke.DashArray != null && stroke.DashArray.Count > 0)
 		{
 			// XPen.DashPattern entries are multiples of the pen width (GDI+ semantics);
 			// the model's DashArray is in mm to match SVG's stroke-dasharray. Divide by
-			// the width so a "5 2" pattern dashes identically in both outputs.
+			// the width so a "5 2" pattern dashes identically in both outputs. Safe from
+			// division by zero: an invisible stroke returned above before reaching here.
 			var pattern = new double[stroke.DashArray.Count];
-			for (var i = 0; i < pattern.Length; i++) pattern[i] = stroke.DashArray[i] / stroke.Width;
+			for (var i = 0; i < pattern.Length; i++) pattern[i] = stroke.DashArray[i] / widthMm;
 			pen.DashPattern = pattern;
-			pen.DashOffset = stroke.DashOffset / stroke.Width;
+			pen.DashOffset = stroke.DashOffset / widthMm;
 		}
 		return pen;
 	}

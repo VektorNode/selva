@@ -10,11 +10,16 @@ using Selva.GH.Properties;
 using Color = System.Drawing.Color;
 using ModelColor = Selva.Drawing.Model.Style.Color;
 
-namespace Selva.GH.Features.Drawing.Components;
+namespace Selva.GH.Features.Drawing.OBSOLETE;
 
-public class GH_PathStyle : GH_Component
+/// <summary>
+///     Obsolete Path Style component (until v0.16.0). Replaced by the version that adds the
+///     Pattern Spacing and Pattern Line Width inputs, which express hatch geometry as
+///     paper-space millimetres instead of only as an opaque Pattern Scale multiplier.
+/// </summary>
+public class OBSOLETE_PathStyle_UntilV0_16_0 : GH_Component
 {
-    public GH_PathStyle()
+    public OBSOLETE_PathStyle_UntilV0_16_0()
         : base("Path Style", "Style",
             "Creates a stroke/fill style for curves and surfaces",
             "Selva", "Drawing")
@@ -22,13 +27,13 @@ public class GH_PathStyle : GH_Component
     }
 
     protected override Bitmap Icon => Resources.PathStlye;
-    public override GH_Exposure Exposure => GH_Exposure.senary;
-    public override Guid ComponentGuid => new Guid("3F5C21A9-7D64-4E18-9B02-6C1A4D8E5F37");
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
+    public override Guid ComponentGuid => new Guid("20587568-1E6E-481D-9ED8-AC136477E323");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddColourParameter("Stroke Color", "SC", "Stroke color", GH_ParamAccess.item, Color.Black);
-        pManager.AddNumberParameter("Stroke Width", "SW", "Stroke width in mm (paper space). 0 = no outline. ISO weights: 0.13, 0.18, 0.25, 0.35, 0.5, 0.7, 1.0", GH_ParamAccess.item, 1.0);
+        pManager.AddNumberParameter("Stroke Width", "SW", "Stroke width in mm (paper space)", GH_ParamAccess.item, 1.0);
         pManager.AddNumberParameter("Stroke Opacity", "SO", "Stroke opacity (0-1)", GH_ParamAccess.item, 1.0);
         pManager.AddColourParameter("Fill Color", "FC", "Fill color (closed paths)", GH_ParamAccess.item, Color.Transparent);
         pManager.AddBooleanParameter("Fill", "F", "Enable fill", GH_ParamAccess.item, false);
@@ -38,18 +43,14 @@ public class GH_PathStyle : GH_Component
         pManager.AddNumberParameter("Dash Pattern", "DP", "Stroke dash/gap lengths in mm (paper space), e.g. 5 2 1 2", GH_ParamAccess.list);
         pManager.AddIntegerParameter("Fill Rule", "FR", "Fill rule for self-intersecting paths", GH_ParamAccess.item, 0);
         pManager.AddIntegerParameter("Hatch Pattern", "HP", "Fill hatch pattern (overrides solid fill)", GH_ParamAccess.item, 0);
-        pManager.AddNumberParameter("Pattern Scale", "PS", "Hatch pattern scale multiplier (1 = default 4 mm tile). Ignored when Pattern Spacing is set", GH_ParamAccess.item, 1.0);
+        pManager.AddNumberParameter("Pattern Scale", "PS", "Hatch pattern scale multiplier (1 = default)", GH_ParamAccess.item, 1.0);
         pManager.AddNumberParameter("Pattern Angle", "PA", "Hatch pattern rotation in degrees", GH_ParamAccess.item, 0.0);
-        pManager.AddNumberParameter("Pattern Spacing", "PSp", "Hatch spacing in mm on the printed sheet (0 = derive from Pattern Scale). Overrides Pattern Scale", GH_ParamAccess.item, 0.0);
-        pManager.AddNumberParameter("Pattern Line Width", "PLW", "Hatch line weight in mm on the printed sheet (0 = default). Poché normally reads lighter than the object line", GH_ParamAccess.item, 0.0);
 
         pManager[8].Optional = true;
         pManager[9].Optional = true;
         pManager[10].Optional = true;
         pManager[11].Optional = true;
         pManager[12].Optional = true;
-        pManager[13].Optional = true;
-        pManager[14].Optional = true;
 
         if (pManager[6] is Param_Integer lineCapParam)
         {
@@ -101,8 +102,6 @@ public class GH_PathStyle : GH_Component
         var hatchPatternInt = 0;
         var patternScale = 1.0;
         var patternAngle = 0.0;
-        var patternSpacing = 0.0;
-        var patternLineWidth = 0.0;
 
         DA.GetData(0, ref strokeColor);
         DA.GetData(1, ref strokeWidth);
@@ -117,8 +116,6 @@ public class GH_PathStyle : GH_Component
         DA.GetData(10, ref hatchPatternInt);
         DA.GetData(11, ref patternScale);
         DA.GetData(12, ref patternAngle);
-        DA.GetData(13, ref patternSpacing);
-        DA.GetData(14, ref patternLineWidth);
 
         double[] dashArray = null;
         if (dashValues.Count > 0)
@@ -150,8 +147,6 @@ public class GH_PathStyle : GH_Component
                 Pattern = hatch,
                 PatternScale = Math.Max(0.01, patternScale),
                 PatternAngle = patternAngle,
-                PatternSpacingMm = Math.Max(0.0, patternSpacing),
-                PatternLineWidthMm = Math.Max(0.0, patternLineWidth),
             };
         }
 

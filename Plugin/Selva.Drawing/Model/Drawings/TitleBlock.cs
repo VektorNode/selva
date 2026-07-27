@@ -110,8 +110,8 @@ public sealed class TitleBlock : LayoutElement
 	public double LogoMaxWidth { get; init; }
 	public double LogoMaxHeight { get; init; }
 
-	public Stroke Border { get; init; } = new Stroke { Width = 0.35 };
-	public Stroke InnerBorder { get; init; } = new Stroke { Width = 0.18 };
+	public Stroke Border { get; init; } = new Stroke { Width = LineWeight.Medium };
+	public Stroke InnerBorder { get; init; } = new Stroke { Width = LineWeight.ExtraFine };
 
 	public TextStyle LabelStyle { get; init; } = new TextStyle { FontSize = 1.8, Color = Color.Black };
 	public TextStyle ValueStyle { get; init; } = new TextStyle { FontSize = 3.0, Weight = FontWeight.Bold };

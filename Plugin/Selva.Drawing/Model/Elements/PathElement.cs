@@ -22,7 +22,7 @@ public sealed class PathElement : DrawElement
 	public override BoundingBox ComputeBounds()
 	{
 		var b = Path.ComputeBounds();
-		if (Stroke != null && Stroke.Width > 0)
+		if (Stroke != null && Stroke.IsVisible)
 		{
 			var half = Stroke.Width / 2.0;
 			b = b.Inflate(half, half);

@@ -36,10 +36,11 @@ public sealed class Stack : LayoutElement
 		if (Children.Count == 0)
 			return new GroupElement { Id = Id, CssClass = CssClass, Metadata = Metadata };
 
-		// Forward the cross-axis size so flexible children (auto-width TextFlow, star
-		// Grids) can fill the stack's cross extent. Main axis is left unconstrained —
-		// the stack sums children along it.
-		var childContext = BuildChildContext(context);
+		// Forward the cross-axis size so flexible children (auto-width TextFlow, star Grids)
+		// can fill the stack's cross extent, plus the main-axis room still unclaimed. The
+		// main-axis ceiling is what stops an auto-fit child (DrawingView) from sizing itself
+		// against an unbounded axis and running past the page's content rect.
+		var remainingMain = PerChildMainBudget(context);
 
 		// First pass: ask each child for its natural bounds (recursing into LayoutElements
 		// with the cross-axis context — they'll hand back a sized primitive).
@@ -50,6 +51,12 @@ public sealed class Stack : LayoutElement
 		var nonEmptyCount = 0;
 		for (var i = 0; i < Children.Count; i++)
 		{
+			// Each child may claim its share of what is still unclaimed: the remaining budget
+			// divided by the number of children still to be measured. A child that needs less
+			// hands the surplus to those after it, and a greedy first child cannot starve its
+			// siblings — which it would under a plain "whole remaining budget" rule, since a
+			// zero-size context reads as unconstrained and lets the starved child size freely.
+			var childContext = BuildChildContext(context, ShareOf(remainingMain, Children.Count - i));
 			var child = Children[i] is LayoutElement nested
 				? nested.Resolve(childContext)
 				: Children[i];
@@ -57,6 +64,11 @@ public sealed class Stack : LayoutElement
 			var b = child?.ComputeBounds() ?? BoundingBox.Empty;
 			bounds[i] = b;
 			if (b.IsEmpty) continue;
+			if (!double.IsPositiveInfinity(remainingMain))
+			{
+				var consumedMain = Orientation == StackOrientation.Vertical ? b.Height : b.Width;
+				remainingMain = Math.Max(0, remainingMain - consumedMain);
+			}
 			nonEmptyCount++;
 			if (Orientation == StackOrientation.Vertical)
 			{
@@ -149,7 +161,12 @@ public sealed class Stack : LayoutElement
 		if (Children.Count == 0)
 			return SplitResult.AllFits(Resolve(context), 0);
 
-		var childContext = BuildChildContext(context);
+		// availableHeight is the real remaining page budget, which beats anything derivable
+		// from the context — use it as the children's main-axis ceiling so an auto-fit
+		// DrawingView cannot size itself past the bottom of the content rect. `consumed`
+		// below tracks what earlier children took, so each measurement sees the room that is
+		// actually left rather than the whole page.
+		var childContext = BuildChildContext(context, availableHeight);
 
 		var fitsChildren = new List<DrawElement>();
 		var overflowChildren = new List<DrawElement>();
@@ -166,8 +183,11 @@ public sealed class Stack : LayoutElement
 				continue;
 			}
 
+			var measureContext = double.IsPositiveInfinity(availableHeight)
+				? childContext
+				: BuildChildContext(context, Math.Max(0, availableHeight - consumed));
 			var resolvedForMeasure = child is LayoutElement nested
-				? nested.Resolve(childContext)
+				? nested.Resolve(measureContext)
 				: child;
 			var b = resolvedForMeasure?.ComputeBounds() ?? BoundingBox.Empty;
 			var h = b.IsEmpty ? 0 : b.Height;
@@ -307,16 +327,75 @@ public sealed class Stack : LayoutElement
 	// fictitious square viewport. Children that split read their height budget from
 	// TrySplit, never from this context.
 	private LayoutContext BuildChildContext(LayoutContext parent)
+		=> BuildChildContext(parent, double.PositiveInfinity);
+
+	// One child's slice of the room left along the main axis. Dividing by the number of
+	// children still unmeasured (rather than by the total) is what lets a modest child pass
+	// its unused room to the ones after it, while still bounding every child.
+	private static double ShareOf(double remaining, int childrenLeft)
 	{
+		if (double.IsPositiveInfinity(remaining)) return double.PositiveInfinity;
+		return remaining / Math.Max(1, childrenLeft);
+	}
+
+	// The main-axis extent a single child may claim: the whole budget, less the spacing that
+	// must fit between children. This is a *ceiling* that stops one child sizing past the page
+	// — not an allocation. Dividing it by the child count instead would cap every child at an
+	// equal share even when its siblings need far less, which squeezes a long flat view into a
+	// fraction of the sheet and leaves the rest blank.
+	//
+	// Children that overrun the page collectively are the pagination pass's problem (vertical)
+	// or the user's layout choice (horizontal); the ceiling only prevents a *single* auto-fit
+	// child from scaling itself against an unbounded axis.
+	private double PerChildMainBudget(LayoutContext parent)
+	{
+		var budget = Orientation == StackOrientation.Vertical
+			? parent.AvailableHeight
+			: parent.AvailableWidth;
+		if (double.IsInfinity(budget) || budget <= 0) return double.PositiveInfinity;
+
+		// Clamp at 0 rather than falling back to infinity: spacing alone exceeding the budget
+		// means there is no room left, which is not the same as having no constraint.
+		return Math.Max(0, budget - Spacing * Math.Max(0, Children.Count - 1));
+	}
+
+	// mainBudget is the real remaining extent along the stacking axis when the caller knows
+	// it, or +infinity when it genuinely doesn't. Passing it through is what keeps an
+	// auto-fitting child (DrawingView) inside the page: with an infinite main axis it fits
+	// only the cross axis, so tall geometry in a vertical stack — or a row of views in a
+	// horizontal one — sizes past the content rect and runs through the footer.
+	//
+	// Never substitute a fake finite value here. An earlier version used cross x cross, which
+	// scaled auto-fit children against a fictitious square viewport; infinity is the correct
+	// answer when no budget is known, because it makes the child keep its natural size rather
+	// than one derived from an unrelated axis.
+	private LayoutContext BuildChildContext(LayoutContext parent, double mainBudget)
+	{
+		// A budget of exactly 0 means "the siblings used it all", not "unbounded" — flipping it
+		// to infinity here would hand the next child a free axis and let it size past the page.
+		// Only a negative or non-finite budget means "no budget known".
+		var main = mainBudget >= 0 && !double.IsNaN(mainBudget) ? mainBudget : double.PositiveInfinity;
 		if (Orientation == StackOrientation.Vertical)
 		{
 			var w = parent.AvailableWidth;
-			if (double.IsInfinity(w) || w <= 0) return new LayoutContext(BoundingBox.Empty);
-			return new LayoutContext(new BoundingBox(0, 0, w, double.PositiveInfinity));
+			if (double.IsInfinity(w) || w <= 0)
+			{
+				// No cross-axis budget. A main-axis budget alone is still worth forwarding —
+				// it bounds the axis the stack grows along.
+				return double.IsInfinity(main)
+					? new LayoutContext(BoundingBox.Empty)
+					: new LayoutContext(new BoundingBox(0, 0, double.PositiveInfinity, main));
+			}
+			return new LayoutContext(new BoundingBox(0, 0, w, main));
 		}
 		var h = parent.AvailableHeight;
-		if (double.IsInfinity(h) || h <= 0) return new LayoutContext(BoundingBox.Empty);
-		return new LayoutContext(new BoundingBox(0, 0, double.PositiveInfinity, h));
+		if (double.IsInfinity(h) || h <= 0)
+		{
+			return double.IsInfinity(main)
+				? new LayoutContext(BoundingBox.Empty)
+				: new LayoutContext(new BoundingBox(0, 0, main, double.PositiveInfinity));
+		}
+		return new LayoutContext(new BoundingBox(0, 0, main, h));
 	}
 
 	// Keep-together flag lives in DrawElement.Metadata under "keep-together". Truthy

@@ -310,6 +310,96 @@ public class DrawingViewTests
 		return null;
 	}
 
+	private static DimensionElement? FindFirstDimension(DrawElement element)
+	{
+		if (element is DimensionElement d) return d;
+		if (element is GroupElement g)
+		{
+			foreach (var child in g.Children)
+			{
+				var hit = FindFirstDimension(child);
+				if (hit != null) return hit;
+			}
+		}
+		return null;
+	}
+
+	// A dimension is an annotation: its text, arrows, and standoff are sized for the reader's
+	// eye, so they must measure the same on paper at every drawing scale (ISO 129-1; the same
+	// reason AutoCAD multiplies DIMEXO/DIMGAP by DIMSCALE). Offset used to ride the group
+	// transform unscaled while TextSize was counter-scaled, so at 1:50 a 5 mm offset landed
+	// 0.1 mm from the geometry and the label sat on top of what it measured.
+	[Theory]
+	[InlineData(1.0)]
+	[InlineData(0.5)]
+	[InlineData(0.1)]
+	[InlineData(0.02)]
+	public void Dimension_offset_is_paper_space(double scale)
+	{
+		var dim = new DimensionElement
+		{
+			Kind = DimensionKind.Linear,
+			A = new Point2D(0, 0),
+			B = new Point2D(100, 0),
+			Offset = 5.0,
+			Style = new DimensionStyle { TextSize = 2.5, StrokeWidth = 0.5 },
+		};
+		var view = new DrawingView { Geometry = dim, Scale = scale };
+
+		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
+		var rewritten = FindFirstDimension(FindFirstScaledGroup(resolved)!)!;
+
+		// The group transform multiplies by `scale`, so the stored value must be the paper
+		// measurement divided by it for the two to cancel on the page.
+		Assert.Equal(5.0, rewritten.Offset * scale, 6);
+	}
+
+	// Offset and TextSize feed the same subtraction in the renderer (extension-line gap and
+	// overshoot are derived from TextSize, then subtracted from Offset), so they have to be
+	// counter-scaled by the same factor or that arithmetic mixes units.
+	[Fact]
+	public void Dimension_offset_and_text_size_scale_together()
+	{
+		var dim = new DimensionElement
+		{
+			Kind = DimensionKind.Linear,
+			A = new Point2D(0, 0),
+			B = new Point2D(1000, 0),
+			Offset = 5.0,
+			Style = new DimensionStyle { TextSize = 2.5, StrokeWidth = 0.5 },
+		};
+		var view = new DrawingView { Geometry = dim, Scale = 0.1 };
+
+		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
+		var rewritten = FindFirstDimension(FindFirstScaledGroup(resolved)!)!;
+
+		Assert.Equal(50.0, rewritten.Offset, 6);
+		Assert.Equal(25.0, rewritten.Style.TextSize, 6);
+		// The authored ratio survives the rewrite, which is what keeps the gap arithmetic sane.
+		Assert.Equal(5.0 / 2.5, rewritten.Offset / rewritten.Style.TextSize, 6);
+	}
+
+	// The measured points stay in world space — the reported distance must not change.
+	[Fact]
+	public void Dimension_endpoints_are_not_counter_scaled()
+	{
+		var dim = new DimensionElement
+		{
+			Kind = DimensionKind.Linear,
+			A = new Point2D(0, 0),
+			B = new Point2D(100, 0),
+			Offset = 5.0,
+			Style = new DimensionStyle { TextSize = 2.5 },
+		};
+		var view = new DrawingView { Geometry = dim, Scale = 0.02 };
+
+		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
+		var rewritten = FindFirstDimension(FindFirstScaledGroup(resolved)!)!;
+
+		Assert.Equal(0, rewritten.A.X, 6);
+		Assert.Equal(100, rewritten.B.X, 6);
+	}
+
 	[Fact]
 	public void Format_scale_label_handles_common_ratios()
 	{

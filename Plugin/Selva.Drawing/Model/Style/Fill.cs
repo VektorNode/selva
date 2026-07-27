@@ -24,6 +24,24 @@ public sealed class Fill : IEquatable<Fill>
 	// Rotation in degrees applied to the pattern tile
 	public double PatternAngle { get; init; } = 0.0;
 
+	// Explicit tile size in paper-space mm. Drafting standards specify poché spacing as a
+	// measurement ("2 mm hatch"), not as a multiplier, so this is the direct way to say it.
+	// 0 means "derive from PatternScale" (DefaultPatternTileMm x PatternScale), which is the
+	// original behaviour and stays the default.
+	public double PatternSpacingMm { get; init; } = 0.0;
+
+	// Line weight for the pattern's linework, in paper-space mm. 0 means "renderer default"
+	// (Stroke.HatchPatternWidthMm, scaled with the tile). Poché normally reads lighter than
+	// the object line it sits inside, which needs a weight independent of the boundary stroke.
+	public double PatternLineWidthMm { get; init; } = 0.0;
+
+	// Tile size before PatternScale is applied. Both renderers derive their geometry from it.
+	public const double DefaultPatternTileMm = 4.0;
+
+	// Resolved tile size in mm: the explicit spacing when set, else the scaled default.
+	public double ResolvedTileMm =>
+		PatternSpacingMm > 0 ? PatternSpacingMm : DefaultPatternTileMm * PatternScale;
+
 	public bool Equals(Fill other)
 	{
 		if (other is null) return false;
@@ -33,7 +51,9 @@ public sealed class Fill : IEquatable<Fill>
 			&& Rule == other.Rule
 			&& Pattern == other.Pattern
 			&& PatternScale == other.PatternScale
-			&& PatternAngle == other.PatternAngle;
+			&& PatternAngle == other.PatternAngle
+			&& PatternSpacingMm == other.PatternSpacingMm
+			&& PatternLineWidthMm == other.PatternLineWidthMm;
 	}
 
 	public override bool Equals(object obj) => Equals(obj as Fill);
@@ -48,6 +68,8 @@ public sealed class Fill : IEquatable<Fill>
 			h = (h * 397) ^ (int)Pattern;
 			h = (h * 397) ^ PatternScale.GetHashCode();
 			h = (h * 397) ^ PatternAngle.GetHashCode();
+			h = (h * 397) ^ PatternSpacingMm.GetHashCode();
+			h = (h * 397) ^ PatternLineWidthMm.GetHashCode();
 			return h;
 		}
 	}

@@ -40,7 +40,7 @@ public sealed class Table : LayoutElement
 	public double? RowHeight { get; init; }
 	public Margins CellPadding { get; init; } = new Margins(1.5, 2.5, 1.5, 2.5);
 
-	public Stroke Border { get; init; } = new Stroke { Width = 0.25 };
+	public Stroke Border { get; init; } = new Stroke { Width = LineWeight.Fine };
 	public TableBorderStyle BorderStyle { get; init; } = TableBorderStyle.All;
 	public Fill HeaderBackground { get; init; }
 	// Per-row body fills, cycled. Body row k uses RowStripeFills[(StripeOffset + k) % Count].

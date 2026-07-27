@@ -146,6 +146,8 @@ Located in `Plugin/Selva.GH/Features/`:
 - **FileIO** - `DataToFile`, `BlockToFile` for geometry export
 - **ComputeIO** - `ValueListData`, `GetValueList` for interactive selections
 
+**Adding or removing a param on a released component is a breaking change.** Grasshopper binds wires by parameter index, so reusing the `ComponentGuid` with a changed param list silently rewires saved definitions. You must snapshot the old shape into `Features/<Name>/OBSOLETE/`, give the live component a new GUID, and add an `IGH_UpgradeObject` that remaps the indices. Full procedure: [STRUCTURE.md](./STRUCTURE.md#changing-a-components-parameters-obsolete--upgrader).
+
 ### Core Package Architecture (`@selvajs/compute`)
 
 In-repo at `packages/compute` (published to npm as `@selvajs/compute`). Modular exports for tree-shaking:

@@ -6,18 +6,19 @@ they didn't have). This index is the single source of truth for sequence. As of 
 
 ## Status at a glance
 
-| Plan                                                                                                                         | Status                                            | Track            |
-| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------- |
-| [data-access-efficiency-audit](./data-access-efficiency-audit.md)                                                            | open items remain (P2/P3 list)                    | B — efficiency   |
-| [api-redesign-plan](./api-redesign-plan.md)                                                                                  | not started                                       | B — product      |
-| [token-plan](./token-plan.md) (PATs)                                                                                         | not started, **blocked by api-redesign**          | B — product      |
-| [presolve-bundle](./presolve-bundle.md)                                                                                      | not started (planning)                            | B — product      |
-| [edge-overlay-open](./edge-overlay-open.md) — full plan [archived](./archive/edge-overlay-performance.md)                    | Phases 0–3 shipped                                | B — residue      |
-| [display-pipeline-open](./display-pipeline-open.md) — full audit [archived](./archive/display-pipeline-performance-audit.md) | most shipped; P1-C#/P3/fat-branch open            | B — residue      |
-| [plugin-compat-gate](./plugin-compat-gate.md)                                                                                | not started (planning)                            | B — operator     |
-| [visualization-package](./visualization-package.md)                                                                          | not started                                       | **A — refactor** |
-| [compute-package-cleanup](./compute-package-cleanup.md)                                                                      | not started, **depends on visualization-package** | **A — refactor** |
-| [verify-slider-drag-solve-path](./verify-slider-drag-solve-path.md)                                                          | not started (measurement)                         | B — gate         |
+| Plan                                                                                                                         | Status                                              | Track            |
+| ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------------- |
+| [data-access-efficiency-audit](./data-access-efficiency-audit.md)                                                            | open items remain (P2/P3 list)                      | B — efficiency   |
+| [api-redesign-plan](./api-redesign-plan.md)                                                                                  | not started                                         | B — product      |
+| [token-plan](./token-plan.md) (PATs)                                                                                         | not started, **blocked by api-redesign**            | B — product      |
+| [presolve-bundle](./presolve-bundle.md)                                                                                      | not started (planning)                              | B — product      |
+| [edge-overlay-open](./edge-overlay-open.md) — full plan [archived](./archive/edge-overlay-performance.md)                    | Phases 0–3 shipped                                  | B — residue      |
+| [display-pipeline-open](./display-pipeline-open.md) — full audit [archived](./archive/display-pipeline-performance-audit.md) | most shipped; P1-C#/P3/fat-branch open              | B — residue      |
+| [plugin-compat-gate](./plugin-compat-gate.md)                                                                                | not started (planning)                              | B — operator     |
+| [visualization-package](./visualization-package.md)                                                                          | not started                                         | **A — refactor** |
+| [compute-package-cleanup](./compute-package-cleanup.md)                                                                      | not started, **depends on visualization-package**   | **A — refactor** |
+| [verify-slider-drag-solve-path](./verify-slider-drag-solve-path.md)                                                          | not started (measurement)                           | B — gate         |
+| [drawing-layout-defects](./drawing-layout-defects.md)                                                                        | not started — **register, 14 confirmed + 19 leads** | B — correctness  |
 
 ## Hard dependencies
 

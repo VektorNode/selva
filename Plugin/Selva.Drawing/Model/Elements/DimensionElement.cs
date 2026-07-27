@@ -14,7 +14,10 @@ public enum DimensionKind { Linear, Angular }
 public sealed class DimensionStyle
 {
 	public double TextSize { get; init; } = 2.5;
-	public double StrokeWidth { get; init; } = 0.25;
+	// Paper-space mm, same convention as Stroke.Width: 0 suppresses the linework. Renderers
+	// wrap this in a Stroke before drawing, so it follows the same visibility rule — the
+	// label still draws, since a dimension without lines is still a legible annotation.
+	public double StrokeWidth { get; init; } = LineWeight.Fine;
 	public Color Color { get; init; } = Color.Black;
 	public string FontFamily { get; init; } = "Inter";
 

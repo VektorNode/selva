@@ -272,22 +272,50 @@ public sealed class DrawingView : LayoutElement
 					BackgroundCornerRadius = text.BackgroundCornerRadius * styleScale,
 					MeasuredBounds = null,
 				};
-			case PathElement path when path.Stroke != null:
+			// Matches a path with either a stroke or a patterned fill: both carry paper-space
+			// measurements. A hatched surface often has no stroke at all, so gating this on
+			// Stroke alone left its pattern to ride the view transform unscaled.
+			case PathElement path when path.Stroke != null || NeedsPatternScaling(path.Fill):
 				return new PathElement
 				{
 					Id = path.Id,
 					CssClass = path.CssClass,
 					Metadata = path.Metadata,
 					Path = path.Path,
-					Stroke = ScaleStroke(path.Stroke, styleScale),
-					Fill = path.Fill,
+					Stroke = path.Stroke != null ? ScaleStroke(path.Stroke, styleScale) : null,
+					Fill = ScaleFill(path.Fill, styleScale),
+				};
+			case HatchElement hatch:
+				// Spacing and LineStyle are paper-space for the same reason Fill.PatternScale
+				// is: poché spacing is specified on the sheet. Boundary is world geometry and
+				// rides the transform.
+				return new HatchElement
+				{
+					Id = hatch.Id,
+					CssClass = hatch.CssClass,
+					Metadata = hatch.Metadata,
+					Boundary = hatch.Boundary,
+					Pattern = hatch.Pattern,
+					Spacing = hatch.Spacing * styleScale,
+					AngleDegrees = hatch.AngleDegrees,
+					LineStyle = hatch.LineStyle != null ? ScaleStroke(hatch.LineStyle, styleScale) : null,
+					BackgroundColor = hatch.BackgroundColor,
+					FillRule = hatch.FillRule,
 				};
 			case DimensionElement dim:
-				// TextSize, StrokeWidth, ArrowSize, and the *Factor fields all live in
+				// TextSize, StrokeWidth, ArrowSize, Offset, and the *Factor fields all live in
 				// paper-space mm (or as multiples of TextSize). Counter-scale the absolute
-				// fields so labels, extension lines, and arrows stay constant on paper
-				// regardless of the view's scale. Geometric inputs (A, B, Vertex, Offset)
-				// are world coords and ride the group transform.
+				// fields so labels, extension lines, arrows, and the dimension line's standoff
+				// stay constant on paper regardless of the view's scale — a dimension is an
+				// annotation, so it is sized for the reader's eye, not for the model. Only the
+				// measured points (A, B, Vertex) are world coords that ride the group
+				// transform; the value the dimension reports still comes from those.
+				//
+				// Offset must be counter-scaled with the rest: the renderer derives the
+				// extension-line gap and overshoot from TextSize and then subtracts them from
+				// Offset, so leaving Offset in world units puts the two sides of that
+				// subtraction 1/Scale apart — at 1:50 a 5 mm offset landed 0.1 mm off the
+				// geometry and the extension lines clamped away entirely.
 				return new DimensionElement
 				{
 					Id = dim.Id,
@@ -297,7 +325,7 @@ public sealed class DrawingView : LayoutElement
 					A = dim.A,
 					B = dim.B,
 					Vertex = dim.Vertex,
-					Offset = dim.Offset,
+					Offset = dim.Offset * styleScale,
 					Label = dim.Label,
 					Style = ScaleDimensionStyle(dim.Style, styleScale),
 				};
@@ -339,6 +367,29 @@ public sealed class DrawingView : LayoutElement
 		}
 	}
 
+	private static bool NeedsPatternScaling(Fill fill) =>
+		fill != null && fill.Pattern != HatchPattern.None;
+
+	// A hatch tile is a paper-space measurement in the same sense as text height: drafting
+	// standards specify poché spacing on the printed sheet, and a pattern that rides the view
+	// transform collapses into a solid smear as the scale drops (at 1:50 the 4 mm tile landed
+	// at 0.08 mm — tighter than the line weight drawing it).
+	private static Fill ScaleFill(Fill fill, double styleScale)
+	{
+		if (!NeedsPatternScaling(fill)) return fill;
+		return new Fill
+		{
+			Color = fill.Color,
+			Opacity = fill.Opacity,
+			Rule = fill.Rule,
+			Pattern = fill.Pattern,
+			PatternScale = fill.PatternScale * styleScale,
+			PatternAngle = fill.PatternAngle,
+			PatternSpacingMm = fill.PatternSpacingMm * styleScale,
+			PatternLineWidthMm = fill.PatternLineWidthMm * styleScale,
+		};
+	}
+
 	private static Stroke ScaleStroke(Stroke stroke, double styleScale)
 	{
 		double[] dashes = null;
@@ -350,6 +401,8 @@ public sealed class DrawingView : LayoutElement
 		return new Stroke
 		{
 			Color = stroke.Color,
+			// Zero stays zero through the multiply, which is what we want: a suppressed stroke
+			// is suppressed at every view scale.
 			Width = stroke.Width * styleScale,
 			Opacity = stroke.Opacity,
 			Cap = stroke.Cap,

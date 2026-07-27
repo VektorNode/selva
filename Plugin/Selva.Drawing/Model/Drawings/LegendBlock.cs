@@ -29,7 +29,7 @@ public sealed class LegendBlock : LayoutElement
 	public double Width { get; init; } = 80;
 	public double SwatchColumnWidth { get; init; } = 18;
 
-	public Stroke Border { get; init; } = new Stroke { Width = 0.25 };
+	public Stroke Border { get; init; } = new Stroke { Width = LineWeight.Fine };
 	public TextStyle TitleStyle { get; init; } = new TextStyle { FontSize = 3.0, Weight = FontWeight.Bold };
 	public TextStyle DescriptionStyle { get; init; } = new TextStyle { FontSize = 2.5 };
 	public Margins CellPadding { get; init; } = new Margins(1.5, 2, 1.5, 2);

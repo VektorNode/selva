@@ -79,6 +79,34 @@ Selva.GH/Features/<FeatureName>/
 
 Goos and Params live in their own folders, **not in `Components/` or `Services/`**.
 
+### Changing a component's parameters (obsolete + upgrader)
+
+**Adding or removing an input/output param on a released component requires a new `ComponentGuid`.** Grasshopper stores wire connections in the `.ghx` by parameter _index_, not by name. Keeping the same GUID while the param list shifts silently rewires saved definitions to the wrong inputs — this happened once already and is recorded in [Plugin/CHANGELOG.md](./Plugin/CHANGELOG.md) under 0.11.2.
+
+Cosmetic edits (description, nickname, default value, `SolveInstance` behaviour) do **not** need this — only changes to the number or order of params.
+
+The procedure:
+
+1. **Snapshot the old shape** into `Features/<Name>/OBSOLETE/` as `OBSOLETE_<Component>_UntilV<X_Y_Z>.cs`. It keeps the **original** `ComponentGuid`, its original `RegisterInputParams`/`RegisterOutputParams`/`SolveInstance`, and gains `public override GH_Exposure Exposure => GH_Exposure.hidden;` so it loads but never appears in the ribbon.
+2. **Give the live component a fresh `ComponentGuid`** and its new param list.
+3. **Write an upgrader** in the same `OBSOLETE/` folder — `GH_<Component>Upgrader_To_<X_Y>` implementing `IGH_UpgradeObject` with `UpgradeFrom` = old GUID, `UpgradeTo` = new GUID, and `Version` = the release date. Use `GH_ComponentUpgradeHelper` ([Selva.GH/Utilities/UpgradeHelper.cs](./Plugin/Selva.GH/Utilities/UpgradeHelper.cs)) to remap indices — it also carries over internalized data, graft/flatten/simplify flags, and expressions:
+
+   ```csharp
+   var helper = new GH_ComponentUpgradeHelper(oldComponent, UpgradeTo);
+   return helper
+       .MapInput(0, 0)   // Geo
+       .MapInput(1, 1)   // Name
+       // new input at index 2 — left empty
+       .MapInput(2, 3)   // Metadata → shifted
+       .MapOutput(0, 0)
+       .Execute();
+   ```
+
+   Grasshopper discovers `IGH_UpgradeObject` types by assembly scan; there is no registration list to edit. Comment each `MapInput` with the param name — the indices are otherwise unreadable.
+
+4. **Chain, don't rewrite.** Each upgrader hops one GUID. Old upgraders stay forever so a v0.6 file can walk 0.6 → 0.9 → 0.14 → 0.16. See `GH_WebDisplayUpgrader.cs` for a five-link chain.
+5. **Record both** in `Plugin/CHANGELOG.md` under **Upgraders** and **Obsolete components**.
+
 ### When does a folder earn its keep?
 
 - A subfolder must contain **at least 3 files** at creation, OR
