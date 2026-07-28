@@ -1,5 +1,16 @@
 # @selvajs/selva
 
+## 4.7.0-beta.6
+
+### Minor Changes
+
+- Adding advanced caching
+
+### Patch Changes
+
+- Updated dependencies
+  - @selvajs/compute@3.1.0-beta.15
+
 ## 4.7.0-beta.5
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 5.0.0-beta.6
+
+### Minor Changes
+
+- Adding advanced caching
+
 ## 5.0.0-beta.5
 
 ### Patch Changes

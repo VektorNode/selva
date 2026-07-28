@@ -1,5 +1,16 @@
 # @selvajs/platform
 
+## 0.15.0-beta.4
+
+### Minor Changes
+
+- Adding advanced caching
+
+### Patch Changes
+
+- Updated dependencies
+  - @selvajs/schemas@4.7.0-beta.2
+
 ## 0.15.0-beta.3
 
 ### Minor Changes

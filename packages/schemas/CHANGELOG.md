@@ -1,5 +1,11 @@
 # Schema Changelog
 
+## 4.7.0-beta.2
+
+### Minor Changes
+
+- Adding advanced caching
+
 ## 4.7.0-beta.1
 
 ### Minor Changes

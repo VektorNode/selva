@@ -1,5 +1,18 @@
 # @selvajs/server
 
+## 0.2.0-beta.6
+
+### Minor Changes
+
+- Adding advanced caching
+
+### Patch Changes
+
+- Updated dependencies
+  - @selvajs/compute@3.1.0-beta.15
+  - @selvajs/platform@0.15.0-beta.4
+  - @selvajs/schemas@4.7.0-beta.2
+
 ## 0.2.0-beta.5
 
 ### Minor Changes

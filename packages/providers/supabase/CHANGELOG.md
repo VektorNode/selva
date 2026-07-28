@@ -1,5 +1,13 @@
 # @selvajs/supabase-provider
 
+## 0.15.0-beta.3
+
+### Patch Changes
+
+- Adding advanced caching
+- Updated dependencies
+  - @selvajs/platform@0.15.0-beta.4
+
 ## 0.15.0-beta.2
 
 ### Minor Changes
