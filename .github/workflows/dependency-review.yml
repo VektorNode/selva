@@ -22,6 +22,13 @@ permissions:
 
 jobs:
   dependency-review:
+    # The action calls GitHub's dependency-review API, which needs the
+    # dependency graph: on by default for public repos, but gated behind
+    # GitHub Advanced Security (paid) while the repo is private. Skip rather
+    # than fail every PR — this re-enables itself at open-sourcing, no edit
+    # needed. Note `pnpm audit --prod` (test.yml) still covers vulnerabilities
+    # across the whole prod tree; what's dormant here is the license denylist.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

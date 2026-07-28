@@ -27,6 +27,12 @@ selva-channel.json
 # Grasshopper definitions (keep private, not tracked)
 *.gh
 *.ghx
+# ...except the e2e fixtures. The core-loop spec uploads a genuine UI Builder
+# definition through the real dialog, so the schema-extraction gate has
+# something to extract — it can't be synthesized. Without this negation the
+# blanket rule above silently swallows `git add` and the spec fails in CI with
+# ENOENT while passing for anyone who has the file locally.
+!e2e/fixtures/*.gh
 
 # Deployment-specific thumbnails
 static/images/*_Thumbnail.png

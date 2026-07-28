@@ -457,9 +457,6 @@ importers:
       '@lucide/svelte':
         specifier: 'catalog:'
         version: 1.21.0(svelte@5.56.4(@typescript-eslint/types@8.64.0))
-      '@selvajs/compute':
-        specifier: workspace:^
-        version: link:../compute
       '@supabase/supabase-js':
         specifier: ^2.104.1
         version: 2.108.2
@@ -500,6 +497,9 @@ importers:
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.61.1
+      '@selvajs/compute':
+        specifier: workspace:*
+        version: link:../compute
       '@selvajs/config':
         specifier: workspace:*
         version: link:../config
