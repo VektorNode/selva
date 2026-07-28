@@ -70,10 +70,29 @@ public sealed class DrawingView : LayoutElement
 
 	public override DrawElement Resolve(LayoutContext context)
 	{
-		var resolvedGeometry = Geometry is LayoutElement nested
-			? nested.Resolve(new LayoutContext(BoundingBox.Empty))
-			: Geometry;
-		var geomBounds = resolvedGeometry?.ComputeBounds() ?? BoundingBox.Empty;
+		// Flatten the whole geometry subtree, not just a LayoutElement sitting at its root.
+		// Counter-scaling below rewrites primitives; an unresolved Frame/Stack/Grid one level
+		// down (inside a GroupElement) would fall through its `default:` arm untouched and only
+		// expand later in LayoutPass — after the styles it contains were supposed to be scaled.
+		// The error is 1/Scale and unbounded: a 0.7 mm border printed at 0.07 mm at 1:10.
+		//
+		// Resolving here also settles the second half of the problem: the subtree is laid out
+		// against its own unconstrained context rather than the outer page's, which is correct —
+		// view geometry is model space, and the page rect is not its budget.
+		var resolvedGeometry = LayoutPass.Resolve(Geometry, new LayoutContext(BoundingBox.Empty));
+
+		// Scale from the geometry's own extent, not from bounds inflated by half the stroke
+		// width. Line weight is a paper-space style that gets counter-scaled out anyway, so
+		// letting it into the measurement made the drawing scale depend on it: a 20 mm square
+		// with Length=20 resolved to 1:0.952 at a 1.0 mm weight, so the "20 mm" edge measured
+		// 19.05 mm and two views of the same geometry at different weights would not align.
+		var geomBounds = GeometryExtent(resolvedGeometry);
+
+		// The caption hangs below the frame and is part of what the view occupies, so its cost
+		// has to come out of the budget BEFORE the geometry is fitted — not be stapled on after.
+		// Adding it afterwards pushed an auto-fit view 4.5 mm past the content rect and straight
+		// into the footer, and made an explicit `Size` of 60x40 resolve to 60x44.5.
+		var captionReserve = CaptionReserve();
 
 		// Resolve sizing. Order: Length → Size → context auto-fit → natural size at Scale.
 		double innerWidth, innerHeight, effectiveScale;
@@ -86,12 +105,16 @@ public sealed class DrawingView : LayoutElement
 		}
 		else if (Size.HasValue)
 		{
-			innerWidth = Math.Max(0, Size.Value.Width - Padding.Left - Padding.Right);
-			innerHeight = Math.Max(0, Size.Value.Height - Padding.Top - Padding.Bottom);
+			// Padding is clamped to the box: a padding larger than the size it sits inside
+			// otherwise grew the view instead of shrinking its content (20x20 with 20 mm padding
+			// resolved to 40x40 — the padding won and the requested size was ignored).
+			var (padX, padY) = ClampPadding(Size.Value.Width, Size.Value.Height - captionReserve);
+			innerWidth = Math.Max(0, Size.Value.Width - padX);
+			innerHeight = Math.Max(0, Size.Value.Height - captionReserve - padY);
 			effectiveScale = Scale > 0 ? Scale : 1.0;
 			if (Scale <= 0 && !geomBounds.IsEmpty && innerWidth > 0 && innerHeight > 0)
 			{
-				effectiveScale = Math.Min(innerWidth / geomBounds.Width, innerHeight / geomBounds.Height);
+				effectiveScale = FitScale(innerWidth, innerHeight, geomBounds);
 			}
 		}
 		else if (Scale <= 0 && !geomBounds.IsEmpty && (context.HasFiniteAvailableWidth || context.HasFiniteAvailableHeight))
@@ -100,18 +123,30 @@ public sealed class DrawingView : LayoutElement
 			// "drop me on a Page and figure it out" path. Containers may constrain only
 			// one axis (a vertical Stack provides width but unbounded height) — fit to
 			// whichever axes are real instead of inventing a budget for the other.
-			var availW = context.HasFiniteAvailableWidth
-				? Math.Max(0, context.AvailableWidth - Padding.Left - Padding.Right)
-				: 0;
-			var availH = context.HasFiniteAvailableHeight
-				? Math.Max(0, context.AvailableHeight - Padding.Top - Padding.Bottom)
-				: 0;
-			if (availW > 0 && availH > 0)
-				effectiveScale = Math.Min(availW / geomBounds.Width, availH / geomBounds.Height);
-			else if (availW > 0)
-				effectiveScale = availW / geomBounds.Width;
-			else if (availH > 0)
-				effectiveScale = availH / geomBounds.Height;
+			//
+			// "Constrained but exhausted" and "unconstrained" must stay distinct. A Stack that
+			// has spent its main axis hands down a budget of 0, which is a hard limit, not an
+			// invitation to size freely — collapsing both to 0 made a spent axis drop out of
+			// the fit and the view scaled off the sheet (a horizontal Stack produced a 3789 mm
+			// page). Constrained axes therefore stay in the fit at their real budget, however
+			// small; only genuinely unconstrained axes are excluded.
+			// Padding and the caption both come out of the container's budget before the fit,
+			// and padding is clamped so it can never exceed the room it sits inside.
+			var (availPadX, availPadY) = ClampPadding(
+				context.HasFiniteAvailableWidth ? context.AvailableWidth : double.PositiveInfinity,
+				context.HasFiniteAvailableHeight ? context.AvailableHeight - captionReserve : double.PositiveInfinity);
+			double? availW = context.HasFiniteAvailableWidth
+				? Math.Max(0, context.AvailableWidth - availPadX)
+				: null;
+			double? availH = context.HasFiniteAvailableHeight
+				? Math.Max(0, context.AvailableHeight - captionReserve - availPadY)
+				: null;
+			if (availW.HasValue && availH.HasValue)
+				effectiveScale = FitScale(availW.Value, availH.Value, geomBounds);
+			else if (availW.HasValue)
+				effectiveScale = AxisScale(availW.Value, geomBounds.Width);
+			else if (availH.HasValue)
+				effectiveScale = AxisScale(availH.Value, geomBounds.Height);
 			else
 				effectiveScale = 1.0;
 			innerWidth = geomBounds.Width * effectiveScale;
@@ -130,8 +165,18 @@ public sealed class DrawingView : LayoutElement
 			innerHeight = geomBounds.Height * effectiveScale;
 		}
 
-		var outerWidth = innerWidth + Padding.Left + Padding.Right;
-		var outerHeight = innerHeight + Padding.Top + Padding.Bottom;
+		// Padding actually applied. Where a budget bounded the fit — an explicit Size, or a
+		// container's available rect — the padding is clamped to it, because padding is taken
+		// out of a box and cannot exceed it. With no budget the geometry drove the size and the
+		// authored padding stands.
+		var (appliedPadX, appliedPadY) = Size.HasValue
+			? ClampPadding(Size.Value.Width, Size.Value.Height - captionReserve)
+			: ClampPadding(
+				context.HasFiniteAvailableWidth ? context.AvailableWidth : double.PositiveInfinity,
+				context.HasFiniteAvailableHeight ? context.AvailableHeight - captionReserve : double.PositiveInfinity);
+
+		var outerWidth = innerWidth + appliedPadX;
+		var outerHeight = innerHeight + appliedPadY;
 
 		// Explicit Caption wins; otherwise auto-label the inferred scale when asked.
 		var effectiveCaption = !string.IsNullOrEmpty(Caption)
@@ -342,6 +387,54 @@ public sealed class DrawingView : LayoutElement
 					Head = leader.Head,
 					HeadSize = leader.HeadSize * styleScale,
 				};
+			case TextBlockElement textBlock:
+				// Style is paper-space like every other text style; Box is world geometry and
+				// rides the transform. Not reachable from Grasshopper today (TokenResolver is
+				// the only construction site) — handled so the invariant holds by element type
+				// rather than by which elements happen to be constructible.
+				return new TextBlockElement
+				{
+					Id = textBlock.Id,
+					CssClass = textBlock.CssClass,
+					Metadata = textBlock.Metadata,
+					Text = textBlock.Text,
+					Box = textBlock.Box,
+					Style = textBlock.Style != null ? ScaleTextStyle(textBlock.Style, styleScale) : textBlock.Style,
+				};
+			case SymbolElement symbol when symbol.Definition != null:
+				// A symbol's children are paper-space annotation in exactly the sense text and
+				// dimensions are: north arrows, section marks and weld symbols are drawn at a
+				// fixed size on the sheet, not at model scale. Without this arm they ride the
+				// view transform raw and a 0.7 mm symbol stroke prints at 0.07 mm at 1:10.
+				//
+				// The Definition.Id must be qualified by the scale. Both renderers dedupe
+				// definitions by Id (SVG <symbol>/<use>, PDF Form XObject), and the PDF
+				// collector throws outright when one Id maps to two different definitions —
+				// which is precisely what two views of the same symbol at different scales
+				// would produce once the children differ.
+				var scaledChildren = new List<DrawElement>(symbol.Definition.Children.Count);
+				var symbolChanged = false;
+				foreach (var child in symbol.Definition.Children)
+				{
+					var next = CounterScalePaperSpaceStyles(child, styleScale);
+					if (!ReferenceEquals(next, child)) symbolChanged = true;
+					scaledChildren.Add(next);
+				}
+				if (!symbolChanged) return symbol;
+				return new SymbolElement
+				{
+					Id = symbol.Id,
+					CssClass = symbol.CssClass,
+					Metadata = symbol.Metadata,
+					Position = symbol.Position,
+					Transform = symbol.Transform,
+					Definition = new SymbolDefinition
+					{
+						Id = ScaleQualifiedId(symbol.Definition.Id, styleScale),
+						ViewBox = symbol.Definition.ViewBox,
+						Children = scaledChildren,
+					},
+				};
 			case GroupElement group:
 				var rewritten = new List<DrawElement>(group.Children.Count);
 				var changed = false;
@@ -367,6 +460,16 @@ public sealed class DrawingView : LayoutElement
 		}
 	}
 
+	// Symbol definitions are deduped by Id across a whole page, so a definition whose children
+	// have been counter-scaled for one view must not answer to the same Id as the unscaled
+	// original or another view's differently-scaled copy. Null/empty Ids are left alone — both
+	// renderers treat those as "inline me, don't cache me".
+	private static string ScaleQualifiedId(string id, double styleScale)
+	{
+		if (string.IsNullOrEmpty(id)) return id;
+		return $"{id}@{styleScale.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}";
+	}
+
 	private static bool NeedsPatternScaling(Fill fill) =>
 		fill != null && fill.Pattern != HatchPattern.None;
 
@@ -386,8 +489,29 @@ public sealed class DrawingView : LayoutElement
 			PatternScale = fill.PatternScale * styleScale,
 			PatternAngle = fill.PatternAngle,
 			PatternSpacingMm = fill.PatternSpacingMm * styleScale,
-			PatternLineWidthMm = fill.PatternLineWidthMm * styleScale,
+			// Same visibility floor as ScaleStrokeWidth — a hatch tile's linework disappears on
+			// an enlargement view for exactly the same reason a path's outline does.
+			PatternLineWidthMm = ScaleStrokeWidth(fill.PatternLineWidthMm, styleScale),
 		};
+	}
+
+	// Counter-scale a stroke width without letting an authored-visible line become invisible.
+	//
+	// `Stroke.MinVisibleWidthMm` is a device threshold about the printed sheet, but it is tested
+	// by the renderers against the counter-scaled LOCAL width. On an enlargement view the
+	// counter-scale is a fraction (1/20 at 20:1), so a perfectly ordinary paper weight lands
+	// under the threshold and both renderers skip the stroke: at 50:1 every standard weight
+	// (0.13 / 0.25 / 0.5 mm) vanished and a detail view exported as a blank page.
+	//
+	// The renderers can't judge this — they never see the view scale — so the decision belongs
+	// here, where the authored width is still known. A stroke the author made visible stays
+	// visible; a stroke authored at or below the threshold (including the deliberate 0 = "no
+	// stroke") is left to scale to nothing as before.
+	private static double ScaleStrokeWidth(double authoredWidth, double styleScale)
+	{
+		var scaled = authoredWidth * styleScale;
+		if (!Stroke.IsVisibleWidth(authoredWidth)) return scaled;
+		return Math.Max(scaled, Stroke.MinVisibleWidthMm * (1.0 + 1e-9));
 	}
 
 	private static Stroke ScaleStroke(Stroke stroke, double styleScale)
@@ -403,7 +527,7 @@ public sealed class DrawingView : LayoutElement
 			Color = stroke.Color,
 			// Zero stays zero through the multiply, which is what we want: a suppressed stroke
 			// is suppressed at every view scale.
-			Width = stroke.Width * styleScale,
+			Width = ScaleStrokeWidth(stroke.Width, styleScale),
 			Opacity = stroke.Opacity,
 			Cap = stroke.Cap,
 			Join = stroke.Join,
@@ -452,12 +576,101 @@ public sealed class DrawingView : LayoutElement
 		};
 	}
 
+	// Bounds of the geometry itself, with PathElement's stroke inflation unwound. PathElement is
+	// the only element that pads its bounds by the drawn line width; DimensionElement and
+	// LeaderElement also inflate, but they pad for arrowheads and label text, which are real
+	// extent the view has to make room for.
+	private static BoundingBox GeometryExtent(DrawElement element)
+	{
+		switch (element)
+		{
+			case null:
+				return BoundingBox.Empty;
+			case PathElement path:
+				return path.Path.ComputeBounds();
+			case GroupElement group:
+				var union = BoundingBox.Empty;
+				foreach (var child in group.Children)
+				{
+					var b = GeometryExtent(child);
+					if (!b.IsEmpty) union = union.Union(b);
+				}
+				if (union.IsEmpty) return union;
+				return group.Transform.IsIdentity ? union : TransformBounds(union, group.Transform);
+			default:
+				return element.ComputeBounds();
+		}
+	}
+
+	// Axis-aligned bounds of a box after a transform: map all four corners, since a rotation
+	// makes the transformed min/max corners insufficient on their own.
+	private static BoundingBox TransformBounds(BoundingBox box, Transform t)
+	{
+		var result = BoundingBox.Empty;
+		result = result.Union(t.Apply(new Point2D(box.MinX, box.MinY)));
+		result = result.Union(t.Apply(new Point2D(box.MaxX, box.MinY)));
+		result = result.Union(t.Apply(new Point2D(box.MaxX, box.MaxY)));
+		result = result.Union(t.Apply(new Point2D(box.MinX, box.MaxY)));
+		return result;
+	}
+
+	// Vertical room the caption will need, including its gap — reserved out of the budget before
+	// the geometry is fitted. Depends only on CaptionStyle and whether a caption will exist at
+	// all, both of which are known before the scale is resolved. The AutoScaleCaption case can't
+	// know the label's *text* yet, but every label is one line at the same style, so the height
+	// is the same either way.
+	private double CaptionReserve()
+	{
+		var willCaption = !string.IsNullOrEmpty(Caption) || AutoScaleCaption;
+		if (!willCaption) return 0;
+		var metrics = ComputeCaptionMetrics();
+		return metrics.Height > 0 ? CaptionGap + metrics.Height : 0;
+	}
+
+	// Padding clamped to the box it sits inside, returned as per-axis totals. Padding is a
+	// margin taken out of a box, so it can never be larger than the box: left unclamped, a
+	// padding wider than its own view grew the view instead of shrinking its content.
+	// Proportional so an asymmetric padding keeps its ratio as it shrinks.
+	private (double X, double Y) ClampPadding(double availableWidth, double availableHeight)
+	{
+		var padX = Padding.Left + Padding.Right;
+		var padY = Padding.Top + Padding.Bottom;
+		if (padX > 0 && !double.IsInfinity(availableWidth) && padX > availableWidth)
+			padX = Math.Max(0, availableWidth);
+		if (padY > 0 && !double.IsInfinity(availableHeight) && padY > availableHeight)
+			padY = Math.Max(0, availableHeight);
+		return (padX, padY);
+	}
+
 	private (double Height, double Ascent) ComputeCaptionMetrics()
 	{
 		var probe = Fonts.FontMetrics.Measure(string.Empty, CaptionStyle ?? new TextStyle());
 		var lineHeight = probe.Ascent + Math.Abs(probe.Descent) + probe.LineGap;
 		return (lineHeight, probe.Ascent);
 	}
+
+	// Fit geometry into an available box. A geometry that is flat on one axis (a horizontal
+	// line, a collapsed path) has no ratio to satisfy on that axis, so it is excluded from the
+	// Math.Min rather than contributing a division by zero. When both axes are flat there is
+	// no meaningful scale at all and we fall back to 1:1 — the alternative is +Infinity, which
+	// propagates into the group transform as NaN and emits `NaN NaN NaN NaN NaN NaN cm` into
+	// the PDF content stream.
+	private static double FitScale(double availableWidth, double availableHeight, BoundingBox geomBounds)
+	{
+		var byWidth = geomBounds.Width > 0 ? availableWidth / geomBounds.Width : double.PositiveInfinity;
+		var byHeight = geomBounds.Height > 0 ? availableHeight / geomBounds.Height : double.PositiveInfinity;
+		return Usable(Math.Min(byWidth, byHeight));
+	}
+
+	private static double AxisScale(double available, double extent) =>
+		Usable(extent > 0 ? available / extent : double.PositiveInfinity);
+
+	// A non-finite ratio means the axis had no extent to divide by, so there was never a real
+	// constraint — fall back to 1:1. A finite zero is different: the container genuinely has no
+	// room, and honouring it is what keeps an exhausted budget from scaling the view off the
+	// sheet. Clamped at zero so a negative budget can't mirror the geometry.
+	private static double Usable(double scale) =>
+		double.IsNaN(scale) || double.IsInfinity(scale) ? 1.0 : Math.Max(0, scale);
 
 	// Helper: format a numeric scale as a "1:N" / "N:1" / "1:1" caption.
 	public static string FormatScaleLabel(double scale)

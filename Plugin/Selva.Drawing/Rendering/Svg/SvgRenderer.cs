@@ -1029,7 +1029,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		var angleDeg = Math.Atan2(uy, ux) * 180.0 / Math.PI;
 		if (angleDeg > 90 || angleDeg < -90) angleDeg += 180;
 
-		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none' vector-effect='non-scaling-stroke'";
+		// No vector-effect='non-scaling-stroke' here: DimensionStyle.StrokeWidth has ALREADY been
+		// counter-scaled by DrawingView (dimension linework is paper-space, like its text), so the
+		// attribute would cancel the view transform a second time and the two compensations stack.
+		// At 1:50 that emitted 12.5 mm bars where the PDF renderer — which has no equivalent and
+		// simply lets the counter-scaled width ride the transform — correctly drew 0.25 mm.
+		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none'";
 		var arrowMarkerId = DimArrowMarkerId(style);
 
 		AppendDimLine(strokeAttr, extStartA.X, extStartA.Y, extEndA.X, extEndA.Y);
@@ -1134,7 +1139,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		}
 		bisX /= bisLen; bisY /= bisLen;
 
-		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none' vector-effect='non-scaling-stroke'";
+		// No vector-effect='non-scaling-stroke' here: DimensionStyle.StrokeWidth has ALREADY been
+		// counter-scaled by DrawingView (dimension linework is paper-space, like its text), so the
+		// attribute would cancel the view transform a second time and the two compensations stack.
+		// At 1:50 that emitted 12.5 mm bars where the PDF renderer — which has no equivalent and
+		// simply lets the counter-scaled width ride the transform — correctly drew 0.25 mm.
+		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none'";
 		var arrowMarkerId = DimArrowMarkerId(style);
 
 		var arcLen = absTheta * radius;

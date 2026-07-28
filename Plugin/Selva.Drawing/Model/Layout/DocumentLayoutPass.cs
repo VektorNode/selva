@@ -38,9 +38,20 @@ public static class DocumentLayoutPass
 
 			// Chrome is measured per section: band height depends on the band width (wrapping
 			// TextFlows), and paper/margins — hence the width — can differ per section.
+			//
+			// Measure the SUBSTITUTED template. Substitution changes text length and layout is
+			// what wraps it, so measuring the raw "{title}" reserved a band sized for the token
+			// rather than for the value. Cross-section numbering means the true {page}/{pages}
+			// aren't known yet; a provisional resolver carrying the real title and section name
+			// gets the length-dominant tokens right, and page numbers vary by a digit at most.
 			var bandWidth = PaginationPass.BandWidth(paper, margins);
-			var sectionHeader = PaginationPass.ResolveLayout(section.Header ?? layout.Header, bandWidth);
-			var sectionFooter = PaginationPass.ResolveLayout(section.Footer ?? layout.Footer, bandWidth);
+			var measureResolver = new TokenResolver(
+				1, 1, layout.Title, section.Title ?? string.Empty, layout.Tokens,
+				layout.Now ?? DateTime.Now, layout.Culture);
+			var sectionHeader = PaginationPass.ResolveLayout(
+				measureResolver.ResolveTree(section.Header ?? layout.Header), bandWidth);
+			var sectionFooter = PaginationPass.ResolveLayout(
+				measureResolver.ResolveTree(section.Footer ?? layout.Footer), bandWidth);
 
 			var headerH = PaginationPass.ResolveBandHeight(
 				section.HeaderHeight ?? layout.HeaderHeight, sectionHeader);
@@ -137,10 +148,9 @@ public static class DocumentLayoutPass
 			var tokens = MergeScaleToken(layout.Tokens, HarvestScaleLabel(rp.Layout.RawContents[rp.ContentIndex]) ?? string.Empty);
 			var resolver = new TokenResolver(i + 1, totalPages, rp.Title, rp.SectionTitle, tokens, now, layout.Culture);
 
-			// Chrome resolves per page against its band rect (so star grids fill the band width
-			// and TextFlows wrap to it), then this page's tokens substitute into the result.
-			// Band heights were measured from the unsubstituted template above — close enough
-			// for typical {page}-style tokens.
+			// Chrome resolves per page: this page's tokens substitute into the raw template
+			// first, then the result is laid out against the band rect (so star grids fill the
+			// band width and TextFlows wrap the substituted text, not the token).
 			var pageHeader = PaginationPass.ResolveChromeForPage(rp.RawHeader, rp.Layout.HeaderRect, resolver);
 			var pageFooter = PaginationPass.ResolveChromeForPage(rp.RawFooter, rp.Layout.FooterRect, resolver);
 
@@ -148,7 +158,8 @@ public static class DocumentLayoutPass
 			var rawContent = resolver.ResolveTree(rp.Layout.RawContents[rp.ContentIndex]);
 			var anchoredContent = PaginationPass.AnchorTopLeft(rawContent, rp.Layout.ContentRect);
 			var anchoredHeader = PaginationPass.AnchorChrome(pageHeader, rp.Layout.HeaderRect, rp.HeaderAlign);
-			var anchoredFooter = PaginationPass.AnchorChrome(pageFooter, rp.Layout.FooterRect, rp.FooterAlign);
+			var anchoredFooter = PaginationPass.AnchorChrome(
+				pageFooter, rp.Layout.FooterRect, rp.FooterAlign, PaginationPass.VerticalAnchor.Bottom);
 
 			pages.Add(new Page
 			{

@@ -38,7 +38,7 @@ public sealed class TextFlow : LayoutElement
 	{
 		var effectiveWidth = ResolveEffectiveWidth(context);
 		var (lines, lineHeight, _) = LayoutLines(Style, Text, effectiveWidth);
-		var w = effectiveWidth > 0 ? effectiveWidth : MaxLineWidth(lines, Style);
+		var w = InkWidth(lines, Style, effectiveWidth);
 		var h = FixedHeight ?? Math.Max(lineHeight, lines.Count * lineHeight);
 		return new BoundingBox(Origin.X, Origin.Y, Origin.X + w, Origin.Y + h);
 	}
@@ -52,6 +52,13 @@ public sealed class TextFlow : LayoutElement
 		var effectiveWidth = ResolveEffectiveWidth(context);
 		var (lines, lineHeight, _) = LayoutLines(Style, Text, effectiveWidth);
 		if (lines.Count == 0 || lineHeight <= 0)
+			return base.TrySplit(availableHeight, context);
+
+		// An unbounded budget fits everything by definition. Guard before the cast: casting
+		// +Infinity to int yields int.MinValue, which reads as "nothing fits" and makes
+		// pagination emit one line per page. DocumentLayoutPass passes +Infinity for every
+		// KeepTogether section, so this is the common path, not an edge case.
+		if (double.IsPositiveInfinity(availableHeight))
 			return base.TrySplit(availableHeight, context);
 
 		var fitsLineCount = (int)Math.Floor((availableHeight + 1e-6) / lineHeight);
@@ -146,9 +153,9 @@ public sealed class TextFlow : LayoutElement
 		}
 
 		// Pin the resolved bounds to the same box ComputeBounds reports. The glyph union is
-		// smaller (it misses the line gap and trailing wrap width), so without this pin the
-		// pagination budget and the measured stack/frame layout disagree by up to one line.
-		var boundsWidth = effectiveWidth > 0 ? effectiveWidth : MaxLineWidth(lines, style);
+		// smaller vertically (it misses the line gap), so without this pin the pagination budget
+		// and the measured stack/frame layout disagree by up to one line.
+		var boundsWidth = InkWidth(lines, style, effectiveWidth);
 		return new GroupElement
 		{
 			Id = Id,
@@ -218,6 +225,25 @@ public sealed class TextFlow : LayoutElement
 		var available = context.AvailableWidth;
 		if (double.IsInfinity(available) || available <= 0) return 0;
 		return available;
+	}
+
+	// The width this flow actually OCCUPIES, as opposed to the width it was allowed to wrap
+	// within. Those are different numbers and conflating them made every width-filling container
+	// treat the budget as a measurement: an Auto grid column holding "Qty" (5 mm of ink) sized
+	// itself to the full 190 mm page, which made Auto tracks byte-identical to Star ones, and a
+	// Frame around the word "NOTE" spanned the sheet.
+	//
+	// Capped at effectiveWidth because a single unbreakable word may overrun the wrap box, and
+	// reporting more than the budget would push the overflow back onto the container.
+	//
+	// This is deliberately NOT what the Center/Right anchor arithmetic uses — that still needs
+	// the wrap box, because "centred" means centred within the box the author asked to wrap in,
+	// not within the glyphs' own extent.
+	private static double InkWidth(IReadOnlyList<string> lines, TextStyle style, double effectiveWidth)
+	{
+		var ink = MaxLineWidth(lines, style);
+		if (effectiveWidth <= 0) return ink;
+		return Math.Min(ink, effectiveWidth);
 	}
 
 	private static double MaxLineWidth(IReadOnlyList<string> lines, TextStyle style)

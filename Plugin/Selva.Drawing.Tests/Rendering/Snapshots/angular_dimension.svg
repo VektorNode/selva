@@ -11,7 +11,7 @@
 </defs>
 <g transform='matrix(1 0 0 -1 0 0)' font-family='Inter, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif'>
   <g class='dimension'>
-    <path stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' vector-effect='non-scaling-stroke' marker-start='url(#selva-dim-arrow-4)' marker-end='url(#selva-dim-arrow-4)' d='M 15 0 A 15 15 0 0 1 0 15' />
+    <path stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' marker-start='url(#selva-dim-arrow-4)' marker-end='url(#selva-dim-arrow-4)' d='M 15 0 A 15 15 0 0 1 0 15' />
     <text x='0' y='0' font-size='2.5' fill='rgb(0,0,0)' text-anchor='middle' dominant-baseline='middle' transform='translate(11.667262 11.667262) scale(1 -1) rotate(45)'>90°</text>
   </g>
 </g>
