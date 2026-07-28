@@ -97,11 +97,11 @@ const warnedUnknownUnits = new Set<string>();
  * // With debugging enabled
  * const meshes = await getThreeMeshesFromComputeResponse(response, { debug: true });
  *
- * // With advanced options
+ * // Opt in to seating the model on the grid instead of using its Rhino coordinates
  * const meshes = await getThreeMeshesFromComputeResponse(response, {
  *   debug: true,
  *   allowScaling: true,
- *   allowAutoPosition: false,
+ *   allowAutoPosition: true,
  *   parsing: {
  *     mergeByMaterial: false,
  *     applyTransforms: true,
@@ -119,7 +119,12 @@ export async function getThreeMeshesFromComputeResponse(
 
 	const {
 		allowScaling = true,
-		allowAutoPosition = true,
+		// Defaults to FALSE: geometry renders where Rhino puts it. Grounding used to be on by
+		// default here but was never applied on the WebSocket preview path, so the same definition
+		// sat at a different height depending on transport. Rhino coordinates are the honest frame —
+		// the viewer agrees with the Grasshopper definition, and picked/measured coordinates match.
+		allowAutoPosition = false,
+		groundAxis = 'z',
 		rhino,
 		debug = false,
 		parsing: parsingOptions = {}
@@ -130,7 +135,7 @@ export async function getThreeMeshesFromComputeResponse(
 		await extractDisplayFromData(data, objects, scaleFactor, parsingOptions, rhino, debug);
 
 		if (allowAutoPosition) {
-			applyGroundOffset(objects);
+			applyGroundOffset(objects, groundAxis);
 		}
 
 		return objects;
@@ -260,14 +265,16 @@ function safeParse(s: string): DisplayBatch | undefined {
 }
 
 /**
- * Applies vertical offset to position objects on the Z=0 plane (the ground of the unified
- * Z-up scene frame — see ../coordinate-transform.ts).
+ * Drops objects so their lowest point sits on the ground plane. `axis` is the scene's up axis —
+ * `z` for the default Rhino frame geometry arrives in (see ../coordinate-transform.ts). Taking it
+ * as a parameter rather than hardcoding `z` keeps grounding correct for a host that configures a
+ * different `sceneUp`, where subtracting `min.z` would shove content sideways instead of down.
  */
-function applyGroundOffset(meshes: THREE.Object3D[]): void {
+function applyGroundOffset(meshes: THREE.Object3D[], axis: 'x' | 'y' | 'z'): void {
 	if (meshes.length === 0) return;
 
 	const combinedBoundingBox = computeCombinedBoundingBox(meshes);
-	applyOffset(meshes, combinedBoundingBox.min.z, 'z');
+	applyOffset(meshes, combinedBoundingBox.min[axis], axis);
 }
 
 /**

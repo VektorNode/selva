@@ -14,8 +14,10 @@ import { createRenderPipeline, type RenderPipeline } from './render-pipeline';
 import { createLabelLayer, type LabelLayer } from './label-layer';
 import { createMeasureTool, type MeasureTool } from './measure';
 import { computeContentBounds } from './three-helpers';
+import { environmentRotationFor, isoOffset, sunOffset, upToAxis } from './up-axis';
 import { setTextureAnisotropy } from '../webdisplay/texture-cache';
 
+/** Rhino's convention, and the frame all geometry arrives in — see `coordinate-transform.ts`. */
 const defaultUp = new THREE.Vector3(0, 0, 1);
 
 /** The look applied when the caller passes no `look` option. */
@@ -93,16 +95,6 @@ export function materialAppearanceForLook(look: Look): MaterialAppearanceOptions
 		envMapIntensity: preset.envMapIntensity,
 		cullBackfaces: preset.cullBackfaces
 	};
-}
-
-/** Map an up vector to the grid's ground-plane axis (the axis the grid is laid perpendicular to). */
-function upToGroundPlane(up: THREE.Vector3): 'x' | 'y' | 'z' {
-	const ax = Math.abs(up.x);
-	const ay = Math.abs(up.y);
-	const az = Math.abs(up.z);
-	if (az >= ax && az >= ay) return 'z';
-	if (ay >= ax && ay >= az) return 'y';
-	return 'x';
 }
 
 /**
@@ -297,7 +289,9 @@ export const initThree = function (
 	// would otherwise be clipped at grazing views.
 	const groundNormals: THREE.Vector3[] = [];
 	if (grid) {
-		const plane = config.grid.plane ?? 'z';
+		// applyDefaults always fills `plane` (from the scene up axis); the fallback derives from the
+		// same source rather than assuming 'z', so the two can't disagree in a non-Z-up scene.
+		const plane = config.grid.plane ?? upToAxis(sceneUp);
 		groundNormals.push(
 			new THREE.Vector3(plane === 'x' ? 1 : 0, plane === 'y' ? 1 : 0, plane === 'z' ? 1 : 0)
 		);
@@ -857,13 +851,17 @@ export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeI
 		sceneScale: scale,
 		look,
 		camera: {
-			// Default 3/4 iso for a Z-up scene: back-left and ABOVE (height on +Z).
+			// Default 3/4 iso: behind-left and ABOVE the model. Derived from the scene up axis rather
+			// than a literal Z-up vector, so a Y-up scene gets an overhead iso instead of a
+			// below-horizon view.
+			// `cameraDistance` was historically a PER-COMPONENT magnitude on a (-d, -d, d) vector, so the
+			// effective orbit radius is d*sqrt(3). Preserved exactly so this change reorients the default
+			// view without also changing how zoomed-in every scene starts.
 			position:
 				options.camera?.position ||
-				new THREE.Vector3(
-					-defaults.cameraDistance,
-					-defaults.cameraDistance,
-					defaults.cameraDistance
+				isoOffset(
+					options.environment?.sceneUp ?? defaultUp,
+					defaults.cameraDistance * Math.sqrt(3)
 				),
 			fov: options.camera?.fov || 20,
 			near: options.camera?.near || defaults.near,
@@ -874,10 +872,15 @@ export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeI
 		lighting: {
 			enableSunlight: options.lighting?.enableSunlight ?? true,
 			sunlightIntensity: options.lighting?.sunlightIntensity ?? 1,
-			// Sun overhead in a Z-up scene: height on +Z, offset across X/Y.
+			// Sun overhead and offset to one side, expressed in the scene basis so it stays overhead in
+			// any up convention (a hardcoded +Z height made the sun near-horizontal in a Y-up scene).
 			sunlightPosition:
 				options.lighting?.sunlightPosition ||
-				new THREE.Vector3(defaults.lightDistance, defaults.lightDistance, defaults.lightHeight),
+				sunOffset(
+					options.environment?.sceneUp ?? defaultUp,
+					defaults.lightDistance,
+					defaults.lightHeight
+				),
 			ambientLightColor: options.lighting?.ambientLightColor || new THREE.Color(0x404040),
 			// The look sets ambient low across the board — the hemisphere fill + env carry the lift, so
 			// flat ambient is only a thin floor keeping shadows off pure black. Explicit option still wins.
@@ -945,7 +948,7 @@ export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeI
 			fadeDistance: options.grid?.fadeDistance ?? 100,
 			// The "ground" plane is the one orthogonal to the scene up axis, so the grid lies under the
 			// model regardless of up convention (Z-up Rhino → 'z'; Y-up → 'y'). Explicit `plane` wins.
-			plane: options.grid?.plane ?? upToGroundPlane(options.environment?.sceneUp ?? defaultUp)
+			plane: options.grid?.plane ?? upToAxis(options.environment?.sceneUp ?? defaultUp)
 		},
 		gizmo: {
 			enabled: options.gizmo?.enabled ?? false
@@ -1253,10 +1256,19 @@ function setupEnvironment(
 				// Normalize the HDR's IBL contribution so brightness is consistent across HDRs of
 				// differing exposure, instead of dim-HDR-looks-dim / bright-HDR-blows-out.
 				scene.environmentIntensity = config.environment.environmentIntensity ?? 1;
+				// Equirectangular mapping assumes the HDR's horizon lies in the XZ plane — i.e. Y-up.
+				// This scene is Z-up, so without a rotation the environment sits on its side: the
+				// horizon runs vertically and the sky lights the model from +Y instead of from above.
+				// Invisible on a neutral studio HDR, obvious on any HDR with a sky/ground split.
+				const envRotation = environmentRotationFor(config.environment.sceneUp ?? defaultUp);
+				scene.environmentRotation.copy(envRotation);
 				if (config.environment.showEnvironment) {
 					// Background wants the full-resolution equirect, not the low-res prefiltered probe —
 					// so keep the raw map for that and let it dispose with the scene background sweep.
 					scene.background = envMap;
+					// Keep the visible background locked to the same orientation as the IBL probe;
+					// they are separate properties and drift apart if only one is set.
+					scene.backgroundRotation.copy(envRotation);
 				} else {
 					// The raw equirect was only an input to PMREM; the prefiltered probe has superseded
 					// it for IBL and nothing else references it, so release it now.

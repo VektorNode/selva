@@ -141,8 +141,21 @@ export interface MeshExtractionOptions {
 	parsing?: MeshBatchParsingOptions;
 	/** Apply scaling based on model units. Defaults to true. */
 	allowScaling?: boolean;
-	/** Apply automatic ground offset positioning (Z=0). Defaults to true. */
+	/**
+	 * Drop geometry so its lowest point sits on the ground plane. **Defaults to `false`** — content
+	 * renders at its true Rhino coordinates, so the viewer matches the Grasshopper definition.
+	 *
+	 * Set `true` to always seat the model on the grid regardless of where it sits in Rhino. Note
+	 * this shifts objects, so anything read back out of the scene (bounds, measured or picked
+	 * positions) no longer corresponds to the model's Rhino coordinates.
+	 */
 	allowAutoPosition?: boolean;
+	/**
+	 * The scene's up axis, used by the `allowAutoPosition` grounding to decide which component to
+	 * drop to zero. Defaults to `'z'` — the frame Rhino geometry arrives in. Only set this if the
+	 * viewer is configured with a non-default `sceneUp`.
+	 */
+	groundAxis?: 'x' | 'y' | 'z';
 	/**
 	 * rhino3dm instance for decoding curve display items. selva-compute does not own the WASM
 	 * instance; the host threads it in. Omit to skip curves (points still render).

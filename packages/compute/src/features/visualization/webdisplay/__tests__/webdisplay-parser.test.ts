@@ -147,11 +147,31 @@ describe('unit scaling (issue 33)', () => {
 
 	it('grounds geometry on the Z=0 plane when allowAutoPosition is enabled', async () => {
 		const res = displayResponse('Meters');
-		const meshes = await getThreeMeshesFromComputeResponse(res);
+		const meshes = await getThreeMeshesFromComputeResponse(res, { allowAutoPosition: true });
 
 		expect(meshes.length).toBeGreaterThan(0);
 		const box = computeCombinedBoundingBox(meshes);
 		expect(box.min.z).toBeCloseTo(0, 5);
+	});
+
+	// Grounding used to be the default here but was never applied on the WebSocket preview path,
+	// so the same definition rendered at a different height per transport. Both now keep Rhino's
+	// coordinates; grounding is opt-in.
+	it('leaves geometry at its Rhino coordinates by default', async () => {
+		const res = displayResponse('Meters');
+		const grounded = await getThreeMeshesFromComputeResponse(res, { allowAutoPosition: true });
+		const groundedMin = computeCombinedBoundingBox(grounded).min.z;
+
+		const meshes = await getThreeMeshesFromComputeResponse(res);
+		expect(meshes.length).toBeGreaterThan(0);
+		const box = computeCombinedBoundingBox(meshes);
+
+		// Untouched: every object keeps an identity position offset.
+		for (const mesh of meshes) expect(mesh.position.z).toBe(0);
+		// The fixture sits off the ground (below it, here), so grounding genuinely moves it —
+		// otherwise this test would pass vacuously even if the default still grounded.
+		expect(Math.abs(box.min.z - groundedMin)).toBeGreaterThan(1e-6);
+		expect(groundedMin).toBeCloseTo(0, 5);
 	});
 
 	it('leaves scale at identity when allowScaling is false', async () => {

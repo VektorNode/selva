@@ -484,11 +484,46 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private static readonly Guid BooleanToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3923ac8bd91a");
     private static readonly Guid HopsContextBakeGuid = new Guid("ae2531b4-bab2-4bb1-b5bf-f2143d10c132");
 
+    /// <summary>
+    ///     Set while an upgrader is swapping an old component for a new one. GH_UpgradeUtil adds the
+    ///     replacement to the document (firing <see cref="AddedToDocument" />) BEFORE migrating the old
+    ///     component's sources and recipients onto it, so at that moment the new instance looks exactly
+    ///     like a fresh drop — zero sources, zero recipients — and would auto-wire a second toggle next
+    ///     to the one already connected to Enable. Upgraders wrap their swap in
+    ///     <see cref="SuppressAutoWire" /> to skip auto-wiring for that window.
+    /// </summary>
+    [ThreadStatic] private static bool _autoWireSuppressed;
+
+    /// <summary>
+    ///     Suppress placement auto-wiring for the duration of the returned scope. Used by upgraders
+    ///     around the component swap; see <see cref="_autoWireSuppressed" />.
+    /// </summary>
+    internal static IDisposable SuppressAutoWire()
+    {
+        return new AutoWireSuppression();
+    }
+
+    private sealed class AutoWireSuppression : IDisposable
+    {
+        private readonly bool _previous;
+
+        public AutoWireSuppression()
+        {
+            _previous = _autoWireSuppressed;
+            _autoWireSuppressed = true;
+        }
+
+        public void Dispose()
+        {
+            _autoWireSuppressed = _previous;
+        }
+    }
+
     public override void AddedToDocument(GH_Document document)
     {
         base.AddedToDocument(document);
 
-        if (document == null || !IsFreshPlacement())
+        if (document == null || _autoWireSuppressed || !IsFreshPlacement())
         {
             return;
         }
@@ -514,17 +549,24 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return false;
         }
 
-        if (Params.Input.Count > 0 && Params.Input[0].SourceCount > 0)
-        {
-            return false;
-        }
-
-        if (Params.Output.Count > 0 && Params.Output[0].Recipients.Count > 0)
+        if (HasEnableSource() || HasSchemaRecipient())
         {
             return false;
         }
 
         return true;
+    }
+
+    /// <summary>Whether anything is already feeding the Enable input.</summary>
+    private bool HasEnableSource()
+    {
+        return Params.Input.Count > 0 && Params.Input[0].SourceCount > 0;
+    }
+
+    /// <summary>Whether anything is already consuming the Schema output.</summary>
+    private bool HasSchemaRecipient()
+    {
+        return Params.Output.Count > 0 && Params.Output[0].Recipients.Count > 0;
     }
 
     private void WireDefaultNeighbors(GH_Document document)
@@ -540,7 +582,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         var selfBounds = Attributes.Bounds;
         var centerY = selfBounds.Y + selfBounds.Height / 2f;
 
-        var toggle = Grasshopper.Instances.ComponentServer.EmitObject(BooleanToggleGuid) as IGH_Param;
+        // Each side is wired independently: an already-connected Enable must not get a second toggle
+        // even if the Schema output is still free (and vice versa).
+        var toggle = HasEnableSource()
+            ? null
+            : Grasshopper.Instances.ComponentServer.EmitObject(BooleanToggleGuid) as IGH_Param;
         if (toggle != null && Params.Input.Count > 0)
         {
             document.AddObject(toggle, false);
@@ -559,7 +605,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             Params.Input[0].AddSource(toggle);
         }
 
-        var bake = Grasshopper.Instances.ComponentServer.EmitObject(HopsContextBakeGuid);
+        var bake = HasSchemaRecipient()
+            ? null
+            : Grasshopper.Instances.ComponentServer.EmitObject(HopsContextBakeGuid);
         if (bake is IGH_Component bakeComponent && Params.Output.Count > 0 && bakeComponent.Params.Input.Count > 0)
         {
             document.AddObject(bakeComponent, false);

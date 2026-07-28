@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import { computeContentBounds } from './three-helpers';
+import { buildUpBasis } from './up-axis';
 
 /**
  * Runtime camera control for the viewer: preset views (top/front/…), a true 2D/3D toggle
@@ -66,7 +67,8 @@ interface CameraControllerDeps {
 	/**
 	 * The scene's up axis. Presets, the orthographic camera's up, and the iso direction are all derived
 	 * from this so the controller is correct in any up convention (Three's native Y-up, Rhino's Z-up, …)
-	 * without hardcoding an axis. Defaults to Y-up.
+	 * without hardcoding an axis. Falls back to `perspective.up` when omitted; `initThree` always
+	 * passes the configured `sceneUp`, which itself defaults to Rhino's Z-up.
 	 */
 	up?: THREE.Vector3;
 }
@@ -74,32 +76,37 @@ interface CameraControllerDeps {
 /**
  * Build the seven preset view directions (from target toward camera, unit vectors) for a given up
  * axis. "Top" looks straight down the up axis; front/back/left/right are the two axes orthogonal to
- * up, with "front" chosen as the more conventional facing for that up convention; iso is a 3/4 blend.
+ * up; iso is a 3/4 blend.
  *
  * Deriving these from `up` (instead of a fixed Y-up table) is what keeps Top/Front/… meaningful for
  * Z-up Rhino scenes — otherwise "Top" would frame the side of the model.
+ *
+ * Note the sign flip against {@link buildUpBasis}: the basis' `forward` is the direction a front
+ * view LOOKS (camera toward model), while these presets are camera POSITIONS relative to the target.
+ * So "front" places the camera at `-forward`. Getting this backwards is exactly the bug this
+ * convention fixes — it put the camera behind the model and swapped left with right.
  */
 function buildViewDirections(up: THREE.Vector3): Record<ViewPreset, THREE.Vector3> {
-	const u = up.clone().normalize();
+	const { up: u, forward, right } = buildUpBasis(up);
 
-	// Two axes spanning the ground plane (orthogonal to up). `forward` is the camera-facing "front"
-	// direction, `right` completes a right-handed basis with up.
-	const worldZ = new THREE.Vector3(0, 0, 1);
-	const worldY = new THREE.Vector3(0, 1, 0);
-	// Pick a seed not parallel to up to derive an in-plane axis from.
-	const seed = Math.abs(u.dot(worldZ)) > 0.9 ? worldY : worldZ;
-	const right = new THREE.Vector3().crossVectors(u, seed).normalize();
-	const forward = new THREE.Vector3().crossVectors(right, u).normalize();
+	// Camera positions are opposite the look direction: Rhino's Front looks along +Y from -Y.
+	const frontPosition = forward.clone().negate();
+	const rightPosition = right.clone();
 
 	return {
 		top: u.clone(),
 		bottom: u.clone().negate(),
-		front: forward.clone(),
-		back: forward.clone().negate(),
-		right: right.clone(),
-		left: right.clone().negate(),
+		front: frontPosition.clone(),
+		back: frontPosition.clone().negate(),
+		right: rightPosition.clone(),
+		left: rightPosition.clone().negate(),
 		// 3/4 iso: blend front, right, and up so it reads as a corner view regardless of up axis.
-		iso: forward.clone().multiplyScalar(1.2).add(right.clone()).add(u.clone()).normalize()
+		iso: frontPosition
+			.clone()
+			.multiplyScalar(1.2)
+			.add(rightPosition.clone())
+			.add(u.clone())
+			.normalize()
 	};
 }
 
@@ -276,18 +283,28 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
  * camera direction coincides with `camera.up`, so azimuth is undefined and the first drag snaps the
  * view. A ~0.5° tilt is imperceptible but keeps the orbit basis well-defined. Non-pole presets pass
  * through unchanged.
+ *
+ * The tilt DIRECTION also decides the roll of the resulting view, because at the pole `camera.up`
+ * can no longer define it.
+ *
+ * Both poles lean toward `-forward`, which reproduces Rhino's own convention:
+ *  - Top    (+X right, +Y up)   — looking down, `+forward` at the top of the screen.
+ *  - Bottom (+X right, +Y down) — the underside, mirrored about the HORIZONTAL axis.
+ *
+ * Bottom being mirrored is correct: you are looking at the far side of the model, so text on the
+ * geometry reads backwards there in Rhino too. What matters is WHICH way it mirrors. Leaning the
+ * two poles opposite ways also produces a mirror, but rolled 180° from Rhino's (+X left, +Y up) —
+ * the same image spun around, which is why it still looked wrong.
  */
 function nudgeOffPole(dir: THREE.Vector3, up: THREE.Vector3): THREE.Vector3 {
-	const u = up.clone().normalize();
+	const { up: u, forward } = buildUpBasis(up);
 	const d = dir.clone().normalize();
 	if (Math.abs(d.dot(u)) < 0.9999) return dir;
 
-	// Derive an in-plane axis (orthogonal to up) to lean toward, same construction as the presets.
-	const seed =
-		Math.abs(u.dot(new THREE.Vector3(0, 0, 1))) > 0.9
-			? new THREE.Vector3(0, 1, 0)
-			: new THREE.Vector3(0, 0, 1);
-	const inPlane = new THREE.Vector3().crossVectors(u, seed).normalize();
+	// Same lean for both poles: the shared screen-space +X is what makes Bottom read as Top flipped
+	// about the horizontal, rather than about the vertical.
+	const inPlane = forward.clone().negate();
+
 	const tilt = (0.5 * Math.PI) / 180; // ~0.5°
 	return d
 		.multiplyScalar(Math.cos(tilt))

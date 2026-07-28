@@ -23,12 +23,18 @@ public class GH_UIBridgeUpgrader_To_0_15_5 : IGH_UpgradeObject
             return null;
         }
 
-        var helper = new GH_ComponentUpgradeHelper(oldComponent, UpgradeTo);
-        var newComponent = helper
-            .MapInput(0, 0) // Enable
-            .MapOutput(0, 0) // Schema
-            // Output 1 (URL) is new — nothing to migrate
-            .Execute();
+        // The swap adds the new component to the document before its sources are migrated, so without
+        // this the replacement would look like a fresh drop and auto-wire a duplicate Enable toggle.
+        IGH_Component newComponent;
+        using (GH_UIBuilderComponent.SuppressAutoWire())
+        {
+            var helper = new GH_ComponentUpgradeHelper(oldComponent, UpgradeTo);
+            newComponent = helper
+                .MapInput(0, 0) // Enable
+                .MapOutput(0, 0) // Schema
+                // Output 1 (URL) is new — nothing to migrate
+                .Execute();
+        }
 
         if (newComponent is GH_UIBuilderComponent fresh)
         {

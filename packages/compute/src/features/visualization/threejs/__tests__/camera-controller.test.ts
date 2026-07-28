@@ -75,6 +75,116 @@ describe('camera-controller presets are up-aware', () => {
 		expect(Math.abs(dir.dot(up))).toBeLessThan(0.01);
 	});
 
+	// The presets previously derived a basis with the opposite handedness, which left every
+	// horizontal view showing the opposite side of the model: "front" framed the back, "left"
+	// framed the right. Orthogonality alone (the test above) did not catch it — these pin the
+	// actual side the camera sits on, in Rhino's convention.
+	describe('Z-up: horizontal presets match Rhino (front looks along +Y, right looks along -X)', () => {
+		const up = new THREE.Vector3(0, 0, 1);
+
+		// [preset, the axis the CAMERA sits on relative to the target]
+		const cases: Array<['front' | 'back' | 'left' | 'right', THREE.Vector3]> = [
+			['front', new THREE.Vector3(0, -1, 0)],
+			['back', new THREE.Vector3(0, 1, 0)],
+			['right', new THREE.Vector3(1, 0, 0)],
+			['left', new THREE.Vector3(-1, 0, 0)]
+		];
+
+		for (const [preset, expected] of cases) {
+			it(`"${preset}" puts the camera on ${expected.toArray().join(',')}`, () => {
+				const { camera, controls, controller } = makeController(up);
+
+				controller.setView(preset, false);
+
+				const dir = camera.position.clone().sub(controls.target).normalize();
+				expect(dir.dot(expected)).toBeGreaterThan(0.99);
+			});
+		}
+	});
+
+	// Preset DIRECTION alone doesn't determine what you see: at the poles the view direction is
+	// parallel to camera.up, so `up` can't define the roll and the off-pole nudge decides it. Both
+	// poles used to lean the same way, which rendered Bottom as a mirror of itself rather than the
+	// model's underside — text on the geometry read backwards. These assert the on-SCREEN axes.
+	describe('Z-up: screen orientation of the pole views', () => {
+		const up = new THREE.Vector3(0, 0, 1);
+
+		/** Where a world axis points in camera space: +x = screen right, +y = screen up. */
+		const toScreen = (camera: THREE.Camera, worldAxis: THREE.Vector3) => {
+			camera.updateMatrixWorld(true);
+			const inverse = camera.matrixWorld.clone().invert();
+			return worldAxis.clone().transformDirection(inverse);
+		};
+
+		const viewAfter = (preset: 'top' | 'bottom') => {
+			const { camera, controls, controller } = makeController(up);
+			controller.setView(preset, false);
+			// setView positions the camera; aim it the way the render loop does.
+			camera.lookAt(controls.target);
+			return camera;
+		};
+
+		it('"top" matches Rhino: +X to the right, +Y up the screen', () => {
+			const camera = viewAfter('top');
+
+			expect(toScreen(camera, new THREE.Vector3(1, 0, 0)).x).toBeGreaterThan(0.99);
+			expect(toScreen(camera, new THREE.Vector3(0, 1, 0)).y).toBeGreaterThan(0.99);
+		});
+
+		it('"top" is not mirrored — text on the geometry reads forwards', () => {
+			const camera = viewAfter('top');
+			const screenX = toScreen(camera, new THREE.Vector3(1, 0, 0));
+			const screenY = toScreen(camera, new THREE.Vector3(0, 1, 0));
+
+			// For an unmirrored view, screen +X cross screen +Y points OUT of the screen (+z).
+			const handedness = new THREE.Vector3().crossVectors(screenX, screenY);
+			expect(handedness.z).toBeGreaterThan(0);
+		});
+
+		it('"bottom" matches Rhino: +X still to the right, +Y down the screen', () => {
+			const camera = viewAfter('bottom');
+
+			// Rhino's Bottom mirrors about the HORIZONTAL axis, not the vertical: +X stays right and
+			// +Y flips. Mirroring the other way (+X left, +Y up) is the same image rolled 180° — it
+			// satisfies a naive "is it mirrored?" check while still looking wrong on screen.
+			expect(toScreen(camera, new THREE.Vector3(1, 0, 0)).x).toBeGreaterThan(0.99);
+			expect(toScreen(camera, new THREE.Vector3(0, 1, 0)).y).toBeLessThan(-0.99);
+		});
+
+		it('"bottom" is the true underside: mirrored relative to top', () => {
+			const top = viewAfter('top');
+			const bottom = viewAfter('bottom');
+
+			// Viewing the underside legitimately mirrors handedness — that is what "bottom" means,
+			// and it is mirrored in Rhino too.
+			const bx = toScreen(bottom, new THREE.Vector3(1, 0, 0));
+			const by = toScreen(bottom, new THREE.Vector3(0, 1, 0));
+			expect(new THREE.Vector3().crossVectors(bx, by).z).toBeLessThan(0);
+
+			// Top is not.
+			const tx = toScreen(top, new THREE.Vector3(1, 0, 0));
+			const ty = toScreen(top, new THREE.Vector3(0, 1, 0));
+			expect(new THREE.Vector3().crossVectors(tx, ty).z).toBeGreaterThan(0);
+
+			// The pair shares a screen-space +X and opposes on +Y — a horizontal-axis flip.
+			expect(Math.sign(bx.x)).toBe(Math.sign(tx.x));
+			expect(Math.sign(by.y)).toBe(-Math.sign(ty.y));
+		});
+	});
+
+	it('Z-up: "iso" looks down at the model from the front-right (the default 3/4)', () => {
+		const up = new THREE.Vector3(0, 0, 1);
+		const { camera, controls, controller } = makeController(up);
+
+		controller.setView('iso', false);
+
+		const dir = camera.position.clone().sub(controls.target).normalize();
+		// Above the model, and on the front (-Y) / right (+X) corner.
+		expect(dir.z).toBeGreaterThan(0);
+		expect(dir.y).toBeLessThan(0);
+		expect(dir.x).toBeGreaterThan(0);
+	});
+
 	it('toggleProjection swaps perspective ⇄ orthographic and preserves the up axis', () => {
 		const up = new THREE.Vector3(0, 0, 1);
 		const { controller } = makeController(up);

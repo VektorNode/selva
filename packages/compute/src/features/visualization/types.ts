@@ -42,6 +42,15 @@ export type EnvironmentConfig = {
 	hdrPath?: string;
 	backgroundColor?: THREE.Color | string;
 	enableEnvironmentLighting?: boolean;
+	/**
+	 * The scene's up axis. **Defaults to `(0, 0, 1)` — Rhino's Z-up**, not Three's native Y-up,
+	 * because geometry arrives in Rhino's frame and is never rotated on ingress (see
+	 * `coordinate-transform.ts`). Everything orientation-dependent derives from this: view presets,
+	 * the default iso camera, sun position, grid plane, floor normal, and the hemisphere light.
+	 *
+	 * Overriding it reorients the viewer but does NOT rotate incoming geometry, so a Y-up value only
+	 * makes sense if the host also feeds Y-up geometry.
+	 */
 	sceneUp?: THREE.Vector3;
 	showEnvironment?: boolean;
 	/**
@@ -205,7 +214,11 @@ export type GridConfig = {
 	majorColor?: THREE.ColorRepresentation;
 	/** World radius at which the grid fully fades. Default 100. */
 	fadeDistance?: number;
-	/** Plane the grid lies on. 'y' = horizontal ground. Default 'y'. */
+	/**
+	 * Axis the grid lies perpendicular to — the scene's up axis. Defaults to whichever axis
+	 * `sceneUp` points along, so it is `'z'` (Rhino's horizontal ground) unless you override
+	 * `sceneUp`. Set explicitly only to force a grid orientation that ignores the scene up.
+	 */
 	plane?: 'x' | 'y' | 'z';
 };
 

@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { getLogger } from '@/core';
 
 import { SHARED_MATERIALS } from './three-materials';
+import { isoOffset } from './up-axis';
 
 const CAMERA_CONFIG = {
 	HUGE_THRESHOLD: 10000,
@@ -75,7 +76,11 @@ export function updateScene(
 	if (!initialPositionSet) {
 		const distance = maxDim * CAMERA_CONFIG.INITIAL_DISTANCE_MULTIPLIER;
 
-		camera.position.set(center.x + distance * 0.8, center.y + distance, center.z + distance * 1.2);
+		// Frame from the standard 3/4 iso, derived from the camera's own up axis (initThree sets it to
+		// the configured sceneUp before this ever runs). Previously a hardcoded (0.8, 1.0, 1.2) offset
+		// that both assumed Z-up and disagreed with the configured iso default, so the first solve
+		// jumped to a different angle than the one the viewer opened at.
+		camera.position.copy(center).add(isoOffset(camera.up, distance));
 		controls.target.copy(center);
 
 		controls.update();
@@ -123,7 +128,8 @@ export function parseColor(colorString: string): THREE.Color {
 
 /**
  * Shift objects along one world axis. Defaults to `z` — the up axis of the unified Z-up scene
- * frame (see `../coordinate-transform.ts`), so grounding subtracts the content's lowest z.
+ * frame (see `../coordinate-transform.ts`), so grounding subtracts the content's lowest z. Pass an
+ * explicit axis when the scene is configured with a different `sceneUp`.
  */
 export function applyOffset(
 	meshes: THREE.Object3D[],

@@ -15,6 +15,16 @@ export {
 	computeCombinedBoundingBox
 } from './features/visualization/threejs/three-helpers.js';
 export * as Materials from './features/visualization/threejs/three-materials.js';
+// The scene-up basis every orientation default derives from. Exported so hosts that configure a
+// non-default `sceneUp` can resolve the matching ground axis for `applyOffset`/`groundAxis`.
+export {
+	buildUpBasis,
+	environmentRotationFor,
+	isoOffset,
+	sunOffset,
+	upToAxis
+} from './features/visualization/threejs/up-axis.js';
+export type { UpBasis } from './features/visualization/threejs/up-axis.js';
 
 // CAD-style viewer tooling (camera controller, grid, gizmo, edges, labels, measure, AO pipeline).
 export { createCameraController } from './features/visualization/threejs/camera-controller.js';

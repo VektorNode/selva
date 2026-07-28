@@ -44,6 +44,16 @@ export {
 	computeCombinedBoundingBox
 } from './threejs/three-helpers.js';
 export * as Materials from './threejs/three-materials.js';
+// The scene-up basis every orientation default derives from. Exported so hosts that configure a
+// non-default `sceneUp` can resolve the matching ground axis for `applyOffset`/`groundAxis`.
+export {
+	buildUpBasis,
+	environmentRotationFor,
+	isoOffset,
+	sunOffset,
+	upToAxis
+} from './threejs/up-axis.js';
+export type { UpBasis } from './threejs/up-axis.js';
 
 // ============================================================================
 // WEB DISPLAY PARSING

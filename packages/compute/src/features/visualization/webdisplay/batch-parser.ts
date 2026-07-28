@@ -238,8 +238,9 @@ function buildMeshesFromParsed(
 
 	// Dequantize once up-front into a single Float32Array. Downstream code (per-group merging,
 	// computeVertexNormals, ground-offset) all expect world-unit floats, and a single
-	// linear pass over the int16 buffer is far cheaper than the legacy gunzip + base64 path. The
-	// Z-up -> Y-up rotation, when requested, is folded into the same pass.
+	// linear pass over the int16 buffer is far cheaper than the legacy gunzip + base64 path.
+	// No rotation happens here: the scene uses Rhino's Z-up frame, so vertices pass through in the
+	// frame they arrived in (see ../coordinate-transform.ts). `applyTransforms` is inert.
 	const worldVertices = isFloat32
 		? maybeRotateFloat32Vertices(parsed.vertices as Float32Array, applyTransforms)
 		: dequantizeInt16(parsed.vertices as Int16Array, parsed.origin, parsed.scale, applyTransforms);

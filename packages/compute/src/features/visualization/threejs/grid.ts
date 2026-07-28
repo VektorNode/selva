@@ -23,7 +23,13 @@ export interface GridOptions {
 	majorColor?: THREE.ColorRepresentation;
 	/** World-space radius at which the grid has fully faded out. Default 100. */
 	fadeDistance?: number;
-	/** Plane to lay the grid on. 'y' = horizontal ground (Three Y-up). Default 'y'. */
+	/**
+	 * Axis the grid is laid perpendicular to — i.e. the scene's up axis. `'z'` is the horizontal
+	 * ground in the Rhino Z-up frame the viewer uses; `'y'` is Three's native Y-up.
+	 *
+	 * This standalone default is `'y'`, but `initThree` always passes a plane derived from the
+	 * configured `sceneUp`, so a viewer-created grid defaults to `'z'`.
+	 */
 	plane?: 'x' | 'y' | 'z';
 }
 
