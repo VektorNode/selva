@@ -67,11 +67,12 @@ public class SymbolBenchmarkTests
 	[Fact]
 	public void Benchmark_10k_symbols_svg_sanity()
 	{
-		// Quick sanity check: dedupe SVG is smaller and faster than inline.
-		var (inlineBytes, inlineMs) = MeasureSvg(AnonymousLineSymbol, 10);
-		var (dedupeBytes, dedupeMs) = MeasureSvg(LineSymbol, 10);
+		// Quick sanity check: dedupe SVG is smaller than inline. Deliberately no timing
+		// assertion — at this size both renders are sub-millisecond, so a wall-clock
+		// comparison measures JIT warm-up and CI scheduling noise, not the dedupe path.
+		var (inlineBytes, _) = MeasureSvg(AnonymousLineSymbol, 10);
+		var (dedupeBytes, _) = MeasureSvg(LineSymbol, 10);
 		Assert.True(dedupeBytes < inlineBytes, "Dedupe should be smaller");
-		Assert.True(dedupeMs <= inlineMs, "Dedupe should be faster or same speed");
 	}
 
 	[Fact(Skip = "Informational — runs in ~1s, useful for profiling but not a gate")]
