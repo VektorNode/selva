@@ -25,6 +25,20 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { readJsonFile, writeJsonFile } from '../fsJson.js';
 
+/**
+ * The two rename-under-contention tests below assert POSIX semantics: `rename`
+ * atomically replaces the destination even while a reader holds it open. Windows
+ * refuses instead — the rename fails with EPERM if any other handle is on the
+ * target, and an antivirus/indexer touching the fresh `.tmp` is enough to trip
+ * it. That's a platform difference in the assertion, not a defect in
+ * `writeJsonFile`, whose per-writer UUID temp is correct on both.
+ *
+ * CI runs ubuntu-latest, so the real coverage still gates every PR. Skipping
+ * keeps a local `pnpm test` on Windows trustworthy rather than permanently red
+ * — noise you learn to ignore is how a genuine regression slips through.
+ */
+const posixRename = it.skipIf(process.platform === 'win32');
+
 let dir: string;
 let file: string;
 
@@ -101,40 +115,43 @@ describe('writeJsonFile', () => {
 		expect(await fs.readdir(dir)).toEqual(['doc.json']);
 	});
 
-	it('never exposes a partially-written target, even for a payload far past one page', async () => {
-		// The crash-safety claim in one property: at NO point during a write does
-		// `doc.json` hold anything but a complete, parseable document. A direct
-		// `writeFile` to the target would break this for any payload large enough
-		// to be flushed in chunks; tmp+rename holds regardless of size because
-		// rename is atomic within a filesystem.
-		await writeJsonFile(file, { generation: 1, blob: 'x'.repeat(2_000_000) });
+	posixRename(
+		'never exposes a partially-written target, even for a payload far past one page',
+		async () => {
+			// The crash-safety claim in one property: at NO point during a write does
+			// `doc.json` hold anything but a complete, parseable document. A direct
+			// `writeFile` to the target would break this for any payload large enough
+			// to be flushed in chunks; tmp+rename holds regardless of size because
+			// rename is atomic within a filesystem.
+			await writeJsonFile(file, { generation: 1, blob: 'x'.repeat(2_000_000) });
 
-		// Race a reader against the writer. Every observation must be a valid
-		// document — generation 1 or 2, never a truncated mix.
-		const write = writeJsonFile(file, { generation: 2, blob: 'y'.repeat(2_000_000) });
-		const seen: number[] = [];
-		for (let i = 0; i < 40; i++) {
-			// Reads that lose the race to the rename see ENOENT-free old content;
-			// a parse failure here would mean a torn file.
-			const doc = await readJsonFile<{ generation: number } | null>(file, null);
-			if (doc) seen.push(doc.generation);
+			// Race a reader against the writer. Every observation must be a valid
+			// document — generation 1 or 2, never a truncated mix.
+			const write = writeJsonFile(file, { generation: 2, blob: 'y'.repeat(2_000_000) });
+			const seen: number[] = [];
+			for (let i = 0; i < 40; i++) {
+				// Reads that lose the race to the rename see ENOENT-free old content;
+				// a parse failure here would mean a torn file.
+				const doc = await readJsonFile<{ generation: number } | null>(file, null);
+				if (doc) seen.push(doc.generation);
+			}
+			await write;
+
+			expect(seen.length).toBeGreaterThan(0);
+			expect(seen.every((g) => g === 1 || g === 2)).toBe(true);
+			expect(await readJsonFile<{ generation: number }>(file, { generation: 0 })).toMatchObject({
+				generation: 2
+			});
+			expect(await fs.readdir(dir)).toEqual(['doc.json']);
 		}
-		await write;
-
-		expect(seen.length).toBeGreaterThan(0);
-		expect(seen.every((g) => g === 1 || g === 2)).toBe(true);
-		expect(await readJsonFile<{ generation: number }>(file, { generation: 0 })).toMatchObject({
-			generation: 2
-		});
-		expect(await fs.readdir(dir)).toEqual(['doc.json']);
-	});
+	);
 
 	it('serializes with tab indent (stable on-disk diffs)', async () => {
 		await writeJsonFile(file, { a: 1 });
 		expect(await fs.readFile(file, 'utf-8')).toBe('{\n\t"a": 1\n}');
 	});
 
-	it('survives concurrent writes to the same target (no shared temp file)', async () => {
+	posixRename('survives concurrent writes to the same target (no shared temp file)', async () => {
 		// REGRESSION (audit Q5.2): the temp file used to be a fixed
 		// `${filePath}.tmp`, shared by every concurrent writer. The first rename
 		// moved it away and every other writer then died with ENOENT renaming a
