@@ -130,7 +130,7 @@
 		"zod": "^4.3.6"
 	},
 	"peerDependencies": {
-		"sharp": "^0.34.0",
+		"sharp": "^0.34.0 || ^0.35.0",
 		"vitest": "^3.2.4"
 	},
 	"peerDependenciesMeta": {
@@ -142,7 +142,7 @@
 		}
 	},
 	"devDependencies": {
-		"sharp": "^0.34.5",
+		"sharp": "^0.35.3",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

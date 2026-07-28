@@ -85,7 +85,7 @@
 	"dependencies": {
 		"@selvajs/platform": "workspace:^",
 		"@supabase/supabase-js": "^2.104.1",
-		"sharp": "^0.34.5"
+		"sharp": "^0.35.3"
 	},
 	"devDependencies": {
 		"@types/node": "catalog:",

@@ -64,7 +64,10 @@ export async function transcodeImageIfNeeded(
 	};
 }
 
-type SharpFn = typeof import('sharp');
+// sharp >=0.35 is ESM-only: the callable lives on `default`, so the namespace
+// type itself is no longer callable. Take the type off `default` and keep the
+// `?? mod` runtime fallback for the older CJS shape.
+type SharpFn = typeof import('sharp').default;
 let cachedSharp: SharpFn | null = null;
 
 async function loadSharp(): Promise<SharpFn> {
