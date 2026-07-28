@@ -28,6 +28,7 @@
     "server-local-publish",
     "server-provider-wiring",
     "server-second-wave-utilities",
-    "share-slugify-and-default-value"
+    "share-slugify-and-default-value",
+    "viewer-up-axis-presets"
   ]
 }
