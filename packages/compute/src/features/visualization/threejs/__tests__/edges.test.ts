@@ -108,31 +108,39 @@ describe('addEdges', () => {
 		expect(hits).toHaveLength(0);
 	});
 
-	it('pushes the mesh surface back instead of pulling edges forward', () => {
-		// Regression: edges used to carry a constant multi-ULP bias toward the camera. A depth ULP
-		// grows ~quadratically with distance, so zoomed out that bias became a meter-scale pull and
-		// hidden edges bled through meshes in front. Edges now render at true depth (no bias) and the
-		// surface recedes via slope-scaled polygonOffset instead.
+	it('biases the lines toward the camera with no slope term, and never touches the surface', () => {
+		// Regression: the surface used to be pushed back with a slope-scaled offset (factor 1). The
+		// slope term scales with dZ/dpixel, which is huge on a grazing face, so surfaces receded
+		// further than the gaps between stacked parts and geometry behind a wall drew through it.
+		// The bias now lives on the lines, units-only, so it is bounded regardless of view angle.
 		const mesh = meshWithBox();
+		const surfaceBefore = { ...(mesh.material as THREE.Material) };
 		const [overlay] = addEdges(mesh);
 		const lineMat = overlay.material as LineMaterial;
 		const surfaceMat = mesh.material as THREE.Material;
 
-		expect(lineMat.polygonOffset).toBe(false);
-		expect(surfaceMat.polygonOffset).toBe(true);
-		expect(surfaceMat.polygonOffsetFactor).toBeGreaterThan(0);
-		expect(surfaceMat.polygonOffsetUnits).toBeGreaterThan(0);
+		expect(lineMat.polygonOffset).toBe(true);
+		expect(lineMat.polygonOffsetUnits).toBeLessThan(0); // negative = toward the camera
+		expect(lineMat.polygonOffsetFactor).toBe(0); // no slope term — the grazing-angle blowout
+		expect(surfaceMat.polygonOffsetFactor).toBe(surfaceBefore.polygonOffsetFactor);
+		expect(surfaceMat.polygonOffsetUnits).toBe(surfaceBefore.polygonOffsetUnits);
 	});
 
-	it('removeEdges restores the mesh surface depth offset', () => {
+	it('leaves a look preset’s own polygonOffset intact through an add/remove cycle', () => {
+		// The old restore path reset surfaces to 0/0 rather than to the preset's values, so toggling
+		// edges permanently stripped the offset the material shipped with.
 		const mesh = meshWithBox();
+		const surfaceMat = mesh.material as THREE.Material;
+		surfaceMat.polygonOffset = true;
+		surfaceMat.polygonOffsetFactor = 1;
+		surfaceMat.polygonOffsetUnits = 1;
+
 		addEdges(mesh);
 		removeEdges(mesh);
 
-		const surfaceMat = mesh.material as THREE.Material;
-		expect(surfaceMat.polygonOffset).toBe(false);
-		expect(surfaceMat.polygonOffsetFactor).toBe(0);
-		expect(surfaceMat.polygonOffsetUnits).toBe(0);
+		expect(surfaceMat.polygonOffset).toBe(true);
+		expect(surfaceMat.polygonOffsetFactor).toBe(1);
+		expect(surfaceMat.polygonOffsetUnits).toBe(1);
 	});
 
 	it('same-color overlays in one call share a material; separate calls get their own', () => {
@@ -178,35 +186,73 @@ describe('distance fade', () => {
 		);
 	}
 
-	it('keeps edges opaque up close and fades them out when the mesh is tiny on screen', () => {
+	it('keeps edges opaque up close and fades them once they crowd below a pixel apart', () => {
 		const mesh = meshWithBox();
 		const [overlay] = addEdges(mesh);
 		mesh.updateMatrixWorld(true);
 		const mat = overlay.material as LineMaterial;
 		const camera = new THREE.PerspectiveCamera(20, 800 / 600, 0.01, 2000);
 
-		camera.position.set(0, 0, 3); // unit box fills hundreds of px → fully opaque
+		camera.position.set(0, 0, 3); // 1-unit edges, hundreds of px apart → fully opaque
 		camera.updateMatrixWorld();
 		invokeBeforeRender(overlay, camera);
 		expect(mat.opacity).toBe(1);
 
-		camera.position.set(0, 0, 800); // a few px on screen → fully faded
+		// Far enough that the box's own 1-unit edge spacing drops under a pixel.
+		camera.position.set(0, 0, 5000);
 		camera.updateMatrixWorld();
 		invokeBeforeRender(overlay, camera);
 		expect(mat.opacity).toBe(0);
 	});
 
-	it('fades under an orthographic camera by frustum coverage', () => {
+	it('fades a densely-edged mesh while a sparse one at the same distance stays opaque', () => {
+		// The regression this fade exists for: layered sheet goods. Both meshes are the same size on
+		// screen, so the old bounding-sphere rule scored them identically and faded neither; only the
+		// millimetre-pitch laminations should fade.
+		const sparse = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+		const layered = new THREE.Group();
+		for (let i = 0; i < 40; i++) {
+			const layer = new THREE.Mesh(
+				new THREE.BoxGeometry(1, 1, 0.001), // 1mm laminations across a 1-unit part
+				new THREE.MeshStandardMaterial()
+			);
+			layer.position.z = i * 0.001;
+			layered.add(layer);
+		}
+
+		const [sparseOverlay] = addEdges(sparse);
+		const layeredOverlays = addEdges(layered);
+		sparse.updateMatrixWorld(true);
+		layered.updateMatrixWorld(true);
+
+		const camera = new THREE.PerspectiveCamera(20, 800 / 600, 0.01, 2000);
+		camera.position.set(0, 0, 20);
+		camera.updateMatrixWorld();
+
+		invokeBeforeRender(sparseOverlay, camera);
+		expect((sparseOverlay.material as LineMaterial).opacity).toBe(1);
+
+		invokeBeforeRender(layeredOverlays[0], camera);
+		expect((layeredOverlays[0].material as LineMaterial).opacity).toBe(0);
+	});
+
+	it('fades under an orthographic camera by edge density', () => {
 		const mesh = meshWithBox();
 		const [overlay] = addEdges(mesh);
 		mesh.updateMatrixWorld(true);
 		const mat = overlay.material as LineMaterial;
 
-		// Frustum 200 world units tall → the unit box covers ~5px of 600 → fully faded.
-		const camera = new THREE.OrthographicCamera(-100, 100, 100, -100, 0.1, 100);
+		// Frustum 2000 units tall → the box's 1-unit edges land ~0.3px apart → fully faded.
+		const camera = new THREE.OrthographicCamera(-1000, 1000, 1000, -1000, 0.1, 5000);
 		camera.updateMatrixWorld();
 		invokeBeforeRender(overlay, camera);
 		expect(mat.opacity).toBe(0);
+
+		// A tight frustum resolves them again.
+		const close = new THREE.OrthographicCamera(-2, 2, 2, -2, 0.1, 100);
+		close.updateMatrixWorld();
+		invokeBeforeRender(overlay, close);
+		expect(mat.opacity).toBe(1);
 	});
 
 	it('distanceFade: false leaves the material opaque and the render hook untouched', () => {

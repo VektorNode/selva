@@ -27,14 +27,26 @@ import { MAX_EXTRACT_VERTICES, edgeExtractWorkerSource, extractEdgeSegments } fr
  *   `userData.edgesSkipped = 'triangle-cap'`), overlays above `maxSegments` lose the distance
  *   fade so they render in the cheaper opaque pass.
  *
- * Depth strategy: edges render at TRUE depth; the mesh's own surface is pushed back a hair with
- * polygonOffset instead (see {@link setSurfaceDepthOffset}). Biasing the lines toward the camera —
- * the obvious alternative — needs a multi-ULP constant offset to survive glancing angles (fat-line
- * quads face the screen, so the slope-scaled factor term is nil), and a depth ULP grows ~quadratically
- * with distance: zoomed out, that constant becomes a meter-scale pull that makes hidden edges bleed
- * through whatever mesh is in front. Offsetting the surfaces instead lets the slope-proportional
- * factor term do the glancing-angle work, keeps the constant term at quantization scale, and leaves
- * occlusion of hidden edges exact.
+ * Depth strategy: surfaces render at TRUE depth, untouched; the LINES carry a small units-only
+ * polygonOffset toward the camera (see EDGE_OFFSET_FACTOR/UNITS).
+ *
+ * This reverses an earlier strategy that instead pushed each mesh's *surface* back with a
+ * slope-scaled offset (factor 1, units 2). That version bled badly: the slope term scales with
+ * dZ/dpixel, which is enormous on a surface viewed near edge-on, so grazing faces receded by much
+ * more than the millimetre gaps between stacked parts — geometry behind a wall then beat the wall's
+ * own receded surface and drew through it. It also clobbered the polygonOffset that look presets
+ * configure on their materials, and its "restore" path reset those to 0 rather than to the preset's
+ * values.
+ *
+ * A units-only bias on the lines is bounded by construction: a fixed number of depth quantization
+ * steps, independent of viewing angle, so it lifts an edge off its own coplanar surface without ever
+ * reaching across to a neighbouring part.
+ *
+ * The caveat the old strategy correctly identified: a depth ULP grows ~quadratically with viewing
+ * distance, so a constant bias is only safe while ULPs stay small. That is what the dynamic
+ * near-plane fitter (near-plane.ts) buys — it keeps `camera.near` proportional to the camera↔content
+ * gap, holding ULPs at micron scale even zoomed well out. The two mechanisms are load-bearing
+ * together; weakening the near fit will make this bias start to bleed.
  */
 export interface EdgeOptions {
 	/**
@@ -57,8 +69,12 @@ export interface EdgeOptions {
 	 */
 	thresholdAngle?: number;
 	/**
-	 * Fade an overlay out as its mesh shrinks on screen (default true). Constant-px edges on a mesh
-	 * covering only tens of pixels alias into dark noise; fading them keeps far zoom-outs clean.
+	 * Fade an overlay out as its own edges crowd together on screen (default true). Edges draw at a
+	 * constant pixel width, so once neighbouring lines sit less than a pixel or two apart they stop
+	 * resolving and merge into a dark smear — worst on layered sheet goods, whose millimetre-pitch
+	 * laminations are sub-pixel at any normal zoom on a metre-scale part. Fading by edge density
+	 * (not by how large the mesh is) returns those parts to a clean shaded read while leaving
+	 * sparsely-edged geometry fully drawn at the same distance.
 	 */
 	distanceFade?: boolean;
 	/**
@@ -100,33 +116,35 @@ const INLINE_TRIANGLE_BUDGET = 25_000;
 /** CPU byte budget for the cross-solve segment cache (Float32 segment arrays only). */
 const SEGMENT_CACHE_BYTE_BUDGET = 128 * 1024 * 1024;
 
-// Screen-coverage fade band, as the projected diameter of an overlay's bounding sphere in px:
-// fully opaque at/above FADE_START_PX, fully gone at/below FADE_END_PX, linear between.
-const FADE_START_PX = 80;
-const FADE_END_PX = 20;
+// Edge-density fade band, as the mean on-screen gap between neighbouring edges in px: fully opaque
+// at/above FADE_START_PX, fully gone at/below FADE_END_PX, linear between.
+//
+// Density, not object size, is what breaks the technical look when zoomed out. A big part whose
+// edges have collapsed to sub-pixel spacing is precisely the failure case — every line still draws
+// at full width and full opacity, so they merge into a dark smear that reads as "all the interior
+// edges showing through". Fading on the *bounding sphere* instead (the previous rule) never fires
+// for that part at all, because the sphere still covers most of the viewport.
+//
+// The band sits just above 1 px: below ~2 px apart, constant-width lines visibly overlap, and by
+// 1 px they are a solid fill. Fading out across that range returns the part to its shaded read.
+const FADE_START_PX = 4;
+const FADE_END_PX = 1;
 
-// Surface push-back (see module doc): factor scales with the polygon's depth slope and carries the
-// glancing-angle work; units stays at quantization scale so a mesh in front of another mesh's edges
-// occludes them except within ~2 depth ULPs — versus the multi-ULP (meters, zoomed out) bleed range
-// a constant line-side bias had.
-const SURFACE_OFFSET_FACTOR = 1;
-const SURFACE_OFFSET_UNITS = 2;
-
-/**
- * Push a mesh's shaded surface slightly back in depth (or restore it), so its edge overlay — drawn
- * at true depth — wins the depth test without any bias of its own. Mutates the mesh's material(s)
- * in place; materials shared across meshes are fine, since every mesh under an `addEdges` root gets
- * the same treatment.
- */
-function setSurfaceDepthOffset(mesh: THREE.Mesh, enabled: boolean): void {
-	const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-	for (const material of materials) {
-		if (!material) continue;
-		material.polygonOffset = enabled;
-		material.polygonOffsetFactor = enabled ? SURFACE_OFFSET_FACTOR : 0;
-		material.polygonOffsetUnits = enabled ? SURFACE_OFFSET_UNITS : 0;
-	}
-}
+// Edge pull-forward (see module doc). Units only — deliberately NO slope (factor) term.
+//
+// The slope term scales with the polygon's dZ/dpixel, which is small head-on but very large at
+// grazing angles: on a long surface viewed near edge-on, one pixel spans a lot of depth. Applying it
+// to the *surfaces* (the previous strategy) pushed grazing faces back by far more than the
+// millimetre-scale gaps between stacked parts, so geometry BEHIND a wall won the depth test against
+// the wall's own receded surface and its edges drew straight through — exactly the bleed-through
+// this offset exists to prevent.
+//
+// A units-only bias on the lines is bounded instead: it is a fixed number of depth quantization
+// steps regardless of viewing angle, so it can lift an edge off its own coplanar surface without
+// ever reaching across the gap to a neighbouring part. 1 unit is the minimum that reliably wins
+// z-fighting against the surface the edge was extracted from.
+const EDGE_OFFSET_FACTOR = 0;
+const EDGE_OFFSET_UNITS = -1; // negative = toward the camera
 
 // ============================================================================
 // Segment extraction — fast path, content cache, worker offload
@@ -399,6 +417,63 @@ interface EdgeGeometryEntry {
 	geometry: LineSegmentsGeometry;
 	refCount: number;
 	segmentCount: number;
+	/**
+	 * Mean world-space spacing between this overlay's edges: the characteristic distance at which
+	 * neighbouring lines sit. Drives the density fade (see {@link enableDistanceFade}) — an overlay
+	 * fades when *this* projects below a pixel, which is when its lines start merging, regardless of
+	 * how large the mesh itself is on screen.
+	 *
+	 * Estimated as area/length: total edge length L spread over the mesh's projected extent A behaves
+	 * like a set of parallel lines A/L apart. Infinity for degenerate cases (no length, no extent), so
+	 * they never fade.
+	 */
+	edgeSpacing: number;
+}
+
+/**
+ * Fraction of segments allowed to be shorter than the reported spacing. A low percentile tracks the
+ * *fine* detail rather than the average: real parts mix a handful of long silhouette edges with many
+ * short ones, and it is the short ones that merge first.
+ */
+const SPACING_PERCENTILE = 0.15;
+
+/** Cap on segments sampled for the percentile — a stride keeps this O(1) on millions of segments. */
+const SPACING_SAMPLE_LIMIT = 4096;
+
+/**
+ * Characteristic spacing between an overlay's edges, in world units: the
+ * {@link SPACING_PERCENTILE} quantile of segment length.
+ *
+ * Segment length is the right proxy for spacing on the geometry this targets. Layered sheet goods —
+ * plywood laminations, stacked panels — produce a ladder of short segments spanning each layer's
+ * thickness, so the short-segment population *is* the layer pitch, which is exactly the distance
+ * that collapses below a pixel and smears the lines together.
+ *
+ * A quantile rather than a mean because the two populations differ by orders of magnitude: a 10 m
+ * part with 1 mm laminations mixes lengths at 1:10000, and any average of those sits far above the
+ * pitch (so the laminations never fade) while still far below the outline (so the outline fades
+ * early). Taking a low quantile lets the dense detail drive the fade without the silhouette edges
+ * dragging it up. Infinity when there is nothing to measure, which never fades.
+ */
+function edgeSpacingOf(segments: Float32Array): number {
+	const segmentCount = Math.floor(segments.length / 6);
+	if (segmentCount === 0) return Infinity;
+
+	const stride = Math.max(1, Math.ceil(segmentCount / SPACING_SAMPLE_LIMIT));
+	const lengths: number[] = [];
+	for (let s = 0; s < segmentCount; s += stride) {
+		const i = s * 6;
+		const length = Math.hypot(
+			segments[i + 3] - segments[i],
+			segments[i + 4] - segments[i + 1],
+			segments[i + 5] - segments[i + 2]
+		);
+		if (length > 0) lengths.push(length);
+	}
+	if (lengths.length === 0) return Infinity;
+
+	lengths.sort((a, b) => a - b);
+	return lengths[Math.min(lengths.length - 1, Math.floor(lengths.length * SPACING_PERCENTILE))];
 }
 const edgeGeometryCache = new WeakMap<THREE.BufferGeometry, Map<number, EdgeGeometryEntry>>();
 
@@ -426,7 +501,8 @@ function storeEntry(
 	const entry: EdgeGeometryEntry = {
 		geometry: lineGeometry,
 		refCount: 0,
-		segmentCount: segments.length / 6
+		segmentCount: segments.length / 6,
+		edgeSpacing: edgeSpacingOf(segments)
 	};
 	byAngle.set(thresholdAngle, entry);
 	return entry;
@@ -536,8 +612,11 @@ function createEdgeMaterial(
 	// LineMaterialParameters omits linewidth/opacity from its type though both exist at runtime.
 	const material = new LineMaterial({ color });
 	(material as LineMaterial & { linewidth: number }).linewidth = width;
-	// No depth bias here — edges render at true depth and the mesh surface recedes instead (see
-	// setSurfaceDepthOffset), so edges can't bleed through meshes in front of them.
+	// Lift the lines a fixed couple of quantization steps toward the camera so they win against the
+	// surface they were extracted from, without touching the surfaces themselves (see the constants).
+	material.polygonOffset = true;
+	material.polygonOffsetFactor = EDGE_OFFSET_FACTOR;
+	material.polygonOffsetUnits = EDGE_OFFSET_UNITS;
 	// Fading needs blending; set once here rather than per draw, since flipping `transparent` after
 	// the render list is built wouldn't re-sort the object into the transparent pass.
 	if (distanceFade) material.transparent = true;
@@ -561,7 +640,7 @@ function buildEdgeOverlay(
 	overlay.userData.edgeSource = sourceGeometry;
 	overlay.userData.edgeThresholdAngle = thresholdAngle;
 	overlay.raycast = () => {}; // never pickable; clicks should hit the mesh, not its outline
-	if (distanceFade) enableDistanceFade(overlay);
+	if (distanceFade) enableDistanceFade(overlay, entry.edgeSpacing);
 	return overlay;
 }
 
@@ -569,35 +648,35 @@ const _fadeCenter = new THREE.Vector3();
 const _fadeCameraPos = new THREE.Vector3();
 
 /**
- * Projected diameter of the overlay's bounding sphere on screen, in px — the "how big does this
- * mesh read" signal driving the distance fade. Returns Infinity ("don't fade") when the camera is
- * inside the sphere or the projection is unknown.
+ * Pixels per world unit at the overlay's centre — the scale that converts a world-space edge spacing
+ * into the on-screen gap driving the density fade. Returns Infinity ("don't fade") when the
+ * projection is unknown or degenerate, and for a perspective camera sitting inside the mesh.
  */
-function projectedDiameterPx(
+function pixelsPerWorldUnit(
 	overlay: LineSegments2,
 	camera: THREE.Camera,
 	viewportHeightPx: number
 ): number {
 	if (!overlay.geometry.boundingSphere) overlay.geometry.computeBoundingSphere();
 	const sphere = overlay.geometry.boundingSphere;
-	if (!sphere || sphere.radius <= 0) return Infinity;
-
-	const radius = sphere.radius * overlay.matrixWorld.getMaxScaleOnAxis();
-	_fadeCenter.copy(sphere.center).applyMatrix4(overlay.matrixWorld);
+	if (!sphere) return Infinity;
 
 	if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
 		const perspective = camera as THREE.PerspectiveCamera;
+		_fadeCenter.copy(sphere.center).applyMatrix4(overlay.matrixWorld);
 		const distance = _fadeCameraPos
 			.setFromMatrixPosition(camera.matrixWorld)
 			.distanceTo(_fadeCenter);
+		const radius = sphere.radius * overlay.matrixWorld.getMaxScaleOnAxis();
 		if (distance <= radius) return Infinity; // camera inside the mesh — no fade
 		const tanHalfFov = Math.tan(THREE.MathUtils.degToRad(perspective.fov) * 0.5);
-		return (radius / (distance * tanHalfFov)) * viewportHeightPx;
+		const worldHeightAtCentre = 2 * distance * tanHalfFov;
+		return worldHeightAtCentre > 0 ? viewportHeightPx / worldHeightAtCentre : Infinity;
 	}
 	if ((camera as THREE.OrthographicCamera).isOrthographicCamera) {
 		const ortho = camera as THREE.OrthographicCamera;
 		const worldHeight = (ortho.top - ortho.bottom) / ortho.zoom;
-		return worldHeight > 0 ? ((2 * radius) / worldHeight) * viewportHeightPx : Infinity;
+		return worldHeight > 0 ? viewportHeightPx / worldHeight : Infinity;
 	}
 	return Infinity;
 }
@@ -608,15 +687,18 @@ function projectedDiameterPx(
  * upload per draw call, so overlays sharing one material still fade independently. Chains
  * LineSegments2's own onBeforeRender, which keeps the material's resolution uniform in sync.
  */
-function enableDistanceFade(overlay: LineSegments2): void {
+function enableDistanceFade(overlay: LineSegments2, edgeSpacing: number): void {
 	// Assign via the Object3D base type: LineSegments2's typings narrow onBeforeRender to
 	// (renderer) only, but the renderer actually calls it with (renderer, scene, camera, …).
 	(overlay as THREE.Object3D).onBeforeRender = (renderer, _scene, camera) => {
 		LineSegments2.prototype.onBeforeRender.call(overlay, renderer);
 		const material = overlay.material as LineMaterial;
-		const coverage = projectedDiameterPx(overlay, camera, material.resolution.y);
+		const scale = pixelsPerWorldUnit(overlay, camera, material.resolution.y);
+		// Mean gap between neighbouring edges, on screen. Infinity (unknown projection, camera inside
+		// the mesh) yields Infinity here too, which clamps to fully opaque — never fade on a guess.
+		const gapPx = edgeSpacing * scale;
 		material.opacity = THREE.MathUtils.clamp(
-			(coverage - FADE_END_PX) / (FADE_START_PX - FADE_END_PX),
+			(gapPx - FADE_END_PX) / (FADE_START_PX - FADE_END_PX),
 			0,
 			1
 		);
@@ -673,7 +755,6 @@ function attachOverlay(
 		fade
 	);
 	mesh.add(overlay); // child → inherits transform, disposed with the parent subtree
-	setSurfaceDepthOffset(mesh, true); // surface recedes a hair so the true-depth edges win
 	return overlay;
 }
 
@@ -784,8 +865,8 @@ export function removeEdges(root: THREE.Object3D): number {
 	for (const overlay of overlays) {
 		releaseEdgeGeometry(overlay); // geometry may be shared across overlays — refcounted dispose
 		materials.add(overlay.material as LineMaterial);
-		// Undo the surface push-back that existed only for this overlay's benefit.
-		if (overlay.parent instanceof THREE.Mesh) setSurfaceDepthOffset(overlay.parent, false);
+		// Nothing to undo on the parent mesh: the depth bias lives entirely on the overlay's own
+		// material, so surfaces keep whatever polygonOffset their look preset configured.
 		overlay.removeFromParent();
 	}
 	materials.forEach((material) => material.dispose());
