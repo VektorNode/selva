@@ -23,6 +23,18 @@ namespace Selva.GH.Features.UIBuilder.Components;
 /// <summary>
 ///     Unified UI Builder component - WebSocket-only version
 ///     Switch between Schema Builder mode and Interactive Preview mode
+///
+///     DO NOT RENAME THIS CLASS. Rhino.Compute identifies it by literal type name
+///     ("GH_UIBuilderComponent") in GrasshopperValidationHelper.cs — it cannot reference Selva.GH,
+///     so there is no `is` check and no compile-time link. A rename compiles clean here and breaks
+///     /grasshopper/schema for EVERY definition at once, with a misleading error blaming the user's
+///     Context Bake wiring. Nothing in either repo catches this: the boundary has no test.
+///     If you must rename, update the compute fork in the same change.
+///
+///     Same applies to OBSOLETE_* snapshots: they must keep subclassing this component. Compute
+///     walks the base chain to accept them (a pre-upgrade .gh deserializes into the subclass, and
+///     the IGH_UpgradeObject only runs on an interactive right-click → Upgrade, never headlessly).
+///     A standalone copy-pasted snapshot is not a GH_UIBuilderComponent and will be rejected.
 /// </summary>
 public class GH_UIBuilderComponent : GH_Component, IDisposable
 {
@@ -31,6 +43,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     // Document tracking
     private GH_Document _currentDocument;
     private bool _disposed;
+
+    // DO NOT RENAME. Rhino.Compute reads this field by literal name via reflection
+    // (GrasshopperValidationHelper.GetEmbeddedSchema) to serve /grasshopper/schema without
+    // solving. A rename compiles clean and makes every definition report "no embedded schema".
     private UISchema _embeddedSchema;
     private Dictionary<string, object> _embeddedValues;
     private EventHandler _onDocumentModified;

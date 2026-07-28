@@ -128,6 +128,31 @@ describe('fetchSchemaFromCompute', () => {
 		});
 	});
 
+	it("surfaces compute's per-file error message instead of the generic fallback", async () => {
+		// Compute diagnoses the definition and still answers 200 with an `error` field,
+		// so the non-OK guard never fires. The real message must reach the caller.
+		const message = "The 'Schema' source is not coming from a 'UI Builder' component.";
+		fetchMock.mockResolvedValue(
+			new Response(JSON.stringify([{ FileName: 'definition.gh', error: message }]), {
+				status: 200,
+				headers: { 'content-type': 'application/json' }
+			})
+		);
+
+		await expect(fetchSchemaFromCompute(new Uint8Array([1]), server)).rejects.toMatchObject({
+			kind: 'invalid',
+			message
+		});
+	});
+
+	it('falls back to the generic message when compute reports no error field', async () => {
+		fetchMock.mockResolvedValue(computeResponse([]));
+		await expect(fetchSchemaFromCompute(new Uint8Array([1]), server)).rejects.toMatchObject({
+			kind: 'invalid',
+			message: expect.stringContaining('No schemas found in definition')
+		});
+	});
+
 	it('applies the version gate to the extracted schema', async () => {
 		fetchMock.mockResolvedValue(computeResponse([schema(bump(UI_SCHEMA_VERSION, 1))]));
 		await expect(fetchSchemaFromCompute(new Uint8Array([1]), server)).rejects.toMatchObject({

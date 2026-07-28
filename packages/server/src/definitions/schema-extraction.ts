@@ -100,11 +100,21 @@ export async function fetchSchemaFromCompute(
 	// option names (e.g. "Display3d" → "display3d").
 	const raw = await response.json();
 	const results = (Array.isArray(raw) ? raw : [raw]).map((r) => camelcaseKeys(r)) as {
-		schemas: UISchema[];
+		schemas?: UISchema[];
+		error?: string;
 	}[];
 	const schemas = results.flatMap((r) => r.schemas ?? []);
 
 	if (schemas.length === 0) {
+		// Compute reports a per-file diagnosis in an `error` field and still answers 200, so
+		// the !response.ok guard above never fires for it. Surface that message verbatim —
+		// it names the actual cause (bad Schema source, no embedded schema, ...), which the
+		// generic fallback below cannot, and its absence sends people debugging the wrong thing.
+		const diagnosis = results.map((r) => r.error).filter(Boolean);
+		if (diagnosis.length > 0) {
+			throw new SchemaExtractionError('invalid', diagnosis.join('\n'));
+		}
+
 		throw new SchemaExtractionError(
 			'invalid',
 			'No schemas found in definition.\n\n' +

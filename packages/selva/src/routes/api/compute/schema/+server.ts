@@ -72,13 +72,20 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	// need a shallow camelcase to normalize FileName→fileName, Schemas→schemas.
 	// deep:true would mangle user-defined option names (e.g. "Display3d" → "display3d").
 	const raw = await response.json();
-	const results: { schemas: UISchema[] }[] = camelcaseKeys(Array.isArray(raw) ? raw : [raw]) as {
-		schemas: UISchema[];
-	}[];
+	const results: { schemas?: UISchema[]; error?: string }[] = camelcaseKeys(
+		Array.isArray(raw) ? raw : [raw]
+	) as { schemas?: UISchema[]; error?: string }[];
 	const schemas = results.flatMap((r) => r.schemas ?? []);
 
 	if (schemas.length === 0) {
-		apiError(422, ApiErrorCode.UNPROCESSABLE, 'No schemas found in definition');
+		// Compute answers 200 with a per-file `error` field, so the !response.ok guard
+		// above never fires for it. Prefer that diagnosis over the generic message.
+		const diagnosis = results.map((r) => r.error).filter(Boolean);
+		apiError(
+			422,
+			ApiErrorCode.UNPROCESSABLE,
+			diagnosis.length > 0 ? diagnosis.join('\n') : 'No schemas found in definition'
+		);
 	}
 
 	return new Response(JSON.stringify(schemas), {
