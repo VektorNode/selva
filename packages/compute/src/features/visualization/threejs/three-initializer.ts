@@ -256,6 +256,10 @@ export const initThree = function (
 	if (config.floor?.enabled) {
 		addFloor(scene, config);
 	}
+	// Tagged by addFloor; grabbed here so the near-plane fitter can consult its live visibility.
+	const floorMesh = config.floor?.enabled
+		? (scene.children.find((child) => child.userData.id === 'floor') ?? null)
+		: null;
 
 	// Optional CAD aids: an infinite fading grid and the corner nav-cube gizmo. Both opt-in.
 	const grid = config.grid.enabled
@@ -285,18 +289,28 @@ export const initThree = function (
 		: null;
 
 	// Per-frame near-plane fitting: recovers depth precision when zoomed out (see near-plane.ts).
-	// Ground-plane normals cap the fit where an always-visible aid (grid under the camera, floor)
-	// would otherwise be clipped at grazing views.
-	const groundNormals: THREE.Vector3[] = [];
-	if (grid) {
-		// applyDefaults always fills `plane` (from the scene up axis); the fallback derives from the
-		// same source rather than assuming 'z', so the two can't disagree in a non-Z-up scene.
-		const plane = config.grid.plane ?? upToAxis(sceneUp);
-		groundNormals.push(
-			new THREE.Vector3(plane === 'x' ? 1 : 0, plane === 'y' ? 1 : 0, plane === 'z' ? 1 : 0)
-		);
-	}
-	if (config.floor.enabled) groundNormals.push(sceneUp.clone().normalize());
+	// Ground-plane normals cap the fit where a ground aid (grid under the camera, floor) would
+	// otherwise be clipped at grazing views.
+	//
+	// Resolved per frame, and only for aids actually VISIBLE: the grid is commonly built up-front so
+	// hosts can toggle it, yet started hidden. Since this clamp is the camera's height above the
+	// plane, letting a hidden grid contribute drives near→0 at grazing views and craters depth
+	// precision (ULP ∝ 1/near) — which shows up as hidden edges punching through solid geometry.
+	// applyDefaults always fills `plane` (from the scene up axis); the fallback derives from the same
+	// source rather than assuming 'z', so the two can't disagree in a non-Z-up scene.
+	const gridPlane = config.grid.plane ?? upToAxis(sceneUp);
+	const gridNormal = new THREE.Vector3(
+		gridPlane === 'x' ? 1 : 0,
+		gridPlane === 'y' ? 1 : 0,
+		gridPlane === 'z' ? 1 : 0
+	);
+	const floorNormal = sceneUp.clone().normalize();
+	const groundNormals = (): THREE.Vector3[] => {
+		const normals: THREE.Vector3[] = [];
+		if (grid?.object.visible) normals.push(gridNormal);
+		if (config.floor.enabled && floorMesh?.visible) normals.push(floorNormal);
+		return normals;
+	};
 	const nearFitter: NearPlaneFitter | null = config.camera.dynamicNear
 		? createNearPlaneFitter({ camera, scene, groundNormals })
 		: null;

@@ -65,11 +65,35 @@ describe('createNearPlaneFitter', () => {
 		const fitter = createNearPlaneFitter({
 			camera,
 			scene,
-			groundNormals: [new THREE.Vector3(0, 0, 1)]
+			groundNormals: () => [new THREE.Vector3(0, 0, 1)]
 		});
 
 		fitter.update();
 
+		expect(camera.near).toBeCloseTo(1);
+	});
+
+	it('ignores a ground plane whose aid is currently hidden', () => {
+		// Same geometry as above, but the aid is toggled off — a hidden grid must not clamp near to
+		// the camera's height, which would crater depth precision (ULP ∝ 1/near) at grazing views.
+		const scene = sceneWithUnitBoxAt(200, 0, 0);
+		const camera = new THREE.PerspectiveCamera(20, 1, 0.01, 2000);
+		camera.position.set(0, 0, 2);
+		let gridVisible = false;
+		const fitter = createNearPlaneFitter({
+			camera,
+			scene,
+			groundNormals: () => (gridVisible ? [new THREE.Vector3(0, 0, 1)] : [])
+		});
+
+		fitter.update();
+		// Free of the hidden aid's clamp, near rises to the MAX_NEAR_TO_FAR ceiling (far * 0.01) —
+		// 20× the 1 it would have been pinned to, i.e. 20× the depth precision.
+		expect(camera.near).toBeCloseTo(20);
+
+		// Toggling the aid on re-applies the clamp on the next frame, with no re-init.
+		gridVisible = true;
+		fitter.update();
 		expect(camera.near).toBeCloseTo(1);
 	});
 

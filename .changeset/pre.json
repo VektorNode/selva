@@ -30,6 +30,7 @@
 		"server-provider-wiring",
 		"server-second-wave-utilities",
 		"share-slugify-and-default-value",
+		"viewer-hidden-grid-near-plane",
 		"viewer-up-axis-presets"
 	]
 }
