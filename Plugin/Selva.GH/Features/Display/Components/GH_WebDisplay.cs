@@ -36,6 +36,13 @@ public sealed class BranchResult
 
     public List<float[]> MeshVertices { get; } = new List<float[]>();
     public List<int[]> MeshFaces { get; } = new List<int[]>();
+
+    /// <summary>Per-mesh texture coordinates (u,v per vertex); null entries mean "mesh has none".</summary>
+    public List<float[]> MeshUvs { get; } = new List<float[]>();
+
+    /// <summary>Per-mesh vertex colors (r,g,b per vertex); null entries mean "mesh has none".</summary>
+    public List<byte[]> MeshColors { get; } = new List<byte[]>();
+
     public List<string> Names { get; } = new List<string>();
     public List<string> Layers { get; } = new List<string>();
     public List<Dictionary<string, string>> Metadata { get; } = new List<Dictionary<string, string>>();
@@ -43,6 +50,13 @@ public sealed class BranchResult
 
     /// <summary>Non-mesh display items (curves, points) for this branch's batch.</summary>
     public List<DisplayItem> Items { get; } = new List<DisplayItem>();
+
+    /// <summary>
+    ///     The encoded batch (combined arrays, quantized + deflated blob). Built at the end of the
+    ///     background task so the expensive encode never runs on the solver thread; null when the
+    ///     branch is empty.
+    /// </summary>
+    public DisplayBatch Batch { get; set; }
 
     public int Count => MeshVertices.Count + Items.Count;
 }
@@ -53,7 +67,8 @@ public sealed class SolveResult
 {
     public SolveResult(List<BranchResult> branches, List<Mesh> previewMeshes,
         List<ThreeMaterial> previewMaterials, List<Curve> previewCurves, List<Color> curveColors,
-        List<Point3d> previewPoints, List<Color> pointColors, int skipped = 0)
+        List<Point3d> previewPoints, List<Color> pointColors, BoundingBox previewBounds,
+        int skipped = 0)
     {
         Branches = branches;
         PreviewMeshes = previewMeshes;
@@ -62,6 +77,7 @@ public sealed class SolveResult
         CurveColors = curveColors;
         PreviewPoints = previewPoints;
         PointColors = pointColors;
+        PreviewBounds = previewBounds;
         Skipped = skipped;
     }
 
@@ -76,6 +92,12 @@ public sealed class SolveResult
     public List<Color> CurveColors { get; }
     public List<Point3d> PreviewPoints { get; }
     public List<Color> PointColors { get; }
+
+    /// <summary>
+    ///     Union of every preview geometry's bounding box, computed in the background pass so the
+    ///     main thread doesn't re-walk all preview geometry to build the clipping box.
+    /// </summary>
+    public BoundingBox PreviewBounds { get; }
 
     public int Skipped { get; }
 
@@ -101,7 +123,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     }
 
     protected override Bitmap Icon => Resources.WebDisplay;
-    public override Guid ComponentGuid => new Guid("CEC76466-37FD-4B1B-8C7F-71E5C1FDBA14");
+    public override Guid ComponentGuid => new Guid("E4111712-6F0A-4F1B-950F-777EECAEBE01");
     public override BoundingBox ClippingBox => _previewBB;
     public override bool IsPreviewCapable => true;
 
@@ -121,7 +143,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         pManager.AddTextParameter("Layer", "L", "Layer for grouping in scene manager (e.g. 'Structure/Walls')",
             GH_ParamAccess.tree, "");
         pManager.AddTextParameter("Metadata", "D", "Metadata for the mesh (Format: 'Key=Value')", GH_ParamAccess.tree);
-        pManager.AddParameter(new Param_ThreeMaterial("T-Material", "TM", "ThreeMaterial for display", "Selva",
+        pManager.AddParameter(new Param_ThreeMaterial("Material", "M", "Material for web display", "Selva",
             "Display", GH_ParamAccess.tree));
         pManager.AddParameter(new Param_MeshParameters(), "Meshing Settings", "MS",
             "Meshing settings to use. Default is FastRenderMesh.", GH_ParamAccess.item);
@@ -140,7 +162,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
         pManager.AddParameter(new Param_WebDisplay("Web Display", "WD",
-            "Geometry data for web display, one per input branch (output tree mirrors the input tree)",
+            "Geometry data for web display, one per input branch (output tree mirrors the input tree, "
+            + "including empty branches)",
             "Selva", "Display", GH_ParamAccess.tree));
     }
 
@@ -177,65 +200,69 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId);
         }
 
-        if (result == null || result.Count == 0)
+        if (result == null)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be displayed");
             return;
         }
 
-        if (result.Skipped > 0)
+        // No displayable geometry, but the input still had branches — warn, then fall through to
+        // emit the mirrored (all-empty) tree structure so downstream components keep the paths.
+        if (result.Count == 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be displayed");
+        }
+        else if (result.Skipped > 0)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
                 $"{result.Skipped} item(s) could not be displayed and were skipped");
         }
 
-        // Build one batch per input branch and emit them onto their matching output paths, so the
-        // output tree mirrors the input tree. Each batch's vertex/face arrays were already extracted
-        // in the parallel pass, so the array overload keeps this step off the per-vertex copy path.
+        // Emit each branch's batch onto its matching output path, so the output tree mirrors the
+        // input tree — including empty input branches, which produce an empty branch at the same
+        // path (EnsurePath) rather than vanishing. The batches were already encoded (merge,
+        // quantize, deflate) inside the background task; this loop only assembles the tree.
         var output = new GH_Structure<WebDisplayGoo>();
         foreach (var b in result.Branches)
         {
-            if (b.Count == 0)
+            if (b.Batch != null)
             {
-                continue;
+                output.Append(new WebDisplayGoo(b.Batch), b.Path);
             }
-
-            var batch = MeshBatchProcessor.CreateBatch(
-                b.MeshVertices, b.MeshFaces, b.Names, b.Materials, b.Metadata, b.Layers, componentId);
-            if (b.Items.Count > 0)
+            else
             {
-                batch.Items = b.Items;
+                output.EnsurePath(b.Path);
             }
-
-            output.Append(new WebDisplayGoo(batch), b.Path);
         }
 
         DA.SetDataTree(0, output);
 
         // Build preview items on main thread (Rhino display API requirement). Preview spans every
         // branch — it's one component drawing all of its geometry, regardless of tree structure.
+        // The clipping box was already unioned in the background pass.
         _previewItems = new List<GH_CustomPreviewItem>(result.PreviewMeshes.Count);
-        _previewBB = BoundingBox.Empty;
-        var matCache = new Dictionary<uint, DisplayMaterial>();
+        _previewBB = result.PreviewBounds;
+        var matCache = new Dictionary<(int argb, double opacity), DisplayMaterial>();
 
         for (var i = 0; i < result.PreviewMeshes.Count; i++)
         {
             var mesh = result.PreviewMeshes[i];
             var mat = result.PreviewMaterials[i];
 
-            var ghMat = new GH_Material(mat.Color);
-            var renderMat = ghMat.MaterialBestGuess();
-            var renderHash = renderMat.RenderHash;
-
-            if (!matCache.TryGetValue(renderHash, out var dispMat))
+            // MaterialBestGuess goes through Rhino's render-content system and is expensive; cache
+            // by what actually distinguishes preview shading (color + opacity) so the whole dance
+            // runs once per distinct material instead of once per mesh.
+            var key = (mat.Color.ToArgb(), mat.Opacity);
+            if (!matCache.TryGetValue(key, out var dispMat))
             {
+                var renderMat = new GH_Material(mat.Color).MaterialBestGuess();
                 var rhinoMat = renderMat.ToMaterial(RenderTexture.TextureGeneration.Disallow);
                 dispMat = new DisplayMaterial(rhinoMat)
                 {
                     Transparency = 1.0 - mat.Opacity,
                     IsTwoSided = true
                 };
-                matCache[renderHash] = dispMat;
+                matCache[key] = dispMat;
             }
 
             _previewItems.Add(new GH_CustomPreviewItem
@@ -244,7 +271,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 Shader = dispMat,
                 Colour = dispMat.Diffuse
             });
-            _previewBB.Union(mesh.GetBoundingBox(false));
         }
 
         // Curve / point preview: the JSON in the batch isn't drawable, so we keep the original Rhino
@@ -253,15 +279,12 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         for (var i = 0; i < result.PreviewCurves.Count; i++)
         {
             _previewCurves.Add((result.PreviewCurves[i], result.CurveColors[i]));
-            _previewBB.Union(result.PreviewCurves[i].GetBoundingBox(false));
         }
 
         _previewPoints = new List<(Point3d, Color)>(result.PreviewPoints.Count);
         for (var i = 0; i < result.PreviewPoints.Count; i++)
         {
-            var point = result.PreviewPoints[i];
-            _previewPoints.Add((point, result.PointColors[i]));
-            _previewBB.Union(new BoundingBox(point, point));
+            _previewPoints.Add((result.PreviewPoints[i], result.PointColors[i]));
         }
     }
 
@@ -325,12 +348,21 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         public float[] MeshVertices;
         public int[] MeshFaces;
 
+        // Optional per-vertex channels, extracted alongside positions when the mesh carries them
+        // (UVs additionally require the material to map a texture). Null = mesh contributes none.
+        public float[] MeshUvs;
+        public byte[] MeshColors;
+
         // Item path (curve / point). PreviewColor is resolved here so the gather pass doesn't re-scan
         // the items list to recover each curve/point's color.
         public DisplayItem Item;
         public Curve PreviewCurve;
         public Point3d? PreviewPoint;
         public Color PreviewColor;
+
+        // Preview bounding box for this slot (mesh, curve or point), computed on the parallel
+        // thread so the main thread doesn't re-walk every preview geometry for the clipping box.
+        public BoundingBox Bounds;
     }
 
     private static SolveResult ComputeBatch(
@@ -354,14 +386,18 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
         foreach (var path in geoTree.Paths)
         {
+            // Record every input path as an output branch, even empty ones, so the output tree
+            // mirrors the input tree exactly (an empty input branch → an empty output branch at the
+            // same path). Empty branches get a BranchResult but no work items, so they fall through
+            // to an EnsurePath'd empty branch when the tree is assembled.
+            var branchIndex = branchPaths.Count;
+            branchPaths.Add(path);
+
             var geoItems = geoTree.get_Branch(path)?.Cast<IGH_GeometricGoo>().ToList();
             if (geoItems == null || geoItems.Count == 0)
             {
                 continue;
             }
-
-            var branchIndex = branchPaths.Count;
-            branchPaths.Add(path);
 
             var nameItems = ResolveBranch<GH_String>(nameTree, path);
             var layerItems = ResolveBranch<GH_String>(layerTree, path);
@@ -410,12 +446,23 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             if (TryBuildItem(w.Geom, componentId, w.Ordinal, w.Name, w.Layer, w.Metadata, w.Material,
                     out var item, out var previewCurve, out var previewPoint))
             {
+                var itemBounds = BoundingBox.Empty;
+                if (previewCurve != null)
+                {
+                    itemBounds = previewCurve.GetBoundingBox(false);
+                }
+                else if (previewPoint.HasValue)
+                {
+                    itemBounds = new BoundingBox(previewPoint.Value, previewPoint.Value);
+                }
+
                 results[idx] = new WorkResult
                 {
                     Item = item,
                     PreviewCurve = previewCurve,
                     PreviewPoint = previewPoint,
-                    PreviewColor = w.Material.Color
+                    PreviewColor = w.Material.Color,
+                    Bounds = itemBounds
                 };
                 return;
             }
@@ -427,6 +474,15 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
+            // Channel gates. UVs are only worth carrying when the material actually maps a texture
+            // (brep meshing auto-fills TextureCoordinates with surface params — emitting those for
+            // every plain mesh would inflate the payload for nothing). Vertex colors only exist
+            // when something explicitly set them, so presence alone is the gate.
+            var wantUvs = !string.IsNullOrEmpty(w.Material?.Map)
+                          && mesh.TextureCoordinates.Count == mesh.Vertices.Count;
+            var wantColors = mesh.VertexColors.Count == mesh.Vertices.Count
+                             && mesh.VertexColors.Count > 0;
+
             // Brep meshing emits one vertex per face-corner, so a clean box arrives with ~3x the
             // vertices it needs. We weld coincident vertices to shrink the payload, but RESPECTING
             // normals (ignoreNormals: false): both the web and the C# preview recompute smooth normals
@@ -434,20 +490,46 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             // edges would therefore smear them. Computing normals first lets the weld keep hard-edge
             // vertices split (different normals) while merging smooth-surface interiors (matching
             // normals) — preserving the original shading while still cutting most of the duplication.
+            //
+            // When a channel is exported the weld must also respect it (ignoreAdditional: false), or
+            // vertices with different UVs/colors would merge and smear texture seams / color
+            // boundaries. Channels NOT being exported are cleared first so stale auto-generated data
+            // (brep TCs, partial color sets) can't block the weld.
             mesh.Normals.ComputeNormals();
-            mesh.Vertices.CombineIdentical(false, true);
+            if (wantUvs || wantColors)
+            {
+                if (!wantUvs && mesh.TextureCoordinates.Count > 0)
+                {
+                    mesh.TextureCoordinates.Clear();
+                }
+
+                if (!wantColors && mesh.VertexColors.Count > 0)
+                {
+                    mesh.VertexColors.Clear();
+                }
+
+                mesh.Vertices.CombineIdentical(false, false);
+            }
+            else
+            {
+                mesh.Vertices.CombineIdentical(false, true);
+            }
+
             mesh.Compact();
 
             // Extract the vertex/face arrays now, while we're already off the main thread. This is the
             // per-vertex copy that CreateBatch would otherwise do serially for every mesh in the batch.
-            var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh);
+            var (vertices, faces, uvs, colors) = GeoMeshProcessor.ConvertMeshToArrays(mesh, wantUvs, wantColors);
 
             results[idx] = new WorkResult
             {
                 Mesh = mesh,
                 MeshName = w.Name,
                 MeshVertices = vertices,
-                MeshFaces = faces
+                MeshFaces = faces,
+                MeshUvs = uvs,
+                MeshColors = colors,
+                Bounds = mesh.GetBoundingBox(false)
             };
         });
 
@@ -465,6 +547,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         var curveColors = new List<Color>();
         var previewPoints = new List<Point3d>();
         var pointColors = new List<Color>();
+        var previewBounds = BoundingBox.Empty;
 
         for (var idx = 0; idx < results.Length; idx++)
         {
@@ -474,6 +557,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 skipped++;
                 continue;
             }
+
+            previewBounds.Union(r.Bounds);
 
             var w = work[idx];
             var branch = branches[w.BranchIndex];
@@ -498,6 +583,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
             branch.MeshVertices.Add(r.MeshVertices);
             branch.MeshFaces.Add(r.MeshFaces);
+            branch.MeshUvs.Add(r.MeshUvs);
+            branch.MeshColors.Add(r.MeshColors);
             branch.Names.Add(!string.IsNullOrWhiteSpace(r.MeshName)
                 ? r.MeshName
                 : branch.MeshVertices.Count.ToString());
@@ -509,11 +596,37 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             previewMaterials.Add(w.Material);
         }
 
-        var hasAnything = branches.Any(b => b.Count > 0);
-        return hasAnything
-            ? new SolveResult(branches, previewMeshes, previewMaterials, previewCurves, curveColors,
-                previewPoints, pointColors, skipped)
-            : null;
+        // No input paths at all → nothing to mirror. (When there ARE paths but none carry geometry,
+        // we still return a result so the output tree mirrors the input's empty-branch structure.)
+        if (branches.Count == 0)
+        {
+            return null;
+        }
+
+        // Pass 4 (expensive, parallel across branches): encode each branch's batch — combined-array
+        // merge, quantization, deflate. This runs here, still inside the background task, so the
+        // solver thread never pays for the encode; it only assembles the output tree from the
+        // ready-made batches.
+        Parallel.ForEach(branches, b =>
+        {
+            if (b.Count == 0)
+            {
+                return;
+            }
+
+            var batch = MeshBatchProcessor.CreateBatch(
+                b.MeshVertices, b.MeshFaces, b.Names, b.Materials, b.Metadata, b.Layers, componentId,
+                b.MeshUvs, b.MeshColors);
+            if (b.Items.Count > 0)
+            {
+                batch.Items = b.Items;
+            }
+
+            b.Batch = batch;
+        });
+
+        return new SolveResult(branches, previewMeshes, previewMaterials, previewCurves, curveColors,
+            previewPoints, pointColors, previewBounds, skipped);
     }
 
     /// <summary>

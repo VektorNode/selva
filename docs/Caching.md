@@ -1,3 +1,11 @@
+---
+title: Caching
+group: Concepts
+order: 5
+published: true
+description: 'Where Selva caches — browser, server, and compute — and how to reason about freshness.'
+---
+
 # Caching
 
 Solving a Grasshopper definition is the expensive part of Selva. Caching avoids
@@ -99,15 +107,16 @@ Defaults and parsing live in
 they're applied in
 [`packages/selva/src/routes/api/compute/+server.ts`](../packages/selva/src/routes/api/compute/+server.ts).
 
-| Setting                          | Cache | Default | What it does                                             |
-| -------------------------------- | ----- | ------- | -------------------------------------------------------- |
-| `COMPUTE_REUSE_DEFINITION_CACHE` | 2     | `true`  | Send a pointer instead of re-uploading the `.gh` binary. |
-| `COMPUTE_SERVER_CACHESOLVE`      | 3     | `true`  | Let Rhino.Compute cache and return solve results.        |
+| Setting                          | Cache | Default | What it does                                                    |
+| -------------------------------- | ----- | ------- | --------------------------------------------------------------- |
+| `COMPUTE_RESPONSE_CACHE_MB`      | 1     | `256`   | Byte budget for the in-process response cache. `0` disables it. |
+| `COMPUTE_REUSE_DEFINITION_CACHE` | 2     | `true`  | Send a pointer instead of re-uploading the `.gh` binary.        |
+| `COMPUTE_SERVER_CACHESOLVE`      | 3     | `true`  | Let Rhino.Compute cache and return solve results.               |
 
-Cache 1 (the in-process response cache) has **no env knob** — it's always on. Its
-size and lifetime are hardcoded in `+server.ts` (`cache: { maxEntries: 20, ttlMs:
-5 * 60_000 }` → keep 20 results for 5 minutes). Change those numbers there if you
-need to.
+Cache 1 (the in-process response cache) keeps at most 20 results for 5 minutes
+(`maxEntries: 20, ttlMs: 5 * 60_000` in
+[`packages/server/src/compute/client-cache.ts`](../packages/server/src/compute/client-cache.ts)),
+within the `COMPUTE_RESPONSE_CACHE_MB` byte budget.
 
 After editing `.env`, restart the Selva server for changes to take effect.
 

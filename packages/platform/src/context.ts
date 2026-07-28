@@ -2,6 +2,7 @@ import type { PlatformPermission } from './permissions/types.js';
 import { ALL_PLATFORM_PERMISSIONS } from './permissions/types.js';
 import type { OrgPermission } from './organizations/schemas.js';
 import { ALL_ORG_PERMISSIONS } from './organizations/schemas.js';
+import { ProviderError } from './errors.js';
 
 /**
  * Per-request identity + scope passed to every data provider call. Built
@@ -63,4 +64,17 @@ const PLATFORM_PERMISSION_VALUES = new Set<string>(ALL_PLATFORM_PERMISSIONS);
 
 function isPlatformPermission(p: string): p is PlatformPermission {
 	return PLATFORM_PERMISSION_VALUES.has(p);
+}
+
+/**
+ * Return the org the caller is acting as, or throw `ProviderError(403)` when
+ * the context has none. Stores that scope every row to an acting org repeat
+ * this guard; centralizing it keeps the failure a single, consistent 403
+ * rather than a `null` that leaks into a query as `org_id = undefined`.
+ */
+export function requireActingOrg(ctx: RequestContext): string {
+	if (!ctx.actingOrgId) {
+		throw new ProviderError('No acting organization in context', 403);
+	}
+	return ctx.actingOrgId;
 }

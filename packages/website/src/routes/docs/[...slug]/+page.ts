@@ -1,4 +1,4 @@
-import { docs, getDoc } from '$lib/docs';
+import { docs, getDoc, getDocNeighbors } from '$lib/docs';
 import { error } from '@sveltejs/kit';
 import type { EntryGenerator, PageLoad } from './$types';
 
@@ -16,5 +16,9 @@ export const load: PageLoad = async ({ params }) => {
 	}
 
 	const { default: content } = await entry.load();
-	return { content, title: entry.title };
+	const { prev, next } = getDocNeighbors(entry.slug);
+	// Pass only the fields the nav needs — DocEntry carries a non-serializable
+	// `load` thunk that can't cross the load boundary.
+	const link = (d?: typeof entry) => (d ? { title: d.title, slug: d.slug } : null);
+	return { content, title: entry.title, prev: link(prev), next: link(next) };
 };

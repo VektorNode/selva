@@ -3,6 +3,7 @@ title: Architecture
 group: Concepts
 order: 2
 published: true
+description: 'How the plugin, app, Rhino.Compute, and providers fit together, with an interactive solve-flow map.'
 ---
 
 # Architecture

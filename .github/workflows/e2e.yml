@@ -12,16 +12,13 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Must precede the local composite action below — GitHub resolves
+      # `uses: ./...` from the runner's filesystem, so the repo has to be
+      # checked out before that step can start.
+      - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v3
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - name: Setup workspace
+        uses: ./.github/actions/setup
 
       # Persist Turbo's local task cache across runs. Turbo hashes task inputs
       # itself, so the key only needs to version + warm-seed the blob: the SHA

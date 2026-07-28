@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Selva.GH.Features.Display.Services;
@@ -8,7 +9,7 @@ namespace Selva.GH.Features.Display.Services;
 public class MaterialCache
 {
     private readonly List<ThreeMaterial> _materials = new List<ThreeMaterial>();
-    private readonly Dictionary<string, int> _materialToId = new Dictionary<string, int>();
+    private readonly Dictionary<MaterialKey, int> _materialToId = new Dictionary<MaterialKey, int>();
     private int _nextId;
 
     /// <summary>
@@ -46,10 +47,64 @@ public class MaterialCache
     /// <summary>
     ///     Creates a unique key for a material based on its properties.
     /// </summary>
-    private string GetMaterialKey(ThreeMaterial material)
+    private static MaterialKey GetMaterialKey(ThreeMaterial material)
     {
-        // Create a compact key that uniquely identifies the material
-        return
-            $"{material.Color.ToArgb()}|{material.Metalness:F3}|{material.Roughness:F3}|{material.Opacity:F3}|{material.Transparent}";
+        return new MaterialKey(material);
+    }
+
+    /// <summary>
+    ///     Value key over the identity-relevant material properties. This runs once per mesh in the
+    ///     batch loop, so it must not allocate — the previous string key ($"{argb}|{F3}|…") paid an
+    ///     interpolated string plus three double.ToString calls per mesh. Scalars are rounded to
+    ///     3 decimals, matching the F3 formatting the string key deduped by. Map must participate
+    ///     or two materials differing only by texture would dedupe into one.
+    /// </summary>
+    private readonly struct MaterialKey : IEquatable<MaterialKey>
+    {
+        private readonly int _argb;
+        private readonly double _metalness;
+        private readonly double _roughness;
+        private readonly double _opacity;
+        private readonly bool _transparent;
+        private readonly string _map;
+
+        public MaterialKey(ThreeMaterial material)
+        {
+            _argb = material.Color.ToArgb();
+            _metalness = Math.Round(material.Metalness, 3);
+            _roughness = Math.Round(material.Roughness, 3);
+            _opacity = Math.Round(material.Opacity, 3);
+            _transparent = material.Transparent;
+            _map = material.Map;
+        }
+
+        public bool Equals(MaterialKey other)
+        {
+            return _argb == other._argb
+                   && _metalness.Equals(other._metalness)
+                   && _roughness.Equals(other._roughness)
+                   && _opacity.Equals(other._opacity)
+                   && _transparent == other._transparent
+                   && string.Equals(_map, other._map, StringComparison.Ordinal);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is MaterialKey other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hash = _argb;
+                hash = hash * 397 ^ _metalness.GetHashCode();
+                hash = hash * 397 ^ _roughness.GetHashCode();
+                hash = hash * 397 ^ _opacity.GetHashCode();
+                hash = hash * 397 ^ _transparent.GetHashCode();
+                hash = hash * 397 ^ (_map != null ? StringComparer.Ordinal.GetHashCode(_map) : 0);
+                return hash;
+            }
+        }
     }
 }

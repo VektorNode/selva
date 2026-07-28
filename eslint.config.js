@@ -32,13 +32,39 @@ export default [
 			'packages/*/vitest.config.ts',
 			'packages/*/*/vitest.config.ts',
 			'packages/*/playwright.config.ts',
-			'packages/*/*/playwright.config.ts'
+			'packages/*/*/playwright.config.ts',
+			// @selvajs/compute is a standalone package with its OWN tsconfig and
+			// eslint.config.mjs. Type-aware linting from this root would see two
+			// candidate tsconfig roots (repo root + compute) and error under
+			// typescript-eslint 8.64+. It's linted by its own `lint` script,
+			// invoked from the root `lint` command (see package.json).
+			'packages/compute/**'
 		]
 	},
 	{
 		files: ['scripts/**/*.{js,ts}'],
 		rules: {
 			'no-console': 'off'
+		}
+	},
+	{
+		// @selvajs/supabase-provider's tsconfig deliberately EXCLUDES tests from the
+		// build (they must not emit into the published `dist`). But that also drops
+		// them out of eslint 10's typed `projectService`, which then errors on every
+		// test file with "not found by the project service". Every other package
+		// includes tests in its tsconfig and lints fine; this package can't without
+		// polluting its npm output. So disable typed parsing for these files only —
+		// they still get every non-type-aware rule.
+		files: [
+			'packages/providers/supabase/src/**/__tests__/**/*.ts',
+			'packages/providers/supabase/src/**/*.{test,spec}.ts'
+		],
+		languageOptions: {
+			parserOptions: {
+				projectService: false,
+				project: null,
+				program: null
+			}
 		}
 	},
 	{

@@ -55,9 +55,9 @@ cd packages/schemas && pnpm run generate:cs     # Generate C# only
 pnpm clean                  # Remove node_modules, .svelte-kit, and pnpm-lock.yaml
 pnpm rebuild                # clean + install + build
 
-# Testing (@selvajs/compute external package)
-# Run tests for the @selvajs/compute npm package (development only)
-# pnpm test                  # (When @selvajs/compute is developed locally)
+# Testing a single in-repo package
+cd packages/compute && pnpm test           # @selvajs/compute suite (~800 tests)
+cd packages/server && pnpm test            # @selvajs/server (limits, SSRF guard, rate-limit, ...)
 ```
 
 ### .NET (Plugin)
@@ -146,9 +146,11 @@ Located in `Plugin/Selva.GH/Features/`:
 - **FileIO** - `DataToFile`, `BlockToFile` for geometry export
 - **ComputeIO** - `ValueListData`, `GetValueList` for interactive selections
 
+**Adding or removing a param on a released component is a breaking change.** Grasshopper binds wires by parameter index, so reusing the `ComponentGuid` with a changed param list silently rewires saved definitions. You must snapshot the old shape into `Features/<Name>/OBSOLETE/`, give the live component a new GUID, and add an `IGH_UpgradeObject` that remaps the indices. Full procedure: [STRUCTURE.md](./STRUCTURE.md#changing-a-components-parameters-obsolete--upgrader).
+
 ### Core Package Architecture (`@selvajs/compute`)
 
-Modular exports for tree-shaking:
+In-repo at `packages/compute` (published to npm as `@selvajs/compute`). Modular exports for tree-shaking:
 
 - Main export: General utilities and types
 - `/grasshopper`: Rhino Compute client, data tree handling, input/output parsers
@@ -190,18 +192,32 @@ Restart Rhino completely after installation.
 
 ## Data Privacy & Compliance
 
-**User data isolation is by design.** All authentication, credentials, and personal information (PII) are owned exclusively by the auth provider. Selva stores only:
+**Selva minimizes the personal data it holds, but it does hold some — and the operator is the data controller.** Whoever deploys Selva is responsible for data residency, retention, and responding to erasure requests. This section states what is actually stored; do not describe Selva as having "zero exposure" to data-protection law.
+
+**What Selva stores in every deployment:**
 
 - Opaque session tokens (in cookies)
-- User ID and permissions (minimal authorization data)
-- Optional provider-specific metadata (non-sensitive only)
+- User id + permissions (authorization data)
+- Display names (`user_profiles.display_name`)
+- Invite email addresses (`invites.email`) — retained after an invite is accepted or expires
+- Audit-event payloads (`audit_events.data`), which embed an email for `invite.created` (see the `DomainEvent` union in `packages/platform/src/events/interface.ts`)
+- Solve telemetry (`solve_metrics`), keyed by `actor_id` and deliberately **not** FK-cascaded, so it survives deletion of the definition or user it refers to
 
-This architecture means Selva has **zero exposure to EU data regulations, credentials, or company user records**. The provider handles all data residency, retention, and compliance.
+**How much the auth provider owns depends on which provider you run:**
+
+- **Supabase provider** — credentials and identity live in Supabase `auth.users`; Selva holds only the authorization data above. This is the case the "provider owns it" framing describes.
+- **Local provider** — **Selva _is_ the auth provider.** `auth-users.json` stores email addresses and PBKDF2 password hashes on the deployment's own disk (`packages/providers/local/src/auth/users.ts`). No third party is involved, and no credential isolation claim applies.
+
+**Erasure (audit P1 — mostly closed):** `SupabaseDataProvider.onUserDeleted(ctx, userId, { email })` now scrubs the personal data that FK cascade does not reach: it deletes `audit_events` the user authored (keyed by plain-text `actor_id`), deletes `invites` addressed to their email, redacts that email out of surviving `invite.created` audit payloads (via the `redact_audit_event_email` function), and anonymizes `solve_metrics` by tombstoning `actor_id` to `'deleted'` (the row survives for capacity/billing aggregates; the person does not). The admin delete handler captures the email before `deleteUser` and passes it through. **Remaining gap:** there is still no _time-based_ retention policy on `audit_events` or `solve_metrics` (rows live forever until a subject is erased). Deletion-triggered erasure is closed; scheduled retention is not.
+
+Login IPs are processed by the rate limiter but stay in-memory, expire within the rate-limit window, and are never persisted.
+
+**Logs are an escape hatch that erasure cannot follow.** `onUserDeleted` scrubs rows; it has no reach into stdout, which on a real deployment has already shipped to a collector and may be indexed by a third party. So a log line carrying personal data outlives every erasure guarantee above. Do not log a whole domain object — an `invite.created` payload embeds the invitee's email, and `console.error('...', { event })` was silently copying it to stdout until 2026-07-17. Log identifiers (`eventType`, `actorId`, `userId`), never payloads. The pino redaction list (`packages/server/src/logging/PinoLogger.ts`) scrubs by **credential field name** (`token`, `apiKey`, …) and will NOT catch an email nested in a payload — it's a backstop for accidents, not a licence to log objects.
 
 ## Requirements
 
 - [pnpm](https://pnpm.io) >= 10.0.0 (Node.js package manager — version pinned in `packageManager`, activated via Corepack)
-- Node.js >= 18.0.0
+- Node.js >= 22.0.0
 - .NET SDK 7.0+ (for plugin development)
 - Rhino 8 or 9 (for using the plugin — Rhino 7 is not supported)
 - Rhino.Compute server — the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support

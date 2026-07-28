@@ -41,7 +41,7 @@ jobs:
   plugin-release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # ── Version guard ────────────────────────────────────────────────────
       # The tag IS the release version; the .gha/.yak version comes from the
@@ -77,11 +77,11 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile

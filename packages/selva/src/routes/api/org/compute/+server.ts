@@ -10,6 +10,7 @@ import {
 	type ComputeServerConfig,
 	type OrgComputeServer
 } from '@selvajs/platform';
+import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
 
 /**
  * Per-org compute endpoint. Manages this org's own servers
@@ -52,7 +53,7 @@ function requireFlag() {
 	}
 }
 
-type OrgServerPayload = Omit<OrgComputeServer, 'apiKey'> & { hasApiKey: boolean };
+type OrgServerPayload = Omit<OrgComputeServer, 'apiKey' | 'hasApiKey'> & { hasApiKey: boolean };
 type SharedServerPayload = Pick<
 	ComputeServerConfig,
 	'id' | 'label' | 'serverUrl' | 'scope' | 'timeoutMs' | 'retryCount'
@@ -72,8 +73,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 		.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId)
 		.map((s) => {
 			const orgServer = s as OrgComputeServer;
-			const { apiKey, ...rest } = orgServer;
-			return { ...rest, hasApiKey: !!apiKey };
+			const { apiKey: _apiKey, hasApiKey, ...rest } = orgServer;
+			return { ...rest, hasApiKey: !!hasApiKey };
 		});
 
 	// Platform + own servers visible to this org (read-only catalog) — used
@@ -133,7 +134,8 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const provider = getComputeServerConfigStore();
-	const existing = await provider.getConfig(ctx);
+	// Needs every key: unchanged servers keep their stored key across the write.
+	const existing = await provider.getConfig(ctx, { includeApiKeys: true });
 	const storedKeyById = new Map(
 		existing.servers
 			.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId)
@@ -174,5 +176,9 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	}
 
 	await provider.saveOrgServers(ctx, orgId, next, incoming.defaultServerId);
+	// Drop warm clients for this org's servers whose URL/key rotated or that were
+	// removed — keyed on `id`, they wouldn't age out on their own (ADR 0004).
+	const prevOrgServers = existing.servers.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId);
+	evictChangedServers(prevOrgServers, next);
 	return new Response(null, { status: 204 });
 };

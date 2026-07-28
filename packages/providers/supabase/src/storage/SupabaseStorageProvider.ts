@@ -112,6 +112,9 @@ export class SupabaseStorageProvider implements IStorageProvider {
 			.from(bucket)
 			.upload(transcoded.path, transcoded.data, {
 				contentType: transcoded.contentType,
+				// Objects are content-addressed (GUID/hash prefixes) and effectively
+				// immutable, so let CDN/browser cache them for a year.
+				cacheControl: '31536000',
 				upsert: true
 			});
 		if (error) throw error;

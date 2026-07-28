@@ -5,9 +5,14 @@ import {
 	type IComputeServerStore,
 	type ComputeConfig,
 	type ComputeServerConfig,
+	type GetConfigOptions,
 	type PlatformComputeServer,
-	type RequestContext
+	type RequestContext,
+	type SecretVerificationFailure,
+	type SecretVerificationReport,
+	type ILogger
 } from '@selvajs/platform';
+import { NoopLogger } from '@selvajs/platform';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 import {
 	decodeSecretKey,
@@ -15,6 +20,14 @@ import {
 	encryptSecret,
 	isEncryptedSecret
 } from './secretCrypto.js';
+
+// Re-exported from `@selvajs/platform` (`computeServer/secrets`) — kept here so
+// the local provider's public surface (index.ts) stays backward-compatible.
+export type {
+	SecretVerificationFailure,
+	SecretVerificationFailureReason,
+	SecretVerificationReport
+} from '@selvajs/platform';
 
 /**
  * On-disk file shape. Single document holding *all* servers (platform +
@@ -30,33 +43,11 @@ interface OnDiskShape {
 	orgDefaults?: Record<string, string>;
 }
 
-const EMPTY: OnDiskShape = { servers: [], orgDefaults: {} };
-
-/**
- * Result of {@link LocalComputeServerStore.verifySecrets}. One entry per
- * server whose `apiKey` couldn't be loaded:
- *  - `plaintext_on_disk` — the field exists but isn't an `enc:v1:` envelope.
- *    Either a hand-edit or a migration regression. Security-relevant.
- *  - `key_mismatch`     — envelope is valid but GCM auth tag verification
- *    fails under the current `SELVA_AT_REST_KEY`. The key was rotated or the
- *    data came from another deployment.
- */
-export type SecretVerificationFailureReason = 'key_mismatch' | 'plaintext_on_disk';
-
-export interface SecretVerificationFailure {
-	serverId: string;
-	serverLabel: string;
-	reason: SecretVerificationFailureReason;
-	/** Underlying error message for `key_mismatch`. Absent for plaintext. */
-	cause?: string;
-}
-
-export interface SecretVerificationReport {
-	ok: boolean;
-	failures: SecretVerificationFailure[];
-	/** True if at least one row holds an unencrypted apiKey on disk. */
-	plaintextFound: boolean;
-}
+// Fresh object per call — `readJsonFile` returns its fallback BY REFERENCE on a
+// missing file, so a shared module-level constant would let its `servers` /
+// `orgDefaults` references escape (via `readAll`) and risk cross-request bleed
+// if any caller mutated them in place. Matches the sibling stores' `empty()`.
+const empty = (): OnDiskShape => ({ servers: [], orgDefaults: {} });
 
 /**
  * Reads/writes compute.config.json. The file is re-read on every read call
@@ -67,7 +58,10 @@ export interface SecretVerificationReport {
  * scopes untouched.
  */
 export class LocalComputeServerStore implements IComputeServerStore {
-	static fromEnv(env: Record<string, string | undefined>): LocalComputeServerStore {
+	static fromEnv(
+		env: Record<string, string | undefined>,
+		logger?: ILogger
+	): LocalComputeServerStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		if (!env.SELVA_AT_REST_KEY) {
 			throw new Error(
@@ -77,17 +71,27 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		}
 		return new LocalComputeServerStore(
 			path.join(env.DATA_PATH, 'compute.config.json'),
-			decodeSecretKey(env.SELVA_AT_REST_KEY)
+			decodeSecretKey(env.SELVA_AT_REST_KEY),
+			logger
 		);
 	}
 
+	/**
+	 * `logger` is optional and defaults to `NoopLogger` — library code stays
+	 * silent unless the app wires a real logger in.
+	 */
+	private readonly logger: ILogger;
+
 	constructor(
 		private readonly configFilePath: string,
-		private readonly secretKey: Buffer
-	) {}
+		private readonly secretKey: Buffer,
+		logger?: ILogger
+	) {
+		this.logger = logger ?? new NoopLogger();
+	}
 
 	private async readAll(): Promise<OnDiskShape> {
-		const raw = await readJsonFile<OnDiskShape>(this.configFilePath, EMPTY);
+		const raw = await readJsonFile<OnDiskShape>(this.configFilePath, empty());
 		return {
 			servers: raw.servers ?? [],
 			defaultServerId: raw.defaultServerId,
@@ -122,13 +126,17 @@ export class LocalComputeServerStore implements IComputeServerStore {
 			try {
 				return { ...s, apiKey: decryptSecret(s.apiKey, this.secretKey) };
 			} catch (cause) {
-				console.warn(
-					`[selva] Could not decrypt apiKey for compute server "${s.label}" (${s.id}). ` +
-						'The stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
-						'This server will be returned without an apiKey; solves against it will fail. ' +
+				this.logger.warn(
+					'Could not decrypt apiKey: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
+						'This server is returned without an apiKey and solves against it will fail. ' +
 						'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY. ' +
-						'See docs/Troubleshooting.md.',
-					cause
+						'See docs/Troubleshooting.md',
+					{
+						component: 'selva',
+						serverLabel: s.label,
+						serverId: s.id,
+						err: cause instanceof Error ? (cause.stack ?? cause.message) : String(cause)
+					}
 				);
 				return { ...s, apiKey: undefined };
 			}
@@ -183,13 +191,30 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		});
 	}
 
-	async getConfig(_ctx: RequestContext): Promise<ComputeConfig> {
+	async getConfig(_ctx: RequestContext, opts: GetConfigOptions = {}): Promise<ComputeConfig> {
 		const all = await this.readAll();
+		const servers = opts.includeApiKeys
+			? this.decryptApiKeys(all.servers)
+			: all.servers.map((s) => ({ ...s, apiKey: undefined }));
 		return {
-			servers: this.decryptApiKeys(all.servers),
+			// `hasApiKey` reads the stored (still-encrypted) value, so presence is
+			// reported without decrypting anything.
+			servers: servers.map((s, i) => ({ ...s, hasApiKey: !!all.servers[i].apiKey })),
 			defaultServerId: all.defaultServerId,
 			orgDefaults: all.orgDefaults
 		};
+	}
+
+	/**
+	 * One server's decrypted key. The local store reads the whole file anyway, so
+	 * this exists for interface parity with Supabase (where it saves a table scan
+	 * plus N decrypts) — and it still avoids decrypting the other servers' keys.
+	 */
+	async getServerApiKey(_ctx: RequestContext, serverId: string): Promise<string | undefined> {
+		const all = await this.readAll();
+		const server = all.servers.find((s) => s.id === serverId);
+		if (!server?.apiKey) return undefined;
+		return this.decryptApiKeys([server])[0].apiKey;
 	}
 
 	async savePlatformServers(

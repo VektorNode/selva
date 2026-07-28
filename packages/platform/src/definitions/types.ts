@@ -35,7 +35,11 @@ export type DefinitionStatus = 'pending' | 'draft' | 'published' | 'archived';
 export interface DefinitionVersion {
 	id: string;
 	definitionId: string;
-	/** Monotonic integer starting at 1; never reused. */
+	/**
+	 * Monotonic integer starting at 1; NEVER reused — allocated from the parent
+	 * record's `nextVersionNumber` counter, which only ever advances. Deleting the
+	 * latest version does not free its number, so `fileKey`s never collide.
+	 */
 	versionNumber: number;
 	fileExt: DefinitionFileExt;
 	/** Full storage key. Opaque to callers. */
@@ -65,6 +69,13 @@ export interface DefinitionRecord {
 	updatedBy: string;
 	/** Falls back to the org default, then the platform default. */
 	computeServerId?: string;
+	/**
+	 * Durable L2 solve-cache quota for this definition (H1/R9). Absent = inherit
+	 * the global default (`SOLVE_CACHE_DEFAULT_MAX_ENTRIES`); `0` = caching off
+	 * (the non-determinism / wide-input-space escape hatch); `N` = keep at most N
+	 * cached solves for this definition. One number, one settings input.
+	 */
+	solveCacheLimit?: number;
 	displayName: string;
 	description?: string;
 	category?: string;
@@ -73,6 +84,16 @@ export interface DefinitionRecord {
 	coverImage?: string;
 	status: DefinitionStatus;
 	solveCount: number;
+	/**
+	 * Monotonic version-number allocator. The next `uploadVersion` reserves this
+	 * value for the new version's `versionNumber` (and `fileKey`) then advances
+	 * the counter — it is NEVER decremented, so delete-latest-then-reupload mints
+	 * a FRESH number and a FRESH `fileKey` rather than reusing the deleted one.
+	 * Reusing a `fileKey` would let a stale storage blob (or any layer keying on
+	 * the key) serve the old version's bytes for the new content. Starts at 2
+	 * after v1 is created.
+	 */
+	nextVersionNumber: number;
 	/**
 	 * Both null only during the brief `pending` window between metadata create
 	 * and v1 upload; otherwise both reference live `DefinitionVersion` rows.
@@ -102,6 +123,8 @@ export interface DefinitionRecordPatch {
 	coverImage?: string | null;
 	projectId?: string;
 	computeServerId?: string | null;
+	/** L2 cache quota (see {@link DefinitionRecord.solveCacheLimit}); `null` clears to inherit. */
+	solveCacheLimit?: number | null;
 	status?: DefinitionStatus;
 	/** Ownership transfer. */
 	ownerId?: string;

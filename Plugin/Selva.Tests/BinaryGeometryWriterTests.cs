@@ -8,7 +8,7 @@ namespace Selva.Tests;
 public class BinaryGeometryWriterTests
 {
     private const uint ExpectedMagic = 0x41564C53;
-    private const uint ExpectedVersion = 2;
+    private const uint ExpectedVersion = 3;
 
     [Fact]
     public void Write_EmitsMagicAndVersion()
@@ -65,8 +65,8 @@ public class BinaryGeometryWriterTests
         Assert.Equal(12, result.IndexCount);
 
         var (decodedVerts, decodedIndices, flags) = ReadGeometry(ms.ToArray());
-        // Small batch: int16 verts (bit 0 clear) + uint16 indices (bit 1 set).
-        Assert.Equal(BinaryGeometryWriter.FlagUint16Indices, flags);
+        // Small batch: int16 verts (bit 0 clear) + uint16 indices (bit 1) + delta filter (bit 2).
+        Assert.Equal(BinaryGeometryWriter.FlagUint16Indices | BinaryGeometryWriter.FlagDeltaEncoded, flags);
 
         for (var i = 0; i < vertices.Length; i++)
         {
@@ -196,14 +196,200 @@ public class BinaryGeometryWriterTests
         Assert.Equal(new uint[] { 0, 1, 65536 }, decodedIndices);
     }
 
+    [Fact]
+    public void Write_DeltaFilterRoundtripsExtremeQuantizedJumps()
+    {
+        // X alternates across the full bbox, so quantized values swing between -32767 and +32767 and
+        // per-component deltas (±65534) exceed int16 — exercising the wrapping arithmetic. Index
+        // jumps are similarly non-local.
+        var vertices = new float[]
+        {
+            0, 0, 0,
+            10, 10, 10,
+            0, 0, 0,
+            10, 0, 10,
+        };
+        var indices = new int[] { 0, 3, 1, 3, 0, 2 };
+
+        using var ms = new MemoryStream();
+        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+
+        Assert.False(result.UsedFloat32);
+
+        var (decodedVerts, decodedIndices, flags) = ReadGeometry(ms.ToArray());
+        Assert.Equal(BinaryGeometryWriter.FlagDeltaEncoded, flags & BinaryGeometryWriter.FlagDeltaEncoded);
+
+        for (var i = 0; i < vertices.Length; i++)
+        {
+            Assert.InRange(decodedVerts[i] - vertices[i], -0.001f, 0.001f);
+        }
+
+        for (var i = 0; i < indices.Length; i++)
+        {
+            Assert.Equal((uint)indices[i], decodedIndices[i]);
+        }
+    }
+
+    [Fact]
+    public void Write_WithoutUvsOrColors_EmitsNoChunkFlagsAndNoTrailingBytes()
+    {
+        // The zero-cost guarantee: a chunk-less write sets neither chunk flag and appends nothing
+        // after the index block, so plain meshes are byte-identical to pre-chunk blobs.
+        var vertices = new float[] { 0, 0, 0, 1, 1, 1, 2, 0, 2 };
+        var indices = new int[] { 0, 1, 2 };
+
+        using var ms = new MemoryStream();
+        BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+
+        var decoded = ReadAll(ms.ToArray());
+        Assert.Equal(0u, decoded.Flags & BinaryGeometryWriter.FlagHasUvs);
+        Assert.Equal(0u, decoded.Flags & BinaryGeometryWriter.FlagHasVertexColors);
+        Assert.Null(decoded.Uvs);
+        Assert.Null(decoded.Colors);
+        Assert.Equal(ms.Length, decoded.BytesConsumed);
+    }
+
+    [Fact]
+    public void Write_QuantizedUvs_RoundtripWithinPrecision()
+    {
+        var vertices = new float[] { 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0 };
+        var indices = new int[] { 0, 1, 2, 0, 2, 3 };
+        var uvs = new float[] { 0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f };
+
+        using var ms = new MemoryStream();
+        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
+
+        Assert.False(result.UsedFloat32Uvs);
+
+        var decoded = ReadAll(ms.ToArray());
+        Assert.Equal(BinaryGeometryWriter.FlagHasUvs, decoded.Flags & BinaryGeometryWriter.FlagHasUvs);
+        Assert.NotNull(decoded.Uvs);
+        for (var i = 0; i < uvs.Length; i++)
+        {
+            // Quantization error bound: extent / 65535.
+            Assert.InRange(decoded.Uvs![i] - uvs[i], -0.0001f, 0.0001f);
+        }
+
+        Assert.Equal(ms.Length, decoded.BytesConsumed);
+    }
+
+    [Fact]
+    public void Write_ConstantUvs_SurviveDegenerateExtent()
+    {
+        // Zero extent on both axes: scale clamps to epsilon, all q = 0, uv = origin exactly.
+        var vertices = new float[] { 0, 0, 0, 1, 0, 0, 1, 1, 0 };
+        var indices = new int[] { 0, 1, 2 };
+        var uvs = new float[] { 0.25f, 0.75f, 0.25f, 0.75f, 0.25f, 0.75f };
+
+        using var ms = new MemoryStream();
+        BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
+
+        var decoded = ReadAll(ms.ToArray());
+        for (var i = 0; i < uvs.Length; i++)
+        {
+            Assert.InRange(decoded.Uvs![i] - uvs[i], -0.0001f, 0.0001f);
+        }
+    }
+
+    [Fact]
+    public void Write_HeavilyTiledUvs_FallBackToFloat32()
+    {
+        // Extent 100 => step 100/65535 ≈ 0.0015 > 1/4096 => float32 UVs, exact roundtrip.
+        var vertices = new float[] { 0, 0, 0, 1, 0, 0, 1, 1, 0 };
+        var indices = new int[] { 0, 1, 2 };
+        var uvs = new float[] { 0f, 0f, 100f, 0f, 100f, 100f };
+
+        using var ms = new MemoryStream();
+        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
+
+        Assert.True(result.UsedFloat32Uvs);
+
+        var decoded = ReadAll(ms.ToArray());
+        Assert.Equal(uvs, decoded.Uvs);
+    }
+
+    [Fact]
+    public void Write_VertexColors_RoundtripExactlyIncludingWrappingDeltas()
+    {
+        // Full-range jumps (0 → 255 → 1) exercise the wrapped 8-bit delta arithmetic.
+        var vertices = new float[] { 0, 0, 0, 1, 0, 0, 1, 1, 0 };
+        var indices = new int[] { 0, 1, 2 };
+        var colors = new byte[] { 0, 255, 128, 255, 0, 1, 1, 254, 255 };
+
+        using var ms = new MemoryStream();
+        BinaryGeometryWriter.Write(ms, "{}", vertices, indices, colors: colors);
+
+        var decoded = ReadAll(ms.ToArray());
+        Assert.Equal(BinaryGeometryWriter.FlagHasVertexColors,
+            decoded.Flags & BinaryGeometryWriter.FlagHasVertexColors);
+        Assert.Equal(colors, decoded.Colors);
+        Assert.Null(decoded.Uvs);
+        Assert.Equal(ms.Length, decoded.BytesConsumed);
+    }
+
+    [Fact]
+    public void Write_BothChunks_DecodeInUvThenColorOrder()
+    {
+        var vertices = new float[] { 0, 0, 0, 1, 0, 0, 1, 1, 0 };
+        var indices = new int[] { 0, 1, 2 };
+        var uvs = new float[] { 0f, 0f, 0.5f, 0f, 0.5f, 0.5f };
+        var colors = new byte[] { 10, 20, 30, 40, 50, 60, 70, 80, 90 };
+
+        using var ms = new MemoryStream();
+        BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: uvs, colors: colors);
+
+        var decoded = ReadAll(ms.ToArray());
+        Assert.NotNull(decoded.Uvs);
+        Assert.Equal(colors, decoded.Colors);
+        for (var i = 0; i < uvs.Length; i++)
+        {
+            Assert.InRange(decoded.Uvs![i] - uvs[i], -0.0001f, 0.0001f);
+        }
+
+        Assert.Equal(ms.Length, decoded.BytesConsumed);
+    }
+
+    [Fact]
+    public void Write_RejectsMismatchedUvAndColorLengths()
+    {
+        var vertices = new float[] { 0, 0, 0, 1, 0, 0, 1, 1, 0 };
+        var indices = new int[] { 0, 1, 2 };
+
+        using var ms = new MemoryStream();
+        Assert.Throws<ArgumentException>(() =>
+            BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: new float[] { 0, 0 }));
+        Assert.Throws<ArgumentException>(() =>
+            BinaryGeometryWriter.Write(ms, "{}", vertices, indices, colors: new byte[] { 1, 2, 3, 4 }));
+    }
+
+    /// <summary>Full decode of a blob, including the optional trailing UV/color chunks.</summary>
+    private sealed class DecodedBlob
+    {
+        public float[] Vertices = null!;
+        public uint[] Indices = null!;
+        public uint Flags;
+        public float[]? Uvs;
+        public byte[]? Colors;
+
+        /// <summary>Bytes consumed by the decode — equals blob length iff nothing trails the format.</summary>
+        public long BytesConsumed;
+    }
+
     /// <summary>
     ///     Decodes the binary blob the same way the JS parser will: peel envelope, peel geometry
     ///     header, dequantize int16 (or read float32 directly), and read uint16/uint32 indices per
-    ///     the flags word.
+    ///     the flags word — undoing the v3 delta+zigzag filter when its flag is set.
     /// </summary>
     private static (float[] vertices, uint[] indices, uint flags) ReadGeometry(byte[] blob)
     {
-        using var br = new BinaryReader(new MemoryStream(blob));
+        var decoded = ReadAll(blob);
+        return (decoded.Vertices, decoded.Indices, decoded.Flags);
+    }
+
+    private static DecodedBlob ReadAll(byte[] blob)
+    {
+        using var ms = new MemoryStream(blob);
+        using var br = new BinaryReader(ms);
 
         Assert.Equal(ExpectedMagic, br.ReadUInt32());
         Assert.Equal(ExpectedVersion, br.ReadUInt32());
@@ -212,6 +398,7 @@ public class BinaryGeometryWriterTests
         br.ReadBytes((int)metadataLen);
 
         var flags = br.ReadUInt32();
+        var deltaEncoded = (flags & BinaryGeometryWriter.FlagDeltaEncoded) != 0;
         var originX = br.ReadDouble();
         var originY = br.ReadDouble();
         var originZ = br.ReadDouble();
@@ -231,11 +418,22 @@ public class BinaryGeometryWriterTests
         }
         else
         {
+            short qx = 0, qy = 0, qz = 0;
             for (var i = 0; i < vertexCount; i++)
             {
-                var qx = br.ReadInt16();
-                var qy = br.ReadInt16();
-                var qz = br.ReadInt16();
+                if (deltaEncoded)
+                {
+                    qx = unchecked((short)(qx + UnZigZag16(br.ReadUInt16())));
+                    qy = unchecked((short)(qy + UnZigZag16(br.ReadUInt16())));
+                    qz = unchecked((short)(qz + UnZigZag16(br.ReadUInt16())));
+                }
+                else
+                {
+                    qx = br.ReadInt16();
+                    qy = br.ReadInt16();
+                    qz = br.ReadInt16();
+                }
+
                 verts[i * 3] = (float)(originX + (qx + 32767) * scaleX);
                 verts[i * 3 + 1] = (float)(originY + (qy + 32767) * scaleY);
                 verts[i * 3 + 2] = (float)(originZ + (qz + 32767) * scaleZ);
@@ -245,11 +443,114 @@ public class BinaryGeometryWriterTests
         var indexCount = br.ReadUInt32();
         var indices = new uint[indexCount];
         var uint16Indices = (flags & BinaryGeometryWriter.FlagUint16Indices) != 0;
-        for (var i = 0; i < indexCount; i++)
+        if (uint16Indices)
         {
-            indices[i] = uint16Indices ? br.ReadUInt16() : br.ReadUInt32();
+            ushort prev = 0;
+            for (var i = 0; i < indexCount; i++)
+            {
+                prev = deltaEncoded ? unchecked((ushort)(prev + UnZigZag16(br.ReadUInt16()))) : br.ReadUInt16();
+                indices[i] = prev;
+            }
+        }
+        else
+        {
+            var prev = 0u;
+            for (var i = 0; i < indexCount; i++)
+            {
+                prev = deltaEncoded ? unchecked((uint)((int)prev + UnZigZag32(br.ReadUInt32()))) : br.ReadUInt32();
+                indices[i] = prev;
+            }
         }
 
-        return (verts, indices, flags);
+        // Optional trailing chunks: UV first, then colors.
+        float[]? uvs = null;
+        if ((flags & BinaryGeometryWriter.FlagHasUvs) != 0)
+        {
+            var uvFormat = br.ReadUInt32();
+            var originU = br.ReadDouble();
+            var originV = br.ReadDouble();
+            var scaleU = br.ReadDouble();
+            var scaleV = br.ReadDouble();
+
+            uvs = new float[vertexCount * 2];
+            if (uvFormat == BinaryGeometryWriter.UvFormatFloat32)
+            {
+                for (var i = 0; i < uvs.Length; i++)
+                {
+                    uvs[i] = br.ReadSingle();
+                }
+            }
+            else
+            {
+                ushort qu = 0, qv = 0;
+                for (var i = 0; i < vertexCount; i++)
+                {
+                    if (deltaEncoded)
+                    {
+                        qu = unchecked((ushort)(qu + UnZigZag16(br.ReadUInt16())));
+                        qv = unchecked((ushort)(qv + UnZigZag16(br.ReadUInt16())));
+                    }
+                    else
+                    {
+                        qu = br.ReadUInt16();
+                        qv = br.ReadUInt16();
+                    }
+
+                    uvs[i * 2] = (float)(originU + qu * scaleU);
+                    uvs[i * 2 + 1] = (float)(originV + qv * scaleV);
+                }
+            }
+        }
+
+        byte[]? colors = null;
+        if ((flags & BinaryGeometryWriter.FlagHasVertexColors) != 0)
+        {
+            colors = new byte[vertexCount * 3];
+            byte r = 0, g = 0, b = 0;
+            for (var i = 0; i < vertexCount; i++)
+            {
+                if (deltaEncoded)
+                {
+                    r = unchecked((byte)(r + UnZigZag8(br.ReadByte())));
+                    g = unchecked((byte)(g + UnZigZag8(br.ReadByte())));
+                    b = unchecked((byte)(b + UnZigZag8(br.ReadByte())));
+                }
+                else
+                {
+                    r = br.ReadByte();
+                    g = br.ReadByte();
+                    b = br.ReadByte();
+                }
+
+                colors[i * 3] = r;
+                colors[i * 3 + 1] = g;
+                colors[i * 3 + 2] = b;
+            }
+        }
+
+        return new DecodedBlob
+        {
+            Vertices = verts,
+            Indices = indices,
+            Flags = flags,
+            Uvs = uvs,
+            Colors = colors,
+            BytesConsumed = ms.Position
+        };
+    }
+
+    private static short UnZigZag16(ushort zz)
+    {
+        return (short)((zz >> 1) ^ -(zz & 1));
+    }
+
+    private static int UnZigZag32(uint zz)
+    {
+        return (int)(zz >> 1) ^ -(int)(zz & 1);
+    }
+
+    private static sbyte UnZigZag8(byte zz)
+    {
+        return (sbyte)((zz >> 1) ^ -(zz & 1));
     }
 }

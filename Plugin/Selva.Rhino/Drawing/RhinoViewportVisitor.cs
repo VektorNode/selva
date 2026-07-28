@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using Rhino.Display;
 using Rhino.Geometry;
@@ -154,7 +155,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
     // while SVG/PDF size by em — without this correction, preview glyphs come out ~1.4×
     // bigger than the exported output. Uses bundled font metrics when available, falls
     // back to the heuristic 0.7 for unbundled families.
-    private static double CapHeightToEmRatio(Selva.Drawing.Model.Style.TextStyle style)
+    private static double CapHeightToEmRatio(Selva.Drawing.Model.Style.TextStyle? style)
     {
         const double fallback = 0.7;
         if (style == null || style.FontSize <= 0) return fallback;
@@ -166,9 +167,9 @@ public sealed class RhinoViewportVisitor : IElementVisitor
     // The first family in a CSS-style stack ("Inter, Helvetica, sans-serif" → "Inter").
     // Matches FontMetrics.ExtractFirstFamily, which is what the SVG/PDF renderers measure
     // against — so the preview's glyph metrics line up with the background rect we draw.
-    private static string ResolveFontFace(string fontFamily)
+    private static string ResolveFontFace(string? fontFamily)
     {
-        if (string.IsNullOrEmpty(fontFamily)) return "Inter";
+        if (fontFamily == null || fontFamily.Length == 0) return "Inter";
         var comma = fontFamily.IndexOf(',');
         var first = comma < 0 ? fontFamily : fontFamily.Substring(0, comma);
         return first.Trim().Trim('"', '\'');
@@ -201,6 +202,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
     // rounded-rect helper, so corner radius is ignored in preview — final output honors it.
     private void DrawTextBackground(TextElement element)
     {
+        if (element.Background is not { } background) return;
         var style = element.Style ?? new Selva.Drawing.Model.Style.TextStyle();
         var measured = Selva.Drawing.Fonts.FontMetrics.Measure(element.Text ?? string.Empty, style);
         var width = measured.Width;
@@ -248,7 +250,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         var p3 = Map(Local(localX + width, localY + height));
         var p4 = Map(Local(localX, localY + height));
 
-        var bgColor = ToSystemColor(element.Background.Value, Color.Transparent);
+        var bgColor = ToSystemColor(background, Color.Transparent);
         _display.DrawPolygon(new[] { p1, p2, p3, p4 }, bgColor, filled: true);
     }
 
@@ -441,7 +443,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         _display.DrawLine(new Line(Map(d.B), Map(dimB)), dimColor);
         _display.DrawLine(new Line(Map(dimA), Map(dimB)), dimColor);
 
-        var label = string.IsNullOrEmpty(d.Label) ? len.ToString("0.##") : d.Label;
+        var label = string.IsNullOrEmpty(d.Label) ? len.ToString("0.##", CultureInfo.InvariantCulture) : d.Label;
         var size = d.Style?.TextSize ?? 2.5;
         if (size > 0)
         {
@@ -516,7 +518,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         _display.DrawPolyline(new Polyline(pts), dimColor, 1);
 
         var label = string.IsNullOrEmpty(d.Label)
-            ? (Math.Abs(theta) * 180.0 / Math.PI).ToString("0.##") + "°"
+            ? (Math.Abs(theta) * 180.0 / Math.PI).ToString("0.##", CultureInfo.InvariantCulture) + "°"
             : d.Label;
         var size = d.Style?.TextSize ?? 2.5;
         if (size > 0)
@@ -869,7 +871,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
     // sits inside an odd number of other rings. NonZero: classify by signed area; for
     // our purposes (paths from CurveConverter) the practical effect is the same since
     // we don't get authoritative winding info from the source curves.
-    private static Mesh TriangulateRings(List<List<Point3d>> rings, FillRule rule)
+    private static Mesh? TriangulateRings(List<List<Point3d>> rings, FillRule rule)
     {
         _ = rule; // Both rules currently use the same depth-parity hole classification;
                   // the parameter stays so callers can pass intent and a future refinement
@@ -972,7 +974,7 @@ public sealed class RhinoViewportVisitor : IElementVisitor
     // Ear-clipping triangulation. If `holes` is given, each hole is bridged to the outer
     // ring by inserting a back-and-forth seam, producing a single weakly-simple polygon.
     // Returns a Mesh with the resulting triangles, or null if the input is degenerate.
-    private static Mesh TriangulatePolygon(List<Point3d> outer, List<List<Point3d>> holes)
+    private static Mesh? TriangulatePolygon(List<Point3d> outer, List<List<Point3d>>? holes)
     {
         var ring = StripClosingDuplicate(outer);
         if (ring.Count < 3) return null;

@@ -6,10 +6,10 @@
 	"type": "module",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/vektornode/selva.git"
+		"url": "git+https://github.com/VektorNode/selva.git"
 	},
-	"bugs": "https://github.com/vektornode/selva/issues",
-	"homepage": "https://github.com/vektornode/selva",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"homepage": "https://github.com/VektorNode/selva",
 	"engines": {
 		"node": ">=22.0.0",
 		"pnpm": ">=10.0.0"
@@ -22,18 +22,18 @@
 		"dev:website": "pnpm --filter @selvajs/website dev",
 		"watch:ui": "pnpm --filter @selvajs/ui build:watch",
 		"generate": "turbo run generate",
-		"build": "turbo run build",
+		"build": "turbo run build --concurrency=20",
 		"build:ui": "pnpm --filter @selvajs/ui build",
 		"build:plugin-ui": "turbo run build --filter=@selvajs/plugin-ui",
 		"build:selva": "turbo run build --filter=@selvajs/selva",
 		"build:website": "turbo run build --filter=@selvajs/website",
 		"build:plugin": "turbo run build --filter=@selvajs/plugin-ui && node scripts/build-production.js",
 		"release:plugin": "node scripts/release-plugin.js",
-		"check": "turbo run check",
-		"type-check": "turbo run type-check",
-		"lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
-		"lint:fix": "eslint . --fix --cache --cache-location node_modules/.cache/eslint/",
-		"test": "turbo run test",
+		"check": "turbo run check --concurrency=20",
+		"type-check": "turbo run type-check --concurrency=20",
+		"lint": "eslint . --cache --cache-location node_modules/.cache/eslint/ && pnpm --filter @selvajs/compute lint",
+		"lint:fix": "eslint . --fix --cache --cache-location node_modules/.cache/eslint/ && pnpm --filter @selvajs/compute lint:fix",
+		"test": "turbo run test --concurrency=20",
 		"test:e2e": "turbo run test:e2e",
 		"format": "prettier --write \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
 		"format:check": "prettier --check \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
@@ -45,12 +45,14 @@
 	},
 	"pnpm": {
 		"overrides": {
-			"@sveltejs/kit": "2.58.0",
-			"svelte": "5.55.5"
+			"@sveltejs/kit": "2.69.1",
+			"svelte": "5.56.4",
+			"cookie@<0.7.0": "^0.7.2",
+			"brace-expansion@>=3.0.0 <5.0.8": "^5.0.8"
 		},
 		"peerDependencyRules": {
 			"allowedVersions": {
-				"@sveltejs/kit": "2.58.0"
+				"@sveltejs/kit": "2.69.1"
 			}
 		}
 	},
@@ -59,6 +61,9 @@
 			"eslint --fix",
 			"prettier --write"
 		],
+		"packages/compute/**/*.{ts,svelte}": [
+			"eslint --fix --config packages/compute/eslint.config.mjs"
+		],
 		"*.{json,yaml,yml,md}": [
 			"prettier --write"
 		]
@@ -66,7 +71,7 @@
 	"devDependencies": {
 		"@changesets/cli": "^2.31.0",
 		"@eslint/compat": "^2.0.5",
-		"@eslint/js": "^9.39.4",
+		"@eslint/js": "^10.0.1",
 		"@selvajs/header-auth-provider": "workspace:*",
 		"@selvajs/local-provider": "workspace:*",
 		"@selvajs/platform": "workspace:*",
@@ -78,11 +83,11 @@
 		"@tailwindcss/vite": "catalog:",
 		"@types/node": "catalog:",
 		"@types/three": "catalog:",
-		"@typescript-eslint/eslint-plugin": "^8.59.0",
-		"@typescript-eslint/parser": "^8.59.0",
+		"@typescript-eslint/eslint-plugin": "^8.64.0",
+		"@typescript-eslint/parser": "^8.64.0",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
-		"eslint-plugin-svelte": "^3.17.1",
+		"eslint-plugin-svelte": "^3.20.0",
 		"globals": "^17.5.0",
 		"husky": "^9.1.7",
 		"lint-staged": "^17.0.4",
@@ -96,7 +101,7 @@
 		"three": "catalog:",
 		"turbo": "^2.9.6",
 		"typescript": "catalog:",
-		"typescript-eslint": "^8.59.0",
+		"typescript-eslint": "^8.64.0",
 		"vite": "catalog:"
 	}
 }

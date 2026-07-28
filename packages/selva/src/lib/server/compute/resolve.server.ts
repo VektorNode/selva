@@ -33,16 +33,24 @@ export class ComputeServerUnconfiguredError extends Error {
  * pure helper so callers don't reimplement it. Re-throws the pure helper's
  * "nothing visible" failure as a typed `ComputeServerUnconfiguredError` so
  * callers can map it to a 503 with operator guidance.
+ *
+ * Selection reads a key-free config and fetches the `apiKey` only for the server
+ * that actually wins (audit 4b) — resolving used to decrypt every configured
+ * server's key on every solve to use exactly one of them.
  */
 export async function resolveServerForOrg(
 	ctx: RequestContext,
 	orgId: string | null | undefined,
 	opts: { definitionPin?: string | null } = {}
 ): Promise<ComputeServerConfig> {
-	const config = await getComputeServerConfigStore().getConfig(ctx);
+	const store = getComputeServerConfigStore();
+	const config = await store.getConfig(ctx);
+	let server: ComputeServerConfig;
 	try {
-		return resolvePure(config, orgId, { definitionPin: opts.definitionPin });
+		server = resolvePure(config, orgId, { definitionPin: opts.definitionPin });
 	} catch (err) {
 		throw new ComputeServerUnconfiguredError(err instanceof Error ? err.message : undefined);
 	}
+	if (!server.hasApiKey) return server;
+	return { ...server, apiKey: await store.getServerApiKey(ctx, server.id) };
 }

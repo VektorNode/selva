@@ -12,9 +12,30 @@ import type {
 	Page,
 	UISchema
 } from '@selvajs/platform';
-import { ProviderError, auditSoftDelete, actorFrom, NoopEventSink } from '@selvajs/platform';
+import { ProviderError, actorFrom, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
+import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
+import { stampSoftDelete, stampUpdate } from './rowStamp.js';
+
+/** Explicit column list for `definitions` — every field `rowToRecord` consumes. */
+const DEFINITION_COLUMNS =
+	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, solve_cache_limit, display_name, description, category, tags, cover_image, status, run_count, next_version_number, live_version_id, draft_version_id, created_at, updated_at, deleted_at';
+/**
+ * Explicit column list for `definition_versions`, minus the `schema` JSONB.
+ * `schema` can be hundreds of KB per row, so the list projection leaves it out
+ * and `listVersions` returns rows with `schema: undefined`; only `getVersion`
+ * (which reads one row, for a caller that needs the schema) pulls it in.
+ */
+const DEFINITION_VERSION_COLUMNS =
+	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at';
+/**
+ * `getVersion`'s projection — the list columns plus the `schema` JSONB. Spelled
+ * out rather than interpolated: supabase-js infers the row type from the literal
+ * column string, and a template literal degrades it to `string`.
+ */
+const DEFINITION_VERSION_COLUMNS_WITH_SCHEMA =
+	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at, schema';
 
 /**
  * Definition metadata + version store backed by Postgres. Spec §6 versioning:
@@ -23,7 +44,7 @@ import { nextCursorFromRange, toRange } from './pagination.js';
  *
  * Deletion protection (§6) is enforced by FK constraints — `live_version_id`
  * and `draft_version_id` are ON DELETE RESTRICT. Trying to delete a
- * referenced version raises 23503 which `mapError` turns into a 409.
+ * referenced version raises 23503 which `mapPostgrestError` turns into a 409.
  *
  * `incrementSolveCount` uses a SQL function for atomic UPDATE — no
  * read-modify-write race like the local provider has.
@@ -69,26 +90,26 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		const range = toRange(opts);
 		const direction = opts?.orderDir ?? 'desc';
 
+		// The public path embeds `project` to filter on its visibility/org; the
+		// non-public path selects the definition columns alone. Pick the select
+		// string up front so there's a single `.select()` call and the builder
+		// keeps one type across both branches.
+		const selectColumns = filter?.publicOnly
+			? `${DEFINITION_COLUMNS}, project:projects!inner(visibility, org_id)`
+			: DEFINITION_COLUMNS;
+
 		let query = this.clients
 			.forRequest(ctx)
 			.from('definitions')
-			.select('*', { count: 'exact' })
+			.select(selectColumns, { count: 'exact' })
 			.is('deleted_at', null);
 
-		if (filter?.projectId) query = query.eq('project_id', filter.projectId);
-
 		if (filter?.publicOnly) {
-			query = this.clients
-				.forRequest(ctx)
-				.from('definitions')
-				.select('*, project:projects!inner(visibility, org_id)', {
-					count: 'exact'
-				})
-				.is('deleted_at', null)
-				.eq('project.visibility', 'public');
+			query = query.eq('project.visibility', 'public');
 			if (filter.orgId) query = query.eq('project.org_id', filter.orgId);
-			if (filter.projectId) query = query.eq('project_id', filter.projectId);
 		}
+
+		if (filter?.projectId) query = query.eq('project_id', filter.projectId);
 
 		if (opts?.statuses?.length) {
 			query = query.in('status', opts.statuses);
@@ -106,8 +127,11 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.range(range.from, range.to);
 
 		const { data, error, count } = await query;
-		if (error) throw mapError(error);
-		const items = (data ?? []).map(rowToRecord);
+		if (error) throw mapPostgrestError(error);
+		// `data` is typed against the dynamic select string, which the PostgREST
+		// parser can't resolve to a row shape; the definition columns are all
+		// present regardless, so map through the known `DefinitionRow`.
+		const items = ((data ?? []) as unknown as DefinitionRow[]).map(rowToRecord);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
 
@@ -115,11 +139,11 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('definitions')
-			.select('*')
+			.select(DEFINITION_COLUMNS)
 			.eq('guid', guid)
 			.is('deleted_at', null)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return data ? rowToRecord(data) : null;
 	}
 
@@ -128,7 +152,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.forRequest(ctx)
 			.from('definitions')
 			.insert(recordToRow(record));
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'definition.created',
 			definitionId: record.guid,
@@ -140,7 +164,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	async update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void> {
 		const row = patchToRow(patch);
 		if (Object.keys(row).length === 0) return;
-		if (ctx.userId) row.updated_by = ctx.userId;
+		Object.assign(row, stampUpdate(ctx));
 
 		const { data, error } = await this.clients
 			.forRequest(ctx)
@@ -149,7 +173,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.eq('guid', guid)
 			.is('deleted_at', null)
 			.select('guid');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data || data.length === 0) throw new ProviderError(`Definition '${guid}' not found`, 404);
 	}
 
@@ -157,19 +181,13 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		// Soft-delete (matches the local provider and spec §9). A retention
 		// sweep running as service-role hard-deletes later, which cascades
 		// versions + share_links via FK.
-		const stamp = auditSoftDelete(ctx, ctx.userId);
-		const row: Record<string, unknown> = {
-			deleted_at: stamp.deletedAt,
-			updated_at: stamp.updatedAt
-		};
-		if (stamp.updatedBy) row.updated_by = stamp.updatedBy;
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('definitions')
-			.update(row)
+			.update(stampSoftDelete(ctx))
 			.eq('guid', guid)
 			.is('deleted_at', null);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'definition.deleted',
 			definitionId: guid,
@@ -177,9 +195,45 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		});
 	}
 
+	async deleteByProject(ctx: RequestContext, projectId: string): Promise<void> {
+		// Cascade from `deleteProject` — soft-delete every live definition in the
+		// project in one statement. `select('guid')` returns the affected rows so
+		// we can emit a `definition.deleted` per record (parity with the local
+		// provider and the single-`delete` path above).
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('definitions')
+			.update(stampSoftDelete(ctx))
+			.eq('project_id', projectId)
+			.is('deleted_at', null)
+			.select('guid');
+		if (error) throw mapPostgrestError(error);
+		for (const row of data ?? []) {
+			await this.events.emit({
+				type: 'definition.deleted',
+				definitionId: row.guid,
+				actorId: actorFrom(ctx)
+			});
+		}
+	}
+
 	async incrementSolveCount(ctx: RequestContext, guid: string): Promise<void> {
 		const { error } = await this.clients.forRequest(ctx).rpc('increment_run_count', { g: guid });
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
+	}
+
+	async reserveNextVersionNumber(ctx: RequestContext, guid: string): Promise<number> {
+		// Atomic reserve-and-increment in one SQL function — no read-modify-write
+		// race. Returns the reserved number; raises no_data_found (mapped to 404)
+		// when the definition is missing or soft-deleted.
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.rpc('reserve_next_version_number', { g: guid });
+		if (error) throw mapPostgrestError(error);
+		if (typeof data !== 'number') {
+			throw new ProviderError(`Definition '${guid}' not found`, 404);
+		}
+		return data;
 	}
 
 	// ============================================================================
@@ -191,7 +245,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.forRequest(ctx)
 			.from('definition_versions')
 			.insert(versionToRow(version));
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'definition_version.created',
 			versionId: version.id,
@@ -209,11 +263,11 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		const { data, error, count } = await this.clients
 			.forRequest(ctx)
 			.from('definition_versions')
-			.select('*', { count: 'exact' })
+			.select(DEFINITION_VERSION_COLUMNS, { count: 'exact' })
 			.eq('definition_guid', definitionId)
 			.order('version_number', { ascending: false })
 			.range(range.from, range.to);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		const items = (data ?? []).map(rowToVersion);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
@@ -222,10 +276,10 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('definition_versions')
-			.select('*')
+			.select(DEFINITION_VERSION_COLUMNS_WITH_SCHEMA)
 			.eq('id', versionId)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return data ? rowToVersion(data) : null;
 	}
 
@@ -235,19 +289,19 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.from('definition_versions')
 			.update({ schema, schema_extracted_at: new Date().toISOString() })
 			.eq('id', versionId);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 	}
 
 	async deleteVersion(ctx: RequestContext, versionId: string): Promise<void> {
 		// FK enforcement at the DB layer: live_version_id / draft_version_id
 		// are ON DELETE RESTRICT. If the version is referenced by either
-		// channel, Postgres raises 23503 → mapError → ProviderError(409).
+		// channel, Postgres raises 23503 → mapPostgrestError → ProviderError(409).
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('definition_versions')
 			.delete()
 			.eq('id', versionId);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'definition_version.deleted',
 			versionId,
@@ -293,7 +347,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.select('id, definition_guid')
 			.eq('id', versionId)
 			.maybeSingle();
-		if (vError) throw mapError(vError);
+		if (vError) throw mapPostgrestError(vError);
 		if (!version || version.definition_guid !== definitionId) {
 			throw new ProviderError(`Version '${versionId}' not found for this definition`, 404);
 		}
@@ -303,9 +357,9 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		const row: Record<string, unknown> = {
 			live_version_id: versionId,
 			draft_version_id: versionId,
-			status: 'draft'
+			status: 'draft',
+			...stampUpdate(ctx)
 		};
-		if (ctx.userId) row.updated_by = ctx.userId;
 
 		const { data, error } = await client
 			.from('definitions')
@@ -313,7 +367,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.eq('guid', definitionId)
 			.is('deleted_at', null)
 			.select('guid');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data || data.length === 0) {
 			throw new ProviderError(`Definition '${definitionId}' not found`, 404);
 		}
@@ -333,20 +387,19 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.select('id, definition_guid')
 			.eq('id', versionId)
 			.maybeSingle();
-		if (vError) throw mapError(vError);
+		if (vError) throw mapPostgrestError(vError);
 		if (!version || version.definition_guid !== definitionId) {
 			throw new ProviderError(`Version '${versionId}' not found for this definition`, 404);
 		}
 
-		const row: Record<string, unknown> = { [column]: versionId };
-		if (ctx.userId) row.updated_by = ctx.userId;
+		const row: Record<string, unknown> = { [column]: versionId, ...stampUpdate(ctx) };
 		const { data, error } = await client
 			.from('definitions')
 			.update(row)
 			.eq('guid', definitionId)
 			.is('deleted_at', null)
 			.select('guid');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data || data.length === 0) {
 			throw new ProviderError(`Definition '${definitionId}' not found`, 404);
 		}
@@ -363,6 +416,7 @@ interface DefinitionRow {
 	created_by?: string | null;
 	updated_by?: string | null;
 	compute_server_id: string | null;
+	solve_cache_limit: number | string | null;
 	display_name: string;
 	description: string | null;
 	category: string | null;
@@ -370,6 +424,7 @@ interface DefinitionRow {
 	cover_image: string | null;
 	status: DefinitionStatus;
 	run_count: number | string;
+	next_version_number: number | string;
 	live_version_id: string | null;
 	draft_version_id: string | null;
 	created_at: string;
@@ -401,6 +456,12 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 		liveVersionId: row.live_version_id,
 		draftVersionId: row.draft_version_id,
 		computeServerId: row.compute_server_id ?? undefined,
+		solveCacheLimit:
+			row.solve_cache_limit == null
+				? undefined
+				: typeof row.solve_cache_limit === 'string'
+					? Number(row.solve_cache_limit)
+					: row.solve_cache_limit,
 		displayName: row.display_name,
 		description: row.description ?? undefined,
 		category: row.category ?? undefined,
@@ -408,6 +469,10 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 		coverImage: row.cover_image ?? undefined,
 		status: row.status,
 		solveCount: typeof row.run_count === 'string' ? Number(row.run_count) : row.run_count,
+		nextVersionNumber:
+			typeof row.next_version_number === 'string'
+				? Number(row.next_version_number)
+				: row.next_version_number,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		deletedAt: row.deleted_at ?? null
@@ -424,12 +489,14 @@ function recordToRow(r: DefinitionRecord): Record<string, unknown> {
 		live_version_id: r.liveVersionId,
 		draft_version_id: r.draftVersionId,
 		compute_server_id: r.computeServerId ?? null,
+		solve_cache_limit: r.solveCacheLimit ?? null,
 		display_name: r.displayName,
 		description: r.description ?? null,
 		category: r.category ?? null,
 		cover_image: r.coverImage ?? null,
 		status: r.status,
 		run_count: r.solveCount,
+		next_version_number: r.nextVersionNumber,
 		created_at: r.createdAt,
 		updated_at: r.updatedAt,
 		deleted_at: r.deletedAt ?? null
@@ -447,6 +514,7 @@ function patchToRow(patch: DefinitionRecordPatch): Record<string, unknown> {
 	if (patch.coverImage !== undefined) row.cover_image = patch.coverImage;
 	if (patch.projectId !== undefined) row.project_id = patch.projectId;
 	if (patch.computeServerId !== undefined) row.compute_server_id = patch.computeServerId;
+	if (patch.solveCacheLimit !== undefined) row.solve_cache_limit = patch.solveCacheLimit;
 	if (patch.status !== undefined) row.status = patch.status;
 	if (patch.ownerId !== undefined) row.owner_id = patch.ownerId;
 	return row;
@@ -497,24 +565,4 @@ function definitionOrderColumn(orderBy: DefinitionListOptions['orderBy'] | undef
 		default:
 			return 'created_at';
 	}
-}
-
-interface PostgrestError {
-	code?: string;
-	message?: string;
-}
-
-function mapError(e: unknown): Error {
-	const pg = e as PostgrestError;
-	if (pg?.code === '23505') return new ProviderError(pg.message ?? 'Duplicate record', 409);
-	if (pg?.code === '23503') return new ProviderError(pg.message ?? 'Foreign key violation', 409);
-	if (e instanceof Error) return e;
-	if (e && typeof e === 'object') {
-		const obj = e as { message?: string; details?: string; hint?: string; code?: string };
-		const msg = obj.message ?? obj.details ?? obj.hint ?? 'Unknown Postgres error';
-		const err = new Error(obj.code ? `[${obj.code}] ${msg}` : msg);
-		Object.assign(err, obj);
-		return err;
-	}
-	return new Error(String(e));
 }

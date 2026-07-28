@@ -31,7 +31,12 @@ public class ServerFilePathTests
 
         Assert.Equal(expected, resolved);
         Assert.StartsWith(Path.GetFullPath(BaseDir), resolved);
-        Assert.DoesNotContain('/', resolved.Replace(Path.GetFullPath(BaseDir), ""));
+
+        // Every separator was normalised to the host's. Assert the *foreign* separator is
+        // gone rather than a hard-coded '/': on Unix '/' IS the host separator, so checking
+        // for it would fail on a correctly-resolved path.
+        var foreignSeparator = Sep == '\\' ? '/' : '\\';
+        Assert.DoesNotContain(foreignSeparator, resolved.Replace(Path.GetFullPath(BaseDir), ""));
     }
 
     [Fact]

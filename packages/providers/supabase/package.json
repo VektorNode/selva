@@ -1,15 +1,28 @@
 {
 	"name": "@selvajs/supabase-provider",
-	"version": "0.14.3",
+	"version": "0.15.0-beta.3",
 	"description": "Supabase (Auth + Postgres + Storage) implementations of @selvajs/platform interfaces",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"selva",
+		"provider",
+		"supabase",
+		"auth",
+		"postgres"
+	],
 	"publishConfig": {
 		"access": "public"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/VektorNode/selva.git",
+		"url": "git+https://github.com/VektorNode/selva.git",
 		"directory": "packages/providers/supabase"
+	},
+	"engines": {
+		"node": ">=22.0.0"
 	},
 	"type": "module",
 	"main": "./dist/index.js",
@@ -52,12 +65,17 @@
 	"files": [
 		"dist",
 		"src",
-		"supabase"
+		"supabase",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
 	],
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
+		"prepack": "node ../../../scripts/prepack.js",
+		"postpack": "node ../../../scripts/prepack.js --restore",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"supabase:start": "supabase start",
@@ -65,9 +83,9 @@
 		"supabase:reset": "supabase db reset"
 	},
 	"dependencies": {
-		"@selvajs/platform": "workspace:*",
+		"@selvajs/platform": "workspace:^",
 		"@supabase/supabase-js": "^2.104.1",
-		"sharp": "^0.34.5"
+		"sharp": "^0.35.3"
 	},
 	"devDependencies": {
 		"@types/node": "catalog:",

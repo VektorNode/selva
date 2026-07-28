@@ -1,5 +1,6 @@
 import type { IOrgStore, OrgMember } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
+import { getLogger } from './providers.server.js';
 
 const PAGE_LIMIT = 200;
 // Runaway guard against an adapter that returns a non-advancing cursor —
@@ -25,9 +26,10 @@ export async function listAllOrgMembers(orgs: IOrgStore, orgId: string): Promise
 		cursor = result.nextCursor;
 		if (!cursor) return members;
 	}
-	console.warn(
-		`[admin] listAllOrgMembers stopped after ${MAX_PAGES} pages for org ${orgId} — ` +
-			`member list may be incomplete`
-	);
+	getLogger().warn('listAllOrgMembers hit the page cap — member list may be incomplete', {
+		component: 'admin',
+		orgId,
+		pages: MAX_PAGES
+	});
 	return members;
 }

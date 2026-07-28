@@ -2,26 +2,33 @@ name: Test
 
 on:
   pull_request:
+  # Re-validate `main` after every merge (including admin/direct pushes and
+  # Dependabot auto-merges, which the PR trigger alone can miss once merged),
+  # and on a weekly cron so a green `main` doesn't silently rot against moving
+  # transitive deps / advisories between merges.
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
 
-# Cancel in-progress runs when a new commit is pushed to the same PR.
+# Cancel in-progress runs when a new commit is pushed to the same PR. Keyed on
+# the workflow too so the push-to-main and PR runs for one ref don't cancel
+# each other.
 concurrency:
-  group: test-${{ github.ref }}
+  group: test-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Must precede the local composite action below — GitHub resolves
+      # `uses: ./...` from the runner's filesystem, so the repo has to be
+      # checked out before that step can start.
+      - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v3
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - name: Setup workspace
+        uses: ./.github/actions/setup
 
       # Persist Turbo's local task cache (type-check/check/generate all run
       # through turbo). Turbo handles input hashing; the SHA key writes a fresh
@@ -38,6 +45,12 @@ jobs:
       # cli/selva fixed-group). Pure file scan — fails fast, no build needed.
       - name: Check publish invariants
         run: node scripts/publishable-packages.mjs --check
+
+      # Fail on known vulnerabilities in production dependencies. `--prod`
+      # excludes devDeps (build/test tooling), so this gates what actually ships.
+      # Keeps the svelte/kit XSS class of advisory from silently regressing.
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level moderate
 
       # Generated-code drift gate. `ui-schema.json` is the single source of
       # truth; the committed schema.ts / UISchema.Generated.cs / SchemaVersion.cs
@@ -74,20 +87,22 @@ jobs:
       # and gates the whole monorepo.
       - run: pnpm type-check
 
-      # Tests read workspace-package source directly via the `"source"` export
-      # condition (vitest.config.ts `resolve.conditions: ['source']`), so no
-      # platform pre-build step is needed here.
+      # Run EVERY package's `test` task via turbo. Tests read workspace-package
+      # source directly via the `"source"` export condition (vitest.config.ts
+      # `resolve.conditions: ['source']`), so no platform pre-build step is
+      # needed. Turbo caches by input hash, so unchanged packages are skipped.
       #
-      # Skipped:
-      #   - @selvajs/supabase-provider — conformance tests need a live Supabase
-      #     stack. They self-skip on Node < 22 (no native WebSocket), but
-      #     filtering at this level keeps CI output clean. Add a separate
-      #     workflow with environment secrets when ready.
-      #   - @selvajs/selva — 178 assertions pass, but the process exits 1 from
-      #     an unhandled promise rejection in test cleanup (a race between
-      #     suite teardown and async store writes). Re-enable here once the
-      #     race is fixed.
-      - run: pnpm --filter @selvajs/local-provider test
+      # This is the full no-infra suite — compute (~803), server (security:
+      # token-codec, safe-url, rate-limit, security-headers), ui, plugin-ui,
+      # selva, cli (import smoke), local-provider, and header-auth all gate here.
+      #
+      # @selvajs/supabase-provider is safe under this command: its live-stack
+      # conformance suites self-skip when `readEnv()` finds no Supabase creds
+      # (there is no .env.test in CI), while its no-stack unit tests — e.g.
+      # compute-server apiKey at-rest encryption, hybrid token verification —
+      # run and gate. A separate workflow with environment secrets can add the
+      # live conformance coverage later.
+      - run: pnpm exec turbo run test
 
   # .NET tests for the Rhino-free libraries. Runs on ubuntu in parallel with
   # the JS job. Selva.Tests and Selva.Drawing.Tests both target net8.0 and have
@@ -98,7 +113,7 @@ jobs:
   dotnet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-dotnet@v4
         with:

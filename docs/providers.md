@@ -3,6 +3,7 @@ title: Providers
 group: Concepts
 order: 3
 published: true
+description: 'Bring your own backend: auth, data, and storage are pluggable interfaces you pick at deploy time.'
 ---
 
 # Providers: bring your own backend
@@ -13,7 +14,7 @@ Selva doesn't own a database, an auth service, or a file store. Those are **prov
 
 A parametric tool gets deployed everywhere: a solo consultant's box, a multi-tenant SaaS, an enterprise behind Entra ID. Baking in one backend forces everyone into one shape. Selva defines the _contract_ a backend must satisfy and lets you supply the implementation.
 
-It also keeps Selva out of your compliance surface. Identity, credentials, and PII are owned entirely by the auth provider; Selva stores only opaque session tokens, user IDs, and minimal authorization metadata.
+It also lets you choose where credentials live. Point Selva at Supabase or corporate SSO and identity stays there — Selva keeps session tokens and authorization data. Run the local provider and Selva _is_ the auth provider, storing emails and password hashes itself. Either way you remain the data controller: Selva also persists display names, invite emails, audit-event payloads, and solve telemetry. See [CLAUDE.md](../CLAUDE.md#data-privacy--compliance) for the full inventory.
 
 ## Three roles
 
@@ -55,4 +56,5 @@ For an in-house identity service, a different DB, or an S3-compatible store, see
 ## Next
 
 - [Architecture](architecture.md): where providers sit.
+- [Permissions & Organizations](permissions.md): the authorization model providers store.
 - [Get Started](getting-started/overview.md): deploy with a provider.

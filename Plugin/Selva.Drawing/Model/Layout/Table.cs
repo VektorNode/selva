@@ -40,7 +40,7 @@ public sealed class Table : LayoutElement
 	public double? RowHeight { get; init; }
 	public Margins CellPadding { get; init; } = new Margins(1.5, 2.5, 1.5, 2.5);
 
-	public Stroke Border { get; init; } = new Stroke { Width = 0.25 };
+	public Stroke Border { get; init; } = new Stroke { Width = LineWeight.Fine };
 	public TableBorderStyle BorderStyle { get; init; } = TableBorderStyle.All;
 	public Fill HeaderBackground { get; init; }
 	// Per-row body fills, cycled. Body row k uses RowStripeFills[(StripeOffset + k) % Count].
@@ -154,15 +154,28 @@ public sealed class Table : LayoutElement
 		// of border-stroke inflation, so a 100mm-wide table reports as 100mm wide regardless
 		// of border width. The renderer still uses the path's stroke-inflated bounds for
 		// viewBox padding, so the visible stroke isn't clipped.
+		var pinned = new BoundingBox(
+			Origin.X, Origin.Y,
+			Origin.X + totalRect.Width, Origin.Y + totalRect.Height);
+
+		// An explicit RowHeight is an Absolute track, and content taller than its row is drawn
+		// rather than clipped. Reporting only the track total then understates the table by
+		// however much hangs out — a RowHeight of 5 reported h=5 while ~18 mm of wrapped text
+		// was drawn below its own bottom edge, so every container downstream laid out around a
+		// box the table had already overrun.
+		//
+		// Union the GRID's bounds only, never the border or fill paths: those are stroked, and
+		// including them would undo the border-stroke exclusion this pin exists to provide.
+		var cellInk = resolvedGrid?.ComputeBounds() ?? BoundingBox.Empty;
+		if (!cellInk.IsEmpty) pinned = pinned.Union(cellInk);
+
 		return new GroupElement
 		{
 			Id = Id,
 			CssClass = CssClass,
 			Metadata = Metadata,
 			Children = children,
-			BoundsOverride = new BoundingBox(
-				Origin.X, Origin.Y,
-				Origin.X + totalRect.Width, Origin.Y + totalRect.Height),
+			BoundsOverride = pinned,
 		};
 	}
 
@@ -235,10 +248,16 @@ public sealed class Table : LayoutElement
 		var overflowRows = new List<IReadOnlyList<TableCell>>(Rows.Count - fitsRowCount);
 		for (var i = fitsRowCount; i < Rows.Count; i++) overflowRows.Add(Rows[i]);
 
+		// Pin the full table's resolved column widths onto both fragments. Auto columns size
+		// to the widest cell present, so letting each fragment re-derive them from its own
+		// row subset makes the column edges jump at the page break whenever the widest cell
+		// lands in the other half.
+		var pinnedWidths = ResolvePinnedColumnWidths(context);
+
 		var stripeCount = RowStripeFills?.Count ?? 0;
-		var fitsTable = CloneWithRows(fitsRows, Origin, StripeOffset);
+		var fitsTable = CloneWithRows(fitsRows, Origin, StripeOffset, pinnedWidths);
 		var overflowTable = CloneWithRows(overflowRows, Point2D.Zero,
-			stripeCount > 0 ? (StripeOffset + fitsRowCount) % stripeCount : 0);
+			stripeCount > 0 ? (StripeOffset + fitsRowCount) % stripeCount : 0, pinnedWidths);
 
 		var fitsResolved = fitsTable.Resolve(context);
 		var fitsBounds = fitsResolved?.ComputeBounds() ?? BoundingBox.Empty;
@@ -246,7 +265,55 @@ public sealed class Table : LayoutElement
 		return SplitResult.Partial(fitsResolved, overflowTable, fitsHeight);
 	}
 
-	private Table CloneWithRows(IReadOnlyList<IReadOnlyList<TableCell>> rows, Point2D origin, int stripeOffset)
+	// Column widths the whole table resolves to under this context, as absolute tracks.
+	// Only needed when a column depends on content (Auto) or on remaining space (Star with
+	// infinite context falls back to auto-sizing) — a fully absolute column set can't drift.
+	private IReadOnlyList<GridLength> ResolvePinnedColumnWidths(LayoutContext context)
+	{
+		var columnCount = InferColumnCount();
+		if (columnCount == 0) return ColumnWidths;
+
+		var declared = ResolveColumnWidths(columnCount);
+		var allAbsolute = true;
+		foreach (var w in declared)
+		{
+			if (w.Type != GridLength.Kind.Absolute) { allAbsolute = false; break; }
+		}
+		if (allAbsolute) return declared;
+
+		var gridCells = new List<GridCell>();
+		var rowIndex = 0;
+		if (Header != null && Header.Count > 0)
+		{
+			AddRow(gridCells, Header, rowIndex, isHeader: true, columnCount: columnCount, columnWidths: declared);
+			rowIndex++;
+		}
+		foreach (var row in Rows)
+		{
+			AddRow(gridCells, row, rowIndex, isHeader: false, columnCount: columnCount, columnWidths: declared);
+			rowIndex++;
+		}
+		var rowTracks = new GridLength[rowIndex];
+		for (var i = 0; i < rowTracks.Length; i++)
+			rowTracks[i] = RowHeight.HasValue ? GridLength.Absolute(RowHeight.Value) : GridLength.Auto;
+
+		var grid = new Grid
+		{
+			Columns = declared,
+			Rows = rowTracks,
+			Cells = gridCells,
+			Origin = Origin,
+		};
+		var (layout, _) = grid.ComputeLayout(context);
+
+		var pinned = new GridLength[layout.ColWidths.Length];
+		for (var i = 0; i < pinned.Length; i++)
+			pinned[i] = GridLength.Absolute(layout.ColWidths[i]);
+		return pinned;
+	}
+
+	private Table CloneWithRows(IReadOnlyList<IReadOnlyList<TableCell>> rows, Point2D origin, int stripeOffset,
+		IReadOnlyList<GridLength> columnWidths)
 	{
 		return new Table
 		{
@@ -255,7 +322,7 @@ public sealed class Table : LayoutElement
 			Metadata = Metadata,
 			Header = Header,
 			Rows = rows,
-			ColumnWidths = ColumnWidths,
+			ColumnWidths = columnWidths,
 			ColumnAlignments = ColumnAlignments,
 			RowHeight = RowHeight,
 			CellPadding = CellPadding,
@@ -340,12 +407,19 @@ public sealed class Table : LayoutElement
 		return n;
 	}
 
+	// Declared widths are honoured as far as they go, and any remaining columns fall back to
+	// Star. A count mismatch used to discard the whole list: two widths for three columns meant
+	// all three came out Star and *every* declared width was silently ignored, which reads as
+	// "ColumnWidths does nothing" rather than "one width is missing".
 	private IReadOnlyList<GridLength> ResolveColumnWidths(int columnCount)
 	{
 		if (ColumnWidths != null && ColumnWidths.Count == columnCount) return ColumnWidths;
-		var defaults = new GridLength[columnCount];
-		for (var i = 0; i < columnCount; i++) defaults[i] = GridLength.Star(1);
-		return defaults;
+
+		var widths = new GridLength[columnCount];
+		var declared = ColumnWidths?.Count ?? 0;
+		for (var i = 0; i < columnCount; i++)
+			widths[i] = i < declared ? ColumnWidths[i] : GridLength.Star(1);
+		return widths;
 	}
 
 	private void AddRow(List<GridCell> grid, IReadOnlyList<TableCell> row, int rowIndex, bool isHeader,

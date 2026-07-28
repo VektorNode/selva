@@ -42,8 +42,14 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 		return new LocalPlatformPermissionStore(path.join(env.DATA_PATH, 'user-data.json'));
 	}
 
-	constructor(userDataFilePath: string) {
-		this.data = createLocalUserDataStore(userDataFilePath);
+	/**
+	 * Accepts a file path (constructs its own store) OR a shared
+	 * `LocalUserDataStore`. `LocalDataProvider` injects one shared store so the
+	 * permission, profile, and data-provider views of `user-data.json` share a
+	 * single load-once write-through cache (§3a).
+	 */
+	constructor(userData: string | LocalUserDataStore) {
+		this.data = typeof userData === 'string' ? createLocalUserDataStore(userData) : userData;
 	}
 
 	async getFor(ctx: RequestContext, userId: string): Promise<PlatformPermission[]> {

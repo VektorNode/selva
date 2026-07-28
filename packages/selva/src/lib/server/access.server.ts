@@ -1,10 +1,10 @@
 import { error, redirect } from '@sveltejs/kit';
 import type {
 	AuthUser,
+	DefinitionRecord,
 	OrgPermission,
 	PlatformPermission,
 	Project,
-	ProjectAccessInput,
 	RequestContext
 } from '@selvajs/platform';
 import {
@@ -19,6 +19,7 @@ import {
 	canEditProjectSettings,
 	canEditDefinition
 } from '@selvajs/platform';
+import { createProjectAccessInputBuilder } from '@selvajs/server/access';
 import {
 	getProjectProvider,
 	getDefinitionMeta,
@@ -142,91 +143,23 @@ async function loadProjectOr404(ctx: RequestContext, projectId: string): Promise
 	return project;
 }
 
-/**
- * Build the rule input for any project-scope rule. Fetches exactly the rows
- * the rule will consult based on `project.visibility`:
- *
- * - `platform` → grants
- * - `private`  → caller's project member row
- * - `org` / `public` → caller's project member row (for canEdit/canManage) and
- *   org member row (for canView). Cross-org public skips the org row.
- *
- * Other fields default to safe values; pass `overrides` for the rare callers
- * that already loaded a row (e.g. tests, batched listing pages).
- */
-async function buildProjectAccessInput(
-	ctx: RequestContext,
-	project: Project,
-	overrides: Partial<ProjectAccessInput> = {}
-): Promise<ProjectAccessInput> {
-	const allowCrossOrgPublic = flag('ALLOW_CROSS_ORG_PUBLIC');
-	const enablePlatformProjects = flag('ENABLE_PLATFORM_PROJECTS');
-
-	let member: ProjectAccessInput['member'] = null;
-	let orgMember: ProjectAccessInput['orgMember'] = null;
-	let platformGrants: ProjectAccessInput['platformGrants'] = [];
-
-	if (project.visibility === 'platform') {
-		// When the flag is off the rule short-circuits before reading grants —
-		// skip the lookup to keep "feature disabled" cheap.
-		if (enablePlatformProjects) {
-			platformGrants = await getPlatformProjectGrantStore().listByProject(ctx, project.id);
-		}
-	} else if (project.visibility === 'private') {
-		member = await getProjectProvider().getProjectMember(ctx, project.id, ctx.userId);
-	} else {
-		const skipOrgMember = project.visibility === 'public' && allowCrossOrgPublic;
-		[member, orgMember] = await Promise.all([
-			getProjectProvider().getProjectMember(ctx, project.id, ctx.userId),
-			skipOrgMember
-				? Promise.resolve(null)
-				: getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId)
-		]);
-	}
-
-	return {
-		orgPermissions: ctx.orgPermissions,
-		platformPermissions: ctx.platformPermissions,
-		project,
-		member,
-		orgMember,
-		allowCrossOrgPublic,
-		enablePlatformProjects,
-		platformGrants,
-		actingOrgId: ctx.actingOrgId ?? null,
-		userId: ctx.userId,
-		...overrides
-	};
-}
-
-/**
- * Build a `ProjectAccessInput` from caller-provided rows without any I/O.
- * Used by listing pages that have already batch-loaded membership for many
- * projects; the route layer's per-row predicate calls this instead of
- * `buildProjectAccessInput` to avoid an N+1 fetch.
- */
-export function projectAccessInputFromRows(
-	ctx: RequestContext,
-	project: Project,
-	rows: {
-		member?: ProjectAccessInput['member'];
-		orgMember?: ProjectAccessInput['orgMember'];
-		platformGrants?: ProjectAccessInput['platformGrants'];
-	}
-): ProjectAccessInput {
-	return {
-		orgPermissions: ctx.orgPermissions,
-		platformPermissions: ctx.platformPermissions,
-		project,
-		member: rows.member ?? null,
-		orgMember: rows.orgMember ?? null,
+// Rule-input assembly (the "which rows does each visibility need" knowledge)
+// lives in `@selvajs/server/access`; this binding wires it to the app's
+// lazily-initialized providers and flag reads.
+const accessInputs = createProjectAccessInputBuilder({
+	getProjectMember: (ctx, projectId, userId) =>
+		getProjectProvider().getProjectMember(ctx, projectId, userId),
+	getOrgMember: (ctx, orgId, userId) => getOrganizationProvider().getOrgMember(ctx, orgId, userId),
+	listPlatformGrants: (ctx, projectId) =>
+		getPlatformProjectGrantStore().listByProject(ctx, projectId),
+	flags: () => ({
 		allowCrossOrgPublic: flag('ALLOW_CROSS_ORG_PUBLIC'),
-		enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS'),
-		platformGrants: rows.platformGrants ?? [],
-		actingOrgId: ctx.actingOrgId ?? null,
-		userId: ctx.userId
-	};
-}
+		enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
+	})
+});
+
+const buildProjectAccessInput = accessInputs.buildProjectAccessInput;
+export const projectAccessInputFromRows = accessInputs.projectAccessInputFromRows;
 
 export async function requireCanEdit(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
@@ -402,10 +335,13 @@ export async function requireCanViewProject(locals: Locals, projectId: string): 
  */
 export async function requireCanSolve(
 	locals: Locals,
-	projectId: string
+	projectId: string,
+	// Pass the already-loaded project (e.g. the solve endpoint loads it to read
+	// orgId/pin) to skip a redundant `getProject` inside the gate.
+	preloadedProject?: Project
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
-	const project = await loadProjectOr404(ctx, projectId);
+	const project = preloadedProject ?? (await loadProjectOr404(ctx, projectId));
 	const allowed = await contentCheck(async () =>
 		canSolve(await buildProjectAccessInput(ctx, project))
 	);
@@ -413,39 +349,51 @@ export async function requireCanSolve(
 	return { user, ctx, project };
 }
 
-/** Loads the record and gates editing. Returns the record so callers skip a re-fetch. */
+/**
+ * Loads the record and gates editing. Returns the record AND the project it
+ * loads for the gate, so callers skip a re-fetch of either (§2b).
+ */
 export async function requireEditableDefinition(locals: Locals, guid: string) {
 	const { ctx } = requireAuthed(locals);
 	const record = await getDefinitionMeta().get(ctx, guid);
 	if (!record) throw error(404, 'Definition not found');
-	const allowed = await contentCheck(async () => {
-		const [project, member] = await Promise.all([
-			getProjectProvider().getProject(ctx, record.projectId),
-			getProjectProvider().getProjectMember(ctx, record.projectId, ctx.userId)
-		]);
-		return canEditDefinition({
+	// Load project + member once up front; `project` is returned for reuse (§2b).
+	const [project, member] = await Promise.all([
+		getProjectProvider().getProject(ctx, record.projectId),
+		getProjectProvider().getProjectMember(ctx, record.projectId, ctx.userId)
+	]);
+	const allowed = await contentCheck(async () =>
+		canEditDefinition({
 			project,
 			definition: record,
 			member,
 			userId: ctx.userId,
 			platformPermissions: ctx.platformPermissions,
 			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
-		});
-	});
+		})
+	);
 	if (!allowed) throw error(403, 'You do not have permission to edit this definition.');
-	return { record, ctx };
+	return { record, ctx, project };
 }
 
 export async function requireCanEditDefinition(
 	locals: Locals,
 	projectId: string,
-	definitionGuid: string
+	definitionGuid: string,
+	// Callers that already loaded the project and/or definition (e.g. the solve
+	// endpoint) pass them to skip the redundant fetches inside the gate. The
+	// member row still loads here (the caller doesn't have it).
+	preloaded?: { project?: Project | null; definition?: DefinitionRecord | null }
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await contentCheck(async () => {
 		const [project, definition, member] = await Promise.all([
-			getProjectProvider().getProject(ctx, projectId),
-			getDefinitionMeta().get(ctx, definitionGuid),
+			preloaded?.project !== undefined
+				? Promise.resolve(preloaded.project)
+				: getProjectProvider().getProject(ctx, projectId),
+			preloaded?.definition !== undefined
+				? Promise.resolve(preloaded.definition)
+				: getDefinitionMeta().get(ctx, definitionGuid),
 			getProjectProvider().getProjectMember(ctx, projectId, ctx.userId)
 		]);
 		return canEditDefinition({

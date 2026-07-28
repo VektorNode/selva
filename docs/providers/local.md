@@ -3,6 +3,7 @@ title: Local provider
 group: Providers
 order: 1
 published: true
+description: 'The zero-dependency filesystem provider — JSON on disk, HMAC sessions, WebP transcoding.'
 ---
 
 # Local provider

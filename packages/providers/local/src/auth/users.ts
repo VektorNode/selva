@@ -87,24 +87,50 @@ export interface LocalAuthUserStore {
 }
 
 export function createLocalAuthUserStore(usersFilePath: string): LocalAuthUserStore {
+	// Load-once, write-through cache — same pattern as `LocalOrgStoreLoader`.
+	// `auth-users.json` is read ~4× per authenticated request (verifyToken →
+	// findById, plus the hook's bootstrap reads); reading + parsing the whole
+	// file each time is the §3a hot-path cost. The provider is the sole writer
+	// in single-process local mode, so the in-memory copy is authoritative:
+	// every mutation updates the cached object AND persists via temp+rename.
+	// Concurrent first-callers share one in-flight load so they converge on the
+	// same object reference (writes must stack on one array).
+	let cache: AuthUsersFile | null = null;
+	let loading: Promise<AuthUsersFile> | null = null;
+
+	async function load(): Promise<AuthUsersFile> {
+		if (cache) return cache;
+		loading ??= readJsonFile<AuthUsersFile>(usersFilePath, empty()).then((data) => {
+			cache = data;
+			loading = null;
+			return data;
+		});
+		return loading;
+	}
+
+	async function persist(file: AuthUsersFile): Promise<void> {
+		cache = file;
+		await writeJsonFile(usersFilePath, file);
+	}
+
 	return {
 		async findByEmail(email) {
-			const { users } = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			const { users } = await load();
 			return users.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
 		},
 
 		async findById(id) {
-			const { users } = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			const { users } = await load();
 			return users.find((u) => u.id === id) ?? null;
 		},
 
 		async listUsers() {
-			const { users } = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			const { users } = await load();
 			return users.map(({ passwordHash: _ph, ...rest }) => rest);
 		},
 
 		async createUser(email, password) {
-			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			const file = await load();
 			if (file.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
 				throw new ProviderError(`User with email "${email}" already exists`, 409);
 			}
@@ -115,20 +141,20 @@ export function createLocalAuthUserStore(usersFilePath: string): LocalAuthUserSt
 				createdAt: new Date().toISOString()
 			};
 			file.users.push(user);
-			await writeJsonFile(usersFilePath, file);
+			await persist(file);
 			return user;
 		},
 
 		async setDisabled(id, disabled) {
-			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			const file = await load();
 			const user = file.users.find((u) => u.id === id);
 			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
 			user.disabled = disabled;
-			await writeJsonFile(usersFilePath, file);
+			await persist(file);
 		},
 
 		async touchLastLogin(id) {
-			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			const file = await load();
 			const user = file.users.find((u) => u.id === id);
 			if (!user) return;
 			const now = Date.now();
@@ -137,15 +163,15 @@ export function createLocalAuthUserStore(usersFilePath: string): LocalAuthUserSt
 				if (Number.isFinite(prev) && now - prev < LAST_LOGIN_DEBOUNCE_MS) return;
 			}
 			user.lastLoginAt = new Date(now).toISOString();
-			await writeJsonFile(usersFilePath, file);
+			await persist(file);
 		},
 
 		async deleteUser(id) {
-			const file = await readJsonFile<AuthUsersFile>(usersFilePath, empty());
+			const file = await load();
 			const before = file.users.length;
 			file.users = file.users.filter((u) => u.id !== id);
 			if (file.users.length === before) throw new ProviderError(`User "${id}" not found`, 404);
-			await writeJsonFile(usersFilePath, file);
+			await persist(file);
 		}
 	};
 }

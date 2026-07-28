@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
 using Grasshopper;
@@ -28,8 +29,8 @@ public class ValueApplicator
     private static readonly Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)> TypeHandlers =
         new Dictionary<string, (Type GhType, Func<object, IGH_Goo> Converter)>
         {
-            { "number", (typeof(GH_Number), val => new GH_Number(Convert.ToDouble(val))) },
-            { "integer", (typeof(GH_Integer), val => new GH_Integer(Convert.ToInt32(val))) },
+            { "number", (typeof(GH_Number), val => new GH_Number(Convert.ToDouble(val, CultureInfo.InvariantCulture))) },
+            { "integer", (typeof(GH_Integer), val => new GH_Integer(Convert.ToInt32(val, CultureInfo.InvariantCulture))) },
             { "text", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
             { "boolean", (typeof(GH_Boolean), val => new GH_Boolean(Convert.ToBoolean(val))) },
             { "valueList", (typeof(GH_String), val => new GH_String(val?.ToString() ?? "")) },
@@ -271,7 +272,7 @@ public class ValueApplicator
                 double numValue;
                 try
                 {
-                    numValue = Convert.ToDouble(value);
+                    numValue = Convert.ToDouble(value, CultureInfo.InvariantCulture);
                 }
                 catch (Exception)
                 {
@@ -294,7 +295,7 @@ public class ValueApplicator
             {
                 try
                 {
-                    Convert.ToInt32(value);
+                    Convert.ToInt32(value, CultureInfo.InvariantCulture);
                 }
                 catch (OverflowException)
                 {

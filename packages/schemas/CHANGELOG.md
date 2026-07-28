@@ -1,5 +1,30 @@
 # Schema Changelog
 
+## 4.7.0-beta.2
+
+### Minor Changes
+
+- Adding advanced caching
+
+## 4.7.0-beta.1
+
+### Minor Changes
+
+- a8e1b47: Export two utilities that had no publishable engine home, so downstream apps can share them instead of re-implementing them.
+
+  - `@selvajs/platform` now exports `slugify(name)` alongside `SlugSchema` (in `organizations/schemas.ts`, re-exported from the org and root barrels). It coerces an arbitrary name into the shape `SlugSchema` validates — lowercase, non-alphanumeric runs collapsed to single hyphens, edge hyphens trimmed, capped at 63 chars — but does not itself guarantee validity (an all-symbol name yields `''` and reserved words pass through), so callers must still run the result through `SlugSchema`. The Selva app's private `server/slug.ts` copy is deleted and its six importers repoint to the package.
+  - `@selvajs/schemas` now exports `getDefaultValue(paramType)` (the value an input carries when the schema supplies no explicit default), moved from `@selvajs/ui`'s `schema/defaults` so server-side callers can share it without pulling in the UI package. `@selvajs/ui/schema/defaults` keeps working as a thin re-export, so existing UI consumers are unaffected.
+
+## 4.7.0-beta.0
+
+### Minor Changes
+
+- 2673995: Make `schemaVersion` a required field on `UISchema` (schema format v2.11.0 → v2.12.0) and export `UI_SCHEMA_VERSION`, the current schema-format version, from the generated constants.
+
+  No data transformation: the C# model has always emitted `schemaVersion` (property initializer + migrator stamp), so every schema produced by the plugin already carries it. Making it required lets the web side treat a stored schema's version as authoritative — the render path re-extracts from compute (which runs the C# `SchemaMigrator`) when a cached schema's version is stale, instead of ever migrating in TypeScript.
+
+  TypeScript consumers constructing `UISchema` values by hand must now set `schemaVersion` (use `UI_SCHEMA_VERSION`).
+
 ## 4.6.1
 
 ### Patch Changes

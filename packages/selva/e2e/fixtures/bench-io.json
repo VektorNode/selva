@@ -1,0 +1,79 @@
+{
+	"description": "",
+	"filename": "",
+	"cachekey": "md5_812E839970B7BA526EFE9FA33FA95361",
+	"inputnames": ["Count", "Metal"],
+	"outputnames": ["Schema", "Web Display"],
+	"icon": null,
+	"inputs": [
+		{
+			"description": "",
+			"atLeast": 1,
+			"atMost": 1,
+			"treeAccess": false,
+			"default": {
+				"ParamName": "Get Number",
+				"InnerTree": {
+					"{0}": [
+						{
+							"type": "System.Double",
+							"data": "50.0",
+							"id": "bb1e68ed-da9a-42f3-be80-7f85b452d7c5"
+						}
+					]
+				}
+			},
+			"minimum": 50.0,
+			"maximum": 100.0,
+			"groupName": null,
+			"values": null,
+			"name": "Count",
+			"nickname": null,
+			"paramType": "Number",
+			"id": "bb1e68ed-da9a-42f3-be80-7f85b452d7c5"
+		},
+		{
+			"description": "",
+			"atLeast": 1,
+			"atMost": 1,
+			"treeAccess": false,
+			"default": {
+				"ParamName": "Get Number",
+				"InnerTree": {
+					"{0}": [
+						{
+							"type": "System.Double",
+							"data": "0.1",
+							"id": "fd699391-85cc-436e-92a9-aa173eb4ec69"
+						}
+					]
+				}
+			},
+			"minimum": 0.1,
+			"maximum": 1.0,
+			"groupName": null,
+			"values": null,
+			"name": "Metal",
+			"nickname": null,
+			"paramType": "Number",
+			"id": "fd699391-85cc-436e-92a9-aa173eb4ec69"
+		}
+	],
+	"outputs": [
+		{
+			"name": "Schema",
+			"nickname": null,
+			"paramType": "Generic Data",
+			"id": null
+		},
+		{
+			"name": "Web Display",
+			"nickname": null,
+			"paramType": "Generic Data",
+			"id": null
+		}
+	],
+	"warnings": [],
+	"errors": [],
+	"supporteddataformats": [0, 1]
+}

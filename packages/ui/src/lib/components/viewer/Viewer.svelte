@@ -4,6 +4,8 @@
 	import {
 		initThree,
 		updateScene,
+		LOOKS,
+		type Look,
 		type ThreeInitializerOptions,
 		type CameraController,
 		type CameraProjection,
@@ -23,7 +25,9 @@
 		Ruler,
 		Grid3x3,
 		Check,
-		ChevronRight
+		ChevronRight,
+		Palette,
+		Spline
 	} from '@lucide/svelte';
 	import { DropdownMenu } from 'bits-ui';
 	import type * as THREE from 'three';
@@ -41,6 +45,11 @@
 		showToolsMenu?: boolean;
 		/** Expose the grid show/hide toggle in the tools menu. Grid starts hidden. */
 		showGridToggle?: boolean;
+		/**
+		 * Expose the "Display" submenu (render style picker + edges toggle) in the tools menu.
+		 * Defaults on. Starts on the 'technical' style with edges shown.
+		 */
+		showDisplayMenu?: boolean;
 		enableMeshClick?: boolean;
 		backgroundColor?: string;
 	}
@@ -72,6 +81,7 @@
 		showSceneManager: true,
 		showToolsMenu: true,
 		showGridToggle: true,
+		showDisplayMenu: true,
 		enableMeshClick: true,
 		backgroundColor: '#E6E6E6'
 	};
@@ -107,6 +117,11 @@
 	let cameraController: CameraController | null = null;
 	let measureTool: MeasureTool | null = null;
 	let grid: Grid | null = null;
+	let applyEdges: ((root: THREE.Object3D) => void) | null = null;
+	let clearEdges: ((root: THREE.Object3D) => void) | null = null;
+	let invalidate: (() => void) | null = null;
+	let setLook: ((look: Look) => void) | null = null;
+	let updateGridScale: (() => void) | null = null;
 	let fitToView: (() => void) | null = null;
 	let viewerInitialized = false;
 	let sceneVersion = $state(0);
@@ -115,8 +130,19 @@
 	let projection: CameraProjection = $state('perspective');
 	let measureActive = $state(false);
 	let gridVisible = $state(false);
+	// Render style + edge overlays. 'technical' is the default look; edges (crease lines) start on so
+	// the technical look reads as a CAD shaded view — both are user-switchable via the Display submenu.
+	let renderStyle: Look = $state('technical');
+	let edgesVisible = $state(true);
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
+
+	// Render-style options for the Display submenu, derived from the library's LOOKS array — adding or
+	// renaming a look in @selvajs/compute updates this automatically. Label is the value capitalized.
+	const STYLE_OPTIONS: { look: Look; label: string }[] = LOOKS.map((look) => ({
+		look,
+		label: look.charAt(0).toUpperCase() + look.slice(1)
+	}));
 
 	const VIEW_PRESETS: { preset: ViewPreset; label: () => string }[] = [
 		{ preset: 'top', label: () => t.viewTop },
@@ -143,12 +169,17 @@
 	onMount(() => {
 		if (!canvas) return;
 
+		// Only options that differ from the library defaults. Seed the initial render style (also the
+		// library default, but stated explicitly since it's user-switchable via the Display menu) and
+		// switch off the sun/shadows the technical look doesn't need — flat ambient + HDR image-based
+		// lighting (baseHDR loads by default) carry it. Grid/measure/click are the tools this viewer uses.
 		const opts: ThreeInitializerOptions = {
+			look: renderStyle,
+			lighting: { enableSunlight: false },
+			render: { enableShadows: false },
 			environment: { backgroundColor: config.backgroundColor },
-			controls: {},
 			// Build the grid so it can be toggled at runtime, but start hidden (off by default).
 			grid: { enabled: config.showToolsMenu && config.showGridToggle },
-			gizmo: { enabled: false },
 			measure: { enabled: config.showToolsMenu },
 			events: {
 				onMeshMetadataClicked: config.enableMeshClick
@@ -170,11 +201,22 @@
 		measureTool = init.measureTool;
 		grid = init.grid;
 		grid?.setVisible(gridVisible);
+		applyEdges = init.applyEdges;
+		clearEdges = init.clearEdges;
+		invalidate = init.invalidate;
+		setLook = init.setLook;
+		updateGridScale = init.updateGridScale;
 		fitToView = init.fitToView;
 		projection = init.cameraController.getProjection();
 
+		const renderer = init.renderer;
+
 		return () => {
 			init.dispose();
+			// `{#key definitionKey}` recreates the canvas + WebGLRenderer + GL context
+			// on every definition switch; browsers cap live contexts (~16). Explicitly
+			// drop this one so the GPU-side context is released now rather than at GC.
+			renderer.forceContextLoss();
 		};
 	});
 
@@ -197,12 +239,43 @@
 		if (!grid) return;
 		gridVisible = !gridVisible;
 		grid.setVisible(gridVisible);
+		invalidate?.();
+	}
+
+	function setRenderStyle(look: Look) {
+		if (!setLook || look === renderStyle) return;
+		renderStyle = look;
+		setLook(look);
+	}
+
+	// Add/remove crease-edge overlays on the current scene content. applyEdges is idempotent per mesh
+	// (and attaches large meshes' overlays async, off the main thread); clearEdges is its inverse —
+	// it also cancels in-flight attaches and stands down the screen-space fallback for capped meshes.
+	function applyEdgeState() {
+		if (!scene) return;
+		if (edgesVisible) applyEdges?.(scene);
+		else clearEdges?.(scene);
+	}
+
+	function toggleEdges() {
+		edgesVisible = !edgesVisible;
+		applyEdgeState();
 	}
 
 	$effect(() => {
 		if (scene && camera && controls) {
 			updateScene(scene, meshes, camera, controls, viewerInitialized);
-			untrack(() => sceneVersion++);
+			// updateScene clears and re-adds all content each solve, so the previous solve's edge
+			// overlays are gone — re-attach them if edges are currently shown. Read the flag untracked:
+			// toggling edges is handled directly by toggleEdges(), so it must not re-trigger a full solve.
+			untrack(() => {
+				if (edgesVisible) applyEdges?.(scene!);
+				// Rescale the grid to the new content's extent so cells and fade match the part size.
+				updateGridScale?.();
+				sceneVersion++;
+				// New solve content — repaint now rather than on the render loop's safety interval.
+				invalidate?.();
+			});
 
 			if (!viewerInitialized && meshes.length > 0) {
 				viewerInitialized = true;
@@ -357,6 +430,49 @@
 											{/each}
 										</DropdownMenu.SubContent>
 									</DropdownMenu.Sub>
+
+									{#if config.showDisplayMenu}
+										<DropdownMenu.Sub>
+											<DropdownMenu.SubTrigger class="{itemClass} data-[state=open]:bg-muted">
+												<Palette class="h-4 w-4" />
+												<span class="flex-1">{t.display}</span>
+												<ChevronRight class="h-4 w-4 text-muted-foreground" />
+											</DropdownMenu.SubTrigger>
+											<DropdownMenu.SubContent
+												sideOffset={4}
+												class="min-w-40 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
+											>
+												<!-- Render style: single-choice, current one checked. -->
+												{#each STYLE_OPTIONS as { look, label } (look)}
+													<DropdownMenu.Item
+														closeOnSelect={false}
+														class="{itemClass} {renderStyle === look ? 'text-primary' : ''}"
+														onSelect={() => setRenderStyle(look)}
+													>
+														<span class="flex-1">{label}</span>
+														{#if renderStyle === look}
+															<Check class="h-4 w-4" />
+														{/if}
+													</DropdownMenu.Item>
+												{/each}
+
+												<DropdownMenu.Separator class="my-1 h-px bg-border" />
+
+												<!-- Edges overlay toggle. -->
+												<DropdownMenu.Item
+													closeOnSelect={false}
+													class="{itemClass} {edgesVisible ? 'text-primary' : ''}"
+													onSelect={toggleEdges}
+												>
+													<Spline class="h-4 w-4" />
+													<span class="flex-1">{t.edges}</span>
+													{#if edgesVisible}
+														<Check class="h-4 w-4" />
+													{/if}
+												</DropdownMenu.Item>
+											</DropdownMenu.SubContent>
+										</DropdownMenu.Sub>
+									{/if}
 
 									<DropdownMenu.Item
 										closeOnSelect={false}

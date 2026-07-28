@@ -49,7 +49,12 @@ export function createComputeThrottle<T>(
 
 		currentAbortController = new AbortController();
 		const { signal } = currentAbortController;
-		const timeoutId = setTimeout(() => currentAbortController?.abort(), timeout);
+		const timeoutId = setTimeout(() => {
+			// Cleared in `finally` on every other path, so firing means a genuine
+			// timeout — the only signal for it (the abort itself is swallowed below).
+			console.warn(`[Compute/throttle] solve exceeded ${timeout}ms — aborting`);
+			currentAbortController?.abort();
+		}, timeout);
 
 		isComputing = true;
 		try {
@@ -76,6 +81,10 @@ export function createComputeThrottle<T>(
 
 	function trigger(values: T) {
 		if (isComputing) {
+			if (pendingValues !== null) {
+				// Latest-wins: the previously-queued values are dropped, not solved.
+				console.debug('[Compute/throttle] superseded pending solve (latest-wins)');
+			}
 			pendingValues = values;
 		} else {
 			executeCompute(values);

@@ -31,7 +31,7 @@ public class GH_AngularDimension : GH_Component
         pManager.AddTextParameter("Label", "L", "Override label (default: degrees with ° suffix)", GH_ParamAccess.item, "");
         pManager.AddNumberParameter("Text Size", "TS", "Text height in drawing units", GH_ParamAccess.item, 2.5);
         pManager.AddColourParameter("Color", "C", "Dimension color", GH_ParamAccess.item, Color.Black);
-        pManager.AddNumberParameter("Stroke Width", "SW", "Line stroke width", GH_ParamAccess.item, 0.5);
+        pManager.AddNumberParameter("Stroke Width", "SW", "Line stroke width in mm (paper space). 0 = no dimension lines (the label still draws)", GH_ParamAccess.item, 0.5);
         pManager.AddIntegerParameter("Tick Style", "TK", "Tick mark style at arc endpoints", GH_ParamAccess.item, 0);
         pManager.AddNumberParameter("Tick Size", "TZ", "Tick/arrow size in drawing units (mm), independent of Text Size", GH_ParamAccess.item, 4.0);
         pManager.AddBooleanParameter("Reflex", "X", "Measure the outer (reflex) angle instead of the inner angle", GH_ParamAccess.item, false);

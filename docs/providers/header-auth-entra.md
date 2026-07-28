@@ -3,6 +3,7 @@ title: Header-auth & Entra
 group: Providers
 order: 3
 published: true
+description: 'Trust a reverse proxy for identity — front Selva with Entra SSO via oauth2-proxy.'
 ---
 
 # Header-auth (Entra, Okta, Google Workspace…)
@@ -30,5 +31,6 @@ Full setup, header names, proxy examples, and the self-test: [header-auth-provid
 
 ## Next
 
+- [Entra SSO walkthrough (oauth2-proxy + Caddy)](../deployment/Entra.md) — the concrete end-to-end runbook
 - [Providers overview](../providers.md)
 - [Get Started](../getting-started/overview.md)

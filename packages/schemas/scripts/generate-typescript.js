@@ -117,6 +117,18 @@ async function main() {
     }
   }
 
+  // Current schema-format version — single source of truth is the
+  // schemaVersion default in ui-schema.json (mirrors C# SchemaVersion.CURRENT).
+  const currentSchemaVersion = schema.definitions?.UISchema?.properties?.schemaVersion?.default;
+  if (!currentSchemaVersion) {
+    console.error('ui-schema.json is missing UISchema.properties.schemaVersion.default');
+    process.exit(1);
+  }
+  constantsCode += `
+/** Current UISchema format version (from ui-schema.json's schemaVersion default). */
+export const UI_SCHEMA_VERSION = ${JSON.stringify(currentSchemaVersion)};
+`;
+
   // Generate UI Schema types
   await generateSchema('ui-schema.json', 'schema.ts', 'UISchemaRoot', {
     appendCode: `

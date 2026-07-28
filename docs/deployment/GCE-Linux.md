@@ -1,3 +1,11 @@
+---
+title: Linux VM Deploy (GCE / Ubuntu)
+group: Deployment
+order: 1
+published: true
+description: 'A concrete, end-to-end deploy onto an Ubuntu VM on Google Compute Engine.'
+---
+
 # Deploying Selva to a Linux VM (GCE / Ubuntu)
 
 End-to-end walkthrough for a CLI-scaffolded Selva on a single Linux VM behind Caddy. Written after a real first-run — every footgun in the debug section actually happened.
@@ -8,13 +16,13 @@ Do **not** install PM2 globally — use the deployment-local `pm2` in `node_modu
 
 ---
 
-## Step 1 — Install Node 20
+## Step 1 — Install Node 22
 
 ```bash
 sudo apt-get update
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
-node -v   # expect v20.x
+node -v   # expect v22.x
 ```
 
 ## Step 2 — Find the VM's external IP

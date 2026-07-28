@@ -8,7 +8,7 @@
 		CircleX,
 		ArrowUpCircle
 	} from '@lucide/svelte';
-	import { deriveOutcome, type OutcomeSeverity } from './update-outcome';
+	import { deriveOutcome, type OutcomeSeverity } from '$lib/update-outcome';
 
 	interface Props {
 		currentVersion?: string;
@@ -199,9 +199,7 @@
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action onclick={confirmRun} disabled={isRunning}>
-				{isRestarting ? 'Restarting…' : 'Continue'}
-			</AlertDialog.Action>
+			<AlertDialog.Action onclick={confirmRun} disabled={isRunning}>Continue</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>

@@ -74,7 +74,7 @@ public class PaginationTemplateTests
 
 		var headerTexts = new List<string>();
 		for (var i = 0; i < pages.Count; i++)
-			headerTexts.Add(FindFirstText(pages[i].Content));
+			headerTexts.Add(FindFirstText(pages[i].Content)!);
 
 		Assert.Equal("Page 1 of 3", headerTexts[0]);
 		Assert.Equal("Page 2 of 3", headerTexts[1]);
@@ -238,6 +238,42 @@ public class PaginationTemplateTests
 		Assert.Equal("1/1", FindFirstText(pages[0].Content));
 	}
 
+	[Fact]
+	public void Wrapping_header_reserves_its_full_wrapped_height()
+	{
+		// A header TextFlow longer than the band width wraps to multiple lines when the
+		// per-page chrome resolves against the band rect. The reserved band must be measured
+		// at that same width — the old unconstrained measure saw a single line and let the
+		// header's extra lines overlap the body on every page.
+		var paper = new PaperSize(100, 100, "T100");
+		var margins = Margins.Uniform(10); // band width 80
+		var header = new Selva.Drawing.Model.Layout.TextFlow
+		{
+			Text = "the quick brown fox jumps over the lazy dog and then jumps back again " +
+				"over the lazy dog and keeps going well past the band width",
+			Style = new Selva.Drawing.Model.Style.TextStyle { FontSize = 3.0 },
+		};
+		var template = new PageTemplate
+		{
+			Header = header,
+			HeaderPlacement = ChromePlacement.Content,
+		};
+
+		var pages = PaginationPass.Paginate(Rect(20, 30), paper, margins, template);
+		var page = Assert.IsType<GroupElement>(pages[0].Content);
+		Assert.Equal(2, page.Children.Count);
+
+		var headerBounds = page.Children[0].ComputeBounds();
+		var bodyBounds = page.Children[1].ComputeBounds();
+
+		// Sanity: the header really wrapped (taller than one ~3.6mm line).
+		Assert.True(headerBounds.Height > 5,
+			$"header height {headerBounds.Height} — expected a multi-line wrap");
+		// The wrapped header must sit entirely above the body.
+		Assert.True(headerBounds.MinY >= bodyBounds.MaxY - 1e-6,
+			$"header bottom {headerBounds.MinY} overlaps body top {bodyBounds.MaxY}");
+	}
+
 	private static PathElement Rect(double w, double h) =>
 		new PathElement
 		{
@@ -246,7 +282,7 @@ public class PaginationTemplateTests
 		};
 
 	// Walks the resolved page tree and returns the Text of the first TextElement encountered.
-	private static string FindFirstText(DrawElement element)
+	private static string? FindFirstText(DrawElement element)
 	{
 		switch (element)
 		{

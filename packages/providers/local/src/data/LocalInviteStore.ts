@@ -14,7 +14,11 @@ import { readJsonFile, writeJsonFile } from './fsJson.js';
 interface InvitesFile {
 	invites: Invite[];
 }
-const EMPTY: InvitesFile = { invites: [] };
+// Fresh object per call — `readJsonFile` returns its fallback BY REFERENCE on a
+// missing file, and `create` mutates the loaded object (`.push`). A shared
+// module-level constant would leak those mutations into subsequent "empty"
+// reads (cross-request data bleed). Same hazard the sibling stores guard against.
+const empty = (): InvitesFile => ({ invites: [] });
 
 /**
  * Filesystem-backed invite store. No per-call scoping by ctx.userId — the
@@ -42,7 +46,7 @@ export class LocalInviteStore implements IInviteStore {
 	}
 
 	private async load(): Promise<InvitesFile> {
-		return readJsonFile<InvitesFile>(this.filePath, EMPTY);
+		return readJsonFile<InvitesFile>(this.filePath, empty());
 	}
 
 	private async save(file: InvitesFile): Promise<void> {

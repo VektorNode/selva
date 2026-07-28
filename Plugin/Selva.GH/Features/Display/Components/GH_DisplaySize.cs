@@ -5,6 +5,7 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Selva.GH.Features.Display.Goos;
+using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 
@@ -29,8 +30,8 @@ public class GH_DisplaySize : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddGenericParameter("Web Display", "WD", "Web Display output from the Display component",
-            GH_ParamAccess.item);
+        pManager.AddParameter(new Param_WebDisplay("Web Display", "WD",
+            "Web Display output from the Display component", "Selva", "Display", GH_ParamAccess.item));
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)

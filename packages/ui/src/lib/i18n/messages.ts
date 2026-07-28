@@ -22,6 +22,10 @@ export interface ViewerMessages {
 	views: string;
 	measure: string;
 	grid: string;
+	/** "Display" submenu label — groups render style + edges. */
+	display: string;
+	/** Edges show/hide toggle label. */
+	edges: string;
 	sceneManager: string;
 	screenshot: string;
 	fullscreen: string;
@@ -82,6 +86,8 @@ const en: ViewerMessages = {
 	views: 'Views',
 	measure: 'Measure',
 	grid: 'Grid',
+	display: 'Display',
+	edges: 'Edges',
 	sceneManager: 'Scene manager',
 	screenshot: 'Screenshot',
 	fullscreen: 'Fullscreen',
@@ -135,6 +141,8 @@ const de: ViewerMessages = {
 	views: 'Ansichten',
 	measure: 'Messen',
 	grid: 'Raster',
+	display: 'Darstellung',
+	edges: 'Kanten',
 	sceneManager: 'Szenen-Manager',
 	screenshot: 'Screenshot',
 	fullscreen: 'Vollbild',

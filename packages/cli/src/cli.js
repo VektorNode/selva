@@ -35,9 +35,6 @@ export async function runSelva(argv) {
 	}
 
 	if (command === '--version' || command === '-v') {
-		// We don't pin a version here — selva is installed transitively, so
-		// the deployment's package.json doesn't list us directly. Read our
-		// own package.json instead.
 		const { readFileSync } = await import('node:fs');
 		const { fileURLToPath } = await import('node:url');
 		const { dirname, join } = await import('node:path');

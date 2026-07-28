@@ -4,8 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { env as privateEnv } from '$env/dynamic/private';
-import { LocalComputeServerStore, type SecretVerificationReport } from '@selvajs/local-provider';
-import { findServerById } from '@selvajs/platform';
+import { LocalComputeServerStore } from '@selvajs/local-provider';
+import {
+	findServerById,
+	type SchemaVersionReport,
+	type SecretVerificationReport
+} from '@selvajs/platform';
 import { providers, getComputeServerConfigStore } from '$lib/server/providers.server';
 import { requirePermission } from '$lib/server/access.server';
 
@@ -79,6 +83,38 @@ function atRestSecretsCheck(report: SecretVerificationReport | null): HealthChec
 	};
 }
 
+function schemaVersionCheck(report: SchemaVersionReport | null): HealthCheck {
+	const base = { id: 'schema-version', label: 'Database schema' };
+
+	if (report === null) {
+		return {
+			...base,
+			status: 'not_applicable',
+			summary:
+				'The active data provider migrates with the app — there is no separate schema to verify.'
+		};
+	}
+
+	if (report.ok) {
+		return {
+			...base,
+			status: 'ok',
+			summary: `Database migration head ${report.actual} satisfies the app's expected ${report.expected}.`
+		};
+	}
+
+	return {
+		...base,
+		status: 'degraded',
+		summary:
+			report.message ??
+			`Database migration head ${report.actual ?? 'unavailable'} is behind the app's expected ${report.expected}.`,
+		remediation:
+			'Sync the provider migrations into your Supabase project and run `npx supabase db push`, ' +
+			'then restart the app. `selva doctor` runs the same check from the CLI.'
+	};
+}
+
 const COMPUTE_PING_TIMEOUT_MS = 8000;
 
 /**
@@ -118,7 +154,10 @@ async function computeReachabilityCheck(locals: App.Locals): Promise<HealthCheck
 	const timer = setTimeout(() => controller.abort(), COMPUTE_PING_TIMEOUT_MS);
 	try {
 		const headers: Record<string, string> = {};
-		if (server.apiKey) headers['RhinoComputeKey'] = server.apiKey;
+		if (server.hasApiKey) {
+			const apiKey = await getComputeServerConfigStore().getServerApiKey(locals.ctx!, server.id);
+			if (apiKey) headers['RhinoComputeKey'] = apiKey;
+		}
 		const res = await fetch(new URL('/healthcheck', server.serverUrl).toString(), {
 			signal: controller.signal,
 			headers
@@ -204,7 +243,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const checks: HealthCheck[] = [];
 
 	const store = providers.data.computeServer;
-	if (store instanceof LocalComputeServerStore) {
+	if (typeof store.verifySecrets === 'function') {
 		try {
 			checks.push(atRestSecretsCheck(await store.verifySecrets()));
 		} catch (err) {
@@ -218,6 +257,16 @@ export const GET: RequestHandler = async ({ locals }) => {
 		}
 	} else {
 		checks.push(atRestSecretsCheck(null));
+	}
+
+	// Live app↔DB schema handshake (audit O3) — unlike boot health this re-runs
+	// on every request, so an operator sees green right after `db push` without
+	// restarting first (the boot report itself stays stale by design).
+	const data = providers.data;
+	if (typeof data.verifySchemaVersion === 'function') {
+		checks.push(schemaVersionCheck(await data.verifySchemaVersion()));
+	} else {
+		checks.push(schemaVersionCheck(null));
 	}
 
 	// Reachability + writability run in parallel — independent of each other

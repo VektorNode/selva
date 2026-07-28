@@ -27,20 +27,87 @@ public static class DocumentLayoutPass
 
 		var sections = layout.Sections ?? Array.Empty<Section>();
 
-		// Pre-resolve doc-level chrome once. Sections that don't override use these.
-		var defaultHeader = PaginationPass.ResolveLayout(layout.Header);
-		var defaultFooter = PaginationPass.ResolveLayout(layout.Footer);
-
 		var raw = new List<RawPage>();
 
-		// An empty document still emits one chrome-only page so an empty header/footer
-		// template renders meaningfully (matches PaginationPass's "null content" behaviour).
-		if (sections.Count == 0)
+		foreach (var section in sections)
+		{
+			if (section == null) continue;
+
+			var paper = section.PaperSize ?? layout.PaperSize;
+			var margins = section.Margins ?? layout.Margins;
+
+			// Chrome is measured per section: band height depends on the band width (wrapping
+			// TextFlows), and paper/margins — hence the width — can differ per section.
+			//
+			// Measure the SUBSTITUTED template. Substitution changes text length and layout is
+			// what wraps it, so measuring the raw "{title}" reserved a band sized for the token
+			// rather than for the value. Cross-section numbering means the true {page}/{pages}
+			// aren't known yet; a provisional resolver carrying the real title and section name
+			// gets the length-dominant tokens right, and page numbers vary by a digit at most.
+			var bandWidth = PaginationPass.BandWidth(paper, margins);
+			var measureResolver = new TokenResolver(
+				1, 1, layout.Title, section.Title ?? string.Empty, layout.Tokens,
+				layout.Now ?? DateTime.Now, layout.Culture);
+			var sectionHeader = PaginationPass.ResolveLayout(
+				measureResolver.ResolveTree(section.Header ?? layout.Header), bandWidth);
+			var sectionFooter = PaginationPass.ResolveLayout(
+				measureResolver.ResolveTree(section.Footer ?? layout.Footer), bandWidth);
+
+			var headerH = PaginationPass.ResolveBandHeight(
+				section.HeaderHeight ?? layout.HeaderHeight, sectionHeader);
+			var footerH = PaginationPass.ResolveBandHeight(
+				section.FooterHeight ?? layout.FooterHeight, sectionFooter);
+
+			var headerAlign = section.HeaderAlign ?? layout.HeaderAlign;
+			var footerAlign = section.FooterAlign ?? layout.FooterAlign;
+
+			var bands = new BandConfig
+			{
+				HeaderHeight = headerH,
+				FooterHeight = footerH,
+				HeaderPlacement = section.HeaderPlacement ?? layout.HeaderPlacement,
+				FooterPlacement = section.FooterPlacement ?? layout.FooterPlacement,
+				HeaderEdgeOffset = section.HeaderEdgeOffset ?? layout.HeaderEdgeOffset,
+				FooterEdgeOffset = section.FooterEdgeOffset ?? layout.FooterEdgeOffset,
+			};
+
+			// KeepTogether forces the whole section onto one page even if it overflows the
+			// content rect. Pagination runs with infinite vertical budget: TrySplit always
+			// reports AllFits and we get a single raw page with all the content.
+			var body = section.KeepTogether
+				? PaginationPass.PaginateBody(section.Content, paper, margins, bands, double.PositiveInfinity)
+				: PaginationPass.PaginateBody(section.Content, paper, margins, bands);
+
+			for (var i = 0; i < body.RawContents.Count; i++)
+			{
+				raw.Add(new RawPage
+				{
+					Paper = paper,
+					Margins = margins,
+					Title = layout.Title,
+					SectionTitle = section.Title ?? string.Empty,
+					RawHeader = section.Header ?? layout.Header,
+					RawFooter = section.Footer ?? layout.Footer,
+					HeaderAlign = headerAlign,
+					FooterAlign = footerAlign,
+					Layout = body,
+					ContentIndex = i,
+				});
+			}
+		}
+
+		// An empty document — no sections, or every section null/empty — still emits one
+		// chrome-only page (with its bands intact) so an empty header/footer template renders
+		// meaningfully and callers always get at least one page out.
+		if (raw.Count == 0)
 		{
 			var paper = layout.PaperSize;
 			var margins = layout.Margins;
-			var headerH = PaginationPass.ResolveBandHeight(layout.HeaderHeight, defaultHeader);
-			var footerH = PaginationPass.ResolveBandHeight(layout.FooterHeight, defaultFooter);
+			var bandWidth = PaginationPass.BandWidth(paper, margins);
+			var headerH = PaginationPass.ResolveBandHeight(
+				layout.HeaderHeight, PaginationPass.ResolveLayout(layout.Header, bandWidth));
+			var footerH = PaginationPass.ResolveBandHeight(
+				layout.FooterHeight, PaginationPass.ResolveLayout(layout.Footer, bandWidth));
 			var bands = new BandConfig
 			{
 				HeaderHeight = headerH,
@@ -50,7 +117,6 @@ public static class DocumentLayoutPass
 				HeaderEdgeOffset = layout.HeaderEdgeOffset,
 				FooterEdgeOffset = layout.FooterEdgeOffset,
 			};
-			var body = PaginationPass.PaginateBody(null, paper, margins, bands);
 			raw.Add(new RawPage
 			{
 				Paper = paper,
@@ -61,87 +127,7 @@ public static class DocumentLayoutPass
 				RawFooter = layout.Footer,
 				HeaderAlign = layout.HeaderAlign,
 				FooterAlign = layout.FooterAlign,
-				Layout = body,
-				ContentIndex = 0,
-			});
-		}
-		else
-		{
-			foreach (var section in sections)
-			{
-				if (section == null) continue;
-
-				var paper = section.PaperSize ?? layout.PaperSize;
-				var margins = section.Margins ?? layout.Margins;
-
-				var sectionHeader = section.Header != null
-					? PaginationPass.ResolveLayout(section.Header)
-					: defaultHeader;
-				var sectionFooter = section.Footer != null
-					? PaginationPass.ResolveLayout(section.Footer)
-					: defaultFooter;
-
-				var headerH = PaginationPass.ResolveBandHeight(
-					section.HeaderHeight ?? layout.HeaderHeight, sectionHeader);
-				var footerH = PaginationPass.ResolveBandHeight(
-					section.FooterHeight ?? layout.FooterHeight, sectionFooter);
-
-				var headerAlign = section.HeaderAlign ?? layout.HeaderAlign;
-				var footerAlign = section.FooterAlign ?? layout.FooterAlign;
-
-				var bands = new BandConfig
-				{
-					HeaderHeight = headerH,
-					FooterHeight = footerH,
-					HeaderPlacement = section.HeaderPlacement ?? layout.HeaderPlacement,
-					FooterPlacement = section.FooterPlacement ?? layout.FooterPlacement,
-					HeaderEdgeOffset = section.HeaderEdgeOffset ?? layout.HeaderEdgeOffset,
-					FooterEdgeOffset = section.FooterEdgeOffset ?? layout.FooterEdgeOffset,
-				};
-
-				// KeepTogether forces the whole section onto one page even if it overflows the
-				// content rect. Pagination runs with infinite vertical budget: TrySplit always
-				// reports AllFits and we get a single raw page with all the content.
-				var body = section.KeepTogether
-					? PaginationPass.PaginateBody(section.Content, paper, margins, bands, double.PositiveInfinity)
-					: PaginationPass.PaginateBody(section.Content, paper, margins, bands);
-
-				for (var i = 0; i < body.RawContents.Count; i++)
-				{
-					raw.Add(new RawPage
-					{
-						Paper = paper,
-						Margins = margins,
-						Title = layout.Title,
-						SectionTitle = section.Title ?? string.Empty,
-						RawHeader = section.Header ?? layout.Header,
-						RawFooter = section.Footer ?? layout.Footer,
-						HeaderAlign = headerAlign,
-						FooterAlign = footerAlign,
-						Layout = body,
-						ContentIndex = i,
-					});
-				}
-			}
-		}
-
-		// Empty doc with non-empty sections list (e.g. all sections null/empty content). Make
-		// sure callers always get at least one page out so renderers don't choke.
-		if (raw.Count == 0)
-		{
-			var paper = layout.PaperSize;
-			var margins = layout.Margins;
-			raw.Add(new RawPage
-			{
-				Paper = paper,
-				Margins = margins,
-				Title = layout.Title,
-				SectionTitle = string.Empty,
-				RawHeader = layout.Header,
-				RawFooter = layout.Footer,
-				HeaderAlign = layout.HeaderAlign,
-				FooterAlign = layout.FooterAlign,
-				Layout = PaginationPass.PaginateBody(null, paper, margins, 0, 0),
+				Layout = PaginationPass.PaginateBody(null, paper, margins, bands),
 				ContentIndex = 0,
 			});
 		}
@@ -162,10 +148,9 @@ public static class DocumentLayoutPass
 			var tokens = MergeScaleToken(layout.Tokens, HarvestScaleLabel(rp.Layout.RawContents[rp.ContentIndex]) ?? string.Empty);
 			var resolver = new TokenResolver(i + 1, totalPages, rp.Title, rp.SectionTitle, tokens, now, layout.Culture);
 
-			// Chrome resolves per page against its band rect (so star grids fill the band width
-			// and TextFlows wrap to it), then this page's tokens substitute into the result.
-			// Band heights were measured from the unsubstituted template above — close enough
-			// for typical {page}-style tokens.
+			// Chrome resolves per page: this page's tokens substitute into the raw template
+			// first, then the result is laid out against the band rect (so star grids fill the
+			// band width and TextFlows wrap the substituted text, not the token).
 			var pageHeader = PaginationPass.ResolveChromeForPage(rp.RawHeader, rp.Layout.HeaderRect, resolver);
 			var pageFooter = PaginationPass.ResolveChromeForPage(rp.RawFooter, rp.Layout.FooterRect, resolver);
 
@@ -173,7 +158,8 @@ public static class DocumentLayoutPass
 			var rawContent = resolver.ResolveTree(rp.Layout.RawContents[rp.ContentIndex]);
 			var anchoredContent = PaginationPass.AnchorTopLeft(rawContent, rp.Layout.ContentRect);
 			var anchoredHeader = PaginationPass.AnchorChrome(pageHeader, rp.Layout.HeaderRect, rp.HeaderAlign);
-			var anchoredFooter = PaginationPass.AnchorChrome(pageFooter, rp.Layout.FooterRect, rp.FooterAlign);
+			var anchoredFooter = PaginationPass.AnchorChrome(
+				pageFooter, rp.Layout.FooterRect, rp.FooterAlign, PaginationPass.VerticalAnchor.Bottom);
 
 			pages.Add(new Page
 			{

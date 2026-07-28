@@ -23,6 +23,18 @@ namespace Selva.GH.Features.UIBuilder.Components;
 /// <summary>
 ///     Unified UI Builder component - WebSocket-only version
 ///     Switch between Schema Builder mode and Interactive Preview mode
+///
+///     DO NOT RENAME THIS CLASS. Rhino.Compute identifies it by literal type name
+///     ("GH_UIBuilderComponent") in GrasshopperValidationHelper.cs — it cannot reference Selva.GH,
+///     so there is no `is` check and no compile-time link. A rename compiles clean here and breaks
+///     /grasshopper/schema for EVERY definition at once, with a misleading error blaming the user's
+///     Context Bake wiring. Nothing in either repo catches this: the boundary has no test.
+///     If you must rename, update the compute fork in the same change.
+///
+///     Same applies to OBSOLETE_* snapshots: they must keep subclassing this component. Compute
+///     walks the base chain to accept them (a pre-upgrade .gh deserializes into the subclass, and
+///     the IGH_UpgradeObject only runs on an interactive right-click → Upgrade, never headlessly).
+///     A standalone copy-pasted snapshot is not a GH_UIBuilderComponent and will be rejected.
 /// </summary>
 public class GH_UIBuilderComponent : GH_Component, IDisposable
 {
@@ -31,6 +43,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     // Document tracking
     private GH_Document _currentDocument;
     private bool _disposed;
+
+    // DO NOT RENAME. Rhino.Compute reads this field by literal name via reflection
+    // (GrasshopperValidationHelper.GetEmbeddedSchema) to serve /grasshopper/schema without
+    // solving. A rename compiles clean and makes every definition report "no embedded schema".
     private UISchema _embeddedSchema;
     private Dictionary<string, object> _embeddedValues;
     private EventHandler _onDocumentModified;
@@ -53,12 +69,16 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// </summary>
     private bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
 
-    public override Guid ComponentGuid => new Guid("D4E5F6A7-B8C9-4D5E-0F1A-2B3C4D5E6F7A");
+    public override Guid ComponentGuid => new Guid("593BC967-797A-4B1A-9B76-C2133F6B08E2");
 
     protected override Bitmap Icon => Resources.UIBridge;
 
     /// <summary>
     ///     Override Locked property to handle right-click disable/enable.
+    ///
+    ///     Unlock recovery: locking tears down document subscriptions without a falling edge, so
+    ///     the solve after unlock sees EnableRising == false. SolveInstance therefore also keys the
+    ///     rebind on EventManager.IsRegistered — do not narrow that condition back to edges only.
     ///
     ///     IMPORTANT invariant: on lock we only tear down what InitializeDependencies wires per-document
     ///     (servers + DocumentEventManager document-side subscriptions). We do NOT detach the
@@ -106,6 +126,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
         pManager.AddGenericParameter("Schema", "Schema", "Current UI schema", GH_ParamAccess.item);
+        pManager.AddTextParameter("URL", "URL",
+            "Web UI URL for this session (empty until the servers are running)", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
@@ -141,9 +163,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         // Register document events only when enabled. Re-registration is needed on the rising
-        // edge (off→on) or when the document changed under us — not on every solve.
-        // EventManager itself is idempotent, but skipping the call keeps the hot path lean.
-        if (enable && (transition.EnableRising || _currentDocument != document))
+        // edge (off→on), when the document changed under us, or when the subscriptions were torn
+        // down without a falling edge: right-click lock → unlock never solves with enable=false,
+        // so _lastEnable stays true and EnableRising alone would skip the rebind — leaving
+        // SolutionStart/End dead and wedging IsBusy after the first value update.
+        var rebind = enable && (transition.EnableRising
+                                || _currentDocument != document
+                                || !_service.EventManager.IsRegistered);
+        if (rebind)
         {
             _currentDocument = document;
             _service.EventManager.RegisterEvents(document);
@@ -152,7 +179,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         // Handle current state
         if (enable)
         {
-            HandleEnabledState(DA, document, transition);
+            HandleEnabledState(DA, document, rebind);
         }
         else
         {
@@ -273,30 +300,41 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// <summary>
     ///     Handle enabled state
     /// </summary>
-    private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, StateTransition transition)
+    private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, bool rebind)
     {
-        if (!_service.ServerManager.IsRunning)
+        var wasRunning = _service.ServerManager.IsRunning;
+
+        // Start servers when they're down — but also route through StartServersAsync on a rebind
+        // even if they look up: StartServersAsync records the "should be running" intent, so a
+        // stop still in flight from a fast disable→enable is skipped instead of landing after
+        // this solve and stranding dead servers on an enabled component.
+        if (!wasRunning || rebind)
         {
-            // Start servers using the ServerLifecycleManager (async fire-and-forget)
             _ = Task.Run(async () =>
             {
                 try
                 {
                     var started = await _service.ServerManager.StartServersAsync(_sessionId);
 
-                    if (started)
-                    // Show Web UI URL if embedded assets are available
+                    // Show Web UI URL if embedded assets are available. Only on an actual
+                    // cold start — a no-op re-confirm shouldn't re-post the remark.
+                    if (started && !wasRunning && _service.ServerManager.HttpPort.HasValue)
                     {
-                        if (_service.ServerManager.HttpPort.HasValue)
+                        var wsPort = _service.ServerManager.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
+                        var httpPort = _service.ServerManager.HttpPort.Value;
+                        RhinoApp.InvokeOnUiThread(new Action(() =>
                         {
-                            var wsPort = _service.ServerManager.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
-                            var httpPort = _service.ServerManager.HttpPort.Value;
-                            RhinoApp.InvokeOnUiThread(new Action(() =>
-                            {
-                                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                                    $"Web UI available at: http://localhost:{httpPort}/?session={_sessionId}&wsPort={wsPort}");
-                            }));
-                        }
+                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                                $"Web UI available at: http://localhost:{httpPort}/?session={_sessionId}&wsPort={wsPort}");
+                        }));
+                    }
+
+                    // The URL output was empty while the servers were still coming up —
+                    // refresh once after a cold start so it picks up the live ports.
+                    if (started && !wasRunning)
+                    {
+                        RhinoApp.InvokeOnUiThread(new Action(() =>
+                            GHDocumentMutator.ScheduleComponentExpire(document, this, true)));
                     }
                 }
                 catch (Exception ex)
@@ -307,11 +345,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     }));
                 }
             });
+        }
 
+        if (!wasRunning)
+        {
             Message = ComponentMessageFormatter.CreateDisplayMessage(true, true, _embeddedSchema, _sessionId);
         }
 
-        if (_embeddedSchema != null && transition.EnableRising)
+        if (_embeddedSchema != null && rebind)
         {
             // Remove any parameters deleted while component was off
             _embeddedSchema = _service.SchemaSynchronizer.ValidateSchema(_embeddedSchema, document);
@@ -322,6 +363,45 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
+        SetUrlOutput(DA);
+    }
+
+    /// <summary>
+    ///     Build the session URL, or null while the WebSocket transport isn't running yet.
+    ///     Falls back to the dev server when no embedded web server is available.
+    /// </summary>
+    private string TryBuildSessionUrl()
+    {
+        if (_service?.WebSocketTransport?.IsRunning != true)
+        {
+            return null;
+        }
+
+        var wsPort = _service.WebSocketTransport.WebSocketPort;
+        var baseUrl = _service.WebServer?.IsRunning == true
+            ? _service.WebServer.BaseUrl
+            : "http://localhost:5173";
+        return $"{baseUrl}/?session={_sessionId}&wsPort={wsPort}";
+    }
+
+    /// <summary>
+    ///     Set the URL output when present — the obsolete subclass registers only the Schema output.
+    /// </summary>
+    private void SetUrlOutput(IGH_DataAccess DA)
+    {
+        if (Params.Output.Count > 1)
+        {
+            DA.SetData(1, TryBuildSessionUrl());
+        }
+    }
+
+    /// <summary>
+    ///     Carry the embedded schema/values across a component upgrade (old instance → this).
+    /// </summary>
+    internal void TransferStateFrom(GH_UIBuilderComponent other)
+    {
+        _embeddedSchema = other._embeddedSchema;
+        _embeddedValues = other._embeddedValues;
     }
 
     /// <summary>
@@ -369,13 +449,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         try
         {
-            // Get WebSocket port from WebSocketTransport
-            var wsPort = _service?.WebSocketTransport?.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
-
-            // Use embedded web server if available, otherwise fall back to dev server
-            var url = _service?.WebServer?.IsRunning == true
-                ? $"{_service.WebServer.BaseUrl}/?session={_sessionId}&wsPort={wsPort}"
-                : $"http://localhost:5173/?session={_sessionId}&wsPort={wsPort}";
+            var url = TryBuildSessionUrl()
+                      ?? $"http://localhost:5173/?session={_sessionId}&wsPort={AppConfig.WebSocket.DefaultPort}";
 
             Process.Start(new ProcessStartInfo
             {
@@ -425,11 +500,46 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private static readonly Guid BooleanToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3923ac8bd91a");
     private static readonly Guid HopsContextBakeGuid = new Guid("ae2531b4-bab2-4bb1-b5bf-f2143d10c132");
 
+    /// <summary>
+    ///     Set while an upgrader is swapping an old component for a new one. GH_UpgradeUtil adds the
+    ///     replacement to the document (firing <see cref="AddedToDocument" />) BEFORE migrating the old
+    ///     component's sources and recipients onto it, so at that moment the new instance looks exactly
+    ///     like a fresh drop — zero sources, zero recipients — and would auto-wire a second toggle next
+    ///     to the one already connected to Enable. Upgraders wrap their swap in
+    ///     <see cref="SuppressAutoWire" /> to skip auto-wiring for that window.
+    /// </summary>
+    [ThreadStatic] private static bool _autoWireSuppressed;
+
+    /// <summary>
+    ///     Suppress placement auto-wiring for the duration of the returned scope. Used by upgraders
+    ///     around the component swap; see <see cref="_autoWireSuppressed" />.
+    /// </summary>
+    internal static IDisposable SuppressAutoWire()
+    {
+        return new AutoWireSuppression();
+    }
+
+    private sealed class AutoWireSuppression : IDisposable
+    {
+        private readonly bool _previous;
+
+        public AutoWireSuppression()
+        {
+            _previous = _autoWireSuppressed;
+            _autoWireSuppressed = true;
+        }
+
+        public void Dispose()
+        {
+            _autoWireSuppressed = _previous;
+        }
+    }
+
     public override void AddedToDocument(GH_Document document)
     {
         base.AddedToDocument(document);
 
-        if (document == null || !IsFreshPlacement())
+        if (document == null || _autoWireSuppressed || !IsFreshPlacement())
         {
             return;
         }
@@ -455,17 +565,24 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return false;
         }
 
-        if (Params.Input.Count > 0 && Params.Input[0].SourceCount > 0)
-        {
-            return false;
-        }
-
-        if (Params.Output.Count > 0 && Params.Output[0].Recipients.Count > 0)
+        if (HasEnableSource() || HasSchemaRecipient())
         {
             return false;
         }
 
         return true;
+    }
+
+    /// <summary>Whether anything is already feeding the Enable input.</summary>
+    private bool HasEnableSource()
+    {
+        return Params.Input.Count > 0 && Params.Input[0].SourceCount > 0;
+    }
+
+    /// <summary>Whether anything is already consuming the Schema output.</summary>
+    private bool HasSchemaRecipient()
+    {
+        return Params.Output.Count > 0 && Params.Output[0].Recipients.Count > 0;
     }
 
     private void WireDefaultNeighbors(GH_Document document)
@@ -481,7 +598,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         var selfBounds = Attributes.Bounds;
         var centerY = selfBounds.Y + selfBounds.Height / 2f;
 
-        var toggle = Grasshopper.Instances.ComponentServer.EmitObject(BooleanToggleGuid) as IGH_Param;
+        // Each side is wired independently: an already-connected Enable must not get a second toggle
+        // even if the Schema output is still free (and vice versa).
+        var toggle = HasEnableSource()
+            ? null
+            : Grasshopper.Instances.ComponentServer.EmitObject(BooleanToggleGuid) as IGH_Param;
         if (toggle != null && Params.Input.Count > 0)
         {
             document.AddObject(toggle, false);
@@ -500,7 +621,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             Params.Input[0].AddSource(toggle);
         }
 
-        var bake = Grasshopper.Instances.ComponentServer.EmitObject(HopsContextBakeGuid);
+        var bake = HasSchemaRecipient()
+            ? null
+            : Grasshopper.Instances.ComponentServer.EmitObject(HopsContextBakeGuid);
         if (bake is IGH_Component bakeComponent && Params.Output.Count > 0 && bakeComponent.Params.Input.Count > 0)
         {
             document.AddObject(bakeComponent, false);

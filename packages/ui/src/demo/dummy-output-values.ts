@@ -48,7 +48,6 @@ export async function getParsedMeshes() {
 	const objects: THREE.Object3D[] = await parseMeshBatchObject(batch, {
 		mergeByMaterial: false,
 		applyTransforms: true,
-		scaleFactor: 1,
 		debug: false
 	});
 

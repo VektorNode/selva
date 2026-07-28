@@ -19,8 +19,19 @@ interface ComputeServerCommon {
 	label: string;
 	/** Base URL of the Rhino.Compute instance. */
 	serverUrl: string;
-	/** Sent as `RhinoComputeKey` header. */
+	/**
+	 * Sent as `RhinoComputeKey` header. Populated only when the config was read
+	 * with `includeApiKeys`, so `apiKey === undefined` means "not loaded" just as
+	 * often as it means "none stored" — read {@link ComputeServerCommon.hasApiKey}
+	 * to tell those apart.
+	 */
 	apiKey?: string;
+	/**
+	 * Whether a key is stored for this server, independent of whether `apiKey`
+	 * was loaded. Lets pickers and admin pages render "key set" without any store
+	 * decrypting a secret it will only throw away.
+	 */
+	hasApiKey?: boolean;
 	/** Default: 30000. */
 	timeoutMs?: number;
 	/** Default: 0. */

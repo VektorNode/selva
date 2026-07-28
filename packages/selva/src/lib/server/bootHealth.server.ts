@@ -1,11 +1,12 @@
-import { LocalComputeServerStore, type SecretVerificationReport } from '@selvajs/local-provider';
-import { providers } from './providers.server.js';
+import type { SchemaVersionReport, SecretVerificationReport } from '@selvajs/platform';
+import { renderThrown } from '@selvajs/server/logging';
+import { getLogger, providers } from './providers.server.js';
 
 /**
  * Boot-time integrity report. Populated once on first import, then cached.
- * Currently checks at-rest secret decryption (compute server apiKeys) for
- * the local provider; other providers either don't encrypt at this layer
- * (Supabase) or don't expose `verifySecrets`.
+ * Checks at-rest secret decryption (compute server apiKeys) for any provider
+ * that exposes `verifySecrets` — both the local (on-disk) and Supabase (in-DB)
+ * compute-server stores encrypt apiKeys and implement it.
  *
  * Goals:
  *  - Fail loudly at deploy time when `SELVA_AT_REST_KEY` doesn't match what
@@ -21,6 +22,14 @@ import { providers } from './providers.server.js';
 export interface BootHealth {
 	checkedAt: string;
 	atRestSecrets: SecretVerificationReport | null;
+	/**
+	 * App↔DB schema handshake (audit O3) — null when the data provider doesn't
+	 * implement it (local provider: schema and app ship together). A not-ok
+	 * report degrades `/api/health` to 503, which also makes the self-update
+	 * runner's health probe roll back an update whose migrations weren't
+	 * applied, instead of leaving a skewed app serving PGRST errors.
+	 */
+	schemaVersion: SchemaVersionReport | null;
 }
 
 let cached: BootHealth | null = null;
@@ -30,11 +39,14 @@ async function run(): Promise<BootHealth> {
 	let atRestSecrets: SecretVerificationReport | null = null;
 
 	const store = providers.data.computeServer;
-	if (store instanceof LocalComputeServerStore) {
+	if (typeof store.verifySecrets === 'function') {
 		try {
 			atRestSecrets = await store.verifySecrets();
 		} catch (err) {
-			console.error('[selva][boot] verifySecrets threw — treating as failure', err);
+			getLogger().error('verifySecrets threw — treating as failure', {
+				component: 'boot',
+				err: renderThrown(err)
+			});
 			atRestSecrets = {
 				ok: false,
 				plaintextFound: false,
@@ -52,22 +64,55 @@ async function run(): Promise<BootHealth> {
 
 	if (atRestSecrets && !atRestSecrets.ok) {
 		for (const f of atRestSecrets.failures) {
-			console.error(
-				`[selva][boot] compute server "${f.serverLabel}" (${f.serverId}): ${f.reason}${
-					f.cause ? ` — ${f.cause}` : ''
-				}`
-			);
+			getLogger().error('At-rest secret verification failed for compute server', {
+				component: 'boot',
+				serverLabel: f.serverLabel,
+				serverId: f.serverId,
+				reason: f.reason,
+				cause: f.cause
+			});
 		}
-		console.error(
-			'[selva][boot] At-rest secret verification failed. /api/health will return 503. ' +
+		getLogger().error(
+			'At-rest secret verification failed. /api/health will return 503. ' +
 				'Recover by re-entering the affected apiKeys via /admin/compute, or by ' +
-				'restoring the original SELVA_AT_REST_KEY. See docs/Troubleshooting.md.'
+				'restoring the original SELVA_AT_REST_KEY. See docs/Troubleshooting.md.',
+			{ component: 'boot' }
 		);
+	}
+
+	let schemaVersion: SchemaVersionReport | null = null;
+	const data = providers.data;
+	if (typeof data.verifySchemaVersion === 'function') {
+		try {
+			schemaVersion = await data.verifySchemaVersion();
+		} catch (err) {
+			// The contract says it must not throw; treat a throw as a failed check.
+			getLogger().error('verifySchemaVersion threw — treating as failure', {
+				component: 'boot',
+				err: renderThrown(err)
+			});
+			schemaVersion = {
+				ok: false,
+				expected: '(unknown)',
+				actual: null,
+				message: err instanceof Error ? err.message : String(err)
+			};
+		}
+	}
+
+	if (schemaVersion && !schemaVersion.ok) {
+		getLogger().error('Database schema handshake failed. /api/health will return 503.', {
+			component: 'boot',
+			expected: schemaVersion.expected,
+			actual: schemaVersion.actual ?? 'unavailable',
+			detail: schemaVersion.message
+		});
 	}
 
 	return {
 		checkedAt: new Date().toISOString(),
-		atRestSecrets
+		atRestSecrets,
+		schemaVersion
 	};
 }
 
@@ -101,5 +146,7 @@ export function getBootHealthSync(): BootHealth | null {
 }
 
 export function isDegraded(report: BootHealth): boolean {
-	return report.atRestSecrets !== null && !report.atRestSecrets.ok;
+	if (report.atRestSecrets !== null && !report.atRestSecrets.ok) return true;
+	if (report.schemaVersion !== null && !report.schemaVersion.ok) return true;
+	return false;
 }

@@ -1,164 +1,74 @@
 import { env } from '$env/dynamic/private';
-import { pathToFileURL } from 'node:url';
-import { resolve as resolvePath } from 'node:path';
-import { existsSync } from 'node:fs';
 import type {
-	IAuthProvider,
-	IDataProvider,
-	IStorageProvider,
+	IErrorReporter,
+	IEventSink,
+	ILogger,
 	ISolveMetricSink,
+	LogFields,
+	LogLevel,
 	SelvaBranding,
 	SelvaConfig,
-	SelvaConfigFactory,
 	SelvaFlags,
 	TenancyMode
 } from '@selvajs/platform';
-import { defineConfig, isFlagEnabled, NoopSolveMetricSink } from '@selvajs/platform';
+import { NoopErrorReporter, NoopEventSink } from '@selvajs/platform';
+import { createSelvaProviders, type ProviderRegistry } from '@selvajs/server/providers';
 import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
 import * as header from '@selvajs/header-auth-provider';
 import { DefinitionService } from './definitions/DefinitionService.js';
 import { OrgAssetService } from './organizations/OrgAssetService.js';
+import { SentryErrorReporter } from '@selvajs/server/errors';
+import { ConsoleLogger, createLogger, renderThrown } from '@selvajs/server/logging';
+
+// Provider wiring lives in `@selvajs/server/providers`
+// (`createSelvaProviders`): env-driven selection over the registry below, an
+// external `selva.config.js` override via SELVA_CONFIG_PATH, and lazy
+// memoized instantiation (nothing touches provider secrets at import/build
+// time). This file is the app's composition root: the registry of bundled
+// provider implementations, the service singletons, and error reporting.
 
 /**
- * Provider wiring source. Two modes:
+ * Forwards to whatever the root logger currently is, rather than capturing it.
  *
- *   Default — providers are picked from env vars (SELVA_AUTH_PROVIDER etc.)
- *   and instantiated via the bundled provider implementations. New deployments
- *   need only a .env file — no selva.config.js.
- *
- *   Override — set `SELVA_CONFIG_PATH` to point at an external
- *   `selva.config.js` (absolute or CWD-relative). The runtime loads it
- *   dynamically at boot, replacing the default env-driven wiring entirely.
- *   Use this only when you need a custom provider not shipped in the box.
- *
- * The override path must resolve to an actual `.js` file — there's no TS
- * compiler at runtime.
+ * Provider wiring runs at module scope, while `_logger` starts as a console
+ * placeholder and is swapped for pino once its async load resolves (see the
+ * Logging section below). A provider handed `getLogger()` directly at
+ * construction would pin the placeholder for the process's whole life; this
+ * indirection keeps a long-lived provider on the current logger.
  */
+export const lazyLogger: ILogger = {
+	debug: (m: string, f?: LogFields) => getLogger().debug(m, f),
+	info: (m: string, f?: LogFields) => getLogger().info(m, f),
+	warn: (m: string, f?: LogFields) => getLogger().warn(m, f),
+	error: (m: string, f?: LogFields) => getLogger().error(m, f),
+	child: (f: LogFields) => getLogger().child(f)
+};
 
-type Env = Record<string, string | undefined>;
-
-function envBool(e: Env, key: string): boolean {
-	const v = e[key]?.toLowerCase();
-	return v === 'true' || v === '1' || v === 'yes';
-}
-
-function pickAuth(e: Env): IAuthProvider {
-	const choice = (e.SELVA_AUTH_PROVIDER ?? 'local').toLowerCase();
-	switch (choice) {
-		case 'local':
-			return local.LocalAuthProvider.fromEnv(e);
-		case 'supabase':
-			return supa.SupabaseAuthProvider.fromEnv(e);
-		case 'header':
-			return header.HeaderAuthProvider.fromEnv(e);
-		default:
-			throw new Error(
-				`Unknown SELVA_AUTH_PROVIDER="${choice}". Expected: local | supabase | header.`
-			);
+/** The provider implementations bundled with the Selva app. */
+const registry: ProviderRegistry = {
+	auth: {
+		local: (e) => local.LocalAuthProvider.fromEnv(e),
+		supabase: (e) => supa.SupabaseAuthProvider.fromEnv(e),
+		header: (e) => header.HeaderAuthProvider.fromEnv(e, lazyLogger)
+	},
+	data: {
+		local: (e) => local.LocalDataProvider.fromEnv(e),
+		// `events` is the second param and stays defaulted — the app wires its
+		// event sink separately (see getEventSink below); the logger is third.
+		supabase: (e) => supa.SupabaseDataProvider.fromEnv(e, undefined, lazyLogger)
+	},
+	storage: {
+		local: (e) => local.LocalStorageProvider.fromEnv(e),
+		supabase: (e) => supa.SupabaseStorageProvider.fromEnv(e)
 	}
-}
+};
 
-function pickData(e: Env): IDataProvider {
-	const choice = (e.SELVA_DATA_PROVIDER ?? 'local').toLowerCase();
-	switch (choice) {
-		case 'local':
-			return local.LocalDataProvider.fromEnv(e);
-		case 'supabase':
-			return supa.SupabaseDataProvider.fromEnv(e);
-		default:
-			throw new Error(`Unknown SELVA_DATA_PROVIDER="${choice}". Expected: local | supabase.`);
-	}
-}
-
-function pickStorage(e: Env): IStorageProvider {
-	const choice = (e.SELVA_STORAGE_PROVIDER ?? 'local').toLowerCase();
-	switch (choice) {
-		case 'local':
-			return local.LocalStorageProvider.fromEnv(e);
-		case 'supabase':
-			return supa.SupabaseStorageProvider.fromEnv(e);
-		default:
-			throw new Error(`Unknown SELVA_STORAGE_PROVIDER="${choice}". Expected: local | supabase.`);
-	}
-}
-
-/**
- * Per-solve metric sink. Supabase's data provider carries a `solveMetrics`
- * sink built from its own client bundle — reuse it so timings persist
- * automatically. Other backends (local) have no metrics table; left undefined,
- * which falls back to `NoopSolveMetricSink` in `getSolveMetricSink()`.
- */
-function pickSolveMetrics(data: IDataProvider): ISolveMetricSink | undefined {
-	const candidate = (data as { solveMetrics?: unknown }).solveMetrics;
-	if (candidate && typeof (candidate as { record?: unknown }).record === 'function') {
-		return candidate as ISolveMetricSink;
-	}
-	return undefined;
-}
-
-function pickTenancy(e: Env): TenancyMode {
-	const choice = (e.SELVA_TENANCY ?? 'single').toLowerCase();
-	if (choice !== 'single' && choice !== 'multi') {
-		throw new Error(`Unknown SELVA_TENANCY="${choice}". Expected: single | multi.`);
-	}
-	return choice;
-}
-
-const defaultConfig = defineConfig((e) => {
-	const data = pickData(e);
-	return {
-		tenancy: pickTenancy(e),
-		flags: {
-			ALLOW_CROSS_ORG_PUBLIC: envBool(e, 'SELVA_FLAG_ALLOW_CROSS_ORG_PUBLIC'),
-			ALLOW_ORG_COMPUTE_OVERRIDE: envBool(e, 'SELVA_FLAG_ALLOW_ORG_COMPUTE_OVERRIDE'),
-			ALLOW_ORG_CREATION: envBool(e, 'SELVA_FLAG_ALLOW_ORG_CREATION'),
-			ENABLE_PLATFORM_PROJECTS: envBool(e, 'SELVA_FLAG_ENABLE_PLATFORM_PROJECTS'),
-			ENABLE_SHARING: envBool(e, 'SELVA_FLAG_ENABLE_SHARING')
-		},
-		branding: {
-			name: e.SELVA_BRAND_NAME,
-			copyrightName: e.SELVA_BRAND_COPYRIGHT_NAME,
-			tagline: e.SELVA_BRAND_TAGLINE,
-			description: e.SELVA_BRAND_DESCRIPTION
-		},
-		auth: pickAuth(e),
-		data,
-		storage: pickStorage(e),
-		solveMetrics: pickSolveMetrics(data)
-	};
+const runtime = await createSelvaProviders(env, {
+	registry,
+	configPath: env.SELVA_CONFIG_PATH,
+	logger: lazyLogger
 });
-
-async function loadRawConfig(): Promise<SelvaConfig | SelvaConfigFactory> {
-	const override = env.SELVA_CONFIG_PATH;
-	if (!override) {
-		return defaultConfig;
-	}
-
-	const abs = resolvePath(process.cwd(), override);
-	if (!existsSync(abs)) {
-		throw new Error(`SELVA_CONFIG_PATH=${override} resolved to ${abs} which does not exist.`);
-	}
-	// Dynamic specifier — Vite must not pre-resolve this at build time, hence
-	// @vite-ignore. pathToFileURL keeps Windows absolute paths valid as ESM
-	// specifiers.
-	const mod = (await import(/* @vite-ignore */ pathToFileURL(abs).href)) as {
-		default: SelvaConfig | SelvaConfigFactory;
-	};
-	return mod.default;
-}
-
-// Loading the *config source* (default factory, or the SELVA_CONFIG_PATH
-// override module) is cheap and secret-free — a factory is just a function.
-// We do that eagerly. We do NOT invoke the factory here: calling it runs
-// pickAuth/pickData/pickStorage → provider.fromEnv(), which validates required
-// secrets (SELVA_HMAC_KEY etc.). Doing that at import time would make merely
-// *building* the app require a full runtime env, which breaks `vite build` and
-// any tool that loads the SSR bundle. So provider instantiation is deferred to
-// first use via resolveProviders().
-const _raw = await loadRawConfig();
-
-let _providers: SelvaConfig | undefined;
 
 /**
  * Memoized provider wiring. The first call instantiates providers from env
@@ -167,23 +77,7 @@ let _providers: SelvaConfig | undefined;
  * happens lazily on the first request, never at build time.
  */
 export function resolveProviders(): SelvaConfig {
-	if (_providers) return _providers;
-	_providers = typeof _raw === 'function' ? _raw(env) : _raw;
-
-	// One-line boot summary so operators can confirm at a glance what got wired
-	// without grepping env vars or reading the config file. Provider names come
-	// from the IAuthProvider.name field; data/storage adapters don't expose a
-	// name, so we infer from the constructor.
-	console.info(
-		`[selva] providers wired: ` +
-			`auth=${_providers.auth.name} ` +
-			`data=${_providers.data.constructor.name} ` +
-			`storage=${_providers.storage.constructor.name} ` +
-			`tenancy=${_providers.tenancy ?? 'single'}` +
-			(env.SELVA_CONFIG_PATH ? ` config=${env.SELVA_CONFIG_PATH}` : '')
-	);
-
-	return _providers;
+	return runtime.resolve();
 }
 
 /**
@@ -198,7 +92,7 @@ export const providers = new Proxy({} as SelvaConfig, {
 });
 
 export function getTenancy(): TenancyMode {
-	return resolveProviders().tenancy ?? 'single';
+	return runtime.tenancy();
 }
 
 /**
@@ -206,21 +100,12 @@ export function getTenancy(): TenancyMode {
  * null-check. White-label deployments override via SELVA_BRAND_* env vars.
  */
 export function getBranding(): Required<SelvaBranding> {
-	const brand = resolveProviders().branding ?? {};
-	const name = brand.name?.trim() || 'Selva';
-	return {
-		name,
-		copyrightName: brand.copyrightName?.trim() || name,
-		tagline: brand.tagline?.trim() || 'Turn Grasshopper definitions into tools anyone can use.',
-		description:
-			brand.description?.trim() ||
-			`Build and deploy interactive web applications powered by Grasshopper definitions with ${name}.`
-	};
+	return runtime.branding();
 }
 
 /** Use this rather than reading flags directly — omitted flags resolve to false. */
 export function flag(name: keyof SelvaFlags): boolean {
-	return isFlagEnabled(resolveProviders(), name);
+	return runtime.flag(name);
 }
 
 let _definitionService: DefinitionService | undefined;
@@ -285,17 +170,12 @@ export function getPlatformProjectGrantStore() {
 	return resolveProviders().data.platformProjectGrants;
 }
 
-let _solveMetricSink: ISolveMetricSink | undefined;
-
 /**
  * Per-solve timing sink. Defaults to `NoopSolveMetricSink` when the config
  * omits `solveMetrics`, so the compute route can always record unconditionally.
  */
 export function getSolveMetricSink(): ISolveMetricSink {
-	if (!_solveMetricSink) {
-		_solveMetricSink = resolveProviders().solveMetrics ?? new NoopSolveMetricSink();
-	}
-	return _solveMetricSink;
+	return runtime.solveMetricSink();
 }
 
 /**
@@ -305,4 +185,155 @@ export function getSolveMetricSink(): ISolveMetricSink {
  */
 export function getAuditQuery() {
 	return providers.data.auditQuery ?? null;
+}
+
+// Never-null via the Noop fallback, so emitters record unconditionally.
+const noopEventSink = new NoopEventSink();
+
+/**
+ * Write-side event sink for routes with no store mutation to piggyback on
+ * (e.g. the self-update lifecycle events, audit O2). Prefers the explicit
+ * `SelvaConfig.events`, then the data provider's own sink, then a no-op —
+ * mirroring how the stores themselves are wired.
+ */
+export function getEventSink(): IEventSink {
+	const p = resolveProviders();
+	return p.events ?? p.data.events ?? noopEventSink;
+}
+
+// ============================================================================
+// Logging
+// ============================================================================
+
+// Same eager-init-then-swap shape as the error reporter below, with one
+// deliberate difference: the placeholder is a real ConsoleLogger, never a
+// no-op. Logging must not have a window where warnings vanish — an operator
+// debugging a boot failure is reading exactly these lines. So records written
+// before pino resolves land on the console, and the swap only upgrades the
+// formatting.
+const LOG_LEVEL: LogLevel = parseLogLevel(env.LOG_LEVEL);
+
+let _logger: ILogger = new ConsoleLogger({}, LOG_LEVEL);
+
+/**
+ * The app's root logger. Structured, correlated, and pino-backed when `pino` is
+ * installed (it ships with the app; the base `@selvajs/server` install treats it
+ * as an optional peer and falls back to the console).
+ *
+ * Prefer a request-scoped child — `event.locals.log` — inside route handlers, so
+ * records carry `requestId`/`route`. Use this root logger for boot, shutdown and
+ * background work that belongs to no request.
+ */
+export function getLogger(): ILogger {
+	return _logger;
+}
+
+/**
+ * `LOG_LEVEL` is operator input, so an unrecognized value must not crash boot
+ * (or silently disable logging). Default to `info`, and to `debug` in dev where
+ * the extra detail is the point.
+ */
+function parseLogLevel(raw: string | undefined): LogLevel {
+	const value = raw?.trim().toLowerCase();
+	if (value === 'debug' || value === 'info' || value === 'warn' || value === 'error') return value;
+	// The compute debug flags emit at `debug`. An operator who turned one on has
+	// asked for that output in so many words, so honor it without also demanding
+	// LOG_LEVEL=debug — otherwise the flag would silently do nothing in
+	// production, which is exactly where it gets reached for.
+	if (
+		isTruthyFlag(env.SELVA_FLAG_COMPUTE_DEBUG) ||
+		isTruthyFlag(env.SELVA_FLAG_COMPUTE_DEBUG_VERBOSE)
+	)
+		return 'debug';
+	return env.NODE_ENV === 'development' ? 'debug' : 'info';
+}
+
+/** Matches the flag spelling accepted elsewhere (`clientCache.server.ts`). */
+function isTruthyFlag(raw: string | undefined): boolean {
+	return ['true', '1', 'yes'].includes((raw ?? '').toLowerCase());
+}
+
+// Eager, fire-and-forget: `getLogger()` stays sync for the same reason
+// `getErrorReporter()` does — its callers (hooks, process handlers) can't await.
+void createLogger({
+	level: LOG_LEVEL,
+	// Pretty output in dev, newline-delimited JSON in production for the
+	// collector. `pino-pretty` is a devDependency, so this silently degrades to
+	// JSON if it's absent.
+	pretty: env.NODE_ENV === 'development',
+	base: { service: 'selva', release: env.SELVA_RELEASE }
+}).then((logger) => {
+	_logger = logger;
+});
+
+// ============================================================================
+// Error reporting
+// ============================================================================
+
+// Starts as the no-op reporter and is swapped for a Sentry-backed one once its
+// async init resolves (see below). `getErrorReporter()` is synchronous — called
+// from `handleError` and the process error hooks, which can't await — so during
+// the sub-second boot window before Sentry finishes loading, reports go to the
+// no-op. Acceptable: the only errors lost are ones thrown in that window.
+let _errorReporter: IErrorReporter = new NoopErrorReporter();
+
+/**
+ * Unexpected-error reporter. Ships errors off-box (Sentry) only when
+ * `SENTRY_DSN` is configured; otherwise a no-op, so self-hosters opt in via
+ * env and the base install carries no error-tracking dependency.
+ *
+ * This reports ONLY genuinely unexpected errors. Intentional HTTP outcomes —
+ * including the compute route's `apiError(500, …)` on a failed solve — are
+ * thrown as SvelteKit `HttpError`s and short-circuit in `handleError` before
+ * ever reaching this reporter. Compute failures are not tracked here by design.
+ */
+export function getErrorReporter(): IErrorReporter {
+	return _errorReporter;
+}
+
+// Eager, fire-and-forget init at module load. Kept out of `getErrorReporter()`
+// so the getter stays sync and allocation-free on the hot error path.
+if (env.SENTRY_DSN) {
+	void SentryErrorReporter.create({
+		dsn: env.SENTRY_DSN,
+		environment: env.NODE_ENV,
+		release: env.SELVA_RELEASE
+	}).then((reporter) => {
+		if (reporter) {
+			_errorReporter = reporter;
+			getLogger().info('Sentry error tracking enabled', { component: 'ErrorReporter' });
+		}
+	});
+}
+
+// Process-level safety net. `handleError` only sees errors on the request path;
+// a rejected promise with no awaiter (or a throw outside any request) bypasses
+// it entirely and would otherwise vanish into a bare `console.error` — or, for
+// an uncaught exception, crash the process silently. Report both, then let the
+// default behavior stand (Node logs uncaughtException and exits; we don't
+// swallow it and pretend the process is healthy). Guarded so repeated module
+// evaluation in dev/HMR doesn't stack duplicate listeners.
+const ERROR_HOOKS_FLAG = '__selvaProcessErrorHooksRegistered';
+if (!(globalThis as Record<string, unknown>)[ERROR_HOOKS_FLAG]) {
+	(globalThis as Record<string, unknown>)[ERROR_HOOKS_FLAG] = true;
+	process.on('unhandledRejection', (reason) => {
+		getLogger().error('Unhandled promise rejection', {
+			component: 'process',
+			origin: 'unhandledRejection',
+			err: renderThrown(reason)
+		});
+		getErrorReporter().capture(reason, { tags: { origin: 'unhandledRejection' } });
+	});
+	process.on('uncaughtException', (error) => {
+		// Also write straight to the console here: Node is about to exit, and a
+		// buffered/async log transport may never flush. The duplicate line is a
+		// cheap price for not losing the record that explains the crash.
+		console.error('[uncaughtException]', error);
+		getLogger().error('Uncaught exception', {
+			component: 'process',
+			origin: 'uncaughtException',
+			err: renderThrown(error)
+		});
+		getErrorReporter().capture(error, { tags: { origin: 'uncaughtException' } });
+	});
 }

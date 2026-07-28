@@ -35,27 +35,16 @@ public sealed class NotesBlock : LayoutElement
 
 	public override DrawElement Resolve(LayoutContext context)
 	{
-		var children = new List<DrawElement>();
-
-		if (!string.IsNullOrEmpty(Title))
-		{
-			children.Add(new TextFlow
-			{
-				Text = Title,
-				Width = Width,
-				Style = TitleStyle,
-			});
-		}
-
 		var bodyTextWidth = Math.Max(10, Width - GutterWidth);
 		var markerStyle = MarkerStyle ?? NoteStyle;
 
+		var noteChildren = new List<DrawElement>();
 		for (var i = 0; i < Notes.Count; i++)
 		{
 			var marker = ResolveMarker(i);
 			var note = Notes[i] ?? string.Empty;
 
-			children.Add(new Grid
+			noteChildren.Add(new Grid
 			{
 				Columns = new[]
 				{
@@ -79,24 +68,36 @@ public sealed class NotesBlock : LayoutElement
 			});
 		}
 
-		var spacing = NoteSpacing;
-		if (children.Count == 0)
+		var hasTitle = !string.IsNullOrEmpty(Title);
+		if (!hasTitle && noteChildren.Count == 0)
 		{
 			return new GroupElement { Id = Id, CssClass = CssClass, Metadata = Metadata };
 		}
 
-		// Title gets a slightly bigger gap if both title + notes are present. We approximate
-		// this by inserting a spacer note after the title; a proper Stack-with-per-child-
-		// spacing isn't worth introducing for one use.
+		// Title gets its own gap (TitleSpacing) to the notes, which use NoteSpacing between
+		// each other. Nesting the notes in an inner stack keeps both gaps exact — a spacer
+		// child would pick up the outer spacing on both sides and inflate the title gap.
+		var notesStack = new Stack
+		{
+			Orientation = StackOrientation.Vertical,
+			Spacing = NoteSpacing,
+			CrossAlign = CrossAlign.Start,
+			Children = noteChildren,
+		};
+
 		var stack = new Stack
 		{
 			Origin = Origin,
 			Orientation = StackOrientation.Vertical,
-			Spacing = spacing,
+			Spacing = hasTitle ? TitleSpacing : NoteSpacing,
 			CrossAlign = CrossAlign.Start,
-			Children = string.IsNullOrEmpty(Title)
-				? children
-				: BuildChildrenWithTitleSpacing(children, TitleSpacing - NoteSpacing),
+			Children = hasTitle
+				? new DrawElement[]
+				{
+					new TextFlow { Text = Title, Width = Width, Style = TitleStyle },
+					notesStack,
+				}
+				: noteChildren,
 		};
 
 		var resolved = stack.Resolve(context);
@@ -117,16 +118,5 @@ public sealed class NotesBlock : LayoutElement
 			return Markers[index] ?? string.Empty;
 		}
 		return (index + 1).ToString(CultureInfo.InvariantCulture) + ".";
-	}
-
-	private static IReadOnlyList<DrawElement> BuildChildrenWithTitleSpacing(List<DrawElement> children, double extraGap)
-	{
-		// First child is the title. We insert an empty TextFlow as a spacer if extraGap > 0.
-		if (extraGap <= 0 || children.Count < 2) return children;
-		var rebuilt = new List<DrawElement>(children.Count + 1);
-		rebuilt.Add(children[0]);
-		rebuilt.Add(new Frame { Size = new BoundingBox(0, 0, 0.001, extraGap) });
-		for (var i = 1; i < children.Count; i++) rebuilt.Add(children[i]);
-		return rebuilt;
 	}
 }

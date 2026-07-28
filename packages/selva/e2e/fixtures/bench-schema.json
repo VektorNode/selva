@@ -1,0 +1,102 @@
+{
+	"id": "02c205ca-5ac2-4abd-ad21-52ef55da5740",
+	"name": "Bench Test Display",
+	"description": "Bench Test Display",
+	"projectFileName": "Bench_Display.gh",
+	"documentId": "408e2914-b31f-4a71-8464-5988976aa9ba",
+	"pluginVersion": "0.13.0.0",
+	"tags": [],
+	"category": null,
+	"author": null,
+	"organization": null,
+	"schemaVersion": "2.11.0",
+	"minPluginVersion": null,
+	"created": "2026-06-26T08:21:16.321313Z",
+	"lastModified": "2026-06-26T08:22:53.938514Z",
+	"viewerOptions": {
+		"enableLocal": true,
+		"enableRemote": true,
+		"backgroundColor": "#f3f3f3"
+	},
+	"instanceSolve": true,
+	"inputs": [
+		{
+			"id": "bb1e68ed-da9a-42f3-be80-7f85b452d7c5",
+			"nickname": "Count",
+			"paramType": "number",
+			"description": "",
+			"inputStructure": "item"
+		},
+		{
+			"id": "fd699391-85cc-436e-92a9-aa173eb4ec69",
+			"nickname": "Metal",
+			"paramType": "number",
+			"description": "",
+			"inputStructure": "item"
+		}
+	],
+	"outputs": [],
+	"layout": {
+		"type": "tabbed",
+		"tabs": [
+			{
+				"id": "6ea1e83b",
+				"label": "Tab 1",
+				"icon": "",
+				"order": 0,
+				"groups": [
+					{
+						"id": "48c6dad5",
+						"label": "Group 1",
+						"description": "",
+						"order": 0,
+						"collapsed": false,
+						"columns": 1,
+						"items": [
+							{
+								"type": "input",
+								"widgetType": "number",
+								"config": {
+									"minimum": 50.0,
+									"maximum": 100.0,
+									"stepSize": 1.0,
+									"placeholder": null,
+									"renderAsSlider": true,
+									"hideRange": null
+								},
+								"id": "135d8bfe",
+								"paramId": "bb1e68ed-da9a-42f3-be80-7f85b452d7c5",
+								"displayName": "Count",
+								"description": "",
+								"order": 0,
+								"span": 1,
+								"visible": true
+							},
+							{
+								"type": "input",
+								"widgetType": "number",
+								"config": {
+									"minimum": 0.1,
+									"maximum": 1.0,
+									"stepSize": 0.1,
+									"placeholder": null,
+									"renderAsSlider": true,
+									"hideRange": null
+								},
+								"id": "4697d5e6",
+								"paramId": "fd699391-85cc-436e-92a9-aa173eb4ec69",
+								"displayName": "Metal",
+								"description": "",
+								"order": 1,
+								"span": 1,
+								"visible": true
+							}
+						]
+					}
+				],
+				"position": "center"
+			}
+		],
+		"gap": 16
+	}
+}

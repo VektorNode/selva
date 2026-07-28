@@ -3,6 +3,7 @@ title: Get Started Overview
 group: Get Started
 order: 1
 published: true
+description: 'Three steps to a live deployment, plus the mental model for compute vs. app servers.'
 ---
 
 # Get Started

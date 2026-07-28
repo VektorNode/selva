@@ -97,6 +97,21 @@ public sealed class Grid : LayoutElement
 			Origin.X, Origin.Y,
 			Origin.X + total.Width, Origin.Y + total.Height);
 
+		// The track total is a floor, not a ceiling. Content taller or wider than its cell is
+		// drawn, not clipped — deliberately so for Absolute tracks, where sizing is the user's
+		// explicit choice — but the reported box must still cover what was drawn. Without this,
+		// a Table with RowHeight=5 reported h=5 while ~18 mm of wrapped text hung below its own
+		// bottom edge, and every container downstream laid out around a box already overrun.
+		//
+		// Placed-cell bounds are used (rather than the pre-placement CellBounds) because those
+		// are in the grid's own coordinate space.
+		foreach (var child in children)
+		{
+			if (child is GroupElement guide && guide.PreviewOnly) continue;
+			var b = child?.ComputeBounds() ?? BoundingBox.Empty;
+			if (!b.IsEmpty) pinned = pinned.Union(b);
+		}
+
 		return new GroupElement
 		{
 			Id = Id,
@@ -171,12 +186,22 @@ public sealed class Grid : LayoutElement
 		var resolvedCells = new DrawElement[Cells.Count];
 		var cellBounds = new BoundingBox[Cells.Count];
 
-		// Pass 1: measure each cell unconstrained so Auto tracks know their natural sizes.
+		// Pass 1: measure each cell against the grid's own budget so Auto tracks know their
+		// natural sizes. The budget is a ceiling, not an assignment — content smaller than a
+		// cell still reports its natural size, and Pass 2 re-resolves everything against the
+		// real cell rect once tracks are known.
+		//
+		// Measuring with an empty context instead would let a self-sizing child (an auto-fit
+		// DrawingView) report an unbounded natural size, which then becomes the Auto track's
+		// size: a tall view in a 2x2 grid sized the grid to 808 mm on a 227 mm content rect and
+		// ran off the page. Auto tracks grow to fit their content, so an overlarge measurement
+		// here is never clamped later.
+		var measureContext = MeasureContext(context);
 		for (var i = 0; i < Cells.Count; i++)
 		{
 			var c = Cells[i];
 			var resolved = c.Content is LayoutElement nested
-				? nested.Resolve(new LayoutContext(BoundingBox.Empty))
+				? nested.Resolve(measureContext)
 				: c.Content;
 			resolvedCells[i] = resolved;
 			cellBounds[i] = resolved?.ComputeBounds() ?? BoundingBox.Empty;
@@ -205,6 +230,16 @@ public sealed class Grid : LayoutElement
 		// column width. Columns stay locked — width was the input to Pass 2, height is the
 		// downstream effect. Only Auto rows participate; Absolute/Star rows keep the explicit
 		// size the user asked for (clipping is the user's choice in those cases).
+		//
+		// KNOWN GAP (unconfirmed): Star rows are sized in ResolveTrackSizes from the Pass-1 Auto
+		// heights and are never re-derived after this pass grows them, so a Star row can in
+		// principle keep a budget that assumed a shorter Auto neighbour. A 2026-07-27 audit
+		// reported this as a 190x54 grid pinning h=80.14 (grown Auto 43.56 + stale Star 36.58),
+		// with `[Auto,Star,Auto]` driving ink to y=-16.1mm. Two later attempts to reproduce it —
+		// including one using the original probe's stated parameters — both resolved to exactly
+		// 54.000 with minY=0.000, so the claimed overflow could not be demonstrated and no fix
+		// was applied. The asymmetry above is real; whether it can actually overflow is not
+		// established. Reproduce before changing anything here.
 		for (var r = 0; r < Rows.Count; r++)
 		{
 			if (Rows[r].Type != GridLength.Kind.Auto) continue;
@@ -222,6 +257,57 @@ public sealed class Grid : LayoutElement
 			ResolvedCells = resolvedCells,
 			CellBounds = cellBounds,
 		}, new BoundingBox(0, 0, totalWidth, totalHeight));
+	}
+
+	// Ceiling for the Pass 1 natural-size measurement: no single cell may measure larger than
+	// the grid's own budget. Falls back to an empty context when the grid itself is
+	// unconstrained, which preserves the "measure naturally" behaviour for auto-fit pages.
+	//
+	// This is a ceiling, not a per-track allocation — dividing by the track count would cap a
+	// cell at an equal share even when its neighbours need far less, shrinking wide content
+	// and leaving the rest of the sheet blank. Track sizing happens in ResolveTrackSizes from
+	// these measurements; Pass 2 then re-resolves each cell against its real rect.
+	private LayoutContext MeasureContext(LayoutContext context)
+	{
+		var w = TrackCeiling(context.AvailableWidth, Columns, ColumnSpacing);
+		var h = TrackCeiling(context.AvailableHeight, Rows, RowSpacing);
+		if (double.IsPositiveInfinity(w) && double.IsPositiveInfinity(h))
+			return new LayoutContext(BoundingBox.Empty);
+		return new LayoutContext(new BoundingBox(0, 0, w, h));
+	}
+
+	// Room available to one track whose size is not yet known: the axis budget, less inter-track
+	// spacing, less the tracks already committed to a size, divided among the tracks that remain
+	// unknown. Unlike a Stack — where a modest child can pass its surplus along — grid tracks are
+	// laid out simultaneously, so each cell must be measured against its own share or the tracks
+	// sum past the axis. ResolveTrackSizes still redistributes afterwards, so a cell that
+	// measures smaller than its share leaves room for Star tracks to absorb.
+	//
+	// Absolute tracks are subtracted rather than counted: they will consume that space whatever
+	// the measurement says, so including them in the divisor let an Auto neighbour measure
+	// against room that was never available — [Absolute(150), Auto] produced a 245 mm grid on a
+	// 190 mm sheet. Star tracks stay in the divisor: their size is genuinely unknown here and
+	// derives from what is left after this pass.
+	//
+	// Note the deliberate asymmetry with "budget − known": dividing the whole remainder among
+	// each unknown track independently would let 2 Auto tracks measure 190 mm each and sum to
+	// 380 on a 190 mm budget, which is the bug the per-track share exists to prevent.
+	private static double TrackCeiling(double available, IReadOnlyList<GridLength> tracks, double spacing)
+	{
+		if (double.IsInfinity(available) || available <= 0) return double.PositiveInfinity;
+
+		var count = Math.Max(1, tracks.Count);
+		var committed = 0.0;
+		var unknown = 0;
+		for (var i = 0; i < tracks.Count; i++)
+		{
+			if (tracks[i].Type == GridLength.Kind.Absolute) committed += tracks[i].Value;
+			else unknown++;
+		}
+		if (unknown == 0) return double.PositiveInfinity;
+
+		var usable = available - spacing * Math.Max(0, count - 1) - committed;
+		return usable > 0 ? usable / unknown : double.PositiveInfinity;
 	}
 
 	private static double SpanSize(double[] sizes, int start, int span, double spacing)

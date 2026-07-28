@@ -131,8 +131,11 @@ function check(packages) {
 	// devDependencies. A workspace @selvajs/* leaking into selva's runtime
 	// `dependencies` means the published bundle would resolve that lib from
 	// npm and could drift from what it was built and tested against — breaking
-	// the "newest selva = newest ui baked in" guarantee. (External npm deps
-	// like @selvajs/compute are not workspace packages and are allowed.)
+	// the "newest selva = newest ui baked in" guarantee. Note this applies even
+	// to publishable siblings: @selvajs/compute became a workspace package when
+	// it was imported into the monorepo, and bundling it is what keeps the SLVA
+	// mesh wire format in lockstep between the app and the lib it was built
+	// against. Only true third-party npm deps belong in `dependencies`.
 	const selva = byName.get('@selvajs/selva');
 	if (selva) {
 		for (const dep of Object.keys(selva.dependencies)) {

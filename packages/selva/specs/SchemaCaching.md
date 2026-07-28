@@ -1,7 +1,15 @@
 # Schema Caching at Upload
 
-Status: proposed
+Status: implemented (see addendum)
 Date: 2026-05-29
+
+> **Addendum (2026-07-11, [ADR 0005](../../../docs/adr/0005-uischema-version-and-disposable-schema-cache.md)):**
+> the cached schema is now version-checked on read. The render loader (extracted to
+> `@selvajs/server/definitions`) uses the cached schema only when its `schemaVersion` matches the
+> app's `UI_SCHEMA_VERSION`; on mismatch it re-extracts from compute (which runs the C# migrator)
+> and persists the refreshed schema back best-effort. Upload extraction additionally rejects schema
+> formats newer than the app supports (`assertSupportedSchemaVersion` → 422). The solve-time lazy
+> backfill bridge below is unchanged and still scheduled for removal ~2026-09.
 
 ## Summary
 

@@ -19,6 +19,20 @@ function bytes(text: string): Uint8Array {
 	return new TextEncoder().encode(text);
 }
 
+/**
+ * Fast content fingerprint (FNV-1a) for large-payload comparison. A single
+ * linear pass — orders of magnitude cheaper than vitest's `toEqual` deep
+ * walk over a megabyte-scale typed array.
+ */
+function checksum(data: Uint8Array): number {
+	let h = 0x811c9dc5;
+	for (let i = 0; i < data.length; i++) {
+		h ^= data[i];
+		h = Math.imul(h, 0x01000193);
+	}
+	return h >>> 0;
+}
+
 export function runStorageProviderConformance(opts: StorageProviderConformanceOptions): void {
 	const { name, createStorage } = opts;
 
@@ -121,6 +135,12 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			expect(got).toEqual(binary);
 		});
 
+		// Runs with a raised timeout: the round-trip itself is ~1ms, but this test
+		// carries fixed worker overhead (~1.5s locally) that inflates several-fold
+		// on a loaded CI runner where all packages' suites run concurrently — enough
+		// to blow the default 5s. Comparison uses a checksum, not `toEqual`, whose
+		// element-by-element deep walk over a million-entry Uint8Array alone cost
+		// >1.5s.
 		it('handles large data', async () => {
 			const storage = await createStorage();
 			const large = new Uint8Array(1024 * 1024); // 1 MB
@@ -129,8 +149,10 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			}
 			await storage.put('large/file.bin', large);
 			const got = await storage.get('large/file.bin');
-			expect(got).toEqual(large);
-		});
+			expect(got).not.toBeNull();
+			expect(got!.length).toBe(large.length);
+			expect(checksum(got!)).toBe(checksum(large));
+		}, 30_000);
 
 		it('put with contentType is stored', async () => {
 			const storage = await createStorage();
@@ -151,13 +173,18 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 
 		it('transcodes png input to webp (path rewritten, magic bytes flipped)', async () => {
 			const storage = await createStorage();
-			// Minimal valid 1×1 transparent PNG — the canonical 67-byte fixture.
+			// Minimal 1×1 transparent PNG (68 bytes): 8-byte signature + IHDR + IDAT + IEND.
+			// The IDAT is a real zlib stream of one scanline (filter 0 + RGBA 0,0,0,0) with a
+			// correct Adler-32. Don't hand-tweak these bytes — the previous fixture carried a
+			// truncated IDAT that older libpng tolerated and sharp >=0.35 rejects outright
+			// ("vipspng: libpng read error"). Regenerate with zlib.deflateSync if it ever needs
+			// to change.
 			const pngBytes = Uint8Array.from([
 				0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
 				0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
-				0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00,
-				0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
-				0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
+				0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0b, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x60,
+				0x00, 0x02, 0x00, 0x00, 0x05, 0x00, 0x01, 0x7a, 0x5e, 0xab, 0x3f, 0x00, 0x00, 0x00, 0x00,
+				0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
 			]);
 			await storage.put('covers/tiny.png', pngBytes, 'image/png');
 

@@ -94,6 +94,15 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
             capsule.Render(graphics, Selected, Owner.Locked, Owner.Hidden);
         }
 
+        // Draw the parallel-compute indicator: task-capable components get boundary dots
+        // (2 = UseTasks on, 1 = off), matching the stock GH_ComponentAttributes rendering
+        // that our custom capsule path would otherwise drop.
+        if (Owner is IGH_TaskCapableComponent taskCapable)
+        {
+            var dotStyle = GH_CapsuleRenderEngine.GetImpliedStyle(palette, Selected, Owner.Locked, Owner.Hidden);
+            capsule.RenderEngine.RenderBoundaryDots(graphics, taskCapable.UseTasks ? 2 : 1, dotStyle);
+        }
+
         var icon = Owner.Icon_24x24;
         if (Owner.Locked && Owner.Icon_24x24_Locked != null)
         {

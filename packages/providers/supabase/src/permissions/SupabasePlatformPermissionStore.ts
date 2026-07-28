@@ -4,7 +4,7 @@ import type {
 	RequestContext,
 	UserManagementResult
 } from '@selvajs/platform';
-import { ProviderError, hasPermission, PlatformPermissionSchema } from '@selvajs/platform';
+import { ProviderError, hasPermission, ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 import type { ClientBundle } from '../data/client.js';
 
 /**
@@ -14,9 +14,11 @@ import type { ClientBundle } from '../data/client.js';
  * `assertAdmin` / `assertCanRead` enforce the auth boundary at the app level
  * since RLS on `user_profiles` is coarse-grained for cross-user reads.
  *
- * Disabled-user state lives on `auth.users.user_metadata.disabled`, so the
- * invariant counters cross-reference the auth backend to exclude disabled
- * admins (matches `Permissions.md §10` "enabled instance_admin" semantics).
+ * Disabled-user state is sourced from `auth.users.user_metadata.disabled` and
+ * mirrored into `user_profiles.disabled` by the `sync_auth_user_disabled`
+ * trigger, so the invariant counters exclude disabled admins in a single
+ * indexed query (matches `Permissions.md §10` "enabled instance_admin"
+ * semantics) instead of cross-referencing the auth admin API per candidate.
  */
 export class SupabasePlatformPermissionStore implements IPlatformPermissionStore {
 	constructor(private readonly clients: ClientBundle) {}
@@ -89,19 +91,13 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 	}
 
 	async hasInstanceAdmin(_ctx: RequestContext): Promise<boolean> {
-		const { data, error } = await this.client()
+		const { count, error } = await this.client()
 			.from('user_profiles')
-			.select('user_id')
-			.contains('platform_permissions', ['instance_admin']);
+			.select('user_id', { count: 'exact', head: true })
+			.contains('platform_permissions', ['instance_admin'])
+			.eq('disabled', false);
 		if (error) throw mapError(error);
-		const candidates = (data ?? []).map((r) => r.user_id as string);
-		if (candidates.length === 0) return false;
-		// Check at least one isn't disabled.
-		for (const id of candidates) {
-			const { data: authData } = await this.clients.serviceClient.auth.admin.getUserById(id);
-			if (authData.user && authData.user.user_metadata?.disabled !== true) return true;
-		}
-		return false;
+		return (count ?? 0) > 0;
 	}
 
 	async countInstanceAdminsExcluding(_ctx: RequestContext, excludeUserId: string): Promise<number> {
@@ -109,25 +105,21 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 	}
 
 	private async countOtherEnabledAdmins(excludeUserId: string): Promise<number> {
-		const { data, error } = await this.client()
+		const { count, error } = await this.client()
 			.from('user_profiles')
-			.select('user_id')
+			.select('user_id', { count: 'exact', head: true })
 			.contains('platform_permissions', ['instance_admin'])
+			.eq('disabled', false)
 			.neq('user_id', excludeUserId);
 		if (error) throw mapError(error);
-		const candidates = (data ?? []).map((r) => r.user_id as string);
-		if (candidates.length === 0) return 0;
-		let count = 0;
-		for (const id of candidates) {
-			const { data: authData } = await this.clients.serviceClient.auth.admin.getUserById(id);
-			if (authData.user && authData.user.user_metadata?.disabled !== true) count += 1;
-		}
-		return count;
+		return count ?? 0;
 	}
 }
 
+const VALID_PERMISSIONS = new Set<string>(ALL_PLATFORM_PERMISSIONS);
+
 function filterValid(raw: readonly string[]): PlatformPermission[] {
-	return raw.filter((p): p is PlatformPermission => PlatformPermissionSchema.safeParse(p).success);
+	return raw.filter((p): p is PlatformPermission => VALID_PERMISSIONS.has(p));
 }
 
 function assertCanRead(ctx: RequestContext, userId: string): void {

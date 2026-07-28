@@ -32,7 +32,7 @@ public sealed class RevisionTable : LayoutElement
 	public double DateColumnWidth { get; init; } = 22;
 	public double ByColumnWidth { get; init; } = 18;
 
-	public Stroke Border { get; init; } = new Stroke { Width = 0.25 };
+	public Stroke Border { get; init; } = new Stroke { Width = LineWeight.Fine };
 	public TextStyle CellStyle { get; init; } = new TextStyle { FontSize = 2.5 };
 	public TextStyle HeaderStyle { get; init; }
 	public Fill HeaderBackground { get; init; }

@@ -3,16 +3,19 @@ title: Display
 group: Plugin
 order: 3
 published: true
+description: 'Configure how geometry is materialized and rendered in the browser 3D viewer.'
 ---
 
 # Display
 
 Controls how Grasshopper geometry appears in the web 3D viewer.
 
-| Component          | Does                                                                                          |
-| ------------------ | --------------------------------------------------------------------------------------------- |
-| **Web Display**    | Tags geometry for the viewer: what shows up in the browser scene.                             |
-| **Three Material** | Defines the material (color, opacity, metalness…) applied to geometry in the Three.js viewer. |
+| Component             | Does                                                                                          |
+| --------------------- | --------------------------------------------------------------------------------------------- |
+| **Display**           | Tags geometry for the viewer: what shows up in the browser scene.                             |
+| **Three Material**    | Defines the material (color, opacity, metalness…) applied to geometry in the Three.js viewer. |
+| **Display To File**   | Saves a display payload to a `.dmf` file for fast reuse (no re-meshing on reload).            |
+| **Display From File** | Reloads a display payload from a `.dmf` file.                                                 |
 
 Feed geometry through these to control its appearance before it reaches the UI.
 

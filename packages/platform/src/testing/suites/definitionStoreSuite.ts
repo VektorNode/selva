@@ -100,6 +100,7 @@ function record(
 		displayName: overrides.displayName ?? 'Test',
 		status: overrides.status ?? 'published',
 		solveCount: overrides.solveCount ?? 0,
+		nextVersionNumber: overrides.nextVersionNumber ?? 2,
 		liveVersionId: overrides.liveVersionId ?? null,
 		draftVersionId: overrides.draftVersionId ?? null,
 		createdAt: overrides.createdAt ?? now,
@@ -227,6 +228,28 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got!.updatedAt >= created.updatedAt).toBe(true);
 		});
 
+		it('solveCacheLimit round-trips: absent → inherit, set → value, null → cleared', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+
+			// Absent on create → undefined (inherit the global default).
+			expect((await store.get(ctx(scope.ownerId), guid))?.solveCacheLimit).toBeUndefined();
+
+			// Set a per-definition quota.
+			await store.update(ctx(scope.ownerId), guid, { solveCacheLimit: 25 });
+			expect((await store.get(ctx(scope.ownerId), guid))?.solveCacheLimit).toBe(25);
+
+			// 0 means "caching off" and must persist as 0 (distinct from absent/inherit).
+			await store.update(ctx(scope.ownerId), guid, { solveCacheLimit: 0 });
+			expect((await store.get(ctx(scope.ownerId), guid))?.solveCacheLimit).toBe(0);
+
+			// null clears back to inherit.
+			await store.update(ctx(scope.ownerId), guid, { solveCacheLimit: null });
+			expect((await store.get(ctx(scope.ownerId), guid))?.solveCacheLimit).toBeUndefined();
+		});
+
 		it('update on missing guid throws ProviderError with status 404', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
@@ -275,6 +298,53 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 				threw = true;
 			}
 			expect(threw).toBe(false);
+		});
+
+		it('reserveNextVersionNumber returns the record counter then advances it', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid, nextVersionNumber: 2 }));
+
+			const first = await store.reserveNextVersionNumber(ctx(scope.ownerId), guid);
+			const second = await store.reserveNextVersionNumber(ctx(scope.ownerId), guid);
+			expect(first).toBe(2);
+			expect(second).toBe(3);
+			// Counter persisted, never reused.
+			const got = await store.get(ctx(scope.ownerId), guid);
+			expect(got?.nextVersionNumber).toBe(4);
+		});
+
+		it('reserveNextVersionNumber mints a FRESH number after delete-latest (fileKeys never collide)', async () => {
+			// The whole reason the counter exists: max(existing)+1 reused a number
+			// after deleting the latest version, colliding the fileKey. The monotonic
+			// counter must hand out a number BEYOND any deleted version's.
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid, nextVersionNumber: 2 }));
+
+			// Simulate an upload of v2 (reserve, create), then delete it.
+			const n2 = await store.reserveNextVersionNumber(ctx(scope.ownerId), guid);
+			expect(n2).toBe(2);
+			const v2 = version(guid, n2, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v2);
+			await store.deleteVersion(ctx(scope.ownerId), v2.id);
+
+			// The next reservation must be 3 — NOT 2 again — even though the highest
+			// surviving version number is now 1 (v1 was never created here; the point
+			// is the counter ignores the version list entirely).
+			const n3 = await store.reserveNextVersionNumber(ctx(scope.ownerId), guid);
+			expect(n3).toBe(3);
+			expect(n3).not.toBe(n2);
+		});
+
+		it('reserveNextVersionNumber throws for a missing definition', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			await expect(
+				store.reserveNextVersionNumber(ctx(scope.ownerId), makeUuid())
+			).rejects.toThrow();
 		});
 
 		it('update advances updatedBy to the caller', async () => {
@@ -520,6 +590,51 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 				limit: 500
 			});
 			expect(byProject.items.map((r) => r.guid)).not.toContain(guid);
+		});
+
+		it('deleteByProject soft-deletes every definition in the project, leaving others', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			// Two published definitions in the target project, one in another —
+			// the cascade must tombstone the target project's and leave the rest.
+			const a = makeUuid();
+			const b = makeUuid();
+			const other = makeUuid();
+			await store.create(
+				ctx(scope.ownerId),
+				record(scope, { guid: a, projectId: scope.projectId, status: 'published' })
+			);
+			await store.create(
+				ctx(scope.ownerId),
+				record(scope, { guid: b, projectId: scope.projectId, status: 'published' })
+			);
+			await store.create(
+				ctx(scope.ownerId),
+				record(scope, { guid: other, projectId: scope.secondaryProjectId, status: 'published' })
+			);
+
+			await store.deleteByProject(ctx(scope.ownerId), scope.projectId);
+
+			// Both target-project definitions gone from every read path…
+			expect(await store.get(ctx(scope.ownerId), a)).toBeNull();
+			expect(await store.get(ctx(scope.ownerId), b)).toBeNull();
+			const targetList = await store.listByProject(ctx(scope.ownerId), scope.projectId, {
+				limit: 500
+			});
+			expect(targetList.items).toHaveLength(0);
+			const all = await store.list(ctx(scope.ownerId), { limit: 500 });
+			expect(all.items.map((r) => r.guid)).not.toContain(a);
+			expect(all.items.map((r) => r.guid)).not.toContain(b);
+			// …but the other project's definition survives.
+			expect(await store.get(ctx(scope.ownerId), other)).not.toBeNull();
+		});
+
+		it('deleteByProject is a no-op when the project has no definitions', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			await expect(
+				store.deleteByProject(ctx(scope.ownerId), scope.secondaryProjectId)
+			).resolves.toBeUndefined();
 		});
 
 		it('listPublic returns published records, not pending', async () => {

@@ -1,5 +1,7 @@
 import { error, type Cookies } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import { createComputeRateLimiter } from '@selvajs/server/compute';
+import { declaredBodySizeExceeds, safeRedirectTarget } from '@selvajs/server/http';
 
 const SESSION_COOKIE_NAME = 'admin_session';
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -9,48 +11,26 @@ const REFRESH_COOKIE_NAME = 'admin_refresh';
 const REFRESH_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ============================================================================
-// Rate limiter
+// Login rate limiter
 // ============================================================================
-// Process-local state — not a provider concern.
-const RATE_LIMIT_MAX = 5;
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-
-interface RateLimitEntry {
-	count: number;
-	resetAt: number;
-}
-
-const rateLimitStore = new Map<string, RateLimitEntry>();
+// Failure-counting flow on the shared fixed-window limiter: `peek` gates the
+// attempt without spending budget, `check` records only failed logins, and a
+// success `clear`s the bucket. Process-local state — not a provider concern.
+const loginRateLimiter = createComputeRateLimiter({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	maxPerWindow: 5
+});
 
 export function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
-	const now = Date.now();
-	const entry = rateLimitStore.get(ip);
-
-	if (!entry || now > entry.resetAt) {
-		return { allowed: true };
-	}
-
-	if (entry.count >= RATE_LIMIT_MAX) {
-		const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
-		return { allowed: false, retryAfter };
-	}
-
-	return { allowed: true };
+	return loginRateLimiter.peek(ip);
 }
 
 export function recordFailedAttempt(ip: string): void {
-	const now = Date.now();
-	const entry = rateLimitStore.get(ip);
-
-	if (!entry || now > entry.resetAt) {
-		rateLimitStore.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-	} else {
-		entry.count += 1;
-	}
+	loginRateLimiter.check(ip);
 }
 
 export function clearRateLimit(ip: string): void {
-	rateLimitStore.delete(ip);
+	loginRateLimiter.clear(ip);
 }
 
 // ============================================================================
@@ -107,45 +87,19 @@ export function clearRefreshCookie(cookies: Cookies): void {
 }
 
 // ============================================================================
-// Request body size guard
+// HTTP hardening (bindings over @selvajs/server/http)
 // ============================================================================
 /**
- * Reject a request whose declared `Content-Length` exceeds `maxBytes`. Throws
- * 413 BEFORE the body is read so a malicious client can't burn memory by
- * sending a huge JSON payload to a small-body endpoint.
- *
- * Background: the global `BODY_SIZE_LIMIT` env var is enforced by adapter-node
- * for every route — but we want it set high enough to accept the largest
- * legitimate upload (50MB .gh files), which means the smaller JSON endpoints
- * inherit that ceiling by default. This helper is the per-route lower bound.
- *
- * Caveat: requests without `Content-Length` (chunked transfer encoding) bypass
- * this check. Most browsers and HTTP clients send Content-Length on POST/PUT.
- * The global `BODY_SIZE_LIMIT` is the backstop for those.
+ * Reject a request whose declared `Content-Length` exceeds `maxBytes` — the
+ * per-route lower bound under the global adapter-node `BODY_SIZE_LIMIT`
+ * (which must stay high enough for 50MB .gh uploads). Throws 413 BEFORE the
+ * body is read; see `declaredBodySizeExceeds` for the chunked-encoding caveat.
  */
 export function requireMaxBodySize(request: Request, maxBytes: number): void {
-	const declared = Number(request.headers.get('content-length'));
-	if (Number.isFinite(declared) && declared > maxBytes) {
+	if (declaredBodySizeExceeds(request.headers, maxBytes)) {
 		throw error(413, `Request body exceeds the limit for this endpoint.`);
 	}
 }
 
-// ============================================================================
-// Redirect target validation
-// ============================================================================
-/**
- * Validate a user-supplied post-login redirect target. Accepts only same-origin
- * relative paths starting with `/` followed by a non-`/` character, so
- * `//evil.com/path` (protocol-relative URL — browser treats as cross-origin)
- * and `/\evil.com` (back-slash variants some browsers normalize) are rejected.
- *
- * Always returns a safe path: the validated target on success, the fallback
- * otherwise. Routes call this with `redirectTo` from form data or query string.
- */
-export function safeRedirectTarget(raw: string | null | undefined, fallback: string): string {
-	if (typeof raw !== 'string' || raw.length < 2) return fallback;
-	if (raw[0] !== '/') return fallback;
-	// Reject protocol-relative (`//host`) and back-slash bypass (`/\host`).
-	if (raw[1] === '/' || raw[1] === '\\') return fallback;
-	return raw;
-}
+/** Post-login redirect validator — re-exported for the login/OAuth routes. */
+export { safeRedirectTarget };

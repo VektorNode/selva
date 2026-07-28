@@ -1,10 +1,26 @@
 {
 	"name": "@selvajs/selva",
-	"version": "4.6.20",
+	"version": "4.7.0-beta.6",
 	"description": "Selva — self-contained Grasshopper-driven web app. Install, configure via .env, deploy.",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"grasshopper",
+		"rhino",
+		"rhino-compute",
+		"parametric-design",
+		"web-app",
+		"sveltekit"
+	],
 	"publishConfig": {
 		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/selva"
 	},
 	"type": "module",
 	"main": "./build/index.js",
@@ -13,7 +29,7 @@
 		"templates"
 	],
 	"engines": {
-		"node": ">=20.6.0"
+		"node": ">=22.0.0"
 	},
 	"scripts": {
 		"dev": "vite dev",
@@ -30,28 +46,33 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"@selvajs/compute": "catalog:",
 		"@supabase/supabase-js": "^2.104.1",
 		"@sveltejs/kit": "catalog:",
 		"bits-ui": "^2.18.0",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
+		"pino": "^10.3.1",
 		"rhino3dm": "8.17.0",
-		"sharp": "^0.34.5",
+		"sharp": "^0.35.3",
 		"tailwind-merge": "catalog:",
 		"tailwind-variants": "^3.2.2",
 		"three": "catalog:",
 		"zod": "^4.3.6"
 	},
+	"optionalDependencies": {
+		"@sentry/node": "^10.63.0"
+	},
 	"devDependencies": {
+		"@playwright/test": "catalog:",
+		"@selvajs/compute": "workspace:*",
 		"@selvajs/config": "workspace:*",
 		"@selvajs/header-auth-provider": "workspace:*",
 		"@selvajs/local-provider": "workspace:*",
 		"@selvajs/platform": "workspace:*",
 		"@selvajs/schemas": "workspace:*",
+		"@selvajs/server": "workspace:*",
 		"@selvajs/supabase-provider": "workspace:*",
 		"@selvajs/ui": "workspace:*",
-		"@playwright/test": "catalog:",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@types/three": "catalog:",
 		"rimraf": "catalog:",

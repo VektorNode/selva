@@ -4,10 +4,37 @@ import {
 	type IComputeServerStore,
 	type ComputeConfig,
 	type ComputeServerConfig,
-	type RequestContext
+	type GetConfigOptions,
+	type RequestContext,
+	type SecretVerificationFailure,
+	type SecretVerificationReport,
+	type ILogger
 } from '@selvajs/platform';
-import { ProviderError } from '@selvajs/platform';
+import { NoopLogger } from '@selvajs/platform';
+// Secret crypto functions come from the server-only subpath (they use
+// `node:crypto`, kept out of the root barrel so client bundles don't pull it in).
+import { decryptSecret, encryptSecret, isEncryptedSecret } from '@selvajs/platform/computeServer';
 import type { ClientBundle } from './client.js';
+import { mapPostgrestError } from './errors.js';
+
+/**
+ * Explicit column list for `compute_servers`, minus the encrypted `api_key`.
+ * Reading a key costs a decrypt per row, so the default projection leaves it
+ * out entirely and `getConfig` reports only whether one is set.
+ */
+const SERVER_COLUMNS =
+	'id, scope, owner_org_id, shared_with_all, label, server_url, timeout_ms, retry_count, has_api_key';
+/**
+ * Projection for the `includeApiKeys` path — the base columns plus the secret.
+ * Spelled out rather than interpolated: supabase-js infers the row type from
+ * the literal column string, and a template literal degrades it to `string`.
+ */
+const SERVER_COLUMNS_WITH_KEY =
+	'id, scope, owner_org_id, shared_with_all, label, server_url, timeout_ms, retry_count, has_api_key, api_key';
+/** Columns from the share join table read in `getConfig`. */
+const SHARE_COLUMNS = 'server_id, org_id';
+/** Columns from the per-org default table read in `getConfig`. */
+const ORG_DEFAULT_COLUMNS = 'org_id, default_server_id';
 
 /**
  * Compute-server config backed by three tables:
@@ -24,15 +51,40 @@ import type { ClientBundle } from './client.js';
  * callers (resolver, page loaders) using helpers in `@selvajs/platform`.
  */
 export class SupabaseComputeServerStore implements IComputeServerStore {
-	constructor(private readonly clients: ClientBundle) {}
+	/**
+	 * `secretKey` (from `SELVA_AT_REST_KEY`) encrypts `api_key` before it is
+	 * written to `compute_servers.api_key` and decrypts it on read, so the
+	 * Rhino.Compute credential never sits in the DB as plaintext — matching the
+	 * local provider's on-disk envelope. Optional only for legacy construction
+	 * paths (tests that never touch apiKeys); a store built without a key throws
+	 * if asked to write or read a secret. Wire it via `SupabaseDataProvider`.
+	 *
+	 * `logger` is optional and defaults to `NoopLogger` — this is library code, so
+	 * it stays silent unless the app wires a real logger in.
+	 */
+	private readonly logger: ILogger;
 
-	async getConfig(ctx: RequestContext): Promise<ComputeConfig> {
+	constructor(
+		private readonly clients: ClientBundle,
+		private readonly secretKey?: Buffer,
+		logger?: ILogger
+	) {
+		this.logger = logger ?? new NoopLogger();
+	}
+
+	async getConfig(ctx: RequestContext, opts: GetConfigOptions = {}): Promise<ComputeConfig> {
 		const client = this.clients.forRequest(ctx);
+		const withKeys = opts.includeApiKeys === true;
 
 		const [serversRes, sharesRes, orgDefRes, platDefRes] = await Promise.all([
-			client.from('compute_servers').select('*'),
-			client.from('compute_server_shares').select('*'),
-			client.from('compute_server_org_defaults').select('*'),
+			// Two literal selects rather than one interpolated column string:
+			// supabase-js derives the row type from the literal, so a computed one
+			// resolves to a ParserError instead of a row.
+			withKeys
+				? client.from('compute_servers').select(SERVER_COLUMNS_WITH_KEY)
+				: client.from('compute_servers').select(SERVER_COLUMNS),
+			client.from('compute_server_shares').select(SHARE_COLUMNS),
+			client.from('compute_server_org_defaults').select(ORG_DEFAULT_COLUMNS),
 			client
 				.from('compute_server_platform_default')
 				.select('default_server_id')
@@ -40,10 +92,10 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 				.maybeSingle()
 		]);
 
-		if (serversRes.error) throw mapError(serversRes.error);
-		if (sharesRes.error) throw mapError(sharesRes.error);
-		if (orgDefRes.error) throw mapError(orgDefRes.error);
-		if (platDefRes.error) throw mapError(platDefRes.error);
+		if (serversRes.error) throw mapPostgrestError(serversRes.error);
+		if (sharesRes.error) throw mapPostgrestError(sharesRes.error);
+		if (orgDefRes.error) throw mapPostgrestError(orgDefRes.error);
+		if (platDefRes.error) throw mapPostgrestError(platDefRes.error);
 
 		// Build per-server `sharedWith` allowlists from the join table.
 		const sharedByServer = new Map<string, string[]>();
@@ -53,7 +105,9 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			sharedByServer.set(row.server_id, list);
 		}
 
-		const servers = (serversRes.data ?? []).map((row) => rowToServer(row, sharedByServer));
+		const servers = (serversRes.data ?? []).map((row) =>
+			rowToServer(withKeys ? this.decryptRowApiKey(row) : row, sharedByServer, withKeys)
+		);
 
 		const orgDefaults: Record<string, string> = {};
 		for (const row of orgDefRes.data ?? []) {
@@ -67,6 +121,24 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		};
 	}
 
+	/**
+	 * One server's decrypted key — the solve path's entry point, replacing a
+	 * whole-table read + N decrypts with a single-row lookup and one decrypt.
+	 * Tolerant in the same way `decryptRowApiKey` is: an unknown id or an
+	 * unreadable ciphertext yields `undefined` rather than throwing.
+	 */
+	async getServerApiKey(ctx: RequestContext, serverId: string): Promise<string | undefined> {
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('compute_servers')
+			.select('id, label, api_key')
+			.eq('id', serverId)
+			.maybeSingle();
+		if (error) throw mapPostgrestError(error);
+		if (!data) return undefined;
+		return this.decryptRowApiKey(data as ServerRow).api_key ?? undefined;
+	}
+
 	async savePlatformServers(
 		ctx: RequestContext,
 		servers: ComputeServerConfig[],
@@ -77,13 +149,13 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 
 		// Replace-all of platform rows.
 		const { error: delErr } = await client.from('compute_servers').delete().eq('scope', 'platform');
-		if (delErr) throw mapError(delErr);
+		if (delErr) throw mapPostgrestError(delErr);
 
 		if (platformOnly.length > 0) {
 			const { error: insErr } = await client
 				.from('compute_servers')
-				.insert(platformOnly.map(serverToRow));
-			if (insErr) throw mapError(insErr);
+				.insert(platformOnly.map((s) => serverToRow(this.encryptServerApiKey(s))));
+			if (insErr) throw mapPostgrestError(insErr);
 
 			// Rebuild the share rows for any non-`all` platform servers.
 			const shareRows = platformOnly.flatMap((s) =>
@@ -93,7 +165,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			);
 			if (shareRows.length > 0) {
 				const { error: shErr } = await client.from('compute_server_shares').insert(shareRows);
-				if (shErr) throw mapError(shErr);
+				if (shErr) throw mapPostgrestError(shErr);
 			}
 		}
 
@@ -101,7 +173,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			.from('compute_server_platform_default')
 			.update({ default_server_id: defaultServerId ?? null })
 			.eq('singleton', true);
-		if (defErr) throw mapError(defErr);
+		if (defErr) throw mapPostgrestError(defErr);
 	}
 
 	async saveOrgServers(
@@ -118,13 +190,13 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			.delete()
 			.eq('scope', 'org')
 			.eq('owner_org_id', orgId);
-		if (delErr) throw mapError(delErr);
+		if (delErr) throw mapPostgrestError(delErr);
 
 		if (orgOnly.length > 0) {
 			const { error: insErr } = await client
 				.from('compute_servers')
-				.insert(orgOnly.map(serverToRow));
-			if (insErr) throw mapError(insErr);
+				.insert(orgOnly.map((s) => serverToRow(this.encryptServerApiKey(s))));
+			if (insErr) throw mapPostgrestError(insErr);
 		}
 
 		if (defaultServerId === null) {
@@ -132,12 +204,12 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 				.from('compute_server_org_defaults')
 				.delete()
 				.eq('org_id', orgId);
-			if (error) throw mapError(error);
+			if (error) throw mapPostgrestError(error);
 		} else if (typeof defaultServerId === 'string') {
 			const { error } = await client
 				.from('compute_server_org_defaults')
 				.upsert({ org_id: orgId, default_server_id: defaultServerId });
-			if (error) throw mapError(error);
+			if (error) throw mapPostgrestError(error);
 		}
 	}
 
@@ -148,13 +220,13 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 				.from('compute_server_org_defaults')
 				.delete()
 				.eq('org_id', orgId);
-			if (error) throw mapError(error);
+			if (error) throw mapPostgrestError(error);
 			return;
 		}
 		const { error } = await client
 			.from('compute_server_org_defaults')
 			.upsert({ org_id: orgId, default_server_id: serverId });
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 	}
 
 	async deleteByOrg(ctx: RequestContext, orgId: string): Promise<void> {
@@ -166,7 +238,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			.from('compute_server_org_defaults')
 			.delete()
 			.eq('org_id', orgId);
-		if (defErr) throw mapError(defErr);
+		if (defErr) throw mapPostgrestError(defErr);
 
 		// Org-private servers owned by this org.
 		const { error: srvErr } = await client
@@ -174,14 +246,129 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			.delete()
 			.eq('scope', 'org')
 			.eq('owner_org_id', orgId);
-		if (srvErr) throw mapError(srvErr);
+		if (srvErr) throw mapPostgrestError(srvErr);
 
 		// Strip this org from any platform server share allowlist.
 		const { error: shErr } = await client
 			.from('compute_server_shares')
 			.delete()
 			.eq('org_id', orgId);
-		if (shErr) throw mapError(shErr);
+		if (shErr) throw mapPostgrestError(shErr);
+	}
+
+	// ==========================================================================
+	// At-rest secret handling
+	// ==========================================================================
+
+	/**
+	 * Encrypt a server's `apiKey` before it is written to the DB. Idempotent —
+	 * an already-enveloped value is passed through, so a round-trip (read →
+	 * save) never double-encrypts. Throws if the store was built without a key
+	 * but a real secret needs writing, so we never silently persist plaintext.
+	 */
+	private encryptServerApiKey(s: ComputeServerConfig): ComputeServerConfig {
+		if (!s.apiKey) return s;
+		if (isEncryptedSecret(s.apiKey)) return s;
+		if (!this.secretKey) {
+			throw new Error(
+				'Cannot store a compute-server apiKey: SELVA_AT_REST_KEY is not configured. ' +
+					'Set it so secrets are encrypted at rest.'
+			);
+		}
+		return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey) };
+	}
+
+	/**
+	 * Decrypt a row's `api_key` on read. Tolerant, mirroring the local provider:
+	 * a row whose ciphertext can't be authenticated under the current key is
+	 * returned with `api_key: null` and a warning logged, so the page keeps
+	 * rendering (solves against that server fail later at Rhino.Compute). A
+	 * plaintext value that predates encryption is passed through unchanged and
+	 * surfaced by `verifySecrets()` — never silently dropped.
+	 */
+	private decryptRowApiKey(row: ServerRow): ServerRow {
+		if (!row.api_key) return row;
+		if (!isEncryptedSecret(row.api_key)) {
+			// Legacy/hand-inserted plaintext. Pass through so an existing key
+			// keeps working; verifySecrets() flags it for re-save via /admin/compute.
+			this.logger.warn(
+				'Compute server row has a plaintext api_key; re-save it via /admin/compute so it is stored encrypted',
+				{ component: 'selva', serverLabel: row.label, serverId: row.id }
+			);
+			return row;
+		}
+		if (!this.secretKey) {
+			this.logger.warn(
+				'Cannot decrypt api_key: SELVA_AT_REST_KEY is not configured. Returning without a key; solves will fail',
+				{ component: 'selva', serverLabel: row.label, serverId: row.id }
+			);
+			return { ...row, api_key: null };
+		}
+		try {
+			return { ...row, api_key: decryptSecret(row.api_key, this.secretKey) };
+		} catch (cause) {
+			this.logger.warn(
+				'Could not decrypt api_key: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
+					'This server is returned without an apiKey and solves against it will fail. ' +
+					'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY',
+				{
+					component: 'selva',
+					serverLabel: row.label,
+					serverId: row.id,
+					err: cause instanceof Error ? (cause.stack ?? cause.message) : String(cause)
+				}
+			);
+			return { ...row, api_key: null };
+		}
+	}
+
+	/**
+	 * Boot-time integrity check over every `compute_servers` row. Uses the
+	 * service client (no request context at boot) to read raw ciphertext, then
+	 * attempts to decrypt each `api_key`. Does NOT throw — returns a structured
+	 * report for boot health to drive `/api/health`.
+	 */
+	async verifySecrets(): Promise<SecretVerificationReport> {
+		const { data, error } = await this.clients.serviceClient
+			.from('compute_servers')
+			.select('id, label, api_key');
+		if (error) throw mapPostgrestError(error);
+
+		const failures: SecretVerificationFailure[] = [];
+		let plaintextFound = false;
+
+		for (const row of data ?? []) {
+			const apiKey = (row as { api_key: string | null }).api_key;
+			const id = (row as { id: string }).id;
+			const label = (row as { label: string }).label;
+			if (!apiKey) continue;
+			if (!isEncryptedSecret(apiKey)) {
+				plaintextFound = true;
+				failures.push({ serverId: id, serverLabel: label, reason: 'plaintext_on_disk' });
+				continue;
+			}
+			if (!this.secretKey) {
+				failures.push({
+					serverId: id,
+					serverLabel: label,
+					reason: 'key_mismatch',
+					cause: 'SELVA_AT_REST_KEY is not configured'
+				});
+				continue;
+			}
+			try {
+				decryptSecret(apiKey, this.secretKey);
+			} catch (cause) {
+				failures.push({
+					serverId: id,
+					serverLabel: label,
+					reason: 'key_mismatch',
+					cause: cause instanceof Error ? cause.message : String(cause)
+				});
+			}
+		}
+
+		return { ok: failures.length === 0, failures, plaintextFound };
 	}
 }
 
@@ -192,17 +379,32 @@ interface ServerRow {
 	shared_with_all: boolean;
 	label: string;
 	server_url: string;
-	api_key: string | null;
+	/** Absent unless the row was read with `SERVER_COLUMNS_WITH_KEY`. */
+	api_key?: string | null;
+	/** Generated column — true when a key is stored, without reading it. */
+	has_api_key?: boolean;
 	timeout_ms: number | null;
 	retry_count: number | null;
 }
 
-function rowToServer(row: ServerRow, sharedByServer: Map<string, string[]>): ComputeServerConfig {
+/**
+ * `withKey` mirrors the projection the row was read with. It gates `apiKey`
+ * explicitly rather than trusting the row's shape, so a key can never ride along
+ * on a read that didn't ask for one.
+ */
+function rowToServer(
+	row: ServerRow,
+	sharedByServer: Map<string, string[]>,
+	withKey: boolean
+): ComputeServerConfig {
 	const common = {
 		id: row.id,
 		label: row.label,
 		serverUrl: row.server_url,
-		apiKey: row.api_key ?? undefined,
+		apiKey: withKey ? (row.api_key ?? undefined) : undefined,
+		// Prefer the generated column; fall back to the key itself for rows read
+		// with the key-bearing projection on a DB predating the column.
+		hasApiKey: row.has_api_key ?? !!row.api_key,
 		timeoutMs: row.timeout_ms ?? undefined,
 		retryCount: row.retry_count ?? undefined
 	};
@@ -219,7 +421,13 @@ function rowToServer(row: ServerRow, sharedByServer: Map<string, string[]>): Com
 	return { ...common, scope: 'org', ownerOrgId: row.owner_org_id };
 }
 
-function serverToRow(s: ComputeServerConfig): ServerRow {
+/**
+ * Insert shape. Deliberately not `ServerRow`: `has_api_key` is generated by the
+ * database and rejected on write, so the writable columns are their own type.
+ */
+type ServerWriteRow = Omit<ServerRow, 'has_api_key'>;
+
+function serverToRow(s: ComputeServerConfig): ServerWriteRow {
 	const base = {
 		id: s.id,
 		label: s.label,
@@ -242,21 +450,4 @@ function serverToRow(s: ComputeServerConfig): ServerRow {
 		owner_org_id: s.ownerOrgId,
 		shared_with_all: false
 	};
-}
-
-interface PostgrestError {
-	code?: string;
-	message?: string;
-}
-
-function mapError(e: unknown): Error {
-	const pg = e as PostgrestError;
-	if (pg?.code === '23505') return new ProviderError(pg.message ?? 'Duplicate record', 409);
-	if (pg?.code === '23503') return new ProviderError(pg.message ?? 'Foreign key violation', 409);
-	if (e instanceof Error) return e;
-	if (e && typeof e === 'object') {
-		const obj = e as { message?: string; code?: string };
-		return new Error(obj.code ? `[${obj.code}] ${obj.message ?? ''}` : (obj.message ?? String(e)));
-	}
-	return new Error(String(e));
 }

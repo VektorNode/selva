@@ -49,6 +49,34 @@ export interface SupabaseAuthProviderConfig {
 	 * `{ ok: false, reason: 'signup_disabled' }`.
 	 */
 	allowEmailLinkSignup?: boolean;
+	/**
+	 * How `verifyToken` validates session JWTs (see the method for the full
+	 * rationale):
+	 *  - `'hybrid'` (default): verify the JWT LOCALLY via `getClaims()` on every
+	 *    request (no network call when the project uses asymmetric signing keys —
+	 *    the modern default), and additionally re-check against GoTrue at most
+	 *    once per `revalidateMs` per session to catch server-side sign-outs and
+	 *    `disabled` flips. Bounds revocation latency to `revalidateMs`.
+	 *  - `'strict'`: call `getUser()` on every request (the pre-1b behavior).
+	 *    Instant revocation, one network round-trip per request. For operators
+	 *    who don't accept any revocation lag.
+	 */
+	tokenVerification?: 'hybrid' | 'strict';
+	/**
+	 * Recheck window for `'hybrid'` verification, in ms. A verified session is
+	 * re-validated against GoTrue at most once per this interval. Default 60s.
+	 */
+	revalidateMs?: number;
+}
+
+/** Default hybrid recheck window — see `revalidateMs`. */
+const DEFAULT_REVALIDATE_MS = 60_000;
+
+/** Parse a positive integer env var, or undefined if unset/invalid. */
+function parsePositiveInt(raw: string | undefined): number | undefined {
+	if (!raw) return undefined;
+	const n = Number.parseInt(raw, 10);
+	return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 export class SupabaseAuthProvider implements IAuthProvider {
@@ -61,10 +89,23 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	private readonly anon: SupabaseClient;
 	private readonly anonKey: string;
 	private readonly supabaseUrl: string;
+	private readonly tokenVerification: 'hybrid' | 'strict';
+	private readonly revalidateMs: number;
+
+	/**
+	 * Last time a given session was re-validated against GoTrue (epoch ms),
+	 * keyed by the JWT `session_id`. Bounds the hybrid recheck to once per
+	 * `revalidateMs` per session. Swept lazily (see `verifyToken`) so a burst of
+	 * distinct sessions can't leak memory. Per-process; multi-instance drift is
+	 * harmless (each instance rechecks on its own schedule).
+	 */
+	private readonly lastRevalidatedAt = new Map<string, number>();
 
 	constructor(config: SupabaseAuthProviderConfig) {
 		this.supabaseUrl = config.supabaseUrl;
 		this.anonKey = config.anonKey;
+		this.tokenVerification = config.tokenVerification ?? 'hybrid';
+		this.revalidateMs = config.revalidateMs ?? DEFAULT_REVALIDATE_MS;
 		this.admin = createClient(config.supabaseUrl, config.serviceRoleKey, {
 			auth: { persistSession: false, autoRefreshToken: false }
 		});
@@ -101,6 +142,11 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			.split(',')
 			.map((p) => p.trim().toLowerCase())
 			.filter((p) => p.length > 0);
+		// Local JWT verification is the default (fast; requires asymmetric signing
+		// keys to skip the network — the Supabase default since 2025). Set
+		// SUPABASE_TOKEN_VERIFICATION=strict to force a getUser() per request.
+		const tokenVerification = env.SUPABASE_TOKEN_VERIFICATION === 'strict' ? 'strict' : 'hybrid';
+		const revalidateMs = parsePositiveInt(env.SUPABASE_REVALIDATE_MS);
 		return new SupabaseAuthProvider({
 			supabaseUrl,
 			anonKey,
@@ -109,19 +155,109 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			oauthProviders,
 			// Default true; set SUPABASE_ALLOW_EMAIL_LINK_SIGNUP=false to lock down
 			// to invite-only and reject magic-link signups for new addresses.
-			allowEmailLinkSignup: env.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP !== 'false'
+			allowEmailLinkSignup: env.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP !== 'false',
+			tokenVerification,
+			...(revalidateMs !== undefined ? { revalidateMs } : {})
 		});
 	}
 
+	/**
+	 * Verify a session JWT and return the user, or null if invalid/disabled.
+	 * Runs on EVERY authenticated request, so the fast path avoids a network
+	 * round-trip.
+	 *
+	 * `'hybrid'` (default):
+	 *  1. `getClaims(token)` verifies the JWT. With asymmetric signing keys (the
+	 *     modern Supabase default) this is LOCAL — the SDK verifies against the
+	 *     cached JWKS via Web Crypto, no call to GoTrue. With a legacy symmetric
+	 *     HS256 secret the SDK transparently falls back to a network verify, so
+	 *     this is correct for both project types without us detecting the scheme
+	 *     or hand-rolling JWKS handling (which the Supabase docs warn against —
+	 *     it breaks under key rotation).
+	 *  2. Local verification can't see a server-side sign-out or a `disabled`
+	 *     flip that happened AFTER the token was issued (the claims are a
+	 *     snapshot). So we additionally re-check against GoTrue via `getUser`,
+	 *     but at most once per `revalidateMs` per session — bounding revocation
+	 *     latency to that window while eliminating ~all per-request network
+	 *     calls under steady load.
+	 *
+	 * `'strict'`: `getUser` on every request — instant revocation, one round
+	 * trip per request. The pre-1b behavior, for operators who accept no lag.
+	 */
 	async verifyToken(token: string): Promise<AuthUser | null> {
 		if (!token) return null;
-		// Per-request anon client with the JWT attached. `getUser(token)` also
-		// works, but routing through a scoped client keeps future sub-calls
-		// (profile fetch, etc.) RLS-aware if we ever move them here.
+
+		if (this.tokenVerification === 'strict') {
+			return this.verifyViaGetUser(token);
+		}
+
+		// --- hybrid: local verify first ---
+		const claims = await this.getClaimsOrNull(token);
+		if (!claims) return null;
+		// `disabled` as of token issue. A flip AFTER issue is caught by the
+		// periodic recheck below.
+		if ((claims.user_metadata as { disabled?: boolean } | undefined)?.disabled === true) {
+			return null;
+		}
+
+		// Periodic recheck: catch sign-out / disabled since the token was issued.
+		const sessionId = typeof claims.session_id === 'string' ? claims.session_id : claims.sub;
+		if (this.shouldRevalidate(sessionId)) {
+			const fresh = await this.verifyViaGetUser(token);
+			// getUser rejected it (signed out, disabled, revoked) → deny now.
+			if (!fresh) {
+				this.lastRevalidatedAt.delete(sessionId);
+				return null;
+			}
+			this.markRevalidated(sessionId);
+			return fresh;
+		}
+
+		// Build the user from claims — no network call on this path.
+		return {
+			id: claims.sub,
+			email: typeof claims.email === 'string' ? claims.email : undefined,
+			disabled: false,
+			metadata: claims.user_metadata
+		};
+	}
+
+	/** Full network verify against GoTrue. Also the `'strict'`-mode path. */
+	private async verifyViaGetUser(token: string): Promise<AuthUser | null> {
 		const { data, error } = await this.anon.auth.getUser(token);
 		if (error || !data.user) return null;
 		if (data.user.user_metadata?.disabled === true) return null;
 		return this.hydrate(data.user);
+	}
+
+	/** Local JWT verification. Returns the claims, or null if invalid/expired. */
+	private async getClaimsOrNull(token: string) {
+		try {
+			const { data, error } = await this.anon.auth.getClaims(token);
+			if (error || !data) return null;
+			return data.claims;
+		} catch {
+			return null;
+		}
+	}
+
+	private shouldRevalidate(sessionId: string): boolean {
+		const last = this.lastRevalidatedAt.get(sessionId);
+		return last === undefined || Date.now() - last >= this.revalidateMs;
+	}
+
+	private markRevalidated(sessionId: string): void {
+		const now = Date.now();
+		this.lastRevalidatedAt.set(sessionId, now);
+		// Lazy sweep so a churn of distinct sessions can't grow the map without
+		// bound. Anything older than two windows is definitely stale (it would
+		// revalidate on next use anyway). Cheap: only runs when the map is large.
+		if (this.lastRevalidatedAt.size > 10_000) {
+			const cutoff = now - this.revalidateMs * 2;
+			for (const [id, ts] of this.lastRevalidatedAt) {
+				if (ts < cutoff) this.lastRevalidatedAt.delete(id);
+			}
+		}
 	}
 
 	async getUser(id: string): Promise<AuthUser | null> {
@@ -196,22 +332,16 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	}
 
 	async touchLastLogin(id: string): Promise<void> {
-		// 60-second debounce. Matches the local provider.
-		const { data, error } = await this.admin
-			.from('user_profiles')
-			.select('last_login_at')
-			.eq('user_id', id)
-			.maybeSingle();
-		if (error) return;
-
-		if (data?.last_login_at) {
-			const prev = Date.parse(data.last_login_at);
-			if (Number.isFinite(prev) && Date.now() - prev < 60_000) return;
-		}
+		// 60-second debounce, done in a single UPDATE: the WHERE clause skips the
+		// write when the stamp is recent, so a login storm from one user costs one
+		// no-op round-trip instead of a select + conditional update. Matches the
+		// local provider's debounce window.
+		const cutoff = new Date(Date.now() - 60_000).toISOString();
 		await this.admin
 			.from('user_profiles')
 			.update({ last_login_at: new Date().toISOString() })
-			.eq('user_id', id);
+			.eq('user_id', id)
+			.or(`last_login_at.is.null,last_login_at.lt.${cutoff}`);
 	}
 
 	// OAuth lives on `this.oauth` (typed `IOAuthAuth`); see `SupabaseOAuthAuth`

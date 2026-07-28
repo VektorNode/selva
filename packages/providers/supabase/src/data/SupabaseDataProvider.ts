@@ -1,7 +1,16 @@
-import type { IDataProvider, IEventSink, IPlatformProjectGrantStore } from '@selvajs/platform';
-import { ProviderError } from '@selvajs/platform';
+import type {
+	IDataProvider,
+	IEventSink,
+	IPlatformProjectGrantStore,
+	RequestContext,
+	SchemaVersionReport,
+	UserErasureOptions
+} from '@selvajs/platform';
+import { ERASED_ACTOR_ID, NoopLogger, ProviderError, type ILogger } from '@selvajs/platform';
+import { decodeSecretKey } from '@selvajs/platform/computeServer';
+import { EXPECTED_MIGRATION_HEAD } from './migrationHead.js';
 import type { ClientBundle, BuildClientOptions } from './client.js';
-import { buildClientBundle } from './client.js';
+import { buildClientBundle, clientBundleFromEnv } from './client.js';
 import { SupabaseEventSink } from './SupabaseEventSink.js';
 import { SupabaseSolveMetricSink } from './SupabaseSolveMetricSink.js';
 import { SupabaseAuditQuery } from './SupabaseAuditQuery.js';
@@ -54,6 +63,8 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly permissions: SupabasePlatformPermissionStore;
 	readonly platformProjectGrants: IPlatformProjectGrantStore;
 	readonly auditQuery: SupabaseAuditQuery;
+	/** The sink every store emits into — exposed per `IDataProvider.events`. */
+	readonly events: IEventSink;
 	/**
 	 * Per-solve timing sink, built from the same client bundle. Exposed so the
 	 * app's provider wiring can hand it to `SelvaConfig.solveMetrics` without
@@ -63,14 +74,17 @@ export class SupabaseDataProvider implements IDataProvider {
 
 	private constructor(
 		private readonly clients: ClientBundle,
-		events: IEventSink
+		events: IEventSink,
+		secretKey?: Buffer,
+		logger: ILogger = new NoopLogger()
 	) {
-		this.solveMetrics = new SupabaseSolveMetricSink(clients);
+		this.events = events;
+		this.solveMetrics = new SupabaseSolveMetricSink(clients, { logger });
 		this.orgs = new SupabaseOrgStore(clients, events);
 		this.projects = new SupabaseProjectStore(clients, events);
 		this.definitions = new SupabaseDefinitionStore(clients, events);
 		this.invites = new SupabaseInviteStore(clients, events);
-		this.computeServer = new SupabaseComputeServerStore(clients);
+		this.computeServer = new SupabaseComputeServerStore(clients, secretKey, logger);
 		this.shareLinks = new SupabaseShareLinkStore(clients, events);
 		this.userProfile = new SupabaseUserProfileProvider(clients);
 		this.permissions = new SupabasePlatformPermissionStore(clients);
@@ -80,29 +94,65 @@ export class SupabaseDataProvider implements IDataProvider {
 
 	static fromEnv(
 		env: Record<string, string | undefined>,
-		events?: IEventSink
+		events?: IEventSink,
+		logger: ILogger = new NoopLogger()
 	): SupabaseDataProvider {
-		const supabaseUrl = env.SUPABASE_URL;
-		const anonKey = env.SUPABASE_ANON_KEY;
-		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-		if (!supabaseUrl) throw new Error('Missing required env var: SUPABASE_URL');
-		if (!anonKey) throw new Error('Missing required env var: SUPABASE_ANON_KEY');
-		if (!serviceRoleKey) throw new Error('Missing required env var: SUPABASE_SERVICE_ROLE_KEY');
-		const bundle = buildClientBundle({ supabaseUrl, anonKey, serviceRoleKey });
-		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
+		// Bundle-only env parse (URL + anon + service-role) is shared with
+		// `clientBundleFromEnv`; the full data provider additionally requires the
+		// at-rest key below.
+		const bundle = clientBundleFromEnv(env);
+		// Required so compute-server apiKeys are encrypted at rest in the DB —
+		// same guarantee (and same key) as the local provider's on-disk envelope.
+		if (!env.SELVA_AT_REST_KEY) {
+			throw new Error(
+				'Missing required env var: SELVA_AT_REST_KEY (32-byte hex or base64). ' +
+					'Required to encrypt compute-server API keys at rest. ' +
+					"Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+			);
+		}
+		const secretKey = decodeSecretKey(env.SELVA_AT_REST_KEY);
+		return new SupabaseDataProvider(
+			bundle,
+			events ?? new SupabaseEventSink(bundle, { logger }),
+			secretKey,
+			logger
+		);
 	}
 
-	static create(opts: BuildClientOptions, events?: IEventSink): SupabaseDataProvider {
+	static create(
+		opts: BuildClientOptions,
+		events?: IEventSink,
+		secretKey?: Buffer,
+		logger: ILogger = new NoopLogger()
+	): SupabaseDataProvider {
 		const bundle = buildClientBundle(opts);
-		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
+		return new SupabaseDataProvider(
+			bundle,
+			events ?? new SupabaseEventSink(bundle, { logger }),
+			secretKey,
+			logger
+		);
 	}
 
 	/**
 	 * Build from a pre-existing `ClientBundle`. Useful for tests or advanced
 	 * cases that need to inject a custom event sink or share a bundle externally.
+	 * `secretKey` is optional here — omit it only when the caller never touches
+	 * compute-server apiKeys (writes without a key throw rather than persist
+	 * plaintext).
 	 */
-	static fromBundle(bundle: ClientBundle, events?: IEventSink): SupabaseDataProvider {
-		return new SupabaseDataProvider(bundle, events ?? new SupabaseEventSink(bundle));
+	static fromBundle(
+		bundle: ClientBundle,
+		events?: IEventSink,
+		secretKey?: Buffer,
+		logger: ILogger = new NoopLogger()
+	): SupabaseDataProvider {
+		return new SupabaseDataProvider(
+			bundle,
+			events ?? new SupabaseEventSink(bundle, { logger }),
+			secretKey,
+			logger
+		);
 	}
 
 	/**
@@ -111,6 +161,63 @@ export class SupabaseDataProvider implements IDataProvider {
 	 */
 	getClientBundle(): ClientBundle {
 		return this.clients;
+	}
+
+	/**
+	 * App↔DB schema handshake (audit O3). Calls `selva.migration_head()` — a
+	 * SECURITY DEFINER function shipped in this package's migrations — and
+	 * compares it against the head this build expects. Three failure shapes:
+	 * the RPC itself is missing (database never applied the handshake
+	 * migration), the head is empty (no migrations pushed at all), or the head
+	 * is lexicographically behind (operator updated the app but forgot
+	 * `supabase db push`). Never throws; boot health consumes the report.
+	 */
+	async verifySchemaVersion(): Promise<SchemaVersionReport> {
+		const expected = EXPECTED_MIGRATION_HEAD;
+		const pushHint =
+			'Apply the pending Supabase migrations: sync them into your project ' +
+			'(see @selvajs/supabase-provider sync-migrations) and run `npx supabase db push`.';
+		try {
+			const { data, error } = await this.clients.serviceClient.rpc('migration_head');
+			if (error) {
+				return {
+					ok: false,
+					expected,
+					actual: null,
+					message:
+						`selva.migration_head() is not available (${error.message ?? error.code ?? 'unknown error'}) ` +
+						`— the database schema is behind this app version. ${pushHint}`
+				};
+			}
+			const actual = typeof data === 'string' ? data : '';
+			if (!actual) {
+				return {
+					ok: false,
+					expected,
+					actual: '',
+					message: `The database reports no applied migrations. ${pushHint}`
+				};
+			}
+			// Timestamp prefixes are fixed-width, so lexicographic order is
+			// chronological. A head AHEAD of the app (rolled-back app, newer DB) is
+			// tolerated — the schema is append-only/additive by convention.
+			const ok = actual >= expected;
+			return {
+				ok,
+				expected,
+				actual,
+				message: ok
+					? undefined
+					: `Database migration head ${actual} is behind the app's expected ${expected}. ${pushHint}`
+			};
+		} catch (err) {
+			return {
+				ok: false,
+				expected,
+				actual: null,
+				message: `Schema handshake failed: ${err instanceof Error ? err.message : String(err)}`
+			};
+		}
 	}
 
 	/**
@@ -123,11 +230,76 @@ export class SupabaseDataProvider implements IDataProvider {
 	}
 
 	/**
-	 * No-op: `public.user_profiles.user_id` references `auth.users(id)` with
-	 * `on delete cascade`. Deleting the auth user removes the profile row
-	 * automatically.
+	 * Erasure hook (audit P1). FK cascade against `auth.users` already removes
+	 * the profile, memberships, and owned rows — but three classes of personal
+	 * data are NOT reachable by those FKs and are scrubbed explicitly here with
+	 * the RLS-bypassing service client (this runs as a system erasure op):
+	 *
+	 *  1. `audit_events` keyed by a plain-text `actor_id` (no FK) — the deleted
+	 *     user's own actions. Deleted.
+	 *  2. The user's email in `invites.email` (invites addressed to them) and in
+	 *     `invite.created` audit payloads (`data->>'email'`). The invite rows are
+	 *     deleted; the audit email is redacted in place (the audit *fact* that an
+	 *     invite was created is preserved — only the PII is removed).
+	 *  3. `solve_metrics` — deliberately not FK-cascaded (retention telemetry).
+	 *     `actor_id` is tombstoned to {@link ERASED_ACTOR_ID}, keeping the row's
+	 *     aggregate value without identifying the person.
+	 *
+	 * Each step tolerates missing rows so the hook is idempotent on retry. Email
+	 * scrubs are skipped when `opts.email` is absent (the caller must capture it
+	 * before `deleteUser`).
 	 */
-	async onUserDeleted(): Promise<void> {
-		// FK cascade handles it.
+	async onUserDeleted(
+		_ctx: RequestContext,
+		userId: string,
+		opts?: UserErasureOptions
+	): Promise<void> {
+		const client = this.clients.serviceClient;
+		const email = opts?.email;
+
+		// 1. Audit rows the user authored (actor_id is plain text, no FK cascade).
+		const deletedActions = await client.from('audit_events').delete().eq('actor_id', userId);
+		if (deletedActions.error) {
+			throw new ProviderError(
+				`Failed to erase audit_events for user: ${deletedActions.error.message}`,
+				500
+			);
+		}
+
+		// 3. Anonymize retention telemetry rather than delete it.
+		const tombstoned = await client
+			.from('solve_metrics')
+			.update({ actor_id: ERASED_ACTOR_ID })
+			.eq('actor_id', userId);
+		if (tombstoned.error) {
+			throw new ProviderError(
+				`Failed to anonymize solve_metrics for user: ${tombstoned.error.message}`,
+				500
+			);
+		}
+
+		if (!email) return;
+
+		// 2a. Invites addressed to the user's email (their PII, keyed by email
+		// not by FK). `invited_by` cascade only removes invites they SENT.
+		const deletedInvites = await client.from('invites').delete().eq('email', email);
+		if (deletedInvites.error) {
+			throw new ProviderError(
+				`Failed to erase invites for user email: ${deletedInvites.error.message}`,
+				500
+			);
+		}
+
+		// 2b. Redact the email out of surviving `invite.created` audit payloads
+		// (authored by the inviter, so the row itself must survive — only the
+		// embedded invitee email is scrubbed). The SQL function rewrites the
+		// `email` key in place and returns the redacted row count.
+		const redacted = await client.rpc('redact_audit_event_email', { p_email: email });
+		if (redacted.error) {
+			throw new ProviderError(
+				`Failed to redact audit_events email payloads: ${redacted.error.message}`,
+				500
+			);
+		}
 	}
 }

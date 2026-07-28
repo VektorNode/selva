@@ -1,10 +1,28 @@
 {
 	"name": "@selvajs/ui",
-	"version": "4.12.5",
+	"version": "5.0.0-beta.6",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"svelte",
+		"sveltekit",
+		"components",
+		"ui",
+		"selva"
+	],
 	"publishConfig": {
 		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/ui"
+	},
+	"engines": {
+		"node": ">=22.0.0"
 	},
 	"type": "module",
 	"svelte": "./dist/public.js",
@@ -37,12 +55,14 @@
 		"**/*.css"
 	],
 	"scripts": {
+		"predev": "node ../../scripts/sync-shared-assets.js",
 		"dev": "vite dev",
+		"prebuild": "node ../../scripts/sync-shared-assets.js",
 		"build": "rimraf dist && pnpm prepack",
 		"build:fast": "svelte-kit sync && svelte-package",
 		"build:watch": "svelte-kit sync && svelte-package --watch",
 		"preview": "vite preview",
-		"prepack": "svelte-kit sync && svelte-package && publint",
+		"prepack": "svelte-kit sync && svelte-package && publint --strict",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -52,7 +72,7 @@
 		"lint": "prettier --check . && eslint ."
 	},
 	"peerDependencies": {
-		"@selvajs/compute": "catalog:",
+		"@selvajs/compute": "workspace:^",
 		"@selvajs/schemas": "workspace:^",
 		"@sveltejs/kit": "^2",
 		"bits-ui": "^2.18.0",

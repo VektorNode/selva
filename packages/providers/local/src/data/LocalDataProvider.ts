@@ -10,7 +10,8 @@ import type {
 	IPlatformPermissionStore,
 	IPlatformProjectGrantStore,
 	IEventSink,
-	RequestContext
+	RequestContext,
+	UserErasureOptions
 } from '@selvajs/platform';
 import { NoopEventSink } from '@selvajs/platform';
 import * as path from 'node:path';
@@ -48,6 +49,8 @@ export class LocalDataProvider implements IDataProvider {
 	readonly userProfile: IUserProfileStore;
 	readonly permissions: IPlatformPermissionStore;
 	readonly platformProjectGrants: IPlatformProjectGrantStore;
+	/** The sink the stores emit into (Noop unless injected) — per `IDataProvider.events`. */
+	readonly events?: IEventSink;
 
 	private readonly userData: LocalUserDataStore;
 
@@ -55,6 +58,7 @@ export class LocalDataProvider implements IDataProvider {
 		stores: Omit<IDataProvider, 'ensureUser' | 'onUserDeleted'>,
 		userData: LocalUserDataStore
 	) {
+		this.events = stores.events;
 		this.orgs = stores.orgs;
 		this.projects = stores.projects;
 		this.definitions = stores.definitions;
@@ -89,8 +93,17 @@ export class LocalDataProvider implements IDataProvider {
 	 * bare user ID in the team roster forever. (Supabase gets the membership
 	 * cascade from FK constraints; local must do it explicitly.) Tolerates
 	 * missing rows.
+	 *
+	 * `opts.email` is accepted for interface parity but unused: the local
+	 * provider persists no audit_events or solve_metrics (Supabase-only tables),
+	 * and its invite set is small and operator-visible on disk. The email-keyed
+	 * erasure that closes audit P1 is a Supabase concern.
 	 */
-	async onUserDeleted(ctx: RequestContext, userId: string): Promise<void> {
+	async onUserDeleted(
+		ctx: RequestContext,
+		userId: string,
+		_opts?: UserErasureOptions
+	): Promise<void> {
 		try {
 			await this.userData.deleteUser(userId);
 		} catch {
@@ -136,9 +149,17 @@ export class LocalDataProvider implements IDataProvider {
 		// - canEditDefinition needs the project store for `listPublic`
 		// - share-link resolution needs the definition store to enforce the §7
 		//   soft-delete cascade (Supabase does the equivalent via JOIN)
+		// - deleteProject needs the definition store to cascade the soft-delete
+		//   to the project's definitions (Supabase does the equivalent inline)
 		definitions.setProjectProvider(projects);
 		shareLinks.setDefinitionProvider(definitions);
+		projects.setDefinitionProvider(definitions);
 
+		// ONE user-data store, shared across the profile store, permission store,
+		// and the data provider's ensureUser/deleteUser — so all three read/write
+		// through a single load-once write-through cache over `user-data.json`
+		// (§3a). Previously each constructed its own store on the same file, which
+		// with caching would run three divergent caches.
 		const userData = createLocalUserDataStore(userDataFilePath);
 
 		return new LocalDataProvider(
@@ -149,9 +170,10 @@ export class LocalDataProvider implements IDataProvider {
 				computeServer,
 				invites,
 				shareLinks,
-				userProfile: new LocalUserProfileProvider(userDataFilePath),
-				permissions: new LocalPlatformPermissionStore(userDataFilePath),
-				platformProjectGrants
+				userProfile: new LocalUserProfileProvider(userData),
+				permissions: new LocalPlatformPermissionStore(userData),
+				platformProjectGrants,
+				events
 			},
 			userData
 		);

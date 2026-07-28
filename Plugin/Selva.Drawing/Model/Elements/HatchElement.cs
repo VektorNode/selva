@@ -15,7 +15,7 @@ public sealed class HatchElement : DrawElement
 	public HatchPatternKind Pattern { get; init; } = HatchPatternKind.Lines;
 	public double Spacing { get; init; } = 2.0;
 	public double AngleDegrees { get; init; } = 45.0;
-	public Stroke LineStyle { get; init; } = new Stroke { Width = 0.18 };
+	public Stroke LineStyle { get; init; } = new Stroke { Width = Stroke.HatchWidthMm };
 	public Color BackgroundColor { get; init; } = Color.Transparent;
 	public FillRule FillRule { get; init; } = FillRule.EvenOdd;
 

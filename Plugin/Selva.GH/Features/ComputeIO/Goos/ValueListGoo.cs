@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json.Linq;
@@ -218,19 +219,19 @@ public class GH_ValueListDataGoo : GH_Goo<string>
 
         if (source is int intVal)
         {
-            Value = intVal.ToString();
+            Value = intVal.ToString(CultureInfo.InvariantCulture);
             return true;
         }
 
         if (source is double doubleVal)
         {
-            Value = doubleVal.ToString();
+            Value = doubleVal.ToString(CultureInfo.InvariantCulture);
             return true;
         }
 
         if (source is float floatVal)
         {
-            Value = floatVal.ToString();
+            Value = floatVal.ToString(CultureInfo.InvariantCulture);
             return true;
         }
 
@@ -278,7 +279,7 @@ public class GH_ValueListDataGoo : GH_Goo<string>
 
         if (typeof(T) == typeof(GH_Number))
         {
-            if (double.TryParse(Value, out var numValue))
+            if (double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var numValue))
             {
                 object obj = new GH_Number(numValue);
                 target = (T)obj;
@@ -290,7 +291,7 @@ public class GH_ValueListDataGoo : GH_Goo<string>
 
         if (typeof(T) == typeof(GH_Integer))
         {
-            if (int.TryParse(Value, out var intValue))
+            if (int.TryParse(Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intValue))
             {
                 object obj = new GH_Integer(intValue);
                 target = (T)obj;
@@ -309,7 +310,7 @@ public class GH_ValueListDataGoo : GH_Goo<string>
                 return true;
             }
 
-            if (double.TryParse(Value, out var numValue))
+            if (double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var numValue))
             {
                 object obj = new GH_Boolean(Math.Abs(numValue) > 1e-10);
                 target = (T)obj;

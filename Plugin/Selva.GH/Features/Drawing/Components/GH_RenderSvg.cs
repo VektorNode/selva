@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Selva.Drawing.Model;
@@ -91,7 +92,7 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
         if (bgColor != Color.Empty)
         {
             backgroundColor = bgColor.A < 255
-                ? $"rgba({bgColor.R},{bgColor.G},{bgColor.B},{bgColor.A / 255f:0.####})"
+                ? $"rgba({bgColor.R},{bgColor.G},{bgColor.B},{(bgColor.A / 255f).ToString("0.####", CultureInfo.InvariantCulture)})"
                 : $"rgb({bgColor.R},{bgColor.G},{bgColor.B})";
         }
 

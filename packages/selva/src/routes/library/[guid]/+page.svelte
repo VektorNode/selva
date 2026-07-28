@@ -89,7 +89,10 @@
 				signal
 			});
 		} catch (err) {
-			if (signal.aborted) return { outputs: {} };
+			if (signal.aborted) {
+				console.debug('[Compute/browser] solve aborted during fetch — empty result discarded');
+				return { outputs: {} };
+			}
 			// A TypeError here means the request never completed. With an SSO proxy in
 			// front (e.g. Azure App Proxy), an expired session 302s the fetch to the
 			// IdP, which CORS blocks — only an interactive reload can re-authenticate.
@@ -99,7 +102,10 @@
 			);
 		}
 
-		if (signal.aborted) return { outputs: {} };
+		if (signal.aborted) {
+			console.debug('[Compute/browser] solve aborted after headers — empty result discarded');
+			return { outputs: {} };
+		}
 
 		// Session expiry surfaces two ways: our hook answers 401 (possibly with the
 		// body stripped by an SSO proxy, so don't rely on it), or a proxy/route
@@ -115,13 +121,25 @@
 			if (res.status === 503) {
 				throw new Error('Compute server is offline or unreachable. Please try again later.');
 			}
+			// Read the body as text first so a non-JSON error body (proxy page, HTML
+			// error) is logged instead of silently discarded by a failed .json().
+			const errorBody = await res.text().catch(() => '');
+			let d: { message?: string; retryAfter?: number } = {};
+			try {
+				d = JSON.parse(errorBody);
+			} catch {
+				if (errorBody) {
+					console.warn(
+						`[Compute/browser] non-JSON error body (HTTP ${res.status}):`,
+						errorBody.slice(0, 300)
+					);
+				}
+			}
 			if (res.status === 429) {
-				const d = await res.json().catch(() => ({}));
 				const retryAfter = Number(res.headers.get('Retry-After')) || Number(d.retryAfter) || 5;
 				cooldownUntil = Date.now() + retryAfter * 1000;
 				throw new Error(d.message || `Rate limit reached. Try again in ${retryAfter}s.`);
 			}
-			const d = await res.json().catch(() => ({}));
 			throw new Error(d.message || `Compute error (HTTP ${res.status})`);
 		}
 
@@ -131,7 +149,10 @@
 		// Read the body to completion; this is the transmission time of the payload.
 		const downloadStart = performance.now();
 		const bodyText = await res.text();
-		if (signal.aborted) return { outputs: {} };
+		if (signal.aborted) {
+			console.debug('[Compute/browser] solve aborted mid-download — empty result discarded');
+			return { outputs: {} };
+		}
 		const downloadMs = performance.now() - downloadStart;
 		const bytes = bodyText.length;
 

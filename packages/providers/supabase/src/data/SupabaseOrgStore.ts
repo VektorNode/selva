@@ -12,12 +12,20 @@ import type {
 import {
 	DEFAULT_ORG_PERMISSIONS,
 	ProviderError,
-	auditSoftDelete,
 	actorFrom,
 	NoopEventSink
 } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
+import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
+import { stampSoftDelete, stampUpdate } from './rowStamp.js';
+
+/** Explicit column list for `orgs` — every field `rowToOrg` consumes. */
+const ORG_COLUMNS =
+	'id, name, slug, owner_id, assets, created_by, updated_by, created_at, updated_at, deleted_at';
+/** Explicit column list for `org_members` — every field `rowToOrgMember` consumes. */
+const ORG_MEMBER_COLUMNS =
+	'org_id, user_id, role, permissions, joined_at, updated_at, updated_by, deleted_at';
 
 /**
  * Org + org-membership store backed by Postgres. The queries rely on RLS
@@ -44,11 +52,11 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error, count } = await this.clients
 			.forRequest(ctx)
 			.from('orgs')
-			.select('*', { count: 'exact' })
+			.select(ORG_COLUMNS, { count: 'exact' })
 			.is('deleted_at', null)
 			.order(orderColumn(opts?.orderBy), { ascending: direction === 'asc' })
 			.range(range.from, range.to);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		const items = (data ?? []).map(rowToOrg);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
@@ -57,11 +65,11 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('orgs')
-			.select('*')
+			.select(ORG_COLUMNS)
 			.eq('id', id)
 			.is('deleted_at', null)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return data ? rowToOrg(data) : null;
 	}
 
@@ -69,18 +77,18 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('orgs')
-			.select('*')
+			.select(ORG_COLUMNS)
 			.eq('slug', slug)
 			.is('deleted_at', null)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return data ? rowToOrg(data) : null;
 	}
 
 	async createOrg(ctx: RequestContext, org: Organization): Promise<void> {
 		const client = this.clients.forRequest(ctx);
 		const { error } = await client.from('orgs').insert(orgToRow(org));
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 
 		// Seed owner membership so user-scoped queries can see the org post-create.
 		// Service-role bypasses RLS, but the same code path runs for user-scoped
@@ -98,7 +106,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			},
 			{ onConflict: 'org_id,user_id' }
 		);
-		if (memberError) throw mapError(memberError);
+		if (memberError) throw mapPostgrestError(memberError);
 		await this.events.emit({ type: 'org.created', orgId: org.id, actorId: actorFrom(ctx) });
 	}
 
@@ -113,11 +121,10 @@ export class SupabaseOrgStore implements IOrgStore {
 		// Callers pass the full merged map; store it wholesale (JSONB column).
 		if (patch.assets !== undefined) row.assets = patch.assets;
 		if (Object.keys(row).length === 0) return;
-		// `updated_at` is set by the trg_orgs_updated_at trigger; `updated_by`
-		// is not, so stamp it here. ctx.userId can be empty in system contexts —
-		// the DB FK is `on delete set null` so passing empty would fail; let it
-		// fall back to whatever's already on the row by omitting in that case.
-		if (ctx.userId) row.updated_by = ctx.userId;
+		// `updated_at` is set by the trg_orgs_updated_at trigger; `stampUpdate`
+		// only adds `updated_by`, and only when ctx.userId is set (empty on
+		// system contexts would violate the `on delete set null` FK).
+		Object.assign(row, stampUpdate(ctx));
 
 		const { error, data } = await this.clients
 			.forRequest(ctx)
@@ -126,7 +133,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('id', id)
 			.is('deleted_at', null)
 			.select('id');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data || data.length === 0) throw new ProviderError(`Org '${id}' not found`, 404);
 	}
 
@@ -135,8 +142,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		// projects → project_members, definitions. Hard delete is reserved for
 		// the background janitor; user-facing deletes preserve the audit trail.
 		const client = this.clients.forRequest(ctx);
-		const stamp = auditSoftDelete(ctx, ctx.userId);
-		const stampRow = stampToRow(stamp);
+		const stampRow = stampSoftDelete(ctx);
 
 		// Org itself.
 		const { error: orgErr, data: orgData } = await client
@@ -145,7 +151,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('id', id)
 			.is('deleted_at', null)
 			.select('id');
-		if (orgErr) throw mapError(orgErr);
+		if (orgErr) throw mapPostgrestError(orgErr);
 		if (!orgData || orgData.length === 0) throw new ProviderError(`Org '${id}' not found`, 404);
 
 		// Cascade: org_members.
@@ -154,7 +160,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.update(stampRow)
 			.eq('org_id', id)
 			.is('deleted_at', null);
-		if (omErr) throw mapError(omErr);
+		if (omErr) throw mapPostgrestError(omErr);
 
 		// Cascade: projects in this org. Fetch IDs first so we can cascade to
 		// project_members and definitions in app code (Postgres FK CASCADE only
@@ -164,7 +170,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.select('id')
 			.eq('org_id', id)
 			.is('deleted_at', null);
-		if (projFetchErr) throw mapError(projFetchErr);
+		if (projFetchErr) throw mapPostgrestError(projFetchErr);
 		const projectIds = (orgProjects ?? []).map((p) => p.id as string);
 
 		const { error: projErr } = await client
@@ -172,7 +178,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.update(stampRow)
 			.eq('org_id', id)
 			.is('deleted_at', null);
-		if (projErr) throw mapError(projErr);
+		if (projErr) throw mapPostgrestError(projErr);
 
 		if (projectIds.length > 0) {
 			const { error: pmErr } = await client
@@ -180,14 +186,14 @@ export class SupabaseOrgStore implements IOrgStore {
 				.update(stampRow)
 				.in('project_id', projectIds)
 				.is('deleted_at', null);
-			if (pmErr) throw mapError(pmErr);
+			if (pmErr) throw mapPostgrestError(pmErr);
 
 			const { error: defErr } = await client
 				.from('definitions')
 				.update(stampRow)
 				.in('project_id', projectIds)
 				.is('deleted_at', null);
-			if (defErr) throw mapError(defErr);
+			if (defErr) throw mapPostgrestError(defErr);
 		}
 
 		// Hard-delete tables that have no `deleted_at` column. SQL CASCADE on
@@ -195,23 +201,23 @@ export class SupabaseOrgStore implements IOrgStore {
 		// clean these up here. Pending invites to a dead org are unredeemable;
 		// stale compute config is operational state with no audit need.
 		const { error: invErr } = await client.from('invites').delete().eq('org_id', id);
-		if (invErr) throw mapError(invErr);
+		if (invErr) throw mapPostgrestError(invErr);
 
 		const { error: cdErr } = await client
 			.from('compute_server_org_defaults')
 			.delete()
 			.eq('org_id', id);
-		if (cdErr) throw mapError(cdErr);
+		if (cdErr) throw mapPostgrestError(cdErr);
 
 		const { error: shErr } = await client.from('compute_server_shares').delete().eq('org_id', id);
-		if (shErr) throw mapError(shErr);
+		if (shErr) throw mapPostgrestError(shErr);
 
 		const { error: csErr } = await client
 			.from('compute_servers')
 			.delete()
 			.eq('scope', 'org')
 			.eq('owner_org_id', id);
-		if (csErr) throw mapError(csErr);
+		if (csErr) throw mapPostgrestError(csErr);
 
 		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });
 	}
@@ -228,12 +234,12 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error, count } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
-			.select('*', { count: 'exact' })
+			.select(ORG_MEMBER_COLUMNS, { count: 'exact' })
 			.eq('org_id', orgId)
 			.is('deleted_at', null)
 			.order('joined_at', { ascending: (opts?.orderDir ?? 'desc') === 'asc' })
 			.range(range.from, range.to);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		const items = (data ?? []).map(rowToOrgMember);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
@@ -246,12 +252,12 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
-			.select('*')
+			.select(ORG_MEMBER_COLUMNS)
 			.eq('org_id', orgId)
 			.eq('user_id', userId)
 			.is('deleted_at', null)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return data ? rowToOrgMember(data) : null;
 	}
 
@@ -266,14 +272,14 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
-			.select('*, org:orgs!inner(*)')
+			.select(`${ORG_MEMBER_COLUMNS}, org:orgs!inner(${ORG_COLUMNS})`)
 			.eq('user_id', userId)
 			.is('deleted_at', null)
 			.is('org.deleted_at', null)
 			.order('joined_at', { ascending: true })
 			.limit(1)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data) return null;
 
 		// PostgREST embeds the related row as `org` per the alias above. Strip
@@ -293,14 +299,14 @@ export class SupabaseOrgStore implements IOrgStore {
 		// a duplicate-key error. Mirrors LocalOrgStore.addOrgMember.
 		const row: Record<string, unknown> = {
 			...memberToRow(member),
-			deleted_at: null
+			deleted_at: null,
+			...stampUpdate(ctx)
 		};
-		if (ctx.userId) row.updated_by = ctx.userId;
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
 			.upsert(row, { onConflict: 'org_id,user_id' });
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'org_member.added',
 			orgId: member.orgId,
@@ -318,9 +324,9 @@ export class SupabaseOrgStore implements IOrgStore {
 		// Role change re-seeds default permissions. Matches LocalOrgStore.
 		const row: Record<string, unknown> = {
 			role,
-			permissions: [...DEFAULT_ORG_PERMISSIONS[role]]
+			permissions: [...DEFAULT_ORG_PERMISSIONS[role]],
+			...stampUpdate(ctx)
 		};
-		if (ctx.userId) row.updated_by = ctx.userId;
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
@@ -329,7 +335,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('user_id', userId)
 			.is('deleted_at', null)
 			.select('user_id');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data || data.length === 0)
 			throw new ProviderError(`Org member '${userId}' not found`, 404);
 		await this.events.emit({
@@ -350,8 +356,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		// Replace permissions only. Matches LocalOrgStore.updateOrgMemberPermissions —
 		// distinct from role change so callers can grant a finer-grained set without
 		// re-seeding defaults from the role.
-		const row: Record<string, unknown> = { permissions: [...permissions] };
-		if (ctx.userId) row.updated_by = ctx.userId;
+		const row: Record<string, unknown> = { permissions: [...permissions], ...stampUpdate(ctx) };
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('org_members')
@@ -360,7 +365,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('user_id', userId)
 			.is('deleted_at', null)
 			.select('user_id');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		if (!data || data.length === 0)
 			throw new ProviderError(`Org member '${userId}' not found`, 404);
 		await this.events.emit({
@@ -379,15 +384,14 @@ export class SupabaseOrgStore implements IOrgStore {
 		// cascade BEFORE the org_member update so RLS policies that gate
 		// project_members on org_member existence still pass for the duration.
 		const client = this.clients.forRequest(ctx);
-		const stamp = auditSoftDelete(ctx, ctx.userId);
-		const stampRow = stampToRow(stamp);
+		const stampRow = stampSoftDelete(ctx);
 
 		const { data: orgProjects, error: projError } = await client
 			.from('projects')
 			.select('id')
 			.eq('org_id', orgId)
 			.is('deleted_at', null);
-		if (projError) throw mapError(projError);
+		if (projError) throw mapPostgrestError(projError);
 
 		const projectIds = (orgProjects ?? []).map((p) => p.id as string);
 		if (projectIds.length > 0) {
@@ -397,7 +401,7 @@ export class SupabaseOrgStore implements IOrgStore {
 				.in('project_id', projectIds)
 				.eq('user_id', userId)
 				.is('deleted_at', null);
-			if (pmError) throw mapError(pmError);
+			if (pmError) throw mapPostgrestError(pmError);
 		}
 
 		const { error } = await client
@@ -406,7 +410,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('org_id', orgId)
 			.eq('user_id', userId)
 			.is('deleted_at', null);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'org_member.removed',
 			orgId,
@@ -414,26 +418,6 @@ export class SupabaseOrgStore implements IOrgStore {
 			actorId: actorFrom(ctx)
 		});
 	}
-}
-
-/**
- * Build a row payload from an audit-soft-delete stamp. `updated_by` only
- * goes into the row when ctx.userId is set — passing `''` would violate the
- * `references auth.users(id)` FK on system contexts. The DB trigger sets
- * `updated_at`, but for soft-delete we set it explicitly so it matches
- * `deleted_at` (single timestamp for the deletion event).
- */
-function stampToRow(stamp: {
-	updatedAt: string;
-	updatedBy: string;
-	deletedAt: string;
-}): Record<string, unknown> {
-	const row: Record<string, unknown> = {
-		deleted_at: stamp.deletedAt,
-		updated_at: stamp.updatedAt
-	};
-	if (stamp.updatedBy) row.updated_by = stamp.updatedBy;
-	return row;
 }
 
 // ============================================================================
@@ -521,32 +505,4 @@ function memberToRow(m: OrgMember): OrgMemberRow {
 		permissions: m.permissions ?? [],
 		joined_at: m.joinedAt
 	};
-}
-
-// ============================================================================
-// Error translation
-// ============================================================================
-interface PostgrestError {
-	code?: string;
-	message?: string;
-	details?: string;
-}
-
-function mapError(e: unknown): Error {
-	const pg = e as PostgrestError;
-	if (pg?.code === '23505') {
-		return new ProviderError(pg.message ?? 'Duplicate record', 409);
-	}
-	if (pg?.code === '23503') {
-		return new ProviderError(pg.message ?? 'Foreign key violation', 409);
-	}
-	if (e instanceof Error) return e;
-	if (e && typeof e === 'object') {
-		const obj = e as { message?: string; details?: string; hint?: string; code?: string };
-		const msg = obj.message ?? obj.details ?? obj.hint ?? 'Unknown Postgres error';
-		const err = new Error(obj.code ? `[${obj.code}] ${msg}` : msg);
-		Object.assign(err, obj);
-		return err;
-	}
-	return new Error(String(e));
 }

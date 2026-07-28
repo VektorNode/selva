@@ -3,6 +3,7 @@ title: CLI
 group: Get Started
 order: 3
 published: true
+description: 'Scaffold, configure, and operate a Selva deployment from the command line.'
 ---
 
 # Selva CLI
@@ -31,16 +32,17 @@ Scaffolds a fresh deployment. Prompts for provider, origin, tenancy, and secrets
 npx @selvajs/cli my-deployment
 npx @selvajs/cli my-deployment --force          # overwrite non-empty dir
 npx @selvajs/cli my-deployment --skip-install
+npx @selvajs/cli my-deployment --yes            # unattended: accept all defaults (also implied by CI=1)
 ```
 
 What lands in `<dir>`:
 
-| File                   | Purpose                                                                      |
-| ---------------------- | ---------------------------------------------------------------------------- |
-| `.env`                 | All config. Contains `SELVA_HMAC_KEY` + `SELVA_AT_REST_KEY` — back these up. |
-| `ecosystem.config.cjs` | PM2 process definition.                                                      |
-| `package.json`         | Pins `@selvajs/selva` + `@selvajs/cli` + `pm2`.                              |
-| `.selva-version`       | Marker for CLI migrations.                                                   |
+| File                   | Purpose                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| `.env`                 | All config. Contains `SELVA_HMAC_KEY` + `SELVA_AT_REST_KEY` — back these up.         |
+| `ecosystem.config.cjs` | PM2 process definition.                                                              |
+| `package.json`         | Depends on `@selvajs/selva` + `@selvajs/cli` (tracking `latest`) and a pinned `pm2`. |
+| `.selva-version`       | Marker for CLI migrations.                                                           |
 
 Secrets are generated once — use `selva keys rotate` to rotate them later. Env-var reference: [packages/selva/.env.example](../packages/selva/.env.example).
 
@@ -68,7 +70,11 @@ Validates the deployment without starting it. Exits 0 on success, 1 on any failu
 
 ### `selva update`
 
-Runs `npm update --save @selvajs/cli @selvajs/selva` and restarts. If before/after versions are identical despite a known new release, you've hit npm's stale packument cache — see [Publishing.md](https://github.com/VektorNode/selva/blob/main/docs/Publishing.md#troubleshooting).
+Runs `npm update --save --prefer-online @selvajs/cli @selvajs/selva` and restarts. If before/after versions are identical despite a known new release, you've hit npm's stale packument cache — see [Publishing.md](https://github.com/VektorNode/selva/blob/main/docs/Publishing.md#troubleshooting).
+
+### `selva migrate`
+
+Brings an existing deployment's `package.json` onto the current scaffold layout (scripts, dependency shape). Run after major CLI upgrades; safe to re-run.
 
 ### `selva keys rotate <hmac|at-rest>`
 

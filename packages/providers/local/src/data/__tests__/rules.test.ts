@@ -101,6 +101,7 @@ function def(
 		displayName: 'D',
 		status: 'published',
 		solveCount: 0,
+		nextVersionNumber: 2,
 		liveVersionId: null,
 		draftVersionId: null,
 		createdAt: now,

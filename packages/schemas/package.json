@@ -1,10 +1,28 @@
 {
 	"name": "@selvajs/schemas",
-	"version": "4.6.1",
+	"version": "4.7.0-beta.2",
 	"description": "Schema definitions, generated TypeScript types, and code generators for Selva",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"json-schema",
+		"codegen",
+		"typescript",
+		"csharp",
+		"selva"
+	],
 	"publishConfig": {
 		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/schemas"
+	},
+	"engines": {
+		"node": ">=22.0.0"
 	},
 	"type": "module",
 	"main": "./dist/index.js",
@@ -26,6 +44,8 @@
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
+		"prepack": "node ../../scripts/prepack.js",
+		"postpack": "node ../../scripts/prepack.js --restore",
 		"generate": "pnpm run generate:ts && pnpm run generate:cs",
 		"generate:ts": "node scripts/generate-typescript.js",
 		"generate:cs": "node scripts/generate-csharp.js",

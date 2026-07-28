@@ -1,9 +1,15 @@
 import { describe, beforeEach, it } from 'vitest';
+import { randomBytes } from 'node:crypto';
 import { runComputeServerStoreConformance } from '@selvajs/platform/testing';
 import { SupabaseComputeServerStore } from '../SupabaseComputeServerStore.js';
 import { readEnv, resetAllData, seedUser } from './test-helpers.js';
 
 const envCtx = readEnv();
+
+// A throwaway at-rest key so the store encrypts apiKeys during the suite. The
+// round-trip (encrypt on write, decrypt on read) must be transparent to the
+// conformance assertions, which compare plaintext apiKeys.
+const TEST_SECRET_KEY = randomBytes(32);
 
 if (!envCtx) {
 	describe.skip('SupabaseComputeServerStore (skipped: no live stack)', () => {
@@ -17,7 +23,7 @@ if (!envCtx) {
 
 		runComputeServerStoreConformance({
 			name: 'SupabaseComputeServerStore',
-			createStore: () => new SupabaseComputeServerStore(envCtx.bundle),
+			createStore: () => new SupabaseComputeServerStore(envCtx.bundle, TEST_SECRET_KEY),
 			seedOrg: async (orgId) => {
 				// `compute_servers.owner_org_id` and `compute_server_org_defaults.org_id`
 				// FK to `orgs(id)`; the suite invents an `orgId` per org-scoped test,

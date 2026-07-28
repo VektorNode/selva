@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -286,8 +287,12 @@ public static class ParameterTypeHelper
                 continue;
             }
 
-            // TypeName on the param itself (works for strongly-typed params)
-            if (string.Equals(source.TypeName, gooTypeName, StringComparison.Ordinal))
+            // TypeName on the param itself (works for strongly-typed params).
+            // Reading TypeName on a generic param whose T is an interface/abstract goo
+            // (e.g. Param_GenericObject) makes GH call InstantiateT() to derive the name,
+            // which throws "Cannot create an instance of an interface" — swallow it and
+            // fall through to volatile-data inspection.
+            if (string.Equals(TryGetTypeName(source), gooTypeName, StringComparison.Ordinal))
             {
                 return true;
             }
@@ -306,6 +311,24 @@ public static class ParameterTypeHelper
         }
 
         return false;
+    }
+
+    /// <summary>
+    ///     Reads <see cref="IGH_Param.TypeName" /> defensively. For a generic param whose backing
+    ///     goo type is an interface or abstract (Param_GenericObject, param painters) GH derives the
+    ///     name via InstantiateT(), which throws "Cannot create an instance of an interface". We only
+    ///     want the name for type-matching, so return null on failure and let callers fall back.
+    /// </summary>
+    private static string TryGetTypeName(IGH_Param param)
+    {
+        try
+        {
+            return param?.TypeName;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -465,7 +488,7 @@ public static class ParameterTypeHelper
                 return true;
             }
 
-            value = (T)Convert.ChangeType(raw, typeof(T));
+            value = (T)Convert.ChangeType(raw, typeof(T), CultureInfo.InvariantCulture);
             return true;
         }
         catch

@@ -1,15 +1,27 @@
 {
 	"name": "@selvajs/local-provider",
-	"version": "0.12.7",
+	"version": "0.13.0-beta.2",
 	"description": "Local filesystem, JSON, and HMAC implementations of @selvajs/platform interfaces",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"selva",
+		"provider",
+		"filesystem",
+		"auth"
+	],
 	"publishConfig": {
 		"access": "public"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/VektorNode/selva.git",
+		"url": "git+https://github.com/VektorNode/selva.git",
 		"directory": "packages/providers/local"
+	},
+	"engines": {
+		"node": ">=22.0.0"
 	},
 	"type": "module",
 	"main": "./dist/index.js",
@@ -48,18 +60,23 @@
 	},
 	"files": [
 		"dist",
-		"src"
+		"src",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
 	],
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
+		"prepack": "node ../../../scripts/prepack.js",
+		"postpack": "node ../../../scripts/prepack.js --restore",
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},
 	"dependencies": {
-		"@selvajs/platform": "workspace:*",
-		"sharp": "^0.34.5",
+		"@selvajs/platform": "workspace:^",
+		"sharp": "^0.35.3",
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {

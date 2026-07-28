@@ -1,5 +1,74 @@
 # @selvajs/platform
 
+## 0.15.0-beta.4
+
+### Minor Changes
+
+- Adding advanced caching
+
+### Patch Changes
+
+- Updated dependencies
+  - @selvajs/schemas@4.7.0-beta.2
+
+## 0.15.0-beta.3
+
+### Minor Changes
+
+- a8e1b47: Export two utilities that had no publishable engine home, so downstream apps can share them instead of re-implementing them.
+
+  - `@selvajs/platform` now exports `slugify(name)` alongside `SlugSchema` (in `organizations/schemas.ts`, re-exported from the org and root barrels). It coerces an arbitrary name into the shape `SlugSchema` validates — lowercase, non-alphanumeric runs collapsed to single hyphens, edge hyphens trimmed, capped at 63 chars — but does not itself guarantee validity (an all-symbol name yields `''` and reserved words pass through), so callers must still run the result through `SlugSchema`. The Selva app's private `server/slug.ts` copy is deleted and its six importers repoint to the package.
+  - `@selvajs/schemas` now exports `getDefaultValue(paramType)` (the value an input carries when the schema supplies no explicit default), moved from `@selvajs/ui`'s `schema/defaults` so server-side callers can share it without pulling in the UI package. `@selvajs/ui/schema/defaults` keeps working as a thin re-export, so existing UI consumers are unaffected.
+
+### Patch Changes
+
+- Updated dependencies [a8e1b47]
+  - @selvajs/schemas@4.7.0-beta.1
+
+## 0.15.0-beta.2
+
+### Minor Changes
+
+- b8607d4: Export the structured logging contract from the platform barrel: `ILogger`,
+  `LogLevel`, `LogFields`, and the `NoopLogger` default (from
+  `./logging/interface.js`).
+
+  These types were added to the platform source with the Pino structured-logging
+  work (request ID correlation), but that commit carried no `@selvajs/platform`
+  changeset — so the published `0.15.0-beta.1` tarball (released three days
+  earlier) predates them entirely. Meanwhile `@selvajs/server@0.2.0-beta.5` was
+  published importing `NoopLogger` from `@selvajs/platform` with a
+  `^0.15.0-beta.1` dependency, so any consumer installing server beta.5 from npm
+  fails at module load with `SyntaxError: The requested module '@selvajs/platform'
+does not provide an export named 'NoopLogger'`. This release publishes the
+  logging interface so server beta.5's existing dependency range resolves a
+  platform build that actually ships the export — no server republish required.
+
+## 0.15.0-beta.1
+
+### Minor Changes
+
+- Export the durable L2 solve-result cache contract from the platform barrel:
+  `ISolveResultCache`, `SolveCacheKey`, `SolveCacheSetOptions`, and the
+  `NoopSolveResultCache` default (from `./solveCache/interface.js`).
+
+  These types already lived in the platform source (added with the advanced-caching
+  work) but were never carried by a platform release — the `quiet-snakes-press`
+  changeset bumped `@selvajs/server`/`@selvajs/selva`/`@selvajs/ui` but not
+  `@selvajs/platform`. As a result the published `@selvajs/platform@0.14.3-beta.0`
+  tarball shipped no `solveCache` files, while `@selvajs/server@0.2.0-beta.3`'s
+  `memory-solve-cache` d.ts does `import type { ISolveResultCache } from
+'@selvajs/platform'` — so a consumer that imports `createMemorySolveResultCache`
+  fails to typecheck against the published platform. This release publishes the
+  interface so the server package's L2 backend resolves its type contract.
+
+## 0.14.3-beta.0
+
+### Patch Changes
+
+- Updated dependencies [2673995]
+  - @selvajs/schemas@4.7.0-beta.0
+
 ## 0.14.2
 
 ### Patch Changes

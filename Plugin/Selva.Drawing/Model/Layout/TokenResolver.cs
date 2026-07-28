@@ -93,6 +93,27 @@ public sealed class TokenResolver
 						Style = b.Style,
 					};
 				}
+			case TextFlow f:
+				{
+					// TextFlow is a LayoutElement, so it carries its text before line breaking
+					// has happened. Chrome substitutes tokens before resolving layout — that is
+					// the whole point, so the substituted value is what gets wrapped and measured
+					// — which means the walk has to reach unresolved flows, not just the
+					// TextElements they eventually produce.
+					var resolved = Resolve(f.Text);
+					if (ReferenceEquals(resolved, f.Text)) return f;
+					return new TextFlow
+					{
+						Id = f.Id,
+						CssClass = f.CssClass,
+						Metadata = f.Metadata,
+						Text = resolved,
+						Width = f.Width,
+						Style = f.Style,
+						Origin = f.Origin,
+						FixedHeight = f.FixedHeight,
+					};
+				}
 			case GroupElement g:
 				{
 					var children = g.Children;

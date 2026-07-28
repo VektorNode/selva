@@ -264,11 +264,35 @@ namespace Selva.GH.Properties
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
+        internal static System.Drawing.Bitmap DrawLeader
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DrawLeader", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
         internal static System.Drawing.Bitmap DrawSurface
         {
             get
             {
                 object obj = ResourceManager.GetObject("DrawSurface", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DrawSymbol
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DrawSymbol", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
         }

@@ -20,6 +20,7 @@ if (!envCtx) {
 		runSolveMetricSinkConformance({
 			name: 'SupabaseSolveMetricSink',
 			createSink: () => new SupabaseSolveMetricSink(ctx.bundle),
+			flushSink: (sink) => (sink as SupabaseSolveMetricSink).flush(),
 			readRows: async () => {
 				const { data, error } = await ctx.adminClient
 					.from('solve_metrics')

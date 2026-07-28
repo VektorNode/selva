@@ -27,6 +27,7 @@ public class SelvaTabProperties : GH_AssemblyPriority
     }
 
 #if !NETCOREAPP
+#nullable enable
     private static readonly string PluginDirectory =
         Path.GetDirectoryName(typeof(SelvaTabProperties).Assembly.Location) ?? "";
 
@@ -36,5 +37,6 @@ public class SelvaTabProperties : GH_AssemblyPriority
         var path = Path.Combine(PluginDirectory, name + ".dll");
         return File.Exists(path) ? Assembly.LoadFrom(path) : null;
     }
+#nullable disable
 #endif
 }

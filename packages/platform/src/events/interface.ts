@@ -57,9 +57,42 @@ export type DomainEvent =
 			actorId: string;
 	  }
 	| { type: 'invite.accepted'; inviteId: string; orgId: string; userId: string; actorId: string }
-	| { type: 'invite.revoked'; inviteId: string; orgId: string; actorId: string };
+	| { type: 'invite.revoked'; inviteId: string; orgId: string; actorId: string }
+	// Self-update lifecycle (audit O2). `started` is emitted by the process that
+	// launches the update; the app restarts mid-update, so the terminal event is
+	// emitted by post-restart reconciliation of the persisted update log.
+	| { type: 'system.update.started'; channel: string; fromVersion?: string; actorId: string }
+	| {
+			type: 'system.update.finished';
+			fromVersion?: string;
+			toVersion?: string;
+			detail?: string;
+			actorId: string;
+	  }
+	| {
+			type: 'system.update.rolled_back';
+			fromVersion?: string;
+			toVersion?: string;
+			detail?: string;
+			actorId: string;
+	  }
+	| {
+			type: 'system.update.failed';
+			fromVersion?: string;
+			toVersion?: string;
+			detail?: string;
+			actorId: string;
+	  };
 
 export type DomainEventType = DomainEvent['type'];
+
+/**
+ * Schema version of the persisted `DomainEvent` payload (audit D3). A durable
+ * sink (e.g. Supabase `audit_events.event_version`) stamps every row with this
+ * so a later reader dispatches on an explicit version instead of inferring the
+ * shape. Bump when the union's persisted form changes in a non-additive way.
+ */
+export const AUDIT_EVENT_VERSION = 1;
 
 export interface IEventSink {
 	/**

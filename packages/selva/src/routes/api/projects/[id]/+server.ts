@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
 import { requireCanManage, requireCanEditProjectSettings } from '$lib/server/access.server';
 import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { slugify } from '$lib/server/slug';
+import { slugify } from '@selvajs/platform';
 import {
 	ProjectVisibilitySchema,
 	canChangeVisibilityToPublic,

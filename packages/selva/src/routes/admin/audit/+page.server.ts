@@ -42,7 +42,11 @@ const KNOWN_EVENT_TYPES: readonly DomainEventType[] = [
 	'share_link.revoked',
 	'invite.created',
 	'invite.accepted',
-	'invite.revoked'
+	'invite.revoked',
+	'system.update.started',
+	'system.update.finished',
+	'system.update.rolled_back',
+	'system.update.failed'
 ] as const;
 
 const KNOWN_TYPE_SET = new Set<string>(KNOWN_EVENT_TYPES);
@@ -307,5 +311,12 @@ function targetFor(event: DomainEvent): { kind: AuditTargetKind; id: string } | 
 		case 'invite.accepted':
 		case 'invite.revoked':
 			return { kind: 'org', id: event.orgId };
+		case 'system.update.started':
+		case 'system.update.finished':
+		case 'system.update.rolled_back':
+		case 'system.update.failed':
+			// Instance-level events — there is no entity to resolve; the versions
+			// and detail live in the row's expandable `data` payload.
+			return null;
 	}
 }

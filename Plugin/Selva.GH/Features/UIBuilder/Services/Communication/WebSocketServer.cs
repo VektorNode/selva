@@ -164,7 +164,11 @@ public class WebSocketServer : IDisposable
     /// </summary>
     public void Stop()
     {
-        // Lock for the whole Stop() so BroadcastAsync cannot interleave.
+        // Under the lock: flip IsRunning and detach the client collections. The actual socket
+        // closes happen OUTSIDE the lock — CloseAsync().Wait() blocks up to ClientCloseTimeoutMs
+        // per client, and holding _clientsLock across that stalls every broadcast snapshot
+        // (taken synchronously on the Rhino UI thread at solve end) for the whole duration.
+        List<WebSocket> clientsToClose;
         lock (_clientsLock)
         {
             if (!IsRunning)
@@ -173,6 +177,10 @@ public class WebSocketServer : IDisposable
             }
 
             IsRunning = false;
+
+            clientsToClose = new List<WebSocket>(_connectedClients);
+            _connectedClients.Clear();
+            _clientState.Clear();
         }
 
         _heartbeatTimer?.Dispose();
@@ -180,33 +188,22 @@ public class WebSocketServer : IDisposable
 
         _cancellationTokenSource?.Cancel();
 
-        lock (_clientsLock)
+        foreach (var client in clientsToClose)
         {
-            foreach (var client in _connectedClients)
+            try
             {
-                try
-                {
-                    client.CloseAsync(
-                            WebSocketCloseStatus.NormalClosure,
-                            "Server shutting down",
-                            CancellationToken.None)
-                        .Wait(AppConfig.WebSocket.ClientCloseTimeoutMs);
+                client.CloseAsync(
+                        WebSocketCloseStatus.NormalClosure,
+                        "Server shutting down",
+                        CancellationToken.None)
+                    .Wait(AppConfig.WebSocket.ClientCloseTimeoutMs);
 
-                    client.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn($"Error closing WebSocket client: {ex.Message}");
-                }
+                client.Dispose();
             }
-
-            _connectedClients.Clear();
-            foreach (var state in _clientState.Values)
+            catch (Exception ex)
             {
-                state.Dispose();
+                Logger.Warn($"Error closing WebSocket client: {ex.Message}");
             }
-
-            _clientState.Clear();
         }
 
         try
@@ -596,11 +593,7 @@ public class WebSocketServer : IDisposable
         lock (_clientsLock)
         {
             _connectedClients.Remove(webSocket);
-            if (_clientState.TryGetValue(webSocket, out var s))
-            {
-                _clientState.Remove(webSocket);
-                s.Dispose();
-            }
+            _clientState.Remove(webSocket);
         }
 
         try
@@ -778,11 +771,7 @@ public class WebSocketServer : IDisposable
             foreach (var client in clients)
             {
                 _connectedClients.Remove(client);
-                if (_clientState.TryGetValue(client, out var s))
-                {
-                    _clientState.Remove(client);
-                    s.Dispose();
-                }
+                _clientState.Remove(client);
 
                 try
                 {
@@ -816,15 +805,16 @@ public class WebSocketServer : IDisposable
     /// <summary>
     ///     Per-client state: pending message count (backpressure) + send semaphore (serialization).
     ///     WebSocket.SendAsync must never be called concurrently on the same socket.
+    ///
+    ///     Deliberately NOT IDisposable: the semaphore was previously disposed on client removal,
+    ///     which raced in-flight SendToClientAsync tasks — WaitAsync/Release on a disposed
+    ///     SemaphoreSlim throws ObjectDisposedException and faulted whole broadcasts whenever a
+    ///     client disconnected mid-send. A SemaphoreSlim whose AvailableWaitHandle is never touched
+    ///     holds no unmanaged resources, so dropping the reference and letting GC collect it is safe.
     /// </summary>
-    private sealed class ClientSendState : IDisposable
+    private sealed class ClientSendState
     {
         public readonly SemaphoreSlim SendLock = new SemaphoreSlim(1, 1);
         public int PendingCount;
-
-        public void Dispose()
-        {
-            SendLock.Dispose();
-        }
     }
 }

@@ -4,6 +4,11 @@ export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 
 export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
 
+// Intentionally omits `pending` — the fourth real status (see `DefinitionStatus`
+// in ./types.ts). `pending` is a create-internal state that `DefinitionService.create`
+// writes during the metadata-first window; a client must never hand-set it through an
+// update, so it is absent from this input validator by design, not by drift. (`review`
+// was a dead fifth value dropped from the DB CHECK in migration 20260716120000 — audit D2.)
 export const DefinitionStatusSchema = z.enum(['draft', 'published', 'archived']);
 
 export const DefinitionFileExtSchema = z.enum(['gh', 'ghx']);
@@ -51,6 +56,9 @@ export const UpdateMetadataInputSchema = z.object({
 	tags: z.array(z.string().max(64)).max(20).nullable().optional(),
 	projectId: GuidSchema.optional(),
 	computeServerId: GuidSchema.nullable().optional(),
+	// L2 cache quota (R9): 0 = off, N = per-definition entry cap, null = inherit
+	// the global default. Bounded so a settings typo can't request a runaway quota.
+	solveCacheLimit: z.number().int().min(0).max(100_000).nullable().optional(),
 	status: DefinitionStatusSchema.optional()
 });
 

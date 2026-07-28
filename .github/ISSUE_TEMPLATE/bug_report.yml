@@ -17,6 +17,18 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Low
+        - Normal
+        - High
+        - Critical
+    validations:
+      required: true
+
   - type: checkboxes
     id: affected-areas
     attributes:

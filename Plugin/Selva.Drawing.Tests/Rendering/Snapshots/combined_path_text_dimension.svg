@@ -10,11 +10,11 @@
   </marker>
 </defs>
 <g transform='matrix(1 0 0 -1 0 0)' font-family='Inter, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif'>
-  <path d='M 0 0 L 50 0 L 50 25 L 0 25 Z' fill='none' stroke='black' />
+  <path d='M 0 0 L 50 0 L 50 25 L 0 25 Z' fill='none' stroke='black' stroke-width='0.25' />
   <g class='dimension'>
-    <line stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' vector-effect='non-scaling-stroke' x1='0' y1='-1' x2='0' y2='-8.75' />
-    <line stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' vector-effect='non-scaling-stroke' x1='50' y1='-1' x2='50' y2='-8.75' />
-    <line stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' vector-effect='non-scaling-stroke' marker-start='url(#selva-dim-arrow-4)' marker-end='url(#selva-dim-arrow-4)' x1='0' y1='-8' x2='50' y2='-8' />
+    <line stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' x1='0' y1='-1' x2='0' y2='-8.75' />
+    <line stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' x1='50' y1='-1' x2='50' y2='-8.75' />
+    <line stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' marker-start='url(#selva-dim-arrow-4)' marker-end='url(#selva-dim-arrow-4)' x1='0' y1='-8' x2='50' y2='-8' />
     <text x='0' y='0' font-size='2.5' fill='rgb(0,0,0)' text-anchor='middle' dominant-baseline='middle' transform='translate(25 -9.5) scale(1 -1) rotate(-0)'>50</text>
   </g>
   <text x='0' y='0' font-size='3' fill='rgb(0,0,0)' text-anchor='middle' transform='translate(25 12.5) scale(1 -1) rotate(-0)'>Plate</text>

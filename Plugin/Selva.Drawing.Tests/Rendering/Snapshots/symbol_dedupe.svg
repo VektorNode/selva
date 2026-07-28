@@ -3,7 +3,7 @@
 <title>Drawing</title>
 <defs>
   <symbol id='tri' viewBox='0 0 5 4' overflow='visible'>
-  <path d='M 0 0 L 5 0 L 2.5 4 Z' fill='none' stroke='black' />
+  <path d='M 0 0 L 5 0 L 2.5 4 Z' fill='none' stroke='black' stroke-width='0.25' />
   </symbol>
 </defs>
 <g transform='matrix(1 0 0 -1 0 0)' font-family='Inter, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif'>

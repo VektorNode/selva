@@ -41,6 +41,16 @@ public class ThreeMaterial
     [JsonProperty("transparent")]
     public bool Transparent { get; set; }
 
+    /// <summary>
+    ///     Optional texture reference for the material's color map: an http(s) URL, a data URI, or
+    ///     a plugin asset URL (<c>http://localhost:{port}/assets/{hash}</c>). Null (the default)
+    ///     omits the field from JSON entirely, keeping untextured materials byte-identical on the
+    ///     wire. A material with a Map also causes WebDisplay to carry the mesh's texture
+    ///     coordinates into the batch.
+    /// </summary>
+    [JsonProperty("map", NullValueHandling = NullValueHandling.Ignore)]
+    public string Map { get; set; }
+
     public static ThreeMaterial Default()
     {
         return new ThreeMaterial
@@ -53,61 +63,4 @@ public class ThreeMaterial
         };
     }
 
-    /// <summary>
-    ///     Copies all properties from this material to a target object using reflection.
-    ///     This automatically handles any new properties added to ThreeMaterial.
-    ///     TODO: CHECK IF I STILL NEED THAT?
-    /// </summary>
-    public void CopyPropertiesTo(object target)
-    {
-        if (target == null)
-        {
-            return;
-        }
-
-        var sourceType = GetType();
-        var targetType = target.GetType();
-
-        var sourceProperties = sourceType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-        foreach (var sourceProp in sourceProperties)
-        {
-            if (!sourceProp.CanRead)
-            {
-                continue;
-            }
-
-            // Find matching property in target
-            var targetProp = targetType.GetProperty(sourceProp.Name, BindingFlags.Public | BindingFlags.Instance);
-
-            if (targetProp == null || !targetProp.CanWrite)
-            {
-                continue;
-            }
-
-            if (targetProp.PropertyType != sourceProp.PropertyType)
-            {
-                continue;
-            }
-
-            var value = sourceProp.GetValue(this);
-
-            if (IsClampedProperty(sourceProp.Name) && value is double doubleValue)
-            {
-                value = doubleValue.Clamp(0.0, 1.0);
-            }
-
-            targetProp.SetValue(target, value);
-        }
-    }
-
-    /// <summary>
-    ///     Determines if a property should be clamped between 0 and 1.
-    /// </summary>
-    private bool IsClampedProperty(string propertyName)
-    {
-        return propertyName == nameof(Metalness)
-               || propertyName == nameof(Roughness)
-               || propertyName == nameof(Opacity);
-    }
 }

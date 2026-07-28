@@ -28,6 +28,7 @@ describe('Cross-store cascade', () => {
 	let tempDir: string;
 	let orgs: LocalOrgStore;
 	let projects: LocalProjectStore;
+	let definitions: LocalDefinitionStore;
 
 	beforeEach(async () => {
 		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'selva-test-'));
@@ -42,6 +43,11 @@ describe('Cross-store cascade', () => {
 		);
 		orgs = new LocalOrgStore({ loader, invites, computeServer, grants });
 		projects = new LocalProjectStore({ loader, grants });
+		definitions = new LocalDefinitionStore(tempDir);
+		// Mirror LocalDataProvider wiring: the definition cascade in deleteProject
+		// runs through the injected store.
+		definitions.setProjectProvider(projects);
+		projects.setDefinitionProvider(definitions);
 	});
 
 	afterEach(async () => {
@@ -253,6 +259,151 @@ describe('Cross-store cascade', () => {
 		await expect(dataProvider.onUserDeleted(SYSTEM_CONTEXT, memberId)).resolves.toBeUndefined();
 	});
 
+	it('deleteProject soft-deletes the project’s definitions (they must not keep serving)', async () => {
+		// Regression: LocalProjectStore.deleteProject used to stamp only the
+		// project + members, leaving live definitions that kept surfacing in the
+		// library/public listings (keyed on the definition row, not the project).
+		const ownerId = randomUUID();
+		const orgId = randomUUID();
+		const projectId = randomUUID();
+		const otherProjectId = randomUUID();
+		const defA = randomUUID();
+		const defB = randomUUID();
+		const otherDef = randomUUID();
+		const now = new Date().toISOString();
+		const ownerCtx = ctxFor(ownerId);
+
+		await orgs.createOrg(ownerCtx, {
+			id: orgId,
+			name: 'Acme',
+			slug: 'acme',
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+
+		for (const [id, slug] of [
+			[projectId, 'target'],
+			[otherProjectId, 'other']
+		]) {
+			await projects.createProject(ownerCtx, {
+				id,
+				orgId,
+				ownerId,
+				name: `Project ${slug}`,
+				slug,
+				visibility: 'public',
+				autoJoinOnUpload: false,
+				createdBy: ownerId,
+				updatedBy: ownerId,
+				createdAt: now,
+				updatedAt: now,
+				deletedAt: null
+			});
+		}
+
+		const makeDef = (guid: string, project: string): DefinitionRecord => ({
+			guid,
+			projectId: project,
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			displayName: `Def ${guid.slice(0, 4)}`,
+			status: 'published',
+			solveCount: 0,
+			nextVersionNumber: 2,
+			liveVersionId: null,
+			draftVersionId: null,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await definitions.create(ownerCtx, makeDef(defA, projectId));
+		await definitions.create(ownerCtx, makeDef(defB, projectId));
+		await definitions.create(ownerCtx, makeDef(otherDef, otherProjectId));
+
+		// Sanity: all three are live and listed before the delete.
+		expect((await definitions.list(ownerCtx, { limit: 500 })).items).toHaveLength(3);
+
+		await projects.deleteProject(ownerCtx, projectId);
+
+		// The project's definitions are gone from every read path…
+		expect(await definitions.get(ownerCtx, defA)).toBeNull();
+		expect(await definitions.get(ownerCtx, defB)).toBeNull();
+		const byProject = await definitions.listByProject(ownerCtx, projectId, { limit: 500 });
+		expect(byProject.items).toHaveLength(0);
+		const all = await definitions.list(ownerCtx, { limit: 500 });
+		expect(all.items.map((r) => r.guid)).toEqual([otherDef]);
+		// …but the unrelated project's definition survives.
+		expect(await definitions.get(ownerCtx, otherDef)).not.toBeNull();
+	});
+
+	it('LocalDataProvider wires the deleteProject → definitions cascade end-to-end', async () => {
+		// Proves the production composition root (not just the hand-wired test
+		// stores above) invokes the cascade — the wiring is the thing that
+		// regressed, so assert it through fromEnv.
+		const ownerId = randomUUID();
+		const orgId = randomUUID();
+		const projectId = randomUUID();
+		const defId = randomUUID();
+		const now = new Date().toISOString();
+		const ownerCtx = ctxFor(ownerId);
+
+		const dataProvider = LocalDataProvider.fromEnv({
+			DATA_PATH: tempDir,
+			SELVA_AT_REST_KEY: Buffer.alloc(32, 0x42).toString('hex')
+		});
+
+		await dataProvider.orgs.createOrg(ownerCtx, {
+			id: orgId,
+			name: 'Acme',
+			slug: 'acme',
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await dataProvider.projects.createProject(ownerCtx, {
+			id: projectId,
+			orgId,
+			ownerId,
+			name: 'P',
+			slug: 'p',
+			visibility: 'public',
+			autoJoinOnUpload: false,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await dataProvider.definitions.create(ownerCtx, {
+			guid: defId,
+			projectId,
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			displayName: 'Def',
+			status: 'published',
+			solveCount: 0,
+			nextVersionNumber: 2,
+			liveVersionId: null,
+			draftVersionId: null,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+
+		await dataProvider.projects.deleteProject(ownerCtx, projectId);
+
+		expect(await dataProvider.definitions.get(ownerCtx, defId)).toBeNull();
+	});
+
 	it('share-link getByTokenHash returns null when parent definition is soft-deleted (§7)', async () => {
 		// §7: token resolution MUST fail closed when its parent definition is
 		// soft-deleted. Supabase enforces this via JOIN; the local store gets
@@ -308,6 +459,7 @@ describe('Cross-store cascade', () => {
 			displayName: 'Def',
 			status: 'published',
 			solveCount: 0,
+			nextVersionNumber: 2,
 			liveVersionId: null,
 			draftVersionId: null,
 			createdAt: now,

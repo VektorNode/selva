@@ -16,6 +16,11 @@ import { paginate } from '../data/pagination.js';
 
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
 
+// Session HMAC secret strength floor. Mirrors `MIN_TOKEN_SECRET_LENGTH` (share/invite
+// tokens) and the 32-byte `SELVA_AT_REST_KEY` rule so a weak session secret can't reach
+// prod. Kept local — the local provider has no `@selvajs/server` dependency.
+const MIN_HMAC_SECRET_LENGTH = 32;
+
 function toAuthUser(
 	u: Pick<StoredAuthUser, 'id' | 'email' | 'createdAt' | 'lastLoginAt' | 'disabled'>
 ): AuthUser {
@@ -94,23 +99,49 @@ export class LocalAuthProvider implements IAuthProvider {
 		);
 	}
 
+	/**
+	 * The underlying identity store, or undefined in stateless (no-DATA_PATH)
+	 * mode. Exposed so callers that need direct seed/read access (tests,
+	 * advanced wiring) share THIS provider's store — and thus its load-once
+	 * write-through cache — instead of constructing a second store on the same
+	 * file, which would run a divergent cache. §3a.
+	 */
+	get userStore(): LocalAuthUserStore | undefined {
+		return this.users;
+	}
+
 	static fromEnv(env: Record<string, string | undefined>): LocalAuthProvider {
 		const hmacSecret = env.SELVA_HMAC_KEY;
 		if (!hmacSecret) throw new Error('Missing required env var: SELVA_HMAC_KEY');
+		if (hmacSecret.length < MIN_HMAC_SECRET_LENGTH) {
+			throw new Error(
+				`SELVA_HMAC_KEY must be at least ${MIN_HMAC_SECRET_LENGTH} characters ` +
+					`(got ${hmacSecret.length}). Generate one with: openssl rand -base64 32`
+			);
+		}
 		return new LocalAuthProvider({
 			hmacSecret,
 			usersFilePath: env.DATA_PATH ? path.join(env.DATA_PATH, 'auth-users.json') : undefined
 		});
 	}
 
-	/** Verify an HMAC session token and return the live user record. */
+	/**
+	 * Verify an HMAC session token and return the live user record.
+	 *
+	 * Runs on EVERY authenticated request, so it stays read-only: one
+	 * `findById` (a cached `auth-users.json` read), no writes. `lastLoginAt` is
+	 * stamped at actual login time in `verifyLogin` — it is a login concern, not
+	 * a per-request activity clock, and the only consumers use it as a
+	 * has-ever-signed-in flag (invited vs. active in the admin/team lists). The
+	 * previous per-request `touchLastLogin` here cost a second full file
+	 * read+parse just to decide (usually) not to write.
+	 */
 	async verifyToken(token: string): Promise<AuthUser | null> {
 		const { valid, userId } = verifyHmacToken(token, this.hmacSecret);
 		if (!valid) return null;
 		if (!this.users) return null;
 		const u = await this.users.findById(userId);
 		if (!u || u.disabled) return null;
-		await this.users.touchLastLogin(u.id).catch(() => {});
 		return toAuthUser(u);
 	}
 

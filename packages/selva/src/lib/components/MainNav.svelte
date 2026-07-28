@@ -3,9 +3,6 @@
 	import { LayoutGrid, GitBranch } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 
-	// Mirror the gate in /projects/+layout.server.ts: the route requires
-	// manage_definitions OR manage_projects. Gating on org membership alone
-	// would show a link that redirects plain members straight to /library.
 	const ctx = $derived(
 		(page.data as { ctx?: { platformPermissions?: string[]; orgPermissions?: string[] } }).ctx
 	);

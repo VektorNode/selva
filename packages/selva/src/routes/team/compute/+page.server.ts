@@ -28,7 +28,9 @@ export type CatalogEntry = Pick<
 	isGlobalDefault: boolean;
 };
 
-export type OrgServerListing = Omit<OrgComputeServer, 'apiKey'> & { hasApiKey: boolean };
+export type OrgServerListing = Omit<OrgComputeServer, 'apiKey' | 'hasApiKey'> & {
+	hasApiKey: boolean;
+};
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const ctx = locals.ctx;
@@ -44,7 +46,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Servers we own — editable.
 	const ownServers: OrgServerListing[] = config.servers
 		.filter((s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId)
-		.map(({ apiKey, ...rest }) => ({ ...rest, hasApiKey: !!apiKey }));
+		.map(({ apiKey: _apiKey, hasApiKey, ...rest }) => ({ ...rest, hasApiKey: !!hasApiKey }));
 
 	// Catalog drives the default-selection dropdown — every server visible to
 	// this org regardless of scope.

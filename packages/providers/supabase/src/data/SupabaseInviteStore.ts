@@ -6,9 +6,14 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { NoopEventSink, ProviderError, actorFrom } from '@selvajs/platform';
+import { NoopEventSink, actorFrom } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
+import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
+
+/** Explicit column list for `invites` — every field `rowToInvite` consumes. */
+const INVITE_COLUMNS =
+	'id, token_hash, email, org_id, org_role, org_permissions, invited_by, created_at, expires_at, accepted_at, accepted_by_user_id';
 
 /**
  * Invite store. `getByTokenHash` routes through a SECURITY DEFINER RPC so
@@ -29,7 +34,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			.forRequest(ctx)
 			.from('invites')
 			.insert(inviteToRow(invite));
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'invite.created',
 			inviteId: invite.id,
@@ -47,7 +52,7 @@ export class SupabaseInviteStore implements IInviteStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.rpc('get_invite_by_token_hash', { h: tokenHash });
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		// rpc returns the matching row (or null). PostgREST may wrap it in
 		// an array depending on the signature — normalize both shapes.
 		const row = Array.isArray(data) ? data[0] : data;
@@ -59,11 +64,11 @@ export class SupabaseInviteStore implements IInviteStore {
 		const { data, error, count } = await this.clients
 			.forRequest(ctx)
 			.from('invites')
-			.select('*', { count: 'exact' })
+			.select(INVITE_COLUMNS, { count: 'exact' })
 			.eq('org_id', orgId)
 			.order('created_at', { ascending: (opts?.orderDir ?? 'desc') === 'asc' })
 			.range(range.from, range.to);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		const items = (data ?? []).map(rowToInvite);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
@@ -78,7 +83,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			.eq('id', id)
 			.is('accepted_at', null)
 			.select('org_id');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		const row = data?.[0];
 		if (!row) return;
 		await this.events.emit({
@@ -98,7 +103,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			.eq('id', id)
 			.is('accepted_at', null)
 			.select('org_id');
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		const row = data?.[0];
 		if (!row) return;
 		await this.events.emit({
@@ -115,7 +120,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			.from('invites')
 			.delete()
 			.eq('org_id', orgId);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 	}
 }
 
@@ -163,21 +168,4 @@ function inviteToRow(i: Invite): InviteRow {
 		accepted_at: i.acceptedAt ?? null,
 		accepted_by_user_id: i.acceptedByUserId ?? null
 	};
-}
-
-interface PostgrestError {
-	code?: string;
-	message?: string;
-}
-
-function mapError(e: unknown): Error {
-	const pg = e as PostgrestError;
-	if (pg?.code === '23505') return new ProviderError(pg.message ?? 'Duplicate record', 409);
-	if (pg?.code === '23503') return new ProviderError(pg.message ?? 'Foreign key violation', 409);
-	if (e instanceof Error) return e;
-	if (e && typeof e === 'object') {
-		const obj = e as { message?: string; code?: string };
-		return new Error(obj.code ? `[${obj.code}] ${obj.message ?? ''}` : (obj.message ?? String(e)));
-	}
-	return new Error(String(e));
 }

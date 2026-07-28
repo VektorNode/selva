@@ -96,15 +96,13 @@ public class GH_CreateSurface : GH_Component
             }
             var combinedPath = builder.Build();
 
-            // Default style for surfaces matches legacy: light-gray fill, black hairline stroke.
-            var stroke = style?.Stroke ?? new Stroke
-            {
-                Color = Selva.Drawing.Model.Style.Color.Black,
-                Width = 1.0,
-            };
+            // No outline unless one is asked for: a surface is a filled region, and the default
+            // 1.0 mm black border was heavier than most drawings want. Connect a Path Style with
+            // a non-zero Stroke Width to outline it.
+            var stroke = style?.Stroke;
             var fill = style?.Fill ?? new Fill
             {
-                Color = Selva.Drawing.Model.Style.Color.Rgb((byte)211, (byte)211, (byte)211), // LightGray (0xD3D3D3)
+                Color = Selva.Drawing.Model.Style.Color.Black,
                 Rule = FillRule.EvenOdd,
             };
 

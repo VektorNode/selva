@@ -27,6 +27,12 @@ public static class BinaryGeometryReader
 
         /// <summary>Flat index array addressing the combined vertex array.</summary>
         public int[] Indices { get; set; }
+
+        /// <summary>Flat dequantized UV components (u,v per vertex); null when the blob has no UV chunk.</summary>
+        public float[] Uvs { get; set; }
+
+        /// <summary>Flat vertex colors (r,g,b per vertex); null when the blob has no color chunk.</summary>
+        public byte[] Colors { get; set; }
     }
 
     public static Result Read(byte[] blob)
@@ -56,6 +62,9 @@ public static class BinaryGeometryReader
             var flags = br.ReadUInt32();
             var useFloat32 = (flags & BinaryGeometryWriter.FlagFloat32) != 0;
             var useUint16Indices = (flags & BinaryGeometryWriter.FlagUint16Indices) != 0;
+            var deltaEncoded = (flags & BinaryGeometryWriter.FlagDeltaEncoded) != 0;
+            var hasUvs = (flags & BinaryGeometryWriter.FlagHasUvs) != 0;
+            var hasColors = (flags & BinaryGeometryWriter.FlagHasVertexColors) != 0;
 
             var originX = br.ReadDouble();
             var originY = br.ReadDouble();
@@ -78,11 +87,23 @@ public static class BinaryGeometryReader
             else
             {
                 // Inverse of the writer's quantization: world = origin + (q + 32767) * scale.
+                // v3 blobs store per-component zigzag deltas; undo the filter with a prefix sum.
+                short qx = 0, qy = 0, qz = 0;
                 for (var i = 0; i < vertexCount; i++)
                 {
-                    var qx = br.ReadInt16();
-                    var qy = br.ReadInt16();
-                    var qz = br.ReadInt16();
+                    if (deltaEncoded)
+                    {
+                        qx = unchecked((short)(qx + UnZigZag16(br.ReadUInt16())));
+                        qy = unchecked((short)(qy + UnZigZag16(br.ReadUInt16())));
+                        qz = unchecked((short)(qz + UnZigZag16(br.ReadUInt16())));
+                    }
+                    else
+                    {
+                        qx = br.ReadInt16();
+                        qy = br.ReadInt16();
+                        qz = br.ReadInt16();
+                    }
+
                     vertices[i * 3] = (float)(originX + (qx + 32767) * scaleX);
                     vertices[i * 3 + 1] = (float)(originY + (qy + 32767) * scaleY);
                     vertices[i * 3 + 2] = (float)(originZ + (qz + 32767) * scaleZ);
@@ -93,21 +114,135 @@ public static class BinaryGeometryReader
             var indices = new int[indexCount];
             if (useUint16Indices)
             {
+                ushort prev = 0;
                 for (var i = 0; i < indexCount; i++)
                 {
-                    indices[i] = br.ReadUInt16();
+                    prev = deltaEncoded
+                        ? unchecked((ushort)(prev + UnZigZag16(br.ReadUInt16())))
+                        : br.ReadUInt16();
+                    indices[i] = prev;
                 }
             }
             else
             {
+                var prev = 0;
                 for (var i = 0; i < indexCount; i++)
                 {
-                    indices[i] = (int)br.ReadUInt32();
+                    prev = deltaEncoded
+                        ? unchecked(prev + UnZigZag32(br.ReadUInt32()))
+                        : (int)br.ReadUInt32();
+                    indices[i] = prev;
                 }
             }
 
-            return new Result { Metadata = metadata, Vertices = vertices, Indices = indices };
+            // Trailing chunks (UV first, then colors) — see the writer's class remarks for layout.
+            float[] uvs = null;
+            if (hasUvs)
+            {
+                uvs = ReadUvChunk(br, vertexCount, deltaEncoded);
+            }
+
+            byte[] colors = null;
+            if (hasColors)
+            {
+                colors = ReadColorChunk(br, vertexCount, deltaEncoded);
+            }
+
+            return new Result
+            {
+                Metadata = metadata,
+                Vertices = vertices,
+                Indices = indices,
+                Uvs = uvs,
+                Colors = colors
+            };
         }
+    }
+
+    private static float[] ReadUvChunk(BinaryReader br, int vertexCount, bool deltaEncoded)
+    {
+        var uvFormat = br.ReadUInt32();
+        var originU = br.ReadDouble();
+        var originV = br.ReadDouble();
+        var scaleU = br.ReadDouble();
+        var scaleV = br.ReadDouble();
+
+        var uvs = new float[vertexCount * 2];
+        if (uvFormat == BinaryGeometryWriter.UvFormatFloat32)
+        {
+            for (var i = 0; i < uvs.Length; i++)
+            {
+                uvs[i] = br.ReadSingle();
+            }
+
+            return uvs;
+        }
+
+        // Unsigned quantization: uv = origin + q * scale, delta+zigzag filtered per component
+        // (independent u/v predictors) when the blob-wide delta flag is set.
+        ushort qu = 0, qv = 0;
+        for (var i = 0; i < vertexCount; i++)
+        {
+            if (deltaEncoded)
+            {
+                qu = unchecked((ushort)(qu + UnZigZag16(br.ReadUInt16())));
+                qv = unchecked((ushort)(qv + UnZigZag16(br.ReadUInt16())));
+            }
+            else
+            {
+                qu = br.ReadUInt16();
+                qv = br.ReadUInt16();
+            }
+
+            uvs[i * 2] = (float)(originU + qu * scaleU);
+            uvs[i * 2 + 1] = (float)(originV + qv * scaleV);
+        }
+
+        return uvs;
+    }
+
+    private static byte[] ReadColorChunk(BinaryReader br, int vertexCount, bool deltaEncoded)
+    {
+        var colors = new byte[vertexCount * 3];
+        if (!deltaEncoded)
+        {
+            for (var i = 0; i < colors.Length; i++)
+            {
+                colors[i] = br.ReadByte();
+            }
+
+            return colors;
+        }
+
+        byte r = 0, g = 0, b = 0;
+        for (var i = 0; i < vertexCount; i++)
+        {
+            r = unchecked((byte)(r + UnZigZag8(br.ReadByte())));
+            g = unchecked((byte)(g + UnZigZag8(br.ReadByte())));
+            b = unchecked((byte)(b + UnZigZag8(br.ReadByte())));
+
+            colors[i * 3] = r;
+            colors[i * 3 + 1] = g;
+            colors[i * 3 + 2] = b;
+        }
+
+        return colors;
+    }
+
+    /// <summary>Inverse of the writer's zigzag map: 0,1,2,3 → 0,-1,1,-2.</summary>
+    private static short UnZigZag16(ushort zz)
+    {
+        return (short)((zz >> 1) ^ -(zz & 1));
+    }
+
+    private static int UnZigZag32(uint zz)
+    {
+        return (int)(zz >> 1) ^ -(int)(zz & 1);
+    }
+
+    private static sbyte UnZigZag8(byte zz)
+    {
+        return (sbyte)((zz >> 1) ^ -(zz & 1));
     }
 
     /// <summary>

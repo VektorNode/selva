@@ -1,13 +1,16 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Rhino;
 using Rhino.DocObjects;
+using Rhino.FileIO;
 using Rhino.Geometry;
 using Selva.GH.Config;
 using Selva.GH.Features.FileIO.Goos;
@@ -18,10 +21,20 @@ using Point = Rhino.Geometry.Point;
 
 namespace Selva.GH.Features.FileIO.Components;
 
-public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
+/// <summary>
+///     Exports geometry to file format(s) with layer organization.
+///     Task-capable: the whole export runs on a background task and each output file is written in
+///     parallel, so a tree of many parts no longer serializes on the UI thread. See
+///     <see cref="Export" /> for why only the .3dm path is backgrounded.
+/// </summary>
+public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.ExportResult>, ISelvaFileOutput
 {
     private const string DefaultLayerName = "Default";
     private const string DefaultFileEnding = ".3dm";
+
+    /// <summary>Rhino file version written by the .3dm path (matches the previous SaveAs default).</summary>
+    private const int RhinoFileVersion = 7;
+
     private static readonly Color DefaultLayerColor = Color.Black;
 
     // Singleton converter instance (reused across all solve instances)
@@ -122,7 +135,9 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
     }
 
     /// <summary>
-    ///     This is the method that actually does the work.
+    ///     This is the method that actually does the work. All inputs are read as trees, so this runs
+    ///     exactly once per solve and queues a single background task; the per-file fan-out happens
+    ///     inside <see cref="Export" />.
     /// </summary>
     protected override void SolveInstance(IGH_DataAccess DA)
     {
@@ -160,143 +175,223 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
             fileEnding = DefaultFileEnding;
         }
 
+        if (InPreSolve)
+        {
+            // Only the .3dm path is safe to run off the UI thread (see Export). Every other format
+            // goes through RhinoDoc.Export, so no task is queued and the second pass computes it
+            // inline on the main thread.
+            if (IsRhinoFile(fileEnding))
+            {
+                var cancel = CancelToken;
+                TaskList.Add(Task.Run(
+                    () => Export(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree,
+                        fileEnding, subFolder, metadata, cancel),
+                    cancel));
+            }
+
+            return;
+        }
+
+        if (!GetSolveResults(DA, out var result))
+        {
+            result = Export(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree,
+                fileEnding, subFolder, metadata, CancellationToken.None);
+        }
+
+        foreach (var (level, text) in result.Messages)
+        {
+            AddRuntimeMessage(level, text);
+        }
+
+        if (result.Files.Count == 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No files were successfully created");
+            return;
+        }
+
+        DA.SetDataList(0, result.Files);
+    }
+
+    /// <summary>
+    ///     Runtime messages cannot be raised from a worker thread, so the background pass collects
+    ///     them here alongside the files and SolveInstance replays them once the task is joined.
+    /// </summary>
+    public sealed class ExportResult
+    {
+        public List<FileDataGoo> Files { get; } = new List<FileDataGoo>();
+
+        public List<(GH_RuntimeMessageLevel Level, string Text)> Messages { get; } =
+            new List<(GH_RuntimeMessageLevel, string)>();
+    }
+
+    /// <summary>One geometry destined for an exported file, with its layer already resolved.</summary>
+    private struct JobItem
+    {
+        public GeometryBase Geometry;
+        public string LayerName;
+        public Color LayerColor;
+    }
+
+    /// <summary>
+    ///     One output file. <see cref="Label" /> is the branch suffix used in runtime messages
+    ///     (empty in single-file mode) so a warning still points at the branch it came from.
+    /// </summary>
+    private sealed class FileJob
+    {
+        public string FileName;
+        public string Label;
+        public List<JobItem> Items;
+    }
+
+    private static bool IsRhinoFile(string fileEnding)
+    {
+        return string.Equals(fileEnding, ".3dm", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    ///     Builds every output file. .3dm is written with <see cref="File3dm" />, an in-memory model
+    ///     that touches neither the document table nor the disk, so files are written concurrently.
+    ///     Every other format needs RhinoDoc.Export, which drives Rhino's file-format plugins — those
+    ///     are not thread-safe, so that path stays serial (and on the main thread, see SolveInstance).
+    /// </summary>
+    private static ExportResult Export(
+        GH_Structure<IGH_GeometricGoo> geometryTree,
+        GH_Structure<GH_String> layerNamesTree,
+        GH_Structure<GH_Colour> layerColorsTree,
+        GH_Structure<GH_String> fileNamesTree,
+        string fileEnding,
+        string subFolder,
+        Dictionary<string, string> metadata,
+        CancellationToken cancel)
+    {
+        var result = new ExportResult();
+
+        List<FileJob> jobs;
         try
         {
-            List<FileDataGoo> results;
-
-            // Determine if we're in single file mode (simple list) or multiple file mode (tree structure)
-            if (IsSingleFileMode(geometryTree))
-                // Single file mode - all geometry in one file
-            {
-                results = ProcessSingleFile(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree, fileEnding,
-                    subFolder, metadata);
-            }
-            else
-                // Multiple files mode - one file per branch
-            {
-                results = ProcessMultipleFiles(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree,
-                    fileEnding, subFolder, metadata);
-            }
-
-            if (results.Count == 0)
-            {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No files were successfully created");
-                return;
-            }
-
-            DA.SetDataList(0, results);
+            jobs = BuildJobs(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree, result.Messages);
         }
         catch (Exception ex)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error processing geometry: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    ///     Determines if the component should operate in single file mode based on tree structure.
-    /// </summary>
-    private bool IsSingleFileMode(GH_Structure<IGH_GeometricGoo> geometryTree)
-    {
-        return geometryTree.PathCount == 1 ||
-               (geometryTree.PathCount > 1 && geometryTree.Branches.Skip(1).All(b => b.Count == 0));
-    }
-
-    /// <summary>
-    ///     Processes all geometry into a single file.
-    /// </summary>
-    private List<FileDataGoo> ProcessSingleFile(
-        GH_Structure<IGH_GeometricGoo> geometryTree,
-        GH_Structure<GH_String> layerNamesTree,
-        GH_Structure<GH_Colour> layerColorsTree,
-        GH_Structure<GH_String> fileNamesTree,
-        string fileEnding,
-        string subFolder,
-        Dictionary<string, string> metadata)
-    {
-        var results = new List<FileDataGoo>();
-
-        // Flatten all data
-        var allGeometry = geometryTree.AllData(true).OfType<IGH_GeometricGoo>().ToList();
-        var allLayerNames = layerNamesTree?.AllData(true)
-            .Select(s => (s as GH_String)?.Value)
-            .ToList() ?? new List<string>();
-        var allLayerColors = layerColorsTree?.AllData(true)
-            .Select(c => (c as GH_Colour)?.Value ?? DefaultLayerColor)
-            .ToList() ?? new List<Color>();
-        var allFileNames = fileNamesTree?.AllData(true)
-            .Select(s => (s as GH_String)?.Value)
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .ToList() ?? new List<string>();
-
-        if (allGeometry.Count == 0)
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No geometry found");
-            return results;
+            result.Messages.Add((GH_RuntimeMessageLevel.Error, $"Error processing geometry: {ex.Message}"));
+            return result;
         }
 
-        var fileName = Path.GetFileNameWithoutExtension(allFileNames.FirstOrDefault() ?? "export");
-
-        var validGeometries = ExtractValidGeometries(allGeometry);
-
-        if (validGeometries.Count == 0)
+        if (jobs.Count == 0)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "No valid geometry found to export");
-            return results;
+            return result;
         }
 
-        RhinoDoc doc = null;
-        try
+        // Per-job slots keep the output (and its messages) in branch order regardless of the order
+        // the parallel pass finishes in.
+        var outputs = new FileDataGoo[jobs.Count];
+        var messages = new List<(GH_RuntimeMessageLevel, string)>[jobs.Count];
+
+        if (IsRhinoFile(fileEnding))
         {
-            doc = RhinoDoc.CreateHeadless(null);
-            if (doc == null)
+            var options = new ParallelOptions
             {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Failed to create Rhino document");
-                return results;
-            }
+                CancellationToken = cancel,
+                MaxDegreeOfParallelism = Math.Max(1, System.Environment.ProcessorCount - 1)
+            };
 
-            AddGeometriesToDocument(doc, validGeometries, allLayerNames, allLayerColors);
-
-            var base64String = ExportDocument(doc, fileEnding);
-
-            if (!string.IsNullOrEmpty(base64String))
+            try
             {
-                var fileData = new FileData
+                Parallel.For(0, jobs.Count, options, i =>
                 {
-                    FileName = fileName,
-                    Data = base64String,
-                    FileType = fileEnding,
-                    IsBase64Encoded = true,
-                    SubFolder = subFolder ?? "",
-                    Metadata = metadata ?? new Dictionary<string, string>()
-                };
-                results.Add(new FileDataGoo(fileData));
+                    messages[i] = new List<(GH_RuntimeMessageLevel, string)>();
+                    outputs[i] = WriteRhinoFile(jobs[i], fileEnding, subFolder, metadata, messages[i]);
+                });
             }
-            else
+            catch (OperationCanceledException)
             {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Failed to export file");
+                return result;
             }
         }
-        finally
+        else
         {
-            doc?.Dispose();
+            for (var i = 0; i < jobs.Count; i++)
+            {
+                if (cancel.IsCancellationRequested)
+                {
+                    return result;
+                }
+
+                messages[i] = new List<(GH_RuntimeMessageLevel, string)>();
+                outputs[i] = ExportViaHeadlessDoc(jobs[i], fileEnding, subFolder, metadata, messages[i]);
+            }
         }
 
-        return results;
+        for (var i = 0; i < jobs.Count; i++)
+        {
+            if (messages[i] != null)
+            {
+                result.Messages.AddRange(messages[i]);
+            }
+
+            if (outputs[i] != null)
+            {
+                result.Files.Add(outputs[i]);
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
-    ///     Processes geometry into multiple files, one per branch.
+    ///     Flattens the input trees into one job per output file, resolving each item's layer up
+    ///     front. Geometry extraction touches GH_Goo wrappers, so it stays in this sequential pass;
+    ///     only the file writing that follows runs in parallel.
     /// </summary>
-    private List<FileDataGoo> ProcessMultipleFiles(
+    private static List<FileJob> BuildJobs(
         GH_Structure<IGH_GeometricGoo> geometryTree,
         GH_Structure<GH_String> layerNamesTree,
         GH_Structure<GH_Colour> layerColorsTree,
         GH_Structure<GH_String> fileNamesTree,
-        string fileEnding,
-        string subFolder,
-        Dictionary<string, string> metadata)
+        List<(GH_RuntimeMessageLevel Level, string Text)> messages)
     {
-        var results = new List<FileDataGoo>();
+        var jobs = new List<FileJob>();
+
+        if (IsSingleFileMode(geometryTree))
+        {
+            // Single file mode - all geometry in one file
+            var allGeometry = geometryTree.AllData(true).OfType<IGH_GeometricGoo>().ToList();
+            var allLayerNames = layerNamesTree?.AllData(true)
+                .Select(s => (s as GH_String)?.Value)
+                .ToList() ?? new List<string>();
+            var allLayerColors = layerColorsTree?.AllData(true)
+                .Select(c => (c as GH_Colour)?.Value ?? DefaultLayerColor)
+                .ToList() ?? new List<Color>();
+            var allFileNames = fileNamesTree?.AllData(true)
+                .Select(s => (s as GH_String)?.Value)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList() ?? new List<string>();
+
+            if (allGeometry.Count == 0)
+            {
+                messages.Add((GH_RuntimeMessageLevel.Warning, "No geometry found"));
+                return jobs;
+            }
+
+            var items = BuildItems(allGeometry, allLayerNames, allLayerColors, "", messages);
+
+            if (items.Count == 0)
+            {
+                messages.Add((GH_RuntimeMessageLevel.Error, "No valid geometry found to export"));
+                return jobs;
+            }
+
+            jobs.Add(new FileJob
+            {
+                FileName = Path.GetFileNameWithoutExtension(allFileNames.FirstOrDefault() ?? "export"),
+                Label = "",
+                Items = items
+            });
+
+            return jobs;
+        }
+
+        // Multiple files mode - one file per branch
         var paths = geometryTree.Paths.ToList();
 
         for (var pathIndex = 0; pathIndex < paths.Count; pathIndex++)
@@ -309,93 +404,69 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
                 continue;
             }
 
+            var label = $" in branch {path}";
+
             try
             {
-                var layerNamesBranch = layerNamesTree?.get_Branch(path)?.Cast<GH_String>().ToList() ??
-                                       new List<GH_String>();
-                var layerColorsBranch = layerColorsTree?.get_Branch(path)?.Cast<GH_Colour>().ToList() ??
-                                        new List<GH_Colour>();
-                var fileNamesBranch = fileNamesTree?.get_Branch(path)?.Cast<GH_String>().ToList() ??
-                                      new List<GH_String>();
-
                 var branchGeometry = geometryBranch.OfType<IGH_GeometricGoo>().ToList();
-                var branchLayerNames = layerNamesBranch
+                var branchLayerNames = layerNamesTree?.get_Branch(path)?.Cast<GH_String>()
                     .Select(s => s?.Value)
-                    .ToList();
-                var branchLayerColors = layerColorsBranch
+                    .ToList() ?? new List<string>();
+                var branchLayerColors = layerColorsTree?.get_Branch(path)?.Cast<GH_Colour>()
                     .Select(c => c?.Value ?? DefaultLayerColor)
-                    .ToList();
-                var branchFileNames = fileNamesBranch
+                    .ToList() ?? new List<Color>();
+                var branchFileNames = fileNamesTree?.get_Branch(path)?.Cast<GH_String>()
                     .Select(s => s?.Value)
                     .Where(s => !string.IsNullOrWhiteSpace(s))
-                    .ToList();
+                    .ToList() ?? new List<string>();
 
-                var fileName =
-                    Path.GetFileNameWithoutExtension(branchFileNames.FirstOrDefault() ?? $"export_{pathIndex}");
-                var validGeometries = ExtractValidGeometries(branchGeometry);
+                var items = BuildItems(branchGeometry, branchLayerNames, branchLayerColors, label, messages);
 
-                if (validGeometries.Count == 0)
+                if (items.Count == 0)
                 {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                        $"No valid geometry found in branch {path}");
+                    messages.Add((GH_RuntimeMessageLevel.Warning, $"No valid geometry found in branch {path}"));
                     continue;
                 }
 
-                RhinoDoc doc = null;
-                try
+                jobs.Add(new FileJob
                 {
-                    doc = RhinoDoc.CreateHeadless(null);
-                    if (doc == null)
-                    {
-                        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                            $"Failed to create document for branch {path}");
-                        continue;
-                    }
-
-                    AddGeometriesToDocument(doc, validGeometries, branchLayerNames, branchLayerColors);
-
-                    var base64String = ExportDocument(doc, fileEnding);
-
-                    if (!string.IsNullOrEmpty(base64String))
-                    {
-                        var fileData = new FileData
-                        {
-                            FileName = fileName,
-                            Data = base64String,
-                            FileType = fileEnding,
-                            IsBase64Encoded = true,
-                            SubFolder = subFolder ?? "",
-                            Metadata = metadata ?? new Dictionary<string, string>()
-                        };
-                        results.Add(new FileDataGoo(fileData));
-                    }
-                    else
-                    {
-                        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                            $"Failed to export file for branch {path}");
-                    }
-                }
-                finally
-                {
-                    doc?.Dispose();
-                }
+                    FileName = Path.GetFileNameWithoutExtension(
+                        branchFileNames.FirstOrDefault() ?? $"export_{pathIndex}"),
+                    Label = label,
+                    Items = items
+                });
             }
             catch (Exception ex)
             {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                    $"Error processing branch {path}: {ex.Message}");
+                messages.Add((GH_RuntimeMessageLevel.Warning, $"Error processing branch {path}: {ex.Message}"));
             }
         }
 
-        return results;
+        return jobs;
     }
 
     /// <summary>
-    ///     Extracts valid GeometryBase objects from IGH_GeometricGoo list with detailed error handling.
+    ///     Determines if the component should operate in single file mode based on tree structure.
     /// </summary>
-    private List<(GeometryBase Geometry, int OriginalIndex)> ExtractValidGeometries(List<IGH_GeometricGoo> gooList)
+    private static bool IsSingleFileMode(GH_Structure<IGH_GeometricGoo> geometryTree)
     {
-        var validGeometries = new List<(GeometryBase, int)>();
+        return geometryTree.PathCount == 1 ||
+               (geometryTree.PathCount > 1 && geometryTree.Branches.Skip(1).All(b => b.Count == 0));
+    }
+
+    /// <summary>
+    ///     Extracts valid GeometryBase objects from an IGH_GeometricGoo list and pairs each with its
+    ///     layer. Layers are resolved against the goo's index in the original list, so a null or
+    ///     unconvertible item does not shift the layer assignment of the items after it.
+    /// </summary>
+    private static List<JobItem> BuildItems(
+        List<IGH_GeometricGoo> gooList,
+        List<string> layerNames,
+        List<Color> layerColors,
+        string label,
+        List<(GH_RuntimeMessageLevel Level, string Text)> messages)
+    {
+        var items = new List<JobItem>(gooList.Count);
 
         for (var i = 0; i < gooList.Count; i++)
         {
@@ -454,90 +525,200 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
 
                 if (geometry != null && geometry.IsValid)
                 {
-                    validGeometries.Add((geometry, i));
+                    items.Add(new JobItem
+                    {
+                        Geometry = geometry,
+                        LayerName = GetLayerName(layerNames, i),
+                        LayerColor = GetLayerColor(layerColors, i)
+                    });
                 }
             }
             catch (Exception ex)
             {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                    $"Error extracting geometry at index {i}: {ex.Message}");
+                messages.Add((GH_RuntimeMessageLevel.Warning,
+                    $"Error extracting geometry at index {i}{label}: {ex.Message}"));
             }
         }
 
-        return validGeometries;
+        return items;
     }
 
     /// <summary>
-    ///     Adds geometries to the Rhino document with proper layer management.
+    ///     Writes one job to a .3dm as an in-memory model. File3dm never registers with the document
+    ///     table and never touches disk, which is what makes this callable from several threads at
+    ///     once and what removes the temp-file write/read round trip per file.
     /// </summary>
-    private void AddGeometriesToDocument(RhinoDoc doc,
-        List<(GeometryBase Geometry, int OriginalIndex)> geometries,
-        List<string> layerNames,
-        List<Color> layerColors)
+    private static FileDataGoo WriteRhinoFile(
+        FileJob job,
+        string fileEnding,
+        string subFolder,
+        Dictionary<string, string> metadata,
+        List<(GH_RuntimeMessageLevel Level, string Text)> messages)
     {
-        // Create a dictionary to track layers and avoid duplicates
-        var layerCache = new Dictionary<string, int>();
-
-        foreach (var (geometry, originalIndex) in geometries)
+        try
         {
-            try
+            byte[] bytes;
+
+            using (var model = new File3dm())
             {
-                var layerName = GetLayerName(layerNames, originalIndex);
-                var layerColor = GetLayerColor(layerColors, originalIndex);
+                var layerCache = new Dictionary<string, int>();
 
-                int layerIndex;
-
-                if (!layerCache.TryGetValue(layerName, out layerIndex))
+                foreach (var item in job.Items)
                 {
-                    layerIndex = doc.Layers.FindByFullPath(layerName, RhinoMath.UnsetIntIndex);
+                    if (!layerCache.TryGetValue(item.LayerName, out var layerIndex))
+                    {
+                        layerIndex = model.AllLayers.AddLayer(item.LayerName, item.LayerColor);
+
+                        if (layerIndex == RhinoMath.UnsetIntIndex)
+                        {
+                            messages.Add((GH_RuntimeMessageLevel.Warning,
+                                $"Failed to create layer '{item.LayerName}'{job.Label}"));
+                            continue;
+                        }
+
+                        layerCache[item.LayerName] = layerIndex;
+                    }
+
+                    model.Objects.Add(item.Geometry, new ObjectAttributes
+                    {
+                        LayerIndex = layerIndex,
+                        Name = item.LayerName
+                    });
+                }
+
+                bytes = model.ToByteArray(new File3dmWriteOptions { Version = RhinoFileVersion });
+            }
+
+            if (bytes == null || bytes.Length == 0)
+            {
+                messages.Add((GH_RuntimeMessageLevel.Error, $"Failed to export file '{job.FileName}'{job.Label}"));
+                return null;
+            }
+
+            if (bytes.Length > AppConfig.ValueLimits.MaxFileSizeBytes)
+            {
+                messages.Add((GH_RuntimeMessageLevel.Error,
+                    $"File '{job.FileName}' size ({bytes.Length:N0} bytes) exceeds maximum allowed ({AppConfig.ValueLimits.MaxFileSizeBytes:N0} bytes)"));
+                return null;
+            }
+
+            // Echo the caller's spelling of the extension rather than a normalized ".3dm" — the
+            // client builds the download name as FileName + FileType.
+            return BuildFileData(job.FileName, Convert.ToBase64String(bytes), fileEnding, subFolder, metadata);
+        }
+        catch (Exception ex)
+        {
+            messages.Add((GH_RuntimeMessageLevel.Error, $"Error during file export{job.Label}: {ex.Message}"));
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Writes one job through a headless RhinoDoc and Rhino's exporters. Required for every
+    ///     format other than .3dm, and the reason those exports stay serial and on the main thread.
+    /// </summary>
+    private static FileDataGoo ExportViaHeadlessDoc(
+        FileJob job,
+        string fileEnding,
+        string subFolder,
+        Dictionary<string, string> metadata,
+        List<(GH_RuntimeMessageLevel Level, string Text)> messages)
+    {
+        RhinoDoc doc = null;
+
+        try
+        {
+            doc = RhinoDoc.CreateHeadless(null);
+
+            if (doc == null)
+            {
+                messages.Add((GH_RuntimeMessageLevel.Error, $"Failed to create Rhino document{job.Label}"));
+                return null;
+            }
+
+            var layerCache = new Dictionary<string, int>();
+
+            foreach (var item in job.Items)
+            {
+                if (!layerCache.TryGetValue(item.LayerName, out var layerIndex))
+                {
+                    layerIndex = doc.Layers.FindByFullPath(item.LayerName, RhinoMath.UnsetIntIndex);
 
                     if (layerIndex == RhinoMath.UnsetIntIndex)
                     {
-                        var layer = new Layer
+                        layerIndex = doc.Layers.Add(new Layer
                         {
-                            Name = layerName,
-                            Color = layerColor
-                        };
-
-                        layerIndex = doc.Layers.Add(layer);
+                            Name = item.LayerName,
+                            Color = item.LayerColor
+                        });
 
                         if (layerIndex < 0)
                         {
-                            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                                $"Failed to create layer '{layerName}' for geometry at index {originalIndex}");
+                            messages.Add((GH_RuntimeMessageLevel.Warning,
+                                $"Failed to create layer '{item.LayerName}'{job.Label}"));
                             continue;
                         }
                     }
 
-                    layerCache[layerName] = layerIndex;
+                    layerCache[item.LayerName] = layerIndex;
                 }
 
-                var attributes = new ObjectAttributes
+                var objectId = doc.Objects.Add(item.Geometry, new ObjectAttributes
                 {
                     LayerIndex = layerIndex,
-                    Name = layerName
-                };
-
-                var objectId = doc.Objects.Add(geometry, attributes);
+                    Name = item.LayerName
+                });
 
                 if (objectId == Guid.Empty)
                 {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                        $"Failed to add geometry at index {originalIndex} to document");
+                    messages.Add((GH_RuntimeMessageLevel.Warning,
+                        $"Failed to add geometry to document{job.Label}"));
                 }
             }
-            catch (Exception ex)
+
+            var base64String = _converter.DocToBase64(doc, fileEnding);
+
+            if (string.IsNullOrEmpty(base64String))
             {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                    $"Error processing geometry at index {originalIndex}: {ex.Message}");
+                messages.Add((GH_RuntimeMessageLevel.Error, $"Failed to export file '{job.FileName}'{job.Label}"));
+                return null;
             }
+
+            return BuildFileData(job.FileName, base64String, fileEnding, subFolder, metadata);
         }
+        catch (Exception ex)
+        {
+            messages.Add((GH_RuntimeMessageLevel.Error, $"Error during file export{job.Label}: {ex.Message}"));
+            return null;
+        }
+        finally
+        {
+            doc?.Dispose();
+        }
+    }
+
+    private static FileDataGoo BuildFileData(
+        string fileName,
+        string data,
+        string fileType,
+        string subFolder,
+        Dictionary<string, string> metadata)
+    {
+        return new FileDataGoo(new FileData
+        {
+            FileName = fileName,
+            Data = data,
+            FileType = fileType,
+            IsBase64Encoded = true,
+            SubFolder = subFolder ?? "",
+            Metadata = metadata ?? new Dictionary<string, string>()
+        });
     }
 
     /// <summary>
     ///     Gets the layer name for a specific index with fallback to default.
     /// </summary>
-    private string GetLayerName(List<string> layerNames, int index)
+    private static string GetLayerName(List<string> layerNames, int index)
     {
         if (layerNames == null || layerNames.Count == 0)
         {
@@ -556,7 +737,7 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
     /// <summary>
     ///     Gets the layer color for a specific index with fallback to default.
     /// </summary>
-    private Color GetLayerColor(List<Color> layerColors, int index)
+    private static Color GetLayerColor(List<Color> layerColors, int index)
     {
         if (layerColors == null || layerColors.Count == 0)
         {
@@ -568,28 +749,6 @@ public class GH_GeometryToFile : GH_Component, ISelvaFileOutput
             return layerColors[index];
         }
 
-        return layerColors.Count > 0 ? layerColors[layerColors.Count - 1] : DefaultLayerColor;
-    }
-
-    /// <summary>
-    ///     Exports the document to the specified file format using the new converter.
-    /// </summary>
-    private string ExportDocument(RhinoDoc doc, string fileEnding)
-    {
-        try
-        {
-            if (fileEnding == ".3dm")
-            {
-                return _converter.DocToRhinoFile(doc); // Synchronous!
-            }
-
-            return _converter.DocToBase64(doc, fileEnding); // Synchronous!
-        }
-        catch (Exception ex)
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
-                $"Error during file export: {ex.Message}");
-            return null;
-        }
+        return layerColors[layerColors.Count - 1];
     }
 }

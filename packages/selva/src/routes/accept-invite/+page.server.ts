@@ -9,6 +9,7 @@ import {
 import { getAuthProvider } from '$lib/server/auth.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 import { hashToken } from '$lib/server/invites/token.server';
+import { renderThrown } from '@selvajs/server/logging';
 
 /**
  * Public page — the invite token is the capability. `SYSTEM_CONTEXT` is
@@ -51,7 +52,7 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, locals }) => {
 		const data = await request.formData();
 		const token = (data.get('token') as string | null)?.trim() ?? '';
 		const password = data.get('password') as string | null;
@@ -121,7 +122,10 @@ export const actions = {
 			});
 			await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
 		} catch (err) {
-			console.error('[accept-invite] post-signup wiring failed', err);
+			locals.log.error('Post-signup wiring failed', {
+				component: 'accept-invite',
+				err: renderThrown(err)
+			});
 			// The user account exists; surface a softer failure rather than a
 			// blank 500. They can still log in — an admin can add membership.
 			return fail(500, {

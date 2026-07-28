@@ -3,6 +3,7 @@ title: Local Dev Setup
 group: Get Started
 order: 4
 published: true
+description: 'Run the whole app on your own machine with hot reload before committing to servers.'
 ---
 
 # Local Dev Setup
@@ -13,10 +14,12 @@ This runs the full Selva web app on your own machine — the fastest way to see 
 
 Install these first if you don't have them. **Node.js** runs JavaScript outside the browser; **pnpm** is the tool that downloads Selva's code dependencies (think of it as a package installer).
 
-- **Node.js >= 20.6** and **pnpm >= 10** — required
+- **Node.js >= 22** and **pnpm >= 10** — required
 - **.NET SDK 7.0+** — only if touching the C# plugin
-- **Rhino 8** — only if running the plugin
+- **Rhino 8 or 9** — only if running the plugin (Rhino 7 is not supported)
 - **Docker Desktop** — only if using the Supabase provider locally
+
+The repo root `README.md` "Requirements" section is the canonical version list; this page mirrors it.
 
 ## 1. Install
 
@@ -42,7 +45,7 @@ An `.env` file holds settings the app reads at startup — secrets and config yo
 ```bash
 cd packages/selva
 pnpm run dev
-# http://localhost:3000
+# http://localhost:5173
 ```
 
 On first boot, visit `/setup` to create the platform admin. Then register your Rhino.Compute server at `/admin/compute` — see [RhinoCompute.md](RhinoCompute.md).

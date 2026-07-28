@@ -32,7 +32,8 @@ public static class SchemaMigrator
             { new Version(2, 8, 0), MigrateTo_2_8_0 },
             { new Version(2, 9, 0), MigrateTo_2_9_0 },
             { new Version(2, 10, 0), MigrateTo_2_10_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_11_0 }
+            { new Version(2, 11, 0), MigrateTo_2_11_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_12_0 }
         };
 
     /// <summary>
@@ -48,7 +49,22 @@ public static class SchemaMigrator
             json["schemaVersion"] = versionStr;
         }
 
-        var version = Version.Parse(versionStr);
+        // Guard the parse: `schemaVersion` is untrusted input (it arrives from a
+        // .gh file that may be hand-edited or corrupt), and a bare Version.Parse
+        // throws FormatException/ArgumentException/OverflowException depending on
+        // the garbage. Mirror ValidateCompatibility and surface the same
+        // IncompatibleSchemaException, which callers already translate into a
+        // clear "Incompatible schema" message instead of a raw parse failure.
+        Version version;
+        try
+        {
+            version = Version.Parse(versionStr);
+        }
+        catch (Exception ex)
+        {
+            throw new IncompatibleSchemaException(
+                $"Invalid schema version format '{versionStr}': {ex.Message}");
+        }
 
         if (version < SchemaVersion.CURRENT)
         {
@@ -311,7 +327,7 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_11_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.11.0";
 
         // 2.11.0 additions (all backward-compatible):
         // - 'dynamicValueList' added to GrasshopperParamType, plus
@@ -320,6 +336,19 @@ public static class SchemaMigrator
         //   runtime from a dynamic value list output that targets it (by
         //   targetInputId). Existing schemas without dynamic value lists load
         //   unchanged.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_12_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // 2.12.0: 'schemaVersion' is now REQUIRED on UISchema (backward-compatible
+        // in practice — the C# model has always emitted it via its initializer, and
+        // this migrator stamps it on every legacy schema). Made required so the web
+        // side can treat a stored schema's version as authoritative for its
+        // migrate-on-read (re-extract from compute) staleness check.
 
         return schema;
     }

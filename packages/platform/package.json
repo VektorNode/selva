@@ -1,15 +1,28 @@
 {
 	"name": "@selvajs/platform",
-	"version": "0.14.2",
+	"version": "0.15.0-beta.4",
 	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
 	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"selva",
+		"providers",
+		"auth",
+		"interfaces",
+		"platform"
+	],
 	"publishConfig": {
 		"access": "public"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/VektorNode/selva.git",
+		"url": "git+https://github.com/VektorNode/selva.git",
 		"directory": "packages/platform"
+	},
+	"engines": {
+		"node": ">=22.0.0"
 	},
 	"type": "module",
 	"main": "./dist/index.js",
@@ -108,14 +121,16 @@
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
-		"type-check": "tsc --noEmit"
+		"type-check": "tsc --noEmit",
+		"prepack": "node ../../scripts/prepack.js",
+		"postpack": "node ../../scripts/prepack.js --restore"
 	},
 	"dependencies": {
-		"@selvajs/schemas": "workspace:*",
+		"@selvajs/schemas": "workspace:^",
 		"zod": "^4.3.6"
 	},
 	"peerDependencies": {
-		"sharp": "^0.34.0",
+		"sharp": "^0.34.0 || ^0.35.0",
 		"vitest": "^3.2.4"
 	},
 	"peerDependenciesMeta": {
@@ -127,7 +142,7 @@
 		}
 	},
 	"devDependencies": {
-		"sharp": "^0.34.5",
+		"sharp": "^0.35.3",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

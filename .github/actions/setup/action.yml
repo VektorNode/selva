@@ -1,0 +1,32 @@
+name: Setup workspace
+description: >-
+  pnpm, Node, and a frozen install — the shared preamble for the workspace CI
+  jobs (test, e2e). Owning the Node version here means it can't drift between
+  workflows (the reason e2e/plugin-release once lagged at 20). The release
+  workflows keep their own bespoke preambles (conditional setup, registry auth,
+  npm upgrade, full history) and deliberately don't use this.
+
+  Callers MUST run actions/checkout themselves before this action: a local
+  `uses: ./.github/actions/setup` is resolved from the runner's filesystem, so
+  the repo has to be on disk before the step can start. Checking out from
+  inside here is a chicken-and-egg failure ("Can't find 'action.yml' ...").
+
+inputs:
+  node-version:
+    description: Node major to install.
+    required: false
+    default: '22'
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

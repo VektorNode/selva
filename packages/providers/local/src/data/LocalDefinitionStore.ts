@@ -37,6 +37,18 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	private readonly events: IEventSink;
 	private projectProvider?: IProjectStore;
 
+	// Load-once write-through cache — same idiom as `LocalOrgStoreLoader` and the
+	// auth/user-data stores. `definitions-config.json` is the largest and
+	// fastest-growing local doc, re-read on every get/list/getVersion/listVersions,
+	// including the unauthenticated share-link solve path (via the injected
+	// definition provider in `LocalShareLinkStore`). Sole-writer in single-process
+	// local mode → the in-memory copy is authoritative; every mutation reads the
+	// cached object, mutates it, and `writeConfig` persists via temp+rename. This
+	// store is constructed once per provider (and the share-link store gets the
+	// SAME instance injected), so there's exactly one cache over the file. §3b.
+	private cache: DefinitionsConfig | null = null;
+	private loading: Promise<DefinitionsConfig> | null = null;
+
 	static fromEnv(env: Record<string, string | undefined>): LocalDefinitionStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		return new LocalDefinitionStore(env.DATA_PATH);
@@ -57,7 +69,13 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	}
 
 	private async readConfig(): Promise<DefinitionsConfig> {
-		return readJsonFile<DefinitionsConfig>(this.configPath, empty());
+		if (this.cache) return this.cache;
+		this.loading ??= readJsonFile<DefinitionsConfig>(this.configPath, empty()).then((data) => {
+			this.cache = data;
+			this.loading = null;
+			return data;
+		});
+		return this.loading;
 	}
 
 	private live(record: DefinitionRecord | undefined | null): record is DefinitionRecord {
@@ -65,6 +83,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	}
 
 	private async writeConfig(config: DefinitionsConfig): Promise<void> {
+		this.cache = config;
 		await writeJsonFile(this.configPath, config);
 	}
 
@@ -204,6 +223,9 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			...(patch.computeServerId !== undefined && {
 				computeServerId: clearable(patch.computeServerId) as string | undefined
 			}),
+			...(patch.solveCacheLimit !== undefined && {
+				solveCacheLimit: clearable(patch.solveCacheLimit) as number | undefined
+			}),
 			...(patch.status !== undefined && { status: patch.status }),
 			...(patch.ownerId !== undefined && { ownerId: patch.ownerId }),
 			...auditUpdate(ctx, existing.updatedBy ?? existing.ownerId)
@@ -224,6 +246,29 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		});
 	}
 
+	async deleteByProject(ctx: RequestContext, projectId: string): Promise<void> {
+		const config = await this.readConfig();
+		// One read-modify-write pass over the cached config so the whole cascade
+		// lands in a single `writeConfig`. Collect the affected guids first, then
+		// emit one `definition.deleted` per tombstoned record after the write.
+		const affected: DefinitionRecord[] = [];
+		for (const record of Object.values(config.definitions)) {
+			if (record.projectId === projectId && this.live(record)) {
+				Object.assign(record, auditSoftDelete(ctx, record.updatedBy ?? record.ownerId));
+				affected.push(record);
+			}
+		}
+		if (affected.length === 0) return;
+		await this.writeConfig(config);
+		for (const record of affected) {
+			await this.events.emit({
+				type: 'definition.deleted',
+				definitionId: record.guid,
+				actorId: actorFrom(ctx)
+			});
+		}
+	}
+
 	async incrementSolveCount(_ctx: RequestContext, guid: string): Promise<void> {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
@@ -231,6 +276,37 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		existing.solveCount = (existing.solveCount ?? 0) + 1;
 		existing.updatedAt = new Date().toISOString();
 		await this.writeConfig(config);
+	}
+
+	async reserveNextVersionNumber(_ctx: RequestContext, guid: string): Promise<number> {
+		const config = await this.readConfig();
+		const existing = config.definitions[guid];
+		if (!this.live(existing)) throw new ProviderError(`Definition '${guid}' not found`, 404);
+		// The whole read-modify-write is serialized by the config lock, so the
+		// read + increment is atomic against concurrent uploads. Never reads the
+		// version list — the counter alone advances, so a deleted latest version's
+		// number is never handed out again.
+		const current = existing.nextVersionNumber ?? this.highestVersionNumber(config, guid) + 1;
+		existing.nextVersionNumber = current + 1;
+		existing.updatedAt = new Date().toISOString();
+		await this.writeConfig(config);
+		return current;
+	}
+
+	/**
+	 * Highest `versionNumber` currently on disk for a definition (0 if none). Only
+	 * used as the seed when a legacy record predates `nextVersionNumber`; new
+	 * records carry the counter and never take this path.
+	 */
+	private highestVersionNumber(
+		config: { definitionVersions: Record<string, DefinitionVersion> },
+		definitionId: string
+	): number {
+		let max = 0;
+		for (const v of Object.values(config.definitionVersions)) {
+			if (v.definitionId === definitionId && v.versionNumber > max) max = v.versionNumber;
+		}
+		return max;
 	}
 
 	// ============================================================================
@@ -264,9 +340,13 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		const config = await this.readConfig();
 		const parent = config.definitions[definitionId];
 		if (!this.live(parent)) return paginate([], opts);
+		// `schema` is stripped to match the interface contract (and Supabase, which
+		// leaves the column out of the list projection): listed rows are metadata
+		// only, and callers who need the schema go through `getVersion`.
 		const rows = Object.values(config.definitionVersions)
 			.filter((v) => v.definitionId === definitionId)
-			.sort((a, b) => b.versionNumber - a.versionNumber);
+			.sort((a, b) => b.versionNumber - a.versionNumber)
+			.map(({ schema: _schema, ...rest }) => rest);
 		return paginate(rows, opts);
 	}
 

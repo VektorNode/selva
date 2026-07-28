@@ -34,6 +34,19 @@ declare global {
 			ctx?: import('@selvajs/platform').RequestContext;
 			/** Resolved provider instances, attached on every request by hooks.server.ts */
 			providers: import('@selvajs/platform').SelvaConfig;
+			/**
+			 * Request-scoped logger. Every record it writes carries `requestId`,
+			 * `method` and `route`, so a route handler logs without knowing
+			 * correlation exists. Attached on every request by hooks.server.ts —
+			 * prefer it over the root `getLogger()` inside handlers.
+			 */
+			log: import('@selvajs/platform').ILogger;
+			/**
+			 * Correlation id for this request — the proxy's `X-Request-Id` when it
+			 * sent one, else generated. Echoed back on the response so a
+			 * user-reported request can be traced to its logs.
+			 */
+			requestId: string;
 		}
 		// interface PageData {}
 		// interface PageState {}

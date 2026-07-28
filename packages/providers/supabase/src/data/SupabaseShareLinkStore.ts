@@ -6,9 +6,14 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { ProviderError, actorFrom, NoopEventSink } from '@selvajs/platform';
+import { actorFrom, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
+import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
+
+/** Explicit column list for `share_links` — every field `rowToLink` consumes. */
+const SHARE_LINK_COLUMNS =
+	'id, definition_guid, channel, token_hash, name, created_by, created_at, expires_at, revoked_at, allow_solve, max_solves, solve_count';
 
 /**
  * Spec §7 — share-link store backed by Postgres.
@@ -37,7 +42,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			.forRequest(ctx)
 			.from('share_links')
 			.insert(linkToRow(link));
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'share_link.minted',
 			linkId: link.id,
@@ -55,12 +60,12 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 		const { data, error, count } = await this.clients
 			.forRequest(ctx)
 			.from('share_links')
-			.select('*', { count: 'exact' })
+			.select(SHARE_LINK_COLUMNS, { count: 'exact' })
 			.eq('definition_guid', definitionId)
 			.is('revoked_at', null)
 			.order('created_at', { ascending: false })
 			.range(range.from, range.to);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		const items = (data ?? []).map(rowToLink);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
@@ -69,10 +74,10 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('share_links')
-			.select('*')
+			.select(SHARE_LINK_COLUMNS)
 			.eq('id', id)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return data ? rowToLink(data) : null;
 	}
 
@@ -82,12 +87,12 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 		// — exactly the wrong semantic for token-credentialed access.
 		const { data, error } = await this.clients.serviceClient
 			.from('share_links')
-			.select('*, definitions!inner(deleted_at)')
+			.select(`${SHARE_LINK_COLUMNS}, definitions!inner(deleted_at)`)
 			.eq('token_hash', tokenHash)
 			.is('revoked_at', null)
 			.is('definitions.deleted_at', null)
 			.maybeSingle();
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return data ? rowToLink(data) : null;
 	}
 
@@ -101,7 +106,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			.update({ revoked_at: new Date().toISOString() })
 			.eq('id', id)
 			.is('revoked_at', null);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		await this.events.emit({ type: 'share_link.revoked', linkId: id, actorId: actorFrom(ctx) });
 	}
 
@@ -113,7 +118,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			'try_increment_share_link_solve_count',
 			{ link_id: id }
 		);
-		if (error) throw mapError(error);
+		if (error) throw mapPostgrestError(error);
 		return typeof data === 'number' ? data : null;
 	}
 }
@@ -168,24 +173,4 @@ function linkToRow(l: ShareLink): Record<string, unknown> {
 		max_solves: l.maxSolves ?? null,
 		solve_count: l.solveCount
 	};
-}
-
-interface PostgrestError {
-	code?: string;
-	message?: string;
-}
-
-function mapError(e: unknown): Error {
-	const pg = e as PostgrestError;
-	if (pg?.code === '23505') return new ProviderError(pg.message ?? 'Duplicate record', 409);
-	if (pg?.code === '23503') return new ProviderError(pg.message ?? 'Foreign key violation', 409);
-	if (e instanceof Error) return e;
-	if (e && typeof e === 'object') {
-		const obj = e as { message?: string; details?: string; hint?: string; code?: string };
-		const msg = obj.message ?? obj.details ?? obj.hint ?? 'Unknown Postgres error';
-		const err = new Error(obj.code ? `[${obj.code}] ${msg}` : msg);
-		Object.assign(err, obj);
-		return err;
-	}
-	return new Error(String(e));
 }

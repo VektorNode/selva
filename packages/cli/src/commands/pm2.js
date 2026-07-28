@@ -58,7 +58,7 @@ function runPm2(dir, args, { inherit = true } = {}) {
 	const result = spawnSync(bin, args, {
 		cwd: dir,
 		stdio: inherit ? 'inherit' : 'pipe',
-		shell: process.platform === 'win32' // allow .cmd shim resolution
+		shell: process.platform === 'win32'
 	});
 	if (result.error) {
 		throw new Error(
@@ -125,10 +125,8 @@ export async function runUpdate() {
 		return;
 	}
 
-	// Resync daemon before state changes (avoid half-state stop/start).
 	ensurePm2InSync(dir);
 
-	// Stop before npm rewrites (SvelteKit lazy-loads chunks; see migrate command).
 	const stopStatus = runPm2(dir, ['stop', APP_NAME], { inherit: false });
 	if (stopStatus !== 0) {
 		p.log.warn('pm2 stop did not succeed — selva-compute may not be running. Continuing.');
@@ -137,7 +135,6 @@ export async function runUpdate() {
 	const s = p.spinner();
 	s.start(`npm update ${packages.join(' ')}`);
 	try {
-		// --prefer-online bypasses npm's packument cache (see docs/Hotfix-CLI-Runtime.md).
 		execSync(`npm update --save --prefer-online ${packages.join(' ')}`, {
 			cwd: dir,
 			stdio: 'pipe'
@@ -145,7 +142,6 @@ export async function runUpdate() {
 		s.stop('npm update finished');
 	} catch (err) {
 		s.stop('npm update failed');
-		// Best-effort: bring old process back up.
 		runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
 		throw err;
 	}
@@ -153,7 +149,6 @@ export async function runUpdate() {
 	const after = readRuntimeVersion(dir);
 	p.log.info(`New @selvajs/selva:     ${after ?? 'unknown'}`);
 
-	// Surface no-op updates (cache may be stale; propagation delay is real).
 	if (before && after && before === after) {
 		p.log.warn(
 			[
@@ -168,7 +163,6 @@ export async function runUpdate() {
 		);
 	}
 
-	// Start the new build under PM2.
 	const status = runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
 	if (status === 0) {
 		p.outro(pc.green('Started ' + APP_NAME));

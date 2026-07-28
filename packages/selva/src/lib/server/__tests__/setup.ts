@@ -11,11 +11,18 @@
  */
 
 import { vi } from 'vitest';
-import { NoopSolveMetricSink } from '@selvajs/platform';
+import {
+	NoopSolveMetricSink,
+	NoopErrorReporter,
+	NoopEventSink,
+	NoopLogger
+} from '@selvajs/platform';
 
 vi.mock('$lib/server/providers.server', async () => {
 	const { currentTestProviders } = await import('./test-providers.js');
 	const { OrgAssetService } = await import('../organizations/OrgAssetService.js');
+	// Stable across calls — see `getLogger` below.
+	const testLogger = new NoopLogger();
 	return {
 		get providers() {
 			return currentTestProviders().config;
@@ -50,6 +57,16 @@ vi.mock('$lib/server/providers.server', async () => {
 		getPermissionStore: () => currentTestProviders().config.data.permissions,
 		getPlatformProjectGrantStore: () => currentTestProviders().config.data.platformProjectGrants,
 		getAuditQuery: () => currentTestProviders().config.data.auditQuery ?? null,
+		getEventSink: () => currentTestProviders().config.data.events ?? new NoopEventSink(),
+		getErrorReporter: () => new NoopErrorReporter(),
+		// Tests assert behavior, not log output; a no-op keeps the suite quiet.
+		// One shared instance, not a fresh one per call, so a test can spy on the
+		// logger and see the calls the code under test makes through it.
+		getLogger: () => testLogger,
+		// The real module's lazy indirection for long-lived providers. Tests have
+		// one logger for the whole run, so it forwards to the same instance —
+		// keeping a spy on `getLogger()` visible through this path too.
+		lazyLogger: testLogger,
 		getSolveMetricSink: () =>
 			(currentTestProviders().config.data as { solveMetrics?: unknown }).solveMetrics ??
 			new NoopSolveMetricSink()

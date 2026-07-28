@@ -247,6 +247,33 @@ public class LocalWebServer : IDisposable
                     path = "index.html";
                 }
 
+                // Content-addressed texture assets (see TextureAssetStore). Served with CORS —
+                // the UI origin (Vite :5173 in dev, the embedded UI server in production) is
+                // always cross-origin to this server, and WebGL requires CORS-clean images.
+                // Hash-keyed URLs are immutable, so the browser may cache them forever.
+                if (path.StartsWith("assets/", StringComparison.Ordinal))
+                {
+                    var hash = path.Substring("assets/".Length);
+                    if (Features.Display.Services.TextureAssetStore.TryGet(hash, out var assetBytes, out var assetMime))
+                    {
+                        var assetHeaders = new Dictionary<string, string>
+                        {
+                            { "Cache-Control", "public, max-age=31536000, immutable" },
+                            { "Access-Control-Allow-Origin", "*" }
+                        };
+                        await WriteResponseAsync(stream, 200, "OK", assetMime, assetBytes,
+                            request.Method == "HEAD", assetHeaders, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await WriteResponseAsync(stream, 404, "Not Found", "text/plain; charset=utf-8",
+                            Encoding.UTF8.GetBytes("404 - Not Found"), false,
+                            cancellationToken: cancellationToken).ConfigureAwait(false);
+                    }
+
+                    return;
+                }
+
                 // SPA fallback: non-file routes (no extension) fall back to index.html.
                 var resourcePath = GetResourcePath(path);
                 if (!ResourceExists(resourcePath) && !path.Contains("."))

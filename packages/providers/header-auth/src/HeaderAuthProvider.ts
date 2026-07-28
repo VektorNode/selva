@@ -7,7 +7,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { ProviderError } from '@selvajs/platform';
+import { NoopLogger, ProviderError, type ILogger } from '@selvajs/platform';
 import { createAllowlistStore } from './users.js';
 import type { AllowlistStore, AllowlistEntry } from './users.js';
 
@@ -78,6 +78,11 @@ export interface HeaderAuthProviderConfig {
 	 * `BootstrapAllowlistPolicy`.
 	 */
 	bootstrapAllowlistPolicy?: BootstrapAllowlistPolicy;
+	/**
+	 * Structured logger for proxy-misconfiguration diagnostics. Optional; defaults
+	 * to `NoopLogger` so this library stays silent unless the app wires one in.
+	 */
+	logger?: ILogger;
 }
 
 function toAuthUser(u: AllowlistEntry): AuthUser {
@@ -108,7 +113,8 @@ class HeaderProxyAuth implements IProxyAuth {
 	constructor(
 		private readonly users: AllowlistStore,
 		private readonly headers: HeaderNames,
-		bootstrapPolicy: BootstrapAllowlistPolicy | undefined
+		bootstrapPolicy: BootstrapAllowlistPolicy | undefined,
+		private readonly logger: ILogger = new NoopLogger()
 	) {
 		this.bootstrapPolicy = bootstrapPolicy;
 	}
@@ -145,13 +151,16 @@ class HeaderProxyAuth implements IProxyAuth {
 			// struggle to diagnose, so we log it once per process.
 			if (!this.missingHeadersWarned && this.hasNoIdentityHeaders(headers)) {
 				this.missingHeadersWarned = true;
-				console.warn(
-					`[HeaderAuth] No identity headers received on the first non-authed request. ` +
-						`Expected one of: ${this.headers.upn}, ${this.headers.email}, ${this.headers.displayName}. ` +
-						`If you reach the app through your forward-auth proxy, this means the proxy is not ` +
-						`forwarding the configured headers — check your forward_auth / copy_headers config. ` +
-						`If you're hitting the app directly (bypassing the proxy), bind the process to ` +
-						`127.0.0.1 and only reach it through the proxy. See @selvajs/header-auth-provider README.`
+				this.logger.warn(
+					'No identity headers received on the first non-authed request. ' +
+						'If you reach the app through your forward-auth proxy, this means the proxy is not ' +
+						'forwarding the configured headers — check your forward_auth / copy_headers config. ' +
+						"If you're hitting the app directly (bypassing the proxy), bind the process to " +
+						'127.0.0.1 and only reach it through the proxy. See @selvajs/header-auth-provider README',
+					{
+						component: 'HeaderAuth',
+						expectedHeaders: [this.headers.upn, this.headers.email, this.headers.displayName]
+					}
 				);
 			}
 			return null;
@@ -223,7 +232,12 @@ export class HeaderAuthProvider implements IAuthProvider {
 	constructor(config: HeaderAuthProviderConfig) {
 		this.users = createAllowlistStore(config.allowlistFilePath);
 		this.headers = { ...DEFAULT_HEADERS, ...config.headers };
-		this.proxyAuth = new HeaderProxyAuth(this.users, this.headers, config.bootstrapAllowlistPolicy);
+		this.proxyAuth = new HeaderProxyAuth(
+			this.users,
+			this.headers,
+			config.bootstrapAllowlistPolicy,
+			config.logger ?? new NoopLogger()
+		);
 	}
 
 	/**
@@ -236,7 +250,7 @@ export class HeaderAuthProvider implements IAuthProvider {
 		(this.proxyAuth as HeaderProxyAuth).setBootstrapPolicy(policy);
 	}
 
-	static fromEnv(env: Record<string, string | undefined>): HeaderAuthProvider {
+	static fromEnv(env: Record<string, string | undefined>, logger?: ILogger): HeaderAuthProvider {
 		const dir = env.HEADER_AUTH_DATA_DIR ?? env.DATA_PATH;
 		if (!dir) {
 			throw new Error(
@@ -250,7 +264,8 @@ export class HeaderAuthProvider implements IAuthProvider {
 				upn: env.HEADER_AUTH_UPN_HEADER ?? DEFAULT_HEADERS.upn,
 				email: env.HEADER_AUTH_EMAIL_HEADER ?? DEFAULT_HEADERS.email,
 				displayName: env.HEADER_AUTH_DISPLAY_NAME_HEADER ?? DEFAULT_HEADERS.displayName
-			}
+			},
+			logger
 		});
 	}
 

@@ -39,6 +39,8 @@ export {
 	OrgAssetKindSchema,
 	ALL_ORG_ASSET_KINDS,
 	SlugSchema,
+	slugify,
+	RESERVED_SLUGS,
 	CreateOrgSchema,
 	UpdateOrgSchema,
 	ALL_ORG_PERMISSIONS,
@@ -130,7 +132,8 @@ export { withCacheBust } from './storage/cacheBust.js';
 // ---------------------------------------------------------------------------
 // data (composition root)
 // ---------------------------------------------------------------------------
-export type { IDataProvider } from './data/interface.js';
+export type { IDataProvider, SchemaVersionReport, UserErasureOptions } from './data/interface.js';
+export { ERASED_ACTOR_ID } from './data/interface.js';
 
 // ---------------------------------------------------------------------------
 // computeServer
@@ -142,7 +145,17 @@ export type {
 	OrgComputeServer
 } from './computeServer/types.js';
 export { isPlatformServer, isOrgServer } from './computeServer/types.js';
-export type { IComputeServerStore } from './computeServer/interface.js';
+export type { IComputeServerStore, GetConfigOptions } from './computeServer/interface.js';
+// NOTE: the at-rest secret crypto FUNCTIONS (`encryptSecret` etc.) are NOT
+// re-exported here — they use `node:crypto` and this barrel is imported by
+// client `.svelte` code, so a browser bundle would fail to resolve them. Import
+// them from `@selvajs/platform/computeServer` (server-only) instead. The report
+// TYPES are erased at build, so they stay here for convenience.
+export type {
+	SecretVerificationReport,
+	SecretVerificationFailure,
+	SecretVerificationFailureReason
+} from './computeServer/secrets.js';
 export type { ResolveOptions } from './computeServer/utils.js';
 export {
 	serversVisibleTo,
@@ -183,7 +196,7 @@ export {
 // events
 // ---------------------------------------------------------------------------
 export type { DomainEvent, DomainEventType, IEventSink } from './events/interface.js';
-export { actorFrom, NoopEventSink } from './events/interface.js';
+export { actorFrom, NoopEventSink, AUDIT_EVENT_VERSION } from './events/interface.js';
 export type {
 	AuditEventRow,
 	AuditCursor,
@@ -197,6 +210,28 @@ export type {
 // ---------------------------------------------------------------------------
 export type { ISolveMetricSink, SolveMetric, SolveFailureKind } from './metrics/interface.js';
 export { NoopSolveMetricSink } from './metrics/interface.js';
+
+// ---------------------------------------------------------------------------
+// solveCache (durable L2 solve-result cache — H1)
+// ---------------------------------------------------------------------------
+export type {
+	ISolveResultCache,
+	SolveCacheKey,
+	SolveCacheSetOptions
+} from './solveCache/interface.js';
+export { NoopSolveResultCache } from './solveCache/interface.js';
+
+// ---------------------------------------------------------------------------
+// errors (unexpected-error reporting)
+// ---------------------------------------------------------------------------
+export type { IErrorReporter, ErrorContext } from './errors/interface.js';
+export { NoopErrorReporter } from './errors/interface.js';
+
+// ---------------------------------------------------------------------------
+// logging (structured operator-facing log records)
+// ---------------------------------------------------------------------------
+export type { ILogger, LogFields, LogLevel } from './logging/interface.js';
+export { NoopLogger } from './logging/interface.js';
 
 // ---------------------------------------------------------------------------
 // bindings (server-side resolver for schema inputs marked `source.kind === 'server'`)
@@ -214,7 +249,7 @@ export { auditUpdate, auditSoftDelete } from './utils/audit.js';
 // top-level (context, pagination, config, errors)
 // ---------------------------------------------------------------------------
 export type { RequestContext } from './context.js';
-export { SYSTEM_CONTEXT, hasPermission } from './context.js';
+export { SYSTEM_CONTEXT, hasPermission, requireActingOrg } from './context.js';
 
 export type { ListOptions, DefinitionListOptions, Page } from './pagination.js';
 export { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './pagination.js';

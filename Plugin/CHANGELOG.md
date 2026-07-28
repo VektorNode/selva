@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
+**Geometry To File: task-capable, parallel .3dm export**
+
+- `Geometry To File` is now a task-capable component: the export runs on a background task instead of blocking the Grasshopper UI thread, and each output file in a tree is written in parallel.
+- `.3dm` output no longer builds a headless `RhinoDoc` and round-trips through a temp file. It is written with an in-memory `File3dm` and `ToByteArray()`, which skips the document-table bookkeeping (undo records, events, display invalidation) and the disk write/read/delete per file. Exporting many parts is substantially faster; the written file is unchanged (still Rhino version 7).
+- Other file endings still go through `RhinoDoc.Export`, whose format plugins are not thread-safe, so that path stays serial and on the main thread — same behaviour as before.
+
 - WebDisplay now extracts each mesh's vertex/face arrays inside the parallel meshing pass instead of in the serial batch-assembly step. Previously the per-vertex copy ran single-threaded for every mesh after meshing; it now scales with the meshing parallelism. `MeshBatchProcessor.CreateBatch` gains an array-taking overload for this (the mesh-taking overload is unchanged for other callers).
 
 ## [0.14.0-beta.2] - 2026-06-29

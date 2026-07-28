@@ -50,7 +50,9 @@ Rhino.Compute server URL + API key are configured in `/admin/compute` and persis
 
 ```
 $DATA_PATH/
-├── users.json                    # users + hashed passwords + platform permissions
+├── auth-users.json               # identity only: users + hashed passwords
+├── user-data.json                # per-user app state: permissions, profile, starred defs, recent runs
+├── platform-project-grants.json  # platform-level project grants
 ├── local-org.json                # organizations, projects, and their memberships
 ├── definitions-config.json       # definition metadata + version history
 ├── share-links.json              # per-definition share tokens (HMAC-hashed)

@@ -193,4 +193,82 @@ public class SchemaMigratorTests
         Assert.Equal(SchemaVersion.CURRENT_STRING, migratedSchema.SchemaVersion);
         Assert.Contains(changes, c => c.Contains("Applied migration from 1.0.0 to 2.0.0"));
     }
+
+    // -------------------------------------------------------------------------
+    // MigrateJson — hostile input (audit Q5.8)
+    //
+    // `schemaVersion` comes off disk, from a .gh file that may be corrupt or
+    // hand-edited, so every value below is reachable without a malicious actor.
+    // The contract: a bad version is an IncompatibleSchemaException (which
+    // SchemaArchiveSerializer already renders as "Incompatible schema: …"),
+    // never a raw parse exception leaking out of the migrator.
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("abc")]            // not a version at all
+    [InlineData("2")]              // too few components for Version.Parse
+    [InlineData("2.x.0")]          // non-numeric component
+    [InlineData("-1.0.0")]         // negative component
+    [InlineData("2.0.0.0.0")]      // too many components
+    [InlineData("99999999999.0.0")] // overflows Int32
+    [InlineData("  ")]             // whitespace (not caught by IsNullOrEmpty)
+    [InlineData("v2.0.0")]         // common hand-edit slip
+    public void MigrateJson_MalformedSchemaVersion_ThrowsIncompatibleSchema(string versionStr)
+    {
+        var json = new JObject
+        {
+            ["schemaVersion"] = versionStr,
+            ["layout"] = new JObject { ["type"] = "flat" }
+        };
+
+        var ex = Assert.Throws<IncompatibleSchemaException>(() => SchemaMigrator.MigrateJson(json));
+        // The message must name the offending value — an operator staring at a
+        // failed file load needs to know WHICH version string was rejected.
+        Assert.Contains(versionStr.Trim().Length > 0 ? versionStr : "", ex.Message);
+    }
+
+    [Fact]
+    public void MigrateJson_MissingSchemaVersion_TreatedAsLegacy_1_0_0()
+    {
+        // The absent-version case is legitimate (pre-versioning schemas) and must
+        // keep working — it is the reason the malformed cases can't simply be
+        // lumped in with "no version".
+        var json = new JObject { ["layout"] = new JObject { ["type"] = "flat" } };
+
+        var migrated = SchemaMigrator.MigrateJson(json);
+
+        Assert.NotNull(migrated);
+        Assert.Equal(SchemaVersion.CURRENT_STRING, migrated["schemaVersion"]?.Value<string>());
+    }
+
+    [Fact]
+    public void MigrateJson_EmptySchemaVersion_TreatedAsLegacy_1_0_0()
+    {
+        var json = new JObject
+        {
+            ["schemaVersion"] = "",
+            ["layout"] = new JObject { ["type"] = "flat" }
+        };
+
+        var migrated = SchemaMigrator.MigrateJson(json);
+
+        Assert.Equal(SchemaVersion.CURRENT_STRING, migrated["schemaVersion"]?.Value<string>());
+    }
+
+    [Fact]
+    public void MigrateJson_FutureSchemaVersion_IsLeftAlone()
+    {
+        // A schema newer than this plugin isn't malformed — MigrateJson has no
+        // migration to apply, so it must pass through rather than throw. (The
+        // version-compatibility verdict belongs to ValidateCompatibility.)
+        var json = new JObject
+        {
+            ["schemaVersion"] = "99.0.0",
+            ["layout"] = new JObject { ["type"] = "flat" }
+        };
+
+        var migrated = SchemaMigrator.MigrateJson(json);
+
+        Assert.Equal("99.0.0", migrated["schemaVersion"]?.Value<string>());
+    }
 }

@@ -3,6 +3,7 @@ title: Build your own app
 group: Get Started
 order: 6
 published: true
+description: 'Embed the Selva viewer and controls in your own product using the @selvajs/* packages.'
 ---
 
 # Build your own app
@@ -44,10 +45,6 @@ Read it top-down: **your app** is the product; it pulls in the viewer (`ui`), th
 | `@selvajs/platform` + a provider | The backend contract + an implementation. See [Providers](../providers.md).                                  |
 
 Take only what you need. For example, just `@selvajs/ui` + `@selvajs/compute` for the viewer and compute in an otherwise-bespoke app.
-
-## The pattern
-
-A product built this way is a SvelteKit app that consumes the `@selvajs/*` packages as its engine, with its own domain, branding, and UI on top. Selva provides the viewer, compute pipeline, schema contract, and a provider; everything the user sees is yours. Selva is the engine, your app is the product.
 
 ## Getting started
 

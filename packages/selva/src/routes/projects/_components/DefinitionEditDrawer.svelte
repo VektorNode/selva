@@ -31,6 +31,8 @@
 		status: DefinitionStatus;
 		projectId?: string;
 		computeServerId: string | null;
+		/** L2 solve-cache quota: null = inherit global default, 0 = off, N = cap. */
+		solveCacheLimit: number | null;
 	}
 
 	interface Props {
@@ -84,6 +86,12 @@
 	let projectId = $state(record.projectId);
 	/* svelte-ignore state_referenced_locally */
 	let computeServerId = $state<string | null>(record.computeServerId ?? null);
+	// Empty string = inherit the global default (persisted as null); a number = the
+	// per-definition quota (0 disables). Kept as a string so "blank" is distinct from 0.
+	/* svelte-ignore state_referenced_locally */
+	let solveCacheLimit = $state<string>(
+		record.solveCacheLimit === undefined ? '' : String(record.solveCacheLimit)
+	);
 	/* svelte-ignore state_referenced_locally */
 	let status = $state<DefinitionStatus>(record.status as DefinitionStatus);
 	let userImageMode = $state<'url' | 'upload' | undefined>(undefined);
@@ -171,6 +179,13 @@
 	}
 
 	function save() {
+		// Blank → inherit (null); a valid non-negative integer → the quota; anything
+		// else (NaN, negative) → inherit rather than persisting garbage.
+		const parsedCacheLimit = solveCacheLimit.trim() === '' ? null : Number(solveCacheLimit);
+		const nextCacheLimit =
+			parsedCacheLimit !== null && Number.isInteger(parsedCacheLimit) && parsedCacheLimit >= 0
+				? parsedCacheLimit
+				: null;
 		onSave(record.guid, {
 			displayName,
 			description: description || undefined,
@@ -179,7 +194,8 @@
 			coverImage: coverImageUrl || undefined,
 			status,
 			projectId: projectId || undefined,
-			computeServerId
+			computeServerId,
+			solveCacheLimit: nextCacheLimit
 		});
 	}
 </script>
@@ -335,6 +351,21 @@
 					{/if}
 				</div>
 			{/if}
+
+			<div class="space-y-1.5">
+				<Label for="edit-cache">Solve cache limit</Label>
+				<Input
+					id="edit-cache"
+					type="number"
+					min={0}
+					bind:value={solveCacheLimit}
+					placeholder="Inherit default"
+				/>
+				<p class="text-muted-foreground text-xs">
+					Cached solves kept for this definition. Leave blank to inherit the server default;
+					<span class="font-medium">0</span> disables caching (use for random / time-based definitions).
+				</p>
+			</div>
 		</Tabs.Content>
 
 		{#if enableSharing}

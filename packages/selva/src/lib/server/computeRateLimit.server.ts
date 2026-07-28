@@ -1,70 +1,46 @@
 /**
- * Per-key fixed-window rate limit for `/api/compute`. Compute solves are the
- * one expensive endpoint in the app — without a cap a single authenticated
- * user (or share-link consumer) can burn through compute budget far faster
- * than any other surface allows.
+ * App-side binding for the compute-solve rate limiter. The limiter itself
+ * (fixed-window, per-key, process-local) lives in `@selvajs/server`
+ * (`createComputeRateLimiter`); this module owns the single app-wide instance,
+ * wired with the window + cap from `computeLimits.ts` (which read the env).
  *
- * Design:
- *  - Process-local Map. Multi-instance deployments will see N× the per-key
- *    rate — acceptable as a first line; a proper distributed limiter is a
- *    follow-up.
- *  - Fixed window (vs sliding) — simpler, no per-request bookkeeping, and
- *    the "burst at window edges" failure mode is fine for this surface
- *    (the share-link `maxSolves` cap and per-user authentication already
- *    prevent unbounded abuse — this exists to flatten short spikes).
- *  - Keyed by caller — `user:{userId}` for authenticated solves,
- *    `share:{linkId}` for share-token solves so anonymous consumers of one
- *    link don't share a bucket with the link's owner.
- *
- * Tunables (window + cap) live in `computeLimits.ts` and read env overrides.
+ * Keyed by caller — `user:{userId}` for authenticated solves, `share:{linkId}`
+ * for share-token solves so anonymous consumers of one link don't share a
+ * bucket with the link's owner.
  */
 
+import { createComputeRateLimiter, type RateLimitResult } from '@selvajs/server/compute';
 import { RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS } from './computeLimits';
 
-const WINDOW_MS = RATE_LIMIT_WINDOW_MS;
-const MAX_PER_WINDOW = RATE_LIMIT_MAX_REQUESTS;
+const limiter = createComputeRateLimiter({
+	windowMs: RATE_LIMIT_WINDOW_MS,
+	maxPerWindow: RATE_LIMIT_MAX_REQUESTS
+});
 
-interface BucketEntry {
-	count: number;
-	resetAt: number;
-}
-
-const buckets = new Map<string, BucketEntry>();
-
-export interface RateLimitResult {
-	allowed: boolean;
-	/** Seconds until the bucket resets, when not allowed. */
-	retryAfter?: number;
+/**
+ * Check + record one request against `key`. Returns
+ * `{ allowed: false, retryAfter }` once the bucket is full.
+ */
+export function checkComputeRateLimit(key: string): RateLimitResult {
+	return limiter.check(key);
 }
 
 /**
- * Check + record one request against `key`. Increments the counter on
- * allow. Returns `{ allowed: false, retryAfter }` once the bucket is full.
+ * Requests charged to `key` this window. Lets a test assert *which* bucket a
+ * request consumed — the route's choice of `share:{linkId}` vs `user:{userId}`
+ * is a security property, and an allow/deny verdict alone can't express it.
  */
-export function checkComputeRateLimit(key: string): RateLimitResult {
-	const now = Date.now();
-	const entry = buckets.get(key);
-
-	if (!entry || now > entry.resetAt) {
-		buckets.set(key, { count: 1, resetAt: now + WINDOW_MS });
-		return { allowed: true };
-	}
-
-	if (entry.count >= MAX_PER_WINDOW) {
-		return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
-	}
-
-	entry.count += 1;
-	return { allowed: true };
+export function computeRateLimitCount(key: string): number {
+	return limiter.count(key);
 }
 
-/** Test seam — wipes the in-memory state. Production code never calls this. */
-export function __resetComputeRateLimitForTests(): void {
-	buckets.clear();
+/**
+ * Test seam — drop all buckets. The limiter is module-global and the app's
+ * tests share one process, so a test that fills a bucket would otherwise leak
+ * that state into every test after it. Production code never calls this.
+ */
+export function resetComputeRateLimit(): void {
+	limiter.reset();
 }
 
-/** Test seam — overrides for time-based assertions. */
-export const __computeRateLimitConfigForTests = {
-	WINDOW_MS,
-	MAX_PER_WINDOW
-};
+export type { RateLimitResult };

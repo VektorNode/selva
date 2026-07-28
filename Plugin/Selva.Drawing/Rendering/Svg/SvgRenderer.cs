@@ -356,38 +356,48 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			var angle = fill.PatternAngle;
 			var color = ColorValue(fill.Color);
 
-			// Base tile sizes in mm — scale multiplied in.
-			var tileSize = 4.0 * scale;
+			// Tile size in mm: explicit PatternSpacingMm when set, else the scaled default.
+			// Must match PdfRenderer.DrawHatchedFill or the two outputs drift apart.
+			var tileSize = fill.ResolvedTileMm > 0 ? fill.ResolvedTileMm : Fill.DefaultPatternTileMm;
 			var transform = angle != 0.0
 				? $" patternTransform='rotate({F(angle)})'"
 				: "";
+			// One resolved width for every line in the tile, matching the pen
+			// PdfRenderer.DrawHatchedFill builds. Floored so a very small PatternScale cannot
+			// collapse the generated pattern to an invisible width.
+			var patternLineWidth = fill.PatternLineWidthMm > 0
+				? fill.PatternLineWidthMm
+				: Stroke.HatchPatternWidthMm * scale;
+			var patternWidth = F(Math.Max(patternLineWidth, Stroke.MinVisibleWidthMm * 2));
 
 			switch (fill.Pattern)
 			{
 				case HatchPattern.Lines:
 					// Parallel diagonal lines at 45°.
 					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(tileSize)}' height='{F(tileSize)}' patternUnits='userSpaceOnUse'{transform}>\n");
-					_sb.Append($"    <line x1='0' y1='0' x2='{F(tileSize)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
-					_sb.Append($"    <line x1='{F(-tileSize)}' y1='0' x2='0' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
-					_sb.Append($"    <line x1='{F(tileSize)}' y1='0' x2='{F(tileSize * 2)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append($"    <line x1='0' y1='0' x2='{F(tileSize)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
+					_sb.Append($"    <line x1='{F(-tileSize)}' y1='0' x2='0' y2='{F(tileSize)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
+					_sb.Append($"    <line x1='{F(tileSize)}' y1='0' x2='{F(tileSize * 2)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
 					_sb.Append("  </pattern>\n");
 					break;
 
 				case HatchPattern.CrossHatch:
 					// Two sets of crossing diagonal lines.
 					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(tileSize)}' height='{F(tileSize)}' patternUnits='userSpaceOnUse'{transform}>\n");
-					_sb.Append($"    <line x1='0' y1='0' x2='{F(tileSize)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
-					_sb.Append($"    <line x1='{F(-tileSize)}' y1='0' x2='0' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
-					_sb.Append($"    <line x1='{F(tileSize)}' y1='0' x2='{F(tileSize * 2)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
-					_sb.Append($"    <line x1='0' y1='{F(tileSize)}' x2='{F(tileSize)}' y2='0' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
-					_sb.Append($"    <line x1='{F(-tileSize)}' y1='{F(tileSize)}' x2='0' y2='0' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
-					_sb.Append($"    <line x1='{F(tileSize)}' y1='{F(tileSize)}' x2='{F(tileSize * 2)}' y2='0' stroke='{color}' stroke-width='{F(0.3 * scale)}' />\n");
+					_sb.Append($"    <line x1='0' y1='0' x2='{F(tileSize)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
+					_sb.Append($"    <line x1='{F(-tileSize)}' y1='0' x2='0' y2='{F(tileSize)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
+					_sb.Append($"    <line x1='{F(tileSize)}' y1='0' x2='{F(tileSize * 2)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
+					_sb.Append($"    <line x1='0' y1='{F(tileSize)}' x2='{F(tileSize)}' y2='0' stroke='{color}' stroke-width='{patternWidth}' />\n");
+					_sb.Append($"    <line x1='{F(-tileSize)}' y1='{F(tileSize)}' x2='0' y2='0' stroke='{color}' stroke-width='{patternWidth}' />\n");
+					_sb.Append($"    <line x1='{F(tileSize)}' y1='{F(tileSize)}' x2='{F(tileSize * 2)}' y2='0' stroke='{color}' stroke-width='{patternWidth}' />\n");
 					_sb.Append("  </pattern>\n");
 					break;
 
 				case HatchPattern.Dots:
 					// Small dots on a regular grid.
-					var dotR = 0.4 * scale;
+					// Proportional to the tile so explicit spacing scales the dots with it —
+					// same ratio PdfRenderer.DrawHatchedFill uses.
+					var dotR = tileSize * 0.1;
 					var half = tileSize / 2;
 					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(tileSize)}' height='{F(tileSize)}' patternUnits='userSpaceOnUse'{transform}>\n");
 					_sb.Append($"    <circle cx='{F(half)}' cy='{F(half)}' r='{F(dotR)}' fill='{color}' />\n");
@@ -398,15 +408,14 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 					// Staggered horizontal lines mimicking a brick coursing pattern.
 					var brickH = tileSize;
 					var brickW = tileSize * 2;
-					var sw = 0.3 * scale;
 					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(brickW)}' height='{F(brickH)}' patternUnits='userSpaceOnUse'{transform}>\n");
 					// Full-width horizontal course lines
-					_sb.Append($"    <line x1='0' y1='0' x2='{F(brickW)}' y2='0' stroke='{color}' stroke-width='{F(sw)}' />\n");
-					_sb.Append($"    <line x1='0' y1='{F(brickH / 2)}' x2='{F(brickW)}' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{F(sw)}' />\n");
+					_sb.Append($"    <line x1='0' y1='0' x2='{F(brickW)}' y2='0' stroke='{color}' stroke-width='{patternWidth}' />\n");
+					_sb.Append($"    <line x1='0' y1='{F(brickH / 2)}' x2='{F(brickW)}' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
 					// Vertical head joints — offset by half a brick width on alternating rows
-					_sb.Append($"    <line x1='0' y1='0' x2='0' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{F(sw)}' />\n");
-					_sb.Append($"    <line x1='{F(brickW)}' y1='0' x2='{F(brickW)}' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{F(sw)}' />\n");
-					_sb.Append($"    <line x1='{F(brickW / 2)}' y1='{F(brickH / 2)}' x2='{F(brickW / 2)}' y2='{F(brickH)}' stroke='{color}' stroke-width='{F(sw)}' />\n");
+					_sb.Append($"    <line x1='0' y1='0' x2='0' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
+					_sb.Append($"    <line x1='{F(brickW)}' y1='0' x2='{F(brickW)}' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
+					_sb.Append($"    <line x1='{F(brickW / 2)}' y1='{F(brickH / 2)}' x2='{F(brickW / 2)}' y2='{F(brickH)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
 					_sb.Append("  </pattern>\n");
 					break;
 			}
@@ -443,7 +452,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			: fill.Color.GetHashCode().ToString("x8");
 		var scaleStr = ((int)(fill.PatternScale * 100)).ToString();
 		var angleStr = ((int)(fill.PatternAngle * 10)).ToString().Replace("-", "n");
-		return $"selva-hatch-{fill.Pattern.ToString().ToLowerInvariant()}-{colorHex}-s{scaleStr}-a{angleStr}";
+		// Spacing and line width are part of the identity: two fills differing only in those
+		// produce different tiles, so folding them into one <pattern> would silently render
+		// the second with the first one's geometry.
+		var tileStr = ((int)Math.Round(fill.ResolvedTileMm * 100)).ToString();
+		var widthStr = ((int)Math.Round(fill.PatternLineWidthMm * 100)).ToString();
+		return $"selva-hatch-{fill.Pattern.ToString().ToLowerInvariant()}-{colorHex}-s{scaleStr}-a{angleStr}-t{tileStr}-w{widthStr}";
 	}
 
 	// Walks the page once and returns every reachable SymbolDefinition keyed by Id.
@@ -764,7 +778,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		var bounds = element.Boundary.ComputeBounds();
 		if (bounds.IsEmpty) return;
 
-		var line = element.LineStyle ?? new Stroke { Width = 0.18 };
+		var line = element.LineStyle ?? new Stroke { Width = Stroke.HatchWidthMm };
 		var spacing = element.Spacing > 0 ? element.Spacing : 2.0;
 		var clipRule = element.FillRule == FillRule.NonZero ? "nonzero" : "evenodd";
 
@@ -795,25 +809,34 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			_sb.Append("  <g clip-path='url(#").Append(clipId).Append(")'>\n");
 			switch (element.Pattern)
 			{
+				// Line patterns are stroked, so a zero-width LineStyle suppresses them —
+				// matching PdfRenderer.Visit(HatchElement).
 				case HatchPatternKind.Lines:
-					AppendHatchLines(bounds, element.AngleDegrees, spacing, line);
+					if (line.IsVisible) AppendHatchLines(bounds, element.AngleDegrees, spacing, line);
 					break;
 				case HatchPatternKind.CrossHatch:
-					AppendHatchLines(bounds, element.AngleDegrees, spacing, line);
-					AppendHatchLines(bounds, element.AngleDegrees + 90.0, spacing, line);
+					if (line.IsVisible)
+					{
+						AppendHatchLines(bounds, element.AngleDegrees, spacing, line);
+						AppendHatchLines(bounds, element.AngleDegrees + 90.0, spacing, line);
+					}
 					break;
 				case HatchPatternKind.Dots:
+					// Dots are filled circles sized from the line width, not stroked.
 					AppendHatchDots(bounds, spacing, line);
 					break;
 			}
 			_sb.Append("  </g>\n");
 		}
 
-		_sb.Append("  <path d='");
-		SvgPathBuilder.AppendTo(_sb, element.Boundary);
-		_sb.Append("' fill='none'");
-		AppendHatchStrokeAttributes(line);
-		_sb.Append(" />\n");
+		if (line.IsVisible)
+		{
+			_sb.Append("  <path d='");
+			SvgPathBuilder.AppendTo(_sb, element.Boundary);
+			_sb.Append("' fill='none'");
+			AppendHatchStrokeAttributes(line);
+			_sb.Append(" />\n");
+		}
 	}
 
 	// Same sweep math as PdfRenderer.DrawHatchLines so the two outputs tile identically:
@@ -1006,7 +1029,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		var angleDeg = Math.Atan2(uy, ux) * 180.0 / Math.PI;
 		if (angleDeg > 90 || angleDeg < -90) angleDeg += 180;
 
-		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none' vector-effect='non-scaling-stroke'";
+		// No vector-effect='non-scaling-stroke' here: DimensionStyle.StrokeWidth has ALREADY been
+		// counter-scaled by DrawingView (dimension linework is paper-space, like its text), so the
+		// attribute would cancel the view transform a second time and the two compensations stack.
+		// At 1:50 that emitted 12.5 mm bars where the PDF renderer — which has no equivalent and
+		// simply lets the counter-scaled width ride the transform — correctly drew 0.25 mm.
+		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none'";
 		var arrowMarkerId = DimArrowMarkerId(style);
 
 		AppendDimLine(strokeAttr, extStartA.X, extStartA.Y, extEndA.X, extEndA.Y);
@@ -1111,7 +1139,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		}
 		bisX /= bisLen; bisY /= bisLen;
 
-		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none' vector-effect='non-scaling-stroke'";
+		// No vector-effect='non-scaling-stroke' here: DimensionStyle.StrokeWidth has ALREADY been
+		// counter-scaled by DrawingView (dimension linework is paper-space, like its text), so the
+		// attribute would cancel the view transform a second time and the two compensations stack.
+		// At 1:50 that emitted 12.5 mm bars where the PDF renderer — which has no equivalent and
+		// simply lets the counter-scaled width ride the transform — correctly drew 0.25 mm.
+		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none'";
 		var arrowMarkerId = DimArrowMarkerId(style);
 
 		var arcLen = absTheta * radius;
@@ -1258,7 +1291,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			_sb.Append(" fill='none'");
 		}
 
-		if (stroke != null && stroke.Width > 0)
+		if (stroke != null && stroke.IsVisible)
 		{
 			_sb.Append(" stroke='").Append(ColorValue(stroke.Color)).Append('\'');
 			_sb.Append(" stroke-width='").Append(F(stroke.Width)).Append('\'');
@@ -1284,7 +1317,10 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			// for parity by overriding the earlier fill='none' write when both are null.
 			// Both fill and stroke being null is the path through the (fill==null) branch
 			// above, so we already wrote " fill='none'"; just append the default stroke.
+			// The width must be explicit: omitting it inherits SVG's 1.0 mm default, which
+			// made an unstyled curve 4x heavier here than the same curve in the PDF.
 			_sb.Append(" stroke='black'");
+			_sb.Append(" stroke-width='").Append(F(Stroke.UnstyledPathWidthMm)).Append('\'');
 		}
 		else
 		{

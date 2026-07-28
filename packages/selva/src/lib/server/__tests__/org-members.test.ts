@@ -50,8 +50,13 @@ describe('listAllOrgMembers', () => {
 				return { items: [member('stuck')], nextCursor: 'same-cursor-every-time' };
 			}
 		} as unknown as IOrgStore;
-		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		// The bail-out warns through the structured logger (not console), so spy
+		// on the logger the provider mock hands out.
+		const { getLogger } = await import('$lib/server/providers.server');
+		const warn = vi.spyOn(getLogger(), 'warn').mockImplementation(() => {});
+
 		const all = await listAllOrgMembers(broken, 'org-1');
+
 		expect(all).toHaveLength(100); // MAX_PAGES iterations, then bail
 		expect(warn).toHaveBeenCalledOnce();
 		warn.mockRestore();
