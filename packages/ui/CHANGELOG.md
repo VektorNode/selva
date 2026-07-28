@@ -1,5 +1,41 @@
 # @selvajs/ui
 
+## 5.0.0
+
+### Minor Changes
+
+- aa2abf6: Beta release covering the pre-open-source hardening pass and follow-on work across the app stack:
+
+  - **Audit/erasure**: user-deletion erasure now scrubs `audit_events`, `invites`, and redacts embedded emails from surviving `invite.created` payloads; `solve_metrics` is anonymized rather than cascaded.
+  - **Logging**: structured logging via Pino with request-ID correlation, replacing ad hoc console logging across the server.
+  - **Caching**: durable L2 solve-result cache with a memory backend, client-side result memoization (LRU), warm-client caching per server, backpressure controls, and definition byte caching; response wire-size tracking feeds caching efficiency metrics.
+  - **Definitions**: extracted definitions server slice (`@selvajs/server/definitions`) with schema-version-aware extraction/caching and hardened schema-version parsing/error handling.
+  - **Tests**: new e2e core-loop tests against a fake compute server, and per-file test isolation to fix flaky mocks.
+
+- 5077fe9: Adding advanced caching
+- 21124cb: Ship the `getServerApiKey` implementations on both compute-server stores
+  (`SupabaseComputeServerStore`, `LocalComputeServerStore`).
+
+  The method was added to `IComputeServerStore` and both provider sources in the
+  same commit as the structured-logging work, but neither provider carried a
+  changeset — so the published `@selvajs/supabase-provider@0.14.4-beta.1` and
+  `@selvajs/local-provider@0.12.8-beta.1` tarballs (released three days earlier)
+  predate it, while `@selvajs/platform@0.15.0-beta.2` now publishes the interface
+  requiring it. Against the published providers, `@selvajs/selva` code paths that
+  call `store.getServerApiKey(...)` (compute resolve, admin health/status/actions
+  routes) fail with a runtime `TypeError`, and consumers fail to typecheck the
+  store against the current platform interface. This release publishes provider
+  builds that actually carry the method.
+
+- 594b5ad: Adding advanced caching
+
+### Patch Changes
+
+- a8e1b47: Export two utilities that had no publishable engine home, so downstream apps can share them instead of re-implementing them.
+
+  - `@selvajs/platform` now exports `slugify(name)` alongside `SlugSchema` (in `organizations/schemas.ts`, re-exported from the org and root barrels). It coerces an arbitrary name into the shape `SlugSchema` validates — lowercase, non-alphanumeric runs collapsed to single hyphens, edge hyphens trimmed, capped at 63 chars — but does not itself guarantee validity (an all-symbol name yields `''` and reserved words pass through), so callers must still run the result through `SlugSchema`. The Selva app's private `server/slug.ts` copy is deleted and its six importers repoint to the package.
+  - `@selvajs/schemas` now exports `getDefaultValue(paramType)` (the value an input carries when the schema supplies no explicit default), moved from `@selvajs/ui`'s `schema/defaults` so server-side callers can share it without pulling in the UI package. `@selvajs/ui/schema/defaults` keeps working as a thin re-export, so existing UI consumers are unaffected.
+
 ## 5.0.0-beta.6
 
 ### Minor Changes

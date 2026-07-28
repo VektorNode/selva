@@ -1,5 +1,140 @@
 # @selvajs/compute
 
+## 3.1.0
+
+### Minor Changes
+
+- aa2abf6: Beta release covering the pre-open-source hardening pass and follow-on work across the app stack:
+
+  - **Audit/erasure**: user-deletion erasure now scrubs `audit_events`, `invites`, and redacts embedded emails from surviving `invite.created` payloads; `solve_metrics` is anonymized rather than cascaded.
+  - **Logging**: structured logging via Pino with request-ID correlation, replacing ad hoc console logging across the server.
+  - **Caching**: durable L2 solve-result cache with a memory backend, client-side result memoization (LRU), warm-client caching per server, backpressure controls, and definition byte caching; response wire-size tracking feeds caching efficiency metrics.
+  - **Definitions**: extracted definitions server slice (`@selvajs/server/definitions`) with schema-version-aware extraction/caching and hardened schema-version parsing/error handling.
+  - **Tests**: new e2e core-loop tests against a fake compute server, and per-file test isolation to fix flaky mocks.
+
+- 21124cb: Ship the `getServerApiKey` implementations on both compute-server stores
+  (`SupabaseComputeServerStore`, `LocalComputeServerStore`).
+
+  The method was added to `IComputeServerStore` and both provider sources in the
+  same commit as the structured-logging work, but neither provider carried a
+  changeset — so the published `@selvajs/supabase-provider@0.14.4-beta.1` and
+  `@selvajs/local-provider@0.12.8-beta.1` tarballs (released three days earlier)
+  predate it, while `@selvajs/platform@0.15.0-beta.2` now publishes the interface
+  requiring it. Against the published providers, `@selvajs/selva` code paths that
+  call `store.getServerApiKey(...)` (compute resolve, admin health/status/actions
+  routes) fail with a runtime `TypeError`, and consumers fail to typecheck the
+  store against the current platform interface. This release publishes provider
+  builds that actually carry the method.
+
+- 5b37862: Fix the viewer's view presets, which showed the wrong side of the model, and route every
+  orientation default through a single scene-up basis.
+
+  `buildViewDirections` derived its ground-plane axes with the opposite handedness to Rhino's, so in
+  the default Z-up scene **Front framed the back of the model and Left framed the right**. The
+  nav-cube inherited the same error. Presets now follow Rhino's convention: Front looks along +Y
+  (camera at -Y) and Right looks along -X (camera at +X).
+
+  **Top and Bottom were also wrong, for a separate reason.** At a pole the view direction is parallel
+  to `camera.up`, so `up` cannot define the view's roll — the ~0.5° off-pole nudge that avoids the
+  OrbitControls singularity decides it instead, and it was leaning toward `+forward`. Both pole views
+  came out rolled, with geometry and text mirrored on screen.
+
+  Both poles now lean toward `-forward`, reproducing Rhino's convention exactly: Top is `+X` right /
+  `+Y` up and unmirrored; Bottom is `+X` right / `+Y` down. Bottom being mirrored is correct — it is
+  the far side of the model, and Rhino mirrors it too — but it must mirror about the horizontal axis.
+  Mirroring about the vertical instead (`+X` left / `+Y` up) is the same image rolled 180°, which
+  still reads as wrong on screen while satisfying a naive "is it mirrored?" check.
+
+  The existing test only asserted that "front" was orthogonal to the up axis, which a 180° swap
+  satisfies — the presets are now pinned to the actual side the camera sits on, and the pole views are
+  additionally pinned by their on-screen axes and handedness rather than direction alone.
+
+  A new `up-axis` module (`buildUpBasis`, `isoOffset`, `sunOffset`, `upToAxis`, exported from
+  `@selvajs/compute/visualization`) is the single source of truth for the scene basis. Several
+  defaults previously hardcoded a Z-up vector while _bypassing_ the configured `sceneUp`, so a scene
+  configured Y-up got a below-horizon camera and a near-horizontal sun even though the presets, floor,
+  and grid correctly followed `sceneUp`. Now derived from it:
+
+  - the default iso camera position (`applyDefaults`)
+  - the default sun position
+  - `updateScene`'s first-frame framing — previously a hardcoded `(0.8, 1.0, 1.2)` offset that also
+    disagreed with the configured iso default, so the first solve jumped to a different angle than the
+    one the viewer opened at
+  - the near-plane fitter's grid ground-normal fallback
+
+  Z-up scenes — every current deployment — keep their existing camera distance and sun placement;
+  these are behaviour-preserving there and only change non-default `sceneUp` scenes.
+
+  ## Breaking: `allowAutoPosition` now defaults to `false`
+
+  `getThreeMeshesFromComputeResponse` used to drop geometry onto the ground plane by default, but the
+  WebSocket preview path never did — so the same definition rendered at a different height depending
+  on transport. Both now keep Rhino's coordinates: the viewer agrees with the Grasshopper definition,
+  and bounds/measured/picked positions correspond to the real model.
+
+  **Migration:** pass `allowAutoPosition: true` to restore the old behaviour.
+
+  `MeshExtractionOptions` also gains `groundAxis` (default `'z'`) so that grounding, when enabled,
+  drops content along the scene's up axis instead of always subtracting `min.z`.
+
+  ## HDR environment orientation
+
+  `scene.environmentRotation` and `scene.backgroundRotation` are now set from `sceneUp`. Three's
+  equirectangular mapping assumes a Y-up horizon, so in the Z-up scene the environment was lying on
+  its side — the horizon ran vertically and image-based lighting arrived from +Y rather than from
+  overhead. Invisible on a neutral studio HDR, obvious on any HDR with a sky/ground split. Exposed as
+  `environmentRotationFor`.
+
+  Also corrects stale docs that contradicted the code: the grid `plane` default (documented `'y'`,
+  actually `'z'`), the camera controller's `up` ("Defaults to Y-up" — the caller always passes Z), a
+  `batch-parser` comment describing a Z-up→Y-up rotation that no longer happens, and the previously
+  undocumented `sceneUp` default.
+
+### Patch Changes
+
+- 5077fe9: Adding advanced caching
+- b0d8bd8: Move `@selvajs/compute` into the Selva monorepo (`packages/compute`). No API or behavior changes — the package continues to publish to npm under the same name and version line. Development, issues, and the SLVA mesh wire-format now live alongside the plugin and app that consume it.
+- 2f787d9: Fix edge overlays bleeding through geometry in front of them, by biasing the lines instead of
+  receding the surfaces.
+
+  Edges were kept off their own coplanar surface by pushing every mesh's **surface** backwards with a
+  slope-scaled `polygonOffset` (factor 1, units 2), leaving the lines at true depth. The slope term
+  scales with the polygon's dZ/dpixel, which is small head-on but very large on a surface viewed near
+  edge-on — one pixel then spans a lot of depth. On a grazing face, surfaces receded by far more than
+  the millimetre-scale gaps between stacked parts, so geometry _behind_ a wall won the depth test
+  against that wall's own receded surface and its edges drew straight through it.
+
+  The bias now lives on the edge material instead, units-only with no slope term, so it is a fixed
+  number of depth quantization steps regardless of viewing angle: enough to lift an edge off the
+  surface it was extracted from, never enough to reach across to a neighbouring part.
+
+  This also fixes two collateral bugs in the old approach. Surfaces are no longer mutated at all, so
+  look presets keep the `polygonOffset` their materials ship with (`EMISSIVE`/`METAL`/`CONCRETE` set
+  factor 1 / units 1, which `addEdges` had been overwriting); and `removeEdges` no longer resets those
+  to 0/0, which had permanently stripped the preset's offset on an edges on/off toggle.
+
+  Depends on the dynamic near-plane fit to stay correct: a constant depth bias is only safe while
+  depth ULPs stay small, and the fitter is what holds them at micron scale when zoomed out. Which
+  surfaced a bug there — the fitter clamps `camera.near` by the camera's distance to any ground plane
+  carrying a visible aid, but its list of planes was captured once at init from whether the aid
+  _object existed_, not whether it is drawn. The viewer builds its grid up-front so the tools menu can
+  toggle it, yet starts it hidden, so a grid nobody could see clamped `near` to half the camera's
+  height above the ground — driving `near` toward zero at grazing views and the depth ULP up with it.
+  `groundNormals` is now a per-frame callback returning only visible aids.
+
+  Separately, the distance fade now measures **edge density** rather than the overlay's bounding
+  sphere. Edges draw at a constant pixel width, so once neighbouring lines sit under a pixel or two
+  apart they merge into a dark smear — worst on layered sheet goods, whose millimetre-pitch laminations
+  are sub-pixel at any zoom that fits a metre-scale part on screen. The old rule scored the bounding
+  sphere and faded below 80 px, which never fired for exactly those parts, because a large mesh whose
+  _internal_ detail has collapsed still covers much of the viewport. Overlays now fade on the
+  15th-percentile segment length scaled to pixels per frame — a quantile, not a mean, because a 1:10000
+  mix of lamination pitch to silhouette length averages to a value that fades neither correctly.
+
+  Note for callers constructing `createNearPlaneFitter` directly: `groundNormals` changed from
+  `THREE.Vector3[]` to `() => THREE.Vector3[]`. This module is not part of the package's public
+  surface — `initThree` is the supported entry point and is unaffected.
+
 ## 3.1.0-beta.16
 
 ### Patch Changes

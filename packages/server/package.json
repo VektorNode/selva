@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/server",
-	"version": "0.2.0-beta.6",
+	"version": "0.2.0",
 	"description": "Transport-agnostic compute/solve/definitions server building blocks for apps built on the Selva engine (limits, rate limiting, SSRF guard, input transform, solve pipeline, definition service + render loader)",
 	"license": "MIT",
 	"author": "VektorNode",
