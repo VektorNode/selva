@@ -22,6 +22,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # Must precede the local composite action below — GitHub resolves
+      # `uses: ./...` from the runner's filesystem, so the repo has to be
+      # checked out before that step can start.
+      - uses: actions/checkout@v5
+
       - name: Setup workspace
         uses: ./.github/actions/setup
 
