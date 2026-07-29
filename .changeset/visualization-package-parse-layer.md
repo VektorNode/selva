@@ -13,9 +13,49 @@ into Three.js objects. The second job is now its own package with documented lay
 (`session → scene → render → parse → shared`, depending downward only), so a consumer can build
 their own viewer over it.
 
-This lands four of the five layers — `shared/`, `parse/`, `render/` and `session/`.
+This lands all five layers — `shared/`, `parse/`, `render/`, `scene/` and `session/`.
 **`@selvajs/compute` no longer depends on `three` in any form** (peer dep and dev deps both gone);
-it is now pure solve/data. `scene/` still lives in `@selvajs/ui` and moves in a follow-up.
+it is now pure solve/data, and `@selvajs/ui` keeps only the Svelte shells plus the design system.
+
+**Fixed — hiding an object in the viewer now survives a solve.**
+
+Hiding a mesh in the scene manager and then changing an input brought it straight back: a solve
+discards all scene content and rebuilds it, and hidden state was keyed on the per-instance
+`THREE.Object3D.uuid`, which does not survive that. It is now keyed on the object's Grasshopper
+identity (`sourceComponentId` + `originalIndex`, or a display item's `id`, falling back to
+name+layer for content from older plugin versions), so it survives any number of solves. Hiding is
+also remembered when a definition edit stops producing that geometry — if it comes back, it comes
+back hidden.
+
+**New in `@selvajs/visualization` — `@selvajs/visualization/scene`:**
+
+The viewer's object list is no longer trapped in a Svelte component. `createSceneOutliner` answers
+the questions any presentation of a scene has to answer — which children are content rather than
+cameras/lights/grid, how they group by layer, what is hidden, what is selected — with no DOM:
+
+```ts
+import { createSceneOutliner } from '@selvajs/visualization/scene';
+
+const outliner = createSceneOutliner(scene);
+outliner.searchQuery = 'wall';
+outliner.layerGroups(); // Map<layerName, Object3D[]>, search-filtered
+outliner.toggleObject(mesh); // follows a multi-selection
+outliner.select(uuid, { shiftKey, toggleKey });
+```
+
+It **reads** the scene and toggles `.visible`; `updateScene` remains the sole owner of scene
+contents. Its mutable state is injectable, so a Svelte host passes `SvelteSet`s and gets reactivity
+without any subscribe/emit machinery:
+
+```ts
+createSceneOutliner(scene, { sets: { hidden, selected, collapsed } });
+```
+
+Hosts driving their own viewer must call `outliner.applyTo()` after each solve to re-apply hidden
+state to the rebuilt content — `<Viewer>` does this for you.
+
+`getSceneObjects`, `groupByLayer`, `filterLayerGroups`, `isSceneContent` and the visibility/selection
+state machines are exported individually for consumers that want the parts, not the composition.
 
 **New in `@selvajs/ui` — `useSolveSession`:**
 
@@ -82,5 +122,6 @@ the postprocessing pipeline and the runtime appearance setters each became their
 `edges` 874→233 (`edges/{options,extraction,cache,overlay}.ts`), `batch-parser` 1007→466
 (`batch/{metadata,materials,merge,assembly-worker}.ts`), `binary-parser` 713→329
 (`binary/{header,geometry,textures}.ts`), `display-items-parser` 440→77
-(`items/{curves,points,appearance}.ts`), and the session's driver split out into
-`session/drivers/{driver,request-response}.ts`. All 343 tests moved with the code and pass.
+(`items/{curves,points,appearance}.ts`), the session's driver split out into
+`session/drivers/{driver,request-response}.ts`, and `SceneManager.svelte` 319→234 (its logic now in
+`scene/`). 425 tests pass.

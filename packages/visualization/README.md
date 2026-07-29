@@ -11,8 +11,8 @@ Layers depend **downward only**. A contributor can predict where code lives from
 ```
 session/   pure state machine + drivers   ─depends→ (nothing below; transport-agnostic)
    │
-scene/     SceneController: parse-output → live THREE.Scene, visibility/selection/layers
-   │  ↓ consumes render/ for helpers, parse/ types
+scene/     SceneOutliner: reads a live THREE.Scene → content list, layers, visibility, selection
+   │  ↓ depends on `three` only — it reads the scene graph, render/ owns its contents
 render/    THREE scene setup + CAD viewer toolkit (camera, edges, grid, gizmo, measure…)
    │  ↓
 parse/     backend payload → THREE meshes + metadata (webdisplay, display-items)
@@ -32,15 +32,17 @@ can be refactored freely without touching consumers.
 
 Migration in progress (see `docs/plans/visualization-package.md`). Landed so far:
 
-| Layer      | Status                                                      |
-| ---------- | ----------------------------------------------------------- |
-| `shared/`  | ✅ coordinate frame, looks, geometry/color utils, types     |
-| `parse/`   | ✅ webdisplay + display-items                               |
-| `render/`  | ✅ scene setup, edges, camera, grid, gizmo, labels, measure |
-| `scene/`   | ⏳ still in `@selvajs/ui` (`SceneManager.svelte`)           |
-| `session/` | ✅ solve session, drivers, throttle, memo, external inputs  |
+| Layer      | Status                                                             |
+| ---------- | ------------------------------------------------------------------ |
+| `shared/`  | ✅ coordinate frame, looks, geometry/color utils, types            |
+| `parse/`   | ✅ webdisplay + display-items                                      |
+| `render/`  | ✅ scene setup, edges, camera, grid, gizmo, labels, measure        |
+| `scene/`   | ✅ outliner: content filter, layer grouping, visibility, selection |
+| `session/` | ✅ solve session, drivers, throttle, memo, external inputs         |
 
-With `render/` moved, `@selvajs/compute` no longer depends on `three` at all — it is pure solve/data.
+All five layers have landed. `@selvajs/compute` no longer depends on `three` at all — it is pure
+solve/data — and `@selvajs/ui` keeps only the Svelte shells (`Viewer.svelte`, `SceneManager.svelte`,
+`useSolveSession.svelte.ts`) plus the design system.
 
 ## Sub-path exports
 
@@ -50,12 +52,17 @@ Mirror the layers so consumers tree-shake:
 import { parseComputeResponse } from '@selvajs/visualization/parse';
 import { initThree, addEdges } from '@selvajs/visualization/render';
 import { LOOKS, parseColor } from '@selvajs/visualization/shared';
+import { createSceneOutliner } from '@selvajs/visualization/scene';
 import { createSolveSession, createRequestResponseDriver } from '@selvajs/visualization/session';
 ```
 
 `session/` is framework-free: its state reads through plain getters plus a `subscribe()`
 seam. In a Svelte app use `useSolveSession` from `@selvajs/ui`, which republishes those
 notifications as rune state — see [`src/session/README.md`](./src/session/README.md).
+
+`scene/` is framework-free too, but takes the simpler route: its state is three sets, so a host
+injects its own (`SvelteSet` in a Svelte app) and gets reactivity with no seam at all — see
+[`src/scene/README.md`](./src/scene/README.md).
 
 Or take everything from the top barrel: `@selvajs/visualization`.
 

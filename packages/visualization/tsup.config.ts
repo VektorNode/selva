@@ -5,6 +5,7 @@ const entries = {
 	shared: 'src/shared/index.ts',
 	parse: 'src/parse/index.ts',
 	render: 'src/render/index.ts',
+	scene: 'src/scene/index.ts',
 	session: 'src/session/index.ts'
 };
 

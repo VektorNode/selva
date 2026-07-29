@@ -30,8 +30,10 @@
 		Spline
 	} from '@lucide/svelte';
 	import { DropdownMenu } from 'bits-ui';
+	import { SvelteSet } from 'svelte/reactivity';
 	import type * as THREE from 'three';
 	import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+	import { createSceneOutliner, type SceneOutliner } from '@selvajs/visualization/scene';
 	import SceneManager from './SceneManager.svelte';
 	import MeshMetadataDialog from './MeshMetadataDialog.svelte';
 	import * as Resizable from '$lib/components/primitives/resizable/index.js';
@@ -127,6 +129,15 @@
 	let sceneVersion = $state(0);
 	let hideButton = $state(false);
 	let sceneManagerOpen = $state(false);
+
+	// The scene outliner lives here rather than inside <SceneManager> because that component is
+	// mounted only while its panel is open. Hidden objects must stay hidden when the panel is
+	// closed — and must be re-hidden after each solve, which nothing would do if the state
+	// unmounted with the panel.
+	const hiddenObjects = new SvelteSet<string>();
+	const selectedObjects = new SvelteSet<string>();
+	const collapsedLayers = new SvelteSet<string>();
+	let outliner: SceneOutliner | null = $state(null);
 	let projection: CameraProjection = $state('perspective');
 	let measureActive = $state(false);
 	let gridVisible = $state(false);
@@ -195,6 +206,9 @@
 
 		const init = initThree(canvas, opts);
 		scene = init.scene;
+		outliner = createSceneOutliner(init.scene, {
+			sets: { hidden: hiddenObjects, selected: selectedObjects, collapsed: collapsedLayers }
+		});
 		camera = init.camera;
 		controls = init.controls;
 		cameraController = init.cameraController;
@@ -272,6 +286,9 @@
 				if (edgesVisible) applyEdges?.(scene!);
 				// Rescale the grid to the new content's extent so cells and fade match the part size.
 				updateGridScale?.();
+				// The rebuild above also un-hid everything the user had hidden. Re-hide it: the outliner
+				// keys that state on Grasshopper identity, not on the instances just discarded.
+				outliner?.applyTo();
 				sceneVersion++;
 				// New solve content — repaint now rather than on the render loop's safety interval.
 				invalidate?.();
@@ -546,10 +563,10 @@
 		</Resizable.Pane>
 
 		<!-- Scene Manager Pane -->
-		{#if sceneManagerOpen && scene}
+		{#if sceneManagerOpen && scene && outliner}
 			<Resizable.Handle withHandle />
 			<Resizable.Pane defaultSize={15} minSize={8} maxSize={30}>
-				<SceneManager {scene} {sceneVersion} />
+				<SceneManager {outliner} {sceneVersion} />
 			</Resizable.Pane>
 		{/if}
 	</Resizable.PaneGroup>

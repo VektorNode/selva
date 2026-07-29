@@ -10,4 +10,5 @@
 export * from './shared/index.js';
 export * from './parse/index.js';
 export * from './render/index.js';
+export * from './scene/index.js';
 export * from './session/index.js';

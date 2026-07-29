@@ -1,20 +1,22 @@
 # `@selvajs/visualization` — a headless, extensible viewer core
 
-> **Status: IN PROGRESS (updated 2026-07-29) — steps 1–5 landed, 6–8 open.** Extract parse + scene +
+> **Status: IN PROGRESS (updated 2026-07-29) — steps 1–6 landed, 7–8 open.** Extract parse + scene +
 > render + session out of `@selvajs/compute` and `@selvajs/ui` into one framework-free package with a
 > clean public API, small single-responsibility files, and documented layer boundaries. Scope:
 > new `packages/visualization`; `@selvajs/compute` loses its `/visualization` export and `three`
 > peer dep; `@selvajs/ui` keeps only the Svelte viewer shell + design-system widgets. Pre-release,
 > so removals are free (no migration path). See migration steps at the bottom.
 >
-> **Landed:** `packages/visualization` scaffolded; `shared/`, `parse/`, `render/` and `session/`
-> moved with their 343 tests; the five largest files split (`batch-parser`, `binary-parser`,
-> `display-items-parser`, `three-initializer`, `edges`); `@selvajs/compute/visualization` deleted
-> outright; every importer rewired. **`@selvajs/compute` no longer depends on `three` in any form**
-> — it is pure solve/data. The Solve Session is now framework-free, with `useSolveSession` in
-> `@selvajs/ui` as its Svelte binding.
+> **Landed:** `packages/visualization` scaffolded; all five layers — `shared/`, `parse/`, `render/`,
+> `scene/` and `session/` — moved with their 425 tests; the five largest files split
+> (`batch-parser`, `binary-parser`, `display-items-parser`, `three-initializer`, `edges`);
+> `@selvajs/compute/visualization` deleted outright; every importer rewired. **`@selvajs/compute` no
+> longer depends on `three` in any form** — it is pure solve/data. The Solve Session is now
+> framework-free, with `useSolveSession` in `@selvajs/ui` as its Svelte binding; the scene outliner
+> is framework-free via injected sets, with `SceneManager.svelte` reduced to rendering.
 >
-> **Still in `@selvajs/ui`:** `scene/` (`SceneManager.svelte`).
+> **Left in `@selvajs/ui` by design:** the Svelte shells — `Viewer.svelte`, `SceneManager.svelte`,
+> `useSolveSession.svelte.ts`, `solving.svelte.ts` — plus the design system.
 
 ## Corrections to this plan, found while executing it
 
@@ -118,6 +120,49 @@ Found while executing step 5:
 18. **A stale note in `ui/CONTEXT.md` was corrected.** It claimed ui's vitest runs without the Svelte
     plugin so runes can't execute in tests. The config has had `plugins: [svelte()]` for a while;
     the rune-module tests were running fine. The paragraph now documents the new binding instead.
+
+Found while executing step 6:
+
+19. **`SceneController` described a component that doesn't exist.** The plan specified `setBatches()`
+    diffing batches into the scene, `dispose()`, `getMetadata()`, and an `on('change'|'select')`
+    emitter — i.e. a controller that _owns_ scene content. `SceneManager.svelte` owns none of that.
+    It is an **outliner over an already-populated scene**: `Viewer.svelte` calls `updateScene`, and
+    SceneManager only reads `scene.children` and toggles `.visible`. Building the specified API
+    would have meant writing a second owner of the scene graph alongside `updateScene` — the setup
+    that produces double-dispose bugs. **Shipped `createSceneOutliner` instead**, which extracts what
+    was actually there. `scene-controller.ts` and `types.ts` were not created; `MeshMetadata` and
+    `LayerGroup` don't exist because nothing needed them (`MeshMetadataDialog.svelte` reads
+    `userData` directly, and layer groups are a plain `Map`).
+20. **The emitter seam was unnecessary — injected sets are better here.** The session layer needed
+    `subscribe()` because its state is scalars behind getters. The outliner's state is three
+    _sets_, so the host can supply `SvelteSet`s via `options.sets` and get reactivity with no
+    subscribe/emit machinery at all. Only `searchQuery` and the shift-anchor aren't sets; the host
+    mirrors those. Net effect: `SceneManager.svelte` 319 → 234 lines, script 162 → ~70, and the
+    controller stays plain TypeScript.
+21. **Hidden state never survived a solve — now fixed, as a deliberate follow-up.** Both the old
+    component and the first cut of the outliner keyed on `THREE.Object3D.uuid`, which three
+    regenerates per instance, so hiding a mesh and dragging a slider brought it back. Shipped as a
+    separate change on top of the extraction (user-approved), because it is a behaviour change, not
+    a refactor:
+    - `identity.ts` synthesizes a stable key — `userData.id` → `sourceComponentId:originalIndex` →
+      `name:layer` → uuid fallback. The first two already existed as a documented convention
+      ("stable pick key") in the parse layer; nothing new had to be put on the wire.
+    - `VisibilityState.applyTo(objects)` re-hides the set against freshly built content;
+      `SceneOutliner.applyTo()` wraps it and clears selection. `Viewer.svelte` calls it in the same
+      `untrack` block that re-attaches edge overlays.
+    - Hidden keys are **never pruned** and `applyTo` **only hides, never shows** — so a definition
+      edit doesn't lose the user's hiding, and this never fights another feature that hid something.
+22. **The outliner had to move out of `SceneManager.svelte` to make that work.** The panel is behind
+    `{#if sceneManagerOpen}`, so it unmounts when closed — taking the hidden set with it, and
+    leaving nothing to call `applyTo()` after a solve. It now lives in `Viewer.svelte` (which owns
+    the scene and persists) and arrives as a prop. This is the general rule, now in the README:
+    **whoever owns the scene owns the outliner**, never the panel.
+23. **The injected-set seam has a sharp edge worth knowing.** A framework observes the _set_, not
+    the outliner — so `visibility.isHidden(obj)`, which reaches the set through a plain reference
+    inside the outliner, reads correctly but does **not** re-render. The markup has to go through
+    the injected set itself: `hidden.has(getTrackingKey(obj))`. Caught by inspection after
+    `svelte-check` and every test passed on the broken version — the same class of silent failure
+    as correction 13, and the reason `getTrackingKey` is exported rather than left private.
 
 ## Goal
 
@@ -257,14 +302,20 @@ packages/visualization/
       types.ts                  ← ThreeInitializerOptions (look types re-exported from shared/)
       up-axis.ts                (128)
 
-    scene/                      ← NEW layer, extracted from SceneManager.svelte
-      index.ts
-      README.md                 ← "the parse↔render bridge"; extension: selection/visibility events
-      scene-controller.ts       ← owns THREE.Scene: setBatches (diff add/remove), dispose, events
-      visibility.ts             ← show/hide + hidden-set logic (pure, from SceneManager)
-      selection.ts              ← single/range/multi selection logic (pure, from SceneManager)
-      layers.ts                 ← layer/category grouping + partial-hidden calc (pure)
-      types.ts                  ← MeshMetadata, SceneEvent, SceneObjectInfo
+    scene/                      ← ✅ BUILT — extracted from SceneManager.svelte (see correction 19)
+      index.ts                  (32)   the layer barrel
+      README.md                 ← "reads the scene, never owns it"; the injected-sets seam, the
+                                   identity table + applyTo contract; extension points
+      outliner.ts               (149)  createSceneOutliner: composes the five below
+      identity.ts               (66)   getStableKey/getTrackingKey — survives a solve (corr. 21)
+      objects.ts                (66)   isSceneContent/HELPER_IDS, getObjectLabel, prettyType
+      layers.ts                 (53)   groupByLayer + filterLayerGroups
+      visibility.ts             (93)   hidden-set + subtree .visible + tri-state + applyTo
+      selection.ts              (89)   click / ctrl / shift-range + anchor subscribers
+      __tests__/                ← 82 tests: outliner, identity, objects, layers, visibility,
+                                   selection
+      # No scene-controller.ts / types.ts: the outliner does not own scene content, so there is
+      # no setBatches to diff and no MeshMetadata to model — see correction 19.
 
     session/                    ← ✅ BUILT — moved from ui/src/lib/compute, de-runed
       index.ts                  (54)   the layer barrel
@@ -302,21 +353,24 @@ its extension points. A contributor adding e.g. a new edge strategy touches only
 - **an outliner UI panel** — search box, collapsible tree, DOM → **stays in `@selvajs/ui`** as a thin
   Svelte wrapper that renders `SceneController` state and forwards clicks.
 
+**What actually shipped** — `SceneOutliner`, not `SceneController`. See correction 19 for why the
+spec below was wrong; kept for the record.
+
 ```ts
-class SceneController {
-	constructor(scene: THREE.Scene, opts?: SceneControllerOptions);
-	setBatches(batches: DisplayBatch[]): void; // diff → add/remove into the scene
-	setVisible(id: string, visible: boolean): void;
-	select(id: string, mode: 'single' | 'toggle' | 'range'): void;
-	layers(): LayerGroup[]; // grouping for an outliner UI
-	getMetadata(id: string): MeshMetadata;
-	on(event: 'change' | 'select', cb): () => void; // plain emitter, no Svelte
-	dispose(): void;
-}
+const outliner = createSceneOutliner(scene, {
+	sets: { hidden, selected, collapsed }, // inject SvelteSets → free reactivity
+	onAnchorChange: (uuid) => {}
+});
+outliner.searchQuery = 'wall';
+outliner.objects(); // content only: no cameras, lights, grid, floor, labels
+outliner.layerGroups(); // Map<layer, Object3D[]>, search-filtered
+outliner.toggleObject(obj); // follows a multi-selection
+outliner.select(uuid, { shiftKey, toggleKey });
+outliner.reset(); // after a solve — uuids are regenerated
 ```
 
-- Headless: `parseComputeResponse` → `new SceneController(scene)` → `setBatches(...)` → own render loop.
-- Svelte: `SceneManager.svelte` becomes a ~80-line `$effect` wrapper over `SceneController`.
+- Headless: `getSceneObjects` + `groupByLayer` alone drive an export filter or screenshot cropper.
+- Svelte: `SceneManager.svelte` is a 234-line component with ~70 lines of script, all rendering.
 
 ## Public API (`src/index.ts`)
 
@@ -360,8 +414,10 @@ revisit only if headless geometry export becomes real. Recorded here as a revers
    gone: the session is framework-free with a `subscribe()` seam, and `@selvajs/ui` gains
    `useSolveSession.svelte.ts` as its Svelte binding. `@selvajs/ui/external` and `schema/defaults`
    remain as re-export shims so published sub-paths keep resolving. See corrections 13–18.
-6. **scene/** — extract pure logic from `SceneManager.svelte` into `SceneController` + helpers;
-   reduce `SceneManager.svelte` to a wrapper in `@selvajs/ui`.
+6. ✅ **DONE** — **scene/** — extracted `SceneManager.svelte`'s logic into `createSceneOutliner` +
+   `{objects,layers,visibility,selection}.ts` with 82 new tests; the component drops 319 → 234 lines
+   and holds only rendering. Shipped as an outliner over a scene it doesn't own, **not** the
+   `SceneController` the plan specified — see corrections 19–21.
 7. Rewire `@selvajs/ui`, `plugin-ui`, `selva` imports to `@selvajs/visualization`. `compute` becomes
    pure solve/data (drops `three` peer dep).
 8. `pnpm build && pnpm check && pnpm test` green; add changeset. **`@selvajs/compute` takes a `major`**

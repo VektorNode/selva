@@ -67,6 +67,16 @@
 				"default": "./dist/render.cjs"
 			}
 		},
+		"./scene": {
+			"import": {
+				"types": "./dist/scene.d.ts",
+				"default": "./dist/scene.js"
+			},
+			"require": {
+				"types": "./dist/scene.d.cts",
+				"default": "./dist/scene.cjs"
+			}
+		},
 		"./session": {
 			"import": {
 				"types": "./dist/session.d.ts",
