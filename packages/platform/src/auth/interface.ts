@@ -83,11 +83,60 @@ export interface IOAuthAuth {
 	 * irrecoverable failure (revoked, expired, signed by a different secret);
 	 * the session-refresh middleware treats null as "force re-login" by
 	 * clearing the refresh cookie.
+	 *
+	 * @deprecated Session refresh is session lifecycle, not OAuth — a consumer
+	 * that brokers no OAuth still needs it (to refresh a password session, or
+	 * to revoke on logout). Moved to `IAuthProvider.sessionRefresh`
+	 * (`ISessionRefresh`). This member delegates for one release and will be
+	 * removed in the next minor; migrate callers to
+	 * `auth.sessionRefresh?.refreshSession(...)`.
 	 */
 	refreshSession(refreshToken: string): Promise<{
 		sessionToken: string;
 		refreshToken: string;
 	} | null>;
+}
+
+/**
+ * Optional session-lifecycle surface: refresh an expiring session, and revoke
+ * one server-side. Deliberately NOT part of `IOAuthAuth` — refresh and revoke
+ * are properties of a *session*, regardless of how that session was minted.
+ * A deployment that brokers no OAuth (`oauth.listProviders()` → `[]`) still
+ * needs to revoke on logout, and would otherwise have to reach into an OAuth
+ * capability whose stated precondition it does not meet.
+ *
+ * Undefined for providers that cannot invalidate a session server-side (the
+ * local HMAC provider mints stateless tokens; there is nothing to revoke).
+ * Callers MUST treat absence as "cookie deletion is all we can do".
+ */
+export interface ISessionRefresh {
+	/**
+	 * Swap a refresh token for a fresh access/refresh pair. Returns null on
+	 * irrecoverable failure (revoked, expired, signed by a different secret,
+	 * or the user has since been disabled); the session-refresh middleware
+	 * treats null as "force re-login" by clearing the refresh cookie.
+	 */
+	refreshSession(refreshToken: string): Promise<{
+		sessionToken: string;
+		refreshToken: string;
+	} | null>;
+
+	/**
+	 * Invalidate a session server-side so the token stops being accepted
+	 * before it would naturally expire. Called on logout.
+	 *
+	 * `token` is the session's access token (the value the driving layer holds
+	 * in its session cookie). Adapters that revoke by refresh token instead
+	 * accept either — the contract is "the credential the caller has".
+	 *
+	 * Best-effort and idempotent: revoking an already-revoked, expired, or
+	 * unknown token returns `true`, because the desired end state (that token
+	 * grants nothing) holds either way. Returns `false` only when the provider
+	 * could not carry out the revocation and the token may still be live —
+	 * callers SHOULD still clear the cookie, but MAY log the failure. Never
+	 * throws: a failed revoke MUST NOT prevent a user from logging out.
+	 */
+	revokeSession(token: string): Promise<boolean>;
 }
 
 /**
@@ -225,6 +274,13 @@ export interface IAuthProvider {
 	readonly oauth?: IOAuthAuth;
 
 	/**
+	 * Present for providers that can refresh or revoke a session server-side.
+	 * Undefined for providers minting stateless tokens with nothing to revoke.
+	 * Independent of `oauth` — a password-only deployment still has sessions.
+	 */
+	readonly sessionRefresh?: ISessionRefresh;
+
+	/**
 	 * Present for providers that send sign-in links over email (Supabase Auth,
 	 * future Eterna ID). Undefined otherwise.
 	 */
@@ -266,8 +322,14 @@ export interface IAuthProvider {
 	deleteUser(id: string): Promise<UserManagementResult>;
 
 	/**
-	 * Disable a user. Sessions become invalid; identity is preserved (preferred
-	 * over deletion). Same invariant rules as `deleteUser`.
+	 * Disable a user. Identity is preserved (preferred over deletion). Same
+	 * invariant rules as `deleteUser`.
+	 *
+	 * Existing sessions are NOT guaranteed to stop working the instant this
+	 * returns — adapters that verify tokens locally may keep accepting an
+	 * already-issued access token until their next revalidation (the Supabase
+	 * adapter bounds this by `revalidateMs`, default 60s). Callers needing
+	 * immediate cutoff should also revoke via `sessionRefresh.revokeSession`.
 	 */
 	disableUser(id: string): Promise<UserManagementResult>;
 

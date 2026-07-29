@@ -40,7 +40,7 @@
 		"clean": "node scripts/clean.js",
 		"rebuild": "pnpm clean && pnpm install && pnpm build",
 		"changeset": "changeset",
-		"release": "pnpm build && changeset publish",
+		"release": "pnpm build && node scripts/changeset-publish.mjs",
 		"prepare": "husky"
 	},
 	"pnpm": {

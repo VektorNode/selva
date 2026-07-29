@@ -6,6 +6,7 @@ import type {
 	IEmailLinkAuth,
 	IOAuthAuth,
 	IPasswordAuth,
+	ISessionRefresh,
 	AuthUser,
 	LoginResult,
 	UserManagementResult,
@@ -92,6 +93,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	readonly passwordAuth: IPasswordAuth;
 	readonly oauth: IOAuthAuth;
 	readonly emailLink: IEmailLinkAuth;
+	readonly sessionRefresh: ISessionRefresh;
 
 	private readonly admin: SupabaseClient;
 	/**
@@ -141,10 +143,12 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			config.enableSelfSignup ?? false,
 			(user) => this.hydrate(user)
 		);
+		this.sessionRefresh = new SupabaseSessionRefresh(this.anon, this.admin, this.logger);
 		this.oauth = new SupabaseOAuthAuth(
 			this.anon,
 			(user) => this.hydrate(user),
-			config.oauthProviders ?? []
+			config.oauthProviders ?? [],
+			this.sessionRefresh
 		);
 		this.emailLink = new SupabaseEmailLinkAuth(
 			this.anon,
@@ -476,7 +480,8 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 	constructor(
 		private readonly anon: SupabaseClient,
 		private readonly hydrate: (user: User) => AuthUser,
-		private readonly providers: readonly string[]
+		private readonly providers: readonly string[],
+		private readonly sessionRefresh: ISessionRefresh
 	) {}
 
 	listProviders(): readonly string[] {
@@ -510,6 +515,29 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 		};
 	}
 
+	/** @deprecated Delegates to `IAuthProvider.sessionRefresh`. Removed next minor. */
+	async refreshSession(refreshToken: string): Promise<{
+		sessionToken: string;
+		refreshToken: string;
+	} | null> {
+		return this.sessionRefresh.refreshSession(refreshToken);
+	}
+}
+
+/**
+ * Supabase-backed `ISessionRefresh`. Owns session lifecycle independently of
+ * OAuth: `refreshSession` swaps an expiring pair (anon client — a refresh
+ * token authenticates itself), `revokeSession` signs the session out
+ * server-side via GoTrue's admin API (service-role — revoking someone else's
+ * session is privileged).
+ */
+class SupabaseSessionRefresh implements ISessionRefresh {
+	constructor(
+		private readonly anon: SupabaseClient,
+		private readonly admin: SupabaseClient,
+		private readonly logger: ILogger
+	) {}
+
 	async refreshSession(refreshToken: string): Promise<{
 		sessionToken: string;
 		refreshToken: string;
@@ -526,6 +554,24 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 			sessionToken: data.session.access_token,
 			refreshToken: data.session.refresh_token
 		};
+	}
+
+	async revokeSession(token: string): Promise<boolean> {
+		// `'global'` — sign out every session for this user, not just the one
+		// this JWT names. Logout on a shared machine should not leave a sibling
+		// session alive, and a token reaching us at all may already be leaked.
+		const { error } = await this.admin.auth.admin.signOut(token, 'global');
+		if (!error) return true;
+		// A token GoTrue no longer recognises (already signed out, expired,
+		// malformed) is the desired end state, not a failure — report success
+		// so the caller doesn't log noise on every double-logout.
+		const e = error as unknown as { status?: number; message?: string };
+		if (e.status === 401 || e.status === 403 || e.status === 404) return true;
+		// Anything else (5xx, network, misconfigured service-role key) means the
+		// session may still be live. Never throw: the contract is that a failed
+		// revoke MUST NOT stop the user from logging out.
+		this.logger.warn('revokeSession failed', { status: e.status, message: e.message });
+		return false;
 	}
 }
 

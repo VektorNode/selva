@@ -31,6 +31,15 @@ name: Release
 # The action figures out which mode to run based on workspace state — no
 # branching needed in this file.
 #
+# Already-published versions are not a failure
+# --------------------------------------------
+# `pnpm release` runs scripts/changeset-publish.mjs, not `changeset publish`
+# directly. changesets decides what to publish from a STALE registry read, so
+# it can try to re-publish a version npm already has and exit 1 on npm's
+# (correct) rejection — a red job for a release that actually succeeded. The
+# wrapper re-checks each reported failure against the registry and exits 0
+# only when npm already serves that exact version. Real failures stay red.
+#
 # What you need set up
 # --------------------
 # - npm Trusted Publishing (OIDC), configured per package at
