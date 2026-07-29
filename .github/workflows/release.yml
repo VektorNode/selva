@@ -126,12 +126,6 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         run: pnpm install --frozen-lockfile
 
-      # `pnpm build` includes @selvajs/website, whose docs render mermaid via
-      # headless chromium; without it the build aborts.
-      - name: Install Playwright Chromium for website docs
-        if: steps.check.outputs.should_run == 'true'
-        run: pnpm --filter @selvajs/website exec playwright install --with-deps chromium
-
       - uses: actions/cache@v4
         if: steps.check.outputs.should_run == 'true'
         with:

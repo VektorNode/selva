@@ -1,71 +1,43 @@
 version: 2
+
+# One grouped PR per ecosystem per week. Grouping is the point: a single PR
+# means one CI run and one auto-merge (see dependabot-auto-merge.yml) instead of
+# a dozen. Majors are split out so a breaking bump never rides along with
+# routine patches — that workflow refuses to auto-merge them.
 updates:
-  # npm/pnpm dependencies
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
       interval: 'weekly'
       day: 'monday'
-      time: '03:00'
-    allow:
-      - dependency-type: 'all'
     open-pull-requests-limit: 10
-    reviewers:
-      - 'VektorNode/maintainers'
-    commit-message-prefix: 'chore(deps):'
-    commit-message-prefix-scope: 'npm'
-    rebase-strategy: 'auto'
-    # Group dependencies by type for smart merging
     groups:
-      security-patches:
-        dependency-type: 'all'
-        update-types:
-          - 'patch'
-        patterns:
-          - '*security*'
-      production-minor:
-        dependency-type: 'production'
-        update-types:
-          - 'minor'
-      development:
-        dependency-type: 'development'
-        update-types:
-          - 'minor'
-          - 'patch'
-      major-updates:
-        dependency-type: 'all'
-        update-types:
-          - 'major'
+      npm:
+        update-types: ['minor', 'patch']
+      npm-major:
+        update-types: ['major']
 
-  # GitHub Actions
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
       interval: 'weekly'
       day: 'monday'
-      time: '04:00'
-    open-pull-requests-limit: 5
-    commit-message-prefix: 'ci(actions):'
-    rebase-strategy: 'auto'
+    groups:
+      actions:
+        patterns: ['*']
 
-  # NuGet — the C# Grasshopper plugin. Dependabot scans every *.csproj under the
-  # given directory tree, so '/Plugin' covers Selva.GH, Selva.Rhino, Selva.Schema,
-  # Selva.Drawing and their test projects.
+  # '/Plugin' covers every *.csproj beneath it: Selva.GH, Selva.Rhino,
+  # Selva.Schema, Selva.Drawing and their test projects.
   - package-ecosystem: 'nuget'
     directory: '/Plugin'
     schedule:
       interval: 'weekly'
       day: 'monday'
-      time: '04:00'
-    open-pull-requests-limit: 5
-    reviewers:
-      - 'VektorNode/maintainers'
-    commit-message-prefix: 'chore(deps):'
-    commit-message-prefix-scope: 'nuget'
-    rebase-strategy: 'auto'
+    groups:
+      nuget:
+        patterns: ['*']
     ignore:
-      # The Grasshopper package version is pinned per-target-framework to the
-      # Rhino 8 / Rhino 9 SDK line (net9 rides a `-wip` prerelease). Bumping it
-      # changes the minimum Rhino the plugin loads in — a deliberate call, not a
-      # dependency chore. Let Dependabot patch everything else, never this.
+      # Pinned per-target-framework to the Rhino 8 / Rhino 9 SDK line (net9
+      # rides a `-wip` prerelease). Bumping it changes the minimum Rhino the
+      # plugin loads in — a deliberate call, not a dependency chore.
       - dependency-name: 'Grasshopper'

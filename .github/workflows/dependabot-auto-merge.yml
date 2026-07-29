@@ -1,5 +1,9 @@
 name: Dependabot Auto-Merge
 
+# Branch protection is unavailable on this plan (private repo, no Pro), so this
+# workflow IS the merge gate — not a convenience layer on top of one. It must
+# verify CI itself before approving.
+
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
@@ -7,7 +11,6 @@ on:
 permissions:
   pull-requests: write
   contents: write
-  # Read check-run status to gate the merge on CI passing.
   checks: read
 
 jobs:
@@ -15,91 +18,62 @@ jobs:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
     steps:
-      - name: Fetch metadata
-        id: metadata
+      - id: metadata
         uses: dependabot/fetch-metadata@v2
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Wait for the full PR test gate to conclude before approving. Without
-      # this the merge relied entirely on branch-protection required-checks
-      # being configured correctly on GitHub; here the gate lives in the
-      # workflow, so an unset or mis-set branch-protection rule can't let a red
-      # bump through. The gate covers Test, E2E, CodeQL and dependency-review —
-      # all `pull_request`-triggered, so they run on every Dependabot PR.
-      #
-      # Why a hand-rolled poll instead of `gh pr checks --watch`: `--watch`
-      # blocks on EVERY check on the head SHA, which includes THIS job's own
-      # check run (a `pull_request_target` workflow shows up in the PR's checks).
-      # That run stays "in progress" until the poll returns, so `--watch` would
-      # wait on itself forever. We poll the JSON instead and drop our own
-      # workflow (`Dependabot Auto-Merge`) from the set before judging.
-      #
-      # Buckets (gh's own categorisation): pass / skipping / cancel are terminal
-      # and acceptable; fail is terminal and fatal; pending means keep waiting.
-      # Skipped for major updates (handled below without auto-merge).
-      - name: Wait for CI checks to pass
+      # `gh pr checks --watch` can't be used: this job's own check run appears
+      # in the PR's checks and would make --watch wait on itself forever. Poll
+      # instead, excluding our own workflow from the set.
+      - name: Wait for CI checks
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Waiting for CI checks on $HEAD_SHA to conclude…"
-          start=$(date +%s)
-          deadline=$(( start + 45 * 60 ))       # 45-minute ceiling
-          grace_until=$(( start + 3 * 60 ))      # treat "no checks yet" as pending for 3m
+          deadline=$(( $(date +%s) + 45 * 60 ))
+          grace_until=$(( $(date +%s) + 3 * 60 ))
           while :; do
-            # `|| true` because gh exits non-zero while checks are still pending
-            # (exit code 8); we drive the loop off the JSON, not the exit code.
-            checks=$(gh pr checks "$PR_URL" --json name,bucket 2>/dev/null || true)
-            # Exclude our own workflow so we never wait on ourselves.
-            others=$(echo "${checks:-[]}" | jq '[.[] | select(.name != "Dependabot Auto-Merge")]')
-            count=$(echo "$others" | jq 'length')
+            # `|| true`: gh exits non-zero while checks are pending; drive off JSON.
+            others=$(gh pr checks "$PR_URL" --json name,bucket 2>/dev/null || echo '[]')
+            others=$(echo "$others" | jq '[.[] | select(.name != "Dependabot Auto-Merge")]')
 
             if echo "$others" | jq -e 'any(.[]; .bucket == "fail")' >/dev/null; then
-              echo "::error::A required check failed — refusing to auto-merge."
+              echo "::error::A check failed — refusing to auto-merge."
               echo "$others" | jq -r '.[] | select(.bucket == "fail") | "  ✗ \(.name)"'
               exit 1
             fi
+
+            count=$(echo "$others" | jq 'length')
             pending=$(echo "$others" | jq '[.[] | select(.bucket == "pending")] | length')
 
-            # Don't conclude on an empty set during the grace window — the
-            # sibling `pull_request` workflows may not have registered their
-            # check runs on this SHA yet, and concluding now would skip the gate.
+            # An empty set inside the grace window means CI hasn't registered
+            # its check runs yet — concluding now would skip the gate entirely.
             if [ "$count" -eq 0 ] && [ "$(date +%s)" -lt "$grace_until" ]; then
-              echo "  no checks registered yet — waiting for CI to start…"
+              echo "no checks registered yet…"
             elif [ "$pending" -eq 0 ]; then
               echo "All $count check(s) concluded without failure."
               exit 0
-            else
-              echo "  $pending of $count check(s) still pending — re-checking in 30s…"
             fi
 
             if [ "$(date +%s)" -ge "$deadline" ]; then
-              echo "::error::Timed out after 45m waiting for checks to conclude."
+              echo "::error::Timed out after 45m waiting for checks."
               exit 1
             fi
             sleep 30
           done
+
+      - name: Approve and merge (non-major)
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Auto-approve and merge for non-major updates
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
-        # Reaching this step means the wait above saw every required check
-        # succeed. `--auto` still honours any branch protection on top (belt
-        # and braces); `--squash` keeps the bump a single commit on main.
         run: |
           gh pr review --approve "$PR_URL"
           gh pr merge --auto --squash "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Approve major updates (require manual merge)
+      - name: Flag major updates for manual review
         if: steps.metadata.outputs.update-type == 'version-update:semver-major'
-        run: |
-          gh pr review --approve "$PR_URL"
-          gh pr comment "$PR_URL" --body "⚠️ **Major version update** - This requires manual review and testing before merging."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr comment "$PR_URL" --body "⚠️ **Major version update** — needs manual review before merging."

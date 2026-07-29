@@ -40,7 +40,7 @@
 		"clean": "node scripts/clean.js",
 		"rebuild": "pnpm clean && pnpm install && pnpm build",
 		"changeset": "changeset",
-		"release": "pnpm build && node scripts/changeset-publish.mjs",
+		"release": "turbo run build --concurrency=20 --filter=!@selvajs/website && node scripts/changeset-publish.mjs",
 		"prepare": "husky"
 	},
 	"pnpm": {
