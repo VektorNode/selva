@@ -52,7 +52,7 @@
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
 		"pino": "^10.3.1",
-		"rhino3dm": "8.17.0",
+		"rhino3dm": "8.32.0",
 		"sharp": "^0.35.3",
 		"tailwind-merge": "catalog:",
 		"tailwind-variants": "^3.2.2",

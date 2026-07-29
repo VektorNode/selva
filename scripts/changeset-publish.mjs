@@ -91,8 +91,16 @@ if (result.status === 0) process.exit(0);
 // Take names from that block only. If the block is absent the run failed for
 // some other reason (build error, auth, crash) — no reconciliation, just fail.
 
+// changesets colorizes its output when it detects a TTY-ish consumer, so in CI
+// the failure block arrives as `🦋  \x1b[31merror\x1b[39m @selvajs/compute@3.1.0`.
+// Strip escape sequences before any parsing — without this the prefix regex
+// below misses, every line looks like "left the block", and a genuine
+// already-published run is misreported as "no failure list found".
+// eslint-disable-next-line no-control-regex
+const ANSI = /\x1b\[[0-9;]*m/g;
+
 function parseFailedPackages(output) {
-	const lines = output.split('\n');
+	const lines = output.replace(ANSI, '').split('\n');
 	const start = lines.findIndex((l) => l.includes('packages failed to publish:'));
 	if (start === -1) return null;
 

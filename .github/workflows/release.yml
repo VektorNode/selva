@@ -250,6 +250,15 @@ jobs:
         # local-provider — gates here.
         run: pnpm exec turbo run test
 
+      # The publish wrapper is not part of any workspace package, so `turbo run
+      # test` above does not cover it. It gets its own step because when it
+      # breaks, it breaks in the one direction CI can't tell apart from a real
+      # failure: a successful release reported red. Its ANSI-parsing bug did
+      # exactly that on 2026-07-29 (run 30467367005).
+      - name: Test publish wrapper
+        if: steps.check.outputs.should_run == 'true'
+        run: node scripts/changeset-publish.test.mjs
+
       # ── beta path: version (pre-release), commit the bump back, publish ───
       # In pre mode, plain `changeset publish` publishes under the `beta`
       # dist-tag automatically — passing `--tag` is REJECTED ("custom tag not

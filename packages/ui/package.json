@@ -104,7 +104,7 @@
 		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"@types/three": "catalog:",
 		"bits-ui": "^2.18.0",
-		"rhino3dm": "8.17.0",
+		"rhino3dm": "8.32.0",
 		"rimraf": "catalog:",
 		"svelte": "catalog:",
 		"tailwind-variants": "^3.2.2",
