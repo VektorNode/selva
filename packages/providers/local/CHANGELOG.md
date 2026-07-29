@@ -1,5 +1,12 @@
 # @selvajs/local-provider
 
+## 0.13.1
+
+### Patch Changes
+
+- Updated dependencies [efb003a]
+  - @selvajs/platform@0.16.0
+
 ## 0.13.0
 
 ### Minor Changes
