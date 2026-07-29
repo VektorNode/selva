@@ -1,64 +1,12 @@
-// Client-supplied input transit storage.
-//
-// When an input has source.kind === 'client', a producer route writes the produced
-// value here, and the solver route reads it back. Scoped per (scopeKey, inputId) so
-// values for one solver/input don't bleed into another. The scope key is whatever
-// uniquely identifies the solver context — sessionId in plugin-ui/preview,
-// definition guid in selva/library, etc.
-//
-// inputId is the Grasshopper parameter instance GUID (LayoutItem.paramId / SchemaInput.id).
+// Moved to `@selvajs/visualization/session`, where the Solve Session that hydrates from it
+// now lives. Re-exported here to keep the published `@selvajs/ui/external` sub-path — and
+// the pre-step producer routes that import it — working unchanged.
 
-import type { UISchema } from '@selvajs/schemas';
-import { getInputItems } from '@selvajs/schemas';
-
-const STORAGE_PREFIX = 'external';
-
-function makeKey(scopeKey: string, inputId: string): string {
-	return `${STORAGE_PREFIX}:${scopeKey}:${inputId}`;
-}
-
-export interface ExternalValueRef {
-	scopeKey: string;
-	inputId: string;
-}
-
-export function writeExternalValue(args: ExternalValueRef & { value: unknown }): void {
-	const { scopeKey, inputId, value } = args;
-	if (!scopeKey || !inputId) return;
-	if (typeof sessionStorage === 'undefined') return;
-	sessionStorage.setItem(makeKey(scopeKey, inputId), JSON.stringify(value));
-}
-
-export function readExternalValue(ref: ExternalValueRef): unknown | undefined {
-	const { scopeKey, inputId } = ref;
-	if (!scopeKey || !inputId) return undefined;
-	if (typeof sessionStorage === 'undefined') return undefined;
-	const raw = sessionStorage.getItem(makeKey(scopeKey, inputId));
-	if (raw === null) return undefined;
-	try {
-		return JSON.parse(raw);
-	} catch {
-		return undefined;
-	}
-}
-
-export function clearExternalValue(ref: ExternalValueRef): void {
-	const { scopeKey, inputId } = ref;
-	if (!scopeKey || !inputId) return;
-	if (typeof sessionStorage === 'undefined') return;
-	sessionStorage.removeItem(makeKey(scopeKey, inputId));
-}
-
-export interface ExternalInput {
-	paramId: string;
-	displayName: string;
-}
-
-export function getExternalInputs(schema: UISchema): ExternalInput[] {
-	return getInputItems(schema)
-		.filter((item) => item.source?.kind === 'client')
-		.map((item) => ({
-			paramId: item.paramId,
-			displayName: item.displayName ?? item.paramId
-		}));
-}
+export {
+	writeExternalValue,
+	readExternalValue,
+	clearExternalValue,
+	getExternalInputs,
+	type ExternalValueRef,
+	type ExternalInput
+} from '@selvajs/visualization/session';

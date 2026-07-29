@@ -13,7 +13,7 @@
 // per hit, and disposes an entry whenever it leaves the map.
 
 import * as THREE from 'three';
-import type { SolveResult } from '../types/solveFn';
+import type { SolveResult } from './solve-fn.js';
 
 /**
  * Deterministic string key for a set of input values. Object keys are sorted at every

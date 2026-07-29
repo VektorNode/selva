@@ -13,15 +13,19 @@ definition changes.
 
 A Solve Session is **transport-agnostic**: it does not know whether a solve runs over
 HTTP (Rhino.Compute) or a WebSocket. It only knows that a solve is _started_ and that
-a result is later _reported_ back to it. The reactive (`$state`-backed) wrapper lives
-in `lib/compute/createSolveSession.svelte.ts`; the pure, framework-free transition
-logic lives in `lib/compute/solve-session-core.ts` and is unit-tested directly.
+a result is later _reported_ back to it.
 
-> The split exists because this package's vitest runs in a node environment without
-> the Svelte vite plugin (see `vitest.config.ts`), so `$state` runes can't execute in
-> tests. Keep all decision logic in the pure core where it's testable; the rune wrapper
-> stays a thin delegation shell. Don't write `.test.ts` files that import runes-using
-> `.svelte.ts` modules — they fail at `$.state is not a function`.
+> **The session itself no longer lives in this package.** It moved to
+> `@selvajs/visualization/session`, where it is framework-free: state reads through plain
+> getters and every mutation fires `subscribe()` listeners. What stays here is
+> `lib/compute/useSolveSession.svelte.ts` — the Svelte binding, which subscribes once and
+> bumps a `$state` counter that each getter reads, so session state stays reactive inside
+> markup. **Use `useSolveSession`, not `createSolveSession`, in a component.** Calling the
+> raw factory compiles and returns correct values, but nothing re-renders.
+>
+> `isSolving` needs one extra wire: it forwards to the driver, which the session can't
+> observe. A driver owning its own in-flight flag must be constructed with
+> `onChange: () => session.notify()`.
 
 ## Solve Driver
 
@@ -34,11 +38,12 @@ on their own schedule.
 Two adapters define this seam:
 
 - **Request/response driver** — wraps `createComputeThrottle` + a `SolveFn` (`onSolve`).
-  Calls `session.report()` when the solve promise resolves. Ships today.
+  Calls `session.report()` when the solve promise resolves. Lives beside the session in
+  `@selvajs/visualization/session`; used by `ComputeApp`.
 - **WebSocket driver** — sends values over the socket; reports when output frames
-  arrive. Designed-for, built when `plugin-ui`'s `usePreviewState` is migrated.
-  Transport quirks (value preparation, mesh-blob streaming, remote-update guards) stay
-  inside this adapter — the session never learns them.
+  arrive. Lives in `plugin-ui` (`lib/schema-source/websocket-solve-driver.ts`) because it
+  is transport-specific. Transport quirks (value preparation, mesh-blob streaming,
+  remote-update guards) stay inside this adapter — the session never learns them.
 
 ## report
 

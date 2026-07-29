@@ -5,7 +5,7 @@ import {
 	applyValueChange,
 	applySolveResult,
 	type SolveSessionState
-} from './solve-session-core';
+} from '../solve-session-core.js';
 import type { UISchema } from '@selvajs/schemas';
 
 // These tests pin the lifecycle state machine that used to live inline in

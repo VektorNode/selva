@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { createSolveMemo, stableInputKey } from './solveMemo';
-import type { SolveResult } from '../types/solveFn';
+import { createSolveMemo, stableInputKey } from '../solve-memo.js';
+import type { SolveResult } from '../solve-fn.js';
 
 // Pins the client-side result memo (M2): stable keying across key order, LRU recency and
 // eviction, hit/miss semantics, and clear(). The driver wiring is pinned separately in

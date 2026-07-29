@@ -4,7 +4,7 @@ import {
 	writeExternalValue,
 	readExternalValue,
 	clearExternalValue
-} from './storage';
+} from '../external-storage.js';
 import type { UISchema } from '@selvajs/schemas';
 
 // getExternalInputs is the gate the whole client-input feature hangs on: it decides

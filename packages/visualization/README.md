@@ -38,7 +38,7 @@ Migration in progress (see `docs/plans/visualization-package.md`). Landed so far
 | `parse/`   | ✅ webdisplay + display-items                               |
 | `render/`  | ✅ scene setup, edges, camera, grid, gizmo, labels, measure |
 | `scene/`   | ⏳ still in `@selvajs/ui` (`SceneManager.svelte`)           |
-| `session/` | ⏳ still in `@selvajs/ui` (`src/lib/compute`)               |
+| `session/` | ✅ solve session, drivers, throttle, memo, external inputs  |
 
 With `render/` moved, `@selvajs/compute` no longer depends on `three` at all — it is pure solve/data.
 
@@ -50,7 +50,12 @@ Mirror the layers so consumers tree-shake:
 import { parseComputeResponse } from '@selvajs/visualization/parse';
 import { initThree, addEdges } from '@selvajs/visualization/render';
 import { LOOKS, parseColor } from '@selvajs/visualization/shared';
+import { createSolveSession, createRequestResponseDriver } from '@selvajs/visualization/session';
 ```
+
+`session/` is framework-free: its state reads through plain getters plus a `subscribe()`
+seam. In a Svelte app use `useSolveSession` from `@selvajs/ui`, which republishes those
+notifications as rune state — see [`src/session/README.md`](./src/session/README.md).
 
 Or take everything from the top barrel: `@selvajs/visualization`.
 

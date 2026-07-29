@@ -41,6 +41,15 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 	let session: SolveSession | null = null;
 	let driver: PreviewSolveDriver | null = null;
 	let initialized = false;
+	let unsubscribeSession: (() => void) | null = null;
+
+	// The Solve Session is framework-free (it lives in @selvajs/visualization/session), so its
+	// getters are inert on their own. This counter is bumped on every session notification and
+	// read by the getters below, which is what makes `values`/`displayMeshes`/`isSolving`
+	// re-render. @selvajs/ui's `useSolveSession` does the same job for components, but it binds
+	// via $effect at init — the session here is built lazily on the first initialData, so the
+	// subscription is managed by hand alongside the source listeners.
+	let sessionVersion = $state(0);
 
 	const reporter: SolveReporter = {
 		report: (result) => session?.report(result),
@@ -59,6 +68,9 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 			const schema = state.schema!; // set by the core before it touches the session
 			driver = schemaSource.makeSolveDriver(getSessionId(), () => reporter);
 			session = createSolveSession({ schema, scopeKey: getSessionId(), driver });
+			unsubscribeSession = session.subscribe(() => {
+				sessionVersion += 1;
+			});
 		}
 		return session;
 	}
@@ -154,6 +166,8 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		schemaSource.off('parametersAdded', onParametersAdded);
 		driver?.dispose();
 		driver = null;
+		unsubscribeSession?.();
+		unsubscribeSession = null;
 		session = null;
 	}
 
@@ -161,18 +175,25 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		get state() {
 			return state;
 		},
+		// `void sessionVersion` registers the reactive dependency on the session's subscribe()
+		// notifications — without it these getters read correct values but never re-render.
 		/** Values map (inputs + reported outputs). Empty until the session is built. */
 		get values() {
+			void sessionVersion;
 			return session?.values ?? EMPTY_VALUES;
 		},
 		/** Display meshes from the latest solve. Empty until the session is built. */
 		get displayMeshes() {
+			void sessionVersion;
 			return session?.meshes ?? EMPTY_MESHES;
 		},
 		get isSolving() {
+			// No sessionVersion read here: the WebSocket driver's isSolving is backed by the
+			// socket store's own $state, so it is already reactive on its own.
 			return driver?.isSolving ?? false;
 		},
 		get hasPendingChanges() {
+			void sessionVersion;
 			return session?.hasPendingChanges ?? false;
 		},
 		get connected() {

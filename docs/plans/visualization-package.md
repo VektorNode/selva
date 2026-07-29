@@ -1,18 +1,20 @@
 # `@selvajs/visualization` — a headless, extensible viewer core
 
-> **Status: IN PROGRESS (updated 2026-07-29) — steps 1–4 landed, 5–8 open.** Extract parse + scene +
+> **Status: IN PROGRESS (updated 2026-07-29) — steps 1–5 landed, 6–8 open.** Extract parse + scene +
 > render + session out of `@selvajs/compute` and `@selvajs/ui` into one framework-free package with a
 > clean public API, small single-responsibility files, and documented layer boundaries. Scope:
 > new `packages/visualization`; `@selvajs/compute` loses its `/visualization` export and `three`
 > peer dep; `@selvajs/ui` keeps only the Svelte viewer shell + design-system widgets. Pre-release,
 > so removals are free (no migration path). See migration steps at the bottom.
 >
-> **Landed:** `packages/visualization` scaffolded; `shared/`, `parse/` and `render/` moved with their
-> 288 tests; the five largest files split (`batch-parser`, `binary-parser`, `display-items-parser`,
-> `three-initializer`, `edges`); `@selvajs/compute/visualization` deleted outright; every importer
-> rewired. **`@selvajs/compute` no longer depends on `three` in any form** — it is pure solve/data.
+> **Landed:** `packages/visualization` scaffolded; `shared/`, `parse/`, `render/` and `session/`
+> moved with their 343 tests; the five largest files split (`batch-parser`, `binary-parser`,
+> `display-items-parser`, `three-initializer`, `edges`); `@selvajs/compute/visualization` deleted
+> outright; every importer rewired. **`@selvajs/compute` no longer depends on `three` in any form**
+> — it is pure solve/data. The Solve Session is now framework-free, with `useSolveSession` in
+> `@selvajs/ui` as its Svelte binding.
 >
-> **Still in `@selvajs/ui`:** `scene/` (`SceneManager.svelte`) and `session/` (`src/lib/compute`).
+> **Still in `@selvajs/ui`:** `scene/` (`SceneManager.svelte`).
 
 ## Corrections to this plan, found while executing it
 
@@ -81,6 +83,41 @@ Found while executing step 4:
     `global.fetch = vi.fn()`, which the viz suites don't need. The empty-object stub matters: it makes
     `devicePixelRatio` `undefined` → `Math.min(undefined, 2)` → `NaN` → the `||` falls through, which
     is the branch the default-resolution tests assert.
+
+Found while executing step 5:
+
+13. **"Rename the `.svelte.ts` files (no runes to lose)" was wrong — there were runes to lose.**
+    `createSolveSession` used `$state` + `$state.snapshot`, and `computeThrottle` used `$state`.
+    Worse, the reactivity crossed the package boundary: `ComputeApp.svelte` reads
+    `session.values`/`meshes`/`isSolving` straight into markup, and `usePreviewState` forwards the
+    same getters onward. Moving them into a package with no Svelte compiler would have left both
+    apps reading correct values that never re-render — a silent failure with no type or test error.
+    **Resolved with a `subscribe()` seam** (user-approved): the session is plain getters + a
+    listener set, and `@selvajs/ui` gains `useSolveSession.svelte.ts`, which subscribes once and
+    bumps a `$state` counter each getter reads. `usePreviewState` does the same by hand, because it
+    builds its session lazily on the first `initialData` rather than at component init, so
+    `useSolveSession`'s `$effect` binding doesn't fit.
+14. **`isSolving` needed a `notify()` escape hatch.** It forwards to the driver, so no session
+    mutation ever fires for it and a subscribe-only host would never see the spinner move.
+    `SolveSession.notify()` fires subscribers without changing state; the request/response driver
+    takes an `onChange` wired to it. The WebSocket driver needs none — its `isSolving` is backed by
+    the socket store's own `$state` and stays reactive on its own.
+15. **`session/` is not renderer-free.** `solve-memo.ts` imports `three` to clone and dispose scene
+    objects (audit C1: the viewer disposes what it renders, so the memo can neither share instances
+    nor drop them silently). **Accepted and documented** rather than hooked out — `three` is already
+    a peer dep of the package. The layer diagram's "depends on nothing below" means _no dependency
+    on `scene`/`render`/`parse`_, which still holds.
+16. **Two `@selvajs/ui` files became re-export shims rather than moving.** `external/storage.ts` and
+    `schema/defaults.ts` back published sub-path exports (`@selvajs/ui/external`) that external host
+    apps import. `publint` caught the first one by failing the build. The implementations moved;
+    the paths still resolve.
+17. **`dispatch()` now copies the projected inputs.** It used to pass `$state.snapshot(...)` output,
+    which was already a fresh object. Without runes, `pickInputValues` returns a map aliasing the
+    live values, so a driver holding it across an async solve would see later edits. Spread added,
+    with a test pinning it.
+18. **A stale note in `ui/CONTEXT.md` was corrected.** It claimed ui's vitest runs without the Svelte
+    plugin so runes can't execute in tests. The config has had `plugins: [svelte()]` for a while;
+    the rune-module tests were running fine. The paragraph now documents the new binding instead.
 
 ## Goal
 
@@ -229,20 +266,28 @@ packages/visualization/
       layers.ts                 ← layer/category grouping + partial-hidden calc (pure)
       types.ts                  ← MeshMetadata, SceneEvent, SceneObjectInfo
 
-    session/                    ← moved from ui/src/lib/compute, de-Svelte-d
-      index.ts                  ← createSolveSession, drivers, types
-      README.md                 ← "inputs → solve → outputs"; extension: write a SolveDriver
-      solve-session.ts          ← createSolveSession (from createSolveSession.svelte.ts, no runes)
-      solve-session-core.ts     (122 → keep) pure transition logic
-      solve-memo.ts             (140 → keep)
-      compute-throttle.ts       (109 → keep, drop .svelte)
+    session/                    ← ✅ BUILT — moved from ui/src/lib/compute, de-runed
+      index.ts                  (54)   the layer barrel
+      README.md                 ← "inputs → solve → outputs"; the subscribe() seam +
+                                   extension: write a SolveDriver
+      solve-session.ts          (197)  createSolveSession: state ownership + subscriber set
+      solve-session-core.ts     (122)  pure transition logic
+      solve-memo.ts             (140)  keeps its `three` import — see correction 15
+      compute-throttle.ts       (122)  single-in-flight, latest-wins (was computeThrottle.svelte.ts)
+      external-storage.ts       (64)   getExternalInputs/readExternalValue
+      solve-fn.ts               (29)   SolveFn, SolveResult
       drivers/
-        driver.ts               ← SolveDriver + SolveReporter interfaces
-        request-response.ts     ← createRequestResponseDriver (memo + throttle)
+        driver.ts               (30)   SolveDriver + SolveReporter interfaces
+        request-response.ts     (75)   createRequestResponseDriver (memo + throttle)
         # websocket driver stays in plugin-ui — it's transport-specific — but implements this iface
-      defaults.ts               ← getDefaultValue (relocated pure dep)
-      external-storage.ts       ← getExternalInputs/readExternalValue (relocated pure dep)
-      solve-fn.ts               ← SolveFn, SolveResult types
+      __tests__/                ← 55 tests: solve-session, solve-session-core, compute-throttle,
+                                   solve-memo, external-storage
+      # defaults.ts NOT created: getDefaultValue already lives in @selvajs/schemas; session
+      # imports it from there directly, and ui/src/lib/schema/defaults.ts stays a re-export shim.
+
+    # Left behind in @selvajs/ui as the Svelte binding for this layer:
+    #   lib/compute/useSolveSession.svelte.ts  ← subscribes + republishes as $state
+    #   lib/compute/solving.svelte.ts          ← adaptive spinner delay, pure UI timing
 ```
 
 Result: **no file over ~300 lines**, every folder maps to one layer, each layer has a README naming
@@ -310,8 +355,11 @@ revisit only if headless geometry export becomes real. Recorded here as a revers
      `src/visualization.ts`; **dropped `three` from compute entirely** (peer dep _and_ devDeps —
      `packages/compute/src/features/` now holds only `grasshopper/`). Rewired `Viewer.svelte`, the sole
      remaining importer, to `@selvajs/visualization/render`. See corrections 9–11.
-5. **session/** — move `ui/src/lib/compute/*` + pure deps (`schema/defaults`, `external/storage`,
-   `types/solveFn`); rename `.svelte.ts` files (no runes to lose); split drivers into `drivers/`.
+5. ✅ **DONE** — **session/** — moved `ui/src/lib/compute/*` + `external/storage` + `types/solveFn`
+   with all 55 tests; split drivers into `drivers/{driver,request-response}.ts`. The runes are
+   gone: the session is framework-free with a `subscribe()` seam, and `@selvajs/ui` gains
+   `useSolveSession.svelte.ts` as its Svelte binding. `@selvajs/ui/external` and `schema/defaults`
+   remain as re-export shims so published sub-paths keep resolving. See corrections 13–18.
 6. **scene/** — extract pure logic from `SceneManager.svelte` into `SceneController` + helpers;
    reduce `SceneManager.svelte` to a wrapper in `@selvajs/ui`.
 7. Rewire `@selvajs/ui`, `plugin-ui`, `selva` imports to `@selvajs/visualization`. `compute` becomes

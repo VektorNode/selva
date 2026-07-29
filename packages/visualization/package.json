@@ -66,6 +66,16 @@
 				"types": "./dist/render.d.cts",
 				"default": "./dist/render.cjs"
 			}
+		},
+		"./session": {
+			"import": {
+				"types": "./dist/session.d.ts",
+				"default": "./dist/session.js"
+			},
+			"require": {
+				"types": "./dist/session.d.cts",
+				"default": "./dist/session.cjs"
+			}
 		}
 	},
 	"files": [
@@ -89,6 +99,7 @@
 	},
 	"dependencies": {
 		"@selvajs/compute": "workspace:*",
+		"@selvajs/schemas": "workspace:*",
 		"fflate": "^0.8.2",
 		"rhino3dm": "8.17.0"
 	},

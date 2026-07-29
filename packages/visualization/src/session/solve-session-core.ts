@@ -1,15 +1,15 @@
-// Pure, framework-free transition logic for a Solve Session (see CONTEXT.md).
+// Pure transition logic for a Solve Session.
 //
-// This module holds the value/lifecycle state machine with no Svelte runes and no
-// transport: how values are seeded (including client-sourced hydration), when a value
+// This module holds the value/lifecycle state machine with no transport and no state
+// ownership: how values are seeded (including client-sourced hydration), when a value
 // change should dispatch a solve vs. defer it, and what a reported solve result does to
-// the flags. The reactive wrapper in createSolveSession.svelte.ts is a thin shell over
-// these functions; everything testable lives here.
+// the flags. `solve-session.ts` is a thin shell that owns the state object and the
+// subscriber set; every decision lives here, which is what makes it directly testable.
 
 import type { UISchema } from '@selvajs/schemas';
-import { getDefaultValue } from '../schema/defaults';
-import { getExternalInputs, type ExternalValueRef } from '../external/storage';
-import type { SolveResult } from '../types/solveFn';
+import { getDefaultValue } from '@selvajs/schemas';
+import { getExternalInputs, type ExternalValueRef } from './external-storage.js';
+import type { SolveResult } from './solve-fn.js';
 
 export interface SolveSessionState {
 	values: Record<string, unknown>;

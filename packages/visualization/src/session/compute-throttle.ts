@@ -5,9 +5,15 @@
  * - Latest values always win (no queue)
  * - AbortController support to cancel stale requests
  * - Configurable timeout with automatic abort
+ *
+ * Framework-free: `isComputing` is a plain getter, and every transition of it fires
+ * `onChange` so a reactive host (see `@selvajs/ui`'s rune adapter) can republish it.
+ * Polling the getter without subscribing will read correct values but won't re-render.
  */
 interface ComputeThrottleOptions {
 	timeout?: number;
+	/** Called after every `isComputing` transition. */
+	onChange?: () => void;
 }
 
 /**
@@ -33,11 +39,18 @@ export function createComputeThrottle<T>(
 	readonly hasPending: boolean;
 	cancel: () => void;
 } {
-	const { timeout = DEFAULT_TIMEOUT_MS } = options;
+	const { timeout = DEFAULT_TIMEOUT_MS, onChange } = options;
 
-	let isComputing = $state(false);
-	let pendingValues = $state<T | null>(null);
+	let isComputing = false;
+	let pendingValues: T | null = null;
 	let currentAbortController: AbortController | null = null;
+
+	/** Assign `isComputing` and notify only when it actually flipped. */
+	function setComputing(next: boolean) {
+		if (isComputing === next) return;
+		isComputing = next;
+		onChange?.();
+	}
 
 	function abortCurrent() {
 		currentAbortController?.abort();
@@ -56,7 +69,7 @@ export function createComputeThrottle<T>(
 			currentAbortController?.abort();
 		}, timeout);
 
-		isComputing = true;
+		setComputing(true);
 		try {
 			await computeFn(values, signal);
 		} catch (err) {
@@ -68,7 +81,7 @@ export function createComputeThrottle<T>(
 			}
 		} finally {
 			clearTimeout(timeoutId);
-			isComputing = false;
+			setComputing(false);
 			currentAbortController = null;
 
 			if (pendingValues !== null) {

@@ -1,17 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-	createSolveSession,
-	createRequestResponseDriver,
-	type SolveDriver,
-	type SolveReporter
-} from './createSolveSession.svelte';
+import { createSolveSession } from '../solve-session.js';
+import { createRequestResponseDriver } from '../drivers/request-response.js';
+import type { SolveDriver, SolveReporter } from '../drivers/driver.js';
 import type { UISchema } from '@selvajs/schemas';
-import type { SolveResult } from '../types/solveFn';
+import type { SolveResult } from '../solve-fn.js';
 
-// Covers the reactive wrapper's dispatch decisions — specifically the `forceSolve` path
+// Covers the session shell's dispatch decisions — specifically the `forceSolve` path
 // added for dynamic-value-list reconciliation. The pure transition logic is pinned in
-// solve-session-core.test.ts; this file pins how the rune shell turns those decisions into
-// driver.solve() calls. Rune module, so it runs under the svelte vitest plugin.
+// solve-session-core.test.ts; this file pins how the shell turns those decisions into
+// driver.solve() calls.
 
 function schema(instanceSolve?: boolean): UISchema {
 	return {
@@ -164,5 +161,99 @@ describe('createRequestResponseDriver — client memo', () => {
 		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
 		session.rebuild(schema(true), 's2');
 		expect(clears).toBe(1);
+	});
+});
+
+// The subscribe() seam replaced the session's former $state backing when it moved out of
+// @selvajs/ui into this framework-free package. A reactive host subscribes once and
+// republishes; if a mutation path forgets to emit, that host silently stops updating —
+// which is exactly the failure these pin.
+describe('createSolveSession.subscribe', () => {
+	/** Subscribes and counts notifications. */
+	function watch(session: ReturnType<typeof createSolveSession>) {
+		let count = 0;
+		const off = session.subscribe(() => {
+			count += 1;
+		});
+		return {
+			get count() {
+				return count;
+			},
+			off
+		};
+	}
+
+	it('notifies on a dispatching value change', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		const w = watch(session);
+		session.setValue('a', 'y');
+		expect(w.count).toBe(1);
+	});
+
+	it('notifies on a deferred (manual-mode) value change, which dispatches nothing', () => {
+		const session = createSolveSession({
+			schema: schema(false),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		const w = watch(session);
+		session.setValue('a', 'y');
+		// No solve was dispatched, but hasPendingChanges flipped — a host must still repaint.
+		expect(w.count).toBe(1);
+		expect(session.hasPendingChanges).toBe(true);
+	});
+
+	it('notifies on report and reportError', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		const w = watch(session);
+		session.report({ outputs: { out: 1 } });
+		expect(w.count).toBe(1);
+		session.reportError('boom');
+		expect(w.count).toBe(2);
+		expect(session.error).toBe('boom');
+	});
+
+	it('notifies on rebuild in both the dispatching and gated paths', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		const w = watch(session);
+		session.rebuild(schema(true), 's2'); // seeds values -> dispatches
+		expect(w.count).toBe(1);
+		session.rebuild(schema(false), 's3'); // manual mode -> no dispatch, still a state change
+		expect(w.count).toBe(2);
+	});
+
+	it('stops notifying after unsubscribe', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		const w = watch(session);
+		session.setValue('a', 'y');
+		w.off();
+		session.setValue('a', 'z');
+		expect(w.count).toBe(1);
+	});
+
+	it('does not hand the live values map to the driver', () => {
+		const driver = recordingDriver();
+		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
+		session.setValue('a', 'y');
+		const dispatched = driver.solves[0];
+		// A later change must not retroactively mutate a payload the transport already holds.
+		session.setValue('a', 'z');
+		expect(dispatched.a).toBe('y');
 	});
 });

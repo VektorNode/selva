@@ -8,7 +8,8 @@
 // Scope: the compute-app SDK — everything an external host app needs to embed a
 // Grasshopper-driven app (ComputeApp), drive solves, and wire pre-step
 // producers. Verified against real external host apps: they import
-// ComputeApp + its types, the solve seam, and external/storage. Nothing else.
+// ComputeApp + its types, the solve seam, and the external-input storage
+// helpers. Nothing else.
 //
 // Deliberately NOT public: design-system primitives (Button, Card, Dialog, …),
 // page-chrome layout (AppShell, SideNav, …), toast/Toaster, ThemeSwitcher,
@@ -44,8 +45,11 @@ export {
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 
 // Solve Session seam (transport-agnostic value/lifecycle state machine + its
-// driver interface). Exported so transports outside this package can satisfy
-// SolveDriver and drive a session. See CONTEXT.md.
+// driver interface). The session lives in `@selvajs/visualization/session` and is
+// framework-free; `useSolveSession` is the Svelte binding that makes its getters
+// read reactively inside components. A host embedding <ComputeApp> needs neither —
+// both are re-exported for hosts driving a session themselves. See CONTEXT.md.
+export { useSolveSession } from './compute/useSolveSession.svelte';
 export {
 	createSolveSession,
 	createRequestResponseDriver,
@@ -53,14 +57,21 @@ export {
 	type SolveSessionArgs,
 	type SolveDriver,
 	type SolveReporter
-} from './compute/createSolveSession.svelte';
+} from '@selvajs/visualization/session';
 
 // Client-slot context type (host apps render their own cell for client-sourced
 // inputs, and may commit a value back via ClientSlotArgs.onValueChange).
 export type { ClientSlotArgs, ClientSlot } from './contexts/clientSlotContext.svelte';
 
 // Pre-step producer transit storage (host apps wire producers via these).
-export * from './external/storage';
+export {
+	writeExternalValue,
+	readExternalValue,
+	clearExternalValue,
+	getExternalInputs,
+	type ExternalValueRef,
+	type ExternalInput
+} from '@selvajs/visualization/session';
 
 // Schema utilities a ComputeApp host reasonably needs to read/shape values.
 export * from './schema/defaults';
@@ -69,5 +80,5 @@ export * from './schema/dynamic-value-list';
 
 // UI-facing runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';
-export type { SolveFn, SolveResult } from './types/solveFn';
+export type { SolveFn, SolveResult } from '@selvajs/visualization/session';
 export { DEFAULT_PRESET_LABELS, type PresetLabels } from './types/presetLabels';

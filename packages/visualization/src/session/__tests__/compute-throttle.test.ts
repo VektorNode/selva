@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createComputeThrottle } from './computeThrottle.svelte';
+import { createComputeThrottle } from '../compute-throttle.js';
 
 // Pins the throttle state machine: single-in-flight, latest-pending-wins, abort on
 // re-trigger, timeout -> abort, and cancel clearing the pending slot. These are the
 // non-obvious paths (the finally-block re-entry, the abort cleanup) where bugs hide.
-// `computeThrottle.svelte.ts` is a rune module, so these run under the svelte vitest
-// plugin (see vitest.config.ts).
 
 // A controllable computeFn: each call exposes a resolver so the test drives when a
 // solve "finishes", plus records the values and the signal it was given.

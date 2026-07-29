@@ -21,9 +21,12 @@ export * from './schema/dynamic-value-list';
 export * from './schema/traversal';
 export * from './compute/solving.svelte';
 
-// Solve Session seam (transport-agnostic value/lifecycle state machine + its driver
-// interface). Exported so transports outside this package — e.g. plugin-ui's WebSocket
+// Solve Session seam. The session itself now lives in `@selvajs/visualization/session`
+// (framework-free); `useSolveSession` is this package's Svelte binding, which republishes
+// the session's subscribe() notifications as rune state so its getters read reactively in
+// markup. Re-exported so transports outside this package — e.g. plugin-ui's WebSocket
 // driver — can satisfy SolveDriver and drive a session. See CONTEXT.md.
+export { useSolveSession } from './compute/useSolveSession.svelte';
 export {
 	createSolveSession,
 	createRequestResponseDriver,
@@ -31,10 +34,17 @@ export {
 	type SolveSessionArgs,
 	type SolveDriver,
 	type SolveReporter
-} from './compute/createSolveSession.svelte';
+} from '@selvajs/visualization/session';
 
 // External-input transit storage (used by routes that wire pre-step producers)
-export * from './external/storage';
+export {
+	writeExternalValue,
+	readExternalValue,
+	clearExternalValue,
+	getExternalInputs,
+	type ExternalValueRef,
+	type ExternalInput
+} from '@selvajs/visualization/session';
 
 // Contexts & Composables
 export * from './contexts/footerContext.svelte';
@@ -47,5 +57,5 @@ export { randomId } from './utils/randomId';
 
 // UI-specific runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';
-export type { SolveFn, SolveResult } from './types/solveFn';
+export type { SolveFn, SolveResult } from '@selvajs/visualization/session';
 export { DEFAULT_PRESET_LABELS, type PresetLabels } from './types/presetLabels';

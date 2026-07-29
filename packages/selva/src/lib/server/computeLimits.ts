@@ -11,9 +11,8 @@
  * to its default regardless of `.env`.
  *
  * Client-side counterparts (the in-flight compute throttle and the slider
- * debounce on inputs) live in `@selvajs/ui` and are bundled into the client, so
- * they cannot read env — see `compute/computeThrottle.svelte.ts` and the input
- * components.
+ * debounce on inputs) are bundled into the client, so they cannot read env — see
+ * `compute-throttle.ts` in `@selvajs/visualization/session` and the input components.
  */
 
 import { env } from '$env/dynamic/private';

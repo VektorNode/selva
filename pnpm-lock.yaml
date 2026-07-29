@@ -654,6 +654,9 @@ importers:
       '@selvajs/compute':
         specifier: workspace:*
         version: link:../compute
+      '@selvajs/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       fflate:
         specifier: ^0.8.2
         version: 0.8.3

@@ -3,13 +3,11 @@
 	import { page } from '$app/state';
 	import type { UISchema, ParameterPreset } from '@selvajs/schemas';
 	import type { ActionButton } from '../../types/actionButton';
-	import type { SolveFn } from '../../types/solveFn';
+	import type { SolveFn } from '@selvajs/visualization/session';
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
-	import {
-		createSolveSession,
-		createRequestResponseDriver
-	} from '../../compute/createSolveSession.svelte';
+	import { createRequestResponseDriver } from '@selvajs/visualization/session';
+	import { useSolveSession } from '../../compute/useSolveSession.svelte';
 	import { useFooterItem } from '../../composables/useFooterItem.svelte';
 	import { hexToOklch } from '../../utils/color';
 	import AppShell from '../layout/AppShell.svelte';
@@ -115,10 +113,14 @@
 	// reads the reporter lazily so it can capture the session it's wired into.
 	// svelte-ignore state_referenced_locally
 	const driver = createRequestResponseDriver(onSolve, () => session, {
-		timeout: solveTimeoutMs
+		timeout: solveTimeoutMs,
+		// `session.isSolving` forwards to the driver, which the session can't observe on its
+		// own — republish so the spinner and disabled states track it. Deferred into a
+		// callback, so it reads `session` after initialization rather than during it.
+		onChange: () => session.notify()
 	});
 	// svelte-ignore state_referenced_locally
-	const session = createSolveSession({
+	const session = useSolveSession({
 		schema,
 		scopeKey: externalScopeKey || definitionKey || schema?.id || '',
 		driver
