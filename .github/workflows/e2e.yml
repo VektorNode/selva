@@ -13,12 +13,12 @@ jobs:
     steps:
       # Must precede `uses: ./...` below — GitHub resolves local actions from
       # the runner's filesystem.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .turbo
           key: turbo-e2e-${{ github.sha }}
@@ -31,7 +31,7 @@ jobs:
         id: pw
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: pw-cache
         with:
           path: ~/.cache/ms-playwright
@@ -51,7 +51,7 @@ jobs:
         env:
           CI: 'true'
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report

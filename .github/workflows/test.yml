@@ -21,12 +21,12 @@ jobs:
     steps:
       # Must precede `uses: ./...` below — GitHub resolves local actions from
       # the runner's filesystem.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .turbo
           key: turbo-test-${{ github.sha }}
@@ -56,7 +56,7 @@ jobs:
           fi
 
       # Keyed on lint config so a rule change busts the cache.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: node_modules/.cache/eslint
           key: eslint-${{ hashFiles('eslint.config.*', '.prettierrc*') }}
@@ -77,15 +77,15 @@ jobs:
   dotnet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
       # Keyed on csproj files: no packages.lock.json exists, so setup-dotnet's
       # built-in cache can't be used.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('Plugin/**/*.csproj') }}
