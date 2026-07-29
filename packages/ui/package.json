@@ -77,7 +77,7 @@
 		"@sveltejs/kit": "^2",
 		"bits-ui": "^2.18.0",
 		"svelte": "^5",
-		"tailwind-variants": "^3.2.2",
+		"tailwind-variants": "^3.3.0",
 		"three": "catalog:"
 	},
 	"peerDependenciesMeta": {
@@ -104,10 +104,10 @@
 		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"@types/three": "catalog:",
 		"bits-ui": "^2.18.0",
-		"rhino3dm": "8.32.0",
+		"rhino3dm": "8.32.1",
 		"rimraf": "catalog:",
 		"svelte": "catalog:",
-		"tailwind-variants": "^3.2.2",
+		"tailwind-variants": "^3.3.0",
 		"vitest": "catalog:"
 	}
 }
