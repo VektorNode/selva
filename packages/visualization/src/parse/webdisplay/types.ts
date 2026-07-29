@@ -1,5 +1,6 @@
 import type { DisplayItem } from '../display-items/types.js';
 import type { RhinoModule } from 'rhino3dm';
+import type { MaterialAppearanceOptions } from '../../shared/types.js';
 
 /**
  * Material properties for Three.js rendering.
@@ -115,23 +116,11 @@ export interface MeshBatchParsingOptions {
 }
 
 /**
- * How compute meshes read visually. Bundled so a caller can pick a coherent look ('technical' vs
- * 'rendered') by setting all three together rather than dialing each in isolation.
+ * Re-exported from `shared/` so the render layer can read a look's material dials
+ * (`materialAppearanceForLook`) without importing upward into `parse/`. Single definition lives in
+ * `shared/types.ts`.
  */
-export interface MaterialAppearanceOptions {
-	/**
-	 * Multiplier on the HDR image-based-lighting reflection strength. ~0.5 reads matte/technical,
-	 * ~1.3 reads glossy/presentation. Default 1 (three.js's own default — unchanged look).
-	 */
-	envMapIntensity?: number;
-	/**
-	 * Cull back faces (`THREE.FrontSide`) instead of rendering both sides (`THREE.DoubleSide`).
-	 * FrontSide gives cleaner interior shading, a crisper silhouette, and less overdraw on closed
-	 * solids — but open surfaces (which Rhino also emits) then vanish when viewed from behind.
-	 * Default false (keep DoubleSide) to stay safe for surface geometry.
-	 */
-	cullBackfaces?: boolean;
-}
+export type { MaterialAppearanceOptions } from '../../shared/types.js';
 
 /**
  * Options for extracting and processing meshes from compute responses.

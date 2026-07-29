@@ -3,26 +3,13 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
-import { getLogger } from '@/core';
+import { getLogger } from '@selvajs/compute';
 
-import { rhinoToThree } from '../coordinate-transform';
+import { rhinoToThree } from '../../../shared/index.js';
+import { materialParams } from './appearance.js';
 
-import type { DisplayCurve, DisplayItem, DisplayPoint } from './types';
+import type { DisplayCurve } from '../types';
 import type { RhinoModule } from 'rhino3dm';
-
-/**
- * Builds THREE.js objects from the non-mesh display items on a DisplayBatch — curves (decoded from
- * Rhino-native JSON via rhino3dm and tessellated to a fat `Line2`) and points (raw positions
- * rendered as one {@link THREE.Points}). Mirrors the mesh path's coordinate handling: every position
- * goes through {@link rhinoToThree}, which is the identity — the Three scene IS Rhino's Z-up frame,
- * so items land at their Rhino coordinates, same as meshes (see `../coordinate-transform.ts`).
- *
- * selva-compute does not own the rhino3dm WASM instance (it is heavy and the host app initializes
- * it once); the caller threads it in, same as the response decoder. If no instance is supplied,
- * curves are skipped with a warning and points still render — they need no decode.
- */
-
-const DEFAULT_COLOR = '#ffffff';
 
 /**
  * Adaptive tessellation parameters. Rather than a fixed segment count, curved spans are recursively
@@ -38,61 +25,6 @@ const CURVE_MAX_SUBDIVISION_DEPTH = 12;
 /** Max turn angle (radians) allowed across a span before it's split. ~3° keeps arcs visibly smooth. */
 const CURVE_MAX_TURN_RADIANS = 0.05;
 
-export interface DisplayItemParseOptions {
-	/** rhino3dm instance for decoding curve JSON. Omit to skip curves (points still render). */
-	rhino?: RhinoModule;
-	/**
-	 * No-op. Historically toggled the Rhino Z-up → Three Y-up rotation, but the pipeline now keeps
-	 * one coordinate frame end to end ({@link rhinoToThree} is the identity), so this flag no longer
-	 * changes the result. Do NOT pre-rotate your own geometry to compensate — none is applied.
-	 *
-	 * @deprecated Retained only so existing call sites compile unchanged; has no effect.
-	 */
-	applyTransforms?: boolean;
-}
-
-/**
- * Parse a batch's `items` into renderable THREE objects. Returns an empty array when there are no
- * items. Unknown kinds are skipped with a warning (forward-compatible with future label/icon kinds
- * a viewer hasn't taught itself to render yet).
- */
-export function parseDisplayItems(
-	items: DisplayItem[] | undefined,
-	options: DisplayItemParseOptions = {}
-): THREE.Object3D[] {
-	if (!items || items.length === 0) return [];
-
-	const { rhino, applyTransforms = true } = options;
-	const objects: THREE.Object3D[] = [];
-
-	for (const item of items) {
-		switch (item.kind) {
-			case 'curve': {
-				const line = buildCurveLine(item, rhino, applyTransforms);
-				if (line) objects.push(line);
-				break;
-			}
-			case 'point': {
-				const point = buildPoint(item, applyTransforms);
-				if (point) objects.push(point);
-				break;
-			}
-			default: {
-				// Exhaustiveness guard: assigning to `never` makes a new kind added to the union
-				// without a case here a compile error. At runtime (plain-JS callers, newer
-				// producers) an unrecognized kind still reaches this branch and is skipped.
-				const unhandled: never = item;
-				const unknown = unhandled as { kind?: string };
-				getLogger().warn(`Skipping unknown display item kind: ${String(unknown.kind)}`);
-				break;
-			}
-		}
-	}
-
-	return objects;
-}
-
-/** Default fat-line thickness (CSS px) when a curve carries no explicit {@link DisplayCurve.width}. */
 const DEFAULT_LINE_WIDTH = 2;
 
 /**
@@ -104,7 +36,7 @@ const DEFAULT_LINE_WIDTH = 2;
  * needs its `resolution` set to the drawing-buffer size, but `Line2.onBeforeRender` does that
  * automatically from the renderer each frame, so the parser needs no renderer reference.
  */
-function buildCurveLine(
+export function buildCurveLine(
 	item: DisplayCurve,
 	rhino: RhinoModule | undefined,
 	applyTransforms: boolean
@@ -168,52 +100,6 @@ function buildCurveLine(
  * position is missing or non-finite — display items arrive as network JSON, so a malformed point
  * must be skipped rather than throwing or pushing NaN into the buffer (a NaN vertex poisons the
  * bounding sphere and can break camera fit-to-view for the whole scene).
- */
-function buildPoint(item: DisplayPoint, applyTransforms: boolean): THREE.Points | null {
-	// Validate before trusting the declared type: `position` comes off the wire.
-	const { position } = item as { position?: { X?: unknown; Y?: unknown; Z?: unknown } };
-	if (
-		!position ||
-		typeof position.X !== 'number' ||
-		!Number.isFinite(position.X) ||
-		typeof position.Y !== 'number' ||
-		!Number.isFinite(position.Y) ||
-		typeof position.Z !== 'number' ||
-		!Number.isFinite(position.Z)
-	) {
-		getLogger().warn(
-			`Skipping point display item with missing or non-finite position (id: ${String(item.id)}).`
-		);
-		return null;
-	}
-
-	const { x, y, z } = rhinoToThree(position.X, position.Y, position.Z, applyTransforms);
-
-	const geometry = new THREE.BufferGeometry();
-	geometry.setAttribute('position', new THREE.Float32BufferAttribute([x, y, z], 3));
-
-	const material = new THREE.PointsMaterial({
-		...materialParams(item.color, item.opacity),
-		size: 6,
-		sizeAttenuation: false
-	});
-
-	const points = new THREE.Points(geometry, material);
-	points.name = item.name;
-	points.userData = {
-		source: 'compute',
-		id: item.id,
-		layer: item.layer,
-		kind: 'point',
-		metadata: item.metadata
-	};
-	return points;
-}
-
-/**
- * Free a rhino3dm object's WASM-heap memory. rhino3dm objects are emscripten bindings — JS GC
- * never reclaims their heap allocation, so everything decoded during a solve must be deleted
- * explicitly or the WASM heap grows monotonically across solves.
  */
 function deleteRhinoObject(obj: unknown): void {
 	(obj as { delete?: () => void } | null | undefined)?.delete?.();
@@ -424,17 +310,4 @@ function distanceToSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3)
 	const dy = apy - aby * t;
 	const dz = apz - abz * t;
 	return Math.sqrt(dx * dx + dy * dy + dz * dz);
-}
-
-/** Shared color/opacity → THREE material params. Opacity < 1 flips `transparent` on. */
-function materialParams(
-	color: string | undefined,
-	opacity: number | undefined
-): { color: THREE.Color; transparent: boolean; opacity: number } {
-	const resolved = opacity ?? 1;
-	return {
-		color: new THREE.Color(color ?? DEFAULT_COLOR),
-		transparent: resolved < 1,
-		opacity: resolved
-	};
 }

@@ -9,11 +9,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
-import { setLogger } from '@/core';
-import { computeCombinedBoundingBox } from '../../threejs/three-helpers.js';
+import { setLogger } from '@selvajs/compute';
+import { computeCombinedBoundingBox } from '../../../shared/index.js';
 
 import { SCALE_FACTORS, getThreeMeshesFromComputeResponse } from '../webdisplay-parser';
-import type { GrasshopperComputeResponse } from '@/features/grasshopper/types';
+import type { GrasshopperComputeResponse } from '@selvajs/compute/grasshopper';
 
 function response(values: any[], modelunits = 'Meters'): GrasshopperComputeResponse {
 	return { values, modelunits } as unknown as GrasshopperComputeResponse;

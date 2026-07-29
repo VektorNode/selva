@@ -58,16 +58,8 @@ export type { LabelLayer, LabelHandle } from './features/visualization/threejs/l
 export { createMeasureTool, snapToVertex } from './features/visualization/threejs/measure.js';
 export type { MeasureTool, MeasureOptions } from './features/visualization/threejs/measure.js';
 
-export {
-	getThreeMeshesFromComputeResponse,
-	SCALE_FACTORS
-} from './features/visualization/webdisplay/webdisplay-parser';
-export {
-	parseMeshBatchObject,
-	parseMeshBatchBlob
-} from './features/visualization/webdisplay/batch-parser';
-
-export { parseDisplayItems } from './features/visualization/display-items/display-items-parser';
+// NOTE: payload parsing (mesh batches, display items) moved to `@selvajs/visualization`
+// (`@selvajs/visualization/parse`). This entry now covers the Three.js *rendering* toolkit only.
 
 export type {
 	ThreeInitializerOptions,
@@ -81,22 +73,6 @@ export type {
 	GizmoConfig,
 	EdgesConfig,
 	MeasureConfig,
-	EventConfig
+	EventConfig,
+	MaterialAppearanceOptions
 } from './features/visualization/types';
-
-export type {
-	MeshExtractionOptions,
-	DisplayBatch,
-	/** @deprecated Use {@link DisplayBatch}. */
-	MeshBatch
-} from './features/visualization/webdisplay/types';
-
-export type { DisplayItemParseOptions } from './features/visualization/display-items/display-items-parser';
-export type {
-	DisplayItem,
-	DisplayCurve,
-	DisplayPoint,
-	DisplayItemBase,
-	DisplayIdentity,
-	DisplayPosition
-} from './features/visualization/display-items/types';

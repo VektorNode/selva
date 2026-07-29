@@ -158,6 +158,29 @@ export type LookPreset = {
 	ambientOcclusion: boolean;
 };
 
+/**
+ * How compute meshes read visually. Bundled so a caller can pick a coherent look ('technical' vs
+ * 'rendered') by setting all three together rather than dialing each in isolation.
+ *
+ * Structurally identical to `@selvajs/visualization`'s type of the same name — the renderer needs
+ * to describe a look's material dials (`materialAppearanceForLook`) without depending on the parse
+ * layer that consumes them.
+ */
+export interface MaterialAppearanceOptions {
+	/**
+	 * Multiplier on the HDR image-based-lighting reflection strength. ~0.5 reads matte/technical,
+	 * ~1.3 reads glossy/presentation. Default 1 (three.js's own default — unchanged look).
+	 */
+	envMapIntensity?: number;
+	/**
+	 * Cull back faces (`THREE.FrontSide`) instead of rendering both sides (`THREE.DoubleSide`).
+	 * FrontSide gives cleaner interior shading, a crisper silhouette, and less overdraw on closed
+	 * solids — but open surfaces (which Rhino also emits) then vanish when viewed from behind.
+	 * Default false (keep DoubleSide) to stay safe for surface geometry.
+	 */
+	cullBackfaces?: boolean;
+}
+
 /** Crisp boundary/crease edge overlays on meshes. See `addEdges`. */
 export type EdgesConfig = {
 	/** Auto-attach edge overlays to meshes as they load. Default false (opt-in). */
@@ -274,6 +297,14 @@ export type ThreeInitializerOptions = {
 	edges?: EdgesConfig;
 	measure?: MeasureConfig;
 	events?: EventConfig;
+	/**
+	 * Called once at init with the GPU's max anisotropy (`renderer.capabilities.getMaxAnisotropy()`).
+	 * Wire this to `@selvajs/visualization`'s `setTextureAnisotropy` so color maps stay sharp at
+	 * grazing angles. Injected rather than imported because the texture cache is a *parse*-layer
+	 * concern and the renderer must not depend upward on it. Omitted, textures keep three's default
+	 * anisotropy of 1.
+	 */
+	onMaxAnisotropy?: (value: number) => void;
 };
 
 export type EventConfig = {

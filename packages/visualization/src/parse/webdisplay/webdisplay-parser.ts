@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 
-import { applyOffset, computeCombinedBoundingBox } from '../threejs/three-helpers.js';
-import { getLogger } from '@/core';
+import { applyOffset, computeCombinedBoundingBox } from '../../shared/index.js';
+import { getLogger } from '@selvajs/compute';
 
 import { parseDisplayItems } from '../display-items/display-items-parser.js';
 
 import { parseMeshBatchObject } from './batch-parser.js';
 
-import type { DataItem, GrasshopperComputeResponse } from '@/features/grasshopper/types';
+import type { DataItem, GrasshopperComputeResponse } from '@selvajs/compute/grasshopper';
 import type { DisplayBatch, MeshExtractionOptions, MeshBatchParsingOptions } from './types.js';
 import type { RhinoModule } from 'rhino3dm';
 

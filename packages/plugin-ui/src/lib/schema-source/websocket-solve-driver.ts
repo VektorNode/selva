@@ -11,12 +11,8 @@
 import type { WebSocketState, WsOutputsMessage } from '$lib/websocket/websocket.svelte';
 import type { SolveReporter } from '@selvajs/ui';
 import type { PreviewSolveDriver } from './schema-source';
-import {
-	parseDisplayItems,
-	parseMeshBatchBlob,
-	SCALE_FACTORS
-} from '@selvajs/compute/visualization';
-import type { DisplayItem } from '@selvajs/compute/visualization';
+import { parseDisplayItems, parseMeshBatchBlob, SCALE_FACTORS } from '@selvajs/visualization/parse';
+import type { DisplayItem } from '@selvajs/visualization/parse';
 import type { RhinoModule } from 'rhino3dm';
 import type * as THREE from 'three';
 

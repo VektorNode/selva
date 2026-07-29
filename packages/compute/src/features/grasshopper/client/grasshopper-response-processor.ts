@@ -1,7 +1,5 @@
 import { downloadFileData } from '@/core/files/handle-files';
 import { FileBaseInfo, FileData } from '@/core/files/types';
-import type { MeshExtractionOptions } from '@/features/visualization/webdisplay/types';
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 
 import { GrasshopperComputeResponse } from '../types';
 
@@ -23,8 +21,18 @@ import {
  */
 export default class GrasshopperResponseProcessor {
 	constructor(
-		private readonly response: GrasshopperComputeResponse,
-		private readonly debug: boolean = false
+		/**
+		 * The raw compute response. Public so callers can hand it to a renderer-side parser — e.g.
+		 * `getThreeMeshesFromComputeResponse` in `@selvajs/visualization/parse`, which replaced this
+		 * class's former `extractMeshesFromResponse()`.
+		 */
+		public readonly response: GrasshopperComputeResponse,
+		/**
+		 * Retained for call-signature compatibility. Its only consumer was the removed
+		 * `extractMeshesFromResponse()`, which merged it into the parse options; pass `debug`
+		 * directly to the parser in `@selvajs/visualization/parse` instead.
+		 */
+		public readonly debug: boolean = false
 	) {}
 
 	/**
@@ -72,42 +80,17 @@ export default class GrasshopperResponseProcessor {
 	}
 
 	/**
-	 * Decode all geometry results into Three.js meshes/lines ready for rendering.
-	 * The processor's `debug` flag is merged with `options` (explicit options win).
+	 * REMOVED: `extractMeshesFromResponse()`. Mesh decoding lives in `@selvajs/visualization` now, so
+	 * this package stays pure solve/data and carries no `three` dependency. Call the parser directly
+	 * with the raw response:
 	 *
-	 * Requires the **Selva Display** Grasshopper component and the VektorNode
-	 * rhino.compute branch. Three.js is loaded dynamically, so install it as a
-	 * peer dependency before calling this.
-	 *
-	 * @throws {RhinoComputeError} If the three.js visualization module can't load.
-	 *
-	 * @example
 	 * ```ts
-	 * const meshes = await processor.extractMeshesFromResponse();
+	 * import { getThreeMeshesFromComputeResponse } from '@selvajs/visualization/parse';
+	 *
+	 * const meshes = await getThreeMeshesFromComputeResponse(processor.response, { rhino });
 	 * scene.add(...meshes);
 	 * ```
 	 */
-	public async extractMeshesFromResponse(options?: MeshExtractionOptions) {
-		const mergedOptions: MeshExtractionOptions = {
-			debug: this.debug,
-			...options
-		};
-
-		let getThreeMeshesFromComputeResponse: typeof import('@/features/visualization').getThreeMeshesFromComputeResponse;
-		try {
-			({ getThreeMeshesFromComputeResponse } = await import('@/features/visualization'));
-		} catch (error) {
-			throw new RhinoComputeError(
-				'Failed to load three.js visualization module. Ensure three.js is installed as a peer dependency.',
-				ErrorCodes.INVALID_STATE,
-				{
-					context: { originalError: error instanceof Error ? error.message : String(error) }
-				}
-			);
-		}
-
-		return getThreeMeshesFromComputeResponse(this.response, mergedOptions);
-	}
 
 	private getFileData(): FileData[] {
 		return extractFileData(this.response);

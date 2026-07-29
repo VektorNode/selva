@@ -57,6 +57,11 @@ export { setLogger, enableDebugLogging, getLogger } from './utils/logger';
 // String utilities
 export { toCamelCase, camelcaseKeys } from './utils/camel-case';
 
+// Encoding utilities. Exported for `@selvajs/visualization`, whose binary mesh parser decodes
+// base64 payloads — the forgiving-base64 normalization and the Node pool-slab copy are subtle
+// enough that a second copy would drift.
+export { decodeBase64ToBinary } from './utils/encoding';
+
 // Configuration
 export type { ComputeConfig, RhinoModelUnit, RetryPolicy, ServerTiming } from './types';
 

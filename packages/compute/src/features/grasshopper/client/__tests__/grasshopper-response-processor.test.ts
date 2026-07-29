@@ -2,8 +2,8 @@
  * Tests for the GrasshopperResponseProcessor class — the public wrapper consumers
  * use to read solve results. The underlying free functions (`getValues`,
  * `getValue`, `extractFileData`) are tested in response-processors.test.ts; here we
- * pin the CLASS behavior: that it threads the response through to them, merges its
- * `debug` flag into mesh extraction, and forwards extracted files to the downloader.
+ * pin the CLASS behavior: that it threads the response through to them, exposes it for
+ * renderer-side mesh parsing, and forwards extracted files to the downloader.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
@@ -14,16 +14,6 @@ import type { GrasshopperComputeResponse, DataItem } from '../../types';
 const downloadFileData = vi.fn();
 vi.mock('@/core/files/handle-files', () => ({
 	downloadFileData: (...args: unknown[]) => downloadFileData(...args)
-}));
-
-// Mock the lazily-imported visualization module so extractMeshesFromResponse
-// resolves without three.js scene work.
-const getThreeMeshesFromComputeResponse = vi.fn(
-	async (..._args: unknown[]) => ['mesh'] as unknown[]
-);
-vi.mock('@/features/visualization', () => ({
-	getThreeMeshesFromComputeResponse: (...args: unknown[]) =>
-		getThreeMeshesFromComputeResponse(...args)
 }));
 
 function item(type: string, data: string, id = ''): DataItem {
@@ -50,7 +40,6 @@ const fileItem = (name: string) =>
 
 beforeEach(() => {
 	downloadFileData.mockClear();
-	getThreeMeshesFromComputeResponse.mockClear();
 });
 
 describe('GrasshopperResponseProcessor — value access', () => {
@@ -102,27 +91,20 @@ describe('GrasshopperResponseProcessor — file download', () => {
 	});
 });
 
-describe('GrasshopperResponseProcessor — mesh extraction', () => {
-	it('delegates to getThreeMeshesFromComputeResponse with the bound response', async () => {
+// `extractMeshesFromResponse()` used to live here. Mesh decoding moved to `@selvajs/visualization`
+// so this package stays pure solve/data with no `three` dependency; callers now pass the raw
+// response to `getThreeMeshesFromComputeResponse` themselves. What this class still owes them is
+// access to that response — pinned below.
+describe('GrasshopperResponseProcessor — renderer hand-off', () => {
+	it('exposes the bound response so a renderer-side parser can consume it', () => {
 		const res = response(param('m', []));
 		const proc = new GrasshopperResponseProcessor(res);
 
-		const meshes = await proc.extractMeshesFromResponse();
-
-		expect(meshes).toEqual(['mesh']);
-		expect(getThreeMeshesFromComputeResponse).toHaveBeenCalledTimes(1);
-		expect(getThreeMeshesFromComputeResponse.mock.calls[0][0]).toBe(res);
+		expect(proc.response).toBe(res);
 	});
 
-	it("merges the processor's debug flag into options, with explicit options winning", async () => {
-		const proc = new GrasshopperResponseProcessor(response(param('m', [])), /* debug */ true);
-
-		// No options → inherits debug:true from the constructor.
-		await proc.extractMeshesFromResponse();
-		expect(getThreeMeshesFromComputeResponse.mock.calls[0][1]).toMatchObject({ debug: true });
-
-		// Explicit debug:false overrides the constructor flag.
-		await proc.extractMeshesFromResponse({ debug: false });
-		expect(getThreeMeshesFromComputeResponse.mock.calls[1][1]).toMatchObject({ debug: false });
+	it('exposes the debug flag it was constructed with', () => {
+		expect(new GrasshopperResponseProcessor(response(param('m', []))).debug).toBe(false);
+		expect(new GrasshopperResponseProcessor(response(param('m', [])), true).debug).toBe(true);
 	});
 });

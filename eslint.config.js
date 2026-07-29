@@ -38,7 +38,10 @@ export default [
 			// candidate tsconfig roots (repo root + compute) and error under
 			// typescript-eslint 8.64+. It's linted by its own `lint` script,
 			// invoked from the root `lint` command (see package.json).
-			'packages/compute/**'
+			'packages/compute/**',
+			// @selvajs/visualization — same story as compute: own tsconfig +
+			// eslint.config.mjs, linted by its own `lint` script from the root command.
+			'packages/visualization/**'
 		]
 	},
 	{

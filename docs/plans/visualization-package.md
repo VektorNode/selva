@@ -1,11 +1,50 @@
 # `@selvajs/visualization` — a headless, extensible viewer core
 
-> **Status: PROPOSED (2026-07-22) — not yet started.** Extract parse + scene + render +
-> session out of `@selvajs/compute` and `@selvajs/ui` into one framework-free package with a
+> **Status: IN PROGRESS (updated 2026-07-29) — steps 1–3 landed, 4–8 open.** Extract parse + scene +
+> render + session out of `@selvajs/compute` and `@selvajs/ui` into one framework-free package with a
 > clean public API, small single-responsibility files, and documented layer boundaries. Scope:
 > new `packages/visualization`; `@selvajs/compute` loses its `/visualization` export and `three`
 > peer dep; `@selvajs/ui` keeps only the Svelte viewer shell + design-system widgets. Pre-release,
 > so removals are free (no migration path). See migration steps at the bottom.
+>
+> **Landed:** `packages/visualization` scaffolded; `shared/` and `parse/` moved with their 108 tests;
+> the three largest parsers split; `compute/visualization` no longer exports parsing; all five
+> importers rewired.
+>
+> **Still in `@selvajs/compute`:** the whole `render/` layer (`threejs/`), so compute keeps its
+> `three` peer dep for now. `scene/` and `session/` are untouched in `@selvajs/ui`.
+
+## Corrections to this plan, found while executing it
+
+The plan was written against a stale file tree. Recorded here so the remaining steps aren't planned
+against the same wrong assumptions:
+
+1. **Paths.** Everything lives under `src/features/visualization/`, not `src/visualization/`. Line
+   counts also drifted: `three-initializer.ts` is 1734 (not 1708), `edges.ts` 874 (not 793),
+   `binary-parser.ts` 713, `batch-parser.ts` 1007.
+2. **`d:\Coding\selva-compute` is a stale clone, not a source of truth.** It holds an older parallel
+   copy of `features/visualization` (no `edge-extract`, `edge-detection-pass`, `up-axis`). Ignore it;
+   `packages/compute` is canonical.
+3. **The dependency direction is viz → compute, so compute can never import viz.** The parse layer
+   needs `getLogger`, `RhinoComputeError`/`ErrorCodes` and `decodeBase64ToBinary`, all of which live
+   in compute's `core`. That single edge decides several things the plan left open — see below.
+4. **`parse/` depended upward on `render/`** via four symbols in `three-helpers` (`parseColor`,
+   `applyOffset`, `computeCombinedBoundingBox`, `CACHED_GEOMETRY_USERDATA_FLAG`). They are pure
+   object/color math with no scene graph, so they moved into `shared/` — which is what let `parse/`
+   move before `render/` does.
+5. **Two render→parse edges had to be cut**, both consequences of (3):
+   - `initThree` called `setTextureAnisotropy` directly. Now an injected `onMaxAnisotropy` hook.
+   - `GrasshopperResponseProcessor.extractMeshesFromResponse()` called the mesh parser. **Removed**
+     (approved as a breaking change); `response`/`debug` are public so callers invoke the parser.
+6. **`MaterialAppearanceOptions` is deliberately declared twice** — once in `shared/types.ts`, once
+   in compute's `features/visualization/types.ts`. The renderer must describe a look's material dials
+   without depending on the parse layer that consumes them. The duplicate disappears when `render/`
+   moves in step 4.
+7. **A test moved in the opposite direction.** `clearScene skips disposing cache-owned geometries`
+   tests a render function, so it went to compute's `three-helpers.test.ts`; the cache half of that
+   contract stayed with the cache.
+8. **Step 8's "add a changeset" is understated** — this is a breaking `major` for `@selvajs/compute`,
+   not a pre-release bump.
 
 ## Goal
 
@@ -60,14 +99,19 @@ packages/visualization/
   src/
     index.ts                    ← top barrel: re-exports each layer's public barrel
 
-    shared/
+    shared/                     ← ✅ BUILT (as below, with two deltas)
       index.ts
+      README.md
       coordinate-frame.ts       ← from coordinate-transform.ts (13 lines)
       looks.ts                  ← LOOK_PRESETS + materialAppearanceForLook (from three-initializer)
-      types.ts                  ← Look, shared config types (from visualization/types.ts, trimmed)
-      errors.ts                 ← re-export RhinoComputeError or a viz-local error
+      types.ts                  ← Look, LookPreset, MaterialAppearanceOptions
+      geometry.ts               ← ADDED: parseColor, applyOffset, computeCombinedBoundingBox,
+                                   CACHED_GEOMETRY_USERDATA_FLAG (lifted out of three-helpers so
+                                   parse/ stops importing upward — see correction 4)
+      # errors.ts NOT created: RhinoComputeError/ErrorCodes are imported from @selvajs/compute
+      # directly. A re-export would be indirection with no added behaviour.
 
-    parse/
+    parse/                      ← ✅ BUILT (as below)
       index.ts                  ← parseComputeResponse, parseMeshBatch*, parseDisplayItems + types
       README.md                 ← "how a payload becomes meshes"; extension: custom material hook
       webdisplay/
@@ -77,7 +121,8 @@ packages/visualization/
           header.ts             ← magic/version/section parsing
           geometry.ts           ← vertex/index/normal decode
           textures.ts           ← embedded texture blocks
-        batch-parser.ts         (1006 → split ↓, keep entry funcs here ~250)
+        batch-parser.ts         (1007 → 466: entry funcs + the off-thread worker path, which
+                                 straddles materials/merge and doesn't cut cleanly any further)
         batch/
           assembly-worker.ts    ← getAssemblyWorker/requestAssembly (worker plumbing)
           materials.ts          ← createMaterial, sRGB decode
@@ -88,10 +133,12 @@ packages/visualization/
         texture-cache.ts        (202 → keep)
         types.ts                (153 → keep)
       display-items/
-        display-items-parser.ts (440 → split: keep entry ~200)
-        display-items/
-          curves.ts             ← curve extraction
-          points.ts             ← point extraction
+        display-items-parser.ts (440 → 77: dispatch only)
+        items/                  ← named `items/`, not `display-items/` — nesting a folder inside its
+                                   own namesake made every import path read twice
+          curves.ts             ← rhino3dm decode + adaptive tessellation (315)
+          points.ts             ← point extraction (55)
+          appearance.ts         ← ADDED: materialParams + DEFAULT_COLOR, shared by both (17)
         types.ts                (72)
 
     render/
@@ -201,22 +248,30 @@ revisit only if headless geometry export becomes real. Recorded here as a revers
 
 ## Migration steps (each independently reviewable, tests move with code)
 
-1. Scaffold `packages/visualization` (package.json, tsconfig, tsup, README with layer diagram).
-2. **shared/** — move `coordinate-transform.ts`, extract `looks.ts` out of `three-initializer.ts`,
-   trim `types.ts`.
-3. **parse/** — move `webdisplay/` + `display-items/`; split `binary-parser`, `batch-parser`,
-   `display-items-parser` along their existing `// ===` sections. Drop `@selvajs/compute/visualization`
-   export; rewire its 5 importers.
+1. ✅ **DONE** — Scaffold `packages/visualization` (package.json, tsconfig, tsup, eslint, vitest,
+   README with layer diagram). Note: like `compute`, it self-lints via its own `eslint.config.mjs`
+   and is excluded from the root ESLint run — two tsconfig roots error under typescript-eslint 8.64+.
+2. ✅ **DONE** — **shared/** — `coordinate-frame.ts`, `looks.ts` extracted out of `three-initializer`,
+   `types.ts`, plus `geometry.ts` (the four pure utilities lifted out of `three-helpers`; see
+   correction 4).
+3. ✅ **DONE** — **parse/** — moved `webdisplay/` + `display-items/` with all 108 tests; split
+   `batch-parser` 1007→466, `binary-parser` 713→329, `display-items-parser` 440→77. Dropped the
+   parse exports from `@selvajs/compute/visualization`; rewired all 5 importers.
 4. **render/** — move `threejs/`; **explode `three-initializer.ts`** into `scene-setup/*`;
-   split `edges.ts` into `edges/*`.
+   split `edges.ts` into `edges/*`. Also fold away the two seams step 3 had to leave behind: the
+   duplicated `MaterialAppearanceOptions` (correction 6) and the `onMaxAnisotropy` injection
+   (correction 5) — once `render/` and `parse/` are in one package, the renderer can import the
+   texture cache directly again.
 5. **session/** — move `ui/src/lib/compute/*` + pure deps (`schema/defaults`, `external/storage`,
    `types/solveFn`); rename `.svelte.ts` files (no runes to lose); split drivers into `drivers/`.
 6. **scene/** — extract pure logic from `SceneManager.svelte` into `SceneController` + helpers;
    reduce `SceneManager.svelte` to a wrapper in `@selvajs/ui`.
 7. Rewire `@selvajs/ui`, `plugin-ui`, `selva` imports to `@selvajs/visualization`. `compute` becomes
    pure solve/data (drops `three` peer dep).
-8. `pnpm build && pnpm check && pnpm test` green; add changeset (pre-release bumps for `compute`,
-   `ui`; new package).
+8. `pnpm build && pnpm check && pnpm test` green; add changeset. **`@selvajs/compute` takes a `major`**
+   — `extractMeshesFromResponse()` is gone and `/visualization` no longer exports the parsers.
+   (Pre-existing, unrelated: `@selvajs/supabase-provider`'s conformance suites fail without Supabase
+   credentials — they fail identically on a clean tree, so don't read them as a regression.)
 
 ## Out of scope
 

@@ -7,7 +7,7 @@ import {
 	parseMeshBatchObject,
 	parseDisplayItems,
 	type DisplayBatch
-} from '@selvajs/compute/visualization';
+} from '@selvajs/visualization/parse';
 
 // rhino3dm decodes curve display items. Load it once, lazily — points and meshes need nothing.
 // Mirrors the production websocket-solve-driver loader (Vite URL asset so the WASM resolves).

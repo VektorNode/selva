@@ -34,6 +34,7 @@
 		"@selvajs/compute": "workspace:^",
 		"@selvajs/schemas": "workspace:*",
 		"@selvajs/ui": "workspace:*",
+		"@selvajs/visualization": "workspace:^",
 		"bits-ui": "^2.18.0",
 		"mode-watcher": "catalog:",
 		"rhino3dm": "8.17.0",

@@ -74,6 +74,7 @@
 	"peerDependencies": {
 		"@selvajs/compute": "workspace:^",
 		"@selvajs/schemas": "workspace:^",
+		"@selvajs/visualization": "workspace:^",
 		"@sveltejs/kit": "^2",
 		"bits-ui": "^2.18.0",
 		"svelte": "^5",

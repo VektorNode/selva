@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { rhinoToThree } from '../../coordinate-transform';
+import { rhinoToThree } from '../../../shared/index.js';
 
 describe('rhinoToThree (shared coordinate transform)', () => {
 	// Selva keeps one coordinate frame end to end: the Three scene IS Rhino's Z-up frame, so the

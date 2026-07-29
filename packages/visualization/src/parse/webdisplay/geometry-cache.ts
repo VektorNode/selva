@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { CACHED_GEOMETRY_USERDATA_FLAG } from '../threejs/three-helpers.js';
+import { CACHED_GEOMETRY_USERDATA_FLAG } from '../../shared/index.js';
 
 /**
  * Cross-solve `BufferGeometry` cache, keyed by geometry *content* (audit P1 —

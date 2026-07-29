@@ -3,8 +3,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 
 import { getLogger } from '@/core';
-import type { ThreeInitializerOptions, Look, LookPreset } from '../types';
-import type { MaterialAppearanceOptions } from '../webdisplay/types';
+import type {
+	ThreeInitializerOptions,
+	Look,
+	LookPreset,
+	MaterialAppearanceOptions
+} from '../types';
 import { createCameraController, type CameraController } from './camera-controller';
 import { createGrid, type Grid } from './grid';
 import { createViewGizmo, type ViewGizmo } from './view-gizmo';
@@ -15,7 +19,13 @@ import { createLabelLayer, type LabelLayer } from './label-layer';
 import { createMeasureTool, type MeasureTool } from './measure';
 import { computeContentBounds } from './three-helpers';
 import { environmentRotationFor, isoOffset, sunOffset, upToAxis } from './up-axis';
-import { setTextureAnisotropy } from '../webdisplay/texture-cache';
+
+/**
+ * Options with every *configuration* section filled in by {@link applyDefaults}. `onMaxAnisotropy`
+ * stays optional: it's a caller-supplied hook (there is no meaningful default), not a config value.
+ */
+type ResolvedOptions = Required<Omit<ThreeInitializerOptions, 'onMaxAnisotropy'>> &
+	Pick<ThreeInitializerOptions, 'onMaxAnisotropy'>;
 
 /** Rhino's convention, and the frame all geometry arrives in — see `coordinate-transform.ts`. */
 const defaultUp = new THREE.Vector3(0, 0, 1);
@@ -217,9 +227,10 @@ export const initThree = function (
 	// and ortho camera from it. Without this, a Z-up scene would orbit and frame as if Y-up.
 	camera.up.copy(sceneUp);
 	const renderer = setupRenderer(canvas, config, pixelRatio);
-	// Report the GPU's max anisotropy to the texture cache so color maps stay sharp at grazing angles.
-	// One-time; retroactively upgrades any texture already decoded this session.
-	setTextureAnisotropy(renderer.capabilities.getMaxAnisotropy());
+	// Report the GPU's max anisotropy so color maps stay sharp at grazing angles. One-time;
+	// retroactively upgrades any texture already decoded this session. Injected (see
+	// `onMaxAnisotropy`) because the texture cache lives in the parse layer.
+	options?.onMaxAnisotropy?.(renderer.capabilities.getMaxAnisotropy());
 	const controls = setupControls(camera, canvas, config);
 
 	// Tracks whichever camera (perspective or orthographic) is live; the controller swaps it.
@@ -789,7 +800,7 @@ export const initThree = function (
 };
 
 // Exported for unit testing the option-precedence logic (initThree itself needs a real WebGL canvas).
-export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeInitializerOptions> {
+export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions {
 	const scale = options.sceneScale || 'm';
 
 	// All Rhino geometry is normalized to METERS (1 unit = 1 meter), sceneScale just changes the viewing perspective
@@ -1001,7 +1012,8 @@ export function applyDefaults(options: ThreeInitializerOptions): Required<ThreeI
 			enableDoubleClickZoom: options.events?.enableDoubleClickZoom ?? true,
 			onReady: options.events?.onReady,
 			onFrame: options.events?.onFrame
-		}
+		},
+		onMaxAnisotropy: options.onMaxAnisotropy
 	};
 }
 
@@ -1056,7 +1068,7 @@ function fitShadowToContent(light: THREE.DirectionalLight, bounds: THREE.Box3): 
 	cam.updateProjectionMatrix();
 }
 
-function createScene(config: Required<ThreeInitializerOptions>): THREE.Scene {
+function createScene(config: ResolvedOptions): THREE.Scene {
 	const scene = new THREE.Scene();
 
 	const bgColor =
@@ -1231,7 +1243,7 @@ function createAnimationLoop(
 function setupEnvironment(
 	scene: THREE.Scene,
 	renderer: THREE.WebGLRenderer,
-	config: Required<ThreeInitializerOptions>,
+	config: ResolvedOptions,
 	isDisposed: () => boolean
 ) {
 	if (config.environment.enableEnvironmentLighting) {
@@ -1319,7 +1331,7 @@ type SceneLights = {
  * Set up scene lighting. Returns handles to the created lights so the caller can refit the sun's
  * shadow frustum on geometry change and retune fill lights at runtime.
  */
-function setupLighting(scene: THREE.Scene, config: Required<ThreeInitializerOptions>): SceneLights {
+function setupLighting(scene: THREE.Scene, config: ResolvedOptions): SceneLights {
 	const ambient = new THREE.AmbientLight(
 		config.lighting.ambientLightColor,
 		config.lighting.ambientLightIntensity
@@ -1377,7 +1389,7 @@ function setupLighting(scene: THREE.Scene, config: Required<ThreeInitializerOpti
 	return { ambient, hemisphere, sun: sunlight };
 }
 
-function addFloor(scene: THREE.Scene, config: Required<ThreeInitializerOptions>) {
+function addFloor(scene: THREE.Scene, config: ResolvedOptions) {
 	const floorSize = config.floor.size;
 	const floorGeometry = new THREE.PlaneGeometry(floorSize, floorSize);
 
@@ -1409,10 +1421,7 @@ function addFloor(scene: THREE.Scene, config: Required<ThreeInitializerOptions>)
 	scene.add(floor);
 }
 
-function createCamera(
-	config: Required<ThreeInitializerOptions>,
-	canvas: HTMLCanvasElement
-): THREE.PerspectiveCamera {
+function createCamera(config: ResolvedOptions, canvas: HTMLCanvasElement): THREE.PerspectiveCamera {
 	const parent = canvas.parentElement;
 	const width = parent ? parent.clientWidth : window.innerWidth;
 	const height = parent ? parent.clientHeight : window.innerHeight;
@@ -1434,7 +1443,7 @@ function createCamera(
 
 function setupRenderer(
 	canvas: HTMLCanvasElement,
-	config: Required<ThreeInitializerOptions>,
+	config: ResolvedOptions,
 	pixelRatio: number
 ): THREE.WebGLRenderer {
 	const renderer = new THREE.WebGLRenderer({
@@ -1482,7 +1491,7 @@ function setupEventHandlers(
 	canvas: HTMLCanvasElement,
 	scene: THREE.Scene,
 	cameraController: CameraController,
-	config: Required<ThreeInitializerOptions>
+	config: ResolvedOptions
 ): {
 	dispose: () => void;
 	fitToView: () => void;
@@ -1706,7 +1715,7 @@ function setupEventHandlers(
 function setupControls(
 	camera: THREE.PerspectiveCamera,
 	canvas: HTMLCanvasElement,
-	config: Required<ThreeInitializerOptions>
+	config: ResolvedOptions
 ): OrbitControls {
 	const controls = new OrbitControls(camera, canvas);
 

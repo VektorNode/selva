@@ -1,9 +1,8 @@
-import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
 
-import { CACHED_GEOMETRY_USERDATA_FLAG, clearScene } from '../../threejs/three-helpers';
+import { CACHED_GEOMETRY_USERDATA_FLAG } from '../../../shared/index.js';
 import { parseMeshBatchObject } from '../batch-parser';
 import { geometryCacheClear } from '../geometry-cache';
 
@@ -63,27 +62,10 @@ describe('cross-solve geometry cache (audit P1)', () => {
 		expect(mesh!.geometry.getAttribute('normal')).toBeDefined();
 	});
 
-	it('clearScene skips disposing cache-owned geometries but disposes everything else', async () => {
-		const batch = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 30, seed: 17 });
-		const [cachedMesh] = await parseMeshBatchObject(batch.batch, { mergeByMaterial: true });
-		expect(cachedMesh!.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG]).toBe(true);
-
-		const plainMesh = new THREE.Mesh(
-			new THREE.BoxGeometry(1, 1, 1),
-			new THREE.MeshStandardMaterial()
-		);
-
-		const cachedDispose = vi.spyOn(cachedMesh!.geometry, 'dispose');
-		const plainDispose = vi.spyOn(plainMesh.geometry, 'dispose');
-
-		const scene = new THREE.Scene();
-		scene.add(cachedMesh!, plainMesh);
-		clearScene(scene);
-
-		expect(cachedDispose).not.toHaveBeenCalled();
-		expect(plainDispose).toHaveBeenCalled();
-		expect(scene.children).toHaveLength(0);
-	});
+	// NOTE: the companion test — that `clearScene` skips disposing cache-owned geometries — now lives
+	// in `@selvajs/compute` (`threejs/__tests__/three-helpers.test.ts`), because `clearScene` is a
+	// render-layer function and `parse/` must not import upward from `render/`. This file keeps the
+	// cache side of that contract: the flag is set, and `geometryCacheClear` disposes + clears it.
 
 	it('geometryCacheClear disposes cached geometries and unlocks clearScene disposal', async () => {
 		const batch = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 30, seed: 18 });

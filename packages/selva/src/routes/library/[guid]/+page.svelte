@@ -3,6 +3,7 @@
 	import type { RhinoModule } from 'rhino3dm';
 	import { ComputeApp, type SolveFn } from '@selvajs/ui';
 	import { GrasshopperResponseProcessor } from '@selvajs/compute';
+	import { getThreeMeshesFromComputeResponse } from '@selvajs/visualization/parse';
 	import ServerFooter from '$lib/components/ServerFooter.svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
 
@@ -185,7 +186,12 @@
 		const rhinoInitMs = performance.now() - rhinoStart;
 
 		const meshStart = performance.now();
-		const meshes = rhino ? await processor.extractMeshesFromResponse({ rhino }) : [];
+		const meshes = rhino
+			? await getThreeMeshesFromComputeResponse(processor.response, {
+					debug: processor.debug,
+					rhino
+				})
+			: [];
 		const meshMs = performance.now() - meshStart;
 
 		// Fall back to name if id missing (VektorNode fork only); stock Compute omits id.

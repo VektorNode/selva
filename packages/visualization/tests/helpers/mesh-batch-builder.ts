@@ -8,13 +8,13 @@ import {
 	FLAG_UINT16_INDICES,
 	UV_FORMAT_FLOAT32,
 	UV_FORMAT_UINT16
-} from '@/features/visualization/webdisplay/binary-parser';
+} from '@/parse/webdisplay/binary-parser';
 import type {
 	MaterialGroup,
 	MeshBatch,
 	MeshMetadata,
 	SerializableMaterial
-} from '@/features/visualization/webdisplay/types';
+} from '@/parse/webdisplay/types';
 
 export interface MeshBatchBuilderOptions {
 	materialCount: number;

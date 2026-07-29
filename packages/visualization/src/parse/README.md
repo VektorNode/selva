@@ -1,0 +1,60 @@
+# `parse/` — how a payload becomes meshes
+
+Turns a backend response into renderable Three.js objects. Depends only on `shared/`; never imports
+from `render/`, `scene/` or `session/`.
+
+## Two payload kinds
+
+| Kind              | Entry point                         | Wire format                                           |
+| ----------------- | ----------------------------------- | ----------------------------------------------------- |
+| **Mesh batches**  | `getThreeMeshesFromComputeResponse` | binary `SLVA` blob (base64 or raw), `SLVZ` = deflated |
+| **Display items** | `parseDisplayItems`                 | Rhino-native JSON, decoded via `rhino3dm`             |
+
+## Mesh batch pipeline
+
+```
+response envelope
+  └─ webdisplay-parser.ts     pick display data off the response, scale, ground, bound
+       └─ batch-parser.ts     entry points + off-thread worker path
+            ├─ binary-parser.ts        SLVA decode  ─┬─ binary/header.ts    magic/version/flags/types
+            │                                        ├─ binary/geometry.ts  buffer reads, delta+zigzag, inflate
+            │                                        └─ binary/textures.ts  trailing UV + vertex-color chunks
+            ├─ batch/metadata.ts       validate windows, cache key, dequantize
+            ├─ batch/materials.ts      SerializableMaterial → MeshPhysicalMaterial
+            ├─ batch/merge.ts          merged + individual mesh construction
+            └─ batch/assembly-worker.ts  worker plumbing (blob URL, request/response)
+```
+
+`geometry-cache.ts` and `texture-cache.ts` are cross-solve caches: identical geometry content and
+hash-keyed texture URLs are decoded and uploaded to the GPU once per session.
+
+## Display item pipeline
+
+```
+display-items-parser.ts      dispatch per item kind
+  ├─ items/curves.ts         rhino3dm decode → adaptive tessellation → fat Line2
+  ├─ items/points.ts         raw positions → one THREE.Points
+  └─ items/appearance.ts     shared color/opacity → material params
+```
+
+Curves need a caller-supplied `rhino3dm` instance (the WASM is heavy and the host owns it). Without
+one, curves are skipped with a warning and points still render.
+
+## Extension points
+
+- **Custom materials** — pass `material: MaterialAppearanceOptions` to the batch parser
+  (`envMapIntensity`, `cullBackfaces`). Baked at parse time, not toggleable in place; runtime
+  restyling of a built scene is the viewer's `setLook`.
+- **Custom scale** — `SCALE_FACTORS` maps Rhino unit systems to the meter-normalized scene.
+- **New display item kind** — add a variant to the `DisplayItem` union in `display-items/types.ts`,
+  then a builder in `items/` and a case in the parser's dispatch.
+
+## Invariants worth knowing
+
+- **One coordinate frame end to end.** The Three scene _is_ Rhino's Z-up frame, so `rhinoToThree` is
+  the identity and `applyTransforms` is inert. Don't reintroduce a rotation here.
+- **Malformed metadata throws, absent data doesn't.** An unparseable envelope returns `[]` (genuinely
+  no data); a corrupt/truncated blob or out-of-range group window throws a `VALIDATION_ERROR` rather
+  than silently rendering an empty or corrupted scene.
+- **Geometry cache owns its buffers.** Cached geometries carry `CACHED_GEOMETRY_USERDATA_FLAG`; the
+  render layer's `clearScene` must not dispose them — the cache disposes on eviction.

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { getLogger } from '@/core';
+import { getLogger } from '@selvajs/compute';
 
 /**
  * Maximum number of decoded textures retained by the module-level cache. When a fresh load pushes
