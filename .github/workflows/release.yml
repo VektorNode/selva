@@ -1,72 +1,24 @@
 name: Release
 
-# What this does
-# ---------------
-# Handles BOTH the stable (`main`) and beta (`beta`) publish flows from one
-# workflow — deliberately, because npm Trusted Publishing matches on the
-# workflow FILENAME and allows one publisher per package. Splitting beta into
-# its own file would need a second per-package trusted-publisher entry npm
-# won't grant, and publishes 404. So beta rides release.yml's identity.
+# Publishes from `main` (stable, via version PR) and `beta` (changesets pre mode).
 #
-# BETA branch (changesets "pre mode"): push a changeset to `beta` (which must
-# have run `pnpm changeset pre enter beta`, committing .changeset/pre.json) and
-# this versions the affected packages as `x.y.z-beta.N`, commits the bump back
-# to `beta`, and publishes them under the npm `beta` dist-tag — no version PR.
-# `npm i pkg` still resolves stable; `npm i pkg@beta` gets the prerelease.
-# Exit the cycle with `pnpm changeset pre exit` on `beta`, then merge to main.
+# Both flows live in ONE file because npm Trusted Publishing matches on the
+# workflow FILENAME — a separate beta workflow would need a second per-package
+# publisher entry npm won't grant, and would 404.
 #
-# MAIN branch — streamlined publish flow using changesets/action. On every push:
-#
-# 1. If there are .changeset/*.md files pending: opens (or updates) a
-#    "Version Packages" PR with `pnpm changeset version` applied. Reviewers
-#    can read the diff before any publish happens. Merging the PR triggers
-#    step 2 on its own push event.
-#
-# 2. If there are NO pending changesets but the working tree contains
-#    bumped versions (the post-version-PR-merge state): runs `pnpm release`,
-#    which builds + publishes the four public packages
-#    (@selvajs/selva, @selvajs/cli, @selvajs/ui, @selvajs/schemas) in
-#    dependency order. Private packages are skipped.
-#
-# The action figures out which mode to run based on workspace state — no
-# branching needed in this file.
-#
-# Already-published versions are not a failure
-# --------------------------------------------
-# `pnpm release` runs scripts/changeset-publish.mjs, not `changeset publish`
-# directly. changesets decides what to publish from a STALE registry read, so
-# it can try to re-publish a version npm already has and exit 1 on npm's
-# (correct) rejection — a red job for a release that actually succeeded. The
-# wrapper re-checks each reported failure against the registry and exits 0
-# only when npm already serves that exact version. Real failures stay red.
-#
-# What you need set up
-# --------------------
-# - npm Trusted Publishing (OIDC), configured per package at
-#   npmjs.com → <package> → Settings → Trusted Publisher. Each of the four
-#   published packages (@selvajs/selva, @selvajs/cli, @selvajs/ui,
-#   @selvajs/schemas) needs an entry pointing at this repo
-#   (VektorNode/selva) and workflow filename (release.yml). The handshake
-#   is per-package, not per-scope — missing entries fail with a misleading
-#   404 from `npm publish`.
-# - `id-token: write` permission below — required for the GitHub → npm OIDC
-#   exchange. Without it the request is anonymous and the publish 404s.
-# - `contents: write` + `pull-requests: write` permissions let
-#   changesets/action open the version PR.
-# - npm ≥ 11.5.1 — older clients don't know how to exchange the OIDC
-#   token, so the workflow below upgrades npm before publishing. The npm
-#   bundled with Node 20 is too old.
-# - No `NPM_TOKEN` secret. If one is set in the environment, npm uses
-#   token auth instead of OIDC and the trusted-publisher path never runs.
+# Setup this depends on:
+# - npm Trusted Publisher entry per package (repo VektorNode/selva + release.yml),
+#   for EVERY package in `node scripts/publishable-packages.mjs --list`. Missing
+#   entries fail with a misleading 404.
+# - `id-token: write`, or the OIDC exchange is anonymous and 404s.
+# - npm >= 11.5.1 (upgraded below); the Node 20 bundle can't do OIDC.
+# - NO NPM_TOKEN secret — its presence overrides OIDC and breaks publishing.
 
 on:
   push:
     branches: [main, beta]
 
-# Per-ref so main and beta never collide. On beta we cancel in-flight runs
-# (a newer push supersedes — its checkout already has the older bump commit);
-# on main we don't, to avoid interrupting an in-progress publish. The
-# expression yields true only for beta.
+# Cancel superseded beta runs; never interrupt an in-flight main publish.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: ${{ github.ref == 'refs/heads/beta' }}
@@ -78,15 +30,9 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    # Job-level env so every step + every subprocess (pnpm → turbo → vite)
-    # inherits these. Setting them only on the changesets/action step is
-    # not enough — vite spawns a worker for SSR rendering that doesn't get
-    # action-level env. See the "providers.server.ts eager evaluation"
-    # note in REFACTOR-PLAN.md.
+    # Must be job-level: vite's SSR worker doesn't inherit step-level env, and
+    # the Local* provider factories throw on missing env at module load.
     env:
-      # Dummy secrets so SvelteKit's SSR prerender doesn't crash. The Local*
-      # provider factories throw on missing env at module load. Runtime
-      # overrides with real values via .env.
       SELVA_HMAC_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       SELVA_AT_REST_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       DATA_PATH: /tmp/selva-build
@@ -96,21 +42,7 @@ jobs:
           # changesets needs full history to compute version diffs
           fetch-depth: 0
 
-      # Decide whether to run, and via which path. Outputs:
-      #   should_run    — gate every heavy step below
-      #   is_beta       — true on the beta branch (pre-release publish path)
-      #   needs_version — beta-only: run `changeset version` (vs. re-publish an
-      #                   already-bumped version whose publish failed)
-      #
-      # MAIN: same as before — pending changesets open/update the version PR;
-      # a post-merge bump (local version ahead of npm) triggers publish.
-      #
-      # BETA: changesets "pre mode". A changeset .md is NOT deleted by
-      # `changeset version` in pre mode — it's recorded in pre.json and left on
-      # disk until `pre exit`, so an UNCONSUMED changeset (basename absent from
-      # pre.json.changesets) means "version a new -beta.N". Otherwise, if a
-      # local version is ahead of its `beta` dist-tag on npm, a prior run
-      # versioned but failed to publish → re-publish without re-versioning.
+      # Outputs: should_run, is_beta, needs_version.
       - name: Check for pending release work
         id: check
         run: |
@@ -121,7 +53,8 @@ jobs:
               echo "Run 'pnpm changeset pre enter beta' on the beta branch first."
               exit 1
             fi
-            # Count changesets not yet consumed this pre-cycle.
+            # In pre mode `changeset version` does NOT delete the .md — it records
+            # it in pre.json. So "unconsumed" = absent from pre.json.changesets.
             unconsumed=0
             for f in $(find .changeset -maxdepth 1 -type f -name '*.md' \
               ! -name 'README.md' ! -name 'config.md'); do
@@ -136,11 +69,10 @@ jobs:
               echo "needs_version=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            # No new changesets — re-publish if a local version is ahead of npm's beta tag.
             while IFS=$'\t' read -r name local_ver _dir; do
-              beta_ver=$(npm view "$name@beta" version 2>/dev/null || echo "")
+              beta_ver=$(npm view "$name@$local_ver" version 2>/dev/null || echo "")
               if [ "$local_ver" != "$beta_ver" ]; then
-                echo "$name local=$local_ver beta=${beta_ver:-<none>} — re-publishing."
+                echo "$name local=$local_ver npm=${beta_ver:-<none>} — re-publishing."
                 echo "should_run=true" >> "$GITHUB_OUTPUT"
                 echo "needs_version=false" >> "$GITHUB_OUTPUT"
                 exit 0
@@ -152,7 +84,6 @@ jobs:
           fi
 
           # ── main branch ──────────────────────────────────────────────────
-          # Count .changeset/*.md files, excluding README.md and config.md.
           count=$(find .changeset -maxdepth 1 -type f -name '*.md' \
             ! -name 'README.md' ! -name 'config.md' | wc -l)
           if [ "$count" -gt 0 ]; then
@@ -160,24 +91,13 @@ jobs:
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # No changesets — we're in the post-version-PR-merge state if any
-          # published package's local version is ahead of what's on npm. This
-          # is merge-style-agnostic: it works whether the version PR was
-          # squash-merged (subject "chore: version packages") or merged as a
-          # merge commit (subject "Merge pull request ..."), which the old
-          # commit-subject check missed and silently skipped the publish.
-          #
-          # The publishable set is DERIVED from the workspace (every package
-          # with private!=true), not hardcoded. The old `selva cli ui schemas`
-          # list omitted @selvajs/platform + the providers, so a provider-only
-          # bump bumped package.json/CHANGELOG but never published — silently
-          # breaking consumers  that pin `@selvajs/platform ^0.12.0`.
-          # scripts/publishable-packages.mjs is dependency-free so it runs here
-          # on the runner's system node, before `pnpm install`.
+          # publishable-packages.mjs must stay dependency-free: this runs on the
+          # runner's system node, before pnpm install.
           while IFS=$'\t' read -r name local_ver _dir; do
-            # `npm view` exits non-zero / empty for never-published packages;
-            # treat that as "needs publish" too.
-            npm_ver=$(npm view "$name" version 2>/dev/null || echo "")
+            # Query the EXACT version, not the `latest` dist-tag — `latest` is a
+            # cached read, so a just-published version can still read as the old
+            # one and trigger a redundant re-publish.
+            npm_ver=$(npm view "$name@$local_ver" version 2>/dev/null || echo "")
             if [ "$local_ver" != "$npm_ver" ]; then
               echo "$name local=$local_ver npm=${npm_ver:-<none>} — proceeding to publish."
               echo "should_run=true" >> "$GITHUB_OUTPUT"
@@ -197,10 +117,7 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      # Upgrade npm so `changeset publish` can perform the OIDC handshake
-      # with the registry. The npm shipped with Node 20 predates Trusted
-      # Publishing support; without this, publishes silently fall back to
-      # anonymous and 404 on the PUT.
+      # Required for OIDC — without it publishes fall back to anonymous and 404.
       - name: Upgrade npm for OIDC publishing
         if: steps.check.outputs.should_run == 'true'
         run: npm install -g npm@latest
@@ -209,21 +126,12 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         run: pnpm install --frozen-lockfile
 
-      # @selvajs/website renders its docs' mermaid diagrams to inline SVG at
-      # build time via rehype-mermaid, which drives a headless Chromium through
-      # Playwright. `pnpm release` → `pnpm build` builds every workspace package
-      # (website included), so the browser must exist or the build aborts with
-      # "Executable doesn't exist". Scope to the website's Playwright + chromium.
+      # `pnpm build` includes @selvajs/website, whose docs render mermaid via
+      # headless chromium; without it the build aborts.
       - name: Install Playwright Chromium for website docs
         if: steps.check.outputs.should_run == 'true'
         run: pnpm --filter @selvajs/website exec playwright install --with-deps chromium
 
-      # Persist Turbo's local task cache so `pnpm release` (→ pnpm build) can
-      # reuse unchanged package builds across releases. Turbo hashes inputs
-      # itself; the SHA key writes a fresh entry and restore-keys warm-seed
-      # from the latest prior cache. This is local-only — it won't reuse builds
-      # produced by the PR test/e2e runs (that needs a remote cache), but it
-      # warms successive release runs.
       - uses: actions/cache@v4
         if: steps.check.outputs.should_run == 'true'
         with:
@@ -232,45 +140,23 @@ jobs:
           restore-keys: |
             turbo-release-
 
-      # Run tests + type-check before letting changesets near publishing.
-      # Catches regressions in the version-bump-PR merge commit. If you need
-      # to ship despite a known-flaky test, add it to vitest's skip list
-      # rather than removing this guard.
+      # Gates the publish: catches regressions in the version-PR merge commit.
       - name: Type-check
         if: steps.check.outputs.should_run == 'true'
         run: pnpm type-check
 
       - name: Test
         if: steps.check.outputs.should_run == 'true'
-        # Run EVERY package's test task before publishing — a regression in
-        # compute/server/ui must not ship to npm green. Same command as the PR
-        # test workflow; turbo caches by input hash. The supabase live-stack
-        # suites self-skip without .env.test creds (none in CI); everything
-        # else — compute, server security suites, ui, plugin-ui, selva, cli,
-        # local-provider — gates here.
         run: pnpm exec turbo run test
 
-      # The publish wrapper is not part of any workspace package, so `turbo run
-      # test` above does not cover it. It gets its own step because when it
-      # breaks, it breaks in the one direction CI can't tell apart from a real
-      # failure: a successful release reported red. Its ANSI-parsing bug did
-      # exactly that on 2026-07-29 (run 30467367005).
-      - name: Test publish wrapper
-        if: steps.check.outputs.should_run == 'true'
-        run: node scripts/changeset-publish.test.mjs
-
-      # ── beta path: version (pre-release), commit the bump back, publish ───
-      # In pre mode, plain `changeset publish` publishes under the `beta`
-      # dist-tag automatically — passing `--tag` is REJECTED ("custom tag not
-      # allowed in pre mode"), so we reuse `pnpm release` (build + publish).
+      # ── beta path ────────────────────────────────────────────────────────
       - name: Version beta packages
         if: steps.check.outputs.is_beta == 'true' && steps.check.outputs.needs_version == 'true'
         run: pnpm changeset version
 
       - name: Commit beta version bumps
         if: steps.check.outputs.is_beta == 'true' && steps.check.outputs.needs_version == 'true'
-        # HUSKY=0 + --no-verify: the repo pre-commit hook runs lint-staged,
-        # which aborts on a no-op commit. CI bumps are machine-generated.
+        # HUSKY=0 + --no-verify: lint-staged aborts on machine-generated commits.
         env:
           HUSKY: 0
         run: |
@@ -281,45 +167,27 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add -A
             git commit --no-verify -m "chore: version beta packages [skip ci]"
-            # No --force: a non-fast-forward push fails the job rather than
-            # clobbering. The concurrency guard makes the race rare; re-running
-            # on the latest commit is the recovery path.
+            # No --force: a non-fast-forward push should fail, not clobber.
             git push origin HEAD:beta
           fi
 
+      # In pre mode `changeset publish` uses the `beta` dist-tag automatically;
+      # passing --tag is rejected. So reuse `pnpm release` (build + publish).
       - name: Build & publish beta
         if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta == 'true'
         run: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # No NPM_TOKEN — auth via OIDC trusted publishing (this workflow
-          # filename, release.yml, is the package's registered publisher).
 
-      # ── main path: changesets/action opens the version PR / publishes ─────
+      # ── main path ────────────────────────────────────────────────────────
       - uses: changesets/action@v1
         if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true'
         with:
-          # `pnpm changeset version` consumes .changeset/*.md, bumps
-          # package.json versions, and writes CHANGELOGs. The `fixed` group in
-          # .changeset/config.json is intentionally narrow: only
-          # @selvajs/selva + @selvajs/cli share a version, so their MAJOR
-          # versions stay aligned (the `selva doctor` cli/runtime compat
-          # check). @selvajs/ui, @selvajs/schemas, @selvajs/platform and the
-          # providers version INDEPENDENTLY on their own changesets — they're
-          # consumed standalone from npm , so lockstepping
-          # them to selva would just inflate their versions.
           version: pnpm changeset version
-
-          # `pnpm release` runs `pnpm build && changeset publish`. The
-          # build step is critical — @selvajs/selva ships a prebuilt
-          # SvelteKit artifact and @selvajs/ui ships compiled .svelte
-          # components.
+          # `pnpm release` = build + publish. The build is required: @selvajs/selva
+          # ships a prebuilt SvelteKit artifact, @selvajs/ui compiled components.
           publish: pnpm release
-
           commit: 'chore: version packages'
           title: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # No NPM_TOKEN here on purpose — auth happens via OIDC trusted
-          # publishing. Setting NPM_TOKEN would override OIDC and break
-          # publishing if the token is missing/expired/under-permissioned.

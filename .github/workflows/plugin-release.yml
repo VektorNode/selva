@@ -1,29 +1,17 @@
 name: Plugin Release
 
 # Builds and publishes the Grasshopper plugin (.yak) on a `plugin-v*` tag.
-# This is intentionally SEPARATE from the npm release flow (release.yml):
-# the plugin has its own version line (Selva.GH.csproj <Version>, surfaced to
-# yak via the `$version` token in the manifests) and its own cadence.
+# Separate from release.yml: the plugin has its own version line
+# (Selva.GH.csproj <Version>) and cadence.
 #
-# Trigger:   git tag plugin-v0.10.4 && git push origin plugin-v0.10.4
-# Produces:  - Rhino 8 (.yak, net48 + net7.0) and Rhino 9 (.yak, net9.0)
-#            - pushed to the Yak registry (yak.rhino3d.com)
-#            - attached to a GitHub Release for the tag
+# Trigger: git tag plugin-v0.10.4 && git push origin plugin-v0.10.4
 #
-# Required setup
-# --------------
-# - Secret YAK_TOKEN: the Yak OAuth token. Get it locally with `yak login`
-#   (interactive, opens a browser), then copy the `credentials.token` value
-#   from %APPDATA%\McNeel\yak.yml and store it as the YAK_TOKEN repo secret.
-#   yak reads this env var directly for `yak push` (verified end-to-end against
-#   test.yak.rhino3d.com — no yak.yml needs to exist on the runner).
-#   See https://developer.rhino3d.com/guides/yak/pushing-a-package-to-the-server/
-# - GITHUB_TOKEN (provided automatically) with contents:write — set below.
+# Requires secret YAK_TOKEN: get it via `yak login` locally, then copy
+# `credentials.token` from %APPDATA%\McNeel\yak.yml. yak reads the env var
+# directly — no yak.yml needs to exist on the runner.
 #
-# Why windows-latest: net48 needs the .NET Framework targeting pack (Windows
-# only), and yak.exe is the Windows/Mac tool. The plugin compiles against the
-# Grasshopper NuGet packages (ExcludeAssets=runtime), so NO Rhino install is
-# needed on the runner.
+# windows-latest is required: net48 needs the .NET Framework targeting pack.
+# No Rhino install needed (builds against NuGet, ExcludeAssets=runtime).
 
 on:
   push:
@@ -43,9 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # ── Version guard ────────────────────────────────────────────────────
-      # The tag IS the release version; the .gha/.yak version comes from the
-      # csproj <Version> (single source of truth). They must match, or we'd
+      # The .yak version comes from the csproj, not the tag — a mismatch would
       # publish a package whose internal version disagrees with its tag.
       - name: Verify tag matches csproj version
         shell: pwsh
@@ -65,11 +51,8 @@ jobs:
             7.0.x
             9.0.x
 
-      # Cache the NuGet global-packages folder so restore doesn't re-download
-      # the Grasshopper/Rhino packages every tag. We key on the csproj files
-      # (no packages.lock.json exists, so setup-dotnet's built-in cache can't
-      # be used) — a dependency change in any project busts it; restore-keys
-      # seed a fresh run from the last cache rather than starting cold.
+      # Keyed on csproj files: no packages.lock.json exists, so setup-dotnet's
+      # built-in cache can't be used.
       - uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
@@ -86,10 +69,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Persist Turbo's local task cache for the plugin-ui web-asset build that
-      # `build:plugin` runs through turbo. Turbo handles input hashing; the SHA
-      # key writes a fresh entry and restore-keys warm-seed from the latest
-      # prior cache. Scoped per workflow — entries don't cross workflows.
       - uses: actions/cache@v4
         with:
           path: .turbo
@@ -97,9 +76,8 @@ jobs:
           restore-keys: |
             turbo-plugin-
 
-      # ── Yak CLI ──────────────────────────────────────────────────────────
-      # yak.exe is a standalone download (no Rhino required). Put it on PATH so
-      # scripts/build-production.js (which shells out to `yak build`) finds it.
+      # Standalone download (no Rhino required). Must be on PATH so
+      # scripts/build-production.js can shell out to `yak build`.
       - name: Install Yak CLI
         shell: pwsh
         run: |
@@ -109,16 +87,11 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $dir
           & "$dir\yak.exe" version
 
-      # Builds plugin-ui web assets, the multi-target Release .gha, and stages +
-      # `yak build`s the Rhino 8 / Rhino 9 packages. (Same script used locally.)
       - name: Build plugin + yak packages
         run: pnpm run build:plugin
 
-      # ── Publish ──────────────────────────────────────────────────────────
-      # yak reads the OAuth token straight from the YAK_TOKEN env var — verified
-      # against test.yak.rhino3d.com (auth succeeds with only YAK_TOKEN set, no
-      # yak.yml on disk). Yak rejects re-pushing an existing version, so a re-run
-      # on an already-published tag fails loudly (intended).
+      # Yak rejects re-pushing an existing version, so re-running an
+      # already-published tag fails loudly (intended).
       - name: Push to Yak registry
         shell: pwsh
         env:
@@ -132,10 +105,6 @@ jobs:
             yak push --source https://yak.rhino3d.com $p.FullName
           }
 
-      # Attach the same artifacts to a GitHub Release so they're downloadable
-      # without a Rhino/yak client. `gh` is preinstalled and uses GITHUB_TOKEN.
-      # A `-beta` tag is flagged as a GitHub pre-release (kept out of "Latest
-      # release"), mirroring how yak hides the pre-release from normal installs.
       - name: Create GitHub Release
         shell: pwsh
         env:

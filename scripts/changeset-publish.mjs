@@ -4,39 +4,18 @@
 // changeset publish wrapper — tolerate already-published versions
 // ============================================================================
 //
-// Why this exists
-// ---------------
-// `changeset publish` decides what to publish by asking the registry (`npm
-// info <pkg>`) which versions exist. That read can be STALE — npm's read path
-// is a cache, its write path is consistent. When the read lags, changesets
-// concludes "not published yet", calls `npm publish`, and npm correctly
-// rejects with:
+// `changeset publish` exits 1 when npm rejects a re-publish of a version it
+// already has, failing releases that actually succeeded. changesets has a
+// native skip for this, but it only fires on npm's `--json` E403 envelope —
+// and changesets shells out to `pnpm publish`, which prints plain text instead
+// (hence `an error occurred while publishing X: undefined` in the logs).
+// Switching to `npm publish` isn't an option: only pnpm rewrites the
+// `workspace:`/`catalog:` specifiers.
 //
-//   You cannot publish over the previously published versions: X.Y.Z.
-//
-// The package is already on npm at exactly the version we wanted. Nothing is
-// wrong. But `changeset publish` exits 1, which fails the release job and
-// makes a no-op look like a broken release. (Observed 2026-07-29: 3 packages
-// published, 6 rejected this way, workflow red despite npm holding all 9 at
-// the intended versions.)
-//
-// What this does
-// --------------
-// Runs `changeset publish`, then reconciles its failures against reality:
-// every package changesets FAILED to publish is checked against the registry.
-// The failure is forgiven ONLY IF npm now serves that package at exactly the
-// version in our workspace — i.e. the intended release is on npm and the error
-// was a redundant re-publish.
-//
-// Anything else — a 403, an OIDC/auth failure, a network error, a version
-// mismatch, a package still absent from npm — keeps the non-zero exit. This
-// deliberately does NOT parse the error text to decide forgiveness: it asks
-// the registry for ground truth, so a future npm error-message change can't
-// silently widen what gets swallowed.
-//
-// Consequence to keep in mind: this makes the release job green when the
-// registry already holds the intended versions. It does not make a FAILED
-// release green.
+// So: if publish fails, check the registry directly. Every publishable package
+// on npm at its workspace version → the release landed, exit 0. Anything
+// missing → exit non-zero. Deliberately does not parse changesets' output,
+// which splits names (stdout) from the failure header (stderr).
 
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -44,17 +23,7 @@ import { dirname, join } from 'node:path';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// ============================================================================
-// Run changeset publish
-// ============================================================================
-
-// Output is piped rather than inherited because we need to parse the failure
-// list out of it; it's re-emitted verbatim below, so CI logs still show
-// everything changesets printed — just buffered until the command exits
-// instead of streaming live.
-//
-// SELVA_FAKE_CHANGESET_PUBLISH swaps in a stand-in command for tests, so the
-// reconciliation logic can be exercised without publishing to npm. Unset in CI.
+// SELVA_FAKE_CHANGESET_PUBLISH swaps in a stand-in for tests. Unset in CI.
 const fake = process.env.SELVA_FAKE_CHANGESET_PUBLISH;
 const [cmd, args] = fake
 	? ['node', [fake]]
@@ -62,14 +31,9 @@ const [cmd, args] = fake
 
 const result = spawnSync(cmd, args, {
 	cwd: repoRoot,
-	encoding: 'utf8',
+	stdio: 'inherit',
 	shell: process.platform === 'win32'
 });
-
-const stdout = result.stdout ?? '';
-const stderr = result.stderr ?? '';
-process.stdout.write(stdout);
-process.stderr.write(stderr);
 
 if (result.error) {
 	console.error(`\n✗ Failed to run changeset publish: ${result.error.message}`);
@@ -78,94 +42,76 @@ if (result.error) {
 
 if (result.status === 0) process.exit(0);
 
-// ============================================================================
-// Parse the failure list
-// ============================================================================
-//
-// changesets prints a trailing block:
-//
-//   🦋  error packages failed to publish:
-//   🦋  @selvajs/compute@3.1.0
-//   🦋  @selvajs/platform@0.15.0
-//
-// Take names from that block only. If the block is absent the run failed for
-// some other reason (build error, auth, crash) — no reconciliation, just fail.
-
-// changesets colorizes its output when it detects a TTY-ish consumer, so in CI
-// the failure block arrives as `🦋  \x1b[31merror\x1b[39m @selvajs/compute@3.1.0`.
-// Strip escape sequences before any parsing — without this the prefix regex
-// below misses, every line looks like "left the block", and a genuine
-// already-published run is misreported as "no failure list found".
-// eslint-disable-next-line no-control-regex
-const ANSI = /\x1b\[[0-9;]*m/g;
-
-function parseFailedPackages(output) {
-	const lines = output.replace(ANSI, '').split('\n');
-	const start = lines.findIndex((l) => l.includes('packages failed to publish:'));
-	if (start === -1) return null;
-
-	const failed = [];
-	for (const line of lines.slice(start + 1)) {
-		// Strip the changesets prefix ("🦋  " / "🦋  error ") and whitespace.
-		const stripped = line.replace(/^\s*🦋\s*(error\s*)?/u, '').trim();
-		if (!stripped) continue;
-		// `@scope/name@1.2.3` — scoped names have a leading @, so match the LAST @.
-		const at = stripped.lastIndexOf('@');
-		if (at <= 0) break; // Left the block.
-		const name = stripped.slice(0, at);
-		const version = stripped.slice(at + 1);
-		if (!/^\d+\.\d+\.\d+/.test(version)) break; // Left the block.
-		failed.push({ name, version });
-	}
-	return failed.length > 0 ? failed : null;
-}
-
-const failed = parseFailedPackages(stdout + '\n' + stderr);
-
-if (!failed) {
-	console.error(
-		'\n✗ changeset publish failed and no "packages failed to publish" list was found — not an already-published case. Failing.'
-	);
-	process.exit(result.status ?? 1);
-}
-
-// ============================================================================
-// Reconcile each failure against the registry
-// ============================================================================
-
-console.info('\n── Reconciling failed publishes against the registry ──\n');
-
-const unresolved = [];
-
-for (const { name, version } of failed) {
-	const view = spawnSync('npm', ['view', `${name}@${version}`, 'version'], {
+// Same source of truth the release workflow gates on, so the two can't
+// disagree about what "everything we publish" means.
+function publishablePackages() {
+	// SELVA_FAKE_PACKAGE_LIST swaps in a stub list for tests. Unset in CI.
+	const lister = process.env.SELVA_FAKE_PACKAGE_LIST;
+	const listArgs = lister
+		? [lister]
+		: [join(repoRoot, 'scripts/publishable-packages.mjs'), '--list'];
+	const listed = spawnSync('node', listArgs, {
+		cwd: repoRoot,
 		encoding: 'utf8',
 		shell: process.platform === 'win32'
 	});
-	const published = (view.stdout ?? '').trim();
+	if (listed.status !== 0) {
+		console.error('\n✗ Could not enumerate publishable packages; cannot verify the release.');
+		process.exit(result.status ?? 1);
+	}
+	return listed.stdout
+		.split('\n')
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const [name, version] = line.split('\t');
+			return { name, version };
+		});
+}
 
-	if (view.status === 0 && published === version) {
-		console.info(`  ✓ ${name}@${version} — already on npm at the intended version; forgiving.`);
+// Plain GET rather than `npm view`: spawning npm per package costs seconds each.
+async function publishedVersion(name, version) {
+	const url = `https://registry.npmjs.org/${name.replace('/', '%2f')}/${version}`;
+	try {
+		const res = await fetch(url, { headers: { accept: 'application/json' } });
+		if (!res.ok) return '';
+		return (await res.json())?.version ?? '';
+	} catch {
+		return ''; // Network failure — treat as unverified, i.e. keep the job red.
+	}
+}
+
+console.info('\n── changeset publish failed; verifying the registry ──\n');
+
+const packages = publishablePackages();
+const checks = await Promise.all(
+	packages.map(async (pkg) => ({ ...pkg, found: await publishedVersion(pkg.name, pkg.version) }))
+);
+
+const missing = [];
+
+for (const { name, version, found } of checks) {
+	if (found === version) {
+		console.info(`  ✓ ${name}@${version} — on npm.`);
 	} else {
-		console.info(
-			`  ✗ ${name}@${version} — registry does not serve this version (got ${published || '<none>'}).`
-		);
-		unresolved.push(`${name}@${version}`);
+		console.info(`  ✗ ${name}@${version} — NOT on npm.`);
+		missing.push(`${name}@${version}`);
 	}
 }
 
 console.info('');
 
-if (unresolved.length > 0) {
+if (missing.length > 0) {
 	console.error(
-		`✗ ${unresolved.length} package(s) genuinely failed to publish:\n` +
-			unresolved.map((p) => `  · ${p}`).join('\n') +
+		`✗ ${missing.length} package(s) are not on npm at their workspace version:\n` +
+			missing.map((p) => `  · ${p}`).join('\n') +
 			'\n'
 	);
 	process.exit(result.status ?? 1);
 }
 
 console.info(
-	`✓ All ${failed.length} reported failure(s) were redundant re-publishes — the registry already holds the intended versions. Treating the release as successful.\n`
+	'✓ Every publishable package is on npm at its workspace version — the release succeeded ' +
+		'(changeset publish exited non-zero on redundant re-publishes). Treating as success.\n'
 );
 process.exit(0);
