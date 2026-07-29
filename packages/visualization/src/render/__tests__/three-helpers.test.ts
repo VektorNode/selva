@@ -5,11 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	applyOffset,
 	CACHED_GEOMETRY_USERDATA_FLAG,
-	clearScene,
 	computeCombinedBoundingBox,
-	parseColor,
-	updateScene
-} from '../three-helpers';
+	parseColor
+} from '../../shared/index.js';
+import { clearScene, updateScene } from '../three-helpers';
 import { METAL_MATERIAL } from '../three-materials';
 
 function meshAt(x: number, y: number, z: number): THREE.Mesh {

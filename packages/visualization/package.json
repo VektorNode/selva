@@ -56,6 +56,16 @@
 				"types": "./dist/parse.d.cts",
 				"default": "./dist/parse.cjs"
 			}
+		},
+		"./render": {
+			"import": {
+				"types": "./dist/render.d.ts",
+				"default": "./dist/render.js"
+			},
+			"require": {
+				"types": "./dist/render.d.cts",
+				"default": "./dist/render.cjs"
+			}
 		}
 	},
 	"files": [

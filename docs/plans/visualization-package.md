@@ -1,18 +1,18 @@
 # `@selvajs/visualization` — a headless, extensible viewer core
 
-> **Status: IN PROGRESS (updated 2026-07-29) — steps 1–3 landed, 4–8 open.** Extract parse + scene +
+> **Status: IN PROGRESS (updated 2026-07-29) — steps 1–4 landed, 5–8 open.** Extract parse + scene +
 > render + session out of `@selvajs/compute` and `@selvajs/ui` into one framework-free package with a
 > clean public API, small single-responsibility files, and documented layer boundaries. Scope:
 > new `packages/visualization`; `@selvajs/compute` loses its `/visualization` export and `three`
 > peer dep; `@selvajs/ui` keeps only the Svelte viewer shell + design-system widgets. Pre-release,
 > so removals are free (no migration path). See migration steps at the bottom.
 >
-> **Landed:** `packages/visualization` scaffolded; `shared/` and `parse/` moved with their 108 tests;
-> the three largest parsers split; `compute/visualization` no longer exports parsing; all five
-> importers rewired.
+> **Landed:** `packages/visualization` scaffolded; `shared/`, `parse/` and `render/` moved with their
+> 288 tests; the five largest files split (`batch-parser`, `binary-parser`, `display-items-parser`,
+> `three-initializer`, `edges`); `@selvajs/compute/visualization` deleted outright; every importer
+> rewired. **`@selvajs/compute` no longer depends on `three` in any form** — it is pure solve/data.
 >
-> **Still in `@selvajs/compute`:** the whole `render/` layer (`threejs/`), so compute keeps its
-> `three` peer dep for now. `scene/` and `session/` are untouched in `@selvajs/ui`.
+> **Still in `@selvajs/ui`:** `scene/` (`SceneManager.svelte`) and `session/` (`src/lib/compute`).
 
 ## Corrections to this plan, found while executing it
 
@@ -45,6 +45,42 @@ against the same wrong assumptions:
    contract stayed with the cache.
 8. **Step 8's "add a changeset" is understated** — this is a breaking `major` for `@selvajs/compute`,
    not a pre-release bump.
+
+Found while executing step 4:
+
+9. **Both seams from correction 5/6 resolved, but only one the way the plan predicted.**
+   - `MaterialAppearanceOptions` (and `LOOKS`/`Look`/`LookPreset`): the duplicate is gone.
+     `render/types.ts` re-exports them from `shared/`. They did **not** move into `render/` — `parse/`
+     still needs them to bake materials, and `parse/` may not import `render/`. `shared/` is their
+     permanent home, not a waypoint.
+   - `onMaxAnisotropy`: **kept as an injected hook, deliberately not reverted.** The plan assumed that
+     once `render/` and `parse/` shared a package the renderer could call `setTextureAnisotropy`
+     directly. It could — but that would make `render/` depend upward on `parse/`, breaking principle 2
+     for one line of convenience. The hook costs the host one option and keeps the render layer usable
+     with no parser at all. Documented in `render/README.md`.
+10. **`three` left compute completely, not just as a peer dep.** Step 4's brief said "drops `three`
+    peer dep" (step 7). In fact `peerDependencies`, `peerDependenciesMeta`, the `three`/`@types/three`
+    devDeps, the `external: ['three']` tsup line, and `tests/helpers/bench-geometry.ts` (only the moved
+    edge tests used it) all went. `packages/compute/src/features/` now contains `grasshopper/` alone.
+11. **`three-initializer.ts` needed three more cuts than the plan's "explode along its private fns".**
+    Splitting only the private helpers left the factory at 680 lines, because most of what remained
+    wasn't helper code — it was (a) the returned handle's ~90 documented members, inline as a
+    return-type annotation, so a reader hit line 123 before any wiring, and (b) two clusters of
+    closures over mutable state the plan hadn't listed: the postprocessing pipeline
+    (`renderPipeline`/`aoEnabled`/`edgeFallbackActive`/`builtWithAo` + five functions) and the runtime
+    appearance setters. Extracted as `viewer.ts` (a named `ThreeViewer` interface),
+    `pipeline-controller.ts` and `appearance.ts` — 680 → 407. The pipeline extraction also removed a
+    latent coupling: `setLook` used to assign `aoEnabled` directly then call `syncPipeline`, and both
+    edge callbacks open-coded the same "only sync when it actually changed" guard. Those now go
+    through `setAmbientOcclusion` / `setEdgeFallback`.
+12. **The moved render tests needed a vitest setup file that didn't exist in the new package.**
+    `applyDefaults` reads `window.devicePixelRatio`, and compute's `tests/setup.ts` had been quietly
+    stubbing `global.window = {}` for every suite in that package. Under viz's config (no
+    `setupFiles`) nine tests failed with `window is not defined`. Added
+    `packages/visualization/tests/setup.ts` with just the browser-global stub — **not** compute's
+    `global.fetch = vi.fn()`, which the viz suites don't need. The empty-object stub matters: it makes
+    `devicePixelRatio` `undefined` → `Math.min(undefined, 2)` → `NaN` → the `||` falls through, which
+    is the branch the default-resolution tests assert.
 
 ## Goal
 
@@ -141,37 +177,48 @@ packages/visualization/
           appearance.ts         ← ADDED: materialParams + DEFAULT_COLOR, shared by both (17)
         types.ts                (72)
 
-    render/
+    render/                     ← ✅ BUILT (as below)
       index.ts                  ← initThree, createRenderPipeline, camera/edges/grid/gizmo/measure…
       README.md                 ← "the CAD viewer toolkit"; extension: custom looks, edge strategy
-      scene-setup/              ← three-initializer.ts (1708) EXPLODED along its private fns:
-        init-three.ts           ← the initThree factory (orchestrator, ~200)
-        create-scene.ts
-        create-camera.ts
-        setup-renderer.ts
-        setup-lighting.ts       ← lighting + shadow fit
-        setup-environment.ts    ← env map + floor
-        setup-controls.ts
-        setup-events.ts         ← pointer/resize handlers (~230, its own file already)
-        animation-loop.ts
-        defaults.ts             ← applyDefaults + option types
-        dispose.ts              ← disposeMaterialWithTextures + teardown
-      camera-controller.ts      (343 → keep)
+      scene-setup/              ← three-initializer.ts (1743) EXPLODED along its private fns:
+        init-three.ts           (407)  the initThree factory — wiring only
+        viewer.ts               (107)  ThreeViewer: the returned handle's ~90 documented members,
+                                   split out so the factory's wiring isn't buried under them
+        pipeline-controller.ts  (107)  ADDED: owns the postprocessing composer and the two
+                                   independent reasons to want one (AO, screen-space edge fallback)
+        appearance.ts           (148)  ADDED: the runtime lighting/material setters incl. setLook
+        defaults.ts             (233)  applyDefaults + ResolvedOptions + defaultUp
+        setup-events.ts         (231)  picking, selection, keyboard
+        animation-loop.ts       (169)
+        setup-lighting.ts       (114)  lighting + fitShadowToContent
+        setup-environment.ts    (112)  HDR/PMREM + addFloor
+        setup-renderer.ts       (49)
+        dispose.ts              (47)   material/object-tree/scene teardown sweeps
+        setup-controls.ts       (34)
+        create-camera.ts        (26)
+        create-scene.ts         (15)
+        __tests__/              ← defaults.test.ts, dispose.test.ts (renamed from look-presets /
+                                   three-initializer, which no longer name their subject)
+      camera-controller.ts      (360 → keep)
       render-pipeline.ts        (153)
-      edges.ts                  (793 → split ↓, keep public addEdges here ~200)
+      edges.ts                  (874 → 233: public API, target collection, attachment)
       edges/
-        extraction.ts           ← sync/async/worker edge extraction
-        cache.ts                ← segment + overlay cache
-        overlay.ts              ← MaterialPool, buildEdgeOverlay, distance fade
+        options.ts              ← EdgeOptions, defaults, tuning constants, resolveOptions (129)
+        extraction.ts           ← sync/async/worker extraction + content-keyed segment cache (264)
+        cache.ts                ← refcounted per-geometry line-geometry cache + edgeSpacingOf (140)
+        overlay.ts              ← MaterialPool, buildEdgeOverlay, density fade (162)
       edge-detection-pass.ts    (221)
       edge-extract.ts           (224)
-      grid.ts                   (226)
+      grid.ts                   (232)
       view-gizmo.ts             (155)
       label-layer.ts            (134)
-      measure.ts                (404 → optional split: tool.ts + snapping.ts)
-      near-plane.ts             (82)
+      measure.ts                (404 → kept whole; the snapping half doesn't cut free cleanly)
+      near-plane.ts             (90)
       three-materials.ts        (153)
-      three-helpers.ts          (253)
+      three-helpers.ts          (259 → 182: parseColor/applyOffset/computeCombinedBoundingBox and
+                                   the cache flag now come from shared/, where step 2 put them)
+      types.ts                  ← ThreeInitializerOptions (look types re-exported from shared/)
+      up-axis.ts                (128)
 
     scene/                      ← NEW layer, extracted from SceneManager.svelte
       index.ts
@@ -257,11 +304,12 @@ revisit only if headless geometry export becomes real. Recorded here as a revers
 3. ✅ **DONE** — **parse/** — moved `webdisplay/` + `display-items/` with all 108 tests; split
    `batch-parser` 1007→466, `binary-parser` 713→329, `display-items-parser` 440→77. Dropped the
    parse exports from `@selvajs/compute/visualization`; rewired all 5 importers.
-4. **render/** — move `threejs/`; **explode `three-initializer.ts`** into `scene-setup/*`;
-   split `edges.ts` into `edges/*`. Also fold away the two seams step 3 had to leave behind: the
-   duplicated `MaterialAppearanceOptions` (correction 6) and the `onMaxAnisotropy` injection
-   (correction 5) — once `render/` and `parse/` are in one package, the renderer can import the
-   texture cache directly again.
+4. ✅ **DONE** — **render/** — moved `threejs/` (14 modules + 14 test files) to `render/`; exploded
+   `three-initializer.ts` 1743 → `scene-setup/*` (14 files, largest 407); split `edges.ts` 874 → 233
+   - `edges/{options,extraction,cache,overlay}.ts`. Deleted `@selvajs/compute/visualization` and
+     `src/visualization.ts`; **dropped `three` from compute entirely** (peer dep _and_ devDeps —
+     `packages/compute/src/features/` now holds only `grasshopper/`). Rewired `Viewer.svelte`, the sole
+     remaining importer, to `@selvajs/visualization/render`. See corrections 9–11.
 5. **session/** — move `ui/src/lib/compute/*` + pure deps (`schema/defaults`, `external/storage`,
    `types/solveFn`); rename `.svelte.ts` files (no runes to lose); split drivers into `drivers/`.
 6. **scene/** — extract pure logic from `SceneManager.svelte` into `SceneController` + helpers;

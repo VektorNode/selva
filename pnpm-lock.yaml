@@ -219,9 +219,6 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
-      '@types/three':
-        specifier: 'catalog:'
-        version: 0.184.1
       '@vitest/coverage-v8':
         specifier: ^3.2.6
         version: 3.2.7(vitest@3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
@@ -252,9 +249,6 @@ importers:
       svelte:
         specifier: 5.56.4
         version: 5.56.4(@typescript-eslint/types@8.64.0)
-      three:
-        specifier: 'catalog:'
-        version: 0.184.0
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.19)(typescript@6.0.3)(yaml@2.9.0)

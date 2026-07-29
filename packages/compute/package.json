@@ -54,16 +54,6 @@
 				"default": "./dist/grasshopper.cjs"
 			}
 		},
-		"./visualization": {
-			"import": {
-				"types": "./dist/visualization.d.ts",
-				"default": "./dist/visualization.js"
-			},
-			"require": {
-				"types": "./dist/visualization.d.cts",
-				"default": "./dist/visualization.cjs"
-			}
-		},
 		"./core": {
 			"import": {
 				"types": "./dist/core.d.ts",
@@ -119,18 +109,9 @@
 		"fflate": "^0.8.2",
 		"rhino3dm": "8.17.0"
 	},
-	"peerDependencies": {
-		"three": ">=0.179.0"
-	},
-	"peerDependenciesMeta": {
-		"three": {
-			"optional": true
-		}
-	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
 		"@types/node": "catalog:",
-		"@types/three": "catalog:",
 		"@vitest/coverage-v8": "^3.2.6",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
@@ -141,7 +122,6 @@
 		"prettier-plugin-svelte": "^3.5.1",
 		"prettier-plugin-tailwindcss": "^0.7.3",
 		"svelte": "catalog:",
-		"three": "catalog:",
 		"tsup": "^8.5.1",
 		"typedoc": "^0.28.17",
 		"typedoc-plugin-extras": "^4.0.1",

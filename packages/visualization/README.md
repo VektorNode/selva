@@ -32,13 +32,15 @@ can be refactored freely without touching consumers.
 
 Migration in progress (see `docs/plans/visualization-package.md`). Landed so far:
 
-| Layer      | Status                                                  |
-| ---------- | ------------------------------------------------------- |
-| `shared/`  | ✅ coordinate frame, looks, geometry/color utils, types |
-| `parse/`   | ✅ webdisplay + display-items                           |
-| `render/`  | ⏳ still in `@selvajs/compute/visualization`            |
-| `scene/`   | ⏳ still in `@selvajs/ui` (`SceneManager.svelte`)       |
-| `session/` | ⏳ still in `@selvajs/ui` (`src/lib/compute`)           |
+| Layer      | Status                                                      |
+| ---------- | ----------------------------------------------------------- |
+| `shared/`  | ✅ coordinate frame, looks, geometry/color utils, types     |
+| `parse/`   | ✅ webdisplay + display-items                               |
+| `render/`  | ✅ scene setup, edges, camera, grid, gizmo, labels, measure |
+| `scene/`   | ⏳ still in `@selvajs/ui` (`SceneManager.svelte`)           |
+| `session/` | ⏳ still in `@selvajs/ui` (`src/lib/compute`)               |
+
+With `render/` moved, `@selvajs/compute` no longer depends on `three` at all — it is pure solve/data.
 
 ## Sub-path exports
 
@@ -46,6 +48,7 @@ Mirror the layers so consumers tree-shake:
 
 ```ts
 import { parseComputeResponse } from '@selvajs/visualization/parse';
+import { initThree, addEdges } from '@selvajs/visualization/render';
 import { LOOKS, parseColor } from '@selvajs/visualization/shared';
 ```
 

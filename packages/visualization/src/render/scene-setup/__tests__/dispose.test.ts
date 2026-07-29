@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
-import { disposeMaterialWithTextures } from '../three-initializer';
+import { disposeMaterialWithTextures } from '../dispose';
 
 // initThree itself needs a real WebGL canvas, so only the pure teardown helper is unit-tested here.
 // The helper is what both dispose paths (final dispose() and disposeObjectTree) run per material.

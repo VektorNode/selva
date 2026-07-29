@@ -12,7 +12,7 @@
 		type MeasureTool,
 		type ViewPreset,
 		type Grid
-	} from '@selvajs/compute/visualization';
+	} from '@selvajs/visualization/render';
 	import {
 		Maximize,
 		Minimize,

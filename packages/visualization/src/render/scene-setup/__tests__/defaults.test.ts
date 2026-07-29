@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
-import { applyDefaults, materialAppearanceForLook, LOOK_PRESETS } from '../three-initializer';
+import { LOOK_PRESETS, materialAppearanceForLook } from '../../../shared/index.js';
 import type { Look, LookPreset } from '../../types';
+import { applyDefaults } from '../defaults';
 
 // Characterization tests for the `look` preset system: the option-precedence resolver in
 // applyDefaults, the default look, the lighting-vs-overlay decoupling, and preset shape.

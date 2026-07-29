@@ -3,7 +3,8 @@ import { defineConfig } from 'tsup';
 const entries = {
 	index: 'src/index.ts',
 	shared: 'src/shared/index.ts',
-	parse: 'src/parse/index.ts'
+	parse: 'src/parse/index.ts',
+	render: 'src/render/index.ts'
 };
 
 export default defineConfig({

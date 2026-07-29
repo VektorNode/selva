@@ -9,3 +9,4 @@
 
 export * from './shared/index.js';
 export * from './parse/index.js';
+export * from './render/index.js';
