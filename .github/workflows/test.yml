@@ -55,11 +55,17 @@ jobs:
             exit 1
           fi
 
-      # Keyed on lint config so a rule change busts the cache.
+      # Keyed on lint config so a rule change busts the cache. Must include
+      # packages/config/eslint.config.js — the root config just re-exports it,
+      # so the rules themselves live there.
+      #
+      # `pnpm lint` passes --cache-strategy content: the default (metadata)
+      # keys on mtime, which actions/checkout rewrites every run, so every
+      # entry would miss and the cache would be dead weight.
       - uses: actions/cache@v6
         with:
           path: node_modules/.cache/eslint
-          key: eslint-${{ hashFiles('eslint.config.*', '.prettierrc*') }}
+          key: eslint-${{ hashFiles('eslint.config.js', 'packages/config/eslint.config.js') }}
           restore-keys: |
             eslint-
 
