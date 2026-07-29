@@ -16,6 +16,13 @@ updates:
         update-types: ['minor', 'patch']
       npm-major:
         update-types: ['major']
+    ignore:
+      # TS 7 breaks the toolchain, not our source: svelte-check/svelte2tsx peer
+      # on ^6, and tsup's dts step dies at require time on the restructured
+      # compiler host. Grouped majors meant this one bump failed the whole PR.
+      # Drop this once those ship TS 7 support; catalog pin is the other half.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
 
   # '/' only covers .github/workflows/. Composite actions live outside that
   # scope and silently lag behind (pnpm/setup-node sat at v4 while every
