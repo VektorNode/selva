@@ -29,7 +29,7 @@ can be refactored freely without touching consumers.
 
 ## Current status
 
-All four layers have landed (see `docs/plans/visualization-package.md`):
+All four layers have landed (see `docs/plans/archive/visualization-package.md`):
 
 | Layer     | Contents                                                        | Published     |
 | --------- | --------------------------------------------------------------- | ------------- |

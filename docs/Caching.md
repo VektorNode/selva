@@ -11,9 +11,9 @@ description: 'Where Selva caches — browser, server, and Rhino.Compute — what
 Solving a Grasshopper definition is the expensive part of Selva. Caching avoids repeating work — and
 also avoids re-uploading definitions, re-decoding meshes, and re-uploading geometry to the GPU.
 
-There are **eleven** caches, across five tiers. That number sounds alarming; it isn't. Most need no
-configuration and cannot go stale by construction. This page groups them so you only have to hold two
-ideas at once.
+Selva owns **ten** caches — five in the browser, five in the server — and sends flags to **two** more
+that Rhino.Compute owns. That number sounds alarming; it isn't. Most need no configuration and cannot
+go stale by construction. This page groups them so you only have to hold two ideas at once.
 
 ---
 
@@ -173,13 +173,14 @@ Asks the compute server to remember results, keyed on definition + inputs.
 
 Listed so you know they exist; none has settings and none can serve stale content.
 
-| Cache                   | Tier         | Keyed on                    | Bound                |
-| ----------------------- | ------------ | --------------------------- | -------------------- |
-| Warm-client cache       | Selva server | compute server id           | 16 servers, LRU      |
-| Single-flight coalescer | Selva server | org + version + inputs      | in-flight only       |
-| Geometry cache          | Browser      | mesh **content** hash       | 256 MiB              |
-| Texture cache           | Browser      | content-addressed URL       | 64 textures          |
-| Edge caches (2)         | Browser      | content hash / geometry ref | 128 MiB / refcounted |
+| Cache                    | Tier         | Keyed on                     | Bound                               |
+| ------------------------ | ------------ | ---------------------------- | ----------------------------------- |
+| Warm-client cache        | Selva server | compute server id            | 16 servers, LRU                     |
+| Single-flight coalescer  | Selva server | org + version + inputs       | in-flight only                      |
+| Geometry cache           | Browser      | mesh **content** hash        | 256 MiB                             |
+| Texture cache            | Browser      | content-addressed URL        | 64 textures                         |
+| Edge segment cache       | Browser      | mesh content hash            | 128 MiB                             |
+| Edge line-geometry cache | Browser      | source geometry **identity** | refcounted, released on scene clear |
 
 **Warm-client cache** keeps a live, connected client per compute server rather than reconnecting each
 solve. It evicts automatically when you change a server's URL or key.
@@ -189,8 +190,18 @@ definition doesn't stampede compute after a deploy. Effectively inactive unless 
 
 **The browser's GPU caches** exist because the viewer discards and rebuilds the entire scene on every
 solve. Without them, an unchanged mesh would be re-decoded and re-uploaded to the GPU on every slider
-move. They dispose their contents on eviction and key on content, so they cannot serve the wrong
-geometry.
+move. They dispose their contents on eviction, and every one of them is keyed so that a hit is always
+the right content — so none can serve the wrong geometry.
+
+> **Resolved 2026-07-30 — the edge line-geometry cache leaked, and no longer does.** It is the one
+> browser cache keyed on object _identity_ rather than content, and it was written when identity could
+> not survive a solve ("the viewer rebuilds every `BufferGeometry` each solve, so identity caches never
+> hit across solves"). That stopped being true once the geometry cache began returning the _same_
+> instance across solves. Measured: 8 meshes over 50 solves left **400** live line geometries — with
+> resident GPU buffers — instead of 8, because whole-scene clears detached overlays without ever
+> decrementing a refcount. `clearScene` now releases these entries explicitly. Memory only; it never
+> could serve wrong geometry. Full measurement and the rejected alternative in
+> [caching-audit-2026-07 §F1](./plans/archive/caching-audit-2026-07.md#f1-the-edge-cache-and-geometry-cache-now-contradict-each-other).
 
 ---
 

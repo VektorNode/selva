@@ -2,10 +2,13 @@
 
 > **Status: P2/P4/P5(most)/P6 + P1-client SHIPPED (2026-07-22).** Full audit + implementation notes
 > archived at [archive/display-pipeline-performance-audit.md](./archive/display-pipeline-performance-audit.md).
-> This file is the open residue only. The shipped client-side parse files (`batch-parser`,
-> assembly worker, `mesh-assembly`, geometry cache, webdisplay) **move to `@selvajs/visualization`
-> in [the visualization-package plan](./visualization-package.md)** — the open items below touch C# and cloud transport,
-> not those TS files, so they don't collide.
+> This file is the open residue only.
+>
+> **The move this plan noted as pending has landed** (2026-07-30,
+> [visualization-package](./archive/visualization-package.md)): the shipped client-side parse files
+> (`batch-parser`, assembly worker, `mesh-assembly`, geometry cache, webdisplay) now live in
+> `@selvajs/visualization/parse`. As predicted, no collision — the open items below are C# and cloud
+> transport, not those TS files.
 
 ## Open (each its own effort)
 

@@ -55,7 +55,7 @@ See **[plans/README.md](./plans/README.md)** for the authoritative status + impl
 - **[API v1 Redesign](./plans/api-redesign-plan.md)** — One versioned `/api/v1` surface for both browser and token-based clients
 - **[Token-based API Auth](./plans/token-plan.md)** — Personal access tokens (PATs) + managed public API; MCP designed-but-deferred
 - **[Pre-solved Bundle + Prewarm](./plans/presolve-bundle.md)** — Ship a pre-solved definition bundle and prewarm the solve caches (F1)
-- **[Visualization Package](./plans/visualization-package.md)** — Extract a headless `@selvajs/visualization` (parse + scene + render + session)
+- **[Solve Package](./plans/solve-package.md)** — One owner for the solve flow, both sides of the wire (`@selvajs/solve`)
 - **[Compute Package Cleanup](./plans/compute-package-cleanup.md)** — Rhino.Compute-focused `@selvajs/compute` with smaller files + cleaner API (follows visualization-package)
 - **[Plugin Compat Gate](./plans/plugin-compat-gate.md)** — Plugin/app compatibility gating
 - **[Edge Overlay — open residue](./plans/edge-overlay-open.md)** — Remaining edge-rendering items (full plan archived)

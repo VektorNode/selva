@@ -1,8 +1,9 @@
 # `@selvajs/solve` — one owner for the solve flow
 
-> **Status: Phases 0–4 DONE (2026-07-30); Phase 5 (unify input hashing) and Phase 6 (verify against
-> Parafa) remain.** Supersedes the open
-> items in [visualization-standalone](./visualization-standalone.md) — §1–§4 **landed** (its §3 chose
+> **Status: Phases 0–4 DONE (2026-07-30). Phase 5 is SUPERSEDED by
+> [caching-simplification](./caching-simplification.md) — do not implement it from this document.
+> Phase 6 (verify against Parafa) remains.** Supersedes the open
+> items in [visualization-standalone](./archive/visualization-standalone.md) — §1–§4 **landed** (its §3 chose
 > option 3a), and §5/§6 are absorbed here. Scope: extract the client-side solve orchestration out of
 > `@selvajs/visualization/session` and the server-side solve core out of `@selvajs/server/compute`
 > into one package with `client/` and `server/` halves, so the whole "slider moved → solve → result"
@@ -237,7 +238,7 @@ independent work first, the risky boundary last.
 
 ### Phase 0 — prerequisite (from the other plan) — ✅ DONE 2026-07-30
 
-Landed [visualization-standalone](./visualization-standalone.md) §1, §2, §4: local logger, local
+Landed [visualization-standalone](./archive/visualization-standalone.md) §1, §2, §4: local logger, local
 `VisualizationError`, local `decodeBase64ToBinary`. §3 landed too (option **3a** — the envelope is
 declared structurally in `parse/webdisplay/response-envelope.ts`), so **all 15 `@selvajs/compute`
 import sites are gone and the dependency is removed from `package.json`**, not just reduced.
@@ -486,7 +487,14 @@ suffix is a SvelteKit convention and this is a plain library, where the `server/
 three guards above already carry the meaning. Renaming 8 files would break every `git mv` rename
 record from this phase for no additional enforcement.
 
-### Phase 5 — consolidate stable-input hashing
+### Phase 5 — consolidate stable-input hashing — ⚠️ SUPERSEDED
+
+> **Do not implement this phase from this document.**
+> [caching-simplification](./caching-simplification.md) replaces it — see that plan's
+> "Why not Phase 5". The short version: unifying the three hash _derivations_ keeps three tiers that
+> overlap; that plan collapses the tiers instead, which makes most of the unification moot. The
+> analysis below is kept because the constraints it records (what must **not** be flattened) still
+> bind whatever replaces it.
 
 _(Was numbered "3b" — renumbered, because it must run **after** both halves are in place. Doing it
 before Phase 3 would mean merging three hashes across three packages and then relocating two of
@@ -502,7 +510,7 @@ Small, and it removes a class of silent bug. Three implementations of the same i
 
 A cache keyed inconsistently doesn't throw — it silently never hits, or hits when it shouldn't.
 
-**Informed by [caching-audit-2026-07](./caching-audit-2026-07.md) §F2**, which found a fourth
+**Informed by [caching-audit-2026-07](./archive/caching-audit-2026-07.md) §F2**, which found a fourth
 inconsistency worth reconciling deliberately rather than merging blindly: **single-flight coalesces on
 the raw `{inputs, values}` while L2 keys on the transformed tree.** So two inputs that are
 raw-different but transform-identical coalesce as separate flights, then both hit the same L2 key.
@@ -684,7 +692,7 @@ where the code belongs.
 ## Relationship to the caching work
 
 Two threads opened on 2026-07-30 — this extraction, and
-[caching-audit-2026-07](./caching-audit-2026-07.md). **Settled: this plan runs first, and they never
+[caching-audit-2026-07](./archive/caching-audit-2026-07.md). **Settled: this plan runs first, and they never
 overlap.**
 
 The ordering is forced by the code, not preference. The caching unification target is one canonical
@@ -703,12 +711,14 @@ The GPU caches (geometry, texture, edges) are untouched by either thread — the
 and stay in `visualization`. L1 stays in `compute`
 ([§C1b](#c1b-the-schedulers-l1-cache-stays-in-selvajscompute)).
 
-**Audit item F1 is independent of both** and is the only one that might be a live bug rather than a
-refactor: the edge line-geometry cache assumes identity caches never hit across solves, but the
-geometry cache now returns the same `BufferGeometry` instance across solves, so those entries may
-survive in a cache with no size bound. Measuring it is ~an hour (instrument the entry count, scrub a
-slider through many solves, watch for a plateau) and is worth doing **before** this plan starts, so an
-unbounded-growth question isn't sitting open across a large refactor.
+**Audit item F1 was independent of both, and is now closed** — ✅ measured and fixed 2026-07-30. It
+was the only audit item that turned out to be a live bug rather than a refactor: the edge
+line-geometry cache assumed identity caches never hit across solves, but the geometry cache returns
+the same `BufferGeometry` instance across solves, so entries survived in a cache with no size bound.
+Measured at 400 live line geometries (with resident GPU buffers) after 50 solves instead of 8; fixed
+by having `clearScene` release them explicitly. See
+[caching-audit-2026-07 §F1](./archive/caching-audit-2026-07.md#f1-the-edge-cache-and-geometry-cache-now-contradict-each-other).
+It touched only `visualization/render`, so it does not intersect this plan's moves.
 
 ## Open questions
 

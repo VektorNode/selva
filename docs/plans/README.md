@@ -6,22 +6,34 @@ they didn't have). This index is the single source of truth for sequence. As of 
 
 ## Status at a glance
 
-| Plan                                                                                                                         | Status                                              | Track            |
-| ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------------- |
-| [data-access-efficiency-audit](./data-access-efficiency-audit.md)                                                            | open items remain (P2/P3 list)                      | B — efficiency   |
-| [api-redesign-plan](./api-redesign-plan.md)                                                                                  | not started                                         | B — product      |
-| [token-plan](./token-plan.md) (PATs)                                                                                         | not started, **blocked by api-redesign**            | B — product      |
-| [presolve-bundle](./presolve-bundle.md)                                                                                      | not started (planning)                              | B — product      |
-| [edge-overlay-open](./edge-overlay-open.md) — full plan [archived](./archive/edge-overlay-performance.md)                    | Phases 0–3 shipped                                  | B — residue      |
-| [display-pipeline-open](./display-pipeline-open.md) — full audit [archived](./archive/display-pipeline-performance-audit.md) | most shipped; P1-C#/P3/fat-branch open              | B — residue      |
-| [plugin-compat-gate](./plugin-compat-gate.md)                                                                                | not started (planning)                              | B — operator     |
-| [visualization-package](./visualization-package.md)                                                                          | **COMPLETE** (2026-07-30) — all 8 steps             | **A — refactor** |
-| [visualization-standalone](./visualization-standalone.md)                                                                    | **§1–§4 LANDED**; §5/§6 absorbed by solve-package   | **A — refactor** |
-| [solve-package](./solve-package.md)                                                                                          | Phases 0–1 done; Phases 2–6 open                    | **A — refactor** |
-| [caching-audit-2026-07](./caching-audit-2026-07.md)                                                                          | findings recorded; docs fixed, F1/F2/F3 open        | B — correctness  |
-| [compute-package-cleanup](./compute-package-cleanup.md)                                                                      | not started, **unblocked** (viz-package done)       | **A — refactor** |
-| [verify-slider-drag-solve-path](./verify-slider-drag-solve-path.md)                                                          | not started (measurement)                           | B — gate         |
-| [drawing-layout-defects](./drawing-layout-defects.md)                                                                        | not started — **register, 14 confirmed + 19 leads** | B — correctness  |
+| Plan                                                                                                                         | Status                                               | Track            |
+| ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------- |
+| [data-access-efficiency-audit](./data-access-efficiency-audit.md)                                                            | open items remain (P2/P3 list)                       | B — efficiency   |
+| [api-redesign-plan](./api-redesign-plan.md)                                                                                  | not started                                          | B — product      |
+| [token-plan](./token-plan.md) (PATs)                                                                                         | not started, **blocked by api-redesign**             | B — product      |
+| [presolve-bundle](./presolve-bundle.md)                                                                                      | not started (planning)                               | B — product      |
+| [edge-overlay-open](./edge-overlay-open.md) — full plan [archived](./archive/edge-overlay-performance.md)                    | Phases 0–3 shipped                                   | B — residue      |
+| [display-pipeline-open](./display-pipeline-open.md) — full audit [archived](./archive/display-pipeline-performance-audit.md) | most shipped; P1-C#/P3/fat-branch open               | B — residue      |
+| [plugin-compat-gate](./plugin-compat-gate.md)                                                                                | not started (planning)                               | B — operator     |
+| [solve-package](./solve-package.md)                                                                                          | Phases 0–4 done; Phase 5 (hashing) + 6 (Parafa) open | **A — refactor** |
+| [caching-simplification](./caching-simplification.md)                                                                        | proposed — supersedes solve-package Phase 5          | B — correctness  |
+| [compute-package-cleanup](./compute-package-cleanup.md)                                                                      | not started, **unblocked** (viz-package done)        | **A — refactor** |
+| [verify-slider-drag-solve-path](./verify-slider-drag-solve-path.md)                                                          | not started (measurement)                            | B — gate         |
+| [drawing-layout-defects](./drawing-layout-defects.md)                                                                        | not started — **register, 14 confirmed + 19 leads**  | B — correctness  |
+
+**Fully closed, moved to [`archive/`](./archive/)** — no residue, unlike edge-overlay and
+display-pipeline. Kept for the _why_:
+
+- [visualization-package](./archive/visualization-package.md) (all 8 steps) and
+  [visualization-standalone](./archive/visualization-standalone.md) (§1–§4; §5/§6 absorbed by
+  solve-package), both 2026-07-30. These hold the **GPU-ownership rules** —
+  `CACHED_GEOMETRY_USERDATA_FLAG`, who disposes what, why `clearScene` skips cache-tagged geometry.
+  Two separate leaks have now been found on that seam, so the rationale is worth keeping reachable.
+- [caching-audit-2026-07](./archive/caching-audit-2026-07.md) — every finding closed or rehomed:
+  D1–D3 fixed, **F1 measured and fixed (a live GPU leak)**, F3 documented in
+  [Caching.md](../Caching.md), F2 absorbed by [caching-simplification](./caching-simplification.md).
+  Worth reading once: it found F1 by reading the caches **as a system**, which is the one class of
+  bug a per-cache review cannot catch.
 
 ## Hard dependencies
 
@@ -33,8 +45,8 @@ they didn't have). This index is the single source of truth for sequence. As of 
   (+ `render/edges/*`), `three-initializer.ts` → `render/scene-setup/*`, `batch-parser.ts` →
   `parse/webdisplay/`. Edge **Phase 4** and display residue now target `@selvajs/visualization`.
 - ~~**visualization-package before presolve-bundle / the UI phases of api-redesign**~~ —
-  **satisfied.** The session layer now lives at `@selvajs/visualization/session`; presolve edits
-  `createRequestResponseDriver`/`createSolveSession` there.
+  **satisfied.** (The session layer has since moved again, to `@selvajs/solve/client` — see the
+  solve-package Phase 2 entry below for the path presolve-bundle should target.)
 - ~~**visualization-standalone §3 is a public-API decision**~~ — **settled: option 3a.** The envelope
   is declared structurally in `parse/webdisplay/response-envelope.ts`; no API broke.
 - ~~**visualization-standalone §5 before presolve-bundle**~~ — **superseded.** §5 resolved to option C
@@ -48,9 +60,10 @@ they didn't have). This index is the single source of truth for sequence. As of 
 - **solve-package Phase 3 before its Phase 5** — the hash unification needs both halves in one
   package. Doing it earlier means merging three hashes across three packages, then relocating two of
   them: the same merge twice.
-- **caching-audit F1 is best measured before solve-package Phase 2** — it is the only open item that
-  might be a live bug rather than a refactor, and Phase 2 touches the same GPU-ownership seam (C1).
-  ~1 hour; not a blocker, but cheaper to resolve outside a large refactor than inside one.
+- ~~**caching-audit F1 is best measured before solve-package Phase 2**~~ — ✅ **resolved 2026-07-30.**
+  Measured and fixed: it was a live GPU leak (400 line geometries after 50 solves instead of 8),
+  closed by having `clearScene` release edge-cache entries. It was the only audit item that turned
+  out to be a bug rather than a refactor. No longer an ordering constraint.
 - **token-plan depends on api-redesign** — PAT auth gates on the `/api/v1/` prefix; api-redesign
   Phases A/B before token-plan Phase 2.
 - **verify-slider gates §B/§C audit items** (C3, C4, LB-1, B5-lb) — cheap measurement that may
@@ -71,16 +84,18 @@ This is the one sequence that matters right now; the rest of the list is indepen
    **C1** (opaque `SolveResult<TMesh>` + injected `MeshPolicy`) and **C2** (`createAsyncThrottle`)
    applied. `@selvajs/visualization` is now mesh-conversion + viewer only, and depends on nothing from
    Selva. Phase 4's ESLint guard landed here too, since `client/` arriving is what made it enforceable.
-4. **caching-audit F1** — measure the edge-cache growth (~1 hour). Independent; still open. Note Phase
-   2 already fixed a _different_ GPU-ownership leak on the same seam (the memo's mesh clone shared
-   `geometry.userData` by reference, so cloned geometries kept the geometry-cache flag and nothing ever
-   disposed them).
+4. ~~**caching-audit F1** — measure the edge-cache growth (~1 hour).~~ — **done 2026-07-30.** It grew
+   unboundedly: 400 live line geometries after 50 solves instead of 8, because `clearScene` detached
+   overlays without ever decrementing a refcount, and the geometry cache had made the WeakMap's
+   "source becomes unreachable" premise false. Fixed with a `releaseEdgeGeometryFor` hook. This is the
+   **second** GPU-ownership leak found on the same seam — Phase 2 fixed the memo's mesh clone sharing
+   `geometry.userData` by reference. Both were cross-cache interactions, not per-cache defects.
 5. **solve-package Phase 3** — `server/`: move the 8 solve-core files, keeping
    `@selvajs/server/compute`'s public surface intact via re-export shims (14 importers, two repos).
 6. **solve-package Phase 4** — the client/server boundary guards: no root barrel, ESLint
    `no-restricted-imports`, one bundle test, `*.server.ts` naming.
 7. **solve-package Phase 5** — unify M2 + L2 input hashing, now local to one package. Informed by
-   [caching-audit](./caching-audit-2026-07.md) §F2. Unify the _derivation_, not the digest strength.
+   [caching-audit](./archive/caching-audit-2026-07.md) §F2. Unify the _derivation_, not the digest strength.
 8. **solve-package Phase 6** — verify: `build`/`check`/`test`, then **build Parafa against the local
    packages** (the only real test of the shims), then changesets.
 9. **compute-package-cleanup** — after Track A settles. Same tree, low-risk once the viewer weight and

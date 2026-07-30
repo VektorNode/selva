@@ -1,7 +1,7 @@
 # `@selvajs/compute` — Rhino.Compute focus, cleaner API, smaller files
 
 > **Status: PROPOSED (2026-07-22) — not yet started.** Companion to
-> [visualization-package.md](./visualization-package.md). Once the viewer leaves for
+> [visualization-package.md](./archive/visualization-package.md). Once the viewer leaves for
 > `@selvajs/visualization`, `@selvajs/compute` becomes a pure Rhino.Compute / Grasshopper library
 > (no `three`, only `rhino3dm` + `fflate`). This plan tightens what remains: split the 5 oversized
 > files along seams they already have, clarify the two-layer public API, and fix the naming warts.

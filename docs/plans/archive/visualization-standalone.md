@@ -1,7 +1,7 @@
 # `@selvajs/visualization` — make it standalone
 
 > **Status: §1–§4 LANDED (2026-07-30). §5 and §6 handed off to
-> [solve-package](./solve-package.md).** `@selvajs/visualization` no longer depends on
+> [solve-package](../solve-package.md).** `@selvajs/visualization` no longer depends on
 > `@selvajs/compute` at all — the dependency is gone from `package.json`, and `shared/`, `parse/`,
 > `render/` and `scene/` need only `three` / `rhino3dm` / `fflate`.
 >
@@ -16,7 +16,7 @@
 >
 > **Decisions taken, with what settled them:**
 >
-> - **§5 → option C (session stays), deferred to [solve-package](./solve-package.md).** That plan
+> - **§5 → option C (session stays), deferred to [solve-package](../solve-package.md).** That plan
 >   supersedes §5 outright: session moves to `@selvajs/solve/client`, not to `@selvajs/ui` (option A)
 >   and not to a `@selvajs/session` package (option B — which that plan explicitly argues against, as
 >   a package with zero direct consumers). So viz keeps its `@selvajs/schemas` dep for now, confined
@@ -197,7 +197,7 @@ before §3, since 3b changes who owns the envelope walk and that interacts with 
 - Neutral scene-graph layer — still deferred (see the old plan's decision).
 - Splitting `parse`/`render`/`scene` apart. One package, internal layers, unchanged.
 - `three` / `rhino3dm` peer deps. Those are legitimate and stay.
-- `@selvajs/compute`'s own cleanup — see [compute-package-cleanup](./compute-package-cleanup.md).
+- `@selvajs/compute`'s own cleanup — see [compute-package-cleanup](../compute-package-cleanup.md).
 
 ## Open questions
 
