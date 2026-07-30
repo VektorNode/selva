@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig, defaultExclude } from 'vitest/config';
 
 export default defineConfig({
 	resolve: {
@@ -8,6 +8,10 @@ export default defineConfig({
 		conditions: ['source']
 	},
 	test: {
+		// The build emits these test files into dist/ too, and vitest 4 dropped
+		// `**/dist/**` from its default excludes — without this every suite runs
+		// twice, against stale compiled output.
+		exclude: [...defaultExclude, '**/dist/**'],
 		// Stateless source-resolution tests — threads pool without isolation
 		// skips worker-spawn overhead.
 		pool: 'threads',

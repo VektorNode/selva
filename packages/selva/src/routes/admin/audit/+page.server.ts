@@ -60,13 +60,7 @@ export interface AuditActorView {
 }
 
 export type AuditTargetKind =
-	| 'org'
-	| 'project'
-	| 'definition'
-	| 'definition_version'
-	| 'share_link'
-	| 'invite'
-	| 'user';
+	'org' | 'project' | 'definition' | 'definition_version' | 'share_link' | 'invite' | 'user';
 
 export interface AuditTargetView {
 	kind: AuditTargetKind;

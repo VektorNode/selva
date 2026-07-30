@@ -12,13 +12,13 @@ catalogs:
     '@sveltejs/kit': 2.70.1
     '@sveltejs/vite-plugin-svelte': ^7.2.0
     '@tailwindcss/vite': ^4.3.3
-    '@types/node': ^22.20.1
+    '@types/node': ^26.1.2
     '@types/three': ^0.185.1
     bits-ui: ^2.15.4
     clsx: ^2.1.1
     eslint: ^10.8.0
     mode-watcher: ^1.1.0
-    prettier: ^3.8.3
+    prettier: ^3.9.6
     rimraf: ^6.0.1
     svelte: 5.56.8
     svelte-check: ^4.7.4
@@ -33,8 +33,8 @@ catalogs:
     # restructured compiler host. Tilde so a caret can't walk into the next
     # major on its own — see the matching ignore in .github/dependabot.yml.
     typescript: ~6.0.3
-    vite: ^8.1.4
-    vitest: ^3.2.7
+    vite: ^8.1.5
+    vitest: ^4.1.10
     ws: ^8.21.1
     '@types/ws': ^8.5.13
 
