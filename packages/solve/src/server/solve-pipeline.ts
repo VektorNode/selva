@@ -252,12 +252,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 	let inputKey: string | null = null;
 	if (args.solveCache) {
 		inputKey = deriveSolveCacheInputKey(inputTree, args.solveCache.configSubset).hash;
-		let stored: Uint8Array | null = null;
-		try {
-			stored = await args.solveCache.lookup(inputKey);
-		} catch {
-			stored = null;
-		}
+		const stored = await args.solveCache.lookup(inputKey).catch(() => null);
 		if (stored) {
 			const hit = buildEnvelopeFromCacheEntry(stored, inputKey, args);
 			if (hit) return hit;

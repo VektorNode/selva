@@ -11,18 +11,32 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // --- Mock @selvajs/compute -------------------------------------------------
-const createdConfigs: any[] = [];
-const createdSchedulerOptions: any[] = [];
-const disposedSchedulers: any[] = [];
+//
+// The recorded values are asserted on property-by-property, so they are loose records rather than
+// the real config types: the point of the mock is that the cache passes values THROUGH untouched,
+// and pinning the upstream shapes here would just couple these tests to `@selvajs/compute`.
+//
+// `unknown` rather than `any`: the few assertions that index into these need a cast, and `prop()`
+// below does it in one place instead of the type opting out everywhere.
+type Recorded = Record<string, unknown>;
+
+/** Read a recorded property. The cast is the point of `Recorded` being `unknown`-valued. */
+function prop<T = unknown>(record: Recorded | undefined, key: string): T {
+	return record?.[key] as T;
+}
+
+const createdConfigs: Recorded[] = [];
+const createdSchedulerOptions: Recorded[] = [];
+const disposedSchedulers: { disposed: boolean }[] = [];
 
 vi.mock('@selvajs/compute', () => {
 	class GrasshopperClient {
-		static async create(config: any) {
+		static async create(config: Recorded) {
 			createdConfigs.push(config);
 			return new GrasshopperClient(config);
 		}
-		constructor(public config: any) {}
-		createScheduler(options: any) {
+		constructor(public config: Recorded) {}
+		createScheduler(options: Recorded) {
 			createdSchedulerOptions.push(options);
 			const scheduler = {
 				disposed: false,
@@ -108,9 +122,13 @@ describe('createClientCache — LRU eviction', () => {
 		expect(disposedSchedulers).toHaveLength(1);
 		// s1 still warm (same entry, no rebuild); s2 rebuilt on next access.
 		expect(await cache.getClient(server('s1'))).toBe(s1);
-		expect(createdConfigs.filter((c) => c.serverUrl.includes('s2'))).toHaveLength(1);
+		expect(createdConfigs.filter((c) => prop<string>(c, 'serverUrl').includes('s2'))).toHaveLength(
+			1
+		);
 		await cache.getClient(server('s2'));
-		expect(createdConfigs.filter((c) => c.serverUrl.includes('s2'))).toHaveLength(2);
+		expect(createdConfigs.filter((c) => prop<string>(c, 'serverUrl').includes('s2'))).toHaveLength(
+			2
+		);
 	});
 });
 
@@ -217,10 +235,16 @@ describe('createClientCache — per-request telemetry sequence counters', () => 
 		const cache = createClientCache(baseConfig());
 		const entry = await cache.getClient(server('s1'));
 		expect(entry.rhinoTiming).toEqual({ last: null, seq: 0 });
-		createdConfigs[0].onServerTiming({ decode: 5, solve: 100, encode: 3 });
+		prop<(t: Record<string, number>) => void>(
+			createdConfigs[0],
+			'onServerTiming'
+		)({ decode: 5, solve: 100, encode: 3 });
 		expect(entry.rhinoTiming.seq).toBe(1);
 		expect(entry.rhinoTiming.last).toEqual({ decode: 5, solve: 100, encode: 3 });
-		createdConfigs[0].onServerTiming({ decode: 1, solve: 2, encode: 3 });
+		prop<(t: Record<string, number>) => void>(
+			createdConfigs[0],
+			'onServerTiming'
+		)({ decode: 1, solve: 2, encode: 3 });
 		expect(entry.rhinoTiming.seq).toBe(2);
 		expect(entry.rhinoTiming.last).toEqual({ decode: 1, solve: 2, encode: 3 });
 	});
@@ -228,7 +252,10 @@ describe('createClientCache — per-request telemetry sequence counters', () => 
 	it('onSettle bumps solveMeta.seq on every settle but writes last only on success', async () => {
 		const cache = createClientCache(baseConfig());
 		const entry = await cache.getClient(server('s1'));
-		const onSettle = createdSchedulerOptions[0].onSettle;
+		const onSettle = prop<(key: Record<string, unknown>, outcome: Record<string, unknown>) => void>(
+			createdSchedulerOptions[0],
+			'onSettle'
+		);
 		expect(entry.solveMeta).toEqual({ last: null, seq: 0 });
 
 		onSettle(

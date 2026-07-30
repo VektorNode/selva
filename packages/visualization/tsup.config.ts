@@ -1,8 +1,9 @@
 import { defineConfig } from 'tsup';
 
+// `shared/` is intentionally absent: it is the internal cross-layer surface, not a published
+// entrypoint. What consumers need from it is re-exported by `render/`.
 const entries = {
 	index: 'src/index.ts',
-	shared: 'src/shared/index.ts',
 	parse: 'src/parse/index.ts',
 	render: 'src/render/index.ts',
 	scene: 'src/scene/index.ts'

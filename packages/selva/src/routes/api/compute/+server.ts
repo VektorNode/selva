@@ -22,7 +22,7 @@ import {
 	type PipelineInput,
 	type ByteCacheRef,
 	type SolvePipelineCacheHook
-} from '@selvajs/server/compute';
+} from '@selvajs/solve/server';
 import { stableStringify, type SolveDefinition } from '@selvajs/compute';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import {
@@ -51,7 +51,7 @@ interface ComputeRequest {
 }
 
 // The transport-agnostic solve pipeline (input tree build → solve → serialize +
-// gzip + Server-Timing envelope) lives in `@selvajs/server` (`runSolvePipeline`);
+// gzip + Server-Timing envelope) lives in `@selvajs/solve/server` (`runSolvePipeline`);
 // this route keeps the app policy around it (auth, DB reads, share tokens, rate
 // limit, metric sink, schema backfill). The remote-definition fetch (SSRF guard
 // + cap + TTL) and the per-server warm-client cache are likewise imported.

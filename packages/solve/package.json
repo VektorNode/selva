@@ -32,6 +32,16 @@
 				"default": "./dist/client.cjs"
 			}
 		},
+		"./server": {
+			"import": {
+				"types": "./dist/server.d.ts",
+				"default": "./dist/server.js"
+			},
+			"require": {
+				"types": "./dist/server.d.cts",
+				"default": "./dist/server.cjs"
+			}
+		},
 		"./shared": {
 			"import": {
 				"types": "./dist/shared.d.ts",
@@ -62,11 +72,14 @@
 		"prepublishOnly": "pnpm build"
 	},
 	"dependencies": {
+		"@selvajs/compute": "workspace:^",
+		"@selvajs/platform": "workspace:^",
 		"@selvajs/schemas": "workspace:*"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
 		"@types/node": "catalog:",
+		"esbuild": "^0.28.1",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
 		"globals": "^17.5.0",

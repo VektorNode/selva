@@ -7,12 +7,18 @@ Depends downward on `shared/` only. It deliberately does **not** import `parse/`
 nothing about wire formats, and a host that does both wires them together (see
 [Anisotropy](#anisotropy-the-one-render↔parse-seam)).
 
+**`initThree` owns this toolkit.** It constructs the camera controller, grid, gizmo, measure tool,
+render pipeline and near-plane fitter from `ThreeInitializerOptions` and returns the live instances
+on `ThreeViewer`. The individual factories are therefore internal — the barrel exports their handle
+_types_ so hosts can annotate, not their constructors. The tables below map the layer's internals;
+they are not a list of public exports.
+
 ## Contents
 
 | Path                                                       | Owns                                                                                                                                     |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `scene-setup/`                                             | `initThree` and everything it composes — see below                                                                                       |
-| `edges.ts`                                                 | Public `addEdges`/`addEdgesAsync`/`removeEdges`; targeting and attachment                                                                |
+| `edges.ts`                                                 | `addEdges`/`addEdgesAsync`/`removeEdges`; targeting and attachment. Reached via `viewer.applyEdges`/`clearEdges`                         |
 | `edges/`                                                   | `options` (defaults/constants), `extraction` (worker + caches), `cache` (refcounted line geometry), `overlay` (materials + density fade) |
 | `camera-controller.ts`                                     | Perspective↔ortho swap, view presets, framing tweens                                                                                     |
 | `render-pipeline.ts`                                       | Postprocessing composer (GTAO, screen-space edges, output pass)                                                                          |

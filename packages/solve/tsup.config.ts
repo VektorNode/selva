@@ -9,7 +9,8 @@ import { defineConfig } from 'tsup';
  */
 const entries = {
 	shared: 'src/shared/index.ts',
-	client: 'src/client/index.ts'
+	client: 'src/client/index.ts',
+	server: 'src/server/index.ts'
 };
 
 export default defineConfig({

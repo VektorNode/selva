@@ -8,10 +8,12 @@
  * nothing to say about meshes, so it moved to `@selvajs/solve/client` — leaving this package as
  * exactly mesh conversion + viewer.
  *
+ * This root module deliberately re-exports nothing. Import from the layer you need
+ * (`@selvajs/visualization/parse`, `/render`, `/scene`) so the layering is enforced by the
+ * import graph rather than merely documented. `shared/` is internal; the pieces consumers need
+ * (errors, logging, the look vocabulary) are re-exported from `render/`.
+ *
  * @module @selvajs/visualization
  */
 
-export * from './shared/index.js';
-export * from './parse/index.js';
-export * from './render/index.js';
-export * from './scene/index.js';
+export {};

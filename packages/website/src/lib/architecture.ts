@@ -185,7 +185,7 @@ export const CACHES: CacheEntry[] = [
 		scope: 'per-process',
 		lifetime: '16 servers (LRU)',
 		files: [
-			'packages/server/src/compute/client-cache.ts:146',
+			'packages/solve/src/server/client-cache.ts:146',
 			'packages/selva/src/lib/server/compute/clientCache.server.ts:39'
 		]
 	},
@@ -202,7 +202,7 @@ export const CACHES: CacheEntry[] = [
 		scope: 'per-process',
 		lifetime: '256 MB budget',
 		files: [
-			'packages/server/src/compute/definition-byte-cache.ts:93',
+			'packages/solve/src/server/definition-byte-cache.ts:93',
 			'packages/selva/src/lib/server/compute/definitionByteCache.server.ts:19'
 		]
 	},
@@ -233,7 +233,7 @@ export const CACHES: CacheEntry[] = [
 		scope: 'per-process',
 		lifetime: 'quota + 512 MB',
 		files: [
-			'packages/server/src/compute/memory-solve-cache.ts:71',
+			'packages/solve/src/server/memory-solve-cache.ts:71',
 			'packages/selva/src/lib/server/compute/solveCache.server.ts'
 		]
 	},
@@ -265,7 +265,7 @@ export const CACHES: CacheEntry[] = [
 		lifetime: '5 min TTL · 20 entries',
 		files: [
 			'packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:239',
-			'packages/server/src/compute/client-cache.ts:229'
+			'packages/solve/src/server/client-cache.ts:229'
 		]
 	},
 	{
@@ -346,13 +346,13 @@ export const FLOW_CONTROLS: FlowControl[] = [
 		name: 'Single-flight coalescer',
 		where: 'Selva server',
 		what: 'Concurrent identical live solves (same org + version + inputs) collapse into one pipeline run; every waiter is served that one result. A hot-key burst hits compute once. The shared run uses a non-aborting signal, so one caller disconnecting can’t cancel the solve for the others.',
-		files: ['packages/server/src/compute/solve-cache-single-flight.ts']
+		files: ['packages/solve/src/server/solve-cache-single-flight.ts']
 	},
 	{
 		name: 'Scheduler queue',
 		where: 'Compute client',
 		what: 'Cloud solves run in queue mode: FIFO, one at a time per compute server, each runs to completion. (The plugin preview uses latest-wins instead.)',
-		files: ['packages/server/src/compute/client-cache.ts:229']
+		files: ['packages/solve/src/server/client-cache.ts:229']
 	}
 ];
 
@@ -489,7 +489,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 		oneliner: 'The per-server LRU hands back a ready client — no handshake, no reconnect.',
 		detail:
 			'The first solve against a compute server creates a GrasshopperClient (one liveness probe) plus a queue-mode SolveScheduler, and caches the pair under the server’s id. Every later solve — and every definition-page render — reuses it. Rotating a server’s URL or key in admin explicitly evicts its entry.',
-		files: ['packages/server/src/compute/client-cache.ts:239'],
+		files: ['packages/solve/src/server/client-cache.ts:239'],
 		caches: [{ id: 'warm-client', note: 'server id → ready client + scheduler' }]
 	},
 	{
@@ -498,8 +498,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 		title: 'Build the input tree',
 		oneliner: 'Values + parameter specs become the Grasshopper data tree for the wire.',
 		detail:
-			'Each input is normalized (number ranges, value lists, files, colors) and assembled into the tree structure Grasshopper expects. This is pure computation inside the solve pipeline — the transport-agnostic core extracted to @selvajs/server.',
-		files: ['packages/server/src/compute/solve-pipeline.ts:145']
+			'Each input is normalized (number ranges, value lists, files, colors) and assembled into the tree structure Grasshopper expects. This is pure computation inside the solve pipeline — the transport-agnostic core in @selvajs/solve.',
+		files: ['packages/solve/src/server/solve-pipeline.ts:145']
 	},
 	{
 		id: 'c-cache',
@@ -511,7 +511,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			'First, for an eligible live-channel solve, the pipeline consults the durable L2 cache (keyed on org + version + inputs); a hit returns the stored gzipped envelope without building a tree or calling compute — l2_cache;dur=1. If L2 is off or misses, the scheduler hashes the definition bytes together with the exact input tree; a hit there returns the stored response instantly as selva_cache;dur=1. Both are what make “wiggle a slider back to where it was” free server-side. The L2 is off by default — an operator opts in with SOLVE_CACHE_PROVIDER.',
 		files: [
 			'packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:412',
-			'packages/server/src/compute/solve-pipeline.ts:160'
+			'packages/solve/src/server/solve-pipeline.ts:160'
 		],
 		caches: [
 			{ id: 'l2-solve', note: 'durable HIT = stored envelope, no solve (if enabled)' },
@@ -560,7 +560,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 		oneliner: 'Size-guard → gzip → Server-Timing header that names where every millisecond went.',
 		detail:
 			'The result is serialized once (an oversized file output becomes a clean 413 instead of a crash), gzipped when the browser accepts it, and stamped with Server-Timing: load/tree/solve/serialize/gzip plus rhino_decode/rhino_solve/rhino_encode from the VM and the cache verdicts selva_cache and def_reupload. Open devtools → Network → Timing and you can read exactly which caches hit.',
-		files: ['packages/server/src/compute/solve-pipeline.ts:140']
+		files: ['packages/solve/src/server/solve-pipeline.ts:140']
 	},
 	{
 		id: 'b-render',

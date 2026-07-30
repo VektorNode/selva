@@ -1,7 +1,7 @@
 /**
  * App-wide binding for the durable L2 solve cache (H1).
  *
- * The backend (`memory` today, `off` by default) lives in `@selvajs/server`; this
+ * The backend (`memory` today, `off` by default) lives in `@selvajs/solve/server`; this
  * module owns the single instance selected by `SOLVE_CACHE_PROVIDER`, plus:
  *
  *   - `resolveSolveCacheQuota(record)` — the definition's effective quota from its
@@ -26,7 +26,7 @@ import {
 	type SolveCacheConfigSubset,
 	type SolvePipelineCacheHook,
 	type MemorySolveResultCache
-} from '@selvajs/server/compute';
+} from '@selvajs/solve/server';
 import {
 	NoopSolveResultCache,
 	type ISolveResultCache,

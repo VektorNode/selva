@@ -1,7 +1,7 @@
 {
 	"name": "@selvajs/server",
 	"version": "0.2.1",
-	"description": "Transport-agnostic compute/solve/definitions server building blocks for apps built on the Selva engine (limits, rate limiting, SSRF guard, input transform, solve pipeline, definition service + render loader)",
+	"description": "Transport-agnostic server building blocks for apps built on the Selva engine (limits, rate limiting, SSRF guard, remote-definition fetch, definition service + render loader); the solve core lives in @selvajs/solve/server",
 	"license": "MIT",
 	"author": "VektorNode",
 	"homepage": "https://github.com/VektorNode/selva#readme",
@@ -25,14 +25,7 @@
 		"node": ">=22.0.0"
 	},
 	"type": "module",
-	"main": "./dist/index.js",
-	"types": "./dist/index.d.ts",
 	"exports": {
-		".": {
-			"source": "./src/index.ts",
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js"
-		},
 		"./compute": {
 			"source": "./src/compute/index.ts",
 			"types": "./dist/compute/index.d.ts",

@@ -6,6 +6,13 @@
  * Depends downward on `shared/` only. It never imports `parse/`: hosts that both parse and render
  * wire the two together (see `ThreeInitializerOptions.onMaxAnisotropy`).
  *
+ * `initThree` is the entrypoint and it owns the toolkit: it builds the camera controller, grid,
+ * gizmo, measure tool, render pipeline and near-plane fitter, and hands them back on
+ * {@link ThreeViewer}. Those factories are therefore not exported — reach the live instances
+ * through the viewer (`viewer.grid`, `viewer.measureTool`, `viewer.applyEdges`, …) and configure
+ * them up front through {@link ThreeInitializerOptions}. Their handle types are exported so hosts
+ * can annotate what they hold.
+ *
  * @module render
  */
 
@@ -15,59 +22,21 @@
 
 export { initThree } from './scene-setup/init-three.js';
 export type { ThreeViewer } from './scene-setup/viewer.js';
-export { applyDefaults } from './scene-setup/defaults.js';
-export type { ResolvedOptions } from './scene-setup/defaults.js';
-export { disposeMaterialWithTextures } from './scene-setup/dispose.js';
 
 // ============================================================================
-// Viewer toolkit
+// Viewer toolkit — handle types (instances come from `initThree`)
 // ============================================================================
 
-export { createCameraController } from './camera-controller.js';
 export type { CameraController, CameraProjection, ViewPreset } from './camera-controller.js';
-
-export { createGrid } from './grid.js';
-export type { Grid, GridOptions } from './grid.js';
-
-export { createViewGizmo } from './view-gizmo.js';
+export type { Grid } from './grid.js';
 export type { ViewGizmo } from './view-gizmo.js';
-
-export {
-	addEdges,
-	addEdgesAsync,
-	removeEdges,
-	isEdgeOverlay,
-	EDGE_USERDATA_KIND,
-	EDGES_SKIPPED_TRIANGLE_CAP
-} from './edges.js';
-export type { EdgeOptions } from './edges.js';
-
-export { createRenderPipeline } from './render-pipeline.js';
-export type { RenderPipeline, RenderPipelineOptions } from './render-pipeline.js';
-
-export { EdgeDetectionPass } from './edge-detection-pass.js';
-export type { EdgeDetectionOptions } from './edge-detection-pass.js';
-
-export { createLabelLayer } from './label-layer.js';
-export type { LabelLayer, LabelHandle } from './label-layer.js';
-
-export { createMeasureTool, snapToVertex } from './measure.js';
-export type { MeasureTool, MeasureOptions } from './measure.js';
-
-export { createNearPlaneFitter } from './near-plane.js';
-export type { NearPlaneFitter } from './near-plane.js';
+export type { MeasureTool } from './measure.js';
 
 // ============================================================================
-// Scene helpers & materials
+// Scene helpers
 // ============================================================================
 
-export { updateScene, clearScene, computeContentBounds } from './three-helpers.js';
-export * as Materials from './three-materials.js';
-
-// The scene-up basis every orientation default derives from. Exported so hosts that configure a
-// non-default `sceneUp` can resolve the matching ground axis for `applyOffset`/`groundAxis`.
-export { buildUpBasis, environmentRotationFor, isoOffset, sunOffset, upToAxis } from './up-axis.js';
-export type { UpBasis } from './up-axis.js';
+export { updateScene } from './three-helpers.js';
 
 // ============================================================================
 // Types
@@ -87,6 +56,18 @@ export type {
 	MeasureConfig,
 	EventConfig
 } from './types.js';
+
+// ============================================================================
+// Errors & logging
+// ============================================================================
+
+// Defined in `shared/` (every layer throws/logs) but surfaced here: `render/` is the entrypoint
+// consumers import, and they need these to catch failures and route this package's logs.
+export { VisualizationError, ErrorCodes } from '../shared/index.js';
+export type { ErrorCode } from '../shared/index.js';
+
+export { getLogger, setLogger, enableDebugLogging } from '../shared/index.js';
+export type { Logger } from '../shared/index.js';
 
 // The look vocabulary. Defined in `shared/` (both this layer and `parse/` need it) but re-exported
 // here so a render-only consumer — the viewer's style picker being the whole point — gets it from

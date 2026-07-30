@@ -11,7 +11,7 @@ import {
 } from '@/parse/webdisplay/binary-parser';
 import type {
 	MaterialGroup,
-	MeshBatch,
+	DisplayBatch,
 	MeshMetadata,
 	SerializableMaterial
 } from '@/parse/webdisplay/types';
@@ -30,7 +30,7 @@ export interface MeshBatchBuilderOptions {
 }
 
 export interface BuiltMeshBatch {
-	batch: MeshBatch;
+	batch: DisplayBatch;
 	rawVertices: Float32Array;
 	rawFaces: Uint32Array;
 }

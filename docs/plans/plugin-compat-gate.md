@@ -144,7 +144,7 @@ per probe.
 **Gate C — solve path (backstop + cached pre-check).**
 
 - _Cached pre-check:_ where the compute client is constructed per server
-  (`packages/server/src/compute/client-cache.ts`), run
+  (`packages/solve/src/server/client-cache.ts`), run
   `checkServerCompatibility` once per server per TTL (~5 min, in-memory beside
   the client cache). Hard-fail fast on `plugin-missing` / `plugin-too-old` /
   `plugin-too-new`; log-and-continue on `unknown`. This is what actually stops

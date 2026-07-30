@@ -88,8 +88,13 @@ through a plain reference, which a framework cannot observe.
 
 ## Extension points
 
-- **A different notion of "content"** — `isSceneContent` is exported on its own. Compose it rather
-  than reimplementing the camera/light/helper filter.
+The layer's parts stay separately composable **inside the package**, but the barrel publishes only
+`createSceneOutliner` (plus the handle types and the two rendering helpers). That is deliberate: a
+published symbol is a compatibility promise, and no consumer has needed these individually. Each is
+one barrel line away if a real case turns up — add it then, with a consumer to justify it.
+
+- **A different notion of "content"** — compose `isSceneContent` from [`objects.ts`](./objects.ts)
+  rather than reimplementing the camera/light/helper filter.
 - **A different grouping** — `groupByLayer` returns a plain `Map`; swap it for a group-by-material
   or group-by-object-type and the rest of the outliner is unaffected.
 - **A headless consumer** — `getSceneObjects` + `groupByLayer` are enough to drive an export filter

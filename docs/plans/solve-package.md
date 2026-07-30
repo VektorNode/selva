@@ -1,6 +1,7 @@
 # `@selvajs/solve` — one owner for the solve flow
 
-> **Status: Phases 0–2 DONE (2026-07-30); Phases 3–6 not started.** Supersedes the open
+> **Status: Phases 0–4 DONE (2026-07-30); Phase 5 (unify input hashing) and Phase 6 (verify against
+> Parafa) remain.** Supersedes the open
 > items in [visualization-standalone](./visualization-standalone.md) — §1–§4 **landed** (its §3 chose
 > option 3a), and §5/§6 are absorbed here. Scope: extract the client-side solve orchestration out of
 > `@selvajs/visualization/session` and the server-side solve core out of `@selvajs/server/compute`
@@ -200,7 +201,7 @@ stateless? **No.** Recorded because it will be asked again.
 
 `SolveScheduler` holds five interlocking pieces of state, and the cache is one of them:
 `cache` (L1 responses — 20 entries / 5-min TTL / byte-budgeted, enabled by the server at
-[client-cache.ts:236](../../packages/server/src/compute/client-cache.ts#L236)), `inFlight`,
+[client-cache.ts:236](../../packages/solve/src/server/client-cache.ts#L236)), `inFlight`,
 `fifoQueue`/`pendingForLatestWins`, `serverCacheKeys`, `subscribers`.
 
 Two reasons it can't move:
@@ -379,14 +380,74 @@ would not have.** `BufferGeometry.clone()` copies `userData` **by reference**. S
   pattern in `selva`'s route code — it is a house-wide unresolved tension, not something this move
   introduced.
 
-### Phase 3 — `server/`
+### Phase 3 — `server/` — ✅ DONE (2026-07-30)
 
 Move the 8 solve-core files. `@selvajs/server/compute` keeps `rate-limit`, `safe-url`, `limits`,
 `remote-definition` and re-exports the moved symbols from `@selvajs/solve/server` so its 14 importers
 across two repos keep resolving. **Do not break `@selvajs/server/compute`'s public surface in this
 phase** — Parafa is on published `@selvajs/server@0.2.1`, and a re-export shim costs nothing.
 
-### Phase 4 — enforce the client/server boundary
+**As landed.** All 8 files + 5 test files moved with `git mv` (13 renames recorded, history intact).
+`@selvajs/solve` gains a `./server` sub-path export and `@selvajs/compute` + `@selvajs/platform` as
+dependencies. `@selvajs/server` does **not** depend on `@selvajs/solve` — see the correction below.
+
+- **The "verified decoupled" claim held exactly.** Re-checked before moving: the 8 movers have **zero
+  import edges to the 4 stayers, in either direction**. The only cross-edge among the stayers is
+  `remote-definition → safe-url`, entirely inside the group that stays. So the cut needed no
+  untangling and no wrapper, adapter, or behaviour change.
+- **The re-export shim was built, then deliberately removed** — see "Correction" below. The two types
+  the old barrel never re-exported (`ByteRefOutcome`, `SolveCacheSingleFlightOptions`) are now public
+  from the new barrel.
+- **Phase 4 guard 3 landed here too**, since the plan put it "after Phase 3" for the reason that it
+  had nothing to bite on until `server/` existed. See below.
+- Lint warnings travelled with the files (they never fired in `@selvajs/server`, which has no `lint`
+  script). Cleared: the `no-useless-assignment` in the L2 lookup was a genuinely dead initializer —
+  `let stored = null` followed by a try/catch assigning on both paths — collapsed to
+  `await lookup(key).catch(() => null)`, same best-effort semantics. The 6 `no-explicit-any` in the
+  moved `client-cache.test.ts` were narrowed to one documented alias.
+
+**Noted, not touched:** `memory-solve-cache.ts` contains a literal NUL byte as the storage-key
+separator (`${orgId}\0${definitionId}\0…`) — deliberate, since NUL can't appear in any interpolated
+id, making the key injection-proof. It makes grep report the file as binary. `git mv` preserved it;
+don't let a tool rewrite that file textually.
+
+#### Correction — the re-export shim was removed (2026-07-30, same day)
+
+**This phase's instruction above — "do not break `@selvajs/server/compute`'s public surface", "a
+re-export shim costs nothing" — turned out to be wrong, and was overridden on review.** Recorded
+rather than quietly edited, because the reasoning generalizes.
+
+The shim did not cost nothing. Measured right after it landed:
+
+| Surface                   | Before extraction | With shim        | After removing it  |
+| ------------------------- | ----------------- | ---------------- | ------------------ |
+| `@selvajs/server/compute` | 24                | 24 (14 borrowed) | **10, 0 borrowed** |
+| `@selvajs/server` root    | 41                | 41 (14 borrowed) | **removed**        |
+
+So the extraction _shrank the package's responsibility while leaving its API the same size_ — 34% of
+the root namespace was code the package no longer owned. A consumer reading the export list would
+still conclude `@selvajs/server` runs solves. That is precisely the "no package owns the solve flow"
+confusion this plan opens by describing, preserved in the one artifact consumers actually read.
+
+**Two changes, both breaking, both deliberate:**
+
+1. `/compute` re-exports nothing from `@selvajs/solve/server`. The dependency
+   `@selvajs/server → @selvajs/solve` is gone; the packages are independent.
+2. **The root `.` export is removed entirely** (this part predates the extraction). It was
+   `export *` over all nine subpaths — 41 symbols in one namespace, hiding which slice a consumer
+   depended on. **Nothing in the repo imported it**, verified before removal. Consumers use a
+   subpath, matching the stance `@selvajs/solve` already takes.
+
+`@selvajs/server` therefore goes **major**, not minor. Phase 6's Parafa build is now load-bearing
+rather than a formality: Parafa is on published `@selvajs/server@0.2.1` and must repoint its
+solve-core imports to `@selvajs/solve/server` and add the dependency. In-repo, `@selvajs/selva`'s 5
+affected modules were repointed and it gained a direct `@selvajs/solve` dependency.
+
+**The generalizable bit:** a compat shim is cheap when it preserves a boundary and expensive when it
+erases one. This shim erased the boundary the phase existed to draw. "Costs nothing" was measured in
+lines of code, which was the wrong unit — the cost was in API surface, and it was 14 symbols.
+
+### Phase 4 — enforce the client/server boundary — ✅ DONE (2026-07-30)
 
 `client/` must never pull `server/` (or `@selvajs/platform`, or storage credentials) into a browser
 bundle. Three cheap guards, in order of value:
@@ -401,12 +462,29 @@ bundle. Three cheap guards, in order of value:
    was already in place from Phase 1.
 3. **One bundle test.** Bundle `dist/client.js` with esbuild and assert no server module or
    `process.env` reference appears. ~30 lines. This is the only check that verifies the _shipped
-   artifact_ rather than the source. **Still to do** — it has nothing to bite on until `server/`
-   exists, so it belongs after Phase 3.
+   artifact_ rather than the source. — ✅ **landed with Phase 3**, which is when it first had
+   something to bite on. `src/__tests__/client-bundle-boundary.test.ts`.
+
+**What the bundle test actually catches, verified by probe rather than assumed.** Adding
+`export { runSolvePipeline } from '../server/solve-pipeline.js'` to `client/index.ts` and rebuilding:
+
+- `tsup` emitted a **shared `solve-pipeline` chunk** that both entries import — the boundary
+  violation made visible in the artifact graph;
+- the test then failed in `beforeAll`, because esbuild with `platform: 'browser'` cannot resolve
+  `node:zlib`. So the strongest signal is a hard build failure, not a string match.
+
+The string assertions cover the subtler case the probe does _not_ exercise: server code that happens
+to import no node builtin. The suite also carries a negative control (the server entry must trip the
+same assertions), so an empty-bundle regression can't leave it green and vacuous. It skips — loudly,
+not silently — when `dist/` is absent, so `pnpm test` on a fresh clone before `pnpm build` doesn't
+show a red herring.
 
 Also name server-only modules `*.server.ts`. That is free and already load-bearing in both apps —
 SvelteKit hard-fails the build with an import trace if a `.server.ts` module reaches client code, so
-consumers get the guard without configuring anything.
+consumers get the guard without configuring anything. **Not applied inside `@selvajs/solve`**: the
+suffix is a SvelteKit convention and this is a plain library, where the `server/` directory + the
+three guards above already carry the meaning. Renaming 8 files would break every `git mv` rename
+record from this phase for no additional enforcement.
 
 ### Phase 5 — consolidate stable-input hashing
 
@@ -442,10 +520,21 @@ tier choosing its own digest. Verify before merging; don't assume the three are 
 
 ### Phase 6 — verify
 
-`pnpm build && pnpm check && pnpm test` green. Then **build Parafa against the local packages** —
-it is a real second consumer on published versions, and it is the only way to know the re-export
-shims hold. Changeset: `major` for `@selvajs/visualization` (loses `/session`), `minor` for
-`@selvajs/server` and `@selvajs/ui` (additive re-exports), new package at `0.1.0`.
+`pnpm build && pnpm check && pnpm test` green. Then **build Parafa against the local packages** — it
+is a real second consumer on published versions.
+
+**This step is now load-bearing, not a formality.** The original plan expected re-export shims to
+absorb the move, so Parafa would need no edit and the build was a sanity check. With the shims
+removed (see the Phase 3 correction), Parafa has **two required edits** before it can take the new
+versions:
+
+1. Repoint solve-core imports from `@selvajs/server/compute` to `@selvajs/solve/server`, and add
+   `@selvajs/solve` as a dependency.
+2. Replace any root `@selvajs/server` import with the matching subpath — the root export is gone.
+
+Changeset: `major` for `@selvajs/visualization` (loses `/session`), **`major` for `@selvajs/server`**
+(loses the solve core and its root export), `minor` for `@selvajs/ui` (additive re-exports), new
+package at `0.1.0`.
 
 **Known Parafa breakage, independent of this plan.** Found 2026-07-30 while tracing the seam:
 `src/routes/app/solve/[guid]/+page.svelte` still calls

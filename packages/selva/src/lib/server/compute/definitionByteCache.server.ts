@@ -1,6 +1,6 @@
 /**
  * App-wide binding for the definition-byte cache. The cache — an in-process,
- * total-byte-budget LRU keyed on immutable version id — lives in `@selvajs/server`
+ * total-byte-budget LRU keyed on immutable version id — lives in `@selvajs/solve/server`
  * (`createDefinitionByteCache`). This module owns the single instance, sized from
  * the env-derived budget, so both hot paths that read `.gh` bytes share it:
  *
@@ -13,7 +13,7 @@
  * doc in `definition-byte-cache.ts`.
  */
 
-import { createDefinitionByteCache } from '@selvajs/server/compute';
+import { createDefinitionByteCache } from '@selvajs/solve/server';
 import { COMPUTE_DEFINITION_BYTE_CACHE_BYTES } from '$lib/server/computeLimits';
 
 const cache = createDefinitionByteCache(COMPUTE_DEFINITION_BYTE_CACHE_BYTES);

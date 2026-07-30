@@ -170,21 +170,30 @@ that turns a response into Three.js objects, sets up a viewer, or drives a solve
 ### Viewer Core (`@selvajs/visualization`)
 
 In-repo at `packages/visualization`. Framework-free (no Svelte, no runes); `three` is a peer dep.
-Five layers that **depend downward only** — `session → scene → render → parse → shared`. Each layer
-has its own barrel and README naming its extension points, and is a published sub-path export:
+Four layers that **depend downward only** — `scene → render → parse → shared`. Each layer has its
+own barrel and README naming its extension points. Three are published sub-path exports:
 
-- `/session`: `createSolveSession`, `SolveDriver` — inputs → solve → outputs, transport-agnostic
 - `/scene`: `createSceneOutliner` — reads a scene (visibility/selection/layers); never owns content
 - `/render`: `initThree` + the CAD viewer toolkit (camera, edges, grid, gizmo, measure)
 - `/parse`: backend payload → THREE meshes (`webdisplay`, `display-items`)
-- `/shared`: coordinate frame, look presets, pure geometry/color math
+- `shared/`: **internal** — coordinate frame, look presets, errors, logging, geometry/color math.
+  Not a published entrypoint; what consumers need is re-exported from `/render`.
 
-Two seams exist so a layer never depends upward, and both must be preserved: `render/` takes an
-`onMaxAnisotropy` hook rather than calling into `parse/`, and `session/` exposes `subscribe()` rather
-than using runes. In a Svelte component use `useSolveSession` from `@selvajs/ui`, not
-`createSolveSession` directly — the raw factory returns correct values that never re-render. Same
-trap in the scene layer: read the injected set (`hidden.has(getTrackingKey(obj))`) in markup, not
-`outliner.visibility.isHidden(obj)`.
+The solve session used to be a fifth layer here; it moved to `@selvajs/solve/client`.
+
+**The public API is deliberately minimal — do not re-export a symbol just because it exists.**
+`initThree` owns the render toolkit (grid, gizmo, measure tool, camera controller, pipeline) and
+hands the live instances back on `ThreeViewer`, so their factories stay unexported; likewise
+`createSceneOutliner` composes the scene layer's parts, and the SLVA binary wire format is private
+to `parseMeshBatch*`. Export handle _types_ so hosts can annotate; keep the constructors internal.
+The root `.` entrypoint intentionally re-exports nothing — import from a layer.
+
+One seam exists so a layer never depends upward, and it must be preserved: `render/` takes an
+`onMaxAnisotropy` hook rather than calling into `parse/` (the host wires it to
+`setTextureAnisotropy` from `/parse`). In a Svelte component use `useSolveSession` from
+`@selvajs/ui` rather than driving a solve directly — a raw factory returns correct values that
+never re-render. Same trap in the scene layer: read the injected set
+(`hidden.has(getTrackingKey(obj))`) in markup, not `outliner.visibility.isHidden(obj)`.
 
 The Svelte shells stay in `@selvajs/ui`: `Viewer.svelte`, `SceneManager.svelte`,
 `useSolveSession.svelte.ts`, `solving.svelte.ts`, plus the design system. **Whoever owns the scene

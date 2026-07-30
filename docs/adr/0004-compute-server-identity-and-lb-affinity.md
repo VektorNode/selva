@@ -146,7 +146,7 @@ This ADR gated K2, the client-cache extraction into [`@selvajs/server`](../../pa
 1. **Now (this ADR):** decision recorded. No code required to _accept_ it.
 2. **✅ Done with K2 (2026-07-08), as part of the extraction:**
    - ✅ Client-cache key changed from `serverUrl + apiKey` to server `id`
-     ([client-cache.ts](../../packages/server/src/compute/client-cache.ts)).
+     ([client-cache.ts](../../packages/solve/src/server/client-cache.ts)).
    - ✅ Config-write eviction hook added ([`evictChangedServers`](../../packages/selva/src/lib/server/compute/evictChangedServers.ts),
      called from the admin + org compute PUT routes; disposes the scheduler for a rotated/removed `id`).
    - ✅ `getClient` takes an opaque `ServerIdentity` (`serverIdentity()` constructor); `evict`/`disposeAll` exported.

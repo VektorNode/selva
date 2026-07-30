@@ -76,9 +76,9 @@ export const packages: PackageInfo[] = [
 	},
 	{
 		name: '@selvajs/server',
-		tagline: 'Solve & compute building blocks',
+		tagline: 'Server building blocks',
 		description:
-			'Transport-agnostic server pieces — request limits, the SSRF guard, rate limiting, solve orchestration. Shared by the app and anyone building their own server layer.',
+			'Transport-agnostic server pieces — request limits, the SSRF guard, rate limiting, the definition service. Shared by the app and anyone building their own server layer.',
 		category: 'Core libraries',
 		href: repoTree('packages/server'),
 		badge: 'Node'

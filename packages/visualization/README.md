@@ -14,7 +14,7 @@ render/    THREE scene setup + CAD viewer toolkit (camera, edges, grid, gizmo, m
    │  ↓
 parse/     backend payload → THREE meshes + metadata (webdisplay, display-items)
    │  ↓
-shared/    coordinate frame, look presets, geometry/color utils, common types
+shared/    coordinate frame, look presets, errors, logging, geometry/color utils  [internal]
 ```
 
 **The solve session used to be a fourth layer on top.** It is a schema-driven form state machine
@@ -29,36 +29,56 @@ can be refactored freely without touching consumers.
 
 ## Current status
 
-Migration in progress (see `docs/plans/visualization-package.md`). Landed so far:
+All four layers have landed (see `docs/plans/visualization-package.md`):
 
-| Layer     | Status                                                             |
-| --------- | ------------------------------------------------------------------ |
-| `shared/` | ✅ coordinate frame, looks, geometry/color utils, types            |
-| `parse/`  | ✅ webdisplay + display-items                                      |
-| `render/` | ✅ scene setup, edges, camera, grid, gizmo, labels, measure        |
-| `scene/`  | ✅ outliner: content filter, layer grouping, visibility, selection |
+| Layer     | Contents                                                        | Published     |
+| --------- | --------------------------------------------------------------- | ------------- |
+| `shared/` | coordinate frame, looks, errors, logging, geometry/color utils  | no — internal |
+| `parse/`  | webdisplay + display-items                                      | `/parse`      |
+| `render/` | scene setup, edges, camera, grid, gizmo, labels, measure        | `/render`     |
+| `scene/`  | outliner: content filter, layer grouping, visibility, selection | `/scene`      |
 
-All layers have landed, and `session/` has since moved out to `@selvajs/solve/client`.
+`session/` has since moved out to `@selvajs/solve/client`.
 `@selvajs/compute` no longer depends on `three` at all — it is pure solve/data — and `@selvajs/ui`
 keeps only the Svelte shells (`Viewer.svelte`, `SceneManager.svelte`, `useSolveSession.svelte.ts`)
 plus the design system.
 
 ## Sub-path exports
 
-Mirror the layers so consumers tree-shake:
+Three of the four layers are published entrypoints, so consumers tree-shake:
 
 ```ts
-import { parseComputeResponse } from '@selvajs/visualization/parse';
-import { initThree, addEdges } from '@selvajs/visualization/render';
-import { LOOKS, parseColor } from '@selvajs/visualization/shared';
+import { getThreeMeshesFromComputeResponse, meshPolicy } from '@selvajs/visualization/parse';
+import { initThree, LOOKS, type ThreeViewer } from '@selvajs/visualization/render';
 import { createSceneOutliner } from '@selvajs/visualization/scene';
 ```
+
+`shared/` is **internal** — it is the cross-layer import surface, not an entrypoint. The parts
+consumers need (`VisualizationError`, the logger seam, the look vocabulary) are re-exported from
+`/render`. The root `.` entrypoint re-exports nothing on purpose: importing from a layer keeps the
+layering enforced by the import graph rather than merely documented.
+
+### The API is deliberately minimal
+
+Only what a consumer genuinely needs is exported. In particular:
+
+- **`initThree` owns the render toolkit.** It builds the camera controller, grid, gizmo, measure
+  tool, render pipeline and near-plane fitter, and returns the live instances on
+  [`ThreeViewer`](./src/render/scene-setup/viewer.ts). Configure them through
+  `ThreeInitializerOptions`, reach them through the viewer (`viewer.grid`, `viewer.measureTool`,
+  `viewer.applyEdges`, …). The factories themselves are internal — their handle _types_ are exported
+  so hosts can annotate what they hold.
+- **`createSceneOutliner` composes the scene layer.** Content filtering, layer grouping, visibility
+  and selection state are reachable via `outliner.visibility` / `.selection` / `.layerGroups()`.
+- **The SLVA binary wire format is private.** Magics, version gates, flag bits and the low-level
+  binary parser are implementation details of `parseMeshBatch*` and change without a major bump.
+
+When adding a feature, resist re-exporting a symbol just because it exists — a published surface is
+a compatibility promise.
 
 `scene/` is framework-free too, but takes the simpler route: its state is three sets, so a host
 injects its own (`SvelteSet` in a Svelte app) and gets reactivity with no seam at all — see
 [`src/scene/README.md`](./src/scene/README.md).
-
-Or take everything from the top barrel: `@selvajs/visualization`.
 
 ## Dependencies
 
@@ -84,7 +104,7 @@ The package logs nothing by default. To route its output into a host's logger �
 `@selvajs/compute`'s, so both packages share a sink:
 
 ```ts
-import { setLogger } from '@selvajs/visualization/shared';
+import { setLogger } from '@selvajs/visualization/render';
 import { getLogger } from '@selvajs/compute';
 
 setLogger(getLogger());

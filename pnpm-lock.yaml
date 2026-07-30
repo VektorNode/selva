@@ -516,6 +516,9 @@ importers:
       '@selvajs/server':
         specifier: workspace:*
         version: link:../server
+      '@selvajs/solve':
+        specifier: workspace:*
+        version: link:../solve
       '@selvajs/supabase-provider':
         specifier: workspace:*
         version: link:../providers/supabase
@@ -575,6 +578,12 @@ importers:
 
   packages/solve:
     dependencies:
+      '@selvajs/compute':
+        specifier: workspace:^
+        version: link:../compute
+      '@selvajs/platform':
+        specifier: workspace:^
+        version: link:../platform
       '@selvajs/schemas':
         specifier: workspace:*
         version: link:../schemas
@@ -585,6 +594,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.2
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.0(jiti@2.7.0)
@@ -7081,7 +7093,6 @@ snapshots:
       '@esbuild/win32-arm64': 0.28.1
       '@esbuild/win32-ia32': 0.28.1
       '@esbuild/win32-x64': 0.28.1
-    optional: true
 
   escape-string-regexp@4.0.0: {}
 

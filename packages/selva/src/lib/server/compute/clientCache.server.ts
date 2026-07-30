@@ -1,7 +1,7 @@
 /**
  * App-side binding for the shared compute client cache. The cache itself —
  * one warm `GrasshopperClient` (+ `SolveScheduler`) per compute server, keyed
- * by the server's `id`, with an LRU bound — lives in `@selvajs/server`
+ * by the server's `id`, with an LRU bound — lives in `@selvajs/solve/server`
  * (`createClientCache`, see ADR 0004). This module owns the single app-wide
  * instance, wired with the env-derived limits/flags, and adapts the app's
  * `ComputeServerConfig` to the cache's `ResolvedServer` shape.
@@ -11,7 +11,7 @@
  * `evictComputeClient(id)` — see the admin/org compute PUT routes.
  */
 
-import { createClientCache, type CachedClient } from '@selvajs/server/compute';
+import { createClientCache, type CachedClient } from '@selvajs/solve/server';
 import { env } from '$env/dynamic/private';
 import { getLogger } from '$lib/server/providers.server';
 import type { ComputeServerConfig } from '@selvajs/platform';

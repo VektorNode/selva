@@ -6,6 +6,10 @@
  *
  * Depends only on `shared/`. Never imports from `render/` or `scene/`.
  *
+ * The SLVA binary wire format — magics, version gates, flag bits and the low-level
+ * `parseBinaryMeshBatch` — is an implementation detail of `parseMeshBatch*` and is deliberately not
+ * exported; it changes without a major bump.
+ *
  * @module parse
  */
 
@@ -14,7 +18,8 @@
 // ============================================================================
 
 // The clone/release rules `@selvajs/solve`'s result memo needs but deliberately doesn't know.
-export { meshPolicy, cloneSceneObjects, releaseSceneObjects } from './mesh-policy.js';
+// `meshPolicy` carries both operations as `.clone` / `.release`; they are not exported separately.
+export { meshPolicy } from './mesh-policy.js';
 
 // ============================================================================
 // WEB DISPLAY PARSING
@@ -31,33 +36,11 @@ export type {
 	DisplayDataItem
 } from './webdisplay/response-envelope.js';
 
-export {
-	parseMeshBatch,
-	parseMeshBatchObject,
-	parseMeshBatchBlob
-} from './webdisplay/batch-parser.js';
+export { parseMeshBatchObject, parseMeshBatchBlob } from './webdisplay/batch-parser.js';
 
-export {
-	parseBinaryMeshBatch,
-	BINARY_MESH_MAGIC,
-	COMPRESSED_MESH_MAGIC,
-	BINARY_MESH_VERSION,
-	MIN_SUPPORTED_VERSION,
-	FLAG_FLOAT32,
-	FLAG_UINT16_INDICES,
-	FLAG_DELTA_ENCODED,
-	FLAG_HAS_UVS,
-	FLAG_HAS_VERTEX_COLORS,
-	UV_FORMAT_UINT16,
-	UV_FORMAT_FLOAT32
-} from './webdisplay/binary-parser.js';
-export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './webdisplay/binary-parser.js';
-
-export {
-	clearTextureCache,
-	setTextureAnisotropy,
-	TEXTURE_CACHE_MAX_ENTRIES
-} from './webdisplay/texture-cache.js';
+// The other half of the render/parse seam: hosts call this from
+// `ThreeInitializerOptions.onMaxAnisotropy` so `render/` never imports this layer.
+export { setTextureAnisotropy } from './webdisplay/texture-cache.js';
 
 export type {
 	MeshBatchParsingOptions,
@@ -65,9 +48,7 @@ export type {
 	SerializableMaterial,
 	MeshMetadata,
 	MaterialGroup,
-	DisplayBatch,
-	/** @deprecated Use {@link DisplayBatch}. */
-	MeshBatch
+	DisplayBatch
 } from './webdisplay/types.js';
 
 // ============================================================================

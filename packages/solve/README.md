@@ -12,14 +12,17 @@ apps hand-wrote a solve coordinator (and one of them paid for it with a poisoned
 ```
 shared/   the vocabulary both halves speak — SolveResult, SolveFn, SolveInput, input keying
 client/   form state machine, auto/manual decision, throttle, result memo, driver seam
-server/   solve pipeline (tree build → solve → serialize → envelope), L2 cache, single-flight (Phase 3)
+server/   solve pipeline (tree build → solve → serialize → envelope), L2 cache, single-flight
 ```
 
-`client/` and `server/` both depend on `shared/`, and **never on each other** — enforced by
-`no-restricted-imports` in this package's eslint config, and by there being no root barrel.
+`client/` and `server/` both depend on `shared/`, and **never on each other** — enforced three ways:
+no root barrel, `no-restricted-imports` in this package's eslint config, and a bundle test that
+checks the shipped `dist/client.js` rather than the source
+([`src/__tests__/client-bundle-boundary.test.ts`](./src/__tests__/client-bundle-boundary.test.ts)).
 
 See [`src/client/README.md`](./src/client/README.md) for the session, the driver seam, and how to
-write a transport.
+write a transport; [`src/server/README.md`](./src/server/README.md) for the pipeline and the cache
+tiers.
 
 ## What it must never know
 
@@ -35,10 +38,10 @@ write a transport.
 
 ## No root barrel — on purpose
 
-`@selvajs/solve` exports `./shared`, and (once they land) `./client` and `./server`. There is
-deliberately **no `.` export**: a root barrel re-exporting both halves would let a browser bundle
-reach server code — and server credentials — through one innocent-looking import, defeating every
-other guard. Adding one is a boundary change, not a convenience.
+`@selvajs/solve` exports `./shared`, `./client` and `./server`. There is deliberately **no `.`
+export**: a root barrel re-exporting both halves would let a browser bundle reach server code — and
+server credentials — through one innocent-looking import, defeating every other guard. Adding one is
+a boundary change, not a convenience.
 
 ```ts
 import type { SolveResult } from '@selvajs/solve/shared';
@@ -46,11 +49,17 @@ import type { SolveResult } from '@selvajs/solve/shared';
 
 ## Status
 
-Phases 1–2 landed: `shared/` and `client/`. `server/` is Phase 3 of the plan.
+Phases 1–3 landed: all three halves. Remaining: unify the input hashing across the M2/L2 tiers
+(Phase 5).
 
 ```ts
 import { createSolveSession, createRequestResponseDriver } from '@selvajs/solve/client';
+import { runSolvePipeline } from '@selvajs/solve/server';
 ```
+
+`@selvajs/server/compute` keeps only the HTTP request policy it owns (limits, rate limiting, the
+SSRF guard, remote-definition fetch) and does not re-export any of this — the two packages are
+independent.
 
 In a Svelte app use `useSolveSession` from `@selvajs/ui` rather than `createSolveSession` directly —
 the raw factory returns correct values that never re-render.

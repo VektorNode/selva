@@ -9,24 +9,27 @@
  * Depends on `three` only. It reads the scene graph and toggles `.visible`; adding, removing and
  * disposing content stays with `render/`.
  *
+ * `createSceneOutliner` composes this layer's parts — content filtering, layer grouping, visibility
+ * and selection state — so those pieces are not exported individually; reach them through the
+ * outliner (`outliner.visibility`, `outliner.selection`, `outliner.layerGroups()`). The exceptions
+ * are the two pure functions a host needs while *rendering* the outliner's output.
+ *
  * @module scene
  */
 
 export { createSceneOutliner, type SceneOutliner, type SceneOutlinerOptions } from './outliner.js';
 
-export {
-	HELPER_IDS,
-	isSceneContent,
-	getSceneObjects,
-	prettyType,
-	getObjectLabel,
-	getTypeLabel
-} from './objects.js';
+// State handle types, reachable via `outliner.visibility` / `.selection` / `.select()`.
+export type { VisibilityState } from './visibility.js';
+export type { SelectionState, SelectionModifiers } from './selection.js';
 
-export { DEFAULT_LAYER, groupByLayer, filterLayerGroups } from './layers.js';
+// Display helpers for rendering an outliner row. Pure functions over an object the outliner
+// already handed back.
+export { getObjectLabel, getTypeLabel } from './objects.js';
 
-export { getStableKey, getTrackingKey } from './identity.js';
-
-export { createVisibilityState, type VisibilityState } from './visibility.js';
-
-export { createSelectionState, type SelectionState, type SelectionModifiers } from './selection.js';
+/**
+ * Keying helper for list rendering. Read the injected set in markup
+ * (`hidden.has(getTrackingKey(obj))`) rather than calling `outliner.visibility.isHidden(obj)` —
+ * the latter is not reactive under Svelte runes.
+ */
+export { getTrackingKey } from './identity.js';

@@ -18,13 +18,14 @@ selva/
 ├── packages/                       # TypeScript / Svelte workspace
 │   ├── schemas/                    # ui-schema.json + TS/C# code generators
 │   ├── compute/                    # @selvajs/compute — Rhino.Compute client + data-tree helpers (no three)
-│   ├── visualization/              # @selvajs/visualization — headless viewer core (session/scene/render/parse/shared)
+│   ├── visualization/              # @selvajs/visualization — headless viewer core (scene/render/parse/shared)
+│   ├── solve/                      # @selvajs/solve — the solve flow, both sides of the wire (client/server/shared)
 │   ├── platform/                   # Provider interfaces (auth, data, storage, ...)
 │   ├── providers/
 │   │   ├── local/                  # Filesystem-backed provider (@selvajs/local-provider)
 │   │   ├── supabase/               # Supabase provider (@selvajs/supabase-provider)
 │   │   └── header-auth/            # Forward-auth provider (@selvajs/header-auth-provider)
-│   ├── server/                     # @selvajs/server — transport-agnostic solve/compute server building blocks
+│   ├── server/                     # @selvajs/server — server building blocks: limits, rate limit, SSRF guard, definitions
 │   ├── ui/                         # Shared Svelte components, theme, primitives
 │   ├── plugin-ui/                  # Plugin UI — schema designer + preview, embedded into Selva.gha
 │   ├── selva/                      # @selvajs/selva — deployable Selva app (cloud mode)

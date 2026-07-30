@@ -78,6 +78,8 @@ import {
 	type PipelineInput,
 	type CachedClient
 } from '../index.js';
+// `../index.js` here is `solve/src/server/index.ts` — the barrel moved with these files. It was
+// `@selvajs/server/compute`'s barrel before the extraction.
 import { gzipSync } from 'node:zlib';
 
 /**

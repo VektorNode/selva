@@ -3,6 +3,11 @@
 What every layer above has in common. Depends on nothing else in this package, so anything placed
 here must stay free of scene, camera, renderer and controls concerns.
 
+**This layer is internal.** Its barrel is the cross-layer import surface for `parse/`, `render/` and
+`scene/`; it is not a published entrypoint (there is no `@selvajs/visualization/shared`). The parts
+consumers need — `VisualizationError`/`ErrorCodes`, the logger seam, and the look vocabulary — are
+re-exported from `render/`, which is the barrel a viewer host already imports.
+
 ## Contents
 
 | File                  | Owns                                                                      |

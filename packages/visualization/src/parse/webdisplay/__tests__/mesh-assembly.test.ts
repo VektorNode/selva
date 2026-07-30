@@ -8,14 +8,14 @@ import { geometryCacheClear, geometryCacheGet } from '../geometry-cache';
 import { assembleGeometries, meshAssemblyWorkerSource } from '../mesh-assembly';
 
 import type { AssemblyInput, AssemblyJob } from '../mesh-assembly';
-import type { MeshBatch } from '../types';
+import type { DisplayBatch } from '../types';
 
 afterEach(() => {
 	geometryCacheClear();
 });
 
 /** Raw parse → AssemblyInput + jobs, mirroring tryBuildViaWorker's construction. */
-function assemblyInputFor(batch: MeshBatch, mergeByMaterial: boolean): AssemblyInput {
+function assemblyInputFor(batch: DisplayBatch, mergeByMaterial: boolean): AssemblyInput {
 	const raw = parseBinaryMeshBatchRaw(batch.compressedData!);
 	const groups = raw.metadata.groups ?? batch.groups ?? [];
 	const jobs: AssemblyJob[] = [];

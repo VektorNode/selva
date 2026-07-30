@@ -94,12 +94,6 @@ export interface DisplayBatch {
 	items?: DisplayItem[];
 }
 
-/**
- * @deprecated Renamed to {@link DisplayBatch} — the payload now carries more than meshes.
- * This alias keeps existing imports compiling; remove it once consumers migrate.
- */
-export type MeshBatch = DisplayBatch;
-
 export interface MeshBatchParsingOptions {
 	/** Merge meshes with same material into single geometry. Defaults to true. */
 	mergeByMaterial?: boolean;
