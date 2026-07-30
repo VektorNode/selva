@@ -29,21 +29,19 @@ if (!envCtx) {
 					)
 					.order('occurred_at', { ascending: true });
 				if (error) throw new Error(`solve_metrics read failed: ${error.message}`);
-				return (data ?? []).map(
-					(r): RecordedSolveMetric => ({
-						actorId: r.actor_id,
-						definitionUrl: r.definition_url,
-						definitionId: r.definition_id,
-						versionId: r.version_id,
-						channel: r.channel,
-						orgId: r.org_id,
-						durationMs: r.duration_ms,
-						ok: r.ok,
-						failureKind: r.failure_kind,
-						errorCount: r.error_count,
-						warningCount: r.warning_count
-					})
-				);
+				return (data ?? []).map((r): RecordedSolveMetric => ({
+					actorId: r.actor_id,
+					definitionUrl: r.definition_url,
+					definitionId: r.definition_id,
+					versionId: r.version_id,
+					channel: r.channel,
+					orgId: r.org_id,
+					durationMs: r.duration_ms,
+					ok: r.ok,
+					failureKind: r.failure_kind,
+					errorCount: r.error_count,
+					warningCount: r.warning_count
+				}));
 			},
 			// Point the sink at a bundle whose service key is bogus, so the insert
 			// fails. record() must still resolve (contract: never throw).

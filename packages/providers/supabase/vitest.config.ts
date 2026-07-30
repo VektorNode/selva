@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vitest/config';
+import { defineConfig, defaultExclude } from 'vitest/config';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -13,6 +13,10 @@ export default defineConfig({
 		conditions: ['source']
 	},
 	test: {
+		// The build emits these test files into dist/ too, and vitest 4 dropped
+		// `**/dist/**` from its default excludes — without this every suite runs
+		// twice, against stale compiled output.
+		exclude: [...defaultExclude, '**/dist/**'],
 		// Conformance tests hit a live local Supabase stack — give the network
 		// room to breathe (bucket listing, cleanup between tests).
 		testTimeout: 30_000,

@@ -60,10 +60,7 @@ export type InputWidgetConfig =
 	| ColorWidgetConfig;
 
 export type OutputWidgetConfig =
-	| ChartWidgetConfig
-	| ImageWidgetConfig
-	| DynamicValueListOutputConfig
-	| Record<string, never>;
+	ChartWidgetConfig | ImageWidgetConfig | DynamicValueListOutputConfig | Record<string, never>;
 
 export type WidgetConfig = InputWidgetConfig | OutputWidgetConfig;
 

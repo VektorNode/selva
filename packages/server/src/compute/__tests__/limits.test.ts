@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { resolveComputeLimits, readPositiveInt, readNonNegativeInt } from '../limits.js';
 import { NoopLogger, type ILogger } from '@selvajs/platform';
 
@@ -7,9 +7,9 @@ import { NoopLogger, type ILogger } from '@selvajs/platform';
  * `NoopLogger`), so the diagnostics are captured by passing this in rather than
  * by spying on `console`.
  */
-function fakeLogger(): ILogger & { warn: ReturnType<typeof vi.fn> } {
-	const logger = new NoopLogger() as ILogger & { warn: ReturnType<typeof vi.fn> };
-	logger.warn = vi.fn();
+function fakeLogger(): ILogger & { warn: Mock<ILogger['warn']> } {
+	const logger = new NoopLogger() as ILogger & { warn: Mock<ILogger['warn']> };
+	logger.warn = vi.fn<ILogger['warn']>();
 	return logger;
 }
 

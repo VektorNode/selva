@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { NoopLogger, type ILogger, type RequestContext, type SolveMetric } from '@selvajs/platform';
 import { SupabaseSolveMetricSink } from '../SupabaseSolveMetricSink.js';
 import type { ClientBundle } from '../client.js';
@@ -8,9 +8,9 @@ import type { ClientBundle } from '../client.js';
  * `NoopLogger`), so its diagnostics are captured by passing this in rather than
  * by spying on `console`.
  */
-function fakeLogger(): ILogger & { error: ReturnType<typeof vi.fn> } {
-	const logger = new NoopLogger() as ILogger & { error: ReturnType<typeof vi.fn> };
-	logger.error = vi.fn();
+function fakeLogger(): ILogger & { error: Mock<ILogger['error']> } {
+	const logger = new NoopLogger() as ILogger & { error: Mock<ILogger['error']> };
+	logger.error = vi.fn<ILogger['error']>();
 	return logger;
 }
 
