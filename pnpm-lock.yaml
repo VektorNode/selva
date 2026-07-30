@@ -624,6 +624,9 @@ importers:
       '@selvajs/compute':
         specifier: workspace:^
         version: link:../compute
+      '@selvajs/solve':
+        specifier: workspace:^
+        version: link:../solve
       '@selvajs/visualization':
         specifier: workspace:^
         version: link:../visualization
@@ -688,9 +691,6 @@ importers:
 
   packages/visualization:
     dependencies:
-      '@selvajs/schemas':
-        specifier: workspace:*
-        version: link:../schemas
       fflate:
         specifier: ^0.8.2
         version: 0.8.3

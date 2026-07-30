@@ -140,8 +140,8 @@ export const CACHES: CacheEntry[] = [
 		scope: 'per-tab',
 		lifetime: '16 entries (LRU)',
 		files: [
-			'packages/visualization/src/session/solve-memo.ts:88',
-			'packages/visualization/src/session/drivers/request-response.ts:23'
+			'packages/solve/src/client/solve-memo.ts:83',
+			'packages/solve/src/client/drivers/request-response.ts:34'
 		]
 	},
 	{
@@ -334,7 +334,7 @@ export const FLOW_CONTROLS: FlowControl[] = [
 		name: 'Solve throttle',
 		where: 'Browser',
 		what: 'One request in flight at a time; a newer value overwrites the single waiting slot ("latest wins") and stale in-flight requests are aborted. Stores no results.',
-		files: ['packages/visualization/src/session/compute-throttle.ts:33']
+		files: ['packages/solve/src/client/async-throttle.ts:44']
 	},
 	{
 		name: 'Rate limiter',
@@ -380,8 +380,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 		detail:
 			'If a solve is already running, the new values go into a single pending slot, overwriting whatever was waiting there. When the in-flight solve settles, the pending values fire — so the server only ever sees the newest state, and a slow solve can’t pile up requests behind it. Before firing, a small client-side memo (LRU 16, keyed on a stable hash of the input values) is consulted: dragging a slider back to a value already solved this session returns instantly, with no request leaving the browser at all.',
 		files: [
-			'packages/visualization/src/session/compute-throttle.ts:33',
-			'packages/visualization/src/session/drivers/request-response.ts:23'
+			'packages/solve/src/client/async-throttle.ts:44',
+			'packages/solve/src/client/drivers/request-response.ts:34'
 		],
 		gates: ['1 in flight · latest wins'],
 		caches: [{ id: 'client-memo', note: 'repeat value → instant, no network' }]
@@ -592,7 +592,7 @@ export const LOCAL_STEPS: FlowStep[] = [
 			'The plugin preview UI collects value changes for 50 ms and sends them as one update. If Grasshopper is still solving, updates keep queueing — when the solve finishes, only the latest state is applied. The same client-side solve memo (LRU 16) the cloud path uses sits in front of the driver here too: a value already solved this session is served from memory without touching the socket.',
 		files: [
 			'packages/plugin-ui/src/lib/websocket/websocket.svelte.ts:337',
-			'packages/visualization/src/session/drivers/request-response.ts:23'
+			'packages/solve/src/client/drivers/request-response.ts:34'
 		],
 		gates: ['50 ms batch · latest wins'],
 		caches: [{ id: 'client-memo', note: 'repeat value → served from memory, no socket send' }]

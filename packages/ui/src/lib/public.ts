@@ -45,7 +45,7 @@ export {
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 
 // Solve Session seam (transport-agnostic value/lifecycle state machine + its
-// driver interface). The session lives in `@selvajs/visualization/session` and is
+// driver interface). The session lives in `@selvajs/solve/client` and is
 // framework-free; `useSolveSession` is the Svelte binding that makes its getters
 // read reactively inside components. A host embedding <ComputeApp> needs neither —
 // both are re-exported for hosts driving a session themselves. See CONTEXT.md.
@@ -57,7 +57,7 @@ export {
 	type SolveSessionArgs,
 	type SolveDriver,
 	type SolveReporter
-} from '@selvajs/visualization/session';
+} from '@selvajs/solve/client';
 
 // Client-slot context type (host apps render their own cell for client-sourced
 // inputs, and may commit a value back via ClientSlotArgs.onValueChange).
@@ -71,7 +71,7 @@ export {
 	getExternalInputs,
 	type ExternalValueRef,
 	type ExternalInput
-} from '@selvajs/visualization/session';
+} from '@selvajs/solve/client';
 
 // Schema utilities a ComputeApp host reasonably needs to read/shape values.
 export * from './schema/defaults';
@@ -80,5 +80,5 @@ export * from './schema/dynamic-value-list';
 
 // UI-facing runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';
-export type { SolveFn, SolveResult } from '@selvajs/visualization/session';
+export type { SolveFn, SolveResult } from '@selvajs/solve/shared';
 export { DEFAULT_PRESET_LABELS, type PresetLabels } from './types/presetLabels';

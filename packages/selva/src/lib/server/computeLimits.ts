@@ -12,7 +12,7 @@
  *
  * Client-side counterparts (the in-flight compute throttle and the slider
  * debounce on inputs) are bundled into the client, so they cannot read env — see
- * `compute-throttle.ts` in `@selvajs/visualization/session` and the input components.
+ * `async-throttle.ts` in `@selvajs/solve/client` and the input components.
  */
 
 import { env } from '$env/dynamic/private';

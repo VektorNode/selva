@@ -4,10 +4,17 @@
  * Turns a Rhino.Compute / WebSocket response into renderable Three.js objects: mesh batches
  * (binary SLVA wire format, textures, materials) and display items (curves, points).
  *
- * Depends only on `shared/`. Never imports from `render/`, `scene/` or `session/`.
+ * Depends only on `shared/`. Never imports from `render/` or `scene/`.
  *
  * @module parse
  */
+
+// ============================================================================
+// MESH OWNERSHIP
+// ============================================================================
+
+// The clone/release rules `@selvajs/solve`'s result memo needs but deliberately doesn't know.
+export { meshPolicy, cloneSceneObjects, releaseSceneObjects } from './mesh-policy.js';
 
 // ============================================================================
 // WEB DISPLAY PARSING

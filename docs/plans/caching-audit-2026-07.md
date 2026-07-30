@@ -135,7 +135,7 @@ Arguably fine — they guard different things (dogpile vs. result reuse) — but
 are raw-different yet transform-identical coalesce as separate flights and then both hit the same L2
 key. There are now **three** stable-hash implementations in the solve path: `stableInputKey` (M2),
 `solve-cache-key.ts` (L2), `stable-hash.ts` (compute/L1). This is what
-[solve-package.md](./solve-package.md) Phase 3b should reconcile — and it should reconcile
+[solve-package.md](./solve-package.md) Phase 5 should reconcile — and it should reconcile
 deliberately, not just merge them.
 
 ### F3. L1's worst case is 256 MB × 16 = 4 GB
@@ -181,5 +181,5 @@ Ordered by value, none started:
 2. **Fix the stale path** in `architecture.ts:159`. One line, fixes D2.
 3. **Measure F1** — instrument the edge line-geometry cache's entry count across many solves with
    cached geometry. Fix only if it grows unboundedly.
-4. **Reconcile the three hashes** — [solve-package.md](./solve-package.md) Phase 3b, informed by F2.
+4. **Reconcile the three hashes** — [solve-package.md](./solve-package.md) Phase 5, informed by F2.
 5. **Document F3's 4 GB worst case** in the operator-facing scaling docs.

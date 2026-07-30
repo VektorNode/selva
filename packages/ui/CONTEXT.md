@@ -16,7 +16,7 @@ HTTP (Rhino.Compute) or a WebSocket. It only knows that a solve is _started_ and
 a result is later _reported_ back to it.
 
 > **The session itself no longer lives in this package.** It moved to
-> `@selvajs/visualization/session`, where it is framework-free: state reads through plain
+> `@selvajs/solve/client`, where it is framework-free: state reads through plain
 > getters and every mutation fires `subscribe()` listeners. What stays here is
 > `lib/compute/useSolveSession.svelte.ts` — the Svelte binding, which subscribes once and
 > bumps a `$state` counter that each getter reads, so session state stays reactive inside
@@ -37,9 +37,9 @@ on their own schedule.
 
 Two adapters define this seam:
 
-- **Request/response driver** — wraps `createComputeThrottle` + a `SolveFn` (`onSolve`).
+- **Request/response driver** — wraps `createAsyncThrottle` + a `SolveFn` (`onSolve`).
   Calls `session.report()` when the solve promise resolves. Lives beside the session in
-  `@selvajs/visualization/session`; used by `ComputeApp`.
+  `@selvajs/solve/client`; used by `ComputeApp`.
 - **WebSocket driver** — sends values over the socket; reports when output frames
   arrive. Lives in `plugin-ui` (`lib/schema-source/websocket-solve-driver.ts`) because it
   is transport-specific. Transport quirks (value preparation, mesh-blob streaming,
@@ -52,3 +52,17 @@ How a completed solve re-enters the Solve Session. The driver (or its host) call
 the result into `values` and applies the post-solve lifecycle transitions (clear
 pending, clear never-solved). Report-based (not return-based) so push transports fit
 without contortion.
+
+## Mesh policy
+
+The clone/dispose rules the request/response driver's result memo needs. **This package is
+where they get wired**, because it is the only one that sees both halves: `@selvajs/solve`
+keeps meshes opaque (`SolveResult<TMesh>`) and `@selvajs/visualization` owns the three.js
+rules, and neither may import the other.
+
+`ComputeApp` passes `meshPolicy` from `@selvajs/visualization/parse` when it builds the
+driver. Omitting it is silently wrong, not a type error: the memo then retains the very
+objects it hands the viewer, so the next hit serves geometry the viewer already disposed
+(audit C1). `lib/compute/mesh-policy-wiring.test.ts` pins it, negative control included.
+
+Anyone building a driver here — or in a host app — carries the same obligation.

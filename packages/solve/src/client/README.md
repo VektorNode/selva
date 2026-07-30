@@ -1,14 +1,14 @@
-# `session/` — inputs → solve → outputs
+# `client/` — inputs → solve → outputs
 
 The value and lifecycle state machine that sits between a schema-driven UI and a solver.
 It owns the input/output `values` map, the solve-gating rules (`instanceSolve`), the
 pending-changes / never-solved flags, the compute errors/warnings, the display meshes, and
 how all of these reset when the active definition changes.
 
-**This layer is independent of `scene/`, `render/` and `parse/`.** A session only knows
-`SolveResult` — inputs go out, outputs and meshes come back. That is what lets the same
-session drive a WebSocket (the Grasshopper plugin) or a Rhino.Compute HTTP call (the cloud
-app), and what lets a headless consumer solve without ever rendering.
+**It knows only `SolveResult` from `shared/`** — inputs go out, outputs and meshes come back.
+That is what lets the same session drive a WebSocket (the Grasshopper plugin) or a
+Rhino.Compute HTTP call (the cloud app), and what lets a headless consumer solve without ever
+rendering. It must never import `../server/*`.
 
 ## Contents
 
@@ -18,10 +18,9 @@ app), and what lets a headless consumer solve without ever rendering.
 | `solve-session-core.ts`       | the pure transition logic every decision goes through            |
 | `drivers/driver.ts`           | `SolveDriver` + `SolveReporter` — the transport seam             |
 | `drivers/request-response.ts` | `createRequestResponseDriver` (memo + throttle over a `SolveFn`) |
-| `compute-throttle.ts`         | single-in-flight, latest-wins dispatch pacing                    |
-| `solve-memo.ts`               | client-side LRU result cache (owns mesh GPU lifetime)            |
+| `async-throttle.ts`           | single-in-flight, latest-wins dispatch pacing                    |
+| `solve-memo.ts`               | client-side LRU result cache (delegates mesh ownership)          |
 | `external-storage.ts`         | client-sourced input transit storage                             |
-| `solve-fn.ts`                 | `SolveFn` / `SolveResult`                                        |
 
 ## Reactivity: the `subscribe()` seam
 
@@ -80,15 +79,26 @@ inside the driver. The session never learns them. `plugin-ui`'s WebSocket driver
 that package rather than here for exactly this reason: it is transport-specific, but it
 satisfies this interface.
 
-Reach for `createComputeThrottle` if your transport needs single-in-flight latest-wins
+Reach for `createAsyncThrottle` if your transport needs single-in-flight latest-wins
 semantics, and `createSolveMemo` if repeated inputs should skip the round-trip. Both are
 exported so a custom driver doesn't re-derive them.
 
-## Note on `three`
+## Mesh ownership is injected, not known here
 
-`solve-memo.ts` imports `three`. A `SolveResult` carries live scene objects and the viewer
-disposes what it renders, so the memo must clone on the way in and out and dispose on
-eviction or it leaks GPU buffers (audit C1). This is the one place `session/` touches the
-renderer — `three` is already a peer dependency of the package, and keeping the ownership
-rule next to the cache that breaks it is worth more than a hook that pushes the same three
-lines onto every host.
+A `SolveResult` can carry live renderer objects, and a viewer takes ownership of every mesh
+array it renders — disposing the previous content on the next scene update. So a memo that
+stored those objects by reference would serve an already-disposed mesh on the next hit, and
+would leak GPU buffers on eviction (audit C1).
+
+`solve-memo.ts` handles that **without knowing what a mesh is**: `TMesh` is opaque and the
+clone/release policy is a `MeshPolicy<TMesh>` the host passes in. The three.js implementation
+lives in `@selvajs/visualization/parse` (`meshPolicy`), beside the viewer whose disposal rule
+creates the requirement. This is what keeps `three` out of this package entirely.
+
+```ts
+import { meshPolicy } from '@selvajs/visualization/parse';
+const driver = createRequestResponseDriver(onSolve, () => session, { meshPolicy });
+```
+
+Omit it and the memo stores meshes by reference — correct only when nothing disposes what it
+hands out.

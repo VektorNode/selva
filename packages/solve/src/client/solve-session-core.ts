@@ -9,7 +9,7 @@
 import type { UISchema } from '@selvajs/schemas';
 import { getDefaultValue } from '@selvajs/schemas';
 import { getExternalInputs, type ExternalValueRef } from './external-storage.js';
-import type { SolveResult } from './solve-fn.js';
+import type { SolveResult } from '../shared/solve-fn.js';
 
 export interface SolveSessionState {
 	values: Record<string, unknown>;

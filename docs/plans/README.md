@@ -35,13 +35,22 @@ they didn't have). This index is the single source of truth for sequence. As of 
 - ~~**visualization-package before presolve-bundle / the UI phases of api-redesign**~~ —
   **satisfied.** The session layer now lives at `@selvajs/visualization/session`; presolve edits
   `createRequestResponseDriver`/`createSolveSession` there.
-- **visualization-standalone §5 before presolve-bundle** — §5 may relocate the whole session layer
-  again (to `@selvajs/ui` or a new `@selvajs/session`) and §6 renames `createComputeThrottle` and
-  changes `SolveResult`'s shape. presolve-bundle edits exactly those symbols. Settle §5 first, or
-  expect to rebase.
-- **visualization-standalone §3 is a public-API decision** — option 3b breaks
-  `getThreeMeshesFromComputeResponse`, which the visualization-package changeset just published as
-  the entry point. Decide before anything external depends on it.
+- ~~**visualization-standalone §3 is a public-API decision**~~ — **settled: option 3a.** The envelope
+  is declared structurally in `parse/webdisplay/response-envelope.ts`; no API broke.
+- ~~**visualization-standalone §5 before presolve-bundle**~~ — **superseded.** §5 resolved to option C
+  (session stays put for now) and handed off to solve-package, which moves it to
+  **`@selvajs/solve/client`** — not `@selvajs/ui` and not a `@selvajs/session` package (both
+  rejected). The real dependency is the one below.
+- ~~**solve-package Phase 2 before presolve-bundle**~~ — **satisfied 2026-07-30.** The session layer
+  now lives at `@selvajs/solve/client`; the throttle is `createAsyncThrottle`; `SolveResult<TMesh>` is
+  opaque. presolve-bundle edits `createRequestResponseDriver`/`createSolveSession` — rebase onto their
+  new home before starting.
+- **solve-package Phase 3 before its Phase 5** — the hash unification needs both halves in one
+  package. Doing it earlier means merging three hashes across three packages, then relocating two of
+  them: the same merge twice.
+- **caching-audit F1 is best measured before solve-package Phase 2** — it is the only open item that
+  might be a live bug rather than a refactor, and Phase 2 touches the same GPU-ownership seam (C1).
+  ~1 hour; not a blocker, but cheaper to resolve outside a large refactor than inside one.
 - **token-plan depends on api-redesign** — PAT auth gates on the `/api/v1/` prefix; api-redesign
   Phases A/B before token-plan Phase 2.
 - **verify-slider gates §B/§C audit items** (C3, C4, LB-1, B5-lb) — cheap measurement that may
@@ -49,26 +58,51 @@ they didn't have). This index is the single source of truth for sequence. As of 
 
 ## Recommended order
 
+### Track A — the package-boundary refactor, in order
+
+This is the one sequence that matters right now; the rest of the list is independent of it.
+
 0. ~~**visualization-package**~~ — **done 2026-07-30.** All five layers extracted; `@selvajs/compute`
-   is pure solve/data with no `three` in any form.
-1. **visualization-standalone** — decide §5 (where session goes) and §3 (envelope walk). §1/§2/§4 are
-   mechanical and can land while §5 is still open; they remove 14 of the 15 `@selvajs/compute` import
-   sites on their own.
-2. **compute-package-cleanup** — unblocked, same tree/context as above. Split the remaining oversized
-   files + API naming fixes. Low-risk now that the viewer weight is gone.
-3. **verify-slider-drag** — one measurement session before spending on solve-path efficiency items.
-4. **api-redesign → token-plan** — if external/machine/LLM access is the priority.
-5. **plugin-compat-gate** — independent; when plugin-version drift becomes a support cost.
-6. **presolve-bundle** — independent product feature; P5.1 (pure enumerate engine) is a small
-   high-confidence start. Must come after visualization-standalone §5/§6 (same session symbols).
-7. **data-access-efficiency-audit items** — slot cheap DB wins (2e/2f counts, 4g indexes, C3
-   delete-the-size-log) opportunistically; B1–B4 scaling roadmap is post-launch.
+   holds no `three` in any form.
+1. ~~**visualization-standalone §1/§2/§4** (+ §3 as option 3a)~~ — **done 2026-07-30**, independently
+   cross-validated. `@selvajs/visualization` no longer depends on `@selvajs/compute` at all.
+2. ~~**solve-package Phase 1** — scaffold `packages/solve` + `shared/`~~ — **done 2026-07-30.**
+3. ~~**solve-package Phase 2** — `client/`~~ — **done 2026-07-30.** 7 source + 5 test files moved,
+   **C1** (opaque `SolveResult<TMesh>` + injected `MeshPolicy`) and **C2** (`createAsyncThrottle`)
+   applied. `@selvajs/visualization` is now mesh-conversion + viewer only, and depends on nothing from
+   Selva. Phase 4's ESLint guard landed here too, since `client/` arriving is what made it enforceable.
+4. **caching-audit F1** — measure the edge-cache growth (~1 hour). Independent; still open. Note Phase
+   2 already fixed a _different_ GPU-ownership leak on the same seam (the memo's mesh clone shared
+   `geometry.userData` by reference, so cloned geometries kept the geometry-cache flag and nothing ever
+   disposed them).
+5. **solve-package Phase 3** — `server/`: move the 8 solve-core files, keeping
+   `@selvajs/server/compute`'s public surface intact via re-export shims (14 importers, two repos).
+6. **solve-package Phase 4** — the client/server boundary guards: no root barrel, ESLint
+   `no-restricted-imports`, one bundle test, `*.server.ts` naming.
+7. **solve-package Phase 5** — unify M2 + L2 input hashing, now local to one package. Informed by
+   [caching-audit](./caching-audit-2026-07.md) §F2. Unify the _derivation_, not the digest strength.
+8. **solve-package Phase 6** — verify: `build`/`check`/`test`, then **build Parafa against the local
+   packages** (the only real test of the shims), then changesets.
+9. **compute-package-cleanup** — after Track A settles. Same tree, low-risk once the viewer weight and
+   the solve core are both gone.
+
+### Track B — independent of the above
+
+- **verify-slider-drag** — one measurement session before spending on solve-path efficiency items.
+- **api-redesign → token-plan** — if external/machine/LLM access is the priority.
+- **plugin-compat-gate** — when plugin-version drift becomes a support cost.
+- **presolve-bundle** — product feature; P5.1 (pure enumerate engine) is a small high-confidence
+  start. Its Phase 2 blocker is cleared; rebase its session edits onto `@selvajs/solve/client`.
+- **data-access-efficiency-audit items** — slot cheap DB wins (2e/2f counts, 4g indexes, C3
+  delete-the-size-log) opportunistically; B1–B4 scaling roadmap is post-launch.
+- **caching-audit F2/F3** — F2 folds into solve-package Phase 5; F3 is an operator-doc note.
 
 ## Tracks (can run in parallel across people)
 
-- **Track A (refactor):** ~~visualization-package~~ → visualization-standalone →
-  compute-package-cleanup. Self-contained in `@selvajs/compute`, `@selvajs/ui`,
-  `@selvajs/visualization`.
-- **Track B (product/efficiency):** verify-slider → api-redesign → token-plan; plus presolve-bundle,
-  plugin-compat-gate, audit items independently. Anything in B that touches the **session layer**
-  now waits for visualization-standalone §5/§6, not visualization-package.
+- **Track A (refactor):** ~~visualization-package~~ → ~~visualization-standalone~~ →
+  **solve-package** (~~Phase 2~~ → Phases 3–6) → compute-package-cleanup. Touches `@selvajs/visualization`,
+  `@selvajs/server`, `@selvajs/ui`, new `@selvajs/solve`. **Not parallelizable within itself** — each
+  phase moves files the next one edits.
+- **Track B (product/efficiency):** verify-slider → api-redesign → token-plan; plus plugin-compat-gate
+  and audit items independently. Anything in B that touches the **session layer** should now target
+  `@selvajs/solve/client` — that is where `createSolveSession`, the throttle and `SolveResult` live.

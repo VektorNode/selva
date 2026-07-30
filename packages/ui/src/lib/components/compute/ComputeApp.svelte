@@ -3,10 +3,11 @@
 	import { page } from '$app/state';
 	import type { UISchema, ParameterPreset } from '@selvajs/schemas';
 	import type { ActionButton } from '../../types/actionButton';
-	import type { SolveFn } from '@selvajs/visualization/session';
+	import type { SolveFn } from '@selvajs/solve/shared';
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
-	import { createRequestResponseDriver } from '@selvajs/visualization/session';
+	import { createRequestResponseDriver } from '@selvajs/solve/client';
+	import { meshPolicy } from '@selvajs/visualization/parse';
 	import { useSolveSession } from '../../compute/useSolveSession.svelte';
 	import { useFooterItem } from '../../composables/useFooterItem.svelte';
 	import { hexToOklch } from '../../utils/color';
@@ -114,6 +115,11 @@
 	// svelte-ignore state_referenced_locally
 	const driver = createRequestResponseDriver(onSolve, () => session, {
 		timeout: solveTimeoutMs,
+		// The driver's result memo caches whole solve results, meshes included — and the viewer
+		// disposes what it renders on the next scene update. `@selvajs/solve` keeps meshes opaque,
+		// so the three.js clone/dispose rules are injected from the renderer that owns them
+		// (audit C1). Without this a memo hit serves an already-disposed mesh.
+		meshPolicy,
 		// `session.isSolving` forwards to the driver, which the session can't observe on its
 		// own — republish so the spinner and disabled states track it. Deferred into a
 		// callback, so it reads `session` after initialization rather than during it.

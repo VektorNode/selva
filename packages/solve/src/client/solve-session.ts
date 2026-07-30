@@ -10,7 +10,7 @@
 
 import type { UISchema } from '@selvajs/schemas';
 import { readExternalValue } from './external-storage.js';
-import type { SolveResult } from './solve-fn.js';
+import type { SolveResult } from '../shared/solve-fn.js';
 import type { SolveDriver } from './drivers/driver.js';
 import {
 	buildInitialValues,

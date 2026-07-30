@@ -1,6 +1,6 @@
 // The Svelte binding for a Solve Session.
 //
-// The session itself lives in `@selvajs/visualization/session` and is framework-free: it
+// The session itself lives in `@selvajs/solve/client` and is framework-free: it
 // exposes plain getters plus a `subscribe()` seam. That makes it usable headless, but a
 // plain getter read inside Svelte markup is NOT reactive — nothing tells the component to
 // re-run. This adapter closes that gap: it subscribes once, bumps a `$state` version
@@ -11,8 +11,8 @@
 // republish: no field list to keep in sync as the session grows, and no risk of a mirrored
 // copy drifting from the source of truth.
 
-import type { SolveSession, SolveSessionArgs } from '@selvajs/visualization/session';
-import { createSolveSession } from '@selvajs/visualization/session';
+import type { SolveSession, SolveSessionArgs } from '@selvajs/solve/client';
+import { createSolveSession } from '@selvajs/solve/client';
 
 /**
  * Wraps a Solve Session so its state reads reactively inside Svelte components.

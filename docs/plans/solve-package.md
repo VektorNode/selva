@@ -1,6 +1,6 @@
 # `@selvajs/solve` — one owner for the solve flow
 
-> **Status: Phases 0–1 DONE (2026-07-30); Phases 2–6 not started.** Supersedes the open
+> **Status: Phases 0–2 DONE (2026-07-30); Phases 3–6 not started.** Supersedes the open
 > items in [visualization-standalone](./visualization-standalone.md) — §1–§4 **landed** (its §3 chose
 > option 3a), and §5/§6 are absorbed here. Scope: extract the client-side solve orchestration out of
 > `@selvajs/visualization/session` and the server-side solve core out of `@selvajs/server/compute`
@@ -133,14 +133,15 @@ before doing it.
 
 Counted 2026-07-30, excluding tests.
 
-**Client half — from `@selvajs/visualization/session` (835 lines, 9 files, 55 tests):**
+**Client half — from `@selvajs/visualization/session` (835 lines, 9 files, 55 tests)** — ✅ moved
+in Phase 2:
 
 | File                          | Lines | Note                                                                         |
 | ----------------------------- | ----- | ---------------------------------------------------------------------------- |
 | `solve-session.ts`            | 197   | state ownership + subscriber set                                             |
 | `solve-session-core.ts`       | 122   | pure transition logic                                                        |
 | `solve-memo.ts`               | 140   | M2; loses its `three` import — [§C1](#c1-solveresultmeshes-must-stay-opaque) |
-| `compute-throttle.ts`         | 122   | **rename** — [§C2](#c2-createcomputethrottle-is-misnamed)                    |
+| `compute-throttle.ts`         | 122   | → `async-throttle.ts` — [§C2](#c2-createcomputethrottle-is-misnamed)         |
 | `external-storage.ts`         | 64    | client-sourced input hydration                                               |
 | `solve-fn.ts`                 | 29    | `SolveFn` / `SolveResult` → `shared/`                                        |
 | `drivers/driver.ts`           | 30    | `SolveDriver` / `SolveReporter`                                              |
@@ -171,7 +172,7 @@ and [§C2](#c2-createcomputethrottle-is-misnamed), both small and both listed.
 
 ## Two design corrections that come with the move
 
-### C1. `SolveResult.meshes` must stay opaque
+### C1. `SolveResult.meshes` must stay opaque — ✅ done (type in Phase 1, policy in Phase 2)
 
 `solve-memo.ts` is the only `three` import in the client half. Root cause: `SolveResult.meshes` is
 `any[]`, and the memo silently reinterprets it as `THREE.Object3D[]` to clone and dispose. Nothing in
@@ -218,12 +219,15 @@ connection reuse, queueing, retry and pointer tracking has to hold state — `cl
 warm clients precisely _because_ they are expensive to recreate. Statelessness is a virtue for a
 parser, not for a client.
 
-### C2. `createComputeThrottle` is misnamed
+### C2. `createComputeThrottle` is misnamed — ✅ done (Phase 2)
 
 It is generic over `T`, takes any `(values, signal) => Promise<void>`, and contains no reference to
 Rhino.Compute, HTTP, WebSockets, or geometry. Proof it isn't compute-specific: plugin-ui drives it
 over a **WebSocket to Grasshopper**. Rename to `createAsyncThrottle`; drop the `[Compute/throttle]`
 log prefix. Mechanical.
+
+**As landed:** also `isComputing` → `isRunning`, and the return type is now an exported
+`AsyncThrottle<T>` instead of an inline shape. Log prefixes across the moved files are `[Solve/*]`.
 
 ## Phases
 
@@ -306,7 +310,7 @@ with no consumer touched.
   `type-check` first. Verified both directions: widening `meshes` back to `any[]` fails the
   typecheck, and a genuinely broken assertion was caught by `tsc`, not by `vitest`.
 
-### Phase 2 — `client/`
+### Phase 2 — `client/` — ✅ DONE 2026-07-30
 
 Move the 9 session files + 55 tests. Apply C2, and the **remaining half of C1** — the opaque
 `SolveResult<TMesh>` type landed in Phase 1, so what is left here is the memo's injected
@@ -317,6 +321,63 @@ Svelte binding, and this package is framework-free.
 
 After this phase `@selvajs/visualization` is **mesh conversion + viewer only**, which was the original
 goal three plans ago.
+
+**As landed:**
+
+- 7 source files + 5 test files moved by `git mv` (rename history preserved). The `/session` sub-path
+  export, the tsup entry and the root-barrel re-export are all gone, and **`@selvajs/schemas` is
+  removed from viz's `package.json`** — the package now depends on nothing from Selva, which was
+  Phase 0's stated end state and only became true here.
+- `@selvajs/ui` re-exports `client/` from `lib/index.ts`, `lib/public.ts` and `lib/external/storage.ts`.
+  Verified: `plugin-ui` imports `createSolveSession`/`SolveSession`/`SolveReporter` **by name from
+  `@selvajs/ui`**, so it needed no edit, and neither does Parafa.
+- `pnpm build` (14) / `check` (14) / `test` (21) green; `pnpm lint` 0 errors. Viz drops 425 → 380
+  tests (−55 session, +10 new mesh-policy), solve rises 6 → 63.
+
+**C2 went one step further than "rename the function":** `isComputing` → `isRunning` too, and the
+options/return interfaces are now exported (`AsyncThrottle`, previously an inline return type). The
+name was the misleading part, but leaving a getter called `isComputing` on a throttle that
+demonstrably isn't compute-specific would have re-imported the confusion the rename exists to remove.
+
+**C1's second half landed as a `MeshPolicy<TMesh>`, not a pair of loose callbacks.** The plan sketched
+`createSolveMemo({ clone, dispose })`; as built it is `createSolveMemo({ max, meshPolicy })` with
+`meshPolicy: { clone, release }`, and `createRequestResponseDriver` accepts and forwards the same
+object. One named thing to pass through two layers beats two callbacks threaded separately, and
+`release` (not `dispose`) says what the memo means: free what the memo owns, which explicitly is not
+materials. Three.js implementation: `meshPolicy` in
+[`visualization/src/parse/mesh-policy.ts`](../../packages/visualization/src/parse/mesh-policy.ts).
+
+**A real leak surfaced while porting the clone — worth recording, because a test caught it and review
+would not have.** `BufferGeometry.clone()` copies `userData` **by reference**. So:
+
+- The pre-move `cloneSceneObjects` produced clones carrying `CACHED_GEOMETRY_USERDATA_FLAG` whenever
+  the source geometry was cache-owned. `clearScene` skips flagged geometries (the geometry cache
+  disposes those on eviction), so **nothing ever freed the memo's clones** — an unbounded GPU leak on
+  the slider-scrub path the memo exists to optimize.
+- The obvious fix — `delete geometry.userData[FLAG]` on the clone — is worse: it mutates the shared
+  object, un-flagging the **source**, after which `clearScene` disposes buffers the cache still owns.
+  The first version of this phase's code did exactly that and the new
+  `mesh-policy.test.ts` "source's own flag is untouched" assertion failed on it.
+- Landed fix: shallow-copy `userData` before dropping the flag, and have `releaseSceneObjects` skip
+  genuinely cache-owned geometry as a second guard.
+
+**Two things deliberately NOT done, with reasons:**
+
+- **`ComputeApp`'s `onSolve` prop stays `SolveFn` (i.e. `SolveFn<unknown>`).** Consequence, verified by
+  probe: `TMesh` infers as `unknown` there, so `MeshPolicy<THREE.Object3D>` is accepted **without**
+  being type-checked against the mesh type — a deliberately wrong policy compiles. The generic _does_
+  enforce correctly wherever `TMesh` is pinned (also probed). Narrowing the prop to
+  `SolveFn<THREE.Object3D>` would be a breaking prop-type change for every host, and `Viewer.svelte`
+  still types `meshes: any[]` anyway, so the chain has no narrowing point yet. Covered at runtime
+  instead by `ui/src/lib/compute/mesh-policy-wiring.test.ts` — the only place both packages are in
+  scope — which includes a negative control asserting the no-policy path really does serve the
+  disposed instance.
+- **No logger seam in `@selvajs/solve`.** The plan asked for the 3 `console.debug` lint warnings to be
+  cleared. They are per-frame traces of normal operation during a scrub, so promoting them to `info`
+  would change output volume, and adding visualization's logger seam is a larger decision than this
+  phase. Cleared with inline disables carrying the reason. Note the same warning exists on the same
+  pattern in `selva`'s route code — it is a house-wide unresolved tension, not something this move
+  introduced.
 
 ### Phase 3 — `server/`
 
@@ -335,10 +396,13 @@ bundle. Three cheap guards, in order of value:
    in `package.json`; the highest-leverage line in the plan.
 2. **ESLint `no-restricted-imports`** in the package: files under `src/client/**` may not import
    `../server/*`, `@selvajs/platform`, or `@selvajs/server*`. ~20 lines, instant in-editor feedback,
-   uses the ESLint already configured (no new plugin).
+   uses the ESLint already configured (no new plugin). — ✅ **landed with Phase 2**, since `client/`
+   arriving is what made it enforceable; `node:*` added to the ban list too. Guard 1 (no root barrel)
+   was already in place from Phase 1.
 3. **One bundle test.** Bundle `dist/client.js` with esbuild and assert no server module or
    `process.env` reference appears. ~30 lines. This is the only check that verifies the _shipped
-   artifact_ rather than the source.
+   artifact_ rather than the source. **Still to do** — it has nothing to bite on until `server/`
+   exists, so it belongs after Phase 3.
 
 Also name server-only modules `*.server.ts`. That is free and already load-bearing in both apps —
 SvelteKit hard-fails the build with an import trace if a `.server.ts` module reaches client code, so

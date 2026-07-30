@@ -3,7 +3,7 @@ import { createSolveSession } from '../solve-session.js';
 import { createRequestResponseDriver } from '../drivers/request-response.js';
 import type { SolveDriver, SolveReporter } from '../drivers/driver.js';
 import type { UISchema } from '@selvajs/schemas';
-import type { SolveResult } from '../solve-fn.js';
+import type { SolveResult } from '../../shared/solve-fn.js';
 
 // Covers the session shell's dispatch decisions — specifically the `forceSolve` path
 // added for dynamic-value-list reconciliation. The pure transition logic is pinned in
@@ -103,7 +103,7 @@ describe('createRequestResponseDriver — client memo', () => {
 		};
 	}
 
-	// Lets the throttle's fire-and-forget executeCompute settle.
+	// Lets the throttle's fire-and-forget execute settle.
 	const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 	it('serves a repeated input from the memo without calling onSolve again', async () => {

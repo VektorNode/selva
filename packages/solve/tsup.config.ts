@@ -8,7 +8,8 @@ import { defineConfig } from 'tsup';
  * a boundary change, not a convenience.
  */
 const entries = {
-	shared: 'src/shared/index.ts'
+	shared: 'src/shared/index.ts',
+	client: 'src/client/index.ts'
 };
 
 export default defineConfig({

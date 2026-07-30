@@ -43,7 +43,7 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 	let initialized = false;
 	let unsubscribeSession: (() => void) | null = null;
 
-	// The Solve Session is framework-free (it lives in @selvajs/visualization/session), so its
+	// The Solve Session is framework-free (it lives in @selvajs/solve/client), so its
 	// getters are inert on their own. This counter is bumped on every session notification and
 	// read by the getters below, which is what makes `values`/`displayMeshes`/`isSolving`
 	// re-render. @selvajs/ui's `useSolveSession` does the same job for components, but it binds

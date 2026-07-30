@@ -4,7 +4,7 @@
 // (a WebSocket streaming mesh frames on its own schedule) satisfy the same interface as
 // a request/response HTTP call without contortion.
 
-import type { SolveResult } from '../solve-fn.js';
+import type { SolveResult } from '../../shared/solve-fn.js';
 
 /**
  * The transport behind a Solve Session. Knows how to start and cancel a solve and
@@ -23,8 +23,13 @@ export interface SolveDriver {
 	clearCache?(): void;
 }
 
-/** The slice of a SolveSession a driver feeds completed/failed solves back into. */
-export interface SolveReporter {
-	report(result: SolveResult): void;
+/**
+ * The slice of a SolveSession a driver feeds completed/failed solves back into.
+ *
+ * `TMesh` defaults to `unknown` because nothing in this package inspects meshes; a host that
+ * knows its concrete mesh type (a three.js viewer) narrows it at its own seam.
+ */
+export interface SolveReporter<TMesh = unknown> {
+	report(result: SolveResult<TMesh>): void;
 	reportError(message: string): void;
 }
