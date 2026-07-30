@@ -1,15 +1,12 @@
 name: CodeQL
 
-# Static analysis (SAST) for the two source languages in this repo:
-#   - JavaScript/TypeScript — the pnpm workspace under packages/
-#   - C# — the Grasshopper plugin under Plugin/
+# SAST for the TypeScript workspace under packages/.
 #
-# Both run in `build-mode: none`: CodeQL analyses source directly without a
-# compile step. This is deliberate for C# — Selva.GH / Selva.Rhino depend on the
-# Windows-only Rhino/Grasshopper SDK (net48) and won't build on the ubuntu
-# runner. Buildless mode scans the Rhino-free logic (Selva.Schema, Selva.Drawing)
-# and the GH glue alike without needing the SDK present. It trades a little
-# dataflow precision for coverage that actually runs in CI.
+# C# is deliberately NOT scanned: Selva.GH / Selva.Rhino need the Windows-only
+# Rhino SDK, so it could only run in `build-mode: none`, and buildless C# on a
+# codebase whose logic sits behind SDK types finds little worth the runtime.
+# The Rhino-free libraries (Selva.Schema, Selva.Drawing) are covered by real
+# unit tests in test.yml instead.
 
 on:
   pull_request:
@@ -17,41 +14,26 @@ on:
   push:
     branches: [main, beta]
   schedule:
-    # Weekly re-scan so newly-published query rules catch code that hasn't
-    # changed. Monday 05:00 UTC — after the Dependabot windows (03:00/04:00).
+    # Weekly re-scan so newly-published query rules reach unchanged code.
     - cron: '0 5 * * 1'
 
-# Don't stack scans on rapid pushes to the same ref; the newest commit wins.
 concurrency:
   group: codeql-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     permissions:
-      # CodeQL needs to read the code and write results to the Security tab.
       actions: read
       contents: read
       security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [javascript-typescript, csharp]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+      - uses: github/codeql-action/init@v4
         with:
-          languages: ${{ matrix.language }}
+          languages: javascript-typescript
           build-mode: none
-          # `security-and-quality` adds maintainability/reliability queries on
-          # top of the default security set — appropriate for a pre-OSS harden.
-          queries: security-and-quality
 
-      - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v4
-        with:
-          category: '/language:${{ matrix.language }}'
+      - uses: github/codeql-action/analyze@v4

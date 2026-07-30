@@ -141,9 +141,6 @@
 			</p>
 		{/if}
 		<Button onclick={handleRunClick} disabled={isRunning} variant="destructive">
-			{#if isRestarting}
-				<RefreshCw class="mr-2 h-4 w-4 animate-spin" />
-			{/if}
 			{buttonLabel()}
 		</Button>
 		{#if isRestarting && exitCode === null}

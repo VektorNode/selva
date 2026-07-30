@@ -81,9 +81,7 @@ import { HeaderAuthProvider } from '@selvajs/header-auth-provider';
 
 export default defineConfig((env) => ({
 	tenancy: 'single' as const,
-	flags: {
-		/* … */
-	},
+	flags: {/* … */},
 
 	auth: HeaderAuthProvider.fromEnv(env),
 	data: local.LocalDataProvider.fromEnv(env),

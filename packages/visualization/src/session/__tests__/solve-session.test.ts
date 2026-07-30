@@ -107,11 +107,9 @@ describe('createRequestResponseDriver — client memo', () => {
 	const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 	it('serves a repeated input from the memo without calling onSolve again', async () => {
-		const onSolve = vi.fn(
-			async (values: Record<string, unknown>): Promise<SolveResult> => ({
-				outputs: { echo: values.a }
-			})
-		);
+		const onSolve = vi.fn(async (values: Record<string, unknown>): Promise<SolveResult> => ({
+			outputs: { echo: values.a }
+		}));
 		const reporter = collectingReporter();
 		const driver = createRequestResponseDriver(onSolve, () => reporter);
 

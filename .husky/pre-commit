@@ -1,23 +1,19 @@
-#!/usr/bin/env sh
-
-# Some git clients (VS Code, GitHub Desktop) launch hooks with a minimal PATH
-# that lacks node/pnpm. Try to restore it before running lint-staged.
+# GUI git clients (VS Code, GitHub Desktop) launch hooks with a minimal PATH
+# that often lacks node. Add the usual install dirs before giving up.
 if ! command -v pnpm >/dev/null 2>&1; then
-	# nvm (Windows + Unix) typically lives here
-	export PATH="$HOME/.nvm/versions/node/$(ls "$HOME/.nvm/versions/node" 2>/dev/null | tail -1)/bin:$PATH"
-	# Common Windows nodejs install
-	[ -d "/c/Program Files/nodejs" ] && export PATH="/c/Program Files/nodejs:$PATH"
+	for dir in "/c/Program Files/nodejs" "$HOME/.local/share/pnpm" "/usr/local/bin"; do
+		[ -d "$dir" ] && PATH="$dir:$PATH"
+	done
+	export PATH
 fi
 
-# Prefer corepack-managed pnpm if available
-if ! command -v pnpm >/dev/null 2>&1 && command -v corepack >/dev/null 2>&1; then
-	corepack enable >/dev/null 2>&1
-fi
-
+# Fail rather than skip: silently waving a commit through defeats the hook,
+# and the message is easy to miss in a GUI client.
 if ! command -v pnpm >/dev/null 2>&1; then
-	echo "pre-commit: pnpm not found on PATH; skipping lint-staged." >&2
-	echo "  Commit from a terminal where 'pnpm' works, or add node/pnpm to your git client's PATH." >&2
-	exit 0
+	echo "pre-commit: pnpm not found on PATH." >&2
+	echo "  Commit from a terminal where 'pnpm' works, or add node to your git client's PATH." >&2
+	echo "  To bypass deliberately: git commit --no-verify" >&2
+	exit 1
 fi
 
 pnpm lint-staged

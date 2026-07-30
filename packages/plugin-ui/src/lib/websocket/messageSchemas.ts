@@ -192,8 +192,7 @@ const schemasByType = {
 export type ValidatedMessageType = keyof typeof schemasByType;
 
 export type ValidationResult =
-	| { ok: true; message: unknown }
-	| { ok: false; type: string; error: z.ZodError; payload: unknown };
+	{ ok: true; message: unknown } | { ok: false; type: string; error: z.ZodError; payload: unknown };
 
 /**
  * Validate an inbound message. Returns the (unchanged) message on success — the

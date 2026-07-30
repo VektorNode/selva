@@ -58,11 +58,13 @@ const makeShedError = (
 	code: 'QUEUE_FULL' | 'QUEUE_TIMEOUT' | 'UNKNOWN_ERROR',
 	options?: { statusCode?: number; context?: Record<string, unknown> }
 ) =>
-	new (MockRhinoComputeError as unknown as new (
-		m: string,
-		c: string,
-		o?: { statusCode?: number; context?: Record<string, unknown> }
-	) => Error)(message, code, options);
+	new (
+		MockRhinoComputeError as unknown as new (
+			m: string,
+			c: string,
+			o?: { statusCode?: number; context?: Record<string, unknown> }
+		) => Error
+	)(message, code, options);
 
 import {
 	runSolvePipeline,

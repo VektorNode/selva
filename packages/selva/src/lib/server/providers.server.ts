@@ -49,7 +49,7 @@ export const lazyLogger: ILogger = {
 const registry: ProviderRegistry = {
 	auth: {
 		local: (e) => local.LocalAuthProvider.fromEnv(e),
-		supabase: (e) => supa.SupabaseAuthProvider.fromEnv(e),
+		supabase: (e) => supa.SupabaseAuthProvider.fromEnv(e, lazyLogger),
 		header: (e) => header.HeaderAuthProvider.fromEnv(e, lazyLogger)
 	},
 	data: {

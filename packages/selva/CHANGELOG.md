@@ -1,5 +1,102 @@
 # @selvajs/selva
 
+## 4.7.3
+
+### Patch Changes
+
+- 0d503c6: Update `rhino3dm` from 8.17.0 to 8.32.0.
+
+  No API surface used by Selva changed. The upgrade was verified by loading both
+  WASM modules side by side and diffing their runtime surfaces: `CommonObject.decode`,
+  `Point`, `Line`, `Curve.isPolyline`/`tryGetPolyline`, `getBoundingBox`, and the
+  emscripten `delete()`/`isDeleted()` lifecycle are all unchanged. 8.32.0 is a strict
+  superset — it adds `BrepLoop`/`BrepTrim` topology classes, SubD iterators,
+  `Material.setTexture`, and `Mesh.toThreejsBuffers`, none of which the current
+  pipeline uses. The 16 dropped top-level exports are emscripten internals
+  (`HEAPU8`, `_malloc`, `ready`) that nothing references.
+
+  Both documented runtime quirks the display-item parser works around still hold in
+  8.32.0, so the workarounds stay: `tryGetPolyline` returns the `Polyline` directly
+  rather than the `[ok, Polyline]` tuple its type declares, and `getBoundingBox`
+  takes no arguments at runtime despite its `.d.ts` signature.
+
+  The package still ships no `exports` field, so plugin-ui's
+  `rhino3dm/rhino3dm.wasm?url` Vite asset import keeps resolving; the emitted bundle
+  was confirmed byte-identical to the 8.32.0 WASM. One source-breaking type change
+  exists but is unused here — `File3dm.add*` methods (`addMesh`, `addCurve`, …) now
+  require a second `attributes` argument.
+
+## 4.7.2
+
+### Patch Changes
+
+- 3b787ff: Fix the project settings dialog overflowing the viewport when a project has many
+  members, and rework its layout so the added height is used deliberately.
+
+  **The dialog had no height bound.** `Dialog.Content` renders as a grid with
+  auto-sized rows and no `max-height`, so the members list grew with the member
+  count and pushed the dialog past the top and bottom of the screen — with 60+
+  members, the tab bar and the "Add member" button were both unreachable. The
+  dialog is now a flex column capped at `calc(100dvh-2rem)`, the tab area has a
+  fixed shared height, and only the member list scrolls. Both tabs occupy the same
+  box, so switching between them no longer resizes the dialog.
+
+  **Member rows overflowed horizontally.** The avatar, role `<select>`, and remove
+  button had no `shrink-0`, so a long display name or an unbroken email string
+  stretched the row instead of truncating, pushing the role control off the right
+  edge. Those controls now hold their width and the name column absorbs the
+  squeeze, so `truncate` applies as intended.
+
+  **Layout rework.** Delete/Cancel/Save moved out of the scrollable General form
+  into a pinned footer shared by both tabs, so the actions no longer scroll away
+  with the form. The description textarea grew from 2 to 5 rows, and the Visibility
+  options are now short labels (Public/Org/Private) with the explanation moved to
+  helper text below the select.
+
+  Also fixes a pre-existing bug surfaced by that rework: `ProjectVisibility`
+  includes a fourth `platform` variant that the select never offered, so opening a
+  platform-visibility project showed a select with no matching option and saving
+  silently coerced it to `public`. `platform` is now preserved as a conditional
+  option when already set. It stays absent from the list otherwise, since that
+  visibility is granted by platform admins rather than chosen here.
+
+## 4.7.1
+
+### Patch Changes
+
+- 650ef18: Fix two live defects in `SupabaseAuthProvider`: disabled users could refresh
+  sessions indefinitely, and `last_login_at` never updated.
+
+  **`refreshSession` did not check `disabled`.** `signIn`, `exchangeOAuthCode`, and
+  `verifyMagicLink` all reject users flagged `user_metadata.disabled === true`;
+  `refreshSession` did not. This was not a latent gap — the session-refresh
+  middleware in `hooks.server.ts` calls it on every request where `verifyToken`
+  fails, so a disabled user's expired access token was silently swapped for a
+  fresh one on the next request, forever. The `revalidateMs` revocation bound on
+  `verifyToken` never applied, because that path had already failed by the time
+  refresh ran. Disabling a user now takes effect within one access-token lifetime
+  on the refresh path. GoTrue already returns the user alongside the session, so
+  the check costs no extra round-trip.
+
+  **`touchLastLogin` wrote to the wrong schema.** Engine tables live in the `selva`
+  schema, and every client in `data/client.ts` pins `db: { schema: 'selva' }`. The
+  auth provider's service-role client was constructed without that option, so it
+  resolved `user_profiles` against `public` — where the table does not exist.
+  PostgREST returned a relation-not-found error, and the unchecked `await`
+  swallowed it, so `last_login_at` silently never updated in any Supabase
+  deployment. Table access now goes through a schema-pinned client, and a failed
+  stamp is logged rather than discarded. The write stays best-effort and still
+  never throws, per the `IAuthProvider.touchLastLogin` contract.
+
+  `this.admin` is deliberately left unpinned: it drives `auth.admin.*`, which is
+  GoTrue's own REST surface and unaffected by the PostgREST schema setting.
+
+  `SupabaseAuthProvider.fromEnv` now accepts an optional second `ILogger`
+  argument, matching `HeaderAuthProvider.fromEnv`. Purely additive — omitting it
+  keeps the previous `NoopLogger` behavior. `@selvajs/selva` passes its
+  `lazyLogger` through, so the failure above is actually visible in the app
+  rather than swallowed.
+
 ## 4.7.0
 
 ### Minor Changes
@@ -220,7 +317,7 @@
 ### Patch Changes
 
 - a7d3728: Fix truncated `/api/compute` responses surfacing as `Unterminated string in JSON` in the browser. Solve responses are now gzipped in one buffered pass and sent with an explicit `Content-Length` (instead of a streamed `CompressionStream` body with no length), so a connection cut mid-transfer — e.g. a proxy/tunnel timeout on a multi-minute large download — fails as a hard network error the client can detect and retry, rather than resolving with a partial body that `JSON.parse` rejects. Buffered compression costs only a few hundred ms on a ~40 MB payload, negligible next to the transfer time it protects.
-- a7d3728: Request-whale log entries now show the input's nickname and param type instead of its GUID. Also replace a literal NUL byte in the compute client cache-key separator with the ` ` escape — same key semantics, but the file is no longer treated as binary by git/grep.
+- a7d3728: Request-whale log entries now show the input's nickname and param type instead of its GUID. Also replace a literal NUL byte in the compute client cache-key separator with the `�` escape — same key semantics, but the file is no longer treated as binary by git/grep.
 
 ## 4.6.9
 

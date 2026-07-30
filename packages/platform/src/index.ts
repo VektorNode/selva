@@ -5,6 +5,7 @@ export type { AuthUser, UserManagementResult, LoginResult } from './auth/types.j
 export type {
 	IAuthProvider,
 	IOAuthAuth,
+	ISessionRefresh,
 	IPasswordAuth,
 	IEmailLinkAuth,
 	IProxyAuth

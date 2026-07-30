@@ -1,9 +1,12 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
+import { NoopLogger, type ILogger } from '@selvajs/platform';
+import { DEFAULT_SCHEMA, type SelvaSchemaClient } from '../data/client.js';
 import type {
 	IAuthProvider,
 	IEmailLinkAuth,
 	IOAuthAuth,
 	IPasswordAuth,
+	ISessionRefresh,
 	AuthUser,
 	LoginResult,
 	UserManagementResult,
@@ -67,6 +70,12 @@ export interface SupabaseAuthProviderConfig {
 	 * re-validated against GoTrue at most once per this interval. Default 60s.
 	 */
 	revalidateMs?: number;
+	/**
+	 * Sink for best-effort failures the provider swallows rather than throwing
+	 * (currently `touchLastLogin`). Defaults to `NoopLogger` — pass one to make
+	 * those failures visible. Only identifiers are ever logged, never payloads.
+	 */
+	logger?: ILogger;
 }
 
 /** Default hybrid recheck window — see `revalidateMs`. */
@@ -84,13 +93,23 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	readonly passwordAuth: IPasswordAuth;
 	readonly oauth: IOAuthAuth;
 	readonly emailLink: IEmailLinkAuth;
+	readonly sessionRefresh: ISessionRefresh;
 
 	private readonly admin: SupabaseClient;
+	/**
+	 * Service-role client pinned to the engine schema (`selva`). Engine tables
+	 * live there, not in `public` — `this.admin` is deliberately left unpinned
+	 * because it exists to drive `auth.admin.*` (GoTrue's own REST surface,
+	 * which the PostgREST schema setting does not affect). Any table read or
+	 * write from this provider MUST go through this client instead.
+	 */
+	private readonly db: SelvaSchemaClient;
 	private readonly anon: SupabaseClient;
 	private readonly anonKey: string;
 	private readonly supabaseUrl: string;
 	private readonly tokenVerification: 'hybrid' | 'strict';
 	private readonly revalidateMs: number;
+	private readonly logger: ILogger;
 
 	/**
 	 * Last time a given session was re-validated against GoTrue (epoch ms),
@@ -106,9 +125,14 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		this.anonKey = config.anonKey;
 		this.tokenVerification = config.tokenVerification ?? 'hybrid';
 		this.revalidateMs = config.revalidateMs ?? DEFAULT_REVALIDATE_MS;
+		this.logger = config.logger ?? new NoopLogger();
 		this.admin = createClient(config.supabaseUrl, config.serviceRoleKey, {
 			auth: { persistSession: false, autoRefreshToken: false }
 		});
+		this.db = createClient(config.supabaseUrl, config.serviceRoleKey, {
+			db: { schema: DEFAULT_SCHEMA },
+			auth: { persistSession: false, autoRefreshToken: false }
+		}) as SelvaSchemaClient;
 		this.anon = createClient(config.supabaseUrl, config.anonKey, {
 			auth: { persistSession: false, autoRefreshToken: false }
 		});
@@ -119,10 +143,12 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			config.enableSelfSignup ?? false,
 			(user) => this.hydrate(user)
 		);
+		this.sessionRefresh = new SupabaseSessionRefresh(this.anon, this.admin, this.logger);
 		this.oauth = new SupabaseOAuthAuth(
 			this.anon,
 			(user) => this.hydrate(user),
-			config.oauthProviders ?? []
+			config.oauthProviders ?? [],
+			this.sessionRefresh
 		);
 		this.emailLink = new SupabaseEmailLinkAuth(
 			this.anon,
@@ -131,7 +157,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		);
 	}
 
-	static fromEnv(env: Record<string, string | undefined>): SupabaseAuthProvider {
+	static fromEnv(env: Record<string, string | undefined>, logger?: ILogger): SupabaseAuthProvider {
 		const supabaseUrl = env.SUPABASE_URL;
 		const anonKey = env.SUPABASE_ANON_KEY;
 		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -157,7 +183,8 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			// to invite-only and reject magic-link signups for new addresses.
 			allowEmailLinkSignup: env.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP !== 'false',
 			tokenVerification,
-			...(revalidateMs !== undefined ? { revalidateMs } : {})
+			...(revalidateMs !== undefined ? { revalidateMs } : {}),
+			...(logger ? { logger } : {})
 		});
 	}
 
@@ -337,11 +364,25 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		// no-op round-trip instead of a select + conditional update. Matches the
 		// local provider's debounce window.
 		const cutoff = new Date(Date.now() - 60_000).toISOString();
-		await this.admin
+		// `this.db`, not `this.admin` — `user_profiles` lives in the `selva`
+		// schema. An unpinned client resolves it against `public`, where the
+		// table does not exist, and PostgREST's relation-not-found error was
+		// being swallowed by the unchecked await: the stamp never landed.
+		const { error } = await this.db
 			.from('user_profiles')
 			.update({ last_login_at: new Date().toISOString() })
 			.eq('user_id', id)
 			.or(`last_login_at.is.null,last_login_at.lt.${cutoff}`);
+		// Best-effort per the interface contract — a failed stamp MUST NOT block
+		// auth, so this never throws. But it is no longer invisible: a schema or
+		// permission regression here would otherwise stay silent forever.
+		if (error) {
+			this.logger.warn('touchLastLogin failed', {
+				userId: id,
+				code: error.code,
+				message: error.message
+			});
+		}
 	}
 
 	// OAuth lives on `this.oauth` (typed `IOAuthAuth`); see `SupabaseOAuthAuth`
@@ -439,7 +480,8 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 	constructor(
 		private readonly anon: SupabaseClient,
 		private readonly hydrate: (user: User) => AuthUser,
-		private readonly providers: readonly string[]
+		private readonly providers: readonly string[],
+		private readonly sessionRefresh: ISessionRefresh
 	) {}
 
 	listProviders(): readonly string[] {
@@ -473,16 +515,63 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 		};
 	}
 
+	/** @deprecated Delegates to `IAuthProvider.sessionRefresh`. Removed next minor. */
+	async refreshSession(refreshToken: string): Promise<{
+		sessionToken: string;
+		refreshToken: string;
+	} | null> {
+		return this.sessionRefresh.refreshSession(refreshToken);
+	}
+}
+
+/**
+ * Supabase-backed `ISessionRefresh`. Owns session lifecycle independently of
+ * OAuth: `refreshSession` swaps an expiring pair (anon client — a refresh
+ * token authenticates itself), `revokeSession` signs the session out
+ * server-side via GoTrue's admin API (service-role — revoking someone else's
+ * session is privileged).
+ */
+class SupabaseSessionRefresh implements ISessionRefresh {
+	constructor(
+		private readonly anon: SupabaseClient,
+		private readonly admin: SupabaseClient,
+		private readonly logger: ILogger
+	) {}
+
 	async refreshSession(refreshToken: string): Promise<{
 		sessionToken: string;
 		refreshToken: string;
 	} | null> {
 		const { data, error } = await this.anon.auth.refreshSession({ refresh_token: refreshToken });
 		if (error || !data.session) return null;
+		// Refresh runs AFTER verifyToken has already failed, so it is the last
+		// gate on an expired-access-token request. Without this check a disabled
+		// user mints fresh access tokens indefinitely — `verifyToken`'s
+		// `revalidateMs` bound never applies, because that path was skipped.
+		// GoTrue returns the user alongside the session, so this costs nothing.
+		if (data.user?.user_metadata?.disabled === true) return null;
 		return {
 			sessionToken: data.session.access_token,
 			refreshToken: data.session.refresh_token
 		};
+	}
+
+	async revokeSession(token: string): Promise<boolean> {
+		// `'global'` — sign out every session for this user, not just the one
+		// this JWT names. Logout on a shared machine should not leave a sibling
+		// session alive, and a token reaching us at all may already be leaked.
+		const { error } = await this.admin.auth.admin.signOut(token, 'global');
+		if (!error) return true;
+		// A token GoTrue no longer recognises (already signed out, expired,
+		// malformed) is the desired end state, not a failure — report success
+		// so the caller doesn't log noise on every double-logout.
+		const e = error as unknown as { status?: number; message?: string };
+		if (e.status === 401 || e.status === 403 || e.status === 404) return true;
+		// Anything else (5xx, network, misconfigured service-role key) means the
+		// session may still be live. Never throw: the contract is that a failed
+		// revoke MUST NOT stop the user from logging out.
+		this.logger.warn('revokeSession failed', { status: e.status, message: e.message });
+		return false;
 	}
 }
 
