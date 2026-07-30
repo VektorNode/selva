@@ -1,8 +1,8 @@
 # `@selvajs/solve` — one owner for the solve flow
 
-> **Status: PLAN, not started.** Supersedes the open items in
-> [visualization-standalone](./visualization-standalone.md) (§5/§6 are absorbed here; §1–§4 stay
-> there and can land independently). Scope: extract the client-side solve orchestration out of
+> **Status: Phases 0–1 DONE (2026-07-30); Phases 2–6 not started.** Supersedes the open
+> items in [visualization-standalone](./visualization-standalone.md) — §1–§4 **landed** (its §3 chose
+> option 3a), and §5/§6 are absorbed here. Scope: extract the client-side solve orchestration out of
 > `@selvajs/visualization/session` and the server-side solve core out of `@selvajs/server/compute`
 > into one package with `client/` and `server/` halves, so the whole "slider moved → solve → result"
 > chain has a single owner.
@@ -241,16 +241,76 @@ import sites are gone and the dependency is removed from `package.json`**, not j
 `session/` — i.e. exactly the thing Phase 2 below moves out. When `session/` leaves, viz is
 dependency-free apart from `three` / `rhino3dm` / `fflate`.
 
-### Phase 1 — scaffold + `shared/`
+**Cross-validated 2026-07-30** (independent check, not the implementer's own report):
+
+- Zero `@selvajs/compute` **imports** in `src/` or `tests/`. The 9 remaining textual hits are all
+  comments/docs explaining why something is local — no code path.
+- `shared/errors.ts` uses **identical code string values** (`VALIDATION_ERROR`, `INVALID_STATE`,
+  `ENVIRONMENT_ERROR`) to compute's, so existing `catch` sites matching on `code` still match.
+- §3's assignability claim holds under scrutiny — the risky one. Viz declares `modelunits: string`
+  non-optionally; compute's `GrasshopperComputeResponse` has `modelunits: RhinoModelUnit`, a string
+  union, which is assignable. All three consumers type-check unchanged.
+- `pnpm build` (13), `pnpm check` (14), `pnpm test` (20) green; viz's **425 tests pass on a forced
+  uncached run**.
+
+Two things the implementation got **better** than this plan specified, recorded so they aren't
+"corrected" later:
+
+- **§4 copied only `decodeBase64ToBinary`**, not the other eight exports in compute's encoding module
+  (`encodeStringToBase64`, `detectBase64Payload`, `base64ByteArray`, `utf8ByteLength`, …). Copying the
+  whole file would have been the easy mistake.
+- **The logger defaults to no-op, not `console`.** The §1 text below says "defaulting to `console`… no
+  behaviour change" — that was **wrong**: compute's default is a `NoOpLogger`, so a `console` default
+  would have introduced new output wherever no sink is set. The implementation matches compute.
+
+**Carried into Phase 2:** `pnpm lint` in viz reports **5 warnings, all inside `session/`** (2
+`no-explicit-any` — including `SolveResult.meshes`, which [§C1](#c1-solveresultmeshes-must-stay-opaque)
+fixes — and 3 `console.debug` in `compute-throttle.ts` / `drivers/request-response.ts`). Pre-existing
+and untouched by §1–§4. They travel with the files; clear them so `@selvajs/solve` starts clean.
+
+### Phase 1 — scaffold + `shared/` — ✅ DONE 2026-07-30
 
 New `packages/solve` (package.json, tsconfig, tsup, eslint, vitest), mirroring `packages/visualization`.
 Sub-path exports only — see [§4](#phase-4--enforce-the-clientserver-boundary) on the root barrel.
 Move `solve-fn.ts` into `shared/` and **collapse the duplicate input type**: `PipelineInput` and
 `SolveInput` become one exported type.
 
+**As landed:**
+
+- `@selvajs/solve@0.1.0`, exporting **only `./shared`** — no `.` root export, and `tsup.config.ts`
+  carries the comment saying why, so the Phase 4 decision is enforced from the first commit rather
+  than retrofitted onto a barrel that already exists.
+- `shared/solve-fn.ts` — `SolveResult<TMesh = unknown>` and `SolveFn<TMesh = unknown>`. **[§C1](#c1-solveresultmeshes-must-stay-opaque)
+  is applied here, in Phase 1 rather than Phase 2**, because the type moved in this phase and typing
+  it `any[]` first only to re-narrow it later would put the leak in the published surface for one
+  phase. The memo's injected clone/dispose policy is still Phase 2 — only the type moved.
+- `shared/solve-input.ts` — one `SolveInput`, replacing the two identical declarations.
+- Only dependency is `@selvajs/schemas` (per open question 2). No `three`, no `@selvajs/compute`, no
+  `@selvajs/platform`.
+
+**Nothing was deleted.** `@selvajs/visualization/session/solve-fn.ts` and the pipeline's
+`PipelineInput` are still in place and still the ones in use — Phases 2 and 3 repoint their
+consumers. Phase 1 is purely additive, so `pnpm build` (14) / `check` (14) / `test` (21) stay green
+with no consumer touched.
+
+**Two things worth recording:**
+
+- **Root ESLint already covers the new package** — verified by probe, not assumed. `compute` and
+  `visualization` are excluded from the root run and delegated to their own `lint` scripts because
+  they have their own tsconfig roots; `solve` is not excluded, so adding it to the root `lint`
+  script's filter chain would double-lint it. The package keeps its own `eslint.config.mjs` for
+  lint-staged and for the Phase 4 `no-restricted-imports` rules to live in.
+- **`vitest run` does not typecheck test files.** `shared/` is types-only, so its 6 tests are
+  `expectTypeOf` assertions — which vitest happily runs green even when the assertion itself is a
+  type error. They are covered because `src/**` is in tsconfig `include` and `pnpm build` runs
+  `type-check` first. Verified both directions: widening `meshes` back to `any[]` fails the
+  typecheck, and a genuinely broken assertion was caught by `tsc`, not by `vitest`.
+
 ### Phase 2 — `client/`
 
-Move the 9 session files + 55 tests. Apply C1 and C2. `@selvajs/visualization/session` is deleted;
+Move the 9 session files + 55 tests. Apply C2, and the **remaining half of C1** — the opaque
+`SolveResult<TMesh>` type landed in Phase 1, so what is left here is the memo's injected
+clone/dispose policy and deleting viz's now-duplicate `solve-fn.ts`. `@selvajs/visualization/session` is deleted;
 `@selvajs/ui` re-exports from the new home so `ComputeApp` and Parafa's `@selvajs/ui` imports keep
 working. `useSolveSession.svelte.ts` and `solving.svelte.ts` stay in `@selvajs/ui` — they are the
 Svelte binding, and this package is framework-free.
@@ -284,18 +344,39 @@ Also name server-only modules `*.server.ts`. That is free and already load-beari
 SvelteKit hard-fails the build with an import trace if a `.server.ts` module reaches client code, so
 consumers get the guard without configuring anything.
 
-### Phase 3b — consolidate stable-input hashing
+### Phase 5 — consolidate stable-input hashing
 
-Small, and it removes a class of silent bug. `solve-cache-key.ts` (server) and `stable-hash.ts`
-(compute, staying) both compute a stable identity hash over solve inputs — plus `stableInputKey` in
-the client memo, which is a third. Same idea, three implementations, free to disagree: two tiers
-keying the same solve differently is a cache that silently never hits, or worse, one that hits wrongly.
+_(Was numbered "3b" — renumbered, because it must run **after** both halves are in place. Doing it
+before Phase 3 would mean merging three hashes across three packages and then relocating two of
+them: the same merge done twice, the second time against a moved tree.)_
 
-One canonical implementation in `solve/shared`, used by M2, L2 and the def-bytes key. `compute` keeps
-its own only if the scheduler's key genuinely differs (it hashes for a different purpose — verify
-before merging, don't assume).
+Small, and it removes a class of silent bug. Three implementations of the same idea, free to disagree:
 
-### Phase 5 — verify
+| Where                             | Hash                              | Keyed over                     |
+| --------------------------------- | --------------------------------- | ------------------------------ |
+| `stableInputKey` (M2, browser)    | sorted-key JSON serialization     | raw input values               |
+| `solve-cache-key.ts` (L2, server) | SHA-256 over a canonical preimage | **transformed** input tree     |
+| `stable-hash.ts` (L1, compute)    | 32-bit FNV                        | scheduler's own solve identity |
+
+A cache keyed inconsistently doesn't throw — it silently never hits, or hits when it shouldn't.
+
+**Informed by [caching-audit-2026-07](./caching-audit-2026-07.md) §F2**, which found a fourth
+inconsistency worth reconciling deliberately rather than merging blindly: **single-flight coalesces on
+the raw `{inputs, values}` while L2 keys on the transformed tree.** So two inputs that are
+raw-different but transform-identical coalesce as separate flights, then both hit the same L2 key.
+
+Two things must **not** be flattened away:
+
+- **L1 keeps its 32-bit FNV.** Deliberate — fine for a 20-entry in-process Map, and it stays in
+  `compute` per [§C1b](#c1b-the-schedulers-l1-cache-stays-in-selvajscompute).
+- **L2 keeps SHA-256 plus the re-verified `inputHash` envelope field.** `solve-cache-key.ts:4-7`
+  records that a collision serving one user's geometry to another **already shipped once**. Key
+  strength scales with blast radius on purpose; this phase unifies the _derivation_, not the strength.
+
+Realistic target: one canonical **canonicalization + preimage** helper in `solve/shared`, with each
+tier choosing its own digest. Verify before merging; don't assume the three are interchangeable.
+
+### Phase 6 — verify
 
 `pnpm build && pnpm check && pnpm test` green. Then **build Parafa against the local packages** —
 it is a real second consumer on published versions, and it is the only way to know the re-export
@@ -374,11 +455,120 @@ plan only if that second problem is worth the extra work; otherwise take the alt
 - **Repo-wide boundary enforcement.** Its own plan.
 - **`server`'s non-solve folders.** Left alone on purpose.
 
+## Naming: why `solve`
+
+Settled 2026-07-30 after checking what the codebase already calls this concept. Recorded because
+renaming a published package is expensive and the question will recur.
+
+**The vocabulary already exists and is consistent** (occurrences across `src/` and `docs/`):
+
+| Term             | Uses |
+| ---------------- | ---- |
+| "solve session"  | 23   |
+| "solve path"     | 18   |
+| "solve flow"     | 9    |
+| "solve pipeline" | 8    |
+| "solve core"     | 4    |
+
+**"Solve" is already this project's noun for the thing** — and notably _not_ "compute", which is
+reserved for Rhino.Compute, the external service. That split is already enforced in the prose: a
+**solve** is the operation, **compute** is the machine that performs it.
+
+**Rejected — `coordinator`.** `coordinate`/`coordinates` appears 37 times in `src/`, and **every
+occurrence is geometry** (coordinate frames and systems, plus
+`visualization/src/shared/coordinate-frame.ts`). In a CAD repo, a package named `coordinator` would
+collide with one of the most overloaded words in the domain — grepping `coordinate` would return both
+meanings mixed together.
+
+**Rejected — `orchestrator`.** No collision, but it names _how the code behaves_ rather than _what it
+owns_, it's generic infra vocabulary, and it's long enough to read as noise at every import site
+(`@selvajs/orchestrator/client`).
+
+**Rejected — `solve-flow`.** Maximally distinct from `compute` and matches this plan's own charter
+sentence, but hyphenated, longer, and the extra word earns nothing once `solve` is established as
+unambiguous.
+
+**On the compute/solve proximity worry** (this plan's original open question 1): **overstated.** The
+two are not near-synonyms here; they already carry a consistent split, so "which do I import?" has a
+crisp answer — _do you need to speak to a Rhino.Compute server, or run a solve?_ The confusing case
+would be two packages both plausibly owning one job, which is not the situation.
+
+```ts
+import { createSolveSession } from '@selvajs/solve/client';
+import { runSolvePipeline } from '@selvajs/solve/server';
+```
+
+### The rename that IS worth doing — inside the package
+
+**`SolveSession` is the misnomer, not the package name.** With 23 uses it is the most entrenched term
+in the codebase, and it oversells the object: there is no connection, no lifecycle, no session — it is
+a **schema-driven form state machine** (seed defaults from a `UISchema`, decide auto-vs-manual solve,
+track dirty flags, project values to inputs).
+
+Its own docblock gives it away: "a framework-free shell over the pure transition logic." That is a
+controller, not a session. ShapeDiver's `session` genuinely is a connection object, which is likely
+where the borrowed name came from.
+
+**Candidate for Phase 2** (`SolveController`, or `SchemaForm` if the form framing wins), deliberately
+kept **separate from the package name** and **optional**:
+
+- It touches 23 sites plus the **published** API: `createSolveSession`, `SolveSession` and
+  `SolveSessionArgs` are all re-exported from both `@selvajs/ui` (`lib/index.ts`) and
+  `@selvajs/ui/public`. Verified 2026-07-30: **Parafa does not import them** (it reaches the session
+  only through `ComputeApp`, as this plan assumes elsewhere) — but `plugin-ui` imports
+  `createSolveSession`, `SolveSession` and `SolveReporter` **by name from `@selvajs/ui`**
+  (`usePreviewState.svelte.ts:9`), so the rename is not free even in-repo, and it is still a breaking
+  change to a published surface for any consumer outside these two repos.
+- Phase 2 is already moving these files and applying [§C1](#c1-solveresultmeshes-must-stay-opaque) and
+  [§C2](#c2-createcomputethrottle-is-misnamed). A third simultaneous change to the same files raises
+  review risk for a cosmetic gain.
+
+**Recommendation: do it as its own change after Phase 2 lands**, with a deprecated alias export, or
+skip it. The name is wrong but it is not costing anything today — unlike
+[§C2](#c2-createcomputethrottle-is-misnamed)'s `createComputeThrottle`, which actively misleads about
+where the code belongs.
+
+## Relationship to the caching work
+
+Two threads opened on 2026-07-30 — this extraction, and
+[caching-audit-2026-07](./caching-audit-2026-07.md). **Settled: this plan runs first, and they never
+overlap.**
+
+The ordering is forced by the code, not preference. The caching unification target is one canonical
+hash, and **two of the three implementations move packages during this plan** (M2 from
+`visualization/session` → `solve/client`; L2's key from `server/compute` → `solve/server`). Doing
+caching first means doing that merge twice. After Phase 3 the two land in the _same_ package with a
+`shared/` folder that exists to hold exactly this — the merge becomes local.
+
+They must also not run **concurrently**: `solve-memo.ts` is where both
+[§C1](#c1-solveresultmeshes-must-stay-opaque) (opaque `SolveResult<TMesh>`) and the hash unification
+land. A move plus a semantic change to one file is how you get a merge that type-checks and keys
+wrongly — and caches fail silently.
+
+Scope note, since "unify the caching" is ambiguous: this means **M2 + L2 share one key derivation**.
+The GPU caches (geometry, texture, edges) are untouched by either thread — they hold live GPU buffers
+and stay in `visualization`. L1 stays in `compute`
+([§C1b](#c1b-the-schedulers-l1-cache-stays-in-selvajscompute)).
+
+**Audit item F1 is independent of both** and is the only one that might be a live bug rather than a
+refactor: the edge line-geometry cache assumes identity caches never hit across solves, but the
+geometry cache now returns the same `BufferGeometry` instance across solves, so those entries may
+survive in a cache with no size bound. Measuring it is ~an hour (instrument the entry count, scrub a
+slider through many solves, watch for a plateau) and is worth doing **before** this plan starts, so an
+unbounded-growth question isn't sitting open across a large refactor.
+
 ## Open questions
 
-1. **Package name** — `@selvajs/solve` reads well but is close to `@selvajs/compute`, and the
-   compute/solve distinction is already the subtlest one in the repo. Worth a moment's thought.
+1. **Package name** — ~~decide before Phase 1.~~ **SETTLED 2026-07-30: keep `@selvajs/solve`.** See
+   [Naming](#naming-why-solve) below for the vocabulary counts that settled it.
 2. **Does `client/` keep `@selvajs/schemas`?** Yes, necessarily — the form state machine is
    schema-driven (`UISchema`, `getDefaultValue`, `getInputItems`). Noting it so the dep isn't read as
-   a leak later.
-3. **Is the honest minimal alternative above actually the right call?** Decide before Phase 3.
+   a leak later. It also means viz becomes fully dependency-free only once `session/` leaves.
+3. **Is the honest minimal alternative the right call?** ~~Decide before Phase 3.~~ **Leaning no —
+   take the full plan**, on evidence gathered after this plan was written: Parafa is a real second
+   consumer that hand-wrote its own solve coordinator and paid for it with a poisoned-cache bug, and
+   its `onSolve` is a documented strip-port of Selva's. The minimal alternative (session → `@selvajs/ui`)
+   fixes the viz scope problem but leaves that duplication in place. **Still revisit if Phase 2 lands
+   and the apps don't get simpler** — that was the stated falsification condition and it holds.
+4. **Was Phase 4's `*.server.ts` naming applied?** A reminder, not a question: it is free, already
+   load-bearing in both apps, and easy to forget because it isn't a code change.

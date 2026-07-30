@@ -16,8 +16,8 @@ they didn't have). This index is the single source of truth for sequence. As of 
 | [display-pipeline-open](./display-pipeline-open.md) — full audit [archived](./archive/display-pipeline-performance-audit.md) | most shipped; P1-C#/P3/fat-branch open              | B — residue      |
 | [plugin-compat-gate](./plugin-compat-gate.md)                                                                                | not started (planning)                              | B — operator     |
 | [visualization-package](./visualization-package.md)                                                                          | **COMPLETE** (2026-07-30) — all 8 steps             | **A — refactor** |
-| [visualization-standalone](./visualization-standalone.md)                                                                    | §1/§2/§4 ready; §5/§6 absorbed by solve-package     | **A — refactor** |
-| [solve-package](./solve-package.md)                                                                                          | plan written, not started                           | **A — refactor** |
+| [visualization-standalone](./visualization-standalone.md)                                                                    | **§1–§4 LANDED**; §5/§6 absorbed by solve-package   | **A — refactor** |
+| [solve-package](./solve-package.md)                                                                                          | Phases 0–1 done; Phases 2–6 open                    | **A — refactor** |
 | [caching-audit-2026-07](./caching-audit-2026-07.md)                                                                          | findings recorded; docs fixed, F1/F2/F3 open        | B — correctness  |
 | [compute-package-cleanup](./compute-package-cleanup.md)                                                                      | not started, **unblocked** (viz-package done)       | **A — refactor** |
 | [verify-slider-drag-solve-path](./verify-slider-drag-solve-path.md)                                                          | not started (measurement)                           | B — gate         |
