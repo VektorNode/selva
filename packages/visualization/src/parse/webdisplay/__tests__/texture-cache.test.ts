@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
 
+import { canDisposeTexture, disposeObjectTree } from '../../../shared/index.js';
 import { applyTextureMap, clearTextureCache, TEXTURE_CACHE_MAX_ENTRIES } from '../texture-cache.js';
 
 type OnLoad = (texture: THREE.Texture) => void;
@@ -232,5 +233,71 @@ describe('LRU bound (issue 17)', () => {
 		const loadsBefore = loadSpy.mock.calls.length;
 		applyTextureMap(makeMaterial(), 'http://localhost/assets/1');
 		expect(loadSpy.mock.calls.length).toBe(loadsBefore + 1);
+	});
+});
+
+describe('cache ownership of textures', () => {
+	// A cached texture is assigned straight onto `material.map` and shared by every material using
+	// that URL, so a scene sweep must not free it. The claim is what makes that true; these tests
+	// pin the claim at the boundary where it is stamped and released.
+
+	it('claims ownership of a texture it caches', async () => {
+		const material = makeMaterial();
+		applyTextureMap(material, 'http://localhost/assets/owned');
+		pendingLoads[0]!.onLoad(new THREE.Texture());
+		await flushMicrotasks();
+
+		expect(canDisposeTexture(material.map!)).toBe(false);
+	});
+
+	it('a scene sweep leaves a cached texture alone, and the cache still serves it', async () => {
+		const material = makeMaterial();
+		applyTextureMap(material, 'http://localhost/assets/swept');
+		pendingLoads[0]!.onLoad(new THREE.Texture());
+		await flushMicrotasks();
+
+		const cached = material.map!;
+		let disposals = 0;
+		cached.addEventListener('dispose', () => disposals++);
+
+		const root = new THREE.Group();
+		root.add(new THREE.Mesh(new THREE.BoxGeometry(), material));
+		disposeObjectTree(root);
+
+		expect(disposals).toBe(0);
+		// Still a live cache hit for the next mesh that wants this URL.
+		const next = makeMaterial();
+		applyTextureMap(next, 'http://localhost/assets/swept');
+		expect(next.map).toBe(cached);
+	});
+
+	it('releases the claim on eviction, so the scene may free it afterwards', async () => {
+		const textures: THREE.Texture[] = [];
+		for (let i = 0; i <= TEXTURE_CACHE_MAX_ENTRIES; i++) {
+			applyTextureMap(makeMaterial(), `http://localhost/assets/evict-${i}`);
+		}
+		for (let i = 0; i <= TEXTURE_CACHE_MAX_ENTRIES; i++) {
+			const texture = new THREE.Texture();
+			textures.push(texture);
+			pendingLoads[i]!.onLoad(texture);
+		}
+		await flushMicrotasks();
+
+		// textures[0] was the LRU victim: evicted, disposed, and no longer claimed.
+		expect(canDisposeTexture(textures[0]!)).toBe(true);
+		expect(canDisposeTexture(textures[TEXTURE_CACHE_MAX_ENTRIES]!)).toBe(false);
+	});
+
+	it('clearTextureCache releases claims as well as disposing', async () => {
+		const material = makeMaterial();
+		applyTextureMap(material, 'http://localhost/assets/cleared');
+		pendingLoads[0]!.onLoad(new THREE.Texture());
+		await flushMicrotasks();
+		const cached = material.map!;
+
+		clearTextureCache();
+
+		// Otherwise the material would hold a disposed texture that no sweep is ever allowed to free.
+		expect(canDisposeTexture(cached)).toBe(true);
 	});
 });

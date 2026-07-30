@@ -53,8 +53,9 @@ export const COMPUTE_RESPONSE_MAX_BYTES = limits.computeResponseMaxBytes;
 export const REMOTE_DEFINITION_MAX_BYTES = limits.remoteDefinitionMaxBytes;
 export const REMOTE_DEFINITION_FETCH_TIMEOUT_MS = limits.remoteDefinitionFetchTimeoutMs;
 
-// In-process cache for remote-fetched .gh bytes.
-export const DEFINITION_CACHE_TTL_MS = limits.definitionCacheTtlMs;
+// TTL for the in-process cache of REMOTE-fetched .gh bytes. Only the remote path
+// is TTL'd — the definition cache below is keyed on an immutable version id.
+export const REMOTE_DEFINITION_CACHE_TTL_MS = limits.remoteDefinitionCacheTtlMs;
 
 // Server definition-cache reuse (pointer instead of re-uploading the binary).
 export const COMPUTE_REUSE_DEFINITION_CACHE = limits.computeReuseDefinitionCache;
@@ -72,21 +73,9 @@ export const COMPUTE_MAX_CONCURRENT = limits.computeMaxConcurrentSolves;
 export const COMPUTE_MAX_QUEUE_DEPTH = limits.computeMaxQueueDepth;
 export const COMPUTE_QUEUE_WAIT_MS = limits.computeQueueWaitMs;
 
-// Total-byte budget for the in-process definition-byte cache (keyed on immutable
-// version id). 0 disables. See ComputeLimits.computeDefinitionByteCacheBytes.
-export const COMPUTE_DEFINITION_BYTE_CACHE_BYTES = limits.computeDefinitionByteCacheBytes;
+// Definition cache — .gh bytes keyed on immutable version id. 0 disables.
+export const COMPUTE_DEFINITION_CACHE_BYTES = limits.computeDefinitionCacheBytes;
 
-// Per-warm-client byte budget for the scheduler L1 response cache (audit C2).
-// 0 disables the L1. See ComputeLimits.computeResponseCacheBytes.
-export const COMPUTE_RESPONSE_CACHE_BYTES = limits.computeResponseCacheBytes;
-
-// Durable L2 solve cache (H1): per-definition default quota (inherited when a
-// definition's solveCacheLimit is absent) + global byte backstop. See
-// ComputeLimits for rationale.
-export const SOLVE_CACHE_DEFAULT_MAX_ENTRIES = limits.solveCacheDefaultMaxEntries;
-export const SOLVE_CACHE_MAX_TOTAL_BYTES = limits.solveCacheMaxTotalBytes;
-
-// L2 backend selection: 'memory' mounts the in-process cache, 'off' (default) a
-// no-op. Read directly (not through resolveComputeLimits — it selects an impl,
-// not a numeric knob).
-export const SOLVE_CACHE_PROVIDER = (env.SOLVE_CACHE_PROVIDER ?? 'off').toLowerCase();
+// Solve cache — results, PER warm client (so the worst case is ×16; see
+// ComputeLimits.computeSolveCacheBytes). 0 disables.
+export const COMPUTE_SOLVE_CACHE_BYTES = limits.computeSolveCacheBytes;

@@ -45,11 +45,72 @@ describe('resolveComputeLimits', () => {
 			expect(resolveComputeLimits({}).computeResponseMaxBytes).toBe(300 * MB);
 		});
 
-		it('byte-budgets the per-client L1 response cache at 256 MB, with 0 = off (audit C2)', () => {
-			expect(resolveComputeLimits({}).computeResponseCacheBytes).toBe(256 * MB);
+		it('byte-budgets the per-client solve cache at 256 MB, with 0 = off (audit C2)', () => {
+			expect(resolveComputeLimits({}).computeSolveCacheBytes).toBe(256 * MB);
+			expect(resolveComputeLimits({ COMPUTE_SOLVE_CACHE_MB: '0' }).computeSolveCacheBytes).toBe(0);
+		});
+
+		it('byte-budgets the definition cache at 256 MB, with 0 = off', () => {
+			expect(resolveComputeLimits({}).computeDefinitionCacheBytes).toBe(256 * MB);
 			expect(
-				resolveComputeLimits({ COMPUTE_RESPONSE_CACHE_MB: '0' }).computeResponseCacheBytes
+				resolveComputeLimits({ COMPUTE_DEFINITION_CACHE_MB: '0' }).computeDefinitionCacheBytes
 			).toBe(0);
+		});
+
+		// The rename is only safe if the old names keep working for a version —
+		// a var that silently stops being read looks identical to one that works.
+		describe('renamed cache vars (2026-07)', () => {
+			it('honours each old name when the new one is unset', () => {
+				expect(
+					resolveComputeLimits({ COMPUTE_DEFINITION_BYTE_CACHE_MB: '8' })
+						.computeDefinitionCacheBytes
+				).toBe(8 * MB);
+				expect(
+					resolveComputeLimits({ COMPUTE_RESPONSE_CACHE_MB: '8' }).computeSolveCacheBytes
+				).toBe(8 * MB);
+				expect(
+					resolveComputeLimits({ DEFINITION_CACHE_TTL_MS: '1234' }).remoteDefinitionCacheTtlMs
+				).toBe(1234);
+			});
+
+			it('honours `0` from an old name (a disable, not an absent value)', () => {
+				expect(
+					resolveComputeLimits({ COMPUTE_RESPONSE_CACHE_MB: '0' }).computeSolveCacheBytes
+				).toBe(0);
+			});
+
+			it('prefers the new name when both are set', () => {
+				expect(
+					resolveComputeLimits({
+						COMPUTE_SOLVE_CACHE_MB: '4',
+						COMPUTE_RESPONSE_CACHE_MB: '99'
+					}).computeSolveCacheBytes
+				).toBe(4 * MB);
+			});
+
+			it('warns when falling back to an old name', () => {
+				const warnings: string[] = [];
+				const logger = {
+					debug: () => {},
+					info: () => {},
+					warn: (msg: string) => warnings.push(msg),
+					error: () => {}
+				};
+				resolveComputeLimits({ COMPUTE_RESPONSE_CACHE_MB: '8' }, logger as never);
+				expect(warnings.some((w) => w.includes('Deprecated env var'))).toBe(true);
+			});
+
+			it('stays silent when only new names are used', () => {
+				const warnings: string[] = [];
+				const logger = {
+					debug: () => {},
+					info: () => {},
+					warn: (msg: string) => warnings.push(msg),
+					error: () => {}
+				};
+				resolveComputeLimits({ COMPUTE_SOLVE_CACHE_MB: '8' }, logger as never);
+				expect(warnings).toEqual([]);
+			});
 		});
 
 		it('keeps every payload cap under V8 single-string wall (~512 MB)', () => {

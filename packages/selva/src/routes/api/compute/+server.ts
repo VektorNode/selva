@@ -9,19 +9,14 @@ import {
 import { getClient, COMPUTE_DEBUG } from '$lib/server/compute/clientCache.server';
 import { loadRemoteDefinition } from '$lib/server/compute/remoteDefinition.server';
 import { definitionRef } from '$lib/server/compute/definitionByteCache.server';
-import {
-	buildSolveCacheHook,
-	resolveSolveCacheQuota,
-	solveCacheSingleFlight,
-	solveCacheStats
-} from '$lib/server/compute/solveCache.server';
+import { solveCacheSingleFlight } from '$lib/server/compute/solveCache.server';
 import { definitionByteCacheStats } from '$lib/server/compute/definitionByteCache.server';
 import {
 	runSolvePipeline,
+	buildSolveInputTree,
 	adaptEnvelopeToEncoding,
 	type PipelineInput,
-	type ByteCacheRef,
-	type SolvePipelineCacheHook
+	type ByteCacheRef
 } from '@selvajs/solve/server';
 import { stableStringify, type SolveDefinition } from '@selvajs/compute';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
@@ -121,9 +116,6 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		// Solve-metric attribution; null for remote-URL solves.
 		let metricDefinitionId: string | null = null;
 		let metricVersionId: string | null = null;
-		// Definition's resolved L2 cache quota (H1). 0 = caching off; set only for
-		// local solves. Consulted when building the pipeline's L2 hook below.
-		let solveCacheQuota = 0;
 
 		// Share-link tokens (spec §7); null for remote definitions or no token.
 		const isLocal = definitionUrl.startsWith('local:');
@@ -213,7 +205,6 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			const project = await providers.data.projects.getProject(solveCtx, record.projectId);
 			solveOrgId = project?.orgId ?? null;
 			definitionPin = record.computeServerId ?? null;
-			solveCacheQuota = resolveSolveCacheQuota(record.solveCacheLimit);
 			mark('project');
 
 			if (!sharedAccess) {
@@ -319,62 +310,72 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		const client = await getClient(serverConfig, { definitionGuid: guid ?? undefined });
 		mark('client');
 
-		// Durable L2 solve cache (H1). Only live-channel local solves are cached
-		// (channel decision 4): drafts iterate a handful of times then abandon, and
-		// an explicit version pick is an editor preview — both skip L2. The hook is
-		// null when caching is off (backend off / quota 0 / no org), and a null hook
-		// means the pipeline never touches L2 (channel gate by hook presence).
-		const cacheable = channel === 'live' && !explicitVersionId && metricVersionId !== null;
-		const solveCache: SolvePipelineCacheHook | null = cacheable
-			? buildSolveCacheHook({
-					ctx: solveCtx,
-					orgId: solveOrgId,
-					definitionId: metricDefinitionId!,
-					versionId: metricVersionId!,
-					quota: solveCacheQuota,
-					// Fold the compute server identity into the key (R8): two servers can
-					// run different Rhino/plugin versions yielding different geometry.
-					configSubset: { computeServerId: serverConfig.id }
-				})
-			: null;
+		// Single-flight (R4): coalesce concurrent identical solves into one pipeline
+		// execution so a hot-key burst hits compute once. This runs for EVERY solve,
+		// not just cacheable ones — dogpile protection matters most when there is no
+		// result cache behind it, since that is exactly when N identical solves each
+		// pay a full Rhino round trip.
+		//
+		// Keyed on the TRANSFORMED tree, not the raw {inputs, values}: the tree is the
+		// identity the scheduler itself caches on, so two requests that differ only in
+		// input ordering or in a field the transform normalizes away are the same solve
+		// and must share one execution. Build it here and hand it to the pipeline so
+		// the transform runs once.
+		const inputTree = buildSolveInputTree(inputs, values);
+		mark('treeBuild');
 
-		// Single-flight (R4): coalesce concurrent identical live solves into one
-		// pipeline execution so a hot-key burst hits compute once. Keyed on the same
-		// identity the L2 keys on (org + version + inputs). An uncacheable solve
-		// (draft / remote / explicit version) gets a unique key, so single-flight is a
-		// no-op there and each keeps its own request.signal (R3 orphan-cancel).
-		const coalesced = solveCache != null && metricVersionId != null;
-		const coalesceKey = coalesced
-			? `${solveOrgId}:${metricVersionId}:${stableStringify({ inputs, values })}`
-			: `nocoalesce:${metricVersionId ?? definitionUrl}:${performance.now()}:${Math.round(Math.random() * 1e9)}`;
+		// Definition identity + server: two definitions must never share a flight, and
+		// neither must two servers (they can run different Rhino versions). Remote-URL
+		// solves have no version id, so the URL stands in as their identity.
+		const coalesceKey = `${metricVersionId ?? definitionUrl}:${serverConfig.id}:${stableStringify(inputTree)}`;
 
 		// A coalesced solve is shared: if it followed one caller's request.signal, that
 		// caller disconnecting would abort the solve for EVERY waiter (a spurious 499).
-		// So a coalesced run gets a non-aborting signal — it runs to completion,
-		// populates L2, and every waiter is served the same result. Uncoalesced solves
-		// keep request.signal so a disconnect still cancels the orphan compute (R3).
-		const solveSignal = coalesced ? new AbortController().signal : request.signal;
+		// So a run with waiters attached gets a non-aborting signal. A solo run keeps
+		// request.signal so a disconnect still cancels the orphan compute (R3).
+		//
+		// `hasWaiters` is decided by the coalescer at join time, not by whether a cache
+		// happens to be configured — cancellation semantics are a property of sharing,
+		// and tying them to cache config (as they were) meant an operator enabling a
+		// cache silently changed whether disconnects cancel upstream work.
+		const abortController = new AbortController();
+		let hasWaiters = false;
+		const solveSignal = abortController.signal;
+		request.signal.addEventListener(
+			'abort',
+			() => {
+				// Only propagate the disconnect when this caller is the sole owner of
+				// the flight. Once anyone has joined, the work belongs to all of them.
+				if (!hasWaiters) abortController.abort();
+			},
+			{ once: true }
+		);
 
 		// Hand off to the transport-agnostic pipeline: input tree build → L2 lookup →
 		// solve (signal propagates to Compute) → serialize + gzip + L2 write-through +
 		// Server-Timing envelope. Returns a typed outcome we map to metrics + HTTP
 		// status; never throws for an expected failure.
-		const outcome = await solveCacheSingleFlight.run(coalesceKey, () =>
-			runSolvePipeline({
-				definitionSource,
-				byteRefOutcome: localDefinitionRef?.outcome,
-				inputs,
-				values,
-				client,
-				responseMaxBytes: COMPUTE_RESPONSE_MAX_BYTES,
-				maxSolveDurationMs: MAX_SOLVE_DURATION_MS,
-				acceptEncoding: request.headers.get('accept-encoding') ?? '',
-				signal: solveSignal,
-				loadStartMs: loadStart,
-				defLoadMs,
-				prepMarks,
-				solveCache: solveCache ?? undefined
-			})
+		const outcome = await solveCacheSingleFlight.run(
+			coalesceKey,
+			() =>
+				runSolvePipeline({
+					definitionSource,
+					byteRefOutcome: localDefinitionRef?.outcome,
+					inputs,
+					values,
+					inputTree,
+					client,
+					responseMaxBytes: COMPUTE_RESPONSE_MAX_BYTES,
+					maxSolveDurationMs: MAX_SOLVE_DURATION_MS,
+					acceptEncoding: request.headers.get('accept-encoding') ?? '',
+					signal: solveSignal,
+					loadStartMs: loadStart,
+					defLoadMs,
+					prepMarks
+				}),
+			() => {
+				hasWaiters = true;
+			}
 		);
 
 		// Map the pipeline's expected-failure outcomes to metrics + HTTP status.
@@ -478,21 +479,8 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				component: 'Compute/server',
 				...Object.fromEntries(prepMarks.map(([label, ms]) => [`p_${label}Ms`, Math.round(ms)]))
 			});
-			// Aggregate cache counters — the only place evictions/quota-drops surface
+			// Aggregate cache counters — the only place evictions surface
 			// (per-request Server-Timing only carries hit/miss verdicts).
-			const l2 = solveCacheStats();
-			if (l2) {
-				locals.log.debug('L2 solve-cache counters', {
-					component: 'Compute/l2-cache',
-					hits: l2.hits,
-					misses: l2.misses,
-					writes: l2.writes,
-					quotaEvictions: l2.quotaEvictions,
-					byteEvictions: l2.byteEvictions,
-					entries: l2.entries,
-					retainedBytes: l2.bytes
-				});
-			}
 			const db = definitionByteCacheStats();
 			locals.log.debug('Definition byte-cache counters', {
 				component: 'Compute/def-bytes',

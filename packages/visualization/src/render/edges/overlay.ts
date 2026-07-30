@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 
-import type { EdgeGeometryEntry } from './cache.js';
+import type { EdgeGeometryEntry } from './line-geometry.js';
 import {
 	DEFAULT_EDGE_COLOR,
 	EDGE_OFFSET_FACTOR,
@@ -80,21 +80,12 @@ function createEdgeMaterial(
 }
 
 export function buildEdgeOverlay(
-	sourceGeometry: THREE.BufferGeometry,
 	entry: EdgeGeometryEntry,
 	material: LineMaterial,
-	thresholdAngle: number,
 	distanceFade: boolean
 ): LineSegments2 {
-	entry.refCount += 1;
-
 	const overlay = new LineSegments2(entry.geometry, material);
 	overlay.userData.kind = EDGE_USERDATA_KIND;
-	// Remember which cache entry backs this overlay so removeEdges can refcount its disposal. The
-	// strong reference is fine: the overlay is a child of the mesh that owns the source geometry,
-	// so their lifetimes already coincide.
-	overlay.userData.edgeSource = sourceGeometry;
-	overlay.userData.edgeThresholdAngle = thresholdAngle;
 	overlay.raycast = () => {}; // never pickable; clicks should hit the mesh, not its outline
 	if (distanceFade) enableDistanceFade(overlay, entry.edgeSpacing);
 	return overlay;

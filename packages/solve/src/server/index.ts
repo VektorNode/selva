@@ -21,11 +21,11 @@
 
 export {
 	runSolvePipeline,
+	buildSolveInputTree,
 	adaptEnvelopeToEncoding,
 	COMPUTE_CONTRACT_VERSION,
 	COMPUTE_VERSION_HEADER,
 	type SolvePipelineArgs,
-	type SolvePipelineCacheHook,
 	type SolveOutcome,
 	type SolveEnvelope,
 	type SolvePhaseMetrics,
@@ -55,26 +55,6 @@ export {
 	type ByteCacheStats,
 	type ByteRefOutcome
 } from './definition-byte-cache.js';
-
-export {
-	createMemorySolveResultCache,
-	type MemorySolveResultCache,
-	type SolveCacheStats
-} from './memory-solve-cache.js';
-
-export {
-	deriveSolveCacheInputKey,
-	type SolveCacheConfigSubset,
-	type SolveCacheInputKey
-} from './solve-cache-key.js';
-
-export {
-	encodeSolveCacheEntry,
-	decodeSolveCacheEntry,
-	gunzipEntryBody,
-	type EnvelopeHeader,
-	type DecodedSolveCacheEntry
-} from './solve-cache-envelope.js';
 
 export {
 	createSolveCacheSingleFlight,

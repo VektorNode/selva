@@ -2,12 +2,7 @@ import * as THREE from 'three';
 import type { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 
-import {
-	cachedEntry,
-	releaseEdgeGeometry,
-	storeEntry,
-	type EdgeGeometryEntry
-} from './edges/cache.js';
+import { buildLineGeometry, type EdgeGeometryEntry } from './edges/line-geometry.js';
 import { extractSegmentsAsync, extractSegmentsSync, triangleCountOf } from './edges/extraction.js';
 import {
 	EDGES_SKIPPED_TRIANGLE_CAP,
@@ -30,10 +25,12 @@ import { MaterialPool, buildEdgeOverlay } from './edges/overlay.js';
  * is cleared.
  *
  * Performance model (docs/plans/4.edge-overlay-performance.md):
- * - Extraction results are cached at two levels: per source `BufferGeometry` (object identity,
- *   helps instanced parts within one solve) and by *content fingerprint* in an LRU — the viewer
- *   rebuilds all geometry objects every solve, so only a content key survives re-solves. Both live
- *   in `edges/cache.ts` and `edges/extraction.ts`.
+ * - Extraction results are cached by *content fingerprint* in an LRU (`edges/extraction.ts`). The
+ *   viewer rebuilds all geometry objects every solve, so only a content key survives re-solves.
+ *   A second, identity-keyed cache of the built `LineSegmentsGeometry` was removed on 2026-07-30:
+ *   it hit 0/80 in the real solve loop (scene clears reset it every solve) and saved 3.8 ms against
+ *   the 71 ms the content cache already absorbs, while costing a refcount protocol and one live
+ *   leak. See `edges/line-geometry.ts` for the measurements.
  * - {@link addEdgesAsync} runs extraction for large meshes in a Worker built from a blob URL
  *   (bundler-agnostic; falls back to inline extraction when Workers are unavailable), keeping the
  *   main thread free of the multi-second stalls extraction causes at millions of triangles.
@@ -107,13 +104,7 @@ function attachOverlay(
 	// Distance fade needs the transparent pass; overlays over the segment cap stay opaque instead
 	// of skipping outright — see EdgeOptions.maxSegments.
 	const fade = resolved.distanceFade && entry.segmentCount <= resolved.maxSegments;
-	const overlay = buildEdgeOverlay(
-		mesh.geometry,
-		entry,
-		materials.for(mesh, fade),
-		resolved.thresholdAngle,
-		fade
-	);
+	const overlay = buildEdgeOverlay(entry, materials.for(mesh, fade), fade);
 	mesh.add(overlay); // child → inherits transform, disposed with the parent subtree
 	return overlay;
 }
@@ -135,14 +126,10 @@ export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineS
 	const created: LineSegments2[] = [];
 
 	for (const mesh of collectTargets(root, resolved.maxTriangles)) {
-		const entry =
-			cachedEntry(mesh.geometry, resolved.thresholdAngle) ??
-			storeEntry(
-				mesh.geometry,
-				resolved.thresholdAngle,
-				extractSegmentsSync(mesh.geometry, resolved.thresholdAngle)
-			);
-		created.push(attachOverlay(mesh, entry, materials, resolved));
+		// Extraction itself is cached by content (`extraction.ts`), which is where the savings are;
+		// the line geometry is per-overlay and owned by it.
+		const segments = extractSegmentsSync(mesh.geometry, resolved.thresholdAngle);
+		created.push(attachOverlay(mesh, buildLineGeometry(segments), materials, resolved));
 	}
 
 	materials.disposeUnused(created);
@@ -187,17 +174,12 @@ export async function addEdgesAsync(
 	const created: LineSegments2[] = [];
 
 	const attaches = collectTargets(root, resolved.maxTriangles).map(async (mesh) => {
-		let entry = cachedEntry(mesh.geometry, resolved.thresholdAngle);
-		if (!entry) {
-			const segments = await extractSegmentsAsync(mesh.geometry, resolved.thresholdAngle);
-			// Things may have moved on while extracting — attach only if this apply is still wanted.
-			if (generationOf(root) !== generation) return;
-			if (!isConnected(mesh, root)) return;
-			if (mesh.children.some((c) => c.userData?.kind === EDGE_USERDATA_KIND)) return;
-			entry = cachedEntry(mesh.geometry, resolved.thresholdAngle);
-			if (!entry) entry = storeEntry(mesh.geometry, resolved.thresholdAngle, segments);
-		}
-		created.push(attachOverlay(mesh, entry, materials, resolved));
+		const segments = await extractSegmentsAsync(mesh.geometry, resolved.thresholdAngle);
+		// Things may have moved on while extracting — attach only if this apply is still wanted.
+		if (generationOf(root) !== generation) return;
+		if (!isConnected(mesh, root)) return;
+		if (mesh.children.some((c) => c.userData?.kind === EDGE_USERDATA_KIND)) return;
+		created.push(attachOverlay(mesh, buildLineGeometry(segments), materials, resolved));
 	});
 
 	await Promise.all(attaches);
@@ -223,7 +205,7 @@ export function removeEdges(root: THREE.Object3D): number {
 	// disposed-but-still-referenced material on its next use.)
 	const materials = new Set<LineMaterial>();
 	for (const overlay of overlays) {
-		releaseEdgeGeometry(overlay); // geometry may be shared across overlays — refcounted dispose
+		overlay.geometry.dispose(); // each overlay owns its line geometry outright
 		materials.add(overlay.material as LineMaterial);
 		// Nothing to undo on the parent mesh: the depth bias lives entirely on the overlay's own
 		// material, so surfaces keep whatever polygonOffset their look preset configured.

@@ -14,7 +14,9 @@ import {
 	COMPUTE_RESPONSE_MAX_BYTES,
 	REMOTE_DEFINITION_MAX_BYTES,
 	REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
-	DEFINITION_CACHE_TTL_MS
+	REMOTE_DEFINITION_CACHE_TTL_MS,
+	COMPUTE_DEFINITION_CACHE_BYTES,
+	COMPUTE_SOLVE_CACHE_BYTES
 } from '$lib/server/computeLimits';
 import pkg from '../../../../package.json';
 import type { Actions, PageServerLoad } from './$types';
@@ -57,7 +59,9 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 		COMPUTE_RESPONSE_MAX_BYTES,
 		REMOTE_DEFINITION_MAX_BYTES,
 		REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
-		DEFINITION_CACHE_TTL_MS
+		REMOTE_DEFINITION_CACHE_TTL_MS,
+		COMPUTE_DEFINITION_CACHE_BYTES,
+		COMPUTE_SOLVE_CACHE_BYTES
 	};
 
 	// The persisted release channel drives which dist-tag the update check (and

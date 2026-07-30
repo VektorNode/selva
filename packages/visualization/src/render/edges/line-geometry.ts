@@ -1,24 +1,31 @@
-import type * as THREE from 'three';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
-import type { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 
 // ============================================================================
-// Per-geometry line-geometry cache (identity-keyed, refcounted)
+// Line geometry construction
 // ============================================================================
+//
+// This used to be a refcounted, identity-keyed cache of `LineSegmentsGeometry` per source
+// `BufferGeometry`. It was removed on 2026-07-30 after measurement (see below); what is left
+// is the part that was doing the work — building the line geometry and describing it.
+//
+// Why the cache went, in numbers:
+//   - In the real solve loop it hit 0 out of 80 lookups. `clearScene` releases edge geometry per
+//     source geometry, so every solve started cold. It only hit (76/80) when edges were re-applied
+//     WITHOUT a scene clear — toggling edges on a stable scene.
+//   - What it uniquely saved over the content-keyed segment cache (`extraction.ts`) is exactly
+//     this file's `buildLineGeometry`: 3.8 ms on a 96k-triangle mesh, against 71 ms for the
+//     extraction the segment cache already absorbs. ~5% of the cost.
+//   - It cost a WeakMap, a refcount protocol, a `clearScene` hook, and one live memory leak (F1):
+//     the WeakMap's "entries vanish with their source geometry" premise was falsified by the
+//     cross-solve geometry cache holding sources reachable forever, so line geometries with
+//     resident GPU buffers accumulated without bound — 400 live entries where 8 were expected.
+//
+// The segment cache remains and is doing the heavy lifting: extraction results are keyed by
+// content, so a rebuilt-but-identical geometry still skips the kernel.
 
-/**
- * Extracted edge geometry, cached per source `BufferGeometry` (and per crease angle, since the
- * angle changes which edges survive). N meshes sharing one geometry — the common case for
- * instanced/repeated parts — get one extraction and one GPU buffer instead of N identical ones.
- *
- * Reference-counted so {@link removeEdges} only disposes a line geometry once its last overlay is
- * gone. The WeakMap keys on the source geometry, so entries vanish with the content they describe;
- * overlays disposed by whole-scene clears (which bypass removeEdges) just leave a refcount behind
- * on an entry that becomes unreachable together with its source geometry.
- */
+/** An extracted edge overlay's geometry plus the measurements the overlay needs to render it. */
 export interface EdgeGeometryEntry {
 	geometry: LineSegmentsGeometry;
-	refCount: number;
 	segmentCount: number;
 	/**
 	 * Mean world-space spacing between this overlay's edges: the characteristic distance at which
@@ -76,65 +83,23 @@ function edgeSpacingOf(segments: Float32Array): number {
 	if (lengths.length === 0) return Infinity;
 
 	lengths.sort((a, b) => a - b);
-	return lengths[Math.min(lengths.length - 1, Math.floor(lengths.length * SPACING_PERCENTILE))];
+	return lengths[Math.min(lengths.length - 1, Math.floor(lengths.length * SPACING_PERCENTILE))]!;
 }
 
-const edgeGeometryCache = new WeakMap<THREE.BufferGeometry, Map<number, EdgeGeometryEntry>>();
-
-export function cachedEntry(
-	geometry: THREE.BufferGeometry,
-	thresholdAngle: number
-): EdgeGeometryEntry | undefined {
-	return edgeGeometryCache.get(geometry)?.get(thresholdAngle);
-}
-
-export function storeEntry(
-	geometry: THREE.BufferGeometry,
-	thresholdAngle: number,
-	segments: Float32Array
-): EdgeGeometryEntry {
-	let byAngle = edgeGeometryCache.get(geometry);
-	if (!byAngle) {
-		byAngle = new Map();
-		edgeGeometryCache.set(geometry, byAngle);
-	}
-	// LineSegmentsGeometry adopts `segments` as its backing store without copying — sharing the
-	// array with the segment cache and with other entries is safe (read-only from here on).
-	const lineGeometry = new LineSegmentsGeometry();
-	lineGeometry.setPositions(segments);
-	const entry: EdgeGeometryEntry = {
-		geometry: lineGeometry,
-		refCount: 0,
+/**
+ * Build the renderable line geometry for a set of extracted segments.
+ *
+ * Every overlay gets its own `LineSegmentsGeometry`, owned by the overlay and disposed with it —
+ * no sharing, no refcount, no cache. `LineSegmentsGeometry` adopts `segments` as its backing store
+ * without copying, so the array itself is still safely shared with the segment cache (read-only
+ * from here on) and across any number of overlays built from the same content.
+ */
+export function buildLineGeometry(segments: Float32Array): EdgeGeometryEntry {
+	const geometry = new LineSegmentsGeometry();
+	geometry.setPositions(segments);
+	return {
+		geometry,
 		segmentCount: segments.length / 6,
 		edgeSpacing: edgeSpacingOf(segments)
 	};
-	byAngle.set(thresholdAngle, entry);
-	return entry;
-}
-
-/** Where an overlay's (possibly shared) line geometry came from, for refcounted disposal. */
-interface EdgeOverlayUserData {
-	kind: string;
-	edgeSource?: THREE.BufferGeometry;
-	edgeThresholdAngle?: number;
-}
-
-/** Refcounted disposal — only when the last overlay referencing an entry is gone. */
-export function releaseEdgeGeometry(overlay: LineSegments2): void {
-	const userData = overlay.userData as EdgeOverlayUserData;
-	const byAngle = userData.edgeSource && edgeGeometryCache.get(userData.edgeSource);
-	const entry =
-		userData.edgeThresholdAngle != null ? byAngle?.get(userData.edgeThresholdAngle) : undefined;
-
-	if (!entry || entry.geometry !== overlay.geometry) {
-		// Not (or no longer) cache-managed — dispose directly.
-		overlay.geometry.dispose();
-		return;
-	}
-
-	entry.refCount -= 1;
-	if (entry.refCount <= 0) {
-		entry.geometry.dispose();
-		byAngle!.delete(userData.edgeThresholdAngle!);
-	}
 }

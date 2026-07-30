@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 
+import { publishMaxAnisotropy, retainCaches } from '../../shared/index.js';
 import { createCameraController } from '../camera-controller.js';
 import { EDGES_SKIPPED_TRIANGLE_CAP, addEdgesAsync, removeEdges } from '../edges.js';
 import { createGrid } from '../grid.js';
@@ -49,10 +50,15 @@ export const initThree = function (
 	camera.up.copy(sceneUp);
 	const renderer = setupRenderer(canvas, config, pixelRatio);
 	// Report the GPU's max anisotropy so color maps stay sharp at grazing angles. One-time;
-	// retroactively upgrades any texture already decoded this session. Injected (see
-	// `onMaxAnisotropy`) rather than calling the parse layer's texture cache directly, so the render
-	// layer stays usable standalone — hosts that parse meshes wire the two together.
+	// retroactively upgrades any texture already decoded this session. Published to a shared sink
+	// rather than imported into the texture cache, so `render/` stays independent of `parse/` — the
+	// cache subscribes from its own side. `onMaxAnisotropy` remains as an opt-in extra observer.
+	publishMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());
 	options?.onMaxAnisotropy?.(renderer.capabilities.getMaxAnisotropy());
+
+	// Claim the shared GPU caches for this viewer's lifetime; released in dispose(), and the caches
+	// are only actually freed once the last live viewer lets go.
+	const releaseCaches = retainCaches();
 	const controls = setupControls(camera, canvas, config);
 
 	// Tracks whichever camera (perspective or orthographic) is live; the controller swaps it.
@@ -374,6 +380,17 @@ export const initThree = function (
 		renderer.forceContextLoss();
 
 		disposeSceneResources(scene);
+
+		// The cross-solve caches outlive any single scene, but not the GL context: their buffers
+		// belong to the context just destroyed above, and nothing else is permitted to free them.
+		// Without this, every mount/unmount cycle stranded up to 256 MiB of geometry and 64 textures.
+		//
+		// Drains a registry the caches push themselves onto, so this frees the parse layer's caches
+		// without importing it (the layer rule holds) and without the host wiring anything. It is
+		// refcounted, so with several viewers mounted only the last one out actually frees. Ordered
+		// after the scene sweep so the caches' ownership claims are still in force while it runs —
+		// the sweep must skip cache-owned resources, not race for them.
+		releaseCaches();
 	};
 
 	return {

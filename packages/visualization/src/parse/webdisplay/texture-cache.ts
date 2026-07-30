@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 
-import { getLogger } from '../../shared/index.js';
+import {
+	CACHED_TEXTURE_USERDATA_FLAG,
+	getLogger,
+	observeMaxAnisotropy,
+	registerCacheRelease
+} from '../../shared/index.js';
 
 /**
  * Maximum number of decoded textures retained by the module-level cache. When a fresh load pushes
@@ -55,16 +60,17 @@ class StaleTextureLoadError extends Error {
 /**
  * Max anisotropic-filtering samples applied to color maps, keeping textures sharp at grazing angles
  * (floors, long walls receding to the horizon) instead of blurring. The ceiling is hardware-defined
- * (`renderer.capabilities.getMaxAnisotropy()`, typically 16); the viewer reports it once at init via
- * {@link setTextureAnisotropy}. Defaults to 1 (three's default — no anisotropy) so the module is
- * correct even if the viewer never calls in.
+ * (`renderer.capabilities.getMaxAnisotropy()`, typically 16). Defaults to 1 (three's default — no
+ * anisotropy) until a renderer reports in, so the module is correct with no viewer at all.
  */
 let maxAnisotropy = 1;
 
 /**
- * Set the anisotropy applied to all color-map textures. Call once from the viewer with
- * `renderer.capabilities.getMaxAnisotropy()`. Retroactively updates already-cached textures so
- * textures decoded before this call still benefit.
+ * Set the anisotropy applied to all color-map textures, updating already-cached textures so ones
+ * decoded earlier still benefit.
+ *
+ * Subscribed to the renderer's own report below, so no host wiring is needed; still exported because
+ * a host embedding a foreign renderer may want to set it directly.
  */
 export function setTextureAnisotropy(value: number): void {
 	maxAnisotropy = Math.max(1, value);
@@ -75,6 +81,10 @@ export function setTextureAnisotropy(value: number): void {
 		}
 	}
 }
+
+// Take the value straight from whichever renderer initializes, rather than depending on the host to
+// forward it. `render/` publishes, this layer subscribes — neither imports the other.
+observeMaxAnisotropy(setTextureAnisotropy);
 
 /**
  * Assigns a texture to `material.map`, synchronously when cached, otherwise asynchronously once
@@ -118,9 +128,14 @@ export function applyTextureMap(material: THREE.MeshPhysicalMaterial, url: strin
  * flight are orphaned: when they resolve they see the bumped generation, dispose their texture,
  * and do not repopulate the cache.
  */
+// Declare this cache to the teardown registry, so the viewer's dispose() frees it without the
+// render layer importing this one and without any host wiring. See shared/gpu-ownership.ts.
+registerCacheRelease(() => clearTextureCache());
+
 export function clearTextureCache(): void {
 	cacheGeneration++;
 	for (const texture of textureCache.values()) {
+		delete texture.userData[CACHED_TEXTURE_USERDATA_FLAG];
 		texture.dispose();
 	}
 	textureCache.clear();
@@ -151,11 +166,20 @@ function fnv1aString(s: string): number {
 
 /** Inserts a texture, evicting (and disposing) least-recently-used entries past the bound. */
 function storeTexture(key: string, texture: THREE.Texture): void {
+	// Claim ownership before the texture can reach a material. A cached texture is assigned straight
+	// onto `material.map` and shared by every material using that URL, so without this flag the first
+	// material sweep to reach one would dispose a texture the cache still holds — and then serve the
+	// disposed texture to the next mesh that asks for it. Cleared on eviction, below.
+	texture.userData[CACHED_TEXTURE_USERDATA_FLAG] = true;
+
 	textureCache.set(key, texture);
 	while (textureCache.size > TEXTURE_CACHE_MAX_ENTRIES) {
 		const oldestKey = textureCache.keys().next().value as string;
 		const evicted = textureCache.get(oldestKey)!;
 		textureCache.delete(oldestKey);
+		// Release the claim first: an evicted texture may still be attached to a live material, and
+		// the scene that owns that material should be free to dispose it from here on.
+		delete evicted.userData[CACHED_TEXTURE_USERDATA_FLAG];
 		evicted.dispose();
 	}
 }

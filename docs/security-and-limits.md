@@ -63,9 +63,8 @@ All resolved in `packages/server/src/compute/limits.ts`.
 | `REMOTE_DEFINITION_FETCH_TIMEOUT_MS` | `30000`              | Deadline on remote-definition fetch (slow-loris protection).                                                                                                                                                 |
 | `BODY_SIZE_LIMIT`                    | `210M`               | adapter-node's global body cap on **every** route. Must be ≥ `COMPUTE_REQUEST_MAX_BYTES`. Use `210M` or a raw byte count — adapter-node reads only the last suffix character, and `Infinity` throws on boot. |
 
-Cache byte budgets (`COMPUTE_DEFINITION_BYTE_CACHE_MB`, `COMPUTE_RESPONSE_CACHE_MB`,
-`SOLVE_CACHE_MAX_TOTAL_MB`) and the boolean cache switches are covered in
-[Caching](Caching.md).
+Cache byte budgets (`COMPUTE_DEFINITION_CACHE_MB`, `COMPUTE_SOLVE_CACHE_MB`) and the
+Rhino.Compute server flags are covered in [Caching](Caching.md).
 
 ## SSRF guard on remote definitions
 

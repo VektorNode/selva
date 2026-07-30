@@ -1,5 +1,11 @@
 /**
- * In-process single-flight (R4) — dogpile protection above the L2 cache.
+ * In-process single-flight (R4) — dogpile protection for every solve.
+ *
+ * This is deliberately NOT conditional on any result cache being configured. The
+ * dogpile it prevents is worst precisely when nothing else is caching: with no
+ * shared result cache, N concurrent identical solves each pay a full Rhino round
+ * trip. Gating it on cache configuration (as an earlier version did) turned it off
+ * in exactly the deployments that needed it most.
  *
  * N identical live solves arriving while the first is still running would each
  * enqueue and each hit Rhino (the scheduler has no in-flight coalescing, and
@@ -27,8 +33,14 @@ export interface SolveCacheSingleFlight {
 	 * Run `work` under `key`, coalescing concurrent identical calls. The first
 	 * caller executes; overlapping callers for the same key await the same promise.
 	 * The key is freed as soon as the promise settles (success or failure).
+	 *
+	 * `onWaiterJoined` fires on the OWNER's call — the one actually running `work` —
+	 * each time another caller joins its flight. The owner needs this because
+	 * ownership changes what its abort signal means: a solo run may cancel on its
+	 * own client's disconnect, a shared one may not (cancelling would 499 every
+	 * waiter). Never fires for a joining caller, and never after `work` settles.
 	 */
-	run<T>(key: string, work: () => Promise<T>): Promise<T>;
+	run<T>(key: string, work: () => Promise<T>, onWaiterJoined?: () => void): Promise<T>;
 	/** Number of keys currently in flight (observability / tests). */
 	inFlight(): number;
 }
@@ -44,25 +56,37 @@ export interface SolveCacheSingleFlightOptions {
 export function createSolveCacheSingleFlight(
 	options: SolveCacheSingleFlightOptions = {}
 ): SolveCacheSingleFlight {
-	const inflight = new Map<string, Promise<unknown>>();
+	// Each entry carries the shared promise plus the owner's join callback, so a
+	// joining caller can notify the owner that its flight is now shared.
+	interface Flight {
+		promise: Promise<unknown>;
+		notifyOwner?: () => void;
+	}
+	const inflight = new Map<string, Flight>();
 
 	return {
-		run<T>(key: string, work: () => Promise<T>): Promise<T> {
+		run<T>(key: string, work: () => Promise<T>, onWaiterJoined?: () => void): Promise<T> {
 			const existing = inflight.get(key);
 			if (existing) {
 				options.onJoin?.(key);
-				return existing as Promise<T>;
+				existing.notifyOwner?.();
+				return existing.promise as Promise<T>;
 			}
 
 			// `.finally` releases the key on both settle paths. Start the work inside
 			// the promise chain so a synchronous throw in `work` still rejects the
 			// shared promise (and still frees the key) rather than escaping.
+			const flight: Flight = { notifyOwner: onWaiterJoined, promise: undefined! };
 			const p = (async () => work())().finally(() => {
-				// Only delete if it's still OUR promise — a key freed and re-taken by a
+				// Drop the callback so a late join can't fire it after the owner's
+				// request has already been served.
+				flight.notifyOwner = undefined;
+				// Only delete if it's still OUR flight — a key freed and re-taken by a
 				// later caller must not be clobbered.
-				if (inflight.get(key) === p) inflight.delete(key);
+				if (inflight.get(key) === flight) inflight.delete(key);
 			});
-			inflight.set(key, p);
+			flight.promise = p;
+			inflight.set(key, flight);
 			return p;
 		},
 		inFlight(): number {

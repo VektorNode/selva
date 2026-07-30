@@ -85,6 +85,28 @@ export function readNonNegativeInt(
 }
 
 /**
+ * Read a renamed variable, honouring its previous name for one minor version.
+ *
+ * Returns the env map's value under `name`, or — when that is unset and the old
+ * name is present — the old value plus a warning naming both. Setting both is not
+ * an error: the new name wins silently, which is what an operator mid-migration
+ * expects.
+ *
+ * This exists so a rename is never a silent behaviour change. A var that quietly
+ * stops being read looks exactly like a var that is working, and the failure only
+ * surfaces as a memory number nobody is watching.
+ */
+function readRenamed(env: EnvRecord, name: string, oldName: string, logger: ILogger): EnvRecord {
+	if (env[name] !== undefined || env[oldName] === undefined) return env;
+	logger.warn('Deprecated env var: rename it', {
+		component: 'selva',
+		envVar: oldName,
+		renamedTo: name
+	});
+	return { ...env, [name]: env[oldName] };
+}
+
+/**
  * Parse a boolean env flag. Accepts `true/1/yes/on` (case-insensitive) as true
  * and `false/0/no/off` as false; any other / absent value falls back.
  */
@@ -157,8 +179,15 @@ export interface ComputeLimits {
 	remoteDefinitionMaxBytes: number;
 	/** Deadline on fetching a remote definition (slow-loris protection). */
 	remoteDefinitionFetchTimeoutMs: number;
-	/** In-process cache TTL for remote-fetched .gh bytes. */
-	definitionCacheTtlMs: number;
+	/**
+	 * TTL for the in-process cache of .gh bytes fetched from a REMOTE URL.
+	 *
+	 * Only the remote path is TTL'd, and the name says so deliberately: the other
+	 * definition cache is keyed on an immutable version id, where expiry would be a
+	 * bug (it can only ever throw away valid work). A URL's owner can swap the file
+	 * underneath us, so that one needs a freshness bound and this is it.
+	 */
+	remoteDefinitionCacheTtlMs: number;
 	/**
 	 * Reuse the server's cached definition via a pointer instead of re-uploading
 	 * the binary each solve. SAFE only on a compute server that signals a
@@ -210,42 +239,27 @@ export interface ComputeLimits {
 	 */
 	computeQueueWaitMs: number;
 	/**
-	 * Total-byte budget (bytes) for the in-process definition-byte cache keyed on
-	 * immutable version id. A warm entry lets a solve skip `storage.get` entirely,
-	 * and a pointer-known solve never loads bytes at all. `0` disables the cache
-	 * (every solve re-reads storage). Sized as a total-byte LRU because definitions
-	 * span KB→hundreds of MB; env value is MB, converted here.
+	 * **Definition cache** — total-byte budget (bytes) for the in-process cache of
+	 * .gh bytes keyed on immutable version id. A warm entry lets a solve skip
+	 * `storage.get` entirely, and a pointer-known solve never loads bytes at all.
+	 * `0` disables it (every solve re-reads storage). A total-byte LRU rather than
+	 * an entry count because definitions span KB→hundreds of MB. Env value is MB.
 	 */
-	computeDefinitionByteCacheBytes: number;
+	computeDefinitionCacheBytes: number;
 	/**
-	 * Total-byte budget (bytes) for EACH warm client's in-process solve-response
-	 * cache (the scheduler L1 — the `fromCache` layer in front of Rhino.Compute).
-	 * Responses range KB→100s of MB (`computeResponseMaxBytes` allows 300 MB), so
-	 * the L1's entry-count cap alone can't bound heap; this adds a byte LRU on
-	 * top. Applies PER warm client — worst-case heap is this × the number of
-	 * distinct compute servers kept warm (`maxCachedClients`, default 16), though
-	 * real deployments run 1–2 servers. `0` disables the L1 response cache
-	 * entirely (every solve goes to compute or the L2). Env value is MB.
+	 * **Solve cache** — total-byte budget (bytes) for EACH warm client's in-process
+	 * cache of solve results (the `fromCache` layer in front of Rhino.Compute).
+	 * Results range KB→100s of MB (`computeResponseMaxBytes` allows 300 MB), so an
+	 * entry-count cap alone can't bound heap; this adds a byte LRU on top. `0`
+	 * disables it (every solve goes to compute). Env value is MB.
+	 *
+	 * **This is per warm client, so the worst case multiplies.** Selva keeps up to
+	 * `maxCachedClients` (default 16) distinct compute servers warm, so the true
+	 * ceiling is this × 16 — 4 GB at the default. Real deployments run 1–2 servers,
+	 * which is why the default is comfortable, but a deployment that fans out
+	 * across many servers on a small VPS is exactly the case this knob exists for.
 	 */
-	computeResponseCacheBytes: number;
-	/**
-	 * Default per-definition entry quota for the durable L2 solve cache (H1), used
-	 * when a definition's `solveCacheLimit` is absent (inherit). A definition may
-	 * override this; `0` on the definition turns caching off for it. This global
-	 * default `0` means the L2 is effectively off until an operator sets a quota —
-	 * safe because the memory backend also ships only under
-	 * `SOLVE_CACHE_PROVIDER=memory`. Counts, not bytes: authors think in "how many
-	 * solves to remember"; the byte backstop below is the operator's memory guard.
-	 */
-	solveCacheDefaultMaxEntries: number;
-	/**
-	 * Global byte backstop (bytes) across ALL definitions' L2 entries, evicted
-	 * global-LRU regardless of per-definition counts. Entries range KB→100s of MB,
-	 * so a count quota alone can't bound memory. `0` disables the backstop (rely on
-	 * per-definition counts only — not recommended in the memory backend). Env value
-	 * is MB, converted here. On Redis this moves to `maxmemory allkeys-lru`.
-	 */
-	solveCacheMaxTotalBytes: number;
+	computeSolveCacheBytes: number;
 }
 
 /**
@@ -254,6 +268,12 @@ export interface ComputeLimits {
  * this once at its composition root with `$env/dynamic/private`.
  */
 export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): ComputeLimits {
+	// Renamed 2026-07 so each cache var says what it HOLDS. Old names still read,
+	// with a boot warning; drop this shim one minor version on.
+	env = readRenamed(env, 'COMPUTE_DEFINITION_CACHE_MB', 'COMPUTE_DEFINITION_BYTE_CACHE_MB', logger);
+	env = readRenamed(env, 'COMPUTE_SOLVE_CACHE_MB', 'COMPUTE_RESPONSE_CACHE_MB', logger);
+	env = readRenamed(env, 'REMOTE_DEFINITION_CACHE_TTL_MS', 'DEFINITION_CACHE_TTL_MS', logger);
+
 	const maxGhFileSize = readPositiveInt(env, 'MAX_GH_FILE_SIZE_BYTES', 50 * MB, logger);
 	return {
 		maxSolveDurationMs: readPositiveInt(env, 'MAX_SOLVE_DURATION_MS', 100_000, logger),
@@ -271,7 +291,12 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 			30_000,
 			logger
 		),
-		definitionCacheTtlMs: readPositiveInt(env, 'DEFINITION_CACHE_TTL_MS', 5 * 60 * 1000, logger),
+		remoteDefinitionCacheTtlMs: readPositiveInt(
+			env,
+			'REMOTE_DEFINITION_CACHE_TTL_MS',
+			5 * 60 * 1000,
+			logger
+		),
 		computeReuseDefinitionCache: readBool(env, 'COMPUTE_REUSE_DEFINITION_CACHE', true, logger),
 		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true, logger),
 		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false, logger),
@@ -285,23 +310,12 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 		// Env is MB; 0 disables. Default 256 MB holds a handful of typical
 		// definitions warm without pinning gigabytes. readNonNegativeInt so `0`
 		// (disable) is honored rather than treated as invalid.
-		computeDefinitionByteCacheBytes:
-			readNonNegativeInt(env, 'COMPUTE_DEFINITION_BYTE_CACHE_MB', 256, logger) * MB,
-		// Per-warm-client L1 response cache budget. Env is MB; 0 disables the L1.
-		// Default 256 MB: enough to keep a scrub session's recent responses warm
-		// without letting 20 × 300 MB worst-case entries pin gigabytes (audit C2).
-		computeResponseCacheBytes:
-			readNonNegativeInt(env, 'COMPUTE_RESPONSE_CACHE_MB', 256, logger) * MB,
-		// L2 durable solve cache (H1). Default per-definition quota 0 = inherit-to-off
-		// until an operator opts in; the memory backend also only mounts under
-		// SOLVE_CACHE_PROVIDER=memory, so nothing caches by accident. Byte backstop
-		// 512 MB caps total heap use across all definitions (env is MB).
-		solveCacheDefaultMaxEntries: readNonNegativeInt(
-			env,
-			'SOLVE_CACHE_DEFAULT_MAX_ENTRIES',
-			0,
-			logger
-		),
-		solveCacheMaxTotalBytes: readNonNegativeInt(env, 'SOLVE_CACHE_MAX_TOTAL_MB', 512, logger) * MB
+		computeDefinitionCacheBytes:
+			readNonNegativeInt(env, 'COMPUTE_DEFINITION_CACHE_MB', 256, logger) * MB,
+		// Per-warm-client solve cache budget. Env is MB; 0 disables it. Default
+		// 256 MB: enough to keep a scrub session's recent solves warm without
+		// letting worst-case entries pin gigabytes (audit C2). PER warm client —
+		// see the field doc for the ×16 worst case.
+		computeSolveCacheBytes: readNonNegativeInt(env, 'COMPUTE_SOLVE_CACHE_MB', 256, logger) * MB
 	};
 }

@@ -20,7 +20,7 @@ import {
 	COMPUTE_MAX_CONCURRENT,
 	COMPUTE_MAX_QUEUE_DEPTH,
 	COMPUTE_QUEUE_WAIT_MS,
-	COMPUTE_RESPONSE_CACHE_BYTES,
+	COMPUTE_SOLVE_CACHE_BYTES,
 	COMPUTE_REUSE_DEFINITION_CACHE,
 	COMPUTE_SERVER_CACHESOLVE,
 	MAX_SOLVE_DURATION_MS
@@ -46,7 +46,7 @@ const cache = createClientCache({
 	cachesolve: COMPUTE_SERVER_CACHESOLVE,
 	cacheerroredsolves: COMPUTE_CACHE_ERRORED_SOLVES,
 	reuseServerDefinitionCache: COMPUTE_REUSE_DEFINITION_CACHE,
-	responseCacheMaxBytes: COMPUTE_RESPONSE_CACHE_BYTES,
+	responseCacheMaxBytes: COMPUTE_SOLVE_CACHE_BYTES,
 	debug: COMPUTE_DEBUG,
 	debugVerbose: COMPUTE_DEBUG_VERBOSE,
 	onDebugLog: (message) => getLogger().debug(message, { component: 'Compute/client-cache' })

@@ -56,5 +56,13 @@ one, curves are skipped with a warning and points still render.
 - **Malformed metadata throws, absent data doesn't.** An unparseable envelope returns `[]` (genuinely
   no data); a corrupt/truncated blob or out-of-range group window throws a `VALIDATION_ERROR` rather
   than silently rendering an empty or corrupted scene.
-- **Geometry cache owns its buffers.** Cached geometries carry `CACHED_GEOMETRY_USERDATA_FLAG`; the
-  render layer's `clearScene` must not dispose them — the cache disposes on eviction.
+- **The caches own their buffers, and `shared/gpu-ownership.ts` is where that is stated.** Cached
+  geometries and textures carry `CACHED_GEOMETRY_USERDATA_FLAG` / `CACHED_TEXTURE_USERDATA_FLAG`;
+  the caches dispose them on eviction and nobody else ever does. Don't read those flags directly —
+  call `canDisposeGeometry` / `canDisposeTexture`, or just use `disposeObjectTree`, which already
+  does. See [the ownership rule](../shared/gpu-ownership.ts) for why this is centralized.
+- **Both cross-solve caches release themselves on viewer teardown.** They outlive a scene by
+  design, but not the GL context. Each calls `registerCacheRelease(...)` at module init, and
+  `initThree` drains the registry in `dispose()` — refcounted, so only the last live viewer
+  frees. No host wiring. `releaseParseCaches` stays exported as an escape hatch, not a required
+  step.

@@ -11,9 +11,17 @@ description: 'Where Selva caches — browser, server, and Rhino.Compute — what
 Solving a Grasshopper definition is the expensive part of Selva. Caching avoids repeating work — and
 also avoids re-uploading definitions, re-decoding meshes, and re-uploading geometry to the GPU.
 
-Selva owns **ten** caches — five in the browser, five in the server — and sends flags to **two** more
-that Rhino.Compute owns. That number sounds alarming; it isn't. Most need no configuration and cannot
-go stale by construction. This page groups them so you only have to hold two ideas at once.
+There are a lot of individual caches, but **only three names you ever have to know**, each named for
+what it holds:
+
+| Name                 | Holds                                       | You configure it with         |
+| -------------------- | ------------------------------------------- | ----------------------------- |
+| **Definition cache** | `.gh` file bytes                            | `COMPUTE_DEFINITION_CACHE_MB` |
+| **Solve cache**      | solve results, keyed on definition + inputs | `COMPUTE_SOLVE_CACHE_MB`      |
+| **Viewer cache**     | geometry and textures with live GPU buffers | nothing — see below           |
+
+Both settings are **sizes in MB**, both are **on by default**, and `0` turns one off. There is no
+provider to pick, no quota that is secretly an on/off switch, and no combination to get right.
 
 ---
 
@@ -35,23 +43,22 @@ GPU-resource caches are an ownership concern (who disposes what), not a freshnes
 
 ```
 Browser ─────────────► Selva server ─────────────► Rhino.Compute
- memo, geometry,        warm client, L1,            definition cache,
- texture, edges         def bytes, L2               cachesolve
+ memo, viewer caches    solve cache,                definition cache,
+                        definition cache            cachesolve
 ```
 
 **Result caches — these decide whether you see fresh output:**
 
-| Cache                  | Tier            | Skips                              | Default | Configurable |
-| ---------------------- | --------------- | ---------------------------------- | ------- | ------------ |
-| Client solve memo      | Browser         | the whole round-trip               | on      | no           |
-| L1 in-process response | Selva server    | the network call **and** the solve | on      | yes          |
-| Definition-byte cache  | Selva server    | reading the `.gh` from storage     | on      | yes          |
-| L2 durable solve cache | Selva server    | the solve, across restarts         | **off** | yes          |
-| Pointer reuse          | Selva ↔ Compute | re-uploading the `.gh`             | on      | yes          |
-| `cachesolve`           | Rhino.Compute   | the solve                          | on      | yes          |
+| Cache             | Tier            | Skips                              | Default | Configurable |
+| ----------------- | --------------- | ---------------------------------- | ------- | ------------ |
+| Client solve memo | Browser         | the whole round-trip               | on      | no           |
+| Solve cache       | Selva server    | the network call **and** the solve | on      | yes          |
+| Definition cache  | Selva server    | reading the `.gh` from storage     | on      | yes          |
+| Pointer reuse     | Selva ↔ Compute | re-uploading the `.gh`             | on      | yes          |
+| `cachesolve`      | Rhino.Compute   | the solve                          | on      | yes          |
 
-**Everything else needs no configuration** — the warm-client cache, the browser's geometry / texture /
-edge caches, and the single-flight coalescer. They're described in
+**Everything else needs no configuration** — the warm-client cache, the browser's viewer caches, and
+the single-flight coalescer. They're described in
 [Caches you don't configure](#caches-you-dont-configure).
 
 ---
@@ -64,9 +71,9 @@ can never change meaning:
 > **Publishing a definition mints a new version id, which is a fresh keyspace. There is nothing to
 > invalidate — old entries simply age out.**
 
-The definition-byte cache and L2 both key on the **version id**, an immutable UUID. Editing a
-definition creates a new version, so its cache entries are new too. Rolling back re-hits the old
-entries, correctly. This is why neither cache has a "clear" button, and why neither needs one.
+The definition cache keys on the **version id**, an immutable UUID. Editing a definition creates a new
+version, so its cache entries are new too. Rolling back re-hits the old entries, correctly. This is why
+it has no "clear" button, and why it needs none.
 
 The browser's geometry and texture caches use the same trick from the other direction: they key on the
 **content** of what they hold (a hash of the mesh bytes, a content-addressed texture URL), so a key can
@@ -79,17 +86,14 @@ Only two caches have real invalidation:
 
 ### Where this leaves you
 
-Three situations produce entries that linger. None causes wrong output except the third:
+Two situations produce entries that linger. Neither causes wrong output:
 
-1. **You delete a definition** — its L2 and byte-cache entries stay in memory until they age out under
+1. **You delete a definition** — its definition-cache entries stay in memory until they age out under
    the byte budget. Harmless; nothing can reach them.
-2. **You lower a definition's solve-cache limit** — the new quota applies to future writes; existing
-   entries aren't purged.
-3. **You upgrade Rhino on an existing compute server, keeping the same server entry.** ⚠️ L2's key
-   includes the compute server's **id**, not its Rhino version — so entries solved by the old Rhino
-   version remain valid keys. If a Rhino upgrade changes geometry output, L2 can serve the old result.
-   **Restart the Selva server after upgrading Rhino in place**, or add the upgraded server as a new
-   entry instead of editing the existing one.
+2. **You upgrade Rhino on an existing compute server, keeping the same server entry.** The solve cache
+   lives per warm compute client and is dropped when that client is evicted or the process restarts, so
+   a Rhino upgrade in place is worth a Selva restart to be certain nothing solved by the old version
+   survives.
 
 ---
 
@@ -105,44 +109,36 @@ request leaves the browser.
 - ❌ Per browser tab; gone on reload. Misses whenever an input is genuinely new.
 - **Invalidation:** cleared when the active definition changes. Not configurable.
 
-### L1 in-process response cache — in the Selva server
+### Solve cache — in the Selva server
 
 If the same definition with the same inputs was solved recently on **this** Selva process, the stored
 result is returned without calling Rhino.Compute at all.
 
 - ✅ Skips both the network round-trip and the solve.
 - ❌ One process's memory — lost on restart, not shared across instances.
-- **Limits:** 20 results, 5 minutes, within `COMPUTE_RESPONSE_CACHE_MB` (default 256 MB).
-- ⚠️ **The byte budget is per compute server**, and Selva keeps up to 16 warm servers. A deployment
-  using many compute servers can hold `256 MB × 16` in the worst case. Lower
-  `COMPUTE_RESPONSE_CACHE_MB` if you run more than a couple of servers on a memory-constrained host.
+- **Limit:** `COMPUTE_SOLVE_CACHE_MB`, default 256 MB. `0` disables.
+- ⚠️ **The budget is per compute server**, and Selva keeps up to 16 warm. A deployment fanned out
+  across many compute servers can hold `256 MB × 16` in the worst case. Lower `COMPUTE_SOLVE_CACHE_MB`
+  if you run more than a couple of servers on a memory-constrained host.
 
-### Definition-byte cache — in the Selva server
+### Definition cache — in the Selva server
 
-Holds `.gh` file bytes keyed on version id, so a re-solve doesn't re-read a multi-MB definition from
-disk or S3. Combined with pointer reuse, a warm re-solve moves **zero** definition bytes.
+Holds `.gh` file bytes so a re-solve doesn't re-read a multi-MB definition from disk or S3. Combined
+with pointer reuse, a warm re-solve moves **zero** definition bytes.
 
-- **Limit:** `COMPUTE_DEFINITION_BYTE_CACHE_MB`, default 256 MB. `0` disables.
-- **Invalidation:** none needed — version ids are immutable.
+- **Limit:** `COMPUTE_DEFINITION_CACHE_MB`, default 256 MB. `0` disables.
 
-### L2 durable solve cache — in the Selva server, **off by default**
+**It has two sources, and only one can go stale.** A definition reaches a solve one of two ways, and
+they expire differently because their sources differ in mutability:
 
-A longer-lived result cache that survives what L1 doesn't. Keyed on
-`org + definition + version + inputs`.
+| Source                           | Keyed on                    | TTL       | Why                                              |
+| -------------------------------- | --------------------------- | --------- | ------------------------------------------------ |
+| **Uploaded** to Selva            | version id (immutable UUID) | **none**  | a published version's bytes can never change     |
+| **Remote URL** (`definitionUrl`) | the URL                     | **5 min** | whoever owns the URL can swap the file under you |
 
-Turning it on takes **two** settings, deliberately:
-
-1. `SOLVE_CACHE_PROVIDER=memory` — mounts the backend (default `off`).
-2. A non-zero entry quota — `SOLVE_CACHE_DEFAULT_MAX_ENTRIES` (default `0`), or per-definition via the
-   definition's own solve-cache limit.
-
-Only **live-channel** solves are eligible; drafts and explicit version picks always solve fresh.
-
-- **Eviction:** two budgets at once — a per-definition entry quota, plus a global
-  `SOLVE_CACHE_MAX_TOTAL_MB` (default 512 MB). The per-definition quota means one slider-heavy
-  definition can only ever evict **its own** entries, never another definition's.
-- **Correctness:** every entry stores a hash of its inputs, re-verified on read. A corrupt or
-  mismatched entry is treated as a miss and re-solved.
+That TTL is `REMOTE_DEFINITION_CACHE_TTL_MS`, and its name is worth reading literally: it bounds
+**only** remote-URL fetches. Putting a TTL on the uploaded path would be a bug, not a safety measure —
+version ids are immutable, so expiring those entries could only ever throw away valid work.
 
 ### Pointer reuse — how the definition is sent
 
@@ -176,7 +172,7 @@ Listed so you know they exist; none has settings and none can serve stale conten
 | Cache                    | Tier         | Keyed on                     | Bound                               |
 | ------------------------ | ------------ | ---------------------------- | ----------------------------------- |
 | Warm-client cache        | Selva server | compute server id            | 16 servers, LRU                     |
-| Single-flight coalescer  | Selva server | org + version + inputs       | in-flight only                      |
+| Single-flight coalescer  | Selva server | definition + server + inputs | in-flight only                      |
 | Geometry cache           | Browser      | mesh **content** hash        | 256 MiB                             |
 | Texture cache            | Browser      | content-addressed URL        | 64 textures                         |
 | Edge segment cache       | Browser      | mesh content hash            | 128 MiB                             |
@@ -186,7 +182,9 @@ Listed so you know they exist; none has settings and none can serve stale conten
 solve. It evicts automatically when you change a server's URL or key.
 
 **Single-flight coalescer** collapses simultaneous identical solves into one execution, so a hot public
-definition doesn't stampede compute after a deploy. Effectively inactive unless L2 is on.
+definition doesn't stampede compute after a deploy. It is not a cache — nothing is stored, and the key
+is released the moment the solve settles. It runs for **every** solve, which matters most when the
+solve cache is off: that is exactly when N identical requests would each pay a full Rhino round trip.
 
 **The browser's GPU caches** exist because the viewer discards and rebuilds the entire scene on every
 solve. Without them, an unchanged mesh would be re-decoded and re-uploaded to the GPU on every slider
@@ -210,33 +208,47 @@ the right content — so none can serve the wrong geometry.
 Server-side, in [`packages/selva/.env.example`](../packages/selva/.env.example) (copy to `.env`).
 Defaults and parsing live in [`packages/server/src/compute/limits.ts`](../packages/server/src/compute/limits.ts).
 
-| Setting                            | Cache            | Default | What it does                                      |
-| ---------------------------------- | ---------------- | ------- | ------------------------------------------------- |
-| `COMPUTE_RESPONSE_CACHE_MB`        | L1               | `256`   | Byte budget **per compute server**. `0` disables. |
-| `COMPUTE_DEFINITION_BYTE_CACHE_MB` | Definition bytes | `256`   | Byte budget for cached `.gh` bytes. `0` disables. |
-| `COMPUTE_REUSE_DEFINITION_CACHE`   | Pointer reuse    | `true`  | Send a pointer instead of re-uploading the `.gh`. |
-| `COMPUTE_SERVER_CACHESOLVE`        | `cachesolve`     | `true`  | Let Rhino.Compute cache and return solve results. |
-| `SOLVE_CACHE_PROVIDER`             | L2               | `off`   | `memory` mounts the durable solve cache.          |
-| `SOLVE_CACHE_DEFAULT_MAX_ENTRIES`  | L2               | `0`     | Per-definition entry quota. `0` keeps L2 off.     |
-| `SOLVE_CACHE_MAX_TOTAL_MB`         | L2               | `512`   | Global byte backstop across all definitions.      |
+**Selva's own caches — two settings, both sizes:**
+
+| Setting                       | Cache            | Default | What it does                                                                          |
+| ----------------------------- | ---------------- | ------- | ------------------------------------------------------------------------------------- |
+| `COMPUTE_DEFINITION_CACHE_MB` | Definition cache | `256`   | How much `.gh` data to keep warm. `0` disables.                                       |
+| `COMPUTE_SOLVE_CACHE_MB`      | Solve cache      | `256`   | How many results to keep warm, **per compute server** (×16 worst case). `0` disables. |
+
+**Rhino.Compute server flags** — these configure the remote compute server's own features, not Selva's
+caches:
+
+| Setting                          | Default  | What it does                                                       |
+| -------------------------------- | -------- | ------------------------------------------------------------------ |
+| `COMPUTE_REUSE_DEFINITION_CACHE` | `true`   | Send a pointer instead of re-uploading the `.gh`.                  |
+| `COMPUTE_SERVER_CACHESOLVE`      | `true`   | Let Rhino.Compute cache and return solve results.                  |
+| `COMPUTE_CACHE_ERRORED_SOLVES`   | `false`  | Also cache solves that reported Grasshopper errors.                |
+| `REMOTE_DEFINITION_CACHE_TTL_MS` | `300000` | Freshness bound on `.gh` bytes fetched from a **remote URL** only. |
 
 Restart the Selva server after editing `.env`.
+
+> **Renamed in 2026-07.** `COMPUTE_DEFINITION_BYTE_CACHE_MB` → `COMPUTE_DEFINITION_CACHE_MB`,
+> `COMPUTE_RESPONSE_CACHE_MB` → `COMPUTE_SOLVE_CACHE_MB`, `DEFINITION_CACHE_TTL_MS` →
+> `REMOTE_DEFINITION_CACHE_TTL_MS`. The old names still work for one minor version and log a warning
+> at boot naming their replacement. `SOLVE_CACHE_PROVIDER`, `SOLVE_CACHE_DEFAULT_MAX_ENTRIES` and
+> `SOLVE_CACHE_MAX_TOTAL_MB` are **gone** — they configured a durable cache tier that duplicated the
+> solve cache in the same process, and were removed along with it.
 
 ---
 
 ## Which should I turn on?
 
-**Defaults are right for most deployments.** L1, pointer reuse, `cachesolve` and the byte cache are all
-on; L2 is off and only pays off in specific cases.
+**Defaults are right for most deployments.** Everything is on; the two settings exist to turn a cache
+_down_ on a memory-constrained host, not to switch features on.
 
-| Situation                                                      | Do this                                                                       |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Large `.gh` files, lots of slider scrubbing                    | Defaults. Pointer reuse is the one that helps; result caches can't.           |
-| Public configurator, few fixed presets, **multiple instances** | Consider L2, or rely on `cachesolve` — both survive one instance going cold.  |
-| Single internal instance, redeployed often                     | Defaults. L1 does the work; it refills after a deploy.                        |
-| Compute server memory-constrained, large outputs               | `COMPUTE_SERVER_CACHESOLVE=false` — its stored results are the heaviest cost. |
-| Many compute servers on a small Selva host                     | Lower `COMPUTE_RESPONSE_CACHE_MB` (it's per server, ×16 worst case).          |
-| Pointed at a Rhino.Compute server you don't control            | `COMPUTE_REUSE_DEFINITION_CACHE=false` (see pointer-reuse safety note).       |
+| Situation                                                      | Do this                                                                                                         |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Large `.gh` files, lots of slider scrubbing                    | Defaults. Pointer reuse is the one that helps; result caches can't.                                             |
+| Public configurator, few fixed presets, **multiple instances** | Rely on `cachesolve` — it lives on the compute box, so it is the one tier that survives an instance going cold. |
+| Single internal instance, redeployed often                     | Defaults. The solve cache does the work; it refills after a deploy.                                             |
+| Compute server memory-constrained, large outputs               | `COMPUTE_SERVER_CACHESOLVE=false` — its stored results are the heaviest cost.                                   |
+| Many compute servers on a small Selva host                     | Lower `COMPUTE_SOLVE_CACHE_MB` (it's per server, ×16 worst case).                                               |
+| Pointed at a Rhino.Compute server you don't control            | `COMPUTE_REUSE_DEFINITION_CACHE=false` (see pointer-reuse safety note).                                         |
 
 ---
 
@@ -247,12 +259,12 @@ Every solve response carries a `Server-Timing` header. The useful verdicts:
 | What you see                                      | Means                                                       |
 | ------------------------------------------------- | ----------------------------------------------------------- |
 | No request in the network panel at all            | Client memo hit — the browser answered.                     |
-| Near-instant response, no fresh compute timing    | L1 hit — Selva answered without calling Rhino.Compute.      |
-| `l2_cache;dur=1`                                  | L2 hit.                                                     |
-| `def_bytes;desc=hit`                              | Definition bytes served from cache.                         |
+| `selva_cache;dur=1`                               | Solve cache hit — Selva answered without calling Rhino.     |
+| `def_bytes;desc=hit`                              | Definition cache hit — bytes served without a storage read. |
 | `def_bytes;desc=skipped`                          | Best case — a pointer-known re-solve moved no bytes at all. |
 | `solve` time near zero, but a round-trip happened | `cachesolve` hit on the compute server.                     |
 | Small outgoing body carrying a `pointer`          | Pointer reuse is working (no base64 `.gh` in the request).  |
 
 For deeper detail, set `SELVA_FLAG_COMPUTE_DEBUG=true` — the server then logs a per-solve phase
-breakdown plus cumulative hit/miss/eviction counters for L1, L2 and the byte cache.
+breakdown plus cumulative hit/miss/eviction counters for the definition cache, and a line each time a
+solve coalesces onto one already in flight.

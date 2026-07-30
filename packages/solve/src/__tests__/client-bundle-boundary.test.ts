@@ -69,10 +69,8 @@ describe.skipIf(!hasBuild)('client bundle boundary (plan Phase 4, guard 3)', () 
 			'runSolvePipeline',
 			'createClientCache',
 			'createDefinitionByteCache',
-			'createMemorySolveResultCache',
 			'createSolveCacheSingleFlight',
-			'deriveSolveCacheInputKey',
-			'encodeSolveCacheEntry',
+			'buildSolveInputTree',
 			'transformInputParameter'
 		];
 		expect(serverOnly.filter((name) => bundled.includes(name))).toEqual([]);

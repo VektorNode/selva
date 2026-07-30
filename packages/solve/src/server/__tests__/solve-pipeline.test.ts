@@ -42,8 +42,8 @@ vi.mock('@selvajs/compute', () => {
 		// transform-input.ts (imported by the pipeline) calls processInput; return
 		// the raw shape as an InputParam so filtering/mapping runs end-to-end.
 		processInput: (raw: InputParam) => raw,
-		// The L2 key module hashes over stableStringify — a deterministic sorted-key
-		// JSON is enough for the tests (real impl sorts recursively).
+		// Deterministic sorted-key JSON is enough for the tests (real impl sorts
+		// recursively).
 		stableStringify: (value: unknown) => JSON.stringify(value),
 		RhinoComputeError,
 		ErrorCodes: { QUEUE_FULL: 'QUEUE_FULL', QUEUE_TIMEOUT: 'QUEUE_TIMEOUT' }
@@ -68,19 +68,16 @@ const makeShedError = (
 
 import {
 	runSolvePipeline,
+	buildSolveInputTree,
 	adaptEnvelopeToEncoding,
 	COMPUTE_CONTRACT_VERSION,
 	COMPUTE_VERSION_HEADER,
-	deriveSolveCacheInputKey,
-	encodeSolveCacheEntry,
 	type SolvePipelineArgs,
-	type SolvePipelineCacheHook,
 	type PipelineInput,
 	type CachedClient
 } from '../index.js';
 // `../index.js` here is `solve/src/server/index.ts` — the barrel moved with these files. It was
 // `@selvajs/server/compute`'s barrel before the extraction.
-import { gzipSync } from 'node:zlib';
 
 /**
  * A scripted solve stub. The pipeline only JSON-serializes and reads
@@ -155,6 +152,46 @@ describe('runSolvePipeline — success', () => {
 		expect(seenTree).toEqual({ __tree: true, count: 1 });
 	});
 
+	// The route builds the tree itself so it can derive a single-flight key from
+	// the solve's real identity, then hands it back rather than transforming twice.
+	it('solves the caller-supplied tree instead of rebuilding one', async () => {
+		let seenTree: unknown;
+		const prebuilt = { __tree: true, count: 99 } as unknown as SolvePipelineArgs['inputTree'];
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				inputs: [{ id: 'a', paramType: 'number', nickname: 'A' } as PipelineInput],
+				inputTree: prebuilt,
+				client: fakeClient(async (_def, tree) => {
+					seenTree = tree;
+					return { errors: [], warnings: [] };
+				})
+			})
+		);
+		expect(outcome.kind).toBe('ok');
+		expect(seenTree).toBe(prebuilt); // the exact object, not a rebuild
+	});
+
+	it('builds its own tree when the caller supplies none', async () => {
+		let seenTree: unknown;
+		await runSolvePipeline(
+			baseArgs({
+				client: fakeClient(async (_def, tree) => {
+					seenTree = tree;
+					return { errors: [], warnings: [] };
+				})
+			})
+		);
+		expect(seenTree).toEqual({ __tree: true, count: 1 });
+	});
+
+	it('buildSolveInputTree produces what the pipeline would have built', () => {
+		const inputs = [
+			{ id: 'a', paramType: 'number', nickname: 'A' } as PipelineInput,
+			{ id: 'b', nickname: 'B' } as PipelineInput // no paramType → filtered out
+		];
+		expect(buildSolveInputTree(inputs, { a: 5 })).toEqual({ __tree: true, count: 1 });
+	});
+
 	it('forwards the abort signal to the scheduler', async () => {
 		const controller = new AbortController();
 		let seenSignal: AbortSignal | undefined;
@@ -211,7 +248,7 @@ describe('runSolvePipeline — gzip', () => {
 	});
 });
 
-describe('adaptEnvelopeToEncoding — coalesced per-waiter re-key (audit C5)', () => {
+describe('adaptEnvelopeToEncoding — single-flight per-waiter re-key', () => {
 	// Build a real gzip envelope the way the pipeline does, so the adapter is
 	// exercised against genuine compressed bytes rather than a hand-rolled stub.
 	async function gzipEnvelope() {
@@ -574,153 +611,3 @@ describe('runSolvePipeline — Server-Timing', () => {
 });
 
 // ============================================================================
-// L2 durable solve cache hook (Phase 3.4)
-// ============================================================================
-
-describe('runSolvePipeline — L2 solve cache', () => {
-	const config = { computeServerId: 'srv-1' };
-
-	/** A hook backed by a Map, recording lookups/stores for assertions. */
-	function fakeHook(seed?: Map<string, Uint8Array>) {
-		const store = seed ?? new Map<string, Uint8Array>();
-		const lookups: string[] = [];
-		const stores: string[] = [];
-		const hook: SolvePipelineCacheHook = {
-			configSubset: config,
-			lookup: async (key) => {
-				lookups.push(key);
-				return store.get(key) ?? null;
-			},
-			store: (key, entry) => {
-				stores.push(key);
-				store.set(key, entry);
-			}
-		};
-		return { hook, store, lookups, stores };
-	}
-
-	it('a miss solves, then write-throughs the gzipped envelope and marks l2_cache;dur=0', async () => {
-		const result = { values: [{ id: 'out' }], errors: [], warnings: ['w'] };
-		let solves = 0;
-		const { hook, store, stores } = fakeHook();
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				client: fakeClient(async () => {
-					solves += 1;
-					return result;
-				}),
-				acceptEncoding: 'gzip',
-				solveCache: hook
-			})
-		);
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(solves).toBe(1);
-		expect(outcome.envelope.headers['Server-Timing']).toContain('l2_cache;dur=0');
-		// Write-through happened — one entry stored under the derived key.
-		expect(stores).toHaveLength(1);
-		expect(store.size).toBe(1);
-	});
-
-	it('a hit returns the stored envelope WITHOUT solving and marks l2_cache;dur=1', async () => {
-		const result = { values: [{ id: 'cached' }], errors: [], warnings: [] };
-		const serialized = JSON.stringify(result);
-		// Pre-seed the store at the key the pipeline will derive for these inputs.
-		const args = baseArgs({ acceptEncoding: 'gzip' });
-		const tree = { __tree: true, count: 1 }; // matches the mock TreeBuilder output
-		const inputKey = deriveSolveCacheInputKey(tree, config).hash;
-		const entry = encodeSolveCacheEntry(
-			{ errorCount: 0, warningCount: 0, serializedBytes: serialized.length, inputHash: inputKey },
-			new Uint8Array(gzipSync(Buffer.from(serialized)))
-		);
-		const seed = new Map([[inputKey, entry]]);
-		const { hook } = fakeHook(seed);
-
-		let solves = 0;
-		const outcome = await runSolvePipeline({
-			...args,
-			client: fakeClient(async () => {
-				solves += 1;
-				return { values: [], errors: [], warnings: [] };
-			}),
-			solveCache: hook
-		});
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(solves).toBe(0); // never solved — served from L2
-		expect(outcome.envelope.encoding).toBe('gzip');
-		expect(gunzipSync(outcome.envelope.body as Uint8Array).toString()).toBe(serialized);
-		expect(outcome.envelope.headers['Server-Timing']).toContain('l2_cache;dur=1');
-	});
-
-	it('a hit for a non-gzip client gunzips the stored body back to JSON', async () => {
-		const result = { values: [{ id: 'x' }], errors: [], warnings: [] };
-		const serialized = JSON.stringify(result);
-		const tree = { __tree: true, count: 1 };
-		const inputKey = deriveSolveCacheInputKey(tree, config).hash;
-		const entry = encodeSolveCacheEntry(
-			{ errorCount: 0, warningCount: 0, serializedBytes: serialized.length, inputHash: inputKey },
-			new Uint8Array(gzipSync(Buffer.from(serialized)))
-		);
-		const { hook } = fakeHook(new Map([[inputKey, entry]]));
-		const outcome = await runSolvePipeline(baseArgs({ acceptEncoding: '', solveCache: hook }));
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.encoding).toBeUndefined();
-		expect(outcome.envelope.body).toBe(serialized);
-	});
-
-	it('a stored entry whose inputHash mismatches is ignored (collision defense) and re-solves', async () => {
-		// Seed the derived key with an entry carrying a DIFFERENT inputHash — a
-		// (hypothetical) storage-key collision must not serve the wrong geometry.
-		const tree = { __tree: true, count: 1 };
-		const inputKey = deriveSolveCacheInputKey(tree, config).hash;
-		const wrong = encodeSolveCacheEntry(
-			{ errorCount: 0, warningCount: 0, serializedBytes: 2, inputHash: 'not-the-real-hash' },
-			new Uint8Array(gzipSync(Buffer.from('{}')))
-		);
-		const { hook } = fakeHook(new Map([[inputKey, wrong]]));
-		let solves = 0;
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				client: fakeClient(async () => {
-					solves += 1;
-					return { values: [{ id: 'fresh' }], errors: [], warnings: [] };
-				}),
-				solveCache: hook
-			})
-		);
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(solves).toBe(1); // fell through to a real solve
-	});
-
-	it('omits l2_cache from Server-Timing when no hook is passed', async () => {
-		const outcome = await runSolvePipeline(baseArgs());
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.headers['Server-Timing']).not.toContain('l2_cache');
-	});
-
-	it('a lookup that rejects is treated as a miss (best-effort), then solves', async () => {
-		let solves = 0;
-		const hook: SolvePipelineCacheHook = {
-			configSubset: config,
-			lookup: async () => {
-				throw new Error('backend down');
-			},
-			store: () => {}
-		};
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				client: fakeClient(async () => {
-					solves += 1;
-					return { values: [], errors: [], warnings: [] };
-				}),
-				solveCache: hook
-			})
-		);
-		expect(outcome.kind).toBe('ok');
-		expect(solves).toBe(1);
-	});
-});

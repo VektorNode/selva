@@ -5,6 +5,7 @@ import {
 	edgeExtractWorkerSource,
 	extractEdgeSegments
 } from '../edge-extract.js';
+import { registerCacheRelease } from '../../shared/index.js';
 import { INLINE_TRIANGLE_BUDGET, SEGMENT_CACHE_BYTE_BUDGET } from './options.js';
 
 // ============================================================================
@@ -93,6 +94,14 @@ function contentKey(data: FastPathData, thresholdAngle: number): string {
  */
 const segmentCache = new Map<string, Float32Array>();
 let segmentCacheBytes = 0;
+
+// CPU-only, so there is nothing to dispose — but up to SEGMENT_CACHE_BYTE_BUDGET of arrays would
+// otherwise sit in memory forever after the last viewer is gone. Registered for the same teardown
+// sweep as the GPU caches.
+registerCacheRelease(() => {
+	segmentCache.clear();
+	segmentCacheBytes = 0;
+});
 
 function segmentCacheGet(key: string): Float32Array | undefined {
 	const cached = segmentCache.get(key);

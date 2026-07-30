@@ -244,10 +244,10 @@ export type ThreeInitializerOptions = {
 	events?: EventConfig;
 	/**
 	 * Called once at init with the GPU's max anisotropy (`renderer.capabilities.getMaxAnisotropy()`).
-	 * Wire this to `@selvajs/visualization`'s `setTextureAnisotropy` so color maps stay sharp at
-	 * grazing angles. Injected rather than imported because the texture cache is a *parse*-layer
-	 * concern and the renderer must not depend upward on it. Omitted, textures keep three's default
-	 * anisotropy of 1.
+	 *
+	 * **Not needed to get sharp textures** — the value is published to a shared sink that the parse
+	 * layer's texture cache subscribes to itself, so colour maps are already handled. This hook is
+	 * for hosts doing their own texture work on top.
 	 */
 	onMaxAnisotropy?: (value: number) => void;
 };

@@ -70,10 +70,15 @@ export interface DefinitionRecord {
 	/** Falls back to the org default, then the platform default. */
 	computeServerId?: string;
 	/**
-	 * Durable L2 solve-cache quota for this definition (H1/R9). Absent = inherit
-	 * the global default (`SOLVE_CACHE_DEFAULT_MAX_ENTRIES`); `0` = caching off
-	 * (the non-determinism / wide-input-space escape hatch); `N` = keep at most N
-	 * cached solves for this definition. One number, one settings input.
+	 * Per-definition quota for a shared solve-result cache: `0` = caching off (the
+	 * non-determinism / wide-input-space escape hatch), `N` = keep at most N cached
+	 * solves, absent = inherit whatever default the backend defines.
+	 *
+	 * **Dormant.** No shared backend ships today (see `ISolveResultCache`), so this
+	 * currently affects nothing at solve time. It is a persisted column in both
+	 * stores plus a shipped Supabase migration, and it is the right per-definition
+	 * knob the moment a backend is wired — so it stays rather than becoming a data
+	 * migration to remove and re-add.
 	 */
 	solveCacheLimit?: number;
 	displayName: string;

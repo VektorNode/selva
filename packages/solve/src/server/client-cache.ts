@@ -116,10 +116,10 @@ export interface ClientCacheConfig {
 	 */
 	queueWaitMs: number;
 	/**
-	 * Byte budget for this client's in-process solve-response cache (scheduler
-	 * L1), evicted LRU alongside its entry-count cap. Applies per warm client —
-	 * total worst-case heap is this × `maxCachedClients`. `0` disables the L1
-	 * response cache entirely (`ComputeLimits.computeResponseCacheBytes`).
+	 * Byte budget for this client's in-process solve cache, evicted LRU alongside
+	 * its entry-count cap. Applies per warm client — total worst-case heap is this
+	 * × `maxCachedClients`. `0` disables the cache entirely
+	 * (`ComputeLimits.computeSolveCacheBytes`, env `COMPUTE_SOLVE_CACHE_MB`).
 	 */
 	responseCacheMaxBytes: number;
 	/** Concise cache/timing logs. When false, `onDebugLog` is never invoked. */

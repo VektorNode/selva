@@ -80,10 +80,5 @@ export function computeCombinedBoundingBox(meshes: THREE.Object3D[]): THREE.Box3
 	return combinedBoundingBox;
 }
 
-/**
- * `geometry.userData` tag marking a geometry owned by the cross-solve geometry cache
- * (`parse/webdisplay/geometry-cache.ts`). `clearScene` must NOT dispose these — the cache keeps them
- * alive (GPU buffers included) so the next solve can reuse them; the cache disposes on eviction
- * instead.
- */
-export const CACHED_GEOMETRY_USERDATA_FLAG = 'selvaGeometryCache';
+// CACHED_GEOMETRY_USERDATA_FLAG moved to ./gpu-ownership.ts, which is the single home for every
+// "who may free this?" rule. Re-exported from the shared barrel, so import sites are unchanged.

@@ -80,7 +80,9 @@ describe('addEdgesAsync', () => {
 		expect(overlaysOf(mesh)).toHaveLength(1);
 	});
 
-	it('meshes sharing one geometry share one line geometry', async () => {
+	it('meshes sharing one geometry get independent line geometries', async () => {
+		// Each overlay owns its line geometry since the identity cache was removed (2026-07-30);
+		// the extraction behind them is still content-cached. See edges/line-geometry.ts.
 		const root = new THREE.Group();
 		const geometry = new THREE.BoxGeometry(1, 1, 1);
 		const meshA = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
@@ -89,7 +91,7 @@ describe('addEdgesAsync', () => {
 
 		const created = await addEdgesAsync(root);
 		expect(created).toHaveLength(2);
-		expect(created[0].geometry).toBe(created[1].geometry);
+		expect(created[0].geometry).not.toBe(created[1].geometry);
 	});
 });
 

@@ -1,11 +1,12 @@
 import type { RequestContext } from '../context.js';
 
 /**
- * Durable L2 solve-result cache (H1). The scheduler's in-process `Map` is L1 —
- * 20 entries, 5-min TTL, per app instance. This is the shared, longer-lived
- * layer keyed on `(orgId, definitionId, versionId, inputKey)` where `inputKey`
- * is a wide (SHA-256) hash of the transformed input tree plus the solve-affecting
- * config subset (H2/R8). A hit skips compute entirely.
+ * Shared solve-result cache seam, keyed on `(orgId, definitionId, versionId,
+ * inputKey)` where `inputKey` is a wide (SHA-256) hash of the transformed input
+ * tree plus the solve-affecting config subset. A hit skips compute entirely.
+ *
+ * No backend ships today — see {@link ISolveResultCache} for why the interface
+ * outlived the in-process implementation that used to sit behind it.
  *
  * Design contract (decided 2026-07-11):
  *
@@ -52,15 +53,26 @@ export interface SolveCacheSetOptions {
 	/**
 	 * Max cached entries this definition may retain. The backend evicts
 	 * LRU-within-definition down to this count on write. A definition's quota is
-	 * `solveCacheLimit` (absent → the global default); the app never calls `set`
-	 * when the resolved quota is `0` (caching off), so this is always `>= 1`.
+	 * `solveCacheLimit` on the definition record; a caller must not call `set` when
+	 * the resolved quota is `0` (caching off), so this is always `>= 1`.
 	 */
 	maxEntriesForDefinition: number;
 }
 
 /**
- * Durable solve-result cache. The solve pipeline talks only to this interface;
- * the backend (memory today, Redis later) is a config change, not a redesign.
+ * Durable solve-result cache — the seam a SHARED backend mounts on.
+ *
+ * There is deliberately no implementation today. The in-process one that used to
+ * live behind this interface was redundant: it was a `Map` in the same heap as
+ * the scheduler's own response cache, which is consulted first, so it could only
+ * ever serve what that cache had already evicted. It was deleted; this interface
+ * was not, because it is the piece that is correct for scaling.
+ *
+ * The reason to keep it: the app runs on `adapter-node`, one long-lived process,
+ * so in-process caches work well for a single instance. Run N instances behind a
+ * proxy and every in-process hit rate divides by N. When that day comes the answer
+ * is Redis behind this interface — async from day one, opaque bytes, best-effort
+ * by contract, so a network backend drops in without any call site changing shape.
  *
  * Implementations MUST NOT throw — both methods are best-effort on the hot path
  * of every live solve. A backend failure resolves as a miss (`get`) or a silent
@@ -85,9 +97,9 @@ export interface ISolveResultCache {
 }
 
 /**
- * Default `ISolveResultCache` — never stores, always misses. Used when
- * `SOLVE_CACHE_PROVIDER=off` (or unset). Swap in the memory backend
- * (`@selvajs/server`) or a shared store to enable the durable L2.
+ * Default `ISolveResultCache` — never stores, always misses. The only
+ * implementation that ships today; a shared backend replaces it when horizontal
+ * scaling makes in-process caching insufficient.
  */
 export class NoopSolveResultCache implements ISolveResultCache {
 	async get(_ctx: RequestContext, _key: SolveCacheKey): Promise<Uint8Array | null> {

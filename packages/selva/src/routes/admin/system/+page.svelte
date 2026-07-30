@@ -28,7 +28,9 @@
 			COMPUTE_RESPONSE_MAX_BYTES: number;
 			REMOTE_DEFINITION_MAX_BYTES: number;
 			REMOTE_DEFINITION_FETCH_TIMEOUT_MS: number;
-			DEFINITION_CACHE_TTL_MS: number;
+			REMOTE_DEFINITION_CACHE_TTL_MS: number;
+			COMPUTE_DEFINITION_CACHE_BYTES: number;
+			COMPUTE_SOLVE_CACHE_BYTES: number;
 		};
 	}
 	let { data }: { data: PageData } = $props();
@@ -120,11 +122,28 @@
 			description: 'Deadline for fetching a remote .gh before the request is dropped.'
 		},
 		{
-			key: 'DEFINITION_CACHE_TTL_MS',
-			label: 'Definition cache TTL',
-			env: 'DEFINITION_CACHE_TTL_MS',
-			value: (l) => formatMs(l.DEFINITION_CACHE_TTL_MS),
-			description: 'How long remotely-fetched .gh bytes stay cached in-process.'
+			key: 'REMOTE_DEFINITION_CACHE_TTL_MS',
+			label: 'Remote definition cache TTL',
+			env: 'REMOTE_DEFINITION_CACHE_TTL_MS',
+			value: (l) => formatMs(l.REMOTE_DEFINITION_CACHE_TTL_MS),
+			description:
+				'How long .gh bytes fetched from a remote URL stay cached. Only remote fetches expire — uploaded definitions are keyed on an immutable version, so they never go stale.'
+		},
+		{
+			key: 'COMPUTE_DEFINITION_CACHE_BYTES',
+			label: 'Definition cache',
+			env: 'COMPUTE_DEFINITION_CACHE_MB',
+			value: (l) => formatBytes(l.COMPUTE_DEFINITION_CACHE_BYTES),
+			description:
+				'How much .gh data to keep warm so a solve can skip re-reading it from storage. 0 disables.'
+		},
+		{
+			key: 'COMPUTE_SOLVE_CACHE_BYTES',
+			label: 'Solve cache',
+			env: 'COMPUTE_SOLVE_CACHE_MB',
+			value: (l) => formatBytes(l.COMPUTE_SOLVE_CACHE_BYTES),
+			description:
+				'How many solve results to keep warm, so re-solving the same inputs returns without calling Rhino. This budget applies per compute server kept warm (up to 16), so the worst-case total is 16× this number. 0 disables.'
 		}
 	];
 

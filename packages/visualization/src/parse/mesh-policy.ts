@@ -18,7 +18,7 @@
 
 import * as THREE from 'three';
 
-import { CACHED_GEOMETRY_USERDATA_FLAG } from '../shared/index.js';
+import { CACHED_GEOMETRY_USERDATA_FLAG, disposeObjectTree } from '../shared/index.js';
 
 /**
  * A three.js object graph the caller owns outright: transforms cloned, geometry copied,
@@ -64,13 +64,9 @@ export function cloneSceneObjects(meshes: THREE.Object3D[]): THREE.Object3D[] {
  * guard against a caller that stores uncloned meshes, not an expected path.
  */
 export function releaseSceneObjects(meshes: THREE.Object3D[]): void {
-	meshes.forEach((root) =>
-		root.traverse((child) => {
-			const geometry = (child as Partial<THREE.Mesh>).geometry;
-			if (geometry?.userData?.[CACHED_GEOMETRY_USERDATA_FLAG]) return;
-			geometry?.dispose();
-		})
-	);
+	// `materials: false` is the memo-specific part; the ownership rules (skip cache-owned geometry)
+	// come from the one shared walker, so they can't drift from `clearScene`'s.
+	meshes.forEach((root) => disposeObjectTree(root, { materials: false }));
 }
 
 /**

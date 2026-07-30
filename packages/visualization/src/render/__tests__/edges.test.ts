@@ -262,29 +262,42 @@ describe('distance fade', () => {
 	});
 });
 
-describe('edge geometry cache', () => {
+describe('edge geometry ownership', () => {
 	function meshSharing(geometry: THREE.BufferGeometry): THREE.Mesh {
 		return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
 	}
 
-	it('meshes sharing one source geometry share one extracted edge geometry', () => {
-		// Regression: the extraction used to run per mesh, recomputing and re-uploading N identical
-		// buffers for N instances of the same part.
+	// The identity-keyed cache that made overlays SHARE one LineSegmentsGeometry was removed on
+	// 2026-07-30 (see edges/line-geometry.ts). Sharing is what forced the refcount protocol and
+	// what leaked in F1; each overlay now owns its geometry. Extraction is still cached by
+	// content, so the work these tests once guarded against is still not repeated — see
+	// 'reuses extracted segments across meshes with identical content' below.
+
+	it('meshes sharing one source geometry get independent line geometries', () => {
 		const shared = new THREE.BoxGeometry(1, 1, 1);
 		const root = new THREE.Group();
 		root.add(meshSharing(shared), meshSharing(shared));
 
 		const [a, b] = addEdges(root);
 
-		expect(a.geometry).toBe(b.geometry);
+		expect(a.geometry).not.toBe(b.geometry);
 	});
 
-	it('distinct crease angles on the same source get distinct edge geometries', () => {
-		const shared = new THREE.BoxGeometry(1, 1, 1);
-		const [a] = addEdges(meshSharing(shared), { thresholdAngle: 30 });
-		const [b] = addEdges(meshSharing(shared), { thresholdAngle: 60 });
+	it('reuses extracted segments across meshes with identical content', () => {
+		// The saving that actually matters, and the one that survived the cut: the extraction
+		// kernel runs once. LineSegmentsGeometry adopts the array without copying, so a shared
+		// segment array is observable as a shared position buffer.
+		const root = new THREE.Group();
+		root.add(meshSharing(new THREE.BoxGeometry(1, 1, 1)));
+		root.add(meshSharing(new THREE.BoxGeometry(1, 1, 1)));
 
-		expect(a.geometry).not.toBe(b.geometry);
+		const [a, b] = addEdges(root);
+
+		const positionsOf = (overlay: typeof a): ArrayBufferLike =>
+			(overlay.geometry.attributes.instanceStart as THREE.InterleavedBufferAttribute).data.array
+				.buffer;
+
+		expect(positionsOf(a)).toBe(positionsOf(b));
 	});
 
 	it('meshes with different source geometries do not share edge geometry', () => {
@@ -294,24 +307,32 @@ describe('edge geometry cache', () => {
 		expect(a.geometry).not.toBe(b.geometry);
 	});
 
-	it('removeEdges disposes a shared edge geometry only with its last overlay', () => {
+	it('distinct crease angles on the same source produce distinct segment sets', () => {
+		// The crease angle is part of the extraction cache key, so changing it must re-extract
+		// rather than serve the previous angle's segments.
+		const shared = new THREE.BoxGeometry(1, 1, 1);
+		const [a] = addEdges(meshSharing(shared), { thresholdAngle: 30 });
+		const [b] = addEdges(meshSharing(shared), { thresholdAngle: 60 });
+
+		expect(a.geometry).not.toBe(b.geometry);
+	});
+
+	it('removeEdges disposes each overlay geometry independently', () => {
 		const shared = new THREE.BoxGeometry(1, 1, 1);
 		const first = meshSharing(shared);
 		const second = meshSharing(shared);
 		const root = new THREE.Group();
 		root.add(first, second);
 
-		const [a] = addEdges(root);
-		const disposeSpy = vi.spyOn(a.geometry, 'dispose');
+		const [a, b] = addEdges(root);
+		const disposeA = vi.spyOn(a.geometry, 'dispose');
+		const disposeB = vi.spyOn(b.geometry, 'dispose');
 
 		removeEdges(first);
-		expect(disposeSpy).not.toHaveBeenCalled(); // second still renders it
+		expect(disposeA).toHaveBeenCalledTimes(1);
+		expect(disposeB).not.toHaveBeenCalled(); // second overlay untouched
 
 		removeEdges(second);
-		expect(disposeSpy).toHaveBeenCalledTimes(1);
-
-		// A fresh addEdges re-extracts instead of resurrecting the disposed cache entry.
-		const [again] = addEdges(first);
-		expect(again.geometry).not.toBe(a.geometry);
+		expect(disposeB).toHaveBeenCalledTimes(1);
 	});
 });

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { CACHED_GEOMETRY_USERDATA_FLAG } from '../../shared/index.js';
+import { CACHED_GEOMETRY_USERDATA_FLAG, registerCacheRelease } from '../../shared/index.js';
 
 /**
  * Cross-solve `BufferGeometry` cache, keyed by geometry *content* (audit P1 —
@@ -126,7 +126,11 @@ export function geometryCachePut(key: string, geometry: THREE.BufferGeometry): v
 	}
 }
 
-/** Test/diagnostic hook: empty the cache, disposing everything in it. */
+// Declare this cache to the teardown registry, so the viewer's dispose() frees it without the
+// render layer importing this one and without any host wiring. See shared/gpu-ownership.ts.
+registerCacheRelease(() => geometryCacheClear());
+
+/** Empty the cache, disposing everything in it. Also the teardown hook registered above. */
 export function geometryCacheClear(): void {
 	for (const entry of cache.values()) {
 		delete entry.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG];

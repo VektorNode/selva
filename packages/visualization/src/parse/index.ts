@@ -38,9 +38,10 @@ export type {
 
 export { parseMeshBatchObject, parseMeshBatchBlob } from './webdisplay/batch-parser.js';
 
-// The other half of the render/parse seam: hosts call this from
-// `ThreeInitializerOptions.onMaxAnisotropy` so `render/` never imports this layer.
+// The two halves of the render/parse seam: hosts wire these to
+// `ThreeInitializerOptions.onMaxAnisotropy` / `.onReleaseCaches` so `render/` never imports this layer.
 export { setTextureAnisotropy } from './webdisplay/texture-cache.js';
+export { releaseParseCaches } from './release-caches.js';
 
 export type {
 	MeshBatchParsingOptions,

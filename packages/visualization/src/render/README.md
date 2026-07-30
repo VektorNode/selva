@@ -15,20 +15,20 @@ they are not a list of public exports.
 
 ## Contents
 
-| Path                                                       | Owns                                                                                                                                     |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `scene-setup/`                                             | `initThree` and everything it composes — see below                                                                                       |
-| `edges.ts`                                                 | `addEdges`/`addEdgesAsync`/`removeEdges`; targeting and attachment. Reached via `viewer.applyEdges`/`clearEdges`                         |
-| `edges/`                                                   | `options` (defaults/constants), `extraction` (worker + caches), `cache` (refcounted line geometry), `overlay` (materials + density fade) |
-| `camera-controller.ts`                                     | Perspective↔ortho swap, view presets, framing tweens                                                                                     |
-| `render-pipeline.ts`                                       | Postprocessing composer (GTAO, screen-space edges, output pass)                                                                          |
-| `edge-detection-pass.ts` / `edge-extract.ts`               | The screen-space edge pass; the fast worker-portable extractor                                                                           |
-| `grid.ts`, `view-gizmo.ts`, `label-layer.ts`, `measure.ts` | Independent viewer overlays                                                                                                              |
-| `near-plane.ts`                                            | Per-frame near-plane fitting (depth precision when zoomed out)                                                                           |
-| `three-helpers.ts`                                         | `updateScene`, `clearScene`, `computeContentBounds`                                                                                      |
-| `three-materials.ts`                                       | The shared material singletons (`SHARED_MATERIALS` is what `clearScene` spares)                                                          |
-| `up-axis.ts`                                               | The scene-up basis every orientation default derives from                                                                                |
-| `types.ts`                                                 | The `ThreeInitializerOptions` surface                                                                                                    |
+| Path                                                       | Owns                                                                                                                                                               |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `scene-setup/`                                             | `initThree` and everything it composes — see below                                                                                                                 |
+| `edges.ts`                                                 | `addEdges`/`addEdgesAsync`/`removeEdges`; targeting and attachment. Reached via `viewer.applyEdges`/`clearEdges`                                                   |
+| `edges/`                                                   | `options` (defaults/constants), `extraction` (worker + content cache), `line-geometry` (builds the renderable line geometry), `overlay` (materials + density fade) |
+| `camera-controller.ts`                                     | Perspective↔ortho swap, view presets, framing tweens                                                                                                               |
+| `render-pipeline.ts`                                       | Postprocessing composer (GTAO, screen-space edges, output pass)                                                                                                    |
+| `edge-detection-pass.ts` / `edge-extract.ts`               | The screen-space edge pass; the fast worker-portable extractor                                                                                                     |
+| `grid.ts`, `view-gizmo.ts`, `label-layer.ts`, `measure.ts` | Independent viewer overlays                                                                                                                                        |
+| `near-plane.ts`                                            | Per-frame near-plane fitting (depth precision when zoomed out)                                                                                                     |
+| `three-helpers.ts`                                         | `updateScene`, `clearScene`, `computeContentBounds`                                                                                                                |
+| `three-materials.ts`                                       | The shared material singletons (`SHARED_MATERIALS` is what `clearScene` spares)                                                                                    |
+| `up-axis.ts`                                               | The scene-up basis every orientation default derives from                                                                                                          |
+| `types.ts`                                                 | The `ThreeInitializerOptions` surface                                                                                                                              |
 
 ### `scene-setup/`
 
@@ -71,17 +71,30 @@ dispose(); // frees the GL context, not just its objects
 - **A custom render pass** — `render-pipeline.ts` builds the composer; `initThree` toggles it via
   `setAmbientOcclusion` and the edge fallback.
 
-## Anisotropy: the one render↔parse seam
+## The render↔parse seam
 
-`initThree` reports the GPU's max anisotropy through an injected `onMaxAnisotropy` callback rather
-than calling the parse layer's texture cache itself. That keeps the dependency direction one-way:
-`render/` never imports `parse/`. Hosts that do both should forward it —
+`render/` never imports `parse/`. Two things nonetheless need to cross that line, and **neither
+requires host wiring** — both are self-managing:
 
-```typescript
-import { setTextureAnisotropy } from '@selvajs/visualization/parse';
+- **GPU capabilities (anisotropy).** `initThree` calls `publishMaxAnisotropy` at init;
+  `parse/webdisplay/texture-cache.ts` subscribes via `observeMaxAnisotropy` at module load. The
+  observer fires immediately on subscribe, so module load order doesn't matter. The legacy
+  `onMaxAnisotropy` option still exists but is **not needed to get sharp textures**.
+- **Cache teardown.** Every cross-solve cache calls `registerCacheRelease(...)` at module init.
+  `initThree` calls `retainCaches()` and invokes the returned release in `dispose()`. It is
+  refcounted, so with several live viewers only the last one out actually frees — an unmount
+  never wipes caches another viewer is still using.
 
-initThree(canvas, { onMaxAnisotropy: setTextureAnisotropy });
-```
+`releaseParseCaches` remains exported as an escape hatch (reclaiming memory under pressure, or a
+test isolating module state), not as a step anyone must remember.
 
-Omitting it is safe: anisotropy stays at 1, so colour maps are softer at grazing angles but nothing
-breaks.
+## GPU ownership: ask, don't remember
+
+Every GPU resource has exactly one owner — a cache, a module singleton, or the scene. The rule lives
+in `shared/gpu-ownership.ts`, and **`shared/gpu-dispose.ts`'s `disposeObjectTree` is the only
+traversal that should dispose scene content.**
+
+This is centralized because it previously wasn't: three separate walkers each carried a different
+subset of the guards, and the gaps between them were exactly where two leaks lived (the edge-cache
+F1 leak, and cache-owned textures being freed while the cache still served them). If you need a new
+teardown path, call `disposeObjectTree` — do not write a fourth `traverse` that calls `.dispose()`.

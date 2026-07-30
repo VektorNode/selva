@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { protectMaterials } from '../shared/index.js';
+
 export const EMISSIVE_MATERIAL = new THREE.MeshPhysicalMaterial({
 	color: 0x000000,
 	emissive: new THREE.Color(0xffffff),
@@ -151,3 +153,7 @@ export const SHARED_MATERIALS: ReadonlySet<THREE.Material> = new Set<THREE.Mater
 	RUBBER_MATERIAL,
 	WOOD_MATERIAL
 ]);
+
+// Declare the ownership claim once, at module init, so every disposal path honours it via
+// `canDisposeMaterial` rather than each one remembering to consult SHARED_MATERIALS itself.
+protectMaterials(SHARED_MATERIALS);

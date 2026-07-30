@@ -26,9 +26,22 @@ export type { Look, LookPreset, MaterialAppearanceOptions } from './types.js';
 
 export { LOOK_PRESETS, DEFAULT_LOOK, materialAppearanceForLook } from './looks.js';
 
+export { parseColor, applyOffset, computeCombinedBoundingBox } from './geometry.js';
+
 export {
-	parseColor,
-	applyOffset,
-	computeCombinedBoundingBox,
-	CACHED_GEOMETRY_USERDATA_FLAG
-} from './geometry.js';
+	CACHED_GEOMETRY_USERDATA_FLAG,
+	CACHED_TEXTURE_USERDATA_FLAG,
+	canDisposeGeometry,
+	canDisposeMaterial,
+	canDisposeTexture,
+	isProtectedMaterial,
+	protectMaterials,
+	registerCacheRelease,
+	releaseAllCaches,
+	retainCaches
+} from './gpu-ownership.js';
+
+export { publishMaxAnisotropy, observeMaxAnisotropy } from './gpu-capabilities.js';
+
+export { disposeMaterial, disposeObjectTree } from './gpu-dispose.js';
+export type { DisposeOptions } from './gpu-dispose.js';

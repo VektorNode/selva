@@ -9,7 +9,7 @@ import { createRemoteDefinitionFetcher } from '@selvajs/server/compute';
 import {
 	REMOTE_DEFINITION_MAX_BYTES,
 	REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
-	DEFINITION_CACHE_TTL_MS
+	REMOTE_DEFINITION_CACHE_TTL_MS
 } from '$lib/server/computeLimits';
 // The fetcher is built once at module scope while the root logger is still
 // being swapped in, so it takes the forwarding logger rather than a captured
@@ -19,7 +19,7 @@ import { lazyLogger } from '$lib/server/providers.server';
 const fetcher = createRemoteDefinitionFetcher({
 	maxBytes: REMOTE_DEFINITION_MAX_BYTES,
 	fetchTimeoutMs: REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
-	cacheTtlMs: DEFINITION_CACHE_TTL_MS,
+	cacheTtlMs: REMOTE_DEFINITION_CACHE_TTL_MS,
 	now: () => Date.now(),
 	logger: lazyLogger
 });

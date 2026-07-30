@@ -14,9 +14,9 @@
  */
 
 import { createDefinitionByteCache } from '@selvajs/solve/server';
-import { COMPUTE_DEFINITION_BYTE_CACHE_BYTES } from '$lib/server/computeLimits';
+import { COMPUTE_DEFINITION_CACHE_BYTES } from '$lib/server/computeLimits';
 
-const cache = createDefinitionByteCache(COMPUTE_DEFINITION_BYTE_CACHE_BYTES);
+const cache = createDefinitionByteCache(COMPUTE_DEFINITION_CACHE_BYTES);
 
 /**
  * Return a `DefinitionRef` (identity + lazy loader) for a version's `.gh` bytes.

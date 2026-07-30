@@ -20,7 +20,7 @@
  * Eviction:
  *   - LRU by **total byte budget**, not entry count — definitions range from tens
  *     of KB to hundreds of MB, so an entry-count cap would either pin gigabytes or
- *     evict uselessly. `COMPUTE_DEFINITION_BYTE_CACHE_MB` sets the budget; `0`
+ *     evict uselessly. `COMPUTE_DEFINITION_CACHE_MB` sets the budget; `0`
  *     disables the cache (every `getOrLoad` calls `load` and caches nothing).
  *   - No TTL: version ids are immutable, so a cached entry can never go stale.
  *   - An entry larger than the whole budget is served but never retained (caching

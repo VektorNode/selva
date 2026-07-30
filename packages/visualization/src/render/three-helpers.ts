@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-import { CACHED_GEOMETRY_USERDATA_FLAG, computeCombinedBoundingBox } from '../shared/index.js';
-import { SHARED_MATERIALS } from './three-materials';
+import { computeCombinedBoundingBox, disposeObjectTree } from '../shared/index.js';
 import { isoOffset } from './up-axis';
 
 const CAMERA_CONFIG = {
@@ -147,35 +146,10 @@ export function clearScene(scene: THREE.Scene): void {
 		// persists across solves so it isn't lost when compute content is replaced.
 		if (object.userData.source === 'user') return;
 
-		// Recursively dispose all renderable objects (meshes, lines, points) in this subtree.
-		object.traverse((child) => {
-			const renderable = child as Partial<THREE.Mesh> & THREE.Object3D;
-			if (!renderable.geometry && !renderable.material) return;
-
-			// Cache-owned geometries survive scene rebuilds — the cache disposes them on eviction.
-			if (!renderable.geometry?.userData?.[CACHED_GEOMETRY_USERDATA_FLAG]) {
-				renderable.geometry?.dispose();
-			}
-
-			const material = renderable.material;
-			if (!material) return;
-			const materials = Array.isArray(material) ? material : [material];
-			materials.forEach((material) => {
-				// Module-scope singletons (METAL_MATERIAL et al.) are shared across meshes and across
-				// solves — disposing one here would force a shader rebuild on its next use and free
-				// textures still referenced by surviving objects.
-				if (SHARED_MATERIALS.has(material)) return;
-
-				// Walk only own enumerable properties — `for...in` on a Three.js material
-				// also iterates the prototype chain, which is needlessly expensive.
-				for (const value of Object.values(material)) {
-					if (value instanceof THREE.Texture) {
-						value.dispose();
-					}
-				}
-				material.dispose();
-			});
-		});
+		// One ownership-aware walker for every teardown path (shared/gpu-dispose.ts). Edge overlays
+		// are children of the meshes they outline, so this traversal disposes their line geometries
+		// too — each overlay owns its own outright (see edges/line-geometry.ts).
+		disposeObjectTree(object);
 
 		object.removeFromParent();
 	});

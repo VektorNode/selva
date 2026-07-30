@@ -191,13 +191,13 @@ export const CACHES: CacheEntry[] = [
 	},
 	{
 		id: 'def-bytes',
-		name: 'Definition-byte cache',
+		name: 'Definition cache (uploaded)',
 		layer: 'selva-server',
 		what: 'Version id → the .gh bytes, read lazily. The solve no longer eagerly pulls the blob off storage — the scheduler asks for bytes only when an upload is unavoidable, and a warm entry then serves them without touching storage. A pointer-known re-solve moves ZERO definition bytes.',
 		keyedBy:
 			'the immutable version id (never the fileKey — a delete-then-reupload can reuse a fileKey for different content)',
 		policy:
-			'LRU by total byte budget (default 256 MB, env COMPUTE_DEFINITION_BYTE_CACHE_MB; 0 disables). No TTL — version ids are immutable. An entry larger than the whole budget is served but never retained.',
+			'LRU by total byte budget (default 256 MB, env COMPUTE_DEFINITION_CACHE_MB; 0 disables). No TTL — version ids are immutable. An entry larger than the whole budget is served but never retained.',
 		invalidation: 'Byte-budget LRU only; nothing ever goes stale.',
 		scope: 'per-process',
 		lifetime: '256 MB budget',
@@ -213,27 +213,26 @@ export const CACHES: CacheEntry[] = [
 		what: 'Remote definition URL → the fetched .gh bytes, so repeat solves of a URL-referenced definition skip the download (and its SSRF checks are behind the same door).',
 		keyedBy: 'the definition URL',
 		policy:
-			'TTL (5 min default, env DEFINITION_CACHE_TTL_MS); max 50 entries, oldest 10 evicted in a batch.',
+			'TTL (5 min default, env REMOTE_DEFINITION_CACHE_TTL_MS); max 50 entries, oldest 10 evicted in a batch.',
 		invalidation: 'TTL expiry only.',
 		scope: 'per-process',
 		lifetime: '5 min TTL',
 		files: ['packages/server/src/compute/remote-definition.ts:97']
 	},
 	{
-		id: 'l2-solve',
-		name: 'Durable solve cache (L2)',
+		id: 'single-flight',
+		name: 'Single-flight (dogpile protection)',
 		layer: 'selva-server',
-		what: 'Full solve request → the finished, gzipped solve response, held in the Selva server. A hit returns the stored envelope without building a tree, calling compute, or re-serializing. OFF by default — an operator opts in with SOLVE_CACHE_PROVIDER=memory and a quota. Only live-channel, non-explicit-version local solves are eligible.',
+		what: 'Not a cache — a coalescer. N identical solves arriving while the first is still running share that one execution instead of each hitting compute. Runs for every solve; the stampede it prevents is worst when nothing else is caching. The shared envelope is re-keyed per waiter to their own Accept-Encoding.',
 		keyedBy:
-			'(orgId, definitionId, versionId, inputKey) — org first for cross-tenant defense, version keys the keyspace to immutable bytes, plus the compute-server id (two servers can yield different geometry)',
+			'(version id or remote URL, compute-server id, transformed input tree) — the same identity the scheduler caches on, so two requests that differ only in input ordering still coalesce',
 		policy:
-			'Two-dimensional eviction: a per-definition entry-count quota (default 0 = off, env SOLVE_CACHE_DEFAULT_MAX_ENTRIES) so one slider-heavy definition only churns its own entries, plus a global byte backstop (default 512 MB, env SOLVE_CACHE_MAX_TOTAL_MB). No TTL.',
-		invalidation:
-			'Count-quota + byte-backstop LRU; a publish is a fresh version keyspace so there is nothing to invalidate — old entries just age out.',
+			'The key is released the moment the work settles, so nothing is ever retained and a later request always runs fresh.',
+		invalidation: 'None — nothing is stored.',
 		scope: 'per-process',
-		lifetime: 'quota + 512 MB',
+		lifetime: 'one solve',
 		files: [
-			'packages/solve/src/server/memory-solve-cache.ts:71',
+			'packages/solve/src/server/solve-cache-single-flight.ts',
 			'packages/selva/src/lib/server/compute/solveCache.server.ts'
 		]
 	},
@@ -255,11 +254,12 @@ export const CACHES: CacheEntry[] = [
 	},
 	{
 		id: 'sched-response',
-		name: 'Solve response cache',
+		name: 'Solve cache',
 		layer: 'compute-client',
 		what: 'Hash of (definition + input tree) → the full solve response. An identical re-solve is answered from memory — Rhino.Compute is never contacted.',
 		keyedBy: 'stable hash of the .gh bytes + the exact input values',
-		policy: 'LRU, max 20 entries, TTL 5 min (Selva’s override of the library default 50 / no TTL).',
+		policy:
+			'LRU, max 20 entries, TTL 5 min (Selva’s override of the library default 50 / no TTL), within a byte budget (default 256 MB, env COMPUTE_SOLVE_CACHE_MB; 0 disables). PER warm client, so the worst case is ×16.',
 		invalidation: 'TTL + LRU; dies with its warm client when that is evicted.',
 		scope: 'per-process',
 		lifetime: '5 min TTL · 20 entries',
@@ -506,15 +506,15 @@ export const CLOUD_STEPS: FlowStep[] = [
 		layer: 'compute-client',
 		title: 'Response cache check',
 		oneliner:
-			'Two in-memory response caches short-circuit here: the durable L2 (if enabled) and the scheduler’s 5-minute response cache.',
+			'The scheduler’s in-memory response cache short-circuits here — and identical concurrent solves have already been coalesced into one.',
 		detail:
-			'First, for an eligible live-channel solve, the pipeline consults the durable L2 cache (keyed on org + version + inputs); a hit returns the stored gzipped envelope without building a tree or calling compute — l2_cache;dur=1. If L2 is off or misses, the scheduler hashes the definition bytes together with the exact input tree; a hit there returns the stored response instantly as selva_cache;dur=1. Both are what make “wiggle a slider back to where it was” free server-side. The L2 is off by default — an operator opts in with SOLVE_CACHE_PROVIDER.',
+			'The scheduler hashes the definition bytes together with the exact input tree; a hit returns the stored response instantly as selva_cache;dur=1. This is what makes “wiggle a slider back to where it was” free server-side. Before reaching it, every solve passes through single-flight: N identical requests arriving at once share one execution rather than each racing to fill the same cache entry.',
 		files: [
 			'packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:412',
-			'packages/solve/src/server/solve-pipeline.ts:160'
+			'packages/solve/src/server/solve-cache-single-flight.ts'
 		],
 		caches: [
-			{ id: 'l2-solve', note: 'durable HIT = stored envelope, no solve (if enabled)' },
+			{ id: 'single-flight', note: 'concurrent duplicates share one execution' },
 			{ id: 'sched-response', note: 'HIT = instant response, no compute call' }
 		]
 	},
@@ -664,11 +664,6 @@ export const SERVER_TIMING: TimingEntry[] = [
 	{
 		metric: 'compute_link',
 		meaning: 'solve minus rhino_* — network + queue between Selva and the VM'
-	},
-	{
-		metric: 'l2_cache;dur=1',
-		meaning:
-			'served from the durable L2 solve cache — no tree build, no compute (dur=0 = consulted then solved; absent = not eligible)'
 	},
 	{
 		metric: 'selva_cache;dur=1',
