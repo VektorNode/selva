@@ -2,34 +2,27 @@ import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 /**
- * Screen-space edge detection: draws crease/silhouette lines by finding depth and normal
- * discontinuities, as a fullscreen pass — cost is O(pixels), independent of triangle count.
+ * Screen-space edge detection (Roberts cross on depth + normal discontinuities), O(pixels)
+ * regardless of triangle count.
  *
- * This is the fallback look for scenes too heavy for geometry edge overlays (see
- * docs/plans/4.edge-overlay-performance.md Phase 3): meshes over `EdgeOptions.maxTriangles` skip
- * extraction, and this pass approximates the technical-drawing read at constant cost. Trade-offs
- * vs geometry edges: uniform pixel width, one global color (no per-object tinting), view-dependent
- * response, and gentle creases below the normal threshold don't register.
+ * Fallback look for scenes too heavy for geometry edge overlays (see
+ * docs/plans/edge-overlay-open.md): meshes over `EdgeOptions.maxTriangles` skip extraction and
+ * fall back to this pass. Trade-offs vs geometry edges: uniform pixel width, one global color,
+ * view-dependent, gentle creases below the normal threshold don't register.
  *
- * Works like GTAOPass internally: the scene is re-rendered with a `MeshNormalMaterial` override
- * into a normal target carrying a depth texture (a pattern this scene already tolerates for AO),
- * then a fullscreen shader Roberts-crosses depth (relative view-Z difference, so far scenes don't
- * dissolve into noise) and normals, and blends the edge color over the composed image.
- *
- * The render target is allocated lazily on first enabled render, so constructing the pass
- * disabled costs nothing but the material.
+ * Normal target is allocated lazily on first render, so a disabled pass costs only the material.
  */
 export interface EdgeDetectionOptions {
-	/** Edge line color. Default 0x222222 — matches the geometry overlays' default. */
+	/** Default 0x222222 — matches the geometry overlays' default. */
 	color?: THREE.ColorRepresentation;
-	/** Edge blend strength 0–1. Default 1. */
+	/** 0–1. Default 1. */
 	opacity?: number;
 	/**
-	 * Normal discontinuity threshold, in summed `1 - dot(n₁, n₂)` across the two diagonal pairs.
-	 * Lower catches gentler creases. Default 0.4 (≈ the 44° crease default of geometry edges).
+	 * Summed `1 - dot(n₁, n₂)` across the two diagonal pairs. Lower catches gentler creases.
+	 * Default 0.4 (≈ the 44° crease default of geometry edges).
 	 */
 	normalThreshold?: number;
-	/** Relative view-depth discontinuity threshold. Default 0.02 (2% of the center depth). */
+	/** Relative view-depth discontinuity, fraction of center depth. Default 0.02. */
 	depthThreshold?: number;
 	/** Sample offset in device px — line thickness. Default 1. */
 	thickness?: number;

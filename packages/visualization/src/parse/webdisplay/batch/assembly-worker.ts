@@ -30,7 +30,7 @@ export function getAssemblyWorker(): Worker | null {
 		return null;
 	}
 	try {
-		// Blob URL keeps the library bundler-agnostic; deliberately never revoked (see `@selvajs/compute`'s edges.ts).
+		// Blob URL keeps the library bundler-agnostic; deliberately never revoked (see render/edges/extraction.ts).
 		const url = URL.createObjectURL(
 			new Blob([meshAssemblyWorkerSource()], { type: 'text/javascript' })
 		);

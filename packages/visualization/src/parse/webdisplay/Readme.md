@@ -1,9 +1,9 @@
-## Web Display Requirements & Workflow
+# webdisplay
 
-To use the web display features, you must:
+Parses the Grasshopper **Display** component's output into Three.js meshes and objects.
 
-- Use the **Selva Display** component in Grasshopper to prepare mesh data for export.
-- Plug the resulting mesh data into a **Context Bake** component.
-- Run your definition on the **custom branch of rhino.compute** from VektorNode.
-
-The custom compute server will include the correct mesh data structure in the compute response, enabling seamless integration with the web display logic.
+The plugin's `WebDisplay` component serializes mesh geometry into the binary "SLVA" wire format
+(see `binary/header.ts`), base64-encoded inside a `DisplayBatch` JSON envelope (`types.ts`).
+`webdisplay-parser.ts` is the entry point: it walks a solve response's data trees, finds
+`DisplayBatch` payloads, and hands them to `batch-parser.ts` for mesh construction. Requires the
+VektorNode Rhino.Compute fork (see repo root CLAUDE.md).

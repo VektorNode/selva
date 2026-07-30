@@ -43,6 +43,7 @@ export {
 	serverIdentity,
 	type ClientCache,
 	type ClientCacheConfig,
+	type SolveCacheStats,
 	type CachedClient,
 	type ResolvedServer,
 	type ServerIdentity

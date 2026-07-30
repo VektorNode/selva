@@ -27,22 +27,6 @@ ownership policy solve's result memo needs but deliberately doesn't know: `meshP
 layer import siblings by relative path; other layers import the barrel. That way a layer's internals
 can be refactored freely without touching consumers.
 
-## Current status
-
-All four layers have landed (see `docs/plans/archive/visualization-package.md`):
-
-| Layer     | Contents                                                        | Published     |
-| --------- | --------------------------------------------------------------- | ------------- |
-| `shared/` | coordinate frame, looks, errors, logging, geometry/color utils  | no — internal |
-| `parse/`  | webdisplay + display-items                                      | `/parse`      |
-| `render/` | scene setup, edges, camera, grid, gizmo, labels, measure        | `/render`     |
-| `scene/`  | outliner: content filter, layer grouping, visibility, selection | `/scene`      |
-
-`session/` has since moved out to `@selvajs/solve/client`.
-`@selvajs/compute` no longer depends on `three` at all — it is pure solve/data — and `@selvajs/ui`
-keeps only the Svelte shells (`Viewer.svelte`, `SceneManager.svelte`, `useSolveSession.svelte.ts`)
-plus the design system.
-
 ## Sub-path exports
 
 Three of the four layers are published entrypoints, so consumers tree-shake:
@@ -82,21 +66,17 @@ injects its own (`SvelteSet` in a Svelte app) and gets reactivity with no seam a
 
 ## Dependencies
 
-This package depends on **nothing from Selva** — only `three`, `rhino3dm` and `fflate`. Mesh
-conversion and the viewer work for a consumer who has neither Selva nor Rhino.Compute. Concretely,
-this package owns its own errors
-([`shared/errors.ts`](./src/shared/errors.ts)), logging ([`shared/logger.ts`](./src/shared/logger.ts))
-and base64 decoding ([`shared/encoding.ts`](./src/shared/encoding.ts)) rather than importing them
-from `@selvajs/compute`.
+This package depends on **nothing from Selva** — only `three`, `rhino3dm` and `fflate`. It owns its
+own errors ([`shared/errors.ts`](./src/shared/errors.ts)), logging
+([`shared/logger.ts`](./src/shared/logger.ts)) and base64 decoding
+([`shared/encoding.ts`](./src/shared/encoding.ts)) rather than importing them from
+`@selvajs/compute`, so mesh conversion and the viewer work for a consumer with neither Selva nor
+Rhino.Compute.
 
 The Grasshopper response envelope `getThreeMeshesFromComputeResponse` accepts is declared
 structurally in [`parse/webdisplay/response-envelope.ts`](./src/parse/webdisplay/response-envelope.ts)
 — only the fields the parser reads. Compute's `GrasshopperComputeResponse` is a superset and stays
-assignable to it, so passing one in is unchanged.
-
-`@selvajs/schemas` used to be a dependency, needed only by `session/`. That layer is now
-`@selvajs/solve/client` (see [`docs/plans/solve-package.md`](../../docs/plans/solve-package.md)), so
-the dependency is gone and every sub-path is Selva-free.
+assignable to it.
 
 ### Unified logging
 

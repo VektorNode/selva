@@ -32,16 +32,46 @@
 		slug: string;
 	}
 
+	interface CacheCounters {
+		hits: number;
+		misses: number;
+		evictions: number;
+		entries: number;
+		bytes: number;
+		budgetBytes: number;
+	}
+
 	interface PageData {
 		servers: (Omit<PlatformComputeServer, 'apiKey'> & { hasApiKey: boolean })[];
 		defaultServerId: string;
 		orgs: OrgRow[];
 		tenancy: TenancyMode;
+		caches: {
+			solve: CacheCounters & { warmClients: number; budgetTotalBytes: number };
+			definition: CacheCounters;
+		};
 	}
 	interface Props {
 		data: PageData;
 	}
 	let { data }: Props = $props();
+
+	function formatCacheBytes(bytes: number): string {
+		if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+		if (bytes >= 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))} MB`;
+		if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+		return `${bytes} B`;
+	}
+
+	/**
+	 * Hit rate as a percentage, or null before any solve has consulted the cache.
+	 * Reported as null rather than 0% because "no data yet" and "nothing is
+	 * hitting" are different answers to the question an operator is asking.
+	 */
+	function hitRate(c: { hits: number; misses: number }): number | null {
+		const total = c.hits + c.misses;
+		return total === 0 ? null : Math.round((c.hits / total) * 100);
+	}
 
 	// Humanize an idle span (seconds since the last child request) into a compact
 	// "just now / 5m / 1h 3m" label. null → '-' (unreachable or not reported).
@@ -285,6 +315,61 @@
 <svelte:head>
 	<title>Admin · Compute</title>
 </svelte:head>
+
+{#snippet cachePanel(
+	label: string,
+	holds: string,
+	envVar: string,
+	c: CacheCounters,
+	note: string | null
+)}
+	{@const rate = hitRate(c)}
+	<div class="space-y-2 rounded-lg border p-4">
+		<div class="flex items-baseline justify-between gap-3">
+			<div>
+				<p class="text-sm font-medium">{label}</p>
+				<p class="text-muted-foreground text-xs">{holds}</p>
+			</div>
+			<div class="text-right">
+				<p class="text-2xl font-semibold tabular-nums">
+					{rate === null ? '—' : `${rate}%`}
+				</p>
+				<p class="text-muted-foreground text-xs">hit rate</p>
+			</div>
+		</div>
+
+		<dl class="text-muted-foreground grid grid-cols-3 gap-2 text-xs">
+			<div>
+				<dt>Hits</dt>
+				<dd class="text-foreground font-mono tabular-nums">{c.hits.toLocaleString()}</dd>
+			</div>
+			<div>
+				<dt>Misses</dt>
+				<dd class="text-foreground font-mono tabular-nums">{c.misses.toLocaleString()}</dd>
+			</div>
+			<div>
+				<dt>Evictions</dt>
+				<dd class="text-foreground font-mono tabular-nums">{c.evictions.toLocaleString()}</dd>
+			</div>
+		</dl>
+
+		<div
+			class="text-muted-foreground flex items-center justify-between gap-3 border-t pt-2 text-xs"
+		>
+			<span>
+				{c.entries.toLocaleString()}
+				{c.entries === 1 ? 'entry' : 'entries'} · {formatCacheBytes(c.bytes)} of {formatCacheBytes(
+					c.budgetBytes
+				)}
+			</span>
+			<code class="font-mono text-[10px]">{envVar}</code>
+		</div>
+
+		{#if note}
+			<p class="text-muted-foreground text-xs">{note}</p>
+		{/if}
+	</div>
+{/snippet}
 
 {#snippet sharingControl(server: ServerEntry)}
 	{@const isAll = server.sharedWith === 'all'}
@@ -644,6 +729,30 @@
 					Add another server
 				</button>
 			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<SectionHeader
+		title="Caching"
+		description="Whether solves are actually being served from memory. Counters are for this Selva instance and reset when it restarts; behind a load balancer each instance keeps its own."
+	/>
+
+	<Card.Root>
+		<Card.Content class="grid gap-3 pt-6 sm:grid-cols-2">
+			{@render cachePanel(
+				'Solve cache',
+				'Results, so identical inputs skip Rhino entirely',
+				'COMPUTE_SOLVE_CACHE_MB',
+				data.caches.solve,
+				`Budget is per compute server — ${data.caches.solve.warmClients} warm, so up to ${formatCacheBytes(data.caches.solve.budgetTotalBytes)} total right now.`
+			)}
+			{@render cachePanel(
+				'Definition cache',
+				'.gh bytes, so a solve skips the storage read',
+				'COMPUTE_DEFINITION_CACHE_MB',
+				data.caches.definition,
+				null
+			)}
 		</Card.Content>
 	</Card.Root>
 </div>

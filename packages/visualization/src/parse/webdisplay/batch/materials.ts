@@ -34,12 +34,10 @@ export function createMaterial(
 		// Cull back faces for closed solids (crisper silhouette, less overdraw); keep both sides for
 		// open surfaces. Caller-controlled since Rhino emits both — default DoubleSide is the safe read.
 		side: appearance?.cullBackfaces ? THREE.FrontSide : THREE.DoubleSide,
-		// Reduced polygon offset to minimize artifacts
-		// Only use minimal offset to prevent z-fighting on coplanar faces
+		// Minimal offset to avoid z-fighting on coplanar faces
 		polygonOffset: true,
 		polygonOffsetFactor: 0.5,
 		polygonOffsetUnits: 0.5,
-		// Improve depth rendering
 		depthWrite: true,
 		depthTest: true
 	});
@@ -75,11 +73,10 @@ export function createMaterial(
 }
 
 /**
- * Patch a material's vertex shader to decode its per-vertex `color` attribute from sRGB to linear.
- * three.js uploads vertex colors verbatim and its `color_vertex` chunk multiplies them straight into
- * the linear working color space (unlike textures, which carry a `colorSpace` and get decoded) — so
- * sRGB-authored vertex colors render too bright without this. Done in the shader (not a CPU pass over
- * the buffer) to keep the hot per-solve parse cheap; the decode is a handful of GPU ops per vertex.
+ * three.js uploads vertex colors verbatim and multiplies them straight into the linear working
+ * space (unlike textures, which carry a `colorSpace` and get decoded) — so sRGB-authored vertex
+ * colors render too bright without this shader patch. Done on the GPU, not a CPU pass over the
+ * buffer, to keep the hot per-solve parse cheap.
  */
 export function applyVertexColorSRGBDecode(material: THREE.Material): void {
 	material.onBeforeCompile = (shader) => {

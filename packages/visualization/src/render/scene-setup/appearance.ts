@@ -21,15 +21,10 @@ export interface AppearanceController {
 	getMaterialAppearance(): MaterialAppearanceOptions;
 }
 
-/**
- * The runtime appearance setters, split out of `initThree` because they form one coherent group:
- * every one of them mutates the resolved config (so a later `setLook` composes with what the host
- * set), touches the renderer or the lights, and asks for a repaint.
- *
- * `setLook` is a straight preset apply built from the same setters a host would call — that's what
- * keeps the construction-time path (`applyDefaults` seeding from `LOOK_PRESETS`) and the runtime
- * path from drifting.
- */
+// Split out of `initThree`: every setter here mutates the resolved config, touches the renderer or
+// lights, and requests a repaint. `setLook` is built from the same setters a host would call, so the
+// construction-time defaults path (`applyDefaults` seeding from `LOOK_PRESETS`) can't drift from
+// the runtime path.
 export function createAppearanceController(params: {
 	scene: THREE.Scene;
 	renderer: THREE.WebGLRenderer;
@@ -40,8 +35,7 @@ export function createAppearanceController(params: {
 }): AppearanceController {
 	const { scene, renderer, lights, config, pipeline, requestRender } = params;
 
-	// The look currently applied. Always a real look (the default is 'technical'), seeded from the
-	// same resolved value as the construction defaults. Drives `getMaterialAppearance()`.
+	// Drives getMaterialAppearance(); seeded from the same resolved value as construction defaults.
 	let activeLook: Look = config.look;
 
 	const setFillLights: AppearanceController['setFillLights'] = (opts) => {
@@ -53,8 +47,8 @@ export function createAppearanceController(params: {
 			!lights.hemisphere &&
 			opts.hemisphereIntensity > 0
 		) {
-			// Built without a hemisphere light — create one on first positive intensity so hosts can
-			// enable the fill purely at runtime.
+			// Create the light lazily on first positive intensity so hosts can enable fill at runtime
+			// even if the scene was built without one.
 			lights.hemisphere = new THREE.HemisphereLight(
 				opts.hemisphereSkyColor ?? config.lighting.hemisphereSkyColor,
 				opts.hemisphereGroundColor ?? config.lighting.hemisphereGroundColor,
@@ -83,8 +77,7 @@ export function createAppearanceController(params: {
 	const setToneMappingExposure = (exposure: number) => {
 		config.render.toneMappingExposure = exposure;
 		renderer.toneMappingExposure = exposure;
-		// When the composer path is active, tone mapping is applied by its OutputPass — rebuild so it
-		// adopts the new exposure.
+		// Composer path applies tone mapping via its OutputPass — rebuild so it picks up the new exposure.
 		if (pipeline.get()) pipeline.rebuild();
 	};
 
@@ -97,30 +90,27 @@ export function createAppearanceController(params: {
 		const preset = LOOK_PRESETS[look];
 		activeLook = look;
 
-		// Tone mapping lives on the renderer (plain path) and is mirrored into the composer's OutputPass
-		// when AO is active. Rebuild the pipeline so the composer picks up the new tone mapping.
+		// Mirror tone mapping into the composer's OutputPass when AO is active; rebuild to apply it.
 		renderer.toneMapping = preset.toneMapping;
 		renderer.toneMappingExposure = preset.toneMappingExposure;
 		config.render.toneMapping = preset.toneMapping;
 		config.render.toneMappingExposure = preset.toneMappingExposure;
 
-		// Fill lighting + HDR normalization: studio/showcase add hemisphere fill and lift the environment
-		// so shadowed surfaces read well regardless of the HDR; technical zeroes the fill back to a flat
-		// CAD look. Applied through the same setters a host would call.
+		// studio/showcase add hemisphere fill + lift the environment so shadowed surfaces read well
+		// regardless of the HDR; technical zeroes the fill back to a flat CAD look.
 		setFillLights({
 			hemisphereIntensity: preset.hemisphereIntensity,
 			ambientIntensity: preset.ambientIntensity
 		});
 		setEnvironmentIntensity(preset.environmentIntensity);
 
-		// Honour the look's AO choice. `setAmbientOcclusion` syncs, which builds or tears down the
-		// composer as needed; rebuild on top of that when one is already live so its OutputPass adopts
-		// the new tone mapping.
+		// setAmbientOcclusion builds/tears down the composer as needed; rebuild on top when one was
+		// already live so its OutputPass adopts the new tone mapping.
 		const hadPipeline = pipeline.get() !== null;
 		pipeline.setAmbientOcclusion(preset.ambientOcclusion);
 		if (hadPipeline) pipeline.rebuild();
 
-		// Retune IBL reflection strength on every compute mesh material in the scene.
+		// Retune IBL reflection strength on every compute mesh material.
 		scene.traverse((object) => {
 			if (object.userData.source !== 'compute') return;
 			const mesh = object as Partial<THREE.Mesh> & THREE.Object3D;

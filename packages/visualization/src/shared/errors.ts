@@ -1,15 +1,7 @@
 /**
- * Errors for the visualization package.
- *
- * These used to be `RhinoComputeError` from `@selvajs/compute`, which was wrong on the project's
- * own terms as well as a dependency: in the plugin's WebSocket path a malformed mesh blob never
- * went near Rhino.Compute, so naming that transport in the error named something the failure has
- * nothing to do with.
- *
- * The `code` values are kept identical to compute's so existing catch-sites that match on
- * `error.code` keep working across the change.
- *
- * @module shared/errors
+ * Errors for the visualization package. Replaces `@selvajs/compute`'s `RhinoComputeError`, which
+ * mis-named failures on paths (e.g. the plugin WebSocket) that never touch Rhino.Compute. `code`
+ * values match compute's so existing catch-sites keep working.
  */
 
 export const ErrorCodes = {

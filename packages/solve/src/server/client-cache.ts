@@ -146,8 +146,33 @@ export interface ClientCache {
 	 * rebuilds against fresh connection details (ADR 0004 Consequences).
 	 */
 	evict(id: string | ServerIdentity): void;
+	/**
+	 * Solve-cache counters summed across every warm client, for an operator-facing
+	 * hit rate. Each client owns its own cache, so a single server's numbers would
+	 * not describe the deployment; `warmClients` is reported alongside so a reader
+	 * can see how many caches the totals span.
+	 *
+	 * Counters are cumulative per client and die when that client is evicted, so
+	 * the totals can fall — they describe the caches alive right now, not an
+	 * all-time ledger.
+	 */
+	solveCacheStats(): SolveCacheStats;
 	/** Dispose every warm client. Test seam / shutdown hook. */
 	disposeAll(): void;
+}
+
+/** Aggregate solve-cache counters across the warm clients (see `solveCacheStats`). */
+export interface SolveCacheStats {
+	/** How many warm clients these totals span. */
+	warmClients: number;
+	/** Live entries across all warm clients. */
+	entries: number;
+	/** Retained bytes across all warm clients. */
+	bytes: number;
+	hits: number;
+	misses: number;
+	/** Entries dropped under size/byte pressure (not TTL expiry or replacement). */
+	evictions: number;
 }
 
 const DEFAULT_MAX_CACHED_CLIENTS = 16;
@@ -331,6 +356,26 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				entry.scheduler.dispose();
 				cache.delete(key);
 			}
+		},
+
+		solveCacheStats(): SolveCacheStats {
+			const total: SolveCacheStats = {
+				warmClients: cache.size,
+				entries: 0,
+				bytes: 0,
+				hits: 0,
+				misses: 0,
+				evictions: 0
+			};
+			for (const entry of cache.values()) {
+				const s = entry.scheduler.cacheStats();
+				total.entries += s.entries;
+				total.bytes += s.bytes;
+				total.hits += s.hits;
+				total.misses += s.misses;
+				total.evictions += s.evictions;
+			}
+			return total;
 		},
 
 		disposeAll(): void {

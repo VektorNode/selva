@@ -17,12 +17,8 @@ import {
 // Overlay construction
 // ============================================================================
 
-/**
- * Edge color for a mesh when no color is forced: the mesh's own surface color darkened toward black
- * by `darken` (0 = surface color, 1 = black), so edges read as the object's darker outline. Falls
- * back to {@link DEFAULT_EDGE_COLOR} when no material color is readable. Multiplicative darkening
- * preserves hue and desaturates gently; a near-black surface just yields near-black edges.
- */
+// Multiplicative darkening (not lerp-to-black) preserves hue and desaturates gently; a near-black
+// surface just yields near-black edges.
 function deriveEdgeColor(mesh: THREE.Mesh, darken: number): THREE.Color {
 	const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
 	const source = (material as { color?: THREE.Color } | null)?.color;
@@ -30,12 +26,7 @@ function deriveEdgeColor(mesh: THREE.Mesh, darken: number): THREE.Color {
 	return source.clone().multiplyScalar(1 - darken);
 }
 
-/**
- * Overlays sharing a color and fade mode share a material: with a forced color that's one material
- * per `addEdges` call; when deriving per-mesh, meshes of the same surface color (instanced/repeated
- * parts) still collapse onto one. The fade bit is part of the key because fading needs
- * `transparent = true` while capped overlays must stay opaque.
- */
+/** Pools materials by color+fade so overlays sharing both share one `LineMaterial` instance. */
 export class MaterialPool {
 	private readonly byKey = new Map<number, LineMaterial>();
 	constructor(private readonly options: ResolvedOptions) {}
@@ -94,11 +85,7 @@ export function buildEdgeOverlay(
 const _fadeCenter = new THREE.Vector3();
 const _fadeCameraPos = new THREE.Vector3();
 
-/**
- * Pixels per world unit at the overlay's centre — the scale that converts a world-space edge spacing
- * into the on-screen gap driving the density fade. Returns Infinity ("don't fade") when the
- * projection is unknown or degenerate, and for a perspective camera sitting inside the mesh.
- */
+/** Pixels per world unit at the overlay's centre. Returns Infinity ("don't fade") when the projection is unknown/degenerate, or the camera sits inside the mesh. */
 function pixelsPerWorldUnit(
 	overlay: LineSegments2,
 	camera: THREE.Camera,
@@ -128,12 +115,9 @@ function pixelsPerWorldUnit(
 	return Infinity;
 }
 
-/**
- * Fade this overlay by its on-screen size (see FADE_START_PX/FADE_END_PX). Hooked into
- * onBeforeRender so the opacity is written immediately before *this* overlay's draw — uniforms
- * upload per draw call, so overlays sharing one material still fade independently. Chains
- * LineSegments2's own onBeforeRender, which keeps the material's resolution uniform in sync.
- */
+// Hooked into onBeforeRender (not computed once) so opacity is written immediately before this
+// overlay's draw — uniforms upload per draw call, so overlays sharing one material still fade
+// independently. Chains LineSegments2's own onBeforeRender to keep its resolution uniform in sync.
 function enableDistanceFade(overlay: LineSegments2, edgeSpacing: number): void {
 	// Assign via the Object3D base type: LineSegments2's typings narrow onBeforeRender to
 	// (renderer) only, but the renderer actually calls it with (renderer, scene, camera, …).

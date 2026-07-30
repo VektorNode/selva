@@ -1,9 +1,27 @@
 # Caching simplification — three names, two sizes
 
-> **Status: proposed, 2026-07-30.** Supersedes Phase 5 of [solve-package](./solve-package.md)
-> (unify the three stable hashes) — see [§Why not Phase 5](#why-not-phase-5). Absorbs the open code
-> findings of [caching-audit-2026-07](./archive/caching-audit-2026-07.md) §F2. §F1 (edge-cache growth) was
-> **independent of this plan** and is now ✅ fixed (2026-07-30) — it was a live GPU leak.
+> **Status: ✅ SHIPPED 2026-07-30 — all four phases.** Archived; this is the record of what was
+> done, not open work.
+>
+> - **Phase 1** — single-flight decoupled from L2, now unconditional and keyed on the transformed
+>   tree. Cancellation is decided by whether a flight is shared, not by cache config.
+> - **Phase 2** — memory L2 backend deleted (`memory-solve-cache.ts`, `solve-cache-envelope.ts`,
+>   `solve-cache-key.ts`, the pipeline branches, three `SOLVE_CACHE_*` vars). `ISolveResultCache`
+>   kept as the Redis seam, with a test backend so it stays proven.
+> - **Phase 3** — the three renames landed, old names honoured for one minor version with a boot
+>   warning. `.env.example`, `docs/Caching.md` and `architecture.ts` rewritten around the three names.
+> - **Phase 4** — hit/miss/eviction counters added to the scheduler, aggregated across warm clients,
+>   surfaced as a Caching panel on `/admin/compute`.
+>
+> Two deviations from the plan as written, both deliberate: the `ComputeLimits` **fields** were
+> renamed alongside their env keys (`definitionCacheTtlMs` → `remoteDefinitionCacheTtlMs` was the
+> same misleading name the rename existed to fix), and the coalesce key folds in the compute-server
+> id, since two servers can run different Rhino versions and return different geometry.
+>
+> Superseded Phase 5 of [solve-package](../solve-package.md) (unify the three stable hashes) — see
+> [§Why not Phase 5](#why-not-phase-5). Absorbed the open code findings of
+> [caching-audit-2026-07](./caching-audit-2026-07.md) §F2. §F1 (edge-cache growth) was **independent
+> of this plan** and was fixed separately (2026-07-30) — it was a live GPU leak.
 >
 > **Goal, in the user's words:** _"very simple, very easy to configure… it should always be in the
 > name."_ Not "fewer lines" as an end in itself — the line count falls out of collapsing three
@@ -53,7 +71,7 @@ They remain as internal tiers of the three names above; nobody configuring Selva
 
 The viewer cache stays unconfigurable on purpose: it is bounded by GPU memory, it holds live
 `BufferGeometry`, and it is not a freshness question but an ownership one
-([caching-audit §The distinction](./archive/caching-audit-2026-07.md#the-distinction-that-makes-all-of-it-legible)).
+([caching-audit §The distinction](./caching-audit-2026-07.md#the-distinction-that-makes-all-of-it-legible)).
 Nobody tunes it from a `.env`, and exposing a knob would imply they should.
 
 ### The definition cache has two sources, and only one can go stale
@@ -70,7 +88,7 @@ mutability**:
 The uploaded path is `definition-byte-cache.ts` in `@selvajs/solve`; the remote path is
 `remote-definition.ts` in `@selvajs/server`, sitting behind the SSRF guard and the size cap, capped at
 50 entries and evicting 10 at a time. Both are live: the solve route picks between them at
-[`+server.ts:129`](../../packages/selva/src/routes/api/compute/+server.ts#L129) on whether
+[`+server.ts:129`](../../../packages/selva/src/routes/api/compute/+server.ts#L129) on whether
 `definitionUrl` starts with `local:`.
 
 **This is the whole reason `DEFINITION_CACHE_TTL_MS` must be renamed.** Two unrelated caches are
@@ -109,7 +127,7 @@ wrong call for these two:
   operator cannot act on them and has no reason to. Constants, as today.
 - **These two are heap on the operator's server**, shared by every concurrent user. And the solve
   cache is **per warm compute client** — worst case 256 MB × 16 clients = **4 GB**
-  ([caching-audit §F3](./archive/caching-audit-2026-07.md#f3-l1s-worst-case-is-256-mb--16--4-gb)). That is a
+  ([caching-audit §F3](./caching-audit-2026-07.md#f3-l1s-worst-case-is-256-mb--16--4-gb)). That is a
   number a deployment on a small VPS may genuinely need to turn down, and no code change should be
   required to do it.
 
@@ -214,7 +232,7 @@ because that is exactly when N identical concurrent solves each hit Rhino.
 Two reasons beyond the obvious, both verified:
 
 1. **It currently changes cancellation semantics as a side effect.**
-   [`+server.ts:356`](../../packages/selva/src/routes/api/compute/+server.ts#L356) — a coalesced solve
+   [`+server.ts:356`](../../../packages/selva/src/routes/api/compute/+server.ts#L356) — a coalesced solve
    gets a non-aborting signal so one caller disconnecting can't 499 every waiter. So whether a client
    disconnect cancels the upstream Rhino solve depends on whether a cache happens to be enabled. That
    coupling is wrong regardless of what happens to L2.
@@ -245,14 +263,14 @@ Its field label should say so rather than implying it does something today.
 
 ## Why not Phase 5
 
-[solve-package](./solve-package.md) Phase 5 proposes unifying the three stable-hash implementations
+[solve-package](../solve-package.md) Phase 5 proposes unifying the three stable-hash implementations
 (`stableInputKey` M2, `solve-cache-key.ts` L2, `stable-hash.ts` L1) behind one canonicalizer.
 
 **Skip it.** Two reasons:
 
 1. **This plan deletes one of the three.** L2's SHA-256 key derivation goes with the backend, and
    single-flight adopts L1's key. Two remain, in different packages, at different blast radii —
-   exactly the split [§C1b](./solve-package.md#c1b-the-schedulers-l1-cache-stays-in-selvajscompute)
+   exactly the split [§C1b](../solve-package.md#c1b-the-schedulers-l1-cache-stays-in-selvajscompute)
    says to preserve.
 2. **Merging would hide the finding rather than fix it.** The real problem was never that three
    canonicalizers might disagree (established earlier: no param type produces a `Date` or `bigint`,

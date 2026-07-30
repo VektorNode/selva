@@ -1,18 +1,18 @@
 /**
- * Off-thread mesh assembly — audit P2 (docs/plans/5.display-pipeline-performance-audit.md).
+ * Off-thread mesh assembly (audit P2 — docs/plans/5.display-pipeline-performance-audit.md).
  *
- * {@link assembleGeometries} performs the hot, pure part of batch parsing: undoing the delta
- * filter on the raw wire arrays, dequantizing int16 positions to world floats, slicing/rebasing
- * the per-geometry windows, computing vertex normals, and fingerprinting each geometry for the
- * cross-solve cache. Everything it needs travels as typed arrays, so the whole stage runs in a
- * Worker and the main thread only wraps the returned buffers into `BufferGeometry` objects.
+ * {@link assembleGeometries} is the hot, pure part of batch parsing: undoes the delta filter on
+ * the raw wire arrays, dequantizes int16 positions to world floats, slices/rebases per-geometry
+ * windows, computes vertex normals, and fingerprints each geometry for the cross-solve cache.
+ * Everything it needs travels as typed arrays, so the whole stage runs in a Worker and the main
+ * thread only wraps the returned buffers into `BufferGeometry` objects.
  *
- * Like `edge-extract.ts`, the function is a single self-contained unit with zero outer captures
- * (only `Math` and its arguments) so `Function.prototype.toString` yields code that runs unchanged
+ * Like `edge-extract.ts`, it's a single self-contained function with zero outer captures (only
+ * `Math` and its arguments) so `Function.prototype.toString` yields code that runs unchanged
  * inside a blob-URL Worker ({@link meshAssemblyWorkerSource}) — bundler-agnostic by construction.
- * That constraint forces some duplication of small pure helpers from `binary-parser.ts`
- * (unzigzag/delta decode) and `geometry-cache.ts` (fingerprint); equivalence is pinned by tests
- * that assert the worker path shares cache entries with the synchronous path.
+ * That forces duplicating small helpers from `binary-parser.ts` (unzigzag/delta decode) and
+ * `geometry-cache.ts` (fingerprint); equivalence is pinned by tests asserting the worker path
+ * shares cache entries with the synchronous path.
  */
 
 export interface AssemblyWindow {

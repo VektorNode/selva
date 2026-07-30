@@ -82,8 +82,7 @@ export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.
  * reconstructed absolute values, so consumers never see the filter.
  *
  * @param input - The blob, as either an `ArrayBuffer`/`Uint8Array` (binary transport) or a
- *   base64-encoded string (today's JSON-envelope transport).
- * @returns Decoded metadata plus typed-array views into the geometry payload.
+ *   base64-encoded string (JSON-envelope transport).
  * @throws {VisualizationError} On invalid magic, unknown version, or truncated input.
  */
 export function parseBinaryMeshBatch(

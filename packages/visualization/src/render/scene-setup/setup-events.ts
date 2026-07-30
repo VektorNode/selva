@@ -23,9 +23,8 @@ export function setupEventHandlers(
 	const mouseDownPosition = new THREE.Vector2();
 	const getActiveCamera = () => cameraController.getActiveCamera();
 
-	// An object is hittable only if every ancestor is also visible. Three.js's
-	// recursive intersect doesn't enforce that — it can hit a visible Mesh inside
-	// a hidden Group.
+	// Three.js's recursive intersect hits a visible Mesh inside a hidden Group; this enforces that
+	// every ancestor must also be visible.
 	const isFullyVisible = (object: THREE.Object3D): boolean => {
 		let current: THREE.Object3D | null = object;
 		while (current) {
@@ -36,8 +35,8 @@ export function setupEventHandlers(
 	};
 
 	const fitToView = () => {
-		// Frame the scene's renderable content; viewer aids (grid/floor/labels/measure) are excluded so
-		// the camera-tracking grid plane can't dominate the bounds and blow up the fit distance.
+		// Viewer aids (grid/floor/labels/measure) excluded so the camera-tracking grid plane can't
+		// dominate the bounds and blow up the fit distance.
 		const box = computeContentBounds(scene);
 
 		if (box.isEmpty()) {
@@ -45,10 +44,9 @@ export function setupEventHandlers(
 			return;
 		}
 
-		// Delegate the move to the camera controller: it frames from the current view direction and
-		// repositions whichever camera is LIVE, re-deriving the ortho frustum in 2D mode — whereas
-		// moving the perspective camera directly would change nothing visible in 2D (and silently
-		// drag the invisible perspective camera out of sync).
+		// Delegate to the camera controller: it repositions whichever camera is LIVE and re-derives
+		// the ortho frustum in 2D mode. Moving the perspective camera directly would be invisible in
+		// 2D and silently desync it.
 		cameraController.frameBounds(box, false);
 	};
 
@@ -66,17 +64,16 @@ export function setupEventHandlers(
 			};
 			if (originalMaterials.has(obj)) {
 				const original = originalMaterials.get(obj)!;
-				// Dispose the clone we swapped in before restoring the original.
-				const clone = restorable.material;
+				const clone = restorable.material; // dispose the highlight clone before restoring
 				if (clone instanceof THREE.Material) clone.dispose();
 				else if (Array.isArray(clone)) clone.forEach((m) => m.dispose());
 				restorable.material = original;
 				originalMaterials.delete(obj);
 
-				// If the object left the scene while selected (a solve's clearScene only saw — and
-				// disposed — the highlight clone), no later scene traversal can reach the original we
-				// just restored, so it must be disposed here. Compute content is cleared wholesale per
-				// solve, so a detached object's material has no surviving sharers.
+				// If the object left the scene while selected, clearScene's traversal only saw (and
+				// disposed) the highlight clone — no later traversal can reach the original we just
+				// restored, so dispose it here. Compute content is cleared wholesale per solve, so a
+				// detached object's material has no surviving sharers.
 				let root: THREE.Object3D = obj;
 				while (root.parent) root = root.parent;
 				if (root !== scene) {
@@ -88,9 +85,8 @@ export function setupEventHandlers(
 		selectedObjects.clear();
 	};
 
-	// Highlight a selected object by cloning its material and recoloring. Meshes get an `emissive`
-	// tint (so the surface keeps its base color); lines and points have no emissive channel, so we
-	// recolor `color` directly. Returns true if a highlight was applied (a material was found).
+	// Meshes get an `emissive` tint (keeps base color); lines/points have no emissive channel so
+	// `color` is recolored directly instead.
 	const applyHighlight = (object: THREE.Object3D): boolean => {
 		const target = object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
 		if (!(target.material instanceof THREE.Material)) return false;
@@ -108,10 +104,8 @@ export function setupEventHandlers(
 		return true;
 	};
 
-	// Picking lines and points needs a ray-to-geometry tolerance, scaled to the scene so it holds at
-	// any zoom. Plain THREE.Points use Raycaster.params.Points.threshold; fat Line2 uses its own
-	// material linewidth, so only Points needs this. (THREE.Line would use params.Line.threshold, but
-	// curves here are Line2.) Recomputed per pick from the current scene bounds.
+	// Ray-to-geometry tolerance for Points picking, scaled to scene size so it holds at any zoom.
+	// Fat Line2 uses its own material linewidth instead, so only Points.threshold is needed here.
 	const updatePickThresholds = () => {
 		const box = computeContentBounds(scene);
 		const diagonal = box.isEmpty() ? 1 : box.getSize(new THREE.Vector3()).length();
@@ -123,7 +117,6 @@ export function setupEventHandlers(
 	};
 
 	const handleCanvasClick = (event: MouseEvent) => {
-		// Ignore if mouse has moved (drag)
 		const currentMousePosition = new THREE.Vector2(event.clientX, event.clientY);
 		if (mouseDownPosition.distanceTo(currentMousePosition) > 5) {
 			return;
@@ -145,10 +138,7 @@ export function setupEventHandlers(
 			if (!selectedObjects.has(clickedObject)) {
 				clearSelection();
 				selectedObjects.add(clickedObject);
-
-				// Clone material (so siblings sharing it are untouched) and recolor to highlight.
-				// Handles meshes, fat lines, and points alike.
-				applyHighlight(clickedObject);
+				applyHighlight(clickedObject); // clones material so siblings sharing it are untouched
 
 				config.events?.onObjectSelected?.(clickedObject);
 
@@ -183,10 +173,9 @@ export function setupEventHandlers(
 		const box = new THREE.Box3().setFromObject(target);
 		if (box.isEmpty()) return;
 
-		// Frame the clicked object via the controller so the ACTIVE camera moves (ortho included —
-		// its frustum is re-derived, since translating an ortho camera alone zooms nothing). The
-		// controller's tween is cancellable: a rapid second double-click replaces the first tween
-		// instead of running a competing loop, and dispose() stops it outright.
+		// Via the controller so the ACTIVE camera moves (ortho frustum re-derived — translating an
+		// ortho camera alone zooms nothing). Tween is cancellable: a rapid second double-click
+		// replaces it rather than running a competing loop; dispose() stops it outright.
 		cameraController.frameBounds(box, true);
 	};
 

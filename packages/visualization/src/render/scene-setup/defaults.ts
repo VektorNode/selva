@@ -7,10 +7,8 @@ import { isoOffset, sunOffset, upToAxis } from '../up-axis.js';
 /** Rhino's convention, and the frame all geometry arrives in — see `shared/coordinate-frame.ts`. */
 export const defaultUp = new THREE.Vector3(0, 0, 1);
 
-/**
- * Options with every *configuration* section filled in by {@link applyDefaults}. `onMaxAnisotropy`
- * stays optional: it's a caller-supplied hook (there is no meaningful default), not a config value.
- */
+// Every config section filled in by applyDefaults. onMaxAnisotropy stays optional — a caller-supplied
+// hook with no meaningful default, not a config value.
 export type ResolvedOptions = Required<Omit<ThreeInitializerOptions, 'onMaxAnisotropy'>> &
 	Pick<ThreeInitializerOptions, 'onMaxAnisotropy'>;
 
@@ -18,7 +16,7 @@ export type ResolvedOptions = Required<Omit<ThreeInitializerOptions, 'onMaxAniso
 export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions {
 	const scale = options.sceneScale || 'm';
 
-	// All Rhino geometry is normalized to METERS (1 unit = 1 meter), sceneScale just changes the viewing perspective
+	// Geometry is always in meters; sceneScale only changes the viewing perspective (camera/light/grid magnitudes).
 	const scaleDefaults = {
 		mm: {
 			cameraDistance: 20,
@@ -79,11 +77,9 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 
 	const defaults = scaleDefaults[scale];
 
-	// The chosen look seeds the lighting/material defaults (tone mapping, AO, IBL, fill). It sits BELOW
-	// explicit per-field options (those still win) and ABOVE the plain per-field defaults — so it only
-	// fills what the caller left unspecified. Always a real preset: the default IS a look ('studio'),
-	// so there's no "no look" state to represent. A look never touches edges/grid — those resolve from
-	// their own configs below.
+	// The chosen look seeds lighting/material defaults (tone mapping, AO, IBL, fill): below explicit
+	// per-field options, above the plain per-field defaults. Never touches edges/grid — those resolve
+	// from their own configs below.
 	const look = options.look ?? DEFAULT_LOOK;
 	const preset = LOOK_PRESETS[look];
 
@@ -91,12 +87,10 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 		sceneScale: scale,
 		look,
 		camera: {
-			// Default 3/4 iso: behind-left and ABOVE the model. Derived from the scene up axis rather
-			// than a literal Z-up vector, so a Y-up scene gets an overhead iso instead of a
-			// below-horizon view.
-			// `cameraDistance` was historically a PER-COMPONENT magnitude on a (-d, -d, d) vector, so the
-			// effective orbit radius is d*sqrt(3). Preserved exactly so this change reorients the default
-			// view without also changing how zoomed-in every scene starts.
+			// Default 3/4 iso (behind-left, above), derived from the scene up axis so a Y-up scene still
+			// gets an overhead iso rather than a below-horizon view.
+			// cameraDistance was historically a per-component magnitude on a (-d,-d,d) vector (orbit
+			// radius d*sqrt(3)) — preserved so switching the derivation doesn't also rezoom every scene.
 			position:
 				options.camera?.position ||
 				isoOffset(
@@ -112,8 +106,8 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 		lighting: {
 			enableSunlight: options.lighting?.enableSunlight ?? true,
 			sunlightIntensity: options.lighting?.sunlightIntensity ?? 1,
-			// Sun overhead and offset to one side, expressed in the scene basis so it stays overhead in
-			// any up convention (a hardcoded +Z height made the sun near-horizontal in a Y-up scene).
+			// Expressed in the scene basis so the sun stays overhead in any up convention (a hardcoded
+			// +Z height made it near-horizontal in a Y-up scene).
 			sunlightPosition:
 				options.lighting?.sunlightPosition ||
 				sunOffset(
@@ -122,16 +116,15 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 					defaults.lightHeight
 				),
 			ambientLightColor: options.lighting?.ambientLightColor || new THREE.Color(0x404040),
-			// The look sets ambient low across the board — the hemisphere fill + env carry the lift, so
-			// flat ambient is only a thin floor keeping shadows off pure black. Explicit option still wins.
+			// Looks keep ambient low; hemisphere fill + env carry the lift, ambient is just a floor
+			// against pure black shadows.
 			ambientLightIntensity: options.lighting?.ambientLightIntensity ?? preset.ambientIntensity,
-			sunlightColor: options.lighting?.sunlightColor || 0xffffff, // Default to white sunlight
-			// Direction-aware fill. The look decides whether it's on (a positive hemisphereIntensity is
-			// what actually creates the light in setupLighting); an explicit option overrides.
+			sunlightColor: options.lighting?.sunlightColor || 0xffffff,
+			// A positive hemisphereIntensity is what actually creates the light in setupLighting.
 			enableHemisphereLight:
 				options.lighting?.enableHemisphereLight ?? preset.hemisphereIntensity > 0,
 			hemisphereSkyColor: options.lighting?.hemisphereSkyColor ?? 0xdfe6ff,
-			// A slightly warm ground tint reads as bounced light and keeps fill from desaturating colour.
+			// Slightly warm ground tint reads as bounced light, keeps fill from desaturating colour.
 			hemisphereGroundColor: options.lighting?.hemisphereGroundColor ?? 0x6b5f52,
 			hemisphereIntensity: options.lighting?.hemisphereIntensity ?? preset.hemisphereIntensity
 		},
@@ -162,9 +155,8 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			preserveDrawingBuffer: options.render?.preserveDrawingBuffer ?? false,
 			ambientOcclusion: options.render?.ambientOcclusion ?? preset.ambientOcclusion,
 			aoIntensity: options.render?.aoIntensity ?? 1,
-			// Cap AO buffers at 1× by default — the biggest lever on GTAO cost on high-DPI displays.
+			// Cap AO buffers at 1x — biggest lever on GTAO cost at high DPI.
 			aoPixelRatio: options.render?.aoPixelRatio ?? 1,
-			// On-demand rendering (audit P4): draw only when something changed. Opt-out flag.
 			onDemand: options.render?.onDemand ?? true
 		},
 		controls: {
@@ -178,27 +170,24 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			maxDistance: options.controls?.maxDistance || Infinity
 		},
 		grid: {
-			// Defaults mirror createGrid's so the two never drift. Grid is an independent overlay — a
-			// look never toggles it.
+			// Mirrors createGrid's own defaults so the two never drift. A look never toggles the grid.
 			enabled: options.grid?.enabled ?? false,
 			cellSize: options.grid?.cellSize ?? 1,
 			majorEvery: options.grid?.majorEvery ?? 10,
 			cellColor: options.grid?.cellColor ?? 0x888888,
 			majorColor: options.grid?.majorColor ?? 0x444444,
 			fadeDistance: options.grid?.fadeDistance ?? 100,
-			// The "ground" plane is the one orthogonal to the scene up axis, so the grid lies under the
-			// model regardless of up convention (Z-up Rhino → 'z'; Y-up → 'y'). Explicit `plane` wins.
+			// Ground plane is orthogonal to the scene up axis (Z-up Rhino -> 'z', Y-up -> 'y').
 			plane: options.grid?.plane ?? upToAxis(options.environment?.sceneUp ?? defaultUp)
 		},
 		gizmo: {
 			enabled: options.gizmo?.enabled ?? false
 		},
 		edges: {
-			// Defaults mirror addEdges' so the two never drift. Edges are an independent overlay — a
-			// look never toggles them.
+			// Mirrors addEdges' own defaults so the two never drift. A look never toggles edges.
 			enabled: options.edges?.enabled ?? false,
-			// No color default: leaving it undefined lets addEdges derive each mesh's edge color from
-			// its own surface material (darkened). Set a color explicitly to force one uniform tint.
+			// Undefined lets addEdges derive each mesh's edge color from its own surface material
+			// (darkened); set explicitly to force one uniform tint.
 			color: options.edges?.color,
 			darken: options.edges?.darken,
 			width: options.edges?.width ?? 1.5,
@@ -206,8 +195,7 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			distanceFade: options.edges?.distanceFade ?? true
 		},
 		measure: {
-			// Visual defaults live in createMeasureTool; only `enabled` needs a value here, the rest
-			// pass through (undefined → the tool's own default).
+			// Visual defaults live in createMeasureTool; the rest pass through undefined to its own defaults.
 			enabled: options.measure?.enabled ?? false,
 			snapPixels: options.measure?.snapPixels,
 			color: options.measure?.color,
@@ -220,7 +208,7 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			onObjectSelected: options.events?.onObjectSelected,
 			onMeshMetadataClicked: options.events?.onMeshMetadataClicked,
 			onMeshDoubleClicked: options.events?.onMeshDoubleClicked,
-			selectionColor: options.events?.selectionColor || '#ff0000', // Default to red
+			selectionColor: options.events?.selectionColor || '#ff0000',
 			enableEventHandlers: options.events?.enableEventHandlers ?? true,
 			enableKeyboardControls: options.events?.enableKeyboardControls ?? true,
 			enableClickToFocus: options.events?.enableClickToFocus ?? true,

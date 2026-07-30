@@ -254,7 +254,16 @@ _down_ on a memory-constrained host, not to switch features on.
 
 ## How to tell a cache is working
 
-Every solve response carries a `Server-Timing` header. The useful verdicts:
+**Start at `/admin/compute`.** The Caching panel shows a live hit rate for the solve cache and the
+definition cache, with the entry/byte counts behind it and the env var that sizes each. A hit rate
+that climbs while you scrub a slider is the system working; one that stays at 0% means every solve is
+reaching Rhino.
+
+Counters are per Selva instance and reset when it restarts — behind a load balancer, each instance
+reports only its own. A rate of `—` means nothing has consulted that cache yet, which is different
+from 0%.
+
+For a single request, every solve response carries a `Server-Timing` header:
 
 | What you see                                      | Means                                                       |
 | ------------------------------------------------- | ----------------------------------------------------------- |

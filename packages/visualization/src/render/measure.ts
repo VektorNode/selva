@@ -6,18 +6,16 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import type { LabelLayer, LabelHandle } from './label-layer';
 
 /**
- * A two-click distance measurement tool — the CAD verb users expect. Click a point, click a second,
- * read the distance off a label on the connecting line; a third click starts a new measurement.
+ * Two-click distance measurement. Click a point, click a second, read the distance off a label on
+ * the connecting line; a third click starts fresh.
  *
- * Picking snaps to geometry so measurements are exact, not "wherever the ray happened to land":
- * on a mesh hit we snap to the nearest vertex of the struck triangle if it's within
- * {@link MeasureOptions.snapPixels} on screen, else use the raw hit point. This is a cheap local
- * snap (three candidate vertices), no spatial index — enough for clean vertex-to-vertex measurement
- * without the cost/complexity of full edge/midpoint snapping (a later refinement).
+ * Picking snaps to geometry (nearest vertex of the struck triangle, within
+ * {@link MeasureOptions.snapPixels}) so measurements land exactly on vertices rather than wherever
+ * the ray happened to hit — a cheap local snap (three candidate vertices, no spatial index).
  *
- * The tool is dormant until {@link MeasureTool.setEnabled}(true). While enabled it intercepts clicks
- * (the caller forwards them and swallows the event when {@link MeasureTool.handleClick} returns
- * true) so measuring doesn't also select objects.
+ * Dormant until {@link MeasureTool.setEnabled}(true). While enabled it intercepts clicks (caller
+ * forwards them and swallows the event when {@link MeasureTool.handleClick} returns true) so
+ * measuring doesn't also select objects.
  */
 
 export interface MeasureTool {
@@ -25,11 +23,7 @@ export interface MeasureTool {
 	isEnabled(): boolean;
 	/** Process a click. Returns true if the tool consumed it (caller should not also select). */
 	handleClick(event: MouseEvent): boolean;
-	/**
-	 * Process pointer movement to preview the next snap point — a ghost marker tracks the cursor and
-	 * jumps to the vertex a click would snap to, so users can aim before committing. No-op when the
-	 * tool is disabled. The caller forwards mousemove; nothing is consumed.
-	 */
+	/** Preview the next snap point via a ghost marker. No-op when disabled; never consumes the event. */
 	handleMove(event: MouseEvent): void;
 	/** Clear the current measurement (markers, line, label). */
 	clear(): void;
@@ -44,15 +38,13 @@ export interface MeasureOptions {
 	/** CSS class applied to the distance label, for styling. */
 	labelClassName?: string;
 	/**
-	 * The model's unit (pass `data.modelunits`). The scene is in meters, so the default formatter
-	 * converts and labels in this unit — e.g. a mm model reads "25.0 mm", not "0.025 m". Defaults
-	 * to meters. Ignored when a custom `format` is supplied.
+	 * The model's unit (pass `data.modelunits`). Scene is in meters; default formatter converts and
+	 * labels in this unit (e.g. "25.0 mm" not "0.025 m"). Defaults to meters. Ignored if `format` given.
 	 */
 	displayUnit?: string;
 	/**
-	 * Format the measurement → label text. Receives the straight-line `distance` and the per-axis
-	 * `delta` (|b − a| on each axis), both in **meters**. May return multi-line text or HTML; the
-	 * default renders the total plus a Δx/Δy/Δz breakdown in `displayUnit`. Overrides `displayUnit`.
+	 * Format the measurement → label text. Receives `distance` and per-axis `delta` (|b − a|), both
+	 * in meters. May return multi-line text/HTML; default renders total + Δx/Δy/Δz in `displayUnit`.
 	 */
 	format?: (distance: number, delta: THREE.Vector3) => string;
 }
@@ -62,11 +54,9 @@ interface MeasureDeps {
 	scene: THREE.Scene;
 	getActiveCamera: () => THREE.Camera;
 	/**
-	 * The current orbit target (e.g. `controls.target`). Used to scale the line/point pick
-	 * threshold with the view: the tolerance is a fraction of the camera→target distance, so it
-	 * stays roughly constant on screen wherever the user has framed the model. Optional for
-	 * backward compatibility — without it the perspective fallback is the camera's distance to the
-	 * world origin, which misjudges the threshold for off-origin content. Thread it in when you can.
+	 * The current orbit target (e.g. `controls.target`). Scales the line/point pick threshold as a
+	 * fraction of camera→target distance so it stays constant on screen regardless of framing.
+	 * Optional; without it the fallback is distance-to-origin, which misjudges off-origin content.
 	 */
 	getViewTarget?: () => THREE.Vector3;
 	labelLayer: LabelLayer;
@@ -79,12 +69,8 @@ const DEFAULT_COLOR = 0xffcc00;
 // comfortable few-pixel grab band at typical framing without snapping to far-off geometry.
 const LINE_PICK_FRACTION = 0.015;
 
-/**
- * Scene geometry is loaded in meters (the webdisplay parser scales to meters when
- * `allowScaling` is on), so distances come out in meters. To label in the model's
- * own unit, convert with `metersPerUnit` and append `suffix`. Keep this in sync
- * with the webdisplay parser's SCALE_FACTORS.
- */
+// Scene geometry loads in meters (webdisplay parser scales when `allowScaling` is on). Keep in
+// sync with the webdisplay parser's SCALE_FACTORS.
 const UNIT_DISPLAY: Record<string, { metersPerUnit: number; suffix: string }> = {
 	Millimeters: { metersPerUnit: 1 / 1000, suffix: 'mm' },
 	Centimeters: { metersPerUnit: 1 / 100, suffix: 'cm' },
@@ -93,23 +79,19 @@ const UNIT_DISPLAY: Record<string, { metersPerUnit: number; suffix: string }> = 
 	Feet: { metersPerUnit: 1 / 3.28084, suffix: 'ft' }
 };
 
-/**
- * Build a `meters → label` formatter for the given display unit (defaults to meters).
- * @internal exported for tests
- */
+/** @internal exported for tests */
 export function makeFormatter(displayUnit?: string): (n: number) => string {
 	const unit = (displayUnit && UNIT_DISPLAY[displayUnit]) || UNIT_DISPLAY.Meters;
 	return (meters: number) => `${(meters / unit.metersPerUnit).toPrecision(3)} ${unit.suffix}`;
 }
 
 /**
- * World-space raycast threshold for picking lines/points (which have no surface area and are only
- * "hit" when the ray passes within this distance of them). A fixed fraction of the view size keeps
- * the grab band roughly constant on screen as the user zooms:
- * - perspective: fraction of the camera→target distance (the framed view size). Falls back to the
- *   camera's distance to the world origin when no target is supplied — see `MeasureDeps.getViewTarget`.
- * - orthographic: fraction of the visible frustum height, `(top − bottom) / zoom`. Ortho zoom
- *   changes `camera.zoom`, not the camera position, so distance-based scaling would never react.
+ * World-space raycast threshold for picking lines/points, as a fixed fraction of view size so the
+ * grab band stays roughly constant on screen while zooming:
+ * - perspective: fraction of camera→target distance (falls back to distance-to-origin if no
+ *   target — see `MeasureDeps.getViewTarget`).
+ * - orthographic: fraction of frustum height `(top − bottom) / zoom`, since ortho zoom changes
+ *   `camera.zoom` rather than position.
  * @internal exported for tests
  */
 export function pickThreshold(camera: THREE.Camera, viewTarget?: THREE.Vector3): number {
@@ -123,12 +105,9 @@ export function pickThreshold(camera: THREE.Camera, viewTarget?: THREE.Vector3):
 }
 
 /**
- * The vertex indices to consider snapping to for a given hit, by object type:
- * - Mesh: the three vertices of the struck triangle (`hit.face`).
- * - Line / LineSegments: the two endpoints of the struck segment (`hit.index`, `hit.index + 1`).
- * - Points: the struck vertex (`hit.index`).
- * Returns null when the hit carries no usable index info (e.g. a fat `Line2`), so the caller keeps
- * the raw hit point.
+ * Vertex indices to consider snapping to, by object type: Mesh → struck triangle's 3 vertices;
+ * Line/LineSegments → struck segment's 2 endpoints; Points → the struck vertex. Null when the hit
+ * carries no usable index (e.g. a fat `Line2`), so the caller keeps the raw hit point.
  */
 function snapCandidateIndices(hit: THREE.Intersection): number[] | null {
 	const obj = hit.object;
@@ -156,12 +135,9 @@ function snapCandidateIndices(hit: THREE.Intersection): number[] | null {
 }
 
 /**
- * Snap a raycast hit to the nearest geometry vertex within `snapPixels` on screen; otherwise return
- * the raw hit point. Works for meshes (triangle vertices), lines (segment endpoints), and points
- * (the vertex itself). Pure (no DOM) so it's unit-testable: it takes the screen size explicitly
- * rather than reading the canvas. Exported for that reason.
- *
- * Falls back to the raw point for hits without usable vertex indices or positions.
+ * Snap a raycast hit to the nearest geometry vertex within `snapPixels` on screen, else return the
+ * raw hit point. Pure (no DOM) and takes screen size explicitly, so it's unit-testable — exported
+ * for that reason.
  */
 export function snapToVertex(
 	hit: THREE.Intersection,
@@ -317,10 +293,8 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 		const camera = getActiveCamera();
 		raycaster.setFromCamera(pointer, camera);
 
-		// Lines and points have no surface area, so they're only "hit" when the ray passes within a
-		// world-space threshold of them — left at the default ~1 unit they're nearly impossible to
-		// click. Scale the threshold with the view (camera→target distance, or the ortho frustum
-		// height under zoom) so the pick tolerance stays roughly constant on screen — see pickThreshold.
+		// Lines/points have no surface area, so raycast threshold matters — the default ~1 unit is
+		// nearly unclickable. pickThreshold scales it with the view so it stays constant on screen.
 		const threshold = pickThreshold(camera, getViewTarget?.());
 		raycaster.params.Line!.threshold = threshold;
 		raycaster.params.Points!.threshold = threshold;

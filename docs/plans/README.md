@@ -15,8 +15,7 @@ they didn't have). This index is the single source of truth for sequence. As of 
 | [edge-overlay-open](./edge-overlay-open.md) — full plan [archived](./archive/edge-overlay-performance.md)                    | Phases 0–3 shipped                                   | B — residue      |
 | [display-pipeline-open](./display-pipeline-open.md) — full audit [archived](./archive/display-pipeline-performance-audit.md) | most shipped; P1-C#/P3/fat-branch open               | B — residue      |
 | [plugin-compat-gate](./plugin-compat-gate.md)                                                                                | not started (planning)                               | B — operator     |
-| [solve-package](./solve-package.md)                                                                                          | Phases 0–4 done; Phase 5 (hashing) + 6 (Parafa) open | **A — refactor** |
-| [caching-simplification](./caching-simplification.md)                                                                        | proposed — supersedes solve-package Phase 5          | B — correctness  |
+| [solve-package](./solve-package.md)                                                                                          | Phases 0–4 done; Phase 5 superseded, 6 (Parafa) open | **A — refactor** |
 | [compute-package-cleanup](./compute-package-cleanup.md)                                                                      | not started, **unblocked** (viz-package done)        | **A — refactor** |
 | [verify-slider-drag-solve-path](./verify-slider-drag-solve-path.md)                                                          | not started (measurement)                            | B — gate         |
 | [drawing-layout-defects](./drawing-layout-defects.md)                                                                        | not started — **register, 14 confirmed + 19 leads**  | B — correctness  |
@@ -31,9 +30,15 @@ display-pipeline. Kept for the _why_:
   Two separate leaks have now been found on that seam, so the rationale is worth keeping reachable.
 - [caching-audit-2026-07](./archive/caching-audit-2026-07.md) — every finding closed or rehomed:
   D1–D3 fixed, **F1 measured and fixed (a live GPU leak)**, F3 documented in
-  [Caching.md](../Caching.md), F2 absorbed by [caching-simplification](./caching-simplification.md).
-  Worth reading once: it found F1 by reading the caches **as a system**, which is the one class of
-  bug a per-cache review cannot catch.
+  [Caching.md](../Caching.md), F2 absorbed by
+  [caching-simplification](./archive/caching-simplification.md). Worth reading once: it found F1 by
+  reading the caches **as a system**, which is the one class of bug a per-cache review cannot catch.
+- [caching-simplification](./archive/caching-simplification.md) (all 4 phases, 2026-07-30) — ten
+  cache names collapsed to three, the redundant L2 tier deleted (~840 lines), three env gates
+  removed leaving two size knobs, and hit rates surfaced on `/admin/compute`. Holds the **reasoning
+  for what was deliberately kept**: `ISolveResultCache` as the Redis seam, single-flight made
+  unconditional, and `solveCacheLimit` left dormant rather than migrated away. Also records why
+  merging the two definition caches was rejected — read it before reviving any of the three.
 
 ## Hard dependencies
 

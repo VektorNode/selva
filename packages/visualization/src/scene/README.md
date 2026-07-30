@@ -33,13 +33,12 @@ const outliner = createSceneOutliner(scene, { sets: { hidden, selected, collapse
 ```
 
 Pass plain `Set`s for a headless host. Pass Svelte's `SvelteSet` and every mutation the outliner
-makes — `toggleObject`, `toggleLayer`, `select` — becomes a reactive read for the component
-rendering it, with no subscribe/emit machinery in between. `SceneManager.svelte` in `@selvajs/ui`
-does exactly that, in about 70 lines of script.
+makes — `toggleObject`, `toggleLayer`, `select` — becomes a reactive read with no subscribe/emit
+machinery in between. `SceneManager.svelte` in `@selvajs/ui` does exactly that, in ~70 lines of script.
 
-The catch: a framework observes the **set**, not the outliner. So a reactive host must read state
-through the set it supplied (`hidden.has(getTrackingKey(obj))`) rather than through
-`visibility.isHidden(obj)`, which reaches the same set by a plain reference the framework cannot see.
+The catch: a framework observes the **set**, not the outliner. A reactive host must read state
+through the set it supplied (`hidden.has(getTrackingKey(obj))`), not through `visibility.isHidden(obj)`,
+which reaches the same set by a plain reference the framework can't see.
 
 Two fields are not sets and so are handled separately: `searchQuery` (a plain property the host
 assigns from its own state) and the shift-range anchor (push-notified via
@@ -52,12 +51,12 @@ passed to `SceneManager.svelte` as a prop.
 
 ## Identity — call `applyTo()` after every solve
 
-A solve does not update the scene in place: `updateScene` discards every object and rebuilds it. So
-`THREE.Object3D.uuid`, which three assigns per _instance_, answers "which object is this right now"
-but never "is this the same wall the user hid a minute ago".
+A solve doesn't update the scene in place: `updateScene` discards every object and rebuilds it. So
+`THREE.Object3D.uuid`, assigned per _instance_, answers "which object is this right now" but never
+"is this the same wall the user hid a minute ago".
 
-Hidden state is therefore keyed by **stable identity** (`identity.ts`), synthesized from what the
-parse layer records in `userData`:
+Hidden state is keyed by **stable identity** (`identity.ts`), synthesized from what the parse layer
+records in `userData`:
 
 | Priority | Source                                | Applies to                                 |
 | -------- | ------------------------------------- | ------------------------------------------ |

@@ -660,7 +660,7 @@ describe('SolveScheduler', () => {
 			}
 
 			// 3 × 100 bytes > 250 → the oldest entry was evicted.
-			expect(scheduler.cacheStats()).toEqual({ entries: 2, bytes: 200 });
+			expect(scheduler.cacheStats()).toMatchObject({ entries: 2, bytes: 200 });
 			const recheck = scheduler.solve('def', trees[0]);
 			await vi.waitFor(() => expect(queue.length).toBe(4));
 			queue[3].release(makeResponse('1-again'));
@@ -684,7 +684,7 @@ describe('SolveScheduler', () => {
 			queue[0].release(oversized);
 			expect((await first).filename).toBe('big'); // served through…
 
-			expect(scheduler.cacheStats()).toEqual({ entries: 0, bytes: 0 }); // …never retained
+			expect(scheduler.cacheStats()).toMatchObject({ entries: 0, bytes: 0 }); // …never retained
 			const second = scheduler.solve('def', tree);
 			await vi.waitFor(() => expect(queue.length).toBe(2));
 			queue[1].release(makeResponse('big-again'));
@@ -719,14 +719,96 @@ describe('SolveScheduler', () => {
 			setResponseWireSize(response, 100);
 			queue[0].release(response);
 			await first;
-			expect(scheduler.cacheStats()).toEqual({ entries: 1, bytes: 100 });
+			expect(scheduler.cacheStats()).toMatchObject({ entries: 1, bytes: 100 });
 
 			await new Promise((r) => setTimeout(r, 20));
 			const second = scheduler.solve('def', tree); // expired read drops the entry
-			expect(scheduler.cacheStats()).toEqual({ entries: 0, bytes: 0 });
+			expect(scheduler.cacheStats()).toMatchObject({ entries: 0, bytes: 0 });
 			await vi.waitFor(() => expect(queue.length).toBe(2));
 			queue[1].release(makeResponse('two'));
 			await second;
+		});
+
+		// The counters behind the operator-facing hit rate. Without these the
+		// admin panel could report a confident number that means nothing.
+		describe('hit/miss counters', () => {
+			it('counts a cold solve as a miss and its repeat as a hit', async () => {
+				const { executor, queue } = deferredExecutor();
+				const scheduler = new SolveScheduler(executor, baseConfig, {
+					mode: 'queue',
+					cache: { maxEntries: 50 }
+				});
+				const tree = [{ ParamName: 'x', InnerTree: {} } as any];
+
+				const first = scheduler.solve('def', tree);
+				await vi.waitFor(() => expect(queue.length).toBe(1));
+				queue[0].release(makeResponse('one'));
+				await first;
+				expect(scheduler.cacheStats()).toMatchObject({ hits: 0, misses: 1 });
+
+				await scheduler.solve('def', tree); // served from cache
+				expect(scheduler.cacheStats()).toMatchObject({ hits: 1, misses: 1 });
+			});
+
+			it('counts a TTL-expired read as a miss, not a hit', async () => {
+				const { executor, queue } = deferredExecutor();
+				const scheduler = new SolveScheduler(executor, baseConfig, {
+					mode: 'queue',
+					cache: { ttlMs: 10 }
+				});
+				const tree = [{ ParamName: 'x', InnerTree: {} } as any];
+
+				const first = scheduler.solve('def', tree);
+				await vi.waitFor(() => expect(queue.length).toBe(1));
+				queue[0].release(makeResponse('one'));
+				await first;
+
+				await new Promise((r) => setTimeout(r, 20));
+				const second = scheduler.solve('def', tree);
+				// The solve ran again, so this is a miss — which is what a hit rate
+				// is measuring, regardless of why the entry was gone.
+				expect(scheduler.cacheStats()).toMatchObject({ hits: 0, misses: 2 });
+				await vi.waitFor(() => expect(queue.length).toBe(2));
+				queue[1].release(makeResponse('two'));
+				await second;
+			});
+
+			it('counts evictions only under byte pressure, not replacement', async () => {
+				const { executor, queue } = deferredExecutor();
+				const scheduler = new SolveScheduler(executor, baseConfig, {
+					mode: 'queue',
+					cache: { maxEntries: 50, maxBytes: 250 }
+				});
+
+				const trees = ['a', 'b', 'c'].map((n) => [{ ParamName: n, InnerTree: {} } as any]);
+				for (let i = 0; i < 3; i++) {
+					const p = scheduler.solve('def', trees[i]);
+					await vi.waitFor(() => expect(queue.length).toBe(i + 1));
+					const response = makeResponse(String(i + 1));
+					setResponseWireSize(response, 100);
+					queue[i].release(response);
+					await p;
+				}
+				// 3 × 100 > 250 → exactly one entry pushed out by the byte budget.
+				expect(scheduler.cacheStats()).toMatchObject({ evictions: 1 });
+			});
+
+			it('keeps counters across clearCache so a hit rate stays comparable', async () => {
+				const { executor, queue } = deferredExecutor();
+				const scheduler = new SolveScheduler(executor, baseConfig, {
+					mode: 'queue',
+					cache: { maxEntries: 50 }
+				});
+				const tree = [{ ParamName: 'x', InnerTree: {} } as any];
+
+				const first = scheduler.solve('def', tree);
+				await vi.waitFor(() => expect(queue.length).toBe(1));
+				queue[0].release(makeResponse('one'));
+				await first;
+
+				scheduler.clearCache();
+				expect(scheduler.cacheStats()).toMatchObject({ entries: 0, bytes: 0, misses: 1 });
+			});
 		});
 
 		// Regression (issue 50): a cache hit returned before enqueue(), so in

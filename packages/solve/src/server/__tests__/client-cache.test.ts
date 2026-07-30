@@ -40,6 +40,12 @@ vi.mock('@selvajs/compute', () => {
 			createdSchedulerOptions.push(options);
 			const scheduler = {
 				disposed: false,
+				// Each scheduler owns its own solve cache; `solveCacheStats()` sums
+				// them, so tests set distinct numbers per client to prove the sum.
+				stats: { entries: 0, bytes: 0, hits: 0, misses: 0, evictions: 0 },
+				cacheStats() {
+					return this.stats;
+				},
 				dispose() {
 					this.disposed = true;
 					disposedSchedulers.push(this);
@@ -280,6 +286,55 @@ describe('createClientCache — per-request telemetry sequence counters', () => 
 		onSettle({ key: 'k' }, { status: 'success', fromCache: true, durationMs: 0, response: {} });
 		expect(entry.solveMeta.seq).toBe(3);
 		expect(entry.solveMeta.last).toEqual({ fromCache: true, definitionReuploaded: undefined });
+	});
+});
+
+// Each warm client owns a separate solve cache, so an operator-facing hit rate
+// has to sum them — one server's numbers wouldn't describe the deployment.
+describe('createClientCache — solveCacheStats', () => {
+	/** Reach the mock scheduler's mutable stats for a warm client. */
+	function statsOf(entry: { scheduler: unknown }) {
+		return (entry.scheduler as { stats: Record<string, number> }).stats;
+	}
+
+	it('reports zeroes and no warm clients before anything is cached', () => {
+		const cache = createClientCache(baseConfig());
+		expect(cache.solveCacheStats()).toEqual({
+			warmClients: 0,
+			entries: 0,
+			bytes: 0,
+			hits: 0,
+			misses: 0,
+			evictions: 0
+		});
+	});
+
+	it('sums counters across every warm client', async () => {
+		const cache = createClientCache(baseConfig());
+		const a = await cache.getClient(server('a'));
+		const b = await cache.getClient(server('b'));
+
+		Object.assign(statsOf(a), { entries: 2, bytes: 100, hits: 7, misses: 3, evictions: 1 });
+		Object.assign(statsOf(b), { entries: 5, bytes: 250, hits: 1, misses: 9, evictions: 4 });
+
+		expect(cache.solveCacheStats()).toEqual({
+			warmClients: 2,
+			entries: 7,
+			bytes: 350,
+			hits: 8,
+			misses: 12,
+			evictions: 5
+		});
+	});
+
+	it('drops an evicted client’s numbers — the totals describe live caches only', async () => {
+		const cache = createClientCache(baseConfig());
+		const a = await cache.getClient(server('a'));
+		Object.assign(statsOf(a), { entries: 2, bytes: 100, hits: 7, misses: 3, evictions: 1 });
+		expect(cache.solveCacheStats().hits).toBe(7);
+
+		cache.evict('a');
+		expect(cache.solveCacheStats()).toMatchObject({ warmClients: 0, hits: 0 });
 	});
 });
 

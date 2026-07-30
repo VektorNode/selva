@@ -23,11 +23,8 @@ interface FastPathData {
 	index: Uint32Array | Uint16Array | null;
 }
 
-/**
- * The fast extractor consumes plain non-interleaved float32 xyz + typed index arrays — which is
- * what every geometry in this pipeline has. Anything exotic (interleaved, float64, morphed) falls
- * back to `THREE.EdgesGeometry`, trading speed for guaranteed-identical semantics.
- */
+// Fast extractor needs plain non-interleaved float32 xyz + typed index arrays. Anything exotic
+// (interleaved, float64, morphed) falls back to THREE.EdgesGeometry instead.
 function fastPathData(geometry: THREE.BufferGeometry): FastPathData | null {
 	const position = geometry.getAttribute('position');
 	if (
@@ -49,12 +46,10 @@ function fastPathData(geometry: THREE.BufferGeometry): FastPathData | null {
 	};
 }
 
-/**
- * Content fingerprint for the cross-solve cache: FNV-1a over sampled raw words of the position
- * (and index) arrays plus their lengths and the crease angle. Sampling (head + tail blocks) keeps
- * it ~free even at millions of vertices; two *different* solves colliding would need identical
- * lengths AND identical sampled regions — not a realistic geometry edit.
- */
+// Content fingerprint for the cross-solve cache: FNV-1a over sampled head+tail words of the
+// position/index arrays plus lengths and crease angle. Sampling keeps this ~free at millions of
+// vertices; a collision between different solves would need identical lengths AND identical
+// sampled regions.
 function contentKey(data: FastPathData, thresholdAngle: number): string {
 	const SAMPLE_WORDS = 4096;
 	let hash = 0x811c9dc5;
@@ -85,19 +80,13 @@ function contentKey(data: FastPathData, thresholdAngle: number): string {
 	return `${thresholdAngle}:${data.positions.length}:${indexLength}:${hash >>> 0}`;
 }
 
-/**
- * Cross-solve segment cache. The viewer rebuilds every `BufferGeometry` each solve, so identity
- * caches never hit across solves — this LRU keys on content instead, making "same meshes again"
- * (unchanged inputs, toggling edges, camera-only updates) free. Stores raw segment arrays (CPU
- * only); `LineSegmentsGeometry` uses the array as its backing store without copying, so entries
- * are safely shared across any number of overlays.
- */
+// Cross-solve segment cache. The viewer rebuilds every BufferGeometry each solve, so identity
+// caches never hit across solves — this LRU keys on content instead. CPU-only (no GPU state to
+// dispose), but registered for the same teardown sweep as the GPU caches so it doesn't outlive
+// the last viewer.
 const segmentCache = new Map<string, Float32Array>();
 let segmentCacheBytes = 0;
 
-// CPU-only, so there is nothing to dispose — but up to SEGMENT_CACHE_BYTE_BUDGET of arrays would
-// otherwise sit in memory forever after the last viewer is gone. Registered for the same teardown
-// sweep as the GPU caches.
 registerCacheRelease(() => {
 	segmentCache.clear();
 	segmentCacheBytes = 0;
@@ -129,7 +118,7 @@ function segmentCachePut(key: string, segments: Float32Array): void {
 	}
 }
 
-/** Extract via `THREE.EdgesGeometry` — the slow but universally-correct fallback. */
+/** Slow but universally-correct fallback. */
 function extractViaThree(geometry: THREE.BufferGeometry, thresholdAngle: number): Float32Array {
 	const edges = new THREE.EdgesGeometry(geometry, thresholdAngle);
 	const positions = edges.attributes.position
@@ -179,9 +168,9 @@ function getExtractionWorker(): Worker | null {
 		return null;
 	}
 	try {
-		// Blob URL keeps the library bundler-agnostic (no `new Worker(new URL(...))` magic). The URL
-		// is deliberately never revoked: revoking before the worker finishes fetching is
-		// unspecified behavior, and one blob URL for a process-lifetime singleton is negligible.
+		// Blob URL keeps this bundler-agnostic (no `new Worker(new URL(...))`). Never revoked:
+		// revoking before the worker finishes fetching is unspecified behavior, and this is a
+		// process-lifetime singleton.
 		const url = URL.createObjectURL(
 			new Blob([edgeExtractWorkerSource()], { type: 'text/javascript' })
 		);
@@ -199,8 +188,8 @@ function getExtractionWorker(): Worker | null {
 			else pending.reject(new Error(error ?? 'edge extraction failed in worker'));
 		};
 		worker.onerror = () => {
-			// Worker died (CSP, OOM, script error): fail everything in flight — callers fall back to
-			// inline extraction — and never try the worker again this session.
+			// Worker died (CSP, OOM, script error): fail everything in flight and never retry the
+			// worker this session — callers fall back to inline extraction.
 			for (const pending of pendingRequests.values()) {
 				pending.reject(new Error('edge extraction worker crashed'));
 			}
@@ -232,11 +221,7 @@ function extractInWorker(
 	});
 }
 
-/**
- * In-flight dedupe: N meshes with identical content (or repeated applies during one extraction)
- * share one worker round-trip. Keyed by content key; cleared when the request settles (results
- * land in the segment cache, which takes over from there).
- */
+// In-flight dedupe: meshes with identical content share one worker round-trip.
 const inFlightExtractions = new Map<string, Promise<Float32Array>>();
 
 /** Asynchronous extraction: cache → worker (large fast-path meshes) → inline fallback. */

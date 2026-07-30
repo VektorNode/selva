@@ -5,64 +5,41 @@ import type * as THREE from 'three';
 // ============================================================================
 
 /**
- * Who may free a GPU resource, in one place.
+ * Who may free a GPU resource, in one place. Exists because ownership used to be prose scattered
+ * across each cache's docblock, enforced by four separate disposal traversals that each had to
+ * rediscover the rules — which is how two leaks happened in one week: F1 (edge line-geometry:
+ * `clearScene` detached overlays without decrementing refcounts once the geometry cache kept source
+ * geometries reachable) and C1 (memo clone: `BufferGeometry.clone()` copies `userData` by reference,
+ * so clones carried the cache-owned flag and were never freed). A third case, cache-owned textures
+ * assigned straight onto materials and freed by every material sweep regardless, turned up auditing
+ * the first two.
  *
- * **Why this module exists.** Two leaks in one week, both the same shape: a cache claimed ownership
- * of a GPU resource, and a disposal walker that had never heard of that claim freed it anyway (or
- * failed to free what nobody owned). The claims were real and documented — in the cache's own
- * docblock, which the walker's author had no reason to read.
- *
- * - **F1** (edge line-geometry): `clearScene` detached overlays without decrementing refcounts, so
- *   nothing ever freed them once the geometry cache started keeping source geometries reachable.
- * - **C1** (memo clone): `BufferGeometry.clone()` copies `userData` by reference, so clones carried
- *   the cache-owned flag and were never freed.
- * - **The texture case** (found 2026-07-30 auditing the above): cache-owned textures are assigned
- *   straight onto materials (`material.map = cached`), and *every* material sweep disposed them
- *   unconditionally — freeing a texture the cache still held and served to other materials.
- *
- * The pattern is not "someone wrote a bug". It is that **ownership was expressed as prose in three
- * separate caches and enforced by four separate traversals**, so each new walker had to rediscover
- * three rules. This module inverts that: ownership is declared here, and walkers ask rather than
- * remember.
- *
- * **The rule, stated once.** A GPU resource has exactly one owner:
- * - a **cache** owns it → the cache frees it on eviction, nobody else ever;
- * - a **module singleton** owns it → nobody frees it, ever;
- * - otherwise the **scene** owns it → whoever tears the scene down frees it.
- *
- * So every disposal path is the same two lines: ask {@link canDisposeGeometry} /
- * {@link canDisposeMaterial} / {@link canDisposeTexture}, and dispose only if the answer is yes.
- * Adding a fifth cache means adding a claim here, not auditing every walker again.
+ * **The rule.** A GPU resource has exactly one owner: a **cache** (frees on eviction, nobody else
+ * ever), a **module singleton** (nobody ever frees it), or else the **scene** (freed on teardown).
+ * Every disposal path is the same: ask {@link canDisposeGeometry} / {@link canDisposeMaterial} /
+ * {@link canDisposeTexture} and dispose only if true. A new cache adds a claim here, not an audit of
+ * every walker.
  */
 
 /**
- * `geometry.userData` tag marking a geometry owned by the cross-solve geometry cache
- * (`parse/webdisplay/geometry-cache.ts`). The cache keeps these alive — GPU buffers included — so
- * the next solve can reuse them, and disposes them itself on eviction.
- *
- * Prefer {@link canDisposeGeometry} over reading this flag directly; the flag is exported because
- * the cache must set and clear it, not so callers can re-implement the check.
+ * `geometry.userData` tag for a geometry owned by the cross-solve geometry cache
+ * (`parse/webdisplay/geometry-cache.ts`), which keeps it (GPU buffers included) for reuse and frees
+ * it itself on eviction. Prefer {@link canDisposeGeometry}; exported only so the cache can set/clear it.
  */
 export const CACHED_GEOMETRY_USERDATA_FLAG = 'selvaGeometryCache';
 
 /**
- * `texture.userData` tag marking a texture owned by the cross-solve texture cache
- * (`parse/webdisplay/texture-cache.ts`).
- *
- * Needed because a cached texture is assigned directly onto materials (`material.map = cached`) and
- * is shared by every material using that URL. Without this, the first material sweep to reach one
- * frees a texture the cache still holds — and the cache then serves a disposed texture to the next
- * mesh that wants it.
+ * `texture.userData` tag for a texture owned by the cross-solve texture cache
+ * (`parse/webdisplay/texture-cache.ts`). A cached texture is assigned directly onto materials
+ * (`material.map = cached`) and shared across every material using that URL — without this flag the
+ * first material sweep to reach one would free a texture the cache still holds and serves elsewhere.
  */
 export const CACHED_TEXTURE_USERDATA_FLAG = 'selvaTextureCache';
 
 /**
  * Materials that must never be disposed: the module-scope singletons in `render/three-materials.ts`,
- * shared across meshes and across solves. Disposing one frees textures still referenced by surviving
- * objects and forces a shader recompile on its next use.
- *
- * Registered at module init by the material module itself, so this module needs no import of it (and
- * no cycle). Consult it via {@link canDisposeMaterial}.
+ * shared across meshes and solves (disposing one would free textures still in use and force a
+ * recompile). Registered by that module at init, avoiding an import cycle here.
  */
 const protectedMaterials = new Set<THREE.Material>();
 
@@ -104,36 +81,27 @@ export function isProtectedMaterial(material: THREE.Material): boolean {
 const cacheReleases = new Set<() => void>();
 
 /**
- * Register a cache's "free everything you hold" function.
- *
- * Caches that hold GPU resources outlive any single scene — that is the point of them — but they do
- * **not** outlive the WebGL context, and nothing else is permitted to free them (that is what the
- * ownership claims above guarantee). So teardown has to free them, and teardown must not need a list
- * of which caches exist.
- *
- * This is why registration is a push, not a pull: a cache declares itself here at module init, and
- * `initThree`'s `dispose()` drains the registry. `render/` therefore frees `parse/`'s caches without
- * importing `parse/` — the layer rule holds, and adding a fifth cache requires no edit to teardown
- * and no host wiring.
+ * Register a cache's "free everything you hold" function. Caches outlive any single scene but not
+ * the WebGL context, so teardown must free them without needing to know which caches exist — a cache
+ * pushes its release function here at module init, and `initThree`'s `dispose()` drains the registry.
+ * This is how `render/` frees `parse/`'s caches without importing `parse/`.
  */
 export function registerCacheRelease(release: () => void): void {
 	cacheReleases.add(release);
 }
 
 /**
- * Free every registered cache. Failures are contained: one throwing cache must not strand the rest.
+ * Free every registered cache. One throwing cache does not stop the rest.
  *
- * Prefer {@link retainCaches} in a viewer — these caches are shared across viewers, so a bare call
- * here while another viewer is live throws away entries it is still using (correct, since they
- * repopulate, but wasteful).
+ * Prefer {@link retainCaches} in a viewer — caches are shared across viewers, so calling this while
+ * another viewer is live discards entries it's still using (they repopulate, but it's wasteful).
  */
 export function releaseAllCaches(): void {
 	for (const release of cacheReleases) {
 		try {
 			release();
 		} catch {
-			// A cache that fails to clear must not prevent the rest from clearing, and teardown has
-			// no sink to report to — the context is already gone.
+			// Teardown has no sink to report to — the context is already gone.
 		}
 	}
 }
@@ -142,13 +110,10 @@ export function releaseAllCaches(): void {
 let cacheRetainCount = 0;
 
 /**
- * Claim the shared caches for the lifetime of one viewer. Returns the release function, which frees
- * every registered cache **only once the last viewer has released** them.
- *
- * Refcounted because the caches are module-level and therefore shared: two viewers on one page
- * (a main view and a thumbnail, say) use the same geometry and texture entries, and the first to
- * unmount must not wipe the second's working set. The last one out frees everything, which is what
- * keeps buffers from outliving the GL contexts they belong to.
+ * Claim the shared caches for the lifetime of one viewer. Returns a release function; the caches are
+ * actually freed only once the last viewer has released them — refcounted because two viewers on one
+ * page (e.g. a main view and a thumbnail) share the same cache entries, and the first to unmount must
+ * not wipe the second's working set.
  */
 export function retainCaches(): () => void {
 	cacheRetainCount++;

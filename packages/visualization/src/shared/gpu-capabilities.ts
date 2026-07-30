@@ -3,17 +3,10 @@
 // ============================================================================
 
 /**
- * Capabilities that only a live `WebGLRenderer` can report, made available to layers that must not
- * import `render/`.
- *
- * The texture cache is the case that motivates this: anisotropic filtering keeps colour maps sharp
- * at grazing angles, the usable maximum is hardware-defined, and only the renderer can ask. But the
- * cache lives in `parse/`, and `render/` must never import `parse/`. Previously this crossed the gap
- * as a host-wired callback (`onMaxAnisotropy`) — which meant a host that forgot it silently got
- * blurry textures, with nothing to indicate why.
- *
- * Inverted here: the renderer *publishes* on init, and interested parties *subscribe* from their own
- * side. Neither layer imports the other, and nothing depends on the host remembering.
+ * Capabilities only a live `WebGLRenderer` can report (e.g. max anisotropy for the texture cache in
+ * `parse/`), made available without `render/` and `parse/` importing each other: the renderer
+ * publishes on init, interested parties subscribe. Previously this crossed via a host-wired callback
+ * (`onMaxAnisotropy`) — a host that forgot it silently got blurry textures.
  */
 
 /** Subscribers notified whenever a renderer reports its capabilities. */

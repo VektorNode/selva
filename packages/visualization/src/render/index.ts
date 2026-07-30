@@ -1,17 +1,14 @@
 /**
- * `render/` — the CAD viewer toolkit: a configured THREE scene (camera, lighting, environment,
- * controls, render loop) plus the overlays that make it read as CAD (edges, grid, nav gizmo,
- * labels, measurement, AO).
+ * `render/` — the CAD viewer toolkit: a configured THREE scene plus the overlays that make it read
+ * as CAD (edges, grid, nav gizmo, labels, measurement, AO).
  *
- * Depends downward on `shared/` only. It never imports `parse/`: hosts that both parse and render
- * wire the two together (see `ThreeInitializerOptions.onMaxAnisotropy`).
+ * Depends downward on `shared/` only; never imports `parse/` (hosts wire the two together via
+ * `ThreeInitializerOptions.onMaxAnisotropy`).
  *
- * `initThree` is the entrypoint and it owns the toolkit: it builds the camera controller, grid,
- * gizmo, measure tool, render pipeline and near-plane fitter, and hands them back on
- * {@link ThreeViewer}. Those factories are therefore not exported — reach the live instances
- * through the viewer (`viewer.grid`, `viewer.measureTool`, `viewer.applyEdges`, …) and configure
- * them up front through {@link ThreeInitializerOptions}. Their handle types are exported so hosts
- * can annotate what they hold.
+ * `initThree` owns the toolkit — camera controller, grid, gizmo, measure tool, render pipeline,
+ * near-plane fitter — and hands the live instances back on {@link ThreeViewer}. Their factories
+ * aren't exported; reach them through the viewer (`viewer.grid`, `viewer.measureTool`, …) and
+ * configure via {@link ThreeInitializerOptions}. Handle types are exported so hosts can annotate.
  *
  * @module render
  */
@@ -61,16 +58,15 @@ export type {
 // Errors & logging
 // ============================================================================
 
-// Defined in `shared/` (every layer throws/logs) but surfaced here: `render/` is the entrypoint
-// consumers import, and they need these to catch failures and route this package's logs.
+// Defined in `shared/` but surfaced here so consumers of this entrypoint can catch failures and
+// route logs without also importing `shared/` directly.
 export { VisualizationError, ErrorCodes } from '../shared/index.js';
 export type { ErrorCode } from '../shared/index.js';
 
 export { getLogger, setLogger, enableDebugLogging } from '../shared/index.js';
 export type { Logger } from '../shared/index.js';
 
-// The look vocabulary. Defined in `shared/` (both this layer and `parse/` need it) but re-exported
-// here so a render-only consumer — the viewer's style picker being the whole point — gets it from
-// the same barrel as `initThree`, without also importing the parse layer.
+// Look vocabulary, defined in `shared/` (shared with `parse/`) but re-exported here so a
+// render-only consumer (e.g. a style picker) doesn't need to import the parse layer.
 export { LOOKS, LOOK_PRESETS, DEFAULT_LOOK, materialAppearanceForLook } from '../shared/index.js';
 export type { Look, LookPreset, MaterialAppearanceOptions } from '../shared/index.js';

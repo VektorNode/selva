@@ -5,9 +5,9 @@ import type { ResolvedOptions } from './defaults.js';
 
 /**
  * Owns the optional postprocessing composer and the two independent reasons to want one: ambient
- * occlusion (a user/look choice) and the screen-space edge fallback (forced on while meshes over the
- * triangle cap are in the scene). Neither knows about the other, so the "is a pipeline wanted, and
- * does it need rebuilding" reconciliation lives here rather than being duplicated at each caller.
+ * occlusion (a user/look choice) and the screen-space edge fallback (forced on while meshes over
+ * the triangle cap are in the scene). Neither knows about the other, so "is a pipeline wanted, and
+ * does it need rebuilding" is reconciled here instead of at each caller.
  */
 export interface PipelineController {
 	/** The live pipeline, or null when neither AO nor the edge fallback wants one. */

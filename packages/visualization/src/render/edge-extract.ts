@@ -1,40 +1,31 @@
 /**
- * Dependency-free crease/boundary edge extraction — the hot core behind `addEdges`.
+ * Dependency-free crease/boundary edge extraction — the hot core behind `addEdges`. Semantically
+ * a drop-in for `THREE.EdgesGeometry(geometry, angle)` (same welding, crease test, boundary
+ * handling, 3+-face quirks), but operates on raw typed arrays with numeric hashing instead of
+ * three's per-vertex string keys (~2.9s/1M triangles) for speed and Worker portability.
  *
- * Semantically a drop-in for `THREE.EdgesGeometry(geometry, angle)` (same 1e-4 vertex welding,
- * same crease test, same boundary-edge handling, same quirks for 3+-face edges), but built for
- * speed and portability:
- *
- * - Operates on raw typed arrays, so extraction is O(triangles) with **numeric** hashing — no
- *   per-vertex template strings, no string-keyed object maps. Phase 0 of
- *   docs/plans/4.edge-overlay-performance.md measured three's string hashing at ~2.9 s per 1M
- *   triangles; this path exists to remove exactly that.
- * - {@link extractEdgeSegments} is a single self-contained function with zero outer captures
- *   (only `Math` and its own arguments), so `Function.prototype.toString` on it yields code that
- *   runs unchanged inside a Worker — {@link edgeExtractWorkerSource} builds that script. Keep it
- *   that way: importing anything into its body silently breaks the worker path.
+ * {@link extractEdgeSegments} has zero outer captures (only `Math` + its args), so
+ * `Function.prototype.toString` yields code that runs unchanged inside a Worker —
+ * {@link edgeExtractWorkerSource} builds that script. Don't import anything into its body; that
+ * silently breaks the worker path.
  */
 
-/** Vertex ids are packed two-per-double in edge keys; above 2^26 vertices the packing overflows. */
+/** Vertex ids pack two-per-double in edge keys; above 2^26 vertices the packing overflows. */
 export const MAX_EXTRACT_VERTICES = 0x4000000; // 2^26
 
 /**
- * Extract crease + boundary edge segments from raw triangle data.
- *
- * @param positions - Non-interleaved xyz triples (a plain `position` attribute array).
- * @param index - Triangle index array, or null for non-indexed soup.
+ * @param index - Triangle indices, or null for non-indexed soup.
  * @param thresholdAngleDeg - Keep edges whose adjacent face normals differ by more than this.
- * @returns Segment endpoint pairs `[x0,y0,z0, x1,y1,z1, ...]` — the exact format
- *   `LineSegmentsGeometry.setPositions` (and `EdgesGeometry.attributes.position.array`) uses.
- * @throws When `positions` holds ≥ 2^26 vertices (see {@link MAX_EXTRACT_VERTICES}) — callers
- *   fall back to `THREE.EdgesGeometry`.
+ * @returns Segment endpoint pairs, same layout as `EdgesGeometry.attributes.position.array`.
+ * @throws If `positions` holds ≥ 2^26 vertices ({@link MAX_EXTRACT_VERTICES}) — callers fall
+ *   back to `THREE.EdgesGeometry`.
  */
 export function extractEdgeSegments(
 	positions: Float32Array,
 	index: Uint32Array | Uint16Array | null,
 	thresholdAngleDeg: number
 ): Float32Array {
-	// NOTE: self-contained by design (worker stringification) — no outer references besides Math.
+	// Self-contained by design (worker stringification) — no outer references besides Math.
 	const PRECISION = 1e4; // same quantization grid as THREE.EdgesGeometry
 	const ID_BITS = 0x4000000; // 2^26 — two ids pack into one float64-exact integer key
 	const thresholdDot = Math.cos((Math.PI / 180) * thresholdAngleDeg);
@@ -201,9 +192,9 @@ export function extractEdgeSegments(
 }
 
 /**
- * Build the source of a Worker that runs {@link extractEdgeSegments} off the main thread.
- * Protocol: receives `{id, positions, index, thresholdAngle}`, replies `{id, segments}` with the
- * segment buffer transferred, or `{id, error}` on failure.
+ * Worker source running {@link extractEdgeSegments} off the main thread. Protocol: receives
+ * `{id, positions, index, thresholdAngle}`, replies `{id, segments}` (buffer transferred) or
+ * `{id, error}`.
  *
  * Relies on `extractEdgeSegments` stringifying to standalone code — guarded by a unit test that
  * evals this source in isolation.

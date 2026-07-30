@@ -1,18 +1,12 @@
 /**
- * The Grasshopper response envelope, declared structurally.
+ * The Grasshopper response envelope, declared structurally rather than imported from
+ * `@selvajs/compute` — this package converts meshes, it doesn't need a Rhino.Compute client
+ * dependency to describe the shape a caller hands it.
  *
- * This is the one place the parse layer knows the shape a Rhino.Compute / Grasshopper solve
- * response arrives in. It is declared here rather than imported from `@selvajs/compute` so that
- * turning a mesh payload into Three.js objects needs no Rhino.Compute client — this package's
- * scope is mesh conversion and the viewer, and unwrapping a Grasshopper response is a shape the
- * caller happens to hand us, not a dependency we need a client for.
- *
- * Declared **structurally and minimally**: only the fields the parser actually reads. Compute's
- * `GrasshopperComputeResponse` is a superset and remains assignable to this, so
- * {@link getThreeMeshesFromComputeResponse} keeps accepting one unchanged. Anything else with the
- * same shape — a WebSocket preview payload, a fixture, a non-Selva backend — works too.
- *
- * @module parse/webdisplay/response-envelope
+ * Declared minimally: only the fields the parser reads. `@selvajs/compute`'s
+ * `GrasshopperComputeResponse` is a superset and stays assignable to this, so
+ * {@link getThreeMeshesFromComputeResponse} keeps accepting one unchanged — as does any other
+ * source with the same shape (WebSocket preview, fixture, non-Selva backend).
  */
 
 /** One value in a data-tree branch: a typed, serialized payload. */

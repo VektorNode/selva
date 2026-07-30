@@ -1,13 +1,7 @@
 /**
- * Base64 decoding for binary mesh payloads.
- *
- * Copied from `@selvajs/compute`'s `core/utils/encoding.ts` (`decodeBase64ToBinary`) rather than
- * imported: it was the last non-trivial reason this package depended on the Rhino.Compute client,
- * and ~20 stable lines are cheaper than that dependency. The two copies are expected to stay
- * identical; the subtleties (forgiving-base64 normalization, the Node pool-slab copy) are the
- * reason this is a copy and not a rewrite.
- *
- * @module shared/encoding
+ * Base64 decoding for binary mesh payloads. Copied (not imported) from `@selvajs/compute`'s
+ * `decodeBase64ToBinary` to avoid depending on the Rhino.Compute client for ~20 stable lines; keep
+ * the two in sync by hand.
  */
 
 import { VisualizationError, ErrorCodes } from './errors.js';
@@ -26,9 +20,7 @@ function getNodeBuffer(): typeof Buffer | undefined {
  *   available in this environment.
  */
 export function decodeBase64ToBinary(base64File: string): Uint8Array {
-	// Forgiving-base64 normalization: strip ASCII whitespace (wrapped /
-	// pretty-printed payloads), then drop trailing padding only where the spec
-	// allows it (total length a multiple of 4).
+	// Forgiving-base64: strip whitespace, then drop trailing padding only where length % 4 allows it.
 	let data = base64File.replace(/[\t\n\f\r ]/g, '');
 	if (data.length % 4 === 0) data = data.replace(/={1,2}$/, '');
 	if (data.length % 4 === 1 || !/^[A-Za-z0-9+/]*$/.test(data)) {
@@ -37,15 +29,12 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
 		});
 	}
 
-	// Prefer Buffer in Node — it's faster and avoids the latin-1 string detour
-	// that atob + charCodeAt requires.
+	// Prefer Buffer in Node: faster, and avoids the atob + charCodeAt latin-1 detour.
 	const Buffer = getNodeBuffer();
 	if (Buffer) {
-		// Copy the bytes out of the Buffer: small Buffer.from results are views
-		// over Node's shared 8 KiB pool slab, so returning a view would retain
-		// the whole slab and expose unrelated pooled bytes to any consumer that
-		// touches `.buffer` (re-wrapping, structuredClone, postMessage transfer).
-		// `new Uint8Array(typedArray)` copies into a fresh, exactly-sized buffer.
+		// Copy out of the Buffer — small Buffer.from results are views over Node's shared 8 KiB pool
+		// slab, so returning one would retain the whole slab and leak unrelated pooled bytes to any
+		// consumer touching `.buffer` (structuredClone, postMessage transfer, etc).
 		return new Uint8Array(Buffer.from(data, 'base64'));
 	}
 	if (typeof globalThis.atob === 'function') {

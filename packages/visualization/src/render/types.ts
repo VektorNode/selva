@@ -103,26 +103,16 @@ export type RenderConfig = {
 	onDemand?: boolean;
 };
 
-/**
- * A ready-to-go visual look. A `look` is a named bundle of LIGHTING/MATERIAL defaults only — it is
- * deliberately decoupled from the CAD overlays (edges, grid), which are driven independently by
- * {@link EdgesConfig}/{@link GridConfig}. Pick one and the viewer looks professional with zero other
- * config; every individual `lighting`/`environment`/`render` option still overrides the preset. Seeds
- * construction defaults and can be re-applied live via `setLook`.
- *
- * - 'technical' (default): matte, drawing-like — neutral tone mapping, low IBL, no fill. Reads like a
- *   CAD shaded view (Rhino/Onshape).
- * - 'studio': balanced presentation — ACES tone mapping, hemisphere fill + lifted HDR so results are
- *   well-lit regardless of the HDR, without washing colour out. The polished "product shot" look.
- * - 'showcase': punchier presentation — ACES, stronger IBL/fill and a touch more exposure.
- */
-/**
- * Look vocabulary lives in `shared/` — both this layer (which applies a look to the live scene) and
- * `parse/` (which bakes `MaterialAppearanceOptions` into materials) need it, and neither may import
- * the other. Re-exported here so `ThreeInitializerOptions` reads as one self-contained option surface.
- */
 import type { Look } from '../shared/index.js';
 
+/**
+ * A named bundle of LIGHTING/MATERIAL defaults, decoupled from the CAD overlays (edges, grid — see
+ * {@link EdgesConfig}/{@link GridConfig}). 'technical' (default) is a matte CAD-shaded look; 'studio'
+ * and 'showcase' add ACES tone mapping and hemisphere fill for punchier presentation.
+ *
+ * Defined in `shared/` (both this layer and `parse/` need it, and neither may import the other) and
+ * re-exported here so `ThreeInitializerOptions` reads as one self-contained option surface.
+ */
 export { LOOKS } from '../shared/index.js';
 export type { Look, LookPreset, MaterialAppearanceOptions } from '../shared/index.js';
 
@@ -255,8 +245,8 @@ export type ThreeInitializerOptions = {
 export type EventConfig = {
 	onBackgroundClicked?: (event: { x: number; y: number }) => void;
 	onObjectSelected?: (object: THREE.Object3D) => void;
-	/** Called when a mesh with metadata is clicked. Receives the mesh's metadata object. */
-	onMeshMetadataClicked?: (metadata: Record<string, string>) => void;
+	/** Called when a mesh with non-empty `userData` is clicked. Receives that `userData` object. */
+	onMeshMetadataClicked?: (metadata: Record<string, unknown>) => void;
 	/** Called when a mesh is double-clicked. Receives the mesh object. */
 	onMeshDoubleClicked?: (object: THREE.Object3D) => void;
 	/** Color to use for highlighting selected meshes. Defaults to red (#ff0000). */

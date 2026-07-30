@@ -1,7 +1,7 @@
 # `@selvajs/solve` — one owner for the solve flow
 
 > **Status: Phases 0–4 DONE (2026-07-30). Phase 5 is SUPERSEDED by
-> [caching-simplification](./caching-simplification.md) — do not implement it from this document.
+> [caching-simplification](./archive/caching-simplification.md) — do not implement it from this document.
 > Phase 6 (verify against Parafa) remains.** Supersedes the open
 > items in [visualization-standalone](./archive/visualization-standalone.md) — §1–§4 **landed** (its §3 chose
 > option 3a), and §5/§6 are absorbed here. Scope: extract the client-side solve orchestration out of
@@ -490,7 +490,7 @@ record from this phase for no additional enforcement.
 ### Phase 5 — consolidate stable-input hashing — ⚠️ SUPERSEDED
 
 > **Do not implement this phase from this document.**
-> [caching-simplification](./caching-simplification.md) replaces it — see that plan's
+> [caching-simplification](./archive/caching-simplification.md) replaces it — see that plan's
 > "Why not Phase 5". The short version: unifying the three hash _derivations_ keeps three tiers that
 > overlap; that plan collapses the tiers instead, which makes most of the unification moot. The
 > analysis below is kept because the constraints it records (what must **not** be flattened) still

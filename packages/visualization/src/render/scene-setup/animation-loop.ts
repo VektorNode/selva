@@ -8,8 +8,8 @@ import type { NearPlaneFitter } from '../near-plane.js';
 import type { RenderPipeline } from '../render-pipeline.js';
 import type { ViewGizmo } from '../view-gizmo.js';
 
-// Resize applied before render so buffer clear and draw happen in the same frame,
-// preventing visible blank frames when the canvas is resized
+// Resize applied before render so buffer clear and draw happen in the same frame — avoids a
+// visible blank frame on resize.
 export function createAnimationLoop(
 	renderer: THREE.WebGLRenderer,
 	scene: THREE.Scene,
@@ -32,10 +32,9 @@ export function createAnimationLoop(
 	let animationId: number | null = null;
 	let lastTime = performance.now();
 
-	// The loop always *ticks* (updates are cheap); it only *renders* when: invalidate() was called
-	// (scene content, style toggles, async edge attach), the active camera moved — a matrix compare
-	// catches every driver: damping, presets, gizmo snaps, near-plane refits — or the safety repaint
-	// interval elapsed, which bounds the staleness of any mutation that forgot to invalidate.
+	// The loop always *ticks* (cheap); it only *renders* when invalidate() was called, the active
+	// camera moved (matrix compare catches damping/presets/gizmo/near-plane), or the idle-repaint
+	// interval elapsed as a safety net for any mutation that forgot to invalidate.
 	let renderRequested = true; // first frame always renders
 	let lastRenderTime = 0;
 	const IDLE_REPAINT_INTERVAL_MS = 500;
@@ -47,8 +46,8 @@ export function createAnimationLoop(
 	};
 
 	const cameraMoved = (activeCamera: THREE.Camera): boolean => {
-		// matrixWorld is normally refreshed by renderer.render — which we're deciding whether to
-		// call — so refresh it here first (cheap: a camera has no deep subtree).
+		// renderer.render normally refreshes matrixWorld, but we're deciding whether to call it — so
+		// refresh here first (cheap: a camera has no deep subtree).
 		activeCamera.updateMatrixWorld();
 		const moved =
 			lastCamera !== activeCamera ||
@@ -62,8 +61,7 @@ export function createAnimationLoop(
 		return moved;
 	};
 
-	// Pointer/wheel activity is a catch-all for click-driven scene mutations (measure points,
-	// selection highlights) whose code paths predate on-demand rendering.
+	// Catch-all for click-driven mutations (measure points, selection highlights) predating on-demand rendering.
 	const canvas = renderer.domElement;
 	const pointerEvents = ['pointerdown', 'pointerup', 'wheel'] as const;
 	if (onDemand) {
@@ -76,8 +74,8 @@ export function createAnimationLoop(
 		const { width, height } = getCanvasSize();
 		if (width === 0 || height === 0) return;
 
-		// Must floor, not round: renderer.setSize floors the buffer size, and a mismatched rounding
-		// here makes the comparison never settle — the resize branch would then run every frame.
+		// Must floor (not round) to match renderer.setSize's own flooring — otherwise the size
+		// comparison below never settles and the resize branch runs every frame.
 		const newW = Math.floor(width * pixelRatio);
 		const newH = Math.floor(height * pixelRatio);
 
@@ -86,12 +84,9 @@ export function createAnimationLoop(
 			renderer.setSize(width, height, false);
 			camera.aspect = width / height;
 			camera.updateProjectionMatrix();
-			// Reshape the orthographic frustum too, if it's the active projection.
-			cameraController.updateAspect(width, height);
-			// Keep the AO composer's render targets in step with the canvas.
-			getRenderPipeline?.()?.setSize(width, height, pixelRatio);
-			// CSS2D overlay matches the canvas's CSS size (not the pixel-ratio buffer size).
-			labelLayer?.setSize(width, height);
+			cameraController.updateAspect(width, height); // also reshapes the ortho frustum if active
+			getRenderPipeline?.()?.setSize(width, height, pixelRatio); // keep AO composer targets in step
+			labelLayer?.setSize(width, height); // CSS2D overlay uses CSS size, not the pixel-ratio buffer
 			invalidate();
 		}
 	};
@@ -109,23 +104,19 @@ export function createAnimationLoop(
 			controls.update();
 		}
 
-		// Keep the grid centered on the camera so it reads as infinite.
-		if (grid) grid.update(getActiveCamera().position);
+		if (grid) grid.update(getActiveCamera().position); // recenter on camera so it reads as infinite
+		if (gizmo) gizmo.update(delta); // fade/spin animation, no-op when idle
 
-		// Advance the gizmo's fade/spin animation (no-op when idle).
-		if (gizmo) gizmo.update(delta);
-
-		// Refit the perspective near plane to the camera↔content gap (after controls moved the
-		// camera, before anything renders) so depth precision tracks the viewing distance.
+		// Refit near plane after controls moved the camera, before anything renders, so depth
+		// precision tracks viewing distance.
 		if (nearFitter) nearFitter.update();
 
 		onFrame?.(delta);
 
 		const activeCamera = getActiveCamera();
 
-		// On-demand gate: skip the draw (the expensive part, especially with the AO composer) when
-		// nothing changed. Ticking continues regardless, so damping/tweens re-trigger via the camera
-		// compare on their next movement.
+		// Skip the draw (expensive, especially with the AO composer) when nothing changed. Ticking
+		// continues regardless, so damping/tweens re-trigger via the camera compare on next movement.
 		if (onDemand) {
 			const shouldRender =
 				renderRequested ||
@@ -138,18 +129,16 @@ export function createAnimationLoop(
 
 		const renderPipeline = getRenderPipeline?.();
 		if (renderPipeline) {
-			// AO path: composer owns the render. Retarget to the active camera in case 2D/3D swapped.
+			// AO path: composer owns the render. Retarget in case 2D/3D swapped.
 			renderPipeline.setCamera(activeCamera);
 			renderPipeline.render(delta);
 		} else {
 			renderer.render(scene, activeCamera);
 		}
 
-		// HTML labels follow their 3D anchors — render the DOM overlay against the active camera.
-		if (labelLayer) labelLayer.render(scene, activeCamera);
+		if (labelLayer) labelLayer.render(scene, activeCamera); // HTML labels follow their 3D anchors
 
-		// The gizmo draws as an overlay in a corner viewport with its own clear; render it last so it
-		// sits on top of the scene.
+		// Gizmo draws as a corner-viewport overlay with its own clear; render last so it sits on top.
 		if (gizmo) gizmo.render(renderer);
 	};
 

@@ -1,18 +1,7 @@
 /**
- * Logging facility for the visualization package.
- *
- * Deliberately local rather than imported from `@selvajs/compute`: logging is not a compute
- * concern, and it was over half of this package's dependency on the Rhino.Compute client. The
- * shape mirrors compute's logger exactly, so a host that wants unified logging points both at the
- * same sink:
- *
- * ```ts
- * import { setLogger } from '@selvajs/visualization/shared';
- * import { getLogger } from '@selvajs/compute';
- * setLogger(getLogger());
- * ```
- *
- * @module shared/logger
+ * Logging facility for the visualization package. Deliberately local rather than imported from
+ * `@selvajs/compute` (logging isn't a compute concern). Mirrors compute's logger shape so a host
+ * wanting one sink for both can call `setLogger(computeLogger.getLogger())`.
  */
 
 import { VisualizationError, ErrorCodes } from './errors.js';

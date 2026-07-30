@@ -10,40 +10,40 @@ re-exported from `render/`, which is the barrel a viewer host already imports.
 
 ## Contents
 
-| File                  | Owns                                                                      |
-| --------------------- | ------------------------------------------------------------------------- |
-| `errors.ts`           | `VisualizationError`, `ErrorCodes`                                        |
-| `logger.ts`           | `getLogger`, `setLogger`, `enableDebugLogging`, the `Logger` interface    |
-| `encoding.ts`         | `decodeBase64ToBinary`                                                    |
-| `coordinate-frame.ts` | The Rhino↔Three frame. Both are Z-up, so `rhinoToThree` is the identity.  |
-| `types.ts`            | `LOOKS`/`Look`, `LookPreset`, `MaterialAppearanceOptions`                 |
-| `looks.ts`            | `LOOK_PRESETS`, `DEFAULT_LOOK`, `materialAppearanceForLook`               |
-| `geometry.ts`         | `parseColor`, `applyOffset`, `computeCombinedBoundingBox`, the cache flag |
+| File                  | Owns                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------ |
+| `errors.ts`           | `VisualizationError`, `ErrorCodes`                                                         |
+| `logger.ts`           | `getLogger`, `setLogger`, `enableDebugLogging`, the `Logger` interface                     |
+| `encoding.ts`         | `decodeBase64ToBinary`                                                                     |
+| `coordinate-frame.ts` | The Rhino↔Three frame. Both are Z-up, so `rhinoToThree` is the identity.                   |
+| `types.ts`            | `LOOKS`/`Look`, `LookPreset`, `MaterialAppearanceOptions`                                  |
+| `looks.ts`            | `LOOK_PRESETS`, `DEFAULT_LOOK`, `materialAppearanceForLook`                                |
+| `geometry.ts`         | `parseColor`, `applyOffset`, `computeCombinedBoundingBox`                                  |
+| `gpu-ownership.ts`    | `canDispose*`/`protectMaterials`, the cache userdata flags, cache registry, `retainCaches` |
+| `gpu-dispose.ts`      | `disposeMaterial`, `disposeObjectTree` — the only traversal that should free scene content |
+| `gpu-capabilities.ts` | `publishMaxAnisotropy`, `observeMaxAnisotropy`                                             |
 
 ## Why errors, logging and base64 live here rather than coming from `@selvajs/compute`
 
-They used to come from there, and that dependency was most of what stopped this package standing on
-its own. None of the three is a compute concern:
+None of the three is a compute concern, and that dependency was most of what stopped this package
+standing on its own:
 
-- **`VisualizationError`** replaces `RhinoComputeError`, which mis-named the failure: on the plugin's
-  WebSocket path a bad mesh blob never went near Rhino.Compute. The `code` values are deliberately
-  identical to compute's so catch-sites matching on `error.code` are unaffected.
-- **`getLogger`/`setLogger`** are a logging facility. It defaults to no-op (as compute's does); a
-  host wanting one sink for both calls `setLogger(getLogger())` with compute's logger.
-- **`decodeBase64ToBinary`** is a ~20-line copy of compute's, kept in sync by hand. Duplicating it
-  is cheaper than the package dependency it used to buy. Its subtleties — WHATWG forgiving-base64
-  normalization and the Node pool-slab copy — are why it is a copy and not a rewrite.
+- **`VisualizationError`** replaces `RhinoComputeError`, which mis-named failures on paths (e.g. the
+  plugin WebSocket) that never touch Rhino.Compute. `code` values match compute's so catch-sites are
+  unaffected.
+- **`getLogger`/`setLogger`** default to no-op, like compute's; a host wanting one sink calls
+  `setLogger(getLogger())` with compute's logger.
+- **`decodeBase64ToBinary`** is a ~20-line copy of compute's, kept in sync by hand — cheaper than the
+  dependency it used to buy.
 
-## Why the geometry/color utilities live here
+## Why the geometry/color and GPU-ownership utilities live here
 
-`parse/` needs them (colors on materials, grounding and bounds on freshly built meshes) and `parse/`
-must never import upward from `render/`. They are pure object math — no scene graph — so `shared/` is
-their correct home rather than the render layer's `three-helpers`.
+`parse/` needs `geometry.ts` (colors, grounding, bounds) and must never import upward from `render/`.
+`gpu-ownership.ts`/`gpu-dispose.ts`/`gpu-capabilities.ts` are the shared rules every disposal path
+and cache in both `parse/` and `render/` obeys — see their docblocks for the ownership model.
 
 ## Extension points
 
-- **A new look** — add an entry to `LOOKS` and a matching `LOOK_PRESETS` record. `Look` derives from
-  `LOOKS`, so the type and the enumerable list can't drift, and consumers iterating `LOOKS` (e.g. a
-  style picker) pick it up automatically.
-- A look carries **only** lighting/material dials — never edges or grid, which are independent
-  overlays.
+A new look: add an entry to `LOOKS` and a matching `LOOK_PRESETS` record — `Look` derives from
+`LOOKS`, so the type and the list can't drift. A look carries **only** lighting/material dials, never
+edges or grid (independent overlays).

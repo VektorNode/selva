@@ -1,7 +1,7 @@
 # `parse/` — how a payload becomes meshes
 
 Turns a backend response into renderable Three.js objects. Depends only on `shared/`; never imports
-from `render/`, `scene/` or `session/`.
+from `render/` or `scene/`.
 
 ## Two payload kinds
 

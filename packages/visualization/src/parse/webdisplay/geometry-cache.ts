@@ -8,9 +8,9 @@ import { CACHED_GEOMETRY_USERDATA_FLAG, registerCacheRelease } from '../../share
  *
  * The viewer rebuilds the whole scene every solve: `clearScene` disposes every geometry and the
  * parser re-decodes, re-copies, re-computes normals and re-uploads to the GPU — even for meshes the
- * solve didn't change. This cache closes that loop the same way the edge-segment cache does:
- * fingerprint the *raw wire windows* a geometry is built from, and on a hit hand back the very same
- * `BufferGeometry` (normals computed, GPU buffers still resident) instead of rebuilding it.
+ * solve didn't change. This closes that loop the same way the edge-segment cache does: fingerprint
+ * the *raw wire windows* a geometry is built from, and on a hit hand back the same `BufferGeometry`
+ * (normals computed, GPU buffers still resident) instead of rebuilding it.
  *
  * Safety model:
  * - Cached geometries are tagged with {@link CACHED_GEOMETRY_USERDATA_FLAG}; `clearScene` skips

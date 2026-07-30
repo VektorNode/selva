@@ -46,13 +46,10 @@ interface ParseTelemetry {
  * base64-encoded into the outer JSON envelope. We `JSON.parse` the small envelope, then hand the
  * blob to `parseBinaryMeshBatch` which decodes the geometry without ever turning it into a string.
  *
- * An invalid JSON envelope (not a batch at all) logs and returns `[]` — that is the
- * "genuinely absent data" case. A batch whose *blob* is corrupt, truncated, or unsupported throws
- * instead of silently rendering an empty scene.
+ * An invalid JSON envelope (not a batch at all) logs and returns `[]` — the "genuinely absent
+ * data" case. A batch whose *blob* is corrupt, truncated, or unsupported throws instead of
+ * silently rendering an empty scene.
  *
- * @param batchJson - JSON string containing the batched mesh data
- * @param options - Rendering options
- * @returns Promise resolving to array of Three.js mesh objects
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatch(
@@ -81,17 +78,12 @@ export async function parseMeshBatch(
 /**
  * Parses a DisplayBatch object and creates Three.js meshes from its mesh blob.
  *
- * The path is synchronous internally — `parseBinaryMeshBatch` does no IO, just typed-array views
- * over the blob. The function stays `async` so callers don't have to change shape if we move
- * parsing into a worker later.
+ * Synchronous internally — `parseBinaryMeshBatch` does no IO, just typed-array views over the
+ * blob. Stays `async` so callers don't have to change shape if parsing moves into a worker later.
  *
  * A batch with no `compressedData` (genuinely empty/absent geometry) resolves to `[]`. A corrupt,
- * truncated, or unsupported blob throws so callers get a signal instead of a silent empty scene —
- * `getThreeMeshesFromComputeResponse` documents (and now delivers) exactly that rethrow.
+ * truncated, or unsupported blob throws so callers get a signal instead of a silent empty scene.
  *
- * @param batch - DisplayBatch object
- * @param options - Rendering options
- * @returns Promise resolving to array of Three.js mesh objects
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatchObject(
@@ -149,14 +141,10 @@ export async function parseMeshBatchObject(
 /**
  * Parses a raw binary mesh batch blob (SLVA wire format) and creates Three.js meshes.
  *
- * Use this entry point when the blob arrives as a binary WebSocket frame (Phase 1b transport):
- * the JSON envelope no longer carries `displayData`, so there's nothing to `JSON.parse`. The blob
- * is self-describing — materials, groups, and `sourceComponentId` come from its embedded metadata
- * header.
+ * Use this entry point when the blob arrives as a binary WebSocket frame rather than inside a JSON
+ * envelope. The blob is self-describing — materials, groups, and `sourceComponentId` come from its
+ * embedded metadata header.
  *
- * @param blob - Raw blob bytes from a binary WebSocket frame.
- * @param options - Rendering options.
- * @returns Promise resolving to array of Three.js mesh objects.
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatchBlob(
@@ -252,7 +240,7 @@ function buildMeshesFromParsed(
 	// computeVertexNormals, ground-offset) all expect world-unit floats, and a single
 	// linear pass over the int16 buffer is far cheaper than the legacy gunzip + base64 path.
 	// No rotation happens here: the scene uses Rhino's Z-up frame, so vertices pass through in the
-	// frame they arrived in (see ../coordinate-transform.ts). `applyTransforms` is inert.
+	// frame they arrived in (see ../../shared/coordinate-frame.ts). `applyTransforms` is inert.
 	const worldVertices = isFloat32
 		? maybeRotateFloat32Vertices(parsed.vertices as Float32Array, applyTransforms)
 		: dequantizeInt16(parsed.vertices as Int16Array, parsed.origin, parsed.scale, applyTransforms);

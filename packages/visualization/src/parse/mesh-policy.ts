@@ -1,20 +1,10 @@
-// The three.js mesh ownership policy for `@selvajs/solve`'s client-side result memo (M2).
-//
-// The memo caches whole solve results, but it deliberately does not know what a mesh is —
-// `SolveResult<TMesh>` is opaque there and the clone/release rules are injected. This is that
-// injection for a three.js host, and it lives here because the rules it encodes are the
-// renderer's, not the cache's:
-//
-//   - The viewer takes ownership of every mesh array it renders; `clearScene` disposes the
-//     previous content on the next scene update. So a memo that retained the objects it handed
-//     out would serve a disposed corpse on the next hit — audit C1, the bug this exists to
-//     prevent. `clone` gives every recipient its own copies.
-//   - `Object3D.clone()` copies the transform hierarchy but SHARES `geometry` and `material` by
-//     reference, which is precisely the aliasing that makes a naive clone useless. Geometry is
-//     therefore copied explicitly.
-//   - Materials are deliberately left shared: `clearScene` spares anything in `SHARED_MATERIALS`
-//     (module-scope singletons reused across solves), and per-mesh materials are cheap to
-//     recreate but expensive to re-compile as shader programs.
+// Mesh ownership policy for `@selvajs/solve`'s result memo: `SolveResult<TMesh>` is opaque to the
+// memo, so clone/release are injected. Rules encoded here, not in the cache, because they're the
+// renderer's: the viewer disposes whatever it last rendered (`clearScene`), so a memo that handed
+// out live references would serve a disposed object on the next hit. `clone` copies geometry
+// explicitly (`Object3D.clone()` shares it by reference — a naive clone would still alias) but
+// leaves materials shared, since `clearScene` already spares `SHARED_MATERIALS` singletons and
+// per-mesh materials are expensive to recompile as shaders.
 
 import * as THREE from 'three';
 
@@ -24,11 +14,10 @@ import { CACHED_GEOMETRY_USERDATA_FLAG, disposeObjectTree } from '../shared/inde
  * A three.js object graph the caller owns outright: transforms cloned, geometry copied,
  * materials shared.
  *
- * The copied geometry drops {@link CACHED_GEOMETRY_USERDATA_FLAG} even when the source carried
- * it. The flag means "the cross-solve geometry cache owns these GPU buffers, don't dispose
- * them" — true of the cache's instance, false of a private copy of it. Left in place it would
- * make both `clearScene` and {@link releaseSceneObjects} skip the copy, and nothing else holds
- * a reference: the buffers would leak.
+ * The copy drops {@link CACHED_GEOMETRY_USERDATA_FLAG} even when the source carries it — the flag
+ * means "the geometry cache owns these buffers," true of the cache's instance but not of a
+ * private copy. Left in place, both `clearScene` and {@link releaseSceneObjects} would skip
+ * disposing the copy and its buffers would leak.
  */
 export function cloneSceneObjects(meshes: THREE.Object3D[]): THREE.Object3D[] {
 	return meshes.map((root) => {
@@ -56,12 +45,9 @@ export function cloneSceneObjects(meshes: THREE.Object3D[]): THREE.Object3D[] {
 /**
  * Release the GPU buffers of objects the memo owns. Mirrors `clearScene`'s traversal, minus
  * materials — the memo never owns those (see {@link cloneSceneObjects}), so disposing one here
- * would free a singleton still referenced by live scene content.
- *
- * Cache-owned geometries are skipped for the same reason `clearScene` skips them: the
- * cross-solve geometry cache disposes on its own eviction. A memo entry should never contain one
- * (its geometries come from {@link cloneSceneObjects}, which strips the flag), so this is a
- * guard against a caller that stores uncloned meshes, not an expected path.
+ * would free a singleton still referenced by live scene content. Cache-owned geometries are
+ * skipped too (a memo entry should never contain one, since {@link cloneSceneObjects} strips the
+ * flag — this guards a caller that stores uncloned meshes, not an expected path).
  */
 export function releaseSceneObjects(meshes: THREE.Object3D[]): void {
 	// `materials: false` is the memo-specific part; the ownership rules (skip cache-owned geometry)

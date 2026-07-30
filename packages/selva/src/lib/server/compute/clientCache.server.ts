@@ -82,4 +82,13 @@ export function evictComputeClient(id: string): void {
 	cache.evict(id);
 }
 
+/**
+ * Solve-cache counters summed across every warm client, for the admin panel's
+ * hit rate. Each warm client owns its own cache, so these are totals across
+ * however many are alive right now (`warmClients`).
+ */
+export function solveCacheStats() {
+	return cache.solveCacheStats();
+}
+
 export type { CachedClient };

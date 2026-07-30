@@ -13,11 +13,11 @@ export function setupRenderer(
 		alpha: true,
 		powerPreference: 'high-performance',
 		preserveDrawingBuffer: config.render.preserveDrawingBuffer,
-		// Deliberately NOT logarithmic: three's depth-based post passes (our GTAO pipeline) reconstruct
-		// view-space positions assuming standard perspective depth and do not support log-encoded
-		// depth — with it on, AO is computed from wrong depths (haloing, wrong-scale occlusion). The
-		// per-scale near/far defaults (see applyDefaults) keep standard depth precision adequate for
-		// the viewer's scene scales. If log depth is ever needed, AO must be disabled with it.
+		// Deliberately NOT logarithmic: the GTAO pipeline reconstructs view-space positions assuming
+		// standard perspective depth and doesn't support log-encoded depth — with it on, AO is
+		// computed from wrong depths (haloing, wrong-scale occlusion). Per-scale near/far defaults
+		// (applyDefaults) keep standard depth precision adequate. If log depth is ever needed, AO
+		// must be disabled with it.
 		logarithmicDepthBuffer: false
 	});
 

@@ -66,11 +66,9 @@ class StaleTextureLoadError extends Error {
 let maxAnisotropy = 1;
 
 /**
- * Set the anisotropy applied to all color-map textures, updating already-cached textures so ones
- * decoded earlier still benefit.
- *
- * Subscribed to the renderer's own report below, so no host wiring is needed; still exported because
- * a host embedding a foreign renderer may want to set it directly.
+ * Sets the anisotropy applied to all color-map textures, updating already-cached ones too.
+ * Subscribed to the renderer's own report below, so no host wiring is needed; still exported for a
+ * host embedding a foreign renderer that wants to set it directly.
  */
 export function setTextureAnisotropy(value: number): void {
 	maxAnisotropy = Math.max(1, value);
@@ -123,15 +121,15 @@ export function applyTextureMap(material: THREE.MeshPhysicalMaterial, url: strin
 		});
 }
 
+// Declare this cache to the teardown registry, so the viewer's dispose() frees it without the
+// render layer importing this one and without any host wiring. See shared/gpu-ownership.ts.
+registerCacheRelease(() => clearTextureCache());
+
 /**
  * Disposes all cached textures and empties the cache (e.g. on viewer teardown). Loads still in
  * flight are orphaned: when they resolve they see the bumped generation, dispose their texture,
  * and do not repopulate the cache.
  */
-// Declare this cache to the teardown registry, so the viewer's dispose() frees it without the
-// render layer importing this one and without any host wiring. See shared/gpu-ownership.ts.
-registerCacheRelease(() => clearTextureCache());
-
 export function clearTextureCache(): void {
 	cacheGeneration++;
 	for (const texture of textureCache.values()) {

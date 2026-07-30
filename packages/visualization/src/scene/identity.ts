@@ -20,20 +20,15 @@ import type * as THREE from 'three';
 const SEP = String.fromCharCode(31);
 
 /**
- * A stable key for an object across solves, or `null` when the object carries nothing identifying.
+ * A stable key for an object across solves, or `null` when it carries nothing identifying.
  *
  * Resolution order:
- *
- * 1. **`userData.id`** — display items (curves, points) arrive with a pre-built stable pick key,
- *    already `${sourceComponentId}:${originalIndex}` by convention.
- * 2. **`sourceComponentId` + `originalIndex`** — meshes. The component GUID is stable across solves
- *    and across sessions; the index is the geometry's position in that component's output.
- * 3. **`name` + `layer`** — fallback for content from plugin versions that predate
- *    `sourceComponentId`. Weaker: two unnamed meshes on one layer collide and are treated as the
- *    same object. Accepted deliberately, so hiding still survives a solve on older definitions.
- *
- * Returns `null` when none of these apply — the caller should treat the object as having no
- * persistent identity rather than inventing one.
+ * 1. `userData.id` — display items (curves, points) arrive with a pre-built pick key.
+ * 2. `sourceComponentId` + `originalIndex` — meshes. Component GUID is stable across solves;
+ *    index is the geometry's position in that component's output.
+ * 3. `name` + `layer` — fallback for content from plugin versions predating `sourceComponentId`.
+ *    Weaker: two unnamed meshes on one layer collide. Accepted so hiding still survives a solve
+ *    on older definitions.
  */
 export function getStableKey(object: THREE.Object3D): string | null {
 	const data = object.userData;

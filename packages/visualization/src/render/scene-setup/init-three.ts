@@ -36,32 +36,26 @@ export const initThree = function (
 
 	const sceneUp = config.environment?.sceneUp || defaultUp;
 
-	// The configured pixel ratio is the single source of truth for every DPR consumer — renderer
-	// setup, the per-frame resize check, and the AO pipeline. Resolving it once here means a
-	// host-configured value (e.g. `pixelRatio: 1` for performance) is never silently overridden
-	// after the first resize check. (applyDefaults always sets it; the fallback is type narrowing.)
+	// Single source of truth for DPR (renderer, resize check, AO pipeline) so a host-configured
+	// value is never silently overridden later. applyDefaults always sets it; fallback is type narrowing.
 	const pixelRatio = config.render.pixelRatio ?? Math.min(window.devicePixelRatio, 2);
 
 	const scene = createScene(config);
 	const camera = createCamera(config, canvas);
-	// Set the camera's up to the scene up BEFORE OrbitControls/the controller read it — OrbitControls
-	// captures the orbit basis from camera.up at construction, and the controller derives its presets
-	// and ortho camera from it. Without this, a Z-up scene would orbit and frame as if Y-up.
+	// Must be set before OrbitControls/the controller read camera.up (captured at construction),
+	// or a Z-up scene orbits and frames as if Y-up.
 	camera.up.copy(sceneUp);
 	const renderer = setupRenderer(canvas, config, pixelRatio);
-	// Report the GPU's max anisotropy so color maps stay sharp at grazing angles. One-time;
-	// retroactively upgrades any texture already decoded this session. Published to a shared sink
-	// rather than imported into the texture cache, so `render/` stays independent of `parse/` — the
-	// cache subscribes from its own side. `onMaxAnisotropy` remains as an opt-in extra observer.
+	// One-time; also retroactively upgrades textures already decoded this session. Published to a
+	// shared sink rather than imported, so render/ stays independent of parse/ (layer rule).
 	publishMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());
 	options?.onMaxAnisotropy?.(renderer.capabilities.getMaxAnisotropy());
 
-	// Claim the shared GPU caches for this viewer's lifetime; released in dispose(), and the caches
-	// are only actually freed once the last live viewer lets go.
+	// Claim the shared GPU caches for this viewer's lifetime; released in dispose(), freed once the
+	// last live viewer lets go.
 	const releaseCaches = retainCaches();
 	const controls = setupControls(camera, canvas, config);
 
-	// Tracks whichever camera (perspective or orthographic) is live; the controller swaps it.
 	// Render loop, resize, and raycasting all read through getActiveCamera so 2D/3D stays coherent.
 	const cameraController = createCameraController({
 		scene,
@@ -72,22 +66,13 @@ export const initThree = function (
 	});
 	const getActiveCamera = () => cameraController.getActiveCamera();
 
-	// The HDR environment decodes asynchronously; if the viewer is disposed before it lands, the
-	// load callback must drop (and dispose) the texture instead of attaching it to a swept scene.
+	// HDR decodes asynchronously; if disposed before it lands, the load callback must drop (and
+	// dispose) the texture instead of attaching it to a swept scene.
 	let disposed = false;
 	setupEnvironment(scene, renderer, config, () => disposed);
-	// Scene lights. The shadow-casting sun (null when sunlight or shadows are off) has its shadow
-	// frustum fitted to the scene content below and again whenever the host calls updateShadowBounds
-	// after a geometry change — keeping shadow-map texels packed onto the model for crisp shadows at
-	// any scale. The ambient + optional hemisphere fill are retunable at runtime via the setters below.
 	const lights = setupLighting(scene, config);
 	const sunlight = lights.sun;
 
-	/**
-	 * Refit the sun's shadow frustum to the current scene content. Call after loading or replacing
-	 * geometry (e.g. right after `updateScene`). No-op when there is no shadow-casting sun or no
-	 * content. Cheap: one bounds traversal, no per-frame cost.
-	 */
 	const updateShadowBounds = () => {
 		if (sunlight) fitShadowToContent(sunlight, computeContentBounds(scene));
 	};
@@ -100,7 +85,6 @@ export const initThree = function (
 		? (scene.children.find((child) => child.userData.id === 'floor') ?? null)
 		: null;
 
-	// Optional CAD aids: an infinite fading grid and the corner nav-cube gizmo. Both opt-in.
 	const grid = config.grid.enabled
 		? createGrid({
 				cellSize: config.grid.cellSize,
@@ -113,12 +97,6 @@ export const initThree = function (
 		: null;
 	if (grid) scene.add(grid.object);
 
-	/**
-	 * Rescale the grid's cell spacing and fade radius to the current scene content, so a part that is
-	 * a few units or a few thousand units wide both get sensibly-sized cells and a fade that reaches
-	 * past the model. Call after loading or replacing geometry (e.g. right after `updateScene`). No-op
-	 * when there's no grid or no content. Cheap: one bounds traversal, no per-frame cost.
-	 */
 	const updateGridScale = () => {
 		if (grid) grid.fitToContent(computeContentBounds(scene));
 	};
@@ -127,16 +105,11 @@ export const initThree = function (
 		? createViewGizmo({ camera, domElement: canvas, controller: cameraController })
 		: null;
 
-	// Per-frame near-plane fitting: recovers depth precision when zoomed out (see near-plane.ts).
-	// Ground-plane normals cap the fit where a ground aid (grid under the camera, floor) would
-	// otherwise be clipped at grazing views.
-	//
-	// Resolved per frame, and only for aids actually VISIBLE: the grid is commonly built up-front so
-	// hosts can toggle it, yet started hidden. Since this clamp is the camera's height above the
-	// plane, letting a hidden grid contribute drives near→0 at grazing views and craters depth
-	// precision (ULP ∝ 1/near) — which shows up as hidden edges punching through solid geometry.
-	// applyDefaults always fills `plane` (from the scene up axis); the fallback derives from the same
-	// source rather than assuming 'z', so the two can't disagree in a non-Z-up scene.
+	// Per-frame near-plane fitting recovers depth precision when zoomed out (see near-plane.ts).
+	// Ground-plane normals cap the fit where a ground aid would otherwise clip at grazing views.
+	// Only VISIBLE aids count: the grid is commonly built hidden so hosts can toggle it, and since
+	// this clamp is the camera's height above the plane, a hidden grid would drive near→0 at grazing
+	// views and crater depth precision (ULP ∝ 1/near), causing hidden edges to punch through geometry.
 	const gridPlane = config.grid.plane ?? upToAxis(sceneUp);
 	const gridNormal = new THREE.Vector3(
 		gridPlane === 'x' ? 1 : 0,
@@ -154,8 +127,7 @@ export const initThree = function (
 		? createNearPlaneFitter({ camera, scene, groundNormals })
 		: null;
 
-	// HTML label overlay (CSS2D) and the measurement tool built on it. Both opt-in; the label layer
-	// is only created when something needs it (currently the measure tool).
+	// Label layer only created when something needs it (currently the measure tool).
 	const labelContainer = canvas.parentElement ?? canvas;
 	const labelLayer: LabelLayer | null = config.measure.enabled
 		? createLabelLayer(labelContainer, scene)
@@ -182,10 +154,8 @@ export const initThree = function (
 			? setupEventHandlers(canvas, scene, cameraController, config)
 			: { dispose: () => {}, fitToView: () => {}, clearSelection: () => {} };
 
-	// A drag to orbit/pan ends with a `click` on mouseup. Without guarding, that release click would
-	// be taken as a measurement point (placing a stray point or clearing a finished measurement when
-	// the user only meant to rotate). Record where the press started and treat the release as a click
-	// only if the pointer barely moved — a real click, not a drag.
+	// A drag to orbit/pan ends with a `click` on mouseup; without this guard that release would be
+	// taken as a measurement point. Only treat the release as a click if the pointer barely moved.
 	const DRAG_SLOP_PX = 5;
 	let pressX = 0;
 	let pressY = 0;
@@ -196,11 +166,10 @@ export const initThree = function (
 	const wasDrag = (event: MouseEvent) =>
 		Math.hypot(event.clientX - pressX, event.clientY - pressY) > DRAG_SLOP_PX;
 
-	// Capture-phase interceptors that pre-empt scene selection. Order: an active measurement claims
-	// the click first, then the gizmo. stopImmediatePropagation keeps the selection handler from
-	// also firing. (Both run in capture so they see the event before the bubble-phase selection.)
+	// Capture-phase so these see the click before bubble-phase selection; measurement claims it
+	// first, then the gizmo. stopImmediatePropagation keeps the selection handler from also firing.
 	const handleToolClick = (event: MouseEvent) => {
-		if (wasDrag(event)) return; // an orbit/pan release, not a measurement click — leave it alone
+		if (wasDrag(event)) return;
 		if (measureTool?.handleClick(event)) {
 			event.stopImmediatePropagation();
 			return;
@@ -213,25 +182,20 @@ export const initThree = function (
 		canvas.addEventListener('mousedown', handlePointerDown, { capture: true });
 		canvas.addEventListener('click', handleToolClick, { capture: true });
 	}
-	// Forward movement to the measure tool so it can preview the snap point under the cursor. Passive:
-	// it only reads, never consumes, so it never interferes with orbit/pan.
+	// Passive: only reads the cursor to preview the snap point, never consumes, so it can't
+	// interfere with orbit/pan.
 	const handleToolMove = (event: MouseEvent) => measureTool?.handleMove(event);
 	if (measureTool) {
 		canvas.addEventListener('mousemove', handleToolMove, { passive: true });
 	}
 
-	// Repaint request for the on-demand render loop (audit P4). Forward-declared so setters defined
-	// before the loop exists can call it; rebound to the loop's real invalidate once it's created.
+	// Forward-declared so setters defined before the loop exists can call it; rebound to the loop's
+	// real invalidate once it's created.
 	let requestRender: () => void = () => {};
 
-	// Edge overlays: bind the configured options into a closure the consumer calls after loading
-	// meshes. Always applies when called explicitly (the `edges.enabled` flag governs whether the
-	// host *intends* edges, but an explicit call should never be silently ignored).
-	// Async path: extraction for large meshes runs in a worker, so a heavy solve never stalls the
-	// main thread — their overlays pop in a beat later; small meshes still attach synchronously.
-	// Cancellation (scene cleared by the next solve, clearEdges toggles) is handled inside.
-	// Once attached, meshes skipped for exceeding the triangle cap switch the screen-space edge
-	// fallback on (and a later solve without such meshes switches it back off).
+	// Always applies when called explicitly, regardless of edges.enabled — an explicit call should
+	// never be silently ignored. Meshes over the triangle cap switch the screen-space edge fallback
+	// on; a later solve without such meshes switches it back off.
 	const applyEdges = (root: THREE.Object3D) => {
 		void addEdgesAsync(root, {
 			color: config.edges.color, // undefined → derive from each mesh's surface color
@@ -247,7 +211,6 @@ export const initThree = function (
 		});
 	};
 
-	/** Turn the screen-space fallback on/off to match whether capped-out meshes are present. */
 	const updateEdgeFallback = (root: THREE.Object3D) => {
 		if (config.edges.screenSpaceFallback === false) return;
 		let hasSkippedMeshes = false;
@@ -257,9 +220,8 @@ export const initThree = function (
 		pipeline.setEdgeFallback(hasSkippedMeshes);
 	};
 
-	// The inverse of applyEdges: removes overlays (cancelling in-flight attaches) and stands down
-	// the screen-space fallback. Hosts toggling edges off should call this rather than bare
-	// removeEdges, or the fallback pass would keep drawing lines for capped meshes.
+	// Prefer over bare removeEdges: also stands down the screen-space fallback, or it would keep
+	// drawing lines for capped meshes.
 	const clearEdges = (root: THREE.Object3D) => {
 		removeEdges(root);
 		pipeline.setEdgeFallback(false);
@@ -272,8 +234,7 @@ export const initThree = function (
 			? { width: parent.clientWidth, height: parent.clientHeight }
 			: { width: window.innerWidth, height: window.innerHeight };
 
-	// Optional postprocessing pipeline (AO and/or the screen-space edge fallback). The loop reads it
-	// through pipeline.get() each frame; when null it uses the plain renderer.render path.
+	// Loop reads pipeline.get() each frame; null falls back to plain renderer.render.
 	const pipeline = createPipelineController({
 		renderer,
 		scene,
@@ -285,7 +246,6 @@ export const initThree = function (
 	});
 	pipeline.sync();
 
-	// Runtime lighting/material dials (fill lights, exposure, environment, AO strength, look).
 	const appearance = createAppearanceController({
 		scene,
 		renderer,
@@ -295,8 +255,6 @@ export const initThree = function (
 		requestRender: () => requestRender()
 	});
 
-	// Resize checked every frame so buffer resize and render happen in the same frame,
-	// preventing visible blank frames on resize
 	const {
 		animate,
 		dispose: disposeAnimation,
@@ -323,9 +281,8 @@ export const initThree = function (
 
 	scene.up.set(sceneUp.x, sceneUp.y, sceneUp.z);
 
-	// Initial fit so any geometry already present at construction casts crisp shadows and the grid is
-	// scaled to it. Hosts that add geometry later (via updateScene) should call updateShadowBounds and
-	// updateGridScale again afterwards.
+	// Initial fit for any geometry already present; hosts adding geometry later via updateScene
+	// should call these again.
 	updateShadowBounds();
 	updateGridScale();
 
@@ -349,10 +306,8 @@ export const initThree = function (
 	};
 
 	const dispose = () => {
-		// Idempotent: a second call would re-run forceContextLoss() on an already-lost
-		// context, throwing "INVALID_OPERATION: loseContext: context already lost".
-		// Double-dispose happens naturally (React StrictMode effect double-invoke, hosts
-		// that unmount twice), so guard on the flag we already track.
+		// Idempotent: a second call would re-run forceContextLoss() on an already-lost context and
+		// throw. Double-dispose happens naturally (React StrictMode, hosts that unmount twice).
 		if (disposed) return;
 		disposed = true;
 		disposeAnimation();
@@ -369,27 +324,21 @@ export const initThree = function (
 		gizmo?.dispose();
 		grid?.dispose();
 		pipeline.dispose();
-		// Stop any in-flight camera tween — its rAF ticks would otherwise keep touching the disposed
-		// controls for up to the tween duration after teardown.
+		// Stops any in-flight camera tween — its rAF ticks would otherwise keep touching the
+		// disposed controls after teardown.
 		cameraController.dispose();
 		controls.dispose();
 		renderer.dispose();
-		// Free the GL context itself, not just its objects — browsers cap live WebGL contexts
-		// (~16) and won't otherwise reclaim this one until GC, which can lag across rapid
-		// mount/unmount cycles (e.g. navigating between definitions) and hit that cap.
+		// Frees the GL context itself: browsers cap live WebGL contexts (~16) and otherwise won't
+		// reclaim this one until GC, which can lag across rapid mount/unmount cycles and hit that cap.
 		renderer.forceContextLoss();
 
 		disposeSceneResources(scene);
 
-		// The cross-solve caches outlive any single scene, but not the GL context: their buffers
-		// belong to the context just destroyed above, and nothing else is permitted to free them.
-		// Without this, every mount/unmount cycle stranded up to 256 MiB of geometry and 64 textures.
-		//
-		// Drains a registry the caches push themselves onto, so this frees the parse layer's caches
-		// without importing it (the layer rule holds) and without the host wiring anything. It is
-		// refcounted, so with several viewers mounted only the last one out actually frees. Ordered
-		// after the scene sweep so the caches' ownership claims are still in force while it runs —
-		// the sweep must skip cache-owned resources, not race for them.
+		// Cross-solve caches outlive any single scene but not the GL context just destroyed above.
+		// Drains a registry the caches push themselves onto (frees parse/'s caches without importing
+		// it — layer rule). Refcounted: only the last live viewer actually frees. Must run after the
+		// scene sweep so cache-owned resources are still claimed while the sweep runs.
 		releaseCaches();
 	};
 

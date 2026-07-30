@@ -1,13 +1,9 @@
 /**
- * `shared/` — the bottom layer. Errors, logging, base64 decoding, coordinate frame, look presets,
- * and the object/color utilities the layers above have in common. Depends on nothing else in this
- * package, and on nothing outside it but `three`.
+ * `shared/` — the bottom layer. Depends on nothing else in this package, and on nothing outside it
+ * but `three`.
  *
  * **Internal.** This barrel is the cross-layer import surface for `parse/`, `render/` and `scene/`;
- * it is not a published entrypoint. The parts consumers need — `VisualizationError`, the logger
- * seam, the look vocabulary — are re-exported from `render/`.
- *
- * @module shared
+ * it is not a published entrypoint. Parts consumers need are re-exported from `render/`.
  */
 
 export { VisualizationError, ErrorCodes } from './errors.js';

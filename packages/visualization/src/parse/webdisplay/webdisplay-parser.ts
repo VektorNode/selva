@@ -64,50 +64,15 @@ function isDisplayItemType(type: string): boolean {
 const warnedUnknownUnits = new Set<string>();
 
 /**
- * Extracts and processes display meshes from a ComputePointerResponse using the Grasshopper WebDisplay component.
+ * Extracts display meshes and items from a Grasshopper WebDisplay compute response: decompresses,
+ * scales to meters, and optionally grounds them. Requires the VektorNode Rhino.Compute fork (see
+ * root CLAUDE.md).
  *
- * This is the primary entry point for extracting mesh geometry from Grasshopper compute responses.
- * It handles all aspects of mesh processing: decompression, coordinate transformation, scaling, and positioning.
+ * The whole pipeline (base64 decode, inflate, dequantization, mesh construction) runs synchronously
+ * on the calling thread — large batches block the UI for their duration. `async` only so the shape
+ * can stay stable if parsing moves off-thread later.
  *
- * **Note:** The entire pipeline (base64 decode, inflate, dequantization, mesh construction) runs
- * synchronously on the calling thread — large batches will block the UI for their duration. The
- * function is `async` only so its shape can stay stable if parsing moves off-thread later.
- *
- * @param data - The ComputePointerResponse containing Grasshopper output trees.
- * @param options - Configuration for mesh extraction and parsing behavior. All options are optional with sensible defaults.
- * @returns Promise resolving to array of THREE.Mesh objects (may be empty).
  * @throws Rethrows unexpected errors after attempting to dispose any created meshes.
- *
- * @remarks
- * - Only works with the WebDisplay component of GHHeadless.
- * - Requires changes to Rhino.Compute (see https://github.com/TheVessen/compute.rhino3d).
- * - Provides a performant way to display mesh data in Three.js.
- * - All decoding is synchronous on the main thread; there is no Web Worker offload today.
- * - Supports mesh metadata (names, user data) if provided in the compute response.
- *
- * @internal Internal helper: high-level extraction remains public via visualization module, but this
- * function is considered internal implementation detail for mesh extraction.
- *
- * @example
- * ```ts
- * // Simple usage with defaults (all processing enabled)
- * const meshes = await getThreeMeshesFromComputeResponse(response);
- *
- * // With debugging enabled
- * const meshes = await getThreeMeshesFromComputeResponse(response, { debug: true });
- *
- * // Opt in to seating the model on the grid instead of using its Rhino coordinates
- * const meshes = await getThreeMeshesFromComputeResponse(response, {
- *   debug: true,
- *   allowScaling: true,
- *   allowAutoPosition: true,
- *   parsing: {
- *     mergeByMaterial: false,
- *     applyTransforms: true,
- *     debug: true,
- *   },
- * });
- * ```
  */
 export async function getThreeMeshesFromComputeResponse(
 	data: DisplayComputeResponse,
@@ -168,9 +133,6 @@ function getScaleFactor(modelUnits: string): number {
 	return 1;
 }
 
-/**
- * Extracts meshes and non-mesh display items (curves, points) from compute response data.
- */
 async function extractDisplayFromData(
 	data: DisplayComputeResponse,
 	objects: THREE.Object3D[],
@@ -265,9 +227,10 @@ function safeParse(s: string): DisplayBatch | undefined {
 
 /**
  * Drops objects so their lowest point sits on the ground plane. `axis` is the scene's up axis —
- * `z` for the default Rhino frame geometry arrives in (see ../coordinate-transform.ts). Taking it
- * as a parameter rather than hardcoding `z` keeps grounding correct for a host that configures a
- * different `sceneUp`, where subtracting `min.z` would shove content sideways instead of down.
+ * `z` for the default Rhino frame geometry arrives in (see ../../shared/coordinate-frame.ts).
+ * Taking it as a parameter rather than hardcoding `z` keeps grounding correct for a host that
+ * configures a different `sceneUp`, where subtracting `min.z` would shove content sideways instead
+ * of down.
  */
 function applyGroundOffset(meshes: THREE.Object3D[], axis: 'x' | 'y' | 'z'): void {
 	if (meshes.length === 0) return;
@@ -276,17 +239,11 @@ function applyGroundOffset(meshes: THREE.Object3D[], axis: 'x' | 'y' | 'z'): voi
 	applyOffset(meshes, combinedBoundingBox.min[axis], axis);
 }
 
-/**
- * Handles errors by disposing created objects and logging.
- */
 function handleError(error: unknown, meshes: THREE.Object3D[]): void {
 	getLogger().error('An unexpected error occurred:', error);
 	disposeMeshes(meshes);
 }
 
-/**
- * Disposes of all objects (meshes, lines, points) and their associated resources.
- */
 function disposeMeshes(meshes: THREE.Object3D[]): void {
 	for (const obj of meshes) {
 		const mesh = obj as Partial<THREE.Mesh> & THREE.Object3D;
@@ -304,9 +261,6 @@ function disposeMeshes(meshes: THREE.Object3D[]): void {
 	}
 }
 
-/**
- * Logs the processing time for mesh extraction.
- */
 function logProcessingTime(startTime: number): void {
 	const elapsed = performance.now() - startTime;
 	getLogger().info('Time to process meshes:', `${elapsed.toFixed(2)}ms`);

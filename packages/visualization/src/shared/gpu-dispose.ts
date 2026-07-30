@@ -7,11 +7,8 @@ import { canDisposeGeometry, canDisposeMaterial, canDisposeTexture } from './gpu
 // ============================================================================
 
 /**
- * Free a material and the textures it references, respecting ownership
- * ([gpu-ownership](./gpu-ownership.ts)).
- *
- * Walks own enumerable properties only — `for...in` would iterate the prototype chain for nothing.
- * A cache-owned texture (or a shared singleton material) is left alone; everything else is freed.
+ * Free a material and its textures, respecting ownership ([gpu-ownership](./gpu-ownership.ts)).
+ * Walks own enumerable properties only (`for...in` would also walk the prototype chain).
  */
 export function disposeMaterial(material: THREE.Material): void {
 	if (!canDisposeMaterial(material)) return;
@@ -35,22 +32,14 @@ function disposeMaterials(material: THREE.Material | THREE.Material[] | undefine
 export interface DisposeOptions {
 	/** Free materials and their textures too. Default true; the solve memo passes false. */
 	materials?: boolean;
-	/**
-	 * Called for each renderable's geometry before it is considered for disposal, so a subsystem can
-	 * release its own derived resources keyed on that geometry. The edge caches use this — their
-	 * line geometries are keyed on the source geometry, and a scene clear is the only signal that
-	 * the overlays are gone.
-	 */
+	/** Called for each geometry before disposal, so a subsystem can free derived resources keyed on it (e.g. edge caches). */
 	onGeometry?: (geometry: THREE.BufferGeometry) => void;
 }
 
 /**
- * Free the GPU resources of an object subtree, respecting ownership.
- *
- * **This is the only traversal that should dispose scene content.** Before it existed there were
- * three, each with a different subset of the ownership guards, and the gaps between them were
- * exactly where the F1 and texture leaks lived. If you need a new teardown path, call this — do not
- * write a fourth `traverse` that disposes.
+ * Free the GPU resources of an object subtree, respecting ownership. **The only traversal that
+ * should dispose scene content** — do not write another `traverse` that disposes; the F1/texture
+ * leaks came from exactly that kind of duplicate walker missing an ownership guard.
  */
 export function disposeObjectTree(root: THREE.Object3D, options: DisposeOptions = {}): void {
 	const { materials = true, onGeometry } = options;

@@ -14,50 +14,44 @@ import {
 import { MaterialPool, buildEdgeOverlay } from './edges/overlay.js';
 
 /**
- * Crisp boundary/crease edges overlaid on meshes — the defining "technical drawing" look that makes
- * shaded geometry read as discrete objects rather than blobs.
+ * Crisp boundary/crease edges overlaid on meshes — the "technical drawing" look that makes shaded
+ * geometry read as discrete objects rather than blobs.
  *
- * Edge segments are extracted by `extractEdgeSegments` (see edge-extract.ts — an
- * `EdgesGeometry`-equivalent that is ~an order of magnitude faster and worker-portable) and
- * rendered as fat `LineSegments2` using the same `LineMaterial` family as curves — so edges get
- * controllable thickness, not the 1px cap of `THREE.LineSegments`. The overlay is added as a
- * *child* of each mesh, so it inherits the mesh's transform and is disposed when the mesh subtree
- * is cleared.
+ * Segments come from `extractEdgeSegments` (edge-extract.ts — an `EdgesGeometry`-equivalent, ~10x
+ * faster and worker-portable) and render as fat `LineSegments2` (same `LineMaterial` family as
+ * curves), giving controllable thickness instead of the 1px cap of `THREE.LineSegments`. Each
+ * overlay is a *child* of its mesh — inherits its transform, disposed with the mesh subtree.
  *
- * Performance model (docs/plans/4.edge-overlay-performance.md):
- * - Extraction results are cached by *content fingerprint* in an LRU (`edges/extraction.ts`). The
- *   viewer rebuilds all geometry objects every solve, so only a content key survives re-solves.
- *   A second, identity-keyed cache of the built `LineSegmentsGeometry` was removed on 2026-07-30:
- *   it hit 0/80 in the real solve loop (scene clears reset it every solve) and saved 3.8 ms against
- *   the 71 ms the content cache already absorbs, while costing a refcount protocol and one live
- *   leak. See `edges/line-geometry.ts` for the measurements.
- * - {@link addEdgesAsync} runs extraction for large meshes in a Worker built from a blob URL
- *   (bundler-agnostic; falls back to inline extraction when Workers are unavailable), keeping the
- *   main thread free of the multi-second stalls extraction causes at millions of triangles.
- * - Caps bound the pathological cases: meshes above `maxTriangles` are skipped outright (tagged
- *   `userData.edgesSkipped = 'triangle-cap'`), overlays above `maxSegments` lose the distance
- *   fade so they render in the cheaper opaque pass.
+ * Performance model (docs/plans/edge-overlay-open.md):
+ * - Extraction is cached by *content fingerprint* in an LRU (`edges/extraction.ts`), since the
+ *   viewer rebuilds every geometry object each solve — only a content key survives that. A second,
+ *   identity-keyed cache of the built `LineSegmentsGeometry` was removed 2026-07-30: 0/80 hit rate
+ *   in the real solve loop (scene clears reset it every solve), saved only 3.8ms against the 71ms
+ *   the content cache already absorbs, and cost a refcount protocol plus one live leak.
+ * - {@link addEdgesAsync} runs extraction for large meshes in a Worker (blob-URL based, bundler
+ *   agnostic; falls back to inline when Workers are unavailable) to avoid the multi-second main
+ *   thread stalls extraction causes at millions of triangles.
+ * - `maxTriangles` skips pathological meshes outright (tags `userData.edgesSkipped =
+ *   'triangle-cap'`); `maxSegments` drops distance fade on oversized overlays so they render in
+ *   the cheaper opaque pass.
  *
- * Depth strategy: surfaces render at TRUE depth, untouched; the LINES carry a small units-only
- * polygonOffset toward the camera (see EDGE_OFFSET_FACTOR/UNITS in `edges/options.ts`).
+ * Depth strategy: surfaces render at TRUE depth; lines carry a small units-only polygonOffset
+ * toward the camera (EDGE_OFFSET_FACTOR/UNITS in `edges/options.ts`).
  *
- * This reverses an earlier strategy that instead pushed each mesh's *surface* back with a
- * slope-scaled offset (factor 1, units 2). That version bled badly: the slope term scales with
- * dZ/dpixel, which is enormous on a surface viewed near edge-on, so grazing faces receded by much
- * more than the millimetre gaps between stacked parts — geometry behind a wall then beat the wall's
- * own receded surface and drew through it. It also clobbered the polygonOffset that look presets
- * configure on their materials, and its "restore" path reset those to 0 rather than to the preset's
- * values.
+ * This reverses an earlier approach that pushed each mesh's *surface* back with a slope-scaled
+ * offset instead. That bled badly: the slope term scales with dZ/dpixel, huge on a near-edge-on
+ * surface, so grazing faces receded far more than the millimetre gaps between stacked parts —
+ * geometry behind a wall then drew through the wall's own receded surface. It also clobbered the
+ * polygonOffset that look presets configure, and its "restore" path zeroed that instead of
+ * restoring the preset's value.
  *
- * A units-only bias on the lines is bounded by construction: a fixed number of depth quantization
- * steps, independent of viewing angle, so it lifts an edge off its own coplanar surface without ever
- * reaching across to a neighbouring part.
- *
- * The caveat the old strategy correctly identified: a depth ULP grows ~quadratically with viewing
- * distance, so a constant bias is only safe while ULPs stay small. That is what the dynamic
- * near-plane fitter (near-plane.ts) buys — it keeps `camera.near` proportional to the camera↔content
- * gap, holding ULPs at micron scale even zoomed well out. The two mechanisms are load-bearing
- * together; weakening the near fit will make this bias start to bleed.
+ * A units-only bias on the lines is bounded by construction — a fixed number of depth quantization
+ * steps regardless of viewing angle — so it lifts an edge off its own coplanar surface without ever
+ * reaching a neighbouring part. The caveat: a depth ULP grows ~quadratically with viewing distance,
+ * so a constant bias is only safe while ULPs stay small. The dynamic near-plane fitter
+ * (near-plane.ts) is what buys that — it keeps `camera.near` proportional to the camera↔content
+ * gap, holding ULPs at micron scale even zoomed out. Weakening the near fit will make this bias
+ * start to bleed.
  */
 export type { EdgeOptions };
 export { EDGE_USERDATA_KIND, EDGES_SKIPPED_TRIANGLE_CAP };
@@ -110,15 +104,11 @@ function attachOverlay(
 }
 
 /**
- * Walk an object subtree and attach an edge overlay to every `Mesh` found, returning the created
- * overlays (so callers can dispose them explicitly if they don't clear the whole subtree). Meshes
- * that already carry an overlay are skipped, so this is safe to call more than once.
+ * Attach an edge overlay to every `Mesh` in `root`'s subtree, returning the created overlays.
+ * Idempotent — meshes that already carry an overlay are skipped. Skips the floor/grid aids.
  *
- * Skips the floor and the grid (they're aids, not content) and anything already tagged as an edge.
- *
- * Fully synchronous — extraction for every mesh runs on the calling thread. Interactive hosts with
- * potentially-large meshes should prefer {@link addEdgesAsync}, which offloads big extractions to
- * a worker.
+ * Fully synchronous, extraction included. Prefer {@link addEdgesAsync} for interactive hosts with
+ * potentially-large meshes.
  */
 export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineSegments2[] {
 	const resolved = resolveOptions(options);
@@ -156,13 +146,11 @@ function isConnected(mesh: THREE.Object3D, root: THREE.Object3D): boolean {
 }
 
 /**
- * Like {@link addEdges}, but extraction for large meshes runs in a Worker so the main thread never
- * stalls. Small meshes (< ~25k triangles) still attach synchronously before this returns — only
- * heavy extractions arrive a beat later. Resolves with every overlay actually attached.
- *
- * Late results are dropped (never attached) when the mesh has left the root's subtree (scene was
- * cleared by a newer solve), the root's edges were removed via {@link removeEdges}, or another
- * apply already attached an overlay to that mesh.
+ * Like {@link addEdges}, but large-mesh extraction runs in a Worker so the main thread never
+ * stalls; small meshes still attach synchronously before this resolves. Resolves with every
+ * overlay actually attached — late results are dropped when the mesh left the subtree (scene
+ * cleared by a newer solve), {@link removeEdges} ran for this root, or another apply already
+ * attached one to that mesh.
  */
 export async function addEdgesAsync(
 	root: THREE.Object3D,
@@ -188,9 +176,9 @@ export async function addEdgesAsync(
 }
 
 /**
- * Remove every edge overlay under `root`, disposing its geometry and material. The inverse of
- * {@link addEdges}/{@link addEdgesAsync}; together they make edges a live on/off toggle — this
- * also cancels any in-flight async attaches for `root`. Returns how many were removed.
+ * Remove every edge overlay under `root`, disposing geometry and material, and cancels any
+ * in-flight async attaches for `root`. Inverse of {@link addEdges}/{@link addEdgesAsync}. Returns
+ * the count removed.
  */
 export function removeEdges(root: THREE.Object3D): number {
 	rootGenerations.set(root, generationOf(root) + 1);

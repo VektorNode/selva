@@ -7,20 +7,15 @@ import {
 	type DisposeOptions
 } from '../../shared/index.js';
 
-/**
- * Scene teardown. The traversal itself lives in `shared/gpu-dispose.ts` — the one walker every
- * disposal path in this package shares, so ownership rules can't drift between them.
- */
+// Traversal lives in `shared/gpu-dispose.ts` — the one walker every disposal path in this package
+// shares, so ownership rules can't drift between them.
 export { disposeObjectTree };
 export type { DisposeOptions };
 
 /** @deprecated Use {@link disposeMaterial} — same behaviour, ownership-aware. */
 export const disposeMaterialWithTextures = disposeMaterial;
 
-/**
- * Sweep every renderable in the scene plus the scene-level textures the traversal can't reach
- * (`environment`, a texture `background`). The teardown half of {@link initThree}'s dispose.
- */
+/** Sweeps every renderable plus the scene-level textures the traversal can't reach. */
 export function disposeSceneResources(scene: THREE.Scene, options?: DisposeOptions): void {
 	disposeObjectTree(scene, options);
 

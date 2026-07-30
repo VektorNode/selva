@@ -6,12 +6,9 @@ import { geometryContentKey, indexOutOfWindow } from './metadata.js';
 import type { MaterialGroup, MeshMetadata } from '../types.js';
 
 /**
- * Creates a merged mesh from multiple meshes sharing the same material.
- *
- * Indices in the parser output already reference offsets into the combined vertex array (the C#
- * pipeline rebases per-mesh local indices into combined-array indices when assembling the batch).
- * For merged meshes we copy the relevant slices into a fresh contiguous buffer and shift indices
- * to match the new layout.
+ * Merges a material group's meshes into one BufferGeometry. Parser indices already address the
+ * combined vertex array (rebased by the C# pipeline during batch assembly), so this copies each
+ * mesh's vertex/index slices into a fresh contiguous buffer and shifts indices to match.
  */
 export function createMergedMesh(
 	group: MaterialGroup,

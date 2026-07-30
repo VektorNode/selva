@@ -9,12 +9,7 @@ import { materialParams } from './appearance.js';
 import type { DisplayCurve } from '../types';
 import type { RhinoModule } from 'rhino3dm';
 
-/**
- * Adaptive tessellation parameters. Rather than a fixed segment count, curved spans are recursively
- * split until the midpoint of a span sits within {@link CURVE_CHORD_TOLERANCE_RATIO} of the curve's
- * size from the straight chord — so a span gets points in proportion to how much it actually bends.
- */
-/** Initial uniform splits before adaptive refinement kicks in (ensures closed/looping curves aren't collapsed). */
+/** Initial uniform splits before adaptive refinement (ensures closed/looping curves aren't collapsed). */
 const CURVE_INITIAL_SEGMENTS = 12;
 /** Chord-deviation tolerance as a fraction of the curve's bounding-box diagonal. Smaller = smoother. */
 const CURVE_CHORD_TOLERANCE_RATIO = 0.0004;
@@ -26,13 +21,12 @@ const CURVE_MAX_TURN_RADIANS = 0.05;
 const DEFAULT_LINE_WIDTH = 2;
 
 /**
- * Decode a curve's Rhino JSON and tessellate it to a fat `Line2`. Returns null if rhino3dm is absent
- * or decoding fails, so one bad curve never aborts the whole batch.
+ * Returns null (never throws) if rhino3dm is absent or decoding fails, so one bad curve can't abort the batch.
  *
- * Uses `Line2`/`LineMaterial` rather than `THREE.Line` so thickness (`item.width`) is actually
- * honoured — plain `THREE.Line` is hard-capped at 1px on every major GPU backend. `LineMaterial`
- * needs its `resolution` set to the drawing-buffer size, but `Line2.onBeforeRender` does that
- * automatically from the renderer each frame, so the parser needs no renderer reference.
+ * Uses `Line2`/`LineMaterial` rather than `THREE.Line` because plain `THREE.Line` is hard-capped at
+ * 1px on every major GPU backend, so `item.width` would otherwise be unhonoured. `LineMaterial`
+ * needs `resolution` set to the drawing-buffer size; `Line2.onBeforeRender` does that automatically,
+ * so no renderer reference is needed here.
  */
 export function buildCurveLine(
 	item: DisplayCurve,
@@ -52,7 +46,6 @@ export function buildCurveLine(
 		points = tessellate(curve, applyTransforms);
 	} catch (error) {
 		// WASM calls (pointAt / tryGetPolyline / getBoundingBox) can throw on malformed geometry.
-		// Log and skip this curve so one bad item never aborts the whole batch (contract above).
 		getLogger().warn('Failed to tessellate curve display item; skipping.', error);
 		return null;
 	} finally {
@@ -66,9 +59,7 @@ export function buildCurveLine(
 	const geometry = new LineGeometry();
 	geometry.setPositions(positions);
 
-	// @types/three's LineMaterial omits `linewidth` (and doesn't surface `transparent`/`opacity`
-	// through its chain) though all exist at runtime. Set them via a narrow typed view rather than
-	// scattering casts.
+	// @types/three's LineMaterial omits `linewidth`/`transparent`/`opacity` though all exist at runtime.
 	const params = materialParams(item.color, item.opacity);
 	const material = new LineMaterial({ color: params.color });
 	const styled = material as LineMaterial & {
@@ -81,7 +72,7 @@ export function buildCurveLine(
 	styled.opacity = params.opacity;
 
 	const line = new Line2(geometry, material);
-	line.computeLineDistances(); // required for any future dashed styling; cheap
+	line.computeLineDistances(); // cheap; required for any future dashed styling
 	line.name = item.name;
 	line.userData = {
 		source: 'compute',
@@ -93,22 +84,16 @@ export function buildCurveLine(
 	return line;
 }
 
-/**
- * Render a single point as a one-vertex THREE.Points. Returns null (with a warning) when the item's
- * position is missing or non-finite — display items arrive as network JSON, so a malformed point
- * must be skipped rather than throwing or pushing NaN into the buffer (a NaN vertex poisons the
- * bounding sphere and can break camera fit-to-view for the whole scene).
- */
+/** Free a rhino3dm WASM object; emscripten bindings aren't reclaimed by JS GC. */
 function deleteRhinoObject(obj: unknown): void {
 	(obj as { delete?: () => void } | null | undefined)?.delete?.();
 }
 
-/** Decode Rhino CommonObject JSON into a rhino3dm Curve (or null on failure). */
 function decodeCurve(json: string, rhino: RhinoModule): InstanceType<RhinoModule['Curve']> | null {
 	try {
 		const parsed = JSON.parse(json);
 		const obj = rhino.CommonObject.decode(parsed);
-		// decode returns a CommonObject; only curves carry domain/pointAt. Treat anything else as a miss.
+		// decode() returns a CommonObject; only curves carry pointAt, so use it to detect a miss.
 		if (obj && typeof (obj as { pointAt?: unknown }).pointAt === 'function') {
 			return obj as InstanceType<RhinoModule['Curve']>;
 		}
@@ -122,13 +107,9 @@ function decodeCurve(json: string, rhino: RhinoModule): InstanceType<RhinoModule
 }
 
 /**
- * Tessellate a curve to THREE points (passed through the shared — identity — coordinate mapping).
- *
- * Most curves Grasshopper emits are linear — a line is 2 vertices, a polyline is N+1 — yet uniform
- * sampling would inflate every one to {@link CURVE_INITIAL_SEGMENTS}+1 points. So we first ask
- * rhino3dm if the curve *is* a polyline (covers lines, polylines, and degree-1 nurbs/polycurves) and
- * emit its exact vertices when so. Only genuinely curved geometry (arcs, nurbs, polycurves with
- * curved spans) falls through to {@link sampleUniform}.
+ * Most curves Grasshopper emits are linear (line = 2 vertices, polyline = N+1), so uniform sampling
+ * would needlessly inflate them to {@link CURVE_INITIAL_SEGMENTS}+1 points. Emit exact vertices for
+ * anything rhino3dm reports as a polyline; only genuinely curved geometry falls through to {@link sampleUniform}.
  */
 function tessellate(
 	curve: InstanceType<RhinoModule['Curve']>,
@@ -146,18 +127,15 @@ interface PolylineLike {
 	get(index: number): number[];
 }
 
-/**
- * If the curve has an exact polyline form, return its vertices; otherwise null. `tryGetPolyline`
- * returns `[ok, Polyline]`; the Polyline is a Point3dList (`count` + `get(i) → [x,y,z]`).
- */
+/** Exact polyline vertices, or null if the curve isn't one. */
 function tryPolylineVertices(
 	curve: InstanceType<RhinoModule['Curve']>,
 	applyTransforms: boolean
 ): THREE.Vector3[] | null {
 	if (!curve.isPolyline()) return null;
 
-	// rhino3dm's WASM `tryGetPolyline` returns the Polyline directly (not the documented
-	// `[ok, Polyline]` tuple). Accept either: unwrap a tuple if we got one, else use it as-is.
+	// rhino3dm's WASM tryGetPolyline returns the Polyline directly, not the documented [ok, Polyline]
+	// tuple — accept either shape.
 	const result = curve.tryGetPolyline() as unknown;
 	const polyline = (Array.isArray(result) ? result[1] : result) as PolylineLike | null;
 	if (!polyline || typeof polyline.count !== 'number' || polyline.count < 2) {
@@ -177,12 +155,9 @@ function tryPolylineVertices(
 }
 
 /**
- * Adaptively sample a curve across its domain via `pointAt`. Robust for any curved type (arc, nurbs,
- * polycurve). Instead of a fixed segment count, we start from {@link CURVE_INITIAL_SEGMENTS} uniform
- * spans and recursively subdivide each only where it actually bends — a span is split when its
- * parameter-midpoint deviates from the straight chord by more than a tolerance derived from the
- * curve's bounding-box diagonal. Result: smooth on tight bends, sparse on near-straight runs, and
- * scale-independent (a tiny fillet and a huge arc both hit the same *visual* smoothness).
+ * Adaptively samples any curved type via `pointAt`: starts from {@link CURVE_INITIAL_SEGMENTS} uniform
+ * spans, recursively subdividing only where the curve actually bends. Tolerance is a fraction of the
+ * bounding-box diagonal, so a tiny fillet and a huge arc get the same *visual* smoothness.
  */
 function sampleUniform(
 	curve: InstanceType<RhinoModule['Curve']>,
@@ -201,8 +176,7 @@ function sampleUniform(
 
 	const tolerance = chordTolerance(curve);
 
-	// Evaluate each segment boundary once and carry it forward as the next `pa`,
-	// instead of re-evaluating ta/tb (3 pointAt calls per segment → 1).
+	// Carry each boundary forward as the next `pa` instead of re-evaluating (3 pointAt calls → 1).
 	let ta = t0;
 	let pa = evalAt(t0);
 	const out: THREE.Vector3[] = [pa];
@@ -218,12 +192,7 @@ function sampleUniform(
 	return out;
 }
 
-/**
- * Recursively refine the span [ta, tb]. If the curve point at the parameter-midpoint lies farther
- * than `tolerance` from the chord pa→pb, split and recurse on both halves; otherwise the chord is a
- * good-enough approximation and nothing is added. Pushes interior points (excluding endpoints — the
- * caller owns those) into `out` in parameter order.
- */
+/** Splits [ta, tb] when the midpoint deviates from chord pa→pb; pushes interior points into `out` in order. */
 function subdivide(
 	ta: number,
 	pa: THREE.Vector3,
@@ -265,11 +234,8 @@ function chordTolerance(curve: InstanceType<RhinoModule['Curve']>): number {
 }
 
 /**
- * Angle (radians) of the turn at `b` along the path a→b→c. 0 = straight, π = full reversal.
- *
- * Scalar math on purpose: this runs once per subdivision test inside a recursion that can evaluate
- * ~2^12 spans per curve, so `Vector3.clone()` temporaries here caused measurable GC churn (and
- * module-scope scratch vectors would be unsafe across the recursive calls).
+ * Turn angle (radians) at `b` along a→b→c; 0 = straight, π = reversal. Scalar math, not Vector3
+ * temporaries — this recurses up to ~2^12 times per curve and clone() churn was measurable.
  */
 function turnAngle(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number {
 	const abx = b.x - a.x;
@@ -288,10 +254,7 @@ function turnAngle(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number
 	return Math.acos(cos);
 }
 
-/**
- * Perpendicular distance from point `p` to the segment a→b (clamped to the segment endpoints).
- * Scalar math for the same allocation-churn reason as {@link turnAngle}.
- */
+/** Perpendicular distance from `p` to segment a→b, clamped to endpoints. Scalar math, see {@link turnAngle}. */
 function distanceToSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): number {
 	const abx = b.x - a.x;
 	const aby = b.y - a.y;

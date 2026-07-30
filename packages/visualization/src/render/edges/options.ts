@@ -9,10 +9,9 @@ import * as THREE from 'three';
  */
 export interface EdgeOptions {
 	/**
-	 * Force a single edge color for every overlay. When omitted (the default), each overlay derives
-	 * its color from its own mesh's material — a darkened tint of the surface — so edges read as the
-	 * object's own outline rather than a uniform black frame. Meshes with no readable material color
-	 * fall back to {@link DEFAULT_EDGE_COLOR}.
+	 * Force a single edge color for every overlay. Omitted (default): each overlay derives its color
+	 * from its own mesh's material (a darkened tint), falling back to {@link DEFAULT_EDGE_COLOR}
+	 * when no material color is readable.
 	 */
 	color?: THREE.ColorRepresentation;
 	/**
@@ -28,12 +27,10 @@ export interface EdgeOptions {
 	 */
 	thresholdAngle?: number;
 	/**
-	 * Fade an overlay out as its own edges crowd together on screen (default true). Edges draw at a
-	 * constant pixel width, so once neighbouring lines sit less than a pixel or two apart they stop
-	 * resolving and merge into a dark smear — worst on layered sheet goods, whose millimetre-pitch
-	 * laminations are sub-pixel at any normal zoom on a metre-scale part. Fading by edge density
-	 * (not by how large the mesh is) returns those parts to a clean shaded read while leaving
-	 * sparsely-edged geometry fully drawn at the same distance.
+	 * Fade an overlay out as its own edges crowd together on screen (default true). Edges draw at
+	 * constant pixel width, so dense edges (e.g. millimetre-pitch laminations on sheet goods) merge
+	 * into a dark smear at normal zoom; fading by edge density rather than mesh size fixes that
+	 * while leaving sparsely-edged geometry fully drawn.
 	 */
 	distanceFade?: boolean;
 	/**
@@ -64,44 +61,27 @@ const DEFAULT_DARKEN = 0.75;
 const DEFAULT_MAX_TRIANGLES = 4_000_000;
 const DEFAULT_MAX_SEGMENTS = 2_000_000;
 
-/**
- * Below this triangle count extraction runs inline even on the async path — a worker round-trip
- * (copy + transfer + wake) costs more than the extraction itself. Phase 0 measured three's
- * extractor at ~200 ms per 100k triangles; the replacement extractor is ~an order faster, putting
- * 25k triangles well under a frame.
- */
+/** Below this triangle count extraction runs inline even on the async path — a worker round-trip costs more than the extraction itself. */
 export const INLINE_TRIANGLE_BUDGET = 25_000;
 
 /** CPU byte budget for the cross-solve segment cache (Float32 segment arrays only). */
 export const SEGMENT_CACHE_BYTE_BUDGET = 128 * 1024 * 1024;
 
-// Edge-density fade band, as the mean on-screen gap between neighbouring edges in px: fully opaque
-// at/above FADE_START_PX, fully gone at/below FADE_END_PX, linear between.
-//
-// Density, not object size, is what breaks the technical look when zoomed out. A big part whose
-// edges have collapsed to sub-pixel spacing is precisely the failure case — every line still draws
-// at full width and full opacity, so they merge into a dark smear that reads as "all the interior
-// edges showing through". Fading on the *bounding sphere* instead (the previous rule) never fires
-// for that part at all, because the sphere still covers most of the viewport.
-//
-// The band sits just above 1 px: below ~2 px apart, constant-width lines visibly overlap, and by
-// 1 px they are a solid fill. Fading out across that range returns the part to its shaded read.
+// Edge-density fade band, as mean on-screen gap between neighbouring edges in px: fully opaque
+// at/above FADE_START_PX, fully gone at/below FADE_END_PX, linear between. Fading by density
+// (not by mesh/bounding-sphere size) is required because a big part with sub-pixel edge spacing
+// still draws every line at full width, merging into a smear the old bounding-sphere rule never
+// caught (the sphere still covers most of the viewport). Band sits just above 1px, where
+// constant-width lines start visibly overlapping.
 export const FADE_START_PX = 4;
 export const FADE_END_PX = 1;
 
-// Edge pull-forward. Units only — deliberately NO slope (factor) term.
-//
-// The slope term scales with the polygon's dZ/dpixel, which is small head-on but very large at
-// grazing angles: on a long surface viewed near edge-on, one pixel spans a lot of depth. Applying it
-// to the *surfaces* (the previous strategy) pushed grazing faces back by far more than the
-// millimetre-scale gaps between stacked parts, so geometry BEHIND a wall won the depth test against
-// the wall's own receded surface and its edges drew straight through — exactly the bleed-through
-// this offset exists to prevent.
-//
-// A units-only bias on the lines is bounded instead: it is a fixed number of depth quantization
-// steps regardless of viewing angle, so it can lift an edge off its own coplanar surface without
-// ever reaching across the gap to a neighbouring part. 1 unit is the minimum that reliably wins
-// z-fighting against the surface the edge was extracted from.
+// Edge pull-forward, units only — deliberately no slope (factor) term. A slope term scales with
+// the polygon's dZ/dpixel, which is huge at grazing angles; applied to surfaces (the old strategy)
+// it pushed grazing faces back further than the mm-scale gaps between stacked parts, so geometry
+// behind a wall won the depth test and bled through the wall's own edges. A units-only bias on the
+// lines instead is a fixed number of depth-quantization steps regardless of angle — enough to lift
+// an edge off its own coplanar surface without reaching across a gap to a neighbouring part.
 export const EDGE_OFFSET_FACTOR = 0;
 export const EDGE_OFFSET_UNITS = -1; // negative = toward the camera
 

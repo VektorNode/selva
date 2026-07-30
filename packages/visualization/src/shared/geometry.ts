@@ -2,13 +2,8 @@ import * as THREE from 'three';
 
 import { getLogger } from './logger.js';
 
-/**
- * Object/color utilities shared by `parse/` and `render/`.
- *
- * These live in `shared/` because the parse layer needs them (colors on materials, grounding and
- * bounds on freshly built meshes) and `parse/` must never import upward from `render/`. Nothing here
- * touches a scene, camera, renderer or controls — those stay in the render layer.
- */
+// Object/color utilities shared by `parse/` and `render/`. Live here (not in render's
+// three-helpers) because `parse/` needs them and must never import upward from `render/`.
 
 /** Parses color strings (hex, RGB, CSS names). */
 export function parseColor(colorString: string): THREE.Color {
@@ -72,7 +67,6 @@ export function computeCombinedBoundingBox(meshes: THREE.Object3D[]): THREE.Box3
 	const combinedBoundingBox = new THREE.Box3();
 	if (meshes.length === 0) return combinedBoundingBox;
 	meshes.forEach((mesh) => {
-		// Ensure the world matrix is up to date before calculating the box
 		mesh.updateMatrixWorld(true);
 		const bbox = new THREE.Box3().setFromObject(mesh);
 		combinedBoundingBox.union(bbox);

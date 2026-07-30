@@ -3,11 +3,37 @@
 > **Status: PLANNING (2026-07-13).** Design only — no implementation yet. Was the
 > caching plan's "F1 / Phase 5", split out because it's a **product feature**, not
 > transparent caching: it adds author-facing surface (admin action, UI, file
-> format, offline read-path). The durable L2 solve cache (H1) it builds on shipped
-> and validated — its keying + gzipped-envelope machinery lives in
-> `@selvajs/server/compute` (`solve-cache-key.ts`, `solve-cache-envelope.ts`).
-> Caching made the same solves cheaper invisibly; this lets an author
-> _pre-compute_ a definition's discrete input space and ship the results.
+> format, offline read-path). Caching made the same solves cheaper invisibly; this
+> lets an author _pre-compute_ a definition's discrete input space and ship the
+> results.
+>
+> ⚠️ **The foundation this was written against no longer exists (2026-07-30).**
+> [caching-simplification](./archive/caching-simplification.md) deleted the durable
+> L2 solve cache and its machinery — `solve-cache-key.ts`,
+> `solve-cache-envelope.ts`, `memory-solve-cache.ts`, and the pipeline's
+> `solveCache` write-through hook are all gone. The L2 backend was redundant with
+> the scheduler's own in-process cache (same heap, same restart boundary, consulted
+> second), so it was removed rather than kept for a feature that hadn't been built.
+>
+> What that changes, concretely:
+>
+> - **The prewarm sink is no longer free.** §Why it's feasible below claims the
+>   write-through hook makes it zero-cost. That hook is gone; prewarm now needs a
+>   real storage decision first.
+> - **Key derivation and the gzipped envelope format must be rebuilt** if a bundle
+>   still wants them. The design intent behind both (a wide collision-defended key
+>   folding `COMPUTE_CONTRACT_VERSION` + server identity; opaque pre-gzipped bytes)
+>   is still sound and worth reading here as a spec — it just has no implementation
+>   to lean on.
+> - **`ISolveResultCache` in `@selvajs/platform` survives** and is the intended
+>   seam for any shared/persistent solve store. That is where a prewarm sink should
+>   mount, with a real backend behind it.
+> - **`solveCacheLimit` on the definition record also survives** (a persisted
+>   column in both stores) and is dormant until such a backend exists.
+>
+> Treat the sections below as a product spec with a stale storage layer. The
+> author-facing half — enumerating the input space, the admin action, the bundle
+> file format, the offline read-path — is unaffected.
 >
 > (The former `docs/plans/CACHING.md` tracker was deleted 2026-07-13 once its work
 > was implemented and validated; its two deferred package/routing seams are issues
@@ -37,14 +63,16 @@ differ only in the sink (L2 cache vs. file).
 re-running the definition. A stored response _is_ a complete solve. The caching
 work already built the two hard parts:
 
-- **Keying** — a stable, collision-defended input key (`solve-cache-key.ts`, H2),
-  folding `COMPUTE_CONTRACT_VERSION` + compute-server identity so a bundle can't
-  serve a result from an incompatible Rhino/plugin.
-- **Serialization + envelope** — `runSolvePipeline` produces the result already
-  gzipped and framed (`solve-cache-envelope.ts`), with an L2 write-through hook.
-  **The prewarm sink is therefore free**: solve each combo through the same
-  pipeline with the same `solveCache` hook the live route uses, and L2 is
-  populated correctly-keyed with zero new persistence code.
+- **Keying** — a stable, collision-defended input key folding
+  `COMPUTE_CONTRACT_VERSION` + compute-server identity, so a bundle can't serve a
+  result from an incompatible Rhino/plugin. ⚠️ The implementation
+  (`solve-cache-key.ts`) was deleted with the L2 cache; the requirement stands and
+  needs rebuilding.
+- **Serialization + envelope** — a stored response is a complete solve, and
+  storing it pre-gzipped keeps a hit near-CPU-free. ⚠️ `solve-cache-envelope.ts`
+  and the pipeline's L2 write-through hook are also gone, so the earlier claim that
+  "the prewarm sink is therefore free" **no longer holds**: prewarm now needs a
+  storage backend behind `ISolveResultCache` before any of this is zero-cost.
 
 ---
 

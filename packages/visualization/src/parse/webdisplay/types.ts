@@ -2,9 +2,7 @@ import type { DisplayItem } from '../display-items/types.js';
 import type { RhinoModule } from 'rhino3dm';
 import type { MaterialAppearanceOptions } from '../../shared/types.js';
 
-/**
- * Material properties for Three.js rendering.
- */
+/** Material properties for Three.js rendering. */
 export interface SerializableMaterial {
 	color: string;
 	metalness: number;
@@ -23,18 +21,13 @@ export interface SerializableMaterial {
 /**
  * Metadata for a single mesh within a batch.
  *
- * Offsets and counts are expressed in **vertex-count units** (not float components) and
- * **index-count units** — i.e. element offsets into the decoded typed arrays, which is how
- * consumers address them (`indices.subarray(indexStart, indexStart + indexCount)`). To address
- * the typed-array storage:
- *   - vertex component offset  = `vertexStart * 3`
- *   - vertex component count   = `vertexCount * 3`
- *   - index element offset     = `indexStart`
- *   - index count              = `indexCount`
+ * `vertexStart`/`vertexCount` and `indexStart`/`indexCount` are in **element units** of the
+ * decoded typed arrays (`indices.subarray(indexStart, indexStart + indexCount)`), not bytes:
+ *   - vertex component offset = `vertexStart * 3`, component count = `vertexCount * 3`
+ *   - index element offset = `indexStart`, count = `indexCount`
  *
- * If you need *byte* offsets, multiply by the element size, which depends on the blob's flags:
- * indices are 2 bytes each for `FLAG_UINT16_INDICES` (wire v2+) blobs and 4 bytes for uint32
- * blobs; vertex components are 2 bytes (int16 quantized) or 4 bytes (`FLAG_FLOAT32`).
+ * For byte offsets, multiply by element size: indices are 2 bytes (`FLAG_UINT16_INDICES`) or 4
+ * bytes (uint32); vertex components are 2 bytes (int16 quantized) or 4 bytes (`FLAG_FLOAT32`).
  */
 export interface MeshMetadata {
 	name: string;
@@ -43,22 +36,20 @@ export interface MeshMetadata {
 	/** Original index in the GH input tree before material grouping. Combined with
 	 *  MeshBatch.sourceComponentId to uniquely identify the GH source geometry. */
 	originalIndex: number;
-	/** Number of vertices in this mesh (each vertex is 3 components: x, y, z). */
+	/** Vertex count (each vertex is 3 components: x, y, z). */
 	vertexCount: number;
-	/** Number of indices in this mesh (3 per triangle). */
+	/** Index count (3 per triangle). */
 	indexCount: number;
-	/** Index of this mesh's first vertex in the combined vertex array, in vertex-count units.
-	 *  The corresponding component offset into the int16/float32 typed array is `vertexStart * 3`. */
+	/** First vertex of this mesh in the combined vertex array (vertex-count units); component
+	 *  offset into the typed array is `vertexStart * 3`. */
 	vertexStart: number;
-	/** Index of this mesh's first index in the combined index array, in index-count units. */
+	/** First index of this mesh in the combined index array (index-count units). */
 	indexStart: number;
 	/** Arbitrary key-value pairs from the GH Metadata input */
 	metadata?: Record<string, string>;
 }
 
-/**
- * A group of meshes sharing the same material.
- */
+/** A group of meshes sharing the same material. */
 export interface MaterialGroup {
 	/** Reference to the material ID in the materials array */
 	materialId: number;
@@ -116,9 +107,7 @@ export interface MeshBatchParsingOptions {
  */
 export type { MaterialAppearanceOptions } from '../../shared/types.js';
 
-/**
- * Options for extracting and processing meshes from compute responses.
- */
+/** Options for extracting and processing meshes from compute responses. */
 export interface MeshExtractionOptions {
 	/** Configuration for parsing mesh batches. */
 	parsing?: MeshBatchParsingOptions;

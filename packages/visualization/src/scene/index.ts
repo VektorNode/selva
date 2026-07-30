@@ -1,17 +1,12 @@
 /**
- * `scene/` — the bridge between parsed content and what a user sees listed.
+ * `scene/` — the bridge between parsed content and what a user sees listed. Reads a live
+ * `THREE.Scene` (content filtering, layer grouping, visibility, selection) with no DOM, so an
+ * outliner panel, a headless export filter, and a screenshot cropper can share one implementation.
  *
- * Presenting a live `THREE.Scene` means answering the same questions every time: which children are
- * actual content, how do they group, what is hidden, what is selected. This layer answers them
- * without a DOM, so an outliner panel, a headless export filter, and a screenshot cropper can share
- * one implementation.
+ * It never adds, removes, or disposes content — that stays with `render/`.
  *
- * Depends on `three` only. It reads the scene graph and toggles `.visible`; adding, removing and
- * disposing content stays with `render/`.
- *
- * `createSceneOutliner` composes this layer's parts — content filtering, layer grouping, visibility
- * and selection state — so those pieces are not exported individually; reach them through the
- * outliner (`outliner.visibility`, `outliner.selection`, `outliner.layerGroups()`). The exceptions
+ * `createSceneOutliner` composes this layer's parts, so they aren't exported individually; reach
+ * them through the outliner (`outliner.visibility`, `.selection`, `.layerGroups()`). The exceptions
  * are the two pure functions a host needs while *rendering* the outliner's output.
  *
  * @module scene

@@ -1,20 +1,14 @@
 import * as THREE from 'three';
 
 /**
- * The single source of truth for "which way is up, and what do front/right mean" in the viewer.
+ * Single source of truth for "which way is up, and what do front/right mean" in the viewer. Every
+ * up-dependent default (camera framing, sun position, ground offset, view presets) derives from
+ * {@link buildUpBasis} rather than hardcoding an axis — that's what lets a Y-up scene get a correct
+ * horizon and sun instead of the below-horizon/near-flat result a hardcoded Z-up vector would give.
  *
- * Every up-dependent default (camera framing, sun position, ground offset, view presets) derives
- * from {@link buildUpBasis} instead of hardcoding an axis. Before this module those defaults each
- * spelled out a Z-up vector inline, so a scene configured Y-up got a below-horizon camera and a
- * near-horizontal sun while the presets and floor correctly followed `sceneUp`.
- *
- * ## Why front is -forward
- *
- * The basis returns `forward` = the direction the camera LOOKS (from camera toward model), and the
- * preset positions are the opposite (from target toward camera). Rhino's convention fixes the signs:
- * its Front view looks along +Y, so the camera sits at -Y; its Right view looks along -X, so the
- * camera sits at +X. Deriving `right` as `seed x up` (rather than `up x seed`) is what makes the
- * handedness come out matching Rhino rather than mirrored.
+ * `forward` is the direction the camera looks (camera → model); preset positions are the reverse
+ * (target → camera). Deriving `right` as `seed x up` (not `up x seed`) matches Rhino's handedness:
+ * Front looks along +Y (camera at -Y), Right looks along -X (camera at +X).
  */
 
 /** An orthonormal frame derived from a scene up axis. All vectors are unit length. */
@@ -28,12 +22,9 @@ export interface UpBasis {
 }
 
 /**
- * Derive the ground-plane axes for a given up vector.
- *
- * The seed picks whichever world axis is least parallel to `up`, so the cross products stay
- * well-conditioned in any up convention. For Rhino's Z-up this yields forward = +Y and right = +X,
- * matching Rhino's own Front/Right views; for Three's native Y-up it yields forward = -Z and
- * right = +X, matching Three's convention that the default camera looks down -Z.
+ * Ground-plane axes for a given up vector. Seeds the cross product with whichever world axis is
+ * least parallel to `up`, keeping it well-conditioned in any convention: Z-up yields forward = +Y,
+ * right = +X (Rhino's Front/Right); Y-up yields forward = -Z, right = +X (Three's default -Z look).
  */
 export function buildUpBasis(up: THREE.Vector3): UpBasis {
 	const u = up.clone().normalize();
@@ -52,11 +43,9 @@ export function buildUpBasis(up: THREE.Vector3): UpBasis {
 }
 
 /**
- * The default 3/4 iso camera OFFSET from the target, scaled to `distance`.
- *
- * Placed behind-left and above the model (the conventional architectural 3/4), expressed in the
- * scene's own basis so it reads the same in any up convention. Callers add this to the framing
- * target to get a camera position.
+ * Default 3/4 iso camera offset from the target, scaled to `distance` — behind-left and above the
+ * model, expressed in the scene's own basis so it reads the same in any up convention. Add to the
+ * framing target to get a camera position.
  */
 export function isoOffset(up: THREE.Vector3, distance: number): THREE.Vector3 {
 	const { forward, right, up: u } = buildUpBasis(up);

@@ -67,7 +67,7 @@ export const CONCRETE_MATERIAL = new THREE.MeshPhysicalMaterial({
 });
 
 export const PLASTIC_MATERIAL = new THREE.MeshPhysicalMaterial({
-	color: new THREE.Color(0xffffff), // Default white plastic
+	color: new THREE.Color(0xffffff),
 	metalness: 0.0,
 	roughness: 0.3,
 	envMapIntensity: 0.5,

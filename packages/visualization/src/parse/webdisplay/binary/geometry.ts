@@ -32,8 +32,8 @@ export function maybeDecompress(bytes: Uint8Array): Uint8Array {
 	const uncompressedLen = view.getUint32(4, true);
 	const deflated = bytes.subarray(8);
 
-	// Bound the wire-supplied length before allocating — a corrupt header could
-	// otherwise request ~4 GB. DEFLATE won't expand past ~1000×.
+	// Bound the wire-supplied length before allocating — a corrupt header could request ~4 GB.
+	// DEFLATE won't expand past ~1000x.
 	const maxPlausibleLen = Math.max(deflated.byteLength * 1032 + 1024, 1 << 20);
 	if (uncompressedLen > maxPlausibleLen) {
 		throw fail('SLVZ header declares an implausible uncompressed length', {

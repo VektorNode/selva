@@ -268,6 +268,15 @@ export class SolveScheduler {
 	private readonly cache = new Map<string, CacheEntry>();
 	/** Sum of `sizeBytes` across retained cache entries. */
 	private cacheBytes = 0;
+	/**
+	 * Cumulative hit/miss/eviction counters for {@link cacheStats}. Deliberately
+	 * NOT reset by `clearCache()` — they measure this scheduler's whole lifetime,
+	 * so a hit rate stays comparable across a session rather than restarting at
+	 * every clear.
+	 */
+	private cacheHits = 0;
+	private cacheMisses = 0;
+	private cacheEvictions = 0;
 
 	/** Optional cache-key-aware executor and whether server-def-cache reuse is on. */
 	private readonly cacheKeyExecutor?: CacheKeyExecutor;
@@ -914,14 +923,21 @@ export class SolveScheduler {
 	private readCache(key: string): GrasshopperComputeResponse | null {
 		if (!this.cacheEnabled) return null;
 		const entry = this.cache.get(key);
-		if (!entry) return null;
+		if (!entry) {
+			this.cacheMisses += 1;
+			return null;
+		}
 		if (this.cacheTtl > 0 && Date.now() - entry.insertedAt > this.cacheTtl) {
 			this.dropCacheEntry(key);
+			// An expired entry is a miss, not a separate outcome — the solve runs
+			// either way, which is what a hit rate is measuring.
+			this.cacheMisses += 1;
 			return null;
 		}
 		// LRU touch
 		this.cache.delete(key);
 		this.cache.set(key, entry);
+		this.cacheHits += 1;
 		return entry.response;
 	}
 
@@ -946,6 +962,7 @@ export class SolveScheduler {
 			const oldest = this.cache.keys().next().value;
 			if (oldest === undefined) break;
 			this.dropCacheEntry(oldest);
+			this.cacheEvictions += 1;
 		}
 	}
 
@@ -962,9 +979,30 @@ export class SolveScheduler {
 		this.cacheBytes = 0;
 	}
 
-	/** Observability snapshot of the response cache (entries + retained bytes). */
-	cacheStats(): { entries: number; bytes: number } {
-		return { entries: this.cache.size, bytes: this.cacheBytes };
+	/**
+	 * Observability snapshot of the solve cache: current size plus lifetime
+	 * hit/miss/eviction counters.
+	 *
+	 * `hits`/`misses` count cache CONSULTATIONS, so `hits / (hits + misses)` is the
+	 * hit rate. A TTL-expired entry counts as a miss (the solve runs either way).
+	 * `evictions` counts only entries dropped under size/byte pressure — not
+	 * replace-in-place writes or TTL expiry, which are not capacity signals.
+	 * Counters are cumulative and survive `clearCache()`.
+	 */
+	cacheStats(): {
+		entries: number;
+		bytes: number;
+		hits: number;
+		misses: number;
+		evictions: number;
+	} {
+		return {
+			entries: this.cache.size,
+			bytes: this.cacheBytes,
+			hits: this.cacheHits,
+			misses: this.cacheMisses,
+			evictions: this.cacheEvictions
+		};
 	}
 
 	// --------------------------------------------------------------------------

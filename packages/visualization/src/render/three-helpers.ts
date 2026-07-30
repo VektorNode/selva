@@ -33,35 +33,26 @@ export function updateScene(
 
 	if (meshes.length === 0) return;
 
-	// Add new objects (meshes, lines, points) to scene
 	meshes.forEach((mesh) => {
 		scene.add(mesh);
 	});
 
-	// Calculate bounds of the new content
 	const unionBoundingBox = computeCombinedBoundingBox(meshes);
-
-	// Get the center of the union bounding box
 	const center = unionBoundingBox.getCenter(new THREE.Vector3());
 	const size = unionBoundingBox.getSize(new THREE.Vector3());
-
-	// Calculate a distance that is slightly larger than the largest dimension of the union bounding box
 	const maxDim = Math.max(size.x, size.y, size.z);
 
-	// Always update camera frustum to ensure geometry is visible
-	// This prevents clipping when geometry size changes significantly
+	// Frustum is rescaled to content size every call (not just on first frame) so near/far stay
+	// well-conditioned when geometry size changes drastically between solves.
 	const scaleRatio = maxDim / Math.min(size.x || 1, size.y || 1, size.z || 1);
 
 	if (scaleRatio > CAMERA_CONFIG.SCALE_RATIO_THRESHOLD || maxDim > CAMERA_CONFIG.HUGE_THRESHOLD) {
-		// Large scale range detected - use logarithmic depth buffer approach
 		camera.near = maxDim * CAMERA_CONFIG.NEAR_PLANE_FACTOR.TINY;
 		camera.far = maxDim * CAMERA_CONFIG.FAR_PLANE_FACTOR.HUGE;
 	} else if (maxDim > CAMERA_CONFIG.LARGE_THRESHOLD) {
-		// Large scene
 		camera.near = maxDim * CAMERA_CONFIG.NEAR_PLANE_FACTOR.SMALL;
 		camera.far = maxDim * CAMERA_CONFIG.FAR_PLANE_FACTOR.LARGE;
 	} else {
-		// Normal scene
 		camera.near = Math.max(0.01, maxDim * CAMERA_CONFIG.NEAR_PLANE_FACTOR.NORMAL);
 		camera.far = Math.max(2000, maxDim * CAMERA_CONFIG.FAR_PLANE_FACTOR.NORMAL);
 	}
@@ -132,14 +123,12 @@ const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer']);
 
 /** Removes all compute content except persistent infrastructure and shared materials. */
 export function clearScene(scene: THREE.Scene): void {
-	// Snapshot children — we mutate the array via removeFromParent during iteration
+	// Snapshot — removeFromParent below mutates scene.children during iteration.
 	const topLevel = [...scene.children];
 
 	topLevel.forEach((object) => {
-		// Persistent scene infrastructure (floor, grid, the CSS2D label layer) outlives content
-		// updates — it's added once at init, not per solve. Removing the label-layer group here
-		// orphans it, so labels created afterwards never render (the CSS2D renderer walks the live
-		// scene and never finds them).
+		// Removing the label-layer group here would orphan it: the CSS2D renderer only finds labels
+		// by walking the live scene, so labels added afterwards would never render.
 		if (PERSISTENT_SCENE_IDS.has(object.userData.id)) return;
 
 		// User-drawn geometry (added via the viewer's addUserGeometry, tagged source==='user')

@@ -2,40 +2,37 @@ import * as THREE from 'three';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 /**
- * An HTML label layer that tracks 3D positions, via three's {@link CSS2DRenderer}. Labels are real
- * DOM nodes (crisp text, CSS-stylable) positioned each frame to follow points in the scene — the
- * foundation for measurement readouts, dimension annotations, and point tags.
+ * HTML label layer tracking 3D positions via three's {@link CSS2DRenderer} — real DOM nodes (crisp
+ * text, CSS-stylable) positioned each frame to follow points in the scene. Backs measurement
+ * readouts, dimension annotations, point tags.
  *
- * The CSS2D renderer draws into its own absolutely-positioned DOM overlay stacked on top of the
- * WebGL canvas (pointer-events disabled so it never steals clicks from the viewer). The viewer owns
- * one of these; features like the measure tool add/remove labels through it.
+ * Draws into its own absolutely-positioned DOM overlay stacked above the WebGL canvas
+ * (pointer-events disabled so it never steals clicks). The viewer owns one; features like the
+ * measure tool add/remove labels through it.
  */
 
 export interface LabelHandle {
-	/** The CSS2DObject in the scene graph. */
 	readonly object: CSS2DObject;
-	/** Move the label to a new world position. */
 	setPosition(position: THREE.Vector3): void;
 	/** Replace the label's text/HTML. */
 	setText(text: string): void;
-	/** Remove the label from the scene and the DOM. */
 	remove(): void;
 }
 
 export interface LabelLayer {
-	/** Create a label at a world position. `className` lets callers theme groups of labels. */
+	/** `className` lets callers theme groups of labels. */
 	addLabel(text: string, position: THREE.Vector3, className?: string): LabelHandle;
-	/** Render the DOM overlay. Call each frame after the WebGL render, with the active camera. */
+	/** Call each frame after the WebGL render, with the active camera. */
 	render(scene: THREE.Scene, camera: THREE.Camera): void;
 	setSize(width: number, height: number): void;
 	dispose(): void;
 }
 
 /**
- * @param container element to overlay labels onto — normally the canvas's parent, so the overlay and
- * canvas share a positioning context. The overlay is appended here and absolutely positioned.
- * @param scene labels are parented to a group added to this scene, so they render and follow the
- * camera without the caller wiring scene-graph parenting.
+ * @param container overlay is appended here, absolutely positioned — normally the canvas's parent
+ * so they share a positioning context.
+ * @param scene labels are parented to a group added to this scene, so they follow the camera
+ * without the caller wiring scene-graph parenting.
  */
 export function createLabelLayer(container: HTMLElement, scene: THREE.Scene): LabelLayer {
 	const renderer = new CSS2DRenderer();
@@ -43,19 +40,15 @@ export function createLabelLayer(container: HTMLElement, scene: THREE.Scene): La
 	dom.style.position = 'absolute';
 	dom.style.top = '0';
 	dom.style.left = '0';
-	// The overlay must never intercept viewer interaction. CSS2DRenderer sizes its root div to the
-	// renderer size and stacks it above the canvas; without an explicit non-interactive, clipped box
-	// it can cover the canvas and swallow orbit/clicks. Note the box is sized in PIXELS by
-	// `setSize` (CSS2DRenderer overwrites width/height styles and bases its projection math on the
-	// same values, so percentage sizing can't work here) — the host's resize handling must call
-	// `setSize` whenever the container resizes, exactly as it does for the WebGL renderer.
+	// CSS2DRenderer overwrites width/height in PIXELS and bases its projection math on those same
+	// values, so percentage sizing can't work — the host must call `setSize` on every resize, same
+	// as for the WebGL renderer. Without the explicit clipped/non-interactive box below, the overlay
+	// can cover the canvas and swallow orbit/clicks.
 	dom.style.overflow = 'hidden';
 	dom.style.pointerEvents = 'none';
-	// Stack above the canvas and any host overlays (e.g. blur/loading scrims) that share the
-	// container's positioning context — without an explicit z-index the overlay sits at z-auto and
-	// such scrims paint over the labels. Kept below typical menu/popover layers.
+	// Above the canvas and host overlays (e.g. loading scrims) sharing this positioning context;
+	// below typical menu/popover layers.
 	dom.style.zIndex = '30';
-	// The container is the canvas's positioning context; make sure it actually establishes one.
 	if (getComputedStyle(container).position === 'static') {
 		container.style.position = 'relative';
 	}
@@ -64,8 +57,7 @@ export function createLabelLayer(container: HTMLElement, scene: THREE.Scene): La
 	const size = { width: container.clientWidth || 1, height: container.clientHeight || 1 };
 	renderer.setSize(size.width, size.height);
 
-	// Labels live under a dedicated group so they're easy to find/exclude and removed en masse on
-	// dispose. Tagged so pick/fit logic ignores it.
+	// Dedicated group: removed en masse on dispose, tagged so pick/fit logic ignores it.
 	const group = new THREE.Group();
 	group.name = 'label-layer';
 	group.userData.id = 'label-layer';
@@ -79,23 +71,20 @@ export function createLabelLayer(container: HTMLElement, scene: THREE.Scene): La
 		if (className) {
 			el.className = className;
 		} else {
-			// Default styling that stays legible on any background (light or dark scene/page): a dark
-			// translucent pill with light text. Callers wanting their own look pass a className, which
-			// opts out of all of this. Kept inline so the layer needs no external stylesheet.
+			// Dark translucent pill, legible on any background. Kept inline so the layer needs no
+			// external stylesheet; pass className to opt out.
 			Object.assign(el.style, {
 				padding: '2px 6px',
 				borderRadius: '4px',
 				background: 'rgba(20, 20, 20, 0.78)',
 				color: '#fff',
 				font: '12px/1.3 system-ui, sans-serif',
-				// `pre` so a multi-line readout (e.g. total + per-axis deltas) keeps its line breaks.
+				// `pre` preserves line breaks for multi-line readouts (e.g. total + per-axis deltas).
 				whiteSpace: 'pre',
 				textAlign: 'center',
 				userSelect: 'none'
 			} satisfies Partial<CSSStyleDeclaration>);
 		}
-		// Individual labels stay non-interactive by default (the overlay is too, but be explicit so a
-		// caller that opts a label into pointer-events doesn't get surprised by inherited none).
 		el.style.pointerEvents = 'none';
 
 		const object = new CSS2DObject(el);

@@ -1,15 +1,13 @@
 import * as THREE from 'three';
 
 /**
- * An "infinite", distance-fading reference grid — the single strongest visual cue that reads as CAD.
+ * An "infinite", distance-fading reference grid — the strongest single visual cue that reads as CAD.
  *
- * Why not `GridHelper`: it's a fixed-size square of line segments that visibly ends and looks wrong
- * once you pan or zoom past it. Instead we draw one large screen-facing plane and compute the grid
- * in the fragment shader from world coordinates, fading lines out with distance so the edge is never
- * a hard cutoff. The plane is big enough to cover any reasonable view; the fade hides its bounds.
+ * Why not `GridHelper`: it's a fixed-size square that visibly ends once you pan/zoom past it.
+ * Instead we draw one large plane and compute the grid in the fragment shader from world
+ * coordinates, fading with distance so the edge is never a hard cutoff.
  *
- * Two line frequencies (minor + major every 10th) give the usual graph-paper depth read. Spacing is
- * in world units (meters — the scene's normalized unit), so a `cellSize` of 1 = 1m minor cells.
+ * Spacing is in world units (meters, the scene's normalized unit) — `cellSize` of 1 = 1m cells.
  */
 
 export interface GridOptions {
@@ -34,15 +32,14 @@ export interface GridOptions {
 }
 
 export interface Grid {
-	/** The grid mesh; add to the scene. Tagged `userData.id = 'grid'` so pick/fit code skips it. */
+	/** Tagged `userData.id = 'grid'` so pick/fit code skips it. */
 	readonly object: THREE.Mesh;
-	/** Keep the fade centered on the camera so the grid feels infinite as you move. Call per frame. */
+	/** Re-centers the fade on the camera so the grid feels infinite as you move. Call per frame. */
 	update(cameraPosition: THREE.Vector3): void;
 	/**
-	 * Rescale the grid's cell spacing and fade radius to the loaded content's extent. Call after a
-	 * geometry change (e.g. right after `updateScene`) so a part that is 3 units or 3000 units wide
-	 * both get sensibly-sized cells and a fade that reaches past the model. No-op for empty/degenerate
-	 * bounds — the grid keeps its last (or default) scale. See {@link Grid.fitToContent}'s impl notes.
+	 * Rescales cell spacing and fade radius to the content's extent, so a 3-unit or 3000-unit part
+	 * both get sensible cells. Call after a geometry change (e.g. after `updateScene`). No-op for
+	 * empty/degenerate bounds.
 	 */
 	fitToContent(bounds: THREE.Box3): void;
 	setVisible(visible: boolean): void;
@@ -50,10 +47,9 @@ export interface Grid {
 }
 
 /**
- * Round a value to a "nice" 1/2/5 × 10ⁿ step — the spacing conventions used by rulers and CAD grids,
- * so cells land on human-readable multiples (…, 0.5, 1, 2, 5, 10, 20, 50, …) rather than arbitrary
- * fractions like 1.37. Returns the largest nice step ≤ `value` (floored on the mantissa) so cells
- * never come out finer than the target and alias into a solid sheet.
+ * Rounds down to a "nice" 1/2/5 × 10ⁿ step (ruler/CAD convention: …, 1, 2, 5, 10, 20, 50, …)
+ * rather than an arbitrary value like 1.37, so cells never come out finer than the target and
+ * alias into a solid sheet.
  */
 function niceStep(value: number): number {
 	if (!(value > 0) || !Number.isFinite(value)) return 1;

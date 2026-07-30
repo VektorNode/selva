@@ -45,9 +45,3 @@ export function buildPoint(item: DisplayPoint, applyTransforms: boolean): THREE.
 	};
 	return points;
 }
-
-/**
- * Free a rhino3dm object's WASM-heap memory. rhino3dm objects are emscripten bindings — JS GC
- * never reclaims their heap allocation, so everything decoded during a solve must be deleted
- * explicitly or the WASM heap grows monotonically across solves.
- */
