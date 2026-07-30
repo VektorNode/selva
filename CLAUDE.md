@@ -154,7 +154,6 @@ In-repo at `packages/compute` (published to npm as `@selvajs/compute`). Modular 
 
 - Main export: General utilities and types
 - `/grasshopper`: Rhino Compute client, data tree handling, input/output parsers
-- `/visualization`: Three.js helpers, WebDisplay utilities
 - `/files`: File handling utilities
 - `/core`: Low-level compute fetch and error handling
 
@@ -162,8 +161,35 @@ Key features:
 
 - Discriminated unions for type-safe error handling
 - Data tree parsing and serialization
-- Three.js geometry conversion helpers
 - Browser and Node.js compatible
+
+**`@selvajs/compute` is pure solve/data — it does not depend on `three` in any form.** Everything
+that turns a response into Three.js objects, sets up a viewer, or drives a solve session lives in
+`@selvajs/visualization`. There is no `@selvajs/compute/visualization` export; don't add one.
+
+### Viewer Core (`@selvajs/visualization`)
+
+In-repo at `packages/visualization`. Framework-free (no Svelte, no runes); `three` is a peer dep.
+Five layers that **depend downward only** — `session → scene → render → parse → shared`. Each layer
+has its own barrel and README naming its extension points, and is a published sub-path export:
+
+- `/session`: `createSolveSession`, `SolveDriver` — inputs → solve → outputs, transport-agnostic
+- `/scene`: `createSceneOutliner` — reads a scene (visibility/selection/layers); never owns content
+- `/render`: `initThree` + the CAD viewer toolkit (camera, edges, grid, gizmo, measure)
+- `/parse`: backend payload → THREE meshes (`webdisplay`, `display-items`)
+- `/shared`: coordinate frame, look presets, pure geometry/color math
+
+Two seams exist so a layer never depends upward, and both must be preserved: `render/` takes an
+`onMaxAnisotropy` hook rather than calling into `parse/`, and `session/` exposes `subscribe()` rather
+than using runes. In a Svelte component use `useSolveSession` from `@selvajs/ui`, not
+`createSolveSession` directly — the raw factory returns correct values that never re-render. Same
+trap in the scene layer: read the injected set (`hidden.has(getTrackingKey(obj))`) in markup, not
+`outliner.visibility.isHidden(obj)`.
+
+The Svelte shells stay in `@selvajs/ui`: `Viewer.svelte`, `SceneManager.svelte`,
+`useSolveSession.svelte.ts`, `solving.svelte.ts`, plus the design system. **Whoever owns the scene
+owns the outliner** — `Viewer.svelte` creates it and calls `applyTo()` after a solve; the panel only
+renders it.
 
 ## Code Style
 

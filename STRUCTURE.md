@@ -17,7 +17,8 @@ selva/
 │
 ├── packages/                       # TypeScript / Svelte workspace
 │   ├── schemas/                    # ui-schema.json + TS/C# code generators
-│   ├── compute/                    # @selvajs/compute — Rhino.Compute client, data-tree + Three.js helpers
+│   ├── compute/                    # @selvajs/compute — Rhino.Compute client + data-tree helpers (no three)
+│   ├── visualization/              # @selvajs/visualization — headless viewer core (session/scene/render/parse/shared)
 │   ├── platform/                   # Provider interfaces (auth, data, storage, ...)
 │   ├── providers/
 │   │   ├── local/                  # Filesystem-backed provider (@selvajs/local-provider)

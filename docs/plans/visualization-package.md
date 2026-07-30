@@ -1,6 +1,12 @@
 # `@selvajs/visualization` — a headless, extensible viewer core
 
-> **Status: IN PROGRESS (updated 2026-07-29) — steps 1–6 landed, 7–8 open.** Extract parse + scene +
+> **Status: COMPLETE (updated 2026-07-30) — all 8 steps landed; build, check and test green.**
+> **Follow-on: [visualization-standalone](./visualization-standalone.md)** — this plan left the
+> package's _external_ deps untouched (it still hard-depends on `@selvajs/compute` and
+> `@selvajs/schemas`). Making it usable on its own reverses two decisions recorded here: the
+> "`errors.ts` NOT created" note and moving `decodeBase64ToBinary` into compute's root.
+>
+> Extract parse + scene +
 > render + session out of `@selvajs/compute` and `@selvajs/ui` into one framework-free package with a
 > clean public API, small single-responsibility files, and documented layer boundaries. Scope:
 > new `packages/visualization`; `@selvajs/compute` loses its `/visualization` export and `three`
@@ -163,6 +169,18 @@ Found while executing step 6:
     the injected set itself: `hidden.has(getTrackingKey(obj))`. Caught by inspection after
     `svelte-check` and every test passed on the broken version — the same class of silent failure
     as correction 13, and the reason `getTrackingKey` is exported rather than left private.
+
+Found while executing steps 7–8:
+
+24. **The plan's step list never mentioned the root docs, and they were the only thing actually
+    stale at the end.** All the code rewiring in step 7 was already done as a side effect of steps
+    3–6 (each layer's move rewired its own importers), so step 7 was a no-op to verify. But
+    `CLAUDE.md` still advertised `/visualization` as a `@selvajs/compute` export, and `STRUCTURE.md`
+    — which `CLAUDE.md` itself calls authoritative for layout — had no `packages/visualization` row
+    at all. Both fixed: the compute section now states the no-`three` rule, and a new "Viewer Core"
+    section documents the five layers plus the three traps a contributor can't infer from the tree
+    (the `onMaxAnisotropy` hook, `useSolveSession` vs `createSolveSession`, and reading the injected
+    set rather than `visibility.isHidden` in markup — corrections 9, 13 and 23).
 
 ## Goal
 
@@ -418,12 +436,15 @@ revisit only if headless geometry export becomes real. Recorded here as a revers
    `{objects,layers,visibility,selection}.ts` with 82 new tests; the component drops 319 → 234 lines
    and holds only rendering. Shipped as an outliner over a scene it doesn't own, **not** the
    `SceneController` the plan specified — see corrections 19–21.
-7. Rewire `@selvajs/ui`, `plugin-ui`, `selva` imports to `@selvajs/visualization`. `compute` becomes
-   pure solve/data (drops `three` peer dep).
-8. `pnpm build && pnpm check && pnpm test` green; add changeset. **`@selvajs/compute` takes a `major`**
-   — `extractMeshesFromResponse()` is gone and `/visualization` no longer exports the parsers.
-   (Pre-existing, unrelated: `@selvajs/supabase-provider`'s conformance suites fail without Supabase
-   credentials — they fail identically on a clean tree, so don't read them as a regression.)
+7. ✅ **DONE** — Rewired `@selvajs/ui`, `plugin-ui`, `selva` imports to `@selvajs/visualization`
+   (declared as a dep in all three); `compute` is pure solve/data with `three` gone entirely. No
+   live reference to `@selvajs/compute/visualization` or `extractMeshesFromResponse()` remains —
+   only historical notes in CHANGELOGs, CONTRIBUTING.md and the removal docblocks that point
+   callers at the new home.
+8. ✅ **DONE** — `pnpm build` (13 tasks), `pnpm check` (0 errors/0 warnings across 4 Svelte
+   packages) and `pnpm test` (20 tasks, incl. viz's 425 tests in 32 files) all green. Changeset
+   `visualization-package-parse-layer.md` is in place with **`@selvajs/compute` as `major`**.
+   Root docs updated in the same pass — see correction 24.
 
 ## Out of scope
 

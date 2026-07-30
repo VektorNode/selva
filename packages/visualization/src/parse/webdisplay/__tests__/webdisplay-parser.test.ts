@@ -9,18 +9,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
-import { setLogger } from '@selvajs/compute';
+import { setLogger } from '../../../shared/index.js';
 import { computeCombinedBoundingBox } from '../../../shared/index.js';
 
 import { SCALE_FACTORS, getThreeMeshesFromComputeResponse } from '../webdisplay-parser';
-import type { GrasshopperComputeResponse } from '@selvajs/compute/grasshopper';
+import type { DisplayComputeResponse } from '../response-envelope.js';
 
-function response(values: any[], modelunits = 'Meters'): GrasshopperComputeResponse {
-	return { values, modelunits } as unknown as GrasshopperComputeResponse;
+function response(values: any[], modelunits = 'Meters'): DisplayComputeResponse {
+	return { values, modelunits } as unknown as DisplayComputeResponse;
 }
 
 /** Wraps a built batch in the response envelope shape the server produces. */
-function displayResponse(modelunits: string, type = 'Display'): GrasshopperComputeResponse {
+function displayResponse(modelunits: string, type = 'Display'): DisplayComputeResponse {
 	const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
 	return response(
 		[

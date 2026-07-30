@@ -1,13 +1,12 @@
 import * as THREE from 'three';
 
-import { applyOffset, computeCombinedBoundingBox } from '../../shared/index.js';
-import { getLogger } from '@selvajs/compute';
+import { applyOffset, computeCombinedBoundingBox, getLogger } from '../../shared/index.js';
 
 import { parseDisplayItems } from '../display-items/display-items-parser.js';
 
 import { parseMeshBatchObject } from './batch-parser.js';
 
-import type { DataItem, GrasshopperComputeResponse } from '@selvajs/compute/grasshopper';
+import type { DisplayDataItem, DisplayComputeResponse } from './response-envelope.js';
 import type { DisplayBatch, MeshExtractionOptions, MeshBatchParsingOptions } from './types.js';
 import type { RhinoModule } from 'rhino3dm';
 
@@ -111,7 +110,7 @@ const warnedUnknownUnits = new Set<string>();
  * ```
  */
 export async function getThreeMeshesFromComputeResponse(
-	data: GrasshopperComputeResponse,
+	data: DisplayComputeResponse,
 	options?: MeshExtractionOptions
 ): Promise<THREE.Object3D[]> {
 	const startTime = performance.now();
@@ -173,7 +172,7 @@ function getScaleFactor(modelUnits: string): number {
  * Extracts meshes and non-mesh display items (curves, points) from compute response data.
  */
 async function extractDisplayFromData(
-	data: GrasshopperComputeResponse,
+	data: DisplayComputeResponse,
 	objects: THREE.Object3D[],
 	scaleFactor: number,
 	parsingOptions: MeshBatchParsingOptions,
@@ -181,7 +180,7 @@ async function extractDisplayFromData(
 	debug: boolean
 ): Promise<void> {
 	for (const value of data.values) {
-		const innerTree = value.InnerTree as { [key: string]: DataItem[] };
+		const innerTree = value.InnerTree;
 
 		for (const path in innerTree) {
 			const branch = innerTree[path];
@@ -197,7 +196,7 @@ async function extractDisplayFromData(
  * (curves/points JSON). Both get the same unit scale so they share one frame.
  */
 async function processDataBranch(
-	branch: DataItem[],
+	branch: DisplayDataItem[],
 	objects: THREE.Object3D[],
 	scaleFactor: number,
 	parsingOptions: MeshBatchParsingOptions,

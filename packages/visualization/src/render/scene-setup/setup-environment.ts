@@ -1,5 +1,6 @@
-import { getLogger } from '@selvajs/compute';
 import * as THREE from 'three';
+
+import { getLogger } from '../../shared/index.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 
 import { environmentRotationFor } from '../up-axis.js';

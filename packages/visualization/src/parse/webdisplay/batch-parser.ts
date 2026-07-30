@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { getLogger } from '@selvajs/compute';
+import { getLogger } from '../../shared/index.js';
 
 import { FLAG_FLOAT32, parseBinaryMeshBatch, parseBinaryMeshBatchRaw } from './binary-parser.js';
 import { geometryCacheGet, geometryCachePut } from './geometry-cache.js';
@@ -53,7 +53,7 @@ interface ParseTelemetry {
  * @param batchJson - JSON string containing the batched mesh data
  * @param options - Rendering options
  * @returns Promise resolving to array of Three.js mesh objects
- * @throws {RhinoComputeError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
+ * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatch(
 	batchJson: string,
@@ -92,7 +92,7 @@ export async function parseMeshBatch(
  * @param batch - DisplayBatch object
  * @param options - Rendering options
  * @returns Promise resolving to array of Three.js mesh objects
- * @throws {RhinoComputeError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
+ * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatchObject(
 	batch: DisplayBatch,
@@ -157,7 +157,7 @@ export async function parseMeshBatchObject(
  * @param blob - Raw blob bytes from a binary WebSocket frame.
  * @param options - Rendering options.
  * @returns Promise resolving to array of Three.js mesh objects.
- * @throws {RhinoComputeError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
+ * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatchBlob(
 	blob: ArrayBuffer | Uint8Array,

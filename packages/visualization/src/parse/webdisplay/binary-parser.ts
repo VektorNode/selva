@@ -1,4 +1,4 @@
-import { RhinoComputeError, ErrorCodes } from '@selvajs/compute';
+import { VisualizationError, ErrorCodes } from '../../shared/index.js';
 
 import {
 	BINARY_MESH_MAGIC,
@@ -84,7 +84,7 @@ export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.
  * @param input - The blob, as either an `ArrayBuffer`/`Uint8Array` (binary transport) or a
  *   base64-encoded string (today's JSON-envelope transport).
  * @returns Decoded metadata plus typed-array views into the geometry payload.
- * @throws {RhinoComputeError} On invalid magic, unknown version, or truncated input.
+ * @throws {VisualizationError} On invalid magic, unknown version, or truncated input.
  */
 export function parseBinaryMeshBatch(
 	input: ArrayBuffer | Uint8Array | string
@@ -148,7 +148,7 @@ export function parseBinaryMeshBatchRaw(
 	input: ArrayBuffer | Uint8Array | string
 ): RawBinaryMeshBatch {
 	if (!HOST_IS_LITTLE_ENDIAN) {
-		throw new RhinoComputeError(
+		throw new VisualizationError(
 			'SLVA parsing requires a little-endian host: the zero-copy geometry readers view the wire bytes in host byte order.',
 			ErrorCodes.ENVIRONMENT_ERROR
 		);

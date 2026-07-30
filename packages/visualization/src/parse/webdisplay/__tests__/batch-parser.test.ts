@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
 import { buildMeshBatch, encodeBatchPayload } from '@tests/helpers/mesh-batch-builder';
-import { decodeBase64ToBinary } from '@selvajs/compute';
+import { decodeBase64ToBinary } from '../../../shared/index.js';
 
 import { parseMeshBatch, parseMeshBatchObject, parseMeshBatchBlob } from '../batch-parser';
 

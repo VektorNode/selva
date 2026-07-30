@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { getLogger } from '@selvajs/compute';
+import { getLogger } from '../../shared/index.js';
 
 import { buildCurveLine } from './items/curves.js';
 import { buildPoint } from './items/points.js';

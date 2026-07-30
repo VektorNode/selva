@@ -1,5 +1,6 @@
-import { getLogger } from '@selvajs/compute';
 import * as THREE from 'three';
+
+import { getLogger } from '../../shared/index.js';
 
 import type { CameraController } from '../camera-controller.js';
 import { computeContentBounds } from '../three-helpers.js';

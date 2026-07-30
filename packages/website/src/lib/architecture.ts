@@ -156,7 +156,7 @@ export const CACHES: CacheEntry[] = [
 			'LRU eviction; clearTextureCache() on viewer teardown bumps a generation guard so a load resolving after a clear is discarded.',
 		scope: 'per-tab',
 		lifetime: '64 entries (LRU)',
-		files: ['packages/compute/src/features/visualization/webdisplay/texture-cache.ts:12']
+		files: ['packages/visualization/src/parse/webdisplay/texture-cache.ts:12']
 	},
 	{
 		id: 'dvl',

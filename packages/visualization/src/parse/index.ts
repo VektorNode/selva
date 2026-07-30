@@ -18,6 +18,12 @@ export {
 	SCALE_FACTORS
 } from './webdisplay/webdisplay-parser.js';
 
+export type {
+	DisplayComputeResponse,
+	DisplayResponseValue,
+	DisplayDataItem
+} from './webdisplay/response-envelope.js';
+
 export {
 	parseMeshBatch,
 	parseMeshBatchObject,

@@ -3,9 +3,7 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
-import { getLogger } from '@selvajs/compute';
-
-import { rhinoToThree } from '../../../shared/index.js';
+import { getLogger, rhinoToThree } from '../../../shared/index.js';
 import { materialParams } from './appearance.js';
 
 import type { DisplayCurve } from '../types';

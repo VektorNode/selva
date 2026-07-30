@@ -7,10 +7,27 @@ here must stay free of scene, camera, renderer and controls concerns.
 
 | File                  | Owns                                                                      |
 | --------------------- | ------------------------------------------------------------------------- |
+| `errors.ts`           | `VisualizationError`, `ErrorCodes`                                        |
+| `logger.ts`           | `getLogger`, `setLogger`, `enableDebugLogging`, the `Logger` interface    |
+| `encoding.ts`         | `decodeBase64ToBinary`                                                    |
 | `coordinate-frame.ts` | The Rhino↔Three frame. Both are Z-up, so `rhinoToThree` is the identity.  |
 | `types.ts`            | `LOOKS`/`Look`, `LookPreset`, `MaterialAppearanceOptions`                 |
 | `looks.ts`            | `LOOK_PRESETS`, `DEFAULT_LOOK`, `materialAppearanceForLook`               |
 | `geometry.ts`         | `parseColor`, `applyOffset`, `computeCombinedBoundingBox`, the cache flag |
+
+## Why errors, logging and base64 live here rather than coming from `@selvajs/compute`
+
+They used to come from there, and that dependency was most of what stopped this package standing on
+its own. None of the three is a compute concern:
+
+- **`VisualizationError`** replaces `RhinoComputeError`, which mis-named the failure: on the plugin's
+  WebSocket path a bad mesh blob never went near Rhino.Compute. The `code` values are deliberately
+  identical to compute's so catch-sites matching on `error.code` are unaffected.
+- **`getLogger`/`setLogger`** are a logging facility. It defaults to no-op (as compute's does); a
+  host wanting one sink for both calls `setLogger(getLogger())` with compute's logger.
+- **`decodeBase64ToBinary`** is a ~20-line copy of compute's, kept in sync by hand. Duplicating it
+  is cheaper than the package dependency it used to buy. Its subtleties — WHATWG forgiving-base64
+  normalization and the Node pool-slab copy — are why it is a copy and not a rewrite.
 
 ## Why the geometry/color utilities live here
 

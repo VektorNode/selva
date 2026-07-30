@@ -108,7 +108,6 @@
 		"prepublishOnly": "pnpm build"
 	},
 	"dependencies": {
-		"@selvajs/compute": "workspace:*",
 		"@selvajs/schemas": "workspace:*",
 		"fflate": "^0.8.2",
 		"rhino3dm": "8.17.0"

@@ -66,6 +66,38 @@ injects its own (`SvelteSet` in a Svelte app) and gets reactivity with no seam a
 
 Or take everything from the top barrel: `@selvajs/visualization`.
 
+## Dependencies
+
+`shared/`, `parse/`, `render/` and `scene/` depend on **nothing from Selva** — only `three`,
+`rhino3dm` and `fflate`. Mesh conversion and the viewer work for a consumer who has neither Selva
+nor Rhino.Compute. Concretely, this package owns its own errors
+([`shared/errors.ts`](./src/shared/errors.ts)), logging ([`shared/logger.ts`](./src/shared/logger.ts))
+and base64 decoding ([`shared/encoding.ts`](./src/shared/encoding.ts)) rather than importing them
+from `@selvajs/compute`.
+
+The Grasshopper response envelope `getThreeMeshesFromComputeResponse` accepts is declared
+structurally in [`parse/webdisplay/response-envelope.ts`](./src/parse/webdisplay/response-envelope.ts)
+— only the fields the parser reads. Compute's `GrasshopperComputeResponse` is a superset and stays
+assignable to it, so passing one in is unchanged.
+
+**`session/` is the one exception**: it depends on `@selvajs/schemas`, because projecting a Selva UI
+schema into solve inputs is what it does. It is slated to move out to `@selvajs/solve/client` — see
+[`docs/plans/solve-package.md`](../../docs/plans/solve-package.md). Until then, importing
+`@selvajs/visualization/session` (or the root barrel) pulls in `@selvajs/schemas`; the four sub-paths
+above do not.
+
+### Unified logging
+
+The package logs nothing by default. To route its output into a host's logger — including
+`@selvajs/compute`'s, so both packages share a sink:
+
+```ts
+import { setLogger } from '@selvajs/visualization/shared';
+import { getLogger } from '@selvajs/compute';
+
+setLogger(getLogger());
+```
+
 ## Peer dependencies
 
 `three` (>=0.179.0) is a peer dep — the host app owns the single `three` instance. Installing a

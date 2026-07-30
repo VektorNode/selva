@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 
-import { getLogger } from '@selvajs/compute';
-
-import { rhinoToThree } from '../../../shared/index.js';
+import { getLogger, rhinoToThree } from '../../../shared/index.js';
 import { materialParams } from './appearance.js';
 
 import type { DisplayPoint } from '../types';

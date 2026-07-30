@@ -1,11 +1,14 @@
-import { RhinoComputeError, ErrorCodes } from '@selvajs/compute';
+import { VisualizationError, ErrorCodes } from '../../../shared/index.js';
 
 import { fingerprintViews } from '../geometry-cache.js';
 
 import type { MaterialGroup, MeshMetadata } from '../types.js';
 
-export function metadataFail(message: string, context: Record<string, unknown>): RhinoComputeError {
-	return new RhinoComputeError(message, ErrorCodes.VALIDATION_ERROR, { context });
+export function metadataFail(
+	message: string,
+	context: Record<string, unknown>
+): VisualizationError {
+	return new VisualizationError(message, ErrorCodes.VALIDATION_ERROR, { context });
 }
 
 /**
@@ -77,7 +80,7 @@ export function validateGroupMetadata(
  * The range checks themselves are inlined in the copy loops (audit P6 — a function call per index
  * was measurable at millions of indices); this only builds the failure.
  */
-export function indexOutOfWindow(indexValue: number, meshMeta: MeshMetadata): RhinoComputeError {
+export function indexOutOfWindow(indexValue: number, meshMeta: MeshMetadata): VisualizationError {
 	return metadataFail("Index references a vertex outside its mesh's vertex window.", {
 		meshName: meshMeta.name,
 		indexValue,

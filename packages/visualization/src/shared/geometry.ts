@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { getLogger } from '@selvajs/compute';
+import { getLogger } from './logger.js';
 
 /**
  * Object/color utilities shared by `parse/` and `render/`.

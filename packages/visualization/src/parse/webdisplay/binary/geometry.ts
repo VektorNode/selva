@@ -1,7 +1,6 @@
 import { inflateSync } from 'fflate';
 
-import { decodeBase64ToBinary } from '@selvajs/compute';
-import { RhinoComputeError, ErrorCodes } from '@selvajs/compute';
+import { decodeBase64ToBinary, VisualizationError, ErrorCodes } from '../../../shared/index.js';
 
 import { COMPRESSED_MESH_MAGIC } from './header.js';
 
@@ -83,7 +82,7 @@ export function decodeUtf8(bytes: Uint8Array): string {
 			globalThis as { Buffer: { from(b: Uint8Array): { toString(enc: string): string } } }
 		).Buffer.from(bytes).toString('utf-8');
 	}
-	throw new RhinoComputeError(
+	throw new VisualizationError(
 		'No UTF-8 decoder available in this environment.',
 		ErrorCodes.INVALID_STATE
 	);
@@ -215,6 +214,6 @@ export function decodeDeltaIndices32(zigzagged: Uint32Array): Uint32Array {
 	return out;
 }
 
-export function fail(message: string, context: Record<string, unknown>): RhinoComputeError {
-	return new RhinoComputeError(message, ErrorCodes.VALIDATION_ERROR, { context });
+export function fail(message: string, context: Record<string, unknown>): VisualizationError {
+	return new VisualizationError(message, ErrorCodes.VALIDATION_ERROR, { context });
 }
