@@ -5,7 +5,7 @@
 > P4 (on-demand rendering), P5 (all C# constant-factor items except the
 > per-branch parallelism restructure), P6. **Shipped 2026-07-31: P1-C# (the
 > `BatchBlobCache` encode cache) and P5's fat-branch parallelism** — see
-> [fixes/display-pipeline-open](../fixes/display-pipeline-open.md), which also records
+> [fixes/display-pipeline-open](../archive/display-pipeline-open.md), which also records
 > the browser-side GPU verification of P2 and P4 (assembly worker, on-demand repaint, AO).
 > **P3 (cloud transport binary side-channel) is the only unstarted item** and now has its
 > own plan: [features/cloud-binary-transport](../features/cloud-binary-transport.md).
@@ -232,7 +232,7 @@ additionally skip the GPU re-upload. Idle GPU work drops from every-frame to
 - ~~Real-browser check still owed (same as plan 4's): worker paths, on-demand
   repaint feel (measure tool, gizmo, label overlays), and AO/edge passes.~~
   **Done 2026-07-31**, all of it, on a real GPU — see
-  [fixes/display-pipeline-open § Browser-side verification](../fixes/display-pipeline-open.md#browser-side-verification-2026-07-31)
+  [fixes/display-pipeline-open § Browser-side verification](../archive/display-pipeline-open.md#browser-side-verification-2026-07-31)
   and, for the edge passes,
   [archive/edge-overlay-performance § GPU-visual verification](./edge-overlay-performance.md#gpu-visual-verification-2026-07-31--closes-the-last-open-item).
 
@@ -240,7 +240,7 @@ additionally skip the GPU re-upload. Idle GPU work drops from every-frame to
 
 1. ~~**P1 C# half**~~ — **SHIPPED 2026-07-31** as `BatchBlobCache`: a 128-bit content key over the
    writer's exact inputs, byte-bounded LRU. Identity is content, never document state, so undo/paste
-   cannot desync it. Details in [fixes/display-pipeline-open](../fixes/display-pipeline-open.md).
+   cannot desync it. Details in [fixes/display-pipeline-open](../archive/display-pipeline-open.md).
 2. **P3** — **still the only unstarted item**, now tracked at
    [features/cloud-binary-transport](../features/cloud-binary-transport.md). Deferred on purpose:
    three-sided protocol change, benefit scales with cloud traffic that does not yet exist.

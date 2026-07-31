@@ -6,7 +6,7 @@
 > real usage.
 >
 > **Rehomed 2026-07-31** from
-> [display-pipeline-open](../fixes/display-pipeline-open.md), where it was filed as "P3". It was
+> [display-pipeline-open](../archive/display-pipeline-open.md), where it was filed as "P3". It was
 > mis-filed there: every other item on that plan was display-pipeline residue that has now shipped
 > and been verified, while this is a **cloud-transport feature** that has never been started. Leaving
 > it there meant a finished plan could never retire. Original analysis:

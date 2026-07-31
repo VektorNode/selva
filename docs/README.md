@@ -58,7 +58,6 @@ See **[plans/README.md](../plans/README.md)** for the authoritative status + imp
 - **[Solve Package](../plans/archive/solve-package.md)** — One owner for the solve flow, both sides of the wire (`@selvajs/solve`)
 - **[Compute Package Cleanup](../plans/refactors/compute-package-cleanup.md)** — Rhino.Compute-focused `@selvajs/compute` with smaller files + cleaner API (follows visualization-package)
 - **[Plugin Compat Gate](../plans/features/plugin-compat-gate.md)** — Plugin/app compatibility gating
-- **[Display Pipeline — open residue](../plans/fixes/display-pipeline-open.md)** — Shipped and verified; awaiting one live-Rhino check (full audit archived)
 - **[Cloud Binary Transport](../plans/features/cloud-binary-transport.md)** — Move the geometry blob out of the values JSON to kill base64 inflation (deferred)
 
 Completed/superseded plans are archived under [`../plans/archive/`](../plans/archive/).

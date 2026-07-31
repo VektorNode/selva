@@ -12,21 +12,27 @@ at the repo root, separate from `docs/`. Plans are grouped by kind:
 
 ## Status at a glance
 
-| Plan                                                                                                                               | Status                                                                                 | Track            |
-| ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------- |
-| [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)                                                            | open items remain (P2/P3 list)                                                         | B — efficiency   |
-| [api-redesign-plan](./features/api-redesign-plan.md)                                                                               | not started                                                                            | B — product      |
-| [token-plan](./features/token-plan.md) (PATs)                                                                                      | not started, **blocked by api-redesign**                                               | B — product      |
-| [presolve-bundle](./features/presolve-bundle.md)                                                                                   | not started (planning)                                                                 | B — product      |
-| [display-pipeline-open](./fixes/display-pipeline-open.md) — full audit [archived](./archive/display-pipeline-performance-audit.md) | **all work shipped + verified 2026-07-31**; awaiting one live-Rhino check, then retire | B — residue      |
-| [cloud-binary-transport](./features/cloud-binary-transport.md)                                                                     | not started, deliberately deferred ("when the traffic arrives")                        | B — product      |
-| [plugin-compat-gate](./features/plugin-compat-gate.md)                                                                             | not started (planning)                                                                 | B — operator     |
-| [compute-package-cleanup](./refactors/compute-package-cleanup.md)                                                                  | not started, **unblocked** (viz-package done)                                          | **A — refactor** |
-| [admin-updates-yak-management](./features/admin-updates-yak-management.md)                                                         | design only, no implementation (planning)                                              | B — operator     |
-| [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)                                                                      | not started — traced 2026-07-31, GH fixture pending                                    | B — correctness  |
+| Plan                                                                       | Status                                                          | Track            |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------- |
+| [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)    | open items remain (P2/P3 list)                                  | B — efficiency   |
+| [api-redesign-plan](./features/api-redesign-plan.md)                       | not started                                                     | B — product      |
+| [token-plan](./features/token-plan.md) (PATs)                              | not started, **blocked by api-redesign**                        | B — product      |
+| [presolve-bundle](./features/presolve-bundle.md)                           | not started (planning)                                          | B — product      |
+| [cloud-binary-transport](./features/cloud-binary-transport.md)             | not started, deliberately deferred ("when the traffic arrives") | B — product      |
+| [plugin-compat-gate](./features/plugin-compat-gate.md)                     | not started (planning)                                          | B — operator     |
+| [compute-package-cleanup](./refactors/compute-package-cleanup.md)          | not started, **unblocked** (viz-package done)                   | **A — refactor** |
+| [admin-updates-yak-management](./features/admin-updates-yak-management.md) | design only, no implementation (planning)                       | B — operator     |
+| [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)              | not started — traced 2026-07-31, GH fixture pending             | B — correctness  |
 
 **Fully closed, moved to [`archive/`](./archive/)** — no residue. Kept for the _why_:
 
+- [display-pipeline-open](./archive/display-pipeline-open.md) (full audit
+  [archived separately](./archive/display-pipeline-performance-audit.md)) — closed 2026-07-31 by
+  the live Rhino check: `BatchBlobCache` hit rate confirmed on a real definition (6 consecutive
+  hits on identical geometry, size flat at 1 entry throughout) and `Stats()` wired into a debug log
+  so the check is no longer a one-off. P3 (cloud binary transport) was rehomed to
+  [features/cloud-binary-transport](./features/cloud-binary-transport.md) before closing, since it
+  was an unstarted feature rather than display-pipeline residue.
 - [visualization-package](./archive/visualization-package.md) (all 8 steps) and
   [visualization-standalone](./archive/visualization-standalone.md) (§1–§4; §5/§6 absorbed by
   solve-package), both 2026-07-30. These hold the **GPU-ownership rules** —

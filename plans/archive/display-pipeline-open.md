@@ -1,13 +1,9 @@
 # Display pipeline performance — remaining open items
 
-> **Status: ALL IMPLEMENTATION SHIPPED AND VERIFIED (2026-07-31).** P1 + P5 shipped; the browser-side
-> verification that was owed is done. **One item remains and it is an observation, not work:** a live
-> Rhino check of the encode-cache hit rate, which cannot be performed off-Rhino. P3 was rehomed to
+> **Status: CLOSED (2026-07-31).** Every item shipped and verified, including the live Rhino check
+> of the encode cache — see "Live Rhino verification" below. P3 was rehomed to
 > [features/cloud-binary-transport](../features/cloud-binary-transport.md) — it was an unstarted
 > cloud-transport feature, not residue of this plan.
->
-> **Retire this plan once the live Rhino check is done** (or once `BatchBlobCache.Stats()` is
-> surfaced somewhere that makes the check continuous rather than a one-off — see below).
 >
 > Full audit + original implementation notes archived at
 > [archive/display-pipeline-performance-audit.md](../archive/display-pipeline-performance-audit.md).
@@ -87,17 +83,8 @@ plan could never retire — the deferral was correct, the filing was not.
   [archive/edge-overlay-performance.md](../archive/edge-overlay-performance.md#gpu-visual-verification-2026-07-31--closes-the-last-open-item);
   that run is what repaired `pnpm example` (the package move had broken it) and moved it to
   `packages/visualization/examples`, which is what made these checks runnable at all.
-- **Live Rhino check of the new encode cache** — the one remaining item, and it needs Rhino.
-  Confirm hit rates behave on a real definition and that repeated solves plateau rather than growing
-  memory. The logic is unit-covered (16 tests); the in-Rhino hit rate is not.
-
-  **`BatchBlobCache.Stats()` has no caller outside its own tests** (verified 2026-07-31) — it
-  exposes `(Count, Bytes, Hits, Misses)` and nothing reads it. So a content-addressed cache whose
-  failure mode is _serving the wrong geometry_ has never had its hit rate observed on real
-  geometry. Surfacing it somewhere (a component menu readout, a debug log on solve) would turn this
-  from a manual one-off into something continuously visible — worth considering before doing the
-  manual check, since the manual check only ever samples one session.
-
+- ~~Live Rhino check of the new encode cache~~ **DONE 2026-07-31** — see "Live Rhino verification"
+  below.
 - ~~`dotnet test` on a net8 runtime~~ — done, the suite runs clean on this machine now (326 passed).
   The earlier note that the test host aborted at CoreCLR launch is no longer accurate.
 
@@ -138,3 +125,27 @@ reading look like the overlay wasn't drawing.
 `batch-parser.bench.ts` and `edges.bench.ts` run and produce sane numbers. At 1M tri the parse path
 splits as: `parseMeshBatchObject` ~163 ms, `computeVertexNormals` ~86 ms, `inflateSync` ~28 ms — decode
 dominates, matching the audit's model.
+
+## Live Rhino verification (2026-07-31) — closes this plan
+
+`BatchBlobCache.Stats()` had no caller outside its own tests, so a cache whose failure mode is
+_serving the wrong geometry_ had never had its hit rate observed on real geometry. Fixed first:
+[MeshBatchProcessor.CreateBatch](../../Plugin/Selva.GH/Features/Display/Services/MeshBatchProcessor.cs)
+now logs `entries/bytes/hits/misses` via the existing debug-only `Logger.Log` after every
+`TryGet`/`Store`, so the hit rate is visible on any solve from here on, not just a one-off session.
+
+Then verified against a real Grasshopper canvas via `rhino-mcp` (dev build,
+`Plugin/Selva.GH/bin/Debug/net7.0/Selva.gha`). The one-off check fixture was later superseded by the
+general-purpose
+[fixtures/grasshopper/display_pipeline_debug.ghx](../../fixtures/grasshopper/display_pipeline_debug.ghx),
+whose random-mesh branch covers the same case:
+
+- A regular grid mesh (Mesh Box, up to 10k verts) never triggered a `Store` at all — DEFLATE
+  compresses the repetitive geometry down to ~2 KB, under `MinCacheableBytes` (16 KB). Expected:
+  the cache is deliberately sized for real payloads, not synthetic grids.
+- A random 4,000-vertex mesh (high entropy, doesn't compress away) produced a 24,509-byte blob on
+  first solve — a miss, then a `Store`. Re-solving the identical mesh 6 times in a row produced 6
+  consecutive **hits**, with `entries=1 bytes=24509` unchanged throughout: no re-encode, no growth.
+
+This confirms both halves the plan asked for: hit rate behaves correctly on content-identical
+re-solves, and the cache plateaus instead of accumulating. Nothing left open on this plan.
