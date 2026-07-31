@@ -7,11 +7,7 @@ import { parseDisplayItems } from '../display-items-parser';
 import type { DisplayItem } from '../types';
 import type { RhinoModule } from 'rhino3dm';
 
-/**
- * Minimal rhino3dm stand-in: `decodeCurve` only needs `CommonObject.decode` to return something with
- * a `pointAt` function. We return a straight-line curve that reports as NOT a polyline, so the
- * parser exercises the uniform-sampling path and builds a real Line2 — no WASM required.
- */
+/** Returns a straight-line curve that reports as NOT a polyline, exercising the uniform-sampling path. */
 function fakeRhino(): RhinoModule {
 	const curve = {
 		isPolyline: () => false,
@@ -24,10 +20,6 @@ function fakeRhino(): RhinoModule {
 	} as unknown as RhinoModule;
 }
 
-/**
- * Step-2b parser tests. Points render with no rhino3dm instance (they need no decode); curves are
- * skipped gracefully when rhino is absent; unknown kinds are skipped, not thrown.
- */
 describe('parseDisplayItems', () => {
 	it('returns empty for undefined or empty items', () => {
 		expect(parseDisplayItems(undefined)).toEqual([]);
@@ -47,7 +39,6 @@ describe('parseDisplayItems', () => {
 		expect(points.name).toBe('P0');
 		expect(points.userData.id).toBe('c:0');
 
-		// Three scene IS Rhino's Z-up frame — the point lands at its Rhino coordinates unchanged.
 		const pos = points.geometry.getAttribute('position');
 		expect([pos.getX(0), pos.getY(0), pos.getZ(0)]).toEqual([1, 2, 3]);
 	});
@@ -154,8 +145,6 @@ describe('parseDisplayItems', () => {
 	});
 
 	it('skips a curve whose tessellation throws without aborting the rest of the batch', () => {
-		// A rhino stand-in whose decode returns a throwing curve for {"bad":true} JSON and a good
-		// straight-line curve otherwise — so one WASM-style failure sits between healthy items.
 		const goodCurve = {
 			isPolyline: () => false,
 			domain: [0, 1],

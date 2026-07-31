@@ -45,11 +45,9 @@ export function maybeDecompress(bytes: Uint8Array): Uint8Array {
 
 	let out: Uint8Array;
 	try {
-		// One byte of slack past the declared length: fflate returns a subarray trimmed to the byte
-		// count actually written, so an understating header (stream longer than declared) lands on
-		// length uncompressedLen + 1 and an overstating one (stream shorter) below uncompressedLen —
-		// either way the check below catches the mismatch instead of a zero-padded/truncated tail
-		// silently decoding as geometry.
+		// One byte of slack past the declared length: fflate trims its output to bytes actually
+		// written, so a mismatched header lands off `uncompressedLen` either way — caught below
+		// instead of silently decoding a zero-padded/truncated tail as geometry.
 		out = inflateSync(deflated, { out: new Uint8Array(uncompressedLen + 1) });
 	} catch (error) {
 		throw fail(

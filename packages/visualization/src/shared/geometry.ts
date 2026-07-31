@@ -13,7 +13,6 @@ export function parseColor(colorString: string): THREE.Color {
 
 	const trimmed = colorString.trim();
 
-	// Try hex format (#C7A5A5 or C7A5A5) — require exactly 6 hex chars
 	if (/^#?[0-9A-Fa-f]{6}$/.test(trimmed)) {
 		try {
 			const hex = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
@@ -24,7 +23,6 @@ export function parseColor(colorString: string): THREE.Color {
 		}
 	}
 
-	// Try RGB format (R, G, B)
 	if (trimmed.includes(',')) {
 		const rgb = trimmed.split(',').map((c) => parseInt(c.trim(), 10));
 		if (rgb.length === 3 && rgb.every((n) => !isNaN(n) && n >= 0 && n <= 255)) {
@@ -32,8 +30,8 @@ export function parseColor(colorString: string): THREE.Color {
 		}
 	}
 
-	// Try CSS named color. `new THREE.Color(name)` never throws on unknown names (it logs its own
-	// warning and leaves the color white), so validate against three's CSS name table instead.
+	// `new THREE.Color(name)` never throws on unknown names (it logs its own warning and leaves the
+	// color white), so validate against three's CSS name table instead.
 	const named = trimmed.toLowerCase();
 	if (named in THREE.Color.NAMES) {
 		return new THREE.Color(THREE.Color.NAMES[named as keyof typeof THREE.Color.NAMES]);
@@ -43,11 +41,7 @@ export function parseColor(colorString: string): THREE.Color {
 	return new THREE.Color(0xffffff);
 }
 
-/**
- * Shift objects along one world axis. Defaults to `z` — the up axis of the unified Z-up scene
- * frame (see `./coordinate-frame.ts`), so grounding subtracts the content's lowest z. Pass an
- * explicit axis when the scene is configured with a different `sceneUp`.
- */
+/** Defaults to `z` (Rhino's up axis); pass an explicit axis when the scene uses a different `sceneUp`. */
 export function applyOffset(
 	meshes: THREE.Object3D[],
 	offset: number,
@@ -58,7 +52,6 @@ export function applyOffset(
 	});
 }
 
-/** World-axis-aligned bounding box of a set of objects, accounting for their transforms. */
 export function computeCombinedBoundingBox(meshes: THREE.Object3D[]): THREE.Box3 {
 	const combinedBoundingBox = new THREE.Box3();
 	if (meshes.length === 0) return combinedBoundingBox;
@@ -69,5 +62,3 @@ export function computeCombinedBoundingBox(meshes: THREE.Object3D[]): THREE.Box3
 	});
 	return combinedBoundingBox;
 }
-
-// CACHED_GEOMETRY_USERDATA_FLAG lives in ./gpu-ownership.ts, the single home for "who may free this?".

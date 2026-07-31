@@ -7,21 +7,19 @@ import type { MaterialGroup, SerializableMaterial } from '../types.js';
 /** "SLVA" little-endian — an uncompressed mesh blob. */
 export const BINARY_MESH_MAGIC = 0x41564c53;
 /**
- * "SLVZ" little-endian — a gzip (raw DEFLATE) container around a SLVA blob. The plugin applies this
- * optionally when it shrinks the payload (the wire is otherwise uncompressed). Layout:
- *   [4] magic = SLVZ, [4] uncompressedLen (uint32), [N] raw-deflate stream of the SLVA blob.
+ * "SLVZ" little-endian — an optional raw-DEFLATE container around a SLVA blob (applied by the
+ * plugin when it shrinks the payload). Layout: `[4] magic=SLVZ | [4] uncompressedLen(u32) |
+ * [N] raw-deflate stream of the SLVA blob`.
  */
 export const COMPRESSED_MESH_MAGIC = 0x5a564c53;
 /**
- * Current writer version. v2 added the uint16-index flag (FLAG_UINT16_INDICES); v3 added the
- * delta+zigzag filter flag (FLAG_DELTA_ENCODED).
+ * Current writer version. v2 added FLAG_UINT16_INDICES; v3 added FLAG_DELTA_ENCODED.
  */
 export const BINARY_MESH_VERSION = 3;
 /**
- * Oldest wire version this parser still decodes. Each version only added a flag bit — v1 always
- * used uint32 indices, v2 introduced uint16 indices, v3 the delta filter — so the flag-driven read
- * path handles every older blob unchanged. Accepting them keeps persisted/cached blobs (saved `.gh`
- * files, DMF files, cached compute results) decodable after upgrade.
+ * Oldest wire version this parser still decodes. Each version only added a flag bit, so the
+ * flag-driven read path handles every older blob unchanged — needed since persisted/cached blobs
+ * (saved `.gh` files, DMF files, cached compute results) must stay decodable after upgrade.
  */
 export const MIN_SUPPORTED_VERSION = 1;
 /** Bit 0 of the geometry flags word: 0 = int16 quantized, 1 = float32 raw. */
@@ -36,18 +34,17 @@ export const FLAG_UINT16_INDICES = 0x2;
  */
 export const FLAG_DELTA_ENCODED = 0x4;
 /**
- * Bit 3 of the geometry flags word: a UV chunk trails the index block. Layout:
- * `uvFormat(u32: 0 = uint16 quantized, 1 = float32) | uvOrigin(2×f64) | uvScale(2×f64) | data`,
- * element count implied by vertexCount. Quantized UVs reconstruct as `uv = origin + q * scale`
- * (q unsigned in [0, 65535]), delta+zigzag filtered per component (independent u/v predictors)
- * iff FLAG_DELTA_ENCODED; float32 UVs are never filtered. Absent flag = absent chunk, so
- * untextured blobs are byte-identical to pre-chunk writers.
+ * Bit 3: a UV chunk trails the index block. Layout: `uvFormat(u32: 0=uint16 quantized, 1=float32)
+ * | uvOrigin(2×f64) | uvScale(2×f64) | data`, element count implied by vertexCount. Quantized UVs
+ * reconstruct as `uv = origin + q * scale` (q unsigned in [0, 65535]), delta+zigzag filtered per
+ * component (independent u/v predictors) iff FLAG_DELTA_ENCODED; float32 UVs are never filtered.
+ * Absent flag = absent chunk, so untextured blobs are byte-identical to pre-chunk writers.
  */
 export const FLAG_HAS_UVS = 0x8;
 /**
- * Bit 4 of the geometry flags word: a vertex-color chunk trails the index block (after the UV
- * chunk when both present). Layout: `uint8 rgb[vertexCount*3]`, delta+zigzag filtered per channel
- * (wrapped 8-bit, independent r/g/b predictors) iff FLAG_DELTA_ENCODED.
+ * Bit 4: a vertex-color chunk trails the index block (after the UV chunk when both present).
+ * Layout: `uint8 rgb[vertexCount*3]`, delta+zigzag filtered per channel (wrapped 8-bit, independent
+ * r/g/b predictors) iff FLAG_DELTA_ENCODED.
  */
 export const FLAG_HAS_VERTEX_COLORS = 0x10;
 
@@ -61,12 +58,11 @@ export const GEOMETRY_HEADER_BYTES =
 	4 /* flags */ + 24 /* origin (3 x f64) */ + 24 /* scale (3 x f64) */ + 4; /* vertexCount */
 
 /**
- * SLVA is little-endian. Header fields use explicit-LE `DataView` reads, but the zero-copy
- * geometry readers below build typed-array views in *host* byte order — rewriting the hot
- * geometry paths onto per-element DataView reads would cost far more than it buys, since every
- * mainstream JS target (x86, ARM, WASM) is little-endian. This check makes the assumption
- * explicit: on a big-endian host the parser refuses to decode rather than return byte-swapped
- * garbage.
+ * Header fields use explicit-LE `DataView` reads, but the zero-copy geometry readers build
+ * typed-array views in *host* byte order (every mainstream JS target is little-endian, and
+ * per-element DataView reads would be far costlier on the hot geometry paths). This check makes
+ * the assumption explicit: on a big-endian host the parser refuses to decode rather than return
+ * byte-swapped garbage.
  */
 export const HOST_IS_LITTLE_ENDIAN = new Uint16Array(new Uint8Array([1, 0]).buffer)[0] === 1;
 
@@ -74,10 +70,7 @@ export const HOST_IS_LITTLE_ENDIAN = new Uint16Array(new Uint8Array([1, 0]).buff
 // PARSED TYPES
 // ============================================================================
 
-/**
- * Metadata JSON embedded inside the binary blob: the mesh-blob subset of `DisplayBatch` minus
- * `compressedData` (which would be circular — the blob can't embed itself).
- */
+/** Mesh-blob subset of `DisplayBatch` minus `compressedData` (circular — the blob can't embed itself). */
 export interface BinaryMeshMetadata {
 	materials: SerializableMaterial[];
 	groups: MaterialGroup[];

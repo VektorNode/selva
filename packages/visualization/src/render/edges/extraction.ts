@@ -46,10 +46,8 @@ function fastPathData(geometry: THREE.BufferGeometry): FastPathData | null {
 	};
 }
 
-// Content fingerprint for the cross-solve cache: FNV-1a over sampled head+tail words of the
-// position/index arrays plus lengths and crease angle. Sampling keeps this ~free at millions of
-// vertices; a collision between different solves would need identical lengths AND identical
-// sampled regions.
+// FNV-1a over sampled head+tail words of position/index plus lengths and crease angle. Sampling
+// keeps this ~free at millions of vertices; a collision needs identical lengths AND sampled regions.
 function contentKey(data: FastPathData, thresholdAngle: number): string {
 	const SAMPLE_WORDS = 4096;
 	let hash = 0x811c9dc5;
@@ -80,10 +78,9 @@ function contentKey(data: FastPathData, thresholdAngle: number): string {
 	return `${thresholdAngle}:${data.positions.length}:${indexLength}:${hash >>> 0}`;
 }
 
-// Cross-solve segment cache. The viewer rebuilds every BufferGeometry each solve, so identity
-// caches never hit across solves — this LRU keys on content instead. CPU-only (no GPU state to
-// dispose), but registered for the same teardown sweep as the GPU caches so it doesn't outlive
-// the last viewer.
+// Keyed on content, not identity: the viewer rebuilds every BufferGeometry each solve, so an
+// identity-keyed cache would never hit. CPU-only, but registered on the same teardown sweep as the
+// GPU caches so it doesn't outlive the last viewer.
 const segmentCache = new Map<string, Float32Array>();
 let segmentCacheBytes = 0;
 
@@ -118,7 +115,6 @@ function segmentCachePut(key: string, segments: Float32Array): void {
 	}
 }
 
-/** Slow but universally-correct fallback. */
 function extractViaThree(geometry: THREE.BufferGeometry, thresholdAngle: number): Float32Array {
 	const edges = new THREE.EdgesGeometry(geometry, thresholdAngle);
 	const positions = edges.attributes.position
@@ -128,7 +124,6 @@ function extractViaThree(geometry: THREE.BufferGeometry, thresholdAngle: number)
 	return positions;
 }
 
-/** Synchronous extraction: content cache → fast extractor → EdgesGeometry fallback. */
 export function extractSegmentsSync(
 	geometry: THREE.BufferGeometry,
 	thresholdAngle: number
@@ -224,7 +219,6 @@ function extractInWorker(
 // In-flight dedupe: meshes with identical content share one worker round-trip.
 const inFlightExtractions = new Map<string, Promise<Float32Array>>();
 
-/** Asynchronous extraction: cache → worker (large fast-path meshes) → inline fallback. */
 export function extractSegmentsAsync(
 	geometry: THREE.BufferGeometry,
 	thresholdAngle: number

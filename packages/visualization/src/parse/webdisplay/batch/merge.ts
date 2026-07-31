@@ -18,8 +18,8 @@ export function createMergedMesh(
 	allUvs: Float32Array | null = null,
 	allColors: Uint8Array | null = null
 ): THREE.Mesh {
-	// Cross-solve reuse (audit P1): identical content → same BufferGeometry object, skipping the
-	// merge copies, computeVertexNormals, and the GPU re-upload entirely.
+	// Cross-solve reuse: identical content → same BufferGeometry object, skipping the merge copies,
+	// computeVertexNormals, and the GPU re-upload entirely.
 	const cacheKey = geometryContentKey(
 		'merged',
 		group.meshes,
@@ -150,7 +150,7 @@ export function createIndividualMeshes(
 		const componentStart = meshMeta.vertexStart * 3;
 		const componentLen = meshMeta.vertexCount * 3;
 
-		// Cross-solve reuse (audit P1) — see createMergedMesh.
+		// Cross-solve reuse — see createMergedMesh.
 		const cacheKey = geometryContentKey(
 			'single',
 			[meshMeta],

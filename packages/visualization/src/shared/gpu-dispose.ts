@@ -7,8 +7,8 @@ import { canDisposeGeometry, canDisposeMaterial, canDisposeTexture } from './gpu
 // ============================================================================
 
 /**
- * Free a material and its textures, respecting ownership ([gpu-ownership](./gpu-ownership.ts)).
- * Walks own enumerable properties only (`for...in` would also walk the prototype chain).
+ * Free a material and its textures, respecting ownership (`./gpu-ownership.ts`). Walks own
+ * enumerable properties only (`for...in` would also walk the prototype chain).
  */
 export function disposeMaterial(material: THREE.Material): void {
 	if (!canDisposeMaterial(material)) return;
@@ -21,14 +21,12 @@ export function disposeMaterial(material: THREE.Material): void {
 	material.dispose();
 }
 
-/** Free every material on a renderable (they come singly or as an array). */
 function disposeMaterials(material: THREE.Material | THREE.Material[] | undefined): void {
 	if (!material) return;
 	if (Array.isArray(material)) material.forEach(disposeMaterial);
 	else disposeMaterial(material);
 }
 
-/** What a caller wants freed. Geometry and materials are separable because the memo owns only geometry. */
 export interface DisposeOptions {
 	/** Free materials and their textures too. Default true; the solve memo passes false. */
 	materials?: boolean;
@@ -38,8 +36,7 @@ export interface DisposeOptions {
 
 /**
  * Free the GPU resources of an object subtree, respecting ownership. **The only traversal that
- * should dispose scene content** — do not write another `traverse` that disposes; the F1/texture
- * leaks came from exactly that kind of duplicate walker missing an ownership guard.
+ * should dispose scene content** — a second disposing `traverse` risks missing an ownership guard.
  */
 export function disposeObjectTree(root: THREE.Object3D, options: DisposeOptions = {}): void {
 	const { materials = true, onGeometry } = options;

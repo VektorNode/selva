@@ -21,10 +21,8 @@ export interface AppearanceController {
 	getMaterialAppearance(): MaterialAppearanceOptions;
 }
 
-// Split out of `initThree`: every setter here mutates the resolved config, touches the renderer or
-// lights, and requests a repaint. `setLook` is built from the same setters a host would call, so the
-// construction-time defaults path (`applyDefaults` seeding from `LOOK_PRESETS`) can't drift from
-// the runtime path.
+// setLook is built from the same setters a host would call directly, so construction-time defaults
+// (applyDefaults seeding from LOOK_PRESETS) can't drift from the runtime path.
 export function createAppearanceController(params: {
 	scene: THREE.Scene;
 	renderer: THREE.WebGLRenderer;
@@ -35,7 +33,6 @@ export function createAppearanceController(params: {
 }): AppearanceController {
 	const { scene, renderer, lights, config, pipeline, requestRender } = params;
 
-	// Drives getMaterialAppearance(); seeded from the same resolved value as construction defaults.
 	let activeLook: Look = config.look;
 
 	const setFillLights: AppearanceController['setFillLights'] = (opts) => {
@@ -47,8 +44,7 @@ export function createAppearanceController(params: {
 			!lights.hemisphere &&
 			opts.hemisphereIntensity > 0
 		) {
-			// Create the light lazily on first positive intensity so hosts can enable fill at runtime
-			// even if the scene was built without one.
+			// Lazily created so hosts can enable fill at runtime even if the scene was built without one.
 			lights.hemisphere = new THREE.HemisphereLight(
 				opts.hemisphereSkyColor ?? config.lighting.hemisphereSkyColor,
 				opts.hemisphereGroundColor ?? config.lighting.hemisphereGroundColor,
@@ -77,7 +73,7 @@ export function createAppearanceController(params: {
 	const setToneMappingExposure = (exposure: number) => {
 		config.render.toneMappingExposure = exposure;
 		renderer.toneMappingExposure = exposure;
-		// Composer path applies tone mapping via its OutputPass — rebuild so it picks up the new exposure.
+		// Composer applies tone mapping via its own OutputPass, so it must rebuild to pick this up.
 		if (pipeline.get()) pipeline.rebuild();
 	};
 
@@ -90,27 +86,23 @@ export function createAppearanceController(params: {
 		const preset = LOOK_PRESETS[look];
 		activeLook = look;
 
-		// Mirror tone mapping into the composer's OutputPass when AO is active; rebuild to apply it.
 		renderer.toneMapping = preset.toneMapping;
 		renderer.toneMappingExposure = preset.toneMappingExposure;
 		config.render.toneMapping = preset.toneMapping;
 		config.render.toneMappingExposure = preset.toneMappingExposure;
 
-		// studio/showcase add hemisphere fill + lift the environment so shadowed surfaces read well
-		// regardless of the HDR; technical zeroes the fill back to a flat CAD look.
 		setFillLights({
 			hemisphereIntensity: preset.hemisphereIntensity,
 			ambientIntensity: preset.ambientIntensity
 		});
 		setEnvironmentIntensity(preset.environmentIntensity);
 
-		// setAmbientOcclusion builds/tears down the composer as needed; rebuild on top when one was
-		// already live so its OutputPass adopts the new tone mapping.
+		// Rebuild on top of setAmbientOcclusion so an already-live composer's OutputPass adopts the
+		// new tone mapping too.
 		const hadPipeline = pipeline.get() !== null;
 		pipeline.setAmbientOcclusion(preset.ambientOcclusion);
 		if (hadPipeline) pipeline.rebuild();
 
-		// Retune IBL reflection strength on every compute mesh material.
 		scene.traverse((object) => {
 			if (object.userData.source !== 'compute') return;
 			const mesh = object as Partial<THREE.Mesh> & THREE.Object3D;

@@ -17,11 +17,7 @@ import {
 	finalizeMergedMesh,
 	finalizeSingleMesh
 } from './batch/merge.js';
-import {
-	dequantizeInt16,
-	maybeRotateFloat32Vertices,
-	validateGroupMetadata
-} from './batch/metadata.js';
+import { dequantizeInt16, validateGroupMetadata } from './batch/metadata.js';
 
 import type { AssembledGeometry, AssemblyJob, AssemblyWindow } from './mesh-assembly.js';
 import type { ParsedBinaryMeshBatch } from './binary-parser.js';
@@ -40,11 +36,10 @@ interface ParseTelemetry {
 }
 
 /**
- * Parses a batched mesh JSON and creates Three.js meshes.
- *
- * The geometry payload is the binary "SLVA" blob produced by the C# `BinaryGeometryWriter`,
- * base64-encoded into the outer JSON envelope. We `JSON.parse` the small envelope, then hand the
- * blob to `parseBinaryMeshBatch` which decodes the geometry without ever turning it into a string.
+ * Parses a batched mesh JSON and creates Three.js meshes. The geometry payload is the binary
+ * "SLVA" blob produced by the C# `BinaryGeometryWriter`, base64-encoded into the outer JSON
+ * envelope. `JSON.parse`s the small envelope, then hands the blob to `parseBinaryMeshBatch`, which
+ * decodes the geometry without ever turning it into a string.
  *
  * An invalid JSON envelope (not a batch at all) logs and returns `[]` — the "genuinely absent
  * data" case. A batch whose *blob* is corrupt, truncated, or unsupported throws instead of
@@ -81,9 +76,6 @@ export async function parseMeshBatch(
  * Synchronous internally — `parseBinaryMeshBatch` does no IO, just typed-array views over the
  * blob. Stays `async` so callers don't have to change shape if parsing moves into a worker later.
  *
- * A batch with no `compressedData` (genuinely empty/absent geometry) resolves to `[]`. A corrupt,
- * truncated, or unsupported blob throws so callers get a signal instead of a silent empty scene.
- *
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatchObject(
@@ -92,7 +84,7 @@ export async function parseMeshBatchObject(
 	/** @internal Timings threaded from an outer entry point; not a caller option. */
 	telemetry?: ParseTelemetry
 ): Promise<THREE.Mesh[]> {
-	const { mergeByMaterial = true, applyTransforms = true, debug = false, material } = options ?? {};
+	const { mergeByMaterial = true, debug = false, material } = options ?? {};
 	const { parseTime = 0, perfStart = debug ? performance.now() : 0 } = telemetry ?? {};
 
 	if (!batch.compressedData) {
@@ -101,10 +93,9 @@ export async function parseMeshBatchObject(
 		return [];
 	}
 
-	// Off-thread path (audit P2): heavy batches decode+assemble in a worker; null → do it here.
+	// Heavy batches decode+assemble in a worker; null → do it here (small batch or no worker support).
 	const workerMeshes = await tryBuildViaWorker(batch.compressedData, {
 		mergeByMaterial,
-		applyTransforms,
 		debug,
 		material,
 		fallback: {
@@ -123,7 +114,6 @@ export async function parseMeshBatchObject(
 
 	return buildMeshesFromParsed(parsed, {
 		mergeByMaterial,
-		applyTransforms,
 		debug,
 		material,
 		parseTime,
@@ -151,14 +141,13 @@ export async function parseMeshBatchBlob(
 	blob: ArrayBuffer | Uint8Array,
 	options?: MeshBatchParsingOptions
 ): Promise<THREE.Mesh[]> {
-	const { mergeByMaterial = true, applyTransforms = true, debug = false, material } = options ?? {};
+	const { mergeByMaterial = true, debug = false, material } = options ?? {};
 
 	const perfStart = debug ? performance.now() : 0;
 
-	// Off-thread path (audit P2): heavy batches decode+assemble in a worker; null → do it here.
+	// Heavy batches decode+assemble in a worker; null → do it here (small batch or no worker support).
 	const workerMeshes = await tryBuildViaWorker(blob, {
 		mergeByMaterial,
-		applyTransforms,
 		debug,
 		material
 	});
@@ -172,7 +161,6 @@ export async function parseMeshBatchBlob(
 
 	return buildMeshesFromParsed(parsed, {
 		mergeByMaterial,
-		applyTransforms,
 		debug,
 		material,
 		parseTime: 0,
@@ -184,7 +172,6 @@ export async function parseMeshBatchBlob(
 
 interface BuildOptions {
 	mergeByMaterial: boolean;
-	applyTransforms: boolean;
 	debug: boolean;
 	material?: MaterialAppearanceOptions;
 	parseTime: number;
@@ -205,7 +192,6 @@ function buildMeshesFromParsed(
 ): Promise<THREE.Mesh[]> {
 	const {
 		mergeByMaterial,
-		applyTransforms,
 		debug,
 		material: materialAppearance,
 		parseTime,
@@ -240,10 +226,11 @@ function buildMeshesFromParsed(
 	// computeVertexNormals, ground-offset) all expect world-unit floats, and a single
 	// linear pass over the int16 buffer is far cheaper than the legacy gunzip + base64 path.
 	// No rotation happens here: the scene uses Rhino's Z-up frame, so vertices pass through in the
-	// frame they arrived in (see ../../shared/coordinate-frame.ts). `applyTransforms` is inert.
+	// frame they arrived in (see ../../shared/coordinate-frame.ts). The public `applyTransforms`
+	// option is inert for mesh batches.
 	const worldVertices = isFloat32
-		? maybeRotateFloat32Vertices(parsed.vertices as Float32Array, applyTransforms)
-		: dequantizeInt16(parsed.vertices as Int16Array, parsed.origin, parsed.scale, applyTransforms);
+		? (parsed.vertices as Float32Array)
+		: dequantizeInt16(parsed.vertices as Int16Array, parsed.origin, parsed.scale);
 
 	if (debug) {
 		const wireBytes = parsed.vertices.byteLength + parsed.indices.byteLength;
@@ -313,12 +300,11 @@ function buildMeshesFromParsed(
 }
 
 // ============================================================================
-// OFF-THREAD ASSEMBLY (audit P2 — docs/plans/5.display-pipeline-performance-audit.md)
+// OFF-THREAD ASSEMBLY
 // ============================================================================
 
 interface WorkerPathOptions {
 	mergeByMaterial: boolean;
-	applyTransforms: boolean;
 	debug: boolean;
 	material?: MaterialAppearanceOptions;
 	fallback?: BuildOptions['fallback'];

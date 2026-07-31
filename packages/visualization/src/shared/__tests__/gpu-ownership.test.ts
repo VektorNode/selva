@@ -12,16 +12,6 @@ import {
 	protectMaterials
 } from '../index.js';
 
-// ============================================================================
-// The ownership rule: exactly one owner per GPU resource, and every disposal
-// path asks rather than remembers.
-//
-// Two leaks (F1, and the texture case found auditing it) both came from a
-// walker that didn't know about a cache's ownership claim. These tests pin the
-// claims themselves, so a fifth cache added later fails loudly if unclaimed.
-// ============================================================================
-
-/** A texture that reports how many times it was actually freed. */
 function countingTexture(): { texture: THREE.Texture; disposals: () => number } {
 	const texture = new THREE.Texture();
 	let count = 0;
@@ -73,9 +63,6 @@ describe('disposeObjectTree honours every claim', () => {
 	});
 
 	it('does NOT dispose a cache-owned texture shared with other materials', () => {
-		// The bug this pins: `material.map = cachedTexture` shares one instance across every
-		// material using that URL. Before the claim existed, the first sweep freed it while the
-		// cache still held and served it.
 		const { texture, disposals } = countingTexture();
 		texture.userData[CACHED_TEXTURE_USERDATA_FLAG] = true;
 
@@ -118,8 +105,8 @@ describe('disposeObjectTree honours every claim', () => {
 	});
 
 	it('onGeometry sees every geometry, including ones it must not dispose', () => {
-		// The edge-cache hook (F1) relies on this: cache-owned geometries still need their
-		// derived line geometries released, even though the geometry itself is spared.
+		// Cache-owned geometries still need derived resources (e.g. edge line-geometries) released,
+		// even though the geometry itself is spared.
 		const cached = new THREE.BoxGeometry();
 		cached.userData[CACHED_GEOMETRY_USERDATA_FLAG] = true;
 		const plain = new THREE.BoxGeometry();

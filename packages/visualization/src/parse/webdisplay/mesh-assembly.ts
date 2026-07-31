@@ -1,6 +1,4 @@
 /**
- * Off-thread mesh assembly (audit P2 — docs/plans/5.display-pipeline-performance-audit.md).
- *
  * {@link assembleGeometries} is the hot, pure part of batch parsing: undoes the delta filter on
  * the raw wire arrays, dequantizes int16 positions to world floats, slices/rebases per-geometry
  * windows, computes vertex normals, and fingerprints each geometry for the cross-solve cache.

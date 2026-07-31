@@ -7,11 +7,9 @@ import { applyTextureMap } from '../texture-cache.js';
 import type { MaterialAppearanceOptions, SerializableMaterial } from '../types.js';
 
 // A near-pure metal has no diffuse response, so under the low-IBL 'technical' look it goes flat and
-// reads as painted card. Real architectural sheet metal is coated, not a bare mirror — so materials
-// that are meaningfully metallic get a thin satin clearcoat: a glossy dielectric layer whose
-// highlight and environment response are independent of the base metalness/envMap, so folds catch
-// light even when the IBL is dialed down. Below this metalness the material is treated as
-// plastic/matte and left untouched.
+// reads as painted card. Real architectural sheet metal is coated, not a bare mirror, so materials
+// meaningfully metallic get a thin satin clearcoat — a glossy dielectric layer independent of the
+// base metalness/envMap, so folds catch light even when the IBL is dialed down.
 const METAL_CLEARCOAT_THRESHOLD = 0.5;
 const METAL_CLEARCOAT = 0.5;
 const METAL_CLEARCOAT_ROUGHNESS = 0.3;
@@ -48,23 +46,18 @@ export function createMaterial(
 		material.envMapIntensity = appearance.envMapIntensity;
 	}
 
-	// Metals get a satin clearcoat so coated sheet metal reads as coated, not flat, under low IBL
-	// (see the constants above). Plastics/matte fall below the threshold and stay bare.
+	// See the constants above. Plastics/matte fall below the threshold and stay bare.
 	if (matData.metalness > METAL_CLEARCOAT_THRESHOLD) {
 		material.clearcoat = METAL_CLEARCOAT;
 		material.clearcoatRoughness = METAL_CLEARCOAT_ROUGHNESS;
 	}
 
-	// Vertex colors arrive as raw sRGB bytes, but three's vertex-color path multiplies them into the
-	// (linear) working space with no decode — so they render washed out. Patch the vertex shader to
-	// sRGB→linear decode `color` before use. Only meshes with real vertex colors take this path.
+	// See applyVertexColorSRGBDecode for why this is needed.
 	if (vertexColors) {
 		applyVertexColorSRGBDecode(material);
 	}
 
-	// Texture loading is async (image decode); the cache assigns `material.map` when ready and
-	// flags needsUpdate, so the mesh renders untextured for at most the first frames. Hash-keyed
-	// asset URLs are immutable, so each texture is fetched and decoded once per session.
+	// Async; see texture-cache.ts for load/cache behavior.
 	if (matData.map) {
 		applyTextureMap(material, matData.map);
 	}

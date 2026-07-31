@@ -3,34 +3,25 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 // ============================================================================
 // Line geometry construction
 // ============================================================================
-//
-// No identity cache here on purpose: an earlier refcounted WeakMap cache (keyed per source
-// BufferGeometry) leaked ~400 live GPU entries where 8 were expected, because the cross-solve
-// geometry cache holds sources reachable forever, falsifying the WeakMap's "entries vanish with
-// their source" premise. It also barely helped (0/80 real-loop hits; the ~5% it saved on top of
-// the content-keyed segment cache in extraction.ts wasn't worth the leak). Removed 2026-07-30 —
-// the segment cache does the heavy lifting instead.
 
-/** An extracted edge overlay's geometry plus the measurements the overlay needs to render it. */
+// No identity cache here: an earlier WeakMap cache keyed per source BufferGeometry leaked ~400
+// live GPU entries where 8 were expected, because the cross-solve geometry cache holds sources
+// reachable forever, so entries never vanished with their source. It also barely helped (0/80
+// real-loop hits) — the content-keyed segment cache in extraction.ts covers this instead.
+
 export interface EdgeGeometryEntry {
 	geometry: LineSegmentsGeometry;
 	segmentCount: number;
-	/**
-	 * Characteristic world-space spacing between this overlay's edges ({@link SPACING_PERCENTILE}
-	 * quantile of segment length, not mean — see {@link edgeSpacingOf}). Drives the density fade
-	 * (see `enableDistanceFade`): fades when this projects below a pixel, regardless of how large
-	 * the mesh is on screen. Infinity for degenerate cases (no length, no extent) — never fades.
-	 */
+	/** {@link SPACING_PERCENTILE} quantile of segment length; drives the density fade in overlay.ts. */
 	edgeSpacing: number;
 }
 
-// Low percentile of segment length tracks the *fine* detail rather than the average: a low
-// quantile (not mean) is needed because real parts mix a few long silhouette edges with many
-// short ones at orders-of-magnitude different scale (e.g. 1mm laminations on a 10m part) — an
-// average would sit between the two and never trigger the fade for either.
+// A low quantile (not mean) tracks the *fine* detail: real parts mix a few long silhouette edges
+// with many short ones at orders-of-magnitude different scale (e.g. 1mm laminations on a 10m
+// part) — an average would sit between the two and never trigger the fade for either.
 const SPACING_PERCENTILE = 0.15;
 
-/** Cap on segments sampled for the percentile — a stride keeps this O(1) on millions of segments. */
+// Stride sampling keeps this O(1) on millions of segments.
 const SPACING_SAMPLE_LIMIT = 4096;
 
 function edgeSpacingOf(segments: Float32Array): number {
@@ -54,9 +45,8 @@ function edgeSpacingOf(segments: Float32Array): number {
 	return lengths[Math.min(lengths.length - 1, Math.floor(lengths.length * SPACING_PERCENTILE))]!;
 }
 
-// Every overlay gets its own LineSegmentsGeometry, owned and disposed with it — no sharing, no
-// cache (see the note above). LineSegmentsGeometry adopts `segments` as its backing store without
-// copying, so the array is still safely shared with the segment cache (read-only from here on).
+// LineSegmentsGeometry adopts `segments` as its backing store without copying, so it's still safely
+// shared with the segment cache in extraction.ts — read-only from here on.
 export function buildLineGeometry(segments: Float32Array): EdgeGeometryEntry {
 	const geometry = new LineSegmentsGeometry();
 	geometry.setPositions(segments);

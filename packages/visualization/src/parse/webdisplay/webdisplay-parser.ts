@@ -68,9 +68,8 @@ const warnedUnknownUnits = new Set<string>();
  * scales to meters, and optionally grounds them. Requires the VektorNode Rhino.Compute fork (see
  * root CLAUDE.md).
  *
- * The whole pipeline (base64 decode, inflate, dequantization, mesh construction) runs synchronously
- * on the calling thread — large batches block the UI for their duration. `async` only so the shape
- * can stay stable if parsing moves off-thread later.
+ * Synchronous internally (large batches block the UI for their duration); `async` only so the
+ * shape can stay stable if parsing moves off-thread later.
  *
  * @throws Rethrows unexpected errors after attempting to dispose any created meshes.
  */
@@ -83,10 +82,9 @@ export async function getThreeMeshesFromComputeResponse(
 
 	const {
 		allowScaling = true,
-		// Defaults to FALSE: geometry renders where Rhino puts it. Grounding used to be on by
-		// default here but was never applied on the WebSocket preview path, so the same definition
-		// sat at a different height depending on transport. Rhino coordinates are the honest frame —
-		// the viewer agrees with the Grasshopper definition, and picked/measured coordinates match.
+		// Defaults to FALSE: grounding used to be on by default here but was never applied on the
+		// WebSocket preview path, so the same definition sat at a different height depending on
+		// transport. Rhino coordinates are the honest frame, so picked/measured values match the GH definition.
 		allowAutoPosition = false,
 		groundAxis = 'z',
 		rhino,
@@ -226,11 +224,9 @@ function safeParse(s: string): DisplayBatch | undefined {
 }
 
 /**
- * Drops objects so their lowest point sits on the ground plane. `axis` is the scene's up axis —
- * `z` for the default Rhino frame geometry arrives in (see ../../shared/coordinate-frame.ts).
- * Taking it as a parameter rather than hardcoding `z` keeps grounding correct for a host that
- * configures a different `sceneUp`, where subtracting `min.z` would shove content sideways instead
- * of down.
+ * Drops objects so their lowest point sits on the ground plane. `axis` is taken as a parameter
+ * (not hardcoded `z`) so grounding stays correct for a host configuring a non-default `sceneUp` —
+ * subtracting `min.z` there would shove content sideways instead of down.
  */
 function applyGroundOffset(meshes: THREE.Object3D[], axis: 'x' | 'y' | 'z'): void {
 	if (meshes.length === 0) return;

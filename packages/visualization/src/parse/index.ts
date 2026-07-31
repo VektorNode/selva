@@ -1,10 +1,6 @@
 /**
- * `parse/` — backend payload → THREE meshes + metadata.
- *
- * Turns a Rhino.Compute / WebSocket response into renderable Three.js objects: mesh batches
- * (binary SLVA wire format, textures, materials) and display items (curves, points).
- *
- * Depends only on `shared/`. Never imports from `render/` or `scene/`.
+ * `parse/` — backend payload → THREE meshes + metadata. Depends only on `shared/`; never imports
+ * from `render/` or `scene/`.
  *
  * The SLVA binary wire format — magics, version gates, flag bits and the low-level
  * `parseBinaryMeshBatch` — is an implementation detail of `parseMeshBatch*` and is deliberately not
@@ -17,8 +13,6 @@
 // MESH OWNERSHIP
 // ============================================================================
 
-// The clone/release rules `@selvajs/solve`'s result memo needs but deliberately doesn't know.
-// `meshPolicy` carries both operations as `.clone` / `.release`; they are not exported separately.
 export { meshPolicy } from './mesh-policy.js';
 
 // ============================================================================
@@ -38,8 +32,7 @@ export type {
 
 export { parseMeshBatchObject, parseMeshBatchBlob } from './webdisplay/batch-parser.js';
 
-// The two halves of the render/parse seam: hosts wire these to
-// `ThreeInitializerOptions.onMaxAnisotropy` / `.onReleaseCaches` so `render/` never imports this layer.
+// texture-cache.ts self-subscribes via shared's observeMaxAnisotropy — render/ never imports this layer.
 export { setTextureAnisotropy } from './webdisplay/texture-cache.js';
 export { releaseParseCaches } from './release-caches.js';
 

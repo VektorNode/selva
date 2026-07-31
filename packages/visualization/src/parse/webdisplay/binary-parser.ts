@@ -31,8 +31,7 @@ import { parseColorChunk, parseUvChunk } from './binary/textures.js';
 
 import type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.js';
 
-// The wire-format constants and parsed-payload types are the module's public vocabulary; re-exported
-// so consumers keep importing them from `binary-parser` rather than reaching into `binary/`.
+// Re-exported so consumers keep importing from `binary-parser` rather than reaching into `binary/`.
 export {
 	BINARY_MESH_MAGIC,
 	COMPRESSED_MESH_MAGIC,

@@ -2,12 +2,11 @@ import * as THREE from 'three';
 
 import { defaultUp, type ResolvedOptions } from './defaults.js';
 
-/** Lights created by {@link setupLighting}, handed back so callers can retune or refit them. */
 export type SceneLights = {
 	ambient: THREE.AmbientLight;
 	/** Null unless `lighting.enableHemisphereLight`. */
 	hemisphere: THREE.HemisphereLight | null;
-	/** Null when sunlight or shadows are disabled — nothing to refit via `fitShadowToContent`. */
+	/** Null when sunlight or shadows are disabled. */
 	sun: THREE.DirectionalLight | null;
 };
 
@@ -18,8 +17,7 @@ export function setupLighting(scene: THREE.Scene, config: ResolvedOptions): Scen
 	);
 	scene.add(ambient);
 
-	// Lifts occluded/downward-facing surfaces the HDR may leave dark. Aligned to scene up — a
-	// HemisphereLight defaults to +Y up, which is wrong for a Z-up scene.
+	// HemisphereLight defaults to +Y up, which is wrong for a Z-up scene — align to scene up instead.
 	let hemisphere: THREE.HemisphereLight | null = null;
 	if (config.lighting.enableHemisphereLight) {
 		hemisphere = new THREE.HemisphereLight(
@@ -50,34 +48,31 @@ export function setupLighting(scene: THREE.Scene, config: ResolvedOptions): Scen
 
 	sunlight.castShadow = true;
 
-	// Frustum bounds are not set here — fitShadowToContent sizes them to scene content (called at
-	// init and on every geometry change), which is the dominant lever on shadow crispness.
+	// Frustum bounds are not set here — fitShadowToContent sizes them to scene content instead.
 	sunlight.shadow.mapSize.width = config.render.shadowMapSize || 2048;
 	sunlight.shadow.mapSize.height = config.render.shadowMapSize || 2048;
 
 	sunlight.shadow.bias = -0.0001;
 	sunlight.shadow.normalBias = 0.02;
-	// Softens VSM edges; only meaningful once the frustum is tight via fitShadowToContent.
 	sunlight.shadow.radius = 4;
 
 	scene.add(sunlight);
 	// A DirectionalLight aims at its target's world position, so the target must be in the scene
-	// graph for its matrix to update — fitShadowToContent moves it to the content centre.
+	// graph for its matrix to update.
 	scene.add(sunlight.target);
 	return { ambient, hemisphere, sun: sunlight };
 }
 
 /**
- * Sizes a directional light's orthographic shadow frustum to the scene content's bounding sphere
- * (padded) instead of a fixed constant area — the dominant lever on shadow crispness. No-op when
- * there is no content (an empty box would collapse the frustum to a point).
+ * Sizes a directional light's orthographic shadow frustum to the scene content's bounding sphere —
+ * the dominant lever on shadow crispness. No-op on an empty box (would collapse the frustum to a point).
  */
 export function fitShadowToContent(light: THREE.DirectionalLight, bounds: THREE.Box3): void {
 	if (bounds.isEmpty()) return;
 
 	const center = bounds.getCenter(new THREE.Vector3());
-	// Bounding-sphere radius keeps the frustum rotation-invariant (fits from any light angle, no
-	// per-angle recompute). Padded so grazing-angle casters and VSM blur near the edges don't clip.
+	// Bounding-sphere radius keeps the frustum rotation-invariant; padded so grazing-angle casters
+	// and VSM blur near the edges don't clip.
 	const radius = bounds.getSize(new THREE.Vector3()).length() * 0.5 * 1.2;
 
 	const cam = light.shadow.camera;
@@ -86,8 +81,7 @@ export function fitShadowToContent(light: THREE.DirectionalLight, bounds: THREE.
 	cam.top = radius;
 	cam.bottom = -radius;
 
-	// Only the target moves to the content centre; the light keeps its configured position, so
-	// direction is preserved while the frustum recentres.
+	// Only the target moves to the content centre, preserving the light's configured direction.
 	light.target.position.copy(center);
 	light.target.updateMatrixWorld();
 

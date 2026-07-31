@@ -35,8 +35,6 @@ export function setupEventHandlers(
 	};
 
 	const fitToView = () => {
-		// Viewer aids (grid/floor/labels/measure) excluded so the camera-tracking grid plane can't
-		// dominate the bounds and blow up the fit distance.
 		const box = computeContentBounds(scene);
 
 		if (box.isEmpty()) {
@@ -44,9 +42,8 @@ export function setupEventHandlers(
 			return;
 		}
 
-		// Delegate to the camera controller: it repositions whichever camera is LIVE and re-derives
-		// the ortho frustum in 2D mode. Moving the perspective camera directly would be invisible in
-		// 2D and silently desync it.
+		// Via the controller, not the perspective camera directly: it repositions whichever camera is
+		// live and re-derives the ortho frustum in 2D mode.
 		cameraController.frameBounds(box, false);
 	};
 
@@ -70,10 +67,9 @@ export function setupEventHandlers(
 				restorable.material = original;
 				originalMaterials.delete(obj);
 
-				// If the object left the scene while selected, clearScene's traversal only saw (and
-				// disposed) the highlight clone — no later traversal can reach the original we just
-				// restored, so dispose it here. Compute content is cleared wholesale per solve, so a
-				// detached object's material has no surviving sharers.
+				// If the object left the scene while selected, no traversal can reach the original
+				// material we just restored — dispose it here. Compute content is cleared wholesale
+				// per solve, so a detached object's material has no surviving sharers.
 				let root: THREE.Object3D = obj;
 				while (root.parent) root = root.parent;
 				if (root !== scene) {
@@ -85,7 +81,7 @@ export function setupEventHandlers(
 		selectedObjects.clear();
 	};
 
-	// Meshes get an `emissive` tint (keeps base color); lines/points have no emissive channel so
+	// Meshes tint via `emissive` (keeps base color); lines/points have no emissive channel, so
 	// `color` is recolored directly instead.
 	const applyHighlight = (object: THREE.Object3D): boolean => {
 		const target = object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
@@ -104,8 +100,8 @@ export function setupEventHandlers(
 		return true;
 	};
 
-	// Ray-to-geometry tolerance for Points picking, scaled to scene size so it holds at any zoom.
-	// Fat Line2 uses its own material linewidth instead, so only Points.threshold is needed here.
+	// Points picking tolerance, scaled to scene size so it holds at any zoom. Fat Line2 uses its own
+	// material linewidth instead, so no separate threshold is needed for lines.
 	const updatePickThresholds = () => {
 		const box = computeContentBounds(scene);
 		const diagonal = box.isEmpty() ? 1 : box.getSize(new THREE.Vector3()).length();
@@ -138,7 +134,7 @@ export function setupEventHandlers(
 			if (!selectedObjects.has(clickedObject)) {
 				clearSelection();
 				selectedObjects.add(clickedObject);
-				applyHighlight(clickedObject); // clones material so siblings sharing it are untouched
+				applyHighlight(clickedObject);
 
 				config.events?.onObjectSelected?.(clickedObject);
 
@@ -173,9 +169,9 @@ export function setupEventHandlers(
 		const box = new THREE.Box3().setFromObject(target);
 		if (box.isEmpty()) return;
 
-		// Via the controller so the ACTIVE camera moves (ortho frustum re-derived — translating an
-		// ortho camera alone zooms nothing). Tween is cancellable: a rapid second double-click
-		// replaces it rather than running a competing loop; dispose() stops it outright.
+		// Via the controller so the active camera moves (translating an ortho camera alone zooms
+		// nothing). The resulting tween is cancellable — a rapid second double-click replaces it
+		// rather than racing it.
 		cameraController.frameBounds(box, true);
 	};
 

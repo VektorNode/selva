@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * An "infinite", distance-fading reference grid — the strongest single visual cue that reads as CAD.
+ * An "infinite", distance-fading reference grid.
  *
  * Why not `GridHelper`: it's a fixed-size square that visibly ends once you pan/zoom past it.
  * Instead we draw one large plane and compute the grid in the fragment shader from world
@@ -22,11 +22,9 @@ export interface GridOptions {
 	/** World-space radius at which the grid has fully faded out. Default 100. */
 	fadeDistance?: number;
 	/**
-	 * Axis the grid is laid perpendicular to — i.e. the scene's up axis. `'z'` is the horizontal
-	 * ground in the Rhino Z-up frame the viewer uses; `'y'` is Three's native Y-up.
-	 *
-	 * This standalone default is `'y'`, but `initThree` always passes a plane derived from the
-	 * configured `sceneUp`, so a viewer-created grid defaults to `'z'`.
+	 * Axis the grid is laid perpendicular to, i.e. the scene's up axis. Standalone default is `'y'`,
+	 * but `initThree` always passes a plane derived from the configured `sceneUp`, so a
+	 * viewer-created grid defaults to `'z'` (Rhino's ground plane).
 	 */
 	plane?: 'x' | 'y' | 'z';
 }
@@ -38,8 +36,7 @@ export interface Grid {
 	update(cameraPosition: THREE.Vector3): void;
 	/**
 	 * Rescales cell spacing and fade radius to the content's extent, so a 3-unit or 3000-unit part
-	 * both get sensible cells. Call after a geometry change (e.g. after `updateScene`). No-op for
-	 * empty/degenerate bounds.
+	 * both get sensible cells. No-op for empty/degenerate bounds.
 	 */
 	fitToContent(bounds: THREE.Box3): void;
 	setVisible(visible: boolean): void;
@@ -78,7 +75,7 @@ const GRID_FRAGMENT = /* glsl */ `
 	uniform float uMajor;
 	uniform vec3 uCellColor;
 	uniform vec3 uMajorColor;
-	uniform vec3 uCenter;       // fade center (camera position), projected onto plane
+	uniform vec3 uCenter;       // fade center (camera position projected onto the plane)
 	uniform float uFade;
 
 	// Antialiased grid line intensity for a given spacing, using screen-space derivatives so lines
@@ -134,9 +131,9 @@ export function createGrid(options: GridOptions = {}): Grid {
 				? new THREE.Vector2(0, 1) // x, y
 				: new THREE.Vector2(1, 2); // y, z
 
-	// The plane must comfortably outreach the fade radius, else the grid ends before it has faded and
-	// shows a hard rectangular edge. Built as a unit plane and sized purely by scale so fitToContent
-	// can regrow it without recreating geometry — the same rotation onto the world plane still applies.
+	// Must comfortably outreach the fade radius, else the grid ends before it has faded, showing a
+	// hard rectangular edge. Built as a unit plane and sized purely by scale so fitToContent can
+	// regrow it without recreating geometry.
 	const PLANE_TO_FADE_RATIO = 2.5;
 	const geometry = new THREE.PlaneGeometry(1, 1);
 
@@ -163,12 +160,10 @@ export function createGrid(options: GridOptions = {}): Grid {
 
 	const mesh = new THREE.Mesh(geometry, material);
 	mesh.name = 'grid';
-	mesh.userData.id = 'grid'; // excluded from raycasting/fit-to-view, like the floor
+	mesh.userData.id = 'grid';
 	mesh.renderOrder = -1; // draw before content so transparent geometry blends over it
 
-	// Live scale of the (unit) plane and current fade radius; fitToContent mutates both, `update`
-	// reads planeScale each frame to size the camera-tracking plane. Seeded from the constructor's
-	// fadeDistance so an un-fitted grid still covers its fade.
+	// fitToContent mutates both; seeded from fadeDistance so an un-fitted grid still covers its fade.
 	let fadeRadius = fadeDistance;
 	let planeScale = fadeDistance * PLANE_TO_FADE_RATIO;
 
@@ -177,8 +172,8 @@ export function createGrid(options: GridOptions = {}): Grid {
 	return {
 		object: mesh,
 		update: (cameraPosition) => {
-			// Re-center the plane and the fade on the camera so the grid tracks the view "infinitely".
-			// Keep the plane's own axis fixed (don't lift the ground grid up to the camera height).
+			// Re-center on the camera so the grid tracks the view "infinitely"; the plane's own axis
+			// stays fixed (don't lift the ground grid up to the camera height).
 			if (plane === 'y') {
 				mesh.position.set(cameraPosition.x, 0, cameraPosition.z);
 				center.set(cameraPosition.x, 0, cameraPosition.z);
@@ -190,15 +185,13 @@ export function createGrid(options: GridOptions = {}): Grid {
 				center.set(0, cameraPosition.y, cameraPosition.z);
 			}
 			material.uniforms.uCenter.value.copy(center);
-			// Size the unit plane to the current scale. The rotation baked into the geometry means the
-			// plane's local XY spans the two world in-plane axes, so a uniform scale is correct on any
-			// plane orientation.
+			// Rotation is baked into the geometry, so a uniform scale is correct on any plane orientation.
 			mesh.scale.setScalar(planeScale);
 		},
 		fitToContent: (bounds) => {
 			if (bounds.isEmpty()) return;
-			// Use the two in-plane axes' extent (not the full 3D diagonal) as the "how big is this on
-			// the ground" measure — a tall thin part shouldn't blow the cell size up by its height.
+			// In-plane extent only (not the full 3D diagonal) — a tall thin part shouldn't blow the
+			// cell size up by its height.
 			const sizeVec = bounds.getSize(new THREE.Vector3());
 			const axisComponent = (v: THREE.Vector3, i: number) => (i === 0 ? v.x : i === 1 ? v.y : v.z);
 			const inPlaneExtent = Math.max(
@@ -207,9 +200,8 @@ export function createGrid(options: GridOptions = {}): Grid {
 			);
 			if (!(inPlaneExtent > 0) || !Number.isFinite(inPlaneExtent)) return;
 
-			// Aim for ~20 minor cells across the part, snapped to a nice 1/2/5 step so labels stay
-			// readable; majorEvery keeps the coarser reference lines. Fade reaches ~2× past the part so
-			// the grid extends beyond it without a visible edge, and the plane outreaches the fade.
+			// ~20 minor cells across the part, snapped to a nice 1/2/5 step. Fade reaches ~2x past the
+			// part so the grid extends beyond it without a visible edge.
 			const TARGET_CELLS_ACROSS = 20;
 			material.uniforms.uCell.value = niceStep(inPlaneExtent / TARGET_CELLS_ACROSS);
 			fadeRadius = inPlaneExtent * 2;
@@ -220,7 +212,7 @@ export function createGrid(options: GridOptions = {}): Grid {
 			mesh.visible = visible;
 		},
 		dispose: () => {
-			mesh.removeFromParent(); // don't leave a dead mesh in the scene graph
+			mesh.removeFromParent();
 			geometry.dispose();
 			material.dispose();
 		}

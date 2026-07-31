@@ -30,7 +30,6 @@ export {
 	canDisposeGeometry,
 	canDisposeMaterial,
 	canDisposeTexture,
-	isProtectedMaterial,
 	protectMaterials,
 	registerCacheRelease,
 	releaseAllCaches,

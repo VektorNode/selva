@@ -7,10 +7,9 @@ export type CameraConfig = {
 	far?: number;
 	target?: THREE.Vector3;
 	/**
-	 * Refit the perspective camera's near plane to the camera↔content gap every frame (default true).
-	 * Recovers depth-buffer precision when zoomed out (precision ∝ near/z²), which is what stops
-	 * distant surfaces z-fighting. `near` stays the lower bound — the plane is only raised, never
-	 * lowered below it.
+	 * Refit the near plane to the camera↔content gap every frame (default true) — recovers
+	 * depth-buffer precision when zoomed out, preventing distant z-fighting. `near` is only ever
+	 * raised, never lowered below the configured value.
 	 */
 	dynamicNear?: boolean;
 };
@@ -23,18 +22,15 @@ export type LightingConfig = {
 	ambientLightIntensity?: number;
 	sunlightColor?: THREE.Color | number;
 	/**
-	 * Add a hemisphere fill light (sky color from above, ground color from below). Unlike the flat
-	 * ambient, this gives soft *direction-aware* fill, so downward- and side-facing surfaces never
-	 * collapse to black when the HDR's lower hemisphere is dark. The single biggest lever for keeping
-	 * results well-lit regardless of which HDR is loaded. Default false (opt-in) — enabling it shifts
-	 * the look. See {@link LightingConfig.hemisphereIntensity}.
+	 * Direction-aware fill (sky color above, ground color below) so surfaces facing away from the
+	 * sun don't collapse to black under a dark HDR. Default false — enabling it shifts the look.
 	 */
 	enableHemisphereLight?: boolean;
-	/** Hemisphere fill sky color (lights upward-facing surfaces). Default white. */
+	/** Default white. */
 	hemisphereSkyColor?: THREE.Color | number;
-	/** Hemisphere fill ground color (lights downward-facing surfaces). Default a mid grey. */
+	/** Default a mid grey. */
 	hemisphereGroundColor?: THREE.Color | number;
-	/** Hemisphere fill strength. Default 0.6. Only applies when {@link LightingConfig.enableHemisphereLight}. */
+	/** Default 0.6. Only applies when {@link LightingConfig.enableHemisphereLight}. */
 	hemisphereIntensity?: number;
 };
 
@@ -43,21 +39,16 @@ export type EnvironmentConfig = {
 	backgroundColor?: THREE.Color | string;
 	enableEnvironmentLighting?: boolean;
 	/**
-	 * The scene's up axis. **Defaults to `(0, 0, 1)` — Rhino's Z-up**, not Three's native Y-up,
-	 * because geometry arrives in Rhino's frame and is never rotated on ingress (see
-	 * `coordinate-transform.ts`). Everything orientation-dependent derives from this: view presets,
-	 * the default iso camera, sun position, grid plane, floor normal, and the hemisphere light.
-	 *
-	 * Overriding it reorients the viewer but does NOT rotate incoming geometry, so a Y-up value only
-	 * makes sense if the host also feeds Y-up geometry.
+	 * Defaults to `(0, 0, 1)` — Rhino's Z-up, not Three's native Y-up — because geometry arrives in
+	 * Rhino's frame and is never rotated on ingress. Everything orientation-dependent derives from
+	 * this (view presets, default camera, sun, grid, floor, hemisphere light), but overriding it
+	 * reorients the viewer only — it does NOT rotate incoming geometry.
 	 */
 	sceneUp?: THREE.Vector3;
 	showEnvironment?: boolean;
 	/**
-	 * Uniform multiplier on the HDR's image-based lighting contribution (`scene.environmentIntensity`).
-	 * Normalizes brightness across HDRs of differing exposure — raise it to lift a dim HDR, lower it to
-	 * tame a blown-out one — so the scene doesn't render dim-or-blown purely because of the HDR chosen.
-	 * Default 1 (three.js default, unchanged look).
+	 * Multiplier on the HDR's image-based lighting contribution — normalizes brightness across HDRs
+	 * of differing exposure. Default 1 (unchanged look).
 	 */
 	environmentIntensity?: number;
 };
@@ -79,26 +70,20 @@ export type RenderConfig = {
 	toneMapping?: THREE.ToneMapping;
 	toneMappingExposure?: number;
 	preserveDrawingBuffer?: boolean;
-	/**
-	 * Enable ground-truth ambient occlusion (GTAO) via a postprocessing pipeline. Default false —
-	 * turning it on switches rendering from `renderer.render` to an EffectComposer, which costs more.
-	 */
+	/** Default false — switches rendering from `renderer.render` to an EffectComposer, which costs more. */
 	ambientOcclusion?: boolean;
 	/** AO strength 0–1 when {@link RenderConfig.ambientOcclusion} is on. Default 1. */
 	aoIntensity?: number;
 	/**
-	 * Device-pixel-ratio cap for the ambient-occlusion postprocessing buffers. AO is low-frequency, so
-	 * rendering its buffers below the display DPR is nearly invisible but hugely cheaper — on a Retina
-	 * display (DPR 2) full-resolution AO means 4× the pixels through GTAO's per-pixel sample loops,
-	 * which can dominate frame time. Default 1 (AO buffers at 1× regardless of display DPR). Raise
-	 * toward the display DPR for sharper AO at higher cost; only relevant when AO is enabled.
+	 * DPR cap for AO buffers — AO is low-frequency, so sampling below display DPR is nearly invisible
+	 * but much cheaper (a DPR-2 display would otherwise push 4× the pixels through GTAO's per-pixel
+	 * sample loop). Default 1; only relevant when AO is enabled.
 	 */
 	aoPixelRatio?: number;
 	/**
-	 * Render only when something changed (camera motion, invalidate(), pointer input, resize), with
-	 * a ~500 ms safety repaint, instead of every animation frame. Default true — cuts idle GPU/battery
-	 * to ~2 fps worth of work, which matters especially with ambient occlusion on. Set false to
-	 * restore the legacy continuous loop.
+	 * Render only on change (camera motion, invalidate(), pointer input, resize) plus a ~500ms safety
+	 * repaint, instead of every frame. Default true — cuts idle GPU/battery use. Set false to restore
+	 * a continuous loop.
 	 */
 	onDemand?: boolean;
 };
@@ -106,44 +91,36 @@ export type RenderConfig = {
 import type { Look } from '../shared/index.js';
 
 /**
- * A named bundle of LIGHTING/MATERIAL defaults, decoupled from the CAD overlays (edges, grid — see
- * {@link EdgesConfig}/{@link GridConfig}). 'technical' (default) is a matte CAD-shaded look; 'studio'
- * and 'showcase' add ACES tone mapping and hemisphere fill for punchier presentation.
+ * A named bundle of lighting/material defaults, decoupled from CAD overlays (edges, grid — see
+ * {@link EdgesConfig}/{@link GridConfig}). 'technical' (default) is matte CAD-shaded; 'studio' and
+ * 'showcase' add ACES tone mapping and hemisphere fill for punchier presentation.
  *
- * Defined in `shared/` (both this layer and `parse/` need it, and neither may import the other) and
- * re-exported here so `ThreeInitializerOptions` reads as one self-contained option surface.
+ * Defined in `shared/` (both this layer and `parse/` need it, neither may import the other) and
+ * re-exported here so `ThreeInitializerOptions` stays a self-contained option surface.
  */
 export { LOOKS } from '../shared/index.js';
 export type { Look, LookPreset, MaterialAppearanceOptions } from '../shared/index.js';
 
 /** Crisp boundary/crease edge overlays on meshes. See `addEdges`. */
 export type EdgesConfig = {
-	/** Auto-attach edge overlays to meshes as they load. Default false (opt-in). */
+	/** Default false (opt-in). */
 	enabled?: boolean;
-	/**
-	 * Force a single edge color for all meshes. Omit (the default) to derive each mesh's edge color
-	 * from its own surface material, darkened by `darken` — so edges read as the object's own outline.
-	 */
+	/** Omit (default) to derive each mesh's edge color from its own surface material, darkened by `darken`. */
 	color?: THREE.ColorRepresentation;
-	/**
-	 * How far derived edge colors are darkened toward black, 0–1 (default 0.75). Ignored when `color`
-	 * is set.
-	 */
+	/** 0–1, default 0.75. Ignored when `color` is set. */
 	darken?: number;
-	/** Edge thickness in CSS px. Default 1.5. */
+	/** CSS px. Default 1.5. */
 	width?: number;
-	/** Crease angle (degrees): keep edges where faces differ by more than this. Default 44. */
+	/** Crease angle in degrees: keep edges where faces differ by more than this. Default 44. */
 	thresholdAngle?: number;
-	/** Fade an overlay out as its mesh shrinks on screen, so far zoom-outs stay clean. Default true. */
+	/** Fade an overlay out as its mesh shrinks on screen. Default true. */
 	distanceFade?: boolean;
-	/** Skip overlay extraction for meshes above this triangle count. Default 4M. See `EdgeOptions`. */
+	/** Skip overlay extraction for meshes above this triangle count. Default 4M. */
 	maxTriangles?: number;
 	/** Overlays above this segment count render opaque (no distance fade). Default 2M. */
 	maxSegments?: number;
-	/**
-	 * When a mesh is skipped for exceeding `maxTriangles`, approximate its edges with the
-	 * screen-space edge-detection pass (constant cost in triangle count). Default true.
-	 */
+	/** Meshes skipped for exceeding `maxTriangles` fall back to the screen-space edge-detection pass
+	 * (constant cost regardless of triangle count). Default true. */
 	screenSpaceFallback?: boolean;
 };
 
@@ -160,65 +137,51 @@ export type ControlsConfig = {
 
 /** Infinite distance-fading reference grid. See `createGrid`. */
 export type GridConfig = {
-	/** Show the grid. Default false (opt-in). */
+	/** Default false (opt-in). */
 	enabled?: boolean;
-	/** Minor cell size in world units (meters). Default 1. */
+	/** World units (meters). Default 1. */
 	cellSize?: number;
 	/** Minor cells per major line. Default 10. */
 	majorEvery?: number;
-	/** Minor line color. */
 	cellColor?: THREE.ColorRepresentation;
-	/** Major line color. */
 	majorColor?: THREE.ColorRepresentation;
 	/** World radius at which the grid fully fades. Default 100. */
 	fadeDistance?: number;
 	/**
-	 * Axis the grid lies perpendicular to — the scene's up axis. Defaults to whichever axis
-	 * `sceneUp` points along, so it is `'z'` (Rhino's horizontal ground) unless you override
-	 * `sceneUp`. Set explicitly only to force a grid orientation that ignores the scene up.
+	 * Axis the grid lies perpendicular to. Defaults to whichever axis `sceneUp` points along
+	 * (`'z'` unless `sceneUp` is overridden); set explicitly to force an orientation that ignores it.
 	 */
 	plane?: 'x' | 'y' | 'z';
 };
 
 /** Corner nav-cube/axis gizmo that snaps to preset views. See `createViewGizmo`. */
 export type GizmoConfig = {
-	/** Show the gizmo. Default false (opt-in). */
+	/** Default false (opt-in). */
 	enabled?: boolean;
 };
 
 /** Two-click distance measurement tool. See `createMeasureTool`. */
 export type MeasureConfig = {
-	/**
-	 * Create the measurement tool. Default false. Note: this only *builds* the tool (and its label
-	 * overlay); start measuring by calling `measureTool.setEnabled(true)` on the init result.
-	 */
+	/** Default false. Only builds the tool; start measuring via `measureTool.setEnabled(true)` on the init result. */
 	enabled?: boolean;
 	/** Snap to a vertex within this many screen px. Default 12. */
 	snapPixels?: number;
-	/** Marker + line color. Default yellow. */
+	/** Default yellow. */
 	color?: THREE.ColorRepresentation;
 	/** CSS class for the distance label. */
 	labelClassName?: string;
-	/**
-	 * Model unit (pass the response's `modelunits`). The scene is in meters, so the default label is
-	 * converted to this unit — a mm model reads "25.0 mm". Defaults to meters. Ignored if `format` is set.
-	 */
+	/** Scene is in meters; pass the response's `modelunits` to convert the label (e.g. "25.0 mm"). Default meters. Ignored if `format` is set. */
 	displayUnit?: string;
-	/**
-	 * Format the measurement → label text. Receives the straight-line `distance` and per-axis `delta`.
-	 * Default renders the total plus a Δx/Δy/Δz breakdown.
-	 */
+	/** Receives the straight-line `distance` and per-axis `delta`. Default renders the total plus a Δx/Δy/Δz breakdown. */
 	format?: (distance: number, delta: THREE.Vector3) => string;
 };
 
 export type ThreeInitializerOptions = {
 	sceneScale?: 'mm' | 'cm' | 'm' | 'inches' | 'feet';
 	/**
-	 * Pick a ready-to-go visual look up front — seeds professional lighting/material defaults (tone
-	 * mapping, AO, IBL strength, hemisphere fill; see {@link Look}). Individual `lighting`/
-	 * `environment`/`render` options still win when set explicitly, so this only fills in what you
-	 * leave unspecified. A look does NOT touch edges/grid (those are independent overlays). Defaults
-	 * to 'technical'. Re-apply later via the init result's `setLook`.
+	 * Seeds lighting/material defaults (tone mapping, AO, IBL strength, hemisphere fill); explicit
+	 * `lighting`/`environment`/`render` options still win. Does NOT touch edges/grid. Default
+	 * 'technical'. Re-apply later via the init result's `setLook`.
 	 */
 	look?: Look;
 	camera?: CameraConfig;
@@ -233,11 +196,9 @@ export type ThreeInitializerOptions = {
 	measure?: MeasureConfig;
 	events?: EventConfig;
 	/**
-	 * Called once at init with the GPU's max anisotropy (`renderer.capabilities.getMaxAnisotropy()`).
-	 *
-	 * **Not needed to get sharp textures** — the value is published to a shared sink that the parse
-	 * layer's texture cache subscribes to itself, so colour maps are already handled. This hook is
-	 * for hosts doing their own texture work on top.
+	 * Called once at init with the GPU's max anisotropy. **Not needed for sharp textures** — the
+	 * parse layer's texture cache subscribes to this value itself via a shared sink. This hook is
+	 * only for hosts doing their own texture work on top.
 	 */
 	onMaxAnisotropy?: (value: number) => void;
 };
@@ -245,20 +206,18 @@ export type ThreeInitializerOptions = {
 export type EventConfig = {
 	onBackgroundClicked?: (event: { x: number; y: number }) => void;
 	onObjectSelected?: (object: THREE.Object3D) => void;
-	/** Called when a mesh with non-empty `userData` is clicked. Receives that `userData` object. */
+	/** Receives the clicked mesh's `userData`; only fires for meshes with non-empty `userData`. */
 	onMeshMetadataClicked?: (metadata: Record<string, unknown>) => void;
-	/** Called when a mesh is double-clicked. Receives the mesh object. */
 	onMeshDoubleClicked?: (object: THREE.Object3D) => void;
-	/** Color to use for highlighting selected meshes. Defaults to red (#ff0000). */
+	/** Default red (#ff0000). */
 	selectionColor?: THREE.Color | string;
-	/** Enable all event handlers (click/selection/metadata). Defaults to true. */
+	/** Enable all event handlers (click/selection/metadata). Default true. */
 	enableEventHandlers?: boolean;
 	enableKeyboardControls?: boolean;
 	enableClickToFocus?: boolean;
-	/** Zoom into a mesh on double-click. Defaults to true. */
+	/** Default true. */
 	enableDoubleClickZoom?: boolean;
-	/** Called once the HDR environment map has finished loading and been applied to the scene. */
 	onReady?: () => void;
-	/** Called every animation frame, after controls update and before render. Use for custom per-frame logic. */
+	/** Fires every animation frame, after controls update and before render. */
 	onFrame?: (delta: number) => void;
 };

@@ -15,37 +15,20 @@ import { MaterialPool, buildEdgeOverlay } from './edges/overlay.js';
 
 /**
  * Crisp boundary/crease edges overlaid on meshes — the "technical drawing" look that makes shaded
- * geometry read as discrete objects rather than blobs.
- *
- * Segments come from `extractEdgeSegments` (edge-extract.ts — an `EdgesGeometry`-equivalent, ~10x
- * faster and worker-portable) and render as fat `LineSegments2` (same `LineMaterial` family as
- * curves), giving controllable thickness instead of the 1px cap of `THREE.LineSegments`. Each
- * overlay is a *child* of its mesh — inherits its transform, disposed with the mesh subtree.
- *
- * Performance model (docs/plans/edge-overlay-open.md):
- * - Extraction is cached by *content fingerprint* in an LRU (`edges/extraction.ts`), since the
- *   viewer rebuilds every geometry object each solve — only a content key survives that. A second,
- *   identity-keyed cache of the built `LineSegmentsGeometry` was removed 2026-07-30: 0/80 hit rate
- *   in the real solve loop (scene clears reset it every solve), saved only 3.8ms against the 71ms
- *   the content cache already absorbs, and cost a refcount protocol plus one live leak.
- * - {@link addEdgesAsync} runs extraction for large meshes in a Worker (blob-URL based, bundler
- *   agnostic; falls back to inline when Workers are unavailable) to avoid the multi-second main
- *   thread stalls extraction causes at millions of triangles.
- * - `maxTriangles` skips pathological meshes outright (tags `userData.edgesSkipped =
- *   'triangle-cap'`); `maxSegments` drops distance fade on oversized overlays so they render in
- *   the cheaper opaque pass.
+ * geometry read as discrete objects rather than blobs. Segments come from `extractEdgeSegments`
+ * (edge-extract.ts) and render as fat `LineSegments2`, giving controllable thickness instead of
+ * the 1px cap of `THREE.LineSegments`.
  *
  * Depth strategy: surfaces render at TRUE depth; lines carry a small units-only polygonOffset
- * toward the camera (`EDGE_OFFSET_FACTOR`/`EDGE_OFFSET_UNITS` in `edges/options.ts`). This replaced
- * an earlier slope-scaled *surface* offset that bled badly: the slope term scales with dZ/dpixel,
- * huge at grazing angles, so faces receded further than the mm gaps between stacked parts and
- * geometry behind a wall drew through the wall's own receded surface. A units-only bias on the
- * lines instead is a fixed number of depth-quantization steps regardless of angle, so it lifts an
- * edge off its own surface without reaching a neighbouring part.
+ * toward the camera (`EDGE_OFFSET_FACTOR`/`EDGE_OFFSET_UNITS` in `edges/options.ts`) instead of a
+ * slope-scaled offset — slope scales with dZ/dpixel, huge at grazing angles, so it would recede
+ * faces further than the mm gaps between stacked parts and draw geometry through a wall's own
+ * receded surface. A units-only bias is a fixed number of depth-quantization steps regardless of
+ * angle, lifting an edge off its own surface without reaching a neighbouring part.
  *
  * That bias is only safe because a depth ULP stays small — `near-plane.ts`'s dynamic near-plane
- * fitter keeps `camera.near` proportional to the camera↔content gap for that. Weakening the near
- * fit will make this bias start to bleed.
+ * fitter keeps `camera.near` proportional to the camera-content gap. Weakening the near fit will
+ * make this bias start to bleed.
  */
 export type { EdgeOptions };
 export { EDGE_USERDATA_KIND, EDGES_SKIPPED_TRIANGLE_CAP };
@@ -54,7 +37,7 @@ export { EDGE_USERDATA_KIND, EDGES_SKIPPED_TRIANGLE_CAP };
 // Public API — add / remove / query
 // ============================================================================
 
-/** Whether an object is an edge overlay (for pick/fit filters elsewhere). */
+/** For pick/fit filters elsewhere to exclude overlays from hit-testing. */
 export function isEdgeOverlay(object: THREE.Object3D): boolean {
 	return object.userData?.kind === EDGE_USERDATA_KIND;
 }
@@ -121,9 +104,8 @@ export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineS
 }
 
 /**
- * Generation per root: {@link removeEdges} bumps it, and async attaches landing after a bump are
- * dropped — so "toggle off while extracting" can't resurrect overlays. Keyed on the root object,
- * which hosts keep stable across solves (the scene).
+ * {@link removeEdges} bumps this per root; async attaches landing after a bump are dropped, so
+ * "toggle off while extracting" can't resurrect overlays.
  */
 const rootGenerations = new WeakMap<THREE.Object3D, number>();
 
@@ -142,9 +124,9 @@ function isConnected(mesh: THREE.Object3D, root: THREE.Object3D): boolean {
 /**
  * Like {@link addEdges}, but large-mesh extraction runs in a Worker so the main thread never
  * stalls; small meshes still attach synchronously before this resolves. Resolves with every
- * overlay actually attached — late results are dropped when the mesh left the subtree (scene
- * cleared by a newer solve), {@link removeEdges} ran for this root, or another apply already
- * attached one to that mesh.
+ * overlay actually attached — late results are dropped if the mesh left the subtree,
+ * {@link removeEdges} ran for this root meanwhile, or another apply already attached one to that
+ * mesh.
  */
 export async function addEdgesAsync(
 	root: THREE.Object3D,

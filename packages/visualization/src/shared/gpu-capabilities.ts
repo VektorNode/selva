@@ -3,25 +3,18 @@
 // ============================================================================
 
 /**
- * Capabilities only a live `WebGLRenderer` can report (e.g. max anisotropy for the texture cache in
- * `parse/`), made available without `render/` and `parse/` importing each other: the renderer
- * publishes on init, interested parties subscribe. Previously this crossed via a host-wired callback
- * (`onMaxAnisotropy`) — a host that forgot it silently got blurry textures.
+ * Lets a renderer publish GPU capabilities (max anisotropy) without `render/` and `parse/` importing
+ * each other: the renderer publishes on init, interested parties subscribe.
  */
 
-/** Subscribers notified whenever a renderer reports its capabilities. */
 type AnisotropyObserver = (value: number) => void;
 
 const observers = new Set<AnisotropyObserver>();
 
-/**
- * Best max-anisotropy reported by any renderer so far. Kept so a subscriber arriving *after* init
- * (module load order between layers is not guaranteed) still receives the current value rather than
- * waiting for a second viewer.
- */
+// Module load order between layers isn't guaranteed, so a subscriber arriving after init still
+// needs the current value rather than waiting for a second renderer to publish.
 let maxAnisotropy = 1;
 
-/** Called by `initThree` with `renderer.capabilities.getMaxAnisotropy()`. */
 export function publishMaxAnisotropy(value: number): void {
 	const next = Math.max(1, value);
 	if (next === maxAnisotropy) return;
@@ -29,10 +22,7 @@ export function publishMaxAnisotropy(value: number): void {
 	for (const observe of observers) observe(next);
 }
 
-/**
- * Observe the GPU's max anisotropy. Fires immediately with the current value (1 until a renderer has
- * reported), then again on every change. Returns an unsubscribe function.
- */
+/** Fires immediately with the current value (1 until a renderer has reported), then on every change. */
 export function observeMaxAnisotropy(observe: AnisotropyObserver): () => void {
 	observers.add(observe);
 	observe(maxAnisotropy);

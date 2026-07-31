@@ -5,12 +5,6 @@ import type * as THREE from 'three';
 // ============================================================================
 
 /**
- * The ready-to-go viewer looks:
- * - 'technical': clean shaded CAD read — neutral tone mapping, IBL-led so the object keeps form.
- * - 'studio': balanced "product shot" — ACES, hemisphere fill + lifted HDR, well-lit without washing
- *   colour out.
- * - 'showcase': punchier presentation — ACES, stronger IBL/fill, a touch more exposure.
- *
  * `LOOKS` is the source of truth ({@link Look} derives from it) so consumers (e.g. a style picker)
  * can iterate instead of hardcoding names. 'technical' is first because it's the default.
  */
@@ -27,15 +21,11 @@ export type Look = (typeof LOOKS)[number];
 export type LookPreset = {
 	toneMapping: THREE.ToneMapping;
 	toneMappingExposure: number;
-	/** IBL reflection strength on compute materials (parse-time material choice). */
 	envMapIntensity: number;
-	/** Multiplier on the HDR's IBL (`scene.environmentIntensity`). 'studio'/'showcase' lift above 1 so results stay bright regardless of the HDR. */
+	/** Multiplier on the HDR's IBL (`scene.environmentIntensity`). */
 	environmentIntensity: number;
-	/** Direction-aware fill lifting shadowed/under-facing surfaces a dark HDR leaves black. 'technical' keeps it 0. */
 	hemisphereIntensity: number;
-	/** Flat ambient strength — kept low on 'studio'/'showcase' so hemisphere fill carries the lift without desaturating colour. */
 	ambientIntensity: number;
-	/** Cull back faces on compute meshes (parse-time material choice; crisper solids). */
 	cullBackfaces: boolean;
 	ambientOcclusion: boolean;
 };
@@ -45,7 +35,7 @@ export type LookPreset = {
  * read a look's material dials via `materialAppearanceForLook` without importing upward into `parse/`.
  */
 export interface MaterialAppearanceOptions {
-	/** IBL reflection strength. ~0.5 reads matte/technical, ~1.3 glossy/presentation. Default 1 (three.js's own default). */
+	/** Default 1 (three.js's own material default) when omitted. */
 	envMapIntensity?: number;
 	/**
 	 * `THREE.FrontSide` instead of `THREE.DoubleSide` — crisper silhouette on closed solids, but open

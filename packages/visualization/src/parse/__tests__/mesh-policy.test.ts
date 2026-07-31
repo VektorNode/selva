@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { CACHED_GEOMETRY_USERDATA_FLAG } from '../../shared/index.js';
 import { cloneSceneObjects, meshPolicy, releaseSceneObjects } from '../mesh-policy.js';
 
-// The three.js half of audit C1. `@selvajs/solve`'s result memo keeps meshes opaque and
-// injects these rules, so this is the only place the actual clone/dispose semantics are
-// pinned — the memo's suite proves it CALLS a policy, this proves the policy is correct.
+// `@selvajs/solve`'s result memo keeps meshes opaque and injects these rules, so this is the
+// only place the actual clone/dispose semantics are pinned — the memo's suite proves it CALLS
+// a policy, this proves the policy is correct.
 
 function meshWithChild(): THREE.Mesh {
 	const parent = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
@@ -24,9 +24,8 @@ describe('cloneSceneObjects', () => {
 	});
 
 	it('copies geometry through the whole subtree, not just the root', () => {
-		// `Object3D.clone(true)` clones the hierarchy but SHARES geometry by reference — the exact
-		// aliasing that makes a naive clone useless here. A child left aliased would be disposed
-		// by whoever owns the other copy.
+		// `Object3D.clone(true)` clones the hierarchy but SHARES geometry by reference — a child
+		// left aliased would be disposed by whoever owns the other copy.
 		const source = meshWithChild();
 		const [copy] = cloneSceneObjects([source]);
 
@@ -50,10 +49,6 @@ describe('cloneSceneObjects', () => {
 	});
 
 	it('strips the geometry-cache flag from the copy', () => {
-		// The flag means "the cross-solve geometry cache owns these GPU buffers, don't dispose
-		// them" — true of the cache's instance, false of a private copy. `BufferGeometry.clone()`
-		// carries userData across, so left in place BOTH clearScene and releaseSceneObjects would
-		// skip the copy and nothing would ever free it.
 		const source = meshWithChild();
 		source.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG] = true;
 
@@ -111,8 +106,8 @@ describe('releaseSceneObjects', () => {
 
 describe('meshPolicy', () => {
 	it('round-trips: a clone survives the original being released', () => {
-		// The scenario audit C1 describes, end to end: the memo stores a clone, the viewer
-		// disposes what it was given, and the next hit must still be renderable.
+		// End to end: the memo stores a clone, the viewer disposes what it was given, and the
+		// next hit must still be renderable.
 		const stored = cloneSceneObjects([meshWithChild()]);
 		const served = meshPolicy.clone(stored);
 

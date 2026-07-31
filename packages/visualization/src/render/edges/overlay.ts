@@ -85,7 +85,7 @@ export function buildEdgeOverlay(
 const _fadeCenter = new THREE.Vector3();
 const _fadeCameraPos = new THREE.Vector3();
 
-/** Pixels per world unit at the overlay's centre. Returns Infinity ("don't fade") when the projection is unknown/degenerate, or the camera sits inside the mesh. */
+// Returns Infinity ("don't fade") when the projection is unknown/degenerate, or the camera sits inside the mesh.
 function pixelsPerWorldUnit(
 	overlay: LineSegments2,
 	camera: THREE.Camera,

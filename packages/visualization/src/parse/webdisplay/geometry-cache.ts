@@ -3,8 +3,7 @@ import * as THREE from 'three';
 import { CACHED_GEOMETRY_USERDATA_FLAG, registerCacheRelease } from '../../shared/index.js';
 
 /**
- * Cross-solve `BufferGeometry` cache, keyed by geometry *content* (audit P1 —
- * docs/plans/5.display-pipeline-performance-audit.md).
+ * Cross-solve `BufferGeometry` cache, keyed by geometry *content*.
  *
  * The viewer rebuilds the whole scene every solve: `clearScene` disposes every geometry and the
  * parser re-decodes, re-copies, re-computes normals and re-uploads to the GPU — even for meshes the
@@ -101,15 +100,14 @@ export function geometryCachePut(key: string, geometry: THREE.BufferGeometry): v
 	const bytes = bytesOf(geometry);
 	if (bytes > GEOMETRY_CACHE_BYTE_BUDGET) return; // absurd single geometry — don't cache
 
-	geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG] = true;
-
-	const existing = cache.get(key);
-	if (existing) {
-		// Same content raced in twice (e.g. duplicate content within one solve building in
-		// parallel) — keep the incumbent, dispose nothing: the caller uses the returned geometry.
+	if (cache.has(key)) {
+		// Same content raced in twice — keep the incumbent. The newcomer stays untagged and
+		// scene-owned, so the normal scene teardown disposes it; tagging it here would orphan it
+		// (flagged, but never owned by the cache → skipped by every disposal path forever).
 		return;
 	}
 
+	geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG] = true;
 	cache.set(key, { geometry, bytes });
 	cacheBytes += bytes;
 

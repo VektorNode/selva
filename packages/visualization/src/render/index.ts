@@ -1,14 +1,12 @@
 /**
  * `render/` — the CAD viewer toolkit: a configured THREE scene plus the overlays that make it read
- * as CAD (edges, grid, nav gizmo, labels, measurement, AO).
+ * as CAD (edges, grid, nav gizmo, labels, measurement, AO). See README for the full layer map.
  *
- * Depends downward on `shared/` only; never imports `parse/` (hosts wire the two together via
- * `ThreeInitializerOptions.onMaxAnisotropy`).
+ * Depends downward on `shared/` only; never imports `parse/` (see README's render↔parse seam).
  *
- * `initThree` owns the toolkit — camera controller, grid, gizmo, measure tool, render pipeline,
- * near-plane fitter — and hands the live instances back on {@link ThreeViewer}. Their factories
- * aren't exported; reach them through the viewer (`viewer.grid`, `viewer.measureTool`, …) and
- * configure via {@link ThreeInitializerOptions}. Handle types are exported so hosts can annotate.
+ * `initThree` owns the toolkit and hands the live instances back on {@link ThreeViewer}; the
+ * individual factories aren't exported on purpose — reach them through the viewer instance
+ * (`viewer.grid`, `viewer.measureTool`, …), configured via {@link ThreeInitializerOptions}.
  *
  * @module render
  */
@@ -58,15 +56,14 @@ export type {
 // Errors & logging
 // ============================================================================
 
-// Defined in `shared/` but surfaced here so consumers of this entrypoint can catch failures and
-// route logs without also importing `shared/` directly.
+// Re-exported from `shared/` so consumers of this entrypoint don't also need to import it directly.
 export { VisualizationError, ErrorCodes } from '../shared/index.js';
 export type { ErrorCode } from '../shared/index.js';
 
 export { getLogger, setLogger, enableDebugLogging } from '../shared/index.js';
 export type { Logger } from '../shared/index.js';
 
-// Look vocabulary, defined in `shared/` (shared with `parse/`) but re-exported here so a
-// render-only consumer (e.g. a style picker) doesn't need to import the parse layer.
+// Look vocabulary lives in `shared/` (shared with `parse/`) but is re-exported here so a
+// render-only consumer (e.g. a style picker) doesn't need the parse layer.
 export { LOOKS, LOOK_PRESETS, DEFAULT_LOOK, materialAppearanceForLook } from '../shared/index.js';
 export type { Look, LookPreset, MaterialAppearanceOptions } from '../shared/index.js';

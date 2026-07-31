@@ -42,8 +42,8 @@ export function updateScene(
 	const size = unionBoundingBox.getSize(new THREE.Vector3());
 	const maxDim = Math.max(size.x, size.y, size.z);
 
-	// Frustum is rescaled to content size every call (not just on first frame) so near/far stay
-	// well-conditioned when geometry size changes drastically between solves.
+	// Rescaled every call, not just the first, so near/far stay well-conditioned when geometry
+	// size changes drastically between solves.
 	const scaleRatio = maxDim / Math.min(size.x || 1, size.y || 1, size.z || 1);
 
 	if (scaleRatio > CAMERA_CONFIG.SCALE_RATIO_THRESHOLD || maxDim > CAMERA_CONFIG.HUGE_THRESHOLD) {
@@ -59,16 +59,14 @@ export function updateScene(
 
 	camera.updateProjectionMatrix();
 
-	// Only reposition camera and controls on first frame.
-	// Zoom limits (min/maxDistance) are deliberately NOT touched here: they are owned by the
-	// host via setupControls, and overwriting them per solve silently discarded user-supplied
-	// configuration after the first geometry update.
+	// Camera/controls are repositioned on first frame only. Zoom limits (min/maxDistance) are
+	// deliberately NOT touched here: they're owned by the host via setupControls, and overwriting
+	// them per solve would silently discard user-supplied configuration after the first update.
 	if (!initialPositionSet) {
 		const distance = maxDim * CAMERA_CONFIG.INITIAL_DISTANCE_MULTIPLIER;
 
-		// Frame from the standard 3/4 iso, derived from the camera's own up axis (initThree sets it to
-		// the configured sceneUp before this ever runs) rather than a hardcoded offset — keeps the
-		// first solve's angle consistent with whatever up-axis the viewer opened at.
+		// camera.up is already the configured sceneUp (initThree sets it before this runs), so the
+		// iso offset stays consistent with whatever up-axis the viewer opened at.
 		camera.position.copy(center).add(isoOffset(camera.up, distance));
 		controls.target.copy(center);
 
@@ -76,15 +74,11 @@ export function updateScene(
 	}
 }
 
-/**
- * userData.id of objects that are viewer *aids*, not content — the grid, floor, CSS2D label layer and
- * measure markers. Excluded from every content-bounds query: the grid especially is a huge plane that
- * re-centers on the camera each frame, so including it would make fit-to-view frame the camera's
- * position instead of the geometry.
- */
+// Excluded from every content-bounds query: the grid especially is a huge plane that re-centers
+// on the camera each frame, so including it would make fit-to-view frame the camera's position
+// instead of the geometry.
 const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
 
-/** True if the object or any ancestor is a viewer aid (grid/floor/labels/measure markers). */
 function isViewerAid(object: THREE.Object3D): boolean {
 	let current: THREE.Object3D | null = object;
 	while (current) {
@@ -97,15 +91,13 @@ function isViewerAid(object: THREE.Object3D): boolean {
 }
 
 /**
- * Axis-aligned world bounds of the scene's renderable *content* — every visible mesh/line/points, with
- * viewer aids (grid/floor/labels/measure) excluded. The single content-bounds function: shared by
- * fit-to-view, pick-threshold scaling, camera framing (`setView`), and shadow-frustum fitting so they
- * all measure exactly the same box. Returns an empty Box3 when there is no content.
- *
- * Refreshes world matrices once up front (one traversal) so `expandByObject` reads current transforms
- * regardless of when the caller invokes this — cheaper and more correct than updating per object.
+ * Bounds of the scene's renderable content, excluding viewer aids (grid/floor/labels/measure).
+ * Shared by fit-to-view, pick-threshold scaling, camera framing (`setView`), and shadow-frustum
+ * fitting so they all measure exactly the same box.
  */
 export function computeContentBounds(scene: THREE.Scene): THREE.Box3 {
+	// Refresh world matrices once up front so expandByObject reads current transforms regardless
+	// of when the caller invokes this, rather than updating per object.
 	scene.updateMatrixWorld(true);
 	const box = new THREE.Box3();
 	scene.traverse((object) => {
@@ -117,10 +109,8 @@ export function computeContentBounds(scene: THREE.Scene): THREE.Box3 {
 	return box;
 }
 
-/** IDs of scene infrastructure that survives content updates (floor, grid, label layer). */
 const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer']);
 
-/** Removes all compute content except persistent infrastructure and shared materials. */
 export function clearScene(scene: THREE.Scene): void {
 	// Snapshot — removeFromParent below mutates scene.children during iteration.
 	const topLevel = [...scene.children];

@@ -10,14 +10,11 @@ import type { ResolvedOptions } from './defaults.js';
  * does it need rebuilding" is reconciled here instead of at each caller.
  */
 export interface PipelineController {
-	/** The live pipeline, or null when neither AO nor the edge fallback wants one. */
 	get(): RenderPipeline | null;
-	/** Reconcile with what's wanted: AO presence is baked at construction, edges toggle live. */
 	sync(): void;
 	/** Dispose and rebuild (if one is wanted) so construction-time options re-apply. */
 	rebuild(): void;
 	setAmbientOcclusion(enabled: boolean): void;
-	/** Turn the screen-space fallback on/off. No-op when already in that state. */
 	setEdgeFallback(active: boolean): void;
 	isEdgeFallbackActive(): boolean;
 	dispose(): void;
@@ -37,8 +34,6 @@ export function createPipelineController(params: {
 
 	let pipeline: RenderPipeline | null = null;
 	let aoEnabled = !!config.render.ambientOcclusion;
-	// True while meshes over the edge triangle cap are in the scene and the config wants the
-	// screen-space approximation for them (see EdgesConfig.screenSpaceFallback).
 	let edgeFallbackActive = false;
 	let builtWithAo = false;
 
@@ -56,7 +51,7 @@ export function createPipelineController(params: {
 				ambientOcclusion: withAo,
 				aoIntensity: config.render.aoIntensity,
 				aoPixelRatio: config.render.aoPixelRatio,
-				// Constructed disabled (cheap until toggled); sync flips it via setEdgeDetection.
+				// Always built disabled; sync() flips it live via setEdgeDetection.
 				edgeDetection: false
 			}
 		);

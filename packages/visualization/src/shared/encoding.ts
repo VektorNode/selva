@@ -1,8 +1,5 @@
-/**
- * Base64 decoding for binary mesh payloads. Copied (not imported) from `@selvajs/compute`'s
- * `decodeBase64ToBinary` to avoid depending on the Rhino.Compute client for ~20 stable lines; keep
- * the two in sync by hand.
- */
+// Copied (not imported) from `@selvajs/compute`'s `decodeBase64ToBinary` to avoid depending on the
+// Rhino.Compute client for ~20 stable lines; keep the two in sync by hand.
 
 import { VisualizationError, ErrorCodes } from './errors.js';
 
@@ -12,10 +9,6 @@ function getNodeBuffer(): typeof Buffer | undefined {
 }
 
 /**
- * Decodes a base64 string to binary data.
- *
- * Normalizes and validates input per WHATWG forgiving-base64 so both runtimes fail consistently.
- *
  * @throws {VisualizationError} `ENCODING_ERROR` if invalid, or `INVALID_STATE` if no decoder is
  *   available in this environment.
  */

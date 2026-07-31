@@ -3,28 +3,18 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 /**
  * Screen-space edge detection (Roberts cross on depth + normal discontinuities), O(pixels)
- * regardless of triangle count.
- *
- * Fallback look for scenes too heavy for geometry edge overlays (see
- * docs/plans/edge-overlay-open.md): meshes over `EdgeOptions.maxTriangles` skip extraction and
- * fall back to this pass. Trade-offs vs geometry edges: uniform pixel width, one global color,
- * view-dependent, gentle creases below the normal threshold don't register.
- *
- * Normal target is allocated lazily on first render, so a disabled pass costs only the material.
+ * regardless of triangle count. Fallback for meshes too heavy for geometry edge overlays
+ * (over `EdgeOptions.maxTriangles`): uniform pixel width, one global color, view-dependent,
+ * gentle creases below the normal threshold don't register.
  */
 export interface EdgeDetectionOptions {
-	/** Default 0x222222 — matches the geometry overlays' default. */
 	color?: THREE.ColorRepresentation;
-	/** 0–1. Default 1. */
 	opacity?: number;
-	/**
-	 * Summed `1 - dot(n₁, n₂)` across the two diagonal pairs. Lower catches gentler creases.
-	 * Default 0.4 (roughly the 44° crease default of geometry edges).
-	 */
+	/** Summed `1 - dot(n₁, n₂)` across the two diagonal pairs. Lower catches gentler creases. */
 	normalThreshold?: number;
-	/** Relative view-depth discontinuity, fraction of center depth. Default 0.02. */
+	/** Relative view-depth discontinuity, fraction of center depth. */
 	depthThreshold?: number;
-	/** Sample offset in device px — line thickness. Default 1. */
+	/** Sample offset in device px — line thickness. */
 	thickness?: number;
 }
 
@@ -75,7 +65,6 @@ const EDGE_SHADER = {
 			vec4 color = texture2D(tDiffuse, vUv);
 			vec2 texel = uThickness / uResolution;
 
-			// Roberts cross over the two diagonal pairs.
 			vec2 offsetA = vec2(texel.x, texel.y);
 			vec2 offsetB = vec2(texel.x, -texel.y);
 
@@ -84,9 +73,8 @@ const EDGE_SHADER = {
 			float z2 = viewZOf(texture2D(tDepth, vUv + offsetB).x);
 			float z3 = viewZOf(texture2D(tDepth, vUv - offsetB).x);
 			float zCenter = viewZOf(texture2D(tDepth, vUv).x);
-			// Relative difference: a constant threshold in absolute Z turns distant geometry into
-			// noise (depth precision) and near geometry blind; normalizing by the center depth keeps
-			// the response scale-invariant across the viewer's mm→m scenes.
+			// Normalized by center depth, not absolute Z: keeps the response scale-invariant across
+			// the viewer's mm-to-m scenes (an absolute threshold would be noise far away, blind up close).
 			float depthDelta = (abs(z0 - z1) + abs(z2 - z3)) / max(abs(zCenter), 1e-6);
 			float depthEdge = step(uDepthThreshold, depthDelta);
 
@@ -171,7 +159,7 @@ export class EdgeDetectionPass extends Pass {
 	): void {
 		const normalTarget = this.acquireNormalTarget();
 
-		// --- Normals + depth prepass (override material, like GTAOPass's normal pass) ---
+		// --- Normals + depth prepass (override material) ---
 		const previousTarget = renderer.getRenderTarget();
 		const previousAutoClear = renderer.autoClear;
 		const previousClearColor = renderer.getClearColor(new THREE.Color());

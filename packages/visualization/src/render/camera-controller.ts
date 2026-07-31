@@ -7,43 +7,34 @@ import { buildUpBasis } from './up-axis';
 /**
  * Runtime camera control: preset views, perspective⇄orthographic toggle, rotate lock.
  *
- * Centralized (not loose methods) because projection switching swaps the camera object that
- * OrbitControls drives, the render loop renders, resize reshapes, and the raycaster picks with —
- * {@link getActiveCamera} is the one source of truth for all four call sites.
+ * Centralized because projection switching swaps the camera object that OrbitControls drives, the
+ * render loop renders, resize reshapes, and the raycaster picks with — {@link getActiveCamera} is
+ * the one source of truth for all four call sites.
  *
- * Perspective is primary; orthographic shadows it (same position/target, frustum derived from
- * perspective FOV + distance) so switching doesn't visually jump.
+ * Orthographic shadows perspective (same position/target, frustum derived from perspective FOV +
+ * distance) so switching doesn't visually jump.
  */
 
-/** The six axis-aligned presets plus the default 3/4 iso. Named in Three's Y-up frame. */
 export type ViewPreset = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right' | 'iso';
 
 export type CameraProjection = 'perspective' | 'orthographic';
 
 export interface CameraController {
-	/** The camera currently being rendered/picked with. Swaps identity on {@link setProjection}. */
+	/** Swaps identity on {@link setProjection}. */
 	getActiveCamera(): THREE.Camera;
-	/** Current projection mode. */
 	getProjection(): CameraProjection;
-	/** Switch between perspective (3D) and orthographic (2D). No-op if already in that mode. */
 	setProjection(projection: CameraProjection): void;
-	/** Convenience toggle for a 2D/3D button. */
 	toggleProjection(): CameraProjection;
-	/** Move the camera to a preset orientation, framing current scene content. Animated. */
 	setView(preset: ViewPreset, animate?: boolean): void;
 	/**
 	 * Frame current content from an explicit world-space direction (target → camera) instead of a
-	 * named preset — used by the nav-cube, whose clicked axis is a world axis. Poles are nudged
-	 * off-axis to avoid the orbit singularity.
+	 * named preset — used by the nav-cube, whose clicked axis is a world axis.
 	 */
 	setViewDirection(direction: THREE.Vector3, animate?: boolean): void;
 	/** Frame a world-space box from the current view direction. No-op on an empty box. */
 	frameBounds(box: THREE.Box3, animate?: boolean): void;
-	/** Enable/disable orbit rotation at runtime (pan/zoom unaffected). */
 	setRotateEnabled(enabled: boolean): void;
-	/** Whether rotation is currently enabled. */
 	isRotateEnabled(): boolean;
-	/** Keep the orthographic frustum aspect in sync on canvas resize. Called by the resize loop. */
 	updateAspect(width: number, height: number): void;
 	/** Cancel any in-flight camera tween. Call on viewer teardown so ticks can't touch disposed controls. */
 	dispose(): void;
@@ -53,12 +44,8 @@ interface CameraControllerDeps {
 	scene: THREE.Scene;
 	perspective: THREE.PerspectiveCamera;
 	controls: OrbitControls;
-	/** Fires when the active camera identity changes (e.g. projection switch). */
 	onActiveCameraChange: (camera: THREE.Camera) => void;
-	/**
-	 * Scene up axis — drives presets, ortho camera up, and iso direction, so the controller works
-	 * for any up convention (Three's Y-up, Rhino's Z-up, …). Falls back to `perspective.up`.
-	 */
+	/** Drives presets, ortho camera up, and iso direction. Falls back to `perspective.up`. */
 	up?: THREE.Vector3;
 }
 
@@ -66,9 +53,9 @@ interface CameraControllerDeps {
  * Seven preset view directions (target → camera, unit vectors), derived from `up` rather than a
  * fixed Y-up table so Top/Front/… stay meaningful for Z-up Rhino scenes.
  *
- * Sign flip vs {@link buildUpBasis}: its `forward` is the LOOK direction (camera → model), but these
- * are camera POSITIONS relative to target, so "front" is `-forward`. Getting this backwards puts
- * the camera behind the model and swaps left/right.
+ * {@link buildUpBasis}'s `forward` is the LOOK direction (camera → model); these are camera
+ * POSITIONS relative to target, so "front" is `-forward`. Flipping this puts the camera behind the
+ * model and swaps left/right.
  */
 function buildViewDirections(up: THREE.Vector3): Record<ViewPreset, THREE.Vector3> {
 	const { up: u, forward, right } = buildUpBasis(up);
@@ -84,7 +71,6 @@ function buildViewDirections(up: THREE.Vector3): Record<ViewPreset, THREE.Vector
 		back: frontPosition.clone().negate(),
 		right: rightPosition.clone(),
 		left: rightPosition.clone().negate(),
-		// 3/4 iso: blend front, right, and up so it reads as a corner view regardless of up axis.
 		iso: frontPosition
 			.clone()
 			.multiplyScalar(1.2)
@@ -108,20 +94,18 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 
 	const active = (): THREE.Camera => (projection === 'perspective' ? perspective : ortho);
 
-	// Starting a new tween cancels any prior one (two loops would fight); dispose() also cancels so
-	// no tick touches disposed controls after teardown.
+	// Starting a new tween cancels any prior one — two loops would otherwise fight over the camera.
 	let activeTween: TweenHandle | null = null;
 	const cancelTween = () => {
 		activeTween?.cancel();
 		activeTween = null;
 	};
 
-	// Sizes the ortho frustum to match the perspective view's apparent size at the current distance
+	// Sizes the ortho frustum to match perspective's apparent size at the current distance
 	// (apparent height at the target plane = 2 * distance * tan(fov/2)).
 	const syncOrthoFrustum = () => {
-		// Measure whichever camera is live: while ortho is active it's the one presets/fit move
-		// (OrbitControls only changes its zoom), so perspective's distance is stale until the next
-		// 3D switch.
+		// Measure whichever camera is live: while ortho is active, OrbitControls moves ortho's
+		// position (only its zoom changes), leaving perspective's distance stale.
 		const reference = projection === 'orthographic' ? ortho : perspective;
 		const distance = reference.position.distanceTo(controls.target);
 		const halfH = distance * Math.tan((perspective.fov * Math.PI) / 360);
@@ -140,7 +124,6 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		// A tween mid-flight would keep lerping the OLD active camera after the swap.
 		cancelTween();
 
-		// Carry position/target across so the switch doesn't jump.
 		if (next === 'orthographic') {
 			ortho.position.copy(perspective.position);
 			ortho.up.copy(perspective.up);
@@ -150,8 +133,8 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 			ortho.zoom = 1;
 			syncOrthoFrustum();
 		} else {
-			// Convert ortho zoom back to perspective DISTANCE (halfH / tan(fov/2)) to preserve
-			// apparent size — copying position alone would discard any zooming done in 2D.
+			// Convert ortho zoom back to perspective DISTANCE (halfH / tan(fov/2)) — copying position
+			// alone would discard any zooming done in 2D.
 			const halfH = (ortho.top - ortho.bottom) / (2 * ortho.zoom);
 			const distance = halfH / Math.tan((perspective.fov * Math.PI) / 360);
 			const direction = ortho.position.clone().sub(controls.target);
@@ -166,26 +149,23 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		onActiveCameraChange(active());
 	};
 
-	// Positions the ACTIVE camera along `direction` at the distance fitting `maxDim`, retargeting
-	// controls at `center`. In ortho mode, zoom resets and the frustum re-derives — position alone
-	// wouldn't change an orthographic view's apparent size.
+	// Positions the active camera along `direction` at the distance fitting `maxDim`, retargeting
+	// controls at `center`. In ortho mode, zoom resets and the frustum re-derives via
+	// syncOrthoFrustum — position alone wouldn't change an orthographic view's apparent size.
 	const frame = (
 		center: THREE.Vector3,
 		maxDim: number,
 		direction: THREE.Vector3,
 		animate: boolean
 	) => {
-		// Distance to fit the content for the perspective camera; ortho reuses it via syncOrthoFrustum.
 		const fov = perspective.fov * (Math.PI / 180);
 		const distance = (maxDim / (2 * Math.tan(fov / 2))) * 1.5;
 
-		// A direction along the up axis is an OrbitControls singularity (parallel to camera.up —
-		// next drag flips the view 180°); nudge off-axis to keep the orbit basis well-defined.
 		const dir = nudgeOffPole(direction, up);
 		const toPosition = center.clone().add(dir.clone().multiplyScalar(distance));
 
 		const cam = active();
-		// Reset ortho zoom first — otherwise it multiplies the freshly-derived frustum and defeats the fit.
+		// Reset zoom before re-deriving the frustum, else it multiplies in and defeats the fit.
 		if (projection === 'orthographic') ortho.zoom = 1;
 
 		cancelTween();
@@ -253,24 +233,22 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 
 /**
  * Nudges a top/bottom view direction a ~0.5° tilt off the up axis; other presets pass through
- * unchanged. Looking exactly down `up` is an OrbitControls singularity (camera direction coincides
- * with `camera.up`, azimuth undefined, first drag snaps the view).
+ * unchanged. Looking exactly down `up` is an OrbitControls singularity: camera direction coincides
+ * with `camera.up`, azimuth is undefined, and the first drag snaps the view.
  *
- * At the pole, `camera.up` can't define roll — the tilt direction does instead. Both poles lean
- * toward `-forward` to reproduce Rhino's convention: Top has +forward at screen-top; Bottom mirrors
- * about the horizontal axis (correct — you're viewing the far side, so geometry text reads backwards
- * there in Rhino too). Leaning the poles opposite ways also mirrors, but rolled 180° from Rhino's
- * convention — looked wrong for that reason.
+ * At the pole, `camera.up` can't define roll, so the tilt direction does instead. Both poles lean
+ * toward `-forward` to reproduce Rhino's convention (Top has +forward at screen-top; Bottom mirrors
+ * about the horizontal axis, matching Rhino where the far side reads backwards too) — leaning the
+ * poles opposite ways also mirrors correctly, but rolled 180° from Rhino.
  */
 function nudgeOffPole(dir: THREE.Vector3, up: THREE.Vector3): THREE.Vector3 {
 	const { up: u, forward } = buildUpBasis(up);
 	const d = dir.clone().normalize();
 	if (Math.abs(d.dot(u)) < 0.9999) return dir;
 
-	// Same lean for both poles so Bottom flips about the horizontal axis, not the vertical.
 	const inPlane = forward.clone().negate();
 
-	const tilt = (0.5 * Math.PI) / 180; // ~0.5°
+	const tilt = (0.5 * Math.PI) / 180;
 	return d
 		.multiplyScalar(Math.cos(tilt))
 		.add(inPlane.multiplyScalar(Math.sin(tilt)))

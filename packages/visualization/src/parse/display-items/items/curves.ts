@@ -9,24 +9,23 @@ import { materialParams } from './appearance.js';
 import type { DisplayCurve } from '../types';
 import type { RhinoModule } from 'rhino3dm';
 
-/** Initial uniform splits before adaptive refinement (ensures closed/looping curves aren't collapsed). */
+/** Initial uniform splits before adaptive refinement, so closed/looping curves aren't collapsed. */
 const CURVE_INITIAL_SEGMENTS = 12;
-/** Chord-deviation tolerance as a fraction of the curve's bounding-box diagonal. Smaller = smoother. */
+/** Chord-deviation tolerance as a fraction of the curve's bounding-box diagonal. */
 const CURVE_CHORD_TOLERANCE_RATIO = 0.0004;
-/** Hard recursion-depth cap per initial span, so pathological curves can't explode the vertex count. */
+/** Recursion-depth cap per initial span, so a pathological curve can't explode the vertex count. */
 const CURVE_MAX_SUBDIVISION_DEPTH = 12;
-/** Max turn angle (radians) allowed across a span before it's split. ~3° keeps arcs visibly smooth. */
+/** Max turn angle (radians) allowed across a span before it's split. */
 const CURVE_MAX_TURN_RADIANS = 0.05;
 
 const DEFAULT_LINE_WIDTH = 2;
 
 /**
- * Returns null (never throws) if rhino3dm is absent or decoding fails, so one bad curve can't abort the batch.
+ * Never throws — returns null so one bad curve can't abort the batch.
  *
  * Uses `Line2`/`LineMaterial` rather than `THREE.Line` because plain `THREE.Line` is hard-capped at
- * 1px on every major GPU backend, so `item.width` would otherwise be unhonoured. `LineMaterial`
- * needs `resolution` set to the drawing-buffer size; `Line2.onBeforeRender` does that automatically,
- * so no renderer reference is needed here.
+ * 1px on every major GPU backend, so `item.width` would otherwise be unhonoured. `Line2.onBeforeRender`
+ * sets `LineMaterial`'s required `resolution`, so no renderer reference is needed here.
  */
 export function buildCurveLine(
 	item: DisplayCurve,
@@ -45,7 +44,6 @@ export function buildCurveLine(
 	try {
 		points = tessellate(curve, applyTransforms);
 	} catch (error) {
-		// WASM calls (pointAt / tryGetPolyline / getBoundingBox) can throw on malformed geometry.
 		getLogger().warn('Failed to tessellate curve display item; skipping.', error);
 		return null;
 	} finally {
@@ -72,7 +70,7 @@ export function buildCurveLine(
 	styled.opacity = params.opacity;
 
 	const line = new Line2(geometry, material);
-	line.computeLineDistances(); // cheap; required for any future dashed styling
+	line.computeLineDistances();
 	line.name = item.name;
 	line.userData = {
 		source: 'compute',
@@ -84,7 +82,7 @@ export function buildCurveLine(
 	return line;
 }
 
-/** Free a rhino3dm WASM object; emscripten bindings aren't reclaimed by JS GC. */
+/** emscripten bindings aren't reclaimed by JS GC — free them explicitly. */
 function deleteRhinoObject(obj: unknown): void {
 	(obj as { delete?: () => void } | null | undefined)?.delete?.();
 }
@@ -107,9 +105,9 @@ function decodeCurve(json: string, rhino: RhinoModule): InstanceType<RhinoModule
 }
 
 /**
- * Most curves Grasshopper emits are linear (line = 2 vertices, polyline = N+1), so uniform sampling
- * would needlessly inflate them to {@link CURVE_INITIAL_SEGMENTS}+1 points. Emit exact vertices for
- * anything rhino3dm reports as a polyline; only genuinely curved geometry falls through to {@link sampleUniform}.
+ * Most curves Grasshopper emits are linear, so uniform sampling would needlessly inflate them to
+ * {@link CURVE_INITIAL_SEGMENTS}+1 points. Exact vertices for anything rhino3dm reports as a
+ * polyline; only genuinely curved geometry falls through to {@link sampleUniform}.
  */
 function tessellate(
 	curve: InstanceType<RhinoModule['Curve']>,
@@ -121,13 +119,11 @@ function tessellate(
 	return sampleUniform(curve, applyTransforms);
 }
 
-/** Minimal shape we use off a rhino3dm Polyline (a Point3dList). */
 interface PolylineLike {
 	count: number;
 	get(index: number): number[];
 }
 
-/** Exact polyline vertices, or null if the curve isn't one. */
 function tryPolylineVertices(
 	curve: InstanceType<RhinoModule['Curve']>,
 	applyTransforms: boolean
@@ -145,7 +141,7 @@ function tryPolylineVertices(
 
 	const out: THREE.Vector3[] = [];
 	for (let i = 0; i < polyline.count; i++) {
-		const p = polyline.get(i); // [x, y, z] in Rhino Z-up
+		const p = polyline.get(i);
 		const { x, y, z } = rhinoToThree(p[0], p[1], p[2], applyTransforms);
 		out.push(new THREE.Vector3(x, y, z));
 	}
@@ -169,14 +165,13 @@ function sampleUniform(
 	const span = t1 - t0;
 
 	const evalAt = (t: number): THREE.Vector3 => {
-		const p = curve.pointAt(t); // [x, y, z] in Rhino Z-up
+		const p = curve.pointAt(t);
 		const { x, y, z } = rhinoToThree(p[0], p[1], p[2], applyTransforms);
 		return new THREE.Vector3(x, y, z);
 	};
 
 	const tolerance = chordTolerance(curve);
 
-	// Carry each boundary forward as the next `pa` instead of re-evaluating (3 pointAt calls → 1).
 	let ta = t0;
 	let pa = evalAt(t0);
 	const out: THREE.Vector3[] = [pa];
@@ -192,7 +187,6 @@ function sampleUniform(
 	return out;
 }
 
-/** Splits [ta, tb] when the midpoint deviates from chord pa→pb; pushes interior points into `out` in order. */
 function subdivide(
 	ta: number,
 	pa: THREE.Vector3,
@@ -220,7 +214,6 @@ function subdivide(
 	subdivide(tm, pm, tb, pb, evalAt, tolerance, depth - 1, out);
 }
 
-/** Tolerance in world units: a fraction of the curve's bounding-box diagonal, with a tiny floor. */
 function chordTolerance(curve: InstanceType<RhinoModule['Curve']>): number {
 	// rhino3dm WASM's getBoundingBox takes no args at runtime despite the .d.ts signature.
 	const box = (
@@ -234,8 +227,8 @@ function chordTolerance(curve: InstanceType<RhinoModule['Curve']>): number {
 }
 
 /**
- * Turn angle (radians) at `b` along a→b→c; 0 = straight, π = reversal. Scalar math, not Vector3
- * temporaries — this recurses up to ~2^12 times per curve and clone() churn was measurable.
+ * Turn angle (radians) at `b` along a→b→c; 0 = straight, π = reversal. Scalar math rather than
+ * Vector3 temporaries — this recurses up to ~2^12 times per curve and clone() churn was measurable.
  */
 function turnAngle(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number {
 	const abx = b.x - a.x;
@@ -254,7 +247,7 @@ function turnAngle(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number
 	return Math.acos(cos);
 }
 
-/** Perpendicular distance from `p` to segment a→b, clamped to endpoints. Scalar math, see {@link turnAngle}. */
+/** Perpendicular distance from `p` to segment a→b, clamped to endpoints. */
 function distanceToSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): number {
 	const abx = b.x - a.x;
 	const aby = b.y - a.y;

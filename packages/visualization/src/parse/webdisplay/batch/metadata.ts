@@ -77,8 +77,8 @@ export function validateGroupMetadata(
  * Error for an index outside its mesh's declared vertex window
  * `[vertexStart, vertexStart + vertexCount)`. Rebasing (`index - vertexStart`) writes into an
  * unsigned array, so a violation would otherwise wrap to ~4 billion and corrupt the geometry.
- * The range checks themselves are inlined in the copy loops (audit P6 — a function call per index
- * was measurable at millions of indices); this only builds the failure.
+ * The range checks themselves are inlined in the copy loops (a function call per index was
+ * measurable at millions of indices); this only builds the failure.
  */
 export function indexOutOfWindow(indexValue: number, meshMeta: MeshMetadata): VisualizationError {
 	return metadataFail("Index references a vertex outside its mesh's vertex window.", {
@@ -128,14 +128,12 @@ export function geometryContentKey(
  *
  * Mirrors the encoder formula: `world = origin + (q + 32767) * scale`. Selva keeps one coordinate
  * frame end to end (the Three scene is Rhino's Z-up frame — see `../../shared/coordinate-frame.ts`), so
- * vertices pass through unrotated. `_applyCoordinateTransform` is retained for call-site
- * compatibility and no longer changes the output.
+ * vertices pass through unrotated.
  */
 export function dequantizeInt16(
 	q: Int16Array,
 	origin: [number, number, number],
-	scale: [number, number, number],
-	_applyCoordinateTransform: boolean
+	scale: [number, number, number]
 ): Float32Array {
 	const out = new Float32Array(q.length);
 	const ox = origin[0];
@@ -152,16 +150,4 @@ export function dequantizeInt16(
 	}
 
 	return out;
-}
-
-/**
- * For float32 batches the parser's view is already in the scene frame (Rhino Z-up), so we pass it
- * through without copying. `_applyCoordinateTransform` is retained for call-site compatibility and
- * no longer rotates.
- */
-export function maybeRotateFloat32Vertices(
-	vertices: Float32Array,
-	_applyCoordinateTransform: boolean
-): Float32Array {
-	return vertices;
 }

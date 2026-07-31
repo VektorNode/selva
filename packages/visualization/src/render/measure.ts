@@ -9,9 +9,9 @@ import type { LabelLayer, LabelHandle } from './label-layer';
  * Two-click distance measurement. Click a point, click a second, read the distance off a label on
  * the connecting line; a third click starts fresh.
  *
- * Picking snaps to geometry (nearest vertex of the struck triangle, within
- * {@link MeasureOptions.snapPixels}) so measurements land exactly on vertices rather than wherever
- * the ray happened to hit — a cheap local snap (three candidate vertices, no spatial index).
+ * Picking snaps to the nearest vertex of the struck triangle within {@link MeasureOptions.snapPixels}
+ * so measurements land exactly on vertices rather than wherever the ray happened to hit — a cheap
+ * local snap (three candidate vertices, no spatial index).
  *
  * Dormant until {@link MeasureTool.setEnabled}(true). While enabled it intercepts clicks (caller
  * forwards them and swallows the event when {@link MeasureTool.handleClick} returns true) so
@@ -34,11 +34,10 @@ export interface MeasureOptions {
 	snapPixels?: number;
 	/** Marker + line color. Default yellow. */
 	color?: THREE.ColorRepresentation;
-	/** CSS class applied to the distance label, for styling. */
 	labelClassName?: string;
 	/**
-	 * The model's unit (pass `data.modelunits`). Scene is in meters; default formatter converts and
-	 * labels in this unit (e.g. "25.0 mm" not "0.025 m"). Defaults to meters. Ignored if `format` given.
+	 * Pass `data.modelunits`. Scene is in meters; default formatter converts and labels in this unit
+	 * (e.g. "25.0 mm" not "0.025 m"). Defaults to meters. Ignored if `format` is given.
 	 */
 	displayUnit?: string;
 	/**
@@ -55,7 +54,7 @@ interface MeasureDeps {
 	/**
 	 * The current orbit target (e.g. `controls.target`). Scales the line/point pick threshold as a
 	 * fraction of camera→target distance so it stays constant on screen regardless of framing.
-	 * Optional; without it the fallback is distance-to-origin, which misjudges off-origin content.
+	 * Without it, the fallback is distance-to-origin, which misjudges off-origin content.
 	 */
 	getViewTarget?: () => THREE.Vector3;
 	labelLayer: LabelLayer;
@@ -85,12 +84,10 @@ export function makeFormatter(displayUnit?: string): (n: number) => string {
 }
 
 /**
- * World-space raycast threshold for picking lines/points, as a fixed fraction of view size so the
- * grab band stays roughly constant on screen while zooming:
- * - perspective: fraction of camera→target distance (falls back to distance-to-origin if no
- *   target — see `MeasureDeps.getViewTarget`).
- * - orthographic: fraction of frustum height `(top − bottom) / zoom`, since ortho zoom changes
- *   `camera.zoom` rather than position.
+ * Raycast threshold for picking lines/points, as a fixed fraction of view size so the grab band
+ * stays roughly constant on screen while zooming. Perspective: fraction of camera→target distance
+ * (see `MeasureDeps.getViewTarget`). Orthographic: fraction of frustum height `(top − bottom) /
+ * zoom`, since ortho zoom changes `camera.zoom` rather than position.
  * @internal exported for tests
  */
 export function pickThreshold(camera: THREE.Camera, viewTarget?: THREE.Vector3): number {
@@ -133,11 +130,7 @@ function snapCandidateIndices(hit: THREE.Intersection): number[] | null {
 	return null;
 }
 
-/**
- * Snap a raycast hit to the nearest geometry vertex within `snapPixels` on screen, else return the
- * raw hit point. Pure (no DOM) and takes screen size explicitly, so it's unit-testable — exported
- * for that reason.
- */
+/** Snap a raycast hit to the nearest geometry vertex within `snapPixels` on screen, else the raw hit point. */
 export function snapToVertex(
 	hit: THREE.Intersection,
 	camera: THREE.Camera,
@@ -191,8 +184,6 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 	let enabled = false;
 	const points: THREE.Vector3[] = [];
 
-	// Visuals, created lazily and reused. Markers are small always-on-top points; the line connects
-	// them; the label rides the line's midpoint.
 	const markers: THREE.Points[] = [];
 	let line: Line2 | null = null;
 	let label: LabelHandle | null = null;
@@ -204,8 +195,7 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 		depthTest: false // markers stay visible through geometry, like CAD snap dots
 	});
 
-	// A hollow-feeling preview dot: dimmer + bigger than a committed marker so the snap target the
-	// next click will lock onto is obvious before clicking. Shown only while hovering geometry.
+	// Dimmer + bigger than a committed marker so the next click's snap target is obvious before clicking.
 	const hoverMaterial = new THREE.PointsMaterial({
 		color,
 		size: 11,
@@ -239,7 +229,7 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 		geometry.setAttribute('position', new THREE.Float32BufferAttribute([p.x, p.y, p.z], 3));
 		const marker = new THREE.Points(geometry, markerMaterial);
 		marker.renderOrder = 999;
-		marker.userData.id = 'measure'; // excluded from pick/fit
+		marker.userData.id = 'measure';
 		marker.raycast = () => {}; // don't let markers be measure targets themselves
 		scene.add(marker);
 		return marker;
@@ -305,9 +295,8 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 		return snapToVertex(hits[0], camera, { width: rect.width, height: rect.height }, snapPixels);
 	};
 
-	// Coalesce hover raycasts to one per animation frame: mousemove can fire far more often than
-	// the display refreshes, and a full-scene recursive raycast per event hitches on large models.
-	// Only the latest event matters for the preview, so intermediate ones are simply dropped.
+	// Coalesce hover raycasts to one per animation frame: a full-scene recursive raycast per
+	// mousemove event hitches on large models, and only the latest event matters for the preview.
 	let pendingMove: MouseEvent | null = null;
 	let moveRaf = 0;
 

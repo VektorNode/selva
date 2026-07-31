@@ -18,7 +18,6 @@ export function createAnimationLoop(
 	cameraController: CameraController,
 	controls: OrbitControls,
 	getCanvasSize: () => { width: number; height: number },
-	// The resolved config.render.pixelRatio — the single source of truth for DPR (see initThree).
 	pixelRatio: number,
 	onFrame?: (delta: number) => void,
 	grid?: Grid | null,
@@ -26,7 +25,7 @@ export function createAnimationLoop(
 	getRenderPipeline?: () => RenderPipeline | null,
 	labelLayer?: LabelLayer | null,
 	nearFitter?: NearPlaneFitter | null,
-	// On-demand rendering (audit P4): render only when something changed. False = legacy every-frame.
+	// false = render every frame regardless of invalidate()/camera movement.
 	onDemand: boolean = true
 ): { animate: () => void; dispose: () => void; invalidate: () => void } {
 	let animationId: number | null = null;
@@ -61,7 +60,7 @@ export function createAnimationLoop(
 		return moved;
 	};
 
-	// Catch-all for click-driven mutations (measure points, selection highlights) predating on-demand rendering.
+	// Click-driven mutations (measure points, selection highlights) don't call invalidate() themselves.
 	const canvas = renderer.domElement;
 	const pointerEvents = ['pointerdown', 'pointerup', 'wheel'] as const;
 	if (onDemand) {
@@ -84,8 +83,8 @@ export function createAnimationLoop(
 			renderer.setSize(width, height, false);
 			camera.aspect = width / height;
 			camera.updateProjectionMatrix();
-			cameraController.updateAspect(width, height); // also reshapes the ortho frustum if active
-			getRenderPipeline?.()?.setSize(width, height, pixelRatio); // keep AO composer targets in step
+			cameraController.updateAspect(width, height);
+			getRenderPipeline?.()?.setSize(width, height, pixelRatio);
 			labelLayer?.setSize(width, height); // CSS2D overlay uses CSS size, not the pixel-ratio buffer
 			invalidate();
 		}
@@ -105,18 +104,15 @@ export function createAnimationLoop(
 		}
 
 		if (grid) grid.update(getActiveCamera().position); // recenter on camera so it reads as infinite
-		if (gizmo) gizmo.update(delta); // no-op when idle
+		if (gizmo) gizmo.update(delta);
 
-		// Refit near plane after controls moved the camera, before anything renders, so depth
-		// precision tracks viewing distance.
+		// Before render, so depth precision tracks the camera's current distance from content.
 		if (nearFitter) nearFitter.update();
 
 		onFrame?.(delta);
 
 		const activeCamera = getActiveCamera();
 
-		// Skip the draw (expensive, especially with the AO composer) when nothing changed. Ticking
-		// continues regardless, so damping/tweens re-trigger via the camera compare on next movement.
 		if (onDemand) {
 			const shouldRender =
 				renderRequested ||
@@ -129,16 +125,15 @@ export function createAnimationLoop(
 
 		const renderPipeline = getRenderPipeline?.();
 		if (renderPipeline) {
-			// AO path: composer owns the render. Retarget in case 2D/3D swapped.
-			renderPipeline.setCamera(activeCamera);
+			renderPipeline.setCamera(activeCamera); // retarget in case 2D/3D swapped
 			renderPipeline.render(delta);
 		} else {
 			renderer.render(scene, activeCamera);
 		}
 
-		if (labelLayer) labelLayer.render(scene, activeCamera); // HTML labels follow their 3D anchors
+		if (labelLayer) labelLayer.render(scene, activeCamera);
 
-		// Gizmo draws as a corner-viewport overlay with its own clear; render last so it sits on top.
+		// Corner-viewport overlay with its own clear; must render last to sit on top.
 		if (gizmo) gizmo.render(renderer);
 	};
 

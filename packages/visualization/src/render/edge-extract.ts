@@ -2,12 +2,8 @@
  * Dependency-free crease/boundary edge extraction — the hot core behind `addEdges`. Semantically
  * a drop-in for `THREE.EdgesGeometry(geometry, angle)` (same welding, crease test, boundary
  * handling, 3+-face quirks), but operates on raw typed arrays with numeric hashing instead of
- * three's per-vertex string keys (~2.9s/1M triangles) for speed and Worker portability.
- *
- * {@link extractEdgeSegments} has zero outer captures (only `Math` + its args), so
- * `Function.prototype.toString` yields code that runs unchanged inside a Worker —
- * {@link edgeExtractWorkerSource} builds that script. Don't import anything into its body; that
- * silently breaks the worker path.
+ * three's per-vertex string keys (~2.9s/1M triangles) for speed and Worker portability — see the
+ * no-outer-captures constraint on {@link extractEdgeSegments} itself.
  */
 
 /** Vertex ids pack two-per-double in edge keys; above 2^26 vertices the packing overflows. */
@@ -15,7 +11,6 @@ export const MAX_EXTRACT_VERTICES = 0x4000000; // 2^26
 
 /**
  * @param index - Triangle indices, or null for non-indexed soup.
- * @param thresholdAngleDeg - Keep edges whose adjacent face normals differ by more than this.
  * @returns Segment endpoint pairs, same layout as `EdgesGeometry.attributes.position.array`.
  * @throws If `positions` holds ≥ 2^26 vertices ({@link MAX_EXTRACT_VERTICES}) — callers fall
  *   back to `THREE.EdgesGeometry`.
@@ -25,7 +20,8 @@ export function extractEdgeSegments(
 	index: Uint32Array | Uint16Array | null,
 	thresholdAngleDeg: number
 ): Float32Array {
-	// Self-contained by design (worker stringification) — no outer references besides Math.
+	// No outer captures besides Math — this function is stringified via toString() to run inside
+	// a Worker ({@link edgeExtractWorkerSource}). Don't reference anything outside this body.
 	const PRECISION = 1e4; // same quantization grid as THREE.EdgesGeometry
 	const ID_BITS = 0x4000000; // 2^26 — two ids pack into one float64-exact integer key
 	const thresholdDot = Math.cos((Math.PI / 180) * thresholdAngleDeg);
@@ -101,9 +97,9 @@ export function extractEdgeSegments(
 	// (key kept, value -1) so a third face on the same edge re-registers it — quirk preserved.
 	// Unmatched entries at the end are boundary edges and always emitted.
 	const edgeSlots = new Map<number, number>(); // directed key → pending-edge slot, -1 = matched
-	const pendingIndex0: number[] = []; // original vertex indices, for boundary emission
+	const pendingIndex0: number[] = [];
 	const pendingIndex1: number[] = [];
-	const pendingNormals: number[] = []; // xyz per pending edge
+	const pendingNormals: number[] = [];
 
 	const triCount = (index ? index.length : vertexCount) / 3;
 	for (let t = 0; t < triCount; t++) {

@@ -15,7 +15,7 @@ re-exported from `render/`, which is the barrel a viewer host already imports.
 | `errors.ts`           | `VisualizationError`, `ErrorCodes`                                                         |
 | `logger.ts`           | `getLogger`, `setLogger`, `enableDebugLogging`, the `Logger` interface                     |
 | `encoding.ts`         | `decodeBase64ToBinary`                                                                     |
-| `coordinate-frame.ts` | The Rhino↔Three frame. Both are Z-up, so `rhinoToThree` is the identity.                   |
+| `coordinate-frame.ts` | `Vec3`, `rhinoToThree` (deprecated identity transform)                                     |
 | `types.ts`            | `LOOKS`/`Look`, `LookPreset`, `MaterialAppearanceOptions`                                  |
 | `looks.ts`            | `LOOK_PRESETS`, `DEFAULT_LOOK`, `materialAppearanceForLook`                                |
 | `geometry.ts`         | `parseColor`, `applyOffset`, `computeCombinedBoundingBox`                                  |
@@ -26,15 +26,8 @@ re-exported from `render/`, which is the barrel a viewer host already imports.
 ## Why errors, logging and base64 live here rather than coming from `@selvajs/compute`
 
 None of the three is a compute concern, and that dependency was most of what stopped this package
-standing on its own:
-
-- **`VisualizationError`** replaces `RhinoComputeError`, which mis-named failures on paths (e.g. the
-  plugin WebSocket) that never touch Rhino.Compute. `code` values match compute's so catch-sites are
-  unaffected.
-- **`getLogger`/`setLogger`** default to no-op, like compute's; a host wanting one sink calls
-  `setLogger(getLogger())` with compute's logger.
-- **`decodeBase64ToBinary`** is a ~20-line copy of compute's, kept in sync by hand — cheaper than the
-  dependency it used to buy.
+standing on its own — see the file headers in `errors.ts`, `logger.ts` and `encoding.ts` for the
+per-file rationale.
 
 ## Why the geometry/color and GPU-ownership utilities live here
 

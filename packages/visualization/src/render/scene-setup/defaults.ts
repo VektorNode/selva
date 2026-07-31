@@ -7,16 +7,14 @@ import { isoOffset, sunOffset, upToAxis } from '../up-axis.js';
 /** Rhino's convention, and the frame all geometry arrives in — see `shared/coordinate-frame.ts`. */
 export const defaultUp = new THREE.Vector3(0, 0, 1);
 
-// Every config section filled in by applyDefaults. onMaxAnisotropy stays optional — a caller-supplied
-// hook with no meaningful default, not a config value.
+// onMaxAnisotropy stays optional — a caller-supplied hook, not a config value with a default.
 export type ResolvedOptions = Required<Omit<ThreeInitializerOptions, 'onMaxAnisotropy'>> &
 	Pick<ThreeInitializerOptions, 'onMaxAnisotropy'>;
 
-// Exported for unit testing the option-precedence logic (initThree itself needs a real WebGL canvas).
 export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions {
 	const scale = options.sceneScale || 'm';
 
-	// Geometry is always in meters; sceneScale only changes the viewing perspective (camera/light/grid magnitudes).
+	// Geometry is always in meters; sceneScale only changes camera/light/grid magnitudes.
 	const scaleDefaults = {
 		mm: {
 			cameraDistance: 20,
@@ -77,9 +75,8 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 
 	const defaults = scaleDefaults[scale];
 
-	// The chosen look seeds lighting/material defaults (tone mapping, AO, IBL, fill): below explicit
-	// per-field options, above the plain per-field defaults. Never touches edges/grid — those resolve
-	// from their own configs below.
+	// The look seeds lighting/material defaults (tone mapping, AO, IBL, fill), ranked below explicit
+	// per-field options but above the plain defaults; it never touches edges/grid.
 	const look = options.look ?? DEFAULT_LOOK;
 	const preset = LOOK_PRESETS[look];
 
@@ -88,9 +85,8 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 		look,
 		camera: {
 			// Default 3/4 iso (behind-left, above), derived from the scene up axis so a Y-up scene still
-			// gets an overhead iso rather than a below-horizon view.
-			// cameraDistance was historically a per-component magnitude on a (-d,-d,d) vector (orbit
-			// radius d*sqrt(3)) — preserved so switching the derivation doesn't also rezoom every scene.
+			// gets an overhead iso rather than a below-horizon view. cameraDistance*sqrt(3) preserves the
+			// orbit radius of the old per-component (-d,-d,d) vector so this doesn't rezoom every scene.
 			position:
 				options.camera?.position ||
 				isoOffset(
@@ -106,8 +102,7 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 		lighting: {
 			enableSunlight: options.lighting?.enableSunlight ?? true,
 			sunlightIntensity: options.lighting?.sunlightIntensity ?? 1,
-			// Expressed in the scene basis so the sun stays overhead in any up convention (a hardcoded
-			// +Z height made it near-horizontal in a Y-up scene).
+			// Expressed in the scene basis so the sun stays overhead in any up convention.
 			sunlightPosition:
 				options.lighting?.sunlightPosition ||
 				sunOffset(
@@ -116,15 +111,12 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 					defaults.lightHeight
 				),
 			ambientLightColor: options.lighting?.ambientLightColor || new THREE.Color(0x404040),
-			// Looks keep ambient low; hemisphere fill + env carry the lift, ambient is just a floor
-			// against pure black shadows.
 			ambientLightIntensity: options.lighting?.ambientLightIntensity ?? preset.ambientIntensity,
 			sunlightColor: options.lighting?.sunlightColor || 0xffffff,
 			// A positive hemisphereIntensity is what actually creates the light in setupLighting.
 			enableHemisphereLight:
 				options.lighting?.enableHemisphereLight ?? preset.hemisphereIntensity > 0,
 			hemisphereSkyColor: options.lighting?.hemisphereSkyColor ?? 0xdfe6ff,
-			// Slightly warm ground tint reads as bounced light, keeps fill from desaturating colour.
 			hemisphereGroundColor: options.lighting?.hemisphereGroundColor ?? 0x6b5f52,
 			hemisphereIntensity: options.lighting?.hemisphereIntensity ?? preset.hemisphereIntensity
 		},
@@ -149,13 +141,13 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			shadowMapSize: options.render?.shadowMapSize || 2048,
 			antialias: options.render?.antialias ?? true,
 			pixelRatio: options.render?.pixelRatio || Math.min(window.devicePixelRatio, 2),
-			// ?? not || so an explicit NoToneMapping (=== 0) is honoured rather than falling through.
+			// ?? not ||: an explicit NoToneMapping (0) must be honoured, not fall through as falsy.
 			toneMapping: options.render?.toneMapping ?? preset.toneMapping,
 			toneMappingExposure: options.render?.toneMappingExposure ?? preset.toneMappingExposure,
 			preserveDrawingBuffer: options.render?.preserveDrawingBuffer ?? false,
 			ambientOcclusion: options.render?.ambientOcclusion ?? preset.ambientOcclusion,
 			aoIntensity: options.render?.aoIntensity ?? 1,
-			// Cap AO buffers at 1x — biggest lever on GTAO cost at high DPI.
+			// Default caps AO buffers at 1x — biggest lever on GTAO cost at high DPI.
 			aoPixelRatio: options.render?.aoPixelRatio ?? 1,
 			onDemand: options.render?.onDemand ?? true
 		},
@@ -170,24 +162,23 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			maxDistance: options.controls?.maxDistance || Infinity
 		},
 		grid: {
-			// Mirrors createGrid's own defaults so the two never drift. A look never toggles the grid.
+			// Mirrors createGrid's own defaults so the two never drift.
 			enabled: options.grid?.enabled ?? false,
 			cellSize: options.grid?.cellSize ?? 1,
 			majorEvery: options.grid?.majorEvery ?? 10,
 			cellColor: options.grid?.cellColor ?? 0x888888,
 			majorColor: options.grid?.majorColor ?? 0x444444,
 			fadeDistance: options.grid?.fadeDistance ?? 100,
-			// Ground plane is orthogonal to the scene up axis (Z-up Rhino -> 'z', Y-up -> 'y').
+			// Orthogonal to the scene up axis: Z-up Rhino -> 'z', Y-up -> 'y'.
 			plane: options.grid?.plane ?? upToAxis(options.environment?.sceneUp ?? defaultUp)
 		},
 		gizmo: {
 			enabled: options.gizmo?.enabled ?? false
 		},
 		edges: {
-			// Mirrors addEdges' own defaults so the two never drift. A look never toggles edges.
+			// Mirrors addEdges' own defaults so the two never drift.
 			enabled: options.edges?.enabled ?? false,
-			// Undefined lets addEdges derive each mesh's edge color from its own surface material
-			// (darkened); set explicitly to force one uniform tint.
+			// Undefined lets addEdges derive each mesh's edge color from its own surface material.
 			color: options.edges?.color,
 			darken: options.edges?.darken,
 			width: options.edges?.width ?? 1.5,
@@ -195,7 +186,7 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			distanceFade: options.edges?.distanceFade ?? true
 		},
 		measure: {
-			// Visual defaults live in createMeasureTool; the rest pass through undefined to its own defaults.
+			// Visual defaults live in createMeasureTool; these pass through undefined to it.
 			enabled: options.measure?.enabled ?? false,
 			snapPixels: options.measure?.snapPixels,
 			color: options.measure?.color,

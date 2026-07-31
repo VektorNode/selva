@@ -34,7 +34,7 @@ const outliner = createSceneOutliner(scene, { sets: { hidden, selected, collapse
 
 Pass plain `Set`s for a headless host. Pass Svelte's `SvelteSet` and every mutation the outliner
 makes — `toggleObject`, `toggleLayer`, `select` — becomes a reactive read with no subscribe/emit
-machinery in between. `SceneManager.svelte` in `@selvajs/ui` does exactly that, in ~70 lines of script.
+machinery in between. `SceneManager.svelte` in `@selvajs/ui` does exactly that.
 
 The catch: a framework observes the **set**, not the outliner. A reactive host must read state
 through the set it supplied (`hidden.has(getTrackingKey(obj))`), not through `visibility.isHidden(obj)`,
@@ -51,12 +51,9 @@ passed to `SceneManager.svelte` as a prop.
 
 ## Identity — call `applyTo()` after every solve
 
-A solve doesn't update the scene in place: `updateScene` discards every object and rebuilds it. So
-`THREE.Object3D.uuid`, assigned per _instance_, answers "which object is this right now" but never
-"is this the same wall the user hid a minute ago".
-
-Hidden state is keyed by **stable identity** (`identity.ts`), synthesized from what the parse layer
-records in `userData`:
+`updateScene` discards every object on each solve and rebuilds it, so `THREE.Object3D.uuid`
+(assigned per _instance_) can't answer "is this the same wall the user hid a minute ago". Hidden
+state is keyed by **stable identity** (`identity.ts`) instead, synthesized from `userData`:
 
 | Priority | Source                                | Applies to                                 |
 | -------- | ------------------------------------- | ------------------------------------------ |

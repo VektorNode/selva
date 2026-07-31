@@ -9,9 +9,9 @@ nothing about wire formats, and a host that does both wires them together (see
 
 **`initThree` owns this toolkit.** It constructs the camera controller, grid, gizmo, measure tool,
 render pipeline and near-plane fitter from `ThreeInitializerOptions` and returns the live instances
-on `ThreeViewer`. The individual factories are therefore internal — the barrel exports their handle
-_types_ so hosts can annotate, not their constructors. The tables below map the layer's internals;
-they are not a list of public exports.
+on `ThreeViewer`. The factories are therefore internal — the barrel exports their handle _types_ so
+hosts can annotate, not their constructors. The tables below map the layer's internals, not a list
+of public exports.
 
 ## Contents
 
@@ -32,12 +32,11 @@ they are not a list of public exports.
 
 ### `scene-setup/`
 
-`initThree` was one 1700-line function; it is now an orchestrator (`init-three.ts`) over one file per
-construction step — `create-scene`, `create-camera`, `setup-renderer`, `setup-lighting` (plus the
-shadow-frustum fit), `setup-environment` (HDR/PMREM + floor), `setup-controls`, `setup-events`
-(picking, selection, keyboard), `animation-loop`, `defaults` (the option-precedence resolver), and
-`dispose` (teardown sweeps). Each takes the resolved config and returns its object; the orchestrator
-owns only the wiring and the returned viewer handle.
+`init-three.ts` orchestrates one file per construction step — `create-scene`, `create-camera`,
+`setup-renderer`, `setup-lighting` (plus the shadow-frustum fit), `setup-environment` (HDR/PMREM +
+floor), `setup-controls`, `setup-events` (picking, selection, keyboard), `animation-loop`, `defaults`
+(the option-precedence resolver), and `dispose` (teardown sweeps). Each takes the resolved config and
+returns its object; the orchestrator owns only the wiring and the returned viewer handle.
 
 ## Quick start
 
@@ -73,28 +72,26 @@ dispose(); // frees the GL context, not just its objects
 
 ## The render↔parse seam
 
-`render/` never imports `parse/`. Two things nonetheless need to cross that line, and **neither
-requires host wiring** — both are self-managing:
+`render/` never imports `parse/`. Two things nonetheless cross that line, and **neither requires
+host wiring** — both are self-managing:
 
 - **GPU capabilities (anisotropy).** `initThree` calls `publishMaxAnisotropy` at init;
-  `parse/webdisplay/texture-cache.ts` subscribes via `observeMaxAnisotropy` at module load. The
-  observer fires immediately on subscribe, so module load order doesn't matter. The legacy
-  `onMaxAnisotropy` option still exists but is **not needed to get sharp textures**.
-- **Cache teardown.** Every cross-solve cache calls `registerCacheRelease(...)` at module init.
-  `initThree` calls `retainCaches()` and invokes the returned release in `dispose()`. It is
-  refcounted, so with several live viewers only the last one out actually frees — an unmount
-  never wipes caches another viewer is still using.
+  `parse/webdisplay/texture-cache.ts` subscribes via `observeMaxAnisotropy` at module load — the
+  observer fires immediately on subscribe, so load order doesn't matter. The `onMaxAnisotropy`
+  option on `ThreeInitializerOptions` still exists for hosts doing their own texture work, but is
+  **not needed to get sharp textures**.
+- **Cache teardown.** Every cross-solve cache calls `registerCacheRelease(...)` at module init;
+  `initThree` calls `retainCaches()` and invokes the returned release in `dispose()`. Refcounted, so
+  with several live viewers only the last one out actually frees.
 
-`parse/`'s `releaseParseCaches` remains exported as an escape hatch (reclaiming memory under
-pressure, or a test isolating module state), not as a step anyone must remember.
+`parse/`'s `releaseParseCaches` remains exported as an escape hatch, not a step anyone must remember.
 
 ## GPU ownership: ask, don't remember
 
 Every GPU resource has exactly one owner — a cache, a module singleton, or the scene. The rule lives
 in `shared/gpu-ownership.ts`, and **`shared/gpu-dispose.ts`'s `disposeObjectTree` is the only
-traversal that should dispose scene content.**
-
-This is centralized because it previously wasn't: three separate walkers each carried a different
-subset of the guards, and the gaps between them were exactly where two leaks lived (the edge-cache
-F1 leak, and cache-owned textures being freed while the cache still served them). If you need a new
-teardown path, call `disposeObjectTree` — do not write a fourth `traverse` that calls `.dispose()`.
+traversal that should dispose scene content.** Separate walkers previously each carried a different
+subset of the ownership guards, and the gaps between them were exactly where two leaks lived (the
+edge-cache F1 leak, and cache-owned textures freed while the cache still served them). If you need
+a new teardown path, call `disposeObjectTree` — do not write a fourth `traverse` that calls
+`.dispose()`.

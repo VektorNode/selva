@@ -4,7 +4,9 @@ import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
 
 import { CACHED_GEOMETRY_USERDATA_FLAG } from '../../../shared/index.js';
 import { parseMeshBatchObject } from '../batch-parser';
-import { geometryCacheClear } from '../geometry-cache';
+import { geometryCacheClear, geometryCacheGet, geometryCachePut } from '../geometry-cache';
+
+import type * as THREE from 'three';
 
 afterEach(() => {
 	geometryCacheClear();
@@ -62,10 +64,10 @@ describe('cross-solve geometry cache (audit P1)', () => {
 		expect(mesh!.geometry.getAttribute('normal')).toBeDefined();
 	});
 
-	// NOTE: the companion test — that `clearScene` skips disposing cache-owned geometries — now lives
-	// in `@selvajs/compute` (`threejs/__tests__/three-helpers.test.ts`), because `clearScene` is a
-	// render-layer function and `parse/` must not import upward from `render/`. This file keeps the
-	// cache side of that contract: the flag is set, and `geometryCacheClear` disposes + clears it.
+	// NOTE: the companion test — that `clearScene` skips disposing cache-owned geometries — lives in
+	// `render/__tests__/three-helpers.test.ts`, because `clearScene` is a render-layer function and
+	// `parse/` must not import upward from `render/`. This file keeps the cache side of that
+	// contract: the flag is set, and `geometryCacheClear` disposes + clears it.
 
 	it('geometryCacheClear disposes cached geometries and unlocks clearScene disposal', async () => {
 		const batch = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 30, seed: 18 });
@@ -77,5 +79,68 @@ describe('cross-solve geometry cache (audit P1)', () => {
 
 		expect(dispose).toHaveBeenCalled();
 		expect(geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG]).toBeUndefined();
+	});
+});
+
+// Eviction is budgeted in bytes (256 MB), so these use stubs that *report* large attribute sizes
+// without allocating them — bytesOf only reads `attribute.array.byteLength`.
+function stubGeometry(bytes: number): { geometry: THREE.BufferGeometry; disposed: () => boolean } {
+	let disposed = false;
+	const geometry = {
+		userData: {} as Record<string, unknown>,
+		index: null,
+		attributes: { position: { array: { byteLength: bytes } } },
+		dispose: () => {
+			disposed = true;
+		}
+	};
+	return { geometry: geometry as unknown as THREE.BufferGeometry, disposed: () => disposed };
+}
+
+const MB = 1024 * 1024;
+
+describe('byte-budget eviction (LRU)', () => {
+	it('evicts the least-recently-used entry once over budget, disposing and untagging it', () => {
+		const a = stubGeometry(100 * MB);
+		const b = stubGeometry(100 * MB);
+		const c = stubGeometry(100 * MB);
+
+		geometryCachePut('a', a.geometry);
+		geometryCachePut('b', b.geometry);
+		geometryCacheGet('a'); // refresh a — b becomes the LRU entry
+		geometryCachePut('c', c.geometry); // 300 MB > 256 MB → evict b
+
+		expect(geometryCacheGet('b')).toBeUndefined();
+		expect(b.disposed()).toBe(true);
+		expect(b.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG]).toBeUndefined();
+
+		expect(geometryCacheGet('a')).toBe(a.geometry);
+		expect(geometryCacheGet('c')).toBe(c.geometry);
+		expect(a.disposed()).toBe(false);
+		expect(c.disposed()).toBe(false);
+	});
+
+	it('rejects a single geometry larger than the whole budget without tagging it', () => {
+		const giant = stubGeometry(300 * MB);
+
+		geometryCachePut('giant', giant.geometry);
+
+		expect(geometryCacheGet('giant')).toBeUndefined();
+		expect(giant.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG]).toBeUndefined();
+		expect(giant.disposed()).toBe(false); // still the caller's to use and dispose
+	});
+
+	it('keeps the incumbent on a duplicate key and leaves the newcomer scene-owned', () => {
+		const first = stubGeometry(1 * MB);
+		const second = stubGeometry(1 * MB);
+
+		geometryCachePut('dup', first.geometry);
+		geometryCachePut('dup', second.geometry);
+
+		expect(geometryCacheGet('dup')).toBe(first.geometry);
+		// The newcomer must NOT carry the cache-owned flag: the cache never owns it, so a stray
+		// flag would make every disposal path skip it forever (the leak this pins).
+		expect(second.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG]).toBeUndefined();
+		expect(second.disposed()).toBe(false);
 	});
 });

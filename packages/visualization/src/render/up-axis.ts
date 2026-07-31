@@ -1,51 +1,42 @@
 import * as THREE from 'three';
 
 /**
- * Single source of truth for "which way is up, and what do front/right mean" in the viewer. Every
- * up-dependent default (camera framing, sun position, ground offset, view presets) derives from
- * {@link buildUpBasis} rather than hardcoding an axis — that's what lets a Y-up scene get a correct
- * horizon and sun instead of the below-horizon/near-flat result a hardcoded Z-up vector would give.
+ * Single source of truth for "which way is up, and what do front/right mean" — camera framing,
+ * sun position, ground offset, and view presets all derive from {@link buildUpBasis} rather than
+ * hardcoding an axis, so a Y-up scene gets a correct horizon and sun instead of the below-horizon
+ * result a hardcoded Z-up vector would give.
  *
- * `forward` is the direction the camera looks (camera → model); preset positions are the reverse
- * (target → camera). Deriving `right` as `seed x up` (not `up x seed`) matches Rhino's handedness:
- * Front looks along +Y (camera at -Y), Right looks along -X (camera at +X).
+ * `forward` is camera → model; preset positions are the reverse (target → camera). `right` is
+ * `seed x up` (not `up x seed`) to match Rhino's handedness: Front looks along +Y, Right along -X.
  */
 
-/** An orthonormal frame derived from a scene up axis. All vectors are unit length. */
+/** Orthonormal frame derived from a scene up axis. All vectors are unit length. */
 export interface UpBasis {
 	up: THREE.Vector3;
-	/** Direction a "front" view looks along (camera toward model). */
 	forward: THREE.Vector3;
 	right: THREE.Vector3;
 }
 
-/**
- * Ground-plane axes for a given up vector: Z-up yields forward = +Y, right = +X (Rhino's
- * Front/Right); Y-up yields forward = -Z, right = +X (Three's default -Z look).
- */
+/** Ground-plane axes for a given up vector: Z-up yields forward = +Y, right = +X (Rhino's Front/Right). */
 export function buildUpBasis(up: THREE.Vector3): UpBasis {
 	const u = up.clone().normalize();
 
-	// Seed with a world axis that isn't (nearly) parallel to up, so the cross product is stable.
+	// Seed must not be (nearly) parallel to up, or the cross product is unstable.
 	const worldZ = new THREE.Vector3(0, 0, 1);
 	const worldY = new THREE.Vector3(0, 1, 0);
 	const seed = Math.abs(u.dot(worldZ)) > 0.9 ? worldY : worldZ;
 
-	// `seed x up`, not `up x seed` — matches Rhino's handedness (Z-up gives right = +X).
+	// seed x up, not up x seed — matches Rhino's handedness (Z-up gives right = +X).
 	const right = new THREE.Vector3().crossVectors(seed, u).normalize();
 	const forward = new THREE.Vector3().crossVectors(u, right).normalize();
 
 	return { up: u, forward, right };
 }
 
-/**
- * Default 3/4 iso camera offset from the target, scaled to `distance` — behind-left and above the
- * model, expressed in the scene's own basis so it reads the same in any up convention. Add to the
- * framing target to get a camera position.
- */
+/** Default 3/4 iso camera offset from the target (behind-left, above), scaled to `distance`. */
 export function isoOffset(up: THREE.Vector3, distance: number): THREE.Vector3 {
 	const { forward, right, up: u } = buildUpBasis(up);
-	// Normalized first so `distance` is the true radius, not the diagonal of the unnormalized sum.
+	// Normalize before scaling so `distance` is the true radius, not the diagonal of the raw sum.
 	return forward
 		.clone()
 		.multiplyScalar(-1)
@@ -55,11 +46,7 @@ export function isoOffset(up: THREE.Vector3, distance: number): THREE.Vector3 {
 		.multiplyScalar(distance);
 }
 
-/**
- * A default sun position: high above the model, offset to one side so surfaces get a directional
- * gradient instead of flat top-down light. Expressed in the scene basis rather than a literal
- * Z-up vector, so a Y-up scene still gets an overhead sun rather than a horizontal one.
- */
+/** Default sun position: high above the model, offset to one side for a directional gradient. */
 export function sunOffset(up: THREE.Vector3, sideDistance: number, height: number): THREE.Vector3 {
 	const { forward, right, up: u } = buildUpBasis(up);
 	return right
@@ -70,17 +57,16 @@ export function sunOffset(up: THREE.Vector3, sideDistance: number, height: numbe
 }
 
 /**
- * The rotation that puts an equirectangular environment map's horizon on the scene's ground plane.
+ * Rotates an equirectangular environment map's horizon onto the scene's ground plane.
  *
- * Three's equirect mapping is hardcoded to Y-up: it assumes the HDR's horizon lies in the XZ plane
- * and its zenith points along +Y. In a Z-up scene that leaves the environment on its side — the
- * horizon runs vertically and image-based lighting arrives from +Y rather than from overhead. The
- * result is a subtly wrong key direction that a neutral studio HDR hides but any sky/ground HDR
- * makes obvious.
+ * Three's equirect mapping is hardcoded to Y-up: the HDR's horizon is assumed to lie in the XZ
+ * plane with zenith along +Y. In a Z-up scene that leaves the environment on its side — horizon
+ * vertical, lighting arriving from +Y instead of overhead. A neutral studio HDR hides this; any
+ * sky/ground HDR makes it obvious.
  *
- * Returns the Euler that rotates the map's native +Y zenith onto `up`. Identity for a Y-up scene.
- * Apply to BOTH `scene.environmentRotation` and `scene.backgroundRotation` — they are independent
- * properties, and setting only one makes the visible background disagree with the lighting.
+ * Returns the Euler rotating the map's native +Y zenith onto `up` (identity for Y-up). Apply to
+ * BOTH `scene.environmentRotation` and `scene.backgroundRotation` — they're independent, and
+ * setting only one desyncs background from lighting.
  */
 export function environmentRotationFor(up: THREE.Vector3): THREE.Euler {
 	const u = up.clone().normalize();
@@ -89,17 +75,14 @@ export function environmentRotationFor(up: THREE.Vector3): THREE.Euler {
 	if (u.dot(mapZenith) > 0.9999) return new THREE.Euler();
 
 	// Upside-down (-Y): setFromUnitVectors picks an arbitrary perpendicular axis for a 180° flip,
-	// which would also spin the horizon. Roll about X so the horizon stays put.
+	// spinning the horizon. Roll about X instead so the horizon stays put.
 	if (u.dot(mapZenith) < -0.9999) return new THREE.Euler(Math.PI, 0, 0);
 
 	const quaternion = new THREE.Quaternion().setFromUnitVectors(mapZenith, u);
 	return new THREE.Euler().setFromQuaternion(quaternion);
 }
 
-/**
- * Which world axis the up vector most closely aligns with — used where the grid plane and
- * ground-offset need a single component index rather than a full vector.
- */
+/** Which world axis the up vector most closely aligns with. */
 export function upToAxis(up: THREE.Vector3): 'x' | 'y' | 'z' {
 	const ax = Math.abs(up.x);
 	const ay = Math.abs(up.y);

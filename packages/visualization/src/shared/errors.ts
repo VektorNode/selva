@@ -5,13 +5,11 @@
  */
 
 export const ErrorCodes = {
-	/** A payload failed a structural check (bad magic bytes, out-of-window index, malformed metadata). */
+	/** Structural check failed: bad magic bytes, out-of-window index, malformed metadata. */
 	VALIDATION_ERROR: 'VALIDATION_ERROR',
-	/** An operation was attempted against state that cannot support it. */
 	INVALID_STATE: 'INVALID_STATE',
-	/** A required runtime capability is missing (no `DecompressionStream`, no WebGL context, ...). */
+	/** No `DecompressionStream`, no WebGL context, etc. */
 	ENVIRONMENT_ERROR: 'ENVIRONMENT_ERROR',
-	/** A caller-supplied option or dependency has an unusable shape. */
 	INVALID_CONFIG: 'INVALID_CONFIG',
 	/** Base64 input could not be decoded. */
 	ENCODING_ERROR: 'ENCODING_ERROR',
@@ -20,7 +18,6 @@ export const ErrorCodes = {
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
-/** Error carrying a machine-readable {@link ErrorCode} plus structured context. */
 export class VisualizationError extends Error {
 	public readonly code: ErrorCode;
 	public readonly context?: Record<string, unknown>;

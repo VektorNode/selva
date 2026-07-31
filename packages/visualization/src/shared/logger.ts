@@ -6,7 +6,6 @@
 
 import { VisualizationError, ErrorCodes } from './errors.js';
 
-/** Implement to route the package's structured log output. */
 export interface Logger {
 	debug(message: string, ...args: unknown[]): void;
 	info(message: string, ...args: unknown[]): void;
@@ -40,25 +39,17 @@ class ConsoleLogger implements Logger {
 	}
 }
 
-/**
- * Defaults to no-op, matching `@selvajs/compute`'s default. A library that writes to the console
- * uninvited is a nuisance in a host that has its own logging; opt in with {@link setLogger} or
- * {@link enableDebugLogging}.
- */
+// Defaults to no-op: a library that writes to the console uninvited is a nuisance in a host with
+// its own logging. Opt in with setLogger or enableDebugLogging.
 let internalLogger: Logger = new NoOpLogger();
 
-/** The active sink. Call per-use rather than caching — the sink is settable at any time. */
+// Call per-use rather than caching — the sink is settable at any time.
 export function getLogger(): Logger {
 	return internalLogger;
 }
 
-/**
- * Routes this package's logging to `logger`, or silences it with `null`.
- *
- * @throws {VisualizationError} `INVALID_CONFIG` if the logger is missing any of the four required
- *   methods — failing here beats a confusing "getLogger().debug is not a function" at some later,
- *   unrelated call site.
- */
+// Validates logger shape up front: failing here beats a confusing "getLogger().debug is not a
+// function" at some later, unrelated call site.
 export function setLogger(logger: Logger | Console | null): void {
 	if (logger === null) {
 		internalLogger = new NoOpLogger();

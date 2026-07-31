@@ -1,16 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-/**
- * HTML label layer tracking 3D positions via three's {@link CSS2DRenderer} — real DOM nodes (crisp
- * text, CSS-stylable) positioned each frame to follow points in the scene. Backs measurement
- * readouts, dimension annotations, point tags.
- *
- * Draws into its own absolutely-positioned DOM overlay stacked above the WebGL canvas
- * (pointer-events disabled so it never steals clicks). The viewer owns one; features like the
- * measure tool add/remove labels through it.
- */
-
 export interface LabelHandle {
 	readonly object: CSS2DObject;
 	setPosition(position: THREE.Vector3): void;
@@ -26,27 +16,21 @@ export interface LabelLayer {
 	dispose(): void;
 }
 
-/**
- * @param container overlay is appended here, absolutely positioned — normally the canvas's parent
- * so they share a positioning context.
- * @param scene labels are parented to a group added to this scene, so they follow the camera
- * without the caller wiring scene-graph parenting.
- */
+// container: overlay is appended here, absolutely positioned — normally the canvas's parent
+// so they share a positioning context.
 export function createLabelLayer(container: HTMLElement, scene: THREE.Scene): LabelLayer {
 	const renderer = new CSS2DRenderer();
 	const dom = renderer.domElement;
 	dom.style.position = 'absolute';
 	dom.style.top = '0';
 	dom.style.left = '0';
-	// CSS2DRenderer overwrites width/height in PIXELS and bases its projection math on those same
-	// values, so percentage sizing can't work — the host must call `setSize` on every resize, same
-	// as for the WebGL renderer. Without the explicit clipped/non-interactive box below, the overlay
-	// can cover the canvas and swallow orbit/clicks.
+	// CSS2DRenderer sets width/height in pixels, so percentage sizing can't work — host must call
+	// `setSize` on every resize, same as the WebGL renderer.
+	// overflow:hidden + pointerEvents:none: without both, the overlay can cover the canvas and
+	// swallow orbit/clicks.
 	dom.style.overflow = 'hidden';
 	dom.style.pointerEvents = 'none';
-	// Above the canvas and host overlays (e.g. loading scrims) sharing this positioning context;
-	// below typical menu/popover layers.
-	dom.style.zIndex = '30';
+	dom.style.zIndex = '30'; // above canvas/host overlays, below menus/popovers
 	if (getComputedStyle(container).position === 'static') {
 		container.style.position = 'relative';
 	}
@@ -55,8 +39,7 @@ export function createLabelLayer(container: HTMLElement, scene: THREE.Scene): La
 	const size = { width: container.clientWidth || 1, height: container.clientHeight || 1 };
 	renderer.setSize(size.width, size.height);
 
-	// Dedicated group: removed en masse on dispose, tagged so pick/fit logic ignores it.
-	const group = new THREE.Group();
+	const group = new THREE.Group(); // 'label-layer' name/id: pick/fit logic in scene/objects.ts skips it
 	group.name = 'label-layer';
 	group.userData.id = 'label-layer';
 	scene.add(group);
@@ -69,8 +52,7 @@ export function createLabelLayer(container: HTMLElement, scene: THREE.Scene): La
 		if (className) {
 			el.className = className;
 		} else {
-			// Dark translucent pill, legible on any background. Kept inline so the layer needs no
-			// external stylesheet; pass className to opt out.
+			// Inline default so the layer needs no external stylesheet; pass className to opt out.
 			Object.assign(el.style, {
 				padding: '2px 6px',
 				borderRadius: '4px',

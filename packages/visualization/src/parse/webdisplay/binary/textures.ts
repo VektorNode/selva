@@ -6,8 +6,8 @@ const UV_CHUNK_HEADER_BYTES = 4 + 16 + 16;
 
 /**
  * Parses the trailing UV chunk into absolute Float32 u,v pairs. Quantized UVs reconstruct as
- * `origin + q * scale` with an unsigned q, undoing the per-component delta+zigzag filter when the
- * blob-wide delta flag is set; float32 UVs are copied out as-is (never filtered).
+ * `origin + q * scale` (unsigned q), undoing the per-component delta+zigzag filter when set;
+ * float32 UVs are copied out as-is (never filtered).
  */
 export function parseUvChunk(
 	bytes: Uint8Array,

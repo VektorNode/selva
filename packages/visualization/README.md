@@ -17,10 +17,9 @@ parse/     backend payload → THREE meshes + metadata (webdisplay, display-item
 shared/    coordinate frame, look presets, errors, logging, geometry/color utils  [internal]
 ```
 
-**The solve session used to be a fourth layer on top.** It moved to `@selvajs/solve/client`,
-leaving this package as exactly mesh conversion + viewer. What stayed behind is the three.js mesh
-ownership policy solve's result memo needs but deliberately doesn't know: `meshPolicy` in
-[`parse/mesh-policy.ts`](./src/parse/mesh-policy.ts).
+**The solve session used to be a fourth layer on top; it moved to `@selvajs/solve/client`.** What
+stayed behind is the three.js mesh ownership policy solve's result memo needs but deliberately
+doesn't know: `meshPolicy` in [`parse/mesh-policy.ts`](./src/parse/mesh-policy.ts).
 
 **Each layer has its own barrel (`index.ts`) — the only cross-layer import surface.** Files inside a
 layer import siblings by relative path; other layers import the barrel. That way a layer's internals

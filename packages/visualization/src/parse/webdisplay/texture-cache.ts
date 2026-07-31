@@ -8,29 +8,23 @@ import {
 } from '../../shared/index.js';
 
 /**
- * Maximum number of decoded textures retained by the module-level cache. When a fresh load pushes
- * the cache past this bound, the least-recently-used entry is evicted and its GPU texture disposed.
- * Sized generously above any realistic per-scene texture count (a solve's materials re-touch their
- * textures on every re-parse, keeping live entries recent), so eviction only ever trims textures
- * that no current scene references — e.g. a workflow regenerating a data-URI texture per solve.
+ * Bound on the module-level texture cache; a fresh load past this evicts the least-recently-used
+ * entry and disposes its GPU texture. Sized generously above any realistic per-scene texture count,
+ * so eviction only ever trims textures no current scene references.
  */
 export const TEXTURE_CACHE_MAX_ENTRIES = 64;
 
 /**
- * Cache keys longer than this are replaced by a compact hash. Content-hashed asset URLs and normal
- * http(s) URLs stay comfortably below it; multi-KB/MB data URIs (whose full string would otherwise
- * be retained as the Map key for as long as the texture lives) exceed it and get hashed.
+ * Cache keys longer than this are replaced by a compact hash — multi-KB/MB data URIs would
+ * otherwise be retained as the Map key for as long as the texture lives.
  */
 const MAX_KEY_LENGTH = 256;
 
 /**
- * Module-level texture cache keyed by URL (or a hash of it — see {@link cacheKeyFor}).
- *
- * Material texture references are immutable by construction — the plugin serves bitmap/file
- * textures at content-hashed URLs (`/assets/{hash}`) and http(s)/data URIs identify their own
- * content — so each URL is fetched and GPU-decoded exactly once per session no matter how many
- * solves or materials reference it. Selva's hot loop re-parses batches on every slider nudge;
- * without this cache every solve would re-decode every texture.
+ * Material texture references are immutable by construction (content-hashed asset URLs, self-
+ * identifying http(s)/data URIs), so each URL is fetched and GPU-decoded exactly once per session
+ * no matter how many solves or materials reference it — without this, every solve would re-decode
+ * every texture on every slider nudge.
  *
  * The Map doubles as the LRU order: hits re-insert their entry, so iteration order is
  * least-recently-used first and eviction pops the first key.
@@ -40,16 +34,12 @@ const inFlight = new Map<string, Promise<THREE.Texture>>();
 
 /**
  * Bumped by {@link clearTextureCache}. A load that started before a clear compares its captured
- * generation on resolve: if the cache was cleared meanwhile, the freshly decoded texture is
- * disposed instead of repopulating the just-emptied cache (which would leak it past viewer
- * teardown and silently serve it to future materials despite the intended full reset).
+ * generation on resolve: if stale, the freshly decoded texture is disposed instead of repopulating
+ * the just-emptied cache (which would leak it past viewer teardown).
  */
 let cacheGeneration = 0;
 
-/**
- * Rejection used when a load resolves after {@link clearTextureCache} wiped the cache. Expected
- * during viewer teardown, so {@link applyTextureMap} swallows it silently instead of warning.
- */
+/** Expected during viewer teardown, so {@link applyTextureMap} swallows it silently instead of warning. */
 class StaleTextureLoadError extends Error {
 	constructor(url: string) {
 		super(`Texture load for ${url} resolved after clearTextureCache(); texture disposed.`);
@@ -58,15 +48,13 @@ class StaleTextureLoadError extends Error {
 }
 
 /**
- * Max anisotropic-filtering samples applied to color maps, keeping textures sharp at grazing angles
- * (floors, long walls receding to the horizon) instead of blurring. The ceiling is hardware-defined
- * (`renderer.capabilities.getMaxAnisotropy()`, typically 16). Defaults to 1 (three's default — no
- * anisotropy) until a renderer reports in, so the module is correct with no viewer at all.
+ * Anisotropic-filtering samples applied to color maps, keeping textures sharp at grazing angles
+ * instead of blurring. Ceiling is hardware-defined (`renderer.capabilities.getMaxAnisotropy()`,
+ * typically 16). Defaults to three's default (1 — no anisotropy) until a renderer reports in.
  */
 let maxAnisotropy = 1;
 
 /**
- * Sets the anisotropy applied to all color-map textures, updating already-cached ones too.
  * Subscribed to the renderer's own report below, so no host wiring is needed; still exported for a
  * host embedding a foreign renderer that wants to set it directly.
  */
@@ -86,10 +74,8 @@ observeMaxAnisotropy(setTextureAnisotropy);
 
 /**
  * Assigns a texture to `material.map`, synchronously when cached, otherwise asynchronously once
- * the image is fetched and decoded (flagging `needsUpdate` — the mesh renders untextured for at
- * most the first frames). Load failures log a warning and leave the material untextured rather
- * than breaking the batch. A load that resolves after {@link clearTextureCache} is discarded
- * silently (its texture disposed) — the clear signals the viewer no longer wants it.
+ * fetched and decoded — the mesh renders untextured for at most the first frames. Load failures
+ * log a warning and leave the material untextured rather than breaking the batch.
  */
 export function applyTextureMap(material: THREE.MeshPhysicalMaterial, url: string): void {
 	const key = cacheKeyFor(url);
@@ -140,11 +126,8 @@ export function clearTextureCache(): void {
 	inFlight.clear();
 }
 
-/**
- * Maps a texture URL to its cache key. Short URLs key by themselves; oversized ones (data URIs)
- * key by a 32-bit FNV-1a hash plus length so the multi-KB/MB URI string isn't retained as a Map
- * key. The `data-uri:` prefix keeps hashed keys disjoint from literal URL keys.
- */
+/** Short URLs key by themselves; oversized ones hash (see MAX_KEY_LENGTH). The `data-uri:` prefix
+ *  keeps hashed keys disjoint from literal URL keys. */
 function cacheKeyFor(url: string): string {
 	if (url.length <= MAX_KEY_LENGTH) {
 		return url;
@@ -207,8 +190,7 @@ function loadTexture(url: string, key: string): Promise<THREE.Texture> {
 				},
 				undefined,
 				(error) => {
-					// Guarded so a failure resolving after a clear can't delete a *newer* in-flight
-					// entry for the same key (the clear already wiped this one).
+					// Guard: a failure resolving after a clear must not delete a *newer* in-flight entry.
 					if (generation === cacheGeneration) {
 						inFlight.delete(key);
 					}
