@@ -160,9 +160,13 @@ Console.WriteLine("objects=" + doc.ObjectCount); // 1, not 3
 // The sandbox can't reference Selva.Schema or Newtonsoft directly, hence the
 // reflection: both types are pulled off the already-loaded assemblies.
 //
-// Shape is authoritative in packages/schemas/ui-schema.json. Two silent traps:
+// Shape is authoritative in packages/schemas/ui-schema.json. Validate the JSON
+// BEFORE grafting — `node scripts/validate-ui-schema.mjs <file>` catches all of
+// the traps below, none of which surface at runtime:
 //   - nesting is layout.tabs[] -> groups[] -> items[]  (a tab has no "items")
 //   - items key on paramId (not inputId) and need BOTH type + widgetType
+//   - paramType values are lowercase: "number", not "Number" (Newtonsoft binds
+//     enums case-insensitively, so the wrong casing deserializes silently)
 // Get either wrong and the JSON still parses — the item is just dropped.
 
 using System;
@@ -181,10 +185,10 @@ var json = @"{
 ""viewerOptions"":{""enableLocal"":false,""enableRemote"":false,""backgroundColor"":""#f3f3f3""},
 ""instanceSolve"":true,
 ""inputs"":[
- {""id"":""11111111-0000-0000-0000-000000000001"",""nickname"":""Width"",""paramType"":""Number"",""default"":3.5},
- {""id"":""11111111-0000-0000-0000-000000000002"",""nickname"":""Label"",""paramType"":""Text"",""default"":""hello""}
+ {""id"":""11111111-0000-0000-0000-000000000001"",""nickname"":""Width"",""paramType"":""number"",""default"":3.5},
+ {""id"":""11111111-0000-0000-0000-000000000002"",""nickname"":""Label"",""paramType"":""text"",""default"":""hello""}
 ],
-""outputs"":[{""id"":""22222222-0000-0000-0000-000000000001"",""nickname"":""Result"",""paramType"":""Geometry""}],
+""outputs"":[{""id"":""22222222-0000-0000-0000-000000000001"",""nickname"":""Result"",""paramType"":""generic""}],
 ""layout"":{""type"":""tabbed"",""gap"":16,""tabs"":[
  {""id"":""tab-1"",""label"":""Main"",""groups"":[
    {""id"":""grp-1"",""label"":""Dimensions"",""items"":[
@@ -206,6 +210,37 @@ schemaProp.SetValue(bridge, deserialize.Invoke(null, new object[] { json })); //
 bridge.NickName = "UI Bridge"; // a fresh instance defaults to "UIBridge"
 doc.NewSolution(false);
 Console.WriteLine("schema=" + (schemaProp.GetValue(bridge) == null ? "NULL" : "ok"));
+
+// ============================================================================
+// Run the plugin's own SchemaValidator over a live component
+// ============================================================================
+// Semantic checks the JSON Schema can't make: orphaned params (an input defined
+// but not placed in any group), missing widget config, version drift. Six rule
+// classes; see Selva.Schema/Services/Validation/Rules/.
+//
+// Shape errors belong to `node scripts/validate-ui-schema.mjs` — run that on the
+// payload BEFORE grafting. This runs after, on what the component actually holds.
+
+using System;
+using System.Linq;
+using System.Reflection;
+
+var doc = Grasshopper.Instances.ActiveCanvas.Document;
+var bridge = doc.Objects.First(o => o.Name == "UI Bridge");
+var schema = bridge.GetType().GetProperty("Schema").GetValue(bridge);
+
+var validatorType = AppDomain.CurrentDomain.GetAssemblies()
+    .First(a => a.GetName().Name == "Selva.Schema")
+    .GetType("Selva.Schema.Services.Validation.SchemaValidator");
+
+var result = validatorType.GetMethod("Validate")
+    .Invoke(Activator.CreateInstance(validatorType), new object[] { schema });
+
+var rt = result.GetType();
+Console.WriteLine("IsValid=" + rt.GetProperty("IsValid").GetValue(result));
+foreach (var issue in (System.Collections.IEnumerable)rt.GetProperty("Issues").GetValue(result))
+    Console.WriteLine("  [" + issue.GetType().GetProperty("Severity").GetValue(issue) + "] "
+        + issue.GetType().GetProperty("Message").GetValue(issue));
 
 // ============================================================================
 // Verify a saved fixture by reloading it

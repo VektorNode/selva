@@ -2,6 +2,7 @@
 
 **Status:** open · **Labels:** `correctness`, `solve-path` · **Scope:** `@selvajs/solve`, `@selvajs/ui`, `@selvajs/plugin-ui`, `Plugin/Selva.GH`, compute.rhino3d fork
 **Origin:** full four-repo trace 2026-07-31 (GH plugin → wire → solve package → UI reactivity → compute.geometry). File refs below are from that trace.
+**Progress:** Phase 5 Level 2 fixture built and verified against live Grasshopper (2026-07-31). Phases 0–4 not started.
 
 ## The problem in one paragraph
 
@@ -63,6 +64,10 @@ Semantics preserved exactly (they are correct, just mislocated): valid → keep;
 valid → prune to survivors; stale/empty → first option (insertion order); never resolves to
 empty — the NRE invariant from `InputControl.svelte:118-122` moves here as the function's contract.
 Unit-test the matrix (single/multi, empty options, reordered-same-membership → keep).
+
+The empty guard is defense in depth, not the only one — the GH param already refuses an empty
+selection (see "Fixture — as built"). Cover it with a unit test here; don't expect the fixture to
+prove it.
 
 No behavior change; `InputControl`'s effect calls the pure function. Ship independently.
 
@@ -148,8 +153,7 @@ as a function of the received `valueUpdate`:
 4. **Checklist prune:** multi-select with one surviving value → pruned, one solve, not reset to
    first.
 
-**Level 2 — real Grasshopper fixture** (user-supplied `.gh`, lives with the other fixtures — spec
-below). Two consumption modes:
+**Level 2 — real Grasshopper fixture** — **built**, see "Fixture" below. Two consumption modes:
 
 - **Live (local WS mode):** manual checklist in this file — open fixture in Rhino, connect
   plugin-ui dev server, walk scenarios 1–3, confirm no solve storm in the GH profiler.
@@ -160,26 +164,49 @@ below). Two consumption modes:
   input returns updated resolution (this is the Phase 3 regression test — it fails on today's
   `AlreadySet`).
 
-### Fixture spec (for the `.gh` you'll build)
+### Fixture — as built
 
-One definition, three groups, so a single fixture covers all scenarios:
+[`fixtures/grasshopper/fixture_dynamic_value_list.ghx`](../../fixtures/grasshopper/fixture_dynamic_value_list.ghx),
+recipe at [`recipes/fixture_dynamic_value_list.json`](../../fixtures/grasshopper/recipes/fixture_dynamic_value_list.json).
+19 objects, 3 groups, 0 runtime errors; built and read back through Rhino MCP against a live
+Grasshopper, verified surviving a close/reopen cycle.
 
-- **Inputs:** `GetDynamicValueParameter` nicknamed `dvlSelect` (item access); a slider `count`
-  (RH_IN or contextual, range 1–5, default 3).
-- **Steady group:** a Panel-style static pair list `"A" = 1, "B" = 2, "C" = 3` → `Set Dynamic
-Value List` (target = `dvlSelect`) → ContextBake.
-- **Convergent group (switchable):** options generated from `count` (e.g. Series → `"Item {i}" = i`
-  pairs) → same Set/Bake wiring. Include both groups but wire only one at a time — or use a second
-  Get/Set pair `dvlConvergent` so both are live simultaneously (preferred: also exercises the
-  multi-DVL global budget).
-- **Oscillation trigger:** a variant where the pair list is built as _all items minus the currently
-  selected one_ (cull by equality with `dvlSelect`'s output). This is the loop case — keep it in a
-  disabled group with a note, enable only for the oscillation scenario.
-- **Downstream consumer:** wire `dvlSelect` into something that NREs on null (e.g. Bounding
-  Rectangle chain, per the invariant comment) so the "never dispatch empty" contract is actually
-  load-bearing in the fixture.
-- Save with a selection applied, so `StoredItems`/`SelectedValues` archive round-trip
-  (`GetDynamicValueListParameter.cs:355-380`) is exercised on load.
+Three Get/Set pairs live simultaneously, so the multi-DVL global budget is exercised:
+
+- **steady** — static `"A"=1, "B"=2, "C"=3` → `Set DynVL(dvlSelect)`. Options never change.
+- **convergent** — `count` slider (1–5, integer, default 3) → `Get Number` → C# emits `"Item {i}"=i`
+  → `Set DynVL(dvlConvergent)`.
+- **oscillate** — C# reads `dvlOscillate`'s own selection and emits every option _except_ it.
+  **Locked (disabled)** in the committed fixture; unlock only for the stall test. Confirmed
+  non-convergent live: sel `X` → emits `Y,Z`; pick `Y` → emits `X,Z`.
+
+All three `Set DynVL` outputs plus the UI Bridge `Schema` feed one Context Bake. Saved with
+selections applied (`dvlSelect=2`, `dvlConvergent=Item 2`, `dvlOscillate=X`, 3 stored items each),
+so the `StoredItems`/`SelectedValues` archive round-trip is exercised on load.
+
+The UI Bridge carries an **embedded schema** keyed on the params' InstanceGuids: 4 inputs, 3
+`dynamicValueList` outputs, tabbed layout with Steady/Convergent/Oscillate groups. `targetInputId`
+is set **only** in `schema.outputs[]`, never in the layout item config — the fixture pins Phase 2's
+outputs-wins precedence. Re-placing a param changes its guid and silently desyncs the schema;
+update both together.
+
+**The reconciliation gap reproduces in Grasshopper alone, no UI attached.** Driving `count` 3 → 1
+makes the convergent script emit only `"Item 1"`, while `dvlConvergent` keeps its stale 3-item
+`_storedItems` and still outputs `2` — a value no longer in the emitted options. `_storedItems` is
+only repopulated by `LoadItems()`, which the web UI calls; the Set component never pushes options
+back into the Get param on solve. This is the deterministic failing case for the Level 2 test.
+
+**Correction to Phase 0's contract.** The "never resolves to empty" invariant is already enforced
+at the param, twice: `SelectItemsByName` returns `false` and no-ops on an empty list
+([GetDynamicValueListParameter.cs:177-187](../../Plugin/Selva.GH/Features/ComputeIO/Components/GetDynamicValueListParameter.cs#L177-L187)),
+and a null `_selectedValues` falls back to the first stored item. The param could not be forced
+empty from a live document. So `reconcileSelection`'s empty guard is belt-and-braces over an
+existing plugin guarantee, not the sole defense — and a downstream NRE consumer **cannot** make
+that contract load-bearing in the fixture, contrary to the original spec. Test it with a double at
+the session layer instead.
+
+Rebuild caveat: the 8 C# script bodies are not reachable through the MCP script sandbox (they live
+in each component's own `Script` chunk). A rebuild cannot restore them — hand-edit this fixture.
 
 ## Order & risk
 

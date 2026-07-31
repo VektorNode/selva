@@ -1,6 +1,24 @@
 # `@selvajs/compute` — post-viewer cleanup
 
-> **Status: REVISED (2026-07-31), not started.** The original 2026-07-22 proposal was written
+> **Status: COMPLETE (2026-07-31). All 8 migration steps shipped.** `/grasshopper` went from 55
+> exported symbols to 50, verified by diffing the emitted `dist/grasshopper.d.ts` before and after;
+> 613 tests pass, monorepo type-check 22/22, lint clean. The user-facing record — every removed
+> symbol and its replacement path — is [`.changeset/compute-package-cleanup.md`](../../.changeset/compute-package-cleanup.md),
+> not this file.
+>
+> **Two things were deliberately left open** and must happen before publishing: grep parafa and
+> parapet for the five removed symbols (`processInputs` and `getValues` are the weakest-evidence
+> cuts; neither repo is in this monorepo's CI), and diff the published `3.1.1` tarball rather than a
+> local build to confirm the 11 never-published symbols really were never published.
+>
+> **Three deviations from the steps below**, each because the code disagreed with the plan:
+> `composeSignal` got its own `signal.ts` (it is abort composition, not timing); `computeNumeric`
+> stayed with the parsers (it depends on the transformers and `RhinoComputeError`, so moving it would
+> have dragged the parser stack into a "rounding" module); and `log()` became its own module (13 call
+> sites across four of the new files). Step 2 also could not land as a pure path move — `src/grasshopper.ts`
+> and `src/grasshopper/` collide, so the barrel deletion from step 3 had to ride along.
+>
+> **Superseded detail below.** The original 2026-07-22 proposal was written
 > _before_ the viewer split landed and assumed seams that turned out not to exist. This revision is
 > validated against the code as it stands today: file structure re-measured, the barrel diff computed
 > exactly, and every export cross-referenced against its real consumers across the monorepo.
@@ -52,7 +70,7 @@ Layering is clean: `src/core/` never imports from
 
 ### `src/grasshopper.ts` duplicates the inner barrel — and they have already drifted
 
-[`src/grasshopper.ts`](../../packages/compute/src/grasshopper.ts) hand-relists ~50 symbols that
+`src/grasshopper.ts` (deleted by this refactor) hand-relists ~50 symbols that
 `src/features/grasshopper/index.ts` already exports. Two barrels at the same layer, one enumerating
 the other; every new export needs editing in both places, and nothing fails when they disagree.
 `core` has no such file — `/core` maps straight to `src/core/index.ts` via tsup.
@@ -278,7 +296,7 @@ weaker argument for cutting than the deferred section implied.
 
 ### Must stay — not a judgment call
 
-- **`stableStringify`, `hashDefinition`, `hashSolveInput`.** [`stable-hash.ts:1-13`](../../packages/compute/src/features/grasshopper/scheduler/stable-hash.ts#L1-L13)
+- **`stableStringify`, `hashDefinition`, `hashSolveInput`.** [`stable-hash.ts:1-13`](../../packages/compute/src/grasshopper/scheduler/stable-hash.ts#L1-L13)
   documents these as a deliberate public keying surface and states key parity with an app-layer
   durable cache is a **correctness requirement** — a cache canonicalizing even slightly differently
   misses every entry the scheduler wrote, or collides. The file already draws the internal line
