@@ -11,10 +11,7 @@ import { describe, it, expect } from 'vitest';
 
 import { SolveScheduler, type SolveExecutor, type CacheKeyExecutor } from '../solve-scheduler';
 import type { SolveDefinition } from '../../definition-ref';
-import type {
-	GrasshopperComputeConfig,
-	GrasshopperComputeResponse
-} from '@/features/grasshopper/types';
+import type { GrasshopperComputeConfig, GrasshopperComputeResponse } from '@/grasshopper/types';
 
 const baseConfig: GrasshopperComputeConfig = { serverUrl: 'http://localhost:6500' };
 

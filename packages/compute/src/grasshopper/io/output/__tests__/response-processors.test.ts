@@ -10,13 +10,9 @@
  * dispatch can be proven behavior-identical.
  */
 import { describe, expect, it, vi } from 'vitest';
-import {
-	getValues,
-	getValue,
-	extractFileData
-} from '@/features/grasshopper/io/output/response-processors';
-import { disposeRhinoObjects } from '@/features/grasshopper/io/output/rhino-decoder';
-import type { DataItem, GrasshopperComputeResponse } from '@/features/grasshopper/types';
+import { getValues, getValue, extractFileData } from '@/grasshopper/io/output/response-processors';
+import { disposeRhinoObjects } from '@/grasshopper/io/output/rhino-decoder';
+import type { DataItem, GrasshopperComputeResponse } from '@/grasshopper/types';
 
 // --- local builders ---------------------------------------------------------
 

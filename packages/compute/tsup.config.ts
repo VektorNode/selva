@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup';
 
 const entries = {
 	index: 'src/index.ts',
-	grasshopper: 'src/grasshopper.ts',
+	grasshopper: 'src/grasshopper/index.ts',
 	core: 'src/core/index.ts'
 };
 

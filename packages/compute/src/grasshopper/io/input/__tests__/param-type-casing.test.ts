@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { processInputWithError } from '@/features/grasshopper/io/input/input-processors';
+import { processInputWithError } from '@/grasshopper/io/input/input-processors';
 import { createInputSchema } from '@tests/helpers/test-data-builders';
 
 // Selva schemas emit lowercase paramTypes (e.g. "valueList") while the plugin

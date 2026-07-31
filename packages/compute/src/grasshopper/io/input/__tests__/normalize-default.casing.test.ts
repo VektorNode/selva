@@ -15,7 +15,7 @@
  * read case-insensitively.
  */
 import { describe, expect, it } from 'vitest';
-import { processInputWithError } from '@/features/grasshopper/io/input/input-processors';
+import { processInputWithError } from '@/grasshopper/io/input/input-processors';
 import { createInputSchema } from '@tests/helpers/test-data-builders';
 
 /** A connected single-value Number default exactly as Compute8 / mcneel 8.x send it. */

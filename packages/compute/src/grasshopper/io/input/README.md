@@ -133,7 +133,7 @@ entry — no edits to `input-processors.ts`.
 ### 1. Define the Type Interface and add it to the union
 
 ```typescript
-// filepath: src/features/grasshopper/types.ts
+// filepath: src/grasshopper/types.ts
 export interface CustomInputType extends BaseInputType {
 	paramType: 'Custom';
 	customProperty: string;
@@ -156,7 +156,7 @@ reads from an already-`normalizeDefault`'d schema and is **pure** — it returns
 typed param and never mutates the schema.
 
 ```typescript
-// filepath: src/features/grasshopper/io/input/input-type-parsers.ts
+// filepath: src/grasshopper/io/input/input-type-parsers.ts
 const customParser: InputTypeParser<CustomInputType> = {
 	types: ['Custom'],
 	parse(schema, base) {
@@ -203,7 +203,7 @@ Test the parser directly through its `parse` interface — the typed param it
 returns is the test surface:
 
 ```typescript
-import { INPUT_TYPE_PARSERS } from '@/features/grasshopper/io/input/input-type-parsers';
+import { INPUT_TYPE_PARSERS } from '@/grasshopper/io/input/input-type-parsers';
 import { createInputSchema } from '@tests/helpers/test-data-builders';
 
 const base = { description: '', name: 'test', nickname: 'T', treeAccess: false, groupName: '' };

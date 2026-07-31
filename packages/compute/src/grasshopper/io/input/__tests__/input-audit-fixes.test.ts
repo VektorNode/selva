@@ -10,7 +10,7 @@ import {
 	processInputs,
 	processInputsWithErrors,
 	processInputWithError
-} from '@/features/grasshopper/io/input/input-processors';
+} from '@/grasshopper/io/input/input-processors';
 import { createInputSchema } from '@tests/helpers/test-data-builders';
 
 describe('issue 64 — tree-access defaults use the scalar parsing rules', () => {

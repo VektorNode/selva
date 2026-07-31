@@ -5,11 +5,8 @@
  * parse error downstream, and `groupName` keeps its null-vs-'' distinction.
  */
 import { describe, expect, it } from 'vitest';
-import {
-	normalizeInputSchema,
-	normalizeOutputSchema
-} from '@/features/grasshopper/io/normalize-schema';
-import { processInputWithError } from '@/features/grasshopper/io/input/input-processors';
+import { normalizeInputSchema, normalizeOutputSchema } from '@/grasshopper/io/normalize-schema';
+import { processInputWithError } from '@/grasshopper/io/input/input-processors';
 
 describe('normalizeInputSchema — missing wire fields (issue 77)', () => {
 	it('fills required fields with honest defaults instead of undefined-behind-a-cast', () => {

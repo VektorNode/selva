@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	processInputWithError,
 	processInputsWithErrors
-} from '@/features/grasshopper/io/input/input-processors';
+} from '@/grasshopper/io/input/input-processors';
 import { createInputSchema } from '@tests/helpers/test-data-builders';
 
 /** A tree-access default whose branch value is not an array — the shape that used to throw. */

@@ -11,7 +11,7 @@
  * expose) — see ComputeServerStats.isServerOnline.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import GrasshopperClient from '@/features/grasshopper/client/grasshopper-client';
+import GrasshopperClient from '@/grasshopper/client/grasshopper-client';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;

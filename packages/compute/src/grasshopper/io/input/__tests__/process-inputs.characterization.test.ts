@@ -13,7 +13,7 @@ import {
 	processInput,
 	processInputs,
 	processInputWithError
-} from '@/features/grasshopper/io/input/input-processors';
+} from '@/grasshopper/io/input/input-processors';
 import { createInputSchema } from '@tests/helpers/test-data-builders';
 
 describe('input pipeline characterization', () => {

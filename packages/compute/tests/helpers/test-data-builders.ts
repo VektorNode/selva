@@ -1,4 +1,4 @@
-import type { InputParamSchema } from '@/features/grasshopper/types';
+import type { InputParamSchema } from '@/grasshopper/types';
 
 // ============================================================================
 // INPUT PARAMETER SCHEMA BUILDERS (Most commonly used)

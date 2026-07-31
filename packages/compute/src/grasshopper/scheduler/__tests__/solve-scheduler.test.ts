@@ -3,10 +3,7 @@ import { SolveScheduler, type SolveExecutor } from '../solve-scheduler';
 import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 import { setResponseWireSize } from '@/core/compute-fetch/wire-size';
 import type { SolveDefinition } from '../../definition-ref';
-import type {
-	GrasshopperComputeConfig,
-	GrasshopperComputeResponse
-} from '@/features/grasshopper/types';
+import type { GrasshopperComputeConfig, GrasshopperComputeResponse } from '@/grasshopper/types';
 
 const baseConfig: GrasshopperComputeConfig = {
 	serverUrl: 'http://localhost:6500'

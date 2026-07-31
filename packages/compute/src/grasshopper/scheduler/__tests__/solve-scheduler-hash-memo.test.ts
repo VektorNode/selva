@@ -21,10 +21,7 @@ vi.mock('../stable-hash', async (importOriginal) => {
 
 import { SolveScheduler, type SolveExecutor, type CacheKeyExecutor } from '../solve-scheduler';
 import { hashDefinition } from '../stable-hash';
-import type {
-	GrasshopperComputeConfig,
-	GrasshopperComputeResponse
-} from '@/features/grasshopper/types';
+import type { GrasshopperComputeConfig, GrasshopperComputeResponse } from '@/grasshopper/types';
 
 const baseConfig: GrasshopperComputeConfig = { serverUrl: 'http://localhost:6500' };
 const hashDefinitionSpy = vi.mocked(hashDefinition);

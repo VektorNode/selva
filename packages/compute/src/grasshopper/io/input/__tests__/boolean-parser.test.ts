@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { INPUT_TYPE_PARSERS } from '@/features/grasshopper/io/input/input-type-parsers';
+import { INPUT_TYPE_PARSERS } from '@/grasshopper/io/input/input-type-parsers';
 import { createBooleanInputSchema } from '@tests/helpers/test-data-builders';
 import { RhinoComputeError } from '@/core';
-import type { BaseInputType, InputParamSchema } from '@/features/grasshopper/types';
+import type { BaseInputType, InputParamSchema } from '@/grasshopper/types';
 
 const base: BaseInputType = {
 	description: '',
