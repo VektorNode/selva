@@ -104,7 +104,6 @@ export function createAnimationLoop(
 		}
 
 		if (grid) grid.update(getActiveCamera().position); // recenter on camera so it reads as infinite
-		if (gizmo) gizmo.update(delta);
 
 		// Before render, so depth precision tracks the camera's current distance from content.
 		if (nearFitter) nearFitter.update();

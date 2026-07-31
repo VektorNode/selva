@@ -68,7 +68,7 @@ describe('full parse path at 1M tri (audit: where the per-solve time goes)', () 
 	bench(
 		'parseMeshBatchObject, merged',
 		async () => {
-			await parseMeshBatchObject(xheavy.batch, { mergeByMaterial: true, applyTransforms: true });
+			await parseMeshBatchObject(xheavy.batch, { mergeByMaterial: true });
 		},
 		FEW
 	);
@@ -76,7 +76,7 @@ describe('full parse path at 1M tri (audit: where the per-solve time goes)', () 
 	bench(
 		'parseMeshBatchObject, individual meshes',
 		async () => {
-			await parseMeshBatchObject(xheavy.batch, { mergeByMaterial: false, applyTransforms: true });
+			await parseMeshBatchObject(xheavy.batch, { mergeByMaterial: false });
 		},
 		FEW
 	);
@@ -119,36 +119,31 @@ describe('full parse path at 1M tri (audit: where the per-solve time goes)', () 
 describe('parseMeshBatchObject (decode + dequantize + assemble)', () => {
 	bench('small, merged', async () => {
 		await parseMeshBatchObject(small.batch, {
-			mergeByMaterial: true,
-			applyTransforms: true
+			mergeByMaterial: true
 		});
 	});
 
 	bench('realistic, merged', async () => {
 		await parseMeshBatchObject(realistic.batch, {
-			mergeByMaterial: true,
-			applyTransforms: true
+			mergeByMaterial: true
 		});
 	});
 
 	bench('realistic, individual', async () => {
 		await parseMeshBatchObject(realistic.batch, {
-			mergeByMaterial: false,
-			applyTransforms: true
+			mergeByMaterial: false
 		});
 	});
 
 	bench('realistic, no transform', async () => {
 		await parseMeshBatchObject(realistic.batch, {
-			mergeByMaterial: true,
-			applyTransforms: false
+			mergeByMaterial: true
 		});
 	});
 
 	bench('heavy, merged', async () => {
 		await parseMeshBatchObject(heavy.batch, {
-			mergeByMaterial: true,
-			applyTransforms: true
+			mergeByMaterial: true
 		});
 	});
 });
@@ -156,15 +151,13 @@ describe('parseMeshBatchObject (decode + dequantize + assemble)', () => {
 describe('parseMeshBatch (JSON.parse + decode + assemble)', () => {
 	bench('realistic JSON', async () => {
 		await parseMeshBatch(realisticJson, {
-			mergeByMaterial: true,
-			applyTransforms: true
+			mergeByMaterial: true
 		});
 	});
 
 	bench('heavy JSON', async () => {
 		await parseMeshBatch(heavyJson, {
-			mergeByMaterial: true,
-			applyTransforms: true
+			mergeByMaterial: true
 		});
 	});
 });

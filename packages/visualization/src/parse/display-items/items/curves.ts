@@ -3,7 +3,7 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
-import { getLogger, rhinoToThree } from '../../../shared/index.js';
+import { getLogger } from '../../../shared/index.js';
 import { materialParams } from './appearance.js';
 
 import type { DisplayCurve } from '../types';
@@ -27,11 +27,7 @@ const DEFAULT_LINE_WIDTH = 2;
  * 1px on every major GPU backend, so `item.width` would otherwise be unhonoured. `Line2.onBeforeRender`
  * sets `LineMaterial`'s required `resolution`, so no renderer reference is needed here.
  */
-export function buildCurveLine(
-	item: DisplayCurve,
-	rhino: RhinoModule | undefined,
-	applyTransforms: boolean
-): Line2 | null {
+export function buildCurveLine(item: DisplayCurve, rhino: RhinoModule | undefined): Line2 | null {
 	if (!rhino) {
 		getLogger().warn('No rhino3dm instance provided; skipping curve display item.');
 		return null;
@@ -42,7 +38,7 @@ export function buildCurveLine(
 
 	let points: THREE.Vector3[];
 	try {
-		points = tessellate(curve, applyTransforms);
+		points = tessellate(curve);
 	} catch (error) {
 		getLogger().warn('Failed to tessellate curve display item; skipping.', error);
 		return null;
@@ -109,14 +105,11 @@ function decodeCurve(json: string, rhino: RhinoModule): InstanceType<RhinoModule
  * {@link CURVE_INITIAL_SEGMENTS}+1 points. Exact vertices for anything rhino3dm reports as a
  * polyline; only genuinely curved geometry falls through to {@link sampleUniform}.
  */
-function tessellate(
-	curve: InstanceType<RhinoModule['Curve']>,
-	applyTransforms: boolean
-): THREE.Vector3[] {
-	const exact = tryPolylineVertices(curve, applyTransforms);
+function tessellate(curve: InstanceType<RhinoModule['Curve']>): THREE.Vector3[] {
+	const exact = tryPolylineVertices(curve);
 	if (exact) return exact;
 
-	return sampleUniform(curve, applyTransforms);
+	return sampleUniform(curve);
 }
 
 interface PolylineLike {
@@ -124,10 +117,7 @@ interface PolylineLike {
 	get(index: number): number[];
 }
 
-function tryPolylineVertices(
-	curve: InstanceType<RhinoModule['Curve']>,
-	applyTransforms: boolean
-): THREE.Vector3[] | null {
+function tryPolylineVertices(curve: InstanceType<RhinoModule['Curve']>): THREE.Vector3[] | null {
 	if (!curve.isPolyline()) return null;
 
 	// rhino3dm's WASM tryGetPolyline returns the Polyline directly, not the documented [ok, Polyline]
@@ -142,8 +132,7 @@ function tryPolylineVertices(
 	const out: THREE.Vector3[] = [];
 	for (let i = 0; i < polyline.count; i++) {
 		const p = polyline.get(i);
-		const { x, y, z } = rhinoToThree(p[0], p[1], p[2], applyTransforms);
-		out.push(new THREE.Vector3(x, y, z));
+		out.push(new THREE.Vector3(p[0], p[1], p[2]));
 	}
 
 	deleteRhinoObject(polyline);
@@ -155,10 +144,7 @@ function tryPolylineVertices(
  * spans, recursively subdividing only where the curve actually bends. Tolerance is a fraction of the
  * bounding-box diagonal, so a tiny fillet and a huge arc get the same *visual* smoothness.
  */
-function sampleUniform(
-	curve: InstanceType<RhinoModule['Curve']>,
-	applyTransforms: boolean
-): THREE.Vector3[] {
+function sampleUniform(curve: InstanceType<RhinoModule['Curve']>): THREE.Vector3[] {
 	const domain = curve.domain;
 	const t0 = domain[0];
 	const t1 = domain[1];
@@ -166,8 +152,7 @@ function sampleUniform(
 
 	const evalAt = (t: number): THREE.Vector3 => {
 		const p = curve.pointAt(t);
-		const { x, y, z } = rhinoToThree(p[0], p[1], p[2], applyTransforms);
-		return new THREE.Vector3(x, y, z);
+		return new THREE.Vector3(p[0], p[1], p[2]);
 	};
 
 	const tolerance = chordTolerance(curve);

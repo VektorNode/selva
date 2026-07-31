@@ -49,20 +49,19 @@
 
 ## Plans
 
-See **[plans/README.md](./plans/README.md)** for the authoritative status + implementation order.
+See **[plans/README.md](../plans/README.md)** for the authoritative status + implementation order.
 
-- **[Data Access Efficiency Audit](./plans/data-access-efficiency-audit.md)** — Pre-scale audit of the compute/data path with open efficiency items
-- **[API v1 Redesign](./plans/api-redesign-plan.md)** — One versioned `/api/v1` surface for both browser and token-based clients
-- **[Token-based API Auth](./plans/token-plan.md)** — Personal access tokens (PATs) + managed public API; MCP designed-but-deferred
-- **[Pre-solved Bundle + Prewarm](./plans/presolve-bundle.md)** — Ship a pre-solved definition bundle and prewarm the solve caches (F1)
-- **[Solve Package](./plans/solve-package.md)** — One owner for the solve flow, both sides of the wire (`@selvajs/solve`)
-- **[Compute Package Cleanup](./plans/compute-package-cleanup.md)** — Rhino.Compute-focused `@selvajs/compute` with smaller files + cleaner API (follows visualization-package)
-- **[Plugin Compat Gate](./plans/plugin-compat-gate.md)** — Plugin/app compatibility gating
-- **[Edge Overlay — open residue](./plans/edge-overlay-open.md)** — Remaining edge-rendering items (full plan archived)
-- **[Display Pipeline — open residue](./plans/display-pipeline-open.md)** — Remaining display-pipeline items (full audit archived)
-- **[Verify slider-drag solve path](./plans/verify-slider-drag-solve-path.md)** — Trace of the slider-drag solve path
+- **[Data Access Efficiency Audit](../plans/fixes/data-access-efficiency-audit.md)** — Pre-scale audit of the compute/data path with open efficiency items
+- **[API v1 Redesign](../plans/features/api-redesign-plan.md)** — One versioned `/api/v1` surface for both browser and token-based clients
+- **[Token-based API Auth](../plans/features/token-plan.md)** — Personal access tokens (PATs) + managed public API; MCP designed-but-deferred
+- **[Pre-solved Bundle + Prewarm](../plans/features/presolve-bundle.md)** — Ship a pre-solved definition bundle and prewarm the solve caches (F1)
+- **[Solve Package](../plans/archive/solve-package.md)** — One owner for the solve flow, both sides of the wire (`@selvajs/solve`)
+- **[Compute Package Cleanup](../plans/refactors/compute-package-cleanup.md)** — Rhino.Compute-focused `@selvajs/compute` with smaller files + cleaner API (follows visualization-package)
+- **[Plugin Compat Gate](../plans/features/plugin-compat-gate.md)** — Plugin/app compatibility gating
+- **[Display Pipeline — open residue](../plans/fixes/display-pipeline-open.md)** — Shipped and verified; awaiting one live-Rhino check (full audit archived)
+- **[Cloud Binary Transport](../plans/features/cloud-binary-transport.md)** — Move the geometry blob out of the values JSON to kill base64 inflation (deferred)
 
-Completed/superseded plans are archived under [`./plans/archive/`](./plans/archive/).
+Completed/superseded plans are archived under [`../plans/archive/`](../plans/archive/).
 
 ## Release Management
 

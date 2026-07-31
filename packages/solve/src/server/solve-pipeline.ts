@@ -1,23 +1,10 @@
 /**
- * Transport-agnostic solve pipeline — the callable core lifted out of the app's
- * `/api/compute` route (embeddable-server-layer plan, K3).
- *
- * Given an already-resolved solve context — the `.gh` bytes, the input params +
- * user values, and a warm `SolveScheduler` (from `createClientCache`) — this
- * runs the framework-free half of a solve:
- *
- *   input tree build → scheduler.solve (with abort/timeout classification) →
- *   JSON serialize (size-guarded) → optional gzip → Server-Timing envelope.
- *
- * It returns a discriminated {@link SolveOutcome}: `ok` carries the ready-to-send
- * {@link SolveEnvelope} (body + headers + phase metrics), while the error
- * variants (`timeout`, `client_abort`, `too_large`, `compute_error`) name a
- * failure the transport maps to its own status code. Nothing here throws for an
- * expected failure and nothing here touches auth, the database, share tokens,
- * rate limits, or metric sinks — those stay app policy in the route.
- *
- * The Server-Timing string it emits IS the versioned wire contract (audit D5):
- * see {@link COMPUTE_CONTRACT_VERSION} and {@link COMPUTE_VERSION_HEADER}.
+ * Transport-agnostic solve pipeline: given an already-resolved solve context
+ * (`.gh` bytes, input params + user values, a warm `SolveScheduler`), runs the
+ * framework-free half of a solve and returns a discriminated {@link SolveOutcome}
+ * instead of throwing for expected failures. Nothing here touches auth, the
+ * database, share tokens, rate limits, or metric sinks — those stay app policy
+ * in the route that calls this.
  */
 
 import {
@@ -36,29 +23,21 @@ import { transformInputParameter } from './transform-input.js';
 import type { CachedClient } from './client-cache.js';
 import type { ByteRefOutcome } from './definition-byte-cache.js';
 
-/** Async gzip (audit B8) — off the event loop, unlike the old `gzipSync`. */
+/** Async gzip — off the event loop, unlike `gzipSync`, which blocks it for multi-MB bodies. */
 const gzipAsync = promisify(gzip);
 
 // ============================================================================
-// Wire contract version (audit D5)
+// Wire contract version
 // ============================================================================
-//
-// The /api/compute response shape (JSON body + Server-Timing phases) is now an
-// explicit, versioned artifact rather than ad-hoc route output. The version
-// rides an additive response header so a client can branch on it without any
-// change to the existing body — bump this (and document the change) whenever the
-// envelope's shape changes in a way a consumer could observe.
 
-/** Current compute-response contract version. Additive header; bump on shape change. */
+/** Compute-response contract version. Bump (and document the change) whenever the envelope's shape changes in a way a consumer could observe. */
 export const COMPUTE_CONTRACT_VERSION = 1 as const;
-/** Response header carrying {@link COMPUTE_CONTRACT_VERSION}. */
 export const COMPUTE_VERSION_HEADER = 'X-Selva-Compute-Version';
 
 // ============================================================================
 // Inputs & outcomes
 // ============================================================================
 
-/** A schema input carrying the optional numeric bounds the transform reads. */
 export type PipelineInput = SchemaInput & {
 	minimum?: number;
 	maximum?: number;
@@ -67,17 +46,16 @@ export type PipelineInput = SchemaInput & {
 
 export interface SolvePipelineArgs {
 	/**
-	 * The definition to solve. Either raw `.gh` bytes (remote fetch, or a caller
-	 * that resolved them eagerly) or a `DefinitionRef` — an identity-keyed lazy
-	 * loader (from the definition-byte cache) whose bytes the scheduler
-	 * materializes ONLY when an upload is unavoidable. A pointer-known solve of a
-	 * `DefinitionRef` moves zero bytes.
+	 * The definition to solve. Either raw `.gh` bytes, or a `DefinitionRef` (from
+	 * the definition-byte cache) whose bytes the scheduler materializes ONLY when
+	 * an upload is unavoidable — a pointer-known solve of a `DefinitionRef` moves
+	 * zero bytes.
 	 */
 	definitionSource: SolveDefinition;
 	/**
 	 * When `definitionSource` is a byte-cache `DefinitionRef`, its mutable outcome
-	 * so the pipeline can emit the `def_bytes` Server-Timing verdict (skipped =
-	 * `load` never ran, hit = warm cache, miss = loader). Omit for raw-bytes solves.
+	 * so the pipeline can emit the `def_bytes` Server-Timing verdict. Omit for
+	 * raw-bytes solves.
 	 */
 	byteRefOutcome?: ByteRefOutcome;
 	/** Persisted input params; only those with a `paramType` are sent to the solve. */
@@ -86,21 +64,16 @@ export interface SolvePipelineArgs {
 	 * A tree the caller already built with {@link buildSolveInputTree}. When present
 	 * the pipeline skips its own build and solves this exact object.
 	 *
-	 * The caller needs the transformed tree BEFORE the pipeline runs whenever it
-	 * coalesces concurrent solves — a single-flight key derived from raw
-	 * `{inputs, values}` would split two requests that transform to the same tree,
-	 * which is the identity the scheduler actually caches on. Passing the tree back
-	 * in keeps one derivation feeding both, instead of transforming twice and hoping
-	 * the two agree.
+	 * Needed whenever the caller coalesces concurrent solves: a single-flight key
+	 * derived from raw `{inputs, values}` would split two requests that transform
+	 * to the same tree, which is the identity the scheduler actually caches on.
 	 */
 	inputTree?: DataTree[];
 	/** User-chosen values keyed by input id; missing keys fall back to the schema default. */
 	values: Record<string, unknown>;
-	/** Warm client bundle from `createClientCache().getClient(...)`. */
 	client: CachedClient;
-	/** Longest a serialized result may be (bytes) before a 413. */
 	responseMaxBytes: number;
-	/** Solve-deadline millis — used only to phrase the timeout message. */
+	/** Used only to phrase the timeout message — the scheduler enforces the deadline itself. */
 	maxSolveDurationMs: number;
 	/** Client's `Accept-Encoding`; gzip is applied only when it advertises `gzip`. */
 	acceptEncoding: string;
@@ -113,14 +86,14 @@ export interface SolvePipelineArgs {
 	/**
 	 * Wall-clock origin (`performance.now()` captured at the top of the request)
 	 * so the pipeline's `load`/`total` phase timings line up with the caller's
-	 * pre-solve prep. The caller owns everything before this and stamps `defLoadMs`.
+	 * pre-solve prep.
 	 */
 	loadStartMs: number;
 	/** Pre-solve "load" phase duration the caller already measured (auth + DB + fetch). */
 	defLoadMs: number;
 	/**
 	 * Pre-solve prep sub-phase marks (`[label, ms]`), surfaced verbatim as `p_*`
-	 * Server-Timing entries. The caller assembles these; the pipeline only echoes.
+	 * Server-Timing entries.
 	 */
 	prepMarks?: [string, number][];
 }
@@ -132,23 +105,18 @@ export interface SolvePhaseMetrics {
 	serializeMs: number;
 	gzipMs: number;
 	serverTotalMs: number;
-	/** Uncompressed serialized length in bytes. */
 	serializedBytes: number;
-	/** Gzipped length in bytes, or null when compression was skipped. */
+	/** Null when compression was skipped. */
 	compressedBytes: number | null;
 }
 
 /** A ready-to-send response: body + headers + the solve result + phase metrics. */
 export interface SolveEnvelope {
-	/** The response body — a gzip `Uint8Array` when `encoding === 'gzip'`, else the JSON string. */
+	/** A gzip `Uint8Array` when `encoding === 'gzip'`, else the JSON string. */
 	body: string | Uint8Array;
-	/** `'gzip'` when the body is compressed; absent otherwise. */
 	encoding?: 'gzip';
-	/** Fully-assembled response headers (Content-Type/-Length/-Encoding, Vary, Server-Timing, version). */
 	headers: Record<string, string>;
-	/** The solved definition object. */
 	result: GrasshopperComputeResponse;
-	/** Phase timings, for the caller's optional debug breakdown. */
 	metrics: SolvePhaseMetrics;
 }
 
@@ -192,12 +160,8 @@ export type SolveOutcome =
 
 /**
  * Build the transformed input tree — the exact object handed to the scheduler.
- *
- * `runSolvePipeline` calls this itself, so a caller only needs it when it must
- * see the tree first: coalescing concurrent solves keys on this tree's identity,
- * not on the raw `{inputs, values}` that produced it. Pure and cheap (a map over
- * the params); calling it and passing the result back via `inputTree` costs one
- * transform, not two.
+ * `runSolvePipeline` calls this itself; a caller only needs it directly to see
+ * the tree before the pipeline runs (see {@link SolvePipelineArgs.inputTree}).
  */
 export function buildSolveInputTree(
 	inputs: PipelineInput[],
@@ -210,16 +174,10 @@ export function buildSolveInputTree(
 	);
 }
 
-/**
- * Run the framework-free half of a solve and produce a typed outcome. See the
- * module doc for the phase sequence and the app/library boundary.
- */
 export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOutcome> {
 	const { client, signal } = args;
 
 	// --- input tree build ---------------------------------------------------
-	// Reuse the caller's tree when it built one (see `args.inputTree`); the build
-	// is a pure function of inputs+values, so the two paths are interchangeable.
 	const treeBuildStart = performance.now();
 	const inputTree = args.inputTree ?? buildSolveInputTree(args.inputs, args.values);
 	const treeBuildMs = performance.now() - treeBuildStart;
@@ -253,10 +211,9 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 				message: `Solve exceeded the ${Math.round(args.maxSolveDurationMs / 1000)}s deadline.`
 			};
 		}
-		// Scheduler backpressure (audit B7): a full queue or an over-deadline queue
-		// wait sheds the solve BEFORE compute runs. Classify these as `shed` (503 +
-		// Retry-After) rather than the generic 500 `compute_error` path — they're
-		// load signals, not failures, and the client should back off and retry.
+		// A full queue or an over-deadline queue wait sheds the solve BEFORE compute
+		// runs. Classify these as `shed` rather than the generic `compute_error` —
+		// they're load signals, not failures, and the client should back off and retry.
 		if (err instanceof RhinoComputeError) {
 			if (err.code === ErrorCodes.QUEUE_FULL) {
 				return {
@@ -299,11 +256,8 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 	// Compress BEFORE the timing snapshot so its cost is a measured phase (`gzip`
 	// in Server-Timing, included in `total`). Buffered (not streamed) so
 	// Content-Length is known and a connection cut mid-transfer fails hard
-	// instead of truncating the JSON.
-	// gzip is async (audit B8) — a multi-MB `gzipSync` blocked the event loop for
-	// every other request on this instance. Compress when the client advertised
-	// gzip AND the body clears the 1 KB break-even (tiny bodies aren't worth
-	// compressing for the wire).
+	// instead of truncating the JSON. Skip gzip for bodies under the 1 KB
+	// break-even — not worth the CPU for the wire savings.
 	const clientWantsGzip = /\bgzip\b/i.test(args.acceptEncoding);
 	const worthSendingGzip = clientWantsGzip && serialized.length > 1024;
 	let compressed: Buffer | null = null;
@@ -327,7 +281,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 			? client.rhinoTiming.last
 			: null;
 
-	// --- Server-Timing envelope (the versioned wire contract) ---------------
+	// --- Server-Timing envelope ----------------------------------------------
 	const serverTiming = buildServerTiming({
 		defLoadMs: args.defLoadMs,
 		treeBuildMs,
@@ -360,8 +314,8 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 
 	let envelope: SolveEnvelope;
 	if (compressed) {
-		// A downstream proxy's `encode gzip` skips already-encoded responses, so
-		// this never double-compresses. Vary is set on both branches.
+		// A downstream proxy skips re-encoding an already-`Content-Encoding`d body,
+		// so this never double-compresses.
 		headers['Content-Encoding'] = 'gzip';
 		headers['Content-Length'] = String(compressed.byteLength);
 		envelope = {
@@ -386,28 +340,24 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 }
 
 // ============================================================================
-// Per-waiter encoding adaptation (audit C5)
+// Per-waiter encoding adaptation
 // ============================================================================
 
 /**
- * Re-key a coalesced envelope to a single waiter's `Accept-Encoding` (audit C5).
+ * Re-key a coalesced envelope to a single waiter's `Accept-Encoding`.
  *
- * The single-flight coalescer (R4) runs ONE pipeline execution for N identical
+ * The single-flight coalescer runs ONE pipeline execution for N identical
  * concurrent solves and hands every waiter the same {@link SolveEnvelope}. That
- * envelope's wire form — gzip body + `Content-Encoding: gzip`, or the plain JSON
- * string — is baked from the FIRST caller's `Accept-Encoding`. A later waiter
- * with a different `Accept-Encoding` would otherwise receive a body labelled with
- * the wrong encoding: a non-gzip client joining a gzip flight gets gzip bytes it
- * cannot decode (`Vary` can't help — this is one object shared across waiters,
- * not a cache lookup). Encoding is not in the coalesce key by design, so mixed
- * clients still coalesce; this adapts the shared result to each waiter instead.
+ * envelope's wire form is baked from the FIRST caller's `Accept-Encoding`, so a
+ * later waiter with a different `Accept-Encoding` would otherwise get a body
+ * labelled with the wrong encoding (`Vary` can't help — this is one object
+ * shared across waiters, not a cache lookup). Encoding is deliberately not part
+ * of the coalesce key, so mixed clients still coalesce; this adapts the shared
+ * result to each waiter instead.
  *
- * Returns the body + headers to send THIS waiter. Only the correctness-critical
- * direction is adapted — a gzip envelope served to a non-gzip waiter is gunzipped
- * back to JSON. The reverse (a plain-JSON envelope to a gzip-capable waiter) is
- * left uncompressed: gzip is an optimisation the client advertises, never a
- * requirement, so sending it plain is correct, just not maximally small. The
- * common all-gzip case returns the envelope's own body/headers untouched.
+ * Only the correctness-critical direction is adapted: a gzip envelope served to
+ * a non-gzip waiter is gunzipped back to JSON. The reverse (plain JSON to a
+ * gzip-capable waiter) is left uncompressed — correct, just not maximally small.
  */
 export function adaptEnvelopeToEncoding(
 	envelope: SolveEnvelope,

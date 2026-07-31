@@ -4,7 +4,7 @@ import { DEFAULT_LOOK, LOOK_PRESETS } from '../../shared/index.js';
 import type { ThreeInitializerOptions } from '../types.js';
 import { isoOffset, sunOffset, upToAxis } from '../up-axis.js';
 
-/** Rhino's convention, and the frame all geometry arrives in — see `shared/coordinate-frame.ts`. */
+/** Rhino's convention, and the frame all geometry arrives in — Selva is Z-up end to end. */
 export const defaultUp = new THREE.Vector3(0, 0, 1);
 
 // onMaxAnisotropy stays optional — a caller-supplied hook, not a config value with a default.
@@ -183,7 +183,14 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			darken: options.edges?.darken,
 			width: options.edges?.width ?? 1.5,
 			thresholdAngle: options.edges?.thresholdAngle ?? 44,
-			distanceFade: options.edges?.distanceFade ?? true
+			distanceFade: options.edges?.distanceFade ?? true,
+			// Passed through undefined on purpose: the caps' canonical defaults live in
+			// `edges/options.ts` (resolveOptions), and applyEdges forwards these straight to it.
+			// Restating 4M/2M here would be a second copy free to drift from the real one.
+			maxTriangles: options.edges?.maxTriangles,
+			maxSegments: options.edges?.maxSegments,
+			// Read by init-three's updateEdgeFallback, which only checks for an explicit `false`.
+			screenSpaceFallback: options.edges?.screenSpaceFallback
 		},
 		measure: {
 			// Visual defaults live in createMeasureTool; these pass through undefined to it.

@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Selva.GH.Features.Display.Services;
 
@@ -372,6 +373,12 @@ public static class BinaryGeometryWriter
         };
     }
 
+    /// <summary>
+    ///     Vertex-component count above which the bbox pass is split across threads. Below it the
+    ///     partitioning overhead outweighs a single linear scan.
+    /// </summary>
+    private const int ParallelBoundsMinComponents = 200_000;
+
     private static void ComputeBounds(
         float[] vertices,
         out double minX, out double minY, out double minZ,
@@ -384,11 +391,95 @@ public static class BinaryGeometryWriter
             return;
         }
 
-        minX = maxX = vertices[0];
-        minY = maxY = vertices[1];
-        minZ = maxZ = vertices[2];
+        if (vertices.Length >= ParallelBoundsMinComponents)
+        {
+            ComputeBoundsParallel(vertices, out minX, out minY, out minZ, out maxX, out maxY, out maxZ);
+            return;
+        }
 
-        for (var i = 3; i < vertices.Length; i += 3)
+        ComputeBoundsRange(vertices, 0, vertices.Length / 3,
+            out minX, out minY, out minZ, out maxX, out maxY, out maxZ);
+    }
+
+    /// <summary>
+    ///     Same result as the serial scan, computed as a partitioned min/max reduction. Exact
+    ///     (min/max are associative and the inputs are floats widened to double, so there is no
+    ///     summation drift), which matters: the bbox becomes the quantization origin/scale, and a
+    ///     partition-order-dependent bbox would make blob bytes non-deterministic.
+    /// </summary>
+    private static void ComputeBoundsParallel(
+        float[] vertices,
+        out double minX, out double minY, out double minZ,
+        out double maxX, out double maxY, out double maxZ)
+    {
+        var vertexCount = vertices.Length / 3;
+        var partitions = Math.Min(Environment.ProcessorCount, Math.Max(1, vertexCount / 32_768));
+        if (partitions < 2)
+        {
+            ComputeBoundsRange(vertices, 0, vertexCount,
+                out minX, out minY, out minZ, out maxX, out maxY, out maxZ);
+            return;
+        }
+
+        var perPartition = (vertexCount + partitions - 1) / partitions;
+        var results = new double[partitions * 6];
+
+        Parallel.For(0, partitions, p =>
+        {
+            var start = p * perPartition;
+            var end = Math.Min(start + perPartition, vertexCount);
+            if (start >= end)
+            {
+                // Empty tail partition: seed with values that lose every comparison in the merge.
+                results[p * 6] = results[p * 6 + 1] = results[p * 6 + 2] = double.PositiveInfinity;
+                results[p * 6 + 3] = results[p * 6 + 4] = results[p * 6 + 5] = double.NegativeInfinity;
+                return;
+            }
+
+            ComputeBoundsRange(vertices, start, end,
+                out var pMinX, out var pMinY, out var pMinZ,
+                out var pMaxX, out var pMaxY, out var pMaxZ);
+
+            results[p * 6] = pMinX;
+            results[p * 6 + 1] = pMinY;
+            results[p * 6 + 2] = pMinZ;
+            results[p * 6 + 3] = pMaxX;
+            results[p * 6 + 4] = pMaxY;
+            results[p * 6 + 5] = pMaxZ;
+        });
+
+        minX = results[0];
+        minY = results[1];
+        minZ = results[2];
+        maxX = results[3];
+        maxY = results[4];
+        maxZ = results[5];
+
+        for (var p = 1; p < partitions; p++)
+        {
+            var o = p * 6;
+            if (results[o] < minX) minX = results[o];
+            if (results[o + 1] < minY) minY = results[o + 1];
+            if (results[o + 2] < minZ) minZ = results[o + 2];
+            if (results[o + 3] > maxX) maxX = results[o + 3];
+            if (results[o + 4] > maxY) maxY = results[o + 4];
+            if (results[o + 5] > maxZ) maxZ = results[o + 5];
+        }
+    }
+
+    /// <summary>Scans vertices in [<paramref name="startVertex" />, <paramref name="endVertex" />).</summary>
+    private static void ComputeBoundsRange(
+        float[] vertices, int startVertex, int endVertex,
+        out double minX, out double minY, out double minZ,
+        out double maxX, out double maxY, out double maxZ)
+    {
+        var i = startVertex * 3;
+        minX = maxX = vertices[i];
+        minY = maxY = vertices[i + 1];
+        minZ = maxZ = vertices[i + 2];
+
+        var end = endVertex * 3;
+        for (i += 3; i < end; i += 3)
         {
             var x = vertices[i];
             var y = vertices[i + 1];

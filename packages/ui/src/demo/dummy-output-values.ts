@@ -47,7 +47,6 @@ export async function getParsedMeshes() {
 
 	const objects: THREE.Object3D[] = await parseMeshBatchObject(batch, {
 		mergeByMaterial: false,
-		applyTransforms: true,
 		debug: false
 	});
 
@@ -55,7 +54,7 @@ export async function getParsedMeshes() {
 	if (items?.length) {
 		const needsRhino = items.some((it) => it.kind === 'curve');
 		const rhino = needsRhino ? await getRhino() : undefined;
-		objects.push(...parseDisplayItems(items, { rhino, applyTransforms: true }));
+		objects.push(...parseDisplayItems(items, { rhino }));
 	}
 
 	return objects;

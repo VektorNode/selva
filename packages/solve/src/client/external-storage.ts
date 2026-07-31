@@ -1,12 +1,7 @@
-// Client-supplied input transit storage.
-//
-// When an input has source.kind === 'client', a producer route writes the produced
-// value here, and the solver route reads it back. Scoped per (scopeKey, inputId) so
-// values for one solver/input don't bleed into another. The scope key is whatever
-// uniquely identifies the solver context — sessionId in plugin-ui/preview,
-// definition guid in selva/library, etc.
-//
-// inputId is the Grasshopper parameter instance GUID (LayoutItem.paramId / SchemaInput.id).
+// Transit storage for inputs with source.kind === 'client': a producer route writes the
+// value here, the solver route reads it back. Keyed by (scopeKey, inputId) so values
+// don't bleed across solver contexts — scopeKey is whatever uniquely identifies one
+// (sessionId in plugin-ui/preview, definition guid in selva/library).
 
 import type { UISchema } from '@selvajs/schemas';
 import { getInputItems } from '@selvajs/schemas';

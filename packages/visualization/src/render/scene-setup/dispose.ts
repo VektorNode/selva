@@ -1,17 +1,9 @@
 import * as THREE from 'three';
 
-import {
-	canDisposeTexture,
-	disposeMaterial,
-	disposeObjectTree,
-	type DisposeOptions
-} from '../../shared/index.js';
+import { canDisposeTexture, disposeObjectTree, type DisposeOptions } from '../../shared/index.js';
 
 export { disposeObjectTree };
 export type { DisposeOptions };
-
-/** @deprecated Use {@link disposeMaterial} — same behaviour, ownership-aware. */
-export const disposeMaterialWithTextures = disposeMaterial;
 
 /** Sweeps every renderable plus the scene-level textures the object traversal can't reach. */
 export function disposeSceneResources(scene: THREE.Scene, options?: DisposeOptions): void {

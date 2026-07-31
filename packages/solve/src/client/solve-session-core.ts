@@ -23,14 +23,12 @@ export interface SolveSessionState {
 	hasNeverSolved: boolean;
 }
 
-/** Reads a previously produced client-sourced value, or undefined if absent. */
 export type ExternalReader = (ref: ExternalValueRef) => unknown | undefined;
 
 /**
- * Builds the initial `values` map for a schema. Non-client inputs get their declared
- * default (falling back to the paramType default); client-sourced inputs are hydrated
- * from `read` and left absent when no stored value exists so the missing-inputs panel
- * can detect them. Outputs are seeded to null.
+ * Client-sourced inputs are hydrated from `read` and left absent when no stored value
+ * exists, so the missing-inputs panel can detect them. Other inputs fall back to their
+ * declared default, then the paramType default.
  */
 export function buildInitialValues(
 	schema: UISchema,
@@ -53,10 +51,7 @@ export function buildInitialValues(
 	return values;
 }
 
-/**
- * Initial lifecycle flags. Manual-solve schemas (instanceSolve === false) start dirty
- * so the user must explicitly calculate; auto-solve schemas start clean.
- */
+/** Manual-solve schemas (instanceSolve === false) start dirty; auto-solve schemas start clean. */
 export function makeInitialFlags(instanceSolve: boolean | undefined): {
 	hasPendingChanges: boolean;
 	hasNeverSolved: boolean;
@@ -65,11 +60,7 @@ export function makeInitialFlags(instanceSolve: boolean | undefined): {
 	return { hasPendingChanges: manual, hasNeverSolved: manual };
 }
 
-/**
- * Records a single value change and decides whether it should dispatch a solve now.
- * Auto-solve mode dispatches immediately; manual mode defers (records the pending value
- * and raises the dirty flag) and never dispatches.
- */
+/** Manual mode defers (records the pending value, raises the dirty flag) instead of solving. */
 export function applyValueChange(
 	state: SolveSessionState,
 	id: string,
@@ -86,12 +77,9 @@ export function applyValueChange(
 }
 
 /**
- * Projects the session's live values down to solve INPUTS. Solve outputs are merged
- * into the same values map after each solve (applySolveResult) so widgets like
- * dynamic value lists can read them — but they are not solve inputs, and echoing
- * them back to the driver re-uploads potentially MB-sized payloads (a measured
- * 6.4 MB options list) that no backend reads. Every transport gets this projection
- * for free by going through the session's dispatch.
+ * Solve outputs live in the same `values` map as inputs (so widgets like dynamic value
+ * lists can read them) but must not be echoed back to the driver: a measured 6.4 MB
+ * options-list output showed this can re-upload a multi-MB payload no backend reads.
  */
 export function pickInputValues(
 	schema: UISchema | undefined,
@@ -105,10 +93,6 @@ export function pickInputValues(
 	return picked;
 }
 
-/**
- * Merges a reported solve result into the state and clears the post-solve lifecycle
- * flags. Missing result arrays are treated as empty.
- */
 export function applySolveResult(state: SolveSessionState, result: SolveResult): SolveSessionState {
 	state.error = '';
 	state.computeErrors = result.errors ?? [];

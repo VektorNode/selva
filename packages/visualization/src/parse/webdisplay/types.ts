@@ -71,8 +71,6 @@ export interface DisplayBatch {
 export interface MeshBatchParsingOptions {
 	/** Merge meshes with same material into single geometry. Defaults to true. */
 	mergeByMaterial?: boolean;
-	/** @deprecated Inert — vertices stay in Rhino's Z-up frame either way (one frame end to end). */
-	applyTransforms?: boolean;
 	debug?: boolean;
 	/**
 	 * Appearance dials applied to every material built from this batch — set once at parse time

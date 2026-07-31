@@ -7,10 +7,10 @@
 // gzip → Server-Timing, plus the caches that make a repeat solve cheap (single-flight coalescing,
 // definition-byte cache, Rhino.Compute client cache).
 //
-// **Node-only.** It reads `node:zlib`, `node:crypto` and `process.env`, and its cache backends take
-// platform providers. Nothing here may be imported from `../client/*` — see the sibling barrel and
-// the `no-restricted-imports` rule in `eslint.config.mjs`. There is deliberately no root barrel that
-// would join the two halves; a browser bundle must not be able to reach this code at all.
+// **Node-only** (`node:zlib`, `node:crypto`, `process.env`, platform-provider cache backends).
+// `client/` must never import from here — enforced by `no-restricted-imports` in
+// `eslint.config.mjs` and, on the built artifact, by the absence of a root barrel joining the two
+// halves; a browser bundle must not be able to reach this code at all.
 //
 // What is NOT here, on purpose: HTTP status mapping, auth, tenancy, rate limiting and SSRF guards.
 // Those are request policy and stay in `@selvajs/server` (`/compute`, `/http`) and in the app route.

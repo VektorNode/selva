@@ -43,12 +43,12 @@ describe('parseDisplayItems', () => {
 		expect([pos.getX(0), pos.getY(0), pos.getZ(0)]).toEqual([1, 2, 3]);
 	});
 
-	it('lands at Rhino coordinates regardless of the legacy applyTransforms flag', () => {
+	it('lands at Rhino coordinates unrotated', () => {
 		const items: DisplayItem[] = [
 			{ kind: 'point', id: 'c:0', name: 'P', layer: '', position: { X: 1, Y: 2, Z: 3 } }
 		];
 
-		const points = parseDisplayItems(items, { applyTransforms: false })[0] as THREE.Points;
+		const points = parseDisplayItems(items)[0] as THREE.Points;
 		const pos = points.geometry.getAttribute('position');
 		expect([pos.getX(0), pos.getY(0), pos.getZ(0)]).toEqual([1, 2, 3]);
 	});

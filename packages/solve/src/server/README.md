@@ -41,14 +41,15 @@ Anything both halves need goes in `shared/`, and must stay runtime-neutral.
 
 Two caches sit on this path; they are separate on purpose and fail independently.
 
-| Tier | Where                        | Keyed on                               | Scope           |
-| ---- | ---------------------------- | -------------------------------------- | --------------- |
-| M2   | `client/solve-memo.ts`       | sorted-key JSON of raw input values    | one browser tab |
-| L1   | `@selvajs/compute` scheduler | 32-bit FNV of the scheduler's identity | one process     |
+| Where                        | Keyed on                                        | Scope           |
+| ---------------------------- | ----------------------------------------------- | --------------- |
+| `client/solve-memo.ts`       | sorted-key JSON of raw input values             | one browser tab |
+| `@selvajs/compute` scheduler | 32-bit FNV of the definition + transformed tree | one process     |
 
-There is no durable L2 tier today. The in-memory backend that used to sit here was deleted as
-redundant with L1 (same heap, consulted second); what survives is the `ISolveResultCache` seam in
-`@selvajs/platform`, where a shared backend (Redis) mounts if horizontal scaling ever demands one.
+There is no durable tier beyond these today. The in-memory backend that used to sit here was
+deleted as redundant with the scheduler's cache (same heap, consulted second); what survives is the
+`ISolveResultCache` seam in `@selvajs/platform`, where a shared backend (Redis) mounts if horizontal
+scaling ever demands one.
 
 Single-flight coalesces on `version:server:` + the **transformed** input tree — the same identity
 the scheduler caches on — so two raw-different but transform-identical requests share one flight.
@@ -61,15 +62,8 @@ document the change — whenever the envelope changes in a way a consumer could 
 
 ## Relationship to `@selvajs/server/compute`
 
-These files lived there until Phase 3 of
-[the solve-package plan](../../../../docs/plans/solve-package.md). That sub-path keeps what is
+These files used to live in `@selvajs/server/compute`. That sub-path now keeps only what is
 genuinely HTTP _request policy_ — rate limiting, the SSRF guard, env-derived limits, the
-remote-definition fetcher — and is now **10 exports that it actually owns**, with no re-export of
-anything here.
-
-The move briefly shipped a compatibility shim (`@selvajs/server/compute` re-exporting all of this).
-It was removed before release: it left `/compute` at 24 exports of which 14 were borrowed, so the
-package's surface no longer described what the package did — the exact problem the extraction was
-meant to fix. `@selvajs/server` no longer depends on `@selvajs/solve` at all; the two are
-independent. Importing solve-core from `@selvajs/server` is a breaking change for consumers on
-`0.2.x`, called out in the changeset.
+remote-definition fetcher — with no re-export of anything here, and no dependency on
+`@selvajs/solve` at all. The two packages are independent; importing solve-core from
+`@selvajs/server` is a breaking change for consumers on `0.2.x` (`.changeset/solve-server-half.md`).

@@ -51,8 +51,8 @@ one, curves are skipped with a warning and points still render.
 
 ## Invariants worth knowing
 
-- **One coordinate frame end to end.** The Three scene _is_ Rhino's Z-up frame, so `rhinoToThree` is
-  the identity and `applyTransforms` is inert. Don't reintroduce a rotation here.
+- **One coordinate frame end to end.** The Three scene _is_ Rhino's Z-up frame, so vertices pass
+  through unrotated. Don't reintroduce a rotation here.
 - **Malformed metadata throws, absent data doesn't.** An unparseable envelope returns `[]` (genuinely
   no data); a corrupt/truncated blob or out-of-range group window throws a `VALIDATION_ERROR` rather
   than silently rendering an empty or corrupted scene.

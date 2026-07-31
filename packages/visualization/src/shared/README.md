@@ -15,7 +15,6 @@ re-exported from `render/`, which is the barrel a viewer host already imports.
 | `errors.ts`           | `VisualizationError`, `ErrorCodes`                                                         |
 | `logger.ts`           | `getLogger`, `setLogger`, `enableDebugLogging`, the `Logger` interface                     |
 | `encoding.ts`         | `decodeBase64ToBinary`                                                                     |
-| `coordinate-frame.ts` | `Vec3`, `rhinoToThree` (deprecated identity transform)                                     |
 | `types.ts`            | `LOOKS`/`Look`, `LookPreset`, `MaterialAppearanceOptions`                                  |
 | `looks.ts`            | `LOOK_PRESETS`, `DEFAULT_LOOK`, `materialAppearanceForLook`                                |
 | `geometry.ts`         | `parseColor`, `applyOffset`, `computeCombinedBoundingBox`                                  |

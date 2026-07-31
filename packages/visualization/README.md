@@ -62,6 +62,25 @@ a compatibility promise.
 injects its own (`SvelteSet` in a Svelte app) and gets reactivity with no seam at all — see
 [`src/scene/README.md`](./src/scene/README.md).
 
+## Examples (`pnpm example`)
+
+`examples/` is a Vite playground for the render pipeline — the only place the GPU-dependent parts
+(edge overlays, the screen-space edge pass, AO, the measure tool) can actually be checked, since
+jsdom has no WebGL.
+
+```bash
+pnpm example        # http://localhost:5173
+```
+
+Three demos: **Viewer — Full API** (every `initThree` control), **DMF — Selva Pipeline** (loads a
+`.dmf` through the same parse + `updateScene` calls `Viewer.svelte` makes), and **Display Items**
+(a GH compute response through `getThreeMeshesFromComputeResponse`).
+
+They live here rather than in `@selvajs/compute` because that package must not depend on `three`.
+Demos import from the public barrels (`@/render`, `@/parse`) on purpose: if a demo needs a symbol
+the barrel doesn't export, that's a gap in the published API, not a reason to deep-import. They are
+covered by `pnpm type-check`, so a rename that breaks a demo fails the build instead of rotting.
+
 ## Dependencies
 
 This package depends on **nothing from Selva** — only `three`, `rhino3dm` and `fflate`. It owns its

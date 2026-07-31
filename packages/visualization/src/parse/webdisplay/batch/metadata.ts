@@ -127,8 +127,7 @@ export function geometryContentKey(
  * Reconstructs world-unit float32 positions from int16 quantized values.
  *
  * Mirrors the encoder formula: `world = origin + (q + 32767) * scale`. Selva keeps one coordinate
- * frame end to end (the Three scene is Rhino's Z-up frame — see `../../shared/coordinate-frame.ts`), so
- * vertices pass through unrotated.
+ * frame end to end — the Three scene is Rhino's Z-up frame — so vertices pass through unrotated.
  */
 export function dequantizeInt16(
 	q: Int16Array,

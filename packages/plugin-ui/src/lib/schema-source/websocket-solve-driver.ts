@@ -157,7 +157,6 @@ export function createWebSocketSolveDriver(
 						for (const blob of blobs) {
 							const parsed = await parseMeshBatchBlob(blob, {
 								mergeByMaterial: false,
-								applyTransforms: true,
 								debug: false
 							});
 							all.push(...parsed);
@@ -185,7 +184,7 @@ export function createWebSocketSolveDriver(
 				const rhino = needsRhino ? await getRhino() : undefined;
 
 				if (myToken === outputsToken) {
-					const objects = parseDisplayItems(items, { rhino, applyTransforms: true });
+					const objects = parseDisplayItems(items, { rhino });
 					if (scaleFactor !== 1) {
 						for (const obj of objects) obj.scale.set(scaleFactor, scaleFactor, scaleFactor);
 					}

@@ -14,8 +14,7 @@ describe('parseMeshBatchObject', () => {
 			const { batch } = buildMeshBatch({ materialCount: 3, meshCount: 12, vertsPerMesh: 6 });
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			expect(meshes).toHaveLength(3);
@@ -29,8 +28,7 @@ describe('parseMeshBatchObject', () => {
 			});
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			let totalPositions = 0;
@@ -51,8 +49,7 @@ describe('parseMeshBatchObject', () => {
 			const { batch } = buildMeshBatch({ materialCount: 2, meshCount: 6, vertsPerMesh: 4 });
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			for (const mesh of meshes) {
@@ -71,8 +68,7 @@ describe('parseMeshBatchObject', () => {
 			const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 4, vertsPerMesh: 3 });
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			expect(meshes).toHaveLength(1);
@@ -88,8 +84,7 @@ describe('parseMeshBatchObject', () => {
 			const { batch } = buildMeshBatch({ materialCount: 4, meshCount: 4, vertsPerMesh: 3 });
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			// Single-mesh groups go through createIndividualMeshes; userData has no mergedFrom.
@@ -105,8 +100,7 @@ describe('parseMeshBatchObject', () => {
 			const { batch } = buildMeshBatch({ materialCount: 2, meshCount: 7, vertsPerMesh: 4 });
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: false,
-				applyTransforms: false
+				mergeByMaterial: false
 			});
 
 			expect(meshes).toHaveLength(7);
@@ -116,8 +110,7 @@ describe('parseMeshBatchObject', () => {
 			const { batch } = buildMeshBatch({ materialCount: 2, meshCount: 5, vertsPerMesh: 6 });
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: false,
-				applyTransforms: false
+				mergeByMaterial: false
 			});
 
 			for (const mesh of meshes) {
@@ -136,8 +129,7 @@ describe('parseMeshBatchObject', () => {
 			const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 3, vertsPerMesh: 3 });
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: false,
-				applyTransforms: false
+				mergeByMaterial: false
 			});
 
 			const names = meshes.map((m) => m.userData.name).sort();
@@ -146,9 +138,9 @@ describe('parseMeshBatchObject', () => {
 	});
 
 	describe('coordinate transform', () => {
-		it('keeps vertices in the Rhino Z-up frame (no rotation) even with applyTransforms=true', async () => {
+		it('keeps vertices in the Rhino Z-up frame (no rotation)', async () => {
 			// Selva keeps one coordinate frame end to end: the Three scene IS Rhino's Z-up frame, so
-			// vertices pass through unrotated. The legacy applyTransforms flag no longer rotates.
+			// vertices pass through unrotated.
 			// Use forceFloat32 so we can compare exact float values without int16 quantization
 			// noise (the quantized path is covered by binary-parser.test.ts).
 			const { batch, rawVertices } = buildMeshBatch({
@@ -160,8 +152,7 @@ describe('parseMeshBatchObject', () => {
 			});
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: true,
-				applyTransforms: true
+				mergeByMaterial: true
 			});
 
 			const position = meshes[0]!.geometry.getAttribute('position');
@@ -177,7 +168,7 @@ describe('parseMeshBatchObject', () => {
 			}
 		});
 
-		it('does not mutate vertices when applyTransforms=false', async () => {
+		it('does not mutate the caller-supplied vertices', async () => {
 			const { batch, rawVertices } = buildMeshBatch({
 				materialCount: 1,
 				meshCount: 1,
@@ -187,8 +178,7 @@ describe('parseMeshBatchObject', () => {
 			});
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			const position = meshes[0]!.geometry.getAttribute('position');
@@ -205,8 +195,7 @@ describe('parseMeshBatchObject', () => {
 			const { batch } = buildMeshBatch({ materialCount: 3, meshCount: 9, vertsPerMesh: 4 });
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			// Each merged mesh should use a distinct material instance — the parser
@@ -227,8 +216,7 @@ describe('parseMeshBatchObject', () => {
 			});
 
 			const meshes = await parseMeshBatchObject(built.batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			const mat = meshes[0]!.material as THREE.MeshPhysicalMaterial;
@@ -250,8 +238,7 @@ describe('parseMeshBatchObject', () => {
 			});
 
 			const meshes = await parseMeshBatchObject(built.batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 			const byMetalness = (m: number) =>
 				meshes
@@ -312,8 +299,7 @@ describe('parseMeshBatchObject', () => {
 			});
 
 			const meshes = await parseMeshBatchObject(built.batch, {
-				mergeByMaterial: false,
-				applyTransforms: false
+				mergeByMaterial: false
 			});
 
 			expect(meshes).toHaveLength(3);
@@ -345,8 +331,7 @@ describe('parseMeshBatchObject', () => {
 			});
 
 			const meshes = await parseMeshBatchObject(built.batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			expect(meshes).toHaveLength(1);
@@ -374,10 +359,8 @@ describe('parseMeshBatchObject', () => {
 			});
 			const withoutColors = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
 
-			const colored = await parseMeshBatchObject(withColors.built.batch, {
-				applyTransforms: false
-			});
-			const plain = await parseMeshBatchObject(withoutColors.batch, { applyTransforms: false });
+			const colored = await parseMeshBatchObject(withColors.built.batch, {});
+			const plain = await parseMeshBatchObject(withoutColors.batch);
 
 			expect((colored[0]!.material as THREE.MeshPhysicalMaterial).vertexColors).toBe(true);
 			expect((plain[0]!.material as THREE.MeshPhysicalMaterial).vertexColors).toBe(false);
@@ -386,7 +369,7 @@ describe('parseMeshBatchObject', () => {
 		it('leaves geometry attribute-free when the blob has no channels', async () => {
 			const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
 
-			const meshes = await parseMeshBatchObject(batch, { applyTransforms: false });
+			const meshes = await parseMeshBatchObject(batch);
 
 			const geom = meshes[0]!.geometry as THREE.BufferGeometry;
 			expect(geom.getAttribute('uv')).toBeUndefined();
@@ -402,7 +385,7 @@ describe('parseMeshBatchObject', () => {
 				map: 'http://localhost:9999/assets/abc123'
 			});
 
-			const meshes = await parseMeshBatchObject(built.batch, { applyTransforms: false });
+			const meshes = await parseMeshBatchObject(built.batch);
 
 			// Node has no document, so applyTextureMap skips silently; the batch still parses.
 			expect(meshes.length).toBeGreaterThan(0);
@@ -415,8 +398,7 @@ describe('parseMeshBatchObject', () => {
 			const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			expect(meshes[0]!.scale.x).toBe(1);
@@ -431,8 +413,7 @@ describe('parseMeshBatchObject', () => {
 			});
 
 			const meshes = await parseMeshBatchObject(batch, {
-				mergeByMaterial: true,
-				applyTransforms: false
+				mergeByMaterial: true
 			});
 
 			expect(meshes[0]!.userData.sourceComponentId).toBe('gh-component-xyz');
@@ -445,15 +426,14 @@ describe('parseMeshBatch (JSON entry point)', () => {
 		const { batch } = buildMeshBatch({ materialCount: 2, meshCount: 6, vertsPerMesh: 4 });
 
 		const meshes = await parseMeshBatch(JSON.stringify(batch), {
-			mergeByMaterial: true,
-			applyTransforms: false
+			mergeByMaterial: true
 		});
 
 		expect(meshes).toHaveLength(2);
 	});
 
 	it('returns empty array on invalid JSON instead of throwing', async () => {
-		const meshes = await parseMeshBatch('not-json', { applyTransforms: false });
+		const meshes = await parseMeshBatch('not-json');
 		expect(meshes).toEqual([]);
 	});
 
@@ -461,7 +441,7 @@ describe('parseMeshBatch (JSON entry point)', () => {
 		// Valid envelope JSON, corrupt blob: only the invalid-envelope case may return [].
 		const envelope = JSON.stringify({ materials: [], groups: [], compressedData: 'AAAAAAAA' });
 
-		await expect(parseMeshBatch(envelope, { applyTransforms: false })).rejects.toThrow(/SLVA/i);
+		await expect(parseMeshBatch(envelope)).rejects.toThrow(/SLVA/i);
 	});
 });
 
@@ -471,23 +451,21 @@ describe('error contract (issue 35)', () => {
 			typeof parseMeshBatchObject
 		>[0];
 
-		await expect(parseMeshBatchObject(batch, { applyTransforms: false })).resolves.toEqual([]);
+		await expect(parseMeshBatchObject(batch)).resolves.toEqual([]);
 	});
 
 	it('parseMeshBatchObject rejects on a corrupt blob', async () => {
 		const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
 		batch.compressedData = 'AAAAAAAA'; // decodes, but is not a SLVA/SLVZ blob
 
-		await expect(parseMeshBatchObject(batch, { applyTransforms: false })).rejects.toThrow(/SLVA/i);
+		await expect(parseMeshBatchObject(batch)).rejects.toThrow(/SLVA/i);
 	});
 
 	it('parseMeshBatchBlob rejects on truncated blob bytes', async () => {
 		const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
 		const blob = decodeBase64ToBinary(batch.compressedData);
 
-		await expect(
-			parseMeshBatchBlob(blob.subarray(0, 8), { applyTransforms: false })
-		).rejects.toThrow();
+		await expect(parseMeshBatchBlob(blob.subarray(0, 8))).rejects.toThrow();
 	});
 });
 
@@ -506,9 +484,7 @@ describe('group metadata validation (issue 19)', () => {
 		built.batch.groups[0]!.materialId = 5;
 		reencode(built);
 
-		await expect(parseMeshBatchObject(built.batch, { applyTransforms: false })).rejects.toThrow(
-			/materialId/i
-		);
+		await expect(parseMeshBatchObject(built.batch)).rejects.toThrow(/materialId/i);
 	});
 
 	it('rejects a vertex window that overruns the vertex buffer instead of clamping silently', async () => {
@@ -516,9 +492,7 @@ describe('group metadata validation (issue 19)', () => {
 		built.batch.groups[0]!.meshes[0]!.vertexStart = 1000;
 		reencode(built);
 
-		await expect(parseMeshBatchObject(built.batch, { applyTransforms: false })).rejects.toThrow(
-			/vertex window/i
-		);
+		await expect(parseMeshBatchObject(built.batch)).rejects.toThrow(/vertex window/i);
 	});
 
 	it('rejects an index window that overruns the index buffer', async () => {
@@ -526,9 +500,7 @@ describe('group metadata validation (issue 19)', () => {
 		built.batch.groups[0]!.meshes[0]!.indexCount = 10_000;
 		reencode(built);
 
-		await expect(parseMeshBatchObject(built.batch, { applyTransforms: false })).rejects.toThrow(
-			/index window/i
-		);
+		await expect(parseMeshBatchObject(built.batch)).rejects.toThrow(/index window/i);
 	});
 
 	it('rejects non-integer or negative metadata fields', async () => {
@@ -536,9 +508,7 @@ describe('group metadata validation (issue 19)', () => {
 		built.batch.groups[0]!.meshes[0]!.vertexCount = -1;
 		reencode(built);
 
-		await expect(parseMeshBatchObject(built.batch, { applyTransforms: false })).rejects.toThrow(
-			/non-negative integer/i
-		);
+		await expect(parseMeshBatchObject(built.batch)).rejects.toThrow(/non-negative integer/i);
 	});
 
 	it('rejects indices outside their mesh vertex window on the merged path (no Uint32 wrap)', async () => {
@@ -551,9 +521,9 @@ describe('group metadata validation (issue 19)', () => {
 		meshB!.vertexStart = tmp;
 		reencode(built);
 
-		await expect(
-			parseMeshBatchObject(built.batch, { mergeByMaterial: true, applyTransforms: false })
-		).rejects.toThrow(/outside its mesh/i);
+		await expect(parseMeshBatchObject(built.batch, { mergeByMaterial: true })).rejects.toThrow(
+			/outside its mesh/i
+		);
 	});
 
 	it('rejects indices outside their mesh vertex window on the individual path', async () => {
@@ -564,9 +534,9 @@ describe('group metadata validation (issue 19)', () => {
 		meshB!.vertexStart = tmp;
 		reencode(built);
 
-		await expect(
-			parseMeshBatchObject(built.batch, { mergeByMaterial: false, applyTransforms: false })
-		).rejects.toThrow(/outside its mesh/i);
+		await expect(parseMeshBatchObject(built.batch, { mergeByMaterial: false })).rejects.toThrow(
+			/outside its mesh/i
+		);
 	});
 });
 
@@ -579,8 +549,7 @@ describe('parseMeshBatchBlob (binary entry point)', () => {
 		const blob = decodeBase64ToBinary(batch.compressedData);
 
 		const meshes = await parseMeshBatchBlob(blob, {
-			mergeByMaterial: true,
-			applyTransforms: false
+			mergeByMaterial: true
 		});
 
 		expect(meshes).toHaveLength(2);
@@ -591,8 +560,7 @@ describe('parseMeshBatchBlob (binary entry point)', () => {
 		const blob = decodeBase64ToBinary(batch.compressedData);
 
 		const meshes = await parseMeshBatchBlob(blob, {
-			mergeByMaterial: true,
-			applyTransforms: false
+			mergeByMaterial: true
 		});
 
 		for (const mesh of meshes) {

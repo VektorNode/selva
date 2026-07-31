@@ -41,7 +41,9 @@ updates:
         update-types: ['major']
 
   # '/Plugin' covers every *.csproj beneath it: Selva.GH, Selva.Rhino,
-  # Selva.Schema, Selva.Drawing and their test projects.
+  # Selva.Schema, Selva.Drawing and their test projects. Versions themselves
+  # live in Plugin/Directory.Packages.props — one declaration per package, so a
+  # bump can no longer land in one project and leave its consumers behind.
   - package-ecosystem: 'nuget'
     directory: '/Plugin'
     schedule:
@@ -55,3 +57,8 @@ updates:
       # rides a `-wip` prerelease). Bumping it changes the minimum Rhino the
       # plugin loads in — a deliberate call, not a dependency chore.
       - dependency-name: 'Grasshopper'
+      # Held at 8.0.0 by net7.0 (Rhino 8): 10.x duplicates types that are
+      # already in the framework's System.Drawing.Primitives, so every
+      # ColorTranslator use fails to compile with CS0433. Bumping it is gated on
+      # dropping net7.0, not on a version being available.
+      - dependency-name: 'System.Drawing.Common'

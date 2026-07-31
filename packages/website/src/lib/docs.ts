@@ -43,21 +43,17 @@ export interface DocIndexGroup {
 }
 
 // Glob the repo-root docs folder. Lazy so each route only pulls its own doc.
-// Internal-only trees (`plans/` trackers, `adr/` decision records) are excluded
-// from the glob entirely: they're never published, and compiling them would run
-// mdsvex over prose that isn't written to be Svelte-safe (e.g. a bare `< 22`
-// parses as a stray tag and fails the build). The `published` filter below only
-// gates *exposure*; the glob decides what gets *compiled*.
-const modules = import.meta.glob<DocModule>([
-	'/../../docs/**/*.md',
-	'!/../../docs/plans/**',
-	'!/../../docs/adr/**'
-]);
+// `plans/` now lives outside `docs/` entirely (internal-only, not published).
+// `adr/` decision records are still under `docs/` but excluded from the glob:
+// they're never published, and compiling them would run mdsvex over prose
+// that isn't written to be Svelte-safe (e.g. a bare `< 22` parses as a stray
+// tag and fails the build). The `published` filter below only gates
+// *exposure*; the glob decides what gets *compiled*.
+const modules = import.meta.glob<DocModule>(['/../../docs/**/*.md', '!/../../docs/adr/**']);
 // Eager metadata-only import so we can build the sidebar without loading bodies.
-const eager = import.meta.glob<DocModule>(
-	['/../../docs/**/*.md', '!/../../docs/plans/**', '!/../../docs/adr/**'],
-	{ eager: true }
-);
+const eager = import.meta.glob<DocModule>(['/../../docs/**/*.md', '!/../../docs/adr/**'], {
+	eager: true
+});
 
 function pathToSlug(path: string): string {
 	// "/../../docs/deployment/GCE-Linux.md" -> "deployment/gce-linux"

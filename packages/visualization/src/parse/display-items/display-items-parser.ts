@@ -11,8 +11,6 @@ import type { RhinoModule } from 'rhino3dm';
 export interface DisplayItemParseOptions {
 	/** Omit to skip curves; points still render. */
 	rhino?: RhinoModule;
-	/** @deprecated No-op — {@link rhinoToThree} is the identity now. Do not pre-rotate to compensate. */
-	applyTransforms?: boolean;
 }
 
 export function parseDisplayItems(
@@ -21,18 +19,18 @@ export function parseDisplayItems(
 ): THREE.Object3D[] {
 	if (!items || items.length === 0) return [];
 
-	const { rhino, applyTransforms = true } = options;
+	const { rhino } = options;
 	const objects: THREE.Object3D[] = [];
 
 	for (const item of items) {
 		switch (item.kind) {
 			case 'curve': {
-				const line = buildCurveLine(item, rhino, applyTransforms);
+				const line = buildCurveLine(item, rhino);
 				if (line) objects.push(line);
 				break;
 			}
 			case 'point': {
-				const point = buildPoint(item, applyTransforms);
+				const point = buildPoint(item);
 				if (point) objects.push(point);
 				break;
 			}

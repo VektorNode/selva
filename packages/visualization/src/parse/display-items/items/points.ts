@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 
-import { getLogger, rhinoToThree } from '../../../shared/index.js';
+import { getLogger } from '../../../shared/index.js';
 import { materialParams } from './appearance.js';
 
 import type { DisplayPoint } from '../types';
 
-export function buildPoint(item: DisplayPoint, applyTransforms: boolean): THREE.Points | null {
+export function buildPoint(item: DisplayPoint): THREE.Points | null {
 	// `position` comes off the wire — don't trust the declared type without validating.
 	const { position } = item as { position?: { X?: unknown; Y?: unknown; Z?: unknown } };
 	if (
@@ -23,10 +23,11 @@ export function buildPoint(item: DisplayPoint, applyTransforms: boolean): THREE.
 		return null;
 	}
 
-	const { x, y, z } = rhinoToThree(position.X, position.Y, position.Z, applyTransforms);
-
 	const geometry = new THREE.BufferGeometry();
-	geometry.setAttribute('position', new THREE.Float32BufferAttribute([x, y, z], 3));
+	geometry.setAttribute(
+		'position',
+		new THREE.Float32BufferAttribute([position.X, position.Y, position.Z], 3)
+	);
 
 	const material = new THREE.PointsMaterial({
 		...materialParams(item.color, item.opacity),

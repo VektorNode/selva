@@ -54,6 +54,27 @@ selva/
 
 Rhino 8 loads `net48` + `net7.0`; Rhino 9 loads `net9.0`. Rhino 7 is not supported.
 
+### NuGet versions live in one file
+
+`Plugin/Directory.Packages.props` declares every version; csprojs carry bare
+`<PackageReference Include="..."/>` with no `Version`. Adding a package means adding a
+`<PackageVersion>` there first — a reference without one fails the build rather than resolving to
+something arbitrary.
+
+This is central package management, adopted because a split version is invisible until restore: a
+bump once landed in `Selva.Drawing` alone and left `Selva.GH`/`Selva.Rhino` behind, and the solution
+stopped restoring entirely with NU1605. One declaration per package makes that unrepresentable.
+
+Two packages are deliberately held back, each with the reason inline in the props file, and both are
+in `dependabot.yml`'s ignore list so the bump is not re-proposed weekly:
+
+- **`System.Drawing.Common`** — 8.0.0. On `net7.0`, 10.x duplicates types already in the framework's
+  `System.Drawing.Primitives`, so every `ColorTranslator` use fails with CS0433. Gated on dropping
+  Rhino 8.
+- **`Grasshopper`** — the Rhino 8 SDK by default, with `VersionOverride` on the `net9.0` references
+  for the Rhino 9 `-wip` line. This is the one package with a legitimate per-TFM split; use
+  `VersionOverride` on the reference rather than a second `<PackageVersion>` entry.
+
 ### Naming rules
 
 | Kind                     | Pattern                                      | Example                                             |

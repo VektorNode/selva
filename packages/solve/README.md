@@ -3,9 +3,8 @@
 One owner for the solve flow — **from an input change to a solve result, on both sides of the wire,
 with no transport and no UI.**
 
-Before this package the chain was scattered across four packages and owned by none of them, so both
-apps hand-wrote a solve coordinator (and one of them paid for it with a poisoned-cache bug). See
-[docs/plans/solve-package.md](../../docs/plans/solve-package.md).
+Before this package the solve flow was scattered across four packages and owned by none of them, so
+both apps hand-wrote a solve coordinator — one of them paid for it with a poisoned-cache bug.
 
 ## Layout
 
@@ -46,10 +45,6 @@ a boundary change, not a convenience.
 ```ts
 import type { SolveResult } from '@selvajs/solve/shared';
 ```
-
-## Status
-
-Phases 1–3 landed: all three halves.
 
 ```ts
 import { createSolveSession, createRequestResponseDriver } from '@selvajs/solve/client';

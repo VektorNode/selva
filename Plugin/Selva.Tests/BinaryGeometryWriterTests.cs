@@ -362,6 +362,154 @@ public class BinaryGeometryWriterTests
             BinaryGeometryWriter.Write(ms, "{}", vertices, indices, colors: new byte[] { 1, 2, 3, 4 }));
     }
 
+    // ========================================================================
+    // Parallel bbox pass (ComputeBoundsParallel)
+    // ========================================================================
+    //
+    // The bbox becomes the quantization origin/scale, so if the partitioned reduction disagreed
+    // with a serial scan by even one ULP every vertex in the blob would shift. These tests pin the
+    // parallel path (which only engages past 200k components) to byte-identical output.
+
+    /// <summary>
+    ///     Deterministic pseudo-random vertex cloud. Avoids Random so the failing case is
+    ///     reproducible, and spreads coordinates across a wide range so the extremes land in
+    ///     unpredictable partitions rather than at the array ends.
+    /// </summary>
+    private static float[] SyntheticCloud(int vertexCount, int seed = 12345)
+    {
+        var verts = new float[vertexCount * 3];
+        var state = (uint)seed;
+        for (var i = 0; i < verts.Length; i++)
+        {
+            // xorshift32
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            verts[i] = (state % 200000u) / 100.0f - 1000.0f;
+        }
+
+        return verts;
+    }
+
+    [Fact]
+    public void Write_ParallelBoundsMatchesSerialBounds_ForLargeCloud()
+    {
+        // 90k vertices = 270k components, past the 200k parallel threshold.
+        var large = SyntheticCloud(90_000);
+
+        // A copy just under the threshold cannot be compared directly (different data), so instead
+        // assert the parallel result against an independently computed serial bbox.
+        double minX = large[0], minY = large[1], minZ = large[2];
+        double maxX = large[0], maxY = large[1], maxZ = large[2];
+        for (var i = 3; i < large.Length; i += 3)
+        {
+            minX = Math.Min(minX, large[i]);
+            minY = Math.Min(minY, large[i + 1]);
+            minZ = Math.Min(minZ, large[i + 2]);
+            maxX = Math.Max(maxX, large[i]);
+            maxY = Math.Max(maxY, large[i + 1]);
+            maxZ = Math.Max(maxZ, large[i + 2]);
+        }
+
+        using var ms = new MemoryStream();
+        var result = BinaryGeometryWriter.Write(ms, "{}", large, new int[0], forceFloat32: true);
+
+        // forceFloat32 keeps origin/scale at identity, so read the bbox back off the reported
+        // struct instead: it surfaces the computed bounds regardless of the chosen format.
+        Assert.Equal(90_000, result.VertexCount);
+
+        // Re-run through the quantized path, where origin IS the bbox min and scale the extent.
+        using var qms = new MemoryStream();
+        var qResult = BinaryGeometryWriter.Write(qms, "{}", large, new int[0]);
+
+        Assert.Equal(minX, qResult.OriginX, 6);
+        Assert.Equal(minY, qResult.OriginY, 6);
+        Assert.Equal(minZ, qResult.OriginZ, 6);
+        Assert.Equal(Math.Max((maxX - minX) / 65534.0, 1e-12), qResult.ScaleX, 12);
+        Assert.Equal(Math.Max((maxY - minY) / 65534.0, 1e-12), qResult.ScaleY, 12);
+        Assert.Equal(Math.Max((maxZ - minZ) / 65534.0, 1e-12), qResult.ScaleZ, 12);
+    }
+
+    [Fact]
+    public void Write_ParallelBoundsFindsExtremesInEveryPartition()
+    {
+        // Plant the true min and max deep inside the cloud, far from index 0 and the final vertex,
+        // so a reduction that dropped a partition's contribution (or seeded from the wrong element)
+        // would miss them. The planted values stay inside SyntheticCloud's own +/-1000 range so the
+        // bbox extent keeps the int16 step under the float32-fallback threshold — otherwise
+        // origin/scale collapse to identity and the assertions below test nothing.
+        var verts = SyntheticCloud(120_000);
+        verts[3 * 7777] = -1500f;       // x min, early partition
+        verts[3 * 61111 + 1] = -1400f;  // y min, middle partition
+        verts[3 * 119_998 + 2] = 1300f; // z max, last partition
+
+        using var ms = new MemoryStream();
+        var result = BinaryGeometryWriter.Write(ms, "{}", verts, new int[0]);
+
+        Assert.False(result.UsedFloat32, "bbox extent pushed the writer onto the float32 path");
+        Assert.Equal(-1500.0, result.OriginX, 3);
+        Assert.Equal(-1400.0, result.OriginY, 3);
+
+        var maxZ = result.OriginZ + result.ScaleZ * 65534.0;
+        Assert.Equal(1300.0, maxZ, 2);
+    }
+
+    [Fact]
+    public void Write_ParallelBoundsIsDeterministicAcrossRuns()
+    {
+        // Partition scheduling varies run to run; the emitted bytes must not.
+        var verts = SyntheticCloud(150_000, seed: 999);
+        var indices = new int[300];
+        for (var i = 0; i < indices.Length; i++)
+        {
+            indices[i] = i;
+        }
+
+        using var first = new MemoryStream();
+        BinaryGeometryWriter.Write(first, "{}", verts, indices);
+        var expected = first.ToArray();
+
+        for (var run = 0; run < 5; run++)
+        {
+            using var next = new MemoryStream();
+            BinaryGeometryWriter.Write(next, "{}", verts, indices);
+            Assert.Equal(expected, next.ToArray());
+        }
+    }
+
+    [Fact]
+    public void Write_ParallelBoundsHandlesUniformCloud()
+    {
+        // Every vertex identical: zero extent on all axes. The partitioned merge must not let an
+        // empty-tail partition's infinity sentinels leak into the result.
+        var verts = new float[80_000 * 3];
+        for (var i = 0; i < verts.Length; i += 3)
+        {
+            verts[i] = 5f;
+            verts[i + 1] = -3f;
+            verts[i + 2] = 2f;
+        }
+
+        using var ms = new MemoryStream();
+        var result = BinaryGeometryWriter.Write(ms, "{}", verts, new int[0]);
+
+        Assert.Equal(5.0, result.OriginX, 6);
+        Assert.Equal(-3.0, result.OriginY, 6);
+        Assert.Equal(2.0, result.OriginZ, 6);
+        Assert.False(double.IsInfinity(result.ScaleX));
+        Assert.False(double.IsInfinity(result.ScaleY));
+        Assert.False(double.IsInfinity(result.ScaleZ));
+
+        // Degenerate axes collapse to the epsilon scale, and every quantized value to 0.
+        var (decoded, _, _) = ReadGeometry(ms.ToArray());
+        for (var i = 0; i < decoded.Length; i += 3)
+        {
+            Assert.Equal(5.0, decoded[i], 3);
+            Assert.Equal(-3.0, decoded[i + 1], 3);
+            Assert.Equal(2.0, decoded[i + 2], 3);
+        }
+    }
+
     /// <summary>Full decode of a blob, including the optional trailing UV/color chunks.</summary>
     private sealed class DecodedBlob
     {

@@ -14,11 +14,11 @@ moved in-package:
   `INVALID_STATE`, `ENVIRONMENT_ERROR`), so catch-sites matching on `error.code` keep working; only
   code matching on `instanceof RhinoComputeError` or `error.name` needs updating.
 - **A local logger** (`getLogger`/`setLogger`/`enableDebugLogging` from
-  `@selvajs/visualization/shared`). It defaults to no-op, exactly as compute's does, so output is
+  `@selvajs/visualization/render`). It defaults to no-op, exactly as compute's does, so output is
   unchanged. For one sink across both packages:
 
   ```ts
-  import { setLogger } from '@selvajs/visualization/shared';
+  import { setLogger } from '@selvajs/visualization/render';
   import { getLogger } from '@selvajs/compute';
 
   setLogger(getLogger());
@@ -30,7 +30,5 @@ moved in-package:
   `getThreeMeshesFromComputeResponse` is otherwise unchanged and compute's
   `GrasshopperComputeResponse` stays assignable to it, so existing calls need no edit.
 
-**Not changed:** `session/` still depends on `@selvajs/schemas`, because projecting a Selva UI schema
-into solve inputs is what it does. Importing `@selvajs/visualization/session` or the root barrel
-still pulls that in; the four sub-paths above do not. Moving it out is tracked in
-`docs/plans/solve-package.md`.
+The package now depends on nothing from Selva at all: the solve session, which was the one part
+still reaching for `@selvajs/schemas`, has moved to `@selvajs/solve/client`.

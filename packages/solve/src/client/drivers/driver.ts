@@ -1,15 +1,9 @@
-// The transport seam of a Solve Session. A driver knows how to start and cancel a solve
-// and reports whether one is in flight; it never returns outputs. Results come back
-// asynchronously through the session's `report()`, which is what lets push transports
-// (a WebSocket streaming mesh frames on its own schedule) satisfy the same interface as
-// a request/response HTTP call without contortion.
-
 import type { SolveResult } from '../../shared/solve-fn.js';
 
 /**
- * The transport behind a Solve Session. Knows how to start and cancel a solve and
- * reports its in-flight state. It does NOT return outputs — those come back via the
- * session's report() so push transports (WebSocket) fit without contortion.
+ * The transport behind a Solve Session. Never returns outputs directly — results come
+ * back via the session's `report()`, which lets push transports (a WebSocket streaming
+ * mesh frames on its own schedule) satisfy the same interface as request/response HTTP.
  */
 export interface SolveDriver {
 	solve(values: Record<string, unknown>): void;

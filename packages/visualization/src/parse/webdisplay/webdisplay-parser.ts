@@ -168,7 +168,6 @@ async function processDataBranch(
 
 		const mergedParsingOptions = {
 			mergeByMaterial: true,
-			applyTransforms: true,
 			debug: false,
 			...parsingOptions
 		};
@@ -184,10 +183,7 @@ async function processDataBranch(
 
 		const batchMeshes = await parseMeshBatchObject(batch, mergedParsingOptions);
 
-		const batchItems = parseDisplayItems(batch.items, {
-			rhino,
-			applyTransforms: mergedParsingOptions.applyTransforms
-		});
+		const batchItems = parseDisplayItems(batch.items, { rhino });
 
 		const batchObjects: THREE.Object3D[] = [...batchMeshes, ...batchItems];
 

@@ -132,6 +132,48 @@ describe('applyDefaults — looks are decoupled from overlays', () => {
 	});
 });
 
+// `ResolvedOptions` is `Required<...>` only at the top level, so `edges` keeps EdgesConfig's optional
+// members — a field that applyDefaults forgets to copy is a silent drop, not a type error. That is
+// exactly how maxTriangles/maxSegments/screenSpaceFallback were lost: documented, read by
+// init-three's applyEdges/updateEdgeFallback, and never carried across from the caller's options.
+describe('applyDefaults — every EdgesConfig field survives resolution', () => {
+	it('carries the caps and the screen-space fallback through', () => {
+		const config = applyDefaults({
+			edges: { maxTriangles: 123_456, maxSegments: 7_890, screenSpaceFallback: false }
+		});
+		expect(config.edges.maxTriangles).toBe(123_456);
+		expect(config.edges.maxSegments).toBe(7_890);
+		expect(config.edges.screenSpaceFallback).toBe(false);
+	});
+
+	// Left undefined rather than restated here: the canonical 4M/2M defaults live in
+	// `edges/options.ts` resolveOptions, and applyEdges forwards these straight to it.
+	it('leaves the caps undefined when unset so edges/options.ts owns the defaults', () => {
+		const config = applyDefaults({});
+		expect(config.edges.maxTriangles).toBeUndefined();
+		expect(config.edges.maxSegments).toBeUndefined();
+		expect(config.edges.screenSpaceFallback).toBeUndefined();
+	});
+
+	it('copies across every key the caller supplied', () => {
+		const edges = {
+			enabled: true,
+			color: 0x123456,
+			darken: 0.4,
+			width: 3,
+			thresholdAngle: 12,
+			distanceFade: false,
+			maxTriangles: 1,
+			maxSegments: 2,
+			screenSpaceFallback: true
+		} as const;
+		const resolved = applyDefaults({ edges }).edges;
+		for (const key of Object.keys(edges) as (keyof typeof edges)[]) {
+			expect(resolved[key], `edges.${key} dropped by applyDefaults`).toBe(edges[key]);
+		}
+	});
+});
+
 describe('materialAppearanceForLook', () => {
 	it.each(ALL_LOOKS)('%s returns the preset envMapIntensity + cullBackfaces', (look) => {
 		const appearance = materialAppearanceForLook(look);

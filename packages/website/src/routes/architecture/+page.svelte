@@ -260,9 +260,9 @@
 				— live in one server instance’s memory, so each instance has its own copy. Run several instances
 				behind a load balancer and a solve cached on instance A is a miss on instance B. The pluggable
 				<span class="font-mono text-xs">ISolveResultCache</span>
-				seam exists for fixing exactly this: no backend ships today, and a shared one like Redis
-				would drop in behind the interface so the whole fleet reads and writes one cache — no change
-				to the browser or the compute VM. The VM-side caches (<span class="whitespace-nowrap"
+				seam exists for fixing exactly this: no backend ships today, and a shared one like Redis would
+				drop in behind the interface so the whole fleet reads and writes one cache — no change to the
+				browser or the compute VM. The VM-side caches (<span class="whitespace-nowrap"
 					>definition cache</span
 				>,
 				<span class="font-mono text-xs">cachesolve</span>) are already shared server-side, so

@@ -24,11 +24,9 @@ rendering. It must never import `../server/*`.
 
 ## Reactivity: the `subscribe()` seam
 
-The session is **framework-free**. State is exposed as plain getters, and every mutation
-fires `subscribe()` listeners. Reading a getter without subscribing gives a correct value
-but nothing re-renders.
-
-A reactive host subscribes once and republishes into its own framework:
+The session is framework-free: state is exposed as plain getters, and every mutation fires
+`subscribe()` listeners. Reading a getter without subscribing gives a correct value but
+nothing re-renders. A reactive host subscribes once and republishes into its own framework:
 
 ```ts
 let version = $state(0);
@@ -75,25 +73,24 @@ Then feed results back with `getReporter().report({ outputs, meshes, errors, war
 or `reportError(message)` on a transport failure.
 
 Transport quirks — value preparation, mesh-blob streaming, remote-update guards — stay
-inside the driver. The session never learns them. `plugin-ui`'s WebSocket driver lives in
-that package rather than here for exactly this reason: it is transport-specific, but it
+inside the driver; the session never learns them. `plugin-ui`'s WebSocket driver lives in
+that package rather than here for exactly this reason: it's transport-specific, but it
 satisfies this interface.
 
 Reach for `createAsyncThrottle` if your transport needs single-in-flight latest-wins
-semantics, and `createSolveMemo` if repeated inputs should skip the round-trip. Both are
+semantics, and `createSolveMemo` if repeated inputs should skip the round-trip — both are
 exported so a custom driver doesn't re-derive them.
 
 ## Mesh ownership is injected, not known here
 
-A `SolveResult` can carry live renderer objects, and a viewer takes ownership of every mesh
-array it renders — disposing the previous content on the next scene update. So a memo that
-stored those objects by reference would serve an already-disposed mesh on the next hit, and
-would leak GPU buffers on eviction (audit C1).
+A viewer takes ownership of every mesh array it renders, disposing the previous content on
+the next scene update. So a memo that stored those objects by reference would serve an
+already-disposed mesh on the next hit, and leak GPU buffers on eviction.
 
-`solve-memo.ts` handles that **without knowing what a mesh is**: `TMesh` is opaque and the
+`solve-memo.ts` handles that without knowing what a mesh is: `TMesh` is opaque and the
 clone/release policy is a `MeshPolicy<TMesh>` the host passes in. The three.js implementation
 lives in `@selvajs/visualization/parse` (`meshPolicy`), beside the viewer whose disposal rule
-creates the requirement. This is what keeps `three` out of this package entirely.
+creates the requirement — this is what keeps `three` out of this package entirely.
 
 ```ts
 import { meshPolicy } from '@selvajs/visualization/parse';

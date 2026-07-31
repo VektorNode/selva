@@ -18,12 +18,8 @@ import type { CameraController } from './camera-controller';
  */
 export interface ViewGizmo {
 	render(renderer: THREE.WebGLRenderer): void;
-	/** @deprecated No-op, kept only for API stability — this wrapper never animates (see module doc). */
-	update(delta: number): void;
 	/** Returns true if it hit the gizmo (and a view change started). */
 	handleClick(event: MouseEvent): boolean;
-	/** @deprecated Always `false`, kept only for API stability — gizmo clicks snap, never animate. */
-	readonly isAnimating: boolean;
 	setVisible(visible: boolean): void;
 	isVisible(): boolean;
 	dispose(): void;
@@ -115,11 +111,7 @@ export function createViewGizmo(deps: ViewGizmoDeps): ViewGizmo {
 			helper.render(renderer);
 			renderer.autoClear = prevAutoClear;
 		},
-		// Deliberately a no-op: calling helper.update() outside a ViewHelper-driven animation would
-		// rewrite camera.position from (center=origin, radius=0) and blank the view.
-		update: () => {},
 		handleClick,
-		isAnimating: false,
 		setVisible: (value) => {
 			visible = value;
 		},

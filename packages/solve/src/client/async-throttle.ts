@@ -1,23 +1,14 @@
 /**
- * Single-in-flight, latest-wins throttle for any async operation.
+ * Single-in-flight, latest-wins throttle for any async operation: only one run at a
+ * time, a newly triggered value overwrites the single pending slot (no queue), and a
+ * stale run can be aborted via `AbortController` or timeout.
  *
- * - Only one run in-flight at a time
- * - Latest values always win (one pending slot, no queue)
- * - AbortController support to cancel stale runs
- * - Configurable timeout with automatic abort
- *
- * **Deliberately not compute-specific.** It was named `createComputeThrottle` while it
- * lived beside the HTTP solve driver, but it is generic over `T`, takes any
- * `(values, signal) => Promise<void>`, and mentions neither Rhino.Compute nor HTTP nor
- * geometry. The proof: plugin-ui drives it over a WebSocket to Grasshopper.
- *
- * Framework-free: `isRunning` is a plain getter, and every transition of it fires
- * `onChange` so a reactive host (see `@selvajs/ui`'s rune adapter) can republish it.
- * Polling the getter without subscribing will read correct values but won't re-render.
+ * Framework-free: `isRunning` is a plain getter, not a store. A reactive host must
+ * subscribe via `onChange` (see `@selvajs/ui`'s rune adapter) — polling the getter
+ * directly reads correct values but won't trigger a re-render.
  */
 interface AsyncThrottleOptions {
 	timeout?: number;
-	/** Called after every `isRunning` transition. */
 	onChange?: () => void;
 }
 
@@ -28,20 +19,9 @@ export interface AsyncThrottle<T> {
 	cancel: () => void;
 }
 
-/**
- * Fallback per-run abort timeout (ms) when the caller doesn't pass one.
- * Used only by callers without a deployment-specific limit (e.g. plugin-ui
- * over WebSocket); the selva app supplies `MAX_SOLVE_DURATION_MS` from its
- * server config via `ComputeApp`'s `solveTimeoutMs` prop.
- */
+/** Fallback per-run abort timeout (ms) when the caller doesn't pass one. */
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-/**
- * Creates a throttled handler that keeps only one run in-flight.
- * If a new value arrives while one is running, it overwrites the single pending
- * slot — older pending values are dropped. The pending value runs once the
- * current run finishes (or aborts).
- */
 export function createAsyncThrottle<T>(
 	run: (values: T, signal: AbortSignal) => Promise<void>,
 	options: AsyncThrottleOptions = {}
@@ -52,7 +32,6 @@ export function createAsyncThrottle<T>(
 	let pendingValues: T | null = null;
 	let currentAbortController: AbortController | null = null;
 
-	/** Assign `isRunning` and notify only when it actually flipped. */
 	function setRunning(next: boolean) {
 		if (isRunning === next) return;
 		isRunning = next;

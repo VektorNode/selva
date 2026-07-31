@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Rhino.Geometry;
 
 namespace Selva.GH.Features.Display.Services;
@@ -181,14 +182,20 @@ public static class MeshBatchProcessor
             allColors.AsSpan().Fill(255); // vectorized white fill (a byte loop was measurable here)
         }
 
+        // Pass A (serial, cheap): walk the sorted meshes once to open material groups, emit the
+        // per-mesh metadata, and record each mesh's write offsets into the combined arrays. Group
+        // creation and metadata order must stay deterministic, and every offset is a running total,
+        // so this pass is inherently sequential — but it only touches per-mesh scalars, never a vertex.
+        var offsets = new MeshOffsets[processedMeshes.Count];
         var componentCursor = 0;          // write head into allVertices, in float components
         var indexCursor = 0;              // write head into allIndices, in indices
         var vertexBaseForIndices = 0;     // number of vertices already in the combined array (rebases per-mesh local indices)
 
         // processedMeshes is sorted by MaterialId, so a new group starts whenever the id changes.
         MaterialGroup materialGroup = null;
-        foreach (var mesh in processedMeshes)
+        for (var m = 0; m < processedMeshes.Count; m++)
         {
+            var mesh = processedMeshes[m];
             if (materialGroup == null || materialGroup.MaterialId != mesh.MaterialId)
             {
                 materialGroup = new MaterialGroup
@@ -215,34 +222,43 @@ public static class MeshBatchProcessor
                 Metadata = mesh.Metadata
             });
 
-            var vertexSpan = allVertices.AsSpan(componentCursor, meshComponentCount);
-            mesh.Vertices.AsSpan().CopyTo(vertexSpan);
-
-            var indexSpan = allIndices.AsSpan(indexCursor, meshIndexCount);
-            for (var i = 0; i < meshIndexCount; i++)
+            offsets[m] = new MeshOffsets
             {
-                indexSpan[i] = mesh.Faces[i] + vertexBaseForIndices;
-            }
-
-            if (allUvs != null && mesh.Uvs != null)
-            {
-                mesh.Uvs.AsSpan().CopyTo(allUvs.AsSpan(vertexBaseForIndices * 2, meshVertexCount * 2));
-            }
-
-            if (allColors != null && mesh.Colors != null)
-            {
-                mesh.Colors.AsSpan().CopyTo(allColors.AsSpan(vertexBaseForIndices * 3, meshVertexCount * 3));
-            }
+                ComponentStart = componentCursor,
+                IndexStart = indexCursor,
+                VertexBase = vertexBaseForIndices
+            };
 
             componentCursor += meshComponentCount;
             indexCursor += meshIndexCount;
             vertexBaseForIndices += meshVertexCount;
         }
 
+        // Pass B (expensive, parallel across meshes): the actual per-vertex copying. Pass A gave every
+        // mesh a disjoint destination span in each combined array, so the copies never overlap and no
+        // locking is needed. This is the intra-branch parallelism: previously a single fat branch
+        // merged its whole scene on one thread, which is the common case (most definitions emit one
+        // branch), leaving the per-branch Parallel.ForEach upstream with nothing to spread.
+        CopyMeshData(processedMeshes, offsets, allVertices, allIndices, allUvs, allColors);
+
         // Build the binary blob. The metadata JSON inside the blob is a self-contained copy of the
         // batch envelope (without the blob itself), so the format is transport-agnostic — the same
         // bytes can travel inside today's JSON values message or as a future binary WebSocket frame.
         var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
+
+        // Skip the encode entirely when this exact content was encoded before. A re-solve triggered
+        // by an unrelated upstream change (dragging one slider) re-runs this method for every branch,
+        // and the branches that didn't change produce byte-identical arrays and metadata. Writing +
+        // deflating those again is pure waste; hashing them is a fraction of the cost. See
+        // BatchBlobCache for the identity and memory-policy rationale.
+        var cacheKey = BlobKey.Compute(metadataJson, allVertices, allIndices, allUvs, allColors);
+        var cached = BatchBlobCache.TryGet(cacheKey);
+        if (cached != null)
+        {
+            batch.CompressedData = cached;
+            return batch;
+        }
+
         using (var ms = new MemoryStream())
         {
             BinaryGeometryWriter.Write(ms, metadataJson, allVertices, allIndices,
@@ -254,7 +270,98 @@ public static class MeshBatchProcessor
             batch.CompressedData = BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
         }
 
+        BatchBlobCache.Store(cacheKey, batch.CompressedData);
+
         return batch;
+    }
+
+    /// <summary>
+    ///     Total combined vertex components below which the merge stays serial. Spinning up
+    ///     Parallel.For costs more than it saves on small batches; above this the per-vertex copy
+    ///     dominates. ~200k components is roughly 65k vertices — the point where the uint16 index
+    ///     path stops applying and batches are unambiguously "fat".
+    /// </summary>
+    private const int ParallelMergeMinComponents = 200_000;
+
+    /// <summary>
+    ///     Copies each mesh's vertices/indices/UVs/colors into its pre-assigned span of the combined
+    ///     arrays. Runs in parallel for large batches (see <see cref="ParallelMergeMinComponents" />)
+    ///     and serially otherwise; both paths write byte-identical output because every mesh owns a
+    ///     disjoint destination range.
+    /// </summary>
+    private static void CopyMeshData(
+        List<ProcessedMesh> meshes,
+        MeshOffsets[] offsets,
+        float[] allVertices,
+        int[] allIndices,
+        float[] allUvs,
+        byte[] allColors)
+    {
+        if (allVertices.Length < ParallelMergeMinComponents || meshes.Count < 2)
+        {
+            for (var m = 0; m < meshes.Count; m++)
+            {
+                CopyOneMesh(meshes[m], offsets[m], allVertices, allIndices, allUvs, allColors);
+            }
+
+            return;
+        }
+
+        Parallel.For(0, meshes.Count,
+            m => CopyOneMesh(meshes[m], offsets[m], allVertices, allIndices, allUvs, allColors));
+    }
+
+    private static void CopyOneMesh(
+        ProcessedMesh mesh,
+        MeshOffsets offset,
+        float[] allVertices,
+        int[] allIndices,
+        float[] allUvs,
+        byte[] allColors)
+    {
+        var meshComponentCount = mesh.Vertices.Length;
+        var meshVertexCount = meshComponentCount / 3;
+        var meshIndexCount = mesh.Faces.Length;
+
+        mesh.Vertices.AsSpan().CopyTo(allVertices.AsSpan(offset.ComponentStart, meshComponentCount));
+
+        // Indices are rebased onto the combined vertex array, so this one can't be a plain copy.
+        var indexSpan = allIndices.AsSpan(offset.IndexStart, meshIndexCount);
+        var faces = mesh.Faces;
+        var vertexBase = offset.VertexBase;
+        for (var i = 0; i < meshIndexCount; i++)
+        {
+            indexSpan[i] = faces[i] + vertexBase;
+        }
+
+        if (allUvs != null && mesh.Uvs != null)
+        {
+            mesh.Uvs.AsSpan().CopyTo(allUvs.AsSpan(vertexBase * 2, meshVertexCount * 2));
+        }
+
+        if (allColors != null && mesh.Colors != null)
+        {
+            mesh.Colors.AsSpan().CopyTo(allColors.AsSpan(vertexBase * 3, meshVertexCount * 3));
+        }
+    }
+
+    /// <summary>
+    ///     Where one mesh writes into the combined arrays. Computed in the serial offset pass so the
+    ///     copy pass can run out of order.
+    /// </summary>
+    private struct MeshOffsets
+    {
+        /// <summary>Start offset into the combined vertex array, in float components.</summary>
+        public int ComponentStart;
+
+        /// <summary>Start offset into the combined index array, in indices.</summary>
+        public int IndexStart;
+
+        /// <summary>
+        ///     Number of vertices already written by earlier meshes. Rebases this mesh's local
+        ///     indices, and (times 2 / times 3) locates its UV and color spans.
+        /// </summary>
+        public int VertexBase;
     }
 
     /// <summary>
