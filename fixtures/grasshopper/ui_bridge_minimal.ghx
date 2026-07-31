@@ -22,7 +22,7 @@
       <chunks count="5">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">9a7f7d5c-c17f-44e5-b510-c3a8236f285f</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">acef23a1-1320-4933-8591-693012cad1c0</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639211004139393165</item>
+            <item name="Date" type_name="gh_date" type_code="8">639211016417422637</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10">ui_bridge_minimal.ghx</item>
@@ -49,10 +49,10 @@
             <chunk name="Projection">
               <items count="2">
                 <item name="Target" type_name="gh_drawing_point" type_code="30">
-                  <X>179</X>
-                  <Y>65</Y>
+                  <X>227</X>
+                  <Y>106</Y>
                 </item>
-                <item name="Zoom" type_name="gh_single" type_code="5">0.61412513</item>
+                <item name="Zoom" type_name="gh_single" type_code="5">1.1764705</item>
               </items>
             </chunk>
             <chunk name="Views">
@@ -113,11 +113,12 @@
               </items>
               <chunks count="1">
                 <chunk name="Container">
-                  <items count="4">
+                  <items count="5">
                     <item name="Description" type_name="gh_string" type_code="10">Build and interact with your UI - WebSocket-only communication</item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">4a1b76c7-f387-4e6e-9f27-c955648b6f75</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">e0c74fe1-f7c4-4811-8e50-54882e1e5aee</item>
                     <item name="Name" type_name="gh_string" type_code="10">UI Bridge</item>
                     <item name="NickName" type_name="gh_string" type_code="10">UI Bridge</item>
+                    <item name="Schema" type_name="gh_string" type_code="10">{"id":"33f65ffb-a01f-4b3c-a010-5821d124f06f","name":"New Schema","description":"Configure your Grasshopper UI","projectFileName":"","documentId":"acef23a1-1320-4933-8591-693012cad1c0","pluginVersion":"0.16.0.0","tags":[],"schemaVersion":"2.12.0","created":"2026-07-31T10:07:55.9981667Z","lastModified":"2026-07-31T11:38:35.3700192Z","viewerOptions":{"enableLocal":false,"enableRemote":false,"backgroundColor":"#f3f3f3"},"instanceSolve":true,"inputs":[],"outputs":[],"layout":{"type":"tabbed","tabs":[],"gap":16}}</item>
                   </items>
                   <chunks count="4">
                     <chunk name="Attributes">
@@ -137,11 +138,11 @@
                     <chunk name="param_input" index="0">
                       <items count="7">
                         <item name="Description" type_name="gh_string" type_code="10">Enable UI Builder (opens web interface)</item>
-                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">5fbb2b1a-5e7c-4a22-95cb-9249d052296b</item>
+                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">868a2c88-37e2-422c-8169-d39777a1e88d</item>
                         <item name="Name" type_name="gh_string" type_code="10">Enable</item>
                         <item name="NickName" type_name="gh_string" type_code="10">Enable</item>
                         <item name="Optional" type_name="gh_bool" type_code="1">false</item>
-                        <item name="Source" index="0" type_name="gh_guid" type_code="9">7b29c4ba-2651-4c2e-a6d3-da96917baaca</item>
+                        <item name="Source" index="0" type_name="gh_guid" type_code="9">7ef2f78a-d773-41f4-8c95-95cd97bdb625</item>
                         <item name="SourceCount" type_name="gh_int32" type_code="3">1</item>
                       </items>
                       <chunks count="2">
@@ -184,7 +185,7 @@
                     <chunk name="param_output" index="0">
                       <items count="6">
                         <item name="Description" type_name="gh_string" type_code="10">Current UI schema</item>
-                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">3dcb2abf-b11b-4d9c-a008-b7ec8389892a</item>
+                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">a3adb3e0-c3df-43d4-a60b-b9ab56eb1fab</item>
                         <item name="Name" type_name="gh_string" type_code="10">Schema</item>
                         <item name="NickName" type_name="gh_string" type_code="10">Schema</item>
                         <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -210,7 +211,7 @@
                     <chunk name="param_output" index="1">
                       <items count="6">
                         <item name="Description" type_name="gh_string" type_code="10">Web UI URL for this session (empty until the servers are running)</item>
-                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">fd827c02-2b3e-46e7-9772-82d84daa5b5a</item>
+                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">6bdcd26b-c4c2-43bc-a57a-7e3a8def3cbe</item>
                         <item name="Name" type_name="gh_string" type_code="10">URL</item>
                         <item name="NickName" type_name="gh_string" type_code="10">URL</item>
                         <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -246,12 +247,12 @@
                 <chunk name="Container">
                   <items count="7">
                     <item name="Description" type_name="gh_string" type_code="10">Boolean (true/false) toggle</item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">7b29c4ba-2651-4c2e-a6d3-da96917baaca</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">7ef2f78a-d773-41f4-8c95-95cd97bdb625</item>
                     <item name="Name" type_name="gh_string" type_code="10">Boolean Toggle</item>
                     <item name="NickName" type_name="gh_string" type_code="10">Toggle</item>
                     <item name="Optional" type_name="gh_bool" type_code="1">false</item>
                     <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
-                    <item name="ToggleValue" type_name="gh_bool" type_code="1">true</item>
+                    <item name="ToggleValue" type_name="gh_bool" type_code="1">false</item>
                   </items>
                   <chunks count="1">
                     <chunk name="Attributes">
@@ -277,7 +278,7 @@
                 <chunk name="Container">
                   <items count="4">
                     <item name="Description" type_name="gh_string" type_code="10">Content for baking at the end of the GrasshopperPlayer command or with Hops and Rhino.Compute.</item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">d4c25130-15a9-48c8-b8a1-ad390f26ff85</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">a00cef86-d308-49a1-b762-6604ada75f31</item>
                     <item name="Name" type_name="gh_string" type_code="10">Context Bake</item>
                     <item name="NickName" type_name="gh_string" type_code="10">C-Bake</item>
                   </items>
@@ -300,11 +301,11 @@
                       <items count="8">
                         <item name="Access" type_name="gh_int32" type_code="3">2</item>
                         <item name="Description" type_name="gh_string" type_code="10">Content to collect for baking</item>
-                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">d0bc27b0-805a-4dbf-9d25-8cf1cf11a481</item>
+                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">3e3463eb-c624-40e3-92fe-f397e19d42d7</item>
                         <item name="Name" type_name="gh_string" type_code="10">Content</item>
                         <item name="NickName" type_name="gh_string" type_code="10">Schema</item>
                         <item name="Optional" type_name="gh_bool" type_code="1">false</item>
-                        <item name="Source" index="0" type_name="gh_guid" type_code="9">3dcb2abf-b11b-4d9c-a008-b7ec8389892a</item>
+                        <item name="Source" index="0" type_name="gh_guid" type_code="9">a3adb3e0-c3df-43d4-a60b-b9ab56eb1fab</item>
                         <item name="SourceCount" type_name="gh_int32" type_code="3">1</item>
                       </items>
                       <chunks count="1">
@@ -335,7 +336,7 @@
     <chunk name="Thumbnail">
       <items count="1">
         <item name="Thumbnail" type_name="gh_drawing_bitmap" type_code="37">
-          <bitmap length="786">iVBORw0KGgoAAAANSUhEUgAAAJYAAABkCAYAAABkW8nwAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAKnSURBVHhe7dyxahtBGIVRvX/pzrgLJF3AZSApA0npIu+T8LsKwsyFy04zOsWCj+ZWy4r9cKHbn7fff+f69fPH+8XX+fXrl+X5yb599CFf4+/fXpfnJ/v20Yd8jefBWp2f7PcH6/5DvsbzKlydn+zbfKvmmpswF1/nl+en5fnJ1lgbPTd4dX6yNdZGz4O1Oj/ZGmuj59WwOj/Z76/C+w/5Gs+DtTo/2RprozVWGHFnjRVG3FljhRF31lhhxJ01VhhxZ40VRtxZY4URd9ZYYcSdNVYYcWeNFUbcWWOFEXfWWGHEnTVWGHFnjRVG3FljhRF31lhhxJ01VhhxZ40VRtxZY4URd9ZYYcSdNVYYcWeNFUbcWWOFEXfWWGHEnR+6se5/JYSv8+dPL8vzk62xNnpu8Or8ZGusjZ4Ha3V+sjXWRs+rYXV+sv0fa6PnwVqdn2yNtdEaK4y4s8YKI+6sscKIO2usMOLOGiuMuLPGCiPurLHCiDtrrDDizhorjLizxgoj7qyxwog7a6ww4s4aK4y4s8YKI+6sscKIO2usMOLOGiuMuLPGCiPurLHCiDtrrDDizhorjLizxgoj7qyxwog7a6ww4s4aK4y480M31v8/PTN/83WenzFanZ9sjbXRc5NX5ydbY230fHNX5ydbY230PFir85Pt/1gbPa/C1fnJ1lgbrbHCiDtrrDDizhorjLizxgoj7qyxwog7a6ww4s4aK4y4s8YKI+6sscKIO2usMOLOGiuMuLPGCiPurLHCiDtrrDDizhorjLizxgoj7qyxwog7a6ww4s4aK4y4s8YKI+6sscKIO2usMOLOGiuMuLPGCiPurLHCiDs/dGPNt2quuQlz8XV+eX5anp9sjbXRc4NX5ydbY230PFir85OtsTZ6Xg2r85P9D7yBVE0XUMz5AAAAAElFTkSuQmCC</bitmap>
+          <bitmap length="539">iVBORw0KGgoAAAANSUhEUgAAAJYAAABkCAYAAABkW8nwAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGwSURBVHhe7dixSgQxFEDR+f9f2E7QTthS0FLQ0sL/UTLlsqS7YQOnCMx5r5wMXOb4+vz4+/35Ps943tnX15fpntf5uDfc1eNizfa8zufFuh3u6ve363TP63zcG+7qcbFme17n82LdDne1xnocayxOrLE4scbixBqLE2ssTqyxOLHG4sQaixNrLE6ssTixxuLEGosTayxOrLE4scbixBqLE2ssTqyxOLHG4sQaixNrLE6ssTixxuLEGosTayxOrLE4scbixBqLE2ssTqyxOLHG4sQaixNrLE6ssTixxuLEGosTayxOrLE4scbixBqLE2ssTqyxOPExvvJxxksZZ2c/P12me15njcWJNRYn1lic2H8sTqyxOLHG4sQaixNrLE6ssTixxuLEGosTayxOrLE4scbixBqLE2ssTqyxOLHG4sQaixNrLE6ssTixxuLEGosTayxOrLE4scbixBqLE2ssTqyxOLHG4sQaixNrLE6ssTixxuLEGosTayxOrLE4scbixBqLE2ssTqyxOLHG4sQaixNrLE6ssTixxuLEGosTayxOrLE4scbixBqLE2ssTvwPgXLQLi0/pBEAAAAASUVORK5CYII=</bitmap>
         </item>
       </items>
     </chunk>

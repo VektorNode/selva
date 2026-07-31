@@ -148,8 +148,6 @@ A first pass over this monorepo alone marked these as consumer-less. They are no
 
 ### Genuine defects the original plan missed
 
-### Genuine defects the original plan missed
-
 - **Unused dependency.** [`packages/plugin-ui/package.json:34`](../../packages/plugin-ui/package.json#L34)
   declares `"@selvajs/compute": "workspace:^"`, but nothing under `packages/plugin-ui/src` imports it.
 - **A comment that warned against exactly what happened.**

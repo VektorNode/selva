@@ -34,9 +34,27 @@
 		"593bc967-797a-4b1a-9b76-c2133f6b08e2": "UI Bridge (Selva.GH, GH_UIBuilderComponent.cs:72)",
 		"ae2531b4-bab2-4bb1-b5bf-f2143d10c132": "Context Bake (ships with Rhino/Hops, not Selva)"
 	},
+	"scaffold_note": "Placing the UI Bridge alone auto-creates a pre-wired Boolean Toggle and Context Bake — the whole graph below, from one placement. Placing all three explicitly yields 5 objects and duplicate wires into Enable. The toggle and bake entries here document intent; place only the bridge.",
 	"expect": {
 		"placed": 3,
 		"placeErrors": 0,
-		"wiresOk": 2
+		"wiresOk": 2,
+		"note": "Counts describe the finished canvas, not the number of placements — see scaffold_note. Verify with g1_get_canvas_graph."
+	},
+	"embedded_schema": "The committed .ghx also stores an authored Schema item (serialized UI schema JSON) in the UI Bridge Container chunk. A rebuild starts empty — the component reads \"Offline • No Schema\" — so graft it back onto _embeddedSchema before saving, and restore the \"UI Bridge\" nickname (a fresh instance defaults to \"UIBridge\"). See the rhino-mcp skill.",
+	"schema_payload": {
+		"id": "33f65ffb-a01f-4b3c-a010-5821d124f06f",
+		"name": "New Schema",
+		"description": "Configure your Grasshopper UI",
+		"projectFileName": "",
+		"documentId": "<set to the live doc.DocumentID>",
+		"pluginVersion": "0.16.0.0",
+		"tags": [],
+		"schemaVersion": "2.12.0",
+		"viewerOptions": { "enableLocal": false, "enableRemote": false, "backgroundColor": "#f3f3f3" },
+		"instanceSolve": true,
+		"inputs": [],
+		"outputs": [],
+		"layout": { "type": "tabbed", "tabs": [], "gap": 16 }
 	}
 }

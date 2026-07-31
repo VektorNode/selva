@@ -5,7 +5,8 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchRhinoCompute, parseServerTiming } from '../compute-fetch';
+import { fetchRhinoCompute } from '../compute-fetch';
+import { parseServerTiming } from '../server-timing';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;

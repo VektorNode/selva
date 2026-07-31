@@ -31,7 +31,6 @@
 	},
 	"dependencies": {
 		"@iconify/svelte": "catalog:",
-		"@selvajs/compute": "workspace:^",
 		"@selvajs/schemas": "workspace:*",
 		"@selvajs/ui": "workspace:*",
 		"@selvajs/visualization": "workspace:^",

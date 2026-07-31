@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { composeSignal } from '../compute-fetch';
+import { composeSignal } from '../signal';
 
 /**
  * Listener-leak audit for `composeSignal` (#22 in docs/audit-2025.md).

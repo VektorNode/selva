@@ -84,7 +84,6 @@ export function detectBase64Payload(str: string): string | null {
  * Decodes a base64 string to binary data (Uint8Array).
  * Normalizes and validates input per WHATWG forgiving-base64 so both runtimes fail consistently.
  *
- * @internal
  * @param base64File - Base64 encoded string
  * @returns Decoded binary data as Uint8Array
  * @throws {RhinoComputeError} `ENCODING_ERROR` if invalid, or `INVALID_STATE` if decoder unavailable

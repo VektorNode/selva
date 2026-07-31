@@ -57,9 +57,10 @@ export { setLogger, enableDebugLogging, getLogger } from './utils/logger';
 // String utilities
 export { toCamelCase, camelcaseKeys } from './utils/camel-case';
 
-// Encoding utilities. Exported for `@selvajs/visualization`, whose binary mesh parser decodes
-// base64 payloads — the forgiving-base64 normalization and the Node pool-slab copy are subtle
-// enough that a second copy would drift.
+// Encoding utilities. `@selvajs/visualization` keeps its own copy of this logic rather than
+// importing it — it raises `VisualizationError`, and importing would couple it to the Compute
+// client for ~20 lines. If the forgiving-base64 normalization or the Node pool-slab copy changes
+// here, `packages/visualization/src/shared/encoding.ts` must change with it.
 export { decodeBase64ToBinary } from './utils/encoding';
 
 // Configuration

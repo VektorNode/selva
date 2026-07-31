@@ -71,6 +71,24 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     public override Guid ComponentGuid => new Guid("593BC967-797A-4B1A-9B76-C2133F6B08E2");
 
+    /// <summary>
+    ///     The embedded UI schema. Normally authored through the designer and restored by
+    ///     <see cref="Read" />; this accessor exists so a definition can be built without one —
+    ///     scripted fixture generation, and tests that need a schema-bearing component.
+    ///
+    ///     Setting expires the solution so the Schema output republishes. The value is persisted
+    ///     by <see cref="Write" /> like any designer-authored schema.
+    /// </summary>
+    public UISchema Schema
+    {
+        get => _embeddedSchema;
+        set
+        {
+            _embeddedSchema = value;
+            ExpireSolution(false);
+        }
+    }
+
     protected override Bitmap Icon => Resources.UIBridge;
 
     /// <summary>
@@ -512,9 +530,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     /// <summary>
     ///     Suppress placement auto-wiring for the duration of the returned scope. Used by upgraders
-    ///     around the component swap; see <see cref="_autoWireSuppressed" />.
+    ///     around the component swap; see <see cref="_autoWireSuppressed" />. Also the way a scripted
+    ///     build places a bare UI Bridge — without it, placement adds a Boolean Toggle and a Context
+    ///     Bake alongside.
+    ///
+    ///     The flag is <see cref="ThreadStaticAttribute" />, so the scope only covers placements made
+    ///     on the calling thread — add the component inside the using block, on the Grasshopper thread.
     /// </summary>
-    internal static IDisposable SuppressAutoWire()
+    public static IDisposable SuppressAutoWire()
     {
         return new AutoWireSuppression();
     }

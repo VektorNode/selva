@@ -313,9 +313,6 @@ importers:
       '@iconify/svelte':
         specifier: 'catalog:'
         version: 5.2.2(svelte@5.56.4(@typescript-eslint/types@8.65.0))
-      '@selvajs/compute':
-        specifier: workspace:^
-        version: link:../compute
       '@selvajs/schemas':
         specifier: workspace:*
         version: link:../schemas
