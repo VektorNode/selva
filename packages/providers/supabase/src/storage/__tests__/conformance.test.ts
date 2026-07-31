@@ -117,7 +117,7 @@ if (_adminClient === null) {
 				expect(await existsInBucket(PUBLIC_BUCKET, path)).toBe(false);
 			});
 
-			it('cover images land in the public bucket', async () => {
+			it('cover images land in the private bucket', async () => {
 				const guid = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 				const path = definitionPaths.image(guid);
 				// Real 1×1 transparent PNG. The provider runs every image through
@@ -131,8 +131,10 @@ if (_adminClient === null) {
 					0, 1, 165, 246, 69, 64, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130
 				]);
 				await storage.put(path, tinyPng, 'image/png');
-				expect(await existsInBucket(PUBLIC_BUCKET, path)).toBe(true);
-				expect(await existsInBucket(PRIVATE_BUCKET, path)).toBe(false);
+				// Covers classify as `definition-cover` (visibility: 'project'), so
+				// they are auth-gated through the proxy, not CDN-readable.
+				expect(await existsInBucket(PRIVATE_BUCKET, path)).toBe(true);
+				expect(await existsInBucket(PUBLIC_BUCKET, path)).toBe(false);
 			});
 
 			it('getPublicUrl returns the proxy prefix for private files', () => {

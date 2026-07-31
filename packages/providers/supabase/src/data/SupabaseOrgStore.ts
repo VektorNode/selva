@@ -475,7 +475,9 @@ function orgToRow(org: Organization): OrgRow {
 		name: org.name,
 		slug: org.slug,
 		owner_id: org.ownerId,
-		assets: org.assets ?? null,
+		// `assets` is `not null default '{}'` — an explicit null defeats the
+		// default and violates the constraint.
+		assets: org.assets ?? {},
 		created_by: org.createdBy,
 		updated_by: org.updatedBy,
 		created_at: org.createdAt,

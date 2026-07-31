@@ -7,17 +7,17 @@ import type { IStorageProvider } from '@selvajs/platform/storage';
  * Storage backend for Selva on Supabase Storage.
  *
  * Uses two buckets:
- *   - {publicBucket} (public): cover images, archive thumbnails, anything
+ *   - {publicBucket} (public): org branding, archive thumbnails, anything
  *     CDN-safe. `getPublicUrl` returns the direct CDN URL.
- *   - {privateBucket} (private): .gh / .ghx source files. `getPublicUrl`
- *     returns the authenticated proxy URL (`${privateUrlPrefix}/{path}`) —
- *     the consuming app must have a route at that prefix that authenticates
- *     the request and streams the bytes via `get()`.
+ *   - {privateBucket} (private): .gh / .ghx source files plus every asset
+ *     class that isn't `public` (definition covers, org private files).
+ *     `getPublicUrl` returns the authenticated proxy URL
+ *     (`${privateUrlPrefix}/{path}`) — the consuming app must have a route at
+ *     that prefix that authenticates the request and streams the bytes via
+ *     `get()`.
  *
- * Path routing: any path whose basename matches `definition.{ext}` is
- * considered private. Covers (`cover.webp`) and archives (`archive/{ref}`)
- * stay public. `definitionPaths` from @selvajs/platform produces exactly these
- * names, so the routing is implicit — no caller has to think about buckets.
+ * Routing is derived from the extension and `classifyAssetPath`, so callers
+ * building paths via `definitionPaths` never have to think about buckets.
  */
 export interface SupabaseStorageProviderConfig {
 	/** Supabase project URL (e.g. http://127.0.0.1:54321 for local stack). */
@@ -79,8 +79,9 @@ export class SupabaseStorageProvider implements IStorageProvider {
 	 *     path-scheme rename can't silently move sources into the public bucket;
 	 *   - it classifies as a non-`public` asset class (`classifyAssetPath`) —
 	 *     e.g. `orgs/{id}/private/*` pricing sheets are members-only and must
-	 *     never land in the CDN-readable bucket.
-	 * Everything else (branding, covers, archives, thumbnails) is public.
+	 *     never land in the CDN-readable bucket. Definition covers classify as
+	 *     `project`-visible and are private for the same reason.
+	 * Everything else (branding, archives, thumbnails) is public.
 	 */
 	private bucketFor(storagePath: string): string {
 		if (/\.(gh|ghx)$/i.test(storagePath)) return this.privateBucket;
