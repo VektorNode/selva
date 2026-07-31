@@ -10,27 +10,28 @@
 // a tab instead of a group, deserializes without complaint and simply loses
 // the content.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// .claude/skills/rhino-mcp/ -> repo root
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
-// ajv is only present transitively; resolve from the workspace rather than
-// adding a dependency for a dev-only script.
+// ajv is only present transitively (no package here declares it), so resolve it
+// out of the pnpm store rather than adding a dependency for a dev-only script.
 let Ajv;
 try {
 	Ajv = require('ajv');
 } catch {
-	const { globSync } = await import('node:fs');
-	const [found] = globSync('node_modules/.pnpm/ajv@*/node_modules/ajv', { cwd: repoRoot });
+	const store = resolve(repoRoot, 'node_modules/.pnpm');
+	const found = existsSync(store) && readdirSync(store).find((d) => d.startsWith('ajv@'));
 	if (!found) {
-		console.error('ajv not found. Run `pnpm install`.');
+		console.error('ajv not found. Run `pnpm install` at the repo root.');
 		process.exit(2);
 	}
-	Ajv = require(resolve(repoRoot, found));
+	Ajv = require(resolve(store, found, 'node_modules/ajv'));
 }
 
 const schema = require(resolve(repoRoot, 'packages/schemas/ui-schema.json'));

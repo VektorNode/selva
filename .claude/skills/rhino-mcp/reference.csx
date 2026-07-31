@@ -1,7 +1,7 @@
 // C# snippets for the Rhino MCP `run_csharp` tool.
 //
 // Not compiled, not referenced by any build — a paste library.
-// Context and traps: .claude/skills/rhino-mcp/SKILL.md
+// Context and traps: SKILL.md (same directory)
 //
 // Verified against Rhino 8.33 / Grasshopper 1.0.0008 / Rhino MCP Platform 0.1.5.
 //
@@ -161,7 +161,7 @@ Console.WriteLine("objects=" + doc.ObjectCount); // 1, not 3
 // reflection: both types are pulled off the already-loaded assemblies.
 //
 // Shape is authoritative in packages/schemas/ui-schema.json. Validate the JSON
-// BEFORE grafting — `node scripts/validate-ui-schema.mjs <file>` catches all of
+// BEFORE grafting — `validate-ui-schema.mjs <file>` (alongside this file) catches all of
 // the traps below, none of which surface at runtime:
 //   - nesting is layout.tabs[] -> groups[] -> items[]  (a tab has no "items")
 //   - items key on paramId (not inputId) and need BOTH type + widgetType
@@ -218,7 +218,7 @@ Console.WriteLine("schema=" + (schemaProp.GetValue(bridge) == null ? "NULL" : "o
 // but not placed in any group), missing widget config, version drift. Six rule
 // classes; see Selva.Schema/Services/Validation/Rules/.
 //
-// Shape errors belong to `node scripts/validate-ui-schema.mjs` — run that on the
+// Shape errors belong to `node .claude/skills/rhino-mcp/validate-ui-schema.mjs` — run that on the
 // payload BEFORE grafting. This runs after, on what the component actually holds.
 
 using System;
