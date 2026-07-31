@@ -8,6 +8,12 @@
 > **Three of the five proposed file splits were dropped** — they fight shared mutable state and would
 > risk behaviour in the scheduler for a line-count target no consumer benefits from. Two structural
 > items and several genuine defects survive. See [What changed](#what-changed-from-the-original-plan).
+>
+> **Decision (2026-07-31): ship this as one deliberate major.** Public announcement is a month out and
+> there is no real external install base, so compatibility shims are not worth carrying for years.
+> Two consequences: the four `./core` re-exports are cut from `/grasshopper` rather than preserved,
+> and the surface pruning the original revision deferred is **folded into this pass** — one major at
+> announcement, not a second one later. See [Public surface — decided](#public-surface--decided).
 
 The viewer has left for `@selvajs/visualization`. `@selvajs/compute` is now a pure Rhino.Compute /
 Grasshopper library — no `three`, only `rhino3dm` + `fflate`.
@@ -39,8 +45,9 @@ install line adds a package they don't need, then hunts for an export that isn't
 its sibling; now the folder carries no information and breaks symmetry with the entrypoints — `/core`
 maps to `src/core`, but `/grasshopper` maps to `src/features/grasshopper`.
 
-**Blast radius (measured):** 17 files reference `@/features/grasshopper` — 14 test files, 2 READMEs,
-and `tests/helpers/test-data-builders.ts`. Layering is clean: `src/core/` never imports from
+**Blast radius (measured):** 19 files reference `@/features/grasshopper` — 15 test files, 1 README,
+plus `src/grasshopper.ts`, `examples/simple_example.ts`, and `tests/helpers/test-data-builders.ts`.
+Layering is clean: `src/core/` never imports from
 `features/`, so the move has no cyclic risk.
 
 ### `src/grasshopper.ts` duplicates the inner barrel — and they have already drifted
@@ -50,32 +57,43 @@ and `tests/helpers/test-data-builders.ts`. Layering is clean: `src/core/` never 
 the other; every new export needs editing in both places, and nothing fails when they disagree.
 `core` has no such file — `/core` maps straight to `src/core/index.ts` via tsup.
 
-They have already drifted. **Measured diff** (inner barrel vs. emitted `dist/grasshopper.d.ts`):
-inner exports 62 symbols, the published surface has 51. Deleting `src/grasshopper.ts` naively would
-newly publish these 15:
+They have already drifted. **Measured diff** (inner barrel vs. emitted `dist/grasshopper.d.ts`,
+recomputed by set difference 2026-07-31): inner exports 62 symbols, the published surface has **55**.
+Deleting `src/grasshopper.ts` naively would newly publish these **11**:
 
-| Symbol                            | Consumer?                                                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `extractFilesFromComputeResponse` | **Yes — external.** `parafa/src/lib/server/solutions/extractSolutionFiles.server.ts`, load-bearing per its ADR-0010 |
-| `downloadFileData`                | **Yes** — `packages/ui/src/lib/utils/file-download.ts` (imports from **root**, not `/grasshopper`)                  |
-| `FileData`                        | **Yes** — `packages/ui` file-download + 2 preview components; also parafa's file extraction                         |
-| `getValue`                        | Only as a **method** on `GrasshopperResponseProcessor` — the free function is unused                                |
-| `getValues`                       | No — compute's own README only                                                                                      |
-| `processInputsWithErrors`         | No — internal, used by `io/definition-io.ts`                                                                        |
-| `registerDecoder`                 | No                                                                                                                  |
-| `disposeRhinoObjects`             | No                                                                                                                  |
-| `ProcessedFile`                   | No                                                                                                                  |
-| `BaseInputType`                   | No                                                                                                                  |
-| `ColorInputType`                  | No                                                                                                                  |
-| `GrasshopperBaseSchema`           | No                                                                                                                  |
-| `GrasshopperDefinitionSource`     | No                                                                                                                  |
-| `InputParseError`                 | No                                                                                                                  |
-| `IoResponseSchema`                | No                                                                                                                  |
+| Symbol                        | Consumer?                                                               |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| `getValue`                    | Only as a **method** on `GrasshopperResponseProcessor` — free fn unused |
+| `getValues`                   | No — compute's own README only                                          |
+| `processInputsWithErrors`     | No — internal, used by `io/definition-io.ts`                            |
+| `registerDecoder`             | No                                                                      |
+| `disposeRhinoObjects`         | No                                                                      |
+| `BaseInputType`               | No                                                                      |
+| `ColorInputType`              | No                                                                      |
+| `GrasshopperBaseSchema`       | No                                                                      |
+| `GrasshopperDefinitionSource` | No                                                                      |
+| `InputParseError`             | No                                                                      |
+| `IoResponseSchema`            | No                                                                      |
 
-`extractFilesFromComputeResponse` **must stay public** — it is currently reachable only because
-`src/grasshopper.ts` re-publishes it through the root barrel. Cutting it breaks parafa's file
-pipeline. The other 11 unreferenced symbols still each need a deliberate keep-or-cut call, and
-**that decision list _is_ the work of this step**, not a footnote.
+All 11 are types or internals, so the cut-vs-keep list is less fraught than it first appeared. Each
+still needs a deliberate call, and **that decision list _is_ the work of this step**, not a footnote.
+
+**`extractFilesFromComputeResponse`, `downloadFileData`, `FileData`, and `ProcessedFile` are already
+published** from `/grasshopper` today — the inner barrel re-exports them from `@/core/files` on its
+own, independently of `src/grasshopper.ts`. Deleting that file does not affect them, so parafa's file
+pipeline is not at risk here. (They must still stay public; the risk is just not in this step.)
+
+**The real break runs the other way, and only bites `/grasshopper`.** Four symbols reach the
+`/grasshopper` subpath _solely_ through `src/grasshopper.ts`'s tail re-export from `./core`:
+
+`ComputeConfig` · `RetryPolicy` · `RhinoComputeError` · `RhinoModelUnit`
+
+They are absent from the inner barrel, so deleting `src/grasshopper.ts` **removes them from
+`/grasshopper`**. All four remain reachable from the root barrel (`index.ts` re-exports `./core`
+directly), so root-importing consumers are unaffected — but parapet imports values through
+`/grasshopper`, and `RhinoComputeError` is a value. Decide explicitly: either add these four to the
+inner barrel to hold the subpath surface steady, or accept the narrowing and treat it as the breaking
+part of the changeset.
 
 ### The `/core` and `/grasshopper` subpaths — used, but only externally
 
@@ -187,19 +205,23 @@ Each is independently reviewable. Tests move with the code they cover.
    requirement, and the `"Failed to load three.js visualization module"` troubleshooting section.
    Point readers at `@selvajs/visualization` for viewer work. _Highest value; ship first, independently._
 2. **Unwrap `src/features/`.** `git mv src/features/grasshopper src/grasshopper`; rewrite
-   `@/features/grasshopper/...` → `@/grasshopper/...` across the 17 files. Repoint the tsup entry and
+   `@/features/grasshopper/...` → `@/grasshopper/...` across the 19 files. Repoint the tsup entry and
    the `./grasshopper` package.json export. Also fix `examples/simple_example.ts` to import from the
    package name rather than a relative path into `src/`. Path-only, no symbol changes.
    `pnpm type-check`.
-3. **Collapse the duplicate barrel.** Work the 15-symbol table above as an explicit decision list:
-   trim intended privates from the inner barrel, publish deliberate omissions. `registerDecoder`,
-   `disposeRhinoObjects`, and `processInputsWithErrors` are the clearest cut candidates.
-   **`extractFilesFromComputeResponse`, `downloadFileData`, and `FileData` must stay** — parafa and
-   `packages/ui` depend on them. Then delete `src/grasshopper.ts`.
-   **Verification:** build and diff the emitted `dist/grasshopper.d.ts` against the pre-change copy.
-   That diff is the real public-API change; it should contain only what you deliberately chose.
-   Then grep parafa and parapet for every removed symbol before publishing — neither is in this
-   monorepo's CI, and both pin older versions, so nothing here will catch the break for them.
+3. **Collapse the duplicate barrel and apply the cut list.** Execute
+   [Public surface — decided](#public-surface--decided): drop the 11 never-published symbols from the
+   inner barrel, drop `processInputs` (plural) and the `getValues`/`getValue` free functions, and let
+   the four `./core` re-exports (`ComputeConfig`, `RetryPolicy`, `RhinoComputeError`,
+   `RhinoModelUnit`) fall out of `/grasshopper` — decided major, still reachable from the root.
+   Keep everything under "Must stay" and the five low-level escape-hatch symbols.
+   Then delete `src/grasshopper.ts`.
+   **Verification:** build and diff the emitted `dist/grasshopper.d.ts` against the pre-change copy —
+   capture that baseline _after_ step 2, since the local `dist/` is stale. The diff is the real
+   public-API change; it should contain only the ~17 symbols chosen above and nothing else.
+   Then grep parafa and parapet for every removed symbol — especially `processInputs` and `getValues`,
+   the two weakest-evidence cuts. Neither repo is in this monorepo's CI and both pin older versions,
+   so nothing here will catch the break for them.
 4. **Split `compute-fetch.ts`** → `request.ts` (buildUrl / buildHeaders / generateRequestId /
    isLocalhost) + `response.ts` (handleResponse / throwHttpError / mapServerErrorCode) + `retry.ts`
    (resolveRetryPolicy / backoffDelay / parseRetryAfter / sleep) + `server-timing.ts`
@@ -213,8 +235,11 @@ Each is independently reviewable. Tests move with the code they cover.
    resolve the `decodeBase64ToBinary` comment/duplication in
    [`src/core/index.ts`](../../packages/compute/src/core/index.ts#L60-L62); reconcile its `@internal`
    tag with its public export.
-8. `pnpm type-check && pnpm lint && pnpm test`, then `pnpm build`. Changeset — step 3 may remove
-   exports, so it is breaking on paper.
+8. `pnpm type-check && pnpm lint && pnpm test`, then `pnpm build`. **Changeset: `major`** — step 3
+   removes exports by design. Document every removed symbol and its replacement path in the changeset
+   body (the four `./core` re-exports → import from the package root; `getValues`/`getValue` → the
+   `GrasshopperResponseProcessor` methods; `processInputs` → `processInput`), since that text is what
+   external users will read at announcement.
 
 ## Deliberately not doing
 
@@ -225,33 +250,81 @@ Each is independently reviewable. Tests move with the code they cover.
   `export { default as X }` at every barrel, so consumers write `import { ComputeServerStats }`.
   No consumer sees `default`; the change is invisible outside the package.
 - **Renaming `io/output/response-processors.ts` → `output-values.ts`.** The rationale was a name
-  collision with `GrasshopperResponseProcessor` — but `getValues`/`getValue` are not published from
-  `/grasshopper` at all, and `getValues` has zero consumers repo-wide. Revisit only if step 3 decides
-  to publish them.
+  collision with `GrasshopperResponseProcessor`. Step 3 unpublishes `getValues`/`getValue`, so the
+  collision stops being externally visible and the rename becomes optional cleanup — still not
+  required, but no longer blocked if you want it while the file is open.
 - **Promoting `/core` and `/grasshopper` as first-class layers** — not worth new work, but keep all
   three entry points as they are: parapet imports values through `/grasshopper` and `camelcaseKeys`
   through `/core`.
 - **Behaviour changes**, `SolveScheduler` semantics (latest-wins / queue / parallel), and anything in
   `@selvajs/visualization`.
 
-## Open question — shrinking the public surface
+## Public surface — decided
 
-Out of scope here; recorded because it needs a product call, not a code call.
+Previously an open question deferred for a product call. **That call is made** (see status header):
+one deliberate major, pruning folded into this pass.
 
-A first pass over this monorepo alone suggested ~40 `/grasshopper` and ~10 `/core` exports had no
-consumer. **Checking the two known external repos cut that list substantially** — `processInput`,
-`TreeBuilder`, `InputParam`, `InputParamSchema`, `DataTree`, `ErrorCodes`, `fetchRhinoCompute`, and
-`extractFilesFromComputeResponse` all turned out to be load-bearing. That is the lesson: a
-single-repo audit systematically overestimates dead surface for a published package.
+**Correcting the premise the deferred version rested on.** It listed eight symbols as "apparently
+unused everywhere checked" and implied they were prune candidates. Re-checked against the code, all
+but two are **internally load-bearing** — `GrasshopperClient` is a thin wrapper over exactly these:
 
-Still apparently unused everywhere checked: `solveGrasshopperDefinition`, `fetchDefinitionIO`,
-`fetchParsedDefinitionIO`, `isDefinitionRef`, `processInputs` (plural — only singular `processInput`
-is used), `hashDefinition`, `hashSolveInput`, `getValues`.
+| Symbol                                          | Internal caller                                                         |
+| ----------------------------------------------- | ----------------------------------------------------------------------- |
+| `solveGrasshopperDefinition`                    | `grasshopper-client.ts` lines 225, 297 (the `createScheduler` executor) |
+| `fetchDefinitionIO` / `fetchParsedDefinitionIO` | `grasshopper-client.ts` lines 176, 171                                  |
+| `isDefinitionRef`                               | `grasshopper-client.ts` lines 34, 210                                   |
+| `hashDefinition`                                | `solve-scheduler.ts` line 437                                           |
 
-Three caveats before pruning any of them:
+"No external consumer" here means "the client already wraps it," **not** "dead code." That is a much
+weaker argument for cutting than the deferred section implied.
 
-- `SolveScheduler`'s option/result types are reachable structurally through
-  `client.createScheduler(...)` even where never named in an import.
+### Must stay — not a judgment call
+
+- **`stableStringify`, `hashDefinition`, `hashSolveInput`.** [`stable-hash.ts:1-13`](../../packages/compute/src/features/grasshopper/scheduler/stable-hash.ts#L1-L13)
+  documents these as a deliberate public keying surface and states key parity with an app-layer
+  durable cache is a **correctness requirement** — a cache canonicalizing even slightly differently
+  misses every entry the scheduler wrote, or collides. The file already draws the internal line
+  (`fnv1a`/`fnv1aBytes`/`hashSolveInputForDefinition` stay private). Cutting these forces
+  reimplementation and silently breaks parity.
+- **`SolveScheduler` + `SchedulerMode`, `CacheOptions`, `SolveSchedulerOptions`, `SolveContext`,
+  `SolveResult`.** `createScheduler(options?: SolveSchedulerOptions): SolveScheduler` makes these
+  structurally reachable whether or not the names are exported. Unexporting doesn't shrink the
+  surface, it just makes it unannotatable for hosts.
+- **Named consumers:** `GrasshopperClient`, `GrasshopperResponseProcessor`, `TreeBuilder`,
+  `processInput`, `InputParam`, `InputParamSchema`, `DataTree`, `ErrorCodes`, `fetchRhinoCompute`,
+  `extractFilesFromComputeResponse`, `downloadFileData`, `FileData`.
+
+### Keep — the deliberate low-level escape hatch
+
+`solveGrasshopperDefinition`, `fetchDefinitionIO`, `fetchParsedDefinitionIO`, `isDefinitionRef`,
+plus the `DefinitionRef` / `SolveDefinition` types.
+
+These five _are_ the "drive compute without `GrasshopperClient`" path, and parafa already does
+something adjacent — calling `fetchRhinoCompute` against a raw RhinoCommon endpoint. `SolveDefinition`
+must be exported regardless (it appears in `createScheduler`'s executor signature), and shipping that
+union without its narrowing guard `isDefinitionRef` is the worst of both. Cost of keeping: five
+symbols and a README section. Cost of cutting: the only supported non-client path disappears, and
+re-adding it is another major.
+
+### Cut
+
+| What                                          | Why it's safe                                                          |
+| --------------------------------------------- | ---------------------------------------------------------------------- |
+| The 11 never-published (table above)          | All types/internals; never in `dist` — nobody can be depending on them |
+| The 4 `./core` re-exports from `/grasshopper` | Decided major; still reachable from the root barrel                    |
+| `processInputs` (plural)                      | Zero callers anywhere, including internally — singular is the used one |
+| `getValues` / `getValue` free functions       | Reachable as `GrasshopperResponseProcessor` methods, the intended path |
+
+Roughly 17 symbols out; `/grasshopper` goes from 55 to ~40. **No capability is lost** — every cut is
+either never-published, still reachable elsewhere, or has no caller at all.
+
+Knock-on: once `getValues` is unpublished, the `response-processors.ts` → `output-values.ts` rename
+listed under "Deliberately not doing" loses its blocker. Optional, still not required.
+
+### Before publishing
+
+- `processInputs` and `getValues` are the two cuts with the weakest evidence — grep parafa and parapet
+  for both before release. Neither repo is in this monorepo's CI.
 - parafa and parapet are the _known_ consumers; `@selvajs/compute` is on public npm, so even they are
   not the full population.
 - The package already removed a subpath once (`/visualization`, still in `CHANGELOG.md`), so external

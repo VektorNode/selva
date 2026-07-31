@@ -52,7 +52,7 @@ public static class SchemaHash
             }
         }
 
-        var canonical = SortJson(root).ToString(Formatting.None);
+        var canonical = JsonConvert.SerializeObject(SortJson(root), Formatting.None);
 
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(canonical));

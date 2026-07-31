@@ -105,6 +105,8 @@ coverage/
 Plugin/Selva.GH/bin/
 Plugin/Selva.GH/obj/
 Plugin/Selva.GH/*.lscache
+!fixtures/**/*.gh
+!fixtures/**/*.ghx
 
 # Definitions config files (production, not checked in)
 definitions-config.json

@@ -1,0 +1,42 @@
+{
+	"fixture": "ui_bridge_minimal.ghx",
+	"description": "Boolean Toggle -> UI Bridge.Enable, UI Bridge.Schema -> Context Bake. The minimal wiring BridgeOrchestrator requires: an unwired Schema output is the error path at BridgeOrchestrator.cs:216.",
+	"apply": {
+		"sliders": [],
+		"components": [
+			{
+				"Key": "enable",
+				"Selector": "2e78987b-9dfb-42a2-8b76-3923ac8bd91a",
+				"X": 60,
+				"Y": 120
+			},
+			{
+				"Key": "bridge",
+				"Selector": "593bc967-797a-4b1a-9b76-c2133f6b08e2",
+				"X": 260,
+				"Y": 100
+			},
+			{
+				"Key": "bake",
+				"Selector": "ae2531b4-bab2-4bb1-b5bf-f2143d10c132",
+				"X": 520,
+				"Y": 100
+			}
+		],
+		"wires": [
+			{ "SrcKey": "enable", "Src": "0", "DstKey": "bridge", "Dst": "Enable" },
+			{ "SrcKey": "bridge", "Src": "Schema", "DstKey": "bake", "Dst": "0" }
+		],
+		"solve": false
+	},
+	"components_note": {
+		"2e78987b-9dfb-42a2-8b76-3923ac8bd91a": "Boolean Toggle (stock Grasshopper)",
+		"593bc967-797a-4b1a-9b76-c2133f6b08e2": "UI Bridge (Selva.GH, GH_UIBuilderComponent.cs:72)",
+		"ae2531b4-bab2-4bb1-b5bf-f2143d10c132": "Context Bake (ships with Rhino/Hops, not Selva)"
+	},
+	"expect": {
+		"placed": 3,
+		"placeErrors": 0,
+		"wiresOk": 2
+	}
+}

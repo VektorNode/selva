@@ -14,15 +14,13 @@
 
 An intermediate-level TypeScript framework for building web applications with Rhino Compute and Grasshopper.
 
-`@selvajs/compute` simplifies the process of communicating with Rhino Compute, handling Grasshopper definitions, and visualizing results in the browser with Three.js.
+`@selvajs/compute` simplifies the process of communicating with Rhino Compute and handling Grasshopper definitions. It is pure solve/data — it has no rendering layer and no `three` dependency. To turn a solve response into Three.js objects, use [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization).
 
 ## Installation
 
 ```bash
-npm install @selvajs/compute three
+npm install @selvajs/compute
 ```
-
-_(Note: `three` is a peer dependency if you use the visualization features)_
 
 ## Why this project exists
 
@@ -32,7 +30,6 @@ _(Note: `three` is a peer dependency if you use the visualization features)_
 - **High-level client** — `GrasshopperClient` for one-off solves, `client.createScheduler()` for any UI that fires solves frequently.
 - **Robust transport** — Configurable timeout, caller-supplied `AbortSignal`, exponential-backoff retries on transient errors, and `Retry-After` honored on 429.
 - **Slider-friendly** — `latest-wins` scheduling aborts stale solves when newer values arrive. Optional response cache makes repeated inputs instant.
-- **Ready-to-use visualization** — Integrated Three.js setup with `initThree()` and configurable rendering options.
 
 Whether you're building a simple solver, a slider-driven configurator, or a long-running job submission flow, `@selvajs/compute` handles the plumbing so you can focus on your Grasshopper definitions.
 
@@ -143,7 +140,6 @@ and expose a status endpoint to the browser.
 ### Core Requirements
 
 - **Node.js** >= 20
-- **three** >= 0.179.0 (required for visualization features)
 
 ### Rhino Compute Compatibility
 
@@ -217,11 +213,6 @@ scheduler.solve(def, tree).catch((err) => {
 	showError(err);
 });
 ```
-
-### "Failed to load three.js visualization module"
-
-The dynamic import of the visualization layer threw. Make sure `three` is
-installed (`npm install three`) — it's a peer dependency, not a direct one.
 
 ## Acknowledgement
 
