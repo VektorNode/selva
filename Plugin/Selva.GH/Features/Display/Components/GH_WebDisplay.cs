@@ -16,7 +16,6 @@ using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
-using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.Display.Components;
 
@@ -190,18 +189,14 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
         if (InPreSolve)
         {
-            Logger.Log("WebDisplay: queuing async ComputeBatch (InPreSolve)");
             TaskList.Add(Task.Run(() =>
                     ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId),
                 CancelToken));
             return;
         }
 
-        var gotAsyncResult = GetSolveResults(DA, out var result);
-        Logger.Log($"WebDisplay: GetSolveResults returned {gotAsyncResult}");
-        if (!gotAsyncResult)
+        if (!GetSolveResults(DA, out var result))
         {
-            Logger.Log("WebDisplay: falling back to synchronous ComputeBatch");
             result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId);
         }
 
