@@ -1,0 +1,22 @@
+{
+	"mode": "pre",
+	"tag": "beta",
+	"initialVersions": {
+		"@selvajs/cli": "4.7.3",
+		"@selvajs/compute": "3.1.1",
+		"@selvajs/config": "0.0.3",
+		"@selvajs/platform": "0.16.0",
+		"@selvajs/plugin-ui": "0.10.0",
+		"@selvajs/header-auth-provider": "0.11.1",
+		"@selvajs/local-provider": "0.13.1",
+		"@selvajs/supabase-provider": "0.16.0",
+		"@selvajs/schemas": "4.7.0",
+		"@selvajs/selva": "4.7.3",
+		"@selvajs/server": "0.2.1",
+		"@selvajs/solve": "0.1.0",
+		"@selvajs/ui": "5.0.1",
+		"@selvajs/visualization": "0.1.0",
+		"@selvajs/website": "0.0.1"
+	},
+	"changesets": []
+}
