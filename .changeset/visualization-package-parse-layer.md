@@ -2,7 +2,6 @@
 '@selvajs/visualization': minor
 '@selvajs/compute': major
 '@selvajs/ui': minor
-'@selvajs/plugin-ui': patch
 '@selvajs/selva': patch
 ---
 

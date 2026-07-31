@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Rhino.Geometry;
+using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.Display.Services;
 
@@ -256,6 +257,7 @@ public static class MeshBatchProcessor
         if (cached != null)
         {
             batch.CompressedData = cached;
+            LogCacheStats();
             return batch;
         }
 
@@ -271,8 +273,20 @@ public static class MeshBatchProcessor
         }
 
         BatchBlobCache.Store(cacheKey, batch.CompressedData);
+        LogCacheStats();
 
         return batch;
+    }
+
+    /// <summary>
+    ///     Debug-only visibility into <see cref="BatchBlobCache" /> hit rate — the cache's failure
+    ///     mode is silently serving the wrong geometry on a hash collision, so its real-world hit
+    ///     rate had never been observed outside unit tests until this was wired in.
+    /// </summary>
+    private static void LogCacheStats()
+    {
+        var (count, bytes, hits, misses) = BatchBlobCache.Stats();
+        Logger.Log($"BatchBlobCache: entries={count} bytes={bytes} hits={hits} misses={misses}");
     }
 
     /// <summary>
