@@ -19,7 +19,7 @@ export interface EdgeDetectionOptions {
 	opacity?: number;
 	/**
 	 * Summed `1 - dot(n₁, n₂)` across the two diagonal pairs. Lower catches gentler creases.
-	 * Default 0.4 (≈ the 44° crease default of geometry edges).
+	 * Default 0.4 (roughly the 44° crease default of geometry edges).
 	 */
 	normalThreshold?: number;
 	/** Relative view-depth discontinuity, fraction of center depth. Default 0.02. */

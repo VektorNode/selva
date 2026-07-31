@@ -12,7 +12,7 @@ apps hand-wrote a solve coordinator (and one of them paid for it with a poisoned
 ```
 shared/   the vocabulary both halves speak — SolveResult, SolveFn, SolveInput, input keying
 client/   form state machine, auto/manual decision, throttle, result memo, driver seam
-server/   solve pipeline (tree build → solve → serialize → envelope), L2 cache, single-flight
+server/   solve pipeline (tree build → solve → serialize → envelope), caches, single-flight
 ```
 
 `client/` and `server/` both depend on `shared/`, and **never on each other** — enforced three ways:
@@ -49,8 +49,7 @@ import type { SolveResult } from '@selvajs/solve/shared';
 
 ## Status
 
-Phases 1–3 landed: all three halves. Remaining: unify the input hashing across the M2/L2 tiers
-(Phase 5).
+Phases 1–3 landed: all three halves.
 
 ```ts
 import { createSolveSession, createRequestResponseDriver } from '@selvajs/solve/client';

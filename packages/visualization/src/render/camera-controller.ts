@@ -53,7 +53,7 @@ interface CameraControllerDeps {
 	scene: THREE.Scene;
 	perspective: THREE.PerspectiveCamera;
 	controls: OrbitControls;
-	/** Fires when the active camera identity changes, so callers can re-point renderer/raycaster. */
+	/** Fires when the active camera identity changes (e.g. projection switch). */
 	onActiveCameraChange: (camera: THREE.Camera) => void;
 	/**
 	 * Scene up axis — drives presets, ortho camera up, and iso direction, so the controller works

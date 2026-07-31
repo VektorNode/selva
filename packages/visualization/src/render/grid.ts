@@ -15,9 +15,9 @@ export interface GridOptions {
 	cellSize?: number;
 	/** How many minor cells per major line. Default 10. */
 	majorEvery?: number;
-	/** Minor line color. */
+	/** Minor line color. Default 0x888888. */
 	cellColor?: THREE.ColorRepresentation;
-	/** Major line color. */
+	/** Major line color. Default 0x444444. */
 	majorColor?: THREE.ColorRepresentation;
 	/** World-space radius at which the grid has fully faded out. Default 100. */
 	fadeDistance?: number;

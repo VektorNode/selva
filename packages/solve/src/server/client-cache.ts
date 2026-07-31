@@ -184,6 +184,10 @@ const DEFAULT_MAX_CACHED_CLIENTS = 16;
 export function createClientCache(config: ClientCacheConfig): ClientCache {
 	const maxCachedClients = config.maxCachedClients ?? DEFAULT_MAX_CACHED_CLIENTS;
 	const cache = new Map<string, CachedClient>();
+	// Builds in flight, keyed like `cache`. Concurrent `getClient` calls for the
+	// same id must share ONE build: without this, both miss, both handshake, and
+	// the loser's entry is overwritten in the map without ever being disposed.
+	const pending = new Map<string, Promise<CachedClient>>();
 
 	if (config.debugVerbose) enableDebugLogging();
 
@@ -327,25 +331,32 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				return existing;
 			}
 
+			const inFlight = pending.get(key);
+			if (inFlight) return inFlight;
+
 			// A build is a Rhino.Compute handshake — expensive, and repeated builds for
 			// the same id mean churn (LRU thrash or config-rotation evictions).
 			debugLog(`[Compute/client-cache] miss — building warm client for server ${key}`);
-			const entry = await build(server, opts?.definitionGuid);
+			const buildPromise = (async () => {
+				const entry = await build(server, opts?.definitionGuid);
 
-			// Evict the least-recently-used entry before inserting when at capacity.
-			if (cache.size >= maxCachedClients) {
-				const oldestKey = cache.keys().next().value;
-				if (oldestKey !== undefined) {
-					debugLog(
-						`[Compute/client-cache] LRU evicted warm client for server ${oldestKey} (cap ${maxCachedClients})`
-					);
-					cache.get(oldestKey)?.scheduler.dispose();
-					cache.delete(oldestKey);
+				// Evict the least-recently-used entry before inserting when at capacity.
+				if (cache.size >= maxCachedClients) {
+					const oldestKey = cache.keys().next().value;
+					if (oldestKey !== undefined) {
+						debugLog(
+							`[Compute/client-cache] LRU evicted warm client for server ${oldestKey} (cap ${maxCachedClients})`
+						);
+						cache.get(oldestKey)?.scheduler.dispose();
+						cache.delete(oldestKey);
+					}
 				}
-			}
 
-			cache.set(key, entry);
-			return entry;
+				cache.set(key, entry);
+				return entry;
+			})().finally(() => pending.delete(key));
+			pending.set(key, buildPromise);
+			return buildPromise;
 		},
 
 		evict(id): void {

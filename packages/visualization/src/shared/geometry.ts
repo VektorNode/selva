@@ -5,7 +5,6 @@ import { getLogger } from './logger.js';
 // Object/color utilities shared by `parse/` and `render/`. Live here (not in render's
 // three-helpers) because `parse/` needs them and must never import upward from `render/`.
 
-/** Parses color strings (hex, RGB, CSS names). */
 export function parseColor(colorString: string): THREE.Color {
 	if (!colorString || typeof colorString !== 'string') {
 		getLogger().warn(`Invalid color input: ${colorString}, using white`);
@@ -59,10 +58,7 @@ export function applyOffset(
 	});
 }
 
-/**
- * Computes the combined world-axis-aligned bounding box of a set of objects (meshes, lines, points).
- * Correctly accounts for transformations (rotation, position, scale).
- */
+/** World-axis-aligned bounding box of a set of objects, accounting for their transforms. */
 export function computeCombinedBoundingBox(meshes: THREE.Object3D[]): THREE.Box3 {
 	const combinedBoundingBox = new THREE.Box3();
 	if (meshes.length === 0) return combinedBoundingBox;
@@ -74,5 +70,4 @@ export function computeCombinedBoundingBox(meshes: THREE.Object3D[]): THREE.Box3
 	return combinedBoundingBox;
 }
 
-// CACHED_GEOMETRY_USERDATA_FLAG moved to ./gpu-ownership.ts, which is the single home for every
-// "who may free this?" rule. Re-exported from the shared barrel, so import sites are unchanged.
+// CACHED_GEOMETRY_USERDATA_FLAG lives in ./gpu-ownership.ts, the single home for "who may free this?".

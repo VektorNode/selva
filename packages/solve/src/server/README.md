@@ -4,7 +4,7 @@ Given a resolved solve context — the `.gh` bytes, the input params + user valu
 scheduler — this half runs a solve and returns a ready-to-send envelope:
 
 ```
-input tree build → L2 lookup → scheduler.solve → JSON serialize (size-guarded) → gzip → Server-Timing
+input tree build → scheduler.solve → JSON serialize (size-guarded) → gzip → Server-Timing
 ```
 
 `runSolvePipeline` returns a discriminated `SolveOutcome`. `ok` carries the envelope (body, headers,
@@ -21,9 +21,6 @@ app policy in the route.
 | `transform-input.ts`           | one schema input + user value → an `InputParam` the tree builder takes     |
 | `client-cache.ts`              | per-server warm Rhino.Compute client + scheduler, id-keyed LRU             |
 | `definition-byte-cache.ts`     | `.gh` bytes by immutable version id, total-byte-budget LRU                 |
-| `memory-solve-cache.ts`        | the in-memory L2 backend (`ISolveResultCache`)                             |
-| `solve-cache-key.ts`           | L2 key derivation — SHA-256 over the transformed tree + config subset      |
-| `solve-cache-envelope.ts`      | the stored L2 entry format (header + gzipped body)                         |
 | `solve-cache-single-flight.ts` | dogpile protection: concurrent identical solves share one flight           |
 
 ## Node-only, and that is load-bearing
@@ -42,22 +39,19 @@ Anything both halves need goes in `shared/`, and must stay runtime-neutral.
 
 ## Cache tiers
 
-Three caches sit on this path; they are separate on purpose and fail independently.
+Two caches sit on this path; they are separate on purpose and fail independently.
 
-| Tier | Where                            | Keyed on                                              | Scope               |
-| ---- | -------------------------------- | ----------------------------------------------------- | ------------------- |
-| M2   | `client/solve-memo.ts`           | sorted-key JSON of raw input values                   | one browser tab     |
-| L1   | `@selvajs/compute` scheduler     | 32-bit FNV of the scheduler's identity                | one process         |
-| L2   | `solve-cache-key.ts` + a backend | SHA-256 over the **transformed** tree + config subset | durable, cross-user |
+| Tier | Where                        | Keyed on                               | Scope           |
+| ---- | ---------------------------- | -------------------------------------- | --------------- |
+| M2   | `client/solve-memo.ts`       | sorted-key JSON of raw input values    | one browser tab |
+| L1   | `@selvajs/compute` scheduler | 32-bit FNV of the scheduler's identity | one process     |
 
-**L2's key strength is not stylistic.** A collision serves one user's geometry to another, and that
-already shipped once (see the file header). L1's 32-bit FNV is fine for a 20-entry in-process Map;
-the two are deliberately not interchangeable, and Phase 5 of the plan unifies their _derivation_
-without flattening their strength.
+There is no durable L2 tier today. The in-memory backend that used to sit here was deleted as
+redundant with L1 (same heap, consulted second); what survives is the `ISolveResultCache` seam in
+`@selvajs/platform`, where a shared backend (Redis) mounts if horizontal scaling ever demands one.
 
-Single-flight coalesces on the raw `{inputs, values}` while L2 keys on the transformed tree, so two
-raw-different but transform-identical inputs run as separate flights and then hit the same L2 key.
-Known, recorded in the caching audit (§F2), and reconciled in Phase 5 rather than blindly.
+Single-flight coalesces on `version:server:` + the **transformed** input tree — the same identity
+the scheduler caches on — so two raw-different but transform-identical requests share one flight.
 
 ## The Server-Timing string is a wire contract
 

@@ -104,7 +104,6 @@ export function createMergedMesh(
 	return finalizeMergedMesh(geometry, group, materials);
 }
 
-/** Wraps a merged group's geometry (built or cache-hit) in its THREE.Mesh with identity/userData. */
 export function finalizeMergedMesh(
 	geometry: THREE.BufferGeometry,
 	group: MaterialGroup,
@@ -204,7 +203,6 @@ export function createIndividualMeshes(
 	return meshes;
 }
 
-/** Wraps a single mesh's geometry (built or cache-hit) in its THREE.Mesh with identity/userData. */
 export function finalizeSingleMesh(
 	geometry: THREE.BufferGeometry,
 	meshMeta: MeshMetadata,

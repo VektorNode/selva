@@ -5,7 +5,7 @@ that make it read as CAD: edges, grid, nav gizmo, HTML labels, measurement, ambi
 
 Depends downward on `shared/` only. It deliberately does **not** import `parse/` — the renderer knows
 nothing about wire formats, and a host that does both wires them together (see
-[Anisotropy](#anisotropy-the-one-render↔parse-seam)).
+[The render↔parse seam](#the-renderparse-seam)).
 
 **`initThree` owns this toolkit.** It constructs the camera controller, grid, gizmo, measure tool,
 render pipeline and near-plane fitter from `ThreeInitializerOptions` and returns the live instances
@@ -85,8 +85,8 @@ requires host wiring** — both are self-managing:
   refcounted, so with several live viewers only the last one out actually frees — an unmount
   never wipes caches another viewer is still using.
 
-`releaseParseCaches` remains exported as an escape hatch (reclaiming memory under pressure, or a
-test isolating module state), not as a step anyone must remember.
+`parse/`'s `releaseParseCaches` remains exported as an escape hatch (reclaiming memory under
+pressure, or a test isolating module state), not as a step anyone must remember.
 
 ## GPU ownership: ask, don't remember
 

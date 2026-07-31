@@ -14,13 +14,11 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 export interface LabelHandle {
 	readonly object: CSS2DObject;
 	setPosition(position: THREE.Vector3): void;
-	/** Replace the label's text/HTML. */
 	setText(text: string): void;
 	remove(): void;
 }
 
 export interface LabelLayer {
-	/** `className` lets callers theme groups of labels. */
 	addLabel(text: string, position: THREE.Vector3, className?: string): LabelHandle;
 	/** Call each frame after the WebGL render, with the active camera. */
 	render(scene: THREE.Scene, camera: THREE.Camera): void;

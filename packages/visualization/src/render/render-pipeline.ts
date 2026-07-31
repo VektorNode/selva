@@ -30,20 +30,18 @@ import { EdgeDetectionPass, type EdgeDetectionOptions } from './edge-detection-p
 export interface RenderPipeline {
 	render(deltaTime: number): void;
 	setSize(width: number, height: number, pixelRatio: number): void;
-	/** Point the passes at the currently active camera (call when projection changes). */
+	/** Call when the camera's projection changes (e.g. perspective↔ortho). */
 	setCamera(camera: THREE.Camera): void;
-	/** Toggle the screen-space edge pass at runtime (no pipeline rebuild). */
 	setEdgeDetection(enabled: boolean): void;
-	/** Whether the screen-space edge pass currently runs. */
 	edgeDetectionEnabled(): boolean;
 	dispose(): void;
 }
 
 export interface RenderPipelineOptions {
-	/** Tone mapping to apply in OutputPass (mirror the renderer's). */
+	/** Must mirror the renderer's own tone mapping — OutputPass applies it, not the renderer, once composited. */
 	toneMapping: THREE.ToneMapping;
 	toneMappingExposure: number;
-	/** Build the pipeline with the GTAO ambient-occlusion pass. Default true. */
+	/** Default true. */
 	ambientOcclusion?: boolean;
 	/** AO strength 0–1. Default 1. */
 	aoIntensity?: number;
@@ -92,7 +90,6 @@ export function createRenderPipeline(
 	const outputPass = new OutputPass();
 	composer.addPass(outputPass);
 
-	// OutputPass owns tone mapping in the composer path; match the renderer's settings.
 	renderer.toneMapping = options.toneMapping;
 	renderer.toneMappingExposure = options.toneMappingExposure;
 

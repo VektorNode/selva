@@ -351,10 +351,10 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			{ once: true }
 		);
 
-		// Hand off to the transport-agnostic pipeline: input tree build → L2 lookup →
-		// solve (signal propagates to Compute) → serialize + gzip + L2 write-through +
-		// Server-Timing envelope. Returns a typed outcome we map to metrics + HTTP
-		// status; never throws for an expected failure.
+		// Hand off to the transport-agnostic pipeline: input tree build → solve
+		// (signal propagates to Compute) → serialize + gzip + Server-Timing
+		// envelope. Returns a typed outcome we map to metrics + HTTP status;
+		// never throws for an expected failure.
 		const outcome = await solveCacheSingleFlight.run(
 			coalesceKey,
 			() =>

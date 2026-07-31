@@ -21,11 +21,10 @@ import type { LabelLayer, LabelHandle } from './label-layer';
 export interface MeasureTool {
 	setEnabled(enabled: boolean): void;
 	isEnabled(): boolean;
-	/** Process a click. Returns true if the tool consumed it (caller should not also select). */
+	/** Returns true if the tool consumed the click (caller should not also select). */
 	handleClick(event: MouseEvent): boolean;
 	/** Preview the next snap point via a ghost marker. No-op when disabled; never consumes the event. */
 	handleMove(event: MouseEvent): void;
-	/** Clear the current measurement (markers, line, label). */
 	clear(): void;
 	dispose(): void;
 }
@@ -284,7 +283,6 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 		label = labelLayer.addLabel(format(a.distanceTo(b), delta), mid, options.labelClassName);
 	};
 
-	/** Raycast the cursor and return the snapped pick point, or null if it hit no measurable geometry. */
 	const pickPoint = (event: MouseEvent): THREE.Vector3 | null => {
 		const rect = canvas.getBoundingClientRect();
 		pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;

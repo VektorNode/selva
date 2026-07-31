@@ -36,22 +36,16 @@ import { MaterialPool, buildEdgeOverlay } from './edges/overlay.js';
  *   the cheaper opaque pass.
  *
  * Depth strategy: surfaces render at TRUE depth; lines carry a small units-only polygonOffset
- * toward the camera (EDGE_OFFSET_FACTOR/UNITS in `edges/options.ts`).
+ * toward the camera (`EDGE_OFFSET_FACTOR`/`EDGE_OFFSET_UNITS` in `edges/options.ts`). This replaced
+ * an earlier slope-scaled *surface* offset that bled badly: the slope term scales with dZ/dpixel,
+ * huge at grazing angles, so faces receded further than the mm gaps between stacked parts and
+ * geometry behind a wall drew through the wall's own receded surface. A units-only bias on the
+ * lines instead is a fixed number of depth-quantization steps regardless of angle, so it lifts an
+ * edge off its own surface without reaching a neighbouring part.
  *
- * This reverses an earlier approach that pushed each mesh's *surface* back with a slope-scaled
- * offset instead. That bled badly: the slope term scales with dZ/dpixel, huge on a near-edge-on
- * surface, so grazing faces receded far more than the millimetre gaps between stacked parts —
- * geometry behind a wall then drew through the wall's own receded surface. It also clobbered the
- * polygonOffset that look presets configure, and its "restore" path zeroed that instead of
- * restoring the preset's value.
- *
- * A units-only bias on the lines is bounded by construction — a fixed number of depth quantization
- * steps regardless of viewing angle — so it lifts an edge off its own coplanar surface without ever
- * reaching a neighbouring part. The caveat: a depth ULP grows ~quadratically with viewing distance,
- * so a constant bias is only safe while ULPs stay small. The dynamic near-plane fitter
- * (near-plane.ts) is what buys that — it keeps `camera.near` proportional to the camera↔content
- * gap, holding ULPs at micron scale even zoomed out. Weakening the near fit will make this bias
- * start to bleed.
+ * That bias is only safe because a depth ULP stays small — `near-plane.ts`'s dynamic near-plane
+ * fitter keeps `camera.near` proportional to the camera↔content gap for that. Weakening the near
+ * fit will make this bias start to bleed.
  */
 export type { EdgeOptions };
 export { EDGE_USERDATA_KIND, EDGES_SKIPPED_TRIANGLE_CAP };

@@ -105,7 +105,7 @@ export function createAnimationLoop(
 		}
 
 		if (grid) grid.update(getActiveCamera().position); // recenter on camera so it reads as infinite
-		if (gizmo) gizmo.update(delta); // fade/spin animation, no-op when idle
+		if (gizmo) gizmo.update(delta); // no-op when idle
 
 		// Refit near plane after controls moved the camera, before anything renders, so depth
 		// precision tracks viewing distance.

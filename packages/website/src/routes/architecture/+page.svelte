@@ -231,7 +231,7 @@
 	</div>
 
 	{#if mode === 'cloud'}
-		<!-- Scaling note: the in-process caches are per-instance; the L2 solve cache is
+		<!-- Scaling note: the in-process caches are per-instance; ISolveResultCache is
 		     the pluggable seam where a shared store (Redis) drops in. -->
 		<aside
 			class="border-border bg-muted/40 mt-8 rounded-lg border border-l-2 border-l-cyan-500/60 p-4"
@@ -258,15 +258,13 @@
 					>definition-byte cache</a
 				>
 				— live in one server instance’s memory, so each instance has its own copy. Run several instances
-				behind a load balancer and a solve cached on instance A is a miss on instance B. The
-				<a href="#cache-l2-solve" class="text-violet-600 hover:underline dark:text-violet-400"
-					>durable L2 solve cache</a
-				>
-				is the seam for fixing exactly this: it’s a pluggable
-				<span class="font-mono text-xs">ISolveResultCache</span> with an in-memory backend today,
-				and a shared backend like Redis would drop in behind the same interface so the whole fleet
-				reads and writes one cache — no change to the browser or the compute VM. The VM-side caches
-				(<span class="whitespace-nowrap">definition cache</span>,
+				behind a load balancer and a solve cached on instance A is a miss on instance B. The pluggable
+				<span class="font-mono text-xs">ISolveResultCache</span>
+				seam exists for fixing exactly this: no backend ships today, and a shared one like Redis
+				would drop in behind the interface so the whole fleet reads and writes one cache — no change
+				to the browser or the compute VM. The VM-side caches (<span class="whitespace-nowrap"
+					>definition cache</span
+				>,
 				<span class="font-mono text-xs">cachesolve</span>) are already shared server-side, so
 				they’re unaffected.
 			</p>

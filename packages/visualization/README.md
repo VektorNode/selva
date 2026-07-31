@@ -17,8 +17,7 @@ parse/     backend payload → THREE meshes + metadata (webdisplay, display-item
 shared/    coordinate frame, look presets, errors, logging, geometry/color utils  [internal]
 ```
 
-**The solve session used to be a fourth layer on top.** It is a schema-driven form state machine
-that types meshes as `unknown` and never inspects them, so it moved to `@selvajs/solve/client` —
+**The solve session used to be a fourth layer on top.** It moved to `@selvajs/solve/client`,
 leaving this package as exactly mesh conversion + viewer. What stayed behind is the three.js mesh
 ownership policy solve's result memo needs but deliberately doesn't know: `meshPolicy` in
 [`parse/mesh-policy.ts`](./src/parse/mesh-policy.ts).

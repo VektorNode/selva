@@ -88,7 +88,6 @@ function bytesOf(geometry: THREE.BufferGeometry): number {
 	return total;
 }
 
-/** Look up a cached geometry, refreshing its LRU position. */
 export function geometryCacheGet(key: string): THREE.BufferGeometry | undefined {
 	const entry = cache.get(key);
 	if (!entry) return undefined;
@@ -130,7 +129,7 @@ export function geometryCachePut(key: string, geometry: THREE.BufferGeometry): v
 // render layer importing this one and without any host wiring. See shared/gpu-ownership.ts.
 registerCacheRelease(() => geometryCacheClear());
 
-/** Empty the cache, disposing everything in it. Also the teardown hook registered above. */
+/** Teardown hook registered above. */
 export function geometryCacheClear(): void {
 	for (const entry of cache.values()) {
 		delete entry.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG];

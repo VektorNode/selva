@@ -6,7 +6,7 @@
 
 import { VisualizationError, ErrorCodes } from './errors.js';
 
-/** Structured logging sink. Implement this to route the package's output. */
+/** Implement to route the package's structured log output. */
 export interface Logger {
 	debug(message: string, ...args: unknown[]): void;
 	info(message: string, ...args: unknown[]): void;
@@ -79,7 +79,6 @@ export function setLogger(logger: Logger | Console | null): void {
 	internalLogger = logger as Logger;
 }
 
-/** Routes logging to the console. */
 export function enableDebugLogging(): void {
 	setLogger(new ConsoleLogger());
 }

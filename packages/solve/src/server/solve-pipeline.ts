@@ -30,7 +30,6 @@ import {
 	type SolveDefinition
 } from '@selvajs/compute';
 import type { SchemaInput } from '@selvajs/schemas';
-import type { ILogger } from '@selvajs/platform';
 import { gzip, gunzipSync } from 'node:zlib';
 import { promisify } from 'node:util';
 import { transformInputParameter } from './transform-input.js';
@@ -95,12 +94,6 @@ export interface SolvePipelineArgs {
 	 * the two agree.
 	 */
 	inputTree?: DataTree[];
-	/**
-	 * Structured logger for pipeline diagnostics (e.g. a corrupt L2 cache entry).
-	 * Optional; defaults to `NoopLogger` so this library never writes to stdout
-	 * unless the embedder asks for it.
-	 */
-	logger?: ILogger;
 	/** User-chosen values keyed by input id; missing keys fall back to the schema default. */
 	values: Record<string, unknown>;
 	/** Warm client bundle from `createClientCache().getClient(...)`. */
@@ -334,11 +327,6 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 			? client.rhinoTiming.last
 			: null;
 
-	// Send gzip to the client only when it's worth it for the wire — a body
-	// compressed solely to feed the L2 write-through (or one below the 1 KB
-	// break-even) goes out uncompressed.
-	const sendCompressed = compressed && worthSendingGzip ? compressed : null;
-
 	// --- Server-Timing envelope (the versioned wire contract) ---------------
 	const serverTiming = buildServerTiming({
 		defLoadMs: args.defLoadMs,
@@ -367,17 +355,17 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		gzipMs,
 		serverTotalMs,
 		serializedBytes: serialized.length,
-		compressedBytes: sendCompressed?.byteLength ?? null
+		compressedBytes: compressed?.byteLength ?? null
 	};
 
 	let envelope: SolveEnvelope;
-	if (sendCompressed) {
+	if (compressed) {
 		// A downstream proxy's `encode gzip` skips already-encoded responses, so
 		// this never double-compresses. Vary is set on both branches.
 		headers['Content-Encoding'] = 'gzip';
-		headers['Content-Length'] = String(sendCompressed.byteLength);
+		headers['Content-Length'] = String(compressed.byteLength);
 		envelope = {
-			body: new Uint8Array(sendCompressed),
+			body: new Uint8Array(compressed),
 			encoding: 'gzip',
 			headers,
 			result,

@@ -1,7 +1,7 @@
 /**
  * Tests for the app-side compute client-cache binding. The cache mechanics
- * (LRU, opacity, X-Selva-Definition) live in `@selvajs/server` and are tested
- * there; this covers what the binding adds:
+ * (LRU, opacity, X-Selva-Definition) live in `@selvajs/solve/server` and are
+ * tested there; this covers what the binding adds:
  *   - it keys on the server `id` (ADR 0004 D1) — a rotated URL/key is the SAME
  *     entry, not a fresh client, so it must be evicted explicitly;
  *   - `evictComputeClient` / `evictChangedServers` drop the warm client so the

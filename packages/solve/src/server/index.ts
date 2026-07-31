@@ -4,8 +4,8 @@
 //
 // Given a resolved solve context (definition bytes, inputs + values, a warm scheduler), this half
 // runs a solve and hands back a ready-to-send envelope: input tree build → solve → serialize →
-// gzip → Server-Timing, plus the caches that make a repeat solve cheap (L2 result cache,
-// single-flight coalescing, definition-byte cache, Rhino.Compute client cache).
+// gzip → Server-Timing, plus the caches that make a repeat solve cheap (single-flight coalescing,
+// definition-byte cache, Rhino.Compute client cache).
 //
 // **Node-only.** It reads `node:zlib`, `node:crypto` and `process.env`, and its cache backends take
 // platform providers. Nothing here may be imported from `../client/*` — see the sibling barrel and

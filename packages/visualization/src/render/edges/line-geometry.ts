@@ -16,9 +16,10 @@ export interface EdgeGeometryEntry {
 	geometry: LineSegmentsGeometry;
 	segmentCount: number;
 	/**
-	 * Mean world-space spacing between this overlay's edges. Drives the density fade (see
-	 * `enableDistanceFade`): fades when this projects below a pixel, regardless of how large the
-	 * mesh is on screen. Infinity for degenerate cases (no length, no extent) — never fades.
+	 * Characteristic world-space spacing between this overlay's edges ({@link SPACING_PERCENTILE}
+	 * quantile of segment length, not mean — see {@link edgeSpacingOf}). Drives the density fade
+	 * (see `enableDistanceFade`): fades when this projects below a pixel, regardless of how large
+	 * the mesh is on screen. Infinity for degenerate cases (no length, no extent) — never fades.
 	 */
 	edgeSpacing: number;
 }
@@ -32,7 +33,6 @@ const SPACING_PERCENTILE = 0.15;
 /** Cap on segments sampled for the percentile — a stride keeps this O(1) on millions of segments. */
 const SPACING_SAMPLE_LIMIT = 4096;
 
-/** Characteristic spacing between an overlay's edges, in world units ({@link SPACING_PERCENTILE} quantile of segment length). */
 function edgeSpacingOf(segments: Float32Array): number {
 	const segmentCount = Math.floor(segments.length / 6);
 	if (segmentCount === 0) return Infinity;

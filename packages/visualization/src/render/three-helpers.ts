@@ -21,7 +21,7 @@ const CAMERA_CONFIG = {
 	INITIAL_DISTANCE_MULTIPLIER: 4
 };
 
-/** Updates scene with meshes and positions camera on first call. */
+/** Replaces scene content with `meshes`, rescales the camera frustum to fit, and (first call only) positions the camera/controls. */
 export function updateScene(
 	scene: THREE.Scene,
 	meshes: THREE.Object3D[],
@@ -67,9 +67,8 @@ export function updateScene(
 		const distance = maxDim * CAMERA_CONFIG.INITIAL_DISTANCE_MULTIPLIER;
 
 		// Frame from the standard 3/4 iso, derived from the camera's own up axis (initThree sets it to
-		// the configured sceneUp before this ever runs). Previously a hardcoded (0.8, 1.0, 1.2) offset
-		// that both assumed Z-up and disagreed with the configured iso default, so the first solve
-		// jumped to a different angle than the one the viewer opened at.
+		// the configured sceneUp before this ever runs) rather than a hardcoded offset — keeps the
+		// first solve's angle consistent with whatever up-axis the viewer opened at.
 		camera.position.copy(center).add(isoOffset(camera.up, distance));
 		controls.target.copy(center);
 

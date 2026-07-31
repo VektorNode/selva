@@ -114,6 +114,19 @@ describe('createClientCache — keying', () => {
 		expect(a).not.toBe(b);
 		expect(createdConfigs).toHaveLength(2);
 	});
+
+	it('coalesces concurrent builds for the same id into one client', async () => {
+		// Two requests racing on a cold key must share ONE build — without
+		// coalescing both handshake and the loser's client is overwritten in the
+		// map without ever being disposed.
+		const cache = createClientCache(baseConfig());
+		const [a, b] = await Promise.all([
+			cache.getClient(server('s1')),
+			cache.getClient(server('s1'))
+		]);
+		expect(a).toBe(b);
+		expect(createdConfigs).toHaveLength(1);
+	});
 });
 
 describe('createClientCache — LRU eviction', () => {

@@ -13,18 +13,15 @@ import * as THREE from 'three';
 
 /** An orthonormal frame derived from a scene up axis. All vectors are unit length. */
 export interface UpBasis {
-	/** The scene up axis, normalized. */
 	up: THREE.Vector3;
-	/** The direction a "front" view looks along (from camera toward the model). */
+	/** Direction a "front" view looks along (camera toward model). */
 	forward: THREE.Vector3;
-	/** Completes a right-handed frame with `up` and `forward`. */
 	right: THREE.Vector3;
 }
 
 /**
- * Ground-plane axes for a given up vector. Seeds the cross product with whichever world axis is
- * least parallel to `up`, keeping it well-conditioned in any convention: Z-up yields forward = +Y,
- * right = +X (Rhino's Front/Right); Y-up yields forward = -Z, right = +X (Three's default -Z look).
+ * Ground-plane axes for a given up vector: Z-up yields forward = +Y, right = +X (Rhino's
+ * Front/Right); Y-up yields forward = -Z, right = +X (Three's default -Z look).
  */
 export function buildUpBasis(up: THREE.Vector3): UpBasis {
 	const u = up.clone().normalize();
@@ -34,9 +31,8 @@ export function buildUpBasis(up: THREE.Vector3): UpBasis {
 	const worldY = new THREE.Vector3(0, 1, 0);
 	const seed = Math.abs(u.dot(worldZ)) > 0.9 ? worldY : worldZ;
 
-	// `seed x up` (not `up x seed`) so the handedness matches Rhino: Z-up gives right = +X.
+	// `seed x up`, not `up x seed` — matches Rhino's handedness (Z-up gives right = +X).
 	const right = new THREE.Vector3().crossVectors(seed, u).normalize();
-	// Completes the frame. Z-up: forward = +Y (Rhino's Front looks along +Y). Y-up: forward = -Z.
 	const forward = new THREE.Vector3().crossVectors(u, right).normalize();
 
 	return { up: u, forward, right };
@@ -49,7 +45,7 @@ export function buildUpBasis(up: THREE.Vector3): UpBasis {
  */
 export function isoOffset(up: THREE.Vector3, distance: number): THREE.Vector3 {
 	const { forward, right, up: u } = buildUpBasis(up);
-	// Behind (-forward), left (-right), above (+up) — normalized so `distance` is the true radius.
+	// Normalized first so `distance` is the true radius, not the diagonal of the unnormalized sum.
 	return forward
 		.clone()
 		.multiplyScalar(-1)
@@ -90,7 +86,6 @@ export function environmentRotationFor(up: THREE.Vector3): THREE.Euler {
 	const u = up.clone().normalize();
 	const mapZenith = new THREE.Vector3(0, 1, 0);
 
-	// Already Y-up: the map is authored in this frame, so no correction is needed.
 	if (u.dot(mapZenith) > 0.9999) return new THREE.Euler();
 
 	// Upside-down (-Y): setFromUnitVectors picks an arbitrary perpendicular axis for a 180° flip,
@@ -102,10 +97,8 @@ export function environmentRotationFor(up: THREE.Vector3): THREE.Euler {
 }
 
 /**
- * Which world axis (`'x' | 'y' | 'z'`) the up vector most closely aligns with.
- *
- * Used for the grid plane and for the ground-offset axis — both need a single component index
- * rather than a full vector. An off-axis up vector resolves to its dominant component.
+ * Which world axis the up vector most closely aligns with — used where the grid plane and
+ * ground-offset need a single component index rather than a full vector.
  */
 export function upToAxis(up: THREE.Vector3): 'x' | 'y' | 'z' {
 	const ax = Math.abs(up.x);

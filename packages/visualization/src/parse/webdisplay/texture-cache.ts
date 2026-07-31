@@ -162,7 +162,6 @@ function fnv1aString(s: string): number {
 	return hash >>> 0;
 }
 
-/** Inserts a texture, evicting (and disposing) least-recently-used entries past the bound. */
 function storeTexture(key: string, texture: THREE.Texture): void {
 	// Claim ownership before the texture can reach a material. A cached texture is assigned straight
 	// onto `material.map` and shared by every material using that URL, so without this flag the first

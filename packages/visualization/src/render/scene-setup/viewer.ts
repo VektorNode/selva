@@ -59,17 +59,16 @@ export interface ThreeViewer {
 	}) => void;
 	/**
 	 * Multiplier on the HDR's image-based lighting (`scene.environmentIntensity`) — normalizes
-	 * brightness across HDRs of differing exposure. Applies immediately, even before the HDR
-	 * finishes decoding.
+	 * brightness across HDRs of differing exposure. Applies even before the HDR finishes decoding.
 	 */
 	setEnvironmentIntensity: (intensity: number) => void;
-	/** Set renderer tone-mapping exposure at runtime. Higher lifts shadows and overall brightness. */
+	/** Higher lifts shadows and overall brightness. */
 	setToneMappingExposure: (exposure: number) => void;
-	/** Set GTAO strength at runtime (0–1). No-op when ambient occlusion isn't active. */
+	/** GTAO strength (0-1). No-op when ambient occlusion isn't active. */
 	setAoIntensity: (intensity: number) => void;
 	/**
 	 * Parse-time material options (backface culling, IBL strength) matching the active look — feed
-	 * into the batch parser's `material` option so freshly-loaded meshes match it. See `setLook`.
+	 * into the batch parser's `material` option so freshly-loaded meshes match it.
 	 */
 	getMaterialAppearance: () => MaterialAppearanceOptions;
 	/**
@@ -93,6 +92,6 @@ export interface ThreeViewer {
 	addUserGeometry: (object: THREE.Object3D) => void;
 	/** Remove a single user-added object and dispose its geometry/materials. */
 	removeUserGeometry: (object: THREE.Object3D) => void;
-	/** Remove and dispose all user-added geometry (every object tagged `source === 'user'`). */
+	/** Remove and dispose everything added via `addUserGeometry`. */
 	clearUserGeometry: () => void;
 }

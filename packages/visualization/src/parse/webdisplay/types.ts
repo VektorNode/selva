@@ -51,9 +51,8 @@ export interface MeshMetadata {
 
 /** A group of meshes sharing the same material. */
 export interface MaterialGroup {
-	/** Reference to the material ID in the materials array */
+	/** Index into the batch's materials array. */
 	materialId: number;
-	/** Individual meshes in this group */
 	meshes: MeshMetadata[];
 }
 
