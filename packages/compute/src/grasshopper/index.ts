@@ -40,14 +40,12 @@ export type { DefinitionRef, SolveDefinition } from './definition-ref';
 // I/O PROCESSING
 // ============================================================================
 export { fetchDefinitionIO, fetchParsedDefinitionIO } from './io/definition-io';
-export { processInput, processInputs, processInputsWithErrors } from './io/input/input-processors';
-export { getValues, getValue } from './io/output/response-processors';
+export { processInput } from './io/input/input-processors';
 export type {
 	GetValuesOptions,
 	GetValuesResult,
 	ParsedContext
 } from './io/output/response-processors';
-export { registerDecoder, disposeRhinoObjects } from './io/output/rhino-decoder';
 
 // ============================================================================
 // DATA STRUCTURES
@@ -56,7 +54,7 @@ export { TreeBuilder } from './data-tree/data-tree';
 export type { DataTreeValue } from './data-tree/data-tree';
 
 // ============================================================================
-// FILE HANDLING (generic — now lives in core/files, re-exported here for back-compat)
+// FILE HANDLING (generic — implementation lives in core/files)
 // ============================================================================
 export { extractFilesFromComputeResponse, downloadFileData } from '@/core/files/handle-files';
 export type { ProcessedFile, FileData, FileBaseInfo } from '@/core/files/types';
@@ -72,24 +70,18 @@ export type {
 	DataTree,
 	OutputType,
 	DefaultValue,
-	BaseInputType,
 	NumericInputType,
 	TextInputType,
 	BooleanInputType,
 	GeometryInputType,
 	ValueListInputType,
 	FileInputType,
-	ColorInputType,
 	InputParam,
-	GrasshopperBaseSchema,
-	GrasshopperDefinitionSource,
 	GrasshopperComputeConfig,
-	IoResponseSchema,
 	GrasshopperRequestSchema,
 	GrasshopperComputeResponse,
 	InputParamSchema,
 	OutputParamSchema,
 	GrasshopperParsedIORaw,
-	GrasshopperParsedIO,
-	InputParseError
+	GrasshopperParsedIO
 } from './types';
