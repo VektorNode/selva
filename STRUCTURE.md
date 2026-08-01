@@ -89,6 +89,8 @@ in `dependabot.yml`'s ignore list so the bump is not re-proposed weekly:
 
 **No snake_case in C# class or filenames.** `GH_Block_To_File` should be `GH_BlockToFile`.
 
+**Exception — `IGH_ContextualParameter` types.** `GetValueListParameter` and `GetDynamicValueListParameter` (`Features/ComputeIO/Components/`) are `IGH_Param` subclasses but skip the `Param_PascalCase` pattern and live in `Components/` rather than `Params/`. This isn't cosmetic: `Param_*` types (`Param_FileData`, `Param_ThreeMaterial`, ...) derive from `GH_PersistentParam<T>` and are standalone canvas nodes a user drops and wires. `IGH_ContextualParameter` types derive from plain `GH_Param<T>` and are never placed as a node — Grasshopper injects them into another component's context menu instead. Naming and placing them like a wire-able param would misrepresent what they are, so don't use this as precedent for a regular `Param_*` type — the exception applies only to `IGH_ContextualParameter`.
+
 ### Folder layout per Grasshopper feature
 
 ```
@@ -101,6 +103,8 @@ Selva.GH/Features/<FeatureName>/
 ```
 
 Goos and Params live in their own folders, **not in `Components/` or `Services/`**.
+
+A feature folder may also have a small growth area beyond this base layout — e.g. `Preview/` (Display) or `Helpers/` (UIBuilder) alongside `Services/` — subject to the same "[folder earns its keep](#when-does-a-folder-earn-its-keep)" rule below. `Goos/` may also hold non-Goo support types that exist only to serialize a Goo's payload (e.g. a JSON converter or a plain DTO record) — these stay next to the Goo they support rather than moving to `Services/`.
 
 ### Changing a component's parameters (obsolete + upgrader)
 
@@ -127,7 +131,7 @@ The procedure:
 
    Grasshopper discovers `IGH_UpgradeObject` types by assembly scan; there is no registration list to edit. Comment each `MapInput` with the param name — the indices are otherwise unreadable.
 
-4. **Chain, don't rewrite.** Each upgrader hops one GUID. Old upgraders stay forever so a v0.6 file can walk 0.6 → 0.9 → 0.14 → 0.16. See `GH_WebDisplayUpgrader.cs` for a five-link chain.
+4. **Chain, don't rewrite.** Each upgrader hops one GUID. Old upgraders stay forever so a v0.6 file can walk 0.6 → 0.9 → 0.14 → 0.16. See `GH_WebDisplayUpgrader.cs` for a four-hop chain.
 5. **Record both** in `Plugin/CHANGELOG.md` under **Upgraders** and **Obsolete components**.
 
 ### When does a folder earn its keep?
@@ -163,6 +167,8 @@ This is the shared vocabulary. Not every package uses every folder, but when a f
 
 Domain-specific helpers go in their domain folder (`lib/compute/`, `lib/schema/`, etc.). `utils/` is for truly generic helpers with no domain assumptions (debounce, color, file-download).
 
+A domain folder named after the domain itself (`lib/compute/`, `lib/schema/`) is equivalent to a `features/<name>/` folder — both hold pure TS for one concern. Prefer `features/<name>/` for new domains; an existing top-level domain folder isn't required to move under `features/` on its own.
+
 ### Routes (`selva/src/routes/<route>/`)
 
 - `_components/` (underscore prefix — SvelteKit ignores these as routes) holds **route-private** components.
@@ -175,7 +181,7 @@ The plugin (C#) and UI (TS) are two implementations of one contract over WebSock
 
 - **One source of truth per shape.** `ui-schema.json` generates both stacks (CI fails on drift). For non-generated wire shapes, use a single Rhino-free payload type shared by both paths; a `*ContractTests` test asserts they match.
 - **One canonical location per concept.** Outputs live in `schema.Outputs`, canonicalized by `SchemaOutputCanonicalizer` at the boundary. Readers never tolerate "either/or".
-- **Keep decisions out of Rhino types.** Pull pure logic into Rhino-free classes in `Selva.Tests` (see `OutputPayloadBuilder`, `SchemaOutputCanonicalizer`); leave only unwrap/IO in GH-typed shells.
+- **Keep decisions out of Rhino types.** Pull pure logic into Rhino-free classes (see `OutputPayloadBuilder`, `SchemaOutputCanonicalizer` in `Selva.GH/Features/UIBuilder/Services/`, exercised by `*ContractTests`/`*CanonicalizerTests` in `Selva.Tests`); leave only unwrap/IO in GH-typed shells.
 
 ### Adding a new output type
 

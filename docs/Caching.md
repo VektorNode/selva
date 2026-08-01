@@ -169,14 +169,13 @@ Asks the compute server to remember results, keyed on definition + inputs.
 
 Listed so you know they exist; none has settings and none can serve stale content.
 
-| Cache                    | Tier         | Keyed on                     | Bound                               |
-| ------------------------ | ------------ | ---------------------------- | ----------------------------------- |
-| Warm-client cache        | Selva server | compute server id            | 16 servers, LRU                     |
-| Single-flight coalescer  | Selva server | definition + server + inputs | in-flight only                      |
-| Geometry cache           | Browser      | mesh **content** hash        | 256 MiB                             |
-| Texture cache            | Browser      | content-addressed URL        | 64 textures                         |
-| Edge segment cache       | Browser      | mesh content hash            | 128 MiB                             |
-| Edge line-geometry cache | Browser      | source geometry **identity** | refcounted, released on scene clear |
+| Cache                   | Tier         | Keyed on                     | Bound           |
+| ----------------------- | ------------ | ---------------------------- | --------------- |
+| Warm-client cache       | Selva server | compute server id            | 16 servers, LRU |
+| Single-flight coalescer | Selva server | definition + server + inputs | in-flight only  |
+| Geometry cache          | Browser      | mesh **content** hash        | 256 MiB         |
+| Texture cache           | Browser      | content-addressed URL        | 64 textures     |
+| Edge segment cache      | Browser      | mesh content hash            | 128 MiB         |
 
 **Warm-client cache** keeps a live, connected client per compute server rather than reconnecting each
 solve. It evicts automatically when you change a server's URL or key.
@@ -191,14 +190,18 @@ solve. Without them, an unchanged mesh would be re-decoded and re-uploaded to th
 move. They dispose their contents on eviction, and every one of them is keyed so that a hit is always
 the right content — so none can serve the wrong geometry.
 
-> **Resolved 2026-07-30 — the edge line-geometry cache leaked, and no longer does.** It is the one
-> browser cache keyed on object _identity_ rather than content, and it was written when identity could
-> not survive a solve ("the viewer rebuilds every `BufferGeometry` each solve, so identity caches never
-> hit across solves"). That stopped being true once the geometry cache began returning the _same_
-> instance across solves. Measured: 8 meshes over 50 solves left **400** live line geometries — with
+> **Removed 2026-07-30 — the edge line-geometry cache leaked, and is gone rather than fixed.** It used
+> to be the one browser cache keyed on object _identity_ rather than content, written when identity
+> could not survive a solve ("the viewer rebuilds every `BufferGeometry` each solve, so identity caches
+> never hit across solves"). That stopped being true once the geometry cache began returning the _same_
+> instance across solves: measured, 8 meshes over 50 solves left **400** live line geometries — with
 > resident GPU buffers — instead of 8, because whole-scene clears detached overlays without ever
-> decrementing a refcount. `clearScene` now releases these entries explicitly. Memory only; it never
-> could serve wrong geometry. Full measurement and the rejected alternative in
+> decrementing a refcount. Rather than patch the refcounting, the cache was deleted outright
+> (`render/edges/line-geometry.ts`): it also turned out to barely help (0/80 hits in a real scrubbing
+> loop), since the content-keyed edge segment cache above already covers the common case. Every overlay
+> now builds and owns its own line geometry directly, and `clearScene`'s generic dispose walker
+> (`shared/gpu-dispose.ts`) frees it like any other scene object — nothing left to bound or release.
+> Memory only; it never could serve wrong geometry. Full measurement in
 > [caching-audit-2026-07 §F1](./plans/archive/caching-audit-2026-07.md#f1-the-edge-cache-and-geometry-cache-now-contradict-each-other).
 
 ---

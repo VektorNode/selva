@@ -264,7 +264,7 @@ export const CACHES: CacheEntry[] = [
 		scope: 'per-process',
 		lifetime: '5 min TTL · 20 entries',
 		files: [
-			'packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:239',
+			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts:342',
 			'packages/solve/src/server/client-cache.ts:229'
 		]
 	},
@@ -279,7 +279,7 @@ export const CACHES: CacheEntry[] = [
 			'On a server-side miss the solve transparently re-uploads once and learns the fresh key; dropped when the server stops returning one.',
 		scope: 'per-process',
 		lifetime: '100 entries (LRU)',
-		files: ['packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:245']
+		files: ['packages/compute/src/grasshopper/scheduler/solve-scheduler.ts:636']
 	},
 	{
 		id: 'vm-def',
@@ -292,7 +292,7 @@ export const CACHES: CacheEntry[] = [
 			'The VM GCs independently; cache/purge does NOT clear it. A stale pointer just triggers one re-upload.',
 		scope: 'vm-shared',
 		lifetime: 'VM-managed',
-		files: ['packages/compute/src/features/grasshopper/solve.ts:175 (miss → re-upload)']
+		files: ['packages/compute/src/grasshopper/solve.ts:26 (miss → re-upload)']
 	},
 	{
 		id: 'vm-solve',
@@ -306,7 +306,7 @@ export const CACHES: CacheEntry[] = [
 		scope: 'vm-shared',
 		lifetime: 'VM-managed · survives restarts',
 		files: [
-			'packages/compute/src/features/grasshopper/solve.ts:299 (cachesolve flag)',
+			'packages/compute/src/grasshopper/solve.ts:308 (cachesolve flag)',
 			'packages/compute/src/core/server/compute-server-stats.ts:318 (purge)'
 		]
 	}
@@ -469,7 +469,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 					'Three uncached Postgres row reads under RLS — the .gh blob is read lazily through the definition-byte cache, not on every solve.',
 				detail:
 					'Each request gets one of three Supabase clients, fail-closed: a system context gets the service-role client (bypasses RLS), a session token gets a JWT-header client (queries run as that user, RLS enforced), anything else gets the anon client — memoized per request. The three rows are fetched fresh every solve. The .gh blob is not: the route hands the scheduler a byte-cache reference (keyed on the immutable version id) that loads bytes only on an unavoidable upload and serves warm entries without touching storage. (The remote-definition cache only guards the separate remote-URL branch; the version-schema cache saves a compute call on upload, not this fetch.)',
-				files: ['packages/providers/supabase/src/storage/SupabaseStorageProvider.ts:92']
+				files: ['packages/providers/supabase/src/data/client.ts:81 (buildClientBundle)']
 			}
 		}
 	},
@@ -510,7 +510,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 		detail:
 			'The scheduler hashes the definition bytes together with the exact input tree; a hit returns the stored response instantly as selva_cache;dur=1. This is what makes “wiggle a slider back to where it was” free server-side. Before reaching it, every solve passes through single-flight: N identical requests arriving at once share one execution rather than each racing to fill the same cache entry.',
 		files: [
-			'packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:412',
+			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts:342',
 			'packages/solve/src/server/solve-cache-single-flight.ts'
 		],
 		caches: [
@@ -526,7 +526,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			'A known definition is sent as a tiny md5 pointer instead of re-uploading megabytes of .gh.',
 		detail:
 			'The first solve uploads the definition; Rhino.Compute answers with a cache key. The pointer map remembers it, and every later solve sends just the key. If the server has meanwhile dropped the definition, the solve fails with definition_not_cached and the client transparently re-uploads once — visible as def_reupload;dur=1.',
-		files: ['packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:699'],
+		files: ['packages/compute/src/grasshopper/scheduler/solve-scheduler.ts:636'],
 		caches: [{ id: 'pointer-map', note: 'definition hash → server-side md5 key' }]
 	},
 	{
@@ -547,7 +547,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			'Two VM-side caches first: the parsed definition (decode) and the finished result (cachesolve).',
 		detail:
 			'The VM keeps uploaded definitions parsed in memory — a pointer hit means decode ≈ 0 ms. With cachesolve on (Selva’s default), an identical request returns the stored result without re-running Grasshopper at all — solve ≈ 0 ms. Both survive Selva restarts and are shared by every client of that server. Otherwise headless Grasshopper actually solves.',
-		files: ['packages/compute/src/features/grasshopper/solve.ts:299'],
+		files: ['packages/compute/src/grasshopper/solve.ts:308'],
 		caches: [
 			{ id: 'vm-def', note: 'parsed .gh held under its md5 key' },
 			{ id: 'vm-solve', note: 'identical request → stored result' }
