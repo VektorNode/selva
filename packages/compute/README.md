@@ -5,8 +5,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/@selvajs/compute.svg)](https://www.npmjs.com/package/@selvajs/compute)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue.svg)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
-[![GitHub Repository](https://img.shields.io/badge/GitHub-VektorNode/selva--compute-blue?logo=github)](https://github.com/VektorNode/selva-compute)
+[![Node.js](https://img.shields.io/badge/Node.js-22+-green.svg)](https://nodejs.org/)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-VektorNode/selva-blue?logo=github)](https://github.com/VektorNode/selva)
 
 </div>
 

@@ -571,7 +571,7 @@ describe('SolveScheduler', () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
 				mode: 'queue',
-				cache: true
+				cache: { maxBytes: 100_000 }
 			});
 
 			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
@@ -589,7 +589,7 @@ describe('SolveScheduler', () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
 				mode: 'queue',
-				cache: { ttlMs: 10 }
+				cache: { ttlMs: 10, maxBytes: 100_000 }
 			});
 
 			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
@@ -606,35 +606,27 @@ describe('SolveScheduler', () => {
 			expect(second.filename).toBe('two');
 		});
 
-		it('evicts oldest when over maxEntries', async () => {
+		it('retains entries far past any count cap, bounded only by maxBytes', async () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
 				mode: 'queue',
-				cache: { maxEntries: 2 }
+				cache: { maxBytes: 100_000 }
 			});
 
-			// Three different inputs
 			const trees = ['a', 'b', 'c'].map((n) => [{ ParamName: n, InnerTree: {} } as any]);
+			for (let i = 0; i < 3; i++) {
+				const p = scheduler.solve('def', trees[i]);
+				await vi.waitFor(() => expect(queue.length).toBe(i + 1));
+				const response = makeResponse(String(i + 1));
+				setResponseWireSize(response, 100);
+				queue[i].release(response);
+				await p;
+			}
 
-			const p1 = scheduler.solve('def', trees[0]);
-			queue[0].release(makeResponse('1'));
-			await p1;
-
-			const p2 = scheduler.solve('def', trees[1]);
-			await vi.waitFor(() => expect(queue.length).toBe(2));
-			queue[1].release(makeResponse('2'));
-			await p2;
-
-			const p3 = scheduler.solve('def', trees[2]);
-			await vi.waitFor(() => expect(queue.length).toBe(3));
-			queue[2].release(makeResponse('3'));
-			await p3;
-
-			// First entry should have been evicted
-			const recheck = scheduler.solve('def', trees[0]);
-			await vi.waitFor(() => expect(queue.length).toBe(4));
-			queue[3].release(makeResponse('1-again'));
-			expect((await recheck).filename).toBe('1-again');
+			expect(scheduler.cacheStats()).toMatchObject({ entries: 3, evictions: 0 });
+			// The oldest entry survives a count that would have evicted it under any cap.
+			expect((await scheduler.solve('def', trees[0])).filename).toBe('1');
+			expect(queue.length).toBe(3);
 		});
 
 		// Byte budget (audit C2): entries are bounded by total bytes alongside the
@@ -643,7 +635,7 @@ describe('SolveScheduler', () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
 				mode: 'queue',
-				cache: { maxEntries: 50, maxBytes: 250 }
+				cache: { maxBytes: 250 }
 			});
 
 			const trees = ['a', 'b', 'c'].map((n) => [{ ParamName: n, InnerTree: {} } as any]);
@@ -733,7 +725,7 @@ describe('SolveScheduler', () => {
 				const { executor, queue } = deferredExecutor();
 				const scheduler = new SolveScheduler(executor, baseConfig, {
 					mode: 'queue',
-					cache: { maxEntries: 50 }
+					cache: { maxBytes: 100_000 }
 				});
 				const tree = [{ ParamName: 'x', InnerTree: {} } as any];
 
@@ -751,7 +743,7 @@ describe('SolveScheduler', () => {
 				const { executor, queue } = deferredExecutor();
 				const scheduler = new SolveScheduler(executor, baseConfig, {
 					mode: 'queue',
-					cache: { ttlMs: 10 }
+					cache: { ttlMs: 10, maxBytes: 100_000 }
 				});
 				const tree = [{ ParamName: 'x', InnerTree: {} } as any];
 
@@ -774,7 +766,7 @@ describe('SolveScheduler', () => {
 				const { executor, queue } = deferredExecutor();
 				const scheduler = new SolveScheduler(executor, baseConfig, {
 					mode: 'queue',
-					cache: { maxEntries: 50, maxBytes: 250 }
+					cache: { maxBytes: 250 }
 				});
 
 				const trees = ['a', 'b', 'c'].map((n) => [{ ParamName: n, InnerTree: {} } as any]);
@@ -794,7 +786,7 @@ describe('SolveScheduler', () => {
 				const { executor, queue } = deferredExecutor();
 				const scheduler = new SolveScheduler(executor, baseConfig, {
 					mode: 'queue',
-					cache: { maxEntries: 50 }
+					cache: { maxBytes: 100_000 }
 				});
 				const tree = [{ ParamName: 'x', InnerTree: {} } as any];
 
@@ -816,7 +808,7 @@ describe('SolveScheduler', () => {
 			const onSettle = vi.fn();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
 				mode: 'latest-wins',
-				cache: true,
+				cache: { maxBytes: 100_000 },
 				onSettle
 			});
 
@@ -848,7 +840,7 @@ describe('SolveScheduler', () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
 				mode: 'queue',
-				cache: true
+				cache: { maxBytes: 100_000 }
 			});
 
 			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
@@ -869,7 +861,7 @@ describe('SolveScheduler', () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
 				mode: 'queue',
-				cache: true
+				cache: { maxBytes: 100_000 }
 			});
 
 			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
@@ -888,7 +880,7 @@ describe('SolveScheduler', () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
 				mode: 'queue',
-				cache: { cacheErroredSolves: false }
+				cache: { cacheErroredSolves: false, maxBytes: 100_000 }
 			});
 
 			const tree = [{ ParamName: 'x', InnerTree: {} } as any];

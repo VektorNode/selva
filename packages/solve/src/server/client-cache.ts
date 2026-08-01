@@ -126,6 +126,14 @@ export interface ClientCache {
 	 * with the client that owns them, so totals can fall over time.
 	 */
 	solveCacheStats(): SolveCacheStats;
+	/**
+	 * Drop every retained solve result, keeping the warm clients (and their
+	 * connections and server-side definition pointers) intact. Nothing expires
+	 * these on its own — the byte budget is the only other pressure — so this is
+	 * the operator's release valve when a definition's inputs no longer describe
+	 * its output, e.g. it reads an external source that has since changed.
+	 */
+	clearSolveCaches(): void;
 	/** Dispose every warm client. Test seam / shutdown hook. */
 	disposeAll(): void;
 }
@@ -137,7 +145,7 @@ export interface SolveCacheStats {
 	bytes: number;
 	hits: number;
 	misses: number;
-	/** Entries dropped under size/byte pressure (not TTL expiry or replacement). */
+	/** Entries dropped under size/byte pressure (not replacement or manual clears). */
 	evictions: number;
 }
 
@@ -212,10 +220,11 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			maxQueueDepth: config.maxQueueDepth || undefined,
 			queueWaitMs: config.queueWaitMs || undefined,
 			timeoutMs: config.maxSolveDurationMs,
-			cache:
-				config.responseCacheMaxBytes > 0
-					? { maxEntries: 20, ttlMs: 5 * 60_000, maxBytes: config.responseCacheMaxBytes }
-					: false,
+			// The byte budget is the only eviction pressure. A solve is a pure
+			// function of (definition, inputs), both immutable, so a retained
+			// result can never go stale — expiring one only forces a paid re-solve
+			// of the identical answer.
+			cache: config.responseCacheMaxBytes > 0 ? { maxBytes: config.responseCacheMaxBytes } : false,
 			reuseServerDefinitionCache: config.reuseServerDefinitionCache,
 			onSettle: (_ctx, result) => {
 				solveMeta.seq += 1;
@@ -320,6 +329,11 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				total.evictions += s.evictions;
 			}
 			return total;
+		},
+
+		clearSolveCaches(): void {
+			debugLog(`[Compute/client-cache] cleared solve caches on ${cache.size} warm client(s)`);
+			for (const entry of cache.values()) entry.scheduler.clearCache();
 		},
 
 		disposeAll(): void {

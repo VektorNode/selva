@@ -7,10 +7,11 @@
 
 	// One-line intent per category, shown under each section heading.
 	const categoryBlurb: Record<string, string> = {
-		'App & UI': 'The runnable app, the schema designer, and the shared component library.',
-		'Core libraries': 'Reusable, mostly UI-free building blocks you can consume on their own.',
+		'App & UI': 'The runnable app, the schema designer, and the shared Svelte layer.',
+		'Core libraries':
+			'Framework-free building blocks — compute, viewer, solve, server policy, interfaces. Consume any of them on their own.',
 		Providers: 'Swappable backends for auth, data, and storage — pick one at deploy time.',
-		Tooling: 'The command-line tool that scaffolds and operates a deployment.'
+		Tooling: 'Scaffolding, operations, and the shared build configuration.'
 	};
 </script>
 
@@ -29,8 +30,9 @@
 		<p class="text-muted-foreground mt-4 text-lg text-pretty">
 			Selva is a monorepo of focused <code class="bg-muted rounded px-1.5 py-0.5 text-base"
 				>@selvajs/*</code
-			> packages. Deploy the whole app, or consume the viewer, compute client, and provider interfaces
-			directly in your own product.
+			> packages. Deploy the whole app, or take just the pieces you need — the compute client, the headless
+			viewer, the solve flow, the provider interfaces — into your own product. The cores are framework-free;
+			the Svelte layer sits on top of them, never inside.
 		</p>
 		<div class="mt-6 flex flex-wrap gap-4 text-sm">
 			<a
@@ -73,13 +75,22 @@
 							<p class="text-muted-foreground mt-2 flex-1 text-sm leading-relaxed">
 								{pkg.description}
 							</p>
-							{#if pkg.badge}
-								<span
-									class="border-border text-muted-foreground mt-4 inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs"
-								>
-									{pkg.badge}
-								</span>
-							{/if}
+							<div class="mt-4 flex flex-wrap items-center gap-2">
+								{#if pkg.npm}
+									<span
+										class="border-primary/30 text-primary inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs"
+									>
+										on npm
+									</span>
+								{/if}
+								{#if pkg.badge && pkg.badge !== 'npm'}
+									<span
+										class="border-border text-muted-foreground inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs"
+									>
+										{pkg.badge}
+									</span>
+								{/if}
+							</div>
 						</a>
 					{/each}
 				</div>

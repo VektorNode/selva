@@ -175,17 +175,18 @@ definition`) the `solveByCacheKey` primitive transparently falls back to a full
 
 The concepts (these outlive whatever plan doc introduced them):
 
-- **Geometry cache** (`webdisplay/geometry-cache.ts`) — cross-solve
-  `BufferGeometry` reuse keyed by a content fingerprint of the wire windows a
-  geometry is built from. The viewer rebuilds the scene every solve, so only
-  content identity survives; `clearScene` skips cache-owned geometries and the
-  cache disposes on LRU eviction (256 MB budget).
+- **No cross-solve caching.** The viewer rebuilds the scene every solve and the
+  scene owns every geometry and texture it holds, so `clearScene` disposes them
+  unconditionally. Geometry, texture and edge-segment caches were removed once
+  measurement showed they were unproven and cost more maintenance than they
+  saved; add one back only with a benchmark to justify it.
 - **Assembly worker** (`webdisplay/mesh-assembly.ts`) — delta-decode +
   dequantize + merge + vertex normals as a single zero-capture pure function,
-  run in a blob-URL Worker for batches ≥ 50k triangles. Its cache keys are
-  pinned byte-identical to the sync path's (`mesh-assembly.test.ts`).
-- **Edge segment cache / edge worker** (`threejs/edge-extract.ts`, `edges.ts`)
-  — same pattern for crease-edge extraction, plus triangle/segment caps and a
+  run in a blob-URL Worker for batches ≥ 50k triangles. Buffer equivalence with
+  the sync path is pinned by `mesh-assembly.test.ts`.
+- **Edge worker** (`threejs/edge-extract.ts`, `edges.ts`) — crease-edge
+  extraction offloaded to a worker, with an in-flight map so meshes with
+  identical content share one round-trip, plus triangle/segment caps and a
   screen-space fallback pass (`threejs/edge-detection-pass.ts`).
 - **On-demand render loop** (`threejs/three-initializer.ts`) — draws only on
   invalidate()/camera motion/pointer input, with a 500 ms safety repaint;

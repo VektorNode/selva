@@ -18,7 +18,7 @@ re-exported from `render/`, which is the barrel a viewer host already imports.
 | `types.ts`            | `LOOKS`/`Look`, `LookPreset`, `MaterialAppearanceOptions`                                  |
 | `looks.ts`            | `LOOK_PRESETS`, `DEFAULT_LOOK`, `materialAppearanceForLook`                                |
 | `geometry.ts`         | `parseColor`, `applyOffset`, `computeCombinedBoundingBox`                                  |
-| `gpu-ownership.ts`    | `canDispose*`/`protectMaterials`, the cache userdata flags, cache registry, `retainCaches` |
+| `gpu-ownership.ts`    | `canDisposeMaterial`, `protectMaterials` — the module-singleton claim                      |
 | `gpu-dispose.ts`      | `disposeMaterial`, `disposeObjectTree` — the only traversal that should free scene content |
 | `gpu-capabilities.ts` | `publishMaxAnisotropy`, `observeMaxAnisotropy`                                             |
 
@@ -32,7 +32,7 @@ per-file rationale.
 
 `parse/` needs `geometry.ts` (colors, grounding, bounds) and must never import upward from `render/`.
 `gpu-ownership.ts`/`gpu-dispose.ts`/`gpu-capabilities.ts` are the shared rules every disposal path
-and cache in both `parse/` and `render/` obeys — see their docblocks for the ownership model.
+in both `parse/` and `render/` obeys — see their docblocks for the ownership model.
 
 ## Extension points
 

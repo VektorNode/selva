@@ -55,7 +55,7 @@ npm start                        # launches the app (under pm2, a process manage
 
 Then: visit `/setup` to create the admin (first boot only), register your Compute server at `/admin/compute`, upload a definition, share the link. Pick your backend here via provider settings; see [Providers](../providers.md).
 
-See [CLI](../CLI.md), [Local dev setup](../QuickStart.md), [Linux deploy](../deployment/GCE-Linux.md).
+See [CLI](../CLI.md), [Local dev setup](../QuickStart.md), [Deployment prerequisites](../deployment/prerequisites.md).
 
 ## 4. (Optional) Build your own app
 

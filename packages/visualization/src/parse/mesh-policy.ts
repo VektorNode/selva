@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 
-import { CACHED_GEOMETRY_USERDATA_FLAG, disposeObjectTree } from '../shared/index.js';
+import { disposeObjectTree } from '../shared/index.js';
 
 /**
  * A three.js object graph the caller owns outright: transforms cloned, geometry copied,
@@ -23,14 +23,7 @@ export function cloneSceneObjects(meshes: THREE.Object3D[]): THREE.Object3D[] {
 			const source = sources[i++] as Partial<THREE.Mesh> & THREE.Object3D;
 			const target = child as Partial<THREE.Mesh> & THREE.Object3D;
 			if (!source.geometry) return;
-			const geometry = source.geometry.clone();
-			// `BufferGeometry.clone()` carries userData (including the cache-ownership flag) across
-			// by reference, not by copy — deleting the flag in place would un-flag the source too,
-			// and the geometry cache would then have its GPU buffers disposed out from under it.
-			// Shallow-copy userData first, then drop the flag from the copy only.
-			geometry.userData = { ...geometry.userData };
-			delete geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG];
-			target.geometry = geometry;
+			target.geometry = source.geometry.clone();
 		});
 		return copy;
 	});

@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { getLogger } from '../../shared/index.js';
 
 import { FLAG_FLOAT32, parseBinaryMeshBatch, parseBinaryMeshBatchRaw } from './binary-parser.js';
-import { geometryCacheGet, geometryCachePut } from './geometry-cache.js';
 
 import {
 	ASSEMBLY_WORKER_MIN_TRIANGLES,
@@ -401,17 +400,13 @@ async function tryBuildViaWorker(
 		const result = assembled[i]!;
 		const ref = jobRefs[i]!;
 
-		let geometry = geometryCacheGet(result.key);
-		if (!geometry) {
-			geometry = new THREE.BufferGeometry();
-			geometry.setAttribute('position', new THREE.BufferAttribute(result.positions, 3));
-			geometry.setAttribute('normal', new THREE.BufferAttribute(result.normals, 3));
-			geometry.setIndex(new THREE.BufferAttribute(result.indices, 1));
-			if (result.uvs) geometry.setAttribute('uv', new THREE.BufferAttribute(result.uvs, 2));
-			if (result.colors) {
-				geometry.setAttribute('color', new THREE.BufferAttribute(result.colors, 3, true));
-			}
-			geometryCachePut(result.key, geometry);
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute('position', new THREE.BufferAttribute(result.positions, 3));
+		geometry.setAttribute('normal', new THREE.BufferAttribute(result.normals, 3));
+		geometry.setIndex(new THREE.BufferAttribute(result.indices, 1));
+		if (result.uvs) geometry.setAttribute('uv', new THREE.BufferAttribute(result.uvs, 2));
+		if (result.colors) {
+			geometry.setAttribute('color', new THREE.BufferAttribute(result.colors, 3, true));
 		}
 
 		const mesh =

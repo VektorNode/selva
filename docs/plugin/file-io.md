@@ -1,26 +1,41 @@
 ---
 title: File I/O
 group: Plugin
-order: 4
+order: 7
 published: true
-description: 'Export geometry and block instances to files for download from the deployed app.'
+description: 'Produce files the deployed app can offer for download.'
 ---
 
 # File I/O
 
-Exports geometry, blocks, and data to files the web app can serve for download.
+Use these when your definition should produce something the user downloads — a cut sheet, a 3D export, a CSV of quantities — alongside the live 3D view.
 
-| Component            | Does                                             |
-| -------------------- | ------------------------------------------------ |
-| **Geometry to File** | Exports geometry to a file output.               |
-| **Block to File**    | Exports a block instance to a file.              |
-| **Create File**      | Exports arbitrary data to a file.                |
-| **File from Path**   | Wraps an existing file on disk as a file output. |
-| **Bake Files**       | Bakes file outputs for delivery.                 |
+## The pattern
 
-Use these when your definition should produce downloadable artifacts (e.g. a cut-sheet, a 3D export) alongside the live viewer.
+All four producers work the same way: they emit a _File_ output, and you wire that into a **ContextBake** to make it a download in the web app. No ContextBake, no download.
+
+| Component            | Produces                                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Create File**      | A file from text or base64 data — CSV, JSON, a report, anything.                                     |
+| **Geometry To File** | Geometry exported with layer names and colours. Single file from a list, multiple files from a tree. |
+| **Block To File**    | Rhino block instances as `.3dm` (default) or `.stp`.                                                 |
+| **File From Path**   | A file that already exists on disk, wrapped as a Selva output.                                       |
+
+All four also take:
+
+- `Sub Folder` — optional path to organise downloads.
+- `Metadata` — optional `Key=Value` strings carried with the file.
+
+Most take a name and, where it makes sense, an extension or format.
+
+## Bake Files
+
+The odd one out: it doesn't produce a download, it writes files to a folder on disk. `Files` in, a base path, and a `Bake` boolean to trigger it; out come the paths written and a status message.
+
+This is an authoring convenience — check that your exports are correct without deploying anything. It is not part of the run-time path.
 
 ## Next
 
+- [Drawing](../plugin/drawing.md): rendered sheets are file outputs too.
+- [Display](../plugin/display.md): the other kind of output.
 - [Plugin overview](../plugin/overview.md)
-- [Compute I/O](../plugin/compute-io.md)

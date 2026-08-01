@@ -4,10 +4,9 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 // Line geometry construction
 // ============================================================================
 
-// No identity cache here: an earlier WeakMap cache keyed per source BufferGeometry leaked ~400
-// live GPU entries where 8 were expected, because the cross-solve geometry cache holds sources
-// reachable forever, so entries never vanished with their source. It also barely helped (0/80
-// real-loop hits) — the content-keyed segment cache in extraction.ts covers this instead.
+// No cache here. An earlier WeakMap keyed per source BufferGeometry leaked ~400 live GPU entries
+// where 8 were expected — entries never vanished with their source — and measured 0/80 hits in a
+// real scrubbing loop. Every overlay builds and owns its own line geometry.
 
 export interface EdgeGeometryEntry {
 	geometry: LineSegmentsGeometry;
@@ -45,8 +44,8 @@ function edgeSpacingOf(segments: Float32Array): number {
 	return lengths[Math.min(lengths.length - 1, Math.floor(lengths.length * SPACING_PERCENTILE))]!;
 }
 
-// LineSegmentsGeometry adopts `segments` as its backing store without copying, so it's still safely
-// shared with the segment cache in extraction.ts — read-only from here on.
+// LineSegmentsGeometry adopts `segments` as its backing store without copying — treat it as
+// read-only from here on.
 export function buildLineGeometry(segments: Float32Array): EdgeGeometryEntry {
 	const geometry = new LineSegmentsGeometry();
 	geometry.setPositions(segments);

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 import { parseColor } from '../../../shared/index.js';
 
-import { applyTextureMap } from '../texture-cache.js';
+import { applyTextureMap } from '../apply-texture.js';
 
 import type { MaterialAppearanceOptions, SerializableMaterial } from '../types.js';
 
@@ -57,7 +57,7 @@ export function createMaterial(
 		applyVertexColorSRGBDecode(material);
 	}
 
-	// Async; see texture-cache.ts for load/cache behavior.
+	// Async; the mesh renders untextured until the image decodes.
 	if (matData.map) {
 		applyTextureMap(material, matData.map);
 	}

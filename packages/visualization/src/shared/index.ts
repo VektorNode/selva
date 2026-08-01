@@ -21,17 +21,7 @@ export { LOOK_PRESETS, DEFAULT_LOOK, materialAppearanceForLook } from './looks.j
 
 export { parseColor, applyOffset, computeCombinedBoundingBox } from './geometry.js';
 
-export {
-	CACHED_GEOMETRY_USERDATA_FLAG,
-	CACHED_TEXTURE_USERDATA_FLAG,
-	canDisposeGeometry,
-	canDisposeMaterial,
-	canDisposeTexture,
-	protectMaterials,
-	registerCacheRelease,
-	releaseAllCaches,
-	retainCaches
-} from './gpu-ownership.js';
+export { canDisposeMaterial, protectMaterials } from './gpu-ownership.js';
 
 export { publishMaxAnisotropy, observeMaxAnisotropy } from './gpu-capabilities.js';
 

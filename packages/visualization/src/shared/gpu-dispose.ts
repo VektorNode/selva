@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { canDisposeGeometry, canDisposeMaterial, canDisposeTexture } from './gpu-ownership.js';
+import { canDisposeMaterial } from './gpu-ownership.js';
 
 // ============================================================================
 // The disposal walkers — every teardown path in the package goes through these
@@ -14,7 +14,7 @@ export function disposeMaterial(material: THREE.Material): void {
 	if (!canDisposeMaterial(material)) return;
 
 	for (const value of Object.values(material)) {
-		if (value instanceof THREE.Texture && canDisposeTexture(value)) {
+		if (value instanceof THREE.Texture) {
 			value.dispose();
 		}
 	}
@@ -39,15 +39,14 @@ export interface DisposeOptions {
  * should dispose scene content** — a second disposing `traverse` risks missing an ownership guard.
  */
 export function disposeObjectTree(root: THREE.Object3D, options: DisposeOptions = {}): void {
-	const { materials = true, onGeometry } = options;
+	const { materials = true } = options;
 
 	root.traverse((object) => {
 		const renderable = object as Partial<THREE.Mesh> & THREE.Object3D;
 		if (!renderable.geometry && !renderable.material) return;
 
 		if (renderable.geometry) {
-			onGeometry?.(renderable.geometry);
-			if (canDisposeGeometry(renderable.geometry)) renderable.geometry.dispose();
+			renderable.geometry?.dispose();
 		}
 
 		if (materials) disposeMaterials(renderable.material);

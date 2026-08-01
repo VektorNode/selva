@@ -19,14 +19,14 @@ response envelope
             ├─ binary-parser.ts        SLVA decode  ─┬─ binary/header.ts    magic/version/flags/types
             │                                        ├─ binary/geometry.ts  buffer reads, delta+zigzag, inflate
             │                                        └─ binary/textures.ts  trailing UV + vertex-color chunks
-            ├─ batch/metadata.ts       validate windows, cache key, dequantize
+            ├─ batch/metadata.ts       validate windows, dequantize
             ├─ batch/materials.ts      SerializableMaterial → MeshPhysicalMaterial
             ├─ batch/merge.ts          merged + individual mesh construction
             └─ batch/assembly-worker.ts  worker plumbing (blob URL, request/response)
 ```
 
-`geometry-cache.ts` and `texture-cache.ts` are cross-solve caches: identical geometry content and
-hash-keyed texture URLs are decoded and uploaded to the GPU once per session.
+`apply-texture.ts` loads a material's color map and assigns it once decoded. Nothing here caches
+across solves: every solve decodes its own geometry and textures, and the scene owns what it built.
 
 ## Display item pipeline
 
@@ -56,13 +56,6 @@ one, curves are skipped with a warning and points still render.
 - **Malformed metadata throws, absent data doesn't.** An unparseable envelope returns `[]` (genuinely
   no data); a corrupt/truncated blob or out-of-range group window throws a `VALIDATION_ERROR` rather
   than silently rendering an empty or corrupted scene.
-- **The caches own their buffers, and `shared/gpu-ownership.ts` is where that is stated.** Cached
-  geometries and textures carry `CACHED_GEOMETRY_USERDATA_FLAG` / `CACHED_TEXTURE_USERDATA_FLAG`;
-  the caches dispose them on eviction and nobody else ever does. Don't read those flags directly —
-  call `canDisposeGeometry` / `canDisposeTexture`, or just use `disposeObjectTree`, which already
-  does. See [the ownership rule](../shared/gpu-ownership.ts) for why this is centralized.
-- **Both cross-solve caches release themselves on viewer teardown.** They outlive a scene by
-  design, but not the GL context. Each calls `registerCacheRelease(...)` at module init, and
-  `initThree` drains the registry in `dispose()` — refcounted, so only the last live viewer
-  frees. No host wiring. `releaseParseCaches` stays exported as an escape hatch, not a required
-  step.
+- **The scene owns every geometry and texture it holds.** Nothing outlives the scene that built it,
+  so `disposeObjectTree` frees them unconditionally. Only the module-singleton materials are spared
+  — see [the ownership rule](../shared/gpu-ownership.ts).

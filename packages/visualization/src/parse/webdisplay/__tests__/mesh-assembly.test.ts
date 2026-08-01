@@ -1,18 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
 
 import { parseMeshBatchObject } from '../batch-parser';
 import { parseBinaryMeshBatchRaw } from '../binary-parser';
-import { geometryCacheClear, geometryCacheGet } from '../geometry-cache';
 import { assembleGeometries, meshAssemblyWorkerSource } from '../mesh-assembly';
 
 import type { AssemblyInput, AssemblyJob } from '../mesh-assembly';
 import type { DisplayBatch } from '../types';
-
-afterEach(() => {
-	geometryCacheClear();
-});
 
 /** Raw parse → AssemblyInput + jobs, mirroring tryBuildViaWorker's construction. */
 function assemblyInputFor(batch: DisplayBatch, mergeByMaterial: boolean): AssemblyInput {
@@ -42,10 +37,9 @@ function assemblyInputFor(batch: DisplayBatch, mergeByMaterial: boolean): Assemb
 }
 
 describe('assembleGeometries equivalence with the synchronous parse path', () => {
-	it.each([true, false])('matches buffers and cache keys (mergeByMaterial=%s)', async (merge) => {
+	it.each([true, false])('matches buffers (mergeByMaterial=%s)', async (merge) => {
 		const built = buildMeshBatch({ materialCount: 3, meshCount: 9, vertsPerMesh: 50, seed: 21 });
 
-		// Sync path first: builds geometries AND populates the cross-solve cache under its keys.
 		const syncMeshes = await parseMeshBatchObject(built.batch, { mergeByMaterial: merge });
 
 		const assembled = assembleGeometries(assemblyInputFor(built.batch, merge));
@@ -54,10 +48,6 @@ describe('assembleGeometries equivalence with the synchronous parse path', () =>
 		for (let i = 0; i < assembled.length; i++) {
 			const result = assembled[i]!;
 			const syncGeometry = syncMeshes[i]!.geometry;
-
-			// Key parity is the load-bearing property: the worker's fingerprint must land on the
-			// sync path's cache entry, or the two paths would double-store every geometry.
-			expect(geometryCacheGet(result.key)).toBe(syncGeometry);
 
 			expect(Array.from(result.positions)).toEqual(
 				Array.from(syncGeometry.getAttribute('position').array as Float32Array)
@@ -84,7 +74,9 @@ describe('assembleGeometries equivalence with the synchronous parse path', () =>
 		const assembled = assembleGeometries(assemblyInputFor(built.batch, true));
 
 		expect(assembled).toHaveLength(syncMeshes.length);
-		expect(geometryCacheGet(assembled[0]!.key)).toBe(syncMeshes[0]!.geometry);
+		expect(Array.from(assembled[0]!.positions)).toEqual(
+			Array.from(syncMeshes[0]!.geometry.getAttribute('position').array as Float32Array)
+		);
 	});
 
 	it('rejects indices outside their vertex window', () => {

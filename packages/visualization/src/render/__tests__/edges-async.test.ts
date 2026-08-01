@@ -1,19 +1,9 @@
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { EDGES_SKIPPED_TRIANGLE_CAP, addEdges, addEdgesAsync, removeEdges } from '../edges';
-
-// Spy on the extractor to observe cache hits/misses; behavior stays the real implementation.
-vi.mock('../edge-extract', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('../edge-extract')>();
-	return { ...actual, extractEdgeSegments: vi.fn(actual.extractEdgeSegments) };
-});
-
-import { extractEdgeSegments } from '../edge-extract';
-
-const extractSpy = vi.mocked(extractEdgeSegments);
 
 function meshWithBox(size = 1): THREE.Mesh {
 	return new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshStandardMaterial());
@@ -141,34 +131,5 @@ describe('caps', () => {
 
 		expect((overlay.material as LineMaterial).transparent).toBe(true);
 		expect(Object.prototype.hasOwnProperty.call(overlay, 'onBeforeRender')).toBe(true);
-	});
-});
-
-describe('cross-solve content cache', () => {
-	it('re-solving with identical content skips extraction entirely', () => {
-		// Distinctive size so this content key is unique to this test.
-		const SIZE = 3.7317;
-
-		const firstSolve = meshWithBox(SIZE);
-		addEdges(firstSolve);
-		const callsAfterFirst = extractSpy.mock.calls.length;
-		removeEdges(firstSolve); // viewer clears content between solves
-
-		// A NEW geometry object with the same content — what every re-solve produces.
-		const secondSolve = meshWithBox(SIZE);
-		const created = addEdges(secondSolve);
-
-		expect(created).toHaveLength(1);
-		expect(extractSpy.mock.calls.length).toBe(callsAfterFirst); // no new extraction
-	});
-
-	it('changed content misses the cache and re-extracts', () => {
-		const firstSolve = meshWithBox(5.111);
-		addEdges(firstSolve);
-		const callsAfterFirst = extractSpy.mock.calls.length;
-
-		const changed = meshWithBox(5.222);
-		addEdges(changed);
-		expect(extractSpy.mock.calls.length).toBeGreaterThan(callsAfterFirst);
 	});
 });

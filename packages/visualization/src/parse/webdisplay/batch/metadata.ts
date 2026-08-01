@@ -1,7 +1,5 @@
 import { VisualizationError, ErrorCodes } from '../../../shared/index.js';
 
-import { fingerprintViews } from '../geometry-cache.js';
-
 import type { MaterialGroup, MeshMetadata } from '../types.js';
 
 export function metadataFail(
@@ -87,40 +85,6 @@ export function indexOutOfWindow(indexValue: number, meshMeta: MeshMetadata): Vi
 		vertexStart: meshMeta.vertexStart,
 		vertexCount: meshMeta.vertexCount
 	});
-}
-
-/**
- * Content key for the cross-solve geometry cache: samples of every buffer window this geometry is
- * built from, plus the window layout as salt (identical bytes at a different offset rebase to
- * different geometry). See ../geometry-cache.ts for the safety model.
- */
-export function geometryContentKey(
-	kind: 'merged' | 'single',
-	meshes: MeshMetadata[],
-	allVertices: Float32Array,
-	allIndices: Uint16Array | Uint32Array,
-	allUvs: Float32Array | null,
-	allColors: Uint8Array | null
-): string {
-	const parts: (ArrayBufferView | null)[] = [];
-	let salt = kind;
-	for (const meshMeta of meshes) {
-		salt += `|${meshMeta.vertexStart},${meshMeta.vertexCount},${meshMeta.indexStart},${meshMeta.indexCount}`;
-		const componentStart = meshMeta.vertexStart * 3;
-		const componentEnd = componentStart + meshMeta.vertexCount * 3;
-		parts.push(allVertices.subarray(componentStart, componentEnd));
-		parts.push(allIndices.subarray(meshMeta.indexStart, meshMeta.indexStart + meshMeta.indexCount));
-		parts.push(
-			allUvs
-				? allUvs.subarray(
-						meshMeta.vertexStart * 2,
-						(meshMeta.vertexStart + meshMeta.vertexCount) * 2
-					)
-				: null
-		);
-		parts.push(allColors ? allColors.subarray(componentStart, componentEnd) : null);
-	}
-	return fingerprintViews(parts, salt);
 }
 
 /**

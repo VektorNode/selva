@@ -48,9 +48,6 @@ const DEFAULT_MAX_SEGMENTS = 2_000_000;
 // runs inline even on the async path.
 export const INLINE_TRIANGLE_BUDGET = 25_000;
 
-/** CPU byte budget for the cross-solve segment cache (Float32 segment arrays only). */
-export const SEGMENT_CACHE_BYTE_BUDGET = 128 * 1024 * 1024;
-
 // Fade band as mean on-screen gap between neighbouring edges, in px: opaque at/above
 // FADE_START_PX, gone at/below FADE_END_PX, linear between. Density-based rather than
 // mesh/bounding-sphere-based, because a big part with sub-pixel edge spacing still draws every

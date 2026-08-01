@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { canDisposeTexture, disposeObjectTree, type DisposeOptions } from '../../shared/index.js';
+import { disposeObjectTree, type DisposeOptions } from '../../shared/index.js';
 
 export { disposeObjectTree };
 export type { DisposeOptions };
@@ -9,8 +9,8 @@ export type { DisposeOptions };
 export function disposeSceneResources(scene: THREE.Scene, options?: DisposeOptions): void {
 	disposeObjectTree(scene, options);
 
-	if (canDisposeTexture(scene.environment ?? undefined)) scene.environment?.dispose();
-	if (scene.background instanceof THREE.Texture && canDisposeTexture(scene.background)) {
+	scene.environment?.dispose();
+	if (scene.background instanceof THREE.Texture) {
 		scene.background.dispose();
 	}
 }

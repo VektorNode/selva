@@ -59,7 +59,9 @@
 	// A short, honest teaser of the workspace — the full grid lives on /packages.
 	const featuredPackages = packages
 		.filter((p) =>
-			['@selvajs/selva', '@selvajs/compute', '@selvajs/platform', '@selvajs/cli'].includes(p.name)
+			['@selvajs/selva', '@selvajs/compute', '@selvajs/visualization', '@selvajs/cli'].includes(
+				p.name
+			)
 		)
 		.map((p) => ({ name: p.name, tagline: p.tagline }));
 

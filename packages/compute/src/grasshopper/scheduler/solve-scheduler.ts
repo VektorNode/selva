@@ -150,7 +150,6 @@ export class SolveScheduler {
 	private readonly retry: RetryPolicy | undefined;
 
 	private readonly cacheEnabled: boolean;
-	private readonly cacheMax: number;
 	private readonly cacheMaxBytes: number;
 	private readonly cacheTtl: number;
 	private readonly cacheErroredSolves: boolean;
@@ -220,12 +219,13 @@ export class SolveScheduler {
 		this.retry = options.retry;
 
 		const cacheOpt = options.cache;
-		this.cacheEnabled = cacheOpt !== undefined && cacheOpt !== false;
-		const cacheConfig = typeof cacheOpt === 'object' ? cacheOpt : {};
-		this.cacheMax = cacheConfig.maxEntries ?? 50;
-		this.cacheMaxBytes = Math.max(0, cacheConfig.maxBytes ?? 0);
-		this.cacheTtl = cacheConfig.ttlMs ?? 0;
-		this.cacheErroredSolves = cacheConfig.cacheErroredSolves ?? true;
+		const cacheConfig = typeof cacheOpt === 'object' ? cacheOpt : null;
+		this.cacheMaxBytes = Math.max(0, cacheConfig?.maxBytes ?? 0);
+		// A zero budget retains nothing, so treat it as off rather than running a
+		// cache that can only ever miss.
+		this.cacheEnabled = this.cacheMaxBytes > 0;
+		this.cacheTtl = cacheConfig?.ttlMs ?? 0;
+		this.cacheErroredSolves = cacheConfig?.cacheErroredSolves ?? true;
 
 		// On by default when the client wired a cache-key executor — it's a pure
 		// win for reusable definitions and falls back safely on a miss.
@@ -839,15 +839,11 @@ export class SolveScheduler {
 		const sizeBytes = getResponseWireSize(response) ?? estimateResponseSize(response);
 		// An entry larger than the whole byte budget would evict everything
 		// (including itself) — serve it through, retain nothing.
-		if (this.cacheMaxBytes > 0 && sizeBytes > this.cacheMaxBytes) return;
+		if (sizeBytes > this.cacheMaxBytes) return;
 		this.dropCacheEntry(key); // replace-in-place: release the old copy's bytes
 		this.cache.set(key, { response, insertedAt: Date.now(), sizeBytes });
 		this.cacheBytes += sizeBytes;
-		while (
-			(this.cache.size > this.cacheMax ||
-				(this.cacheMaxBytes > 0 && this.cacheBytes > this.cacheMaxBytes)) &&
-			this.cache.size > 0
-		) {
+		while (this.cacheBytes > this.cacheMaxBytes && this.cache.size > 0) {
 			const oldest = this.cache.keys().next().value;
 			if (oldest === undefined) break;
 			this.dropCacheEntry(oldest);

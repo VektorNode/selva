@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CACHED_GEOMETRY_USERDATA_FLAG } from '../../shared/index.js';
 import { cloneSceneObjects, meshPolicy, releaseSceneObjects } from '../mesh-policy.js';
 
 // `@selvajs/solve`'s result memo keeps meshes opaque and injects these rules, so this is the
@@ -48,17 +47,6 @@ describe('cloneSceneObjects', () => {
 		expect(copy.position.toArray()).toEqual([1, 2, 3]);
 	});
 
-	it('strips the geometry-cache flag from the copy', () => {
-		const source = meshWithChild();
-		source.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG] = true;
-
-		const [copy] = cloneSceneObjects([source]);
-
-		expect((copy as THREE.Mesh).geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG]).toBeUndefined();
-		// The source's own flag is untouched — the cache still owns its instance.
-		expect(source.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG]).toBe(true);
-	});
-
 	it('handles objects with no geometry (groups, lights)', () => {
 		const group = new THREE.Group();
 		group.add(meshWithChild());
@@ -91,20 +79,6 @@ describe('releaseSceneObjects', () => {
 		expect(material).not.toHaveBeenCalled();
 	});
 
-	it('skips cache-owned geometry (the geometry cache disposes on its own eviction)', () => {
-		const mesh = meshWithChild();
-		mesh.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG] = true;
-		const cached = vi.spyOn(mesh.geometry, 'dispose');
-		const plain = vi.spyOn((mesh.children[0] as THREE.Mesh).geometry, 'dispose');
-
-		releaseSceneObjects([mesh]);
-
-		expect(cached).not.toHaveBeenCalled();
-		expect(plain).toHaveBeenCalled();
-	});
-});
-
-describe('meshPolicy', () => {
 	it('round-trips: a clone survives the original being released', () => {
 		// End to end: the memo stores a clone, the viewer disposes what it was given, and the
 		// next hit must still be renderable.

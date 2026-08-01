@@ -235,11 +235,15 @@ describe('createClientCache — L1 response cache byte budget (audit C2)', () =>
 	it('forwards responseCacheMaxBytes as the scheduler cache maxBytes', async () => {
 		const cache = createClientCache({ ...baseConfig(), responseCacheMaxBytes: 64 * 1024 * 1024 });
 		await cache.getClient(server('s1'));
-		expect(createdSchedulerOptions[0].cache).toEqual({
-			maxEntries: 20,
-			ttlMs: 5 * 60_000,
-			maxBytes: 64 * 1024 * 1024
-		});
+		expect(createdSchedulerOptions[0].cache).toEqual({ maxBytes: 64 * 1024 * 1024 });
+	});
+
+	it('sets no TTL and no entry cap, so the byte budget is the only eviction pressure', async () => {
+		const cache = createClientCache({ ...baseConfig(), responseCacheMaxBytes: 64 * 1024 * 1024 });
+		await cache.getClient(server('s1'));
+		const opts = createdSchedulerOptions[0].cache as Record<string, unknown>;
+		expect(opts.ttlMs).toBeUndefined();
+		expect(opts.maxEntries).toBeUndefined();
 	});
 
 	it('disables the L1 response cache entirely when the budget is 0', async () => {

@@ -5,11 +5,10 @@ import {
 	edgeExtractWorkerSource,
 	extractEdgeSegments
 } from '../edge-extract.js';
-import { registerCacheRelease } from '../../shared/index.js';
-import { INLINE_TRIANGLE_BUDGET, SEGMENT_CACHE_BYTE_BUDGET } from './options.js';
+import { INLINE_TRIANGLE_BUDGET } from './options.js';
 
 // ============================================================================
-// Segment extraction — fast path, content cache, worker offload
+// Segment extraction — fast path, worker offload
 // ============================================================================
 
 export function triangleCountOf(geometry: THREE.BufferGeometry): number {
@@ -78,43 +77,6 @@ function contentKey(data: FastPathData, thresholdAngle: number): string {
 	return `${thresholdAngle}:${data.positions.length}:${indexLength}:${hash >>> 0}`;
 }
 
-// Keyed on content, not identity: the viewer rebuilds every BufferGeometry each solve, so an
-// identity-keyed cache would never hit. CPU-only, but registered on the same teardown sweep as the
-// GPU caches so it doesn't outlive the last viewer.
-const segmentCache = new Map<string, Float32Array>();
-let segmentCacheBytes = 0;
-
-registerCacheRelease(() => {
-	segmentCache.clear();
-	segmentCacheBytes = 0;
-});
-
-function segmentCacheGet(key: string): Float32Array | undefined {
-	const cached = segmentCache.get(key);
-	if (cached) {
-		// Refresh LRU order.
-		segmentCache.delete(key);
-		segmentCache.set(key, cached);
-	}
-	return cached;
-}
-
-function segmentCachePut(key: string, segments: Float32Array): void {
-	if (segments.byteLength > SEGMENT_CACHE_BYTE_BUDGET) return;
-	const existing = segmentCache.get(key);
-	if (existing) {
-		segmentCacheBytes -= existing.byteLength;
-		segmentCache.delete(key);
-	}
-	segmentCache.set(key, segments);
-	segmentCacheBytes += segments.byteLength;
-	while (segmentCacheBytes > SEGMENT_CACHE_BYTE_BUDGET) {
-		const oldestKey = segmentCache.keys().next().value as string;
-		segmentCacheBytes -= segmentCache.get(oldestKey)!.byteLength;
-		segmentCache.delete(oldestKey);
-	}
-}
-
 function extractViaThree(geometry: THREE.BufferGeometry, thresholdAngle: number): Float32Array {
 	const edges = new THREE.EdgesGeometry(geometry, thresholdAngle);
 	const positions = edges.attributes.position
@@ -131,13 +93,7 @@ export function extractSegmentsSync(
 	const data = fastPathData(geometry);
 	if (!data) return extractViaThree(geometry, thresholdAngle);
 
-	const key = contentKey(data, thresholdAngle);
-	const cached = segmentCacheGet(key);
-	if (cached) return cached;
-
-	const segments = extractEdgeSegments(data.positions, data.index, thresholdAngle);
-	segmentCachePut(key, segments);
-	return segments;
+	return extractEdgeSegments(data.positions, data.index, thresholdAngle);
 }
 
 // --- Worker offload -----------------------------------------------------------------------------
@@ -229,9 +185,6 @@ export function extractSegmentsAsync(
 	}
 
 	const key = contentKey(data, thresholdAngle);
-	const cached = segmentCacheGet(key);
-	if (cached) return Promise.resolve(cached);
-
 	const inFlight = inFlightExtractions.get(key);
 	if (inFlight) return inFlight;
 
@@ -240,10 +193,6 @@ export function extractSegmentsAsync(
 
 	const request = extractInWorker(worker, data, thresholdAngle)
 		.catch(() => extractEdgeSegments(data.positions, data.index, thresholdAngle))
-		.then((segments) => {
-			segmentCachePut(key, segments);
-			return segments;
-		})
 		.finally(() => {
 			inFlightExtractions.delete(key);
 		});

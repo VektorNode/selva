@@ -76,22 +76,15 @@ dispose(); // frees the GL context, not just its objects
 host wiring** — both are self-managing:
 
 - **GPU capabilities (anisotropy).** `initThree` calls `publishMaxAnisotropy` at init;
-  `parse/webdisplay/texture-cache.ts` subscribes via `observeMaxAnisotropy` at module load — the
+  `parse/webdisplay/apply-texture.ts` subscribes via `observeMaxAnisotropy` at module load — the
   observer fires immediately on subscribe, so load order doesn't matter. The `onMaxAnisotropy`
   option on `ThreeInitializerOptions` still exists for hosts doing their own texture work, but is
   **not needed to get sharp textures**.
-- **Cache teardown.** Every cross-solve cache calls `registerCacheRelease(...)` at module init;
-  `initThree` calls `retainCaches()` and invokes the returned release in `dispose()`. Refcounted, so
-  with several live viewers only the last one out actually frees.
-
-`parse/`'s `releaseParseCaches` remains exported as an escape hatch, not a step anyone must remember.
 
 ## GPU ownership: ask, don't remember
 
-Every GPU resource has exactly one owner — a cache, a module singleton, or the scene. The rule lives
-in `shared/gpu-ownership.ts`, and **`shared/gpu-dispose.ts`'s `disposeObjectTree` is the only
-traversal that should dispose scene content.** Separate walkers previously each carried a different
-subset of the ownership guards, and the gaps between them were exactly where two leaks lived (the
-edge-cache F1 leak, and cache-owned textures freed while the cache still served them). If you need
-a new teardown path, call `disposeObjectTree` — do not write a fourth `traverse` that calls
-`.dispose()`.
+Every GPU resource has exactly one owner — a module singleton, or the scene. The rule lives in
+`shared/gpu-ownership.ts`, and **`shared/gpu-dispose.ts`'s `disposeObjectTree` is the only traversal
+that should dispose scene content.** Separate walkers previously each carried a different subset of
+the ownership guards, and the gaps between them were exactly where leaks lived. If you need a new
+teardown path, call `disposeObjectTree` — do not write a fourth `traverse` that calls `.dispose()`.

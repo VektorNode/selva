@@ -2,12 +2,7 @@ import * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-	applyOffset,
-	CACHED_GEOMETRY_USERDATA_FLAG,
-	computeCombinedBoundingBox,
-	parseColor
-} from '../../shared/index.js';
+import { applyOffset, computeCombinedBoundingBox, parseColor } from '../../shared/index.js';
 import { clearScene, updateScene } from '../three-helpers';
 import { METAL_MATERIAL } from '../three-materials';
 
@@ -142,27 +137,5 @@ describe('clearScene', () => {
 		clearScene(scene);
 
 		expect(scene.children).toEqual([grid]);
-	});
-
-	// The render half of the geometry-cache contract. The cache itself lives in
-	// `@selvajs/visualization` (parse/webdisplay/geometry-cache.ts) and owns the flagged geometries —
-	// including their GPU buffers — so the next solve can reuse them; it disposes on eviction. This
-	// asserts `clearScene` honours that ownership. The cache side (flag is set, `geometryCacheClear`
-	// disposes) is covered in that package's geometry-cache suite.
-	it('skips disposing cache-owned geometries but disposes everything else', () => {
-		const cachedMesh = meshAt(0, 0, 0);
-		cachedMesh.geometry.userData[CACHED_GEOMETRY_USERDATA_FLAG] = true;
-		const plainMesh = meshAt(1, 1, 1);
-
-		const cachedDispose = vi.spyOn(cachedMesh.geometry, 'dispose');
-		const plainDispose = vi.spyOn(plainMesh.geometry, 'dispose');
-
-		const scene = new THREE.Scene();
-		scene.add(cachedMesh, plainMesh);
-		clearScene(scene);
-
-		expect(cachedDispose).not.toHaveBeenCalled();
-		expect(plainDispose).toHaveBeenCalled();
-		expect(scene.children).toHaveLength(0);
 	});
 });

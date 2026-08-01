@@ -1,16 +1,15 @@
 /**
  * {@link assembleGeometries} is the hot, pure part of batch parsing: undoes the delta filter on
  * the raw wire arrays, dequantizes int16 positions to world floats, slices/rebases per-geometry
- * windows, computes vertex normals, and fingerprints each geometry for the cross-solve cache.
+ * windows and computes vertex normals.
  * Everything it needs travels as typed arrays, so the whole stage runs in a Worker and the main
  * thread only wraps the returned buffers into `BufferGeometry` objects.
  *
  * Like `edge-extract.ts`, it's a single self-contained function with zero outer captures (only
  * `Math` and its arguments) so `Function.prototype.toString` yields code that runs unchanged
  * inside a blob-URL Worker ({@link meshAssemblyWorkerSource}) — bundler-agnostic by construction.
- * That forces duplicating small helpers from `binary-parser.ts` (unzigzag/delta decode) and
- * `geometry-cache.ts` (fingerprint); equivalence is pinned by tests asserting the worker path
- * shares cache entries with the synchronous path.
+ * That forces duplicating small helpers from `binary-parser.ts` (unzigzag/delta decode);
+ * equivalence with the synchronous path is pinned by tests.
  */
 
 export interface AssemblyWindow {
@@ -41,8 +40,6 @@ export interface AssemblyInput {
 }
 
 export interface AssembledGeometry {
-	/** Cache key — identical to the synchronous path's `geometryContentKey` output. */
-	key: string;
 	positions: Float32Array;
 	normals: Float32Array;
 	indices: Uint32Array;
@@ -124,60 +121,6 @@ export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
 			throw new Error(`Index ${indices[i]} out of range of vertexCount ${totalVertexCount}`);
 		}
 	}
-
-	// --- Fingerprint (must byte-match geometry-cache.ts fingerprintViews) ----------------------
-	const SAMPLE_WORDS = 1024;
-	const fingerprint = (parts: (ArrayBufferView | null)[], salt: string): string => {
-		let hash = 0x811c9dc5;
-		const mix = (word: number): void => {
-			hash ^= word;
-			hash = Math.imul(hash, 0x01000193);
-		};
-		for (let i = 0; i < salt.length; i++) mix(salt.charCodeAt(i));
-		for (const part of parts) {
-			if (!part) {
-				mix(0xdead);
-				continue;
-			}
-			const byteLength = part.byteLength;
-			mix(byteLength);
-			if ((part.byteOffset & 3) === 0 && (byteLength & 3) === 0) {
-				const words = new Uint32Array(part.buffer, part.byteOffset, byteLength >> 2);
-				const head = Math.min(SAMPLE_WORDS, words.length);
-				for (let i = 0; i < head; i++) mix(words[i]);
-				for (let i = Math.max(head, words.length - SAMPLE_WORDS); i < words.length; i++) {
-					mix(words[i]);
-				}
-			} else {
-				const bytes = new Uint8Array(part.buffer, part.byteOffset, byteLength);
-				const head = Math.min(SAMPLE_WORDS * 4, bytes.length);
-				for (let i = 0; i < head; i++) mix(bytes[i]);
-				for (let i = Math.max(head, bytes.length - SAMPLE_WORDS * 4); i < bytes.length; i++) {
-					mix(bytes[i]);
-				}
-			}
-		}
-		return `${(hash >>> 0).toString(36)}:${parts.length}`;
-	};
-
-	const keyFor = (kind: string, windows: AssemblyWindow[]): string => {
-		const parts: (ArrayBufferView | null)[] = [];
-		let salt = kind;
-		for (const window of windows) {
-			salt += `|${window.vertexStart},${window.vertexCount},${window.indexStart},${window.indexCount}`;
-			const componentStart = window.vertexStart * 3;
-			const componentEnd = componentStart + window.vertexCount * 3;
-			parts.push(worldVertices.subarray(componentStart, componentEnd));
-			parts.push(indices.subarray(window.indexStart, window.indexStart + window.indexCount));
-			parts.push(
-				uvs
-					? uvs.subarray(window.vertexStart * 2, (window.vertexStart + window.vertexCount) * 2)
-					: null
-			);
-			parts.push(colors ? colors.subarray(componentStart, componentEnd) : null);
-		}
-		return fingerprint(parts, salt);
-	};
 
 	// --- Assemble each job: window copies, rebased indices, area-weighted vertex normals --------
 	const results: AssembledGeometry[] = [];
@@ -274,7 +217,6 @@ export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
 		}
 
 		results.push({
-			key: keyFor(job.kind, job.windows),
 			positions,
 			normals,
 			indices: outIndices,

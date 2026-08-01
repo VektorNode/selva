@@ -283,23 +283,6 @@ describe('edge geometry ownership', () => {
 		expect(a.geometry).not.toBe(b.geometry);
 	});
 
-	it('reuses extracted segments across meshes with identical content', () => {
-		// The saving that actually matters, and the one that survived the cut: the extraction
-		// kernel runs once. LineSegmentsGeometry adopts the array without copying, so a shared
-		// segment array is observable as a shared position buffer.
-		const root = new THREE.Group();
-		root.add(meshSharing(new THREE.BoxGeometry(1, 1, 1)));
-		root.add(meshSharing(new THREE.BoxGeometry(1, 1, 1)));
-
-		const [a, b] = addEdges(root);
-
-		const positionsOf = (overlay: typeof a): ArrayBufferLike =>
-			(overlay.geometry.attributes.instanceStart as THREE.InterleavedBufferAttribute).data.array
-				.buffer;
-
-		expect(positionsOf(a)).toBe(positionsOf(b));
-	});
-
 	it('meshes with different source geometries do not share edge geometry', () => {
 		const [a] = addEdges(meshWithBox());
 		const [b] = addEdges(meshWithBox());

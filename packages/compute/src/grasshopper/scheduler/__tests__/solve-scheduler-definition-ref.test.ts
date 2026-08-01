@@ -31,7 +31,10 @@ const makeRef = (key: string): DefinitionRef & { load: ReturnType<typeof vi.fn> 
 describe('scheduler + DefinitionRef', () => {
 	it('serves an L1 hit for the same (ref.key, tree) across distinct ref objects, never calling load()', async () => {
 		const executor = vi.fn<SolveExecutor>(async () => makeResponse());
-		const s = new SolveScheduler(executor, baseConfig, { mode: 'queue', cache: true });
+		const s = new SolveScheduler(executor, baseConfig, {
+			mode: 'queue',
+			cache: { maxBytes: 100_000 }
+		});
 
 		const refA = makeRef('version-1');
 		const refB = makeRef('version-1'); // different object, same identity

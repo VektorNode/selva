@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 
-import { geometryCacheGet, geometryCachePut } from '../geometry-cache.js';
-import { geometryContentKey, indexOutOfWindow } from './metadata.js';
+import { indexOutOfWindow } from './metadata.js';
 
 import type { MaterialGroup, MeshMetadata } from '../types.js';
 
@@ -18,88 +17,73 @@ export function createMergedMesh(
 	allUvs: Float32Array | null = null,
 	allColors: Uint8Array | null = null
 ): THREE.Mesh {
-	// Cross-solve reuse: identical content → same BufferGeometry object, skipping the merge copies,
-	// computeVertexNormals, and the GPU re-upload entirely.
-	const cacheKey = geometryContentKey(
-		'merged',
-		group.meshes,
-		allVertices,
-		allIndices,
-		allUvs,
-		allColors
-	);
-	let geometry = geometryCacheGet(cacheKey);
+	let totalVertexCount = 0;
+	let totalIndexCount = 0;
+	for (const meshMeta of group.meshes) {
+		totalVertexCount += meshMeta.vertexCount;
+		totalIndexCount += meshMeta.indexCount;
+	}
 
-	if (!geometry) {
-		let totalVertexCount = 0;
-		let totalIndexCount = 0;
-		for (const meshMeta of group.meshes) {
-			totalVertexCount += meshMeta.vertexCount;
-			totalIndexCount += meshMeta.indexCount;
+	const mergedVertices = new Float32Array(totalVertexCount * 3);
+	const mergedIndices = new Uint32Array(totalIndexCount);
+	const mergedUvs = allUvs ? new Float32Array(totalVertexCount * 2) : null;
+	const mergedColors = allColors ? new Uint8Array(totalVertexCount * 3) : null;
+
+	let vertexWriteCursor = 0;
+	let indexWriteCursor = 0;
+
+	for (const meshMeta of group.meshes) {
+		const componentStart = meshMeta.vertexStart * 3;
+		const componentLen = meshMeta.vertexCount * 3;
+		mergedVertices.set(
+			allVertices.subarray(componentStart, componentStart + componentLen),
+			vertexWriteCursor * 3
+		);
+
+		if (mergedUvs && allUvs) {
+			const uvStart = meshMeta.vertexStart * 2;
+			mergedUvs.set(
+				allUvs.subarray(uvStart, uvStart + meshMeta.vertexCount * 2),
+				vertexWriteCursor * 2
+			);
 		}
 
-		const mergedVertices = new Float32Array(totalVertexCount * 3);
-		const mergedIndices = new Uint32Array(totalIndexCount);
-		const mergedUvs = allUvs ? new Float32Array(totalVertexCount * 2) : null;
-		const mergedColors = allColors ? new Uint8Array(totalVertexCount * 3) : null;
-
-		let vertexWriteCursor = 0;
-		let indexWriteCursor = 0;
-
-		for (const meshMeta of group.meshes) {
-			const componentStart = meshMeta.vertexStart * 3;
-			const componentLen = meshMeta.vertexCount * 3;
-			mergedVertices.set(
-				allVertices.subarray(componentStart, componentStart + componentLen),
+		if (mergedColors && allColors) {
+			mergedColors.set(
+				allColors.subarray(componentStart, componentStart + componentLen),
 				vertexWriteCursor * 3
 			);
-
-			if (mergedUvs && allUvs) {
-				const uvStart = meshMeta.vertexStart * 2;
-				mergedUvs.set(
-					allUvs.subarray(uvStart, uvStart + meshMeta.vertexCount * 2),
-					vertexWriteCursor * 2
-				);
-			}
-
-			if (mergedColors && allColors) {
-				mergedColors.set(
-					allColors.subarray(componentStart, componentStart + componentLen),
-					vertexWriteCursor * 3
-				);
-			}
-
-			const indicesSlice = allIndices.subarray(
-				meshMeta.indexStart,
-				meshMeta.indexStart + meshMeta.indexCount
-			);
-			const indexShift = vertexWriteCursor - meshMeta.vertexStart;
-			const windowStart = meshMeta.vertexStart;
-			const windowEnd = meshMeta.vertexStart + meshMeta.vertexCount;
-			for (let i = 0; i < indicesSlice.length; i++) {
-				const indexValue = indicesSlice[i]!;
-				if (indexValue < windowStart || indexValue >= windowEnd) {
-					throw indexOutOfWindow(indexValue, meshMeta);
-				}
-				mergedIndices[indexWriteCursor + i] = indexValue + indexShift;
-			}
-
-			vertexWriteCursor += meshMeta.vertexCount;
-			indexWriteCursor += meshMeta.indexCount;
 		}
 
-		geometry = new THREE.BufferGeometry();
-		geometry.setAttribute('position', new THREE.BufferAttribute(mergedVertices, 3));
-		geometry.setIndex(new THREE.BufferAttribute(mergedIndices, 1));
-		if (mergedUvs) {
-			geometry.setAttribute('uv', new THREE.BufferAttribute(mergedUvs, 2));
+		const indicesSlice = allIndices.subarray(
+			meshMeta.indexStart,
+			meshMeta.indexStart + meshMeta.indexCount
+		);
+		const indexShift = vertexWriteCursor - meshMeta.vertexStart;
+		const windowStart = meshMeta.vertexStart;
+		const windowEnd = meshMeta.vertexStart + meshMeta.vertexCount;
+		for (let i = 0; i < indicesSlice.length; i++) {
+			const indexValue = indicesSlice[i]!;
+			if (indexValue < windowStart || indexValue >= windowEnd) {
+				throw indexOutOfWindow(indexValue, meshMeta);
+			}
+			mergedIndices[indexWriteCursor + i] = indexValue + indexShift;
 		}
-		if (mergedColors) {
-			geometry.setAttribute('color', new THREE.BufferAttribute(mergedColors, 3, true));
-		}
-		geometry.computeVertexNormals();
-		geometryCachePut(cacheKey, geometry);
+
+		vertexWriteCursor += meshMeta.vertexCount;
+		indexWriteCursor += meshMeta.indexCount;
 	}
+
+	const geometry = new THREE.BufferGeometry();
+	geometry.setAttribute('position', new THREE.BufferAttribute(mergedVertices, 3));
+	geometry.setIndex(new THREE.BufferAttribute(mergedIndices, 1));
+	if (mergedUvs) {
+		geometry.setAttribute('uv', new THREE.BufferAttribute(mergedUvs, 2));
+	}
+	if (mergedColors) {
+		geometry.setAttribute('color', new THREE.BufferAttribute(mergedColors, 3, true));
+	}
+	geometry.computeVertexNormals();
 
 	return finalizeMergedMesh(geometry, group, materials);
 }
@@ -150,52 +134,38 @@ export function createIndividualMeshes(
 		const componentStart = meshMeta.vertexStart * 3;
 		const componentLen = meshMeta.vertexCount * 3;
 
-		// Cross-solve reuse — see createMergedMesh.
-		const cacheKey = geometryContentKey(
-			'single',
-			[meshMeta],
-			allVertices,
-			allIndices,
-			allUvs,
-			allColors
+		// `subarray` returns a view; copy via `slice` so the BufferAttribute owns its memory and
+		// downstream code (dispose/reuse) can't surprise us by sharing the parser's buffer.
+		const vertices = allVertices.slice(componentStart, componentStart + componentLen);
+
+		const indicesSlice = allIndices.subarray(
+			meshMeta.indexStart,
+			meshMeta.indexStart + meshMeta.indexCount
 		);
-		let geometry = geometryCacheGet(cacheKey);
-
-		if (!geometry) {
-			// `subarray` returns a view; copy via `slice` so the BufferAttribute owns its memory and
-			// downstream code (dispose/reuse) can't surprise us by sharing the parser's buffer.
-			const vertices = allVertices.slice(componentStart, componentStart + componentLen);
-
-			const indicesSlice = allIndices.subarray(
-				meshMeta.indexStart,
-				meshMeta.indexStart + meshMeta.indexCount
-			);
-			const rebasedIndices = new Uint32Array(indicesSlice.length);
-			const baseIndex = meshMeta.vertexStart;
-			const windowEnd = meshMeta.vertexStart + meshMeta.vertexCount;
-			for (let i = 0; i < indicesSlice.length; i++) {
-				const indexValue = indicesSlice[i]!;
-				if (indexValue < baseIndex || indexValue >= windowEnd) {
-					throw indexOutOfWindow(indexValue, meshMeta);
-				}
-				rebasedIndices[i] = indexValue - baseIndex;
+		const rebasedIndices = new Uint32Array(indicesSlice.length);
+		const baseIndex = meshMeta.vertexStart;
+		const windowEnd = meshMeta.vertexStart + meshMeta.vertexCount;
+		for (let i = 0; i < indicesSlice.length; i++) {
+			const indexValue = indicesSlice[i]!;
+			if (indexValue < baseIndex || indexValue >= windowEnd) {
+				throw indexOutOfWindow(indexValue, meshMeta);
 			}
-
-			geometry = new THREE.BufferGeometry();
-			geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-			geometry.setIndex(new THREE.BufferAttribute(rebasedIndices, 1));
-			if (allUvs) {
-				const uvStart = meshMeta.vertexStart * 2;
-				const uvs = allUvs.slice(uvStart, uvStart + meshMeta.vertexCount * 2);
-				geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-			}
-			if (allColors) {
-				const colors = allColors.slice(componentStart, componentStart + componentLen);
-				geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3, true));
-			}
-			geometry.computeVertexNormals();
-			geometryCachePut(cacheKey, geometry);
+			rebasedIndices[i] = indexValue - baseIndex;
 		}
+
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+		geometry.setIndex(new THREE.BufferAttribute(rebasedIndices, 1));
+		if (allUvs) {
+			const uvStart = meshMeta.vertexStart * 2;
+			const uvs = allUvs.slice(uvStart, uvStart + meshMeta.vertexCount * 2);
+			geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+		}
+		if (allColors) {
+			const colors = allColors.slice(componentStart, componentStart + componentLen);
+			geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3, true));
+		}
+		geometry.computeVertexNormals();
 
 		meshes.push(finalizeSingleMesh(geometry, meshMeta, group, materials));
 	}

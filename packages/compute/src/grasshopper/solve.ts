@@ -223,10 +223,9 @@ async function materializeDefinition(definition: SolveDefinition): Promise<strin
  * Shared solve body: apply optional settings, POST, and split the server's
  * `pointer` (its cache key) off the response. `algo` — the request's full
  * base64 definition echoed back on every solve — is stripped too: keeping it
- * pins a multi-MB copy per response, multiplied by every cache holding
- * responses (the scheduler's LRU alone up to `maxEntries` times). Stripping via
- * shallow copy rather than `delete` keeps any already-observed response object
- * unmutated.
+ * pins a multi-MB copy per response, which would consume the scheduler cache's
+ * byte budget many times over. Stripping via shallow copy rather than `delete`
+ * keeps any already-observed response object unmutated.
  */
 async function runSolve(
 	args: GrasshopperRequestSchema,

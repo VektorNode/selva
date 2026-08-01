@@ -11,31 +11,19 @@ description: 'Where Selva caches — browser, server, and Rhino.Compute — what
 Solving a Grasshopper definition is the expensive part of Selva. Caching avoids repeating work — and
 also avoids re-uploading definitions, re-decoding meshes, and re-uploading geometry to the GPU.
 
-There are a lot of individual caches, but **only three names you ever have to know**, each named for
-what it holds:
+There are **only two names you ever have to know**, each named for what it holds:
 
 | Name                 | Holds                                       | You configure it with         |
 | -------------------- | ------------------------------------------- | ----------------------------- |
 | **Definition cache** | `.gh` file bytes                            | `COMPUTE_DEFINITION_CACHE_MB` |
 | **Solve cache**      | solve results, keyed on definition + inputs | `COMPUTE_SOLVE_CACHE_MB`      |
-| **Viewer cache**     | geometry and textures with live GPU buffers | nothing — see below           |
 
 Both settings are **sizes in MB**, both are **on by default**, and `0` turns one off. There is no
 provider to pick, no quota that is secretly an on/off switch, and no combination to get right.
 
----
-
-## First: "cache" means two different things
-
-Almost every confusion about caching in Selva comes from mixing these up.
-
-| Kind                    | Holds                                    | Why it exists                                      | Can it go stale?                                |
-| ----------------------- | ---------------------------------------- | -------------------------------------------------- | ----------------------------------------------- |
-| **Result caches**       | finished solve results, definition bytes | skip work                                          | **Yes** — this is where freshness lives         |
-| **GPU-resource caches** | live Three.js geometries and textures    | the viewer rebuilds the whole scene on every solve | **No** — keyed on content, disposed on eviction |
-
-If you're debugging "why am I seeing an old result?", you only care about **result caches**. The
-GPU-resource caches are an ownership concern (who disposes what), not a freshness one.
+**The browser caches nothing across solves except the solve memo.** The viewer rebuilds its scene
+every solve and owns every geometry and texture it builds, so there is no viewer cache to reason
+about, configure, or clear.
 
 ---
 
@@ -43,7 +31,7 @@ GPU-resource caches are an ownership concern (who disposes what), not a freshnes
 
 ```
 Browser ─────────────► Selva server ─────────────► Rhino.Compute
- memo, viewer caches    solve cache,                definition cache,
+ solve memo             solve cache,                definition cache,
                         definition cache            cachesolve
 ```
 
@@ -57,8 +45,7 @@ Browser ─────────────► Selva server ─────�
 | Pointer reuse     | Selva ↔ Compute | re-uploading the `.gh`             | on      | yes          |
 | `cachesolve`      | Rhino.Compute   | the solve                          | on      | yes          |
 
-**Everything else needs no configuration** — the warm-client cache, the browser's viewer caches, and
-the single-flight coalescer. They're described in
+**Everything else needs no configuration** — the warm-client cache and the single-flight coalescer. They're described in
 [Caches you don't configure](#caches-you-dont-configure).
 
 ---
@@ -74,10 +61,6 @@ can never change meaning:
 The definition cache keys on the **version id**, an immutable UUID. Editing a definition creates a new
 version, so its cache entries are new too. Rolling back re-hits the old entries, correctly. This is why
 it has no "clear" button, and why it needs none.
-
-The browser's geometry and texture caches use the same trick from the other direction: they key on the
-**content** of what they hold (a hash of the mesh bytes, a content-addressed texture URL), so a key can
-never refer to different content than it did before.
 
 Only two caches have real invalidation:
 
@@ -111,12 +94,19 @@ request leaves the browser.
 
 ### Solve cache — in the Selva server
 
-If the same definition with the same inputs was solved recently on **this** Selva process, the stored
+If the same definition with the same inputs has been solved on **this** Selva process, the stored
 result is returned without calling Rhino.Compute at all.
 
 - ✅ Skips both the network round-trip and the solve.
 - ❌ One process's memory — lost on restart, not shared across instances.
 - **Limit:** `COMPUTE_SOLVE_CACHE_MB`, default 256 MB. `0` disables.
+- **Nothing expires.** Memory is the only pressure: entries are dropped LRU when the budget is
+  exceeded, and there is no TTL and no entry-count cap. A solve is a pure function of
+  (definition, inputs) — both immutable — so a retained result cannot go stale, and expiring one
+  could only ever force a paid re-solve of the identical answer.
+- ⚠️ **The one exception is a definition that reaches outside its inputs** — a component reading a
+  live URL, a database, or the clock. Its output isn't a function of its inputs, so a cached result
+  can be genuinely wrong rather than merely old. Nothing detects this; a restart is the blunt fix.
 - ⚠️ **The budget is per compute server**, and Selva keeps up to 16 warm. A deployment fanned out
   across many compute servers can hold `256 MB × 16` in the worst case. Lower `COMPUTE_SOLVE_CACHE_MB`
   if you run more than a couple of servers on a memory-constrained host.
@@ -169,13 +159,11 @@ Asks the compute server to remember results, keyed on definition + inputs.
 
 Listed so you know they exist; none has settings and none can serve stale content.
 
-| Cache                   | Tier         | Keyed on                     | Bound           |
-| ----------------------- | ------------ | ---------------------------- | --------------- |
-| Warm-client cache       | Selva server | compute server id            | 16 servers, LRU |
-| Single-flight coalescer | Selva server | definition + server + inputs | in-flight only  |
-| Geometry cache          | Browser      | mesh **content** hash        | 256 MiB         |
-| Texture cache           | Browser      | content-addressed URL        | 64 textures     |
-| Edge segment cache      | Browser      | mesh content hash            | 128 MiB         |
+| Cache                         | Tier         | Keyed on                     | Bound           |
+| ----------------------------- | ------------ | ---------------------------- | --------------- |
+| Warm-client cache             | Selva server | compute server id            | 16 servers, LRU |
+| Single-flight coalescer       | Selva server | definition + server + inputs | in-flight only  |
+| Edge extraction in-flight map | Browser      | mesh content hash            | in-flight only  |
 
 **Warm-client cache** keeps a live, connected client per compute server rather than reconnecting each
 solve. It evicts automatically when you change a server's URL or key.
@@ -185,24 +173,18 @@ definition doesn't stampede compute after a deploy. It is not a cache — nothin
 is released the moment the solve settles. It runs for **every** solve, which matters most when the
 solve cache is off: that is exactly when N identical requests would each pay a full Rhino round trip.
 
-**The browser's GPU caches** exist because the viewer discards and rebuilds the entire scene on every
-solve. Without them, an unchanged mesh would be re-decoded and re-uploaded to the GPU on every slider
-move. They dispose their contents on eviction, and every one of them is keyed so that a hit is always
-the right content — so none can serve the wrong geometry.
+**Edge extraction in-flight map** is not a cache either: when several meshes in one solve have
+identical content, they share a single edge-extraction worker round-trip. The entry is released as
+soon as the extraction settles.
 
-> **Removed 2026-07-30 — the edge line-geometry cache leaked, and is gone rather than fixed.** It used
-> to be the one browser cache keyed on object _identity_ rather than content, written when identity
-> could not survive a solve ("the viewer rebuilds every `BufferGeometry` each solve, so identity caches
-> never hit across solves"). That stopped being true once the geometry cache began returning the _same_
-> instance across solves: measured, 8 meshes over 50 solves left **400** live line geometries — with
-> resident GPU buffers — instead of 8, because whole-scene clears detached overlays without ever
-> decrementing a refcount. Rather than patch the refcounting, the cache was deleted outright
-> (`render/edges/line-geometry.ts`): it also turned out to barely help (0/80 hits in a real scrubbing
-> loop), since the content-keyed edge segment cache above already covers the common case. Every overlay
-> now builds and owns its own line geometry directly, and `clearScene`'s generic dispose walker
-> (`shared/gpu-dispose.ts`) frees it like any other scene object — nothing left to bound or release.
-> Memory only; it never could serve wrong geometry. Full measurement in
-> [caching-audit-2026-07 §F1](./plans/archive/caching-audit-2026-07.md#f1-the-edge-cache-and-geometry-cache-now-contradict-each-other).
+> **Removed 2026-08-01 — the browser's geometry, texture and edge-segment caches are gone.** They
+> held decoded `BufferGeometry`, GPU textures and extracted edge segments across solves, bounded by
+> byte budgets (256 MiB / 64 entries / 128 MiB). None was ever measured against a real workload, no
+> user had reported a mesh-speed problem, and between them they carried the GPU-ownership flag
+> machinery, a cache-teardown registry, and a hash function hand-duplicated into the mesh worker.
+> They were deleted rather than tuned: the viewer now decodes each solve's geometry fresh and the
+> scene owns everything it builds, so `clearScene` disposes unconditionally. Re-add one only with a
+> benchmark showing what it buys — `pnpm bench` in `packages/visualization` is the instrument.
 
 ---
 

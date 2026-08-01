@@ -19,19 +19,29 @@ import type { SolveDefinition } from '../definition-ref';
 export type SchedulerMode = 'latest-wins' | 'queue' | 'parallel';
 
 export interface CacheOptions {
-	/** Maximum entries kept in the LRU. Default: 50. */
-	maxEntries?: number;
 	/**
-	 * Total byte budget for retained responses, evicted LRU alongside
-	 * `maxEntries` (both bounds apply). Responses range KB→100s of MB, so an
-	 * entry count alone can't bound heap. Sizing uses the response's wire size
-	 * (JSON text length, recorded at the fetch boundary — no re-serialization);
-	 * a response without that hint (custom executor) is sized by a one-off
-	 * `JSON.stringify`. A single response larger than the whole budget is
-	 * served but never retained. `0` = no byte bound (count-only, default).
+	 * Total byte budget for retained responses, evicted LRU. The only size bound
+	 * there is: responses range KB→100s of MB, so memory is the constraint that
+	 * matters and an entry count would only obscure it.
+	 *
+	 * Sizing uses the response's wire size (JSON text length, recorded at the
+	 * fetch boundary — no re-serialization); a response without that hint
+	 * (custom executor) is sized by a one-off `JSON.stringify`. A single
+	 * response larger than the whole budget is served but never retained.
+	 *
+	 * Required and must be > 0 — to disable caching, pass `cache: false`.
 	 */
-	maxBytes?: number;
-	/** Time-to-live in ms. Set to `0` for no expiry (default). */
+	maxBytes: number;
+	/**
+	 * Time-to-live in ms. Set to `0` for no expiry (default, and the right
+	 * choice for a solve keyed by immutable definition+inputs — expiry there
+	 * only buys a paid re-solve of an identical answer). Meaningful only when a
+	 * definition reaches outside its inputs (external data source, clock), where
+	 * a stale result is genuinely wrong rather than merely old.
+	 *
+	 * Expiry is evaluated lazily on read: an expired entry keeps its bytes
+	 * counted against `maxBytes` until that exact key is next consulted.
+	 */
 	ttlMs?: number;
 	/**
 	 * Cache responses that carry Grasshopper `errors`. Default `true`: an
@@ -66,8 +76,12 @@ export interface SolveSchedulerOptions {
 	queueWaitMs?: number;
 	timeoutMs?: number;
 	retry?: RetryPolicy;
-	/** Enable response caching keyed by hash of (definition, dataTree). */
-	cache?: boolean | CacheOptions;
+	/**
+	 * Response caching keyed by hash of (definition, dataTree). Omit or pass
+	 * `false` to disable; otherwise a byte budget is required, so an unbounded
+	 * cache can't be enabled by accident.
+	 */
+	cache?: false | CacheOptions;
 	/**
 	 * Reuse the server's definition cache key so a large (base64/binary)
 	 * definition is uploaded once and subsequent solves reference it by

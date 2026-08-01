@@ -56,7 +56,7 @@ const eager = import.meta.glob<DocModule>(['/../../docs/**/*.md', '!/../../docs/
 });
 
 function pathToSlug(path: string): string {
-	// "/../../docs/deployment/GCE-Linux.md" -> "deployment/gce-linux"
+	// "/../../docs/deployment/prerequisites.md" -> "deployment/prerequisites"
 	const rel = path.replace(/^.*\/docs\//, '').replace(/\.md$/, '');
 	return rel
 		.split('/')

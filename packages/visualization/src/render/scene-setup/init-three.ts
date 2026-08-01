@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { publishMaxAnisotropy, retainCaches } from '../../shared/index.js';
+import { publishMaxAnisotropy } from '../../shared/index.js';
 import { createCameraController } from '../camera-controller.js';
 import { EDGES_SKIPPED_TRIANGLE_CAP, addEdgesAsync, removeEdges } from '../edges.js';
 import { createGrid } from '../grid.js';
@@ -48,7 +48,6 @@ export const initThree = function (
 	options?.onMaxAnisotropy?.(renderer.capabilities.getMaxAnisotropy());
 
 	// Released in dispose(); the underlying caches are freed once the last live viewer lets go.
-	const releaseCaches = retainCaches();
 	const controls = setupControls(camera, canvas, config);
 
 	// Render loop, resize, and raycasting all read through getActiveCamera so 2D/3D stays coherent.
@@ -328,7 +327,6 @@ export const initThree = function (
 		// Cross-solve caches (parse/'s, reached via a registry rather than an import — layer rule)
 		// outlive any single scene but not the GL context just destroyed. Refcounted: only the last
 		// live viewer actually frees, and this must run after the scene sweep above.
-		releaseCaches();
 	};
 
 	return {
