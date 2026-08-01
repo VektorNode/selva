@@ -85,8 +85,7 @@
 		"test": "vitest run",
 		"test:watch": "vitest watch",
 		"bench": "vitest bench --run",
-		"type-check": "tsc --noEmit",
-		"prepublishOnly": "pnpm build"
+		"type-check": "tsc --noEmit"
 	},
 	"dependencies": {
 		"fflate": "^0.8.2",

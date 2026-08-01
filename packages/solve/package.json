@@ -68,8 +68,7 @@
 		"format:check": "prettier --check .",
 		"test": "vitest run",
 		"test:watch": "vitest watch",
-		"type-check": "tsc --noEmit",
-		"prepublishOnly": "pnpm build"
+		"type-check": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@selvajs/compute": "workspace:^",

@@ -97,8 +97,7 @@
 		"type-check": "tsc --noEmit",
 		"build-docs": "typedoc",
 		"prepack": "node ../../scripts/prepack.js",
-		"postpack": "node ../../scripts/prepack.js --restore",
-		"prepublishOnly": "pnpm build"
+		"postpack": "node ../../scripts/prepack.js --restore"
 	},
 	"lint-staged": {
 		"*.{ts,js,mjs,svelte,json,md}": "prettier --write",
