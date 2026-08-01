@@ -64,9 +64,11 @@ export const COMPUTE_REUSE_DEFINITION_CACHE = limits.computeReuseDefinitionCache
 export const COMPUTE_SERVER_CACHESOLVE = limits.computeServerCachesolve;
 export const COMPUTE_CACHE_ERRORED_SOLVES = limits.computeCacheErroredSolves;
 
-// Max in-flight solves per compute server (scheduler maxConcurrent) — size to
-// the server's compute.geometry child count. See ComputeLimits for rationale.
+// Max in-flight solves per compute server (scheduler maxConcurrent) — should match
+// the server's compute.geometry child count. Unset, the client cache reads that
+// count from the server instead. See ComputeLimits for rationale.
 export const COMPUTE_MAX_CONCURRENT = limits.computeMaxConcurrentSolves;
+export const COMPUTE_MAX_CONCURRENT_IS_DEFAULT = limits.computeMaxConcurrentIsDefault;
 
 // Backpressure (audit B7): queue-depth cap and queue-wait deadline. Both 0 =
 // unbounded/off (nothing sheds). See ComputeLimits for tuning guidance.

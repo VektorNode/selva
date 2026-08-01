@@ -220,6 +220,13 @@ export interface ComputeLimits {
 	 */
 	computeMaxConcurrentSolves: number;
 	/**
+	 * True when `COMPUTE_MAX_CONCURRENT` was left unset, so `computeMaxConcurrentSolves`
+	 * is the built-in guess rather than an operator's decision. The client cache uses
+	 * this to decide whether it may replace the value with the server's real child
+	 * count — an explicit setting always wins, a guess does not.
+	 */
+	computeMaxConcurrentIsDefault: boolean;
+	/**
 	 * Backpressure — max solves allowed to WAIT in the per-server FIFO queue (i.e.
 	 * excluding the `computeMaxConcurrentSolves` already in flight). A solve that
 	 * arrives to a full queue is shed immediately (scheduler `QUEUE_FULL`, mapped
@@ -300,8 +307,10 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 		computeReuseDefinitionCache: readBool(env, 'COMPUTE_REUSE_DEFINITION_CACHE', true, logger),
 		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true, logger),
 		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false, logger),
-		// 4 matches rhino.compute's default --childcount; tune to the actual VM.
+		// 4 matches rhino.compute's default --childcount. Left unset, the client cache
+		// replaces this with the server's actual child count at connect time.
 		computeMaxConcurrentSolves: readPositiveInt(env, 'COMPUTE_MAX_CONCURRENT', 4, logger),
+		computeMaxConcurrentIsDefault: !env['COMPUTE_MAX_CONCURRENT'],
 		// Both 0 (unbounded / no deadline) by default — nothing sheds until an
 		// operator who's measured their pool opts in. readNonNegativeInt so `0` is a
 		// valid "disabled" value, not treated as invalid.

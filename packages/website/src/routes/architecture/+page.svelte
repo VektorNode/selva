@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { CLOUD_STEPS, LOCAL_STEPS, LAYERS, type Mode } from '$lib/architecture';
+	import DetailBlocks from './DetailBlocks.svelte';
 	import Cloud from '@lucide/svelte/icons/cloud';
 	import Plug from '@lucide/svelte/icons/plug';
 
@@ -98,10 +99,6 @@
 	<div class="relative mt-8">
 		<!-- Spine -->
 		<div class="bg-border absolute top-2 bottom-2 left-[7px] w-px" aria-hidden="true"></div>
-		<div
-			class="pulse-dot bg-primary absolute left-[3px] size-[9px] rounded-full motion-reduce:hidden"
-			aria-hidden="true"
-		></div>
 
 		<ol class="space-y-3">
 			{#each steps as step, i (step.id)}
@@ -157,7 +154,7 @@
 						</button>
 						{#if expanded === step.id}
 							<div class="border-border border-t px-4 py-3">
-								<p class="text-muted-foreground text-sm leading-relaxed">{step.detail}</p>
+								<DetailBlocks blocks={step.detail} />
 								<div class="mt-3 flex flex-wrap gap-2">
 									{#each step.files as file (file)}
 										<code class="bg-muted text-muted-foreground rounded px-2 py-0.5 text-[11px]"
@@ -173,25 +170,3 @@
 		</ol>
 	</div>
 </div>
-
-<style>
-	@keyframes flow {
-		0% {
-			top: 1%;
-			opacity: 0;
-		}
-		6% {
-			opacity: 1;
-		}
-		94% {
-			opacity: 1;
-		}
-		100% {
-			top: 98%;
-			opacity: 0;
-		}
-	}
-	.pulse-dot {
-		animation: flow 7s linear infinite;
-	}
-</style>

@@ -18,6 +18,7 @@ import type { ComputeServerConfig } from '@selvajs/platform';
 import {
 	COMPUTE_CACHE_ERRORED_SOLVES,
 	COMPUTE_MAX_CONCURRENT,
+	COMPUTE_MAX_CONCURRENT_IS_DEFAULT,
 	COMPUTE_MAX_QUEUE_DEPTH,
 	COMPUTE_QUEUE_WAIT_MS,
 	COMPUTE_SOLVE_CACHE_BYTES,
@@ -41,6 +42,7 @@ export const COMPUTE_DEBUG_VERBOSE = ['true', '1', 'yes'].includes(
 const cache = createClientCache({
 	maxSolveDurationMs: MAX_SOLVE_DURATION_MS,
 	maxConcurrentSolves: COMPUTE_MAX_CONCURRENT,
+	maxConcurrentIsDefault: COMPUTE_MAX_CONCURRENT_IS_DEFAULT,
 	maxQueueDepth: COMPUTE_MAX_QUEUE_DEPTH,
 	queueWaitMs: COMPUTE_QUEUE_WAIT_MS,
 	cachesolve: COMPUTE_SERVER_CACHESOLVE,

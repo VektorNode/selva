@@ -77,10 +77,18 @@ export interface ClientCacheConfig {
 	reuseServerDefinitionCache: boolean;
 	/**
 	 * Max in-flight solves per compute server (scheduler `maxConcurrent`; excess
-	 * FIFO-queues). Size to the server's `compute.geometry` child count
-	 * (`ComputeLimits.computeMaxConcurrentSolves`).
+	 * FIFO-queues). Should match the server's `compute.geometry` child count
+	 * (`ComputeLimits.computeMaxConcurrentSolves`); when `maxConcurrentIsDefault`
+	 * is set, that count is read from the server instead of using this.
 	 */
 	maxConcurrentSolves: number;
+	/**
+	 * Set when `maxConcurrentSolves` is a built-in guess rather than an operator's
+	 * choice. Only then does `build` adopt the server's reported child count —
+	 * an explicit setting is never overridden, since an operator may deliberately
+	 * run below capacity (shared VM, memory headroom, licence limits).
+	 */
+	maxConcurrentIsDefault?: boolean;
 	/**
 	 * Backpressure — max solves that may WAIT in the FIFO queue (excludes the
 	 * in-flight `maxConcurrentSolves`). `0` = unbounded (`ComputeLimits.
@@ -151,6 +159,14 @@ export interface SolveCacheStats {
 
 const DEFAULT_MAX_CACHED_CLIENTS = 16;
 
+/**
+ * How stale the compute server's child count may get before a solve triggers a
+ * re-read. Short enough that a resized pool is picked up within a few solves,
+ * long enough that a busy server is probed rarely — the probe rides on solve
+ * completion, so an idle server is never polled at all.
+ */
+const CONCURRENCY_PROBE_INTERVAL_MS = 5 * 60 * 1000;
+
 export function createClientCache(config: ClientCacheConfig): ClientCache {
 	const maxCachedClients = config.maxCachedClients ?? DEFAULT_MAX_CACHED_CLIENTS;
 	const cache = new Map<string, CachedClient>();
@@ -208,12 +224,58 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 		}
 
 		const client = await GrasshopperClient.create(clientConfig);
+
+		// rhino.compute hands out children in strict rotation and never reports "busy",
+		// so nothing downstream enforces a concurrency cap — send more than it has
+		// children and requests silently double up on one. Its child count and our cap
+		// are separate settings that both happen to default to 4; when ours was never
+		// set, prefer the server's real number over that coincidence.
+		//
+		// The count is not static: children exit on their own under `-idlespan`, and
+		// `/launch-child` + `/recycle-children` resize the pool at runtime. So the probe
+		// re-runs after solves (see `refreshConcurrency`) rather than only at connect.
+		let maxConcurrent = config.maxConcurrentSolves;
+		let lastProbeAt = 0;
+		let probing = false;
+
+		/**
+		 * Best-effort re-read of the server's child count. Never awaited by a caller:
+		 * a probe must not add a round-trip to the solve path, so a changed count takes
+		 * effect on the NEXT solve rather than the one that triggered the probe.
+		 *
+		 * `initialize: false` keeps this from spawning children on an idle server —
+		 * which also means a cold server honestly reports 0, and 0 is ignored rather
+		 * than clamping us to a single slot.
+		 */
+		async function refreshConcurrency(scheduler?: { setMaxConcurrent(n: number): void }) {
+			if (!config.maxConcurrentIsDefault || probing) return;
+			probing = true;
+			try {
+				const children = await Promise.resolve(
+					client.serverStats?.getActiveChildren({ initialize: false })
+				).catch(() => null);
+				lastProbeAt = Date.now();
+				if (!children || children <= 0 || children === maxConcurrent) return;
+				debugLog(
+					`[Compute/client-cache] concurrency ${maxConcurrent} → ${children} ` +
+						`(server child count; set COMPUTE_MAX_CONCURRENT to override)`
+				);
+				maxConcurrent = children;
+				scheduler?.setMaxConcurrent(children);
+			} finally {
+				probing = false;
+			}
+		}
+
+		// One blocking probe at connect so the first solves already use the right cap.
+		await refreshConcurrency();
+
 		const scheduler = client.createScheduler({
 			mode: 'queue',
 			// Queue mode defaults maxConcurrent to 1, serializing every solve on
 			// this server through a single slot while the compute VM's other
 			// compute.geometry children idle — always pass it explicitly.
-			maxConcurrent: config.maxConcurrentSolves,
+			maxConcurrent,
 			// The scheduler treats undefined as unbounded/no-deadline, so map our
 			// `0`-means-off convention to undefined rather than passing 0 (which
 			// would shed EVERY queued solve).
@@ -229,6 +291,18 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			onSettle: (_ctx, result) => {
 				solveMeta.seq += 1;
 				if (result.status !== 'success') return;
+				// Piggyback the pool re-read on real traffic: only servers actually
+				// being used get probed, at most once per window, and never on the
+				// request path. A cache hit means we never reached the server, so it
+				// says nothing about the pool — don't spend a probe on it.
+				if (
+					result.fromCache !== true &&
+					Date.now() - lastProbeAt >= CONCURRENCY_PROBE_INTERVAL_MS
+				) {
+					// Safe despite being referenced from inside its own initializer:
+					// onSettle only ever fires during a solve, long after binding.
+					void refreshConcurrency(scheduler);
+				}
 				solveMeta.last = {
 					fromCache: result.fromCache === true,
 					definitionReuploaded: result.definitionReuploaded

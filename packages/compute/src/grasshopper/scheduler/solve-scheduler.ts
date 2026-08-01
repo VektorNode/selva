@@ -143,7 +143,12 @@ export class SolveScheduler {
 	private readonly baseConfig: GrasshopperComputeConfig;
 
 	private readonly mode: SchedulerMode;
-	private readonly maxConcurrent: number;
+	/**
+	 * Mutable via {@link setMaxConcurrent}: the compute server's worker pool can grow
+	 * or shrink while this scheduler is alive, and the dispatch loops re-read this on
+	 * every pass rather than capturing it.
+	 */
+	private maxConcurrent: number;
 	private readonly maxQueueDepth: number | undefined;
 	private readonly queueWaitMs: number | undefined;
 	private readonly timeoutMs: number | undefined;
@@ -263,6 +268,27 @@ export class SolveScheduler {
 
 	get lastDurationMs(): number | null {
 		return this._lastDurationMs;
+	}
+
+	/**
+	 * Adjust how many solves may run at once, for when the compute server's worker
+	 * pool changes size after this scheduler was built.
+	 *
+	 * Raising it drains queued work immediately. Lowering it never interrupts work
+	 * already in flight — those finish above the new limit, and the cap applies from
+	 * the next dispatch. Values below 1 are clamped, since 0 would wedge the queue.
+	 */
+	setMaxConcurrent(value: number): void {
+		const next = Math.max(1, Math.floor(value));
+		if (next === this.maxConcurrent) return;
+		const raised = next > this.maxConcurrent;
+		this.maxConcurrent = next;
+		if (raised) this.drainNext();
+	}
+
+	/** Current concurrency cap — reflects any {@link setMaxConcurrent} adjustment. */
+	getMaxConcurrent(): number {
+		return this.maxConcurrent;
 	}
 
 	/** Subscribe to state changes. */
