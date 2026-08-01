@@ -100,10 +100,13 @@
 	},
 	"devDependencies": {
 		"@internationalized/date": "^3.12.1",
+		"@selvajs/compute": "workspace:*",
 		"@selvajs/config": "workspace:*",
 		"@selvajs/schemas": "workspace:*",
+		"@selvajs/visualization": "workspace:*",
 		"@sveltejs/kit": "catalog:",
 		"@sveltejs/vite-plugin-svelte": "catalog:",
+		"@selvajs/solve": "workspace:*",
 		"@types/three": "catalog:",
 		"bits-ui": "^2.18.0",
 		"rhino3dm": "8.32.1",
