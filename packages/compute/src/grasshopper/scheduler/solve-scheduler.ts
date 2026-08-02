@@ -211,7 +211,7 @@ export class SolveScheduler {
 		this.maxConcurrent = Math.max(1, options.maxConcurrent ?? (this.mode === 'parallel' ? 4 : 1));
 		// Backpressure bounds — only meaningful for queue/parallel (latest-wins has
 		// depth 1). A non-positive maxQueueDepth is treated as unbounded rather than
-		// "shed everything", which would silently break the scheduler.
+		// "reject everything", which would silently break the scheduler.
 		this.maxQueueDepth =
 			options.maxQueueDepth !== undefined && options.maxQueueDepth > 0
 				? Math.floor(options.maxQueueDepth)
@@ -465,7 +465,7 @@ export class SolveScheduler {
 	 */
 	private shedAsQueueFull(item: PendingItem): void {
 		const err = new RhinoComputeError(
-			'Solve queue is full; request shed (backpressure)',
+			'Solve queue is full; request rejected (backpressure)',
 			ErrorCodes.QUEUE_FULL,
 			{
 				statusCode: 503,
@@ -484,8 +484,8 @@ export class SolveScheduler {
 
 	/**
 	 * Arm the queue-wait deadline for an item about to be queued. If the item is
-	 * still waiting when it fires, it's shed as QUEUE_TIMEOUT and removed from the
-	 * queue. Cleared on execute/settle via {@link clearQueueWaitTimer}.
+	 * still waiting when it fires, it's rejected as QUEUE_TIMEOUT and removed from
+	 * the queue. Cleared on execute/settle via {@link clearQueueWaitTimer}.
 	 */
 	private armQueueWaitTimer(item: PendingItem): void {
 		if (this.queueWaitMs === undefined) return;
@@ -497,7 +497,7 @@ export class SolveScheduler {
 			if (queued >= 0) this.fifoQueue.splice(queued, 1);
 
 			const err = new RhinoComputeError(
-				`Solve waited longer than ${waitMs}ms in queue; shed (backpressure)`,
+				`Solve waited longer than ${waitMs}ms in queue; rejected (backpressure)`,
 				ErrorCodes.QUEUE_TIMEOUT,
 				{
 					statusCode: 503,

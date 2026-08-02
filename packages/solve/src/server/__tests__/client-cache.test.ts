@@ -340,7 +340,7 @@ describe('createClientCache — scheduler backpressure (audit B7)', () => {
 
 	it('maps a 0 (disabled) queue bound to undefined so the scheduler stays unbounded', async () => {
 		// The scheduler treats undefined as unbounded/no-deadline; passing 0 would
-		// shed EVERY queued solve. Our `0 = off` convention must become undefined.
+		// reject EVERY queued solve. Our `0 = off` convention must become undefined.
 		const cache = createClientCache({ ...baseConfig(), maxQueueDepth: 0, queueWaitMs: 0 });
 		await cache.getClient(server('s1'));
 		expect(createdSchedulerOptions[0].maxQueueDepth).toBeUndefined();

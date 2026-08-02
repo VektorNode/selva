@@ -8,7 +8,8 @@ input tree build → scheduler.solve → JSON serialize (size-guarded) → gzip 
 ```
 
 `runSolvePipeline` returns a discriminated `SolveOutcome`. `ok` carries the envelope (body, headers,
-phase metrics); `timeout`, `client_abort`, `too_large`, `shed` and `compute_error` each name a
+phase metrics); `timeout`, `client_abort`, `too_large`, `shed` (rejected under backpressure) and
+`compute_error` each name a
 failure the transport maps to its own status code. **Nothing here throws for an expected failure**,
 and nothing here touches auth, the database, share tokens, rate limits or metric sinks — those stay
 app policy in the route.

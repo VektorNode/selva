@@ -60,7 +60,7 @@ export interface SolveSchedulerOptions {
 	/**
 	 * Backpressure — cap on how many calls may wait in the FIFO queue (i.e.
 	 * excluding the ones already in flight). When the queue is full, a new
-	 * `solve()` is shed immediately with `code: QUEUE_FULL` (retryable, meant to
+	 * `solve()` is rejected immediately with `code: QUEUE_FULL` (retryable, meant to
 	 * map to HTTP 503 + Retry-After) instead of piling up unbounded. Bounds the
 	 * miss path under load. Only applies to `queue` / `parallel` modes —
 	 * `latest-wins` has an intrinsic depth of 1. Default: unbounded.
@@ -68,7 +68,7 @@ export interface SolveSchedulerOptions {
 	maxQueueDepth?: number;
 	/**
 	 * Backpressure — max time (ms) a call may sit queued before it starts
-	 * executing. If it's still waiting after this long it's shed with
+	 * executing. If it's still waiting after this long it's rejected with
 	 * `code: QUEUE_TIMEOUT` rather than burning compute on a stale request.
 	 * Bounds tail latency. Only applies to `queue` / `parallel` modes. Default:
 	 * no deadline.

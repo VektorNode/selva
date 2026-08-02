@@ -86,13 +86,13 @@ export interface ClientCacheConfig {
 	 * Backpressure — max solves that may WAIT in the FIFO queue (excludes the
 	 * in-flight solves, capped at the scheduler's `maxConcurrent`, itself driven
 	 * by the compute server's probed child count). `0` = unbounded (`ComputeLimits.
-	 * computeMaxQueueDepth`); a full queue sheds new solves with `QUEUE_FULL`.
+	 * computeMaxQueueDepth`); a full queue rejects new solves with `QUEUE_FULL`.
 	 */
 	maxQueueDepth: number;
 	/**
 	 * Backpressure — max ms a solve may sit queued before executing; `0` = no
-	 * deadline (`ComputeLimits.computeQueueWaitMs`). A too-long wait sheds with
-	 * `QUEUE_TIMEOUT`.
+	 * deadline (`ComputeLimits.computeQueueWaitMs`). A too-long wait is rejected
+	 * with `QUEUE_TIMEOUT`.
 	 */
 	queueWaitMs: number;
 	/**
@@ -279,7 +279,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			maxConcurrent,
 			// The scheduler treats undefined as unbounded/no-deadline, so map our
 			// `0`-means-off convention to undefined rather than passing 0 (which
-			// would shed EVERY queued solve).
+			// would reject EVERY queued solve).
 			maxQueueDepth: config.maxQueueDepth || undefined,
 			queueWaitMs: config.queueWaitMs || undefined,
 			timeoutMs: config.maxSolveDurationMs,

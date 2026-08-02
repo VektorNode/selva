@@ -398,7 +398,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			}
 		}
 
-		// `toWebResponse` builds the Response itself (incl. `Retry-After` on `shed`,
+		// `toWebResponse` builds the Response itself (incl. `Retry-After` on a rejected `shed`,
 		// which `apiError` cannot set) and still throws `compute_error` through to
 		// the outer catch below.
 		return engine.toWebResponse(outcome);

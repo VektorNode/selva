@@ -123,7 +123,7 @@ export interface SolveEnvelope {
 /**
  * Discriminated result. `ok` carries the envelope; every other variant names an
  * expected failure the transport maps to a status code (the app route maps
- * timeout→504, client_abort→499, too_large→413, shed→503+Retry-After;
+ * timeout→504, client_abort→499, too_large→413, shed (rejected under backpressure)→503+Retry-After;
  * `compute_error` re-surfaces the original error for the generic 500/503 path).
  * `durationMs` on the error variants is the solve wall time up to the failure,
  * for the metric record.
@@ -140,10 +140,10 @@ export type SolveOutcome =
 	| { kind: 'client_abort'; durationMs: number }
 	| { kind: 'too_large' }
 	/**
-	 * Scheduler backpressure shed the solve before it executed — the per-server
-	 * queue was full (`QUEUE_FULL`) or it sat queued past the wait deadline
-	 * (`QUEUE_TIMEOUT`). Retryable: the route maps this to 503 + `Retry-After`.
-	 * `retryAfterSeconds` is a suggested backoff hint for the client.
+	 * Scheduler backpressure rejected the solve before it executed — the
+	 * per-server queue was full (`QUEUE_FULL`) or it sat queued past the wait
+	 * deadline (`QUEUE_TIMEOUT`). Retryable: the route maps this to 503 +
+	 * `Retry-After`. `retryAfterSeconds` is a suggested backoff hint for the client.
 	 */
 	| {
 			kind: 'shed';
@@ -211,7 +211,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 				message: `Solve exceeded the ${Math.round(args.maxSolveDurationMs / 1000)}s deadline.`
 			};
 		}
-		// A full queue or an over-deadline queue wait sheds the solve BEFORE compute
+		// A full queue or an over-deadline queue wait rejects the solve BEFORE compute
 		// runs. Classify these as `shed` rather than the generic `compute_error` —
 		// they're load signals, not failures, and the client should back off and retry.
 		if (err instanceof RhinoComputeError) {

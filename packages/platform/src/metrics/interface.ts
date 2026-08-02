@@ -20,8 +20,8 @@ export type SolveFailureKind =
 	/** Result exceeded the response size limit (HTTP 413). */
 	| 'too_large'
 	/**
-	 * Shed by scheduler backpressure — the per-server queue was full, or the solve
-	 * sat queued past its wait deadline, so it was rejected before executing
+	 * Rejected by scheduler backpressure — the per-server queue was full, or the
+	 * solve sat queued past its wait deadline, so it never executed
 	 * (HTTP 503 + Retry-After). Distinct from `compute_error`: no compute ran.
 	 */
 	| 'shed'

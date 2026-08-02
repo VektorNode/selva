@@ -68,7 +68,7 @@ export const COMPUTE_SERVER_CACHESOLVE = limits.computeServerCachesolve;
 export const COMPUTE_CACHE_ERRORED_SOLVES = limits.computeCacheErroredSolves;
 
 // Backpressure (audit B7): queue-depth cap and queue-wait deadline. Both 0 =
-// unbounded/off (nothing sheds). See ComputeLimits for tuning guidance.
+// unbounded/off (nothing is rejected). See ComputeLimits for tuning guidance.
 export const COMPUTE_MAX_QUEUE_DEPTH = limits.computeMaxQueueDepth;
 export const COMPUTE_QUEUE_WAIT_MS = limits.computeQueueWaitMs;
 

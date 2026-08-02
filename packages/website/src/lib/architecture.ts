@@ -482,7 +482,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 						'auto-detected from the server, re-probed periodically; falls back to 1 if unreadable'
 					],
 					['COMPUTE_MAX_QUEUE_DEPTH', 'max solves waiting, default 0 = unbounded'],
-					['COMPUTE_QUEUE_WAIT_MS', 'max wait before shedding, default 0 = no deadline'],
+					['COMPUTE_QUEUE_WAIT_MS', 'max wait before rejecting, default 0 = no deadline'],
 					['MAX_SOLVE_DURATION_MS', 'per-solve timeout, default 100000']
 				]
 			},
@@ -735,12 +735,12 @@ export const ENV_VAR_GROUPS: EnvVarGroup[] = [
 			{
 				name: 'COMPUTE_MAX_QUEUE_DEPTH',
 				default: '0 (unbounded)',
-				text: 'Backpressure: how many solves may wait in the FIFO queue once the in-flight cap is full. A solve arriving to a full queue is shed immediately (503 + Retry-After) instead of piling up. Size to roughly 2–3× the concurrency cap. The in-flight cap itself is not an env var — Selva auto-detects it from the compute server’s active worker count, re-probing as the pool resizes, and falls back to 1 if that count can’t be read. Resize --childcount on the compute server to change it.'
+				text: 'Backpressure: how many solves may wait in the FIFO queue once the in-flight cap is full. A solve arriving to a full queue is rejected immediately (503 + Retry-After) instead of piling up. Size to roughly 2–3× the concurrency cap. The in-flight cap itself is not an env var — Selva auto-detects it from the compute server’s active worker count, re-probing as the pool resizes, and falls back to 1 if that count can’t be read. Resize --childcount on the compute server to change it.'
 			},
 			{
 				name: 'COMPUTE_QUEUE_WAIT_MS',
 				default: '0 (no deadline)',
-				text: 'Backpressure: longest a solve may sit queued before it’s shed rather than run stale. A sensible tuned value is close to MAX_SOLVE_DURATION_MS.'
+				text: 'Backpressure: longest a solve may sit queued before it’s rejected rather than run stale. A sensible tuned value is close to MAX_SOLVE_DURATION_MS.'
 			},
 			{
 				name: 'MAX_SOLVE_DURATION_MS',

@@ -213,17 +213,17 @@ export interface ComputeLimits {
 	 * Backpressure — max solves allowed to WAIT in the per-server FIFO queue (i.e.
 	 * excluding the in-flight solves, capped at the scheduler's `maxConcurrent`,
 	 * itself auto-detected from the compute server's active child count). A solve
-	 * that arrives to a full queue is shed immediately (scheduler `QUEUE_FULL`,
+	 * that arrives to a full queue is rejected immediately (scheduler `QUEUE_FULL`,
 	 * mapped to HTTP 503 + `Retry-After`) instead of piling up unbounded. `0` =
-	 * unbounded (the pre-shedding default): the queue grows without limit,
+	 * unbounded (the pre-backpressure default): the queue grows without limit,
 	 * matching prior behavior. Size it to roughly 2–3× the compute server's
-	 * child count once the Rhino pool's real capacity is known — shedding fast
+	 * child count once the Rhino pool's real capacity is known — rejecting fast
 	 * beats a hung request.
 	 */
 	computeMaxQueueDepth: number;
 	/**
 	 * Backpressure — longest (ms) a solve may sit QUEUED before it starts
-	 * executing; still-waiting past this it's shed (scheduler `QUEUE_TIMEOUT` →
+	 * executing; still-waiting past this it's rejected (scheduler `QUEUE_TIMEOUT` →
 	 * HTTP 503 + `Retry-After`) rather than burning compute on a stale request.
 	 * Bounds tail latency: the scheduler's `timeoutMs` clock starts at execution,
 	 * so without this a solve's total wait is unbounded and invisible. `0` = no
@@ -292,7 +292,7 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 		computeReuseDefinitionCache: readBool(env, 'COMPUTE_REUSE_DEFINITION_CACHE', true, logger),
 		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true, logger),
 		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false, logger),
-		// Both 0 (unbounded / no deadline) by default — nothing sheds until an
+		// Both 0 (unbounded / no deadline) by default — nothing is rejected until an
 		// operator who's measured their pool opts in. readNonNegativeInt so `0` is a
 		// valid "disabled" value, not treated as invalid.
 		computeMaxQueueDepth: readNonNegativeInt(env, 'COMPUTE_MAX_QUEUE_DEPTH', 0, logger),
