@@ -29,7 +29,7 @@ vi.mock('@selvajs/compute', () => ({
 }));
 
 // Import AFTER the mock is registered.
-const { getClient, evictComputeClient } = await import('../clientCache.server.js');
+const { getClient, evictComputeClient } = await import('../engine.server.js');
 const { evictChangedServers } = await import('../evictChangedServers.js');
 
 function server(id: string, url: string, apiKey?: string): ComputeServerConfig {

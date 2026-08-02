@@ -6,8 +6,7 @@ import {
 } from '$lib/server/providers.server';
 import { assertManageCompute } from '$lib/server/access.server';
 import { platformServers, type Organization } from '@selvajs/platform';
-import { solveCacheStats } from '$lib/server/compute/clientCache.server';
-import { definitionByteCacheStats } from '$lib/server/compute/definitionByteCache.server';
+import { solveCacheStats, definitionByteCacheStats } from '$lib/server/compute/engine.server';
 import {
 	COMPUTE_SOLVE_CACHE_BYTES,
 	COMPUTE_DEFINITION_CACHE_BYTES

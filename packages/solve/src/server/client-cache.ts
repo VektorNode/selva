@@ -16,7 +16,7 @@ import {
 //
 // Deliberately a per-server LRU, not a single shared client: definitions can
 // pin different servers, so two definitions on two servers keep two warm
-// clients, with churn from one-off servers bounded by `maxCachedClients`.
+// clients, with churn from one-off servers bounded by `maxWarmComputeServers`.
 //
 // Both hot paths share this cache — the solve endpoint uses the entry's
 // `scheduler`; the definition-viewer render path uses the entry's `client`
@@ -47,7 +47,7 @@ export interface CachedClient {
 	scheduler: SolveScheduler;
 	/**
 	 * Last Server-Timing decode/solve/encode, written by onServerTiming.
-	 * The scheduler runs up to `maxConcurrentSolves` at once, so `last` alone
+	 * The scheduler runs up to `maxConcurrent` solves at once, so `last` alone
 	 * can't be trusted per-request: callers snapshot `seq` before their solve
 	 * and only attribute `last` to themselves if exactly one write happened
 	 * since (see the guard in `runSolvePipeline`), dropping it otherwise
@@ -65,6 +65,13 @@ export interface CachedClient {
 	};
 }
 
+/**
+ * Debug verbosity: `false` is silent, `true` gives concise cache/timing logs
+ * (`onDebugLog`), `'verbose'` also enables full lib-level request/response
+ * dumps (incl. geometry) — a superset of `true`, not an independent setting.
+ */
+export type ClientCacheDebug = boolean | 'verbose';
+
 /** Config injected by the consuming app, so this module stays env-agnostic and testable. */
 export interface ClientCacheConfig {
 	/** Per-solve timeout forwarded to the scheduler (`ComputeLimits.maxSolveDurationMs`). */
@@ -76,22 +83,9 @@ export interface ClientCacheConfig {
 	/** Reference large definitions by server cache key (pointer) instead of re-uploading. */
 	reuseServerDefinitionCache: boolean;
 	/**
-	 * Max in-flight solves per compute server (scheduler `maxConcurrent`; excess
-	 * FIFO-queues). Should match the server's `compute.geometry` child count
-	 * (`ComputeLimits.computeMaxConcurrentSolves`); when `maxConcurrentIsDefault`
-	 * is set, that count is read from the server instead of using this.
-	 */
-	maxConcurrentSolves: number;
-	/**
-	 * Set when `maxConcurrentSolves` is a built-in guess rather than an operator's
-	 * choice. Only then does `build` adopt the server's reported child count —
-	 * an explicit setting is never overridden, since an operator may deliberately
-	 * run below capacity (shared VM, memory headroom, licence limits).
-	 */
-	maxConcurrentIsDefault?: boolean;
-	/**
 	 * Backpressure — max solves that may WAIT in the FIFO queue (excludes the
-	 * in-flight `maxConcurrentSolves`). `0` = unbounded (`ComputeLimits.
+	 * in-flight solves, capped at the scheduler's `maxConcurrent`, itself driven
+	 * by the compute server's probed child count). `0` = unbounded (`ComputeLimits.
 	 * computeMaxQueueDepth`); a full queue sheds new solves with `QUEUE_FULL`.
 	 */
 	maxQueueDepth: number;
@@ -104,16 +98,14 @@ export interface ClientCacheConfig {
 	/**
 	 * Byte budget for this client's in-process solve cache, evicted LRU alongside
 	 * its entry-count cap. Applies per warm client — total worst-case heap is this
-	 * × `maxCachedClients`. `0` disables the cache entirely
+	 * × `maxWarmComputeServers`. `0` disables the cache entirely
 	 * (`ComputeLimits.computeSolveCacheBytes`, env `COMPUTE_SOLVE_CACHE_MB`).
 	 */
 	responseCacheMaxBytes: number;
-	/** Concise cache/timing logs. When false, `onDebugLog` is never invoked. */
-	debug: boolean;
-	/** VERBOSE lib-level logging (full solve request/response incl. geometry). */
-	debugVerbose: boolean;
-	/** Max distinct warm clients before the LRU evicts the oldest. Default 16. */
-	maxCachedClients?: number;
+	/** Debug verbosity. `onDebugLog` is only ever invoked when this is not `false`. */
+	debug: ClientCacheDebug;
+	/** Max distinct warm compute servers before the LRU evicts the oldest. Default 16. */
+	maxWarmComputeServers?: number;
 	/** Sink for the concise debug lines (the app wires `console.log`). */
 	onDebugLog?: (message: string) => void;
 }
@@ -157,7 +149,14 @@ export interface SolveCacheStats {
 	evictions: number;
 }
 
-const DEFAULT_MAX_CACHED_CLIENTS = 16;
+const DEFAULT_MAX_WARM_COMPUTE_SERVERS = 16;
+
+/**
+ * Fallback concurrency while the first probe is still in flight, and the value
+ * kept whenever a probe fails or reports 0 — never send more than a single
+ * solve to a server whose real capacity is unknown.
+ */
+const FALLBACK_CONCURRENCY = 1;
 
 /**
  * How stale the compute server's child count may get before a solve triggers a
@@ -168,14 +167,14 @@ const DEFAULT_MAX_CACHED_CLIENTS = 16;
 const CONCURRENCY_PROBE_INTERVAL_MS = 5 * 60 * 1000;
 
 export function createClientCache(config: ClientCacheConfig): ClientCache {
-	const maxCachedClients = config.maxCachedClients ?? DEFAULT_MAX_CACHED_CLIENTS;
+	const maxWarmComputeServers = config.maxWarmComputeServers ?? DEFAULT_MAX_WARM_COMPUTE_SERVERS;
 	const cache = new Map<string, CachedClient>();
 	// Builds in flight, keyed like `cache`. Concurrent `getClient` calls for the
 	// same id must share ONE build: without this, both miss, both handshake, and
 	// the loser's entry is overwritten in the map without ever being disposed.
 	const pending = new Map<string, Promise<CachedClient>>();
 
-	if (config.debugVerbose) enableDebugLogging();
+	if (config.debug === 'verbose') enableDebugLogging();
 
 	const debugLog = (message: string) => {
 		if (config.debug) config.onDebugLog?.(message);
@@ -184,13 +183,14 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 	async function build(server: ResolvedServer, definitionGuid?: string): Promise<CachedClient> {
 		const rhinoTiming: CachedClient['rhinoTiming'] = { last: null, seq: 0 };
 		const solveMeta: CachedClient['solveMeta'] = { last: null, seq: 0 };
+		const debugVerbose = config.debug === 'verbose';
 
 		const clientConfig: GrasshopperComputeConfig = {
 			serverUrl: server.serverUrl,
 			apiKey: server.apiKey,
 			// Lib-level debug is the verbose one (full payload logs); keep it on the
 			// verbose flag so the concise cache logs can run without the noise.
-			debug: config.debugVerbose,
+			debug: debugVerbose,
 			cachesolve: config.cachesolve,
 			cacheerroredsolves: config.cacheerroredsolves,
 			onServerTiming: (t) => {
@@ -227,14 +227,14 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 
 		// rhino.compute hands out children in strict rotation and never reports "busy",
 		// so nothing downstream enforces a concurrency cap — send more than it has
-		// children and requests silently double up on one. Its child count and our cap
-		// are separate settings that both happen to default to 4; when ours was never
-		// set, prefer the server's real number over that coincidence.
+		// children and requests silently double up on one. Rhino.Compute is the only
+		// source of truth for its own child count, so this always probes rather than
+		// trusting an operator-supplied guess.
 		//
 		// The count is not static: children exit on their own under `-idlespan`, and
 		// `/launch-child` + `/recycle-children` resize the pool at runtime. So the probe
 		// re-runs after solves (see `refreshConcurrency`) rather than only at connect.
-		let maxConcurrent = config.maxConcurrentSolves;
+		let maxConcurrent = FALLBACK_CONCURRENCY;
 		let lastProbeAt = 0;
 		let probing = false;
 
@@ -244,24 +244,25 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 		 * effect on the NEXT solve rather than the one that triggered the probe.
 		 *
 		 * `initialize: false` keeps this from spawning children on an idle server —
-		 * which also means a cold server honestly reports 0, and 0 is ignored rather
-		 * than clamping us to a single slot.
+		 * which also means a cold server honestly reports 0. Both a failed probe and a
+		 * 0 result fall back to `FALLBACK_CONCURRENCY` (1): an unknown-capacity server
+		 * is safer under-used than oversent.
 		 */
 		async function refreshConcurrency(scheduler?: { setMaxConcurrent(n: number): void }) {
-			if (!config.maxConcurrentIsDefault || probing) return;
+			if (probing) return;
 			probing = true;
 			try {
 				const children = await Promise.resolve(
 					client.serverStats?.getActiveChildren({ initialize: false })
 				).catch(() => null);
 				lastProbeAt = Date.now();
-				if (!children || children <= 0 || children === maxConcurrent) return;
+				const next = !children || children <= 0 ? FALLBACK_CONCURRENCY : children;
+				if (next === maxConcurrent) return;
 				debugLog(
-					`[Compute/client-cache] concurrency ${maxConcurrent} → ${children} ` +
-						`(server child count; set COMPUTE_MAX_CONCURRENT to override)`
+					`[Compute/client-cache] concurrency ${maxConcurrent} → ${next} (server child count)`
 				);
-				maxConcurrent = children;
-				scheduler?.setMaxConcurrent(children);
+				maxConcurrent = next;
+				scheduler?.setMaxConcurrent(next);
 			} finally {
 				probing = false;
 			}
@@ -357,11 +358,11 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			const buildPromise = (async () => {
 				const entry = await build(server, opts?.definitionGuid);
 
-				if (cache.size >= maxCachedClients) {
+				if (cache.size >= maxWarmComputeServers) {
 					const oldestKey = cache.keys().next().value;
 					if (oldestKey !== undefined) {
 						debugLog(
-							`[Compute/client-cache] LRU evicted warm client for server ${oldestKey} (cap ${maxCachedClients})`
+							`[Compute/client-cache] LRU evicted warm client for server ${oldestKey} (cap ${maxWarmComputeServers})`
 						);
 						cache.get(oldestKey)?.scheduler.dispose();
 						cache.delete(oldestKey);

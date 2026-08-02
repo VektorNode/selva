@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CLOUD_STEPS, LOCAL_STEPS, LAYERS, type Mode } from '$lib/architecture';
+	import { CLOUD_STEPS, LOCAL_STEPS, LAYERS, ENV_VAR_GROUPS, type Mode } from '$lib/architecture';
 	import DetailBlocks from './DetailBlocks.svelte';
 	import SolveAnimation from './demos/SolveAnimation.svelte';
 	import Cloud from '@lucide/svelte/icons/cloud';
@@ -184,6 +184,39 @@
 
 		<div class="border-border bg-card mt-6 rounded-lg border p-4">
 			<SolveAnimation />
+		</div>
+	</div>
+
+	<!-- Configuration — every knob from the steps above, gathered in one place -->
+	<div class="mt-20">
+		<p class="text-primary text-sm font-semibold tracking-wide uppercase">Configuration</p>
+		<h2 class="mt-2 text-2xl font-bold tracking-tight text-balance">Every knob, in one place</h2>
+		<p class="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
+			Each one is an environment variable read once at boot (<code
+				class="bg-muted rounded px-1 py-0.5 text-xs">resolveComputeLimits</code
+			>). Unset, every knob falls back to the default below — nothing here is required to run Selva.
+		</p>
+
+		<div class="mt-6 space-y-8">
+			{#each ENV_VAR_GROUPS as group (group.title)}
+				<div>
+					<h3 class="text-sm font-semibold">{group.title}</h3>
+					<dl class="border-border divide-border mt-3 divide-y rounded-md border text-sm">
+						{#each group.vars as v (v.name)}
+							<div class="px-3 py-2.5">
+								<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+									<code class="font-mono text-xs font-semibold">{v.name}</code>
+									<span
+										class="rounded bg-violet-500/10 px-1.5 py-0.5 font-mono text-[11px] text-violet-600 dark:text-violet-400"
+										>{v.default}</span
+									>
+								</div>
+								<p class="text-muted-foreground mt-1 text-xs leading-relaxed">{v.text}</p>
+							</div>
+						{/each}
+					</dl>
+				</div>
+			{/each}
 		</div>
 	</div>
 </div>

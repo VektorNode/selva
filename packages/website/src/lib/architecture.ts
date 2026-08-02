@@ -246,6 +246,14 @@ export const CLOUD_STEPS: FlowStep[] = [
 			{
 				kind: 'prose',
 				text: 'A share-link token rides in the URL or an Authorization header, never the body, and is tied to one definition and one channel; a view-only link is refused here. Everyone else needs a session — and picking a specific version rather than whatever is published requires an editor. The rate limiter then runs before the solve does any real work, so a throttled caller costs a counter check.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['COMPUTE_REQUEST_MAX_BYTES', 'body cap, default 210 MB'],
+					['COMPUTE_RATE_LIMIT_MAX', 'requests per window, default 120'],
+					['COMPUTE_RATE_LIMIT_WINDOW_MS', 'window length ms, default 100000']
+				]
 			}
 		],
 		files: [
@@ -420,6 +428,14 @@ export const CLOUD_STEPS: FlowStep[] = [
 				kind: 'warning',
 				title: 'Unless the definition is not repeatable',
 				text: 'A definition that reads the clock, fetches a live URL, or picks a random number gives a different answer each run. Store one of those and it is not merely stale but wrong — and nothing here notices. The budget is deployment-wide, so the only lever is turning the cache off entirely.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['COMPUTE_SOLVE_CACHE_MB', 'budget in MB, default 256, PER warm client'],
+					['COMPUTE_SERVER_CACHESOLVE', 'also ask Rhino.Compute to cache, default true'],
+					['COMPUTE_CACHE_ERRORED_SOLVES', 'also cache Grasshopper-error results, default false']
+				]
 			}
 		],
 		files: [
@@ -451,11 +467,23 @@ export const CLOUD_STEPS: FlowStep[] = [
 			{
 				kind: 'facts',
 				rows: [
-					['In flight at once', 'the machine’s worker count, re-read as it changes'],
-					['To pin it yourself', 'set COMPUTE_MAX_CONCURRENT — then nothing overrides you'],
+					['In flight at once', 'the machine’s worker count, always auto-read, never hardcoded'],
+					['To change it', 'resize --childcount on the compute server — Selva just follows'],
 					['A solve may take', 'up to 100 s, then it is given up on'],
 					['Queue length', 'unlimited by default — nothing is turned away'],
 					['If an operator caps it', 'over-capacity requests are refused up front, told to retry']
+				]
+			},
+			{
+				kind: 'facts',
+				rows: [
+					[
+						'Worker count',
+						'auto-detected from the server, re-probed periodically; falls back to 1 if unreadable'
+					],
+					['COMPUTE_MAX_QUEUE_DEPTH', 'max solves waiting, default 0 = unbounded'],
+					['COMPUTE_QUEUE_WAIT_MS', 'max wait before shedding, default 0 = no deadline'],
+					['MAX_SOLVE_DURATION_MS', 'per-solve timeout, default 100000']
 				]
 			},
 			{
@@ -489,6 +517,13 @@ export const CLOUD_STEPS: FlowStep[] = [
 			{
 				kind: 'prose',
 				text: 'Selva having the id written down is not the same as Rhino.Compute still recognising it. If that machine restarts, it forgets which id points to which file — so a solve sent with a now-meaningless id comes back rejected, not silently wrong. Selva reads that rejection as "resend the file," does so once, gets a fresh id back, and writes that one down instead. The user just sees one slightly slower solve, no error.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['COMPUTE_REUSE_DEFINITION_CACHE', 'send pointer instead of bytes, default true'],
+					['COMPUTE_DEFINITION_CACHE_MB', 'definition-bytes budget in MB, default 256']
+				]
 			}
 		],
 		files: [
@@ -633,6 +668,125 @@ export const CLOUD_STEPS: FlowStep[] = [
 		files: [
 			'packages/ui/src/lib/components/viewer/Viewer.svelte',
 			'packages/ui/src/lib/compute/useSolveSession.svelte.ts'
+		]
+	}
+];
+
+// ============================================================================
+// Configuration — every compute env var, resolved in `resolveComputeLimits`
+// (packages/server/src/compute/limits.ts). Grouped by what they tune, in the
+// order a solve actually meets them.
+// ============================================================================
+
+export interface EnvVarGroup {
+	title: string;
+	vars: { name: string; default: string; text: string }[];
+}
+
+export const ENV_VAR_GROUPS: EnvVarGroup[] = [
+	{
+		title: 'Doors before the work starts',
+		vars: [
+			{
+				name: 'COMPUTE_REQUEST_MAX_BYTES',
+				default: '210 MB',
+				text: 'JSON request body cap for /api/compute (inputs + values, not the .gh file). Must stay under adapter-node’s global BODY_SIZE_LIMIT or that rejects first.'
+			},
+			{
+				name: 'COMPUTE_RESPONSE_MAX_BYTES',
+				default: '300 MB',
+				text: 'JSON response cap. Above this the result is refused with a clean 413 instead of crashing on V8’s string-size wall.'
+			},
+			{
+				name: 'COMPUTE_RATE_LIMIT_MAX',
+				default: '120',
+				text: 'Requests allowed per window on /api/compute before a 429 with Retry-After.'
+			},
+			{
+				name: 'COMPUTE_RATE_LIMIT_WINDOW_MS',
+				default: '100000',
+				text: 'Length of the fixed rate-limit window, in ms.'
+			},
+			{
+				name: 'MAX_GH_FILE_SIZE_BYTES',
+				default: '50 MB',
+				text: 'Largest .gh definition accepted on upload, and the largest remote definition fetched — kept in lockstep so a remote URL can’t smuggle a bigger file past the upload cap. Matches Rhino.Compute’s own request-size default.'
+			},
+			{
+				name: 'MAX_IMAGE_FILE_SIZE_BYTES',
+				default: '10 MB',
+				text: 'Largest image upload accepted for an image-typed input.'
+			},
+			{
+				name: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
+				default: '30000',
+				text: 'Deadline for fetching a remote .gh URL — slow-loris protection.'
+			},
+			{
+				name: 'REMOTE_DEFINITION_CACHE_TTL_MS',
+				default: '300000',
+				text: 'How long a fetched remote .gh’s bytes stay cached before being re-fetched. Only the remote path expires on a timer — the version-id-keyed definition cache below never does, because that key can’t go stale.'
+			}
+		]
+	},
+	{
+		title: 'How many solves run at once',
+		vars: [
+			{
+				name: 'COMPUTE_MAX_QUEUE_DEPTH',
+				default: '0 (unbounded)',
+				text: 'Backpressure: how many solves may wait in the FIFO queue once the in-flight cap is full. A solve arriving to a full queue is shed immediately (503 + Retry-After) instead of piling up. Size to roughly 2–3× the concurrency cap. The in-flight cap itself is not an env var — Selva auto-detects it from the compute server’s active worker count, re-probing as the pool resizes, and falls back to 1 if that count can’t be read. Resize --childcount on the compute server to change it.'
+			},
+			{
+				name: 'COMPUTE_QUEUE_WAIT_MS',
+				default: '0 (no deadline)',
+				text: 'Backpressure: longest a solve may sit queued before it’s shed rather than run stale. A sensible tuned value is close to MAX_SOLVE_DURATION_MS.'
+			},
+			{
+				name: 'MAX_SOLVE_DURATION_MS',
+				default: '100000',
+				text: 'Longest one solve is allowed to run before it’s aborted — propagated into the upstream Compute call, so it actually cancels the work rather than merely timing out client-side. A reverse proxy or serverless platform can still cap it lower.'
+			}
+		]
+	},
+	{
+		title: 'What gets cached, and how big',
+		vars: [
+			{
+				name: 'COMPUTE_DEFINITION_CACHE_MB',
+				default: '256',
+				text: 'Byte budget for the in-process cache of .gh bytes, keyed on immutable version id. A warm entry skips the storage read entirely. 0 disables it.'
+			},
+			{
+				name: 'COMPUTE_SOLVE_CACHE_MB',
+				default: '256',
+				text: 'Byte budget for the solve-result cache — but PER warm compute-client. Up to 16 servers are kept warm, so the real ceiling is this × 16. 0 disables it.'
+			},
+			{
+				name: 'COMPUTE_REUSE_DEFINITION_CACHE',
+				default: 'true',
+				text: 'Send a short pointer instead of re-uploading the .gh bytes each solve. Only safe against a compute server that signals a stale-pointer miss instead of silently returning empty geometry (the VektorNode fork does); leave off for an unknown/standard rhino.compute.'
+			},
+			{
+				name: 'COMPUTE_SERVER_CACHESOLVE',
+				default: 'true',
+				text: 'Ask Rhino.Compute itself to cache solve results keyed on the full request, so an identical repeat skips solving. Server-wide — survives Selva restarts.'
+			},
+			{
+				name: 'COMPUTE_CACHE_ERRORED_SOLVES',
+				default: 'false',
+				text: 'Also cache solves that reported a Grasshopper error. Correct for definitions that error-by-design (guarded Python, pruned branches) but still return valid geometry — off by default because most errors aren’t that.'
+			}
+		]
+	},
+	{
+		title: 'Diagnostics',
+		vars: [
+			{
+				name: 'SELVA_FLAG_COMPUTE_DEBUG',
+				default: 'off',
+				text: 'Three-way, not a boolean: off, on (concise cache/timing logs for every step above), or verbose (also dumps full request/response payloads, including base64 geometry — never enable on a deployment holding real data).'
+			}
 		]
 	}
 ];

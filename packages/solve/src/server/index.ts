@@ -64,6 +64,23 @@ export {
 } from './solve-cache-single-flight.js';
 
 // ============================================================================
+// Facade
+// ============================================================================
+
+export {
+	SolveEngine,
+	type SolveEngineOptions,
+	type SolveEngineLimits,
+	type SolveEngineSolveArgs,
+	type SolveEngineDefinitionSource,
+	type SolveEngineStats,
+	type FrameworkAgnosticResponse
+} from './solve-engine.js';
+
+export type { DefinitionRef, SolveDefinition } from '@selvajs/compute';
+export { isDefinitionRef } from '@selvajs/compute';
+
+// ============================================================================
 // Shared vocabulary
 // ============================================================================
 //

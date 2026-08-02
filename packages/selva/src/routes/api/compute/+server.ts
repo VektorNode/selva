@@ -6,25 +6,11 @@ import {
 	resolveServerForOrg,
 	ComputeServerUnconfiguredError
 } from '$lib/server/compute/resolve.server';
-import { getClient, COMPUTE_DEBUG } from '$lib/server/compute/clientCache.server';
+import { engine, COMPUTE_DEBUG } from '$lib/server/compute/engine.server';
 import { loadRemoteDefinition } from '$lib/server/compute/remoteDefinition.server';
-import { definitionRef } from '$lib/server/compute/definitionByteCache.server';
-import { solveCacheSingleFlight } from '$lib/server/compute/solveCache.server';
-import { definitionByteCacheStats } from '$lib/server/compute/definitionByteCache.server';
-import {
-	runSolvePipeline,
-	buildSolveInputTree,
-	adaptEnvelopeToEncoding,
-	type PipelineInput,
-	type ByteCacheRef
-} from '@selvajs/solve/server';
-import { stableStringify, type SolveDefinition } from '@selvajs/compute';
+import type { ByteCacheRef, PipelineInput, SolveDefinition } from '@selvajs/solve/server';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
-import {
-	COMPUTE_REQUEST_MAX_BYTES,
-	COMPUTE_RESPONSE_MAX_BYTES,
-	MAX_SOLVE_DURATION_MS
-} from '$lib/server/computeLimits';
+import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { getStorageProvider, getSolveMetricSink, providers } from '$lib/server/providers.server';
 import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
@@ -45,11 +31,12 @@ interface ComputeRequest {
 	versionId?: string;
 }
 
-// The transport-agnostic solve pipeline (input tree build → solve → serialize +
-// gzip + Server-Timing envelope) lives in `@selvajs/solve/server` (`runSolvePipeline`);
-// this route keeps the app policy around it (auth, DB reads, share tokens, rate
-// limit, metric sink, schema backfill). The remote-definition fetch (SSRF guard
-// + cap + TTL) and the per-server warm-client cache are likewise imported.
+// The transport-agnostic solve mechanics (warm-client cache, definition-byte
+// cache, single-flight coalescing, pipeline call, outcome→HTTP mapping) live in
+// `@selvajs/solve/server`'s `SolveEngine` (`engine.server.ts`'s app-wide
+// instance); this route keeps the app policy around it (auth, DB reads, share
+// tokens, rate limit, metric sink, schema backfill). The remote-definition
+// fetch (SSRF guard + cap + TTL) is likewise imported.
 
 export const POST: RequestHandler = async ({ request, locals, url }) => {
 	const storage = getStorageProvider();
@@ -239,7 +226,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			// which a delete-latest-then-reupload can reuse for different content. A
 			// missing blob now surfaces at solve time (compute_error → 500) rather than
 			// as an upfront 404, since we no longer eagerly read it here.
-			localDefinitionRef = definitionRef(version.id, async () => {
+			localDefinitionRef = engine.definitionRef(version.id, async () => {
 				const bytes = await storage.get(version.fileKey);
 				if (!bytes) throw new Error(`Version blob missing: ${version.fileKey}`);
 				return bytes;
@@ -305,205 +292,116 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			mark('schemaBackfill');
 		}
 
-		// Definition-guid affinity key on the wire (ADR 0004 D2). Local definitions
-		// carry a guid; remote-URL solves have none, so the header is simply absent.
-		const client = await getClient(serverConfig, { definitionGuid: guid ?? undefined });
-		mark('client');
+		// Hand off to the engine: warm-client lookup (stamping `definitionGuid` as the
+		// ADR 0004 D2 affinity header when present), input-tree build, single-flight
+		// coalescing (R4 — a hot-key burst hits compute once, for EVERY solve not just
+		// cacheable ones), the abort/hasWaiters dance (R3 — a coalesced solve must not
+		// follow one caller's disconnect and 499 every waiter), the pipeline call, and
+		// per-caller Accept-Encoding re-keying (audit C5) all live in `SolveEngine.solve`
+		// now. Remote-URL solves have no version id, so the URL stands in as their
+		// coalesce-key identity (`definitionKey`); local solves carry that identity on
+		// `localDefinitionRef.key` already, so `definitionKey` is unused there.
+		const outcome = await engine.solve({
+			server: serverConfig,
+			definitionSource,
+			definitionKey: isLocal ? undefined : definitionUrl,
+			inputs,
+			values,
+			signal: request.signal,
+			acceptEncoding: request.headers.get('accept-encoding') ?? '',
+			definitionGuid: guid ?? undefined,
+			loadStartMs: loadStart,
+			defLoadMs,
+			prepMarks
+		});
+		mark('solve');
 
-		// Single-flight (R4): coalesce concurrent identical solves into one pipeline
-		// execution so a hot-key burst hits compute once. This runs for EVERY solve,
-		// not just cacheable ones — dogpile protection matters most when there is no
-		// result cache behind it, since that is exactly when N identical solves each
-		// pay a full Rhino round trip.
-		//
-		// Keyed on the TRANSFORMED tree, not the raw {inputs, values}: the tree is the
-		// identity the scheduler itself caches on, so two requests that differ only in
-		// input ordering or in a field the transform normalizes away are the same solve
-		// and must share one execution. Build it here and hand it to the pipeline so
-		// the transform runs once.
-		const inputTree = buildSolveInputTree(inputs, values);
-		mark('treeBuild');
-
-		// Definition identity + server: two definitions must never share a flight, and
-		// neither must two servers (they can run different Rhino versions). Remote-URL
-		// solves have no version id, so the URL stands in as their identity.
-		const coalesceKey = `${metricVersionId ?? definitionUrl}:${serverConfig.id}:${stableStringify(inputTree)}`;
-
-		// A coalesced solve is shared: if it followed one caller's request.signal, that
-		// caller disconnecting would abort the solve for EVERY waiter (a spurious 499).
-		// So a run with waiters attached gets a non-aborting signal. A solo run keeps
-		// request.signal so a disconnect still cancels the orphan compute (R3).
-		//
-		// `hasWaiters` is decided by the coalescer at join time, not by whether a cache
-		// happens to be configured — cancellation semantics are a property of sharing,
-		// and tying them to cache config (as they were) meant an operator enabling a
-		// cache silently changed whether disconnects cancel upstream work.
-		const abortController = new AbortController();
-		let hasWaiters = false;
-		const solveSignal = abortController.signal;
-		request.signal.addEventListener(
-			'abort',
-			() => {
-				// Only propagate the disconnect when this caller is the sole owner of
-				// the flight. Once anyone has joined, the work belongs to all of them.
-				if (!hasWaiters) abortController.abort();
-			},
-			{ once: true }
-		);
-
-		// Hand off to the transport-agnostic pipeline: input tree build → solve
-		// (signal propagates to Compute) → serialize + gzip + Server-Timing
-		// envelope. Returns a typed outcome we map to metrics + HTTP status;
-		// never throws for an expected failure.
-		const outcome = await solveCacheSingleFlight.run(
-			coalesceKey,
-			() =>
-				runSolvePipeline({
-					definitionSource,
-					byteRefOutcome: localDefinitionRef?.outcome,
-					inputs,
-					values,
-					inputTree,
-					client,
-					responseMaxBytes: COMPUTE_RESPONSE_MAX_BYTES,
-					maxSolveDurationMs: MAX_SOLVE_DURATION_MS,
-					acceptEncoding: request.headers.get('accept-encoding') ?? '',
-					signal: solveSignal,
-					loadStartMs: loadStart,
-					defLoadMs,
-					prepMarks
-				}),
-			() => {
-				hasWaiters = true;
-			}
-		);
-
-		// Map the pipeline's expected-failure outcomes to metrics + HTTP status.
-		// Each `apiError` throws (returns `never`), so past this block `outcome` is
-		// narrowed to the `ok` variant.
+		// Metric recording is app policy — the engine's `toResponse` only maps
+		// outcome→HTTP. Branches don't return; `engine.toResponse` below does.
 		if (outcome.kind === 'timeout') {
 			recordMetric('timeout', { durationMs: outcome.durationMs });
-			apiError(504, ApiErrorCode.INTERNAL, outcome.message);
-		}
-		if (outcome.kind === 'client_abort') {
+		} else if (outcome.kind === 'client_abort') {
 			recordMetric('client_abort', { durationMs: outcome.durationMs });
-			apiError(499, ApiErrorCode.INTERNAL, 'Client closed request');
-		}
-		if (outcome.kind === 'too_large') {
+		} else if (outcome.kind === 'too_large') {
 			recordMetric('too_large');
-			apiError(
-				413,
-				ApiErrorCode.INTERNAL,
-				'Solve result is too large to return. This usually means a file output exceeds the supported size.'
-			);
-		}
-		if (outcome.kind === 'shed') {
-			// Scheduler backpressure shed this solve before it ran (queue full or
-			// queue-wait deadline). 503 + Retry-After so the client backs off and
-			// retries — a fast fail, not a hung request. Built as a raw Response
-			// because apiError can't set Retry-After.
+		} else if (outcome.kind === 'shed') {
 			recordMetric('shed', { durationMs: outcome.durationMs });
-			return new Response(
-				JSON.stringify({ message: outcome.message, retryAfter: outcome.retryAfterSeconds }),
-				{
-					status: 503,
-					headers: {
-						'Content-Type': 'application/json',
-						'Retry-After': String(outcome.retryAfterSeconds)
-					}
-				}
-			);
-		}
-		if (outcome.kind === 'compute_error') {
-			// Re-throw so the outer catch maps `fetch failed` → 503 and everything
-			// else → 500, preserving the pre-extraction error handling.
-			throw outcome.error;
-		}
-
-		// Success. Record the metric and bump the definition's display counter.
-		recordMetric('ok', {
-			durationMs: outcome.solveMs,
-			errorCount: outcome.errorCount,
-			warningCount: outcome.warningCount
-		});
-		// Bump the definition's display counter ("N runs"). Local definitions only —
-		// remote URLs have no record. Best-effort: the solve already succeeded and
-		// was returned, so a failed counter write must not turn into a request
-		// error. Share-link cap counting is separate (above).
-		if (metricDefinitionId) {
-			providers.data.definitions.incrementSolveCount(solveCtx, metricDefinitionId).catch((err) =>
-				locals.log.warn('solveCount increment failed', {
-					component: 'API/Compute',
-					definitionId: metricDefinitionId,
-					err: renderThrown(err)
-				})
-			);
-		}
-
-		const { envelope } = outcome;
-		const { metrics } = envelope;
-		// DEBUG (SELVA_FLAG_COMPUTE_DEBUG): the server-side overhead the solve metric's
-		// `durationMs` doesn't capture. `load` = auth + DB + definition fetch; `tree` =
-		// input tree build; `serialize` = JSON.stringify of the result. The solve itself
-		// is timed separately (see the solve metric's durationMs and [Compute/selva-cache]).
-		if (COMPUTE_DEBUG) {
-			locals.log.debug('Solve server-side phase breakdown', {
-				component: 'Compute/server',
-				loadMs: Math.round(defLoadMs),
-				treeBuildMs: Math.round(metrics.treeBuildMs),
-				solveMs: Math.round(metrics.solveMs),
-				serializeMs: Math.round(metrics.serializeMs),
-				gzipMs: Math.round(metrics.gzipMs),
-				serverTotalMs: Math.round(metrics.serverTotalMs),
-				serializedBytes: metrics.serializedBytes
+		} else if (outcome.kind === 'ok') {
+			recordMetric('ok', {
+				durationMs: outcome.solveMs,
+				errorCount: outcome.errorCount,
+				warningCount: outcome.warningCount
 			});
-			if (metrics.compressedBytes !== null) {
-				locals.log.debug('Response gzipped', {
+			// Bump the definition's display counter ("N runs"). Local definitions only —
+			// remote URLs have no record. Best-effort: the solve already succeeded and
+			// was returned, so a failed counter write must not turn into a request
+			// error. Share-link cap counting is separate (above).
+			if (metricDefinitionId) {
+				providers.data.definitions.incrementSolveCount(solveCtx, metricDefinitionId).catch((err) =>
+					locals.log.warn('solveCount increment failed', {
+						component: 'API/Compute',
+						definitionId: metricDefinitionId,
+						err: renderThrown(err)
+					})
+				);
+			}
+
+			// DEBUG (SELVA_FLAG_COMPUTE_DEBUG): the server-side overhead the solve metric's
+			// `durationMs` doesn't capture. `load` = auth + DB + definition fetch; `tree` =
+			// input tree build; `serialize` = JSON.stringify of the result. The solve itself
+			// is timed separately (see the solve metric's durationMs and [Compute/selva-cache]).
+			if (COMPUTE_DEBUG) {
+				const { metrics } = outcome.envelope;
+				locals.log.debug('Solve server-side phase breakdown', {
 					component: 'Compute/server',
-					serializedBytes: metrics.serializedBytes,
-					compressedBytes: metrics.compressedBytes,
-					ratio: Number((metrics.serializedBytes / metrics.compressedBytes).toFixed(1))
+					loadMs: Math.round(defLoadMs),
+					treeBuildMs: Math.round(metrics.treeBuildMs),
+					solveMs: Math.round(metrics.solveMs),
+					serializeMs: Math.round(metrics.serializeMs),
+					gzipMs: Math.round(metrics.gzipMs),
+					serverTotalMs: Math.round(metrics.serverTotalMs),
+					serializedBytes: metrics.serializedBytes
 				});
-			} else {
-				// If this fires for browser requests, a proxy in front is stripping
-				// Accept-Encoding — compression is then impossible end-to-end from here.
-				const acceptEncoding = request.headers.get('accept-encoding') ?? '';
-				locals.log.debug('Compression skipped', {
+				if (metrics.compressedBytes !== null) {
+					locals.log.debug('Response gzipped', {
+						component: 'Compute/server',
+						serializedBytes: metrics.serializedBytes,
+						compressedBytes: metrics.compressedBytes,
+						ratio: Number((metrics.serializedBytes / metrics.compressedBytes).toFixed(1))
+					});
+				} else {
+					// If this fires for browser requests, a proxy in front is stripping
+					// Accept-Encoding — compression is then impossible end-to-end from here.
+					const acceptEncoding = request.headers.get('accept-encoding') ?? '';
+					locals.log.debug('Compression skipped', {
+						component: 'Compute/server',
+						acceptEncoding,
+						hasAcceptEncoding: acceptEncoding !== ''
+					});
+				}
+				// Names the step a `load` (or pre-solve) spike hides in.
+				locals.log.debug('Prep breakdown', {
 					component: 'Compute/server',
-					acceptEncoding,
-					hasAcceptEncoding: acceptEncoding !== ''
+					...Object.fromEntries(prepMarks.map(([label, ms]) => [`p_${label}Ms`, Math.round(ms)]))
+				});
+				// Aggregate cache counters — the only place evictions surface
+				// (per-request Server-Timing only carries hit/miss verdicts).
+				const db = engine.stats().definitionBytes;
+				locals.log.debug('Definition byte-cache counters', {
+					component: 'Compute/def-bytes',
+					hits: db.hits,
+					misses: db.misses,
+					evictions: db.evictions,
+					entries: db.entries,
+					retainedBytes: db.bytes
 				});
 			}
-			// Names the step a `load` (or pre-solve) spike hides in.
-			locals.log.debug('Prep breakdown', {
-				component: 'Compute/server',
-				...Object.fromEntries(prepMarks.map(([label, ms]) => [`p_${label}Ms`, Math.round(ms)]))
-			});
-			// Aggregate cache counters — the only place evictions surface
-			// (per-request Server-Timing only carries hit/miss verdicts).
-			const db = definitionByteCacheStats();
-			locals.log.debug('Definition byte-cache counters', {
-				component: 'Compute/def-bytes',
-				hits: db.hits,
-				misses: db.misses,
-				evictions: db.evictions,
-				entries: db.entries,
-				retainedBytes: db.bytes
-			});
 		}
 
-		// Re-key the (possibly coalesced) envelope to THIS request's Accept-Encoding
-		// (audit C5). A single-flight join hands every waiter the first caller's
-		// envelope, whose gzip/plain wire form was baked from the first caller's
-		// header; a non-gzip waiter joining a gzip flight would otherwise get a
-		// gzip body it can't decode. This adapts the shared result per waiter.
-		const wire = adaptEnvelopeToEncoding(envelope, request.headers.get('accept-encoding') ?? '');
-		// `body` is a `Uint8Array` (gzip) or the JSON `string`; both are valid
-		// BodyInit at runtime. The union widens past the DOM lib's BodyInit type, so
-		// hand `Response` the concrete branch.
-		return new Response(typeof wire.body === 'string' ? wire.body : new Uint8Array(wire.body), {
-			headers: wire.headers
-		});
+		// `toWebResponse` builds the Response itself (incl. `Retry-After` on `shed`,
+		// which `apiError` cannot set) and still throws `compute_error` through to
+		// the outer catch below.
+		return engine.toWebResponse(outcome);
 	} catch (err) {
 		if (isHttpError(err)) throw err;
 

@@ -35,6 +35,9 @@ export type { SolveSessionState, ExternalReader } from './solve-session-core.js'
 export { createAsyncThrottle } from './async-throttle.js';
 export type { AsyncThrottle } from './async-throttle.js';
 
+export { createComputeFetchSolveFn } from './compute-fetch-solve-fn.js';
+export type { ComputeFetchSolveFnOptions } from './compute-fetch-solve-fn.js';
+
 export { createSolveMemo, stableInputKey } from './solve-memo.js';
 export type { SolveMemo, SolveMemoOptions, MeshPolicy } from './solve-memo.js';
 

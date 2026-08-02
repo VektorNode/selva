@@ -79,15 +79,13 @@ import { createClientCache, serverIdentity } from '../client-cache.js';
 function baseConfig() {
 	return {
 		maxSolveDurationMs: 30_000,
-		maxConcurrentSolves: 4,
 		maxQueueDepth: 0,
 		queueWaitMs: 0,
 		cachesolve: true,
 		cacheerroredsolves: false,
 		reuseServerDefinitionCache: true,
 		responseCacheMaxBytes: 256 * 1024 * 1024,
-		debug: false,
-		debugVerbose: false
+		debug: false as boolean | 'verbose'
 	};
 }
 
@@ -105,39 +103,32 @@ beforeEach(() => {
 });
 
 describe('createClientCache — concurrency vs. the server child count', () => {
-	it('adopts the server child count when the cap was left at its default', async () => {
+	it('always adopts the server child count, never an operator-supplied cap', async () => {
 		activeChildren = 8;
-		const cache = createClientCache({ ...baseConfig(), maxConcurrentIsDefault: true });
+		const cache = createClientCache(baseConfig());
 		await cache.getClient(server('a'));
 		expect(createdSchedulerOptions[0].maxConcurrent).toBe(8);
 	});
 
-	it('never overrides an operator-set cap, even when the server reports more', async () => {
-		activeChildren = 8;
-		const cache = createClientCache({ ...baseConfig(), maxConcurrentIsDefault: false });
-		await cache.getClient(server('a'));
-		expect(createdSchedulerOptions[0].maxConcurrent).toBe(4);
-	});
-
-	it('keeps the default when the server cannot report a count', async () => {
+	it('falls back to 1 when the server cannot report a count', async () => {
 		activeChildren = null;
-		const cache = createClientCache({ ...baseConfig(), maxConcurrentIsDefault: true });
+		const cache = createClientCache(baseConfig());
 		await cache.getClient(server('a'));
-		expect(createdSchedulerOptions[0].maxConcurrent).toBe(4);
+		expect(createdSchedulerOptions[0].maxConcurrent).toBe(1);
 	});
 
-	it('ignores a nonsense count rather than serializing every solve', async () => {
+	it('falls back to 1 on a nonsense (0) count rather than serializing on a guess', async () => {
 		activeChildren = 0;
-		const cache = createClientCache({ ...baseConfig(), maxConcurrentIsDefault: true });
+		const cache = createClientCache(baseConfig());
 		await cache.getClient(server('a'));
-		expect(createdSchedulerOptions[0].maxConcurrent).toBe(4);
+		expect(createdSchedulerOptions[0].maxConcurrent).toBe(1);
 	});
 
 	it('picks up a pool that grew after connect, once the probe window has passed', async () => {
 		vi.useFakeTimers();
 		try {
 			activeChildren = 2;
-			const cache = createClientCache({ ...baseConfig(), maxConcurrentIsDefault: true });
+			const cache = createClientCache(baseConfig());
 			const entry = (await cache.getClient(server('a'))) as unknown as {
 				scheduler: { maxConcurrent: number; settle(r: Recorded): void };
 			};
@@ -153,10 +144,29 @@ describe('createClientCache — concurrency vs. the server child count', () => {
 		}
 	});
 
+	it('picks up a server that recovers after an earlier failed probe, on the next window', async () => {
+		vi.useFakeTimers();
+		try {
+			activeChildren = null;
+			const cache = createClientCache(baseConfig());
+			const entry = (await cache.getClient(server('a'))) as unknown as {
+				scheduler: { maxConcurrent: number; settle(r: Recorded): void };
+			};
+			expect(entry.scheduler.maxConcurrent).toBe(1);
+
+			activeChildren = 6;
+			vi.advanceTimersByTime(6 * 60 * 1000);
+			entry.scheduler.settle({ status: 'success', fromCache: false, durationMs: 1 });
+			await vi.waitFor(() => expect(entry.scheduler.maxConcurrent).toBe(6));
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('does not re-probe on every solve', async () => {
 		let probes = 0;
 		activeChildren = 4;
-		const cache = createClientCache({ ...baseConfig(), maxConcurrentIsDefault: true });
+		const cache = createClientCache(baseConfig());
 		const entry = (await cache.getClient(server('a'))) as unknown as {
 			client: { serverStats: { getActiveChildren: () => Promise<number | null> } };
 			scheduler: { settle(r: Recorded): void };
@@ -176,7 +186,7 @@ describe('createClientCache — concurrency vs. the server child count', () => {
 		vi.useFakeTimers();
 		try {
 			activeChildren = 2;
-			const cache = createClientCache({ ...baseConfig(), maxConcurrentIsDefault: true });
+			const cache = createClientCache(baseConfig());
 			const entry = (await cache.getClient(server('a'))) as unknown as {
 				scheduler: { maxConcurrent: number; settle(r: Recorded): void };
 			};
@@ -237,7 +247,7 @@ describe('createClientCache — keying', () => {
 
 describe('createClientCache — LRU eviction', () => {
 	it('evicts the least-recently-used entry past capacity and disposes its scheduler', async () => {
-		const cache = createClientCache({ ...baseConfig(), maxCachedClients: 2 });
+		const cache = createClientCache({ ...baseConfig(), maxWarmComputeServers: 2 });
 		const s1 = await cache.getClient(server('s1'));
 		await cache.getClient(server('s2'));
 		// Touch s1 so s2 becomes the LRU.
@@ -308,8 +318,9 @@ describe('createClientCache — X-Selva-Definition (ADR 0004 D2)', () => {
 });
 
 describe('createClientCache — scheduler concurrency (audit B6)', () => {
-	it('forwards maxConcurrentSolves as the scheduler maxConcurrent in queue mode', async () => {
-		const cache = createClientCache({ ...baseConfig(), maxConcurrentSolves: 7 });
+	it('forwards the probed child count as the scheduler maxConcurrent in queue mode', async () => {
+		activeChildren = 7;
+		const cache = createClientCache(baseConfig());
 		await cache.getClient(server('s1'));
 		expect(createdSchedulerOptions).toHaveLength(1);
 		// Queue mode with NO maxConcurrent defaults to 1 in the scheduler,

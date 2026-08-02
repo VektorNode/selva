@@ -184,8 +184,8 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 
 	// --- solve --------------------------------------------------------------
 	// Snapshot the shared telemetry sequence counters. The holders live on the
-	// warm client and are written by every request on this server; with
-	// maxConcurrentSolves > 1 another request can write them mid-flight. After
+	// warm client and are written by every request on this server; with the
+	// scheduler's maxConcurrent > 1 another request can write them mid-flight. After
 	// the solve, a slot is attributed to THIS request only when exactly one
 	// write happened since this snapshot — for solveMeta that single settle is
 	// necessarily ours (onSettle fires before scheduler.solve() resolves).

@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { randomFillSync } from 'node:crypto';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { COMPUTE_DEBUG } from '$lib/server/compute/clientCache.server';
+import { COMPUTE_DEBUG } from '$lib/server/compute/engine.server';
 
 // Transport throughput probe (SELVA_FLAG_COMPUTE_DEBUG only): streams N MB of
 // random bytes through the exact same stack a solve response takes (Node →

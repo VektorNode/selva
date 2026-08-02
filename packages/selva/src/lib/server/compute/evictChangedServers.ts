@@ -9,7 +9,7 @@
  * changed or that was removed. Unchanged servers keep their warm client.
  */
 
-import { evictComputeClient } from './clientCache.server';
+import { evictComputeClient } from './engine.server';
 
 /** The connection-identifying fields — a change in either makes the warm client stale. */
 export interface ServerConnection {

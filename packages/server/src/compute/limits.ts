@@ -210,30 +210,15 @@ export interface ComputeLimits {
 	 */
 	computeCacheErroredSolves: boolean;
 	/**
-	 * Max in-flight solves this app instance sends to ONE compute server
-	 * (forwarded as the SolveScheduler's `maxConcurrent`; excess solves FIFO-queue).
-	 * Size it to the server's `compute.geometry` child count — Rhino.Compute
-	 * spawns N children per VM precisely to run N solves concurrently, and a
-	 * lower value idles that capacity while users queue (audit B6: the scheduler's
-	 * queue-mode default is 1, which serialized ALL solves per server). Multiple
-	 * app instances each apply their own cap.
-	 */
-	computeMaxConcurrentSolves: number;
-	/**
-	 * True when `COMPUTE_MAX_CONCURRENT` was left unset, so `computeMaxConcurrentSolves`
-	 * is the built-in guess rather than an operator's decision. The client cache uses
-	 * this to decide whether it may replace the value with the server's real child
-	 * count — an explicit setting always wins, a guess does not.
-	 */
-	computeMaxConcurrentIsDefault: boolean;
-	/**
 	 * Backpressure — max solves allowed to WAIT in the per-server FIFO queue (i.e.
-	 * excluding the `computeMaxConcurrentSolves` already in flight). A solve that
-	 * arrives to a full queue is shed immediately (scheduler `QUEUE_FULL`, mapped
-	 * to HTTP 503 + `Retry-After`) instead of piling up unbounded. `0` = unbounded
-	 * (the pre-shedding default): the queue grows without limit, matching prior
-	 * behavior. Size it to roughly 2–3× `computeMaxConcurrentSolves` once the
-	 * Rhino pool's real capacity is known — shedding fast beats a hung request.
+	 * excluding the in-flight solves, capped at the scheduler's `maxConcurrent`,
+	 * itself auto-detected from the compute server's active child count). A solve
+	 * that arrives to a full queue is shed immediately (scheduler `QUEUE_FULL`,
+	 * mapped to HTTP 503 + `Retry-After`) instead of piling up unbounded. `0` =
+	 * unbounded (the pre-shedding default): the queue grows without limit,
+	 * matching prior behavior. Size it to roughly 2–3× the compute server's
+	 * child count once the Rhino pool's real capacity is known — shedding fast
+	 * beats a hung request.
 	 */
 	computeMaxQueueDepth: number;
 	/**
@@ -261,7 +246,7 @@ export interface ComputeLimits {
 	 * disables it (every solve goes to compute). Env value is MB.
 	 *
 	 * **This is per warm client, so the worst case multiplies.** Selva keeps up to
-	 * `maxCachedClients` (default 16) distinct compute servers warm, so the true
+	 * `maxWarmComputeServers` (default 16) distinct compute servers warm, so the true
 	 * ceiling is this × 16 — 4 GB at the default. Real deployments run 1–2 servers,
 	 * which is why the default is comfortable, but a deployment that fans out
 	 * across many servers on a small VPS is exactly the case this knob exists for.
@@ -307,10 +292,6 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 		computeReuseDefinitionCache: readBool(env, 'COMPUTE_REUSE_DEFINITION_CACHE', true, logger),
 		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true, logger),
 		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false, logger),
-		// 4 matches rhino.compute's default --childcount. Left unset, the client cache
-		// replaces this with the server's actual child count at connect time.
-		computeMaxConcurrentSolves: readPositiveInt(env, 'COMPUTE_MAX_CONCURRENT', 4, logger),
-		computeMaxConcurrentIsDefault: !env['COMPUTE_MAX_CONCURRENT'],
 		// Both 0 (unbounded / no deadline) by default — nothing sheds until an
 		// operator who's measured their pool opts in. readNonNegativeInt so `0` is a
 		// valid "disabled" value, not treated as invalid.

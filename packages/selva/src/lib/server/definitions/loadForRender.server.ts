@@ -15,7 +15,7 @@ import {
 import type { DefinitionRecord, RequestContext } from '@selvajs/platform';
 import { getStorageProvider, getDefinitionMeta, getProjectProvider } from '../providers.server';
 import { resolveServerForOrg } from '../compute/resolve.server';
-import { getClient, COMPUTE_DEBUG } from '../compute/clientCache.server';
+import { getClient, COMPUTE_DEBUG } from '../compute/engine.server';
 
 export { DefinitionLoadError };
 export type { DefinitionChannel, DefinitionLoadErrorKind, LoadedDefinition };

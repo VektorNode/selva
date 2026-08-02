@@ -26,6 +26,9 @@ import { lazyLogger } from '$lib/server/providers.server';
 // those warnings would go nowhere.
 const limits = resolveComputeLimits(env, lazyLogger);
 
+/** The whole resolved object — passed wholesale to `SolveEngine` (`engine.server.ts`). */
+export const computeLimits = limits;
+
 // Maximum solve duration — single source of truth for the /api/compute timeout.
 // See `@selvajs/server` `ComputeLimits.maxSolveDurationMs` for the full rationale
 // (SolveScheduler AbortSignal propagation, reverse-proxy/platform caveat).
@@ -63,12 +66,6 @@ export const COMPUTE_REUSE_DEFINITION_CACHE = limits.computeReuseDefinitionCache
 // Server-side solve-result cache (`cachesolve`) + errored-solve caching opt-in.
 export const COMPUTE_SERVER_CACHESOLVE = limits.computeServerCachesolve;
 export const COMPUTE_CACHE_ERRORED_SOLVES = limits.computeCacheErroredSolves;
-
-// Max in-flight solves per compute server (scheduler maxConcurrent) — should match
-// the server's compute.geometry child count. Unset, the client cache reads that
-// count from the server instead. See ComputeLimits for rationale.
-export const COMPUTE_MAX_CONCURRENT = limits.computeMaxConcurrentSolves;
-export const COMPUTE_MAX_CONCURRENT_IS_DEFAULT = limits.computeMaxConcurrentIsDefault;
 
 // Backpressure (audit B7): queue-depth cap and queue-wait deadline. Both 0 =
 // unbounded/off (nothing sheds). See ComputeLimits for tuning guidance.

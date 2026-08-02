@@ -521,7 +521,7 @@ describe('runSolvePipeline — Server-Timing', () => {
 	});
 
 	it('drops telemetry when a concurrent request also settled in the window (audit B6)', async () => {
-		// With maxConcurrentSolves > 1 two solves can interleave. More than one
+		// With the scheduler's maxConcurrent > 1 two solves can interleave. More than one
 		// settle since this request's snapshot makes the shared slots ambiguous —
 		// the pipeline must omit the segments rather than report another
 		// request's cache verdict / rhino timing as ours.

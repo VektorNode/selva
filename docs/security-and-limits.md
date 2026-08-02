@@ -53,7 +53,6 @@ All resolved in `packages/server/src/compute/limits.ts`.
 | Env var                              | Default              | Guards                                                                                                                                                                                                       |
 | ------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `MAX_SOLVE_DURATION_MS`              | `100000`             | Longest a single solve may run before it is aborted.                                                                                                                                                         |
-| `COMPUTE_MAX_CONCURRENT`             | `4`                  | In-flight solves to one compute server; excess FIFO-queues. Matches rhino.compute's default `--childcount`.                                                                                                  |
 | `COMPUTE_MAX_QUEUE_DEPTH`            | `0` (unbounded)      | Max solves allowed to wait. A full queue sheds with **503** + `Retry-After`.                                                                                                                                 |
 | `COMPUTE_QUEUE_WAIT_MS`              | `0` (no deadline)    | Max time a solve may sit queued before it is shed with **503**.                                                                                                                                              |
 | `MAX_GH_FILE_SIZE_BYTES`             | `52428800` (50 MB)   | Largest `.gh` on upload, and the cap on remote-definition fetches.                                                                                                                                           |
@@ -62,6 +61,11 @@ All resolved in `packages/server/src/compute/limits.ts`.
 | `COMPUTE_RESPONSE_MAX_BYTES`         | `314572800` (300 MB) | `/api/compute` response cap; a backstop under V8's ~512 MB string wall. Over the cap returns **413**.                                                                                                        |
 | `REMOTE_DEFINITION_FETCH_TIMEOUT_MS` | `30000`              | Deadline on remote-definition fetch (slow-loris protection).                                                                                                                                                 |
 | `BODY_SIZE_LIMIT`                    | `210M`               | adapter-node's global body cap on **every** route. Must be ≥ `COMPUTE_REQUEST_MAX_BYTES`. Use `210M` or a raw byte count — adapter-node reads only the last suffix character, and `Infinity` throws on boot. |
+
+In-flight concurrency is not an env var: Selva always auto-detects it from the
+compute server's active `compute.geometry` child count (re-probed periodically
+as the pool resizes), falling back to `1` if that count can't be read. The one
+place to change it is `--childcount` on the compute server itself.
 
 Cache byte budgets (`COMPUTE_DEFINITION_CACHE_MB`, `COMPUTE_SOLVE_CACHE_MB`) and the
 Rhino.Compute server flags are covered in [Caching](Caching.md).
