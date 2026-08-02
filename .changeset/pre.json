@@ -24,6 +24,7 @@
     "plugin-ui-visualization-package-move",
     "scheduler-cache-bytes-only",
     "solve-client-half",
+    "solve-engine-abort-listener-leak",
     "solve-engine-facade",
     "solve-server-half",
     "supabase-org-assets-not-null",
