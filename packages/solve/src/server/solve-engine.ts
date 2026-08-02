@@ -1,21 +1,15 @@
 /**
- * `SolveEngine` — the facade that owns everything a consumer needs to run
- * interactive Grasshopper solves: the per-server warm-client cache, the
- * definition-byte cache, single-flight coalescing, the pipeline call, and the
- * outcome→HTTP mapping. Composes `createClientCache` + `createDefinitionByteCache`
- * + `createSolveCacheSingleFlight` + `runSolvePipeline` — the same primitives a
- * hand-assembled app route already wires, minus the wiring.
+ * Facade over the warm-client cache, definition-byte cache, single-flight
+ * coalescing, and the solve pipeline — the primitives an app route would
+ * otherwise wire up by hand.
  *
- * Deliberately does NOT read env itself (no `resolveComputeLimits` call here):
- * `@selvajs/server`, which owns that function, depends on `@selvajs/solve`, so
- * the reverse import would be circular. A consumer resolves its own limits
- * (`resolveComputeLimits` from `@selvajs/server/compute`, or any equivalent) and
- * passes the handful of fields this engine actually needs.
+ * Doesn't read env itself: `@selvajs/server` owns `resolveComputeLimits` and
+ * depends on `@selvajs/solve`, so calling it from here would be a circular
+ * import. Callers resolve their own limits and pass in the fields below.
  *
- * What stays OUT, on purpose (matches `server/index.ts`'s existing boundary):
- * auth, DB reads, share tokens, rate limiting, metric sinks, and which compute
- * server to use (`resolveServerForOrg`-equivalent) — all app policy, supplied
- * per-call via `SolveEngineSolveArgs.server`.
+ * Stays out of auth, DB reads, share tokens, rate limiting, metrics, and
+ * compute-server selection — all app policy, supplied per-call via
+ * `SolveEngineSolveArgs.server`.
  */
 
 import {
@@ -52,9 +46,8 @@ import {
 } from './solve-pipeline.js';
 
 /**
- * The subset of `ComputeLimits` (`@selvajs/server/compute`) the engine needs,
- * passed straight through to `createClientCache` — pass the resolved object
- * through, its extra fields are ignored.
+ * Subset of `ComputeLimits` (`@selvajs/server/compute`) the engine needs.
+ * Pass the resolved object through as-is — extra fields are ignored.
  */
 export interface SolveEngineLimits {
 	maxSolveDurationMs: number;
@@ -69,25 +62,23 @@ export interface SolveEngineLimits {
 }
 
 export interface SolveEngineOptions {
-	/** Required — the engine does not read env itself (see module doc). */
 	limits: SolveEngineLimits;
 	logger?: ILogger;
-	/** Max distinct warm compute servers before the LRU evicts the oldest. Default 16 (see `createClientCache`). */
+	/** Max distinct warm compute servers before the LRU evicts the oldest. Default 16. */
 	maxWarmComputeServers?: number;
-	/** Concise cache/timing logs when truthy; `'verbose'` also enables full lib-level request/response dumps. Default off. */
+	/** Concise cache/timing logs when truthy; `'verbose'` also dumps full lib-level requests/responses. Default off. */
 	debug?: ClientCacheDebug;
 	onDebugLog?: (message: string) => void;
-	/** Fired when a caller joins an already-in-flight solve instead of running its own (`createSolveCacheSingleFlight`'s `onJoin`). */
+	/** Fired when a caller joins an already-in-flight solve instead of running its own. */
 	onSolveCoalesced?: (key: string) => void;
 }
 
 /**
- * `definitionSource` accepts every form `runSolvePipeline` does, plus the
- * `{versionId, load}` sugar that builds (and caches) a `ByteCacheRef` internally.
- * A `ByteCacheRef` obtained from `engine.definitionRef()` ahead of time (e.g. to
- * read its bytes for schema extraction before solving) is accepted directly and
- * NOT re-wrapped — recognized by its `outcome` field, which a plain external
- * `DefinitionRef` never has.
+ * Accepts every form `runSolvePipeline` does, plus `{versionId, load}` sugar
+ * that builds (and caches) a `ByteCacheRef` internally. A `ByteCacheRef`
+ * obtained ahead of time from `engine.definitionRef()` (e.g. to read bytes for
+ * schema extraction before solving) is passed through as-is — detected by its
+ * `outcome` field, which a plain `DefinitionRef` never has.
  */
 export type SolveEngineDefinitionSource =
 	| Uint8Array
@@ -100,18 +91,17 @@ export interface SolveEngineSolveArgs {
 	server: ResolvedServer;
 	definitionSource: SolveEngineDefinitionSource;
 	/**
-	 * Coalesce-key identity for a raw `Uint8Array`/`string` `definitionSource`,
-	 * which has no natural identity the way a `DefinitionRef`'s `.key` does.
-	 * Required in that case — `solve()` throws without it, rather than silently
-	 * hashing bytes (a different identity convention than the rest of the
-	 * package, which keys on immutable ids). Ignored for the other source forms.
+	 * Coalesce-key identity for a raw `Uint8Array`/`string` source, which has
+	 * no natural identity the way a `DefinitionRef`'s `.key` does. Required in
+	 * that case — `solve()` throws rather than silently hashing the bytes.
+	 * Ignored for the other source forms.
 	 */
 	definitionKey?: string;
 	inputs: PipelineInput[];
 	values: Record<string, unknown>;
 	signal: AbortSignal;
 	acceptEncoding?: string;
-	/** Stamped as `X-Selva-Definition` on this solve's client — see `ClientCache.getClient`. */
+	/** Stamped as `X-Selva-Definition` on this solve's client. */
 	definitionGuid?: string;
 	loadStartMs?: number;
 	defLoadMs?: number;
@@ -221,49 +211,52 @@ export class SolveEngine {
 		const inputTree = buildSolveInputTree(args.inputs, args.values);
 		const coalesceKey = `${identity}:${args.server.id}:${stableStringify(inputTree)}`;
 
-		// Abort/hasWaiters dance: a coalesced solve is shared, so it must not
-		// follow one caller's disconnect and 499 every other waiter. Only a
-		// solo run (no one has joined by the time this caller disconnects)
-		// propagates its own abort.
+		// A coalesced solve is shared, so one caller's disconnect can't 499 every
+		// other waiter. Only propagate abort if no one else has joined yet.
 		const abortController = new AbortController();
 		let hasWaiters = false;
-		args.signal.addEventListener(
-			'abort',
-			() => {
-				if (!hasWaiters) abortController.abort();
-			},
-			{ once: true }
-		);
+		const onCallerAbort = () => {
+			if (!hasWaiters) abortController.abort();
+		};
+		// `once: true` doesn't detach on a normal completion, and the caller's signal
+		// outlives this call — a request signal fires `abort` after the response is
+		// consumed, and a session-scoped one never settles at all. Without the
+		// `finally` below, every solve leaks a listener onto it.
+		args.signal.addEventListener('abort', onCallerAbort, { once: true });
 
 		const acceptEncoding = args.acceptEncoding ?? '';
-		const outcome = await this.singleFlight.run(
-			coalesceKey,
-			() =>
-				runSolvePipeline({
-					definitionSource: resolvedSource,
-					byteRefOutcome,
-					inputs: args.inputs,
-					values: args.values,
-					inputTree,
-					client,
-					responseMaxBytes: this.limits.computeResponseMaxBytes,
-					maxSolveDurationMs: this.limits.maxSolveDurationMs,
-					acceptEncoding,
-					signal: abortController.signal,
-					loadStartMs: args.loadStartMs ?? performance.now(),
-					defLoadMs: args.defLoadMs ?? 0,
-					prepMarks: args.prepMarks
-				}),
-			() => {
-				hasWaiters = true;
-			}
-		);
+		let outcome: SolveOutcome;
+		try {
+			outcome = await this.singleFlight.run(
+				coalesceKey,
+				() =>
+					runSolvePipeline({
+						definitionSource: resolvedSource,
+						byteRefOutcome,
+						inputs: args.inputs,
+						values: args.values,
+						inputTree,
+						client,
+						responseMaxBytes: this.limits.computeResponseMaxBytes,
+						maxSolveDurationMs: this.limits.maxSolveDurationMs,
+						acceptEncoding,
+						signal: abortController.signal,
+						loadStartMs: args.loadStartMs ?? performance.now(),
+						defLoadMs: args.defLoadMs ?? 0,
+						prepMarks: args.prepMarks
+					}),
+				() => {
+					hasWaiters = true;
+				}
+			);
+		} finally {
+			args.signal.removeEventListener('abort', onCallerAbort);
+		}
 
 		if (outcome.kind !== 'ok') return outcome;
 
-		// Re-key the (possibly shared) envelope to THIS caller's Accept-Encoding —
-		// runs per-call, after the shared `singleFlight.run` await resolves for
-		// each waiter individually, so every waiter gets its own correct wire form.
+		// The envelope may be shared across waiters; re-key it to this caller's
+		// own Accept-Encoding so each one gets the right wire form.
 		const wire = adaptEnvelopeToEncoding(outcome.envelope, acceptEncoding);
 		return {
 			...outcome,

@@ -183,11 +183,9 @@ export function createComputeFetchSolveFn<TMesh = unknown, TRhino = unknown>(
 		}
 		const processor = new GrasshopperResponseProcessor(solved, false);
 
-		const rhino = opts.meshes ? await getRhino() : null;
-		const meshes =
-			rhino !== null && opts.meshes
-				? await opts.meshes.extract(processor.response, { debug, rhino })
-				: [];
+		const meshes = opts.meshes
+			? await opts.meshes.extract(processor.response, { debug, rhino: await getRhino() })
+			: [];
 
 		const resultOutputs: Record<string, unknown> = {};
 		for (const o of outputs) {

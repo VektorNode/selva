@@ -1,10 +1,9 @@
 /**
  * Transport-agnostic solve pipeline: given an already-resolved solve context
  * (`.gh` bytes, input params + user values, a warm `SolveScheduler`), runs the
- * framework-free half of a solve and returns a discriminated {@link SolveOutcome}
- * instead of throwing for expected failures. Nothing here touches auth, the
- * database, share tokens, rate limits, or metric sinks — those stay app policy
- * in the route that calls this.
+ * solve and returns a discriminated {@link SolveOutcome} instead of throwing
+ * for expected failures. Auth, the database, share tokens, rate limits, and
+ * metric sinks are the calling route's job, not this file's.
  */
 
 import {
@@ -23,7 +22,7 @@ import { transformInputParameter } from './transform-input.js';
 import type { CachedClient } from './client-cache.js';
 import type { ByteRefOutcome } from './definition-byte-cache.js';
 
-/** Async gzip — off the event loop, unlike `gzipSync`, which blocks it for multi-MB bodies. */
+// gzipSync blocks the event loop for multi-MB bodies; promisify(gzip) doesn't.
 const gzipAsync = promisify(gzip);
 
 // ============================================================================
@@ -46,25 +45,20 @@ export type PipelineInput = SchemaInput & {
 
 export interface SolvePipelineArgs {
 	/**
-	 * The definition to solve. Either raw `.gh` bytes, or a `DefinitionRef` (from
-	 * the definition-byte cache) whose bytes the scheduler materializes ONLY when
-	 * an upload is unavoidable — a pointer-known solve of a `DefinitionRef` moves
-	 * zero bytes.
+	 * Raw `.gh` bytes, or a byte-cache `DefinitionRef` whose bytes the scheduler
+	 * materializes only when an upload is unavoidable — a pointer-known solve
+	 * moves zero bytes.
 	 */
 	definitionSource: SolveDefinition;
-	/**
-	 * When `definitionSource` is a byte-cache `DefinitionRef`, its mutable outcome
-	 * so the pipeline can emit the `def_bytes` Server-Timing verdict. Omit for
-	 * raw-bytes solves.
-	 */
+	/** Mutable load outcome for a `DefinitionRef` source, so the `def_bytes` Server-Timing verdict can be emitted. Omit for raw-bytes solves. */
 	byteRefOutcome?: ByteRefOutcome;
 	/** Persisted input params; only those with a `paramType` are sent to the solve. */
 	inputs: PipelineInput[];
 	/**
-	 * A tree the caller already built with {@link buildSolveInputTree}. When present
-	 * the pipeline skips its own build and solves this exact object.
+	 * A tree the caller already built with {@link buildSolveInputTree}; skips the
+	 * pipeline's own build and solves this object directly.
 	 *
-	 * Needed whenever the caller coalesces concurrent solves: a single-flight key
+	 * A caller coalescing concurrent solves needs this: a single-flight key
 	 * derived from raw `{inputs, values}` would split two requests that transform
 	 * to the same tree, which is the identity the scheduler actually caches on.
 	 */
@@ -73,28 +67,21 @@ export interface SolvePipelineArgs {
 	values: Record<string, unknown>;
 	client: CachedClient;
 	responseMaxBytes: number;
-	/** Used only to phrase the timeout message — the scheduler enforces the deadline itself. */
+	/** Only phrases the timeout message — the scheduler enforces the deadline itself. */
 	maxSolveDurationMs: number;
 	/** Client's `Accept-Encoding`; gzip is applied only when it advertises `gzip`. */
 	acceptEncoding: string;
 	/**
-	 * Request abort signal, forwarded to the scheduler so a client disconnect
-	 * cancels the upstream compute call. Its `aborted` flag also disambiguates a
-	 * client disconnect from the scheduler's own deadline firing.
+	 * Forwarded to the scheduler so a client disconnect cancels the upstream
+	 * compute call. Its `aborted` flag also distinguishes a client disconnect
+	 * from the scheduler's own deadline firing.
 	 */
 	signal: AbortSignal;
-	/**
-	 * Wall-clock origin (`performance.now()` captured at the top of the request)
-	 * so the pipeline's `load`/`total` phase timings line up with the caller's
-	 * pre-solve prep.
-	 */
+	/** Wall-clock origin (`performance.now()` at the top of the request) so `load`/`total` phase timings line up with the caller's pre-solve prep. */
 	loadStartMs: number;
 	/** Pre-solve "load" phase duration the caller already measured (auth + DB + fetch). */
 	defLoadMs: number;
-	/**
-	 * Pre-solve prep sub-phase marks (`[label, ms]`), surfaced verbatim as `p_*`
-	 * Server-Timing entries.
-	 */
+	/** Pre-solve prep sub-phase marks (`[label, ms]`), surfaced verbatim as `p_*` Server-Timing entries. */
 	prepMarks?: [string, number][];
 }
 
@@ -121,12 +108,11 @@ export interface SolveEnvelope {
 }
 
 /**
- * Discriminated result. `ok` carries the envelope; every other variant names an
- * expected failure the transport maps to a status code (the app route maps
- * timeout→504, client_abort→499, too_large→413, shed (rejected under backpressure)→503+Retry-After;
- * `compute_error` re-surfaces the original error for the generic 500/503 path).
- * `durationMs` on the error variants is the solve wall time up to the failure,
- * for the metric record.
+ * `ok` carries the envelope; every other variant names an expected failure the
+ * calling route maps to a status code (timeout→504, client_abort→499,
+ * too_large→413, shed→503+Retry-After, compute_error→generic 500/503).
+ * `durationMs` on error variants is the solve wall time up to the failure, for
+ * the metric record.
  */
 export type SolveOutcome =
 	| {
@@ -139,12 +125,7 @@ export type SolveOutcome =
 	| { kind: 'timeout'; durationMs: number; message: string }
 	| { kind: 'client_abort'; durationMs: number }
 	| { kind: 'too_large' }
-	/**
-	 * Scheduler backpressure rejected the solve before it executed — the
-	 * per-server queue was full (`QUEUE_FULL`) or it sat queued past the wait
-	 * deadline (`QUEUE_TIMEOUT`). Retryable: the route maps this to 503 +
-	 * `Retry-After`. `retryAfterSeconds` is a suggested backoff hint for the client.
-	 */
+	/** Scheduler backpressure rejected the solve before it ran: queue was full (`queue_full`) or the wait exceeded the deadline (`queue_timeout`). Retryable — `retryAfterSeconds` is a backoff hint. */
 	| {
 			kind: 'shed';
 			durationMs: number;
@@ -158,11 +139,7 @@ export type SolveOutcome =
 // Pipeline
 // ============================================================================
 
-/**
- * Build the transformed input tree — the exact object handed to the scheduler.
- * `runSolvePipeline` calls this itself; a caller only needs it directly to see
- * the tree before the pipeline runs (see {@link SolvePipelineArgs.inputTree}).
- */
+/** The transformed input tree exactly as handed to the scheduler; `runSolvePipeline` calls this itself unless the caller supplies {@link SolvePipelineArgs.inputTree}. */
 export function buildSolveInputTree(
 	inputs: PipelineInput[],
 	values: Record<string, unknown>
@@ -177,19 +154,17 @@ export function buildSolveInputTree(
 export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOutcome> {
 	const { client, signal } = args;
 
-	// --- input tree build ---------------------------------------------------
 	const treeBuildStart = performance.now();
 	const inputTree = args.inputTree ?? buildSolveInputTree(args.inputs, args.values);
 	const treeBuildMs = performance.now() - treeBuildStart;
 
-	// --- solve --------------------------------------------------------------
-	// Snapshot the shared telemetry sequence counters. The holders live on the
-	// warm client and are written by every request on this server; with the
-	// scheduler's maxConcurrent > 1 another request can write them mid-flight. After
-	// the solve, a slot is attributed to THIS request only when exactly one
-	// write happened since this snapshot — for solveMeta that single settle is
-	// necessarily ours (onSettle fires before scheduler.solve() resolves).
-	// Anything ambiguous is dropped from Server-Timing, never misattributed.
+	// client.solveMeta/rhinoTiming live on the warm client and are written by
+	// every request on this server; with scheduler maxConcurrent > 1, another
+	// request can write them mid-flight. A slot is attributed to THIS request
+	// only if exactly one write happened since this snapshot — for solveMeta
+	// that single settle is necessarily ours, since onSettle fires before
+	// scheduler.solve() resolves. Anything ambiguous is dropped from
+	// Server-Timing rather than misattributed.
 	const settleSeqBefore = client.solveMeta.seq;
 	const rhinoSeqBefore = client.rhinoTiming.seq;
 
@@ -199,9 +174,8 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		result = await client.scheduler.solve(args.definitionSource, inputTree, { signal });
 	} catch (err) {
 		const durationMs = performance.now() - solveStart;
-		// Distinguish timeout (scheduler deadline timer) from client disconnect
-		// (request signal). AbortError with the request signal NOT aborted means
-		// the scheduler's own timeout fired — the solve genuinely timed out.
+		// AbortError with the request signal NOT aborted means the scheduler's own
+		// deadline timer fired, not a client disconnect.
 		const isAbort = err instanceof Error && err.name === 'AbortError';
 		if (isAbort) {
 			if (signal.aborted) return { kind: 'client_abort', durationMs };
@@ -211,9 +185,8 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 				message: `Solve exceeded the ${Math.round(args.maxSolveDurationMs / 1000)}s deadline.`
 			};
 		}
-		// A full queue or an over-deadline queue wait rejects the solve BEFORE compute
-		// runs. Classify these as `shed` rather than the generic `compute_error` —
-		// they're load signals, not failures, and the client should back off and retry.
+		// Queue-full or queue-timeout rejects the solve before compute runs — a load
+		// signal, not a failure, so it's `shed` rather than `compute_error`.
 		if (err instanceof RhinoComputeError) {
 			if (err.code === ErrorCodes.QUEUE_FULL) {
 				return {
@@ -238,26 +211,22 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 	}
 	const solveMs = performance.now() - solveStart;
 
-	// --- serialize (size-guarded) ------------------------------------------
 	const serializeStart = performance.now();
 	let serialized: string;
 	try {
 		serialized = JSON.stringify(result);
 	} catch (err) {
-		// V8 caps a single string at ~512 MB; an oversized `file` output trips a
-		// RangeError here. Surface it as the same too-large outcome as the byte cap.
+		// V8 caps a string at ~512 MB; an oversized `file` output trips a RangeError
+		// here. Treat it the same as the byte cap: too_large.
 		if (err instanceof RangeError) return { kind: 'too_large' };
 		throw err;
 	}
 	if (serialized.length > args.responseMaxBytes) return { kind: 'too_large' };
 	const serializeMs = performance.now() - serializeStart;
 
-	// --- gzip ---------------------------------------------------------------
-	// Compress BEFORE the timing snapshot so its cost is a measured phase (`gzip`
-	// in Server-Timing, included in `total`). Buffered (not streamed) so
-	// Content-Length is known and a connection cut mid-transfer fails hard
-	// instead of truncating the JSON. Skip gzip for bodies under the 1 KB
-	// break-even — not worth the CPU for the wire savings.
+	// Buffered, not streamed, so Content-Length is known upfront and a connection
+	// cut mid-transfer fails hard instead of silently truncating the JSON. Below
+	// 1 KB gzip isn't worth the CPU for the wire savings.
 	const clientWantsGzip = /\bgzip\b/i.test(args.acceptEncoding);
 	const worthSendingGzip = clientWantsGzip && serialized.length > 1024;
 	let compressed: Buffer | null = null;
@@ -270,9 +239,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 
 	const serverTotalMs = performance.now() - args.loadStartMs;
 
-	// --- per-request telemetry attribution (see snapshot above) -------------
-	// settle: ours iff exactly one settle happened since the snapshot. rhino:
-	// only meaningful when the settle is ours AND it was a real compute call
+	// rhino is only meaningful when settle is ours AND it was a real compute call
 	// (a Selva-cache hit never reaches the server), and only unambiguous when
 	// exactly one Server-Timing callback fired in the window.
 	const settle = client.solveMeta.seq === settleSeqBefore + 1 ? client.solveMeta.last : null;
@@ -281,7 +248,6 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 			? client.rhinoTiming.last
 			: null;
 
-	// --- Server-Timing envelope ----------------------------------------------
 	const serverTiming = buildServerTiming({
 		defLoadMs: args.defLoadMs,
 		treeBuildMs,
@@ -314,8 +280,8 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 
 	let envelope: SolveEnvelope;
 	if (compressed) {
-		// A downstream proxy skips re-encoding an already-`Content-Encoding`d body,
-		// so this never double-compresses.
+		// Content-Encoding tells a downstream proxy the body is already compressed,
+		// so it won't gzip it again.
 		headers['Content-Encoding'] = 'gzip';
 		headers['Content-Length'] = String(compressed.byteLength);
 		envelope = {
@@ -347,13 +313,12 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
  * Re-key a coalesced envelope to a single waiter's `Accept-Encoding`.
  *
  * The single-flight coalescer runs ONE pipeline execution for N identical
- * concurrent solves and hands every waiter the same {@link SolveEnvelope}. That
- * envelope's wire form is baked from the FIRST caller's `Accept-Encoding`, so a
- * later waiter with a different `Accept-Encoding` would otherwise get a body
- * labelled with the wrong encoding (`Vary` can't help — this is one object
- * shared across waiters, not a cache lookup). Encoding is deliberately not part
- * of the coalesce key, so mixed clients still coalesce; this adapts the shared
- * result to each waiter instead.
+ * concurrent solves and hands every waiter the same {@link SolveEnvelope},
+ * baked from the FIRST caller's `Accept-Encoding`. A later waiter with a
+ * different `Accept-Encoding` would otherwise get a body labelled with the
+ * wrong encoding — `Vary` can't help here, since it's one shared object, not a
+ * cache lookup. Encoding is deliberately left out of the coalesce key so mixed
+ * clients still coalesce; this adapts the shared result to each waiter instead.
  *
  * Only the correctness-critical direction is adapted: a gzip envelope served to
  * a non-gzip waiter is gunzipped back to JSON. The reverse (plain JSON to a
@@ -365,9 +330,8 @@ export function adaptEnvelopeToEncoding(
 ): { body: string | Uint8Array; headers: Record<string, string> } {
 	const waiterWantsGzip = /\bgzip\b/i.test(acceptEncoding);
 
-	// The only mismatch that corrupts the response: a gzip body handed to a waiter
-	// that did not advertise gzip. Gunzip it back to the JSON string and drop the
-	// encoding headers. Every other combination is already wire-correct.
+	// Only mismatch that corrupts the response: gzip body, non-gzip waiter.
+	// Every other combination is already wire-correct.
 	if (envelope.encoding === 'gzip' && !waiterWantsGzip) {
 		const json = gunzipSync(
 			envelope.body instanceof Uint8Array ? envelope.body : Buffer.from(envelope.body)
@@ -399,12 +363,10 @@ interface ServerTimingParts {
 }
 
 /**
- * Assemble the `Server-Timing` header. The browser reads these to attribute its
- * round-trip: `total` here == the server's headers-to-out wall time, so browser
- * `ttfb − total` ≈ network+send latency. When the compute server reported its
- * own decode/solve/encode (VektorNode fork), `rhino_*` is time ON the compute
- * server and `compute_link` is everything between (network + queue wait). Prep
- * sub-phases ride as `p_*`; cache verdicts as 0/1 `selva_cache`/`def_reupload`.
+ * `total` is the server's headers-to-out wall time, so browser `ttfb − total`
+ * ≈ network+send latency. When the compute server reports its own
+ * decode/solve/encode (VektorNode fork), `rhino_*` is time on the compute
+ * server and `compute_link` is everything between it (network + queue wait).
  */
 function buildServerTiming(parts: ServerTimingParts): string {
 	let header =
@@ -438,9 +400,9 @@ function buildServerTiming(parts: ServerTimingParts): string {
 		}
 	}
 
-	// Byte-cache verdict for `DefinitionRef` solves: skipped = the scheduler never
-	// materialized bytes (pointer-known solve — the whole point of this path), hit
-	// = warm byte cache, miss = fell through to storage. Absent for raw-bytes solves.
+	// skipped = scheduler never materialized bytes (pointer-known solve, the
+	// whole point of this path); hit = warm byte cache; miss = fell through to
+	// storage. Absent for raw-bytes solves.
 	const byteRef = parts.byteRefOutcome;
 	if (byteRef) {
 		const verdict = !byteRef.loaded ? 'skipped' : byteRef.fromCache ? 'hit' : 'miss';

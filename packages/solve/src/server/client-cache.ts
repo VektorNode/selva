@@ -10,13 +10,13 @@ import {
 // ============================================================================
 //
 // One warm `GrasshopperClient` (+ its `SolveScheduler`) per distinct compute
-// server, keyed by the server's `id`, never its URL (ADR 0004) — a rotated
-// URL/apiKey keeps the same key with stale connection details, so the
-// config-write path MUST call `evict(id)` when a server's config changes.
+// server, keyed by the server's `id`, never its URL — a rotated URL/apiKey
+// keeps the same key with stale connection details, so the config-write path
+// MUST call `evict(id)` when a server's config changes.
 //
-// Deliberately a per-server LRU, not a single shared client: definitions can
-// pin different servers, so two definitions on two servers keep two warm
-// clients, with churn from one-off servers bounded by `maxWarmComputeServers`.
+// Per-server LRU, not a single shared client: definitions can pin different
+// servers, so two definitions on two servers keep two warm clients, with
+// churn from one-off servers bounded by `maxWarmComputeServers`.
 //
 // Both hot paths share this cache — the solve endpoint uses the entry's
 // `scheduler`; the definition-viewer render path uses the entry's `client`
@@ -33,11 +33,10 @@ export type ServerIdentity = string & { readonly __brand: 'ServerIdentity' };
 export interface ResolvedServer {
 	id: string;
 	serverUrl: string;
-	/** Sent as `RhinoComputeKey`. */
+	/** Sent as the `RhinoComputeKey` header. */
 	apiKey?: string;
 }
 
-/** Derive the opaque cache identity from a resolved server. Identity is the `id`. */
 export function serverIdentity(server: Pick<ResolvedServer, 'id'>): ServerIdentity {
 	return server.id as ServerIdentity;
 }
@@ -46,17 +45,17 @@ export interface CachedClient {
 	client: GrasshopperClient;
 	scheduler: SolveScheduler;
 	/**
-	 * Last Server-Timing decode/solve/encode, written by onServerTiming.
-	 * The scheduler runs up to `maxConcurrent` solves at once, so `last` alone
-	 * can't be trusted per-request: callers snapshot `seq` before their solve
-	 * and only attribute `last` to themselves if exactly one write happened
-	 * since (see the guard in `runSolvePipeline`), dropping it otherwise
-	 * rather than risk misattributing another request's timing.
+	 * Last Server-Timing decode/solve/encode, written by `onServerTiming`. The
+	 * scheduler runs up to `maxConcurrent` solves at once, so `last` alone can't
+	 * be trusted per-request: callers snapshot `seq` before their solve and only
+	 * attribute `last` to themselves if exactly one write happened since (see
+	 * the guard in `runSolvePipeline`), dropping it otherwise rather than risk
+	 * misattributing another request's timing.
 	 */
 	rhinoTiming: { last: { decode: number; solve: number; encode: number } | null; seq: number };
 	/**
 	 * Same snapshot-and-attribute pattern as `rhinoTiming`, for the scheduler's
-	 * onSettle cache verdict. `seq` increments on every settle (success or
+	 * `onSettle` cache verdict. `seq` increments on every settle (success or
 	 * error); `last` is written only on success.
 	 */
 	solveMeta: {
@@ -76,37 +75,34 @@ export type ClientCacheDebug = boolean | 'verbose';
 export interface ClientCacheConfig {
 	/** Per-solve timeout forwarded to the scheduler (`ComputeLimits.maxSolveDurationMs`). */
 	maxSolveDurationMs: number;
-	/** Ask Rhino.Compute to cache solve results and return them on identical repeats. */
 	cachesolve: boolean;
-	/** Also cache solves that reported GH errors (only meaningful with `cachesolve`). */
+	/** Only meaningful with `cachesolve`. */
 	cacheerroredsolves: boolean;
-	/** Reference large definitions by server cache key (pointer) instead of re-uploading. */
+	/** Reference large definitions by server cache key instead of re-uploading. */
 	reuseServerDefinitionCache: boolean;
 	/**
-	 * Backpressure — max solves that may WAIT in the FIFO queue (excludes the
-	 * in-flight solves, capped at the scheduler's `maxConcurrent`, itself driven
-	 * by the compute server's probed child count). `0` = unbounded (`ComputeLimits.
-	 * computeMaxQueueDepth`); a full queue rejects new solves with `QUEUE_FULL`.
+	 * Max solves that may wait in the FIFO queue, excluding in-flight solves
+	 * (capped at `maxConcurrent`, itself driven by the server's probed child
+	 * count). `0` = unbounded (`ComputeLimits.computeMaxQueueDepth`); a full
+	 * queue rejects new solves with `QUEUE_FULL`.
 	 */
 	maxQueueDepth: number;
 	/**
-	 * Backpressure — max ms a solve may sit queued before executing; `0` = no
-	 * deadline (`ComputeLimits.computeQueueWaitMs`). A too-long wait is rejected
-	 * with `QUEUE_TIMEOUT`.
+	 * Max ms a solve may sit queued before executing; `0` = no deadline
+	 * (`ComputeLimits.computeQueueWaitMs`). Too long a wait rejects with
+	 * `QUEUE_TIMEOUT`.
 	 */
 	queueWaitMs: number;
 	/**
-	 * Byte budget for this client's in-process solve cache, evicted LRU alongside
-	 * its entry-count cap. Applies per warm client — total worst-case heap is this
-	 * × `maxWarmComputeServers`. `0` disables the cache entirely
-	 * (`ComputeLimits.computeSolveCacheBytes`, env `COMPUTE_SOLVE_CACHE_MB`).
+	 * Byte budget for this client's in-process solve cache. Applies per warm
+	 * client — worst-case heap is this × `maxWarmComputeServers`. `0` disables
+	 * the cache (`ComputeLimits.computeSolveCacheBytes`, env `COMPUTE_SOLVE_CACHE_MB`).
 	 */
 	responseCacheMaxBytes: number;
-	/** Debug verbosity. `onDebugLog` is only ever invoked when this is not `false`. */
 	debug: ClientCacheDebug;
 	/** Max distinct warm compute servers before the LRU evicts the oldest. Default 16. */
 	maxWarmComputeServers?: number;
-	/** Sink for the concise debug lines (the app wires `console.log`). */
+	/** Sink for the debug lines. `onDebugLog` only fires when `debug` is not `false`. */
 	onDebugLog?: (message: string) => void;
 }
 
@@ -120,11 +116,7 @@ export interface ClientCache {
 	getClient(server: ResolvedServer, opts?: { definitionGuid?: string }): Promise<CachedClient>;
 	/** Dispose and drop the warm client for `id`, so the next request rebuilds against fresh connection details. */
 	evict(id: string | ServerIdentity): void;
-	/**
-	 * Solve-cache counters summed across every warm client. `warmClients` is
-	 * reported alongside since each client owns its own cache. Counters die
-	 * with the client that owns them, so totals can fall over time.
-	 */
+	/** Solve-cache counters summed across every warm client. Counters die with the client that owns them, so totals can fall over time. */
 	solveCacheStats(): SolveCacheStats;
 	/**
 	 * Drop every retained solve result, keeping the warm clients (and their
@@ -138,7 +130,6 @@ export interface ClientCache {
 	disposeAll(): void;
 }
 
-/** Aggregate solve-cache counters across the warm clients (see `solveCacheStats`). */
 export interface SolveCacheStats {
 	warmClients: number;
 	entries: number;

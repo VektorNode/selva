@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 /**
- * Plan Phase 4, guard 3 — the client/server boundary, checked on the SHIPPED ARTIFACT.
+ * Checks the client/server boundary on the SHIPPED ARTIFACT.
  *
- * The other two guards work on source: `tsup.config.ts` exports no root barrel (so a consumer can't
+ * Two other guards work on source: `tsup.config.ts` exports no root barrel (so a consumer can't
  * reach `server/` through one innocent import), and eslint `no-restricted-imports` stops `client/`
  * from importing `server/`, `@selvajs/platform`, `@selvajs/server` or `node:*`. Both are worth
  * having, and neither can see through a bundler.
@@ -36,8 +36,7 @@ async function bundleForBrowser(entry: string): Promise<string> {
 		write: false,
 		platform: 'browser',
 		format: 'esm',
-		// Externalize nothing: the point is to see everything the entry actually pulls in.
-		// A `node:*` import would fail resolution here rather than being silently marked external.
+		// Externalize nothing — a `node:*` import must fail resolution here, not get marked external.
 		logLevel: 'silent'
 	});
 	return result.outputFiles.map((f) => f.text).join('\n');
@@ -52,13 +51,13 @@ describe.skipIf(!hasBuild)('client bundle boundary (plan Phase 4, guard 3)', () 
 
 	it('bundles for the browser at all — no node builtin reaches the client entry', () => {
 		// esbuild with platform:'browser' fails to resolve `node:zlib`/`node:crypto`, so reaching
-		// this line already proves the absence. Asserted explicitly so the reason is visible when
-		// a future change makes the build throw instead.
+		// this line already proves their absence — asserted explicitly so the reason is visible
+		// if a future change makes the build throw instead.
 		//
-		// Verified by probe (2026-07-30): adding `export { runSolvePipeline } from
-		// '../server/solve-pipeline.js'` to `client/index.ts` fails HERE, in beforeAll, on
-		// `node:zlib` — before any string assertion below runs. That is the guard's real teeth;
-		// the greps catch the subtler case of server code with no node import.
+		// Probe: adding `export { runSolvePipeline } from '../server/solve-pipeline.js'` to
+		// `client/index.ts` fails here, in beforeAll, on `node:zlib`, before any string assertion
+		// below runs. That's this guard's real teeth; the string greps below only catch the
+		// subtler case of server code with no node import.
 		expect(bundled.length).toBeGreaterThan(0);
 	});
 
@@ -87,12 +86,11 @@ describe.skipIf(!hasBuild)('client bundle boundary (plan Phase 4, guard 3)', () 
 	});
 
 	it('proves the assertions can fail — the server entry trips them', async () => {
-		// A negative control. Without it, a bundler change that silently emitted an empty string
+		// Negative control: without this, a bundler change that silently emitted an empty string
 		// would leave every assertion above passing and testing nothing.
 		//
-		// Bundled for node, since that is what the server entry legitimately targets — the browser
-		// build would fail on `node:zlib` (itself the boundary working, just not observable as a
-		// string match).
+		// Bundled for node — the server entry legitimately targets node, and a browser build
+		// would just fail on `node:zlib` instead of producing a comparable string.
 		const serverBundle = await build({
 			entryPoints: [path.join(packageRoot, 'dist/server.js')],
 			bundle: true,

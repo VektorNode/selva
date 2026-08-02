@@ -1,14 +1,13 @@
 /**
- * Tests for `transformInputParameter` — the adapter that turns a persisted `SchemaInput`
- * (plus the user's chosen value) into the `@selvajs/compute` `InputParam` that
- * `TreeBuilder.fromInputParams` serializes for the solve.
+ * Tests `transformInputParameter` — the adapter turning a persisted `SchemaInput` plus the
+ * user's chosen value into the `@selvajs/compute` `InputParam` that `TreeBuilder.fromInputParams`
+ * serializes for the solve.
  *
- * The adapter delegates to the package's `processInput`, so these assert the
- * package-aligned behavior: correct `paramType` for every type (not the old
- * coerce-everything-to-Text), and `default` carrying the user's value. Where a value/
- * default is absent, `processInput` leaves `default` undefined and `fromInputParams`
- * omits the input entirely — letting Grasshopper use its own internal default rather
- * than forcing `''`/`false`.
+ * The adapter delegates to the package's `processInput`, so these assert the package-aligned
+ * behavior: correct `paramType` for every type (not the old coerce-everything-to-Text), and
+ * `default` carrying the user's value. Where a value/default is absent, `processInput` leaves
+ * `default` undefined and `fromInputParams` omits the input entirely — letting Grasshopper use
+ * its own internal default rather than forcing `''`/`false`.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -60,8 +59,6 @@ describe('transformInputParameter — number / integer', () => {
 	});
 
 	it('honors a schema-authored stepSize verbatim for integers (compute ≥3.1.0-beta.5)', () => {
-		// The package used to force integer stepSize to 1; since beta.5 a
-		// server-authored stepSize wins and the 1-heuristic is only the fallback.
 		const out = transformInputParameter(
 			input({ paramType: 'integer', stepSize: 0.5, default: 2 }),
 			4
@@ -88,8 +85,6 @@ describe('transformInputParameter — text', () => {
 	});
 
 	it('leaves default undefined when neither value nor schema default exist (input is then omitted)', () => {
-		// processInput does not force ''. fromInputParams filters undefined defaults, so the
-		// param is simply not sent and Grasshopper uses its own internal default.
 		expect(
 			transformInputParameter(input({ paramType: 'text', default: undefined }), undefined).default
 		).toBeUndefined();
@@ -117,20 +112,17 @@ describe('transformInputParameter — boolean', () => {
 });
 
 describe('transformInputParameter — value-list / file / color / generic', () => {
-	// The regression that motivated the swap: these used to be silently coerced to Text.
-	// processInput now types them correctly. (The options map for ValueList isn't carried
-	// on SchemaInput, so `values` is empty and the selected value rides on `default` —
-	// which is exactly the string a contextual ValueList param consumes.)
+	// ValueList's options map isn't carried on SchemaInput, so `values` is empty and the
+	// selected value rides on `default` — the string a contextual ValueList param consumes.
 	it('maps valueList to ValueList, carrying the selected value', () => {
 		const out = transformInputParameter(input({ paramType: 'valueList', default: '0' }), '1');
 		expect(out).toMatchObject({ paramType: 'ValueList', default: '1' });
 	});
 
-	// Regression: processInput has no dynamicValueList handler, so without the explicit
-	// mapping it fell to the Geometry fallback with a null default — and fromInputParams
-	// then DROPPED the input, so the user's selection never reached the definition.
-	// The plugin's GetDynamicValueListParameter reuses the ValueList wire contract
-	// (TypeName "ValueList"), so ValueList is the correct target type.
+	// processInput has no dynamicValueList handler, so without the explicit mapping below
+	// it falls to the Geometry fallback with a null default, and fromInputParams then drops
+	// the input — the user's selection never reaches the definition. ValueList is correct
+	// here because the plugin's GetDynamicValueListParameter reuses the ValueList wire contract.
 	it('maps dynamicValueList to ValueList, carrying the selected value', () => {
 		const out = transformInputParameter(
 			input({ paramType: 'dynamicValueList', default: '0' }),

@@ -5,8 +5,8 @@ import type { SolveDriver, SolveReporter } from '../drivers/driver.js';
 import type { UISchema } from '@selvajs/schemas';
 import type { SolveResult } from '../../shared/solve-fn.js';
 
-// Covers the session shell's dispatch decisions — specifically the `forceSolve` path
-// added for dynamic-value-list reconciliation. The pure transition logic is pinned in
+// Covers the session shell's dispatch decisions, including the `forceSolve` path used
+// for dynamic-value-list reconciliation. Pure transition logic is pinned in
 // solve-session-core.test.ts; this file pins how the shell turns those decisions into
 // driver.solve() calls.
 
@@ -87,8 +87,8 @@ describe('createSolveSession.setValue', () => {
 	});
 });
 
-// M2: the request/response driver's client-side result memo. Verifies a slider returning
-// to a solved value serves from memory (no onSolve call) and that a definition rebuild
+// The request/response driver's client-side result memo. Verifies a slider returning to
+// a solved value serves from memory (no onSolve call), and that a definition rebuild
 // drops the memo so a stale result can't cross the swap.
 describe('createRequestResponseDriver — client memo', () => {
 	// Collects reported results so the memo hit/miss can be observed without a session.

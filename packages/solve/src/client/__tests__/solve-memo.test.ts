@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { createSolveMemo, stableInputKey, type MeshPolicy } from '../solve-memo.js';
 import type { SolveResult } from '../../shared/solve-fn.js';
 
-// Pins the client-side result memo (M2): stable keying across key order, LRU recency and
-// eviction, hit/miss semantics, clear(), and the injected mesh ownership policy. The driver
+// Pins the client-side result memo: stable keying across key order, LRU recency and
+// eviction, hit/miss semantics, clear(), and the injected mesh ownership policy. Driver
 // wiring is pinned separately in solve-session.test.ts.
 //
-// These tests use a fake mesh, not a THREE.Object3D, on purpose: the memo's whole design
-// (audit C1) is that it never learns what a mesh is. If a future change made it reach into
-// a mesh, these tests would stop compiling — which is the point. The three.js policy is
-// pinned where it lives, in `@selvajs/visualization`.
+// Tests use a fake mesh, not a THREE.Object3D, on purpose: the memo's design is that it
+// never learns what a mesh is. If a future change made it reach into a mesh, these tests
+// would stop compiling — that's the point. The three.js policy itself is pinned where it
+// lives, in `@selvajs/visualization`.
 
 /** A mesh-free result. Generic so it fits a mesh-typed memo too (it just carries no meshes). */
 const result = <TMesh = unknown>(tag: string): SolveResult<TMesh> => ({ outputs: { out: tag } });
@@ -133,10 +133,9 @@ describe('createSolveMemo', () => {
 	});
 });
 
-// Audit C1. The memo caches whole SolveResults, including meshes a viewer disposes on the
-// next scene update. Every pre-existing test above used mesh-free results, so nothing
-// caught it. The policy is injected now, so these pin the memo's USE of it — the three.js
-// implementation is pinned in `@selvajs/visualization`.
+// The memo caches whole SolveResults, including meshes a viewer disposes on the next
+// scene update. Every test above used mesh-free results, so nothing caught that. These
+// pin the memo's use of the injected ownership policy.
 describe('createSolveMemo — mesh ownership (audit C1)', () => {
 	it('serves a usable mesh after the viewer disposed the one it was given', () => {
 		const memo = createSolveMemo<FakeMesh>({ meshPolicy: trackingPolicy() });

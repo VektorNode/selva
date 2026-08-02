@@ -7,10 +7,8 @@
 // session drive a WebSocket (the Grasshopper plugin) or an HTTP call (the cloud app), and
 // lets a headless consumer solve without ever rendering.
 //
-// Framework-free and renderer-free. `SolveSession` exposes plain getters and a
-// `subscribe()` seam rather than carrying framework reactivity; a Svelte host wraps it (see
-// `useSolveSession` in `@selvajs/ui`). Meshes stay opaque — the ownership policy the memo
-// needs is injected. See ./README.md for how to write a driver.
+// Meshes stay opaque — the ownership policy the memo needs is injected. See ./README.md
+// for how to write a driver.
 //
 // Must never import `../server/*`. Enforced by eslint `no-restricted-imports`.
 

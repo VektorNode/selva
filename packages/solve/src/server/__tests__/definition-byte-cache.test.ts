@@ -15,7 +15,7 @@ describe('createDefinitionByteCache', () => {
 		const second = await cache.getOrLoad('v-1', load).load();
 
 		expect(first).toEqual(second);
-		expect(load).toHaveBeenCalledTimes(1); // second call served from cache
+		expect(load).toHaveBeenCalledTimes(1);
 		const s = cache.stats();
 		expect(s.hits).toBe(1);
 		expect(s.misses).toBe(1);
@@ -39,7 +39,6 @@ describe('createDefinitionByteCache', () => {
 	it("a ref whose load() is never called leaves outcome.loaded false (the 'skipped' verdict)", () => {
 		const cache = createDefinitionByteCache(10 * 1024 * 1024);
 		const ref = cache.getOrLoad('v-1', async () => bytes(1));
-		// The scheduler served a pointer-known solve — load() never ran.
 		expect(ref.outcome).toEqual({ loaded: false, fromCache: false });
 	});
 
@@ -48,24 +47,21 @@ describe('createDefinitionByteCache', () => {
 		const cache = createDefinitionByteCache(2 * 1024);
 		const load = (marker: number) => async () => bytes(1024, marker);
 
-		await cache.getOrLoad('a', load(1)).load(); // [a]
-		await cache.getOrLoad('b', load(2)).load(); // [a,b]
-		// Touch 'a' so 'b' becomes the LRU victim.
-		await cache.getOrLoad('a', load(1)).load(); // hit → [b,a]
-		await cache.getOrLoad('c', load(3)).load(); // insert c → evict b → [a,c]
+		await cache.getOrLoad('a', load(1)).load();
+		await cache.getOrLoad('b', load(2)).load();
+		await cache.getOrLoad('a', load(1)).load(); // touch 'a' so 'b' becomes the LRU victim
+		await cache.getOrLoad('c', load(3)).load(); // insert c → evicts b
 
 		expect(cache.stats().entries).toBe(2);
 		expect(cache.stats().evictions).toBe(1);
 		expect(cache.stats().bytes).toBe(2 * 1024);
 
-		// 'a' survived (it was touched, so 'b' was the LRU victim) → served from
-		// cache without the loader. Checked BEFORE re-loading 'b', since bringing 'b'
-		// back would itself evict 'a' under the 2-entry budget.
+		// Check 'a' before re-loading 'b': bringing 'b' back would itself evict 'a'
+		// under this 2-entry budget, so order matters.
 		const aLoad = vi.fn(load(1));
 		await cache.getOrLoad('a', aLoad).load();
 		expect(aLoad).toHaveBeenCalledTimes(0);
 
-		// 'b' was evicted → its next load calls the loader again (miss).
 		const bLoad = vi.fn(load(2));
 		await cache.getOrLoad('b', bLoad).load();
 		expect(bLoad).toHaveBeenCalledTimes(1);
@@ -76,19 +72,17 @@ describe('createDefinitionByteCache', () => {
 		const load = vi.fn(async () => bytes(4096));
 
 		const out = await cache.getOrLoad('big', load).load();
-		expect(out.byteLength).toBe(4096); // still served
-		expect(cache.stats().entries).toBe(0); // but not retained
+		expect(out.byteLength).toBe(4096);
+		expect(cache.stats().entries).toBe(0);
 		expect(cache.stats().bytes).toBe(0);
 
-		// Every load re-fetches — nothing was cached.
 		await cache.getOrLoad('big', load).load();
 		expect(load).toHaveBeenCalledTimes(2);
 	});
 
 	it('keys on the passed version id — two versions that reused a fileKey never collide', async () => {
-		// The trap this cache exists to avoid: delete-latest-then-reupload reused a
-		// fileKey, but the version id (the KEY) is always fresh. Distinct ids →
-		// distinct entries, so the new version never serves the old bytes.
+		// Guards against delete-latest-then-reupload: fileKey can repeat, but
+		// version id is always fresh, so distinct ids must stay distinct entries.
 		const cache = createDefinitionByteCache(10 * 1024 * 1024);
 		const oldBytes = bytes(1024, 1);
 		const newBytes = bytes(1024, 2);
@@ -98,7 +92,7 @@ describe('createDefinitionByteCache', () => {
 
 		expect(a).toEqual(oldBytes);
 		expect(b).toEqual(newBytes);
-		expect(a).not.toEqual(b); // no cross-contamination despite a shared fileKey
+		expect(a).not.toEqual(b);
 		expect(cache.stats().entries).toBe(2);
 	});
 
@@ -113,13 +107,11 @@ describe('createDefinitionByteCache', () => {
 		expect(load).toHaveBeenCalledTimes(2);
 		expect(cache.stats().entries).toBe(0);
 		expect(cache.stats().bytes).toBe(0);
-		// Outcome still reports loaded, but never fromCache.
 		expect(ref1.outcome).toEqual({ loaded: true, fromCache: false });
 	});
 
 	it('re-storing the same key updates bytes without double-counting the budget', async () => {
 		const cache = createDefinitionByteCache(10 * 1024 * 1024);
-		// clear() to force a re-store path: first load caches, clear drops it, second caches again.
 		await cache.getOrLoad('v-1', async () => bytes(1024)).load();
 		expect(cache.stats().bytes).toBe(1024);
 		cache.clear();

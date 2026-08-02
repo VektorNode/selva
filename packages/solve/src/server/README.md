@@ -9,10 +9,9 @@ input tree build → scheduler.solve → JSON serialize (size-guarded) → gzip 
 
 `runSolvePipeline` returns a discriminated `SolveOutcome`. `ok` carries the envelope (body, headers,
 phase metrics); `timeout`, `client_abort`, `too_large`, `shed` (rejected under backpressure) and
-`compute_error` each name a
-failure the transport maps to its own status code. **Nothing here throws for an expected failure**,
-and nothing here touches auth, the database, share tokens, rate limits or metric sinks — those stay
-app policy in the route.
+`compute_error` each name a failure the transport maps to its own status code. **Nothing here
+throws for an expected failure**, and nothing here touches auth, the database, share tokens, rate
+limits or metric sinks — those stay app policy in the route.
 
 ## Contents
 
@@ -63,8 +62,7 @@ document the change — whenever the envelope changes in a way a consumer could 
 
 ## Relationship to `@selvajs/server/compute`
 
-These files used to live in `@selvajs/server/compute`. That sub-path now keeps only what is
-genuinely HTTP _request policy_ — rate limiting, the SSRF guard, env-derived limits, the
-remote-definition fetcher — with no re-export of anything here, and no dependency on
-`@selvajs/solve` at all. The two packages are independent; importing solve-core from
-`@selvajs/server` is a breaking change for consumers on `0.2.x` (`.changeset/solve-server-half.md`).
+That sub-path keeps only HTTP _request policy_ — rate limiting, the SSRF guard, env-derived
+limits, the remote-definition fetcher — with no re-export of anything here and no dependency on
+`@selvajs/solve`. The two packages are independent; importing solve-core from `@selvajs/server`
+is a breaking change for consumers on `0.2.x`.

@@ -2,18 +2,17 @@
 // server/ — the solve core behind the wire
 // ============================================================================
 //
-// Given a resolved solve context (definition bytes, inputs + values, a warm scheduler), this half
-// runs a solve and hands back a ready-to-send envelope: input tree build → solve → serialize →
-// gzip → Server-Timing, plus the caches that make a repeat solve cheap (single-flight coalescing,
+// Given a resolved solve context (definition bytes, inputs + values, a warm scheduler), runs a
+// solve and returns a ready-to-send envelope: build input tree → solve → serialize → gzip →
+// Server-Timing, plus the caches that make a repeat solve cheap (single-flight coalescing,
 // definition-byte cache, Rhino.Compute client cache).
 //
 // **Node-only** (`node:zlib`, `node:crypto`, `process.env`, platform-provider cache backends).
 // `client/` must never import from here — enforced by `no-restricted-imports` in
-// `eslint.config.mjs` and, on the built artifact, by the absence of a root barrel joining the two
-// halves; a browser bundle must not be able to reach this code at all.
+// `eslint.config.mjs`, and on the built artifact by having no root barrel join the two halves.
 //
-// What is NOT here, on purpose: HTTP status mapping, auth, tenancy, rate limiting and SSRF guards.
-// Those are request policy and stay in `@selvajs/server` (`/compute`, `/http`) and in the app route.
+// Not here, on purpose: HTTP status mapping, auth, tenancy, rate limiting, SSRF guards. Those are
+// request policy and stay in `@selvajs/server` (`/compute`, `/http`) and in the app route.
 
 // ============================================================================
 // Pipeline

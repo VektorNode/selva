@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+Guidance for Claude Code (claude.ai/code) when working in this repository.
+
 ## Before you start
 
 [STRUCTURE.md](./STRUCTURE.md) is authoritative for folder layout, naming, and per-package conventions. Read it before adding files.
@@ -10,6 +14,7 @@ Each of these is silent — nothing fails at build time, and the damage shows up
 - **Never log a whole domain object.** Log identifiers (`eventType`, `actorId`, `userId`), never payloads. Erasure cannot reach stdout.
 - **Never add a `three` dependency to `@selvajs/compute`**, in any form, including a `/visualization` sub-export.
 - **Never hand-edit generated files.** Edit `ui-schema.json` and regenerate.
+- **Never hardcode a shared dep version.** Reference `catalog:` and edit `pnpm-workspace.yaml`.
 - **Never describe Selva as having "zero exposure" to data-protection law.** It holds personal data; the operator is the controller.
 
 ## Project Overview
@@ -60,6 +65,24 @@ Before writing a comment explaining what a function does, check whether renaming
 **Sibling declarations keep the same doc shape.** Flag bits, enum members, error codes documented as a set: one form for all of them, or the odd ones read as though they mean something different.
 
 When editing: leave comments you didn't invalidate alone. Delete rather than comment out.
+
+### How comments and docs should read
+
+**Write like an engineer at a whiteboard, not like a specification.** Would you say it this way out loud to a colleague? If not, rewrite it. This applies to `.md` files too.
+
+- _utilize_ → _use_, _leverage_ → _use_, _facilitate_ → _let_, _prior to_ → _before_, _in order to_ → _to_
+- Cut throat-clearing: _It should be noted that_, _This function is designed to_. Start at the verb.
+- Verbs, not nouns: _performs a validation of_ → _validates_
+- Say who does what: _the buffer is detached_ → _`slice()` detaches the buffer_
+- Name the thing: _the relevant data structure_ → _the vertex buffer_
+- Split any sentence you'd run out of breath reading aloud
+
+Domain terms are not jargon — _zigzag encoding_, _prefix sum_, _idempotent_ stay. Plain language, not simplified content. Neutral and human; no jokes.
+
+> _It should be noted that invocation prior to initialization may potentially result in undefined behavior._
+> → _Calling this before `init()` returns garbage — the lookup table is still empty._
+
+The rewrite is barely shorter. It's better because it names what breaks and why.
 
 ## Architecture
 

@@ -12,12 +12,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { gunzipSync } from 'node:zlib';
 import type { GrasshopperClient, InputParam, SolveScheduler } from '@selvajs/compute';
 
-// --- Mock @selvajs/compute -------------------------------------------------
-// The factory is hoisted above module top-level, so the RhinoComputeError
-// stand-in is declared INSIDE it. The pipeline classifies shed outcomes with
+// vi.mock factories are hoisted above module top-level, so RhinoComputeError is
+// declared INSIDE this one. The pipeline classifies shed outcomes with
 // `err instanceof RhinoComputeError && err.code === ErrorCodes.QUEUE_*`, so the
-// mock must export a real class + the code constants. Tests import the mocked
-// `RhinoComputeError` below to construct instances the pipeline recognizes.
+// mock must export a real class plus the code constants.
 vi.mock('@selvajs/compute', () => {
 	class RhinoComputeError extends Error {
 		code: string;
@@ -39,19 +37,13 @@ vi.mock('@selvajs/compute', () => {
 		TreeBuilder: {
 			fromInputParams: (params: unknown[]) => ({ __tree: true, count: params.length })
 		},
-		// transform-input.ts (imported by the pipeline) calls processInput; return
-		// the raw shape as an InputParam so filtering/mapping runs end-to-end.
 		processInput: (raw: InputParam) => raw,
-		// Deterministic sorted-key JSON is enough for the tests (real impl sorts
-		// recursively).
 		stableStringify: (value: unknown) => JSON.stringify(value),
 		RhinoComputeError,
 		ErrorCodes: { QUEUE_FULL: 'QUEUE_FULL', QUEUE_TIMEOUT: 'QUEUE_TIMEOUT' }
 	};
 });
 
-// The mocked class, typed loosely for constructing test errors. The `as` cast
-// keeps the 3-arg (message, code, options) signature the pipeline's mock uses.
 import { RhinoComputeError as MockRhinoComputeError } from '@selvajs/compute';
 const makeShedError = (
 	message: string,
@@ -76,8 +68,6 @@ import {
 	type PipelineInput,
 	type CachedClient
 } from '../index.js';
-// `../index.js` here is `solve/src/server/index.ts` — the barrel moved with these files. It was
-// `@selvajs/server/compute`'s barrel before the extraction.
 
 /**
  * A scripted solve stub. The pipeline only JSON-serializes and reads
@@ -152,8 +142,6 @@ describe('runSolvePipeline — success', () => {
 		expect(seenTree).toEqual({ __tree: true, count: 1 });
 	});
 
-	// The route builds the tree itself so it can derive a single-flight key from
-	// the solve's real identity, then hands it back rather than transforming twice.
 	it('solves the caller-supplied tree instead of rebuilding one', async () => {
 		let seenTree: unknown;
 		const prebuilt = { __tree: true, count: 99 } as unknown as SolvePipelineArgs['inputTree'];
@@ -210,7 +198,6 @@ describe('runSolvePipeline — success', () => {
 
 describe('runSolvePipeline — gzip', () => {
 	it('compresses when Accept-Encoding allows and the body is over 1 KB', async () => {
-		// A payload comfortably over the 1 KB gzip threshold.
 		const big = { values: Array.from({ length: 500 }, (_, i) => ({ i, s: 'xxxxxxxxxx' })) };
 		const outcome = await runSolvePipeline(
 			baseArgs({ acceptEncoding: 'gzip, br', client: fakeClient(async () => big) })
@@ -220,7 +207,6 @@ describe('runSolvePipeline — gzip', () => {
 		expect(outcome.envelope.encoding).toBe('gzip');
 		expect(outcome.envelope.headers['Content-Encoding']).toBe('gzip');
 		expect(outcome.envelope.headers['Vary']).toBe('Accept-Encoding');
-		// The gzip body round-trips back to the original JSON.
 		const inflated = gunzipSync(Buffer.from(outcome.envelope.body as Uint8Array)).toString();
 		expect(JSON.parse(inflated)).toEqual(big);
 		expect(outcome.envelope.metrics.compressedBytes).toBeGreaterThan(0);
@@ -264,10 +250,9 @@ describe('adaptEnvelopeToEncoding — single-flight per-waiter re-key', () => {
 		const { envelope, body } = await gzipEnvelope();
 		expect(envelope.encoding).toBe('gzip'); // first caller's flight was gzip
 
-		// A waiter that did NOT advertise gzip joins the same flight.
+		// A waiter that did not advertise gzip joins the same flight and must get
+		// decodable JSON, not the mislabelled gzip bytes.
 		const wire = adaptEnvelopeToEncoding(envelope, 'br');
-
-		// It must get decodable JSON, not the mislabelled gzip bytes.
 		expect(typeof wire.body).toBe('string');
 		expect(JSON.parse(wire.body as string)).toEqual(body);
 		expect(wire.headers['Content-Encoding']).toBeUndefined();
@@ -293,7 +278,6 @@ describe('adaptEnvelopeToEncoding — single-flight per-waiter re-key', () => {
 	});
 
 	it('passes a plain-JSON envelope through untouched for any waiter', async () => {
-		// First caller lacked gzip → plain-string body, no Content-Encoding.
 		const big = { values: Array.from({ length: 500 }, (_, i) => ({ i, s: 'xxxxxxxxxx' })) };
 		const outcome = await runSolvePipeline(
 			baseArgs({ acceptEncoding: 'br', client: fakeClient(async () => big) })
@@ -301,8 +285,8 @@ describe('adaptEnvelopeToEncoding — single-flight per-waiter re-key', () => {
 		if (outcome.kind !== 'ok') throw new Error('expected ok');
 		expect(outcome.envelope.encoding).toBeUndefined();
 
-		// A gzip-capable waiter joining it gets the plain body — correct, if not
-		// maximally small (gzip is an optimisation, never a requirement).
+		// A gzip-capable waiter joining a plain flight gets the plain body: correct,
+		// if not maximally small — gzip is an optimisation, not a guarantee.
 		const wire = adaptEnvelopeToEncoding(outcome.envelope, 'gzip');
 		expect(wire.body).toBe(outcome.envelope.body);
 		expect(wire.headers['Content-Encoding']).toBeUndefined();

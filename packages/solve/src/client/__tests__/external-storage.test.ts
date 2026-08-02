@@ -26,7 +26,7 @@ describe('getExternalInputs', () => {
 		const s = schema([
 			input('a', { source: { kind: 'client' } }),
 			input('b', { source: { kind: 'user' } }),
-			input('c') // no source
+			input('c')
 		]);
 		expect(getExternalInputs(s).map((e) => e.paramId)).toEqual(['a']);
 	});
@@ -86,7 +86,6 @@ describe('read/write/clear with a sessionStorage stub', () => {
 
 describe('no-storage guard (SSR / node)', () => {
 	it('read returns undefined and write/clear no-op when sessionStorage is absent', () => {
-		// node env: sessionStorage is undefined by default
 		expect(readExternalValue({ scopeKey: 's1', inputId: 'p1' })).toBeUndefined();
 		expect(() => writeExternalValue({ scopeKey: 's1', inputId: 'p1', value: 1 })).not.toThrow();
 		expect(() => clearExternalValue({ scopeKey: 's1', inputId: 'p1' })).not.toThrow();

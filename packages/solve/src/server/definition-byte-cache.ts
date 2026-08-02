@@ -26,7 +26,6 @@
  */
 export interface ByteRefOutcome {
 	loaded: boolean;
-	/** When `loaded`, whether the bytes came from a warm cache entry. */
 	fromCache: boolean;
 }
 
@@ -37,25 +36,17 @@ export interface ByteCacheRef {
 	outcome: ByteRefOutcome;
 }
 
-/** Hit/miss/eviction counters for observability (Server-Timing, admin debug). */
 export interface ByteCacheStats {
 	hits: number;
 	misses: number;
-	/** Entries dropped by the byte-budget LRU. */
 	evictions: number;
 	entries: number;
 	bytes: number;
 }
 
 export interface DefinitionByteCache {
-	/**
-	 * `DefinitionRef` whose `load()` serves `versionId`'s bytes from the cache
-	 * when warm, otherwise calls `load` and caches the result. Cheap to build
-	 * and moves no bytes until `load()` runs.
-	 */
 	getOrLoad(versionId: string, load: () => Promise<Uint8Array>): ByteCacheRef;
 	stats(): ByteCacheStats;
-	/** Test seam / eviction on definition delete if ever needed. */
 	clear(): void;
 }
 
@@ -69,8 +60,8 @@ interface Entry {
  */
 export function createDefinitionByteCache(maxBytes: number): DefinitionByteCache {
 	const budget = Math.max(0, Math.floor(maxBytes));
-	// Map preserves insertion order → iteration order IS LRU order; re-inserting
-	// on access moves an entry to the most-recently-used (last) position.
+	// Map iteration order is insertion order, so it doubles as LRU order:
+	// re-inserting a key on access moves it to the most-recently-used end.
 	const cache = new Map<string, Entry>();
 	let retainedBytes = 0;
 	const stats = { hits: 0, misses: 0, evictions: 0 };

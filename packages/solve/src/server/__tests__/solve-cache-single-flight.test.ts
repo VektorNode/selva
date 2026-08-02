@@ -1,10 +1,6 @@
 /**
- * In-process single-flight (R4) — coalescing, release-on-settle, and the
+ * In-process single-flight — coalescing, release-on-settle, and the
  * owner-notification the route uses to decide abort semantics.
- *
- * These tests moved out of `solve-cache.test.ts`: single-flight is no longer
- * gated on a result cache being configured, so its coverage must not disappear
- * along with the L2 backend's.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -25,8 +21,8 @@ describe('createSolveCacheSingleFlight', () => {
 		expect(sf.inFlight()).toBe(1);
 		release(7);
 		expect(await p1).toBe(7);
-		expect(await p2).toBe(7); // shared result
-		expect(runs).toBe(1); // executed once
+		expect(await p2).toBe(7);
+		expect(runs).toBe(1);
 	});
 
 	it('runs distinct keys independently', async () => {
@@ -70,7 +66,7 @@ describe('createSolveCacheSingleFlight', () => {
 			() => gate,
 			() => void joins++
 		);
-		expect(joins).toBe(0); // nobody has joined yet
+		expect(joins).toBe(0);
 
 		sf.run('k', () => gate);
 		expect(joins).toBe(1);
@@ -125,8 +121,7 @@ describe('createSolveCacheSingleFlight', () => {
 			() => void joins++
 		);
 
-		// A later call for the same key is a NEW flight, not a join — the settled
-		// owner's request is already served and must not be told otherwise.
+		// A later call for the same key is a new flight, not a join.
 		await sf.run('k', async () => 2);
 		expect(joins).toBe(0);
 	});

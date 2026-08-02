@@ -19,7 +19,7 @@ import type { UISchema } from '@selvajs/schemas';
 function schema(partial: {
 	inputs?: { id: string; paramType: string; default?: unknown }[];
 	outputs?: { id: string }[];
-	clientInputs?: string[]; // ids that carry source.kind === 'client'
+	clientInputs?: string[];
 	instanceSolve?: boolean;
 }): UISchema {
 	const clientSet = new Set(partial.clientInputs ?? []);
@@ -45,14 +45,14 @@ describe('buildInitialValues', () => {
 		const s = schema({
 			inputs: [
 				{ id: 'a', paramType: 'number', default: 5 },
-				{ id: 'b', paramType: 'text' } // no default -> getDefaultValue('text') === ''
+				{ id: 'b', paramType: 'text' }
 			],
 			outputs: [{ id: 'out' }]
 		});
 		const v = buildInitialValues(s, 'scope', () => undefined);
 		expect(v.a).toBe(5);
 		expect(v.b).toBe('');
-		expect(v.out).toBe(null); // outputs always seeded null
+		expect(v.out).toBe(null);
 	});
 
 	it('hydrates client-sourced inputs from the reader, leaving them undefined when absent', () => {

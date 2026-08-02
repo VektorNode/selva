@@ -39,13 +39,13 @@ describe('createAsyncThrottle', () => {
 		const { fn, calls } = deferredRun();
 		const t = createAsyncThrottle<number>(fn);
 
-		t.trigger(1); // runs
-		t.trigger(2); // queued
+		t.trigger(1);
+		t.trigger(2);
 		t.trigger(3); // overwrites the single pending slot — 2 is dropped
 		expect(calls).toHaveLength(1);
 		expect(t.hasPending).toBe(true);
 
-		calls[0].resolve(); // first finishes -> pending (3) runs
+		calls[0].resolve();
 		await tick();
 		expect(calls).toHaveLength(2);
 		expect(calls[1].values).toBe(3); // not 2
@@ -57,12 +57,11 @@ describe('createAsyncThrottle', () => {
 		const t = createAsyncThrottle<number>(fn);
 
 		t.trigger(1);
-		t.trigger(2); // pending
+		t.trigger(2);
 		const firstSignal = calls[0].signal;
 
 		calls[0].resolve(); // finishes -> re-enters execute(2), which aborts the (already-cleared) prior
 		await tick();
-		// The second run gets a fresh, non-aborted signal.
 		expect(calls).toHaveLength(2);
 		expect(calls[1].signal.aborted).toBe(false);
 		expect(firstSignal).not.toBe(calls[1].signal);
@@ -73,7 +72,7 @@ describe('createAsyncThrottle', () => {
 		const t = createAsyncThrottle<number>(fn);
 
 		t.trigger(1);
-		t.trigger(2); // pending
+		t.trigger(2);
 		expect(t.hasPending).toBe(true);
 
 		t.cancel();

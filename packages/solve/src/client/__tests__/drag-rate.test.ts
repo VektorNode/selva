@@ -5,18 +5,13 @@ import { createAsyncThrottle } from '../async-throttle.js';
 // What one slider drag actually costs, in requests
 // ============================================================================
 //
-// This file exists because THREE successive static readings of the slider→solve
-// path reached three different wrong conclusions about whether a drag can trip the
-// server's rate limit (120 requests / 100s per user). The history is in
-// plans/archive/verify-slider-drag-solve-path.md; the short version:
+// Static reasoning about the slider->solve path has repeatedly reached wrong
+// conclusions about whether a drag can trip the server's rate limit (120 requests /
+// 100s per user) — e.g. treating the throttle as a rate limiter when it actually
+// bounds CONCURRENCY, not request rate: a debounce fire landing while nothing is in
+// flight starts a request immediately regardless of recent history.
 //
-//   1. "~6.6 solves/sec"      — read the 150ms debounce, missed that it's trailing-edge.
-//   2. "bounded by 1/RTT"     — read the throttle as a rate limiter. It isn't; it bounds
-//                               CONCURRENCY. A debounce fire landing while nothing is in
-//                               flight starts a request immediately.
-//   3. "narrow, needs a ~100s pathological pattern" — followed from (2).
-//
-// So the rate is asserted here by DRIVING the real limiters with fake timers rather
+// So the rate here is asserted by DRIVING the real limiters with fake timers rather
 // than by reasoning about the constants. The debounce and memo are reimplemented
 // inline (they mirror packages/ui's debounce.ts and solve-memo.ts, which live in
 // packages that don't depend on this one) but createAsyncThrottle is the real thing.
@@ -155,7 +150,7 @@ describe('slider drag → request rate', () => {
 	it('is rescued by the throttle only once solves are slower than ~830ms', async () => {
 		// The throttle bounds concurrency, so it only becomes the binding constraint
 		// when round-trip time alone pushes the rate under 1.2/sec. Anything faster and
-		// it never helps — which is what the second wrong analysis missed.
+		// it never helps.
 		const slow = await simulateDrag({
 			moveIntervalMs: 160,
 			durationMs: 100_000,

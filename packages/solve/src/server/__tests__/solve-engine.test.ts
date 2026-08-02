@@ -1,8 +1,7 @@
 /**
  * Tests for `SolveEngine` — the facade composing the client cache, byte cache,
- * single-flight coalescer, and pipeline. `@selvajs/compute` is mocked the same
- * way `solve-pipeline.test.ts` and `client-cache.test.ts` mock it, so these run
- * without a live compute server and without a real Rhino.Compute handshake.
+ * single-flight coalescer, and pipeline. `@selvajs/compute` is mocked, so these
+ * run without a live compute server or a real Rhino.Compute handshake.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -64,8 +63,9 @@ vi.mock('@selvajs/compute', () => {
 import { SolveEngine, type SolveEngineLimits } from '../solve-engine.js';
 import type { PipelineInput } from '../solve-pipeline.js';
 
-/** Flush microtasks until `check()` is truthy or `attempts` is exhausted — `getClient`'s async
- *  chain (client build + concurrency probe) hops several ticks before `scriptedSolve` runs. */
+/** Flush microtasks until `check()` is truthy or `attempts` is exhausted.
+ *  `getClient`'s async chain (client build + concurrency probe) hops several
+ *  ticks before `scriptedSolve` runs. */
 async function waitUntil(check: () => boolean, attempts = 20): Promise<void> {
 	for (let i = 0; i < attempts && !check(); i++) {
 		await Promise.resolve();
@@ -127,10 +127,9 @@ describe('SolveEngine.solve — definitionSource variants', () => {
 
 	it('{versionId, load} sugar builds a byte-cache ref and threads its outcome into the pipeline call, without re-wrapping on a repeat solve', async () => {
 		// The real SolveScheduler calls definitionSource.load() itself when an
-		// upload is unavoidable; the mocked scheduler doesn't simulate that, so
-		// this test drives the ref directly to prove `solve()` reuses the SAME
-		// underlying byte-cache entry across two calls rather than reading the
-		// loader twice.
+		// upload is unavoidable; the mock doesn't simulate that, so this test
+		// drives the ref directly to prove solve() reuses the same byte-cache
+		// entry across two calls instead of reading the loader twice.
 		scriptedSolve = async (def) => {
 			await (def as { load: () => Promise<Uint8Array> }).load();
 			return { values: [], errors: [], warnings: [] };
@@ -148,7 +147,6 @@ describe('SolveEngine.solve — definitionSource variants', () => {
 		expect(outcome.kind).toBe('ok');
 		expect(load).toHaveBeenCalledTimes(1);
 
-		// A second solve for the same versionId hits the warm byte-cache entry.
 		const outcome2 = await engine.solve({
 			server,
 			definitionSource: { versionId: 'v-1', load },
@@ -168,7 +166,7 @@ describe('SolveEngine.solve — definitionSource variants', () => {
 		const engine = new SolveEngine({ limits: baseLimits() });
 		const load = vi.fn(async () => new Uint8Array([1]));
 		const ref = engine.definitionRef('v-2', load);
-		await ref.load(); // simulate the caller (e.g. schema backfill) materializing bytes first
+		await ref.load(); // simulates a caller (e.g. schema backfill) materializing bytes first
 		expect(load).toHaveBeenCalledTimes(1);
 
 		const outcome = await engine.solve({
@@ -179,7 +177,6 @@ describe('SolveEngine.solve — definitionSource variants', () => {
 			signal: new AbortController().signal
 		});
 		expect(outcome.kind).toBe('ok');
-		// Still only the one load — solve() reused the ref's own cached bytes, no second getOrLoad.
 		expect(load).toHaveBeenCalledTimes(1);
 	});
 
@@ -225,11 +222,42 @@ describe('SolveEngine.solve — coalescing and abort', () => {
 		expect(b.kind).toBe('ok');
 	});
 
+	it('detaches its abort listener once the solve settles, so a reused signal does not accumulate them', async () => {
+		scriptedSolve = async () => ({ values: [], errors: [], warnings: [] });
+		const engine = new SolveEngine({ limits: baseLimits() });
+		// A long-lived signal (session-scoped controller, or a request signal that
+		// fires `abort` after the response is read) is what makes the leak observable.
+		const controller = new AbortController();
+		let attached = 0;
+		const realAdd = controller.signal.addEventListener.bind(controller.signal);
+		const realRemove = controller.signal.removeEventListener.bind(controller.signal);
+		controller.signal.addEventListener = ((...a: Parameters<typeof realAdd>) => {
+			attached += 1;
+			return realAdd(...a);
+		}) as typeof realAdd;
+		controller.signal.removeEventListener = ((...a: Parameters<typeof realRemove>) => {
+			attached -= 1;
+			return realRemove(...a);
+		}) as typeof realRemove;
+
+		for (let i = 0; i < 5; i++) {
+			await engine.solve({
+				server,
+				definitionSource: new Uint8Array([1]),
+				definitionKey: `leak-${i}`,
+				inputs,
+				values: { a: i },
+				signal: controller.signal
+			});
+		}
+		expect(attached).toBe(0);
+	});
+
 	it('a solo caller aborting propagates to the pipeline signal', async () => {
 		let sawSignal: AbortSignal | undefined;
 		scriptedSolve = (_def, _tree, opts) => {
 			sawSignal = opts.signal;
-			return new Promise(() => {}); // never resolves
+			return new Promise(() => {});
 		};
 		const engine = new SolveEngine({ limits: baseLimits() });
 		const controller = new AbortController();
@@ -269,9 +297,9 @@ describe('SolveEngine.solve — coalescing and abort', () => {
 			signal
 		});
 		void engine.solve(args(owner.signal));
-		await waitUntil(() => sawSignal !== undefined); // owner's pipeline call is now in flight
+		await waitUntil(() => sawSignal !== undefined);
 		void engine.solve(args(joiner.signal));
-		await waitUntil(() => joined); // joiner has attached to the owner's flight
+		await waitUntil(() => joined);
 		owner.abort();
 		await Promise.resolve();
 		expect(sawSignal?.aborted).toBe(false);

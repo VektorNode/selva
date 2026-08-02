@@ -24,6 +24,7 @@ at the repo root, separate from `docs/`. Plans are grouped by kind:
 | [admin-updates-yak-management](./features/admin-updates-yak-management.md) | design only, no implementation (planning)                        | B — operator     |
 | [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)              | not started — traced 2026-07-31, GH fixture pending              | B — correctness  |
 | [solve-engine-facade](./features/solve-engine-facade.md)                   | proposal, not started — written from the Parafa side, 2026-08-02 | **A — refactor** |
+| [solve-fn-raw-response](./features/solve-fn-raw-response.md)               | proposal, not started — unblocks the client half of the facade   | **A — refactor** |
 
 **Fully closed, moved to [`archive/`](./archive/)** — no residue. Kept for the _why_:
 

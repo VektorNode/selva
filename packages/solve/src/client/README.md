@@ -1,14 +1,14 @@
 # `client/` — inputs → solve → outputs
 
-The value and lifecycle state machine that sits between a schema-driven UI and a solver.
-It owns the input/output `values` map, the solve-gating rules (`instanceSolve`), the
-pending-changes / never-solved flags, the compute errors/warnings, the display meshes, and
-how all of these reset when the active definition changes.
+The value and lifecycle state machine between a schema-driven UI and a solver. It owns the
+input/output `values` map, solve-gating (`instanceSolve`), the pending-changes /
+never-solved flags, compute errors/warnings, display meshes, and how all of these reset
+when the active definition changes.
 
 **It knows only `SolveResult` from `shared/`** — inputs go out, outputs and meshes come back.
-That is what lets the same session drive a WebSocket (the Grasshopper plugin) or a
-Rhino.Compute HTTP call (the cloud app), and what lets a headless consumer solve without ever
-rendering. It must never import `../server/*`.
+That's what lets the same session drive a WebSocket (the Grasshopper plugin) or a
+Rhino.Compute HTTP call (the cloud app), and what lets a headless consumer solve without
+rendering. Must never import `../server/*`.
 
 ## Contents
 
@@ -18,6 +18,7 @@ rendering. It must never import `../server/*`.
 | `solve-session-core.ts`       | the pure transition logic every decision goes through            |
 | `drivers/driver.ts`           | `SolveDriver` + `SolveReporter` — the transport seam             |
 | `drivers/request-response.ts` | `createRequestResponseDriver` (memo + throttle over a `SolveFn`) |
+| `compute-fetch-solve-fn.ts`   | `createComputeFetchSolveFn` — ready-made `SolveFn` over HTTP     |
 | `async-throttle.ts`           | single-in-flight, latest-wins dispatch pacing                    |
 | `solve-memo.ts`               | client-side LRU result cache (delegates mesh ownership)          |
 | `external-storage.ts`         | client-sourced input transit storage                             |
@@ -49,10 +50,9 @@ const driver = createRequestResponseDriver(onSolve, () => session, {
 
 ## Extension point: writing a driver
 
-A driver gives the session its transport. It knows how to _start_ and _cancel_ a solve and
-reports `isSolving`. It does **not** return outputs — results come back asynchronously via
-the reporter, which is what lets a push transport satisfy the same interface as a
-request/response call.
+A driver gives the session its transport: start and cancel a solve, report `isSolving`. It
+does **not** return outputs — results come back asynchronously via the reporter, which is
+what lets a push transport satisfy the same interface as a request/response call.
 
 ```ts
 const myDriver: SolveDriver = {
@@ -74,8 +74,8 @@ or `reportError(message)` on a transport failure.
 
 Transport quirks — value preparation, mesh-blob streaming, remote-update guards — stay
 inside the driver; the session never learns them. `plugin-ui`'s WebSocket driver lives in
-that package rather than here for exactly this reason: it's transport-specific, but it
-satisfies this interface.
+that package rather than here for exactly this reason: it's transport-specific but satisfies
+this interface.
 
 Reach for `createAsyncThrottle` if your transport needs single-in-flight latest-wins
 semantics, and `createSolveMemo` if repeated inputs should skip the round-trip — both are
@@ -84,13 +84,14 @@ exported so a custom driver doesn't re-derive them.
 ## Mesh ownership is injected, not known here
 
 A viewer takes ownership of every mesh array it renders, disposing the previous content on
-the next scene update. So a memo that stored those objects by reference would serve an
+the next scene update. A memo that stored those objects by reference would serve an
 already-disposed mesh on the next hit, and leak GPU buffers on eviction.
 
-`solve-memo.ts` handles that without knowing what a mesh is: `TMesh` is opaque and the
-clone/release policy is a `MeshPolicy<TMesh>` the host passes in. The three.js implementation
-lives in `@selvajs/visualization/parse` (`meshPolicy`), beside the viewer whose disposal rule
-creates the requirement — this is what keeps `three` out of this package entirely.
+`solve-memo.ts` avoids that without knowing what a mesh is: `TMesh` is opaque, and the
+clone/release policy is a `MeshPolicy<TMesh>` the host passes in. The three.js
+implementation lives in `@selvajs/visualization/parse` (`meshPolicy`), beside the viewer
+whose disposal rule creates the requirement — that's what keeps `three` out of this package
+entirely.
 
 ```ts
 import { meshPolicy } from '@selvajs/visualization/parse';

@@ -12,12 +12,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // --- Mock @selvajs/compute -------------------------------------------------
 //
-// The recorded values are asserted on property-by-property, so they are loose records rather than
-// the real config types: the point of the mock is that the cache passes values THROUGH untouched,
-// and pinning the upstream shapes here would just couple these tests to `@selvajs/compute`.
-//
-// `unknown` rather than `any`: the few assertions that index into these need a cast, and `prop()`
-// below does it in one place instead of the type opting out everywhere.
+// Loose records, not the real config types: the cache passes values through untouched, and
+// pinning the upstream shapes here would just couple these tests to `@selvajs/compute`.
+// `unknown` rather than `any` so the few assertions that index into these need a cast —
+// `prop()` below does it in one place instead of the type opting out everywhere.
 type Recorded = Record<string, unknown>;
 
 /** Read a recorded property. The cast is the point of `Recorded` being `unknown`-valued. */
@@ -212,8 +210,8 @@ describe('createClientCache — keying', () => {
 	});
 
 	it('reuses the entry even when the URL/apiKey rotate under the same id', async () => {
-		// The whole point of ADR 0004 D1: identity is the id, so a rotated URL is
-		// the SAME entry (stale until evicted) — not a new client.
+		// Identity is the id, so a rotated URL is the SAME entry (stale until
+		// evicted), not a new client.
 		const cache = createClientCache(baseConfig());
 		const a = await cache.getClient(server('s1', { serverUrl: 'http://old:6500' }));
 		const b = await cache.getClient(server('s1', { serverUrl: 'http://new:6500' }));
