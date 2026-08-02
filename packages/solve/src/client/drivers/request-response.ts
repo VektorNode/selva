@@ -39,8 +39,11 @@ export function createRequestResponseDriver<TMesh = unknown>(
 				console.debug('[Solve/driver] solve completed after abort — result discarded');
 				return;
 			}
-			memo.set(values, result);
-			getReporter().report(result);
+			// Stamped here rather than in the SolveFn: a memo hit never calls it, so values
+			// captured inside would pair the served result with whatever solved last.
+			const stamped = { ...result, values };
+			memo.set(values, stamped);
+			getReporter().report(stamped);
 		} catch (err) {
 			if (signal.aborted) {
 				// eslint-disable-next-line no-console -- normal during a slider scrub; not a warning

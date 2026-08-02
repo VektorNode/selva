@@ -122,7 +122,30 @@ describe('createRequestResponseDriver — client memo', () => {
 
 		expect(onSolve).toHaveBeenCalledTimes(2); // only the two distinct inputs
 		expect(reporter.reports).toHaveLength(3); // but all three solves reported
-		expect(reporter.reports[2]).toEqual({ outputs: { echo: 1 } });
+		expect(reporter.reports[2]).toEqual({ outputs: { echo: 1 }, values: { a: 1 } });
+	});
+
+	// The memo short-circuits without calling onSolve, so a consumer that captured the
+	// artifact and its inputs inside its own SolveFn would still be holding B's when the
+	// viewer is showing A's — and a commit path would freeze that mismatch. Both must
+	// travel with the result through the memo.
+	it('a memo hit reports the source and values that produced the cached result', async () => {
+		const onSolve = async (values: Record<string, unknown>): Promise<SolveResult> => ({
+			outputs: { echo: values.a },
+			source: { raw: values.a }
+		});
+		const reporter = collectingReporter();
+		const driver = createRequestResponseDriver(onSolve, () => reporter);
+
+		driver.solve({ a: 'A' });
+		await flush();
+		driver.solve({ a: 'B' });
+		await flush();
+		driver.solve({ a: 'A' }); // memo hit
+		await flush();
+
+		expect(reporter.reports[2].source).toEqual({ raw: 'A' });
+		expect(reporter.reports[2].values).toEqual({ a: 'A' });
 	});
 
 	it('clearCache drops the memo so the next identical solve re-runs', async () => {

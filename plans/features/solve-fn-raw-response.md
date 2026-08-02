@@ -142,23 +142,24 @@ them on. Two candidate shapes:
   populated by the driver (not the `SolveFn` — it must survive a memo hit, and the driver is what
   has both). No signature change anywhere; the memo carries it for free like `source`.
 
-**Recommendation: B2.** It keeps "what was shown" as one atomic object, which is the whole point —
-a consumer holding a `SolveResult` cannot accidentally pair it with the wrong inputs. B1 leaves two
-things to keep in sync at every call site. Decide before step 4; either way the pairing must be
-settled or Parafa deletes its `onSolve` and keeps half the bug.
+**Chosen: B2.** It keeps "what was shown" as one atomic object, which is the whole point — a
+consumer holding a `SolveResult` cannot accidentally pair it with the wrong inputs. B1 leaves two
+things to keep in sync at every call site.
 
-Note the driver must set this on the memo-hit branch too — the cached result's stored `values` are
-the right ones (they keyed the entry), so `memo.get` returning them intact is sufficient.
+The memo-hit branch needs no code of its own: the driver stamps `values` onto the result _before_
+`memo.set`, so the cached entry already carries the values that keyed it and `memo.get` returns them
+intact.
 
 ## Migration
 
-1. Add `TSource` + `source` (and per B2, `values`) to `SolveResult` — additive, defaulted, no
-   consumer breaks.
-2. Populate `source` in `createComputeFetchSolveFn`; populate `values` in
-   `createRequestResponseDriver` on both the fresh-solve and memo-hit paths.
-3. **Regression test, first and regardless of which option ships:** solve A → solve B → solve A
-   again (memo hit) and assert the reported result's `source` _and_ `values` are A's, not B's. This
-   is the test that catches both the naive design and the bug Parafa has today.
+1. ~~Add `TSource` + `source` and `values` to `SolveResult`~~ — done. `SolveFn` gained the same
+   `TSource` param so the narrowing survives the return-type annotation.
+2. ~~Populate `source` in `createComputeFetchSolveFn` (narrowed to
+   `SolveFn<TMesh, GrasshopperComputeResponse>`); stamp `values` in
+   `createRequestResponseDriver`~~ — done.
+3. ~~Regression test: solve A → solve B → solve A (memo hit), assert the reported `source` _and_
+   `values` are A's~~ — done, in
+   [solve-session.test.ts](../../packages/solve/src/client/__tests__/solve-session.test.ts).
 4. Parafa deletes its hand-written `onSolve`, adopts the factory, reads `source`/`values` off the
    reported result instead of closure variables, and picks up the 429 cooldown and session-expiry
    handling it currently lacks.

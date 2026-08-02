@@ -71,7 +71,7 @@ const defaultOnSessionExpired = (): never => {
 
 export function createComputeFetchSolveFn<TMesh = unknown, TRhino = unknown>(
 	opts: ComputeFetchSolveFnOptions<TMesh, TRhino>
-): SolveFn<TMesh> {
+): SolveFn<TMesh, GrasshopperComputeResponse> {
 	const debug = opts.debug ?? false;
 	const log = (...args: unknown[]) => {
 		if (debug) console.info(...args);
@@ -86,7 +86,7 @@ export function createComputeFetchSolveFn<TMesh = unknown, TRhino = unknown>(
 
 	let cooldownUntil = 0;
 
-	return async (values, signal): Promise<SolveResult<TMesh>> => {
+	return async (values, signal): Promise<SolveResult<TMesh, GrasshopperComputeResponse>> => {
 		const remainingMs = cooldownUntil - Date.now();
 		if (remainingMs > 0) {
 			throw new Error(`Rate limit reached. Try again in ${Math.ceil(remainingMs / 1000)}s.`);
@@ -224,7 +224,8 @@ export function createComputeFetchSolveFn<TMesh = unknown, TRhino = unknown>(
 			outputs: resultOutputs,
 			meshes,
 			errors: solved.errors ?? [],
-			warnings: solved.warnings ?? []
+			warnings: solved.warnings ?? [],
+			source: solved
 		};
 	};
 }
