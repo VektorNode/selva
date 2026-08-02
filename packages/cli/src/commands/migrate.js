@@ -2,18 +2,13 @@
 // provider packages), remove stale selva.config.js, update ecosystem.config.cjs.
 // Idempotent; mirrors update's lifecycle (stop/mutate/start with rollback on failure).
 
-import {
-	existsSync,
-	readFileSync,
-	writeFileSync,
-	copyFileSync,
-	rmSync
-} from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync, execSync } from 'node:child_process';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
+import { renameEnvKeys, RENAMED_ENV_VARS } from '../env.js';
 
 const APP_NAME = 'selva-compute';
 
@@ -66,9 +61,31 @@ export async function runMigrate() {
 	const ecoHasStaleRuntime =
 		existsSync(ecoPath) && readFileSync(ecoPath, 'utf8').includes('@selvajs/runtime');
 
+	// Deprecated env keys. The server reads the old names for one more minor
+	// version, so this is a warning today and a silent fallback to defaults once
+	// that shim goes — rewriting now is what keeps a tuned value tuned.
+	const envPath = join(dir, '.env');
+	const envBefore = existsSync(envPath) ? readFileSync(envPath, 'utf8') : null;
+	const envRename = envBefore
+		? renameEnvKeys(envBefore, RENAMED_ENV_VARS)
+		: { text: '', changes: [] };
+
 	const sideFileChanges = [];
-	if (hasStaleConfig) sideFileChanges.push(`${pc.red('-')} selva.config.js ${pc.dim('(no longer needed; providers are env-driven)')}`);
-	if (ecoHasStaleRuntime) sideFileChanges.push(`${pc.yellow('~')} ecosystem.config.cjs ${pc.dim('(rewrite: @selvajs/runtime → @selvajs/selva)')}`);
+	if (hasStaleConfig)
+		sideFileChanges.push(
+			`${pc.red('-')} selva.config.js ${pc.dim('(no longer needed; providers are env-driven)')}`
+		);
+	if (ecoHasStaleRuntime)
+		sideFileChanges.push(
+			`${pc.yellow('~')} ecosystem.config.cjs ${pc.dim('(rewrite: @selvajs/runtime → @selvajs/selva)')}`
+		);
+	for (const [oldName, newName, action] of envRename.changes) {
+		sideFileChanges.push(
+			action === 'dropped'
+				? `${pc.red('-')} .env ${pc.dim(`${oldName} (deprecated; ${newName} is already set)`)}`
+				: `${pc.yellow('~')} .env ${pc.dim(`${oldName} → ${newName}`)}`
+		);
+	}
 
 	if (pkgDiff.length === 0 && sideFileChanges.length === 0) {
 		p.outro(pc.green('Already on the current layout — nothing to migrate.'));
@@ -114,6 +131,11 @@ export async function runMigrate() {
 		writeFileSync(ecoPath, ecoContent, 'utf8');
 	}
 
+	if (envRename.changes.length > 0) {
+		copyFileSync(envPath, envPath + '.bak');
+		writeFileSync(envPath, envRename.text, 'utf8');
+	}
+
 	// Clean install required (major version changes break legacy lockfile).
 	rmSync(join(dir, 'node_modules'), { recursive: true, force: true });
 	rmSync(join(dir, 'package-lock.json'), { force: true });
@@ -137,6 +159,9 @@ export async function runMigrate() {
 		if (ecoHasStaleRuntime && existsSync(ecoPath + '.bak')) {
 			copyFileSync(ecoPath + '.bak', ecoPath);
 		}
+		if (envRename.changes.length > 0 && existsSync(envPath + '.bak')) {
+			copyFileSync(envPath + '.bak', envPath);
+		}
 		// Try to bring the process back up (best-effort; at least package.json is consistent).
 		runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
 		p.outro(pc.red(`Migration aborted: ${err.message ?? err}`));
@@ -147,6 +172,7 @@ export async function runMigrate() {
 	const backupHints = ['package.json.bak'];
 	if (hasStaleConfig) backupHints.push('selva.config.js.bak');
 	if (ecoHasStaleRuntime) backupHints.push('ecosystem.config.cjs.bak');
+	if (envRename.changes.length > 0) backupHints.push('.env.bak');
 
 	if (status === 0) {
 		p.outro(
@@ -231,7 +257,8 @@ export function detectDrift(pkgJson, dir) {
 	const reasons = [];
 	if (deps['@selvajs/runtime']) reasons.push('@selvajs/runtime is the old runtime package');
 	if (deps['@selvajs/create']) reasons.push('@selvajs/create is the old CLI package');
-	if (deps['@selvajs/platform']) reasons.push('@selvajs/platform is now bundled into @selvajs/selva');
+	if (deps['@selvajs/platform'])
+		reasons.push('@selvajs/platform is now bundled into @selvajs/selva');
 	if (deps['@selvajs/local-provider'])
 		reasons.push('@selvajs/local-provider is now bundled into @selvajs/selva');
 	if (deps['@selvajs/supabase-provider'])
@@ -250,6 +277,13 @@ export function detectDrift(pkgJson, dir) {
 		const ecoPath = join(dir, 'ecosystem.config.cjs');
 		if (existsSync(ecoPath) && readFileSync(ecoPath, 'utf8').includes('@selvajs/runtime')) {
 			reasons.push('ecosystem.config.cjs still references @selvajs/runtime');
+		}
+		const envPath = join(dir, '.env');
+		if (existsSync(envPath)) {
+			const { changes } = renameEnvKeys(readFileSync(envPath, 'utf8'), RENAMED_ENV_VARS);
+			for (const [oldName, newName] of changes) {
+				reasons.push(`.env still uses ${oldName} (renamed to ${newName})`);
+			}
 		}
 	}
 

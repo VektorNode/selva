@@ -11,6 +11,18 @@ import { getDefaultValue } from '@selvajs/schemas';
 import { getExternalInputs, type ExternalValueRef } from './external-storage.js';
 import type { SolveResult } from '../shared/solve-fn.js';
 
+/**
+ * The slice of a reported result the session keeps addressable, so a host can commit exactly
+ * what the viewer is showing — `source` and `values` included, already memo-correct.
+ *
+ * Mesh-free by construction. `SolveResult.meshes` are GPU-backed and the viewer disposes what
+ * it renders on the next scene update, which is why the memo carries a `MeshPolicy`
+ * clone/release contract at all. Retaining them here would hand out disposed instances after
+ * the next solve, with no policy governing them and no owner. Everything left is inert JSON;
+ * live meshes stay on `session.meshes`.
+ */
+export type RetainedSolveResult<TSource = unknown> = Omit<SolveResult<never, TSource>, 'meshes'>;
+
 export interface SolveSessionState {
 	values: Record<string, unknown>;
 	error: string;
@@ -21,6 +33,15 @@ export interface SolveSessionState {
 	pendingValues: Record<string, unknown>;
 	hasPendingChanges: boolean;
 	hasNeverSolved: boolean;
+	/**
+	 * The last result reported, minus its meshes. Null before the first solve.
+	 *
+	 * Lags `values` by design: nothing updates it on `setValue` or `loadValues`, so between a
+	 * value change and the next report it describes the *previous* input set. That is what a
+	 * commit gate wants — what is on screen, not what is pending — so `lastResult.values`
+	 * disagreeing with `state.values` mid-scrub is the feature, not a bug.
+	 */
+	lastResult: RetainedSolveResult | null;
 }
 
 export type ExternalReader = (ref: ExternalValueRef) => unknown | undefined;
@@ -98,6 +119,8 @@ export function applySolveResult(state: SolveSessionState, result: SolveResult):
 	state.computeErrors = result.errors ?? [];
 	state.computeWarnings = result.warnings ?? [];
 	state.meshes = result.meshes ?? [];
+	const { meshes: _meshes, ...retained } = result;
+	state.lastResult = retained;
 	Object.assign(state.values, result.outputs);
 	state.pendingValues = {};
 	state.hasPendingChanges = false;

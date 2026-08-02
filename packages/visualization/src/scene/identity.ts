@@ -16,11 +16,9 @@ import type * as THREE from 'three';
 const SEP = String.fromCharCode(31);
 
 /**
- * Resolution order:
- * 1. `userData.id` — display items (curves, points) arrive with a pre-built pick key.
- * 2. `sourceComponentId` + `originalIndex` — meshes. Component GUID is stable across solves.
- * 3. `name` + `layer` — fallback for content predating `sourceComponentId`. Weaker: two unnamed
- *    meshes on one layer collide, but it lets hiding survive a solve on older definitions.
+ * Tries, in order: `userData.id` (display items arrive with a pre-built pick key), then
+ * `sourceComponentId` + `originalIndex` (component GUID is stable across solves), then
+ * `name` + `layer` as a weaker fallback — two unnamed meshes on one layer collide under it.
  */
 export function getStableKey(object: THREE.Object3D): string | null {
 	const data = object.userData;
@@ -41,11 +39,7 @@ export function getStableKey(object: THREE.Object3D): string | null {
 	return null;
 }
 
-/**
- * The key an object is tracked under: its stable identity, or its instance uuid when it has none.
- * Use this, not `getStableKey`, when reading the backing set directly (e.g. for a reactive lookup
- * that bypasses `VisibilityState.isHidden`) — `getStableKey` alone misses unidentified objects.
- */
+/** Falls back to the instance uuid when the object has no stable identity, unlike `getStableKey`. */
 export function getTrackingKey(object: THREE.Object3D): string {
 	return getStableKey(object) ?? object.uuid;
 }

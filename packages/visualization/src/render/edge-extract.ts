@@ -2,8 +2,8 @@
  * Dependency-free crease/boundary edge extraction — the hot core behind `addEdges`. Semantically
  * a drop-in for `THREE.EdgesGeometry(geometry, angle)` (same welding, crease test, boundary
  * handling, 3+-face quirks), but operates on raw typed arrays with numeric hashing instead of
- * three's per-vertex string keys (~2.9s/1M triangles) for speed and Worker portability — see the
- * no-outer-captures constraint on {@link extractEdgeSegments} itself.
+ * three's per-vertex string keys, for speed and Worker portability — see the no-outer-captures
+ * constraint on {@link extractEdgeSegments} itself.
  */
 
 /** Vertex ids pack two-per-double in edge keys; above 2^26 vertices the packing overflows. */
@@ -32,8 +32,8 @@ export function extractEdgeSegments(
 	}
 
 	// --- Weld vertices on the quantization grid → canonical id per vertex -------------------
-	// Rounded coords kept as float64 (huge coordinates stay exact where int32 would overflow);
-	// the hash only needs int32 truncations — equality always compares the exact values.
+	// Rounded coords stay float64 (huge coordinates stay exact where int32 would overflow); only
+	// the hash truncates to int32 — equality always compares the exact float64 values.
 	const quantX = new Float64Array(vertexCount);
 	const quantY = new Float64Array(vertexCount);
 	const quantZ = new Float64Array(vertexCount);
@@ -94,8 +94,8 @@ export function extractEdgeSegments(
 	// --- Walk triangles, pairing opposite-winding edges -------------------------------------
 	// Mirrors EdgesGeometry: a directed edge a→b matches a pending b→a; on match the segment is
 	// kept iff the face normals differ beyond the threshold, and the pending entry is tombstoned
-	// (key kept, value -1) so a third face on the same edge re-registers it — quirk preserved.
-	// Unmatched entries at the end are boundary edges and always emitted.
+	// (key kept, value -1) so a third face on the same edge re-registers it. Unmatched entries at
+	// the end are boundary edges and always emitted.
 	const edgeSlots = new Map<number, number>(); // directed key → pending-edge slot, -1 = matched
 	const pendingIndex0: number[] = [];
 	const pendingIndex1: number[] = [];

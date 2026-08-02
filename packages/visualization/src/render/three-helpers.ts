@@ -74,9 +74,9 @@ export function updateScene(
 	}
 }
 
-// Excluded from every content-bounds query: the grid especially is a huge plane that re-centers
-// on the camera each frame, so including it would make fit-to-view frame the camera's position
-// instead of the geometry.
+// Excluded from every content-bounds query: the grid is a huge plane that re-centers on the
+// camera each frame, so including it would make fit-to-view frame the camera's position instead
+// of the geometry.
 const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
 
 function isViewerAid(object: THREE.Object3D): boolean {
@@ -96,8 +96,8 @@ function isViewerAid(object: THREE.Object3D): boolean {
  * fitting so they all measure exactly the same box.
  */
 export function computeContentBounds(scene: THREE.Scene): THREE.Box3 {
-	// Refresh world matrices once up front so expandByObject reads current transforms regardless
-	// of when the caller invokes this, rather than updating per object.
+	// Refresh world matrices once up front so expandByObject reads current transforms, regardless
+	// of when the caller invokes this.
 	scene.updateMatrixWorld(true);
 	const box = new THREE.Box3();
 	scene.traverse((object) => {
@@ -120,13 +120,12 @@ export function clearScene(scene: THREE.Scene): void {
 		// by walking the live scene, so labels added afterwards would never render.
 		if (PERSISTENT_SCENE_IDS.has(object.userData.id)) return;
 
-		// User-drawn geometry (added via the viewer's addUserGeometry, tagged source==='user')
-		// persists across solves so it isn't lost when compute content is replaced.
+		// User-drawn geometry (tagged source==='user' by the viewer's addUserGeometry) persists
+		// across solves so it isn't lost when compute content is replaced.
 		if (object.userData.source === 'user') return;
 
-		// One ownership-aware walker for every teardown path (shared/gpu-dispose.ts). Edge overlays
-		// are children of the meshes they outline, so this traversal disposes their line geometries
-		// too — each overlay owns its own outright (see edges/line-geometry.ts).
+		// Edge overlays are children of the meshes they outline, so this traversal disposes their
+		// line geometries too — each overlay owns its geometry outright.
 		disposeObjectTree(object);
 
 		object.removeFromParent();

@@ -29,10 +29,11 @@ const limits = resolveComputeLimits(env, lazyLogger);
 /** The whole resolved object — passed wholesale to `SolveEngine` (`engine.server.ts`). */
 export const computeLimits = limits;
 
-// Maximum solve duration — single source of truth for the /api/compute timeout.
-// See `@selvajs/server` `ComputeLimits.maxSolveDurationMs` for the full rationale
+// How long one solve may run — single source of truth, shared with the browser so
+// the client's AbortController matches the server's deadline rather than guessing.
+// See `@selvajs/server` `ComputeLimits.solveDeadlineMs` for the full rationale
 // (SolveScheduler AbortSignal propagation, reverse-proxy/platform caveat).
-export const MAX_SOLVE_DURATION_MS = limits.maxSolveDurationMs;
+export const SOLVE_DEADLINE_MS = limits.solveDeadlineMs;
 
 // Per-key compute rate limit (see computeRateLimit.server.ts).
 export const RATE_LIMIT_WINDOW_MS = limits.rateLimitWindowMs;

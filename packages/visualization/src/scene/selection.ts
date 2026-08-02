@@ -6,7 +6,6 @@
 // visible* order — what the user actually sees after search filtering and layer collapse — which
 // only the caller knows, so it is passed in per click rather than derived here.
 
-/** Modifier state of the click that drove the selection. */
 export interface SelectionModifiers {
 	shiftKey: boolean;
 	/** Ctrl (Windows/Linux) or Meta (macOS) — the caller normalizes the platform difference. */

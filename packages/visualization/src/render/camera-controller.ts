@@ -11,8 +11,8 @@ import { buildUpBasis } from './up-axis';
  * render loop renders, resize reshapes, and the raycaster picks with — {@link getActiveCamera} is
  * the one source of truth for all four call sites.
  *
- * Orthographic shadows perspective (same position/target, frustum derived from perspective FOV +
- * distance) so switching doesn't visually jump.
+ * Orthographic mirrors perspective's position/target with a frustum derived from perspective's FOV
+ * and distance, so switching projections doesn't visually jump.
  */
 
 export type ViewPreset = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right' | 'iso';
@@ -53,9 +53,8 @@ interface CameraControllerDeps {
  * Seven preset view directions (target → camera, unit vectors), derived from `up` rather than a
  * fixed Y-up table so Top/Front/… stay meaningful for Z-up Rhino scenes.
  *
- * {@link buildUpBasis}'s `forward` is the LOOK direction (camera → model); these are camera
- * POSITIONS relative to target, so "front" is `-forward`. Flipping this puts the camera behind the
- * model and swaps left/right.
+ * `buildUpBasis`'s `forward` is camera→model; these are camera positions relative to target, so
+ * "front" is `-forward`. Flipping this puts the camera behind the model and swaps left/right.
  */
 function buildViewDirections(up: THREE.Vector3): Record<ViewPreset, THREE.Vector3> {
 	const { up: u, forward, right } = buildUpBasis(up);
@@ -101,8 +100,7 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		activeTween = null;
 	};
 
-	// Sizes the ortho frustum to match perspective's apparent size at the current distance
-	// (apparent height at the target plane = 2 * distance * tan(fov/2)).
+	// Sizes the ortho frustum to match perspective's apparent size at the current distance.
 	const syncOrthoFrustum = () => {
 		// Measure whichever camera is live: while ortho is active, OrbitControls moves ortho's
 		// position (only its zoom changes), leaving perspective's distance stale.
@@ -150,8 +148,8 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 	};
 
 	// Positions the active camera along `direction` at the distance fitting `maxDim`, retargeting
-	// controls at `center`. In ortho mode, zoom resets and the frustum re-derives via
-	// syncOrthoFrustum — position alone wouldn't change an orthographic view's apparent size.
+	// controls at `center`. Ortho zoom resets and the frustum re-derives via syncOrthoFrustum —
+	// position alone wouldn't change an orthographic view's apparent size.
 	const frame = (
 		center: THREE.Vector3,
 		maxDim: number,

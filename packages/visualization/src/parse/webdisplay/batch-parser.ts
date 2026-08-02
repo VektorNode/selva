@@ -28,7 +28,6 @@ import type {
 	MeshMetadata,
 	SerializableMaterial
 } from './types.js';
-/** Internal telemetry only (not exposed in public options). */
 interface ParseTelemetry {
 	parseTime?: number;
 	perfStart?: number;
@@ -37,12 +36,11 @@ interface ParseTelemetry {
 /**
  * Parses a batched mesh JSON and creates Three.js meshes. The geometry payload is the binary
  * "SLVA" blob produced by the C# `BinaryGeometryWriter`, base64-encoded into the outer JSON
- * envelope. `JSON.parse`s the small envelope, then hands the blob to `parseBinaryMeshBatch`, which
- * decodes the geometry without ever turning it into a string.
+ * envelope — `JSON.parse`s the small envelope, then hands the blob to `parseBinaryMeshBatch`
+ * without ever turning it into a string.
  *
- * An invalid JSON envelope (not a batch at all) logs and returns `[]` — the "genuinely absent
- * data" case. A batch whose *blob* is corrupt, truncated, or unsupported throws instead of
- * silently rendering an empty scene.
+ * An invalid JSON envelope logs and returns `[]` (genuinely absent data). A corrupt, truncated, or
+ * unsupported *blob* throws instead of silently rendering an empty scene.
  *
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
@@ -73,22 +71,22 @@ export async function parseMeshBatch(
  * Parses a DisplayBatch object and creates Three.js meshes from its mesh blob.
  *
  * Synchronous internally — `parseBinaryMeshBatch` does no IO, just typed-array views over the
- * blob. Stays `async` so callers don't have to change shape if parsing moves into a worker later.
+ * blob. Stays `async` so callers don't need to change shape if parsing moves into a worker later.
  *
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
 export async function parseMeshBatchObject(
 	batch: DisplayBatch,
 	options?: MeshBatchParsingOptions,
-	/** @internal Timings threaded from an outer entry point; not a caller option. */
+	/** @internal Timings threaded from an outer entry point — not a caller option. */
 	telemetry?: ParseTelemetry
 ): Promise<THREE.Mesh[]> {
 	const { mergeByMaterial = true, debug = false, material } = options ?? {};
 	const { parseTime = 0, perfStart = debug ? performance.now() : 0 } = telemetry ?? {};
 
 	if (!batch.compressedData) {
-		// No blob at all — an items-only or empty batch. This is the one entry-point path that
-		// legitimately yields [] rather than throwing.
+		// Items-only or empty batch — the one entry-point path that legitimately yields [] rather
+		// than throwing.
 		return [];
 	}
 
@@ -131,8 +129,8 @@ export async function parseMeshBatchObject(
  * Parses a raw binary mesh batch blob (SLVA wire format) and creates Three.js meshes.
  *
  * Use this entry point when the blob arrives as a binary WebSocket frame rather than inside a JSON
- * envelope. The blob is self-describing — materials, groups, and `sourceComponentId` come from its
- * embedded metadata header.
+ * envelope — the blob is self-describing, with materials, groups, and `sourceComponentId` coming
+ * from its embedded metadata header.
  *
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
@@ -177,7 +175,7 @@ interface BuildOptions {
 	decodeTime: number;
 	perfStart: number;
 	blobBytes: number;
-	/** Outer-envelope fallback when the blob's metadata is missing fields (defensive). */
+	/** Outer-envelope fallback used when the blob's metadata is missing fields. */
 	fallback?: {
 		materials?: SerializableMaterial[];
 		groups?: MaterialGroup[];
@@ -202,18 +200,18 @@ function buildMeshesFromParsed(
 
 	const materialsSrc = parsed.metadata.materials ?? fallback?.materials ?? [];
 	const groups = parsed.metadata.groups ?? fallback?.groups ?? [];
-	// Prefer the outer envelope's sourceComponentId over the blob's embedded one. The blob bakes in
-	// the id at encode time, but a reloaded part (e.g. from a .dmf instanced many times) re-stamps a
-	// fresh id on the envelope to keep web pick identity distinct per placement. The blob value is
-	// the fallback for the raw-blob transport, which has no envelope.
+	// Envelope sourceComponentId wins over the blob's embedded one: the blob bakes in the id at
+	// encode time, but a reloaded part (e.g. a .dmf instanced many times) re-stamps a fresh id on
+	// the envelope so web pick identity stays distinct per placement. The blob value only applies
+	// to the raw-blob transport, which has no envelope.
 	const sourceComponentId = fallback?.sourceComponentId ?? parsed.metadata.sourceComponentId;
 
 	const isFloat32 = (parsed.flags & FLAG_FLOAT32) !== 0;
 
-	// Group metadata arrives as embedded (or envelope) JSON and is used arithmetically below —
-	// unchecked, a bad vertexStart/indexStart wraps rebased indices into a Uint32Array, `subarray`
-	// silently clamps, and an out-of-range materialId feeds `undefined` into `new THREE.Mesh`.
-	// Fail the parse instead of silently corrupting the render.
+	// Group metadata is used arithmetically below — unchecked, a bad vertexStart/indexStart wraps
+	// rebased indices into a Uint32Array, `subarray` silently clamps, and an out-of-range
+	// materialId feeds `undefined` into `new THREE.Mesh`. Fail the parse instead of corrupting
+	// the render silently.
 	validateGroupMetadata(
 		groups,
 		materialsSrc.length,
@@ -221,11 +219,9 @@ function buildMeshesFromParsed(
 		parsed.indices.length
 	);
 
-	// Dequantize once up-front into a single Float32Array. Downstream code (per-group merging,
-	// computeVertexNormals, ground-offset) all expect world-unit floats, and a single
-	// linear pass over the int16 buffer is far cheaper than the legacy gunzip + base64 path.
-	// No rotation happens here: the scene uses Rhino's Z-up frame, so vertices pass through in the
-	// frame they arrived in.
+	// Dequantize once up front into a single Float32Array — downstream code (per-group merging,
+	// computeVertexNormals, ground-offset) expects world-unit floats, and one linear pass over the
+	// int16 buffer beats doing it per group.
 	const worldVertices = isFloat32
 		? (parsed.vertices as Float32Array)
 		: dequantizeInt16(parsed.vertices as Int16Array, parsed.origin, parsed.scale);
@@ -244,8 +240,8 @@ function buildMeshesFromParsed(
 	}
 
 	const meshCreateStart = performance.now();
-	// Vertex colors are batch-wide when present (meshes without real colors carry a white fill,
-	// which multiplies to identity), so the material can enable vertexColors unconditionally.
+	// Vertex colors are batch-wide when present — meshes without real colors carry a white fill,
+	// which multiplies to identity — so the material enables vertexColors unconditionally.
 	const materials = materialsSrc.map((m) =>
 		createMaterial(m, {
 			vertexColors: parsed.colors != null,
@@ -309,14 +305,13 @@ interface WorkerPathOptions {
 }
 
 /**
- * Attempt the off-thread build. Returns the finished meshes, or `null` when the worker path
+ * Attempts the off-thread build. Returns the finished meshes, or `null` when the worker path
  * doesn't apply (no Worker, small batch, worker crashed) — the caller then runs the synchronous
- * path. Malformed-blob/metadata errors throw, matching the entry points' contract either way.
+ * path. Malformed-blob/metadata errors throw either way, matching the entry points' contract.
  *
- * Cache interplay: the worker always assembles and fingerprints every geometry (decode is
- * whole-array work anyway), and the main thread prefers an existing cached geometry over the
- * returned buffers — so cache hits skip the GPU re-upload, and the wasted worker CPU for them is
- * off the critical path by definition.
+ * The worker always assembles and fingerprints every geometry, even when the main thread ends up
+ * preferring an existing cached geometry over the returned buffers. That's fine: cache hits skip
+ * the GPU re-upload, so the wasted worker CPU is off the critical path by definition.
  */
 async function tryBuildViaWorker(
 	input: ArrayBuffer | Uint8Array | string,
@@ -334,7 +329,7 @@ async function tryBuildViaWorker(
 	const sourceComponentId = opts.fallback?.sourceComponentId ?? raw.metadata.sourceComponentId;
 	validateGroupMetadata(groups, materialsSrc.length, raw.vertexCount, raw.indexData.length);
 
-	// Same job branching as buildMeshesFromParsed, with a parallel ref list to wrap results.
+	// Same job branching as buildMeshesFromParsed, with a parallel ref list to unwrap results by index.
 	interface JobRef {
 		kind: 'merged' | 'single';
 		group: MaterialGroup;
@@ -360,8 +355,8 @@ async function tryBuildViaWorker(
 		}
 	}
 
-	// The geometry views alias the caller's blob buffer — copy them so the transfer can't detach
-	// it. UV/color arrays are parser-owned fresh copies and transfer directly.
+	// vertexData/indexData alias the caller's blob buffer — copy before transferring so the
+	// transfer can't detach it. UV/color arrays are already fresh copies and transfer directly.
 	const vertexData = raw.vertexData.slice();
 	const indexData = raw.indexData.slice();
 	const transfer: Transferable[] = [vertexData.buffer, indexData.buffer];
@@ -389,7 +384,7 @@ async function tryBuildViaWorker(
 		getLogger().warn('Mesh assembly worker failed; falling back to main-thread parse.', error);
 		return null;
 	}
-	if (assembled.length !== jobs.length) return null; // defensive: protocol mismatch → sync path
+	if (assembled.length !== jobs.length) return null; // protocol mismatch → fall back to sync path
 
 	const materials = materialsSrc.map((m) =>
 		createMaterial(m, { vertexColors: raw.colors != null, appearance: opts.material })

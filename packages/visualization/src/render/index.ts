@@ -1,12 +1,8 @@
 /**
- * `render/` — the CAD viewer toolkit: a configured THREE scene plus the overlays that make it read
- * as CAD (edges, grid, nav gizmo, labels, measurement, AO). See README for the full layer map.
+ * `render/` — the CAD viewer toolkit. See README for the layer map and the render↔parse seam.
  *
- * Depends downward on `shared/` only; never imports `parse/` (see README's render↔parse seam).
- *
- * `initThree` owns the toolkit and hands the live instances back on {@link ThreeViewer}; the
- * individual factories aren't exported on purpose — reach them through the viewer instance
- * (`viewer.grid`, `viewer.measureTool`, …), configured via {@link ThreeInitializerOptions}.
+ * `initThree` owns the toolkit; factories aren't exported on purpose — reach live instances through
+ * the viewer (`viewer.grid`, `viewer.measureTool`, …), configured via {@link ThreeInitializerOptions}.
  *
  * @module render
  */
@@ -56,14 +52,11 @@ export type {
 // Errors & logging
 // ============================================================================
 
-// Re-exported from `shared/` so consumers of this entrypoint don't also need to import it directly.
 export { VisualizationError, ErrorCodes } from '../shared/index.js';
 export type { ErrorCode } from '../shared/index.js';
 
 export { getLogger, setLogger, enableDebugLogging } from '../shared/index.js';
 export type { Logger } from '../shared/index.js';
 
-// Look vocabulary lives in `shared/` (shared with `parse/`) but is re-exported here so a
-// render-only consumer (e.g. a style picker) doesn't need the parse layer.
 export { LOOKS, LOOK_PRESETS, DEFAULT_LOOK, materialAppearanceForLook } from '../shared/index.js';
 export type { Look, LookPreset, MaterialAppearanceOptions } from '../shared/index.js';

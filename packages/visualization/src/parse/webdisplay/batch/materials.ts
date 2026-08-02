@@ -7,9 +7,9 @@ import { applyTextureMap } from '../apply-texture.js';
 import type { MaterialAppearanceOptions, SerializableMaterial } from '../types.js';
 
 // A near-pure metal has no diffuse response, so under the low-IBL 'technical' look it goes flat and
-// reads as painted card. Real architectural sheet metal is coated, not a bare mirror, so materials
-// meaningfully metallic get a thin satin clearcoat — a glossy dielectric layer independent of the
-// base metalness/envMap, so folds catch light even when the IBL is dialed down.
+// reads as painted card. Real architectural sheet metal is coated, not a bare mirror, so meaningfully
+// metallic materials get a thin satin clearcoat — a glossy dielectric layer independent of base
+// metalness/envMap, so folds catch light even when the IBL is dialed down.
 const METAL_CLEARCOAT_THRESHOLD = 0.5;
 const METAL_CLEARCOAT = 0.5;
 const METAL_CLEARCOAT_ROUGHNESS = 0.3;
@@ -32,8 +32,7 @@ export function createMaterial(
 		// Cull back faces for closed solids (crisper silhouette, less overdraw); keep both sides for
 		// open surfaces. Caller-controlled since Rhino emits both — default DoubleSide is the safe read.
 		side: appearance?.cullBackfaces ? THREE.FrontSide : THREE.DoubleSide,
-		// Minimal offset to avoid z-fighting on coplanar faces
-		polygonOffset: true,
+		polygonOffset: true, // avoids z-fighting on coplanar faces
 		polygonOffsetFactor: 0.5,
 		polygonOffsetUnits: 0.5,
 		depthWrite: true,
@@ -52,7 +51,6 @@ export function createMaterial(
 		material.clearcoatRoughness = METAL_CLEARCOAT_ROUGHNESS;
 	}
 
-	// See applyVertexColorSRGBDecode for why this is needed.
 	if (vertexColors) {
 		applyVertexColorSRGBDecode(material);
 	}
@@ -66,9 +64,9 @@ export function createMaterial(
 }
 
 /**
- * three.js uploads vertex colors verbatim and multiplies them straight into the linear working
- * space (unlike textures, which carry a `colorSpace` and get decoded) — so sRGB-authored vertex
- * colors render too bright without this shader patch. Done on the GPU, not a CPU pass over the
+ * three.js uploads vertex colors verbatim and multiplies them straight into linear working space
+ * (unlike textures, which carry a `colorSpace` and get decoded) — so sRGB-authored vertex colors
+ * render too bright without this shader patch. Done on the GPU rather than a CPU pass over the
  * buffer, to keep the hot per-solve parse cheap.
  */
 export function applyVertexColorSRGBDecode(material: THREE.Material): void {

@@ -19,7 +19,7 @@
 			ENABLE_SHARING: boolean;
 		};
 		limits: {
-			MAX_SOLVE_DURATION_MS: number;
+			SOLVE_DEADLINE_MS: number;
 			RATE_LIMIT_WINDOW_MS: number;
 			RATE_LIMIT_MAX_REQUESTS: number;
 			MAX_GH_FILE_SIZE: number;
@@ -64,10 +64,10 @@
 		description: string;
 	}> = [
 		{
-			key: 'MAX_SOLVE_DURATION_MS',
-			label: 'Max solve duration',
-			env: 'MAX_SOLVE_DURATION_MS',
-			value: (l) => formatMs(l.MAX_SOLVE_DURATION_MS),
+			key: 'SOLVE_DEADLINE_MS',
+			label: 'Solve deadline',
+			env: 'COMPUTE_SOLVE_DEADLINE_MS',
+			value: (l) => formatMs(l.SOLVE_DEADLINE_MS),
 			description: 'Longest a single /api/compute solve may run before it is aborted.'
 		},
 		{

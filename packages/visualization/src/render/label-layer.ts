@@ -16,18 +16,17 @@ export interface LabelLayer {
 	dispose(): void;
 }
 
-// container: overlay is appended here, absolutely positioned — normally the canvas's parent
-// so they share a positioning context.
+// `container` is normally the canvas's parent, so both share a positioning context for the
+// absolutely-positioned label overlay.
 export function createLabelLayer(container: HTMLElement, scene: THREE.Scene): LabelLayer {
 	const renderer = new CSS2DRenderer();
 	const dom = renderer.domElement;
 	dom.style.position = 'absolute';
 	dom.style.top = '0';
 	dom.style.left = '0';
-	// CSS2DRenderer sets width/height in pixels, so percentage sizing can't work — host must call
-	// `setSize` on every resize, same as the WebGL renderer.
-	// overflow:hidden + pointerEvents:none: without both, the overlay can cover the canvas and
-	// swallow orbit/clicks.
+	// CSS2DRenderer sets width/height in pixels, so host must call `setSize` on every resize, same
+	// as the WebGL renderer. overflow:hidden + pointerEvents:none: without both, the overlay can
+	// cover the canvas and swallow orbit/clicks.
 	dom.style.overflow = 'hidden';
 	dom.style.pointerEvents = 'none';
 	dom.style.zIndex = '30'; // above canvas/host overlays, below menus/popovers
@@ -39,7 +38,7 @@ export function createLabelLayer(container: HTMLElement, scene: THREE.Scene): La
 	const size = { width: container.clientWidth || 1, height: container.clientHeight || 1 };
 	renderer.setSize(size.width, size.height);
 
-	const group = new THREE.Group(); // 'label-layer' name/id: pick/fit logic in scene/objects.ts skips it
+	const group = new THREE.Group(); // pick/fit logic skips objects tagged 'label-layer'
 	group.name = 'label-layer';
 	group.userData.id = 'label-layer';
 	scene.add(group);

@@ -2,11 +2,8 @@
  * `parse/` — backend payload → THREE meshes + metadata. Depends only on `shared/`; never imports
  * from `render/` or `scene/`.
  *
- * The SLVA binary wire format — magics, version gates, flag bits and the low-level
- * `parseBinaryMeshBatch` — is an implementation detail of `parseMeshBatch*` and is deliberately not
- * exported; it changes without a major bump.
- *
- * @module parse
+ * The SLVA binary wire format (magics, version gates, flag bits, `parseBinaryMeshBatch`) is an
+ * implementation detail of `parseMeshBatch*` and stays unexported so it can change without a major bump.
  */
 
 // ============================================================================

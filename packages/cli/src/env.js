@@ -2,6 +2,29 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
+/**
+ * Old env name → its replacement, for keys renamed without changing meaning.
+ * The server still reads each old name for one minor version and warns at boot
+ * (`readRenamed` in `@selvajs/server` `resolveComputeLimits`); `selva doctor`
+ * reports them and `selva migrate` rewrites them. Keep in sync with that list,
+ * and drop an entry when the server stops reading it.
+ */
+export const RENAMED_ENV_VARS = {
+	COMPUTE_DEFINITION_BYTE_CACHE_MB: 'COMPUTE_DEFINITION_CACHE_MB',
+	COMPUTE_RESPONSE_CACHE_MB: 'COMPUTE_SOLVE_CACHE_MB',
+	DEFINITION_CACHE_TTL_MS: 'REMOTE_DEFINITION_CACHE_TTL_MS',
+	MAX_SOLVE_DURATION_MS: 'COMPUTE_SOLVE_DEADLINE_MS'
+};
+
+/**
+ * Deprecated vars whose replacement changes the VALUE too, so they can't be
+ * rewritten by renaming a key. `selva doctor` reports these; migrate leaves
+ * them alone rather than guessing.
+ */
+export const REPLACED_ENV_VARS = {
+	SELVA_FLAG_COMPUTE_DEBUG_VERBOSE: 'SELVA_FLAG_COMPUTE_DEBUG=verbose'
+};
+
 // Parse a .env file into { key: value }. Preserves nothing else.
 export function parseEnv(text) {
 	const out = {};
@@ -76,6 +99,48 @@ export function mergeEnv(template, values) {
 
 export function writeEnvFile(path, template, values) {
 	writeFileSync(path, mergeEnv(template, values), 'utf8');
+}
+
+/**
+ * Rewrite deprecated keys to their current names, in place. `renames` maps old
+ * name → new name. Only the key is touched — the value, comments, ordering and
+ * spacing survive, so an operator's tuned file stays recognisably theirs.
+ *
+ * A key already present under its new name is left alone and its old line is
+ * dropped: the server resolves the same way (new name wins), so keeping both
+ * would preserve a line that does nothing.
+ *
+ * Returns `{ text, changes }` where `changes` is `[oldName, newName, 'renamed'
+ * | 'dropped']` per line acted on; an empty array means the file was already
+ * current and nothing should be written.
+ */
+export function renameEnvKeys(text, renames) {
+	const present = new Set(Object.keys(parseEnv(text)));
+	const changes = [];
+	const out = [];
+
+	for (const line of text.split(/\r?\n/)) {
+		const stripped = line.trim();
+		const eq = stripped.indexOf('=');
+		if (!stripped || stripped.startsWith('#') || eq === -1) {
+			out.push(line);
+			continue;
+		}
+		const key = stripped.slice(0, eq).trim();
+		const newName = renames[key];
+		if (!newName) {
+			out.push(line);
+			continue;
+		}
+		if (present.has(newName)) {
+			changes.push([key, newName, 'dropped']);
+			continue;
+		}
+		out.push(line.replace(key, newName));
+		changes.push([key, newName, 'renamed']);
+	}
+
+	return { text: out.join('\n'), changes };
 }
 
 function quoteIfNeeded(value) {

@@ -4,19 +4,14 @@ import type * as THREE from 'three';
 // LOOKS
 // ============================================================================
 
-/**
- * `LOOKS` is the source of truth ({@link Look} derives from it) so consumers (e.g. a style picker)
- * can iterate instead of hardcoding names. 'technical' is first because it's the default.
- */
+/** Source of truth for {@link Look} — lets consumers (e.g. a style picker) iterate instead of hardcoding names. */
 export const LOOKS = ['technical', 'studio', 'showcase'] as const;
 
 export type Look = (typeof LOOKS)[number];
 
 /**
- * The lighting/material dials a {@link Look} sets, shared by construction-time defaults and runtime
- * `setLook`. `envMapIntensity`/`cullBackfaces` are parse-time material choices (see
- * `materialAppearanceForLook`); the rest apply to the live scene. Never carries edges or grid —
- * those are independent overlays.
+ * The lighting/material dials a {@link Look} sets. Never carries edges or grid — those are
+ * independent overlays.
  */
 export type LookPreset = {
 	toneMapping: THREE.ToneMapping;
@@ -30,10 +25,7 @@ export type LookPreset = {
 	ambientOcclusion: boolean;
 };
 
-/**
- * How compute meshes read visually. Lives in `shared/` (not with the parser) so the render layer can
- * read a look's material dials via `materialAppearanceForLook` without importing upward into `parse/`.
- */
+/** How compute meshes read visually — the parse-time material choices baked from a {@link Look}. */
 export interface MaterialAppearanceOptions {
 	/** Default 1 (three.js's own material default) when omitted. */
 	envMapIntensity?: number;

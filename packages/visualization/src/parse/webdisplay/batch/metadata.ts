@@ -11,9 +11,9 @@ export function metadataFail(
 
 /**
  * Validates the batch's group/mesh metadata against the decoded geometry buffers before any of it
- * is used arithmetically. Throws a VALIDATION_ERROR on the first inconsistency (out-of-range
- * `materialId`, non-integer or negative offsets/counts, or vertex/index windows that overrun the
- * buffers) so malformed or version-skewed metadata fails the parse loudly.
+ * is used arithmetically. Throws on the first inconsistency — out-of-range `materialId`,
+ * non-integer or negative offsets/counts, or a vertex/index window that overruns the buffers — so
+ * malformed or version-skewed metadata fails the parse loudly instead of corrupting the render.
  */
 export function validateGroupMetadata(
 	groups: MaterialGroup[],
@@ -74,9 +74,9 @@ export function validateGroupMetadata(
 /**
  * Error for an index outside its mesh's declared vertex window
  * `[vertexStart, vertexStart + vertexCount)`. Rebasing (`index - vertexStart`) writes into an
- * unsigned array, so a violation would otherwise wrap to ~4 billion and corrupt the geometry.
- * The range checks themselves are inlined in the copy loops (a function call per index was
- * measurable at millions of indices); this only builds the failure.
+ * unsigned array, so an out-of-window index would otherwise wrap to ~4 billion and corrupt the
+ * geometry. Range checks live inline in the copy loops (a function call per index measured
+ * noticeably slower at millions of indices) — this only builds the failure.
  */
 export function indexOutOfWindow(indexValue: number, meshMeta: MeshMetadata): VisualizationError {
 	return metadataFail("Index references a vertex outside its mesh's vertex window.", {
@@ -88,10 +88,9 @@ export function indexOutOfWindow(indexValue: number, meshMeta: MeshMetadata): Vi
 }
 
 /**
- * Reconstructs world-unit float32 positions from int16 quantized values.
- *
- * Mirrors the encoder formula: `world = origin + (q + 32767) * scale`. Selva keeps one coordinate
- * frame end to end — the Three scene is Rhino's Z-up frame — so vertices pass through unrotated.
+ * Reconstructs world-unit float32 positions from int16 quantized values:
+ * `world = origin + (q + 32767) * scale`. No rotation — the Three scene uses Rhino's Z-up frame,
+ * so vertices pass through as they arrived.
  */
 export function dequantizeInt16(
 	q: Int16Array,

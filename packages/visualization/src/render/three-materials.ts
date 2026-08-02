@@ -154,6 +154,6 @@ export const SHARED_MATERIALS: ReadonlySet<THREE.Material> = new Set<THREE.Mater
 	WOOD_MATERIAL
 ]);
 
-// Declare the ownership claim once, at module init, so every disposal path honours it via
-// `canDisposeMaterial` rather than each one remembering to consult SHARED_MATERIALS itself.
+// Registered once at module init so every disposal path honours it via `canDisposeMaterial`
+// rather than each one remembering to consult SHARED_MATERIALS itself.
 protectMaterials(SHARED_MATERIALS);

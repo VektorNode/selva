@@ -152,7 +152,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			},
 			{
 				kind: 'prose',
-				text: 'Each run gets an AbortController, and starting a new run aborts the previous signal. Its deadline is the same 100 s the server allows a solve.'
+				text: 'Each run gets an AbortController, and starting a new run aborts the previous signal. Its deadline is the same 100 s the server allows a solve: the page passes the server’s value down, and the client carries no default of its own — there is one deadline in the system, not a client copy that can drift from it.'
 			}
 		],
 		files: [
@@ -483,7 +483,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 					],
 					['COMPUTE_MAX_QUEUE_DEPTH', 'max solves waiting, default 0 = unbounded'],
 					['COMPUTE_QUEUE_WAIT_MS', 'max wait before rejecting, default 0 = no deadline'],
-					['MAX_SOLVE_DURATION_MS', 'per-solve timeout, default 100000']
+					['COMPUTE_SOLVE_DEADLINE_MS', 'per-solve deadline, default 100000']
 				]
 			},
 			{
@@ -740,10 +740,10 @@ export const ENV_VAR_GROUPS: EnvVarGroup[] = [
 			{
 				name: 'COMPUTE_QUEUE_WAIT_MS',
 				default: '0 (no deadline)',
-				text: 'Backpressure: longest a solve may sit queued before it’s rejected rather than run stale. A sensible tuned value is close to MAX_SOLVE_DURATION_MS.'
+				text: 'Backpressure: longest a solve may sit queued before it’s rejected rather than run stale. A sensible tuned value is close to COMPUTE_SOLVE_DEADLINE_MS.'
 			},
 			{
-				name: 'MAX_SOLVE_DURATION_MS',
+				name: 'COMPUTE_SOLVE_DEADLINE_MS',
 				default: '100000',
 				text: 'Longest one solve is allowed to run before it’s aborted — propagated into the upstream Compute call, so it actually cancels the work rather than merely timing out client-side. A reverse proxy or serverless platform can still cap it lower.'
 			}

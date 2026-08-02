@@ -73,8 +73,8 @@ const EDGE_SHADER = {
 			float z2 = viewZOf(texture2D(tDepth, vUv + offsetB).x);
 			float z3 = viewZOf(texture2D(tDepth, vUv - offsetB).x);
 			float zCenter = viewZOf(texture2D(tDepth, vUv).x);
-			// Normalized by center depth, not absolute Z: keeps the response scale-invariant across
-			// the viewer's mm-to-m scenes (an absolute threshold would be noise far away, blind up close).
+			// Normalized by center depth, not absolute Z: keeps the response scale-invariant (an
+			// absolute threshold would be noise far away, blind up close).
 			float depthDelta = (abs(z0 - z1) + abs(z2 - z3)) / max(abs(zCenter), 1e-6);
 			float depthEdge = step(uDepthThreshold, depthDelta);
 
@@ -167,7 +167,7 @@ export class EdgeDetectionPass extends Pass {
 		const previousOverride = this.scene.overrideMaterial;
 
 		renderer.setRenderTarget(normalTarget);
-		// 0x7777ff ≈ packed +Z: background pixels get a uniform normal, so only depth silhouettes
+		// 0x7777ff is packed +Z: background pixels get a uniform normal, so only depth silhouettes
 		// (not normal noise) separate objects from empty space.
 		renderer.setClearColor(0x7777ff, 1);
 		renderer.autoClear = true;

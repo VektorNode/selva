@@ -40,7 +40,6 @@ export interface MeshMetadata {
 }
 
 export interface MaterialGroup {
-	/** Index into the batch's materials array. */
 	materialId: number;
 	meshes: MeshMetadata[];
 }
@@ -69,7 +68,7 @@ export interface DisplayBatch {
 }
 
 export interface MeshBatchParsingOptions {
-	/** Merge meshes with same material into single geometry. Defaults to true. */
+	/** Merge meshes sharing a material into a single geometry. Defaults to true. */
 	mergeByMaterial?: boolean;
 	debug?: boolean;
 	/**
@@ -86,7 +85,7 @@ export type { MaterialAppearanceOptions } from '../../shared/types.js';
 
 export interface MeshExtractionOptions {
 	parsing?: MeshBatchParsingOptions;
-	/** Apply scaling based on model units. Defaults to true. */
+	/** Scale geometry to model units. Defaults to true. */
 	allowScaling?: boolean;
 	/**
 	 * Drop geometry so its lowest point sits on the ground plane. **Defaults to `false`** — content

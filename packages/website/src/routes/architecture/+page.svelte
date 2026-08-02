@@ -192,9 +192,10 @@
 		<p class="text-primary text-sm font-semibold tracking-wide uppercase">Configuration</p>
 		<h2 class="mt-2 text-2xl font-bold tracking-tight text-balance">Every knob, in one place</h2>
 		<p class="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
-			Each one is an environment variable read once at boot (<code
+			Each one is an environment variable read once at boot — the limits through <code
 				class="bg-muted rounded px-1 py-0.5 text-xs">resolveComputeLimits</code
-			>). Unset, every knob falls back to the default below — nothing here is required to run Selva.
+			>, the debug flag alongside the solve engine. Unset, every knob falls back to the default
+			below — nothing here is required to run Selva.
 		</p>
 
 		<div class="mt-6 space-y-8">

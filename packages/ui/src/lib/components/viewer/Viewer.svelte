@@ -194,10 +194,10 @@
 			measure: { enabled: config.showToolsMenu },
 			events: {
 				onMeshMetadataClicked: config.enableMeshClick
-					? (metadata: Record<string, string>) => {
+					? (metadata: Record<string, unknown>) => {
 							if (hasUsefulMetadata(metadata)) {
 								selectedMeshMetadata = metadata;
-								selectedMeshName = metadata?.name || t.objectFallbackName;
+								selectedMeshName = String(metadata?.name ?? '') || t.objectFallbackName;
 							}
 						}
 					: undefined

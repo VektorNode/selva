@@ -9,10 +9,6 @@ import * as THREE from 'three';
 
 import { disposeObjectTree } from '../shared/index.js';
 
-/**
- * A three.js object graph the caller owns outright: transforms cloned, geometry copied,
- * materials shared.
- */
 export function cloneSceneObjects(meshes: THREE.Object3D[]): THREE.Object3D[] {
 	return meshes.map((root) => {
 		const copy = root.clone(true);
@@ -29,18 +25,12 @@ export function cloneSceneObjects(meshes: THREE.Object3D[]): THREE.Object3D[] {
 	});
 }
 
-/**
- * Release the GPU buffers of objects the memo owns. Mirrors `clearScene`'s traversal, minus
- * materials — the memo never owns those (see {@link cloneSceneObjects}).
- */
+/** Skips materials — the memo never owns those; see the file header. */
 export function releaseSceneObjects(meshes: THREE.Object3D[]): void {
 	meshes.forEach((root) => disposeObjectTree(root, { materials: false }));
 }
 
-/**
- * Structural, not nominal: satisfies `@selvajs/solve/client`'s `MeshPolicy<THREE.Object3D>`
- * without this package depending on solve.
- */
+/** Structurally, not nominally, typed as `@selvajs/solve/client`'s `MeshPolicy<THREE.Object3D>` — avoids a dependency on solve. */
 export const meshPolicy: {
 	clone(meshes: THREE.Object3D[]): THREE.Object3D[];
 	release(meshes: THREE.Object3D[]): void;

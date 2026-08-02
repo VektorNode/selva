@@ -72,6 +72,14 @@ const myDriver: SolveDriver = {
 Then feed results back with `getReporter().report({ outputs, meshes, errors, warnings })`,
 or `reportError(message)` on a transport failure.
 
+**If your driver owns a request/response pair, stamp `values` on what you report.** The
+session retains the last reported result, and a host committing what is on screen relies on
+artifact and inputs being atomic. If your transport is push-based and cannot attribute an
+incoming frame to a request it made, leave `values` absent — do not attach the last set you
+sent. Frames that arrive unsolicited (a replay on connect, a recompute triggered outside the
+web UI) would be stamped with an unrelated input set, which is the exact mismatch the field
+exists to prevent. Absent is a documented answer; wrong is not.
+
 Transport quirks — value preparation, mesh-blob streaming, remote-update guards — stay
 inside the driver; the session never learns them. `plugin-ui`'s WebSocket driver lives in
 that package rather than here for exactly this reason: it's transport-specific but satisfies

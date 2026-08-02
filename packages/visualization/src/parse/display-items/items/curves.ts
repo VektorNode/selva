@@ -23,9 +23,9 @@ const DEFAULT_LINE_WIDTH = 2;
 /**
  * Never throws — returns null so one bad curve can't abort the batch.
  *
- * Uses `Line2`/`LineMaterial` rather than `THREE.Line` because plain `THREE.Line` is hard-capped at
- * 1px on every major GPU backend, so `item.width` would otherwise be unhonoured. `Line2.onBeforeRender`
- * sets `LineMaterial`'s required `resolution`, so no renderer reference is needed here.
+ * Uses `Line2`/`LineMaterial` instead of `THREE.Line`: plain `THREE.Line` is hard-capped at 1px on
+ * every major GPU backend, so `item.width` would go unhonoured. `Line2.onBeforeRender` sets
+ * `LineMaterial`'s required `resolution`, so no renderer reference is needed here.
  */
 export function buildCurveLine(item: DisplayCurve, rhino: RhinoModule | undefined): Line2 | null {
 	if (!rhino) {
@@ -102,8 +102,8 @@ function decodeCurve(json: string, rhino: RhinoModule): InstanceType<RhinoModule
 
 /**
  * Most curves Grasshopper emits are linear, so uniform sampling would needlessly inflate them to
- * {@link CURVE_INITIAL_SEGMENTS}+1 points. Exact vertices for anything rhino3dm reports as a
- * polyline; only genuinely curved geometry falls through to {@link sampleUniform}.
+ * {@link CURVE_INITIAL_SEGMENTS}+1 points: use exact vertices for anything rhino3dm reports as a
+ * polyline, and fall through to {@link sampleUniform} only for genuinely curved geometry.
  */
 function tessellate(curve: InstanceType<RhinoModule['Curve']>): THREE.Vector3[] {
 	const exact = tryPolylineVertices(curve);
@@ -141,8 +141,8 @@ function tryPolylineVertices(curve: InstanceType<RhinoModule['Curve']>): THREE.V
 
 /**
  * Adaptively samples any curved type via `pointAt`: starts from {@link CURVE_INITIAL_SEGMENTS} uniform
- * spans, recursively subdividing only where the curve actually bends. Tolerance is a fraction of the
- * bounding-box diagonal, so a tiny fillet and a huge arc get the same *visual* smoothness.
+ * spans and recursively subdivides only where the curve bends. Tolerance is a fraction of the
+ * bounding-box diagonal, so a tiny fillet and a huge arc get the same visual smoothness.
  */
 function sampleUniform(curve: InstanceType<RhinoModule['Curve']>): THREE.Vector3[] {
 	const domain = curve.domain;

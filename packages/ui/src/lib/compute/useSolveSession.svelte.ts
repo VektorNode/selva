@@ -62,6 +62,9 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		get meshes() {
 			return track(() => session.meshes);
 		},
+		get lastResult() {
+			return track(() => session.lastResult);
+		},
 		get hasPendingChanges() {
 			return track(() => session.hasPendingChanges);
 		},

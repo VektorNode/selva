@@ -41,7 +41,10 @@ describe('mesh policy wiring (audit C1)', () => {
 	it('a memo hit serves a live mesh after the viewer disposed the previous one', async () => {
 		const onSolve = async () => meshResult('a');
 		const reporter = collectingReporter();
-		const driver = createRequestResponseDriver(onSolve, () => reporter, { meshPolicy });
+		const driver = createRequestResponseDriver(onSolve, () => reporter, {
+			meshPolicy,
+			solveDeadlineMs: 100_000
+		});
 
 		driver.solve({ a: 1 });
 		await flush();
@@ -60,7 +63,9 @@ describe('mesh policy wiring (audit C1)', () => {
 		// Pins the failure mode, so the assertion above is known to be testing something.
 		const onSolve = async () => meshResult('a');
 		const reporter = collectingReporter();
-		const driver = createRequestResponseDriver(onSolve, () => reporter); // no meshPolicy
+		const driver = createRequestResponseDriver(onSolve, () => reporter, {
+			solveDeadlineMs: 100_000
+		}); // no meshPolicy
 
 		driver.solve({ a: 1 });
 		await flush();

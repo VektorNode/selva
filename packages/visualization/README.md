@@ -53,7 +53,7 @@ Only what a consumer genuinely needs is exported. In particular:
 - **`createSceneOutliner` composes the scene layer.** Content filtering, layer grouping, visibility
   and selection state are reachable via `outliner.visibility` / `.selection` / `.layerGroups()`.
 - **The SLVA binary wire format is private.** Magics, version gates, flag bits and the low-level
-  binary parser are implementation details of `parseMeshBatch*` and change without a major bump.
+  binary parser are implementation details of `parseBinaryMeshBatch*` and change without a major bump.
 
 When adding a feature, resist re-exporting a symbol just because it exists — a published surface is
 a compatibility promise.
@@ -83,7 +83,8 @@ covered by `pnpm type-check`, so a rename that breaks a demo fails the build ins
 
 ## Dependencies
 
-This package depends on **nothing from Selva** — only `three`, `rhino3dm` and `fflate`. It owns its
+This package depends on **nothing from Selva** — only `rhino3dm`, `fflate`, and `three` as a peer
+dependency. It owns its
 own errors ([`shared/errors.ts`](./src/shared/errors.ts)), logging
 ([`shared/logger.ts`](./src/shared/logger.ts)) and base64 decoding
 ([`shared/encoding.ts`](./src/shared/encoding.ts)) rather than importing them from

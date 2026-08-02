@@ -111,7 +111,9 @@ describe('createRequestResponseDriver — client memo', () => {
 			outputs: { echo: values.a }
 		}));
 		const reporter = collectingReporter();
-		const driver = createRequestResponseDriver(onSolve, () => reporter);
+		const driver = createRequestResponseDriver(onSolve, () => reporter, {
+			solveDeadlineMs: 100_000
+		});
 
 		driver.solve({ a: 1 });
 		await flush();
@@ -135,7 +137,9 @@ describe('createRequestResponseDriver — client memo', () => {
 			source: { raw: values.a }
 		});
 		const reporter = collectingReporter();
-		const driver = createRequestResponseDriver(onSolve, () => reporter);
+		const driver = createRequestResponseDriver(onSolve, () => reporter, {
+			solveDeadlineMs: 100_000
+		});
 
 		driver.solve({ a: 'A' });
 		await flush();
@@ -151,7 +155,9 @@ describe('createRequestResponseDriver — client memo', () => {
 	it('clearCache drops the memo so the next identical solve re-runs', async () => {
 		const onSolve = vi.fn(async (): Promise<SolveResult> => ({ outputs: {} }));
 		const reporter = collectingReporter();
-		const driver = createRequestResponseDriver(onSolve, () => reporter);
+		const driver = createRequestResponseDriver(onSolve, () => reporter, {
+			solveDeadlineMs: 100_000
+		});
 
 		driver.solve({ a: 1 });
 		await flush();
@@ -167,7 +173,7 @@ describe('createRequestResponseDriver — client memo', () => {
 		const reporter = collectingReporter();
 		let clears = 0;
 		// Wrap the real driver to observe clearCache being invoked from rebuild.
-		const base = createRequestResponseDriver(onSolve, () => reporter);
+		const base = createRequestResponseDriver(onSolve, () => reporter, { solveDeadlineMs: 100_000 });
 		const driver: SolveDriver = {
 			solve: base.solve,
 			cancel: base.cancel,
@@ -182,6 +188,79 @@ describe('createRequestResponseDriver — client memo', () => {
 		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
 		session.rebuild(schema(true), 's2');
 		expect(clears).toBe(1);
+	});
+});
+
+// What a host reads at a commit gesture. The memo case is the one that matters: it is the
+// only path where "what the viewer shows" and "what the last solve produced" can disagree.
+describe('createSolveSession.lastResult', () => {
+	const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+	it('is null before the first solve', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		expect(session.lastResult).toBeNull();
+	});
+
+	it('a memo hit leaves the host holding the cached result, not the last solved one', async () => {
+		const onSolve = async (values: Record<string, unknown>): Promise<SolveResult> => ({
+			outputs: { echo: values.a },
+			source: { raw: values.a }
+		});
+		// The driver reads the reporter lazily, so it can be wired to the session it drives.
+		const held: { session?: ReturnType<typeof createSolveSession> } = {};
+		const driver = createRequestResponseDriver(onSolve, () => held.session!, {
+			solveDeadlineMs: 100_000
+		});
+		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
+		held.session = session;
+
+		session.setValue('a', 'A');
+		await flush();
+		session.setValue('a', 'B');
+		await flush();
+		session.setValue('a', 'A'); // memo hit — onSolve never runs
+		await flush();
+
+		expect(session.lastResult?.source).toEqual({ raw: 'A' });
+		expect(session.lastResult?.values).toEqual({ a: 'A' });
+	});
+
+	it('never retains meshes', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		session.report({ outputs: { out: 1 }, meshes: [{ id: 'm' }] });
+		// Retaining GPU-backed handles would hand out disposed instances after the next solve.
+		expect(session.lastResult).not.toHaveProperty('meshes');
+		expect(session.meshes).toHaveLength(1);
+	});
+
+	it('rebuild clears it — a retained result belongs to the previous definition', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		session.report({ outputs: { out: 1 } });
+		session.rebuild(schema(true), 's2');
+		expect(session.lastResult).toBeNull();
+	});
+
+	it('reportError preserves it — the viewer still shows the last good geometry', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		session.report({ outputs: { out: 1 }, source: { raw: 'good' } });
+		session.reportError('boom');
+		expect(session.lastResult?.source).toEqual({ raw: 'good' });
 	});
 });
 

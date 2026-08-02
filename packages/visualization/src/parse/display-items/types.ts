@@ -1,12 +1,9 @@
 // Non-mesh display items (curves, points) ride as JSON inside DisplayBatch alongside the binary
-// mesh blob; meshes themselves don't appear in this union. Discriminated on `kind` — the parser's
-// `never` check forces new kinds to be handled there.
+// mesh blob. Discriminated on `kind` — the parser's `never` check forces new kinds to be handled there.
 
-/** Shared by meshes and items so pick/filter/label code treats them uniformly. No color/material — that's per-kind. */
 export interface DisplayIdentity {
-	/** Stable pick key: `${sourceComponentId}:${originalIndex}`. */
+	/** Stable pick key: `${sourceComponentId}:${originalIndex}`. Distinct from `name` so renaming doesn't change identity. */
 	id: string;
-	/** Distinct from {@link id} — renaming must not change identity. */
 	name: string;
 	layer: string;
 	/** Arbitrary key-value pairs from the GH Metadata input. */
@@ -16,7 +13,7 @@ export interface DisplayIdentity {
 export interface DisplayItemBase extends DisplayIdentity {
 	/** Hex/rgb/named color string, parsed by `parseColor`. Falls back to a viewer default. */
 	color?: string;
-	/** 0–1. Omitted means fully opaque. */
+	/** 0-1; omitted means fully opaque. */
 	opacity?: number;
 }
 
@@ -31,7 +28,7 @@ export interface DisplayPosition {
 export interface DisplayCurve extends DisplayItemBase {
 	kind: 'curve';
 	json: string;
-	/** Screen-space CSS px, constant regardless of zoom. Omitted → viewer default. */
+	/** Screen-space CSS px, constant regardless of zoom. Omitted uses the viewer default. */
 	width?: number;
 }
 

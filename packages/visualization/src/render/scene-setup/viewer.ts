@@ -15,17 +15,16 @@ export interface ThreeViewer {
 	cameraController: CameraController;
 	grid: Grid | null;
 	gizmo: ViewGizmo | null;
-	/** Null unless `measure.enabled`; `setEnabled(true)` to use. */
+	/** Null unless `measure.enabled`. */
 	measureTool: MeasureTool | null;
 	/**
-	 * Attach edge overlays to meshes under `root` (no-op unless `edges.enabled`). Large-mesh
-	 * extraction runs off-thread, so overlays may attach a beat later; meshes over
-	 * `edges.maxTriangles` are skipped and (by default) covered by the screen-space edge fallback.
+	 * No-op unless `edges.enabled`. Extraction runs off-thread for large meshes, so overlays can
+	 * attach a beat later; meshes over `edges.maxTriangles` fall back to the screen-space edge shader.
 	 */
 	applyEdges: (root: THREE.Object3D) => void;
 	/**
-	 * Prefer over calling `removeEdges` directly — also cancels in-flight async attaches and stands
-	 * down the screen-space fallback if active.
+	 * Prefer over `removeEdges` directly — also cancels in-flight async attaches and stands down the
+	 * screen-space edge fallback if active.
 	 */
 	clearEdges: (root: THREE.Object3D) => void;
 	/**
@@ -35,14 +34,14 @@ export interface ThreeViewer {
 	invalidate: () => void;
 	setAmbientOcclusion: (enabled: boolean) => void;
 	/**
-	 * Retunes lighting/material only (tone mapping, fill, IBL, AO) — never edges/grid. Overwrites
-	 * any granular lighting dials set earlier.
+	 * Retunes lighting/material (tone mapping, fill, IBL, AO) only — never edges/grid. Overwrites
+	 * any granular lighting dials set earlier with the preset's values.
 	 */
 	setLook: (look: 'studio' | 'technical' | 'showcase') => void;
 	/**
-	 * Raising `hemisphereIntensity` is the most effective way to lift shadowed/under-facing surfaces
-	 * a dark HDR leaves black; a positive value lazily creates the hemisphere light if the viewer was
-	 * built without one, `0` switches it off.
+	 * Raising `hemisphereIntensity` is the most effective way to lift shadowed surfaces a dark HDR
+	 * leaves black. Lazily creates the hemisphere light if the viewer was built without one; `0` turns
+	 * it back off.
 	 */
 	setFillLights: (opts: {
 		hemisphereIntensity?: number;
@@ -67,10 +66,7 @@ export interface ThreeViewer {
 	dispose: () => void;
 	fitToView: () => void;
 	clearSelection: () => void;
-	/**
-	 * Tagged `userData.source = 'user'` so it survives `updateScene` solves instead of being cleared
-	 * with compute content, and counts as normal content for fit-to-view framing.
-	 */
+	/** Tagged `userData.source = 'user'` so it survives `updateScene` solves and counts for fit-to-view. */
 	addUserGeometry: (object: THREE.Object3D) => void;
 	removeUserGeometry: (object: THREE.Object3D) => void;
 	/** Removes and disposes everything added via `addUserGeometry`. */

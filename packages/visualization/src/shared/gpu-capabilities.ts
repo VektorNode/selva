@@ -2,10 +2,8 @@
 // GPU capabilities — published by the renderer, read by whoever needs them
 // ============================================================================
 
-/**
- * Lets a renderer publish GPU capabilities (max anisotropy) without `render/` and `parse/` importing
- * each other: the renderer publishes on init, interested parties subscribe.
- */
+// Lets a renderer publish GPU capabilities (max anisotropy) without `render/` and `parse/` importing
+// each other: the renderer publishes on init, interested parties subscribe.
 
 type AnisotropyObserver = (value: number) => void;
 

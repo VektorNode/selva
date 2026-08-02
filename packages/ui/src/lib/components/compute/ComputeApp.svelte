@@ -7,6 +7,7 @@
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
 	import { createRequestResponseDriver } from '@selvajs/solve/client';
+	import type { RetainedSolveResult } from '@selvajs/solve/client';
 	import { meshPolicy } from '@selvajs/visualization/parse';
 	import { useSolveSession } from '../../compute/useSolveSession.svelte';
 	import { useFooterItem } from '../../composables/useFooterItem.svelte';
@@ -43,13 +44,25 @@
 		copyrightName?: string;
 		/** Fully overrides the footer copyright line. `{name}` and `{year}` are substituted. */
 		footerText?: string;
-		/** Per-solve abort timeout (ms). Falls back to createComputeThrottle's default. */
-		solveTimeoutMs?: number;
+		/**
+		 * How long one solve may take before the client aborts it (ms). Required: pass
+		 * the same value the server enforces (`COMPUTE_SOLVE_DEADLINE_MS`), so the client
+		 * doesn't abort a solve that would have finished.
+		 */
+		solveDeadlineMs: number;
 		footerComponent?: any;
 		footerComponentProps?: () => Record<string, unknown>;
 		footerItemId?: string;
 		footerItemPriority?: number;
-		onReady?: (api: { loadValues: (values: Record<string, unknown>) => void }) => void;
+		onReady?: (api: {
+			loadValues: (values: Record<string, unknown>) => void;
+			/**
+			 * The last result reported to the session — the one the viewer is showing, carrying
+			 * `source`/`values` even when a memo hit served it. Null before the first solve.
+			 * A getter, not a snapshot: `onReady` fires once.
+			 */
+			getLastResult: () => RetainedSolveResult | null;
+		}) => void;
 		headerRight?: Snippet;
 		// Replaces the built-in header; takes precedence over `headerRight`.
 		header?: Snippet;
@@ -83,7 +96,7 @@
 		presetLabels,
 		copyrightName,
 		footerText,
-		solveTimeoutMs,
+		solveDeadlineMs,
 		footerComponent,
 		footerComponentProps,
 		footerItemId = 'footer-item',
@@ -114,7 +127,7 @@
 	// reads the reporter lazily so it can capture the session it's wired into.
 	// svelte-ignore state_referenced_locally
 	const driver = createRequestResponseDriver(onSolve, () => session, {
-		timeout: solveTimeoutMs,
+		solveDeadlineMs,
 		// The driver's result memo caches whole solve results, meshes included — and the viewer
 		// disposes what it renders on the next scene update. `@selvajs/solve` keeps meshes opaque,
 		// so the three.js clone/dispose rules are injected from the renderer that owns them
@@ -137,7 +150,10 @@
 	const solvingIndicator = createSolvingIndicator(() => session.isSolving);
 
 	$effect(() => {
-		onReady?.({ loadValues: (incoming) => session.loadValues(incoming) });
+		onReady?.({
+			loadValues: (incoming) => session.loadValues(incoming),
+			getLastResult: () => session.lastResult
+		});
 	});
 
 	let previousDefinitionKey = $state('');

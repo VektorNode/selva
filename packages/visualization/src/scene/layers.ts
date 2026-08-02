@@ -5,7 +5,6 @@
 import type * as THREE from 'three';
 import { getObjectLabel } from './objects.js';
 
-/** Objects that carry no layer or category fall under this name. */
 export const DEFAULT_LAYER = 'Default';
 
 /**

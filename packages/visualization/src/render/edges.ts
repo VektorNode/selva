@@ -14,21 +14,9 @@ import {
 import { MaterialPool, buildEdgeOverlay } from './edges/overlay.js';
 
 /**
- * Crisp boundary/crease edges overlaid on meshes — the "technical drawing" look that makes shaded
- * geometry read as discrete objects rather than blobs. Segments come from `extractEdgeSegments`
- * (edge-extract.ts) and render as fat `LineSegments2`, giving controllable thickness instead of
- * the 1px cap of `THREE.LineSegments`.
- *
- * Depth strategy: surfaces render at TRUE depth; lines carry a small units-only polygonOffset
- * toward the camera (`EDGE_OFFSET_FACTOR`/`EDGE_OFFSET_UNITS` in `edges/options.ts`) instead of a
- * slope-scaled offset — slope scales with dZ/dpixel, huge at grazing angles, so it would recede
- * faces further than the mm gaps between stacked parts and draw geometry through a wall's own
- * receded surface. A units-only bias is a fixed number of depth-quantization steps regardless of
- * angle, lifting an edge off its own surface without reaching a neighbouring part.
- *
- * That bias is only safe because a depth ULP stays small — `near-plane.ts`'s dynamic near-plane
- * fitter keeps `camera.near` proportional to the camera-content gap. Weakening the near fit will
- * make this bias start to bleed.
+ * Crisp boundary/crease edges overlaid on meshes, rendered as fat `LineSegments2` (controllable
+ * thickness, unlike the 1px cap of `THREE.LineSegments`). Depth-offset rationale for the overlay
+ * lines: see `EDGE_OFFSET_FACTOR`/`EDGE_OFFSET_UNITS` in `edges/options.ts`.
  */
 export type { EdgeOptions };
 export { EDGE_USERDATA_KIND, EDGES_SKIPPED_TRIANGLE_CAP };

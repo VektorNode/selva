@@ -50,7 +50,7 @@
 	title={data.schema?.description || data.schema.name}
 	logo={data.orgLogoUrl ?? undefined}
 	showModeToggle={true}
-	solveTimeoutMs={data.solveTimeoutMs}
+	solveDeadlineMs={data.solveDeadlineMs}
 	footerComponent={ServerFooter}
 	footerComponentProps={() => ({ label: data.serverLabel })}
 >

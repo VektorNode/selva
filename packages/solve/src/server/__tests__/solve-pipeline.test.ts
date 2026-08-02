@@ -97,7 +97,7 @@ function baseArgs(over: Partial<SolvePipelineArgs> = {}): SolvePipelineArgs {
 		values: { a: 5 },
 		client: fakeClient(async () => ({ values: [], errors: [], warnings: [] })),
 		responseMaxBytes: 10 * 1024 * 1024,
-		maxSolveDurationMs: 100_000,
+		solveDeadlineMs: 100_000,
 		acceptEncoding: '',
 		signal: new AbortController().signal,
 		loadStartMs: performance.now(),
@@ -297,7 +297,7 @@ describe('runSolvePipeline — failure outcomes', () => {
 	it('classifies the scheduler deadline (AbortError, signal NOT aborted) as timeout', async () => {
 		const outcome = await runSolvePipeline(
 			baseArgs({
-				maxSolveDurationMs: 42_000,
+				solveDeadlineMs: 42_000,
 				client: fakeClient(async () => {
 					const e = new Error('aborted');
 					e.name = 'AbortError';

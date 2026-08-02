@@ -15,9 +15,9 @@ export interface EdgeGeometryEntry {
 	edgeSpacing: number;
 }
 
-// A low quantile (not mean) tracks the *fine* detail: real parts mix a few long silhouette edges
-// with many short ones at orders-of-magnitude different scale (e.g. 1mm laminations on a 10m
-// part) — an average would sit between the two and never trigger the fade for either.
+// A low quantile (not mean) tracks the fine detail: real parts mix a few long silhouette edges
+// with many short ones at wildly different scale (e.g. 1mm laminations on a 10m part) — an
+// average would sit between the two and never trigger the fade for either.
 const SPACING_PERCENTILE = 0.15;
 
 // Stride sampling keeps this O(1) on millions of segments.

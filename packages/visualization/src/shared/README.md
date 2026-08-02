@@ -32,7 +32,7 @@ per-file rationale.
 
 `parse/` needs `geometry.ts` (colors, grounding, bounds) and must never import upward from `render/`.
 `gpu-ownership.ts`/`gpu-dispose.ts`/`gpu-capabilities.ts` are the shared rules every disposal path
-in both `parse/` and `render/` obeys — see their docblocks for the ownership model.
+in both `parse/` and `render/` obeys — see `gpu-ownership.ts`'s docblock for the ownership model.
 
 ## Extension points
 

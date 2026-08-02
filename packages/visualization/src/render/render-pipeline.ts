@@ -10,9 +10,9 @@ import { EdgeDetectionPass, type EdgeDetectionOptions } from './edge-detection-p
 /**
  * Pipeline: RenderPass → GTAOPass? → EdgeDetectionPass? → SMAAPass → OutputPass. EdgeDetectionPass
  * sits before SMAA so its 1px lines get antialiased. SMAA is required because EffectComposer
- * renders offscreen, so the renderer's own MSAA does nothing here; chosen over TAA because TAA's
- * temporal jitter smears during OrbitControls drags. OutputPass applies tone mapping + color space
- * last, so SMAA operates on the pre-tonemapped image.
+ * renders offscreen, so the renderer's own MSAA does nothing here; SMAA over TAA because TAA's
+ * temporal jitter smears during OrbitControls drags. OutputPass applies tone mapping and color
+ * space last, so SMAA operates on the pre-tonemapped image.
  */
 
 export interface RenderPipeline {
@@ -79,8 +79,8 @@ export function createRenderPipeline(
 
 	return {
 		render: (deltaTime) => composer.render(deltaTime),
-		// Only composer.setSize, never individual pass.setSize — that would reset AO/AA targets
-		// back to logical CSS size, undoing the pixel-ratio scaling.
+		// composer.setSize only — calling individual pass.setSize would reset AO/AA targets back to
+		// logical CSS size, undoing the pixel-ratio scaling.
 		setSize: (w, h, pixelRatio) => {
 			composer.setPixelRatio(Math.min(pixelRatio, aoPixelRatioCap));
 			composer.setSize(w, h);
@@ -91,8 +91,8 @@ export function createRenderPipeline(
 			if (!gtaoPass) return;
 			gtaoPass.camera = cam;
 			// GTAOPass bakes camera type into its AO shader as a construction-time define; reassigning
-			// `camera` alone leaves the old projection's depth reconstruction active (garbage AO after
-			// a perspective⇄ortho toggle). Force a shader recompile when the type actually changes.
+			// `camera` alone leaves the old projection's depth reconstruction active — garbage AO after
+			// a perspective⇄ortho toggle. Force a recompile when the type actually changes.
 			const isPerspective = (cam as Partial<THREE.PerspectiveCamera>).isPerspectiveCamera ? 1 : 0;
 			if (gtaoPass.gtaoMaterial.defines.PERSPECTIVE_CAMERA !== isPerspective) {
 				gtaoPass.gtaoMaterial.defines.PERSPECTIVE_CAMERA = isPerspective;
@@ -103,7 +103,7 @@ export function createRenderPipeline(
 			edgePass.enabled = enabled;
 		},
 		edgeDetectionEnabled: () => edgePass.enabled,
-		// composer.dispose() doesn't free passes — dispose explicitly.
+		// composer.dispose() doesn't free passes.
 		dispose: () => {
 			composer.dispose();
 			gtaoPass?.dispose();

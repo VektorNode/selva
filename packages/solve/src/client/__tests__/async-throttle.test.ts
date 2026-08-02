@@ -18,10 +18,14 @@ function deferredRun() {
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
+// Long enough never to fire in the tests that aren't about the deadline; the
+// timeout tests below pass their own short value.
+const TEST_DEADLINE_MS = 100_000;
+
 describe('createAsyncThrottle', () => {
 	it('runs immediately when idle and reports isRunning across the call', async () => {
 		const { fn, calls } = deferredRun();
-		const t = createAsyncThrottle<number>(fn);
+		const t = createAsyncThrottle<number>(fn, { runDeadlineMs: TEST_DEADLINE_MS });
 
 		expect(t.isRunning).toBe(false);
 		t.trigger(1);
@@ -37,7 +41,7 @@ describe('createAsyncThrottle', () => {
 
 	it('keeps only one in flight; latest pending value wins, intermediates dropped', async () => {
 		const { fn, calls } = deferredRun();
-		const t = createAsyncThrottle<number>(fn);
+		const t = createAsyncThrottle<number>(fn, { runDeadlineMs: TEST_DEADLINE_MS });
 
 		t.trigger(1);
 		t.trigger(2);
@@ -54,7 +58,7 @@ describe('createAsyncThrottle', () => {
 
 	it('aborts the in-flight request when a new one starts (after the pending re-entry)', async () => {
 		const { fn, calls } = deferredRun();
-		const t = createAsyncThrottle<number>(fn);
+		const t = createAsyncThrottle<number>(fn, { runDeadlineMs: TEST_DEADLINE_MS });
 
 		t.trigger(1);
 		t.trigger(2);
@@ -69,7 +73,7 @@ describe('createAsyncThrottle', () => {
 
 	it('cancel() clears the pending slot and aborts the in-flight signal', async () => {
 		const { fn, calls } = deferredRun();
-		const t = createAsyncThrottle<number>(fn);
+		const t = createAsyncThrottle<number>(fn, { runDeadlineMs: TEST_DEADLINE_MS });
 
 		t.trigger(1);
 		t.trigger(2);
@@ -91,7 +95,7 @@ describe('createAsyncThrottle', () => {
 
 		it('aborts the in-flight request when the timeout elapses', async () => {
 			const { fn, calls } = deferredRun();
-			const t = createAsyncThrottle<number>(fn, { timeout: 1000 });
+			const t = createAsyncThrottle<number>(fn, { runDeadlineMs: 1000 });
 
 			t.trigger(1);
 			expect(calls[0].signal.aborted).toBe(false);

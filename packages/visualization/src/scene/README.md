@@ -33,8 +33,8 @@ const outliner = createSceneOutliner(scene, { sets: { hidden, selected, collapse
 ```
 
 Pass plain `Set`s for a headless host. Pass Svelte's `SvelteSet` and every mutation the outliner
-makes — `toggleObject`, `toggleLayer`, `select` — becomes a reactive read with no subscribe/emit
-machinery in between. `SceneManager.svelte` in `@selvajs/ui` does exactly that.
+makes — `toggleObject`, `visibility.toggleLayer`, `select` — becomes a reactive read with no
+subscribe/emit machinery in between. `SceneManager.svelte` in `@selvajs/ui` does exactly that.
 
 The catch: a framework observes the **set**, not the outliner. A reactive host must read state
 through the set it supplied (`hidden.has(getTrackingKey(obj))`), not through `visibility.isHidden(obj)`,

@@ -17,7 +17,8 @@ import {
 	applyValueChange,
 	applySolveResult,
 	pickInputValues,
-	type SolveSessionState
+	type SolveSessionState,
+	type RetainedSolveResult
 } from './solve-session-core.js';
 
 export interface SolveSession {
@@ -26,6 +27,13 @@ export interface SolveSession {
 	readonly computeErrors: string[];
 	readonly computeWarnings: string[];
 	readonly meshes: unknown[];
+	/**
+	 * The last reported result without its meshes — what the viewer is currently showing,
+	 * including the `source`/`values` pair a commit path needs. Null before the first solve,
+	 * and again after `rebuild()`. Survives `reportError`: a failed solve leaves the last good
+	 * geometry on screen, so a host committing what it sees should still see what produced it.
+	 */
+	readonly lastResult: RetainedSolveResult | null;
 	readonly hasPendingChanges: boolean;
 	readonly hasNeverSolved: boolean;
 	readonly isSolving: boolean;
@@ -61,7 +69,8 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		meshes: [],
 		pendingValues: {},
 		hasPendingChanges: flags.hasPendingChanges,
-		hasNeverSolved: flags.hasNeverSolved
+		hasNeverSolved: flags.hasNeverSolved,
+		lastResult: null
 	};
 
 	const listeners = new Set<() => void>();
@@ -89,6 +98,9 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 		get meshes() {
 			return state.meshes;
+		},
+		get lastResult() {
+			return state.lastResult;
 		},
 		get hasPendingChanges() {
 			return state.hasPendingChanges;
@@ -133,6 +145,8 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			// one must not serve that definition's cached result.
 			args.driver.clearCache?.();
 			state.meshes = [];
+			// Same reason as clearCache: a retained result belongs to the previous definition.
+			state.lastResult = null;
 			state.error = '';
 			state.computeErrors = [];
 			state.computeWarnings = [];

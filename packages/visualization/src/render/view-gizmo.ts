@@ -4,16 +4,16 @@ import { ViewHelper } from 'three/addons/helpers/ViewHelper.js';
 import type { CameraController } from './camera-controller';
 
 /**
- * Corner nav-cube/axis gizmo. Uses three's {@link ViewHelper} only as the rendered widget, NOT its
+ * Corner nav-cube/axis gizmo. Uses three's {@link ViewHelper} only as the rendered widget, not its
  * click→animate behavior: ViewHelper's snap assumes Y-up and animates straight onto the up axis,
- * which rolls the view and jitters the gizmo at the pole in our Z-up scene. Instead we hit-test the
- * axis sprites ourselves and drive the viewer's up-aware camera controller, which snaps instantly
- * with a pole nudge so the orbit basis never degenerates.
+ * which rolls the view and jitters the gizmo at the pole in a Z-up scene. Instead this hit-tests
+ * the axis sprites directly and drives the viewer's up-aware camera controller, which snaps
+ * instantly with a pole nudge so the orbit basis never degenerates.
  *
- * A click frames the current orbit target (not the world origin), and flips the viewer back to
- * perspective first if it's in orthographic mode (the cube is inherently a 3D-orientation tool).
+ * A click frames the current orbit target (not the world origin) and switches back to perspective
+ * first if orthographic — the cube is a 3D-orientation tool.
  *
- * Caller contract (mirrors ViewHelper's own): call {@link ViewGizmo.render} *after* the main scene
+ * Caller contract (mirrors ViewHelper's own): call {@link ViewGizmo.render} after the main scene
  * render each frame, and forward pointer clicks to {@link ViewGizmo.handleClick}.
  */
 export interface ViewGizmo {
@@ -39,8 +39,7 @@ export function createViewGizmo(deps: ViewGizmoDeps): ViewGizmo {
 
 	let visible = true;
 
-	// Hit-test mirrors ViewHelper's internal `dim`×`dim` corner-viewport math (see module doc for why
-	// we don't use ViewHelper's own handleClick).
+	// Mirrors ViewHelper's internal `dim`×`dim` corner-viewport math.
 	const DIM = 128;
 	const raycaster = new THREE.Raycaster();
 	const gizmoCamera = new THREE.OrthographicCamera(-2, 2, 2, -2, 0, 4);
@@ -50,7 +49,7 @@ export function createViewGizmo(deps: ViewGizmoDeps): ViewGizmo {
 	// position (z = 0, the cube's mid-plane) and the camera-facing axis sprites sit behind it.
 	gizmoCamera.updateMatrixWorld();
 
-	// Direction is target → camera, matching CameraController.setViewDirection.
+	// target → camera, matching CameraController.setViewDirection.
 	const AXIS_DIRECTIONS: Record<string, THREE.Vector3> = {
 		posX: new THREE.Vector3(1, 0, 0),
 		negX: new THREE.Vector3(-1, 0, 0),
@@ -73,7 +72,7 @@ export function createViewGizmo(deps: ViewGizmoDeps): ViewGizmo {
 		);
 		if (Math.abs(mouse.x) > 1 || Math.abs(mouse.y) > 1) return null;
 
-		// Orient the helper as it's rendered (inverse of the camera) so sprites are where the user sees them.
+		// Orient the helper as rendered (inverse of the camera) so sprites match what's on screen.
 		helper.quaternion.copy(camera.quaternion).invert();
 		helper.updateMatrixWorld();
 

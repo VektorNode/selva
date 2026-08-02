@@ -9,9 +9,9 @@ import type { LabelLayer, LabelHandle } from './label-layer';
  * Two-click distance measurement. Click a point, click a second, read the distance off a label on
  * the connecting line; a third click starts fresh.
  *
- * Picking snaps to the nearest vertex of the struck triangle within {@link MeasureOptions.snapPixels}
- * so measurements land exactly on vertices rather than wherever the ray happened to hit — a cheap
- * local snap (three candidate vertices, no spatial index).
+ * Picking snaps to the nearest vertex within {@link MeasureOptions.snapPixels} so measurements
+ * land exactly on vertices rather than wherever the ray happened to hit — a cheap local snap
+ * against the struck primitive's own vertices, no spatial index.
  *
  * Dormant until {@link MeasureTool.setEnabled}(true). While enabled it intercepts clicks (caller
  * forwards them and swallows the event when {@link MeasureTool.handleClick} returns true) so
@@ -63,8 +63,8 @@ interface MeasureDeps {
 
 const DEFAULT_SNAP_PIXELS = 12;
 const DEFAULT_COLOR = 0xffcc00;
-// Line/Points raycast threshold as a fraction of the view distance (camera→target). ~1.5% gives a
-// comfortable few-pixel grab band at typical framing without snapping to far-off geometry.
+// Fraction of view distance used as the line/point raycast threshold: ~1.5% gives a comfortable
+// grab band at typical framing without snapping to far-off geometry.
 const LINE_PICK_FRACTION = 0.015;
 
 // Scene geometry loads in meters (webdisplay parser scales when `allowScaling` is on). Keep in
@@ -85,9 +85,9 @@ export function makeFormatter(displayUnit?: string): (n: number) => string {
 
 /**
  * Raycast threshold for picking lines/points, as a fixed fraction of view size so the grab band
- * stays roughly constant on screen while zooming. Perspective: fraction of camera→target distance
- * (see `MeasureDeps.getViewTarget`). Orthographic: fraction of frustum height `(top − bottom) /
- * zoom`, since ortho zoom changes `camera.zoom` rather than position.
+ * stays constant on screen while zooming. Perspective uses camera→target distance (see
+ * `MeasureDeps.getViewTarget`); orthographic uses frustum height `(top − bottom) / zoom`, since
+ * ortho zoom changes `camera.zoom` rather than position.
  * @internal exported for tests
  */
 export function pickThreshold(camera: THREE.Camera, viewTarget?: THREE.Vector3): number {
@@ -115,9 +115,9 @@ function snapCandidateIndices(hit: THREE.Intersection): number[] | null {
 		return hit.index != null ? [hit.index] : null;
 	}
 	// THREE.Line / LineSegments / LineLoop. For non-indexed geometry `hit.index` is the first
-	// vertex of the struck segment; for INDEXED geometry it is a cursor into the index buffer
-	// (three r184 Line.raycast reports the loop counter, not the resolved vertex), so the segment's
-	// endpoints must be looked up through the index before reading the position attribute.
+	// vertex of the struck segment. For indexed geometry it's a cursor into the index buffer, not
+	// the resolved vertex (three r184 Line.raycast reports the loop counter) — endpoints must be
+	// looked up through the index before reading the position attribute.
 	if (obj instanceof THREE.Line) {
 		if (hit.index == null) return null;
 		const index = obj.geometry.index;
@@ -281,7 +281,7 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 		const camera = getActiveCamera();
 		raycaster.setFromCamera(pointer, camera);
 
-		// Lines/points have no surface area, so raycast threshold matters — the default ~1 unit is
+		// Lines/points have no surface area, so the raycast threshold matters — three's default is
 		// nearly unclickable. pickThreshold scales it with the view so it stays constant on screen.
 		const threshold = pickThreshold(camera, getViewTarget?.());
 		raycaster.params.Line!.threshold = threshold;
@@ -295,8 +295,8 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 		return snapToVertex(hits[0], camera, { width: rect.width, height: rect.height }, snapPixels);
 	};
 
-	// Coalesce hover raycasts to one per animation frame: a full-scene recursive raycast per
-	// mousemove event hitches on large models, and only the latest event matters for the preview.
+	// One raycast per animation frame, not per mousemove: a full-scene recursive raycast per event
+	// hitches on large models, and only the latest event matters for the preview.
 	let pendingMove: MouseEvent | null = null;
 	let moveRaf = 0;
 

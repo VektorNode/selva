@@ -6,10 +6,7 @@ import { canDisposeMaterial } from './gpu-ownership.js';
 // The disposal walkers — every teardown path in the package goes through these
 // ============================================================================
 
-/**
- * Free a material and its textures, respecting ownership (`./gpu-ownership.ts`). Walks own
- * enumerable properties only (`for...in` would also walk the prototype chain).
- */
+/** Frees a material and its textures, respecting ownership (`./gpu-ownership.ts`). */
 export function disposeMaterial(material: THREE.Material): void {
 	if (!canDisposeMaterial(material)) return;
 
@@ -35,7 +32,7 @@ export interface DisposeOptions {
 }
 
 /**
- * Free the GPU resources of an object subtree, respecting ownership. **The only traversal that
+ * Frees the GPU resources of an object subtree, respecting ownership. **The only traversal that
  * should dispose scene content** — a second disposing `traverse` risks missing an ownership guard.
  */
 export function disposeObjectTree(root: THREE.Object3D, options: DisposeOptions = {}): void {

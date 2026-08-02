@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { readEnvFile } from '../env.js';
+import { readEnvFile, RENAMED_ENV_VARS, REPLACED_ENV_VARS } from '../env.js';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 import { detectDrift } from './migrate.js';
 
@@ -83,6 +83,21 @@ export async function runDoctor() {
 		}
 	} else {
 		checks.push(yellow('ORIGIN unset — required behind a reverse proxy'));
+	}
+
+	for (const [oldName, newName] of Object.entries(RENAMED_ENV_VARS)) {
+		if (env[oldName] === undefined) continue;
+		checks.push(
+			env[newName] === undefined
+				? yellow(`${oldName} is deprecated — \`selva migrate\` renames it to ${newName}`)
+				: yellow(`${oldName} is deprecated and ignored — ${newName} is set and wins`)
+		);
+	}
+
+	// Not auto-fixable: the replacement encodes a value, so migrate won't guess.
+	for (const [oldName, replacement] of Object.entries(REPLACED_ENV_VARS)) {
+		if (env[oldName] === undefined) continue;
+		checks.push(yellow(`${oldName} is deprecated — replace it with ${replacement}`));
 	}
 
 	// ── Render ─────────────────────────────────────────────────────────
@@ -321,9 +336,7 @@ function checkBootPersistence(dir) {
 
 	// systemd unit: present and pointing at deployment-local pm2.
 	const user = process.env.USER ?? process.env.LOGNAME;
-	const unitPath = user
-		? `/etc/systemd/system/pm2-${user}.service`
-		: null;
+	const unitPath = user ? `/etc/systemd/system/pm2-${user}.service` : null;
 
 	if (unitPath && existsSync(unitPath)) {
 		const localPm2 = join(dir, 'node_modules', 'pm2', 'bin', 'pm2');
@@ -494,8 +507,7 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		Boolean(env.HEADER_AUTH_EMAIL_HEADER),
 		Boolean(env.HEADER_AUTH_DISPLAY_NAME_HEADER)
 	].filter(Boolean).length;
-	const headerList =
-		`UPN=${resolved.upn}, Email=${resolved.email}, DisplayName=${resolved.displayName}`;
+	const headerList = `UPN=${resolved.upn}, Email=${resolved.email}, DisplayName=${resolved.displayName}`;
 	if (overrides === 0) {
 		out.push(green(`header names (bundled defaults): ${headerList}`));
 	} else if (overrides === 3) {

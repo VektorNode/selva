@@ -22,6 +22,10 @@ export interface SolveResult<TMesh = unknown, TSource = unknown> {
 	 * user narrows it at its own seam. Travels with the result through the driver's memo, so a
 	 * cached hit carries the source that produced it. Unlike `meshes` it needs no ownership policy —
 	 * it is inert data, not a GPU-backed handle.
+	 *
+	 * Supplied by the `SolveFn`, so it is present only when the one in use sets it
+	 * (`createComputeFetchSolveFn` does). A transport with no raw payload to hand back leaves it
+	 * absent — see `values` on telling absent from unsupported.
 	 */
 	source?: TSource;
 	/**
@@ -29,6 +33,11 @@ export interface SolveResult<TMesh = unknown, TSource = unknown> {
 	 * memo hit never calls the `SolveFn`, so a consumer reading values captured inside it would pair
 	 * the on-screen result with whatever solved last. Keeping the pair atomic is the point: a commit
 	 * path holding a `SolveResult` cannot mismatch artifact and inputs.
+	 *
+	 * Present only from a driver that owns a request/response pair (`createRequestResponseDriver`).
+	 * A push driver cannot attribute an incoming frame to a request and must leave this absent
+	 * rather than guess — so `undefined` means "this transport does not supply it", not "no solve
+	 * yet", and a consumer that needs the pair requires a request/response driver. See `SolveDriver`.
 	 */
 	values?: Record<string, unknown>;
 }

@@ -47,7 +47,6 @@ export const initThree = function (
 	publishMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());
 	options?.onMaxAnisotropy?.(renderer.capabilities.getMaxAnisotropy());
 
-	// Released in dispose(); the underlying caches are freed once the last live viewer lets go.
 	const controls = setupControls(camera, canvas, config);
 
 	// Render loop, resize, and raycasting all read through getActiveCamera so 2D/3D stays coherent.

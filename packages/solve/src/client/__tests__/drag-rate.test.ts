@@ -67,18 +67,22 @@ async function simulateDrag({
 	let triggers = 0;
 	const memo: number[] = [];
 
-	const throttle = createAsyncThrottle<number>(async (value) => {
-		// The memo is checked INSIDE the throttled run (request-response.ts:29), so a
-		// hit serves only after latest-wins ordering has already picked these values.
-		if (memo.includes(value)) {
-			memoHits++;
-			return;
-		}
-		networkCalls++;
-		memo.push(value);
-		if (memo.length > MEMO_CAP) memo.shift();
-		await new Promise<void>((resolve) => setTimeout(resolve, solveRttMs));
-	});
+	const throttle = createAsyncThrottle<number>(
+		async (value) => {
+			// The memo is checked INSIDE the throttled run (request-response.ts:29), so a
+			// hit serves only after latest-wins ordering has already picked these values.
+			if (memo.includes(value)) {
+				memoHits++;
+				return;
+			}
+			networkCalls++;
+			memo.push(value);
+			if (memo.length > MEMO_CAP) memo.shift();
+			await new Promise<void>((resolve) => setTimeout(resolve, solveRttMs));
+			// Deadline far past the simulated drag — this measures solve/memo rates, not aborts.
+		},
+		{ runDeadlineMs: 100_000 }
+	);
 
 	const commit = debounce((value: number) => {
 		triggers++;

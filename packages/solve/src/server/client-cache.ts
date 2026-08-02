@@ -73,8 +73,8 @@ export type ClientCacheDebug = boolean | 'verbose';
 
 /** Config injected by the consuming app, so this module stays env-agnostic and testable. */
 export interface ClientCacheConfig {
-	/** Per-solve timeout forwarded to the scheduler (`ComputeLimits.maxSolveDurationMs`). */
-	maxSolveDurationMs: number;
+	/** Per-solve timeout forwarded to the scheduler (`ComputeLimits.solveDeadlineMs`). */
+	solveDeadlineMs: number;
 	cachesolve: boolean;
 	/** Only meaningful with `cachesolve`. */
 	cacheerroredsolves: boolean;
@@ -273,7 +273,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			// would reject EVERY queued solve).
 			maxQueueDepth: config.maxQueueDepth || undefined,
 			queueWaitMs: config.queueWaitMs || undefined,
-			timeoutMs: config.maxSolveDurationMs,
+			timeoutMs: config.solveDeadlineMs,
 			// The byte budget is the only eviction pressure. A solve is a pure
 			// function of (definition, inputs), both immutable, so a retained
 			// result can never go stale — expiring one only forces a paid re-solve

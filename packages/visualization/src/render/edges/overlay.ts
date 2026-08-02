@@ -59,13 +59,13 @@ function createEdgeMaterial(
 	// LineMaterialParameters omits linewidth/opacity from its type though both exist at runtime.
 	const material = new LineMaterial({ color });
 	(material as LineMaterial & { linewidth: number }).linewidth = width;
-	// Lift the lines a fixed couple of quantization steps toward the camera so they win against the
-	// surface they were extracted from, without touching the surfaces themselves (see the constants).
+	// Lifts lines toward the camera by a couple of depth-quantization steps so they win z-fighting
+	// against the surface they were extracted from, without moving the surface itself.
 	material.polygonOffset = true;
 	material.polygonOffsetFactor = EDGE_OFFSET_FACTOR;
 	material.polygonOffsetUnits = EDGE_OFFSET_UNITS;
-	// Fading needs blending; set once here rather than per draw, since flipping `transparent` after
-	// the render list is built wouldn't re-sort the object into the transparent pass.
+	// Set once here, not per draw: flipping `transparent` after the render list is built wouldn't
+	// re-sort the object into the transparent pass.
 	if (distanceFade) material.transparent = true;
 	return material;
 }
@@ -85,7 +85,7 @@ export function buildEdgeOverlay(
 const _fadeCenter = new THREE.Vector3();
 const _fadeCameraPos = new THREE.Vector3();
 
-// Returns Infinity ("don't fade") when the projection is unknown/degenerate, or the camera sits inside the mesh.
+// Returns Infinity ("don't fade") for an unknown/degenerate projection, or a camera inside the mesh.
 function pixelsPerWorldUnit(
 	overlay: LineSegments2,
 	camera: THREE.Camera,
@@ -115,9 +115,9 @@ function pixelsPerWorldUnit(
 	return Infinity;
 }
 
-// Hooked into onBeforeRender (not computed once) so opacity is written immediately before this
-// overlay's draw — uniforms upload per draw call, so overlays sharing one material still fade
-// independently. Chains LineSegments2's own onBeforeRender to keep its resolution uniform in sync.
+// Runs in onBeforeRender (not computed once) so opacity is written right before this overlay's
+// draw call — uniforms upload per draw, so overlays sharing one material still fade independently.
+// Chains LineSegments2's own onBeforeRender to keep its resolution uniform in sync.
 function enableDistanceFade(overlay: LineSegments2, edgeSpacing: number): void {
 	// Assign via the Object3D base type: LineSegments2's typings narrow onBeforeRender to
 	// (renderer) only, but the renderer actually calls it with (renderer, scene, camera, …).
@@ -125,8 +125,8 @@ function enableDistanceFade(overlay: LineSegments2, edgeSpacing: number): void {
 		LineSegments2.prototype.onBeforeRender.call(overlay, renderer);
 		const material = overlay.material as LineMaterial;
 		const scale = pixelsPerWorldUnit(overlay, camera, material.resolution.y);
-		// Mean gap between neighbouring edges, on screen. Infinity (unknown projection, camera inside
-		// the mesh) yields Infinity here too, which clamps to fully opaque — never fade on a guess.
+		// Screen-space gap between neighbouring edges. Infinity in, Infinity out — clamps to fully
+		// opaque rather than fading on a guess.
 		const gapPx = edgeSpacing * scale;
 		material.opacity = THREE.MathUtils.clamp(
 			(gapPx - FADE_END_PX) / (FADE_START_PX - FADE_END_PX),

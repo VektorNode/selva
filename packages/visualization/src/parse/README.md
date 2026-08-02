@@ -14,15 +14,16 @@ from `render/` or `scene/`.
 
 ```
 response envelope
-  └─ webdisplay-parser.ts     pick display data off the response, scale, ground, bound
-       └─ batch-parser.ts     entry points + off-thread worker path
-            ├─ binary-parser.ts        SLVA decode  ─┬─ binary/header.ts    magic/version/flags/types
-            │                                        ├─ binary/geometry.ts  buffer reads, delta+zigzag, inflate
-            │                                        └─ binary/textures.ts  trailing UV + vertex-color chunks
-            ├─ batch/metadata.ts       validate windows, dequantize
-            ├─ batch/materials.ts      SerializableMaterial → MeshPhysicalMaterial
-            ├─ batch/merge.ts          merged + individual mesh construction
-            └─ batch/assembly-worker.ts  worker plumbing (blob URL, request/response)
+  └─ webdisplay/webdisplay-parser.ts     pick display data off the response, scale, ground, bound
+       └─ webdisplay/batch-parser.ts     entry points + off-thread worker path
+            ├─ webdisplay/binary-parser.ts        SLVA decode  ─┬─ webdisplay/binary/header.ts    magic/version/flags/types
+            │                                                   ├─ webdisplay/binary/geometry.ts  buffer reads, delta+zigzag, inflate
+            │                                                   └─ webdisplay/binary/textures.ts  trailing UV + vertex-color chunks
+            ├─ webdisplay/batch/metadata.ts       validate windows, dequantize
+            ├─ webdisplay/batch/materials.ts      SerializableMaterial → MeshPhysicalMaterial
+            ├─ webdisplay/batch/merge.ts          merged + individual mesh construction
+            ├─ webdisplay/mesh-assembly.ts        pure geometry assembly, shared by the main thread and the worker
+            └─ webdisplay/batch/assembly-worker.ts  worker plumbing (blob URL, request/response)
 ```
 
 `apply-texture.ts` loads a material's color map and assigns it once decoded. Nothing here caches
@@ -31,10 +32,10 @@ across solves: every solve decodes its own geometry and textures, and the scene 
 ## Display item pipeline
 
 ```
-display-items-parser.ts      dispatch per item kind
-  ├─ items/curves.ts         rhino3dm decode → adaptive tessellation → fat Line2
-  ├─ items/points.ts         raw positions → one THREE.Points
-  └─ items/appearance.ts     shared color/opacity → material params
+display-items/display-items-parser.ts      dispatch per item kind
+  ├─ display-items/items/curves.ts         rhino3dm decode → adaptive tessellation → fat Line2
+  ├─ display-items/items/points.ts         raw positions → one THREE.Points
+  └─ display-items/items/appearance.ts     shared color/opacity → material params
 ```
 
 Curves need a caller-supplied `rhino3dm` instance (the WASM is heavy and the host owns it). Without

@@ -62,6 +62,9 @@ export const FADE_END_PX = 1;
 // behind a wall then won the depth test and bled through the wall's own edges. A fixed
 // quantization-step bias on the lines instead lifts an edge off its own surface without reaching
 // across a gap to a neighbouring part.
+//
+// This bias is only safe as long as a depth ULP stays small, which is what near-plane.ts's dynamic
+// near-plane fitter guarantees. Weakening that fit makes this bias start to bleed.
 export const EDGE_OFFSET_FACTOR = 0;
 export const EDGE_OFFSET_UNITS = -1; // negative = toward the camera
 

@@ -76,7 +76,7 @@ import { createClientCache, serverIdentity } from '../client-cache.js';
 
 function baseConfig() {
 	return {
-		maxSolveDurationMs: 30_000,
+		solveDeadlineMs: 30_000,
 		maxQueueDepth: 0,
 		queueWaitMs: 0,
 		cachesolve: true,

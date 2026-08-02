@@ -74,7 +74,7 @@ async function waitUntil(check: () => boolean, attempts = 20): Promise<void> {
 
 function baseLimits(over: Partial<SolveEngineLimits> = {}): SolveEngineLimits {
 	return {
-		maxSolveDurationMs: 30_000,
+		solveDeadlineMs: 30_000,
 		computeResponseMaxBytes: 10 * 1024 * 1024,
 		computeReuseDefinitionCache: true,
 		computeServerCachesolve: true,

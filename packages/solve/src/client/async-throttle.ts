@@ -8,7 +8,14 @@
  * directly reads correct values but won't trigger a re-render.
  */
 interface AsyncThrottleOptions {
-	timeout?: number;
+	/**
+	 * How long one run may take before it is aborted (ms). Required and deliberately
+	 * undefaulted: this is a generic throttle, so it has no basis for guessing what
+	 * the caller's work costs. Callers driving a Selva solve pass the deadline the
+	 * server enforces (`COMPUTE_SOLVE_DEADLINE_MS`) — a shorter local guess would abort
+	 * solves the server would have finished.
+	 */
+	runDeadlineMs: number;
 	onChange?: () => void;
 }
 
@@ -19,14 +26,11 @@ export interface AsyncThrottle<T> {
 	cancel: () => void;
 }
 
-/** Fallback per-run abort timeout (ms) when the caller doesn't pass one. */
-const DEFAULT_TIMEOUT_MS = 60_000;
-
 export function createAsyncThrottle<T>(
 	run: (values: T, signal: AbortSignal) => Promise<void>,
-	options: AsyncThrottleOptions = {}
+	options: AsyncThrottleOptions
 ): AsyncThrottle<T> {
-	const { timeout = DEFAULT_TIMEOUT_MS, onChange } = options;
+	const { runDeadlineMs, onChange } = options;
 
 	let isRunning = false;
 	let pendingValues: T | null = null;
@@ -48,12 +52,12 @@ export function createAsyncThrottle<T>(
 
 		currentAbortController = new AbortController();
 		const { signal } = currentAbortController;
-		const timeoutId = setTimeout(() => {
+		const deadlineId = setTimeout(() => {
 			// Cleared in `finally` on every other path, so firing means a genuine
 			// timeout — the only signal for it (the abort itself is swallowed below).
-			console.warn(`[Solve/throttle] run exceeded ${timeout}ms — aborting`);
+			console.warn(`[Solve/throttle] run exceeded ${runDeadlineMs}ms — aborting`);
 			currentAbortController?.abort();
-		}, timeout);
+		}, runDeadlineMs);
 
 		setRunning(true);
 		try {
@@ -66,7 +70,7 @@ export function createAsyncThrottle<T>(
 				console.error('[Solve/throttle] unhandled error in run:', err);
 			}
 		} finally {
-			clearTimeout(timeoutId);
+			clearTimeout(deadlineId);
 			setRunning(false);
 			currentAbortController = null;
 

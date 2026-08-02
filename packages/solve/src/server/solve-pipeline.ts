@@ -68,7 +68,7 @@ export interface SolvePipelineArgs {
 	client: CachedClient;
 	responseMaxBytes: number;
 	/** Only phrases the timeout message — the scheduler enforces the deadline itself. */
-	maxSolveDurationMs: number;
+	solveDeadlineMs: number;
 	/** Client's `Accept-Encoding`; gzip is applied only when it advertises `gzip`. */
 	acceptEncoding: string;
 	/**
@@ -182,7 +182,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 			return {
 				kind: 'timeout',
 				durationMs,
-				message: `Solve exceeded the ${Math.round(args.maxSolveDurationMs / 1000)}s deadline.`
+				message: `Solve exceeded the ${Math.round(args.solveDeadlineMs / 1000)}s deadline.`
 			};
 		}
 		// Queue-full or queue-timeout rejects the solve before compute runs — a load

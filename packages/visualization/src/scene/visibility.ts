@@ -21,7 +21,7 @@ export interface VisibilityState {
 	isHidden(object: THREE.Object3D): boolean;
 	setVisible(object: THREE.Object3D, visible: boolean): void;
 	isLayerHidden(objects: THREE.Object3D[]): boolean;
-	/** Some — but not all — of the layer is hidden. Drives the tri-state eye icon. */
+	/** Drives the tri-state eye icon. */
 	isLayerPartial(objects: THREE.Object3D[]): boolean;
 	toggleLayer(objects: THREE.Object3D[]): void;
 	/** Restores `.visible` on everything the user had hidden before the solve. Call after each solve. */

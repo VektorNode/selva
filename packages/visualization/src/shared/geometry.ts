@@ -2,8 +2,8 @@ import * as THREE from 'three';
 
 import { getLogger } from './logger.js';
 
-// Object/color utilities shared by `parse/` and `render/`. Live here (not in render's
-// three-helpers) because `parse/` needs them and must never import upward from `render/`.
+// parse/ needs these and must never import upward from render/, so they live in shared/ instead
+// of render's three-helpers.
 
 export function parseColor(colorString: string): THREE.Color {
 	if (!colorString || typeof colorString !== 'string') {

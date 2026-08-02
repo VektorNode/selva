@@ -39,10 +39,8 @@ export type EnvironmentConfig = {
 	backgroundColor?: THREE.Color | string;
 	enableEnvironmentLighting?: boolean;
 	/**
-	 * Defaults to `(0, 0, 1)` — Rhino's Z-up, not Three's native Y-up — because geometry arrives in
-	 * Rhino's frame and is never rotated on ingress. Everything orientation-dependent derives from
-	 * this (view presets, default camera, sun, grid, floor, hemisphere light), but overriding it
-	 * reorients the viewer only — it does NOT rotate incoming geometry.
+	 * Default `(0, 0, 1)` — Rhino's Z-up. Every orientation default derives from this (see `up-axis.ts`);
+	 * overriding it reorients the viewer only, it does not rotate incoming geometry.
 	 */
 	sceneUp?: THREE.Vector3;
 	showEnvironment?: boolean;
@@ -91,36 +89,33 @@ export type RenderConfig = {
 import type { Look } from '../shared/index.js';
 
 /**
- * A named bundle of lighting/material defaults, decoupled from CAD overlays (edges, grid — see
- * {@link EdgesConfig}/{@link GridConfig}). 'technical' (default) is matte CAD-shaded; 'studio' and
- * 'showcase' add ACES tone mapping and hemisphere fill for punchier presentation.
+ * A named bundle of lighting/material defaults, independent of CAD overlays (edges, grid). 'technical'
+ * (default) is matte CAD-shaded; 'studio' and 'showcase' add ACES tone mapping and hemisphere fill.
  *
- * Defined in `shared/` (both this layer and `parse/` need it, neither may import the other) and
- * re-exported here so `ThreeInitializerOptions` stays a self-contained option surface.
+ * Defined in `shared/` (both `render/` and `parse/` need it) and re-exported here so
+ * `ThreeInitializerOptions` stays self-contained.
  */
 export { LOOKS } from '../shared/index.js';
 export type { Look, LookPreset, MaterialAppearanceOptions } from '../shared/index.js';
 
-/** Crisp boundary/crease edge overlays on meshes. See `addEdges`. */
+/** Crisp boundary/crease edge overlays on meshes. Field rationale: see `EdgeOptions` in `edges/options.ts`. */
 export type EdgesConfig = {
 	/** Default false (opt-in). */
 	enabled?: boolean;
-	/** Omit (default) to derive each mesh's edge color from its own surface material, darkened by `darken`. */
 	color?: THREE.ColorRepresentation;
 	/** 0–1, default 0.75. Ignored when `color` is set. */
 	darken?: number;
 	/** CSS px. Default 1.5. */
 	width?: number;
-	/** Crease angle in degrees: keep edges where faces differ by more than this. Default 44. */
+	/** Degrees. Default 44. */
 	thresholdAngle?: number;
-	/** Fade an overlay out as its mesh shrinks on screen. Default true. */
+	/** Default true. */
 	distanceFade?: boolean;
-	/** Skip overlay extraction for meshes above this triangle count. Default 4M. */
+	/** Default 4M. */
 	maxTriangles?: number;
-	/** Overlays above this segment count render opaque (no distance fade). Default 2M. */
+	/** Default 2M. */
 	maxSegments?: number;
-	/** Meshes skipped for exceeding `maxTriangles` fall back to the screen-space edge-detection pass
-	 * (constant cost regardless of triangle count). Default true. */
+	/** Fall back to the screen-space edge-detection pass for meshes skipped by `maxTriangles`. Default true. */
 	screenSpaceFallback?: boolean;
 };
 
@@ -196,9 +191,9 @@ export type ThreeInitializerOptions = {
 	measure?: MeasureConfig;
 	events?: EventConfig;
 	/**
-	 * Called once at init with the GPU's max anisotropy. **Not needed for sharp textures** — the
-	 * parse layer's texture cache subscribes to this value itself via a shared sink. This hook is
-	 * only for hosts doing their own texture work on top.
+	 * Called once at init with the GPU's max anisotropy. Not needed for sharp textures — `parse/`'s
+	 * texture cache subscribes to this value on its own (see README's render↔parse seam). Only for
+	 * hosts doing their own texture work.
 	 */
 	onMaxAnisotropy?: (value: number) => void;
 };

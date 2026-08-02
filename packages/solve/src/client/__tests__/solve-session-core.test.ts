@@ -95,6 +95,7 @@ function state(overrides: Partial<SolveSessionState> = {}): SolveSessionState {
 		pendingValues: {},
 		hasPendingChanges: false,
 		hasNeverSolved: false,
+		lastResult: null,
 		...overrides
 	};
 }

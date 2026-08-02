@@ -28,7 +28,11 @@ export {
 	pickInputValues,
 	applySolveResult
 } from './solve-session-core.js';
-export type { SolveSessionState, ExternalReader } from './solve-session-core.js';
+export type {
+	SolveSessionState,
+	ExternalReader,
+	RetainedSolveResult
+} from './solve-session-core.js';
 
 export { createAsyncThrottle } from './async-throttle.js';
 export type { AsyncThrottle } from './async-throttle.js';

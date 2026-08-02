@@ -12,19 +12,20 @@ at the repo root, separate from `docs/`. Plans are grouped by kind:
 
 ## Status at a glance
 
-| Plan                                                                       | Status                                                           | Track            |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------- |
-| [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)    | open items remain (P2/P3 list)                                   | B — efficiency   |
-| [api-redesign-plan](./features/api-redesign-plan.md)                       | not started                                                      | B — product      |
-| [token-plan](./features/token-plan.md) (PATs)                              | not started, **blocked by api-redesign**                         | B — product      |
-| [presolve-bundle](./features/presolve-bundle.md)                           | not started (planning)                                           | B — product      |
-| [cloud-binary-transport](./features/cloud-binary-transport.md)             | not started, deliberately deferred ("when the traffic arrives")  | B — product      |
-| [plugin-compat-gate](./features/plugin-compat-gate.md)                     | not started (planning)                                           | B — operator     |
-| [compute-package-cleanup](./refactors/compute-package-cleanup.md)          | not started, **unblocked** (viz-package done)                    | **A — refactor** |
-| [admin-updates-yak-management](./features/admin-updates-yak-management.md) | design only, no implementation (planning)                        | B — operator     |
-| [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)              | not started — traced 2026-07-31, GH fixture pending              | B — correctness  |
-| [solve-engine-facade](./features/solve-engine-facade.md)                   | proposal, not started — written from the Parafa side, 2026-08-02 | **A — refactor** |
-| [solve-fn-raw-response](./features/solve-fn-raw-response.md)               | proposal, not started — unblocks the client half of the facade   | **A — refactor** |
+| Plan                                                                       | Status                                                                     | Track            |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------- |
+| [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)    | open items remain (P2/P3 list)                                             | B — efficiency   |
+| [api-redesign-plan](./features/api-redesign-plan.md)                       | not started                                                                | B — product      |
+| [token-plan](./features/token-plan.md) (PATs)                              | not started, **blocked by api-redesign**                                   | B — product      |
+| [presolve-bundle](./features/presolve-bundle.md)                           | not started (planning)                                                     | B — product      |
+| [cloud-binary-transport](./features/cloud-binary-transport.md)             | not started, deliberately deferred ("when the traffic arrives")            | B — product      |
+| [plugin-compat-gate](./features/plugin-compat-gate.md)                     | not started (planning)                                                     | B — operator     |
+| [compute-package-cleanup](./refactors/compute-package-cleanup.md)          | not started, **unblocked** (viz-package done)                              | **A — refactor** |
+| [admin-updates-yak-management](./features/admin-updates-yak-management.md) | design only, no implementation (planning)                                  | B — operator     |
+| [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)              | not started — traced 2026-07-31, GH fixture pending                        | B — correctness  |
+| [solve-engine-facade](./features/solve-engine-facade.md)                   | proposal, not started — written from the Parafa side, 2026-08-02           | **A — refactor** |
+| [solve-fn-raw-response](./features/solve-fn-raw-response.md)               | **shipped** in `@selvajs/solve@0.2.0-beta.4` (`64c954ef`)                  | **A — refactor** |
+| [solve-result-host-seam](./features/solve-result-host-seam.md)             | proposal, not started — the last hop; `@selvajs/ui` has no result-out seam | **A — refactor** |
 
 **Fully closed, moved to [`archive/`](./archive/)** — no residue. Kept for the _why_:
 

@@ -47,13 +47,14 @@ export {
 } from './binary/header.js';
 export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.js';
 
+// ============================================================================
 // PARSER
 // ============================================================================
 
 /**
  * Parses a binary mesh batch blob in the SLVA wire format.
  *
- * The blob layout is:
+ * Blob layout:
  * ```
  *   [4]  magic        = "SLVA" (0x53 0x4C 0x56 0x41)
  *   [4]  version      = uint32 (currently 3)
@@ -76,9 +77,9 @@ export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.
  *
  * For float32: `origin = (0, 0, 0)`, `scale = (1, 1, 1)`, vertices are raw world positions.
  *
- * With FLAG_DELTA_ENCODED (v3), the stored int16 vertex components and indices are wrapped
- * differences from their predecessor, zigzag-mapped — see the flag's doc. The parser returns the
- * reconstructed absolute values, so consumers never see the filter.
+ * With FLAG_DELTA_ENCODED (v3), stored int16 vertex components and indices are wrapped
+ * differences from their predecessor, zigzag-mapped — see the flag's doc in `binary/header.ts`.
+ * This parser returns reconstructed absolute values; consumers never see the filter.
  *
  * @param input - The blob, as either an `ArrayBuffer`/`Uint8Array` (binary transport) or a
  *   base64-encoded string (JSON-envelope transport).
@@ -122,8 +123,8 @@ export function parseBinaryMeshBatch(
 /**
  * Raw wire-value view of a blob: geometry arrays are exactly as stored — zigzag-mapped deltas when
  * the blob carries the delta filter — while metadata, UVs, and colors are fully decoded (they're
- * small). For consumers that hand the heavy decoding to a worker (`mesh-assembly.ts`); everyone
- * else wants {@link parseBinaryMeshBatch}, which returns reconstructed absolute values.
+ * small). For consumers handing the heavy decoding to a worker (`mesh-assembly.ts`); everyone else
+ * wants {@link parseBinaryMeshBatch}, which returns reconstructed absolute values.
  */
 export interface RawBinaryMeshBatch {
 	metadata: BinaryMeshMetadata;
@@ -250,18 +251,17 @@ export function parseBinaryMeshBatchRaw(
 		});
 	}
 
-	// Typed-array views require alignment to the element size. The header lays out the geometry
-	// block such that the vertex byte offset is always 4-aligned (preamble 12 + metadataLen + 4 +
-	// 48 + 4). float32 needs 4-byte alignment (satisfied), int16 needs 2-byte alignment
-	// (satisfied). We can take a zero-copy view as long as `bytes.byteOffset + offset` agrees with
-	// that alignment in the underlying buffer — a wrapper Uint8Array could violate it. Fall back
-	// to a fresh copy if so.
+	// Typed-array views need alignment to the element size. The header lays out the geometry block
+	// so the vertex byte offset is always 4-aligned (preamble 12 + metadataLen + 4 + 48 + 4) —
+	// satisfies both float32 (4-byte) and int16 (2-byte). A zero-copy view is only valid if
+	// `bytes.byteOffset + offset` respects that alignment in the underlying buffer, which a wrapper
+	// Uint8Array could violate; the readers fall back to a copy when it does.
 	const absoluteOffset = bytes.byteOffset + offset;
 	let vertexData: Uint16Array | Int16Array | Float32Array;
 	if (useFloat32) {
 		vertexData = readFloat32Vertices(bytes.buffer, absoluteOffset, componentCount);
 	} else if (deltaEncoded) {
-		// Left as raw zigzag deltas — parseBinaryMeshBatch (or the assembly worker) prefix-sums them.
+		// Raw zigzag deltas — parseBinaryMeshBatch (or the assembly worker) prefix-sums them later.
 		vertexData = readUint16Array(bytes.buffer, absoluteOffset, componentCount);
 	} else {
 		vertexData = readInt16Vertices(bytes.buffer, absoluteOffset, componentCount);
@@ -296,8 +296,8 @@ export function parseBinaryMeshBatchRaw(
 		: readUint32Array(bytes.buffer, bytes.byteOffset + offset, indexCount);
 	offset += indicesByteLength;
 
-	// Optional trailing chunks (UV first, then colors). Blobs from pre-chunk writers simply end
-	// here; the flags gate every read, so nothing is consumed when the chunks are absent.
+	// Optional trailing chunks: UV first, then colors. Pre-chunk-writer blobs simply end here —
+	// each read is gated by its flag, so nothing is consumed when a chunk is absent.
 	let uvs: Float32Array | null = null;
 	if ((flags & FLAG_HAS_UVS) !== 0) {
 		const parsed = parseUvChunk(bytes, view, offset, vertexCount, deltaEncoded);

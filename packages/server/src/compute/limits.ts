@@ -142,7 +142,7 @@ export interface ComputeLimits {
 	 * serverless platform cap may shoot the request sooner; bumping past those
 	 * caps produces 502s, not longer solves.
 	 */
-	maxSolveDurationMs: number;
+	solveDeadlineMs: number;
 	/** Fixed-window cap on /api/compute: window length + max requests per window. */
 	rateLimitWindowMs: number;
 	rateLimitMaxRequests: number;
@@ -227,7 +227,7 @@ export interface ComputeLimits {
 	 * HTTP 503 + `Retry-After`) rather than burning compute on a stale request.
 	 * Bounds tail latency: the scheduler's `timeoutMs` clock starts at execution,
 	 * so without this a solve's total wait is unbounded and invisible. `0` = no
-	 * queue deadline (the default). A sensible tuned value is ≈ `maxSolveDurationMs`.
+	 * queue deadline (the default). A sensible tuned value is ≈ `solveDeadlineMs`.
 	 */
 	computeQueueWaitMs: number;
 	/**
@@ -265,10 +265,13 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 	env = readRenamed(env, 'COMPUTE_DEFINITION_CACHE_MB', 'COMPUTE_DEFINITION_BYTE_CACHE_MB', logger);
 	env = readRenamed(env, 'COMPUTE_SOLVE_CACHE_MB', 'COMPUTE_RESPONSE_CACHE_MB', logger);
 	env = readRenamed(env, 'REMOTE_DEFINITION_CACHE_TTL_MS', 'DEFINITION_CACHE_TTL_MS', logger);
+	// Renamed 2026-08 into the COMPUTE_* namespace it belongs to, and to say what it
+	// bounds — one solve — rather than a vague "duration".
+	env = readRenamed(env, 'COMPUTE_SOLVE_DEADLINE_MS', 'MAX_SOLVE_DURATION_MS', logger);
 
 	const maxGhFileSize = readPositiveInt(env, 'MAX_GH_FILE_SIZE_BYTES', 50 * MB, logger);
 	return {
-		maxSolveDurationMs: readPositiveInt(env, 'MAX_SOLVE_DURATION_MS', 100_000, logger),
+		solveDeadlineMs: readPositiveInt(env, 'COMPUTE_SOLVE_DEADLINE_MS', 100_000, logger),
 		rateLimitWindowMs: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_WINDOW_MS', 100_000, logger),
 		rateLimitMaxRequests: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_MAX', 120, logger),
 		maxGhFileSize,

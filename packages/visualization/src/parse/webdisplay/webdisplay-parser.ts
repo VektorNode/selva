@@ -14,9 +14,8 @@ import type { RhinoModule } from 'rhino3dm';
 
 /**
  * Metres per model unit, keyed by Rhino `UnitSystem` name (the `modelunits` string on the compute
- * response). Imperial factors are the exact international definitions (1 in = 0.0254 m,
- * 1 ft = 0.3048 m, 1 mi = 1609.344 m). Units not in this table scale 1 and log a one-time warning
- * — see {@link getScaleFactor}.
+ * response). Imperial factors are the exact international definitions. Units missing from this
+ * table scale by 1 and log a one-time warning — see {@link getScaleFactor}.
  */
 export const SCALE_FACTORS: Record<string, number> = {
 	// Metric
@@ -42,18 +41,14 @@ export const SCALE_FACTORS: Record<string, number> = {
 	NauticalMiles: 1852
 };
 
-/**
- * Wire `type` token identifying a Selva Display payload. The real wire value is namespaced (e.g.
- * `Selva.GH.Features.Display.Services.DisplayBatch`), so dispatch matches exact dot-separated
- * tokens — never substrings, which would misroute any unrelated type merely containing "Display".
- */
 const DISPLAY_COMPONENT_TYPE = 'Display';
 const DISPLAY_BATCH_TYPE = 'DisplayBatch';
 
 /**
  * True when a wire `type` denotes a Display payload: one of its dot-separated tokens is exactly
  * `Display` or `DisplayBatch`. Matches the bare `Display` used by older servers and the namespaced
- * `Selva.GH.Features.Display.Services.DisplayBatch`, but not e.g. `System.DisplayText`.
+ * `Selva.GH.Features.Display.Services.DisplayBatch`, but not e.g. `System.DisplayText` — matching
+ * on tokens rather than substring avoids misrouting an unrelated type that merely contains "Display".
  */
 function isDisplayItemType(type: string): boolean {
 	const tokens = type.split('.');
@@ -65,8 +60,7 @@ const warnedUnknownUnits = new Set<string>();
 
 /**
  * Extracts display meshes and items from a Grasshopper WebDisplay compute response: decompresses,
- * scales to meters, and optionally grounds them. Requires the VektorNode Rhino.Compute fork (see
- * root CLAUDE.md).
+ * scales to meters, and optionally grounds them. Requires the VektorNode Rhino.Compute fork.
  *
  * Synchronous internally (large batches block the UI for their duration); `async` only so the
  * shape can stay stable if parsing moves off-thread later.
@@ -82,9 +76,8 @@ export async function getThreeMeshesFromComputeResponse(
 
 	const {
 		allowScaling = true,
-		// Defaults to FALSE: grounding used to be on by default here but was never applied on the
-		// WebSocket preview path, so the same definition sat at a different height depending on
-		// transport. Rhino coordinates are the honest frame, so picked/measured values match the GH definition.
+		// Defaults to false so picked/measured values match the GH definition's own coordinates
+		// rather than shifting per transport.
 		allowAutoPosition = false,
 		groundAxis = 'z',
 		rhino,
@@ -112,9 +105,8 @@ export async function getThreeMeshesFromComputeResponse(
 }
 
 /**
- * Gets the metres-per-unit scale factor for the given Rhino unit name. Unknown units fall back to
- * 1 (no scaling) with a one-time warning per unit name — a kilometers model rendering 1000× off
- * should at least say why.
+ * Gets the metres-per-unit scale factor for a Rhino unit name. Unknown units fall back to 1 (no
+ * scaling) with a one-time warning — a kilometers model rendering 1000x off should at least say why.
  */
 function getScaleFactor(modelUnits: string): number {
 	const factor = SCALE_FACTORS[modelUnits];
@@ -151,10 +143,7 @@ async function extractDisplayFromData(
 	}
 }
 
-/**
- * Processes a single data branch to extract a DisplayBatch's meshes (binary blob) and items
- * (curves/points JSON). Both get the same unit scale so they share one frame.
- */
+/** Extracts a DisplayBatch's meshes (binary blob) and items (curves/points JSON) from one data branch. */
 async function processDataBranch(
 	branch: DisplayDataItem[],
 	objects: THREE.Object3D[],
@@ -172,9 +161,8 @@ async function processDataBranch(
 			...parsingOptions
 		};
 
-		// Parse the JSON envelope once — it contains the full multi-MB base64 SLVA blob as a string,
-		// so letting the mesh parser and the display-item extractor each parse it doubles both the
-		// synchronous main-thread CPU and the transient string memory.
+		// Parsed once and shared: item.data is a multi-MB base64 SLVA blob, so parsing it twice (once
+		// for the mesh parser, once for the item extractor) would double both CPU and string memory.
 		const batch = extractBatch(item.data);
 		if (!batch) {
 			getLogger().error('Error parsing display batch envelope: invalid JSON');
@@ -187,6 +175,7 @@ async function processDataBranch(
 
 		const batchObjects: THREE.Object3D[] = [...batchMeshes, ...batchItems];
 
+		// Meshes and items share one scale factor so they end up in the same frame.
 		if (scaleFactor !== 1) {
 			for (const obj of batchObjects) {
 				obj.scale.set(scaleFactor, scaleFactor, scaleFactor);
@@ -203,10 +192,7 @@ async function processDataBranch(
 	}
 }
 
-/**
- * Resolves a raw DisplayBatch payload to a parsed object, tolerating either a parsed object or a
- * JSON string (the blob-bearing `item.data` is the same envelope the mesh parser reads).
- */
+/** Resolves `item.data` to a parsed DisplayBatch, tolerating either an already-parsed object or a JSON string. */
 function extractBatch(data: unknown): DisplayBatch | undefined {
 	return typeof data === 'string' ? safeParse(data) : (data as DisplayBatch | undefined);
 }
@@ -220,9 +206,9 @@ function safeParse(s: string): DisplayBatch | undefined {
 }
 
 /**
- * Drops objects so their lowest point sits on the ground plane. `axis` is taken as a parameter
- * (not hardcoded `z`) so grounding stays correct for a host configuring a non-default `sceneUp` —
- * subtracting `min.z` there would shove content sideways instead of down.
+ * Drops objects so their lowest point sits on the ground plane. `axis` isn't hardcoded to `z`
+ * because subtracting `min.z` on a host with a non-default `sceneUp` would shove content sideways
+ * instead of down.
  */
 function applyGroundOffset(meshes: THREE.Object3D[], axis: 'x' | 'y' | 'z'): void {
 	if (meshes.length === 0) return;

@@ -5,10 +5,6 @@
 // Everything an outliner panel needs — content filtering, layer grouping, search, collapse,
 // visibility and selection — with no DOM and no framework. A host renders `layerGroups()` and
 // forwards clicks; see `SceneManager.svelte` in `@selvajs/ui` for the Svelte binding.
-//
-// The outliner *reads* the scene and toggles `.visible`. It does not add, remove, or dispose
-// anything — the render layer owns scene content (`updateScene`), and having two owners of the
-// scene graph is how double-dispose bugs start.
 
 import type * as THREE from 'three';
 import { getSceneObjects } from './objects.js';
@@ -36,7 +32,7 @@ export interface SceneOutliner {
 	/** Free-text search over layer and object names. */
 	searchQuery: string;
 
-	/** Content objects of the scene, in scene-graph order. Recomputed on every call. */
+	/** Not memoized — recomputes from the scene on every call. */
 	objects(): THREE.Object3D[];
 	/** Content grouped by layer, after the search filter. */
 	layerGroups(): Map<string, THREE.Object3D[]>;
@@ -50,7 +46,7 @@ export interface SceneOutliner {
 	 */
 	toggleObject(object: THREE.Object3D): void;
 
-	/** Apply a click to the selection, resolving shift-ranges against the visible flat order. */
+	/** Shift-ranges resolve against `flatVisibleUuids()`, not scene-graph order. */
 	select(uuid: string, modifiers: SelectionModifiers): void;
 
 	/**

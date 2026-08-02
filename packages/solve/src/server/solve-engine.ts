@@ -50,7 +50,7 @@ import {
  * Pass the resolved object through as-is — extra fields are ignored.
  */
 export interface SolveEngineLimits {
-	maxSolveDurationMs: number;
+	solveDeadlineMs: number;
 	computeResponseMaxBytes: number;
 	computeReuseDefinitionCache: boolean;
 	computeServerCachesolve: boolean;
@@ -153,7 +153,7 @@ export class SolveEngine {
 		const logger = options.logger ?? new NoopLogger();
 
 		this.clientCache = createClientCache({
-			maxSolveDurationMs: this.limits.maxSolveDurationMs,
+			solveDeadlineMs: this.limits.solveDeadlineMs,
 			cachesolve: this.limits.computeServerCachesolve,
 			cacheerroredsolves: this.limits.computeCacheErroredSolves,
 			reuseServerDefinitionCache: this.limits.computeReuseDefinitionCache,
@@ -238,7 +238,7 @@ export class SolveEngine {
 						inputTree,
 						client,
 						responseMaxBytes: this.limits.computeResponseMaxBytes,
-						maxSolveDurationMs: this.limits.maxSolveDurationMs,
+						solveDeadlineMs: this.limits.solveDeadlineMs,
 						acceptEncoding,
 						signal: abortController.signal,
 						loadStartMs: args.loadStartMs ?? performance.now(),

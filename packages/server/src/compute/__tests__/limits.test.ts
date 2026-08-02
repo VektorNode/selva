@@ -113,6 +113,35 @@ describe('resolveComputeLimits', () => {
 			});
 		});
 
+		describe('renamed solve deadline (2026-08)', () => {
+			it('honours the old name when the new one is unset', () => {
+				expect(resolveComputeLimits({ MAX_SOLVE_DURATION_MS: '45000' }).solveDeadlineMs).toBe(
+					45_000
+				);
+			});
+
+			it('prefers the new name when both are set', () => {
+				expect(
+					resolveComputeLimits({
+						COMPUTE_SOLVE_DEADLINE_MS: '30000',
+						MAX_SOLVE_DURATION_MS: '99000'
+					}).solveDeadlineMs
+				).toBe(30_000);
+			});
+
+			it('warns when falling back to the old name', () => {
+				const warnings: string[] = [];
+				const logger = {
+					debug: () => {},
+					info: () => {},
+					warn: (msg: string) => warnings.push(msg),
+					error: () => {}
+				};
+				resolveComputeLimits({ MAX_SOLVE_DURATION_MS: '45000' }, logger as never);
+				expect(warnings.some((w) => w.includes('Deprecated env var'))).toBe(true);
+			});
+		});
+
 		it('keeps every payload cap under V8 single-string wall (~512 MB)', () => {
 			const limits = resolveComputeLimits({});
 			// A `file` output is base64-embedded and JSON.stringify'd into one string;

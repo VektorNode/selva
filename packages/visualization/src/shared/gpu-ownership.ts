@@ -5,12 +5,9 @@ import type * as THREE from 'three';
 // ============================================================================
 
 /**
- * Who may free a GPU resource, in one place. A resource has exactly one owner: a **module
- * singleton** (nobody ever frees it) or else the **scene** (freed on teardown). Every disposal path
- * asks {@link canDisposeMaterial} and disposes only if true.
- *
- * Geometries and textures are always scene-owned — nothing outlives the scene that built them — so
- * they have no claim to check.
+ * A GPU resource has exactly one owner: a **module singleton** (nobody ever frees it) or the
+ * **scene** (freed on teardown). Every disposal path asks {@link canDisposeMaterial} and disposes
+ * only if true. Geometries and textures are always scene-owned, so they have no claim to check.
  */
 
 // Module-scope singletons from `render/three-materials.ts`, shared across meshes and solves —

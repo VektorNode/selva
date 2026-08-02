@@ -38,6 +38,11 @@ floor), `setup-controls`, `setup-events` (picking, selection, keyboard), `animat
 (the option-precedence resolver), and `dispose` (teardown sweeps). Each takes the resolved config and
 returns its object; the orchestrator owns only the wiring and the returned viewer handle.
 
+Two more controllers live here and back part of the `ThreeViewer` API: `appearance.ts`
+(`viewer.setLook`, `setFillLights`, `setEnvironmentIntensity`, `setToneMappingExposure`,
+`setAoIntensity`) and `pipeline-controller.ts` (wraps `render-pipeline.ts`'s composer, backs
+`viewer.setAmbientOcclusion`).
+
 ## Quick start
 
 ```typescript
