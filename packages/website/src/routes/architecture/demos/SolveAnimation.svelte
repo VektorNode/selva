@@ -8,12 +8,15 @@
 	// Advances only on click, never on a timer: someone seeing this for the first
 	// time needs to actually read a header before it's replaced, not watch it
 	// flash past.
-	type StageId = 'browser' | 'selva-out' | 'rhino' | 'selva-in';
+	type StageId = 'browser' | 'selva-out' | 'rhino-solve' | 'rhino-answer' | 'selva-in';
 
 	interface Stage {
 		id: StageId;
-		from: string;
-		to: string;
+		/** null on the solving stage: nothing travels anywhere while it happens. */
+		from: string | null;
+		to: string | null;
+		/** Which node this dot sits under on the route. */
+		at: string;
 		title: string;
 		explain: string;
 		headers: (r: number, c: boolean) => string[];
@@ -31,6 +34,7 @@
 			id: 'browser',
 			from: 'Browser',
 			to: 'Selva server',
+			at: 'Browser',
 			title: 'The browser sends what changed',
 			explain:
 				'You move the slider and the toggle, then hit Solve. The browser packs both current values into one JSON body and POSTs it — this is the only step you triggered directly.',
@@ -41,6 +45,7 @@
 			id: 'selva-out',
 			from: 'Selva server',
 			to: 'Rhino.Compute',
+			at: 'Selva server',
 			title: 'Selva repacks it for Rhino',
 			explain:
 				'Rhino is a .NET program, so a bare value is not enough — each one is wrapped with its parameter name and sent as a small tree, radius and capped both. The server also attaches its own key so Rhino.Compute knows who is asking.',
@@ -49,12 +54,24 @@
 				`{ "pointer": "md5:7ab3…",\n  "values": [\n    { "ParamName": "radius", "InnerTree": { "{0}": [{ "data": ${r} }] } },\n    { "ParamName": "capped", "InnerTree": { "{0}": [{ "data": ${c} }] } }\n  ] }`
 		},
 		{
-			id: 'rhino',
+			id: 'rhino-solve',
+			from: null,
+			to: null,
+			at: 'Rhino.Compute',
+			title: 'This is where the solve actually happens',
+			explain:
+				'Nothing travels during this step — Grasshopper is already open and waiting on the Rhino.Compute machine. It plugs radius and capped into the definition, capped picks which branch runs, and the definition recomputes right here. Every earlier step was just getting these two numbers to this machine; every later step is just getting the answer back out.',
+			headers: () => [],
+			body: () => ''
+		},
+		{
+			id: 'rhino-answer',
 			from: 'Rhino.Compute',
 			to: 'Selva server',
-			title: 'Rhino solves and answers with more detail than it got',
+			at: 'Rhino.Compute',
+			title: 'Rhino answers with more detail than it got',
 			explain:
-				'Headless Grasshopper runs the definition with these inputs — capped picked which branch ran — and sends back one small tree per output. Unlike the request, each item now carries its .NET type: Rhino knows exactly what kind of value it produced.',
+				'The solve above just finished. Rhino sends back one small tree per output. Unlike the request, each item now carries its .NET type: Rhino knows exactly what kind of value it produced.',
 			headers: () => ['Server-Timing: decode;dur=1, solve;dur=4, encode;dur=1'],
 			body: (r, c) =>
 				`{ "values": [{ "ParamName": "area", "InnerTree": { "{0}": [{ "type": "System.Double", "data": "${area(r, c)}" }] } }] }`
@@ -63,6 +80,7 @@
 			id: 'selva-in',
 			from: 'Selva server',
 			to: 'Browser',
+			at: 'Selva server',
 			title: 'Selva simplifies it and sends it back',
 			explain:
 				'The server flattens the tree back into a plain value, times every step it took, and returns both. The bar under the header is that timing, drawn to scale — the browser reads it to show you where the time actually went.',
@@ -178,7 +196,9 @@
 			</p>
 		</div>
 	{:else if started}
-		<!-- The route: four dots, filled up to the stage being read right now. -->
+		<!-- The route: one dot per moment, labeled by which node it's happening at.
+		     The solve stage sits still on Rhino.Compute — no arrow, so it reads as
+		     "this is where time passes", not another hop. -->
 		<div class="relative px-1">
 			<div class="bg-border absolute top-1.75 right-4 left-4 h-px" aria-hidden="true"></div>
 			<div
@@ -193,12 +213,14 @@
 							class="ring-background size-3.75 rounded-full ring-4 transition-colors {i < index
 								? 'bg-emerald-500'
 								: i === index
-									? 'bg-sky-500'
+									? s.id === 'rhino-solve'
+										? 'animate-pulse bg-orange-500'
+										: 'bg-sky-500'
 									: 'bg-border'}"
 							aria-hidden="true"
 						></span>
 						<span class="text-muted-foreground max-w-20 text-center text-[10px] leading-tight">
-							{i === 0 ? s.from : s.to}
+							{s.at}
 						</span>
 					</div>
 				{/each}
@@ -210,21 +232,32 @@
 			<div class="flex items-baseline justify-between gap-2">
 				<p class="text-sm font-semibold">{stage.title}</p>
 				<span class="text-muted-foreground font-mono text-[10px]">
-					{stage.from} → {stage.to}
+					{#if stage.from}
+						{stage.from} → {stage.to}
+					{:else}
+						solving on {stage.at}
+					{/if}
 				</span>
 			</div>
 			<p class="text-muted-foreground mt-1.5 text-xs leading-relaxed">{stage.explain}</p>
 
-			<div class="border-border/60 mt-3 space-y-0.5 border-t pt-2.5">
-				{#each stage.headers(radius, capped) as header (header)}
-					<p class="text-muted-foreground font-mono text-[11px] leading-relaxed">{header}</p>
-				{/each}
-			</div>
-			<pre
-				class="text-foreground mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed">{stage.body(
-					radius,
-					capped
-				)}</pre>
+			{#if stage.id === 'rhino-solve'}
+				<div class="border-border/60 mt-3 flex items-center gap-2 border-t pt-2.5">
+					<span class="size-2 animate-pulse rounded-full bg-orange-500" aria-hidden="true"></span>
+					<span class="text-muted-foreground font-mono text-[11px]">Grasshopper recomputing…</span>
+				</div>
+			{:else}
+				<div class="border-border/60 mt-3 space-y-0.5 border-t pt-2.5">
+					{#each stage.headers(radius, capped) as header (header)}
+						<p class="text-muted-foreground font-mono text-[11px] leading-relaxed">{header}</p>
+					{/each}
+				</div>
+				<pre
+					class="text-foreground mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed">{stage.body(
+						radius,
+						capped
+					)}</pre>
+			{/if}
 
 			{#if stage.id === 'selva-in'}
 				<!-- Server-Timing, decoded: the same seven numbers as the header above, as a bar each. -->

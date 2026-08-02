@@ -321,16 +321,18 @@ export const CLOUD_STEPS: FlowStep[] = [
 		detail: [
 			{
 				kind: 'prose',
-				text: 'Rhino is a .NET application, so a bare number is not enough — it needs the .NET type spelled out, and the value addressed to a named parameter rather than sitting loose in an object.'
+				text: 'Rhino is a .NET application, but Selva does not spell out the .NET type on the way in — it sends a bare value, addressed to a named parameter rather than sitting loose in an object, and lets Rhino infer the type from the parameter itself. The type only shows up later, on the way back (see the next layer down): Rhino tags every output value with the .NET type it actually produced.'
 			},
 			{
 				kind: 'mapping',
 				from: 'the browser sent',
 				to: 'goes on the wire as',
 				rows: [
-					['radius: 12.5', 'System.Double'],
-					['style: "ribbed"', 'System.String'],
-					['capped: true', 'System.Boolean']
+					['radius: 12.5', '{ "ParamName": "radius", "InnerTree": { "{0}": [{ "data": 12.5 }] } }'],
+					[
+						'style: "ribbed"',
+						'{ "ParamName": "style", "InnerTree": { "{0}": [{ "data": "ribbed" }] } }'
+					]
 				]
 			},
 			{
