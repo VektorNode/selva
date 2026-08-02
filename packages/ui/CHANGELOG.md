@@ -1,5 +1,93 @@
 # @selvajs/ui
 
+## 6.0.0-beta.1
+
+### Major Changes
+
+- b9c9d6a: One name, one value, for how long a solve may run. The deadline is now sourced
+  from the server and carried unchanged to the browser's `AbortController`, rather
+  than each layer keeping its own answer under its own name.
+
+  **Fixed — the client could abort a solve the server would have finished.** The
+  throttle defaulted to `60_000` while the server's deadline was `100_000`, so any
+  host that embedded `<ComputeApp>` without passing a timeout aborted at 60 s a
+  solve the server was still happily running. The user saw a failure for work that
+  succeeded. `@selvajs/solve` can't read env, so the fix is to require the value
+  rather than guess it — there is no client-side default left to drift.
+
+  **Breaking — the per-solve deadline is now required:**
+
+  - `createAsyncThrottle`: `options.timeout` → **`options.runDeadlineMs`**, required,
+    and the options bag itself is no longer optional. The name says what elapses;
+    the throttle is generic, so its field is named after a run, not a solve.
+  - `createRequestResponseDriver`: `options.timeout` → **`options.solveDeadlineMs`**,
+    required.
+  - `ComputeApp`: `solveTimeoutMs?` → **`solveDeadlineMs`**, required. Pass the value
+    the server enforces; omitting it is now a type error rather than a silent 60 s.
+  - `ComputeLimits.maxSolveDurationMs` → **`solveDeadlineMs`**.
+
+  **Renamed — `MAX_SOLVE_DURATION_MS` → `COMPUTE_SOLVE_DEADLINE_MS`.** It joins the
+  `COMPUTE_*` namespace every other compute knob already uses, and says what it
+  bounds — one solve — instead of a vague "duration". The old name still works for
+  one minor version and warns at boot, so no deployment breaks on upgrade.
+
+  **`selva migrate` now rewrites deprecated env keys in your `.env`**, so a tuned
+  value survives the shim being dropped later instead of silently reverting to a
+  default. Only the key changes — value, comments, ordering and spacing are left
+  byte-identical, a commented-out old name is ignored, and the old line is dropped
+  outright when the new name is already set. `.env.bak` is written alongside the
+  existing backups and restored if the migration rolls back.
+
+  `selva doctor` reports the same deprecations without changing anything, covering
+  this rename plus the four that were previously silent
+  (`COMPUTE_DEFINITION_BYTE_CACHE_MB`, `COMPUTE_RESPONSE_CACHE_MB`,
+  `DEFINITION_CACHE_TTL_MS`, `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE`). The last of those
+  is reported but not auto-fixed: its replacement encodes a value
+  (`SELVA_FLAG_COMPUTE_DEBUG=verbose`), so migrate won't guess at it.
+
+  Migration: run `selva migrate` to rewrite the env var, and pass `solveDeadlineMs`
+  wherever you mount `ComputeApp` or build a driver.
+
+### Minor Changes
+
+- b9c9d6a: Make the reported `SolveResult` reachable from a `ComputeApp` host, so a commit path can pair the
+  artifact it persists with the inputs that produced it.
+
+  `source` and `values` travel correctly through the request/response driver's memo, but stopped at the
+  session: `applySolveResult` merged `outputs` and discarded the rest, and `ComputeApp`'s only outbound
+  seam was `onReady({ loadValues })`. So a host wanting the pair had to capture it inside its own
+  `SolveFn` — which a memo hit never calls. Solve A, solve B, scrub back to A: the memo serves A, the
+  viewer shows A, and the host commits B's geometry.
+
+  `SolveSession` now exposes `lastResult: RetainedSolveResult | null` — the last reported result minus
+  its meshes — and `ComputeApp` hands out `getLastResult()` alongside `loadValues`. Because the session
+  fills it in `report()`, a memo hit populates it exactly like a fresh solve.
+
+  Meshes are dropped from the retained slice rather than kept: they are GPU-backed and the viewer
+  disposes what it renders on the next scene update, so retaining them would hand out disposed
+  instances with no policy governing them. Live meshes stay on `session.meshes`. `rebuild()` nulls
+  `lastResult` for the same reason it clears the driver memo; `reportError` deliberately leaves it, as
+  the viewer still shows the geometry that produced it.
+
+  `values` remains driver-supplied and absent on push transports (the plugin's WebSocket driver cannot
+  attribute an unsolicited frame to a request) — documented on `SolveDriver` and `SolveResult`.
+
+### Patch Changes
+
+- b9c9d6a: Fix a type error in `Viewer.svelte`: its `onMeshMetadataClicked` handler declared its parameter as
+  `Record<string, string>`, but the callback receives a Three.js object's `userData`, typed
+  `Record<string, unknown>`. Callback parameters are checked contravariantly, so the narrower
+  annotation failed to assign and `svelte-check` errored on the package.
+
+  The handler now takes `Record<string, unknown>` and coerces the object name with `String(… ?? '')`
+  before falling back to the localized placeholder. Nothing downstream changes shape —
+  `hasUsefulMetadata`, `selectedMeshMetadata` and `MeshMetadataDialog` all already accept
+  `Record<string, any>`.
+
+- Updated dependencies [b9c9d6a]
+- Updated dependencies [b9c9d6a]
+  - @selvajs/solve@1.0.0-beta.5
+
 ## 6.0.0-beta.0
 
 ### Minor Changes
