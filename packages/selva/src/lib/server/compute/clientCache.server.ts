@@ -27,17 +27,41 @@ import {
 	MAX_SOLVE_DURATION_MS
 } from '$lib/server/computeLimits';
 
-/** Concise cache/timing logs (Selva cache hits, server decode/solve/encode). */
-export const COMPUTE_DEBUG = ['true', '1', 'yes'].includes(
-	(env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase()
-);
 /**
- * VERBOSE lib-level logging: dumps the FULL solve request/response (incl. base64
- * geometry). Separate opt-in so the concise cache logs aren't drowned out.
+ * `SELVA_FLAG_COMPUTE_DEBUG` is a three-way knob, not a boolean: `off` (default),
+ * `on` (concise cache/timing logs), or `verbose` (adds FULL lib-level request/
+ * response dumps, incl. base64 geometry). `verbose` implies `on` — there is no
+ * way to get the verbose dump without the concise logs too.
+ *
+ * `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE` merged into this var. Still honoured for
+ * one minor version so an operator's existing `.env` degrades to a warning,
+ * not a silent loss of the verbose logging they asked for.
  */
-export const COMPUTE_DEBUG_VERBOSE = ['true', '1', 'yes'].includes(
-	(env.SELVA_FLAG_COMPUTE_DEBUG_VERBOSE ?? '').toLowerCase()
-);
+const COMPUTE_DEBUG_MODE = (() => {
+	const raw = (env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase();
+	if (raw === 'verbose') return 'verbose';
+	const on = ['true', '1', 'yes', 'on'].includes(raw);
+
+	// Merged in 4.8; drop this shim (and the oldVerbose block) one minor version on.
+	const oldVerbose = ['true', '1', 'yes'].includes(
+		(env.SELVA_FLAG_COMPUTE_DEBUG_VERBOSE ?? '').toLowerCase()
+	);
+	if (oldVerbose) {
+		getLogger().warn('Deprecated env var: rename it', {
+			component: 'selva',
+			envVar: 'SELVA_FLAG_COMPUTE_DEBUG_VERBOSE',
+			renamedTo: 'SELVA_FLAG_COMPUTE_DEBUG=verbose'
+		});
+		return 'verbose';
+	}
+
+	return on ? 'on' : 'off';
+})();
+
+/** Concise cache/timing logs (Selva cache hits, server decode/solve/encode). */
+export const COMPUTE_DEBUG = COMPUTE_DEBUG_MODE !== 'off';
+/** VERBOSE lib-level logging: dumps the FULL solve request/response (incl. base64 geometry). */
+export const COMPUTE_DEBUG_VERBOSE = COMPUTE_DEBUG_MODE === 'verbose';
 
 const cache = createClientCache({
 	maxSolveDurationMs: MAX_SOLVE_DURATION_MS,

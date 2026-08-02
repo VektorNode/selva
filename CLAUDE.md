@@ -20,7 +20,7 @@ Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for b
 - **Frontend**: SvelteKit with TypeScript + Tailwind CSS
 - **Communication**: WebSocket (port 8765) + embedded HTTP server
 
-Monorepo: `packages/` (TypeScript/Svelte workspace) and `Plugin/` (.NET / Grasshopper).
+Monorepo: `packages/` (TypeScript/Svelte workspace) and `Plugin/` (.NET / Grasshopper). Shared dep versions are pinned in `pnpm-workspace.yaml` catalogs — reference `catalog:` in a package's `package.json` rather than hardcoding a version.
 
 The web app runs in two modes: **Local** (`@selvajs/plugin-ui`, the drag-and-drop schema designer, embedded into `Selva.gha` and served from the plugin's local HTTP port) and **Cloud** (`@selvajs/selva`, standalone, solves through Rhino.Compute, installed via `@selvajs/cli`).
 
@@ -69,7 +69,7 @@ When editing: leave comments you didn't invalidate alone. Delete rather than com
 
 ### `@selvajs/compute`
 
-`packages/compute`, published to npm. Modular exports for tree-shaking: main (utilities and types), `/grasshopper` (Rhino Compute client, data trees, input/output parsers), `/files`, `/core` (low-level fetch and error handling). Discriminated unions for type-safe error handling; browser and Node compatible.
+`packages/compute`, published to npm. Modular exports for tree-shaking: main (utilities and types), `/grasshopper` (Rhino Compute client, data trees, input/output parsers), `/core` (low-level fetch and error handling). Discriminated unions for type-safe error handling; browser and Node compatible.
 
 Pure solve/data — see the `three` prohibition above. Anything that turns a response into Three.js objects, sets up a viewer, or drives a solve session belongs in `@selvajs/visualization`.
 
@@ -103,10 +103,10 @@ Pluggable provider interfaces (auth, data stores, storage, permissions, access r
 
 `Plugin/Selva.GH/Features/`:
 
-- **UIBuilder** — `UIBuilderComponent`, schema linking and WebSocket communication
+- **UIBuilder** — `GH_UIBuilderComponent`, schema linking and WebSocket communication
 - **Display** — `ThreeMaterial`, 3D web visualization config
-- **FileIO** — `DataToFile`, `BlockToFile`, geometry export
-- **ComputeIO** — `ValueListData`, `GetValueList`, interactive selections
+- **FileIO** — `GH_DataToFileGeneric`, `GH_BlockToFile`, geometry export
+- **ComputeIO** — `GetValueListParameter`, `GH_ValueListDataGoo`, and other interactive-selection params (colors, images, files)
 
 **Adding or removing a param on a released component is a breaking change.** Snapshot the old shape into `Features/<Name>/OBSOLETE/`, give the live component a new GUID, and add an `IGH_UpgradeObject` remapping the indices. Full procedure: [STRUCTURE.md](./STRUCTURE.md#changing-a-components-parameters-obsolete--upgrader).
 
@@ -119,7 +119,7 @@ Pluggable provider interfaces (auth, data stores, storage, permissions, access r
 `pnpm install` first. Builds are orchestrated by Turborepo (see `docs/Turborepo.md`); most scripts run through it, with the exceptions noted.
 
 ```bash
-pnpm dev                    # plugin-ui dev server (http://localhost:5173)
+pnpm dev:plugin             # plugin-ui dev server (http://localhost:5173)
 pnpm dev:selva              # Selva app dev server
 
 pnpm build                  # every package in dep order, cached
@@ -151,7 +151,7 @@ Plus `cd Plugin && dotnet build && dotnet test` if C# changed, and `pnpm generat
 
 ### Local development
 
-Two terminals: `cd packages/plugin-ui && pnpm dev` (web on :5173), and `cd Plugin && dotnet build` then run in your IDE. The plugin auto-connects to the dev server over WebSocket on 8765, giving hot reload on web changes while the plugin stays debuggable.
+Two terminals: `pnpm dev:plugin` (web on :5173), and `cd Plugin && dotnet build` then run in your IDE. The plugin auto-connects to the dev server over WebSocket on 8765, giving hot reload on web changes while the plugin stays debuggable.
 
 ### Installing to Grasshopper
 
@@ -197,7 +197,7 @@ The plugin UI needs none (WebSocket on 8765 by default). Rhino.Compute server UR
 
 ## Requirements
 
-- [pnpm](https://pnpm.io) >= 10.0.0 (pinned in `packageManager`, activated via Corepack)
+- [pnpm](https://pnpm.io) >= 11.0.0 (pinned in `packageManager`, activated via Corepack)
 - Node.js >= 22.0.0
 - .NET SDK 7.0+ (plugin development)
 - Rhino 8 or 9 — Rhino 7 is not supported

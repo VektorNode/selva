@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { randomFillSync } from 'node:crypto';
-import { env } from '$env/dynamic/private';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { COMPUTE_DEBUG } from '$lib/server/compute/clientCache.server';
 
 // Transport throughput probe (SELVA_FLAG_COMPUTE_DEBUG only): streams N MB of
 // random bytes through the exact same stack a solve response takes (Node →
@@ -13,9 +13,6 @@ import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 // Random bytes are deliberately incompressible so proxy compression can't fake
 // a fast transfer. Hidden (404) unless the debug flag is on; auth still required
 // so the endpoint can't be used as an anonymous bandwidth sink.
-const COMPUTE_DEBUG = ['true', '1', 'yes'].includes(
-	(env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase()
-);
 
 const CHUNK_BYTES = 1024 * 1024;
 const DEFAULT_MB = 20;

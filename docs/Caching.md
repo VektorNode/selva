@@ -259,6 +259,11 @@ For a single request, every solve response carries a `Server-Timing` header:
 | `solve` time near zero, but a round-trip happened | `cachesolve` hit on the compute server.                     |
 | Small outgoing body carrying a `pointer`          | Pointer reuse is working (no base64 `.gh` in the request).  |
 
-For deeper detail, set `SELVA_FLAG_COMPUTE_DEBUG=true` — the server then logs a per-solve phase
+For deeper detail, set `SELVA_FLAG_COMPUTE_DEBUG=on` — the server then logs a per-solve phase
 breakdown plus cumulative hit/miss/eviction counters for the definition cache, and a line each time a
 solve coalesces onto one already in flight.
+
+> **Merged in 4.8.** `SELVA_FLAG_COMPUTE_DEBUG` is now three-way (`off` | `on` | `verbose`) instead of
+> a separate `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE` boolean. `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE=true` still
+> works for one minor version — treated as `SELVA_FLAG_COMPUTE_DEBUG=verbose`, with a boot warning —
+> then the shim goes away.

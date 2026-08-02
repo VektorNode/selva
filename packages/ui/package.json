@@ -108,11 +108,11 @@
 		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"@selvajs/solve": "workspace:*",
 		"@types/three": "catalog:",
-		"bits-ui": "^2.18.0",
+		"bits-ui": "catalog:",
 		"rhino3dm": "8.32.1",
 		"rimraf": "catalog:",
 		"svelte": "catalog:",
-		"tailwind-variants": "^3.3.0",
+		"tailwind-variants": "catalog:",
 		"vitest": "catalog:"
 	}
 }

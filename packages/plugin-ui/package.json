@@ -34,12 +34,12 @@
 		"@selvajs/schemas": "workspace:*",
 		"@selvajs/ui": "workspace:*",
 		"@selvajs/visualization": "workspace:^",
-		"bits-ui": "^2.18.0",
+		"bits-ui": "catalog:",
 		"mode-watcher": "catalog:",
 		"rhino3dm": "8.32.1",
 		"svelte-dnd-action": "^0.9.75",
-		"tailwind-variants": "^3.3.0",
+		"tailwind-variants": "catalog:",
 		"three": "catalog:",
-		"zod": "^4.3.6"
+		"zod": "catalog:"
 	}
 }

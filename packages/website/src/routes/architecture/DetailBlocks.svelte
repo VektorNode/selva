@@ -5,6 +5,7 @@
 	import ThrottleDemo from './demos/ThrottleDemo.svelte';
 	import SingleFlightDemo from './demos/SingleFlightDemo.svelte';
 	import QueueDemo from './demos/QueueDemo.svelte';
+	import SolveAnimation from './demos/SolveAnimation.svelte';
 
 	// A demo block names its component here. Statically mapped rather than
 	// dynamically imported so an unknown name fails visibly in dev and the whole
@@ -14,7 +15,8 @@
 		LruDemo,
 		ThrottleDemo,
 		SingleFlightDemo,
-		QueueDemo
+		QueueDemo,
+		SolveAnimation
 	};
 
 	let { blocks }: { blocks: DetailBlock[] } = $props();
@@ -60,6 +62,22 @@
 			<div class="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
 				<p class="text-xs font-semibold text-amber-700 dark:text-amber-400">{block.title}</p>
 				<p class="text-muted-foreground mt-1 text-xs leading-relaxed">{block.text}</p>
+			</div>
+		{:else if block.kind === 'pipeline'}
+			<div class="flex flex-wrap items-stretch gap-2">
+				{#each block.stages as stage, i (stage.label)}
+					<div
+						class="border-border bg-card min-w-32 flex-1 rounded-md border px-3 py-2 {stage.terminal
+							? 'border-primary/40 bg-primary/5'
+							: ''}"
+					>
+						<p class="text-sm font-semibold">{stage.label}</p>
+						<p class="text-muted-foreground mt-0.5 text-[11px] leading-snug">{stage.sub}</p>
+					</div>
+					{#if i < block.stages.length - 1}
+						<span class="text-muted-foreground flex items-center px-0.5" aria-hidden="true">→</span>
+					{/if}
+				{/each}
 			</div>
 		{:else if block.kind === 'demo'}
 			{@const Demo = DEMOS[block.component]}

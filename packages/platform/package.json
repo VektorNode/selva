@@ -127,7 +127,7 @@
 	},
 	"dependencies": {
 		"@selvajs/schemas": "workspace:^",
-		"zod": "^4.3.6"
+		"zod": "catalog:"
 	},
 	"peerDependencies": {
 		"sharp": "^0.34.0 || ^0.35.0",
@@ -142,7 +142,7 @@
 		}
 	},
 	"devDependencies": {
-		"sharp": "^0.35.3",
+		"sharp": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

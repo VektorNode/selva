@@ -12,9 +12,9 @@
 	"homepage": "https://github.com/VektorNode/selva",
 	"engines": {
 		"node": ">=22.0.0",
-		"pnpm": ">=10.0.0"
+		"pnpm": ">=11.0.0"
 	},
-	"packageManager": "pnpm@10.33.0",
+	"packageManager": "pnpm@11.18.0+sha512.33d83c77da82f49fba836925c6f1b841181ec3132b670639bd012f7075f5c7cf634c5f870147c19aae7478fac01df09d8892e880454896edd23ee9b33757563c",
 	"scripts": {
 		"dev:plugin": "pnpm --filter @selvajs/plugin-ui dev",
 		"dev:selva": "pnpm --filter @selvajs/selva dev",
@@ -43,19 +43,6 @@
 		"changeset": "changeset",
 		"release": "turbo run build --concurrency=20 --filter=!@selvajs/website && node scripts/changeset-publish.mjs",
 		"prepare": "husky"
-	},
-	"pnpm": {
-		"overrides": {
-			"@sveltejs/kit": "2.69.1",
-			"svelte": "5.56.4",
-			"cookie@<0.7.0": "^0.7.2",
-			"brace-expansion@>=3.0.0 <5.0.8": "^5.0.8"
-		},
-		"peerDependencyRules": {
-			"allowedVersions": {
-				"@sveltejs/kit": "2.69.1"
-			}
-		}
 	},
 	"lint-staged": {
 		"*.{ts,tsx,svelte}": [

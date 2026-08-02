@@ -12,17 +12,18 @@ at the repo root, separate from `docs/`. Plans are grouped by kind:
 
 ## Status at a glance
 
-| Plan                                                                       | Status                                                          | Track            |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------- |
-| [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)    | open items remain (P2/P3 list)                                  | B — efficiency   |
-| [api-redesign-plan](./features/api-redesign-plan.md)                       | not started                                                     | B — product      |
-| [token-plan](./features/token-plan.md) (PATs)                              | not started, **blocked by api-redesign**                        | B — product      |
-| [presolve-bundle](./features/presolve-bundle.md)                           | not started (planning)                                          | B — product      |
-| [cloud-binary-transport](./features/cloud-binary-transport.md)             | not started, deliberately deferred ("when the traffic arrives") | B — product      |
-| [plugin-compat-gate](./features/plugin-compat-gate.md)                     | not started (planning)                                          | B — operator     |
-| [compute-package-cleanup](./refactors/compute-package-cleanup.md)          | not started, **unblocked** (viz-package done)                   | **A — refactor** |
-| [admin-updates-yak-management](./features/admin-updates-yak-management.md) | design only, no implementation (planning)                       | B — operator     |
-| [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)              | not started — traced 2026-07-31, GH fixture pending             | B — correctness  |
+| Plan                                                                       | Status                                                           | Track            |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------- |
+| [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)    | open items remain (P2/P3 list)                                   | B — efficiency   |
+| [api-redesign-plan](./features/api-redesign-plan.md)                       | not started                                                      | B — product      |
+| [token-plan](./features/token-plan.md) (PATs)                              | not started, **blocked by api-redesign**                         | B — product      |
+| [presolve-bundle](./features/presolve-bundle.md)                           | not started (planning)                                           | B — product      |
+| [cloud-binary-transport](./features/cloud-binary-transport.md)             | not started, deliberately deferred ("when the traffic arrives")  | B — product      |
+| [plugin-compat-gate](./features/plugin-compat-gate.md)                     | not started (planning)                                           | B — operator     |
+| [compute-package-cleanup](./refactors/compute-package-cleanup.md)          | not started, **unblocked** (viz-package done)                    | **A — refactor** |
+| [admin-updates-yak-management](./features/admin-updates-yak-management.md) | design only, no implementation (planning)                        | B — operator     |
+| [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)              | not started — traced 2026-07-31, GH fixture pending              | B — correctness  |
+| [solve-engine-facade](./features/solve-engine-facade.md)                   | proposal, not started — written from the Parafa side, 2026-08-02 | **A — refactor** |
 
 **Fully closed, moved to [`archive/`](./archive/)** — no residue. Kept for the _why_:
 
@@ -150,6 +151,11 @@ This is the one sequence that matters right now; the rest of the list is indepen
    using the removed `extractMeshesFromResponse` (breakage independent of this plan).
 9. **compute-package-cleanup** — **now unblocked.** Same tree, low-risk once the viewer weight and
    the solve core are both gone.
+10. **solve-engine-facade** — independent of compute-package-cleanup (touches `@selvajs/solve`, not
+    `@selvajs/compute`), but sequenced after it here since it's the next consumer-facing surface
+    change to `@selvajs/solve` and benefits from that package being settled first. Dogfoods on
+    Selva's own `/api/compute` route + `library/[guid]` page before Parafa (or any future platform)
+    adopts it.
 
 ### Track B — independent of the above
 

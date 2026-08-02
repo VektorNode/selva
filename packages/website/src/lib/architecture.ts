@@ -35,7 +35,8 @@ export type DetailBlock =
 	| { kind: 'code'; lang: string; text: string }
 	| { kind: 'mapping'; from: string; to: string; rows: [string, string][] }
 	| { kind: 'warning'; title: string; text: string }
-	| { kind: 'demo'; component: string; caption?: string };
+	| { kind: 'demo'; component: string; caption?: string }
+	| { kind: 'pipeline'; stages: { label: string; sub: string; terminal?: boolean }[] };
 
 export interface FlowStep {
 	id: string;
@@ -127,8 +128,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/ui/src/lib/components/preview/inputs/NumberInput.svelte:27-28',
-			'packages/solve/src/client/solve-session-core.ts:64-77'
+			'packages/ui/src/lib/components/preview/inputs/NumberInput.svelte',
+			'packages/solve/src/client/solve-session-core.ts'
 		],
 		gates: ['debounce 150 / 400 ms']
 	},
@@ -155,8 +156,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/solve/src/client/async-throttle.ts:46-94',
-			'packages/ui/src/lib/components/compute/ComputeApp.svelte:116-117'
+			'packages/solve/src/client/async-throttle.ts',
+			'packages/ui/src/lib/components/compute/ComputeApp.svelte'
 		],
 		gates: ['1 in flight · latest wins']
 	},
@@ -192,8 +193,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/solve/src/client/drivers/request-response.ts:26-34',
-			'packages/solve/src/client/solve-memo.ts:66-122'
+			'packages/solve/src/client/drivers/request-response.ts',
+			'packages/solve/src/client/solve-memo.ts'
 		],
 		caches: [{ label: 'Client memo · 16 entries', hit: 'no request leaves the browser' }]
 	},
@@ -221,7 +222,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 				]
 			}
 		],
-		files: ['packages/selva/src/routes/library/[guid]/+page.svelte:73-145']
+		files: ['packages/selva/src/routes/library/[guid]/+page.svelte']
 	},
 	{
 		id: 's-gates',
@@ -248,8 +249,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/selva/src/routes/api/compute/+server.ts:58-188',
-			'packages/server/src/compute/limits.ts:280-285'
+			'packages/selva/src/routes/api/compute/+server.ts',
+			'packages/server/src/compute/limits.ts'
 		],
 		gates: ['rate limit 120 / 100 s']
 	},
@@ -277,7 +278,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 				text: 'Four answers, four quick lookups — and notably not the Grasshopper file, which never moves. The server passes down instructions for fetching it, and most of the time they go unused: Rhino usually still has the file from an earlier solve and only needs to be told which one.'
 			}
 		],
-		files: ['packages/selva/src/routes/api/compute/+server.ts:190-265', 'packages/platform/src/']
+		files: ['packages/selva/src/routes/api/compute/+server.ts', 'packages/platform/src/']
 	},
 	{
 		id: 's-server',
@@ -307,8 +308,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/selva/src/routes/api/compute/+server.ts:284-311',
-			'packages/solve/src/server/client-cache.ts:152-203'
+			'packages/selva/src/routes/api/compute/+server.ts',
+			'packages/solve/src/server/client-cache.ts'
 		],
 		caches: [{ label: 'Warm client · 16 servers', hit: 'no reconnect or handshake' }]
 	},
@@ -342,8 +343,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/selva/src/routes/api/compute/+server.ts:324',
-			'packages/solve/src/server/solve-pipeline.ts:166-175'
+			'packages/selva/src/routes/api/compute/+server.ts',
+			'packages/solve/src/server/solve-pipeline.ts'
 		]
 	},
 	{
@@ -371,8 +372,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/selva/src/routes/api/compute/+server.ts:330-379',
-			'packages/solve/src/server/solve-cache-single-flight.ts:45-85'
+			'packages/selva/src/routes/api/compute/+server.ts',
+			'packages/solve/src/server/solve-cache-single-flight.ts'
 		],
 		gates: ['coalesce concurrent duplicates']
 	},
@@ -411,7 +412,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			},
 			{
 				kind: 'prose',
-				text: 'Nothing expires on a timer, and that is deliberate. The same definition with the same inputs always produces the same geometry, and neither can change underneath a stored result — so discarding one on a schedule would only buy a paid re-solve of an answer already in hand. Running out of memory is the only reason an entry leaves.'
+				text: 'TTL expiry exists in the cache but ships off by default — deliberately. The same definition with the same inputs always produces the same geometry, and neither can change underneath a stored result — so discarding one on a schedule would only buy a paid re-solve of an answer already in hand. Running out of memory is the only reason an entry leaves.'
 			},
 			{
 				kind: 'warning',
@@ -420,9 +421,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts:342-363',
-			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts:833-856',
-			'packages/solve/src/server/client-cache.ts:223-229'
+			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts',
+			'packages/solve/src/server/client-cache.ts'
 		],
 		caches: [{ label: 'Solve cache · 256 MB · LRU', hit: 'Rhino is never called' }]
 	},
@@ -462,9 +462,9 @@ export const CLOUD_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/solve/src/server/client-cache.ts:230-271',
-			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts:273-292',
-			'packages/server/src/compute/limits.ts:304-309'
+			'packages/solve/src/server/client-cache.ts',
+			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts',
+			'packages/server/src/compute/limits.ts'
 		],
 		gates: ['queue · workers in flight']
 	},
@@ -477,21 +477,21 @@ export const CLOUD_STEPS: FlowStep[] = [
 		detail: [
 			{
 				kind: 'prose',
-				text: 'The scheduler keeps a bounded map (100 entries) from definition hash to the cache key Rhino.Compute returned for it. When a key is known the solve is sent as a pointer with no file attached — this is the case where the lazy byte reference from earlier is never called and zero definition bytes move.'
+				text: 'The first time gear.gh is solved, the whole file rides along, and Rhino.Compute hands back a short id for it. Selva writes that id down — up to 100 definitions, oldest dropped first — and every solve after that sends the id instead of the file.'
 			},
 			{
 				kind: 'code',
 				lang: 'json',
-				text: '// key known — nothing but the pointer travels\n{ "pointer": "md5:7ab3…", "values": [ … ] }\n\n// key unknown — the whole definition rides along\n{ "algo": "<base64 .gh bytes>", "values": [ … ] }'
+				text: '// Selva has the id on file — send it, not the .gh bytes\n{ "pointer": "md5:7ab3…", "values": [ … ] }\n\n// no id on file yet — send the whole definition\n{ "algo": "<base64 .gh bytes>", "values": [ … ] }'
 			},
 			{
 				kind: 'prose',
-				text: 'If the server has since dropped it, the error is recognised as a definition-load miss, the bytes are materialized, the definition is uploaded once, and the fresh key is learned. That re-upload is reported as `def_reupload`.'
+				text: 'Selva having the id written down is not the same as Rhino.Compute still recognising it. If that machine restarts, it forgets which id points to which file — so a solve sent with a now-meaningless id comes back rejected, not silently wrong. Selva reads that rejection as "resend the file," does so once, gets a fresh id back, and writes that one down instead. The user just sees one slightly slower solve, no error.'
 			}
 		],
 		files: [
-			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts:621-656',
-			'packages/compute/src/grasshopper/solve.ts:176-199'
+			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts',
+			'packages/compute/src/grasshopper/solve.ts'
 		],
 		caches: [
 			{ label: 'Pointer map · 100 entries', hit: 'no .gh bytes uploaded' },
@@ -521,10 +521,9 @@ export const CLOUD_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/compute/src/grasshopper/solve.ts:231-258',
-			'packages/compute/src/grasshopper/solve.ts:304-314',
-			'packages/compute/src/core/compute-fetch/retry.ts:3-8',
-			'packages/server/src/compute/limits.ts:301-302'
+			'packages/compute/src/grasshopper/solve.ts',
+			'packages/compute/src/core/compute-fetch/retry.ts',
+			'packages/server/src/compute/limits.ts'
 		],
 		caches: [
 			{ label: 'VM definition cache', hit: 'no parse (decode ≈ 0)' },
@@ -539,11 +538,11 @@ export const CLOUD_STEPS: FlowStep[] = [
 		detail: [
 			{
 				kind: 'prose',
-				text: 'The result is stringified once — an oversized file output trips a RangeError or the 300 MB cap and becomes a clean 413 rather than a crash. Bodies over 1 KB are gzipped asynchronously when the client advertised it.'
+				text: 'The result becomes JSON, gzipped if it is over 1 KB and the browser accepts it. A result too large to turn into JSON — over 300 MB — is refused with a clean 413 instead of crashing the server.'
 			},
 			{
 				kind: 'prose',
-				text: 'The Server-Timing header is how every step above becomes observable from the browser: load, tree, solve, serialize, gzip and total, the VM’s own decode/solve/encode when reported, the prep sub-marks as p_*, and the cache verdicts — selva_cache, def_reupload, and def_bytes (skipped, hit or miss).'
+				text: 'Every step above leaves a timestamp, and they all ride back on one response header — so the browser can show a full breakdown without a separate request:'
 			},
 			{
 				kind: 'code',
@@ -552,34 +551,86 @@ export const CLOUD_STEPS: FlowStep[] = [
 			},
 			{
 				kind: 'prose',
-				text: 'Because a coalesced result is one shared object, a gzip body is decompressed again for any waiter that did not ask for gzip.'
+				text: 'One edge case: when several requests were coalesced into one solve, they share a single compressed result — so any of them that did not ask for gzip gets it decompressed again just for them.'
 			}
 		],
-		files: [
-			'packages/solve/src/server/solve-pipeline.ts:241-340',
-			'packages/solve/src/server/solve-pipeline.ts:362-382',
-			'packages/solve/src/server/solve-pipeline.ts:409-451'
-		]
+		files: ['packages/solve/src/server/solve-pipeline.ts']
+	},
+	{
+		id: 'b-decode',
+		layer: 'browser',
+		title: 'The page reads the response',
+		oneliner:
+			'The library page — not a package — decodes the JSON and matches outputs to the schema.',
+		detail: [
+			{
+				kind: 'pipeline',
+				stages: [
+					{ label: 'The page', sub: 'decodes JSON, matches outputs' },
+					{ label: '@selvajs/visualization', sub: 'response → three.js meshes' },
+					{ label: '@selvajs/ui', sub: 'owns the scene, draws it', terminal: true }
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'This part is just the page: parse the JSON body, then for each output the schema defines, find its value. No package owns this step — it is what the library route does with a solve result once it has one.'
+			},
+			{
+				kind: 'mapping',
+				from: 'the schema defines',
+				to: 'found in the response by',
+				rows: [
+					['output "area", id 3f2a', 'byId 3f2a'],
+					['output "area", id missing', "byName 'area' (its Grasshopper nickname)"]
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'Id is tried first and used whenever Compute returns one; the nickname is only a fallback for a stock Rhino.Compute server that omits it. The page also measures itself against the Server-Timing header from the earlier step, so it can show network time separately from server time.'
+			}
+		],
+		files: ['packages/selva/src/routes/library/[guid]/+page.svelte']
 	},
 	{
 		id: 'b-render',
 		layer: 'browser',
-		title: 'Parse and render',
-		oneliner: 'JSON decode, then meshes straight out of a binary blob into the three.js viewer.',
+		title: '@selvajs/visualization turns it into geometry',
+		oneliner:
+			'Meshes straight out of a binary blob into three.js — no other package is involved yet.',
 		detail: [
 			{
 				kind: 'prose',
-				text: 'Meshes do not go through rhino3dm. Each display batch carries them as one binary SLVA blob that is decoded directly into three.js geometry — rhino3dm is only needed to rebuild curves, so it is lazily initialized once per session and simply passed along for those.'
+				text: 'The page hands the raw solve response to this package and gets back three.js meshes. Meshes do not go through rhino3dm: each display batch carries them as one binary SLVA blob, decoded directly into geometry. rhino3dm is only needed to rebuild curves, so it is lazily loaded once per session and only for those.'
 			},
 			{
 				kind: 'prose',
-				text: 'Both meshes and the curve/point items are scaled by the model-unit factor so they share one frame. Outputs are matched by id, falling back to nickname. Textures referenced by materials are fetched and GPU-decoded as they are encountered. The browser also splits its own round-trip against the Server-Timing header to separate network from server time.'
+				text: 'Meshes and curve/point items are scaled by the model-unit factor so they share one frame, and textures referenced by materials are fetched and GPU-decoded as they are encountered. What this package does not do: put anything on screen. That is the next step.'
 			}
 		],
 		files: [
-			'packages/selva/src/routes/library/[guid]/+page.svelte:150-206',
-			'packages/visualization/src/parse/webdisplay/webdisplay-parser.ts:158-204',
+			'packages/visualization/src/parse/webdisplay/webdisplay-parser.ts',
 			'packages/visualization/src/parse/webdisplay/batch-parser.ts'
+		]
+	},
+	{
+		id: 'b-viewer',
+		layer: 'browser',
+		title: '@selvajs/ui draws it',
+		oneliner:
+			'The Svelte viewer owns the solve session and the scene — the two packages before it only hand back data.',
+		detail: [
+			{
+				kind: 'prose',
+				text: "Everything so far — the page, the compute client, the visualization package — only produces data: JSON, meshes, timings. Nothing has appeared on screen yet. That is this package's job: Viewer.svelte holds the three.js scene, and useSolveSession is what actually calls the earlier steps and feeds their result in."
+			},
+			{
+				kind: 'prose',
+				text: 'After each solve, the viewer builds the scene outliner — the thing the sidebar panel reads to show visibility and layers — and applies it. The panel itself never talks to the scene directly, only to what the viewer already computed.'
+			}
+		],
+		files: [
+			'packages/ui/src/lib/components/viewer/Viewer.svelte',
+			'packages/ui/src/lib/compute/useSolveSession.svelte.ts'
 		]
 	}
 ];
@@ -605,10 +656,7 @@ export const LOCAL_STEPS: FlowStep[] = [
 				text: 'There is no client memo and no throttle on this path. Local mode builds its own WebSocket driver rather than the request/response one, so a repeated value is sent to Grasshopper again rather than replayed from memory — and there is nothing to cancel.'
 			}
 		],
-		files: [
-			'packages/plugin-ui/src/lib/schema-source/grasshopper-source.ts:111',
-			'packages/plugin-ui/src/lib/websocket/websocket.svelte.ts:337-356'
-		],
+		files: ['packages/plugin-ui/src/lib/websocket/websocket.svelte.ts'],
 		gates: ['debounce 150 / 400 ms', '50 ms batch · latest wins']
 	},
 	{
@@ -627,8 +675,8 @@ export const LOCAL_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts:44-65',
-			'Plugin/Selva.GH/Features/UIBuilder/Services/Communication/WebSocketTransport.cs:55-59'
+			'packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts',
+			'Plugin/Selva.GH/Features/UIBuilder/Services/Communication/WebSocketTransport.cs'
 		],
 		gates: ['strict arrival order']
 	},
@@ -647,10 +695,7 @@ export const LOCAL_STEPS: FlowStep[] = [
 				text: 'Every step the cloud path spends moving a definition to a machine that can solve it — resolving records, byte references, pointers, uploads — has no equivalent here. The definition is already open.'
 			}
 		],
-		files: [
-			'Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs:107-129',
-			'Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs:173-194'
-		],
+		files: ['Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs'],
 		gates: ['merge while busy · latest wins']
 	},
 	{
@@ -678,7 +723,7 @@ export const LOCAL_STEPS: FlowStep[] = [
 				text: 'Curves in the JSON envelope need rhino3dm, which is lazy-loaded on the first solve that carries them; meshes and points do not.'
 			}
 		],
-		files: ['packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts:106-207']
+		files: ['packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts']
 	},
 	{
 		id: 'l-render',
@@ -693,7 +738,7 @@ export const LOCAL_STEPS: FlowStep[] = [
 			}
 		],
 		files: [
-			'packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts:127-180',
+			'packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts',
 			'packages/visualization/src/parse/webdisplay/apply-texture.ts'
 		]
 	}

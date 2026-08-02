@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { CLOUD_STEPS, LOCAL_STEPS, LAYERS, type Mode } from '$lib/architecture';
 	import DetailBlocks from './DetailBlocks.svelte';
+	import SolveAnimation from './demos/SolveAnimation.svelte';
 	import Cloud from '@lucide/svelte/icons/cloud';
 	import Plug from '@lucide/svelte/icons/plug';
 
@@ -168,5 +169,21 @@
 				</li>
 			{/each}
 		</ol>
+	</div>
+
+	<!-- Wire format — same solve, but as the bytes that actually cross each hop -->
+	<div class="mt-20">
+		<p class="text-primary text-sm font-semibold tracking-wide uppercase">Wire format</p>
+		<h2 class="mt-2 text-2xl font-bold tracking-tight text-balance">
+			What actually crosses the wire
+		</h2>
+		<p class="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
+			The same cloud-mode solve as above, but as headers and JSON bodies — set the inputs, hit
+			Solve, and watch the request cross each hop.
+		</p>
+
+		<div class="border-border bg-card mt-6 rounded-lg border p-4">
+			<SolveAnimation />
+		</div>
 	</div>
 </div>

@@ -236,21 +236,17 @@ export function getLogger(): ILogger {
 function parseLogLevel(raw: string | undefined): LogLevel {
 	const value = raw?.trim().toLowerCase();
 	if (value === 'debug' || value === 'info' || value === 'warn' || value === 'error') return value;
-	// The compute debug flags emit at `debug`. An operator who turned one on has
-	// asked for that output in so many words, so honor it without also demanding
+	// SELVA_FLAG_COMPUTE_DEBUG emits at `debug`. An operator who set it has asked
+	// for that output in so many words, so honor it without also demanding
 	// LOG_LEVEL=debug — otherwise the flag would silently do nothing in
 	// production, which is exactly where it gets reached for.
 	if (
-		isTruthyFlag(env.SELVA_FLAG_COMPUTE_DEBUG) ||
-		isTruthyFlag(env.SELVA_FLAG_COMPUTE_DEBUG_VERBOSE)
+		['true', '1', 'yes', 'on', 'verbose'].includes(
+			(env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase()
+		)
 	)
 		return 'debug';
 	return env.NODE_ENV === 'development' ? 'debug' : 'info';
-}
-
-/** Matches the flag spelling accepted elsewhere (`clientCache.server.ts`). */
-function isTruthyFlag(raw: string | undefined): boolean {
-	return ['true', '1', 'yes'].includes((raw ?? '').toLowerCase());
 }
 
 // Eager, fire-and-forget: `getLogger()` stays sync for the same reason

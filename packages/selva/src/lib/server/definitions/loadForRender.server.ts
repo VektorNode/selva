@@ -15,16 +15,10 @@ import {
 import type { DefinitionRecord, RequestContext } from '@selvajs/platform';
 import { getStorageProvider, getDefinitionMeta, getProjectProvider } from '../providers.server';
 import { resolveServerForOrg } from '../compute/resolve.server';
-import { getClient } from '../compute/clientCache.server';
-import { env } from '$env/dynamic/private';
+import { getClient, COMPUTE_DEBUG } from '../compute/clientCache.server';
 
 export { DefinitionLoadError };
 export type { DefinitionChannel, DefinitionLoadErrorKind, LoadedDefinition };
-
-// Verbose IO diagnostics — same flag as the solve route.
-const COMPUTE_DEBUG = ['true', '1', 'yes'].includes(
-	(env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase()
-);
 
 export async function loadDefinitionForRender(
 	ctx: RequestContext,
