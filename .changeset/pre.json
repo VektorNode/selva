@@ -26,6 +26,7 @@
     "solve-client-half",
     "solve-engine-abort-listener-leak",
     "solve-engine-facade",
+    "solve-result-source-values",
     "solve-server-half",
     "supabase-org-assets-not-null",
     "visualization-drop-deprecated",
