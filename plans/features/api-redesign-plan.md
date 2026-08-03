@@ -598,7 +598,37 @@ present, per the Verification section.
 4. Switch the load functions to the extracted helpers (pure refactor, same data).
 5. Every new list endpoint: cursor pagination from day one.
 
-### Phase C — definition-addressed solve
+### Phase C — definition-addressed solve — **DONE**
+
+Decisions taken during implementation:
+
+- **The share-token branch is excluded by type, not by discipline.** `runSolve` takes a
+  `SolveAccess` discriminated union (`user` | `share`); the definition-addressed route can only
+  construct `user`, so it cannot inherit anonymous access by editing the core later. Token
+  resolution stays in `/api/v1/compute`'s handler, as specified.
+- **Blocker #5's "stays unversioned" is superseded by Phase A**, which moved compute to
+  `/api/v1/compute` with the anonymous branch dormant. So this was an extraction shared by two
+  routes in the _same_ tree. The seam it protects is unchanged.
+- **`concealAccessFailure` collapses 403→404 on the definition-addressed route only.** A guid is
+  guessable, so `requireCanSolve`'s 403 there is an existence oracle. `/api/v1/compute` keeps the
+  403 — its callers navigated to the definition. Found by the adversarial test, not by review: the
+  first version of the route returned 403 for a definition in another user's private project.
+- **Idempotency stores a promise, reserved before the solve starts**, so the common case — a client
+  retrying while the first solve is still running — joins the first run instead of starting a
+  second. A rejected reservation is dropped, so a failed solve stays retryable rather than replaying
+  a cached error for the whole TTL.
+- **The key is namespaced by caller.** `Idempotency-Key` is client-chosen, so two tenants can pick
+  the same string; without the caller in the key one would replay the other's result. The `tokenId`
+  slot is marked for when PATs land.
+- **A stored response is a snapshot, not a `Response`** — a `Response` body reads once, so a
+  naive store replays an empty body. Replays carry `Idempotency-Replayed: true`.
+- **TTL is a fixed 5 min constant, not an env knob.** The goal is absorbing retries; a longer window
+  would make it a result cache and serve stale geometry after a live-version pointer moves.
+
+Verified: `pnpm type-check`, `pnpm check` (0 errors), `pnpm lint` (0 errors), `pnpm test` (all
+packages green; selva 250/250 up from 237, server 218/218 up from 211). The pre-existing
+`/api/v1/compute` suite (22 tests) passed unchanged against the extracted core, which is what makes
+this an extraction rather than a rewrite.
 
 Extract the body-independent core of [api/compute/+server.ts](../../packages/selva/src/routes/api/compute/+server.ts)
 into `$lib/server/` so `POST /api/v1/definitions/{guid}/solve` can delegate with

@@ -28,6 +28,14 @@ export {
 	type RateLimitResult
 } from './rate-limit.js';
 
+export {
+	createIdempotencyStore,
+	DEFAULT_IDEMPOTENCY_MAX_KEYS,
+	type IdempotencyStore,
+	type IdempotencyStoreConfig,
+	type IdempotencyOutcome
+} from './idempotency.js';
+
 export { isSafeRemoteDefinitionUrl, assertSafeRemoteDefinitionUrl } from './safe-url.js';
 
 export {
