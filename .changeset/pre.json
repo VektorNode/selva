@@ -26,6 +26,7 @@
     "scheduler-cache-bytes-only",
     "solve-client-half",
     "solve-deadline-single-source",
+    "solve-endpoint-v1-path",
     "solve-engine-abort-listener-leak",
     "solve-engine-facade",
     "solve-result-host-seam",
