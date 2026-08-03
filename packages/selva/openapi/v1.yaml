@@ -1,10 +1,10 @@
 # Generated from the Zod validators and the route registry in
 # src/lib/server/api/v1/. Do not edit by hand — `pnpm test` fails when this
 # file drifts from the code. Regenerate with `pnpm openapi:generate`.
-openapi: '3.1.0'
+openapi: "3.1.0"
 info:
   title: Selva API
-  version: '4.8.0-beta.2'
+  version: "4.8.0-beta.2"
   description: "The tenant-scoped Selva API. Every endpoint acts as the calling identity and is confined to that identity's organization.\n\n**Stability.** Public endpoints are additive-only within v1: new optional fields and parameters may appear, but nothing is removed, renamed, or changed in type or meaning. A breaking change ships as a new route under `/api/v2` alongside this one. Anything deprecated inside v1 keeps working for a stated window and returns a `Deprecation` header while it does.\n\n**Operations marked `x-internal` carry none of that promise.** They exist to serve the Selva web UI and may change or disappear without notice.\n\n**Existence is never disclosed.** A resource the caller may not see returns `404`, not `403`. `403` means the resource is visible but the action is not allowed.\n\n**No CORS.** `/api/v1` sends no cross-origin headers; it serves same-origin browser requests and non-browser clients holding a token.\n\nInstance administration lives at `/api/admin`, is session-only, is never reachable with a bearer token, and is not described here."
   license:
     name: MIT
@@ -24,13 +24,13 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: 'A personal access token. `/api/v1` is the only prefix that accepts one — `/api/admin` never does.'
+      description: "A personal access token. `/api/v1` is the only prefix that accepts one — `/api/admin` never does."
   parameters:
     limit:
       name: limit
       in: query
       required: false
-      description: 'Page size. Out-of-range values clamp rather than fail, so a client walking a cursor is never stopped by pagination plumbing. Default 50.'
+      description: "Page size. Out-of-range values clamp rather than fail, so a client walking a cursor is never stopped by pagination plumbing. Default 50."
       schema:
         type: integer
         minimum: 1
@@ -64,7 +64,7 @@ components:
   schemas:
     Page:
       type: object
-      description: 'The envelope every collection returns. `nextCursor` is absent on the last page.'
+      description: "The envelope every collection returns. `nextCursor` is absent on the last page."
       properties:
         items:
           type: array
@@ -76,7 +76,7 @@ components:
         - items
     Error:
       type: object
-      description: 'Every failure carries this shape. Branch on `code`, not on the human-readable `message`.'
+      description: "Every failure carries this shape. Branch on `code`, not on the human-readable `message`."
       properties:
         message:
           type: string
@@ -94,7 +94,7 @@ components:
             - INTERNAL
         fields:
           type: object
-          description: 'Per-field messages, keyed by dotted path. Present on validation failures.'
+          description: "Per-field messages, keyed by dotted path. Present on validation failures."
           additionalProperties:
             type: string
       required:
@@ -103,30 +103,30 @@ components:
 paths:
   /api/v1/me:
     get:
-      summary: 'The calling identity, its acting org, and its effective permissions.'
+      summary: "The calling identity, its acting org, and its effective permissions."
       operationId: getMe
       tags:
         - Me
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/me/starred/{guid}':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/me/starred/{guid}":
     put:
       summary: Star a definition. Idempotent.
       operationId: putMeStarredByGuid
@@ -139,26 +139,26 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Unstar a definition. Idempotent.
       operationId: deleteMeStarredByGuid
@@ -171,20 +171,20 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
   /api/v1/definitions:
     get:
       summary: List definitions the caller can see.
@@ -192,10 +192,10 @@ paths:
       tags:
         - Definitions
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/cursor'
-        - $ref: '#/components/parameters/orderBy'
-        - $ref: '#/components/parameters/orderDir'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/orderBy"
+        - $ref: "#/components/parameters/orderDir"
         - name: projectId
           in: query
           required: false
@@ -205,28 +205,28 @@ paths:
         - name: status
           in: query
           required: false
-          description: 'One of `draft`, `published`, `archived`.'
+          description: "One of `draft`, `published`, `archived`."
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: A page of results.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
-        '401':
+                $ref: "#/components/schemas/Page"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     post:
       summary: Create a definition from a Grasshopper file.
       operationId: postDefinitions
@@ -241,7 +241,7 @@ paths:
               properties:
                 file:
                   type: string
-                  description: 'The `.gh` or `.ghx` file.'
+                  description: "The `.gh` or `.ghx` file."
                 projectId:
                   type: string
                   description: Owning project.
@@ -268,49 +268,49 @@ paths:
                 - projectId
                 - displayName
       responses:
-        '201':
+        "201":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '422':
+                $ref: "#/components/schemas/Error"
+        "422":
           description: Well-formed but not processable.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '503':
+                $ref: "#/components/schemas/Error"
+        "503":
           description: The compute server is unconfigured or unreachable.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/definitions/{guid}':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}":
     get:
       summary: Definition record plus its live and draft version summaries.
       operationId: getDefinitionsByGuid
@@ -323,30 +323,30 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     patch:
       summary: Update definition metadata.
       operationId: patchDefinitionsByGuid
@@ -359,32 +359,32 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Soft-delete a definition.
       operationId: deleteDefinitionsByGuid
@@ -397,27 +397,27 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/definitions/{guid}/solve':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/solve":
     post:
       summary: Solve a definition. The primary action of the API.
       operationId: postDefinitionsByGuidSolve
@@ -432,7 +432,7 @@ paths:
         - name: Idempotency-Key
           in: header
           required: false
-          description: 'A client-chosen key. Repeating a request with the same key within the retention window replays the first response instead of solving again; the replay carries `Idempotency-Replayed: true`. The store is per-process and in-memory — it absorbs retries, it is not a durable result cache, and it does not survive a restart or a second app instance.'
+          description: "A client-chosen key. Repeating a request with the same key within the retention window replays the first response instead of solving again; the replay carries `Idempotency-Replayed: true`. The store is per-process and in-memory — it absorbs retries, it is not a durable result cache, and it does not survive a restart or a second app instance."
           schema:
             type: string
       requestBody:
@@ -463,49 +463,49 @@ paths:
                 definitionUrl:
                   type: string
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: 'Rate limited. Retry after the interval in `Retry-After`.'
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '503':
+                $ref: "#/components/schemas/Error"
+        "503":
           description: The compute server is unconfigured or unreachable.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/definitions/{guid}/schema':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/schema":
     get:
       summary: "The live version's UI schema. 404 when nothing is published."
       operationId: getDefinitionsByGuidSchema
@@ -518,33 +518,33 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/definitions/{guid}/versions':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/versions":
     get:
-      summary: 'List versions, newest first.'
+      summary: "List versions, newest first."
       operationId: getDefinitionsByGuidVersions
       tags:
         - Definitions
@@ -554,35 +554,35 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/cursor'
-        - $ref: '#/components/parameters/orderBy'
-        - $ref: '#/components/parameters/orderDir'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/orderBy"
+        - $ref: "#/components/parameters/orderDir"
       responses:
-        '200':
+        "200":
           description: A page of results.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
-        '401':
+                $ref: "#/components/schemas/Page"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     post:
       summary: Upload a new version.
       operationId: postDefinitionsByGuidVersions
@@ -603,58 +603,58 @@ paths:
               properties:
                 file:
                   type: string
-                  description: 'The `.gh` or `.ghx` file.'
+                  description: "The `.gh` or `.ghx` file."
                 changeNote:
                   type: string
                   description: Truncated to 1000 characters.
               required:
                 - file
       responses:
-        '201':
+        "201":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '422':
+                $ref: "#/components/schemas/Error"
+        "422":
           description: Well-formed but not processable.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '503':
+                $ref: "#/components/schemas/Error"
+        "503":
           description: The compute server is unconfigured or unreachable.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/definitions/{guid}/versions/{versionId}':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/versions/{versionId}":
     get:
-      summary: 'One version, without its cached schema.'
+      summary: "One version, without its cached schema."
       operationId: getDefinitionsByGuidVersionsByVersionId
       tags:
         - Definitions
@@ -670,30 +670,30 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Delete a version. 409 when it is the live or draft pointer.
       operationId: deleteDefinitionsByGuidVersionsByVersionId
@@ -711,33 +711,33 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '409':
+                $ref: "#/components/schemas/Error"
+        "409":
           description: The request conflicts with the current state.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/definitions/{guid}/versions/{versionId}/schema':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/versions/{versionId}/schema":
     get:
       summary: "That version's cached UI schema. No compute round-trip."
       operationId: getDefinitionsByGuidVersionsByVersionIdSchema
@@ -755,31 +755,31 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/definitions/{guid}/publish':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/publish":
     post:
       summary: Promote a version to live.
       operationId: postDefinitionsByGuidPublish
@@ -792,37 +792,37 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/definitions/{guid}/image':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/image":
     post:
       summary: Upload a cover image.
       operationId: postDefinitionsByGuidImage
@@ -843,41 +843,41 @@ paths:
               properties:
                 image:
                   type: string
-                  description: 'PNG, JPEG, WebP or GIF.'
+                  description: "PNG, JPEG, WebP or GIF."
               required:
                 - image
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/definitions/{guid}/share-links':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/share-links":
     get:
       summary: List share links. 404 when sharing is disabled on the instance.
       operationId: getDefinitionsByGuidShare-links
@@ -889,35 +889,35 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/cursor'
-        - $ref: '#/components/parameters/orderBy'
-        - $ref: '#/components/parameters/orderDir'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/orderBy"
+        - $ref: "#/components/parameters/orderDir"
       responses:
-        '200':
+        "200":
           description: A page of results.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
-        '401':
+                $ref: "#/components/schemas/Page"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     post:
       summary: Create a share link. The raw token is returned once and never again.
       operationId: postDefinitionsByGuidShare-links
@@ -930,37 +930,37 @@ paths:
           schema:
             type: string
       responses:
-        '201':
+        "201":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/definitions/{guid}/share-links/{linkId}':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/share-links/{linkId}":
     delete:
       summary: Revoke a share link.
       operationId: deleteDefinitionsByGuidShare-linksByLinkId
@@ -978,26 +978,26 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
   /api/v1/projects:
     get:
       summary: List projects the caller can view.
@@ -1005,29 +1005,29 @@ paths:
       tags:
         - Projects
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/cursor'
-        - $ref: '#/components/parameters/orderBy'
-        - $ref: '#/components/parameters/orderDir'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/orderBy"
+        - $ref: "#/components/parameters/orderDir"
       responses:
-        '200':
+        "200":
           description: A page of results.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
-        '401':
+                $ref: "#/components/schemas/Page"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     post:
       summary: Create a project.
       operationId: postProjects
@@ -1060,43 +1060,43 @@ paths:
               required:
                 - name
       responses:
-        '201':
+        "201":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '409':
+                $ref: "#/components/schemas/Error"
+        "409":
           description: The request conflicts with the current state.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/projects/{id}':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/projects/{id}":
     get:
       summary: "Project record plus the caller's effective role and capabilities."
       operationId: getProjectsById
@@ -1109,30 +1109,30 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     patch:
       summary: Update project settings. Owner-only.
       operationId: patchProjectsById
@@ -1159,7 +1159,7 @@ paths:
                   anyOf:
                     - type: string
                       maxLength: 2000
-                    - type: 'null'
+                    - type: "null"
                 visibility:
                   type: string
                   enum:
@@ -1170,44 +1170,44 @@ paths:
                 autoJoinOnUpload:
                   type: boolean
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '409':
+                $ref: "#/components/schemas/Error"
+        "409":
           description: The request conflicts with the current state.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Delete a project.
       operationId: deleteProjectsById
@@ -1220,33 +1220,33 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/projects/{id}/members':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/projects/{id}/members":
     get:
       summary: List project members.
       operationId: getProjectsByIdMembers
@@ -1258,41 +1258,41 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/cursor'
-        - $ref: '#/components/parameters/orderBy'
-        - $ref: '#/components/parameters/orderDir'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/orderBy"
+        - $ref: "#/components/parameters/orderDir"
       responses:
-        '200':
+        "200":
           description: A page of results.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
-        '401':
+                $ref: "#/components/schemas/Page"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     post:
       summary: Add a member. The target must already belong to the org.
       operationId: postProjectsByIdMembers
@@ -1324,43 +1324,43 @@ paths:
                 - userId
                 - role
       responses:
-        '201':
+        "201":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/projects/{id}/members/{userId}':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/projects/{id}/members/{userId}":
     patch:
       summary: Change a member role.
       operationId: patchProjectsByIdMembersByUserId
@@ -1393,44 +1393,44 @@ paths:
               required:
                 - role
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '409':
+                $ref: "#/components/schemas/Error"
+        "409":
           description: The request conflicts with the current state.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Remove a member. Idempotent.
       operationId: deleteProjectsByIdMembersByUserId
@@ -1450,43 +1450,43 @@ paths:
         - name: confirm
           in: query
           required: false
-          description: 'Set to `true` to remove a co-owner; without it the call returns 409.'
+          description: "Set to `true` to remove a co-owner; without it the call returns 409."
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '409':
+                $ref: "#/components/schemas/Error"
+        "409":
           description: The request conflicts with the current state.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/projects/{id}/reclaim':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/projects/{id}/reclaim":
     post:
       summary: Claim ownership of an unowned project.
       operationId: postProjectsByIdReclaim
@@ -1499,43 +1499,43 @@ paths:
           schema:
             type: string
       responses:
-        '201':
+        "201":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '409':
+                $ref: "#/components/schemas/Error"
+        "409":
           description: The request conflicts with the current state.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/orgs/{orgId}':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}":
     get:
       summary: "Org record. The org must be the caller's acting org."
       operationId: getOrgsByOrgId
@@ -1548,37 +1548,37 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/orgs/{orgId}/members':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/members":
     get:
       summary: List org members.
       operationId: getOrgsByOrgIdMembers
@@ -1590,36 +1590,36 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/cursor'
-        - $ref: '#/components/parameters/orderBy'
-        - $ref: '#/components/parameters/orderDir'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/orderBy"
+        - $ref: "#/components/parameters/orderDir"
       responses:
-        '200':
+        "200":
           description: A page of results.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
-        '401':
+                $ref: "#/components/schemas/Page"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/orgs/{orgId}/members/{userId}':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/members/{userId}":
     patch:
       summary: Change an org role or permission set. The sole owner cannot be demoted.
       operationId: patchOrgsByOrgIdMembersByUserId
@@ -1659,44 +1659,44 @@ paths:
                       - manage_definitions
                       - manage_projects
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '409':
+                $ref: "#/components/schemas/Error"
+        "409":
           description: The request conflicts with the current state.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Remove an org member. The sole owner cannot be removed.
       operationId: deleteOrgsByOrgIdMembersByUserId
@@ -1714,39 +1714,39 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '409':
+                $ref: "#/components/schemas/Error"
+        "409":
           description: The request conflicts with the current state.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/orgs/{orgId}/invites':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/invites":
     get:
       summary: List pending invites.
       operationId: getOrgsByOrgIdInvites
@@ -1758,35 +1758,35 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/cursor'
-        - $ref: '#/components/parameters/orderBy'
-        - $ref: '#/components/parameters/orderDir'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/orderBy"
+        - $ref: "#/components/parameters/orderDir"
       responses:
-        '200':
+        "200":
           description: A page of results.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
-        '401':
+                $ref: "#/components/schemas/Page"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     post:
       summary: Invite someone to the org. The accept URL is returned once.
       operationId: postOrgsByOrgIdInvites
@@ -1836,43 +1836,43 @@ paths:
               required:
                 - email
       responses:
-        '201':
+        "201":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '409':
+                $ref: "#/components/schemas/Error"
+        "409":
           description: The request conflicts with the current state.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/orgs/{orgId}/invites/{id}':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/invites/{id}":
     delete:
       summary: Revoke an invite.
       operationId: deleteOrgsByOrgIdInvitesById
@@ -1890,33 +1890,33 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/orgs/{orgId}/compute':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/compute":
     get:
       summary: Org compute-server overrides and the shared catalog.
       operationId: getOrgsByOrgIdCompute
@@ -1930,30 +1930,30 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     patch:
       summary: Replace the org compute-server overrides.
       operationId: patchOrgsByOrgIdCompute
@@ -1990,7 +1990,7 @@ paths:
                       apiKey:
                         anyOf:
                           - type: string
-                          - type: 'null'
+                          - type: "null"
                       timeoutMs:
                         type: number
                       retryCount:
@@ -2002,37 +2002,37 @@ paths:
                 defaultServerId:
                   anyOf:
                     - type: string
-                    - type: 'null'
+                    - type: "null"
               required:
                 - servers
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-  '/api/v1/orgs/{orgId}/assets/{kind}':
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/assets/{kind}":
     post:
       summary: Upload an org branding asset.
       operationId: postOrgsByOrgIdAssetsByKind
@@ -2059,46 +2059,46 @@ paths:
               properties:
                 image:
                   type: string
-                  description: 'PNG, JPEG, WebP, GIF or SVG.'
+                  description: "PNG, JPEG, WebP, GIF or SVG."
               required:
                 - image
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Remove an org branding asset.
       operationId: deleteOrgsByOrgIdAssetsByKind
@@ -2117,82 +2117,82 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        "204":
           description: Success. No content.
-        '401':
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
   /api/v1/compute:
     post:
-      summary: 'Generic solve, including remote definition URLs and share-token access.'
+      summary: "Generic solve, including remote definition URLs and share-token access."
       operationId: postCompute
       tags:
         - Compute
       x-internal: true
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: 'No such resource, or the caller cannot see it.'
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: 'Rate limited. Retry after the interval in `Retry-After`.'
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '503':
+                $ref: "#/components/schemas/Error"
+        "503":
           description: The compute server is unconfigured or unreachable.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
   /api/v1/compute/schema:
     post:
       summary: Extract UI schemas from an uploaded file before it becomes a definition.
@@ -2222,49 +2222,49 @@ paths:
               properties:
                 file:
                   type: string
-                  description: 'The `.gh` or `.ghx` file.'
+                  description: "The `.gh` or `.ghx` file."
               required:
                 - file
       responses:
-        '200':
+        "200":
           description: Success.
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Validation failed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Missing or invalid credentials.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: 'Authenticated, but not permitted to perform this action.'
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '422':
+                $ref: "#/components/schemas/Error"
+        "422":
           description: Well-formed but not processable.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '503':
+                $ref: "#/components/schemas/Error"
+        "503":
           description: The compute server is unconfigured or unreachable.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
