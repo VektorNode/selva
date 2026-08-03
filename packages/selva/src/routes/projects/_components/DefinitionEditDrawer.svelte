@@ -118,8 +118,10 @@
 		pendingProjectId = null;
 	}
 
+	// An uploaded cover is stored as the storage provider's public URL
+	// (`/api/files/…`); anything else was typed in as an external URL.
 	const imageMode = $derived<'url' | 'upload'>(
-		userImageMode ?? (record.coverImage?.startsWith('/api/definitions/') ? 'upload' : 'url')
+		userImageMode ?? (record.coverImage?.startsWith('/api/files/') ? 'upload' : 'url')
 	);
 
 	const statusItems: FilterableDropdownItem[] = [
@@ -150,7 +152,7 @@
 		const formData = new FormData();
 		formData.append('image', imageInput.files[0]);
 		try {
-			const res = await fetch(`/api/definitions/${record.guid}/image`, {
+			const res = await fetch(`/api/v1/definitions/${record.guid}/image`, {
 				method: 'POST',
 				body: formData
 			});
@@ -218,7 +220,12 @@
 		</Tabs.List>
 
 		<Tabs.Content value="versions" class="mt-4 flex-1 overflow-y-auto px-6 py-5">
-			<VersionsSection definitionGuid={record.guid} {onOpenRunner} />
+			<VersionsSection
+				definitionGuid={record.guid}
+				liveVersionId={record.liveVersionId}
+				draftVersionId={record.draftVersionId}
+				{onOpenRunner}
+			/>
 		</Tabs.Content>
 
 		<Tabs.Content value="details" class="mt-4 flex-1 space-y-5 overflow-y-auto px-6 py-5">

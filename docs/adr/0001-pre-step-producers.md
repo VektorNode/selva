@@ -48,7 +48,7 @@ The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` i
 
 ### How values reach Grasshopper
 
-`values[paramId]` is set from sessionStorage → `transformInputParameter` wraps it per `paramType` (text/number/boolean) → `TreeBuilder.fromInputParams` builds the GH data tree server-side in [api/compute/+server.ts](../../packages/selva/src/routes/api/compute/+server.ts). For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write a JSON-stringified payload — the GH definition parses it via a script component.
+`values[paramId]` is set from sessionStorage → `transformInputParameter` wraps it per `paramType` (text/number/boolean) → `TreeBuilder.fromInputParams` builds the GH data tree server-side in [api/v1/compute/+server.ts](../../packages/selva/src/routes/api/v1/compute/+server.ts). For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write a JSON-stringified payload — the GH definition parses it via a script component.
 
 ### What's intentionally absent in v1
 

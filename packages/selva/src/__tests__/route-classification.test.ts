@@ -38,12 +38,12 @@ describe('isPublicRoute', () => {
 		['/admin'],
 		['/admin/users'],
 		// Authenticated APIs (every /api/* except /api/health).
-		['/api/projects'],
-		['/api/definitions'],
-		['/api/compute'],
-		['/api/invites'],
-		['/admin/api/users'],
-		['/admin/api/orgs'],
+		['/api/v1/projects'],
+		['/api/v1/definitions'],
+		['/api/v1/compute'],
+		['/api/v1/orgs/org-1/invites'],
+		['/api/admin/users'],
+		['/api/admin/orgs'],
 		// Unknown future routes inherit "gated".
 		['/billing'],
 		['/billing/invoice/123'],
@@ -56,7 +56,7 @@ describe('isPublicRoute', () => {
 	it('treats /api/files as self-gating, not other /api routes', () => {
 		expect(isSelfGatingApiRoute('/api/files/orgs/abc/branding/logo.webp')).toBe(true);
 		expect(isSelfGatingApiRoute('/api/files/anything')).toBe(true);
-		expect(isSelfGatingApiRoute('/api/projects')).toBe(false);
+		expect(isSelfGatingApiRoute('/api/v1/projects')).toBe(false);
 		expect(isSelfGatingApiRoute('/api/health')).toBe(false);
 		// `/api/filesX` must not be admitted by a loose prefix.
 		expect(isSelfGatingApiRoute('/api/filesX/y')).toBe(false);

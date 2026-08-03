@@ -40,7 +40,7 @@
 		error = null;
 		try {
 			const start = performance.now();
-			const res = await fetch(`/admin/api/system/throughput?mb=${sizeMb}`, {
+			const res = await fetch(`/api/admin/system/throughput?mb=${sizeMb}`, {
 				cache: 'no-store'
 			});
 			if (!res.ok || !res.body) {
@@ -76,7 +76,7 @@
 		try {
 			const body = randomBytes(sizeMb * 1024 * 1024);
 			const start = performance.now();
-			const res = await fetch('/admin/api/system/throughput', {
+			const res = await fetch('/api/admin/system/throughput', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/octet-stream' },
 				body

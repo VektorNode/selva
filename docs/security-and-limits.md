@@ -23,7 +23,7 @@ Two independent limiters, both **fixed-window** and **in-memory** (nothing is
 persisted). In a multi-instance deployment each instance keeps its own counters,
 so the effective rate is roughly N× the per-key limit.
 
-### Compute solves (`/api/compute`)
+### Compute solves (`/api/v1/compute`)
 
 | Env var                        | Default  | Meaning                                     |
 | ------------------------------ | -------- | ------------------------------------------- |
@@ -57,8 +57,8 @@ All resolved in `packages/server/src/compute/limits.ts`.
 | `COMPUTE_QUEUE_WAIT_MS`              | `0` (no deadline)    | Max time a solve may sit queued before it is rejected with **503**.                                                                                                                                          |
 | `MAX_GH_FILE_SIZE_BYTES`             | `52428800` (50 MB)   | Largest `.gh` on upload, and the cap on remote-definition fetches.                                                                                                                                           |
 | `MAX_IMAGE_FILE_SIZE_BYTES`          | `10485760` (10 MB)   | Cover-image upload cap.                                                                                                                                                                                      |
-| `COMPUTE_REQUEST_MAX_BYTES`          | `220200960` (210 MB) | `/api/compute` request-body cap (inputs, values, base64 file widgets). Keep ≤ `BODY_SIZE_LIMIT`.                                                                                                             |
-| `COMPUTE_RESPONSE_MAX_BYTES`         | `314572800` (300 MB) | `/api/compute` response cap; a backstop under V8's ~512 MB string wall. Over the cap returns **413**.                                                                                                        |
+| `COMPUTE_REQUEST_MAX_BYTES`          | `220200960` (210 MB) | `/api/v1/compute` request-body cap (inputs, values, base64 file widgets). Keep ≤ `BODY_SIZE_LIMIT`.                                                                                                          |
+| `COMPUTE_RESPONSE_MAX_BYTES`         | `314572800` (300 MB) | `/api/v1/compute` response cap; a backstop under V8's ~512 MB string wall. Over the cap returns **413**.                                                                                                     |
 | `REMOTE_DEFINITION_FETCH_TIMEOUT_MS` | `30000`              | Deadline on remote-definition fetch (slow-loris protection).                                                                                                                                                 |
 | `BODY_SIZE_LIMIT`                    | `210M`               | adapter-node's global body cap on **every** route. Must be ≥ `COMPUTE_REQUEST_MAX_BYTES`. Use `210M` or a raw byte count — adapter-node reads only the last suffix character, and `Infinity` throws on boot. |
 

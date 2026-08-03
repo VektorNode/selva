@@ -35,7 +35,7 @@
 		if (!data.orgId) return;
 		savingId = userId;
 		try {
-			const res = await fetch(`/api/orgs/${data.orgId}/members/${userId}`, {
+			const res = await fetch(`/api/v1/orgs/${data.orgId}/members/${userId}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(patch)
@@ -107,7 +107,7 @@
 	async function createInvite() {
 		creatingInvite = true;
 		try {
-			const res = await fetch('/api/invites', {
+			const res = await fetch(`/api/v1/orgs/${data.orgId}/invites`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -140,7 +140,7 @@
 		if (!confirm(`Revoke invite for "${email}"?`)) return;
 		revokingId = id;
 		try {
-			const res = await fetch(`/api/invites/${id}`, { method: 'DELETE' });
+			const res = await fetch(`/api/v1/orgs/${data.orgId}/invites/${id}`, { method: 'DELETE' });
 			if (res.ok) {
 				toast.success('Invite revoked');
 				await invalidateAll();

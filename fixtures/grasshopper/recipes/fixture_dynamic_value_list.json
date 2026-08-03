@@ -22,17 +22,27 @@
 		"b6ba1144-02d6-4a2d-b53c-ec62e290eeb7": "C# Script (RhinoCodePluginGH). Script bodies are NOT reachable through the MCP script sandbox — the source lives in the component's own Script chunk. Hand-edit this fixture's scripts; a rebuild cannot restore them."
 	},
 	"saved_state": {
-		"selections": { "dvlSelect": "2", "dvlConvergent": "Item 2", "dvlOscillate": "X" },
+		"selections": {
+			"dvlSelect": "2",
+			"dvlConvergent": "Item 2",
+			"dvlOscillate": "X"
+		},
 		"storedItems": "3 per param",
 		"note": "Saved with selections applied so the StoredItems/SelectedValues archive round-trip is exercised on load — verified surviving a close/reopen cycle."
 	},
-	"embedded_schema": "The UI Bridge stores a Schema item keyed on the guids above: 4 inputs, 3 dynamicValueList outputs (each with targetInputId), tabbed layout with Steady/Convergent/Oscillate groups. Assign via the public `Schema` property (reachable only by reflection from the MCP sandbox — Selva.Schema is not referenceable there). Deserialize the JSON with the Newtonsoft loaded by Selva.Schema so polymorphic layout items resolve; verified producing InputDynamicValueListLayoutItem / InputNumberLayoutItem rather than the base type.",
-	"targetInputId_note": "Every DVL output carries targetInputId in schema.outputs[], which is the canonical side per Phase 2 of the fix plan. The fixture deliberately does not also set it in layout item config — it pins outputs-wins.",
+	"embedded_schema": "The UI Bridge stores a Schema item keyed on the guids above: 4 inputs (3 paramType dynamicValueList + 1 number, all camelCase), 3 dynamicValueList outputs keyed on the BAKE guids, tabbed layout with Steady/Convergent/Oscillate groups, each carrying an input item plus an OutputDynamicValueListLayoutItem whose paramId is the bake and whose config.targetInputId is the Get param.",
+	"targetInputId_note": "Carried in BOTH schema.outputs[] and the layout item config. The layout item is required: ApplyParameterAccessFromSchema keys the write-back onto the live Set component off the layout item, resolving paramId -> bake -> upstream Set. With no layout item the write-back never runs.",
 	"live_finding": "With no web UI attached, the Get param never learns of new options: _storedItems is only repopulated by LoadItems(), which the UI calls. Driving count 3 -> 1 leaves dvlConvergent holding the stale 3-item list and still emitting \"2\", a value no longer in the emitted options. This is the reconciliation gap the fix plan moves into the solve session, reproducible in Grasshopper alone.",
 	"expect": {
-		"objects": 19,
+		"objects": 22,
 		"groups": 3,
 		"runtimeErrors": 0,
-		"note": "Verify with g1_get_canvas_graph after a solve, not with tool return values."
+		"note": "Verify with g1_get_canvas_graph after a solve, not with tool return values. 4 Context Bakes: one per DVL output plus the schema bake."
+	},
+	"topology": {
+		"note": "One ContextBake per output — a bake surfaces only its FIRST recognized goo, so N Set DynVL feeding one bake collapses to one payload. See PLUGIN-CONTEXT.md.",
+		"schema_bake": "Input[0] nicknamed \"Schema\", fed by UI Bridge.Schema. BridgeOrchestrator refuses to serve the UI without it. Must carry ONLY the schema goo.",
+		"output_bakes": "Bake steady/convergent/oscillate — input[0] nicknamed steadyOptions/convergentOptions/oscillateOptions. That nickname is the schema output label; GH is authoritative for it.",
+		"output_identity": "schema.outputs[].id is the BAKE guid, never the Set DynVL guid. Pointing at the Set component classifies its Options text input as UnknownType(Text)."
 	}
 }

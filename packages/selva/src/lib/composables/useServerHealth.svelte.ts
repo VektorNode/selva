@@ -51,7 +51,7 @@ export function useServerHealth(serverId: () => string) {
 	async function probe(): Promise<boolean> {
 		if (!browser || destroyed) return false;
 		try {
-			const res = await fetch(`/admin/api/compute/status?serverId=${serverId()}`);
+			const res = await fetch(`/api/admin/compute/status?serverId=${serverId()}`);
 			if (destroyed) return false;
 			if (!res.ok) {
 				state = { ...state, reachable: false, ready: false };

@@ -27,7 +27,7 @@ import {
 	getPlatformProjectGrantStore,
 	flag
 } from './providers.server.js';
-import { handleApiError } from './api-errors.js';
+import { handleApiError, apiError, ApiErrorCode } from './api-errors.js';
 
 export const throwProviderError = handleApiError;
 
@@ -84,6 +84,25 @@ export const assertManageProjects = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_projects');
 
 export const requireInstanceAdmin = (locals: Locals) => requirePermission(locals, 'instance_admin');
+
+/**
+ * Tenancy gate for `/api/v1/orgs/{orgId}/…`. The URL id is never trusted on its
+ * own — the acting context decides which tenant a request applies to, so a
+ * mismatch is 403 rather than a silent read of the caller's own org.
+ */
+export function requireActingOrg(
+	locals: Locals,
+	orgId: string | undefined
+): { ctx: RequestContext; orgId: string } {
+	const ctx = locals.ctx;
+	if (!ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+	if (!orgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing org ID');
+	if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
+	if (ctx.actingOrgId !== orgId) {
+		apiError(403, ApiErrorCode.FORBIDDEN, 'Acting org does not match the target org.');
+	}
+	return { ctx, orgId };
+}
 
 /**
  * Gate for routes that may be reached by any platform-class permission holder

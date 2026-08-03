@@ -43,8 +43,8 @@ import {
 	expectHttpError,
 	type TestProviders
 } from './fixtures.js';
-import { POST as reclaimPOST } from '../../../routes/api/projects/[id]/reclaim/+server.js';
-import { PATCH as projectPATCH } from '../../../routes/api/projects/[id]/+server.js';
+import { POST as reclaimPOST } from '../../../routes/api/v1/projects/[id]/reclaim/+server.js';
+import { PATCH as projectPATCH } from '../../../routes/api/v1/projects/[id]/+server.js';
 
 let tp: TestProviders | null = null;
 

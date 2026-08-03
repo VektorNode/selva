@@ -16,13 +16,13 @@ licensed, minutes to boot).
 One solve request, synchronous end to end:
 
 ```
-Browser ──HTTP POST /api/compute──► Selva server ──HTTP──► Rhino.Compute
+Browser ──HTTP POST /api/v1/compute──► Selva server ──HTTP──► Rhino.Compute
         ◄────── full JSON result ──┘            ◄── JSON ──┘
 ```
 
 - The client never talks to Rhino.Compute directly. The Selva server proxies
   everything and holds the compute URL + API key
-  ([+server.ts](../packages/selva/src/routes/api/compute/+server.ts)).
+  ([+server.ts](../packages/selva/src/routes/api/v1/compute/+server.ts)).
 - The full `.gh`, the full input tree, and the full result are each **buffered
   whole in Node memory**, then `JSON.stringify`-ed once and gzipped with
   `gzipSync`. The size caps in
@@ -79,7 +79,7 @@ Near-term, no architecture change:
 
 Structural (the keystone for everything in §2):
 
-- **Async job model with results in object storage.** `POST /api/compute`
+- **Async job model with results in object storage.** `POST /api/v1/compute`
   enqueues and returns a job ID; a worker solves and writes results to storage
   (small JSON manifest + **binary blobs** for meshes/geometry); the client is
   notified (polling or SSE) and downloads **directly from storage via presigned

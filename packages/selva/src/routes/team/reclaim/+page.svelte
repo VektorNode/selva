@@ -29,7 +29,7 @@
 	async function reclaim(project: ReclaimRow) {
 		reclaimingId = project.id;
 		try {
-			const res = await fetch(`/api/projects/${project.id}/reclaim`, { method: 'POST' });
+			const res = await fetch(`/api/v1/projects/${project.id}/reclaim`, { method: 'POST' });
 			if (res.ok) {
 				toast.success(`Reclaimed "${project.name}"`);
 				await invalidateAll();

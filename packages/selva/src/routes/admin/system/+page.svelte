@@ -181,7 +181,7 @@
 		}
 	}
 
-	// Probe the *heavier* readiness endpoint (`/admin/api/system/health`), not
+	// Probe the *heavier* readiness endpoint (`/api/admin/system/health`), not
 	// just /api/health. The lightweight /api/health answers the instant the Node
 	// process boots — before the app can necessarily serve real routes through
 	// the proxy — so keying "online" on it alone races: the UI said "back online"
@@ -193,7 +193,7 @@
 	// Returns true only on a real 200; false on any non-2xx or transport error.
 	async function isReadinessProbeWarm(): Promise<boolean> {
 		try {
-			const res = await fetch('/admin/api/system/health', { cache: 'no-store' });
+			const res = await fetch('/api/admin/system/health', { cache: 'no-store' });
 			return res.ok;
 		} catch {
 			return false;
@@ -207,7 +207,7 @@
 	// hasn't booted yet).
 	async function fetchUpdateLog(): Promise<string | null> {
 		try {
-			const res = await fetch('/admin/api/system/update', { cache: 'no-store' });
+			const res = await fetch('/api/admin/system/update', { cache: 'no-store' });
 			if (!res.ok) return null;
 			return await res.text();
 		} catch {
@@ -245,7 +245,7 @@
 	// can't satisfy the check either. And even a fresh instanceId isn't enough on
 	// its own — /api/health answers the instant the process boots, a beat before
 	// real routes serve through the proxy, so we additionally require the heavier
-	// /admin/api/system/health route to answer 200 (isReadinessProbeWarm). That
+	// /api/admin/system/health route to answer 200 (isReadinessProbeWarm). That
 	// pairing is what prevents the premature "online" verdict that left an
 	// immediate reload / health-check click hitting a 502.
 	//
@@ -350,7 +350,7 @@
 		const previousInstanceId = preHealth?.instanceId ?? null;
 
 		try {
-			const response = await fetch('/admin/api/system/update', { method: 'POST' });
+			const response = await fetch('/api/admin/system/update', { method: 'POST' });
 			if (!response.ok) {
 				updateLogs = 'Failed to start update process';
 				updateExitCode = response.status;

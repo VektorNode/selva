@@ -247,8 +247,8 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 	const publicRoute = isPublicRoute(pathname);
 	// Distinguish JSON API routes from page routes for response-shape choices
-	// (401 JSON vs 303 redirect). Both `/api/*` and `/admin/api/*` qualify.
-	const isJsonApiRoute = pathname.startsWith('/api/') || pathname.startsWith('/admin/api/');
+	// (401 JSON vs 303 redirect). All HTTP endpoints live under `/api/*`.
+	const isJsonApiRoute = pathname.startsWith('/api/');
 
 	// On first run (no users yet), redirect non-public traffic to /setup so a
 	// fresh deployment lands on the bootstrap flow rather than a dead login

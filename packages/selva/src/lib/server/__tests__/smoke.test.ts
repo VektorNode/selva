@@ -11,7 +11,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { freshProviders, seedAcme, actAs, call, type TestProviders } from './fixtures.js';
-import { GET, POST } from '../../../routes/api/projects/+server.js';
+import { POST } from '../../../routes/api/v1/projects/+server.js';
 
 let tp: TestProviders | null = null;
 
@@ -34,22 +34,7 @@ describe('smoke: test infrastructure', () => {
 		expect(locals.ctx.orgPermissions.length).toBeGreaterThan(0); // admin gets all
 	});
 
-	it("GET /api/projects via call() returns the seeded org's projects", async () => {
-		tp = await freshProviders();
-		const { alice } = await seedAcme(tp);
-		const locals = await actAs(tp, alice.id);
-
-		const res = await call(GET, { locals });
-		expect(res.status).toBe(200);
-		const body = res.json as { projects: Array<{ name: string }> };
-		expect(body.projects.map((p) => p.name).sort()).toEqual([
-			'Acme Org Project',
-			'Acme Public',
-			'Alice Private'
-		]);
-	});
-
-	it('POST /api/projects respects canCreateProject — Bob (member) is rejected', async () => {
+	it('POST /api/v1/projects respects canCreateProject — Bob (member) is rejected', async () => {
 		tp = await freshProviders();
 		const { bob } = await seedAcme(tp);
 		const locals = await actAs(tp, bob.id);

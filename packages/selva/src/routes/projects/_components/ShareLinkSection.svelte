@@ -26,10 +26,10 @@
 	async function loadLinks() {
 		loading = true;
 		try {
-			const res = await fetch(`/api/definitions/${definitionGuid}/share-links`);
+			const res = await fetch(`/api/v1/definitions/${definitionGuid}/share-links`);
 			if (!res.ok) throw new Error(`${res.status}`);
-			const data = (await res.json()) as { links: SafeShareLink[] };
-			links = data.links;
+			const data = (await res.json()) as { items: SafeShareLink[] };
+			links = data.items;
 		} catch {
 			toast.error('Failed to load share links');
 		} finally {
@@ -40,7 +40,7 @@
 	async function revoke(link: SafeShareLink) {
 		revokingId = link.id;
 		try {
-			const res = await fetch(`/api/definitions/${definitionGuid}/share-links/${link.id}`, {
+			const res = await fetch(`/api/v1/definitions/${definitionGuid}/share-links/${link.id}`, {
 				method: 'DELETE'
 			});
 			if (!res.ok) {

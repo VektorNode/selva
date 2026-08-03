@@ -237,7 +237,7 @@
 						: {})
 				}))
 			};
-			const res = await fetch('/admin/api/compute', {
+			const res = await fetch('/api/admin/compute', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload)
@@ -277,7 +277,7 @@
 		}
 		busyAction[server.id] = action;
 		try {
-			const res = await fetch('/admin/api/compute/actions', {
+			const res = await fetch('/api/admin/compute/actions', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ serverId: server.id, action })

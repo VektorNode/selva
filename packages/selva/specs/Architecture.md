@@ -188,7 +188,7 @@ A Grasshopper definition (`.gh` or `.ghx`) plus its metadata.
 Per-definition, per-channel grant for unauthenticated access. **Replaces all anonymous-access mechanisms.**
 
 - `(id, definitionId, channel, tokenHash, allowSolve, maxSolves, expiresAt, revokedAt, solveCount, …)`.
-- Raw token shown to the minter **once** at creation (`POST /api/definitions/[guid]/share-links`); only `tokenHash` (HMAC) persisted.
+- Raw token shown to the minter **once** at creation (`POST /api/v1/definitions/[guid]/share-links`); only `tokenHash` (HMAC) persisted.
 - Resolution: HMAC the supplied token, look up by hash, check revocation/expiry/cap/parent-status, build a synthetic `RequestContext` scoped to the token, skip user-based rules.
 - Default cap: `maxSolves = 1000` (a denial-of-wallet protection, since iframe-embedded tokens are publicly visible by design).
 - Cascades: definition soft-delete → tokens fail closed; definition hard-delete → tokens FK-cascade.
@@ -212,7 +212,7 @@ Per-definition, per-channel grant for unauthenticated access. **Replaces all ano
   2. **Per-org default** (`orgDefaults[orgId]`) — set by the org owner from servers visible to that org.
   3. **Global default** (`defaultServerId`) — set by `manage_compute`.
 - An org can only see/use platform servers shared with it (`'all'`, or its id in `sharedWith`, or the global default) plus servers it owns. Helper: `serversVisibleTo(config, orgId)` in [`@selvajs/platform`](../../platform/src/computeServer/utils.ts).
-- **`ALLOW_ORG_COMPUTE_OVERRIDE` flag** gates org-private server creation and per-org default selection (`/api/org/compute` returns 403 when off). Platform servers and the global default work identically regardless of the flag — single-tenant self-hosted typically leaves it off, with the admin sharing platform servers to the one org.
+- **`ALLOW_ORG_COMPUTE_OVERRIDE` flag** gates org-private server creation and per-org default selection (`/api/v1/orgs/[orgId]/compute` returns 403 when off). Platform servers and the global default work identically regardless of the flag — single-tenant self-hosted typically leaves it off, with the admin sharing platform servers to the one org.
 
 ### 4.9 UserProfile
 
@@ -353,7 +353,7 @@ Things the architecture supports today but no code path exercises yet. These are
 | **Channel UX in selva app**               | Editors can't toggle live/draft in the UI; share-link minter UI doesn't pin channel                                    | Editors need to test draft solves in-app                    |
 | **`ALLOW_ORG_CREATION` enforcement**      | Platform flag exists in `SelvaFlags`; no route consults it                                                             | SaaS multi-tenant ships and self-service org creation lands |
 | **Multi-tenant `actingOrgId` resolution** | Today resolves to first membership; no URL-prefix / subdomain / org-switcher UX                                        | A user can belong to >1 org in a real deployment            |
-| **Self-service org creation**             | `/admin/api/orgs` exists for instance-admin; no end-user create flow                                                   | SaaS multi-tenant ships                                     |
+| **Self-service org creation**             | `/api/admin/orgs` exists for instance-admin; no end-user create flow                                                   | SaaS multi-tenant ships                                     |
 | **Cross-org guests on private projects**  | Permissions.md §12 deferred                                                                                            | First customer asks for it                                  |
 | **Audit-log viewer UI**                   | `SupabaseEventSink` already persists every domain event to `public.audit_events`; operator-facing browser UI not built | Operators need to read the trail without opening the DB     |
 
