@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { getDefinitionService, getProjectProvider } from '$lib/server/providers.server';
 import { requireCanCreateDefinition } from '$lib/server/access.server';
-import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode, throwZodError } from '$lib/server/api-errors';
 import { CreateDefinitionInputSchema } from '@selvajs/platform/definitions';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
@@ -11,40 +10,46 @@ import { fetchSchemaFromCompute } from '$lib/server/definitions/schemaExtraction
 import { listVisibleDefinitions } from '$lib/server/definitions/visibility.server';
 import { parseDefinitionListOptions } from '$lib/server/pagination.server';
 import { toDefinitionListItem, type DefinitionStatus } from '@selvajs/platform';
+import {
+	apiRoute,
+	collection,
+	created,
+	formText,
+	requireCaller,
+	requireUpload
+} from '$lib/server/api/v1/route';
 
 const LISTABLE_STATUSES: DefinitionStatus[] = ['draft', 'published', 'archived'];
 
-// GET — definitions the caller can view. Visibility is resolved into the query
-// via `projectIds`, so `limit`/`nextCursor` describe the filtered set.
-export const GET: RequestHandler = async ({ locals, url }) => {
-	if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+/**
+ * Definitions the caller can view. Visibility is resolved into the query via
+ * `projectIds`, so `limit`/`nextCursor` describe the filtered set.
+ */
+export const GET: RequestHandler = apiRoute(
+	'Failed to list definitions',
+	async ({ locals, url }) => {
+		const { ctx } = requireCaller(locals);
 
-	const statusParam = url.searchParams.get('status');
-	if (statusParam && !LISTABLE_STATUSES.includes(statusParam as DefinitionStatus)) {
-		apiError(
-			400,
-			ApiErrorCode.VALIDATION_FAILED,
-			`status must be one of: ${LISTABLE_STATUSES.join(', ')}`
-		);
-	}
+		const statusParam = url.searchParams.get('status');
+		if (statusParam && !LISTABLE_STATUSES.includes(statusParam as DefinitionStatus)) {
+			apiError(
+				400,
+				ApiErrorCode.VALIDATION_FAILED,
+				`status must be one of: ${LISTABLE_STATUSES.join(', ')}`
+			);
+		}
 
-	try {
-		const page = await listVisibleDefinitions(locals.ctx, {
+		const page = await listVisibleDefinitions(ctx, {
 			...parseDefinitionListOptions(url),
 			projectId: url.searchParams.get('projectId') ?? undefined,
 			statuses: statusParam ? [statusParam as DefinitionStatus] : undefined
 		});
-		return json({
-			items: page.items.map(toDefinitionListItem),
-			nextCursor: page.nextCursor
-		});
-	} catch (err) {
-		handleApiError(err, 'Failed to list definitions');
+		return collection({ items: page.items.map(toDefinitionListItem), nextCursor: page.nextCursor });
 	}
-};
+);
 
-function parseTags(raw: unknown): string[] | undefined {
-	if (typeof raw !== 'string' || !raw.trim()) return undefined;
+function parseTags(raw: string | undefined): string[] | undefined {
+	if (!raw) return undefined;
 	const tags = raw
 		.split(',')
 		.map((t) => t.trim())
@@ -52,75 +57,59 @@ function parseTags(raw: unknown): string[] | undefined {
 	return tags.length ? tags : undefined;
 }
 
-// POST - Create a new definition (metadata + GH file in one request)
-export const POST: RequestHandler = async ({ request, locals }) => {
-	const ctx = locals.ctx!;
-	const formData = await request.formData();
+/** Create a definition — metadata and the Grasshopper file in one request. */
+export const POST: RequestHandler = apiRoute(
+	'Failed to create definition',
+	async ({ request, locals }) => {
+		const ctx = locals.ctx!;
+		const form = await request.formData();
 
-	const file = formData.get('file');
-	if (!(file instanceof File)) {
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'A Grasshopper (.gh or .ghx) file is required');
-	}
-
-	const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-	if (!GH_EXTENSIONS.includes(ext)) {
-		apiError(
-			400,
-			ApiErrorCode.VALIDATION_FAILED,
-			`File type not allowed. Allowed: ${GH_EXTENSIONS.join(', ')}`
-		);
-	}
-	if (file.size > MAX_GH_FILE_SIZE) {
-		apiError(
-			400,
-			ApiErrorCode.VALIDATION_FAILED,
-			`File too large. Max size: ${MAX_GH_FILE_SIZE / (1024 * 1024)} MB`
-		);
-	}
-
-	const imageFile = formData.get('image');
-	if (imageFile instanceof File && imageFile.size > MAX_IMAGE_FILE_SIZE) {
-		apiError(
-			400,
-			ApiErrorCode.VALIDATION_FAILED,
-			`Image too large. Max size: ${MAX_IMAGE_FILE_SIZE / (1024 * 1024)} MB`
-		);
-	}
-
-	let projectId = formData.get('projectId');
-	if (typeof projectId !== 'string' || !projectId) {
-		// Fall back to the first project of the active org.
-		if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
-		const projectsPage = await getProjectProvider().listProjects(ctx, ctx.actingOrgId, {
-			limit: 1
+		const { file, extension } = requireUpload(form, 'file', {
+			maxBytes: MAX_GH_FILE_SIZE,
+			extensions: GH_EXTENSIONS,
+			label: 'Grasshopper (.gh or .ghx) file'
 		});
-		const defaultProject = projectsPage.items[0];
-		if (!defaultProject) apiError(500, ApiErrorCode.INTERNAL, 'No project configured');
-		projectId = defaultProject.id;
-	}
 
-	const { project } = await requireCanCreateDefinition(locals, projectId);
+		const imageFile = form.get('image');
+		if (imageFile instanceof File && imageFile.size > MAX_IMAGE_FILE_SIZE) {
+			apiError(
+				400,
+				ApiErrorCode.VALIDATION_FAILED,
+				`Image too large. Max size: ${MAX_IMAGE_FILE_SIZE / (1024 * 1024)} MB`
+			);
+		}
 
-	const parsed = CreateDefinitionInputSchema.safeParse({
-		displayName: formData.get('displayName'),
-		description: formData.get('description') || undefined,
-		category: formData.get('category') || undefined,
-		coverImage: formData.get('coverImage') || undefined,
-		tags: parseTags(formData.get('tags')),
-		projectId,
-		computeServerId: formData.get('computeServerId') || undefined
-	});
-	if (!parsed.success) throwZodError(parsed.error);
+		let projectId = formText(form, 'projectId');
+		if (!projectId) {
+			// Fall back to the first project of the acting org.
+			if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
+			const page = await getProjectProvider().listProjects(ctx, ctx.actingOrgId, { limit: 1 });
+			const fallback = page.items[0];
+			if (!fallback) apiError(500, ApiErrorCode.INTERNAL, 'No project configured');
+			projectId = fallback.id;
+		}
 
-	const fileExt = ext.slice(1) as 'gh' | 'ghx';
-	const guid = randomUUID();
+		const { project } = await requireCanCreateDefinition(locals, projectId);
 
-	try {
+		// Not `parseBody` — the fields arrive as multipart, not JSON, so they are
+		// assembled here and validated by the same schema.
+		const parsed = CreateDefinitionInputSchema.safeParse({
+			displayName: formText(form, 'displayName'),
+			description: formText(form, 'description'),
+			category: formText(form, 'category'),
+			coverImage: formText(form, 'coverImage'),
+			tags: parseTags(formText(form, 'tags')),
+			projectId,
+			computeServerId: formText(form, 'computeServerId')
+		});
+		if (!parsed.success) throwZodError(parsed.error);
+
+		const guid = randomUUID();
 		const fileData = new Uint8Array(await file.arrayBuffer());
 
 		// Validate-and-cache gate: extract the schema from compute BEFORE any
-		// write. A failure here (compute down / no valid Schema output) rejects
-		// the upload with nothing persisted. See specs/SchemaCaching.md.
+		// write, so compute being down or the file having no Schema output rejects
+		// the upload with nothing persisted.
 		const server = await resolveServerForOrg(ctx, project.orgId, {
 			definitionPin: parsed.data.computeServerId ?? null
 		});
@@ -132,7 +121,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				guid,
 				projectId: parsed.data.projectId,
 				ownerId: locals.user!.id,
-				fileExt,
+				fileExt: extension.slice(1) as 'gh' | 'ghx',
 				originalFilename: file.name,
 				computeServerId: parsed.data.computeServerId,
 				displayName: parsed.data.displayName.trim(),
@@ -151,8 +140,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			coverImage = await getDefinitionService().saveCoverImage(ctx, guid, imageData);
 		}
 
-		return json({ guid, version, coverImage }, { status: 201 });
-	} catch (err) {
-		handleApiError(err, 'Failed to create definition');
+		return created({ guid, version, coverImage });
 	}
-};
+);

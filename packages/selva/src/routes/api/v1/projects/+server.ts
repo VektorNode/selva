@@ -1,14 +1,14 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanCreateProject } from '$lib/server/access.server';
-import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { slugify } from '@selvajs/platform';
-import { ProjectVisibilitySchema, ProviderError, type Project } from '@selvajs/platform';
+import { ProviderError, type Project } from '@selvajs/platform';
 import { resolveAccessibleProjects } from '$lib/server/definitions/visibility.server';
 import { parseListOptions } from '$lib/server/pagination.server';
+import { CreateProjectBodySchema } from '$lib/server/api/v1/bodies';
+import { apiRoute, collection, created, parseBody, requireCaller } from '$lib/server/api/v1/route';
 
 const MAX_SLUG_ATTEMPTS = 25;
 
@@ -33,96 +33,86 @@ function isNameConflict(err: unknown): boolean {
 // Authored against `resolveAccessibleProjects`, not lifted from the pre-v1
 // handler: that one listed every project in the acting org with no `canView`
 // filter and had no UI caller, so it carried no evidence of being correct.
-export const GET: RequestHandler = async ({ locals, url }) => {
-	if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+export const GET: RequestHandler = apiRoute('Failed to list projects', async ({ locals, url }) => {
+	const { ctx } = requireCaller(locals);
 
-	try {
-		const { projects } = await resolveAccessibleProjects(locals.ctx);
-		const { limit, cursor } = parseListOptions(url);
-		// The accessible set is resolved in-process rather than by the store, so
-		// the cursor is an index into it. Opaque to callers either way.
-		const start = cursor ? Number(cursor) : 0;
-		if (!Number.isInteger(start) || start < 0)
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid cursor');
-
-		const pageSize = limit ?? projects.length;
-		const items = projects.slice(start, start + pageSize);
-		const nextIndex = start + items.length;
-		return json({
-			items,
-			nextCursor: nextIndex < projects.length ? String(nextIndex) : undefined
-		});
-	} catch (err) {
-		handleApiError(err, 'Failed to list projects');
+	const { projects } = await resolveAccessibleProjects(ctx);
+	const { limit, cursor } = parseListOptions(url);
+	// The accessible set is resolved in-process rather than by the store, so the
+	// cursor is an index into it. Opaque to callers either way.
+	const start = cursor ? Number(cursor) : 0;
+	if (!Number.isInteger(start) || start < 0) {
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid cursor');
 	}
-};
 
-const CreateProjectBody = z.object({
-	name: z.string().min(1, 'Project name is required').max(128).trim(),
-	description: z.string().max(2000).optional(),
-	visibility: ProjectVisibilitySchema.default('private'),
-	autoJoinOnUpload: z.boolean().optional()
+	const items = projects.slice(start, start + (limit ?? projects.length));
+	const nextIndex = start + items.length;
+	return collection({
+		items,
+		nextCursor: nextIndex < projects.length ? String(nextIndex) : undefined
+	});
 });
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	const ctx = locals.ctx!;
-	if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
-	await requireCanCreateProject(locals, ctx.actingOrgId);
+export const POST: RequestHandler = apiRoute(
+	'Failed to create project',
+	async ({ request, locals }) => {
+		const ctx = locals.ctx!;
+		if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
+		await requireCanCreateProject(locals, ctx.actingOrgId);
 
-	const body = await request.json().catch(() => null);
-	const parsed = CreateProjectBody.safeParse(body);
-	if (!parsed.success) throwZodError(parsed.error);
+		const input = await parseBody(request, CreateProjectBodySchema);
 
-	const autoJoinOnUpload = parsed.data.autoJoinOnUpload ?? false;
-	if (autoJoinOnUpload && parsed.data.visibility !== 'public') {
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'autoJoinOnUpload requires visibility=public');
-	}
-
-	const projectStore = getProjectProvider();
-	const baseSlug = slugify(parsed.data.name) || 'project';
-	const now = new Date().toISOString();
-	const projectId = randomUUID();
-
-	// Retry on slug collision: the user may not be able to *see* a colliding
-	// project under RLS, so a pre-flight getProjectBySlug isn't enough — the
-	// unique-index is the source of truth. Retry up to MAX_SLUG_ATTEMPTS.
-	for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
-		const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
-		const project: Project = {
-			id: projectId,
-			orgId: ctx.actingOrgId,
-			name: parsed.data.name,
-			slug,
-			description: parsed.data.description,
-			visibility: parsed.data.visibility,
-			ownerId: locals.user!.id,
-			createdBy: locals.user!.id,
-			updatedBy: locals.user!.id,
-			autoJoinOnUpload,
-			createdAt: now,
-			updatedAt: now,
-			deletedAt: null
-		};
-
-		try {
-			await projectStore.createProject(ctx, project);
-			return json(project, { status: 201 });
-		} catch (err) {
-			if (isNameConflict(err)) {
-				apiError(
-					409,
-					ApiErrorCode.CONFLICT,
-					'A project with that name already exists in this organization.'
-				);
-			}
-			if (isSlugConflict(err)) continue;
-			handleApiError(err, 'Failed to create project');
+		const autoJoinOnUpload = input.autoJoinOnUpload ?? false;
+		if (autoJoinOnUpload && input.visibility !== 'public') {
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'autoJoinOnUpload requires visibility=public');
 		}
-	}
 
-	apiError(
-		409,
-		ApiErrorCode.CONFLICT,
-		'Could not pick a unique project slug after several attempts.'
-	);
-};
+		const projectStore = getProjectProvider();
+		const baseSlug = slugify(input.name) || 'project';
+		const now = new Date().toISOString();
+		const projectId = randomUUID();
+
+		// Retry on slug collision: the caller may not be able to *see* a colliding
+		// project under RLS, so a pre-flight getProjectBySlug isn't enough — the
+		// unique index is the source of truth.
+		for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
+			const project: Project = {
+				id: projectId,
+				orgId: ctx.actingOrgId,
+				name: input.name,
+				slug: attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`,
+				description: input.description,
+				visibility: input.visibility,
+				ownerId: locals.user!.id,
+				createdBy: locals.user!.id,
+				updatedBy: locals.user!.id,
+				autoJoinOnUpload,
+				createdAt: now,
+				updatedAt: now,
+				deletedAt: null
+			};
+
+			try {
+				await projectStore.createProject(ctx, project);
+				return created(project);
+			} catch (err) {
+				if (isNameConflict(err)) {
+					apiError(
+						409,
+						ApiErrorCode.CONFLICT,
+						'A project with that name already exists in this organization.'
+					);
+				}
+				// A slug clash is the one error worth another attempt; everything else
+				// leaves the loop for the wrapper to map.
+				if (!isSlugConflict(err)) throw err;
+			}
+		}
+
+		apiError(
+			409,
+			ApiErrorCode.CONFLICT,
+			'Could not pick a unique project slug after several attempts.'
+		);
+	}
+);

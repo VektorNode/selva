@@ -646,7 +646,92 @@ replays the stored response instead of re-solving. In-memory store keyed by
 `(tokenId|userId, key)` — the goal is absorbing client retries, not durable result caching. Adding
 it after PATs ship would mean changing a contract that already has consumers.
 
-### Phase D — contract artifacts
+### Phase D — contract artifacts — **DONE**
+
+Decisions taken during implementation:
+
+- **The validators moved before the spec could be derived from them.** A `+server.ts` imports
+  `./$types`, a SvelteKit build artifact, so a generator cannot load one — with the schemas inline,
+  "derived from Zod" would have meant hand-transcribing them, which is the shape drift the spec
+  exists to prevent. Every v1 JSON body now lives in `$lib/server/api/v1/bodies.ts`, imported by
+  both the route and the generator. Seven validators moved; behaviour unchanged.
+- **No `zod-openapi` dependency.** Zod 4 emits JSON Schema natively (`z.toJSONSchema`), and the
+  repo is already on 4.4.3. Request bodies use `io: 'input'` so a field with a default documents as
+  optional — the client's view, not the parsed one.
+- **Response schemas are deliberately not derived.** Handlers build payloads from store records
+  with no Zod validator on the way out, so there is nothing to derive from. The envelopes (`Page`,
+  `Error`) are described precisely and individual resource bodies are left open. Claiming
+  precision that does not exist would be worse than claiming less.
+- **The generator lives inside the conformance test.** It needs `$lib` resolution and the workspace
+  `source` condition, both configured for vitest; a standalone runner with its own resolver could
+  build the document from a different module graph than the test checking it. `pnpm
+openapi:generate` sets `UPDATE_OPENAPI=1` and runs that one test. A stale committed spec fails
+  `pnpm test` — the drift check and the generator are one mechanism, so they cannot disagree.
+- **A registry, not a spec, is the source of truth.** `$lib/server/api/v1/registry.ts` lists every
+  method+path with its body validator, response kind and `internal` flag; the spec and all five
+  conformance assertions read it. That is what makes drift detectable in _both_ directions.
+- **`/me/*` is exempt from the 404-not-403 rule.** Those paths address the caller's own profile, so
+  there is no other tenant's existence to disclose — `DELETE /me/starred/{guid}` legitimately 204s
+  for a guid the caller cannot see. Found by the assertion failing on a route that was correct.
+- **The docs page filters internal endpoints in its load function, not its markup.** Hiding them in
+  the template would still ship them in the page payload, one devtools panel away from reading as
+  a promise. A test asserts no internal endpoint reaches the browser.
+- **`/docs/` joins the public prefixes.** An API reference gated behind login is hidden from the
+  people deciding whether to integrate. It describes shapes, not tenant data. The spec is served at
+  `/docs/api/openapi.yaml` from a `?raw` import — inlined at build time, so no runtime path
+  resolution and no `static/` copy inviting a hand-edit the next generate would overwrite.
+
+**The assertions were verified by breaking them**, not by watching them pass: a bare `error()` in
+`/me`, a removed guard on admin `GET /users`, and an unregistered `/ghost` route each failed the
+suite by name, and each was reverted.
+
+Verified: `pnpm type-check` (22/22), `pnpm check` (0 errors, 0 warnings), `pnpm lint` (0 errors;
+272 pre-existing `no-explicit-any` warnings), `pnpm test` (22/22 — selva 342/342, up from 250),
+plus `pnpm build --filter=@selvajs/selva` to confirm the `?raw` yaml import survives the adapter
+bundle.
+
+### Phase E — unify the handlers — **DONE**
+
+Phase D made the contract enforceable but left the handlers as they were: 2070 lines across 27
+files, four things spelled out in each (validate the path, parse the body, do the work, serialize),
+already drifted. Path params were checked two ways — `GuidSchema.safeParse` in 18 places and a
+manual `if (!id)` in 13. The `try { … } catch (handleApiError) }` tail appeared 59 times. Five
+upload handlers each formatted their own "Max size: N MB".
+
+Shared helpers now carry all of it: `$lib/server/api/v1/route.ts` (`apiRoute`, `requireCaller`,
+`requireParams`, `parseParam`, `parseBody`, `requireUpload`, `formText`, `collection`, `created`,
+`noContent`, `shaped`) and `responses.ts`. **1825 lines, and the remaining duplication is zero** —
+no `handleApiError` tail, no manual param check, no inline clamp anywhere in the tree.
+
+Two of these were correctness fixes, not tidying:
+
+- **Four list endpoints hand-rolled the pagination clamp** — share-links, versions, invites and
+  project members — and all four diverged from `parseListOptions`: they hardcoded `50` instead of
+  `DEFAULT_PAGE_LIMIT`, dropped `Math.trunc` (so `limit=5.9` reached the store), and **silently
+  ignored the `orderBy`/`orderDir` the spec documents them as accepting**. Code now matches spec,
+  and a conformance assertion rejects both an inline clamp and a direct `searchParams.get('limit')`
+  on any endpoint the registry calls a collection — so a fifth copy cannot be written.
+- **Secret stripping became structural.** `ShareLink.tokenHash`, `Invite.tokenHash` and
+  `OrgComputeServer.apiKey` were removed by destructuring, which holds until someone edits the line
+  away or adds a field to the stored type — neither fails a build. Responses now parse through an
+  explicit schema, so a new field on a stored record is invisible to clients until it is added on
+  purpose. A test proves the credential cannot get through even when present on the input, and that
+  a later-added field is dropped.
+
+Also: `PATCH /orgs/{orgId}/compute` was the last handler validating its body by hand (a cast to a
+TS interface plus manual checks). It is now `OrgComputePatchBodySchema`, so the spec derives that
+body too. Its `apiKey` is deliberately `.nullable().optional()` and **not** `.nullish()` — omitted
+keeps the stored key, `null` clears it, a string replaces it, and collapsing the first two would
+wipe a live credential on any save that left the field out. A test pins the three-way distinction.
+
+Verified: `pnpm type-check` (22/22), `pnpm check` (0/0), `pnpm lint` (0 errors; the new and changed
+files lint completely clean), `pnpm test` (353, up from 343), plus a production build.
+
+Not done, recorded rather than silently dropped: **`Cache-Control: private, no-store` on v1 GET
+responses.** Carried from earlier phases and still open — a PAT-reachable API returning
+tenant-scoped JSON with no explicit cache header risks a proxy caching an authenticated response.
+It is a one-line hook change plus a conformance assertion, but it changes response headers on every
+read endpoint, which is its own PR.
 
 1. **OpenAPI spec** `packages/selva/openapi/v1.yaml`: all v1 endpoints, auth schemes (cookie +
    bearer), scopes (from token-plan), pagination params, full `ApiErrorCode` enum, `x-internal`

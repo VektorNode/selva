@@ -169,8 +169,10 @@ const routeClassifier = createRouteClassifier({
 	publicPages: PUBLIC_PAGE_ROUTES,
 	// `/auth/` covers the OAuth start + callback flow (the user has no session
 	// yet by definition). `/logout` is a form-action page — the action destroys
-	// the session, then redirects.
-	publicPrefixes: ['/auth/', '/logout'],
+	// the session, then redirects. `/docs/` is the API reference: it describes
+	// the shape of the API and reads no tenant data, and gating it would hide it
+	// from the people who need it most — callers deciding whether to integrate.
+	publicPrefixes: ['/auth/', '/logout', '/docs/'],
 	// Endpoints that must answer without a session — currently just the
 	// load-balancer health probe. Anything added here must be safe to expose
 	// to anonymous callers.

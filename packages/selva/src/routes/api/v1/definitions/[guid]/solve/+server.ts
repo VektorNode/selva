@@ -1,6 +1,7 @@
 import type { RequestHandler } from './$types';
-import { z } from 'zod';
-import { apiError, ApiErrorCode, throwZodError } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { SolveBodySchema } from '$lib/server/api/v1/bodies';
+import { parseBody, requireCaller, requireParams } from '$lib/server/api/v1/route';
 import type { PipelineInput } from '@selvajs/solve/server';
 import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
@@ -22,19 +23,6 @@ import {
  * keeps the URL-addressed and share-token flows.
  */
 
-const SolveBody = z.object({
-	inputs: z.array(z.unknown()).default([]),
-	values: z.record(z.string(), z.unknown()).default({}),
-	channel: z.enum(['live', 'draft']).default('live'),
-	versionId: z.string().optional(),
-	/**
-	 * Accepted only when it names this same definition. A caller pasting a body
-	 * from `/api/v1/compute` should get a clear 400, not a silent solve of a
-	 * different definition than the URL names.
-	 */
-	definitionUrl: z.string().optional()
-});
-
 export const POST: RequestHandler = async ({ request, params, locals }) => {
 	requireMaxBodySize(request, COMPUTE_REQUEST_MAX_BYTES);
 
@@ -46,18 +34,14 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 		prevMark = performance.now();
 	};
 
-	const { guid } = params;
-	if (!guid) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing definition guid');
-	if (!locals.ctx || !locals.user) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
-	const ctx = locals.ctx;
+	const { guid } = requireParams(params, 'guid');
+	const { ctx, user } = requireCaller(locals);
 
-	const raw = await request.json().catch(() => null);
-	const parsed = SolveBody.safeParse(raw ?? {});
-	if (!parsed.success) throwZodError(parsed.error);
+	const body = await parseBody(request, SolveBodySchema, { missingAs: {} });
 	mark('body');
 
 	const definitionUrl = `local:${guid}`;
-	if (parsed.data.definitionUrl !== undefined && parsed.data.definitionUrl !== definitionUrl) {
+	if (body.definitionUrl !== undefined && body.definitionUrl !== definitionUrl) {
 		apiError(
 			400,
 			ApiErrorCode.VALIDATION_FAILED,
@@ -69,12 +53,12 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 		runSolve({
 			// The `user` variant is the only one constructible here — this route has
 			// no share-token branch and must never grow one.
-			access: { kind: 'user', ctx, rateLimitKey: `user:${locals.user!.id}` },
+			access: { kind: 'user', ctx, rateLimitKey: `user:${user.id}` },
 			definitionUrl,
-			inputs: parsed.data.inputs as PipelineInput[],
-			values: parsed.data.values,
-			channel: parsed.data.channel,
-			versionId: parsed.data.versionId ?? null,
+			inputs: body.inputs as PipelineInput[],
+			values: body.values,
+			channel: body.channel,
+			versionId: body.versionId ?? null,
 			request,
 			locals,
 			loadStart,
@@ -91,7 +75,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 		// Caller identity is part of the key: `Idempotency-Key` is client-chosen,
 		// so two tenants can pick the same string. Once PATs land, the token id
 		// belongs here so two tokens of one user don't share replays.
-		const key = idempotencyKey(locals.user.id, clientKey);
+		const key = idempotencyKey(user.id, clientKey);
 		const { value, replayed } = await withIdempotency(key, async () =>
 			toStoredResponse(await solve())
 		);

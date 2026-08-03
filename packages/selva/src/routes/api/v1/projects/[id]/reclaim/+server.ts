@@ -1,36 +1,32 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanReclaim } from '$lib/server/access.server';
-import { handleApiError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import type { ProjectMember } from '@selvajs/platform';
+import { apiRoute, created, requireParams } from '$lib/server/api/v1/route';
 
 /**
- * §5 — org owner/admin escape hatch. Adds the actor as a co-owner; does
- * NOT demote the existing owner. Idempotent: reclaiming twice is a no-op
- * because `addProjectMember` reactivates a soft-deleted row in place.
+ * Org owner/admin escape hatch. Adds the actor as a co-owner and does NOT
+ * demote the existing owner. Idempotent: reclaiming twice is a no-op, because
+ * `addProjectMember` reactivates a soft-deleted row in place.
  */
-export const POST: RequestHandler = async ({ params, locals }) => {
-	const { id } = params;
-	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
+export const POST: RequestHandler = apiRoute(
+	'Failed to reclaim project',
+	async ({ params, locals }) => {
+		const { id } = requireParams(params, 'id');
+		const { user, ctx } = await requireCanReclaim(locals, id);
 
-	const { user, ctx } = await requireCanReclaim(locals, id);
+		const now = new Date().toISOString();
+		const member: ProjectMember = {
+			projectId: id,
+			userId: user.id,
+			role: 'owner',
+			joinedAt: now,
+			updatedAt: now,
+			updatedBy: ctx.userId || user.id,
+			deletedAt: null
+		};
 
-	const now = new Date().toISOString();
-	const member: ProjectMember = {
-		projectId: id,
-		userId: user.id,
-		role: 'owner',
-		joinedAt: now,
-		updatedAt: now,
-		updatedBy: ctx.userId || user.id,
-		deletedAt: null
-	};
-
-	try {
 		await getProjectProvider().addProjectMember(ctx, member);
-		return json({ member }, { status: 201 });
-	} catch (err) {
-		handleApiError(err, 'Failed to reclaim project');
+		return created({ member });
 	}
-};
+);

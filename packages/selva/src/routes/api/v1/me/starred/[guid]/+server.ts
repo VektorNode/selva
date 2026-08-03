@@ -1,31 +1,27 @@
 import type { RequestHandler } from './$types';
 import { getUserProfileStore } from '$lib/server/providers.server';
-import { handleApiError, apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiRoute, noContent, requireCaller, requireParams } from '$lib/server/api/v1/route';
 
-/** Star a definition for the current user. Idempotent. */
-export const PUT: RequestHandler = async ({ params, locals }) => {
-	if (!locals.user || !locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
-	const guid = params.guid;
-	if (!guid) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing definition guid');
+/** Star a definition for the calling user. Idempotent. */
+export const PUT: RequestHandler = apiRoute(
+	'Failed to star definition',
+	async ({ params, locals }) => {
+		const { ctx, user } = requireCaller(locals);
+		const { guid } = requireParams(params, 'guid');
 
-	try {
-		await getUserProfileStore().starDefinition(locals.ctx, locals.user.id, guid);
-		return new Response(null, { status: 204 });
-	} catch (err) {
-		handleApiError(err, 'Failed to star definition');
+		await getUserProfileStore().starDefinition(ctx, user.id, guid);
+		return noContent();
 	}
-};
+);
 
-/** Unstar a definition for the current user. Idempotent. */
-export const DELETE: RequestHandler = async ({ params, locals }) => {
-	if (!locals.user || !locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
-	const guid = params.guid;
-	if (!guid) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing definition guid');
+/** Unstar a definition for the calling user. Idempotent. */
+export const DELETE: RequestHandler = apiRoute(
+	'Failed to unstar definition',
+	async ({ params, locals }) => {
+		const { ctx, user } = requireCaller(locals);
+		const { guid } = requireParams(params, 'guid');
 
-	try {
-		await getUserProfileStore().unstarDefinition(locals.ctx, locals.user.id, guid);
-		return new Response(null, { status: 204 });
-	} catch (err) {
-		handleApiError(err, 'Failed to unstar definition');
+		await getUserProfileStore().unstarDefinition(ctx, user.id, guid);
+		return noContent();
 	}
-};
+);

@@ -1,8 +1,9 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { handleApiError, apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { GuidSchema } from '@selvajs/platform/definitions';
 import { loadVisibleVersion } from '$lib/server/definitions/visibility.server';
+import { apiRoute, parseParam, requireCaller } from '$lib/server/api/v1/route';
 
 /**
  * The UI schema cached on this version at upload. Reads what is stored — no
@@ -11,22 +12,18 @@ import { loadVisibleVersion } from '$lib/server/definitions/visibility.server';
  * Schemas belong to a version, so this is the canonical location;
  * `/definitions/{guid}/schema` is an alias for the live one.
  */
-export const GET: RequestHandler = async ({ params, locals }) => {
-	const guidParsed = GuidSchema.safeParse(params.guid);
-	if (!guidParsed.success) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid or missing GUID');
-	const versionParsed = GuidSchema.safeParse(params.versionId);
-	if (!versionParsed.success)
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid or missing version ID');
-	if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+export const GET: RequestHandler = apiRoute(
+	'Failed to load version schema',
+	async ({ params, locals }) => {
+		const guid = parseParam(params.guid, GuidSchema, 'GUID');
+		const versionId = parseParam(params.versionId, GuidSchema, 'version ID');
+		const { ctx } = requireCaller(locals);
 
-	try {
-		const version = await loadVisibleVersion(locals.ctx, guidParsed.data, versionParsed.data);
+		const version = await loadVisibleVersion(ctx, guid, versionId);
 		if (!version) apiError(404, ApiErrorCode.NOT_FOUND, 'Version not found');
-		// Pre-caching versions can still lack a schema (lazy backfill bridge, see
-		// specs/SchemaCaching.md); that is a missing sub-resource, not an error.
+		// A pre-caching version can still lack a schema (lazy backfill bridge) —
+		// that is a missing sub-resource, not an error.
 		if (!version.schema) apiError(404, ApiErrorCode.NOT_FOUND, 'No schema cached for this version');
 		return json(version.schema);
-	} catch (err) {
-		handleApiError(err, 'Failed to load version schema');
 	}
-};
+);

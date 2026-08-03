@@ -1,4 +1,3 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { flag, getComputeServerConfigStore } from '$lib/server/providers.server';
@@ -7,7 +6,6 @@ import {
 	isOrgServer,
 	isPlatformServer,
 	serversVisibleTo,
-	type ComputeServerConfig,
 	type OrgComputeServer
 } from '@selvajs/platform';
 import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
@@ -17,6 +15,9 @@ import {
 	storedKeysById,
 	type IncomingServerBase
 } from '$lib/server/compute/serverConfigWrite';
+import { apiRoute, noContent, parseBody, shaped } from '$lib/server/api/v1/route';
+import { OrgComputeResponseSchema } from '$lib/server/api/v1/responses';
+import { OrgComputePatchBodySchema } from '$lib/server/api/v1/bodies';
 
 /**
  * Per-org compute endpoint. Manages this org's own servers
@@ -29,17 +30,6 @@ import {
  * `ALLOW_ORG_COMPUTE_OVERRIDE`; when off, both methods 403.
  */
 
-interface IncomingConfig {
-	servers: IncomingServerBase[];
-	/**
-	 * Org default selection. May reference any server visible to this org
-	 * — a platform server shared with us (or `'all'`, or the global
-	 * default) or one of our own org-private servers. `null` clears the
-	 * override; `undefined` leaves it untouched.
-	 */
-	defaultServerId?: string | null;
-}
-
 function requireFlag() {
 	if (!flag('ALLOW_ORG_COMPUTE_OVERRIDE')) {
 		apiError(
@@ -50,112 +40,107 @@ function requireFlag() {
 	}
 }
 
-type OrgServerPayload = Omit<OrgComputeServer, 'apiKey' | 'hasApiKey'> & { hasApiKey: boolean };
-type SharedServerPayload = Pick<
-	ComputeServerConfig,
-	'id' | 'label' | 'serverUrl' | 'scope' | 'timeoutMs' | 'retryCount'
-> & { source: 'platform' | 'org' };
+export const GET: RequestHandler = apiRoute(
+	'Failed to load org compute config',
+	async ({ params, locals }) => {
+		requireFlag();
+		requireManageOrgCompute(locals);
+		const { ctx, orgId } = requireActingOrg(locals, params.orgId);
 
-export const GET: RequestHandler = async ({ params, locals }) => {
-	requireFlag();
-	requireManageOrgCompute(locals);
-	const { ctx, orgId } = requireActingOrg(locals, params.orgId);
+		const config = await getComputeServerConfigStore().getConfig(ctx);
 
-	const config = await getComputeServerConfigStore().getConfig(ctx);
+		// Servers this org owns and may edit. `apiKey` is dropped by the response
+		// schema; `hasApiKey` is what a picker needs to render "key set".
+		const owned = config.servers
+			.filter((s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId)
+			.map((s) => ({ ...s, hasApiKey: !!s.hasApiKey }));
 
-	// Servers we own (editable). API keys stripped, replaced with hasApiKey.
-	const owned: OrgServerPayload[] = config.servers
-		.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId)
-		.map((s) => {
-			const orgServer = s as OrgComputeServer;
-			const { apiKey: _apiKey, hasApiKey, ...rest } = orgServer;
-			return { ...rest, hasApiKey: !!hasApiKey };
+		// Platform and own servers visible to this org — the read-only catalog
+		// behind the "default selection" dropdown.
+		const catalog = serversVisibleTo(config, orgId).map((s) => ({
+			id: s.id,
+			label: s.label,
+			serverUrl: s.serverUrl,
+			scope: s.scope,
+			source: isPlatformServer(s) ? ('platform' as const) : ('org' as const),
+			timeoutMs: s.timeoutMs,
+			retryCount: s.retryCount
+		}));
+
+		return shaped(OrgComputeResponseSchema, {
+			servers: owned,
+			defaultServerId: config.orgDefaults?.[orgId] ?? null,
+			globalDefaultServerId: config.defaultServerId ?? null,
+			catalog
 		});
-
-	// Platform + own servers visible to this org (read-only catalog) — used
-	// to populate the "default selection" dropdown.
-	const visible = serversVisibleTo(config, orgId);
-	const catalog: SharedServerPayload[] = visible.map((s) => ({
-		id: s.id,
-		label: s.label,
-		serverUrl: s.serverUrl,
-		scope: s.scope,
-		source: isPlatformServer(s) ? 'platform' : 'org',
-		timeoutMs: s.timeoutMs,
-		retryCount: s.retryCount
-	}));
-
-	return json({
-		servers: owned,
-		defaultServerId: config.orgDefaults?.[orgId] ?? null,
-		globalDefaultServerId: config.defaultServerId ?? null,
-		catalog
-	});
-};
+	}
+);
 
 // PATCH — replace the org's own server set, optionally update the org's default.
 // apiKey field semantics:
 //   omitted / undefined  → preserve currently stored key (matched by id)
 //   null                 → explicitly clear the key
 //   non-empty string     → replace with new value
-export const PATCH: RequestHandler = async ({ params, request, locals }) => {
-	requireFlag();
-	requireManageOrgCompute(locals);
-	const { ctx, orgId } = requireActingOrg(locals, params.orgId);
+export const PATCH: RequestHandler = apiRoute(
+	'Failed to save org compute config',
+	async ({ params, request, locals }) => {
+		requireFlag();
+		requireManageOrgCompute(locals);
+		const { ctx, orgId } = requireActingOrg(locals, params.orgId);
 
-	const body = await request.json().catch(() => null);
-	if (!body || typeof body !== 'object')
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid request body');
-	const incoming = body as IncomingConfig;
-	if (!Array.isArray(incoming.servers))
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'servers must be an array');
+		const incoming = await parseBody(request, OrgComputePatchBodySchema);
+		// Cross-field rules the schema can't express (URL shape, duplicate ids).
+		validateIncomingServers(incoming.servers as IncomingServerBase[]);
 
-	validateIncomingServers(incoming.servers);
+		const provider = getComputeServerConfigStore();
+		// Every key is needed: an unchanged server keeps its stored key across the write.
+		const existing = await provider.getConfig(ctx, { includeApiKeys: true });
+		const storedKeys = storedKeysById(
+			existing.servers.filter(
+				(s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId
+			)
+		);
 
-	const provider = getComputeServerConfigStore();
-	// Needs every key: unchanged servers keep their stored key across the write.
-	const existing = await provider.getConfig(ctx, { includeApiKeys: true });
-	const storedKeys = storedKeysById(
-		existing.servers.filter((s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId)
-	);
+		const next: OrgComputeServer[] = incoming.servers.map((s) => ({
+			id: s.id,
+			scope: 'org',
+			ownerOrgId: orgId,
+			label: s.label,
+			serverUrl: s.serverUrl,
+			timeoutMs: s.timeoutMs,
+			retryCount: s.retryCount,
+			apiKey: resolveApiKey(s.apiKey, storedKeys.get(s.id))
+		}));
 
-	const next: OrgComputeServer[] = incoming.servers.map((s) => ({
-		id: s.id,
-		scope: 'org',
-		ownerOrgId: orgId,
-		label: s.label,
-		serverUrl: s.serverUrl,
-		timeoutMs: s.timeoutMs,
-		retryCount: s.retryCount,
-		apiKey: resolveApiKey(s.apiKey, storedKeys.get(s.id))
-	}));
-
-	// Validate the requested orgDefault is visible to this org. Build the
-	// projected post-save config so the check sees both the new org-private
-	// rows and the existing platform rows.
-	if (typeof incoming.defaultServerId === 'string') {
-		const projected = {
-			servers: [
-				...existing.servers.filter((s) => !(isOrgServer(s) && s.ownerOrgId === orgId)),
-				...next
-			],
-			defaultServerId: existing.defaultServerId,
-			orgDefaults: existing.orgDefaults
-		};
-		const visibleIds = new Set(serversVisibleTo(projected, orgId).map((s) => s.id));
-		if (!visibleIds.has(incoming.defaultServerId)) {
-			apiError(
-				400,
-				ApiErrorCode.VALIDATION_FAILED,
-				'defaultServerId must reference a server visible to this organization'
-			);
+		// The requested org default must be visible to this org. The check runs
+		// against the projected post-save config so it sees both the new
+		// org-private rows and the existing platform ones.
+		if (typeof incoming.defaultServerId === 'string') {
+			const projected = {
+				servers: [
+					...existing.servers.filter((s) => !(isOrgServer(s) && s.ownerOrgId === orgId)),
+					...next
+				],
+				defaultServerId: existing.defaultServerId,
+				orgDefaults: existing.orgDefaults
+			};
+			const visibleIds = new Set(serversVisibleTo(projected, orgId).map((s) => s.id));
+			if (!visibleIds.has(incoming.defaultServerId)) {
+				apiError(
+					400,
+					ApiErrorCode.VALIDATION_FAILED,
+					'defaultServerId must reference a server visible to this organization'
+				);
+			}
 		}
-	}
 
-	await provider.saveOrgServers(ctx, orgId, next, incoming.defaultServerId);
-	// Drop warm clients for this org's servers whose URL/key rotated or that were
-	// removed — keyed on `id`, they wouldn't age out on their own (ADR 0004).
-	const prevOrgServers = existing.servers.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId);
-	evictChangedServers(prevOrgServers, next);
-	return new Response(null, { status: 204 });
-};
+		await provider.saveOrgServers(ctx, orgId, next, incoming.defaultServerId);
+		// Drop warm clients for servers whose URL or key rotated, or that were
+		// removed — keyed on `id`, they would not age out on their own.
+		evictChangedServers(
+			existing.servers.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId),
+			next
+		);
+		return noContent();
+	}
+);

@@ -1,33 +1,34 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { handleApiError, apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { GuidSchema } from '@selvajs/platform/definitions';
 import {
 	getVisibleDefinition,
 	loadVisibleVersion
 } from '$lib/server/definitions/visibility.server';
+import { apiRoute, parseParam, requireCaller } from '$lib/server/api/v1/route';
 
 /**
  * Convenience alias for the live version's schema — the call a client makes
- * before solving. The canonical location is
- * `/versions/{versionId}/schema`; this resolves the `live` pointer for you.
+ * before solving. The canonical location is `/versions/{versionId}/schema`;
+ * this resolves the `live` pointer for you.
  */
-export const GET: RequestHandler = async ({ params, locals }) => {
-	const guidParsed = GuidSchema.safeParse(params.guid);
-	if (!guidParsed.success) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid or missing GUID');
-	if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+export const GET: RequestHandler = apiRoute(
+	'Failed to load definition schema',
+	async ({ params, locals }) => {
+		const guid = parseParam(params.guid, GuidSchema, 'GUID');
+		const { ctx } = requireCaller(locals);
 
-	try {
-		const record = await getVisibleDefinition(locals.ctx, guidParsed.data);
+		const record = await getVisibleDefinition(ctx, guid);
 		if (!record) apiError(404, ApiErrorCode.NOT_FOUND, 'Definition not found');
-		if (!record.liveVersionId)
+		if (!record.liveVersionId) {
 			apiError(404, ApiErrorCode.NOT_FOUND, 'This definition has no published version');
+		}
 
-		const version = await loadVisibleVersion(locals.ctx, guidParsed.data, record.liveVersionId);
-		if (!version?.schema)
+		const version = await loadVisibleVersion(ctx, guid, record.liveVersionId);
+		if (!version?.schema) {
 			apiError(404, ApiErrorCode.NOT_FOUND, 'No schema cached for the live version');
+		}
 		return json(version.schema);
-	} catch (err) {
-		handleApiError(err, 'Failed to load definition schema');
 	}
-};
+);
