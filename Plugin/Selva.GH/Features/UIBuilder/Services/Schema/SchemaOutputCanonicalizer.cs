@@ -13,11 +13,11 @@ namespace Selva.GH.Features.UIBuilder.Services.Schema;
 public static class SchemaOutputCanonicalizer
 {
     /// <summary>
-    ///     The schema output type strings produced by a ContextBake component. Single source of truth
-    ///     for the "qualifying bake output" set — the post-solve add/remove sync, the scope filter, and
+    ///     Output type strings a ContextBake component can produce. Single source of truth for the
+    ///     "qualifying bake output" set — the post-solve add/remove sync, the scope filter, and
     ///     ParameterTypeHelper.ClassifyBakeOutputType all agree with this. Adding a bake output type
-    ///     means adding it here (and the matching detector). A test pins this set so a new type can't
-    ///     be half-wired (the failure that stripped dynamicValueList outputs every solve).
+    ///     means adding it here and the matching detector; a test pins this set so a new type can't
+    ///     be half-wired (the bug that used to strip dynamicValueList outputs every solve).
     /// </summary>
     public static readonly IReadOnlyCollection<string> BakeOutputTypes =
         new[] { "file", "chart", "dynamicValueList" };
@@ -41,12 +41,10 @@ public static class SchemaOutputCanonicalizer
     }
 
     /// <summary>
-    ///     Schema invariant: a dynamicValueList output present in the layout must also exist in
-    ///     <see cref="UISchema.Outputs" />. The layout is a routing sink; the canonical record is
-    ///     schema.Outputs. Enforcing it means every consumer (C# collector, TS router) can read ONE
-    ///     place. Without it, a layout-only DynVL is silently dropped by anything scanning only Outputs.
-    ///
-    ///     Idempotent: re-running adds nothing once the schema is canonical.
+    ///     A dynamicValueList output present in the layout must also exist in
+    ///     <see cref="UISchema.Outputs" />: the layout is a routing sink, schema.Outputs is the
+    ///     canonical record. Without this, a layout-only DynVL is silently dropped by anything
+    ///     that scans only Outputs. Idempotent — re-running adds nothing once already canonical.
     /// </summary>
     public static void CanonicalizeDynamicValueListOutputs(UISchema schema)
     {

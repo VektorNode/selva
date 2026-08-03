@@ -27,12 +27,10 @@ namespace Selva.GH.Features.ComputeIO.Components;
 /// </summary>
 public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParameter
 {
-    // Constants for validation and limits
     private const int MaxContextualDataItems = 100;
     private const int MaxFileDataSize = AppConfig.ValueLimits.MaxBase64StringLength;
     private const int MaxJsonDepth = AppConfig.JsonSerialization.MaxJsonDepth;
-    private const int MaxPathLength = 32767; // Windows MAX_PATH - maximum length for file paths
-
+    private const int MaxPathLength = 32767; // Windows MAX_PATH
 
     private FileInputData _contextualFileData;
     private bool _isFromContextual;
@@ -83,7 +81,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
             var count = 0;
             foreach (var item in data)
             {
-                // Prevent processing too many items
                 if (++count > MaxContextualDataItems)
                 {
                     AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
@@ -98,7 +95,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
                     {
                         _contextualFileData = fileData;
                         _isFromContextual = true;
-                        break; // Only take first item (AtMost = 1)
+                        break; // AtMost = 1
                     }
 
                     AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
@@ -117,13 +114,12 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 
     public bool AutoAssignContextualData(GH_ParameterContext context)
     {
-        // Auto-assign when contextual data is available
         return _contextualFileData != null;
     }
 
     /// <summary>
-    ///     Assigns contextual data as a tree structure - called by Rhino.Compute via reflection.
-    ///     Rhino.Compute sends data as DataTree of GH_String, so we extract from the first path.
+    ///     Assigns contextual data as a tree — called by Rhino.Compute via reflection, which sends
+    ///     DataTree of GH_String.
     /// </summary>
     public void AssignContextualDataTree(DataTree<GH_String> data)
     {
@@ -137,7 +133,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 
         try
         {
-            // Take first item from first path (AtMost = 1)
+            // AtMost = 1: only the first item of the first path.
             var firstPath = data.Paths.FirstOrDefault();
             if (firstPath != null)
             {
@@ -175,9 +171,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
         _isFromContextual = false;
     }
 
-    /// <summary>
-    ///     Returns contextual JSON for web UI schema discovery.
-    /// </summary>
     public JObject GetContextualJson()
     {
         return new JObject
@@ -227,8 +220,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
             {
                 IGH_Goo firstItem = null;
 
-
-                // Support both Param_FilePath and Param_String
                 if (source is Param_FilePath filePathParam)
                 {
                     var persistentData = filePathParam.PersistentData;
@@ -274,9 +265,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
         }
     }
 
-    /// <summary>
-    ///     Imports geometry from FileInputData and outputs to m_data.
-    /// </summary>
     private void ImportAndOutputGeometry(FileInputData fileData)
     {
         if (fileData == null)
@@ -328,14 +316,10 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
 
         m_data.AppendRange(ghGeometry, new GH_Path(0));
 
-        // Success message
         AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
             $"Imported {ghGeometry.Count} objects from {result.DetectedFormat}");
     }
 
-    /// <summary>
-    ///     Extracts FileInputData from various input types.
-    /// </summary>
     private static FileInputData ExtractFileInputData(object item)
     {
         return item switch
@@ -350,10 +334,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
         };
     }
 
-
-    /// <summary>
-    ///     Attempts to parse a string as FileInputData JSON or fallback to path.
-    /// </summary>
     private static FileInputData TryParseFileInputDataFromString(string str)
     {
         if (string.IsNullOrEmpty(str))
@@ -361,27 +341,23 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
             return null;
         }
 
-        // Prevent DoS from large file data strings
         if (str.Length > MaxFileDataSize)
         {
             return null;
         }
 
-        // Try to parse as JSON first
         try
         {
             var settings = new JsonSerializerSettings
             {
                 MaxDepth = MaxJsonDepth,
-                TypeNameHandling = TypeNameHandling.None // Prevent type injection attacks
+                TypeNameHandling = TypeNameHandling.None // prevent type injection attacks
             };
 
             var data = JsonConvert.DeserializeObject<FileInputData>(str, settings);
 
-            // Validate deserialized data
             if (data != null && !string.IsNullOrEmpty(data.File))
             {
-                // Sanitize the Type field
                 if (data.Type != null)
                 {
                     var validTypes = new[] { "path", "url", "base64" };
@@ -396,18 +372,15 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
         }
         catch (JsonException)
         {
-            // Not JSON, treat as path
+            // Not JSON — treat as a path.
         }
         catch (Exception)
         {
-            // Unexpected error during deserialization
             return null;
         }
 
-        // Fallback: treat as file path
         try
         {
-            // Validate path string before creating FileInputData
             if (str.Length > MaxPathLength)
             {
                 return null;
@@ -417,14 +390,10 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
         }
         catch
         {
-            // Invalid path format
             return null;
         }
     }
 
-    /// <summary>
-    ///     Validates FileInputData for security issues.
-    /// </summary>
     private static bool ValidateFileInputData(FileInputData fileData)
     {
         if (fileData == null || string.IsNullOrWhiteSpace(fileData.File))
@@ -432,13 +401,11 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
             return false;
         }
 
-        // Check for excessively long data
         if (fileData.File.Length > MaxFileDataSize)
         {
             return false;
         }
 
-        // Validate type
         if (fileData.Type != null)
         {
             var validTypes = new[] { "path", "url", "base64" };
@@ -448,7 +415,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
             }
         }
 
-        // Validate file extension
         if (fileData.FileEnding != null)
         {
             if (!AcceptedFileFormats.Values.Contains(fileData.FileEnding.ToLowerInvariant()))

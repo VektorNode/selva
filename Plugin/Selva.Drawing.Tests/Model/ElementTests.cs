@@ -32,9 +32,9 @@ public class ElementTests
 	[Fact]
 	public void TextElement_uses_real_font_metrics_for_bundled_family()
 	{
-		// Phase 4: Inter is bundled, so bounds come from real glyph advance — not the
-		// 0.55 × charCount heuristic. The exact width depends on Inter's hmtx, but it
-		// must beat the heuristic for "ABC" (cap-letters skew wider in real fonts).
+		// Inter is bundled, so bounds come from real glyph advance, not the 0.55×charCount
+		// heuristic. Exact width depends on Inter's metrics, but it must exceed the heuristic
+		// for "ABC" (cap letters are wider than the heuristic assumes).
 		var e = new TextElement
 		{
 			Text = "ABC",
@@ -50,7 +50,6 @@ public class ElementTests
 	[Fact]
 	public void TextElement_falls_back_to_heuristic_for_unknown_family()
 	{
-		// Unknown family stack — heuristic still applies for parity with old behavior.
 		var e = new TextElement
 		{
 			Text = "ABC",
@@ -59,8 +58,7 @@ public class ElementTests
 		};
 		var b = e.ComputeBounds();
 		Assert.Equal(10, b.MinX);
-		// width: 3 chars * 4 size * 0.55 = 6.6
-		Assert.Equal(16.6, System.Math.Round(b.MaxX, 6));
+		Assert.Equal(16.6, System.Math.Round(b.MaxX, 6)); // 3 chars * 4 size * 0.55 = 6.6, +10 origin
 	}
 
 	[Fact]
@@ -115,7 +113,7 @@ public class ElementTests
 			Style = new ModelDimensionStyle { TextSize = 2.5 }
 		};
 		var b = e.ComputeBounds();
-		// Conservative bound: AB plus inflated by |offset| + 4*textSize (15 mm).
+		// Conservative bound: AB inflated by |offset| + 4*textSize (15mm).
 		Assert.True(b.MinX <= 0 - 15);
 		Assert.True(b.MaxX >= 10 + 15);
 	}

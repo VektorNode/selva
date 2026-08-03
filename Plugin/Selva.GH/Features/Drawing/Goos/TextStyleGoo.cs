@@ -17,8 +17,7 @@ public class TextStyleGoo : IGH_Goo
     public string TypeName => "TextStyle";
     public string TypeDescription => "Text style (font, size, color, alignment)";
 
-    // TextStyle is immutable (init-only properties), so duplicates can safely share the
-    // same instance. The old JSON round-trip here silently zeroed Color (private ctor).
+    // TextStyle is immutable, so Duplicate can share the instance instead of copying.
     public IGH_Goo Duplicate() => new TextStyleGoo(Value);
 
     public IGH_GooProxy EmitProxy() => null;

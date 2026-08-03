@@ -18,8 +18,7 @@ using Selva.GH.Utilities;
 namespace Selva.GH.Features.FileIO.Components;
 
 /// <summary>
-///     Exports Rhino block instances to base64-encoded .3dm files.
-///     Supports recursive block hierarchies by automatically including nested block definitions.
+///     Exports a Rhino block instance to a base64-encoded .3dm file, recursively including nested block definitions.
 /// </summary>
 public class GH_BlockToFile : GH_Component, ISelvaFileOutput
 {
@@ -115,14 +114,11 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
             {
                 DA.SetData(0, new FileDataGoo(exportedFile));
             }
-            // On failure, ExportBlockToFile / TryProcessBlockObject already raised a specific
-            // warning or error explaining why, so no generic fallback message is needed here.
         }
         catch (Exception ex)
         {
-            // Surface the exception type + originating location. A bare NullReferenceException
-            // message is always the generic "Object reference not set..." with no clue where it
-            // came from, which makes data-dependent failures look random.
+            // Include exception type + originating frame: a bare NullReferenceException message
+            // is always "Object reference not set...", giving no clue which data caused it.
             var location = ex.StackTrace?.Split('\n')[0]?.Trim();
             AddRuntimeMessage(
                 GH_RuntimeMessageLevel.Error,
@@ -131,9 +127,6 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
         }
     }
 
-    /// <summary>
-    ///     Creates custom component attributes
-    /// </summary>
     public override void CreateAttributes()
     {
         m_attributes = new GH_ContextBakeOutputAttributes(this);
@@ -160,10 +153,8 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
         using var headlessDoc = RhinoDoc.CreateHeadless(null);
         _copiedBlockIndices.Clear();
 
-
         if (!TryProcessBlockObject(blockObj, headlessDoc, out var blockName))
         {
-            // A specific warning was already raised inside TryProcessBlockObject.
             return null;
         }
 
@@ -203,9 +194,8 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
         blockName = modelIdef.Name;
         CopyBlockRecursive(modelIdef, targetDoc);
 
-        // A block yields no index when its definition contained no exportable geometry — most
-        // often a linked/embedded definition whose objects live in an external file, or an empty
-        // definition. Warn specifically so this isn't confused with a hard export failure.
+        // No index means the definition had no exportable geometry — typically a linked/embedded
+        // definition whose objects live in an external file, or an empty definition.
         if (!_copiedBlockIndices.TryGetValue(blockName, out var idefIndex))
         {
             AddRuntimeMessage(
@@ -231,7 +221,6 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
 
     private void CopyBlockRecursive(ModelInstanceDefinition modelIdef, RhinoDoc targetDoc)
     {
-        // Skip if already copied
         if (_copiedBlockIndices.ContainsKey(modelIdef.Name))
         {
             return;
@@ -260,8 +249,8 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
     {
         var geometries = new List<GeometryBase>();
 
-        // Objects can be null (not just empty) for linked/embedded definitions or ones whose
-        // objects aren't materialized — foreach would NRE on the null before the per-item guard.
+        // Objects is null (not just empty) for linked/embedded definitions whose objects aren't
+        // materialized — foreach would NRE on the null before the per-item guard runs.
         var objects = modelIdef.Objects;
         if (objects == null)
         {
@@ -301,13 +290,12 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
             return;
         }
 
-        // Recursively copy nested block first
         CopyBlockRecursive(nestedModelIdef, targetDoc);
 
         if (_copiedBlockIndices.TryGetValue(nestedModelIdef.Name, out var nestedIdefIndex) &&
             nestedInstanceRef.Value != null)
         {
-            // InstanceDefinitions[index] returns null for a stale/invalid index; guard before .Id.
+            // Null means a stale/invalid index — guard before accessing .Id.
             var nestedIdef = targetDoc.InstanceDefinitions[nestedIdefIndex];
             if (nestedIdef == null)
             {

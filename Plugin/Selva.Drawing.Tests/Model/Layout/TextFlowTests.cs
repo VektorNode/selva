@@ -27,7 +27,7 @@ public class TextFlowTests
 		var flow = new TextFlow
 		{
 			Text = "the quick brown fox jumps over the lazy dog",
-			Width = 25, // narrow enough that the line must break
+			Width = 25, // forces a line break
 			Style = new TextStyle { FontSize = 3.0 },
 		};
 		var resolved = (GroupElement)flow.Resolve(new LayoutContext(BoundingBox.Empty));
@@ -40,7 +40,7 @@ public class TextFlowTests
 		var flow = new TextFlow
 		{
 			Text = "line one\nline two\nline three",
-			Width = 1000, // wide enough that wrapping isn't triggered
+			Width = 1000, // no wrap
 			Style = new TextStyle { FontSize = 3.0 },
 		};
 		var resolved = (GroupElement)flow.Resolve(new LayoutContext(BoundingBox.Empty));
@@ -60,7 +60,7 @@ public class TextFlowTests
 		var resolved = (GroupElement)flow.Resolve(new LayoutContext(BoundingBox.Empty));
 		var line0 = (TextElement)resolved.Children[0];
 		var line1 = (TextElement)resolved.Children[1];
-		// Y-up: the first line's baseline is HIGHER than the second's.
+		// Y-up: line 0's baseline is above line 1's.
 		Assert.True(line0.Position.Y > line1.Position.Y);
 	}
 }

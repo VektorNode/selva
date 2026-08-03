@@ -24,20 +24,18 @@ public class SchemaSynchronizer
     #region Static Configuration
 
     /// <summary>
-    ///     Keyword → type name mapping. Entries are checked via string.Contains against the GH type name.
+    ///     Keyword → type name mapping, checked via string.Contains against the GH type name.
     /// </summary>
     private static readonly Dictionary<string, string> ParameterTypeKeywords = new Dictionary<string, string>
     {
         { "GetNumberParameter", "number" },
         { "Slider", "number" },
-        // DynamicValueList must precede ValueList: the type name contains "ValueList" and
-        // ResolveParameterTypeName matches on first substring hit.
+        // Must precede ValueList: the type name contains "ValueList" and matching is first-hit.
         { "DynamicValueList", "dynamicValueList" },
         { "ValueList", "valueList" },
         { "GetFile", "file" },
-        // GetImage reuses the entire file input pipeline (upload/url widget +
-        // ApplyToFileParameter): it carries a FileInputData payload exactly like GetFile,
-        // differing only in its accepted-format allowlist (advertised via GetContextualJson).
+        // GetImage carries a FileInputData payload like GetFile, differing only in its
+        // accepted-format allowlist.
         { "GetImage", "file" },
         { "GetColor", "color" },
         { "Colour", "color" },
@@ -62,11 +60,7 @@ public class SchemaSynchronizer
         { "Geometry", "geometry" }
     };
 
-    /// <summary>
-    ///     Cache resolved type names by exact CLR type to avoid repeated substring scans.
-    ///     Note: Not thread-safe. If GH ever processes documents on multiple threads,
-    ///     consider switching to ConcurrentDictionary.
-    /// </summary>
+    // Not thread-safe — fine while GH processes documents on one thread.
     private static readonly Dictionary<Type, string> TypeNameCache = new Dictionary<Type, string>();
 
     #endregion
@@ -88,8 +82,8 @@ public class SchemaSynchronizer
     #region Parameter Scanning
 
     /// <summary>
-    ///     Scan the document and return all discoverable inputs and outputs in a single pass.
-    ///     When <paramref name="ownerComponent" /> is provided, only ContextBake/ContextPrint
+    ///     Scans the document for all discoverable inputs and outputs in a single pass.
+    ///     When <paramref name="ownerComponent" /> is given, only ContextBake/ContextPrint
     ///     components wired to its "Schema" output are included.
     /// </summary>
     public DiscoveredParameters ScanParameters(GH_Document document, GH_Component ownerComponent = null)
@@ -117,9 +111,8 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Build a Guid → group nickname lookup for the directly-enclosing GH group of each object.
+    ///     Builds a Guid → group nickname lookup for each object's directly-enclosing GH group.
     ///     If an object sits in multiple overlapping groups, the innermost (smallest member count) wins.
-    ///     Returns an empty dictionary if the document has no groups.
     /// </summary>
     private static Dictionary<Guid, string> BuildGroupLookup(GH_Document document)
     {
@@ -129,8 +122,7 @@ public class SchemaSynchronizer
             return lookup;
         }
 
-        // Collect all groups and sort by member count descending so smaller (innermost)
-        // groups overwrite larger ones in the lookup.
+        // Sort by member count descending so smaller (innermost) groups overwrite larger ones below.
         var groups = document.Objects.OfType<GH_Group>()
             .Where(g => g.ObjectIDs != null && g.ObjectIDs.Count > 0)
             .OrderByDescending(g => g.ObjectIDs.Count);
@@ -159,7 +151,7 @@ public class SchemaSynchronizer
 
     /// <summary>
     ///     Determines which context components are "in scope" for the given owner.
-    ///     Returns null when no owner is specified (all components are in scope).
+    ///     Null when no owner is specified — everything is in scope.
     /// </summary>
     private static HashSet<Guid> BuildScopeFilter(GH_Document document, GH_Component ownerComponent)
     {
@@ -184,7 +176,7 @@ public class SchemaSynchronizer
                 continue;
             }
 
-            // Context Print components use GH's contextual mechanism (not wires) so they are always in scope
+            // Context Print components use GH's contextual mechanism (not wires), so always in scope.
             if (isPrint ||
                 ParameterTypeHelper.IsWiredToOwner(c, ownerComponent.InstanceGuid) ||
                 ParameterTypeHelper.IsQualifyingBakeOutput(c))
@@ -196,9 +188,6 @@ public class SchemaSynchronizer
         return inScope;
     }
 
-    /// <summary>
-    ///     Single pass over document objects — classify into inputs, print outputs, and bake outputs.
-    /// </summary>
     private static (List<IGH_ContextualParameter> Inputs, List<GH_Component> Prints, List<GH_Component> Bakes)
         ClassifyDocumentObjects(GH_Document document, HashSet<Guid> scopeFilter)
     {
@@ -353,9 +342,8 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Populate the accepted-format allowlist for file-bearing parameters so the builder
-    ///     seeds the correct defaults (image extensions for Get Image, geometry for Get File)
-    ///     instead of a single hardcoded list.
+    ///     Seeds the accepted-format allowlist per parameter kind (image extensions for Get Image,
+    ///     geometry for Get File) instead of one hardcoded list for both.
     /// </summary>
     private static void PopulateAcceptedFormats(IGH_ContextualParameter param, DiscoveredInput input)
     {
@@ -370,9 +358,6 @@ public class SchemaSynchronizer
         }
     }
 
-    /// <summary>
-    ///     Populate the default value, handling ValueList parameters specially.
-    /// </summary>
     private static void PopulateInputDefault(IGH_ContextualParameter param, IGH_Param ghParam, DiscoveredInput input)
     {
         if (param is GetValueListParameter valueList)
@@ -387,19 +372,19 @@ public class SchemaSynchronizer
             return;
         }
 
-        // TODO: properly handle tree inputs (not a priority for now)
+        // TODO: handle tree inputs properly (not a priority for now)
         var raw = ExtractFirstScriptVariable(ghParam);
 
-        // GH_Colour.ScriptVariable() is a System.Drawing.Color, which Newtonsoft cannot
-        // serialize cleanly (throws ArgumentNullException 'key' on Mono/macOS). Emit a hex
-        // string instead — symmetric with how GetColorParameter parses hex on the way in.
+        // GH_Colour.ScriptVariable() returns System.Drawing.Color, which Newtonsoft can't
+        // serialize on Mono/macOS (throws ArgumentNullException 'key'). Emit hex instead —
+        // GetColorParameter parses hex the same way on the way in.
         input.Default = raw is Color color ? ColorTranslator.ToHtml(color) : raw;
     }
 
     /// <summary>
-    ///     Best-effort extraction of a parameter's first scalar value. Tries volatile data
-    ///     (solved output), persistent data (the param's stored value), then wired source
-    ///     volatile/persistent data. Returns null only when nothing is set anywhere.
+    ///     Best-effort read of a parameter's first scalar value: volatile data (solved output),
+    ///     then persistent data, then the wired source's volatile/persistent data. Null if
+    ///     nothing is set anywhere.
     /// </summary>
     private static object ExtractFirstScriptVariable(IGH_Param ghParam)
     {
@@ -465,7 +450,7 @@ public class SchemaSynchronizer
         }
         catch
         {
-            // Reflection fallback failures are non-fatal — caller treats null as "no default".
+            // Non-fatal — caller treats null as "no default".
         }
 
         return null;
@@ -518,8 +503,8 @@ public class SchemaSynchronizer
                 input.Options = options;
             }
 
-            // VolatileData is only populated during a solution, so it is empty right after
-            // document load — fall back to the connected value list's live selection.
+            // VolatileData is empty right after document load (only populated by a solve) —
+            // fall back to the connected value list's live selection.
             var selectedValue = ghParam?.VolatileData.AllData(true).FirstOrDefault()?.ScriptVariable();
             var selectedString = selectedValue?.ToString() ?? valueList.GetDefaultValue();
             if (string.IsNullOrEmpty(selectedString) || input.Options == null)
@@ -533,7 +518,7 @@ public class SchemaSynchronizer
         }
         catch
         {
-            // Silently ignore ValueList extraction failures
+            // ignored
         }
     }
 
@@ -555,7 +540,7 @@ public class SchemaSynchronizer
         }
         catch
         {
-            // Silently ignore dynamic value list extraction failures
+            // ignored
         }
     }
 
@@ -571,17 +556,15 @@ public class SchemaSynchronizer
         }
         catch
         {
-            // Silently ignore reflection failures
+            // ignored
         }
     }
 
     /// <summary>
-    ///     Apply layout-item config flags that affect GH parameter behavior back onto the document.
-    ///     - When a dropdown layout item declares `displayAs = "checklist"`, the matching
-    ///       GetValueListParameter is switched to list access so multi-selection flows downstream.
-    ///     - The target-input picked in the web UI builder is written back onto the matching
-    ///       GH_DynamicValueListOutput so the component itself becomes the source of truth (its
-    ///       solve-time "no target set" remark and persisted GUID stay in sync with the schema).
+    ///     Writes layout-item config flags that affect GH parameter behavior back onto the document:
+    ///     a dropdown's `displayAs = "checklist"` switches its GetValueListParameter to list access,
+    ///     and the target input picked in the web builder is written onto the matching
+    ///     GH_DynamicValueListOutput so the component stays the source of truth.
     /// </summary>
     public void ApplyParameterAccessFromSchema(UISchema schema, GH_Document document)
     {
@@ -608,16 +591,15 @@ public class SchemaSynchronizer
 
                 case OutputDynamicValueListLayoutItem dvl when dvl.Config != null:
                     {
-                        // ParamId is the ContextBake's GUID (the output identity). Walk up to the
+                        // ParamId is the ContextBake's GUID (the output identity) — walk up to the
                         // GH_DynamicValueListOutput feeding it to write the picked target back.
                         if (document.FindObject(dvl.ParamId, false) is GH_Component bake &&
                             ParameterTypeHelper.FindUpstreamDynamicValueListOutput(bake) is { } output &&
                             output.TargetInputId != dvl.Config.TargetInputId)
                         {
                             output.TargetInputId = dvl.Config.TargetInputId;
-                            // The output is not downstream of the UIBuilder, so the post-save expire
-                            // won't re-solve it; expire it directly so its stale "no target" remark
-                            // clears now that the target is set.
+                            // Not downstream of the UIBuilder, so the post-save expire won't reach
+                            // it — expire directly so the stale "no target" remark clears.
                             output.ExpireSolution(false);
                         }
 
@@ -632,7 +614,7 @@ public class SchemaSynchronizer
     #region Schema Validation
 
     /// <summary>
-    ///     Validate schema against the current document — removes references to missing parameters.
+    ///     Validates the schema against the current document, removing references to missing parameters.
     /// </summary>
     public UISchema ValidateSchema(UISchema schema, GH_Document document)
     {
@@ -641,10 +623,9 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Reconcile schema nicknames directly against the current document state.
-    ///     Used on startup/enable to fix any drift that occurred while Rhino was closed.
-    ///     Unlike DetectMetadataChanges, this bypasses the snapshot cache and always reflects current GH state.
-    ///     Returns true if any nicknames were updated.
+    ///     Reconciles schema nicknames against the current document — used on startup/enable to fix
+    ///     drift from while Rhino was closed. Unlike DetectMetadataChanges, this bypasses the
+    ///     snapshot cache and always reads current GH state. Returns true if anything changed.
     /// </summary>
     public bool SyncNicknamesFromDocument(UISchema schema, GH_Document document)
     {
@@ -695,8 +676,8 @@ public class SchemaSynchronizer
             }
         }
 
-        // Also seed the metadata cache so the first UndoStateChanged after startup
-        // has a baseline and doesn't incorrectly report everything as changed.
+        // Seed the metadata cache so the first UndoStateChanged after startup has a baseline
+        // instead of reporting everything as changed.
         if (changed)
         {
             ClearMetadataCache();
@@ -705,9 +686,6 @@ public class SchemaSynchronizer
         return changed;
     }
 
-    /// <summary>
-    ///     Validate schema and track which parameter IDs were removed.
-    /// </summary>
     public (UISchema Schema, List<Guid> RemovedIds) ValidateSchemaAndTrackChanges(
         UISchema schema, GH_Document document)
     {
@@ -729,14 +707,11 @@ public class SchemaSynchronizer
         MergeDiscoveredInputs(schema, document);
         MergeDiscoveredPrintOutputs(schema, document);
 
-        // Schema invariant: dynamicValueList layout items are mirrored into schema.Outputs so every
-        // consumer reads one canonical place. Enforced here — the funnel every save/connect passes.
+        // dynamicValueList layout items must mirror into schema.Outputs so every consumer reads
+        // one canonical place — this is the funnel every save/connect passes through.
         SchemaOutputCanonicalizer.CanonicalizeDynamicValueListOutputs(schema);
     }
 
-    /// <summary>
-    ///     Gather every parameter ID referenced anywhere in the schema.
-    /// </summary>
     private static HashSet<Guid> CollectAllReferencedIds(UISchema schema)
     {
         var ids = new HashSet<Guid>();
@@ -749,9 +724,6 @@ public class SchemaSynchronizer
         return ids;
     }
 
-    /// <summary>
-    ///     Check which of the given IDs actually exist in the document.
-    /// </summary>
     private static HashSet<Guid> ResolveExistingIds(HashSet<Guid> candidates, GH_Document document)
     {
         var existing = new HashSet<Guid>();
@@ -766,9 +738,6 @@ public class SchemaSynchronizer
         return existing;
     }
 
-    /// <summary>
-    ///     Remove stale inputs, outputs, and layout items. Returns list of removed IDs.
-    /// </summary>
     private static List<Guid> PurgeStaleReferences(UISchema schema, HashSet<Guid> existingIds)
     {
         var removed = new List<Guid>();
@@ -776,7 +745,6 @@ public class SchemaSynchronizer
         removed.AddRange(schema.Inputs.Where(i => !existingIds.Contains(i.Id)).Select(i => i.Id));
         removed.AddRange(schema.Outputs.Where(o => !existingIds.Contains(o.Id)).Select(o => o.Id));
 
-        // Use a set for O(1) removal checks instead of list.Contains (O(n))
         var removedSet = new HashSet<Guid>(removed);
         schema.Inputs.RemoveAll(i => removedSet.Contains(i.Id));
         schema.Outputs.RemoveAll(o => removedSet.Contains(o.Id));
@@ -787,9 +755,9 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Remove layout items whose parameters no longer exist, cleaning up empty groups and tabs.
-    ///     Note: This method must access the concrete layout types directly because it mutates
-    ///     the group/tab collections (RemoveAll), which requires references to the actual lists.
+    ///     Removes layout items whose parameters no longer exist, then cleans up empty groups and tabs.
+    ///     Matches on the concrete layout types because RemoveAll needs a reference to the actual
+    ///     group/tab list, not an interface view.
     /// </summary>
     private static void PurgeStaleLayoutItems(LayoutConfigBase layout, HashSet<Guid> existingIds)
     {
@@ -823,9 +791,8 @@ public class SchemaSynchronizer
     #region Metadata Change Detection
 
     /// <summary>
-    ///     Ensures every contextual parameter in the document is tracked in schema.Inputs,
-    ///     even if it has no layout item. Inputs already in the schema are left untouched;
-    ///     only genuinely new parameters are appended.
+    ///     Ensures every contextual parameter in the document is tracked in schema.Inputs, even
+    ///     without a layout item. Only appends genuinely new parameters; existing ones are untouched.
     /// </summary>
     private static void MergeDiscoveredInputs(UISchema schema, GH_Document document)
     {
@@ -867,10 +834,9 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     After a solve, sync ContextBake outputs in the schema:
-    ///     - Adds newly-qualifying bakes (file/chart now wired correctly)
-    ///     - Removes bakes that are still on the canvas but no longer qualify (unwired)
-    ///     Returns (addedIds, removedIds) so the caller can broadcast accordingly.
+    ///     After a solve, syncs ContextBake outputs in the schema: adds newly-qualifying bakes
+    ///     (file/chart now wired correctly) and removes bakes still on the canvas but no longer
+    ///     qualifying (unwired). Returns (addedIds, removedIds) so the caller can broadcast them.
     /// </summary>
     public (List<Guid> Added, List<Guid> Removed) MergePostSolveBakeOutputs(UISchema schema, GH_Document document)
     {
@@ -881,7 +847,6 @@ public class SchemaSynchronizer
             return (added, removed);
         }
 
-        // Build a map of all ContextBake components currently on the canvas
         var bakeComponents = new Dictionary<Guid, GH_Component>();
         foreach (var obj in document.Objects)
         {
@@ -891,10 +856,9 @@ public class SchemaSynchronizer
             }
         }
 
-        // Remove existing schema outputs that are ContextBake but no longer qualify. The qualifying
-        // set (file/chart/dynamicValueList) lives in ClassifyBakeOutputType — routing through it here
-        // means a DynVL bake is no longer stripped every solve (which fought the canonicalizer and
-        // produced the spurious "1 parameter removed" churn).
+        // Route through ClassifyBakeOutputType (the same qualifying set: file/chart/dynamicValueList)
+        // rather than a separate check here — otherwise a DynVL bake gets stripped every solve,
+        // fighting the canonicalizer and producing spurious "1 parameter removed" churn.
         var toRemove = schema.Outputs
             .Where(o => bakeComponents.TryGetValue(o.Id, out var c)
                         && !ParameterTypeHelper.IsQualifyingBakeOutput(c))
@@ -907,7 +871,6 @@ public class SchemaSynchronizer
             removed.AddRange(toRemove);
         }
 
-        // Add newly-qualifying bakes not yet in the schema
         var existingIds = new HashSet<Guid>(schema.Outputs.Select(o => o.Id));
         foreach (var kvp in bakeComponents)
         {
@@ -948,8 +911,8 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Auto-merge ContextPrint components into schema.Outputs (same as MergeDiscoveredInputs for inputs).
-    ///     ContextBake is excluded — it needs a solve to determine what it's connected to.
+    ///     Auto-merges ContextPrint components into schema.Outputs (mirrors MergeDiscoveredInputs).
+    ///     ContextBake is excluded — it needs a solve to know what it's connected to.
     /// </summary>
     private static void MergeDiscoveredPrintOutputs(UISchema schema, GH_Document document)
     {
@@ -991,8 +954,7 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Detect metadata changes in parameters since last scan.
-    ///     Returns changed parameters and applies changes to the schema.
+    ///     Detects metadata changes in parameters since the last scan and applies them to the schema.
     /// </summary>
     public DiscoveredParameters DetectMetadataChanges(GH_Document document, UISchema schema)
     {
@@ -1020,9 +982,6 @@ public class SchemaSynchronizer
         return changes;
     }
 
-    /// <summary>
-    ///     Generic change detection for any schema parameter collection.
-    /// </summary>
     private void DetectChanges<TSchema, TDiscovered>(
         GH_Document document,
         List<TSchema> schemaParams,
@@ -1060,9 +1019,6 @@ public class SchemaSynchronizer
         }
     }
 
-    /// <summary>
-    ///     Clear the metadata cache (e.g. when the schema is disabled).
-    /// </summary>
     public void ClearMetadataCache()
     {
         _metadataCache.Clear();
@@ -1078,8 +1034,8 @@ public class SchemaSynchronizer
         var contextParam = docObj as IGH_ContextualParameter;
         var ghParam = docObj as IGH_Param;
 
-        // Output components (ContextPrint/ContextBake) use their first input param's NickName
-        // as the user-facing label — match the same source as SyncNicknamesFromDocument.
+        // Output components use their first input param's NickName as the label, matching
+        // SyncNicknamesFromDocument.
         var nickname = docObj.NickName;
         if (docObj is GH_Component comp && contextParam == null && comp.Params.Input.Count > 0)
         {
@@ -1146,9 +1102,8 @@ public class SchemaSynchronizer
     #region Apply Metadata Changes
 
     /// <summary>
-    ///     Apply detected metadata changes to the schema.
-    ///     Updates layout item configs (min/max/stepSize, dropdown options).
-    ///     Does NOT update layout displayNames — those are user-controlled in the UI.
+    ///     Applies detected metadata changes to the schema: layout item configs (min/max/stepSize,
+    ///     dropdown options). Does NOT update layout displayNames — those are user-controlled.
     /// </summary>
     public void ApplyMetadataChangesToSchema(UISchema schema, DiscoveredParameters changes)
     {
@@ -1220,10 +1175,9 @@ public class SchemaSynchronizer
     #region Sync
 
     /// <summary>
-    ///     Compute a diff between current Grasshopper state and schema state.
-    ///     For inputs: syncs GH nickname ↔ layout displayName.
-    ///     For outputs: syncs GH component input-parameter nickname ↔ layout displayName.
-    ///     Descriptions and min/max/stepSize are not synced here.
+    ///     Computes a diff between current Grasshopper state and schema state: GH nickname ↔ layout
+    ///     displayName for inputs, and the component's input-parameter nickname ↔ displayName for
+    ///     outputs. Descriptions and min/max/stepSize are not synced here.
     /// </summary>
     public static SyncDiff ComputeSyncDiff(UISchema schema, GH_Document document)
     {
@@ -1316,7 +1270,7 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Apply selected sync changes to both Grasshopper document and schema.
+    ///     Applies selected sync changes to both the Grasshopper document and the schema.
     ///     Returns the updated schema if any "fromGH" changes were applied, null otherwise.
     /// </summary>
     public static UISchema ApplySyncChanges(List<SyncChange> changes, GH_Document document, UISchema schema)
@@ -1367,7 +1321,6 @@ public class SchemaSynchronizer
             return false;
         }
 
-        // Try as input
         var input = schema.Inputs?.FirstOrDefault(i => i.Id == paramGuid);
         if (input != null)
         {
@@ -1376,7 +1329,6 @@ public class SchemaSynchronizer
             return true;
         }
 
-        // Try as output
         var output = schema.Outputs?.FirstOrDefault(o => o.Id == paramGuid);
         if (output != null && docObj is GH_Component component && component.Params.Input.Count > 0)
         {
@@ -1404,7 +1356,6 @@ public class SchemaSynchronizer
 
         var modified = false;
 
-        // Update input: GH nickname → schema input + layout displayName
         var input = schema.Inputs?.FirstOrDefault(i => i.Id == paramGuid);
         if (input != null)
         {
@@ -1414,7 +1365,6 @@ public class SchemaSynchronizer
             modified = true;
         }
 
-        // Update output: GH component input-param nickname → schema output + layout displayName
         var output = schema.Outputs?.FirstOrDefault(o => o.Id == paramGuid);
         if (output != null && docObj is GH_Component component && component.Params.Input.Count > 0)
         {
@@ -1444,9 +1394,6 @@ public class SchemaSynchronizer
 
     #region Helpers
 
-    /// <summary>
-    ///     Map a contextual parameter to its Compute-compatible type name.
-    /// </summary>
     private static string ResolveParameterTypeName(IGH_ContextualParameter contextParam)
     {
         if (contextParam is not IGH_Param param)
@@ -1476,8 +1423,8 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Returns all layout items from either a tabbed or flat layout. Thin forwarder to the
-    ///     Rhino-free <see cref="SchemaOutputCanonicalizer.GetAllLayoutItems" /> (single implementation).
+    ///     Forwards to the Rhino-free <see cref="SchemaOutputCanonicalizer.GetAllLayoutItems" /> —
+    ///     the single implementation for flattening tabbed or flat layouts.
     /// </summary>
     public static IEnumerable<LayoutItemBase> GetAllLayoutItems(LayoutConfigBase layout)
     {
@@ -1487,9 +1434,6 @@ public class SchemaSynchronizer
     #endregion
 }
 
-/// <summary>
-///     Snapshot of parameter metadata for change detection.
-/// </summary>
 internal sealed class ParameterMetadataSnapshot : IEquatable<ParameterMetadataSnapshot>
 {
     public Guid Id { get; set; }
@@ -1528,7 +1472,6 @@ internal sealed class ParameterMetadataSnapshot : IEquatable<ParameterMetadataSn
 
     public override int GetHashCode()
     {
-        // Consistent with Equals — includes all fields used in equality comparison
         unchecked
         {
             var hash = Id.GetHashCode();

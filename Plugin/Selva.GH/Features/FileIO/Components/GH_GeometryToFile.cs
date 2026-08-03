@@ -23,9 +23,9 @@ namespace Selva.GH.Features.FileIO.Components;
 
 /// <summary>
 ///     Exports geometry to file format(s) with layer organization.
-///     Task-capable: the whole export runs on a background task and each output file is written in
-///     parallel, so a tree of many parts no longer serializes on the UI thread. See
-///     <see cref="Export" /> for why only the .3dm path is backgrounded.
+///     Task-capable: the export runs on a background task and writes output files in parallel, so a
+///     tree of many parts doesn't serialize on the UI thread. See <see cref="Export" /> for why only
+///     the .3dm path is backgrounded.
 /// </summary>
 public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.ExportResult>, ISelvaFileOutput
 {
@@ -37,13 +37,9 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
 
     private static readonly Color DefaultLayerColor = Color.Black;
 
-    // Singleton converter instance (reused across all solve instances)
     private static RhinoDocumentConverter _converter;
     private static readonly object _converterLock = new object();
 
-    /// <summary>
-    ///     Initializes a new instance of the DataToFile class.
-    /// </summary>
     public GH_GeometryToFile()
         : base("Geometry To File", "GTF",
             "Exports geometry to file format(s) with layer organization. Supports both single file (list input) and multiple files (tree input).",
@@ -52,27 +48,16 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
         EnsureConverterInitialized();
     }
 
-    /// <summary>
-    ///     Provides an Icon for the component.
-    /// </summary>
     protected override Bitmap Icon => Resources.GeometryToFile;
 
-    /// <summary>
-    ///     Gets the unique ID for this component. Do not change this ID after release.
-    /// </summary>
+    /// <summary>Do not change this GUID after release — it's the component's wire identity.</summary>
     public override Guid ComponentGuid => new Guid("4B2646E6-A8B0-48B6-A566-FE5EC2376C82");
 
-    /// <summary>
-    ///     Creates custom component attributes
-    /// </summary>
     public override void CreateAttributes()
     {
         m_attributes = new GH_ContextBakeOutputAttributes(this);
     }
 
-    /// <summary>
-    ///     Ensures the converter is initialized (singleton pattern)
-    /// </summary>
     private void EnsureConverterInitialized()
     {
         if (_converter == null)
@@ -81,18 +66,13 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
             {
                 if (_converter == null)
                 {
-                    // Configure options for Grasshopper usage
                     var options = new RhinoConverterOptions();
-
                     _converter = new RhinoDocumentConverter(options);
                 }
             }
         }
     }
 
-    /// <summary>
-    ///     Registers all the input parameters for this component.
-    /// </summary>
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddGeometryParameter("Geometry", "G",
@@ -124,9 +104,6 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
         pManager[6].Optional = true;
     }
 
-    /// <summary>
-    ///     Registers all the output parameters for this component.
-    /// </summary>
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
         pManager.AddGenericParameter("File", "F",
@@ -135,13 +112,11 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
     }
 
     /// <summary>
-    ///     This is the method that actually does the work. All inputs are read as trees, so this runs
-    ///     exactly once per solve and queues a single background task; the per-file fan-out happens
-    ///     inside <see cref="Export" />.
+    ///     All inputs are read as trees, so this runs once per solve and queues a single background
+    ///     task; the per-file fan-out happens inside <see cref="Export" />.
     /// </summary>
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        // Get trees for all parameters
         if (!DA.GetDataTree(0, out GH_Structure<IGH_GeometricGoo> geometryTree))
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No geometry provided");
@@ -167,7 +142,6 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
         DA.GetDataList(6, metadataLines);
         var metadata = FileMetadataParser.Parse(metadataLines);
 
-        // Validate file ending
         if (string.IsNullOrWhiteSpace(fileEnding) || !fileEnding.StartsWith("."))
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
@@ -177,9 +151,8 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
 
         if (InPreSolve)
         {
-            // Only the .3dm path is safe to run off the UI thread (see Export). Every other format
-            // goes through RhinoDoc.Export, so no task is queued and the second pass computes it
-            // inline on the main thread.
+            // Only .3dm is safe to run off the UI thread — see Export. Other formats skip the
+            // task and get computed inline on the main thread in the second pass below.
             if (IsRhinoFile(fileEnding))
             {
                 var cancel = CancelToken;
@@ -354,7 +327,6 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
 
         if (IsSingleFileMode(geometryTree))
         {
-            // Single file mode - all geometry in one file
             var allGeometry = geometryTree.AllData(true).OfType<IGH_GeometricGoo>().ToList();
             var allLayerNames = layerNamesTree?.AllData(true)
                 .Select(s => (s as GH_String)?.Value)
@@ -391,7 +363,6 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
             return jobs;
         }
 
-        // Multiple files mode - one file per branch
         var paths = geometryTree.Paths.ToList();
 
         for (var pathIndex = 0; pathIndex < paths.Count; pathIndex++)
@@ -445,9 +416,6 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
         return jobs;
     }
 
-    /// <summary>
-    ///     Determines if the component should operate in single file mode based on tree structure.
-    /// </summary>
     private static bool IsSingleFileMode(GH_Structure<IGH_GeometricGoo> geometryTree)
     {
         return geometryTree.PathCount == 1 ||
@@ -613,10 +581,7 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
         }
     }
 
-    /// <summary>
-    ///     Writes one job through a headless RhinoDoc and Rhino's exporters. Required for every
-    ///     format other than .3dm, and the reason those exports stay serial and on the main thread.
-    /// </summary>
+    /// <summary>Writes one job through a headless RhinoDoc and Rhino's exporters — see <see cref="Export" />.</summary>
     private static FileDataGoo ExportViaHeadlessDoc(
         FileJob job,
         string fileEnding,
@@ -715,9 +680,6 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
         });
     }
 
-    /// <summary>
-    ///     Gets the layer name for a specific index with fallback to default.
-    /// </summary>
     private static string GetLayerName(List<string> layerNames, int index)
     {
         if (layerNames == null || layerNames.Count == 0)
@@ -734,9 +696,6 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
         return lastName ?? DefaultLayerName;
     }
 
-    /// <summary>
-    ///     Gets the layer color for a specific index with fallback to default.
-    /// </summary>
     private static Color GetLayerColor(List<Color> layerColors, int index)
     {
         if (layerColors == null || layerColors.Count == 0)

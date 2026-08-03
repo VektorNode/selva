@@ -1,9 +1,8 @@
 namespace Selva.Drawing.Model;
 
-// The authoring unit a user types lengths in. The drawing model is always internally in
-// millimetres (renderers convert mm → PDF points / SVG units at the boundary); this enum exists
-// only at the input surface so imperial users can think in inches without the model changing.
-// Convert at the GH boundary via ToMm before constructing any model type.
+// The unit a user types lengths in. The model is always internally millimetres; this enum
+// exists only at the input surface, so convert via ToMm at the GH boundary before
+// constructing any model type.
 public enum DrawingUnit
 {
 	Millimeters = 0,
@@ -14,7 +13,6 @@ public enum DrawingUnit
 
 public static class DrawingUnitExtensions
 {
-	// Millimetres per one unit.
 	public static double MmPerUnit(this DrawingUnit unit)
 	{
 		switch (unit)
@@ -26,6 +24,5 @@ public static class DrawingUnitExtensions
 		}
 	}
 
-	// Convert an authored value in this unit to internal millimetres.
 	public static double ToMm(this DrawingUnit unit, double value) => value * unit.MmPerUnit();
 }

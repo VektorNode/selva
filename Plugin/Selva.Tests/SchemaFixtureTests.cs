@@ -6,25 +6,13 @@ using Selva.Schema.Services;
 namespace Selva.Tests;
 
 /// <summary>
-///     Data-driven fixture tests for schema migration and validation.
-///     HOW TO ADD A NEW SCHEMA VERSION:
-///     1. Drop a JSON file in TestFiles/schemas/vX.Y.Z.json — it will be picked up automatically.
-///     2. Add a matching FixtureExpectations entry in CreateExpectations() below.
-///     3. If a field changes behaviour, update the corresponding assertion in AssertExpectations().
-///     WHAT EACH FIXTURE FILE TESTS (automatically, no extra code needed):
-///     - The file parses without error
-///     - Full migration pipeline runs without throwing
-///     - Final schemaVersion == SchemaVersion.CURRENT_STRING
-///     - All inputs have a non-null inputStructure ("item" | "list" | "tree")
-///     - All outputs have a non-null type
-///     - Layout is non-null and has a discriminator type ("tabbed" or "flat")
+///     Data-driven fixture tests for schema migration and validation. Drop a JSON file in
+///     TestFiles/schemas/vX.Y.Z.json and it's auto-discovered and run against the generic
+///     invariants below; add a CreateExpectations() entry for per-fixture assertions.
 /// </summary>
 public class SchemaFixtureTests
 {
-    /// <summary>
-    ///     Returns expectations keyed by fixture filename (e.g. "v1.0.0.json").
-    ///     TO ADD NEW VERSION: add an entry here matching your new fixture file.
-    /// </summary>
+    /// <summary>Expectations keyed by fixture filename (e.g. "v1.0.0.json").</summary>
     private static Dictionary<string, FixtureExpectations> CreateExpectations()
     {
         return new Dictionary<string, FixtureExpectations>
@@ -201,9 +189,7 @@ public class SchemaFixtureTests
         }
     }
 
-    /// <summary>
-    ///     Runs the full two-phase migration pipeline the same way SchemaArchiveSerializer does.
-    /// </summary>
+    // Mirrors SchemaArchiveSerializer's two-phase call sequence exactly.
     private static UISchema FullMigration(string rawJson)
     {
         var jObject = JObject.Parse(rawJson);
@@ -216,26 +202,16 @@ public class SchemaFixtureTests
     {
         return File.ReadAllText(Path.Combine("TestFiles", "schemas", fileName));
     }
+
     // -------------------------------------------------------------------------
     // Per-fixture expectations
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    ///     Expectations for a specific fixture file. Only set fields you want to assert.
-    ///     Leave a field null to skip that assertion for this fixture.
-    /// </summary>
+    /// <summary>Null fields skip that assertion for the fixture.</summary>
     private class FixtureExpectations
     {
-        /// <summary>How many inputs the fixture should have after migration.</summary>
         public int? InputCount { get; init; }
-
-        /// <summary>How many outputs the fixture should have after migration.</summary>
         public int? OutputCount { get; init; }
-
-        /// <summary>
-        ///     Per-input expectations keyed by input nickname.
-        ///     Only specify inputs you want to assert on — others are ignored.
-        /// </summary>
         public Dictionary<string, InputExpectation> Inputs { get; init; } = new Dictionary<string, InputExpectation>();
     }
 

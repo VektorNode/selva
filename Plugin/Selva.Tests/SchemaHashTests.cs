@@ -42,8 +42,8 @@ public class SchemaHashTests
     [Fact]
     public void Compute_EquivalentSchemas_ProduceSameHash()
     {
-        // Two independently-built schemas with identical content must hash equal — even though
-        // their default Created/LastModified timestamps differ, since those are excluded.
+        // Default Created/LastModified are DateTime.UtcNow, so this also proves timestamps
+        // are excluded from the hash: two schemas built moments apart still match.
         var a = new UISchema { Id = "s", Name = "Schema" };
         var b = new UISchema { Name = "Schema", Id = "s" };
 
@@ -66,9 +66,6 @@ public class SchemaHashTests
     [Fact]
     public void Compute_TimestampsDoNotAffectHash()
     {
-        // Created/LastModified are metadata, not content, and get bumped on save/migration.
-        // The hash must ignore them so it is reproducible across persistence boundaries and
-        // does not spuriously reject saves. Schemas differing only in timestamps hash equal.
         var a = new UISchema { Id = "s", Created = FixedTime, LastModified = FixedTime };
         var b = new UISchema
         {

@@ -21,15 +21,12 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Components;
 
 /// <summary>
-///     Unified UI Builder component - WebSocket-only version
-///     Switch between Schema Builder mode and Interactive Preview mode
-///
 ///     DO NOT RENAME THIS CLASS. Rhino.Compute identifies it by literal type name
 ///     ("GH_UIBuilderComponent") in GrasshopperValidationHelper.cs — it cannot reference Selva.GH,
 ///     so there is no `is` check and no compile-time link. A rename compiles clean here and breaks
-///     /grasshopper/schema for EVERY definition at once, with a misleading error blaming the user's
-///     Context Bake wiring. Nothing in either repo catches this: the boundary has no test.
-///     If you must rename, update the compute fork in the same change.
+///     /grasshopper/schema for EVERY definition at once, blaming the user's Context Bake wiring.
+///     Nothing in either repo catches this: the boundary has no test. If you must rename, update
+///     the compute fork in the same change.
 ///
 ///     Same applies to OBSOLETE_* snapshots: they must keep subclassing this component. Compute
 ///     walks the base chain to accept them (a pre-upgrade .gh deserializes into the subclass, and
@@ -40,7 +37,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 {
     private static readonly Version PluginVersion = typeof(GH_UIBuilderComponent).Assembly.GetName().Version;
 
-    // Document tracking
     private GH_Document _currentDocument;
     private bool _disposed;
 
@@ -51,8 +47,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private Dictionary<string, object> _embeddedValues;
     private EventHandler _onDocumentModified;
     private EventHandler _onSolutionEnded;
-
-    // Named event handler references so they can be unsubscribed on Dispose
     private EventHandler _onSolutionStarted;
     private UIBuilderService _service;
     private string _sessionId;
@@ -64,20 +58,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
     }
 
-    /// <summary>
-    ///     Helper property to check if WebSocket communication is available
-    /// </summary>
     private bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
 
     public override Guid ComponentGuid => new Guid("593BC967-797A-4B1A-9B76-C2133F6B08E2");
 
     /// <summary>
-    ///     The embedded UI schema. Normally authored through the designer and restored by
-    ///     <see cref="Read" />; this accessor exists so a definition can be built without one —
-    ///     scripted fixture generation, and tests that need a schema-bearing component.
-    ///
-    ///     Setting expires the solution so the Schema output republishes. The value is persisted
-    ///     by <see cref="Write" /> like any designer-authored schema.
+    ///     Normally authored through the designer and restored by <see cref="Read" />; this setter
+    ///     exists so a definition can be built without one — scripted fixture generation, tests.
+    ///     Setting expires the solution so the Schema output republishes.
     /// </summary>
     public UISchema Schema
     {
@@ -92,28 +80,25 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     protected override Bitmap Icon => Resources.UIBridge;
 
     /// <summary>
-    ///     Override Locked property to handle right-click disable/enable.
+    ///     Locking tears down document subscriptions without a falling edge, so the solve after
+    ///     unlock sees EnableRising == false. SolveInstance also keys the rebind on
+    ///     EventManager.IsRegistered — don't narrow that condition back to edges only.
     ///
-    ///     Unlock recovery: locking tears down document subscriptions without a falling edge, so
-    ///     the solve after unlock sees EnableRising == false. SolveInstance therefore also keys the
-    ///     rebind on EventManager.IsRegistered — do not narrow that condition back to edges only.
+    ///     Lock only tears down what InitializeDependencies wires per-document (servers +
+    ///     DocumentEventManager document-side subscriptions). It does NOT detach the component-side
+    ///     handlers (_onSolutionStarted/_onSolutionEnded/_onDocumentModified) — those are bound once
+    ///     in InitializeDependencies and stay attached for the component's lifetime; Cleanup()/
+    ///     Dispose() detach them.
     ///
-    ///     IMPORTANT invariant: on lock we only tear down what InitializeDependencies wires per-document
-    ///     (servers + DocumentEventManager document-side subscriptions). We do NOT detach the
-    ///     component-side handlers (_onSolutionStarted/_onSolutionEnded/_onDocumentModified) — they
-    ///     are bound exactly once in InitializeDependencies and remain attached for the component's
-    ///     lifetime. Cleanup() / Dispose() are responsible for detaching them.
-    ///
-    ///     If you ever change UnregisterEvents to also clear the EventManager's SolutionStarted/
-    ///     SolutionEnded/DocumentModified subscriber lists, this contract breaks and solving-state
-    ///     tracking silently stops working across lock/unlock cycles.
+    ///     If UnregisterEvents ever starts clearing EventManager's SolutionStarted/SolutionEnded/
+    ///     DocumentModified subscriber lists too, this contract breaks and solving-state tracking
+    ///     silently stops working across lock/unlock cycles.
     /// </summary>
     public override bool Locked
     {
         get => base.Locked;
         set
         {
-            // If component is being locked (disabled), cleanup communication and events
             if (value && !base.Locked)
             {
                 CleanupCommunication();
@@ -150,8 +135,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        // Check if running in headless/compute environment before any initialization
-        // If so, just output the embedded schema and stop - no services or background tasks
+        // Headless (Rhino.Compute): output the embedded schema and stop, no services/background tasks.
         if (HeadlessGuard.IsHeadless)
         {
             DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
@@ -161,9 +145,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         var enable = false;
         DA.GetData(0, ref enable);
 
-        // Initialize dependencies on first run
         InitializeDependencies();
-
 
         var document = OnPingDocument();
         if (!DocumentGuards.IsValid(document, out var error))
@@ -180,11 +162,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             HandleDisablingState(document);
         }
 
-        // Register document events only when enabled. Re-registration is needed on the rising
-        // edge (off→on), when the document changed under us, or when the subscriptions were torn
-        // down without a falling edge: right-click lock → unlock never solves with enable=false,
-        // so _lastEnable stays true and EnableRising alone would skip the rebind — leaving
-        // SolutionStart/End dead and wedging IsBusy after the first value update.
+        // Rebind is needed on the rising edge (off→on), when the document changed under us, or when
+        // subscriptions were torn down without a falling edge: right-click lock → unlock never solves
+        // with enable=false, so EnableRising alone would skip the rebind and leave SolutionStart/End
+        // dead, wedging IsBusy after the first value update.
         var rebind = enable && (transition.EnableRising
                                 || _currentDocument != document
                                 || !_service.EventManager.IsRegistered);
@@ -205,9 +186,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
-    /// <summary>
-    ///     Initialize all dependencies on first run
-    /// </summary>
     private void InitializeDependencies()
     {
         if (_service != null)
@@ -215,13 +193,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return;
         }
 
-        // Always generate a new session ID on first initialization (don't restore from file)
+        // Always a new session ID, never restored from file.
         _sessionId = new SessionManager().CreateNewSession();
-
-        // Now create UIBuilderService with the correct session ID
         _service = new UIBuilderService(_sessionId, PluginVersion);
 
-        // Initialize BridgeService and DocumentSyncService with callbacks for single source of truth
         _service.BridgeService.Initialize(
             this,
             () => _embeddedSchema,
@@ -235,14 +210,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             schema => _embeddedSchema = schema
         );
 
-        // Wire up parameter deletion handler
         _service.DocumentSyncService.OnParameterDeletionRequired += HandleParameterDeletion;
 
         // Keep watched set in sync when new params are merged into the schema
         _service.DocumentSyncService.OnNewIdsDiscovered += ids =>
             _service.EventManager.RegisterWatchedIds(ids);
 
-        // Wire up solution events — stored as named fields so they can be unsubscribed on Dispose
         _onSolutionStarted = (s, e) =>
         {
 #if DEBUG
@@ -291,11 +264,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
             ClearAllContextualParameters();
 
-            // Apply any value updates that coalesced while this solve was in flight. Posted to a fresh
-            // UI tick rather than run inline: this handler is reentrant (it just broadcast outputs and
-            // merged bake outputs), and draining inline would re-schedule a solve from inside the end of
-            // the current one — under a slider drag that becomes a non-draining loop. By the time the
-            // posted callback runs, the solve has fully ended (IsBusy is false) so the drain schedules cleanly.
+            // Drain pending values on a fresh UI tick, not inline: draining here would re-schedule
+            // a solve from inside the end of this one — under a slider drag that's a non-draining
+            // loop. By the time the posted callback runs, IsBusy is false and the drain is safe.
             if (_service.StateManager.HasPendingValues)
             {
                 RhinoApp.InvokeOnUiThread((Action)(() => _service.BridgeService?.DrainPendingValues()));
@@ -315,17 +286,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
 
-    /// <summary>
-    ///     Handle enabled state
-    /// </summary>
     private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, bool rebind)
     {
         var wasRunning = _service.ServerManager.IsRunning;
 
-        // Start servers when they're down — but also route through StartServersAsync on a rebind
-        // even if they look up: StartServersAsync records the "should be running" intent, so a
-        // stop still in flight from a fast disable→enable is skipped instead of landing after
-        // this solve and stranding dead servers on an enabled component.
+        // Also route through StartServersAsync on a rebind even if servers look up already:
+        // it records the "should be running" intent, so a stop still in flight from a fast
+        // disable→enable is skipped instead of landing after this solve and stranding dead servers.
         if (!wasRunning || rebind)
         {
             _ = Task.Run(async () =>
@@ -334,8 +301,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                 {
                     var started = await _service.ServerManager.StartServersAsync(_sessionId);
 
-                    // Show Web UI URL if embedded assets are available. Only on an actual
-                    // cold start — a no-op re-confirm shouldn't re-post the remark.
+                    // Only post the URL remark on an actual cold start, not a no-op re-confirm.
                     if (started && !wasRunning && _service.ServerManager.HttpPort.HasValue)
                     {
                         var wsPort = _service.ServerManager.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
@@ -347,8 +313,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                         }));
                     }
 
-                    // The URL output was empty while the servers were still coming up —
-                    // refresh once after a cold start so it picks up the live ports.
+                    // Refresh once after a cold start so the URL output picks up the live ports.
                     if (started && !wasRunning)
                     {
                         RhinoApp.InvokeOnUiThread(new Action(() =>
@@ -372,11 +337,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
         if (_embeddedSchema != null && rebind)
         {
-            // Remove any parameters deleted while component was off
+            // Drop params deleted, and reconcile nicknames renamed, while the component was off.
             _embeddedSchema = _service.SchemaSynchronizer.ValidateSchema(_embeddedSchema, document);
-            // Reconcile nicknames renamed while component was off (or Rhino was closed)
             _service.SchemaSynchronizer.SyncNicknamesFromDocument(_embeddedSchema, document);
-            // Seed the watched set so UndoStateChanged can short-circuit correctly
+            // Seed the watched set so UndoStateChanged can short-circuit correctly.
             _service.EventManager.RegisterWatchedObjects(_embeddedSchema);
         }
 
@@ -384,10 +348,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         SetUrlOutput(DA);
     }
 
-    /// <summary>
-    ///     Build the session URL, or null while the WebSocket transport isn't running yet.
-    ///     Falls back to the dev server when no embedded web server is available.
-    /// </summary>
+    /// <summary>Null while the WebSocket transport isn't running yet.</summary>
     private string TryBuildSessionUrl()
     {
         if (_service?.WebSocketTransport?.IsRunning != true)
@@ -402,9 +363,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         return $"{baseUrl}/?session={_sessionId}&wsPort={wsPort}";
     }
 
-    /// <summary>
-    ///     Set the URL output when present — the obsolete subclass registers only the Schema output.
-    /// </summary>
+    /// <summary>Skipped when absent — the obsolete subclass registers only the Schema output.</summary>
     private void SetUrlOutput(IGH_DataAccess DA)
     {
         if (Params.Output.Count > 1)
@@ -413,18 +372,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
-    /// <summary>
-    ///     Carry the embedded schema/values across a component upgrade (old instance → this).
-    /// </summary>
+    /// <summary>Called on the new instance during a component upgrade; `other` is the old one.</summary>
     internal void TransferStateFrom(GH_UIBuilderComponent other)
     {
         _embeddedSchema = other._embeddedSchema;
         _embeddedValues = other._embeddedValues;
     }
 
-    /// <summary>
-    ///     Handle transition to disabled state
-    /// </summary>
     private void HandleDisablingState(GH_Document document)
     {
         CleanupCommunication();
@@ -435,21 +389,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _service?.ValueApplicator?.Clear();
     }
 
-    /// <summary>
-    ///     Handle disabled state display
-    /// </summary>
     private void HandleDisabledState(IGH_DataAccess DA, GH_Document document)
     {
         DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
         Message = ComponentMessageFormatter.CreateDisplayMessage(false, false, _embeddedSchema, _sessionId);
     }
 
-    /// <summary>
-    ///     Handle value updates received via WebSocket
-    /// </summary>
-    /// <summary>
-    ///     Transactional deletion handler - delegates to SchemaCleanupService
-    /// </summary>
     private void HandleParameterDeletion(List<Guid> removedIds, GH_Document document)
     {
         _service.CleanupService.CleanupDeletedParameters(
@@ -483,9 +428,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
-    /// <summary>
-    ///     Add custom context menu items to the component's right-click menu
-    /// </summary>
     public override bool AppendMenuItems(ToolStripDropDown menu)
     {
         base.AppendMenuItems(menu);
@@ -501,7 +443,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             ToolTipText = "Open the interactive UI preview in your default web browser"
         };
 
-        // Only enable if the component is active and connected
         openUIItem.Enabled = _service?.StateManager != null && IsConnected;
 
         menu.Items.Add(openUIItem);
@@ -519,23 +460,21 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private static readonly Guid HopsContextBakeGuid = new Guid("ae2531b4-bab2-4bb1-b5bf-f2143d10c132");
 
     /// <summary>
-    ///     Set while an upgrader is swapping an old component for a new one. GH_UpgradeUtil adds the
-    ///     replacement to the document (firing <see cref="AddedToDocument" />) BEFORE migrating the old
-    ///     component's sources and recipients onto it, so at that moment the new instance looks exactly
-    ///     like a fresh drop — zero sources, zero recipients — and would auto-wire a second toggle next
-    ///     to the one already connected to Enable. Upgraders wrap their swap in
+    ///     Set while an upgrader swaps an old component for a new one. GH_UpgradeUtil adds the
+    ///     replacement to the document (firing <see cref="AddedToDocument" />) BEFORE migrating the
+    ///     old component's sources and recipients onto it, so at that moment the new instance looks
+    ///     like a fresh drop — zero sources, zero recipients — and would auto-wire a second toggle
+    ///     next to the one already connected to Enable. Upgraders wrap the swap in
     ///     <see cref="SuppressAutoWire" /> to skip auto-wiring for that window.
     /// </summary>
     [ThreadStatic] private static bool _autoWireSuppressed;
 
     /// <summary>
-    ///     Suppress placement auto-wiring for the duration of the returned scope. Used by upgraders
-    ///     around the component swap; see <see cref="_autoWireSuppressed" />. Also the way a scripted
-    ///     build places a bare UI Bridge — without it, placement adds a Boolean Toggle and a Context
-    ///     Bake alongside.
+    ///     Also how a scripted build places a bare UI Bridge — without it, placement adds a Boolean
+    ///     Toggle and a Context Bake alongside.
     ///
-    ///     The flag is <see cref="ThreadStaticAttribute" />, so the scope only covers placements made
-    ///     on the calling thread — add the component inside the using block, on the Grasshopper thread.
+    ///     <see cref="ThreadStaticAttribute" />: the scope only covers placements on the calling
+    ///     thread — add the component inside the using block, on the Grasshopper thread.
     /// </summary>
     public static IDisposable SuppressAutoWire()
     {
@@ -577,10 +516,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
-    /// <summary>
-    ///     True only when this component was just dropped on a fresh canvas position —
-    ///     not on file load, paste, or when the user has already wired/loaded state.
-    /// </summary>
+    /// <summary>False on file load, paste, or when the user has already wired/loaded state.</summary>
     private bool IsFreshPlacement()
     {
         if (_embeddedSchema != null)
@@ -596,13 +532,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         return true;
     }
 
-    /// <summary>Whether anything is already feeding the Enable input.</summary>
     private bool HasEnableSource()
     {
         return Params.Input.Count > 0 && Params.Input[0].SourceCount > 0;
     }
 
-    /// <summary>Whether anything is already consuming the Schema output.</summary>
     private bool HasSchemaRecipient()
     {
         return Params.Output.Count > 0 && Params.Output[0].Recipients.Count > 0;
@@ -667,10 +601,6 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
-    /// <summary>
-    ///     Clear contextual data from all inputs and outputs after each solve.
-    ///     Single pass over document.Objects with cached reflection — runs on every solve-end.
-    /// </summary>
     private void ClearAllContextualParameters()
     {
         var document = OnPingDocument();
@@ -702,16 +632,12 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
-    /// <summary>
-    ///     Cleanup communication servers and notify clients
-    /// </summary>
     private void CleanupCommunication()
     {
         if (_service?.ServerManager != null)
         {
             try
             {
-                // Use ServerLifecycleManager to stop servers and notify clients
                 _ = _service.ServerManager.StopServersAndNotifyAsync("Component disabled");
             }
             catch (Exception ex)
@@ -755,12 +681,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _disposed = true;
     }
 
-    // Schema persistence - save/load with .gh file
     public override bool Write(GH_IWriter writer)
     {
-        // Persist schema and values. Don't depend on _service being initialized — under
-        // headless hosts (or before the first solve) it is null, and skipping serialization
-        // there would silently drop the schema from the saved file.
+        // Don't depend on _service being initialized — under headless hosts (or before the first
+        // solve) it is null, and skipping serialization there would silently drop the saved schema.
         try
         {
             var persistence = _service?.PersistenceService ?? new SchemaArchiveSerializer(PluginVersion);
@@ -772,8 +696,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not save schema/values: {ex.Message}");
         }
 
-        // Append to schema history on every GH file save (skip under headless
-        // hosts like Rhino.Compute, which never legitimately save back).
+        // Skip under headless hosts like Rhino.Compute, which never legitimately save back.
         if (_embeddedSchema != null && !HeadlessGuard.IsHeadless)
         {
             try

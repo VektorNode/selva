@@ -7,14 +7,9 @@ using Selva.GH.Features.ComputeIO;
 
 namespace Selva.GH.Features.ComputeIO.Goos;
 
-/// <summary>
-///     Goo carrying a runtime-computed value list routing payload { targetInputId, options }. Emitted
-///     by the "Set Dynamic Value List" component and wired into a ContextBake (like file/chart outputs),
-///     so all Selva outputs share one authoring gesture and one serialization contract.
-///
-///     The wire shape lives in <see cref="DynamicValueListPayload" /> (Rhino-free, unit-tested); this
-///     class is the thin GH_Goo wrapper. The two must never diverge — all serialization delegates down.
-/// </summary>
+// Thin GH_Goo wrapper around DynamicValueListPayload (Rhino-free, unit-tested) — the runtime-computed
+// { targetInputId, options } routing payload emitted by "Set Dynamic Value List". All serialization
+// delegates to the payload; the two must never diverge.
 public class DynamicValueListGoo : GH_Goo<DynamicValueListGoo>, ISelvaSerializableGoo
 {
     public DynamicValueListGoo()
@@ -37,18 +32,13 @@ public class DynamicValueListGoo : GH_Goo<DynamicValueListGoo>, ISelvaSerializab
 
     public DynamicValueListPayload Payload { get; private set; }
 
-    /// <summary>
-    ///     Instance GUID of the Dynamic Value List input these options populate. Empty when unset.
-    /// </summary>
+    // Empty when unset.
     public Guid TargetInputId
     {
         get => Payload.TargetInputId;
         set => Payload.TargetInputId = value;
     }
 
-    /// <summary>
-    ///     Computed options (name -> value).
-    /// </summary>
     public Dictionary<string, string> Options
     {
         get => Payload.Options;
@@ -69,8 +59,7 @@ public class DynamicValueListGoo : GH_Goo<DynamicValueListGoo>, ISelvaSerializab
         return $"Dynamic Value List: {Options?.Count ?? 0} option(s)";
     }
 
-    // ISelvaSerializableGoo — Rhino.Compute returns this payload; the web UI routes it back into the
-    // targeted Dynamic Value List input. Same shape the local collector produces.
+    // Rhino.Compute returns this payload; the web UI routes it back into the targeted input.
     public string ToComputeJson()
     {
         return Payload.ToComputeJson();

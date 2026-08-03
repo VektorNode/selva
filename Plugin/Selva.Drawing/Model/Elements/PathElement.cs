@@ -4,9 +4,8 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Model.Elements;
 
-// Generic stroked/filled path. Replaces today's SvgCurveData and SvgSurfaceData — a
-// surface is just a PathElement with Fill set; multiple subpaths (holes) live in the same
-// Path via repeated MoveTo+Close pairs.
+// Generic stroked/filled path. A surface is just a PathElement with Fill set; holes are
+// extra subpaths in the same Path via repeated MoveTo+Close pairs.
 public sealed class PathElement : DrawElement
 {
 	public Path Path { get; init; } = Path.Empty;

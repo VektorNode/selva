@@ -1,33 +1,28 @@
 namespace Selva.Drawing.Rendering.Svg;
 
-// Configures SvgRenderer. Defaults reproduce the legacy SvgDocument.Build output for
-// parity testing; embedding fonts and using the page's paper size are opt-in.
+// Configures SvgRenderer. Defaults reproduce legacy SvgDocument.Build output byte-for-byte.
 public sealed class SvgRenderOptions
 {
 	public const string DefaultFontFamily =
 		"Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif";
 
-	// Auto-fit the viewBox to the union of element bounds plus Padding on each side.
-	// Matches legacy behavior. When false, the renderer uses the page's paper size for
-	// width/height (Phase 6 territory).
+	// Auto-fit the viewBox to the union of element bounds plus Padding. When false,
+	// the renderer uses the page's paper size for width/height instead.
 	public bool AutoFitToContent { get; init; } = true;
 
-	// Padding around the auto-fit content bounds, in document units. Ignored when
-	// AutoFitToContent is false.
+	// Ignored when AutoFitToContent is false.
 	public double Padding { get; init; } = 10.0;
 
-	// Optional CSS color value (e.g. "white" or "#fff"). When set, a <rect width=100%
-	// height=100% fill='...' /> is emitted before the content group.
+	// CSS color (e.g. "white", "#fff"). When set, emits a full-canvas <rect> behind
+	// the content group.
 	public string BackgroundColor { get; init; }
 
-	// font-family stack inherited by all <text> elements in the content group.
 	public string FontFamily { get; init; } = DefaultFontFamily;
 
-	// Embed bundled Inter fonts as @font-face data URIs. Off by default to keep parity
-	// with legacy output; Phase 4 turns this on once font metrics are wired up.
+	// Off by default: keeps parity with legacy output, which never embedded fonts.
 	public bool EmbedFonts { get; init; }
 
-	// Title for the SVG <title> element. When null, falls back to Document.Metadata.Title
-	// or Page.Title; when empty string, no <title> is emitted.
+	// Title for the SVG <title> element. When null, falls back to Page.Title, then
+	// Document.Metadata.Title. Empty string suppresses <title> entirely.
 	public string Title { get; init; }
 }

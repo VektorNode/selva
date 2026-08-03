@@ -2,14 +2,9 @@ using Selva.GH.Features.Display.Services;
 
 namespace Selva.Tests;
 
-/// <summary>
-///     Covers the identity contract of <see cref="BlobKey" /> and the hit/miss + eviction behaviour
-///     of <see cref="BatchBlobCache" />.
-///
-///     The property that actually matters is the negative one: a key collision would serve one
-///     branch's geometry in place of another's, which is a silent visual corruption rather than a
-///     crash. So most of these tests assert that some single-element difference DOES change the key.
-/// </summary>
+// Covers BlobKey identity and BatchBlobCache hit/miss/eviction. Most tests assert that a
+// single-element difference DOES change the key: a collision would silently serve one branch's
+// geometry in place of another's.
 public class BatchBlobCacheTests
 {
     private static float[] Verts(params float[] v) => v;
@@ -34,8 +29,6 @@ public class BatchBlobCacheTests
     [Fact]
     public void Key_ChangesWhenMetadataChanges()
     {
-        // Metadata carries material ids, group boundaries, names, layers and the source component
-        // id — a change there changes the blob even when every vertex is identical.
         var a = BlobKey.Compute("{\"m\":1}", SampleVerts, SampleIndices, null, null);
         var b = BlobKey.Compute("{\"m\":2}", SampleVerts, SampleIndices, null, null);
 
@@ -64,8 +57,6 @@ public class BatchBlobCacheTests
     [Fact]
     public void Key_DistinguishesNullChannelFromEmptyChannel()
     {
-        // A null UV array writes no chunk and no flag; a zero-length one is a different blob.
-        // Hashing "nothing" for both would collide these.
         Assert.NotEqual(
             BlobKey.Compute("{}", SampleVerts, SampleIndices, null, null),
             BlobKey.Compute("{}", SampleVerts, SampleIndices, System.Array.Empty<float>(), null));
@@ -94,8 +85,7 @@ public class BatchBlobCacheTests
     [Fact]
     public void Key_ChangesWhenATrailingColorByteChanges()
     {
-        // MixBytes consumes 8 bytes per round then falls through to a per-byte tail. A change in
-        // that tail must still register — an early `return` in the tail loop would lose it.
+        // MixBytes hashes 8-byte rounds then a per-byte tail; this exercises the tail.
         var a = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
         var b = a.ToArray();
         b[9] = 11;
@@ -108,7 +98,7 @@ public class BatchBlobCacheTests
     [Fact]
     public void Key_ChangesWhenAnOddTrailingVertexComponentChanges()
     {
-        // MixFloats folds pairs; a 3-component (odd-length) array exercises the single-element tail.
+        // MixFloats folds pairs; a 3-component array exercises the odd tail.
         var a = Verts(1f, 2f, 3f);
         var b = Verts(1f, 2f, 4f);
 
@@ -120,8 +110,8 @@ public class BatchBlobCacheTests
     [Fact]
     public void Key_DistinguishesSignedZero()
     {
-        // Hashing bit patterns rather than values: -0.0 == 0.0 numerically, but they are distinct
-        // bit patterns and the float32 fallback path writes raw bits.
+        // -0.0 == 0.0 numerically but hashes distinct bit patterns, matching what the float32
+        // fallback path actually writes.
         Assert.NotEqual(
             BlobKey.Compute("{}", Verts(0f, 0f, 0f), System.Array.Empty<int>(), null, null),
             BlobKey.Compute("{}", Verts(-0f, 0f, 0f), System.Array.Empty<int>(), null, null));
@@ -130,7 +120,6 @@ public class BatchBlobCacheTests
     [Fact]
     public void Key_ChangesWhenArrayLengthChangesButContentPrefixMatches()
     {
-        // Length is mixed explicitly, so a prefix match must not collide with the longer array.
         Assert.NotEqual(
             BlobKey.Compute("{}", Verts(1f, 2f, 3f), System.Array.Empty<int>(), null, null),
             BlobKey.Compute("{}", Verts(1f, 2f, 3f, 0f, 0f, 0f), System.Array.Empty<int>(), null, null));
@@ -184,7 +173,7 @@ public class BatchBlobCacheTests
         BatchBlobCache.Store(key, first);
         BatchBlobCache.Store(key, second);
 
-        // Outstanding references handed out on an earlier hit must stay valid, so the first blob wins.
+        // Keeps the first blob so any reference already handed out stays valid.
         Assert.Same(first, BatchBlobCache.TryGet(key));
         Assert.Equal(1, BatchBlobCache.Stats().Count);
 

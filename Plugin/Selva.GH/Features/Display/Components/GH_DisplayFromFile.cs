@@ -9,14 +9,12 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Display.Components;
 
-// Reloads a Web Display payload from a .dmf file written by Display To File. Skips the expensive
-// mesh/quantize/compress path — the finished blob is read straight back — so reusing a saved part
-// many times is cheap.
+// Reads the finished blob straight back from a .dmf file, skipping the mesh/quantize/compress path
+// — cheap to reuse a saved part many times.
 //
-// Pick identity: the web keys selection on sourceComponentId (+ per-item ids). If the same .dmf is
-// loaded into many instances, sharing one saved id would collide. So by default each loader stamps
-// the batch with its own InstanceGuid; an explicit Id input overrides that when you want a stable,
-// known identity.
+// The web keys pick selection on sourceComponentId (+ per-item ids). Loading the same .dmf into many
+// instances would collide on one shared id, so each loader stamps its own InstanceGuid by default;
+// an explicit Id input pins a stable identity instead.
 public class GH_DisplayFromFile : GH_Component
 {
     public GH_DisplayFromFile()
@@ -77,21 +75,14 @@ public class GH_DisplayFromFile : GH_Component
             return;
         }
 
-        // Re-stamp the pick identity. Default to this component's id so reusing a saved part across
-        // many loaders yields distinct identities; an explicit Id input pins it instead.
         var newId = !string.IsNullOrWhiteSpace(idOverride) ? idOverride : InstanceGuid.ToString();
         RestampSourceComponentId(batch, newId);
 
         DA.SetData(0, new WebDisplayGoo(batch));
     }
 
-    /// <summary>
-    ///     Rewrites the batch's <see cref="DisplayBatch.SourceComponentId" /> and the per-item pick
-    ///     ids (synthesized as <c>{sourceComponentId}:{ordinal}</c>) to use <paramref name="newId" />.
-    ///     The mesh blob's embedded metadata still carries the old id, but the web prefers the outer
-    ///     batch's sourceComponentId over the blob's, so meshes pick up the new id without touching
-    ///     (and re-encoding) the blob — keeping the no-re-mesh fast path intact.
-    /// </summary>
+    // The blob's embedded metadata still carries the old id, but the web prefers the outer batch's
+    // sourceComponentId over the blob's, so this restamps without touching (or re-encoding) the blob.
     private static void RestampSourceComponentId(DisplayBatch batch, string newId)
     {
         var oldId = batch.SourceComponentId;
@@ -109,7 +100,7 @@ public class GH_DisplayFromFile : GH_Component
                 continue;
             }
 
-            // Item ids are "{oldId}:{ordinal}". Swap the prefix when it matches; otherwise leave as-is.
+            // Item ids are "{oldId}:{ordinal}" — swap the prefix, leave non-matching ids alone.
             if (oldId != null && item.Id.StartsWith(oldId + ":", StringComparison.Ordinal))
             {
                 item.Id = newId + item.Id.Substring(oldId.Length);

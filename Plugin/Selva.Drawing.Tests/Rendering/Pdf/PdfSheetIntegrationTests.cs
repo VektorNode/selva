@@ -12,16 +12,14 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
-// Phase 8 exit criteria: a complete drawing sheet — multi-view assembly drawing, title
-// block, BOM, notes, and a revision table — fits on one A2 page and produces a valid PDF
-// reopenable by PdfReader.
+// A complete drawing sheet — multi-view assembly drawing, title block, BOM, notes, and
+// a revision table — fits on one A2 page and produces a valid PDF reopenable by PdfReader.
 public class PdfSheetIntegrationTests
 {
 	[Fact]
 	public void Full_sheet_renders_to_a_valid_one_page_pdf()
 	{
 		var doc = BuildSheet();
-		// AutoFitToContent = false so the rendered page honours the requested A2 paper.
 		var bytes = new PdfRenderer(new PdfRenderOptions { AutoFitToContent = false }).Render(doc);
 
 		Assert.True(bytes.Length > 0);
@@ -44,15 +42,13 @@ public class PdfSheetIntegrationTests
 		Assert.Single(svgs);
 		var svg = svgs[0];
 		Assert.Contains("<svg", svg);
-		// Should contain title-block fields, BOM header, revision row, note text.
 		Assert.Contains("Bracket assembly", svg);
-		Assert.Contains("DESCRIPTION", svg);    // revision-table column header
+		Assert.Contains("DESCRIPTION", svg);
 		Assert.Contains("GENERAL NOTES", svg);
 	}
 
 	private static Document BuildSheet()
 	{
-		// 1) Two views of dummy geometry (a square & a triangle outline to stand in for parts).
 		var part1 = new PathElement
 		{
 			Path = new Path.Builder().MoveTo(0, 0).LineTo(60, 0).LineTo(60, 40).LineTo(0, 40).Close().Build(),
@@ -64,8 +60,6 @@ public class PdfSheetIntegrationTests
 			Stroke = new Stroke { Width = 0.5 },
 		};
 
-		// A2 landscape: 594 × 420 mm. Lay out top-down: views in upper-left, revisions
-		// upper-right, notes mid-left, BOM mid-centre, title block bottom-right.
 		var view1 = new DrawingView
 		{
 			Geometry = part1,
@@ -85,7 +79,6 @@ public class PdfSheetIntegrationTests
 			Origin = new Point2D(120, 320),
 		};
 
-		// 2) Title block — pinned to the bottom-right of the page.
 		var titleValues = new Dictionary<string, string>
 		{
 			["Project"] = "Bracket assembly",
@@ -106,7 +99,6 @@ public class PdfSheetIntegrationTests
 			Origin = new Point2D(394, 20),
 		};
 
-		// 3) BOM (Phase 7 Table) showing assembly parts.
 		var bom = new Selva.Drawing.Model.Layout.Table
 		{
 			Origin = new Point2D(20, 80),
@@ -135,7 +127,6 @@ public class PdfSheetIntegrationTests
 			DefaultCellStyle = new TextStyle { FontSize = 2.5 },
 		};
 
-		// 4) Revision table — top-right corner.
 		var revisions = new RevisionTable
 		{
 			Width = 130,
@@ -147,7 +138,6 @@ public class PdfSheetIntegrationTests
 			},
 		};
 
-		// 5) Notes block — left side, mid-page.
 		var notes = new NotesBlock
 		{
 			Title = "GENERAL NOTES",

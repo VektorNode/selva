@@ -4,21 +4,17 @@ using Selva.Schema.Models;
 
 namespace Selva.Schema.Services.Validation.Rules;
 
-/// <summary>
-///     Validates input and output parameter definitions
-/// </summary>
 public class ParameterValidationRule : IValidationRule
 {
     public IEnumerable<ValidationIssue> Validate(UISchema schema)
     {
         if (schema.Inputs == null || schema.Outputs == null)
         {
-            yield break; // Already flagged in BasicStructureRule
+            yield break; // BasicStructureRule already flagged this
         }
 
         var inputIds = new HashSet<Guid>();
 
-        // Validate inputs
         foreach (var input in schema.Inputs)
         {
             if (input.Id == Guid.Empty)
@@ -30,7 +26,6 @@ public class ParameterValidationRule : IValidationRule
                 continue;
             }
 
-            // Check for duplicate IDs
             if (!inputIds.Add(input.Id))
             {
                 yield return ValidationIssue.Error(
@@ -39,7 +34,6 @@ public class ParameterValidationRule : IValidationRule
                     "Each input parameter must have a unique ID");
             }
 
-            // Validate param type
             if (string.IsNullOrEmpty(input.ParamType))
             {
                 yield return ValidationIssue.Warning(
@@ -51,7 +45,6 @@ public class ParameterValidationRule : IValidationRule
 
         var outputIds = new HashSet<Guid>();
 
-        // Validate outputs
         foreach (var output in schema.Outputs)
         {
             if (output.Id == Guid.Empty)
@@ -63,7 +56,6 @@ public class ParameterValidationRule : IValidationRule
                 continue;
             }
 
-            // Check for duplicate IDs
             if (!outputIds.Add(output.Id))
             {
                 yield return ValidationIssue.Error(

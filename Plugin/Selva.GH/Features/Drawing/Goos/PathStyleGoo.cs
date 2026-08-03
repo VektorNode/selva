@@ -17,8 +17,7 @@ public class PathStyleGoo : IGH_Goo
     public string TypeName => "PathStyle";
     public string TypeDescription => "Path style bundle (stroke + fill)";
 
-    // PathStyle is immutable (init-only properties), so duplicates can safely share the
-    // same instance. The old JSON round-trip here silently zeroed Color (private ctor).
+    // PathStyle is immutable, so Duplicate can share the instance instead of copying.
     public IGH_Goo Duplicate() => new PathStyleGoo(Value);
 
     public IGH_GooProxy EmitProxy() => null;
@@ -28,7 +27,7 @@ public class PathStyleGoo : IGH_Goo
         if (source == null) return false;
         if (source is PathStyleGoo psg) { Value = psg.Value; return Value != null; }
         if (source is PathStyle ps) { Value = ps; return true; }
-        // Promote a bare Stroke or Fill into a PathStyle so users can wire either side.
+        // Promote a bare Stroke or Fill into a PathStyle so either side can feed this input.
         if (source is StrokeGoo sg && sg.Value != null) { Value = new PathStyle { Stroke = sg.Value }; return true; }
         if (source is Stroke s) { Value = new PathStyle { Stroke = s }; return true; }
         if (source is FillGoo fg && fg.Value != null) { Value = new PathStyle { Fill = fg.Value }; return true; }

@@ -42,8 +42,7 @@ public class NotesBlockTests
 			},
 		};
 		var b = notes.ComputeBounds();
-		// Single-line note at 2.5mm is ~3mm tall; multi-line wrapping should produce >6mm.
-		Assert.True(b.Height > 6);
+		Assert.True(b.Height > 6); // single-line note is ~3mm tall; wrapping pushes it past 6mm
 	}
 
 	[Fact]
@@ -70,9 +69,8 @@ public class NotesBlockTests
 	[Fact]
 	public void Title_gap_is_exactly_TitleSpacing()
 	{
-		// The old spacer-child implementation delivered TitleSpacing + NoteSpacing between
-		// title and first note (the spacer picked up stack spacing on both sides). Total
-		// height must decompose as titleHeight + TitleSpacing + notesHeight.
+		// Regression: the old spacer-child implementation added TitleSpacing + NoteSpacing
+		// between title and first note. Total height must decompose as titleHeight + TitleSpacing + notesHeight.
 		var notes = new[] { "First note", "Second note" };
 		var titleOnly = new NotesBlock { Title = "GENERAL NOTES" };
 		var notesOnly = new NotesBlock { Notes = notes };

@@ -44,10 +44,7 @@ public static class AppConfig
     // -------------------------------------------------------------------------
     public static class UIBuilder
     {
-        /// <summary>
-        ///     Delay before broadcasting initial outputs after a client connects.
-        ///     Gives Grasshopper time to finish its current solution before output data is read.
-        /// </summary>
+        // Lets Grasshopper finish its current solution before output data is read.
         public const int InitialOutputBroadcastDelayMs = 100;
     }
 

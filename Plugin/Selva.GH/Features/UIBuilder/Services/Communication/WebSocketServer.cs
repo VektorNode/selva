@@ -13,8 +13,7 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
-///     Simple WebSocket server for real-time communication with the web UI.
-///     Only used for local interactive mode.
+///     WebSocket server for real-time communication with the web UI in local interactive mode.
 /// </summary>
 public class WebSocketServer : IDisposable
 {
@@ -79,8 +78,8 @@ public class WebSocketServer : IDisposable
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///     Start the WebSocket server. Tries the preferred port first; if it's already in
-    ///     use, falls back to a random free port automatically.
+    ///     Starts the server. Tries the preferred port first, falls back to a random free port
+    ///     if it's taken.
     /// </summary>
     public Task StartAsync()
     {
@@ -118,11 +117,6 @@ public class WebSocketServer : IDisposable
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    ///     Binds the underlying listener (HttpListener on net48, TcpListener elsewhere)
-    ///     to the given port on the loopback interface. Returns true and sets
-    ///     <paramref name="boundPort" /> on success; returns false on failure.
-    /// </summary>
     private bool TryBindListener(int port, out int boundPort)
     {
 #if NET48
@@ -159,9 +153,6 @@ public class WebSocketServer : IDisposable
 #endif
     }
 
-    /// <summary>
-    ///     Stop the WebSocket server and close all client connections.
-    /// </summary>
     public void Stop()
     {
         // Under the lock: flip IsRunning and detach the client collections. The actual socket
@@ -238,9 +229,6 @@ public class WebSocketServer : IDisposable
     // Broadcast
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    ///     Send a UTF-8 text message to all connected clients with backpressure handling.
-    /// </summary>
     public Task BroadcastAsync(string message)
     {
         if (!IsRunning)
@@ -252,9 +240,6 @@ public class WebSocketServer : IDisposable
         return BroadcastSegmentAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text);
     }
 
-    /// <summary>
-    ///     Send a raw binary frame to all connected clients with backpressure handling.
-    /// </summary>
     public Task BroadcastBinaryAsync(byte[] data)
     {
         if (!IsRunning)
@@ -314,9 +299,6 @@ public class WebSocketServer : IDisposable
         RemoveDeadClients(clientsToRemove);
     }
 
-    /// <summary>
-    ///     Send to a single client. Returns false if the send failed.
-    /// </summary>
     private async Task SendToClientAsync(
         WebSocket client,
         ArraySegment<byte> segment,
@@ -439,10 +421,7 @@ public class WebSocketServer : IDisposable
     }
 
 #if NET48
-    /// <summary>
-    ///     net48 path: HttpListener already negotiated the WebSocket upgrade, so we
-    ///     just take ownership of the resulting WebSocket and enter the receive loop.
-    /// </summary>
+    // HttpListener already negotiated the WebSocket upgrade; just take ownership and receive.
     private async Task ProcessWebSocketRequestAsync(
         HttpListenerContext context,
         CancellationToken cancellationToken)
@@ -477,11 +456,8 @@ public class WebSocketServer : IDisposable
         }
     }
 #else
-    /// <summary>
-    ///     net7+/net9 path: perform the RFC 6455 handshake manually on a raw TCP
-    ///     connection (HttpListener's WebSocket support is Windows-only) and wrap the
-    ///     resulting stream in a server-side WebSocket.
-    /// </summary>
+    // net7+/net9: HttpListener's WebSocket support is Windows-only, so do the RFC 6455
+    // handshake manually on the raw TCP connection and wrap the stream in a server-side WebSocket.
     private async Task ProcessWebSocketRequestAsync(
         TcpClient tcpClient,
         CancellationToken cancellationToken)
@@ -560,10 +536,7 @@ public class WebSocketServer : IDisposable
     }
 #endif
 
-    /// <summary>
-    ///     Registers a newly-accepted client, enforcing the connection cap. Returns
-    ///     false if the cap is reached (caller is responsible for closing the socket).
-    /// </summary>
+    // Returns false if MAX_CLIENTS is reached; caller closes the socket in that case.
     private bool TryRegisterClient(WebSocket webSocket)
     {
         lock (_clientsLock)
@@ -579,10 +552,7 @@ public class WebSocketServer : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Releases a client's bookkeeping and closes the underlying socket. Safe to
-    ///     call with a null webSocket (no-op) so callers can use a single finally block.
-    /// </summary>
+    // No-op on null so callers can call this unconditionally from a finally block.
     private async Task TeardownClientAsync(WebSocket webSocket)
     {
         if (webSocket == null)
@@ -785,9 +755,7 @@ public class WebSocketServer : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Ask the OS for a free port by binding to port 0 — no TOCTOU race.
-    /// </summary>
+    // Binding to port 0 asks the OS for a free port with no TOCTOU race.
     private static int FindAvailablePort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);

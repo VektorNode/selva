@@ -48,7 +48,6 @@ public class DocumentSynchronizationService : IDisposable
             return;
         }
 
-        // Unwire event handlers
         if (_eventManager != null)
         {
             _eventManager.ParametersChanged -= HandleParametersChanged;
@@ -58,15 +57,11 @@ public class DocumentSynchronizationService : IDisposable
         _disposed = true;
     }
 
-    // Delegate for parameter deletion handling
     public event Action<List<Guid>, GH_Document> OnParameterDeletionRequired;
 
-    // Delegate to register newly discovered IDs into the watched set
+    // Lets the watched set pick up IDs for newly-discovered params without a full re-scan.
     public event Action<IEnumerable<Guid>> OnNewIdsDiscovered;
 
-    /// <summary>
-    ///     Initialize the service and wire up document event handlers.
-    /// </summary>
     public void Initialize(
         GH_Component component,
         GH_Document document,
@@ -80,7 +75,6 @@ public class DocumentSynchronizationService : IDisposable
         _getValues = getValues ?? throw new ArgumentNullException(nameof(getValues));
         _setSchema = setSchema ?? throw new ArgumentNullException(nameof(setSchema));
 
-        // Wire up document event handlers
         _eventManager.ParametersChanged += HandleParametersChanged;
         _eventManager.MetadataChanged += HandleMetadataChanged;
     }
@@ -113,24 +107,23 @@ public class DocumentSynchronizationService : IDisposable
                 return;
             }
 
-            // Snapshot IDs before validation so we can detect what was added vs removed
+            // Snapshot IDs before validation to detect what was added vs removed below.
             var inputIdsBefore = new HashSet<Guid>(schema.Inputs.Select(i => i.Id));
             var outputIdsBefore = new HashSet<Guid>(schema.Outputs.Select(o => o.Id));
 
-            // ValidateSchemaAndTrackChanges: purges deleted params AND merges new ones into schema.Inputs
+            // Purges deleted params and merges newly-discovered ones into the schema.
             List<Guid> removedIds;
             (schema, removedIds) = _schemaSynchronizer.ValidateSchemaAndTrackChanges(schema, e.Document);
             _setSchema(schema);
 
             if (removedIds.Count > 0)
             {
-                // Parameters deleted — cleanup, expire, done. New adds can't coexist with deletes in one event.
+                // Deletes and adds can't coexist in one event, so handle the delete and stop.
                 OnParameterDeletionRequired?.Invoke(removedIds, e.Document);
                 GHDocumentMutator.ScheduleComponentExpire(e.Document, _component);
                 return;
             }
 
-            // Check if MergeDiscoveredInputs added anything new
             var addedInputs = schema.Inputs.Where(i => !inputIdsBefore.Contains(i.Id)).ToList();
             var addedOutputs = schema.Outputs.Where(o => !outputIdsBefore.Contains(o.Id)).ToList();
 
@@ -139,10 +132,8 @@ public class DocumentSynchronizationService : IDisposable
                 return;
             }
 
-            // Register the new IDs in the watched set immediately
             OnNewIdsDiscovered?.Invoke(addedInputs.Select(i => i.Id).Concat(addedOutputs.Select(o => o.Id)));
 
-            // Broadcast the full updated schema — web UI updates without reload
             _ = _webSocketTransport
                 .BroadcastSchemaUpdate(schema)
                 .ContinueWith(t =>
@@ -153,7 +144,7 @@ public class DocumentSynchronizationService : IDisposable
                     }
                 });
 
-            // Expire UIBridge so downstream GH components (EvaluateSchema etc.) re-solve with updated schema
+            // Expire so downstream components (GH_EvaluateSchema etc.) re-solve with the updated schema.
             GHDocumentMutator.ScheduleComponentExpire(e.Document, _component);
 
             _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
@@ -183,8 +174,8 @@ public class DocumentSynchronizationService : IDisposable
             _currentDocument ??= document;
             document.Modified();
 
-            // Schema already updated in memory — schedule a full expire so UIBridge re-solves
-            // and downstream components (EvaluateSchema etc.) receive the updated schema.
+            // Schema already updated in memory — full expire so this component and downstream
+            // ones (GH_EvaluateSchema etc.) re-solve with it.
             GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
 #if DEBUG
             Logger.Log("[UIBuilder] MetadataChanged — scheduling full expire");

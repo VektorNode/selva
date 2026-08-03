@@ -10,10 +10,9 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Model.Layout;
 
-// Regressions for the second batch of 2026-07-27 audit findings: view sizing costs that were
-// applied after the budget was honoured (caption, padding), a scale derived from the wrong
-// measurement (stroke-inflated bounds), chrome that grew off the sheet, and containers that
-// reported a box smaller than what they drew.
+// Covers view-sizing costs applied after the budget was already honoured (caption, padding),
+// a scale derived from the wrong measurement (stroke-inflated bounds), chrome that grew off the
+// sheet, and containers that reported a box smaller than what they actually drew.
 public class ViewSizingTests
 {
 	// ========================================================================================
@@ -23,7 +22,7 @@ public class ViewSizingTests
 	[Fact]
 	public void A_captioned_view_with_an_explicit_size_occupies_exactly_that_size()
 	{
-		// The caption was stapled on after sizing, so a 60x40 view resolved to 60x44.5.
+		// Caption used to get stapled on after sizing: a 60x40 view resolved to 60x44.5.
 		var view = new DrawingView
 		{
 			Geometry = Rect(100, 100),
@@ -40,7 +39,7 @@ public class ViewSizingTests
 	[Fact]
 	public void A_captioned_auto_fit_view_stays_inside_a_height_bound_container()
 	{
-		// Auto-fit into a 277mm rect produced 281.5mm — 4.5mm into the footer.
+		// Used to auto-fit into a 277mm rect at 281.5mm — 4.5mm into the footer.
 		var view = new DrawingView { Geometry = Rect(100, 400), Caption = "PLAN VIEW" };
 
 		var bounds = view.Resolve(new LayoutContext(new BoundingBox(0, 0, 190, 277))).ComputeBounds();
@@ -51,8 +50,8 @@ public class ViewSizingTests
 	[Fact]
 	public void Padding_larger_than_the_view_shrinks_the_content_rather_than_growing_the_view()
 	{
-		// Padding is a margin taken out of a box, so it cannot exceed the box. Unclamped, a 20mm
-		// view with 20mm padding resolved to 40x40 — the padding won and Size was ignored.
+		// Padding is a margin taken out of a box, so it can't exceed the box. Unclamped, a 20mm
+		// view with 20mm padding resolved to 40x40: the padding won and Size was ignored.
 		var view = new DrawingView
 		{
 			Geometry = Rect(100, 100),
@@ -72,8 +71,8 @@ public class ViewSizingTests
 	[InlineData(11.0)]
 	public void Auto_fit_has_no_cliff_as_padding_approaches_the_available_size(double padding)
 	{
-		// There was a cliff exactly where available - padding hit 0: padding 9 gave 20x19.2 but
-		// padding 10 gave 70.5x50.5.
+		// Cliff at exactly available - padding == 0: padding 9 gave 20x19.2, padding 10 gave
+		// 70.5x50.5.
 		var view = new DrawingView { Geometry = Rect(100, 100), Padding = Margins.Uniform(padding) };
 
 		var bounds = view.Resolve(new LayoutContext(new BoundingBox(0, 0, 20, 20))).ComputeBounds();
@@ -92,9 +91,9 @@ public class ViewSizingTests
 	[InlineData(1.0)]
 	public void Stroke_weight_does_not_change_the_view_scale(double strokeWidth)
 	{
-		// The scale was derived from stroke-inflated bounds, so a 20mm square with Length=20
-		// resolved to 1:0.952 at a 1.0mm weight — the "20mm" edge measured 19.05mm, and two
-		// views of the same geometry at different weights would not align.
+		// Scale used to derive from stroke-inflated bounds: a 20mm square with Length=20 resolved
+		// to 1:0.952 at a 1.0mm weight, because the "20mm" edge measured 19.05mm — two views of
+		// the same geometry at different weights would not align.
 		var view = new DrawingView
 		{
 			Geometry = Rect(20, 20, strokeWidth),
@@ -116,8 +115,9 @@ public class ViewSizingTests
 	[Fact]
 	public void An_oversize_footer_grows_towards_the_page_not_off_the_bottom_edge()
 	{
-		// AnchorChrome top-aligned the footer, so content taller than its reserve grew downward
-		// past the paper edge: an 8mm reserve holding 30mm of content landed 12mm below the sheet.
+		// AnchorChrome used to top-align the footer, so content taller than its reserve grew
+		// downward past the paper edge: an 8mm reserve holding 30mm of content landed 12mm below
+		// the sheet.
 		var template = new PageTemplate
 		{
 			Footer = Rect(180, 30),
@@ -134,8 +134,8 @@ public class ViewSizingTests
 	[Fact]
 	public void Negative_margins_do_not_push_the_page_rect_off_the_paper()
 	{
-		// Nothing downstream crops to the paper, so a negative margin simply moved the content
-		// rect and both bands off the sheet: -10mm on A4 gave a page rect of -10..307.
+		// Nothing downstream crops to the paper: a negative margin used to simply move the content
+		// rect and both bands off the sheet — -10mm on A4 gave a page rect of -10..307.
 		var section = PaginationPass.PaginateBody(
 			Rect(100, 100), PaperSize.A4, new Margins(-10, -10, -10, -10), BandConfig.ContentMode(10, 10));
 
@@ -152,9 +152,9 @@ public class ViewSizingTests
 	[Fact]
 	public void A_table_with_a_fixed_row_height_reports_the_box_it_actually_draws()
 	{
-		// An explicit RowHeight is an Absolute track and overflowing content is drawn, not
-		// clipped — but the reported box stayed at the track total, so a RowHeight of 5 reported
-		// h=5 while ~18mm of wrapped text hung below its own bottom edge.
+		// An explicit RowHeight is an Absolute track: overflowing content is drawn, not clipped.
+		// The reported box used to stay at the track total, so a RowHeight of 5 reported h=5
+		// while ~18mm of wrapped text hung below its own bottom edge.
 		var table = new Table
 		{
 			RowHeight = 5.0,
@@ -187,8 +187,8 @@ public class ViewSizingTests
 	[Fact]
 	public void Declared_column_widths_survive_a_count_mismatch()
 	{
-		// A short ColumnWidths list discarded EVERY declared width and fell back to all-Star,
-		// which reads as "ColumnWidths does nothing" rather than "one width is missing".
+		// A short ColumnWidths list used to discard every declared width and fall back to
+		// all-Star — reading as "ColumnWidths does nothing" instead of "one width is missing".
 		var table = new Table
 		{
 			ColumnWidths = new List<GridLength> { GridLength.Absolute(20), GridLength.Absolute(20) },
@@ -215,8 +215,8 @@ public class ViewSizingTests
 	[Fact]
 	public void A_leading_empty_child_does_not_produce_a_blank_first_page()
 	{
-		// ForcePlace took Children[0] unconditionally, so an empty leading child became "the
-		// head" of a forced page: a 1-page document turned into 2, the first drawing nothing.
+		// ForcePlace used to take Children[0] unconditionally, so an empty leading child became
+		// "the head" of a forced page: a 1-page document turned into 2, the first drawing nothing.
 		var withEmpty = new Stack
 		{
 			Children = new DrawElement[] { new Stack { Children = Array.Empty<DrawElement>() }, Rect(50, 300) },
@@ -256,7 +256,7 @@ public class ViewSizingTests
 		return null;
 	}
 
-	// Vertical extent of everything actually drawn, following group transforms.
+	// Vertical extent of everything drawn, following group transforms.
 	private static (double Min, double Max) DrawnExtent(DrawElement element)
 	{
 		var min = double.MaxValue;

@@ -3,9 +3,8 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing.Model.Elements;
 
-// Base for everything renderers know how to draw. Carries the cross-cutting metadata
-// (id, css class, free-form key/value pairs) that today's SvgCurveData/SvgTextData
-// surface — keeping it here means every element gets it for free.
+// Base for everything renderers know how to draw. Cross-cutting metadata lives here so
+// every element gets it for free.
 public abstract class DrawElement
 {
 	public string Id { get; init; }

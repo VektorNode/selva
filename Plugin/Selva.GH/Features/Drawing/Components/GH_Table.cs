@@ -13,10 +13,7 @@ using DrawColor = Selva.Drawing.Model.Style.Color;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Phase 7 layout component: tabular data layout with optional header row, a column-width
-// number list, and built-in borders/cell padding. Body cells arrive as a data tree where
-// each branch is one row and each item in the branch is a cell value (text). Column widths
-// use the same convention as Grid: >0 = mm, 0 = auto, <0 = star weight.
+// Body cells arrive as a data tree: one branch per row, each item in the branch a cell value.
 public class GH_Table : GH_Component
 {
     public GH_Table()
@@ -164,8 +161,8 @@ public class GH_Table : GH_Component
         DA.SetData(0, table);
     }
 
-    // Mismatched counts render with blank/ignored cells, which reads as "the table is
-    // broken" with no hint — surface a remark so users see why columns look off.
+    // Mismatched counts render with blank/ignored cells and no other signal — remark so
+    // users see why columns look off.
     private void WarnOnCountMismatch(
         List<string> headers,
         List<IReadOnlyList<TableCell>> bodyRows,

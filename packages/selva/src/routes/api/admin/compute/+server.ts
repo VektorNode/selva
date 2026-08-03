@@ -20,7 +20,7 @@ import { renderThrown } from '@selvajs/server/logging';
 /**
  * Admin platform-server endpoint. `manage_compute` only. Reads/writes the
  * platform-scope rows + the global `defaultServerId`. Org-private rows and
- * `orgDefaults` are handled by `/api/org/compute`.
+ * `orgDefaults` are handled by `/api/v1/orgs/[orgId]/compute`.
  */
 
 type ServerPayload = Omit<PlatformComputeServer, 'apiKey' | 'hasApiKey'> & { hasApiKey: boolean };

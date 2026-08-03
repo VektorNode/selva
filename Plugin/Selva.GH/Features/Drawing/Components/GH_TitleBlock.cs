@@ -11,15 +11,8 @@ using BBox = Selva.Drawing.Model.Geometry.BoundingBox;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// ISO 7200 drawing title block. Every field accepts a literal or a {token} that resolves from
-// the Document's Info values — so the same block, wired into many Grasshopper files, renders
-// each file's data. Two variants: Full (first sheet, all fields + optional logo) and
-// Continuation (slim strip — drawing no. / title / rev / sheet — for later sheets).
-//
-// Width defaults to Auto (resolved from the document's paper at render time): the block stretches
-// to the page's content width on every paper size, capped at TitleBlock.MaxAutoWidth so large
-// formats don't get absurdly wide cells. Set Width to a positive number to override. Wire the
-// output into a Layout Override's Footer.
+// Every field accepts a literal or a {token} resolved from the Document's Info values, so
+// the same block wired into many Grasshopper files renders each file's own data.
 public class GH_TitleBlock : GH_Component
 {
     public GH_TitleBlock()
@@ -123,9 +116,8 @@ public class GH_TitleBlock : GH_Component
         var defaultHeight = isContinuation ? 12.0 : 50.0;
         var h = height > 0 ? height : defaultHeight;
 
-        // Width 0 → Auto: keep 180mm as the fallback used only when the band width is unknown, and
-        // flag the block so the renderer stretches it to the page's content width (capped). A
-        // positive width pins an explicit size and disables the auto rule.
+        // Width 0 → Auto: 180mm is a fallback for when the band width is unknown; the renderer
+        // stretches the block to the page's content width instead (capped at MaxAutoWidth).
         var autoWidth = width <= 0;
         var w = width > 0 ? width : 180.0;
         var size = new BBox(0, 0, w, h);
@@ -140,8 +132,7 @@ public class GH_TitleBlock : GH_Component
         DA.SetData(0, block);
     }
 
-    // Apply the resolved size / auto-width flag / logo onto the factory-produced block. The
-    // factory helpers set Rows + Size; this layers the GH-driven settings on top.
+    // Layers the GH-driven settings onto the factory-produced block (factory helpers only set Rows + Size).
     private static TitleBlock WithSettings(TitleBlock block, BBox size, bool autoWidth, ImageElement logo,
         double logoMaxW, double logoMaxH)
     {
@@ -162,9 +153,7 @@ public class GH_TitleBlock : GH_Component
         };
     }
 
-    // The Logo input takes the output of a Draw Image component. Raster images resolve to an
-    // ImageElement directly; SVGs resolve to a GroupElement of geometry, which the title block's
-    // raster-only logo slot can't place — warn and skip those.
+    // SVGs resolve to a GroupElement of geometry, which the raster-only logo slot can't place.
     private ImageElement ExtractLogo(DrawElement logo)
     {
         switch (logo)

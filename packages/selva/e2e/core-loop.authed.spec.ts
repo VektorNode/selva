@@ -35,7 +35,7 @@ test.afterAll(async () => {
 });
 
 function isSolveResponse(url: string, method: string): boolean {
-	return method === 'POST' && new URL(url).pathname === '/api/compute';
+	return method === 'POST' && new URL(url).pathname === '/api/v1/compute';
 }
 
 function collectMeshCounts(page: Page): number[] {
@@ -80,7 +80,7 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	await expect(page.locator('#new-dn')).toHaveValue(/bench test display/i, { timeout: 60_000 });
 
 	const uploadResponse = page.waitForResponse(
-		(r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/definitions'
+		(r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/definitions'
 	);
 	await page.getByRole('button', { name: /^create definition$/i }).click();
 	const uploaded = await uploadResponse;

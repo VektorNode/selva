@@ -5,7 +5,7 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing.Model.Layout;
 
-// Phase 7: a CSS-grid-style track. Each track is one of:
+// A CSS-grid-style track. Each track is one of:
 //   Absolute(mm)   — fixed width/height
 //   Auto           — sized to the largest natural size of its content
 //   Star(weight)   — distributes remaining space proportionally (like CSS `1fr`)
@@ -53,10 +53,10 @@ public sealed class GridOverflow
 	public bool OverflowsHeight => ContentHeight > CellHeight + 1e-6;
 }
 
-// Phase 7: a flex grid that resolves rows × columns and places each cell at the
-// intersection. The grid's natural size honours absolute/auto tracks; star tracks expand
-// to fill `LayoutContext.AvailableWidth`/`AvailableHeight` when the context is finite,
-// otherwise they fall back to the largest auto-sized cell on that track.
+// A flex grid: resolves rows × columns and places each cell at the intersection. Natural size
+// honours absolute/auto tracks; star tracks expand to fill `LayoutContext.AvailableWidth`/
+// `AvailableHeight` when the context is finite, otherwise fall back to the largest auto-sized
+// cell on that track.
 //
 // Anchor: bottom-left of the grid sits at Origin in world coords. Y-up: row 0 is the TOP
 // row visually (matching how spreadsheets and DOM tables read).
@@ -85,26 +85,24 @@ public sealed class Grid : LayoutElement
 		var children = new List<DrawElement>(layout.ResolvedCells.Length);
 		PlaceCells(layout, total.Width, children);
 
-		// Authoring guides: a dotted box per track intersection so the grid lines are visible
-		// in the Rhino viewport — at the Grid component AND wherever the grid is nested
-		// (Page, Document, …). Tagged PreviewOnly so SVG/PDF export skips them.
+		// Authoring guides: a dotted box per track intersection, visible in the Rhino viewport
+		// wherever the grid is nested. Tagged PreviewOnly so SVG/PDF export skips them.
 		AppendCellGuides(layout, children);
 
-		// Pin the resolved group's outer bounds to the resolved track totals. Stack/Frame/
-		// Table consumers measure resolved-child bounds and need the grid's full track
-		// extent — not just the union of cell content (which can be smaller than its track).
+		// Stack/Frame/Table consumers measure resolved-child bounds and need the grid's full
+		// track extent, not just the union of cell content (which can be smaller than its track).
 		var pinned = new BoundingBox(
 			Origin.X, Origin.Y,
 			Origin.X + total.Width, Origin.Y + total.Height);
 
-		// The track total is a floor, not a ceiling. Content taller or wider than its cell is
-		// drawn, not clipped — deliberately so for Absolute tracks, where sizing is the user's
-		// explicit choice — but the reported box must still cover what was drawn. Without this,
-		// a Table with RowHeight=5 reported h=5 while ~18 mm of wrapped text hung below its own
-		// bottom edge, and every container downstream laid out around a box already overrun.
+		// The track total is a floor, not a ceiling: content taller/wider than its cell is drawn,
+		// not clipped (deliberately, for Absolute tracks where sizing is the user's choice), but
+		// the reported box must still cover what was drawn — otherwise a Table with RowHeight=5
+		// reports h=5 while wrapped text hangs below its own bottom edge, and every downstream
+		// container lays out around a box that's already overrun.
 		//
-		// Placed-cell bounds are used (rather than the pre-placement CellBounds) because those
-		// are in the grid's own coordinate space.
+		// Uses placed-cell bounds, not the pre-placement CellBounds, which are in the grid's own
+		// coordinate space.
 		foreach (var child in children)
 		{
 			if (child is GroupElement guide && guide.PreviewOnly) continue;
@@ -146,11 +144,10 @@ public sealed class Grid : LayoutElement
 		return new BoundingBox(Origin.X, Origin.Y, Origin.X + total.Width, Origin.Y + total.Height);
 	}
 
-	// Returns one entry per cell whose resolved content is larger than its allocated cell rect.
-	// Caller passes the LayoutContext the grid will be laid out in; in standalone evaluation
-	// (no parent context) pass `new LayoutContext(BoundingBox.Empty)` and only Absolute-track
-	// overflows will be detected — Auto tracks always grow to fit, and Star tracks fall back
-	// to natural sizes when available is infinite.
+	// Returns one entry per cell whose resolved content exceeds its allocated cell rect. In
+	// standalone evaluation (no parent context), pass `new LayoutContext(BoundingBox.Empty)` —
+	// only Absolute-track overflows are detected then, since Auto tracks always grow to fit and
+	// Star tracks fall back to natural sizes when available is infinite.
 	public IReadOnlyList<GridOverflow> ComputeOverflows(LayoutContext context)
 	{
 		var (layout, _) = ComputeLayout(context);
@@ -187,15 +184,15 @@ public sealed class Grid : LayoutElement
 		var cellBounds = new BoundingBox[Cells.Count];
 
 		// Pass 1: measure each cell against the grid's own budget so Auto tracks know their
-		// natural sizes. The budget is a ceiling, not an assignment — content smaller than a
-		// cell still reports its natural size, and Pass 2 re-resolves everything against the
-		// real cell rect once tracks are known.
+		// natural sizes. The budget is a ceiling, not an assignment: content smaller than a cell
+		// still reports its natural size, and Pass 2 re-resolves against the real cell rect once
+		// tracks are known.
 		//
 		// Measuring with an empty context instead would let a self-sizing child (an auto-fit
-		// DrawingView) report an unbounded natural size, which then becomes the Auto track's
-		// size: a tall view in a 2x2 grid sized the grid to 808 mm on a 227 mm content rect and
-		// ran off the page. Auto tracks grow to fit their content, so an overlarge measurement
-		// here is never clamped later.
+		// DrawingView) report an unbounded natural size that becomes the Auto track's size — a
+		// tall view in a 2x2 grid sized the grid to 808 mm on a 227 mm content rect and ran off
+		// the page. Auto tracks grow to fit their content, so an overlarge measurement here is
+		// never clamped later.
 		var measureContext = MeasureContext(context);
 		for (var i = 0; i < Cells.Count; i++)
 		{
@@ -210,10 +207,9 @@ public sealed class Grid : LayoutElement
 		var colWidths = ResolveTrackSizes(Columns, Cells, cellBounds, context.AvailableWidth, ColumnSpacing, isColumn: true);
 		var rowHeights = ResolveTrackSizes(Rows, Cells, cellBounds, context.AvailableHeight, RowSpacing, isColumn: false);
 
-		// Pass 2: cells whose content is a LayoutElement get re-resolved with their real
-		// cell rect as context. This is what lets a TextFlow inside a Star column wrap to
-		// the column's resolved width instead of needing the user to pre-compute it.
-		// Primitives don't depend on context, so we leave them alone.
+		// Pass 2: re-resolve LayoutElement cells against their real cell rect, so e.g. a TextFlow
+		// in a Star column wraps to the column's resolved width. Primitives don't depend on
+		// context, so they're left alone.
 		for (var i = 0; i < Cells.Count; i++)
 		{
 			var c = Cells[i];
@@ -227,19 +223,18 @@ public sealed class Grid : LayoutElement
 		}
 
 		// Pass 3: re-grow Auto rows whose content got taller after Pass 2 wrapped to the real
-		// column width. Columns stay locked — width was the input to Pass 2, height is the
-		// downstream effect. Only Auto rows participate; Absolute/Star rows keep the explicit
-		// size the user asked for (clipping is the user's choice in those cases).
+		// column width. Columns stay locked (width was Pass 2's input, height is the downstream
+		// effect); only Auto rows participate, since Absolute/Star rows keep the explicit size
+		// the user asked for.
 		//
 		// KNOWN GAP (unconfirmed): Star rows are sized in ResolveTrackSizes from the Pass-1 Auto
 		// heights and are never re-derived after this pass grows them, so a Star row can in
-		// principle keep a budget that assumed a shorter Auto neighbour. A 2026-07-27 audit
-		// reported this as a 190x54 grid pinning h=80.14 (grown Auto 43.56 + stale Star 36.58),
-		// with `[Auto,Star,Auto]` driving ink to y=-16.1mm. Two later attempts to reproduce it —
-		// including one using the original probe's stated parameters — both resolved to exactly
-		// 54.000 with minY=0.000, so the claimed overflow could not be demonstrated and no fix
-		// was applied. The asymmetry above is real; whether it can actually overflow is not
-		// established. Reproduce before changing anything here.
+		// principle keep a budget that assumed a shorter Auto neighbour. An audit reported a
+		// 190x54 grid pinning h=80.14 (grown Auto 43.56 + stale Star 36.58) with `[Auto,Star,Auto]`
+		// driving ink to y=-16.1mm, but two later reproduction attempts, including one with the
+		// original probe's parameters, both resolved to exactly 54.000 with minY=0.000 — the
+		// overflow could not be demonstrated and no fix was applied. The asymmetry is real;
+		// whether it can actually overflow is not established. Reproduce before changing this.
 		for (var r = 0; r < Rows.Count; r++)
 		{
 			if (Rows[r].Type != GridLength.Kind.Auto) continue;
@@ -259,14 +254,9 @@ public sealed class Grid : LayoutElement
 		}, new BoundingBox(0, 0, totalWidth, totalHeight));
 	}
 
-	// Ceiling for the Pass 1 natural-size measurement: no single cell may measure larger than
-	// the grid's own budget. Falls back to an empty context when the grid itself is
-	// unconstrained, which preserves the "measure naturally" behaviour for auto-fit pages.
-	//
-	// This is a ceiling, not a per-track allocation — dividing by the track count would cap a
-	// cell at an equal share even when its neighbours need far less, shrinking wide content
-	// and leaving the rest of the sheet blank. Track sizing happens in ResolveTrackSizes from
-	// these measurements; Pass 2 then re-resolves each cell against its real rect.
+	// Ceiling for the Pass 1 measurement: no single cell may measure larger than the grid's own
+	// budget. Falls back to an empty context when the grid itself is unconstrained, preserving
+	// "measure naturally" for auto-fit pages.
 	private LayoutContext MeasureContext(LayoutContext context)
 	{
 		var w = TrackCeiling(context.AvailableWidth, Columns, ColumnSpacing);
@@ -276,22 +266,20 @@ public sealed class Grid : LayoutElement
 		return new LayoutContext(new BoundingBox(0, 0, w, h));
 	}
 
-	// Room available to one track whose size is not yet known: the axis budget, less inter-track
-	// spacing, less the tracks already committed to a size, divided among the tracks that remain
-	// unknown. Unlike a Stack — where a modest child can pass its surplus along — grid tracks are
-	// laid out simultaneously, so each cell must be measured against its own share or the tracks
-	// sum past the axis. ResolveTrackSizes still redistributes afterwards, so a cell that
-	// measures smaller than its share leaves room for Star tracks to absorb.
+	// Room available to one track whose size is not yet known: the axis budget, less spacing,
+	// less tracks already committed to a size, divided among the tracks that remain unknown.
+	// Grid tracks lay out simultaneously (unlike a Stack, where a modest child can pass its
+	// surplus along), so each cell must be measured against its own share or the tracks sum
+	// past the axis. ResolveTrackSizes redistributes afterwards, so a cell measuring smaller
+	// than its share leaves room for Star tracks to absorb.
 	//
-	// Absolute tracks are subtracted rather than counted: they will consume that space whatever
-	// the measurement says, so including them in the divisor let an Auto neighbour measure
-	// against room that was never available — [Absolute(150), Auto] produced a 245 mm grid on a
-	// 190 mm sheet. Star tracks stay in the divisor: their size is genuinely unknown here and
-	// derives from what is left after this pass.
+	// Absolute tracks are subtracted rather than counted in the divisor: they consume that space
+	// regardless of measurement, so counting them let an Auto neighbour measure against room
+	// that was never available — [Absolute(150), Auto] produced a 245 mm grid on a 190 mm sheet.
+	// Star tracks stay in the divisor since their size is genuinely unknown here.
 	//
-	// Note the deliberate asymmetry with "budget − known": dividing the whole remainder among
-	// each unknown track independently would let 2 Auto tracks measure 190 mm each and sum to
-	// 380 on a 190 mm budget, which is the bug the per-track share exists to prevent.
+	// Dividing the whole remainder among each unknown track independently (rather than by
+	// share) would let 2 Auto tracks measure 190 mm each and sum to 380 on a 190 mm budget.
 	private static double TrackCeiling(double available, IReadOnlyList<GridLength> tracks, double spacing)
 	{
 		if (double.IsInfinity(available) || available <= 0) return double.PositiveInfinity;
@@ -345,9 +333,8 @@ public sealed class Grid : LayoutElement
 			}
 		}
 
-		// Star tracks soak up whatever's left of `available` after fixed/auto. If available
-		// is infinite (unconstrained context), each star track falls back to its largest
-		// natural cell — same fallback as Auto.
+		// Star tracks soak up what's left of `available` after fixed/auto; if available is
+		// infinite, each falls back to its largest natural cell, same as Auto.
 		if (totalStarWeight > 0)
 		{
 			if (double.IsInfinity(available))
@@ -383,9 +370,8 @@ public sealed class Grid : LayoutElement
 			var c = cells[i];
 			var span = isColumn ? c.ColumnSpan : c.RowSpan;
 			var start = isColumn ? c.Column : c.Row;
-			// Single-track cells contribute directly. Spanning cells contribute their natural
-			// size divided evenly across the spanned tracks — keeps the arithmetic simple
-			// and matches how most flex grids handle the spanning-auto case.
+			// Spanning cells contribute their natural size divided evenly across the spanned
+			// tracks, matching how most flex grids handle the spanning-auto case.
 			if (start <= trackIndex && trackIndex < start + span)
 			{
 				if (bounds[i].IsEmpty) continue;
@@ -407,8 +393,6 @@ public sealed class Grid : LayoutElement
 
 	private void PlaceCells(TrackLayout layout, double totalWidth, List<DrawElement> children)
 	{
-		// Y-up world: row 0 is the TOP row, so we accumulate downwards from the top of the
-		// grid.
 		var totalHeight = SumWithSpacing(layout.RowHeights, RowSpacing);
 
 		for (var i = 0; i < Cells.Count; i++)
@@ -426,7 +410,7 @@ public sealed class Grid : LayoutElement
 			}
 			else
 			{
-				// Top-left of the cell rect; place the child's top-left at that corner.
+				// Place the child's top-left at the cell rect's top-left corner.
 				var tx = Origin.X + cellRect.MinX - b.MinX;
 				var ty = Origin.Y + cellRect.MaxY - b.MaxY;
 				positioned = (Math.Abs(tx) < 1e-12 && Math.Abs(ty) < 1e-12)

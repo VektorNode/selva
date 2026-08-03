@@ -31,8 +31,8 @@ public class BinaryGeometryWriterTests
         BinaryGeometryWriter.Write(ms, metadata, new float[0], new int[0]);
 
         using var br = new BinaryReader(new MemoryStream(ms.ToArray()));
-        br.ReadUInt32(); // magic
-        br.ReadUInt32(); // version
+        br.ReadUInt32();
+        br.ReadUInt32();
         var len = br.ReadUInt32();
         var roundtripped = Encoding.UTF8.GetString(br.ReadBytes((int)len));
 
@@ -65,7 +65,6 @@ public class BinaryGeometryWriterTests
         Assert.Equal(12, result.IndexCount);
 
         var (decodedVerts, decodedIndices, flags) = ReadGeometry(ms.ToArray());
-        // Small batch: int16 verts (bit 0 clear) + uint16 indices (bit 1) + delta filter (bit 2).
         Assert.Equal(BinaryGeometryWriter.FlagUint16Indices | BinaryGeometryWriter.FlagDeltaEncoded, flags);
 
         for (var i = 0; i < vertices.Length; i++)
@@ -125,7 +124,6 @@ public class BinaryGeometryWriterTests
         Assert.True(result.UsedFloat32);
 
         var (decoded, _, flags) = ReadGeometry(ms.ToArray());
-        // Float32 verts (bit 0) and — being a 4-vertex batch — uint16 indices (bit 1) too.
         Assert.Equal(BinaryGeometryWriter.FlagFloat32, flags & BinaryGeometryWriter.FlagFloat32);
 
         // Float32 path is exact for the supplied values (they fit in float32 exactly).
@@ -366,14 +364,13 @@ public class BinaryGeometryWriterTests
     // Parallel bbox pass (ComputeBoundsParallel)
     // ========================================================================
     //
-    // The bbox becomes the quantization origin/scale, so if the partitioned reduction disagreed
-    // with a serial scan by even one ULP every vertex in the blob would shift. These tests pin the
-    // parallel path (which only engages past 200k components) to byte-identical output.
+    // The bbox becomes the quantization origin/scale, so a partitioned reduction that disagrees
+    // with a serial scan by even one ULP shifts every vertex in the blob. These tests pin the
+    // parallel path (engages past 200k components) to byte-identical output.
 
     /// <summary>
-    ///     Deterministic pseudo-random vertex cloud. Avoids Random so the failing case is
-    ///     reproducible, and spreads coordinates across a wide range so the extremes land in
-    ///     unpredictable partitions rather than at the array ends.
+    ///     Deterministic pseudo-random vertex cloud, spread across a wide range so extremes land
+    ///     in unpredictable partitions rather than at the array ends.
     /// </summary>
     private static float[] SyntheticCloud(int vertexCount, int seed = 12345)
     {
@@ -397,8 +394,7 @@ public class BinaryGeometryWriterTests
         // 90k vertices = 270k components, past the 200k parallel threshold.
         var large = SyntheticCloud(90_000);
 
-        // A copy just under the threshold cannot be compared directly (different data), so instead
-        // assert the parallel result against an independently computed serial bbox.
+        // Independently computed serial bbox to compare the parallel result against.
         double minX = large[0], minY = large[1], minZ = large[2];
         double maxX = large[0], maxY = large[1], maxZ = large[2];
         for (var i = 3; i < large.Length; i += 3)
@@ -610,7 +606,6 @@ public class BinaryGeometryWriterTests
             }
         }
 
-        // Optional trailing chunks: UV first, then colors.
         float[]? uvs = null;
         if ((flags & BinaryGeometryWriter.FlagHasUvs) != 0)
         {

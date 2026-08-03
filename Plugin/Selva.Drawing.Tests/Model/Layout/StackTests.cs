@@ -17,7 +17,6 @@ public class StackTests
 			Children = new[] { Rect(10, 4), Rect(10, 6), Rect(10, 5) },
 		};
 		var b = stack.ComputeBounds();
-		// Heights 4 + 6 + 5 = 15, spacing 2*2 = 4, total 19.
 		Assert.Equal(19, b.Height, 6);
 		Assert.Equal(10, b.Width, 6);
 	}
@@ -46,7 +45,6 @@ public class StackTests
 		};
 		var resolved = stack.Resolve(new LayoutContext(BoundingBox.Empty));
 		var bounds = resolved.ComputeBounds();
-		// Top of stack should be at y = totalHeight = 10.
 		Assert.Equal(10, bounds.MaxY, 6);
 		Assert.Equal(0, bounds.MinY, 6);
 	}
@@ -62,8 +60,7 @@ public class StackTests
 		};
 		var resolved = stack.Resolve(new LayoutContext(BoundingBox.Empty));
 		var b = resolved.ComputeBounds();
-		// Widest child = 10, narrow child = 4: centred at (10 - 4)/2 = 3 from the left.
-		// Both children sit within MinX = 0 and MaxX = 10.
+		// Widest child = 10; the 4mm child centers within it, so both stay inside MinX/MaxX.
 		Assert.Equal(0, b.MinX, 6);
 		Assert.Equal(10, b.MaxX, 6);
 	}

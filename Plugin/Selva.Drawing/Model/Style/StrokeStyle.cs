@@ -7,52 +7,38 @@ namespace Selva.Drawing.Model.Style;
 public enum StrokeCap { Butt, Round, Square }
 public enum StrokeJoin { Miter, Round, Bevel }
 
-// Line-drawing style. Width, DashArray entries, and DashOffset are all paper-space
-// millimetres — DrawingView counter-scales them so a 0.25 mm stroke renders at 0.25 mm on
-// paper regardless of the view's scale. DashArray of null means a solid line; an empty
-// array also means solid; non-empty values repeat the on/off pattern starting from each
+// Width, DashArray entries, and DashOffset are paper-space millimetres — DrawingView
+// counter-scales them so a 0.25 mm stroke renders at 0.25 mm regardless of view scale.
+// DashArray null or empty means solid; otherwise the on/off pattern repeats from each
 // segment's origin.
 //
-// Width = 0 means "no stroke": the path is not stroked at all, in either renderer. It is the
-// authoring-side way to turn an outline off without having to null out the whole Stroke, which
-// matters because a Stroke also carries Color, dash, and cap settings worth keeping around.
-//
-// A zero must never reach the output as a literal width. PDF's `0 w` operator is defined as
-// "thinnest line the *device* can render", so it draws a hairline whose weight depends on the
-// printer, viewer, and DPI — the same file looked different on every machine. Renderers
-// therefore branch on IsVisible and skip the stroke entirely rather than emitting `0 w`.
-// Sub-threshold widths are treated the same way: too thin to render predictably anywhere.
+// Width = 0 means "no stroke" — lets authors turn off an outline without nulling the whole
+// Stroke (which also carries Color, dash, cap). PDF's `0 w` operator means "thinnest line
+// the device can render", so it renders as a different-weight hairline on every machine;
+// renderers must check IsVisible and skip the stroke rather than ever emit `0 w`.
 public sealed class Stroke : IEquatable<Stroke>
 {
-	// Widths at or below this count as "no stroke". Covers exact zero plus the sliver of
-	// values too thin for any real output device, which land inconsistently for the same
-	// reason `0 w` does.
+	// Widths at or below this count as invisible: exact zero plus values too thin to render
+	// predictably on any device, for the same reason `0 w` isn't safe to emit.
 	public const double MinVisibleWidthMm = 0.01;
 
-	// Width used when a path carries no stroke and no fill at all. Both renderers must agree
-	// on this: PDF has to name a width explicitly, while SVG would otherwise fall through to
-	// the spec default of 1.0 mm, so leaving it implicit on either side reintroduces the 4x
-	// mismatch this constant exists to prevent.
+	// Width for a path with neither stroke nor fill. Must be explicit on both renderers:
+	// PDF requires a width, SVG would otherwise fall back to its spec default of 1.0 mm —
+	// leaving it implicit on either side reintroduces a 4x mismatch between them.
 	public const double UnstyledPathWidthMm = LineWeight.Fine;
 
-	// Default weight for hatch and pattern linework, which sits below the body weight so it
-	// reads as texture rather than as geometry.
+	// Default hatch/pattern linework weight — lighter than body weight so it reads as texture.
 	public const double HatchWidthMm = LineWeight.ExtraFine;
 
-	// Line width inside a generated hatch tile, before Fill.PatternScale is applied. Slightly
-	// heavier than HatchWidthMm because tile lines are short and need to hold together
-	// visually. Both renderers read this; it used to be an independent 0.3 literal in the PDF
-	// renderer and seven more in the SVG one.
+	// Line width inside a generated hatch tile, before Fill.PatternScale. Heavier than
+	// HatchWidthMm because short tile lines need it to hold together visually.
 	public const double HatchPatternWidthMm = 0.3;
 
-	// Whether a width produces a drawn line at all. Renderers must check this before stroking:
-	// emitting a zero-width stroke is what made output device-dependent.
 	public static bool IsVisibleWidth(double widthMm) => widthMm > MinVisibleWidthMm;
 
 	public Color Color { get; init; } = Color.Black;
 	public double Width { get; init; } = LineWeight.Fine;
 
-	// Whether this stroke draws anything. False means the path is left unstroked.
 	public bool IsVisible => IsVisibleWidth(Width);
 	public double Opacity { get; init; } = 1.0;
 	public StrokeCap Cap { get; init; } = StrokeCap.Butt;

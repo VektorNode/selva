@@ -7,49 +7,43 @@ namespace Selva.GH.Features.Display.Services;
 /// <summary>
 ///     Process-lifetime cache of encoded geometry blobs, keyed by the content that produced them.
 ///
-///     A Grasshopper solve re-runs the whole WebDisplay pipeline whenever anything upstream changes,
-///     but most edits leave most geometry untouched — dragging one slider re-solves a definition
-///     whose other branches produce byte-identical vertex/index arrays. Encoding those again costs a
-///     quantization pass plus a DEFLATE at <see cref="System.IO.Compression.CompressionLevel.Optimal" />,
-///     which <see cref="BlobCompressor" /> measures at ~30 ms for a 2.7 MB payload. This cache turns
-///     that into a hash of the same bytes (memory-bandwidth-bound, no compression) plus a dictionary
-///     lookup.
+///     A Grasshopper solve re-runs the whole WebDisplay pipeline on any upstream change, but most
+///     edits leave most geometry untouched — dragging one slider re-solves a definition whose other
+///     branches produce byte-identical vertex/index arrays. Re-encoding those costs a quantization
+///     pass plus a DEFLATE at <see cref="System.IO.Compression.CompressionLevel.Optimal" />
+///     (<see cref="BlobCompressor" /> measures ~30 ms for a 2.7 MB payload); this cache turns that
+///     into a hash of the same bytes plus a dictionary lookup.
 ///
-///     <b>Identity.</b> The key is a 128-bit FNV-1a-style hash over everything that can change a
-///     blob byte: the combined vertex/index/UV/color arrays and the metadata JSON (which already
-///     encodes material ids, group boundaries, names, layers, per-mesh metadata and the source
-///     component id — see <see cref="MeshBatchSerialization.SerializeMetadata" />). Two batches that
-///     agree on all of those produce identical blobs, because <see cref="BinaryGeometryWriter.Write" />
-///     is a pure function of exactly those inputs. Nothing else about the Rhino document is consulted,
-///     so the cache cannot be desynced by undo/paste/document reload — a stale entry is unreachable
-///     rather than wrong.
+///     <b>Identity.</b> The key is a 128-bit hash over everything that can change a blob byte: the
+///     combined vertex/index/UV/color arrays and the metadata JSON (material ids, group boundaries,
+///     names, layers, per-mesh metadata, source component id — see
+///     <see cref="MeshBatchSerialization.SerializeMetadata" />). Two batches agreeing on all of that
+///     produce identical blobs, since <see cref="BinaryGeometryWriter.Write" /> is a pure function of
+///     exactly those inputs. Nothing else about the Rhino document is consulted, so undo/paste/reload
+///     can't desync the cache — a stale entry is unreachable, never wrong.
 ///
-///     <b>Collisions.</b> 128 bits over a workload of at most a few thousand live entries puts
-///     collision probability far below the rate of a cosmic-ray bit flip, which is the standard
-///     content-addressing bet (git, and <see cref="TextureAssetStore" /> in this same feature, take
-///     it at 128 and 256 bits respectively). A collision would serve the wrong geometry, so the
-///     width is deliberately not narrowed to 64.
+///     <b>Collisions.</b> 128 bits over a few thousand live entries puts collision probability far
+///     below a cosmic-ray bit flip — the same bet git makes for object hashes. A collision would
+///     serve the wrong geometry, so the width isn't narrowed to 64.
 ///
-///     <b>Memory policy.</b> Bounded by total cached bytes, not entry count, since one entry can be
-///     a handful of bytes or many megabytes. Eviction is least-recently-used, driven by a monotonic
-///     tick stamped on every hit. Rhino is a long-lived host and this is static, so an unbounded
-///     cache would be a slow leak across a day of modelling; the bound makes the worst case a fixed
-///     ceiling. Blobs are stored as-is and handed back by reference — callers must treat the result
-///     as read-only, which they do: <see cref="DisplayBatch.CompressedData" /> is only ever written
-///     whole, never mutated in place.
+///     <b>Memory policy.</b> Bounded by total cached bytes, not entry count — one entry can be a
+///     handful of bytes or many megabytes. Eviction is LRU, driven by a monotonic tick stamped on
+///     every hit. Rhino is long-lived and this cache is static, so unbounded growth would leak slowly
+///     across a day of modelling. Blobs are handed back by reference and callers must treat them as
+///     read-only; <see cref="DisplayBatch.CompressedData" /> is only ever written whole, never
+///     mutated in place.
 /// </summary>
 public static class BatchBlobCache
 {
     /// <summary>
-    ///     Total cached blob bytes retained before LRU eviction kicks in. 64 MB is a small fraction
-    ///     of a Rhino session's working set and holds a realistic multi-branch scene comfortably,
-    ///     while capping the worst case for a user who cycles through very large definitions.
+    ///     Total cached blob bytes retained before LRU eviction. 64 MB holds a realistic
+    ///     multi-branch scene comfortably while capping the worst case for very large definitions.
     /// </summary>
     private const long MaxBytes = 64L * 1024 * 1024;
 
     /// <summary>
-    ///     Blobs below this size are not cached. The encode they would save is proportionally tiny
-    ///     (<see cref="BlobCompressor" /> does not even compress under 4 KB), so caching them only
+    ///     Blobs below this size aren't cached — the encode they'd save is proportionally tiny
+    ///     (<see cref="BlobCompressor" /> doesn't even compress under 4 KB), so caching them just
     ///     spends dictionary entries and eviction bookkeeping.
     /// </summary>
     private const int MinCacheableBytes = 16 * 1024;
@@ -70,10 +64,7 @@ public static class BatchBlobCache
         public long LastUsed;
     }
 
-    /// <summary>
-    ///     Returns the cached blob for this content, or null on a miss. The caller encodes on a miss
-    ///     and calls <see cref="Store" /> with the same key.
-    /// </summary>
+    /// <summary>Returns the cached blob for this content, or null on a miss — the caller then encodes and calls <see cref="Store" /> with the same key.</summary>
     public static byte[] TryGet(BlobKey key)
     {
         lock (Gate)
@@ -105,8 +96,8 @@ public static class BatchBlobCache
         {
             if (Entries.TryGetValue(key, out var existing))
             {
-                // Same content already present (two branches encoding identical geometry, or a
-                // concurrent miss on both). Keep the first blob so outstanding references stay valid.
+                // Two branches producing identical geometry, or a concurrent miss on both.
+                // Keep the first blob so outstanding references stay valid.
                 existing.LastUsed = ++_tick;
                 return;
             }
@@ -141,8 +132,8 @@ public static class BatchBlobCache
 
     /// <summary>
     ///     Evicts least-recently-used entries until the budget is met. Called under
-    ///     <see cref="Gate" />. Linear scans per eviction are fine: eviction is rare relative to
-    ///     lookups, and the entry count stays in the hundreds at this budget.
+    ///     <see cref="Gate" />. Linear scan is fine here: eviction is rare relative to lookups, and
+    ///     entry count stays in the hundreds at this budget.
     /// </summary>
     private static void EvictIfNeeded()
     {
@@ -173,10 +164,7 @@ public static class BatchBlobCache
     }
 }
 
-/// <summary>
-///     128-bit content hash identifying an encoded blob. A value type with structural equality so it
-///     can key a dictionary without allocating.
-/// </summary>
+/// <summary>128-bit content hash identifying an encoded blob.</summary>
 public readonly struct BlobKey : IEquatable<BlobKey>
 {
     private readonly ulong _low;
@@ -190,8 +178,8 @@ public readonly struct BlobKey : IEquatable<BlobKey>
 
     /// <summary>
     ///     Hashes everything that feeds <see cref="BinaryGeometryWriter.Write" />. Null arrays are
-    ///     distinguished from empty ones: a batch with no UV chunk must not collide with a batch
-    ///     carrying a zero-length one, since the flags word differs and so do the bytes.
+    ///     distinguished from empty ones: a batch with no UV chunk must not collide with one
+    ///     carrying a zero-length UV array, since the flags word — and the resulting bytes — differ.
     /// </summary>
     public static BlobKey Compute(
         string metadataJson,
@@ -200,10 +188,9 @@ public readonly struct BlobKey : IEquatable<BlobKey>
         float[] uvs,
         byte[] colors)
     {
-        // Two independent FNV-1a lanes with different offset bases, combined into 128 bits. FNV is
-        // used rather than a cryptographic hash because this guards against accidental collision,
-        // not an adversary — nothing here is attacker-controlled, and the pass has to keep up with
-        // memory bandwidth to be worth doing at all.
+        // Two independent FNV-1a lanes with different offset bases, combined into 128 bits. FNV
+        // rather than a cryptographic hash: this guards against accidental collision, not an
+        // adversary, and has to keep up with memory bandwidth to be worth doing at all.
         var h1 = 0xcbf29ce484222325UL;
         var h2 = 0x9e3779b97f4a7c15UL;
 
@@ -256,13 +243,9 @@ public readonly struct BlobKey : IEquatable<BlobKey>
 
         Mix(ref h1, ref h2, (ulong)a.Length);
 
-        // Hash the raw bit patterns, and fold pairs so the loop does half as many rounds. Bit
-        // patterns rather than values because the encoder is bit-exact: -0.0 and +0.0 quantize
-        // identically today, but NaN payloads and the float32 fallback path both write raw bits,
-        // so distinguishing them keeps the key faithful to the output.
-        //
-        // SingleToBits is a local reimplementation: BitConverter.SingleToInt32Bits is .NET Core
-        // only, and this assembly also targets net48.
+        // Hash raw bit patterns, not values: NaN payloads and the float32 fallback path both write
+        // raw bits, so distinguishing them keeps the key faithful to the encoder's output. Folds
+        // pairs so the loop does half as many rounds.
         var i = 0;
         for (; i + 1 < a.Length; i += 2)
         {
@@ -279,9 +262,8 @@ public readonly struct BlobKey : IEquatable<BlobKey>
 
     /// <summary>
     ///     Raw IEEE-754 bit pattern of a float. <c>BitConverter.SingleToInt32Bits</c> is .NET Core
-    ///     only and this assembly also targets net48, so reinterpret through an explicit-layout
-    ///     union — which keeps the project free of <c>AllowUnsafeBlocks</c>. Bit-exact on every
-    ///     target, including for NaN payloads and -0.0.
+    ///     only and this assembly also targets net48, so this reinterprets through an
+    ///     explicit-layout union instead, keeping the project free of <c>AllowUnsafeBlocks</c>.
     /// </summary>
     [StructLayout(LayoutKind.Explicit)]
     private struct FloatBits

@@ -143,7 +143,7 @@ export interface ComputeLimits {
 	 * caps produces 502s, not longer solves.
 	 */
 	solveDeadlineMs: number;
-	/** Fixed-window cap on /api/compute: window length + max requests per window. */
+	/** Fixed-window cap on /api/v1/compute: window length + max requests per window. */
 	rateLimitWindowMs: number;
 	rateLimitMaxRequests: number;
 	/**
@@ -156,7 +156,7 @@ export interface ComputeLimits {
 	maxGhFileSize: number;
 	maxImageFileSize: number;
 	/**
-	 * /api/compute JSON *request* body cap (inputs + values, not the .gh). A
+	 * /api/v1/compute JSON *request* body cap (inputs + values, not the .gh). A
 	 * `file`-widget input embeds geometry as base64 in `values`; must stay <=
 	 * the adapter-node global BODY_SIZE_LIMIT or the global backstop rejects first.
 	 * Defaults to 210 MB: the client allows a 150 MB raw file, base64 inflates it
@@ -165,7 +165,7 @@ export interface ComputeLimits {
 	 */
 	computeRequestMaxBytes: number;
 	/**
-	 * /api/compute JSON *response* cap. A `file`-typed output is base64-embedded
+	 * /api/v1/compute JSON *response* cap. A `file`-typed output is base64-embedded
 	 * in the response; guards V8's ~512 MB single-string wall (a `JSON.stringify`
 	 * `RangeError`) and browser-tab OOM. Defensive backstop → clear 413 instead of
 	 * an opaque crash (real fix is out-of-band streaming, ADR 0003).

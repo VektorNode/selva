@@ -4,9 +4,9 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing.Rendering;
 
-// Conservative bounds for dimension elements, shared by both exporters' auto-fit so SVG and
-// PDF crop identically. Includes extension-line overshoot and the lifted label position that
-// raw ComputeBounds misses.
+// Bounds for dimension elements, shared by both exporters' auto-fit so SVG and PDF
+// crop identically. Includes extension-line overshoot and the lifted label position
+// that ComputeBounds misses.
 internal static class DimensionMeasure
 {
 	public static BoundingBox Measure(DimensionElement d)
@@ -100,7 +100,7 @@ internal static class DimensionMeasure
 		b = b.Union(new Point2D(arcEndX, arcEndY));
 		b = b.Union(new Point2D(midX, midY));
 
-		// Sample 7 points along the arc — matches the legacy 8-step sampler (i=1..7).
+		// Sample points along the arc so bounds don't undershoot a wide sweep.
 		const int samples = 8;
 		for (var i = 1; i < samples; i++)
 		{

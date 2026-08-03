@@ -10,9 +10,8 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Display.Components;
 
-// Saves a Web Display payload to a .dmf file on disk. The blob is written verbatim (no re-mesh,
-// no re-encode), so this preprocesses a part once: mesh it, save it, then reload the finished
-// display with the Display From File component when the part is reused many times in a scene.
+// Writes the blob to disk verbatim (no re-mesh, no re-encode) — mesh a part once, save it, then
+// reload the finished display with Display From File wherever the part repeats in a scene.
 public class GH_DisplayToFile : GH_Component
 {
     public GH_DisplayToFile()

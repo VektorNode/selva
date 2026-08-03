@@ -8,10 +8,9 @@ using ModelPoint = Selva.Drawing.Model.Geometry.Point2D;
 
 namespace Selva.Drawing.RhinoInterop;
 
-// Inverse of CurveConverter: takes a model Path and rebuilds Rhino curves, one per
-// closed subpath. Used by RhinoViewportVisitor so closed paths can be filled via
-// Brep.CreatePlanarBreps + DrawBrepShaded — orders of magnitude faster than the
-// hand-rolled tessellate-and-ear-clip path, and Rhino handles concavity + holes.
+// Inverse of CurveConverter: rebuilds Rhino curves from a model Path, one per closed
+// subpath, so RhinoViewportVisitor can fill them via Brep.CreatePlanarBreps + DrawBrepShaded
+// instead of tessellate-and-ear-clip — Rhino handles concavity and holes for free.
 internal static class PathToCurves
 {
     public static List<Curve> ClosedSubpaths(ModelPath path)
@@ -34,8 +33,8 @@ internal static class PathToCurves
                 if (c != null && c.IsClosed) result.Add(c);
         }
 
-        // Subpaths that return to their start point are fillable even without an explicit
-        // Close segment — SVG/PDF auto-close fills, so the viewport must match.
+        // A subpath that returns to its start is fillable even without an explicit Close
+        // segment — SVG/PDF auto-close fills, and the viewport has to match that.
         bool GeometricallyClosed() => hasCursor && segs.Count > 0 && Same(cursor, subpathStart);
 
         foreach (var seg in path)
@@ -89,8 +88,7 @@ internal static class PathToCurves
         return bezier.ToNurbsCurve();
     }
 
-    // Reconstruct an ArcCurve from SVG endpoint-parameterization. Falls back to null when
-    // the arc collapses to a line (radii too small) — caller skips it.
+    // Falls back to a line when the arc's radii collapse to ~0.
     private static Curve? ArcCurveFromSvg(ModelPoint from, PathSeg.ArcTo a)
     {
         var rx = Math.Abs(a.RadiusX);

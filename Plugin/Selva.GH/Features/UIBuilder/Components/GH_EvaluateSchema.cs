@@ -22,7 +22,7 @@ public class GH_EvaluateSchema : GH_Component
 
     public override Guid ComponentGuid => new Guid("E7611CB2-9BAE-4A88-B47B-A94135394FA3");
 
-    protected override Bitmap Icon => Resources.UIBridge; // Using same icon for now, or null if preferred
+    protected override Bitmap Icon => Resources.UIBridge;
 
     public override GH_Exposure Exposure => GH_Exposure.hidden;
 
@@ -50,7 +50,6 @@ public class GH_EvaluateSchema : GH_Component
 
         UISchema schema = null;
 
-        // Try to extract UISchema from the input
         if (schemaGoo is UISchemaGoo uiSchemaGoo)
         {
             schema = uiSchemaGoo.Value;

@@ -1,8 +1,5 @@
 namespace Selva.Schema.Services.Validation;
 
-/// <summary>
-///     Severity levels for validation issues
-/// </summary>
 public enum ValidationSeverity
 {
     Info,
@@ -10,9 +7,6 @@ public enum ValidationSeverity
     Error
 }
 
-/// <summary>
-///     Individual validation issue
-/// </summary>
 public class ValidationIssue
 {
     public string ParamId { get; set; }

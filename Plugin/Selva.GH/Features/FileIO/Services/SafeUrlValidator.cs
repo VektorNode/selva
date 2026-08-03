@@ -19,10 +19,8 @@ namespace Selva.GH.Features.FileIO.Services;
 public static class SafeUrlValidator
 {
     /// <summary>
-    ///     Validates the scheme and resolves the host, rejecting any URL whose host
-    ///     resolves to a loopback, link-local, private, or otherwise non-public address.
-    ///     On success, <paramref name="resolvedAddresses"/> holds the vetted IPs (callers
-    ///     on net7+ should pin the connection to one of these to defeat DNS rebinding).
+    ///     On success, <paramref name="resolvedAddresses"/> holds the vetted IPs — callers
+    ///     on net7+ should pin the connection to one of these to defeat DNS rebinding.
     /// </summary>
     public static bool TryValidate(string url, out IPAddress[] resolvedAddresses, out string errorMessage)
     {
@@ -67,9 +65,6 @@ public static class SafeUrlValidator
         return true;
     }
 
-    /// <summary>
-    ///     True when the address is a globally routable (public) unicast address.
-    /// </summary>
     public static bool IsPublic(IPAddress address)
     {
         if (address == null) return false;

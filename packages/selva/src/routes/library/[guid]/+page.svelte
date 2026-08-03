@@ -19,7 +19,7 @@
 	}
 
 	const onSolve = createComputeFetchSolveFn({
-		endpoint: '/api/compute',
+		endpoint: '/api/v1/compute',
 		definitionUrl: () => data.ghDefinition,
 		inputs: () => data.schema.inputs,
 		outputs: () => data.schema.outputs,

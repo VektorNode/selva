@@ -8,9 +8,9 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
-// Phase 6 exit-criteria coverage. Multi-page documents must produce multi-page PDFs whose
-// pages line up with the model: same count, per-page paper sizes preserved when auto-fit
-// is disabled, and per-page content rendered without leaking state across pages.
+// Multi-page documents must produce multi-page PDFs whose pages line up with the model:
+// same count, per-page paper sizes preserved when auto-fit is disabled, and per-page
+// content rendered without leaking state across pages.
 public class PdfMultiPageTests
 {
 	[Fact]

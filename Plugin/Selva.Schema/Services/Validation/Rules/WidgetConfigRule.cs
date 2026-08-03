@@ -6,9 +6,6 @@ using Selva.Schema.Models;
 
 namespace Selva.Schema.Services.Validation.Rules;
 
-/// <summary>
-///     Validates widget-specific configurations for layout items
-/// </summary>
 public class WidgetConfigRule : IValidationRule
 {
     public IEnumerable<ValidationIssue> Validate(UISchema schema)
@@ -89,7 +86,6 @@ public class WidgetConfigRule : IValidationRule
             yield break;
         }
 
-        // Validate min/max relationship
         if (config.Minimum.HasValue && config.Maximum.HasValue)
         {
             if (config.Minimum.Value >= config.Maximum.Value)
@@ -101,7 +97,6 @@ public class WidgetConfigRule : IValidationRule
             }
         }
 
-        // Validate step size
         if (config.StepSize.HasValue)
         {
             if (config.StepSize.Value <= 0)
@@ -112,7 +107,6 @@ public class WidgetConfigRule : IValidationRule
                     "Step size must be greater than 0");
             }
 
-            // Warn if step size is too large for range
             if (config.Minimum.HasValue && config.Maximum.HasValue)
             {
                 var range = config.Maximum.Value - config.Minimum.Value;
@@ -157,7 +151,6 @@ public class WidgetConfigRule : IValidationRule
 
         var config = item.Config;
 
-        // Validate maxLength
         if (config.MaxLength.HasValue && config.MaxLength.Value < 1)
         {
             yield return ValidationIssue.Error(
@@ -166,7 +159,6 @@ public class WidgetConfigRule : IValidationRule
                 $"maxLength is {config.MaxLength.Value} but must be at least 1");
         }
 
-        // Validate regex pattern
         if (!string.IsNullOrEmpty(config.Pattern))
         {
             ValidationIssue patternError = null;

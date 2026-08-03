@@ -6,11 +6,7 @@ using Selva.GH.Features.UIBuilder.Services.Communication;
 
 namespace Selva.Tests;
 
-/// <summary>
-///     Tests for the RFC 6455 WebSocket opening handshake helper and the HTTP request
-///     parser it depends on. Everything is wire-format sensitive — these tests pin
-///     the exact bytes we emit and accept.
-/// </summary>
+// Wire-format sensitive: pins the exact bytes the handshake emits and accepts.
 public class WebSocketHandshakeTests
 {
     // -------------------------------------------------------------------------
@@ -20,8 +16,6 @@ public class WebSocketHandshakeTests
     [Fact]
     public void ComputeAcceptKey_MatchesRfc6455ReferenceVector()
     {
-        // The RFC explicitly states: for Sec-WebSocket-Key "dGhlIHNhbXBsZSBub25jZQ==",
-        // the server MUST respond with Sec-WebSocket-Accept "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=".
         var actual = WebSocketHandshake.ComputeAcceptKey("dGhlIHNhbXBsZSBub25jZQ==");
         Assert.Equal("s3pPLMBiTxaQ9kYGzzhZRbK+xOo=", actual);
     }

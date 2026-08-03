@@ -11,9 +11,8 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Phase 7 layout component: bordered/filled rectangle around a single child with optional
-// padding. Useful for building title-block cells, callout boxes, or simply giving any
-// element a uniform border + padding.
+// Bordered/filled rectangle around a single child, with optional padding — title-block cells,
+// callout boxes, or just giving an element a uniform border.
 public class GH_Frame : GH_Component
 {
     public GH_Frame()

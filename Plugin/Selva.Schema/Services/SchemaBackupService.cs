@@ -28,9 +28,8 @@ public static class SchemaBackupService
     }
 
     /// <summary>
-    ///     Creates a backup of the raw pre-migration JSON before any deserialization/migration occurs.
-    ///     <paramref name="rawJson" /> is the original schema JSON string as stored in the .gh file.
-    ///     <paramref name="onWarning" /> receives a warning message if the backup fails (never throws).
+    ///     Backs up the raw pre-migration JSON before deserialization/migration touches it.
+    ///     Never throws; failures go to <paramref name="onWarning" /> instead.
     /// </summary>
     public static string CreateMigrationBackup(string rawJson, string schemaName, string schemaVersion,
         Action<string> onWarning = null, string backupDirectory = null)
@@ -65,10 +64,9 @@ public static class SchemaBackupService
     }
 
     /// <summary>
-    ///     Appends a history entry to the schema history file for this document.
-    ///     History is stored as a JSON array (newest first), capped at <see cref="MaxHistoryEntries" /> entries.
-    ///     <paramref name="documentId" /> ties the history to a specific .gh file.
-    ///     <paramref name="onWarning" /> receives a warning message if saving fails (never throws).
+    ///     Prepends a history entry to this document's history file (JSON array, newest first,
+    ///     capped at <see cref="MaxHistoryEntries" />). Never throws; failures go to
+    ///     <paramref name="onWarning" /> instead.
     /// </summary>
     public static void AppendHistory(UISchema schema, Guid documentId, Action<string> onWarning = null,
         string backupDirectory = null)
@@ -85,7 +83,6 @@ public static class SchemaBackupService
 
             var historyPath = Path.Combine(backupDirectory, $"history_{documentId:N}.json");
 
-            // Load existing history
             var history = new JArray();
             if (File.Exists(historyPath))
             {
@@ -99,7 +96,6 @@ public static class SchemaBackupService
                 }
             }
 
-            // Build new entry
             var entry = new JObject
             {
                 ["savedAt"] = DateTime.UtcNow.ToString("O"),
@@ -110,7 +106,6 @@ public static class SchemaBackupService
                 ["schema"] = JObject.FromObject(schema, JsonSerializer.Create(BackupSerializationSettings))
             };
 
-            // Prepend (newest first) and cap
             history.Insert(0, entry);
             while (history.Count > MaxHistoryEntries)
             {
@@ -125,9 +120,6 @@ public static class SchemaBackupService
         }
     }
 
-    /// <summary>
-    ///     Returns the path to the history file for a given document, or null if it doesn't exist.
-    /// </summary>
     public static string GetHistoryFilePath(Guid documentId, string backupDirectory = null)
     {
         backupDirectory ??= GetBackupDirectory();
@@ -145,7 +137,6 @@ public static class SchemaBackupService
                 return;
             }
 
-            // Sort oldest first by creation time, delete the excess
             var sorted = files.OrderBy(f => File.GetCreationTimeUtc(f)).ToArray();
             for (var i = 0; i < sorted.Length - maxFiles; i++)
             {
@@ -154,7 +145,6 @@ public static class SchemaBackupService
         }
         catch
         {
-            // Ignore cleanup errors
         }
     }
 

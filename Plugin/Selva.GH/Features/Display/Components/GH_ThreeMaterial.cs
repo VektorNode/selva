@@ -14,10 +14,8 @@ namespace Selva.GH.Features.Display.Components;
 
 public class GH_ThreeMaterial : GH_Component
 {
-    /// <summary>
-    ///     Above this size a data-URI texture (the headless/cloud fallback) re-ships enough base64
-    ///     per solve to hurt; warn so the user knows to host the image instead.
-    /// </summary>
+    // Past this size, a data-URI texture (the headless fallback) re-ships enough base64 per solve
+    // to hurt — warn so the user knows to host the image instead.
     private const int DataUriWarnBytes = 2 * 1024 * 1024;
 
     public GH_ThreeMaterial()
@@ -80,13 +78,9 @@ public class GH_ThreeMaterial : GH_Component
         DA.SetData(0, new ThreeMaterialGoo(material));
     }
 
-    /// <summary>
-    ///     Turns the Texture input into a <see cref="ThreeMaterial.Map" /> reference:
-    ///     http(s)/data URLs pass through untouched; bitmaps and local files are content-hashed
-    ///     and served from the plugin's asset endpoint (immutable URL → the browser fetches each
-    ///     texture once, and re-solves never re-ship image bytes). In headless mode (Rhino.Compute)
-    ///     there is no reachable local server, so bytes fall back to an inline data URI.
-    /// </summary>
+    // http(s)/data URLs pass through untouched. Bitmaps and local files are content-hashed and
+    // served from the plugin's asset endpoint, so re-solves never re-ship image bytes — see
+    // PublishTexture for the headless fallback.
     private string ResolveTexture(IGH_Goo goo)
     {
         if (goo == null)

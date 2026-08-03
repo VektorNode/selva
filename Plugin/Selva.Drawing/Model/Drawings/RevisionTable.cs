@@ -7,7 +7,7 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Model.Drawings;
 
-// Phase 8 composite: a single revision history entry — drawn as one row of a RevisionTable.
+// One row of a RevisionTable.
 public sealed class RevisionEntry
 {
 	public string Revision { get; init; }
@@ -16,16 +16,13 @@ public sealed class RevisionEntry
 	public string By { get; init; }
 }
 
-// Phase 8 composite: bordered, headered table tracking drawing revisions. The four standard
-// columns (Rev / Date / Description / By) reflect drafting-spec convention; Description is
-// the only flex column. Wraps Phase 7's `Table` so styling and rendering go through the
-// same code path as a hand-rolled table.
+// Bordered, headered table tracking drawing revisions: Rev / Date / Description / By.
+// Description is the only flex column.
 public sealed class RevisionTable : LayoutElement
 {
 	public IReadOnlyList<RevisionEntry> Entries { get; init; } = Array.Empty<RevisionEntry>();
 
-	// Total table width. The Description column is a Star track; the remaining columns are
-	// absolute. Defaults match a typical right-side block on an A3 sheet.
+	// Defaults match a typical right-side block on an A3 sheet.
 	public double Width { get; init; } = 120;
 
 	public double RevisionColumnWidth { get; init; } = 12;
@@ -42,7 +39,6 @@ public sealed class RevisionTable : LayoutElement
 
 	public override DrawElement Resolve(LayoutContext context)
 	{
-		// Description column = Width - sum of fixed columns (clamped at zero).
 		var descWidth = Math.Max(10, Width - RevisionColumnWidth - DateColumnWidth - ByColumnWidth);
 
 		var table = new Table

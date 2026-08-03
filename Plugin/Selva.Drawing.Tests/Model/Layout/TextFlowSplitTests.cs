@@ -17,7 +17,6 @@ public class TextFlowSplitTests
 			Width = 1000,
 			Style = new TextStyle { FontSize = 3.0 },
 		};
-		// 100mm of budget — clearly enough for a 2-line flow at any reasonable font.
 		var split = flow.TrySplit(100, new LayoutContext(BoundingBox.Empty));
 		Assert.NotNull(split.Fits);
 		Assert.Null(split.Overflow);
@@ -32,7 +31,6 @@ public class TextFlowSplitTests
 			Width = 1000,
 			Style = new TextStyle { FontSize = 10.0 },
 		};
-		// 0.1mm of budget — not enough room for a single line.
 		var split = flow.TrySplit(0.1, new LayoutContext(BoundingBox.Empty));
 		Assert.Null(split.Fits);
 		Assert.Same(flow, split.Overflow);
@@ -41,9 +39,8 @@ public class TextFlowSplitTests
 	[Fact]
 	public void Splits_between_lines_and_overflow_is_a_TextFlow()
 	{
-		// Five hard-newline lines, wide enough that no wrapping happens. The line height for
-		// FontSize=3 is < 5mm, so a 6mm budget should fit at least one full line and spill
-		// the rest.
+		// Five hard-newline lines, wide enough that no wrapping happens. Line height at
+		// FontSize=3 is under 5mm, so a 6mm budget fits at least one line and spills the rest.
 		var flow = new TextFlow
 		{
 			Text = "a\nb\nc\nd\ne",
@@ -54,15 +51,13 @@ public class TextFlowSplitTests
 		Assert.NotNull(split.Fits);
 		var overflow = Assert.IsType<TextFlow>(split.Overflow);
 
-		// Overflow must reset its origin so PaginationPass can re-anchor it on the next page.
+		// Overflow resets its origin so PaginationPass can re-anchor it on the next page.
 		Assert.Equal(Point2D.Zero, overflow.Origin);
-		// Width and style propagate so the overflow re-wraps identically.
 		Assert.Equal(flow.Width, overflow.Width);
 		Assert.Equal(flow.Style, overflow.Style);
 
-		// Round-trip the lines: fits-text + "\n" + overflow-text == original after re-assembly.
-		// We can't compare strings directly because the wrapper may have collapsed empty
-		// paragraphs; instead, both halves combined should produce 5 lines when re-resolved.
+		// Can't compare strings directly — the wrapper may collapse empty paragraphs — so
+		// re-resolve both halves and check the line count adds back up to 5.
 		var fitsResolved = (GroupElement)new TextFlow { Text = ExtractText(split.Fits), Width = flow.Width, Style = flow.Style }
 			.Resolve(new LayoutContext(BoundingBox.Empty));
 		var overflowResolved = (GroupElement)overflow.Resolve(new LayoutContext(BoundingBox.Empty));
@@ -72,8 +67,8 @@ public class TextFlowSplitTests
 	[Fact]
 	public void Pagination_emits_one_page_per_line_chunk_for_long_TextFlow()
 	{
-		// 10mm-tall page with 0 margins → 10mm content rect. FontSize 3.0 → lineHeight ≈ 4.something mm.
-		// Two lines fit per page; with 5 lines we expect 3 pages.
+		// 10mm-tall page, 0 margins → 10mm content rect; FontSize 3.0 fits 2 lines per page,
+		// so 5 lines should spread across 3 pages.
 		var flow = new TextFlow
 		{
 			Text = "1\n2\n3\n4\n5",
@@ -85,8 +80,7 @@ public class TextFlowSplitTests
 		Assert.True(pages.Count >= 2, $"expected long TextFlow to spread across multiple pages, got {pages.Count}");
 	}
 
-	// Walks the resolved subtree and joins the text of each TextElement with newlines so
-	// callers can re-assemble what was placed on a page.
+	// Joins each TextElement's text with newlines so callers can re-assemble what was placed.
 	private static string ExtractText(DrawElement element)
 	{
 		var lines = new System.Collections.Generic.List<string>();

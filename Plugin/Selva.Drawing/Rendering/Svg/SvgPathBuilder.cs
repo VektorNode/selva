@@ -4,9 +4,8 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing.Rendering.Svg;
 
-// Builds an SVG `d=` attribute string from a typed Path. Mirrors the formatting rules
-// the legacy SvgWriter used (invariant culture, "0.######" precision) so output is
-// byte-identical for the same input.
+// Builds an SVG `d=` attribute string from a Path. Invariant culture, "0.######"
+// precision — matches legacy SvgWriter output byte-for-byte.
 public static class SvgPathBuilder
 {
 	private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;

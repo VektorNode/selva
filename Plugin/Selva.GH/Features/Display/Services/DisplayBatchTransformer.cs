@@ -9,15 +9,15 @@ namespace Selva.GH.Features.Display.Services;
 ///     <see cref="DisplayBatch" />, producing a new batch with relocated geometry.
 ///
 ///     A WebDisplay holds no live Rhino geometry — meshes live as a quantized binary blob and
-///     curves/points as JSON items. To honour Move/Rotate/Scale/Orient on the param (the natural
-///     Grasshopper expectation), we decode the blob to world-space vertices, transform them, and
-///     re-encode a fresh blob; curve/point items are transformed in their own native forms. The
-///     batch envelope (materials, groups, layout, ids) is preserved unchanged — only positions move.
+///     curves/points as JSON items. To honour Move/Rotate/Scale/Orient on the param, this decodes
+///     the blob to world-space vertices, transforms them, and re-encodes a fresh blob; curve/point
+///     items are transformed in their own native forms. The batch envelope (materials, groups,
+///     layout, ids) stays unchanged — only positions move.
 ///
 ///     Mesh indices, group layout, and per-mesh vertex ranges are identity-preserving under any
-///     affine transform, so we only need to move the vertex array and re-run the writer. For a
-///     non-affine <see cref="SpaceMorph" /> the vertices are morphed point-by-point; topology is
-///     still preserved (display meshes are not refined), which matches how GH morphs an existing mesh.
+///     affine transform, so only the vertex array needs to move before re-running the writer. A
+///     non-affine <see cref="SpaceMorph" /> morphs vertices point-by-point instead; topology is
+///     still preserved, matching how GH morphs an existing mesh.
 /// </summary>
 public static class DisplayBatchTransformer
 {
@@ -48,9 +48,9 @@ public static class DisplayBatchTransformer
     }
 
     /// <summary>
-    ///     Decodes the mesh blob, moves its vertices via <paramref name="moveVerts" />, and re-encodes
-    ///     a new SLVA(/SLVZ) blob with the original metadata envelope. Returns the original bytes
-    ///     unchanged when the batch has no mesh geometry.
+    ///     Decodes the mesh blob, moves its vertices via <paramref name="moveVerts" />, and
+    ///     re-encodes with the original metadata envelope. Returns the bytes unchanged if the batch
+    ///     has no mesh geometry.
     /// </summary>
     private static byte[] TransformMeshBlob(DisplayBatch batch, System.Action<float[]> moveVerts)
     {
@@ -66,7 +66,7 @@ public static class DisplayBatchTransformer
         }
         catch
         {
-            // Unreadable blob: leave it as-is rather than dropping the geometry.
+            // Unreadable blob — keep it as-is rather than dropping the geometry.
             return batch.CompressedData;
         }
 
@@ -77,9 +77,8 @@ public static class DisplayBatchTransformer
 
         moveVerts(decoded.Vertices);
 
-        // Re-embed the same metadata envelope the original blob carried, so the re-encoded blob is
-        // self-contained exactly like the writer's output. UVs and vertex colors are invariant
-        // under position transforms but must be threaded back through or they'd silently vanish.
+        // UVs and vertex colors are invariant under position transforms but must be threaded back
+        // through the writer or they'd silently vanish.
         var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
         using (var ms = new MemoryStream())
         {
@@ -90,9 +89,9 @@ public static class DisplayBatchTransformer
     }
 
     /// <summary>
-    ///     Transforms curve/point display items. Curves round-trip through Rhino JSON (the only form
-    ///     the item carries); points move their stored position. Items are deep-copied so the source
-    ///     batch is left untouched — GH treats transform as producing a new value.
+    ///     Transforms curve/point display items. Curves round-trip through Rhino JSON, the only form
+    ///     the item carries. Items are deep-copied so the source batch stays untouched — GH treats
+    ///     transform as producing a new value.
     /// </summary>
     private static List<DisplayItem> TransformItems(
         List<DisplayItem> items,

@@ -2,9 +2,9 @@ using System;
 
 namespace Selva.Drawing.Model;
 
-// Page dimensions in millimetres. ISO 216 A-series + common US imperial sizes are
-// available as named constants; arbitrary sizes are constructed via Custom(w, h).
-// Width/Height are always portrait by default; call Landscape() to flip orientation.
+// Page dimensions in millimetres. ISO 216 A-series and common US imperial sizes are
+// available as named constants; build arbitrary sizes with Custom(w, h). Named constants
+// are portrait; call Landscape() to flip.
 public readonly struct PaperSize : IEquatable<PaperSize>
 {
 	public double WidthMm { get; }
@@ -37,15 +37,15 @@ public readonly struct PaperSize : IEquatable<PaperSize>
 	public static readonly PaperSize Legal = new PaperSize(215.9, 355.6, "Legal");
 	public static readonly PaperSize Tabloid = new PaperSize(279.4, 431.8, "Tabloid");
 
-	// ANSI/ASME Y14.1 engineering series, defined in inches → mm (1 in = 25.4 mm). ANSI A == Letter
-	// and ANSI B == Tabloid, but the named constants make the imperial series discoverable.
+	// ANSI/ASME Y14.1 engineering series. ANSI A == Letter and ANSI B == Tabloid, but these
+	// constants make the series discoverable as a set.
 	public static readonly PaperSize AnsiA = Inches(8.5, 11, "ANSI A");
 	public static readonly PaperSize AnsiB = Inches(11, 17, "ANSI B");
 	public static readonly PaperSize AnsiC = Inches(17, 22, "ANSI C");
 	public static readonly PaperSize AnsiD = Inches(22, 34, "ANSI D");
 	public static readonly PaperSize AnsiE = Inches(34, 44, "ANSI E");
 
-	// ARCH architectural series, in inches → mm.
+	// ARCH architectural series.
 	public static readonly PaperSize ArchA = Inches(9, 12, "ARCH A");
 	public static readonly PaperSize ArchB = Inches(12, 18, "ARCH B");
 	public static readonly PaperSize ArchC = Inches(18, 24, "ARCH C");
@@ -75,7 +75,7 @@ public readonly struct PaperSize : IEquatable<PaperSize>
 	public static bool operator !=(PaperSize a, PaperSize b) => !a.Equals(b);
 }
 
-// Page margins in millimetres. Defaults match the existing 10mm padding used by SvgDocument.
+// Page margins in millimetres.
 public readonly struct Margins : IEquatable<Margins>
 {
 	public double Top { get; }

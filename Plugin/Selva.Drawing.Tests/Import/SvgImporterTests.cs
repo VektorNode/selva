@@ -11,7 +11,6 @@ public class SvgImporterTests
 {
     private static DrawElement Import(string svg) => new SvgImporter().Import(svg);
 
-    // Renders the imported geometry back to SVG to prove it produces real draw output.
     private static string ImportAndRenderSvg(string svg)
     {
         var el = Import(svg);
@@ -27,7 +26,6 @@ public class SvgImporterTests
     {
         var el = Import("<svg width='100' height='100'><rect x='10' y='20' width='30' height='40'/></svg>");
         Assert.NotNull(el);
-        // Wrapped in the Y-flip group; should contain a PathElement somewhere.
         Assert.Contains(Flatten(el), e => e is PathElement);
     }
 
@@ -36,7 +34,6 @@ public class SvgImporterTests
     {
         var svg = "<svg width='100' height='100'><path d='M10 10 C 20 20, 40 20, 50 10 L 50 50 Z'/></svg>";
         var output = ImportAndRenderSvg(svg);
-        // A cubic produces a C command in the rendered path output.
         Assert.Contains("<path", output);
         Assert.Contains(" C ", output);
     }
@@ -67,8 +64,7 @@ public class SvgImporterTests
     {
         var el = Import("<svg width='10' height='10'><rect width='10' height='10' fill='red' style='fill:#00ff00'/></svg>");
         var path = Flatten(el).OfType<PathElement>().Single();
-        // style wins → green.
-        Assert.Equal(1f, path.Fill.Color.G, 3);
+        Assert.Equal(1f, path.Fill.Color.G, 3); // style wins -> green
         Assert.Equal(0f, path.Fill.Color.R, 3);
     }
 
@@ -83,7 +79,6 @@ public class SvgImporterTests
     [Fact]
     public void Groups_apply_transforms()
     {
-        // A translate on a group should shift the child rect.
         var el = Import("<svg width='100' height='100'><g transform='translate(10 20)'><rect x='0' y='0' width='5' height='5'/></g></svg>");
         Assert.NotNull(el);
         Assert.Contains(Flatten(el), e => e is PathElement);
@@ -102,7 +97,6 @@ public class SvgImporterTests
         Assert.Null(Import("   "));
     }
 
-    // Recursively flattens a DrawElement tree into all its leaf/branch elements.
     private static System.Collections.Generic.IEnumerable<DrawElement> Flatten(DrawElement el)
     {
         if (el == null) yield break;

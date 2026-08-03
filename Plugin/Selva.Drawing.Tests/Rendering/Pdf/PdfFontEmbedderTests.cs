@@ -13,11 +13,10 @@ using Color = Selva.Drawing.Model.Style.Color;
 
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
-// Regression test for the white-text-in-PDF bug. Inside Rhino, GlobalFontSettings.FontResolver
-// is already populated by Rhino's own resolver before our PdfRenderer ever runs — and Rhino's
-// resolver substitutes "Inter" with AcadEref.ttf (a fallback font with mostly .notdef glyphs).
-// PdfFontEmbedder.EnsureInstalled now wraps any existing resolver instead of bailing, so our
-// Inter handling takes priority and falls back to the host resolver only for other families.
+// Regression test for white-text-in-PDF: inside Rhino, GlobalFontSettings.FontResolver
+// is already set before our PdfRenderer runs, and Rhino's resolver substitutes "Inter"
+// with a fallback font that's mostly .notdef glyphs. EnsureInstalled wraps whatever
+// resolver is already there so Inter requests come to us first.
 public class PdfFontEmbedderTests
 {
 	[Fact]
@@ -51,9 +50,8 @@ public class PdfFontEmbedderTests
 		}
 		var content = sb.ToString();
 
-		// Locate the Tj operand (`<...> Tj`) and assert it isn't all-zeros (i.e. .notdef).
-		// Inter "HELLO" produces real, non-zero glyph IDs — the exact values depend on the
-		// Inter version, so we don't pin them; we just want to know they're not white-on-white.
+		// Find the Tj hex operand and assert it isn't all-zeros (.notdef). We don't pin
+		// exact glyph IDs since they depend on the Inter version, just that they're set.
 		var tjStart = content.IndexOf('<');
 		var tjEnd = content.IndexOf('>', tjStart + 1);
 		Assert.True(tjStart > 0 && tjEnd > tjStart, $"No Tj hex string found:\n{content}");

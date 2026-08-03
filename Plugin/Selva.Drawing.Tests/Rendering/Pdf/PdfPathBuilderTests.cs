@@ -32,7 +32,6 @@ public class PdfPathBuilderTests
 		var xpath = PdfPathBuilder.Build(path);
 		Assert.NotNull(xpath);
 
-		// Round-trip into a PDF page to prove the path is well-formed enough to be drawn.
 		using var pdf = new PdfDocument();
 		var page = pdf.AddPage();
 		using var gfx = XGraphics.FromPdfPage(page);

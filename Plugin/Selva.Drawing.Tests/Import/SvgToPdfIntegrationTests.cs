@@ -8,8 +8,8 @@ using Selva.Drawing.Rendering.Pdf;
 
 namespace Selva.Drawing.Tests.Import;
 
-// The original bug: SVG images didn't render in PDF (the raster ImageElement path skipped
-// them). Importing SVG into DrawElements makes it render losslessly to PDF. This guards that.
+// Guards against a regression where SVG images silently didn't render to PDF: the raster
+// ImageElement path skipped them, since SVG needs to be imported into DrawElements first.
 public class SvgToPdfIntegrationTests
 {
     [Fact]

@@ -9,7 +9,8 @@ using Grasshopper.Kernel.Types;
 namespace SheepMetal.PluginGrasshopper.Upgraders;
 
 /// <summary>
-///     Helper class to simplify Grasshopper component upgrades with automatic data migration
+///     Migrates wire connections, internalized data, and param metadata from an old component
+///     to its upgraded replacement, keyed by explicit old-index → new-index mappings.
 /// </summary>
 public class GH_ComponentUpgradeHelper
 {
@@ -26,20 +27,12 @@ public class GH_ComponentUpgradeHelper
         _outputMappings = new Dictionary<int, int>();
     }
 
-    /// <summary>
-    ///     Map an old input index to a new input index
-    /// </summary>
-    /// <param name="oldIndex">Old parameter index</param>
-    /// <param name="newIndex">New parameter index</param>
     public GH_ComponentUpgradeHelper MapInput(int oldIndex, int newIndex)
     {
         _inputMappings[oldIndex] = newIndex;
         return this;
     }
 
-    /// <summary>
-    ///     Map an old output index to a new output index
-    /// </summary>
     public GH_ComponentUpgradeHelper MapOutput(int oldIndex, int newIndex)
     {
         _outputMappings[oldIndex] = newIndex;
@@ -69,7 +62,8 @@ public class GH_ComponentUpgradeHelper
     }
 
     /// <summary>
-    ///     Execute the migration - reconnects inputs/outputs and ALWAYS internalizes data when no sources
+    ///     Runs the swap: reconnects mapped inputs/outputs, and for any mapped input with no
+    ///     wired source, internalizes its old persistent data instead.
     /// </summary>
     public IGH_Component Execute()
     {
@@ -90,7 +84,6 @@ public class GH_ComponentUpgradeHelper
 
         var oldOutputs = _oldComponent.Params.Output;
 
-        // First, collect all recipients
         var recipientMappings = new Dictionary<(IGH_Param oldParam, int newParam), IGH_Param[]>();
 
         foreach (var mapping in _outputMappings)
@@ -103,9 +96,10 @@ public class GH_ComponentUpgradeHelper
             recipientMappings[(oldOutput, newIndex)] = recipients;
         }
 
+        // Sources/recipients had to be collected above, before the swap: SwapComponents
+        // disposes the old params, so anything read from them afterward is stale.
         var newComponent = GH_UpgradeUtil.SwapComponents(_oldComponent, UpgradeTo, false);
 
-        // Then migrate all sources
         foreach (var sourceMapping in sourceMappings)
         {
             var (oldParam, newParam) = sourceMapping.Key;
@@ -120,7 +114,6 @@ public class GH_ComponentUpgradeHelper
             GH_UpgradeUtil.MigrateSources(sources, newParamObj);
         }
 
-        // Finally, internalize data and migrate param metadata for all mapped inputs
         foreach (var sourceMapping in sourceMappings)
         {
             var (oldParam, newParam) = sourceMapping.Key;
@@ -141,7 +134,6 @@ public class GH_ComponentUpgradeHelper
             }
         }
 
-        // Then migrate all recipients
         foreach (var recipientMapping in recipientMappings)
         {
             var (oldOutput, newOutput) = recipientMapping.Key;
@@ -160,9 +152,6 @@ public class GH_ComponentUpgradeHelper
         return newComponent;
     }
 
-    /// <summary>
-    ///     Migrate param-level metadata that applies to all parameter types (invert, simplify, graft/flatten, etc.)
-    /// </summary>
     private static void MigrateParamMetadata(IGH_Param oldParam, IGH_Param newParam)
     {
         newParam.Reverse = oldParam.Reverse;
@@ -189,12 +178,8 @@ public class GH_ComponentUpgradeHelper
         }
     }
 
-    /// <summary>
-    ///     Migrate internalized data between parameters of various types
-    /// </summary>
     private void MigrateInternalizedData(IGH_Param oldParam, IGH_Param newParam)
     {
-        // Handle Param_Integer
         if (oldParam is Param_Integer oldInt && newParam is Param_Integer newInt)
         {
             newInt.PersistentData.Clear();
@@ -206,7 +191,6 @@ public class GH_ComponentUpgradeHelper
                 }
             }
         }
-        // Handle Param_Number
         else if (oldParam is Param_Number oldNum && newParam is Param_Number newNum)
         {
             newNum.PersistentData.Clear();
@@ -218,8 +202,6 @@ public class GH_ComponentUpgradeHelper
                 }
             }
         }
-
-        // Handle Param_Boolean
         else if (oldParam is Param_Boolean oldBool && newParam is Param_Boolean newBool)
         {
             newBool.PersistentData.Clear();
@@ -231,7 +213,6 @@ public class GH_ComponentUpgradeHelper
                 }
             }
         }
-        // Handle Param_String
         else if (oldParam is Param_String oldStr && newParam is Param_String newStr)
         {
             newStr.PersistentData.Clear();
@@ -245,8 +226,9 @@ public class GH_ComponentUpgradeHelper
         }
         else
         {
-            // Fallback for any GH_PersistentParam<T> (geometry, brep, curve, etc.)
-            // PersistentData is GH_Structure<T> — use CopyFrom via reflection since T is unknown
+            // Fallback for GH_PersistentParam<T> types not special-cased above (geometry,
+            // brep, curve, etc). T is unknown here, so go through reflection to call
+            // GH_Structure<T>.CopyFrom instead of a generic cast.
             var oldProp = oldParam.GetType()
                 .GetProperty("PersistentData", BindingFlags.Public | BindingFlags.Instance);
             var newProp = newParam.GetType()

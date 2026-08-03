@@ -8,62 +8,42 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Model.Drawings;
 
-// Phase 8 composite: a scaled view of geometry (curves, surfaces, dimensions, etc.) with an
-// optional bordered frame and a caption. Wraps the visitor-visible geometry in a Group whose
-// Transform = Translate(Origin) ∘ Translate(viewport-fit) ∘ Scale(Scale), so the model
-// geometry's bounds at the input scale land inside the requested viewport.
+// A scaled view of geometry (curves, surfaces, dimensions, etc.) with an optional bordered
+// frame and caption. Wraps the geometry in a Group whose transform translates to Origin,
+// fits it to the viewport, and scales it, so the geometry's bounds land inside the requested
+// viewport. Overflow is never clipped.
 //
-// Sizing modes (resolved in order):
-//   - Length set: pin the view's longest geometry side to Length mm; the other side follows
-//     the geometry's aspect ratio. This is the common "I want this view to be ~80mm across"
-//     ask without thinking about scale ratios.
-//   - Size set: the view occupies that rectangle. Geometry is scaled by Scale (default 1.0)
-//     then centred in the inner rect; Scale <= 0 means uniform-fit into the inner rect.
-//   - Neither set + LayoutContext has finite bounds: auto-fit geometry into the available
-//     bounds (the "drop it on a Page and it just works" path).
-//   - Neither set + no parent bounds: fall back to natural size at Scale (default 1.0).
-//
-// In every case, geometry that overflows the inner rect is NOT clipped.
-//
-// The caption (if set) is a single-line label drawn below the frame's bottom edge, e.g.
-// "SCALE 1:5" or a view name. Caption text uses CaptionStyle.
+// Sizing, resolved in order: Length (pin longest side to N mm, aspect ratio follows) → Size
+// (occupy that rect, Scale <= 0 means fit-to-rect) → context auto-fit (drop-on-a-Page path) →
+// natural size at Scale (default 1.0).
 public sealed class DrawingView : LayoutElement
 {
-	// Metadata key under which the resolved view records the scale it actually rendered at
-	// (numeric, e.g. "0.2" for 1:5). DocumentLayoutPass harvests this off the resolved body to
-	// auto-fill the {scale} token in a title block, so an auto-fit view never needs its scale
-	// typed in by hand. Present on the resolved GroupElement only when the scale is meaningful.
 	public const string ScaleMetadataKey = "selva:scale";
 
 	public DrawElement Geometry { get; init; }
 
-	// Drawing scale. 1.0 = full size in mm; 0.2 = 1:5; 2.0 = 2:1. Numeric only — formatting
-	// for the caption is up to the caller via ScaleLabel. Default 0 means "auto-fit" — the
-	// view scales to its layout context (or falls back to 1.0 when no context is available).
+	// 1.0 = full size in mm, 0.2 = 1:5, 2.0 = 2:1. Default 0 means auto-fit to the layout
+	// context (or 1.0 if no context is available).
 	public double Scale { get; init; } = 0.0;
 
-	// Optional fixed viewport size. When null, the view fits the scaled geometry + padding.
+	// Fixed viewport size. Null means fit to the scaled geometry + padding.
 	public BoundingBox? Size { get; init; }
 
-	// Convenience sizing: pin the geometry's longest side (post-padding inner rect) to this
-	// length in mm. The shorter side follows from the geometry's aspect ratio. Wins over
-	// Scale when set; ignored when Size is also set. Use this when you want "draw the view
-	// at ~N millimetres" without computing the scale ratio yourself.
+	// Pin the geometry's longest side (inner rect, post-padding) to this length in mm; the
+	// other side follows the aspect ratio. Wins over Scale; ignored if Size is also set.
 	public double? Length { get; init; }
 
 	public Stroke Border { get; init; }
 	public Fill Background { get; init; }
 	public Margins Padding { get; init; } = Margins.Uniform(2);
 
-	// Bottom-left of the view's outer rect in world coords.
+	// Bottom-left of the view's outer rect, world coords.
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
-	// Optional caption shown below the frame (drawing title, scale label, etc.).
 	public string Caption { get; init; }
 
-	// When true and no explicit Caption is set, the view auto-captions its inferred scale as
-	// "SCALE 1:N" from the scale it actually resolved at. Lets a dropped-on-a-page view label
-	// itself without the user computing the ratio. Ignored when Caption is set.
+	// If true and Caption is unset, auto-labels the resolved scale as "SCALE 1:N". Ignored
+	// when Caption is set.
 	public bool AutoScaleCaption { get; init; }
 	public TextStyle CaptionStyle { get; init; } = new TextStyle { FontSize = 2.5 };
 	public double CaptionGap { get; init; } = 1.5;
@@ -94,7 +74,6 @@ public sealed class DrawingView : LayoutElement
 		// into the footer, and made an explicit `Size` of 60x40 resolve to 60x44.5.
 		var captionReserve = CaptionReserve();
 
-		// Resolve sizing. Order: Length → Size → context auto-fit → natural size at Scale.
 		double innerWidth, innerHeight, effectiveScale;
 		if (Length.HasValue && Length.Value > 0 && !geomBounds.IsEmpty)
 		{
@@ -105,9 +84,6 @@ public sealed class DrawingView : LayoutElement
 		}
 		else if (Size.HasValue)
 		{
-			// Padding is clamped to the box: a padding larger than the size it sits inside
-			// otherwise grew the view instead of shrinking its content (20x20 with 20 mm padding
-			// resolved to 40x40 — the padding won and the requested size was ignored).
 			var (padX, padY) = ClampPadding(Size.Value.Width, Size.Value.Height - captionReserve);
 			innerWidth = Math.Max(0, Size.Value.Width - padX);
 			innerHeight = Math.Max(0, Size.Value.Height - captionReserve - padY);
@@ -119,19 +95,16 @@ public sealed class DrawingView : LayoutElement
 		}
 		else if (Scale <= 0 && !geomBounds.IsEmpty && (context.HasFiniteAvailableWidth || context.HasFiniteAvailableHeight))
 		{
-			// Auto-fit to whatever container we're being resolved into. This is the
-			// "drop me on a Page and figure it out" path. Containers may constrain only
-			// one axis (a vertical Stack provides width but unbounded height) — fit to
-			// whichever axes are real instead of inventing a budget for the other.
+			// Auto-fit into whatever container we're resolved into. A container may constrain
+			// only one axis (a vertical Stack gives width but unbounded height), so fit to
+			// whichever axes are real rather than inventing a budget for the rest.
 			//
-			// "Constrained but exhausted" and "unconstrained" must stay distinct. A Stack that
-			// has spent its main axis hands down a budget of 0, which is a hard limit, not an
-			// invitation to size freely — collapsing both to 0 made a spent axis drop out of
-			// the fit and the view scaled off the sheet (a horizontal Stack produced a 3789 mm
-			// page). Constrained axes therefore stay in the fit at their real budget, however
-			// small; only genuinely unconstrained axes are excluded.
-			// Padding and the caption both come out of the container's budget before the fit,
-			// and padding is clamped so it can never exceed the room it sits inside.
+			// A spent axis (budget 0) is still constrained, not free to size — collapsing both
+			// to 0 dropped a spent axis out of the fit and let the view scale off the sheet (a
+			// horizontal Stack once produced a 3789 mm page). Only genuinely unconstrained axes
+			// are excluded from the fit.
+			// Padding and the caption come out of the container's budget before the fit, and
+			// padding is clamped so it can't exceed the room it sits in.
 			var (availPadX, availPadY) = ClampPadding(
 				context.HasFiniteAvailableWidth ? context.AvailableWidth : double.PositiveInfinity,
 				context.HasFiniteAvailableHeight ? context.AvailableHeight - captionReserve : double.PositiveInfinity);
@@ -165,10 +138,8 @@ public sealed class DrawingView : LayoutElement
 			innerHeight = geomBounds.Height * effectiveScale;
 		}
 
-		// Padding actually applied. Where a budget bounded the fit — an explicit Size, or a
-		// container's available rect — the padding is clamped to it, because padding is taken
-		// out of a box and cannot exceed it. With no budget the geometry drove the size and the
-		// authored padding stands.
+		// Re-derive the padding actually used for the branch we took above (Size vs. context
+		// budget vs. unbounded), since each clamps against a different box.
 		var (appliedPadX, appliedPadY) = Size.HasValue
 			? ClampPadding(Size.Value.Width, Size.Value.Height - captionReserve)
 			: ClampPadding(
@@ -276,8 +247,8 @@ public sealed class DrawingView : LayoutElement
 		{
 			Id = Id,
 			CssClass = CssClass,
-			// Record the scale this view actually rendered at so a title block's {scale} token
-			// can be auto-filled. Only stamp when geometry was drawn at a meaningful scale.
+			// DocumentLayoutPass reads this off the resolved group to auto-fill a title block's
+			// {scale} token. Only stamped when geometry was drawn at a meaningful scale.
 			Metadata = (!geomBounds.IsEmpty && effectiveScale > 0)
 				? WithScale(Metadata, effectiveScale)
 				: Metadata,
@@ -672,7 +643,6 @@ public sealed class DrawingView : LayoutElement
 	private static double Usable(double scale) =>
 		double.IsNaN(scale) || double.IsInfinity(scale) ? 1.0 : Math.Max(0, scale);
 
-	// Helper: format a numeric scale as a "1:N" / "N:1" / "1:1" caption.
 	public static string FormatScaleLabel(double scale)
 	{
 		if (scale <= 0) return string.Empty;

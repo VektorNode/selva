@@ -1,6 +1,6 @@
-// Polyfill so init-only setters and record types compile against net48,
-// which doesn't ship the IsExternalInit modreq the C# 9+ compiler emits.
-// The type must live in the System.Runtime.CompilerServices namespace.
+// Polyfill so init-only setters and records compile on net48, which doesn't
+// ship the IsExternalInit modreq the C# 9+ compiler emits. Must stay in
+// System.Runtime.CompilerServices — the compiler looks for it by full name.
 namespace System.Runtime.CompilerServices
 {
     internal static class IsExternalInit { }

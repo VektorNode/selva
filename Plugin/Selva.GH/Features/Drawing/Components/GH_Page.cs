@@ -16,27 +16,15 @@ using Selva.Drawing.RhinoInterop;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Wraps drawing elements into a Section that flows into GH_Document. The section is the
-// unrendered description; GH_Document drives pagination and global token resolution so
-// page numbering is correct across multi-section documents.
+// Wraps drawing elements into a Section for GH_Document. GH_Document drives pagination and
+// global token resolution, so page numbering stays correct across multi-section documents.
 //
-// Arrange controls how the input is placed:
-//   Auto (default) — each input tree BRANCH is one unit (its internal relative geometry kept
-//     intact: a line and the dimension annotating it stay paired). Each branch's world offset
-//     is stripped and the branches flow down the page, centred and spaced, inside the margins.
-//     This is the painless default: drop drawings on a Page and they land sensibly.
-//   Grid — branches packed into a fit-to-page grid (contact-sheet style).
-//   Manual — branches keep their raw Rhino world coordinates (for deliberately positioned
-//     layouts). Overlap / outside-margin warnings apply only in this mode.
+// Arrange modes: Auto (default) keeps each tree branch as one unit, strips its world offset,
+// and flows branches centred down the page. Grid packs branches into a fit-to-page grid.
+// Manual keeps raw Rhino world coordinates; overlap/outside-margin warnings apply only here.
 //
-// Per-section paper / margin / chrome overrides live on the optional Override input
-// (produced by GH_LayoutOverride). Most pages don't need it — leave it unconnected and
-// the section inherits every default from the Document.
-//
-// Preview tiles the section's pages left-to-right using only this section's chrome and
-// numbering — the document-wide page count is unknown until GH_Document runs, so {page} /
-// {pages} in the preview reflect section-local counts. The PDF / SVG output uses the global
-// counts via GH_Document.
+// Preview tiles this section's own pages, so {page}/{pages} reflect section-local counts —
+// the real document-wide page count isn't known until GH_Document runs.
 public class GH_Page : GH_Component
 {
     private List<Page> _previewPages;
@@ -120,8 +108,6 @@ public class GH_Page : GH_Component
         WarnIfChromeHasOrigin(overrides?.Header, "Header");
         WarnIfChromeHasOrigin(overrides?.Footer, "Footer");
 
-        // Each branch becomes one unit. A single-element branch is that element; a multi-element
-        // branch is Grouped so its internal relative geometry (drawing + its dimension) is kept.
         var branches = BuildBranchUnits(tree, out var skipped);
         if (skipped > 0)
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
@@ -196,9 +182,6 @@ public class GH_Page : GH_Component
         return units;
     }
 
-    // Auto: strip each branch's world offset (so a branch drawn far from origin lands on the
-    // sheet, not at its Rhino coordinates) and flow them centred down the page. Pagination and
-    // page-fitting are handled downstream by the Stack + Document.
     private static DrawElement ComposeAuto(List<DrawElement> branches, double spacing)
     {
         if (branches.Count == 1) return NormalizeToOrigin(branches[0]);
@@ -215,9 +198,8 @@ public class GH_Page : GH_Component
         };
     }
 
-    // Grid: pack normalized branches into a near-square grid of equal (star) tracks that fills
-    // the page width. Row count follows from the column count so the sheet reads as a contact
-    // sheet of the branches.
+    // Near-square grid of equal (star) tracks filling the page width; row count follows from
+    // column count.
     private DrawElement ComposeGrid(List<DrawElement> branches, double spacing)
     {
         if (branches.Count == 1) return NormalizeToOrigin(branches[0]);
@@ -251,8 +233,6 @@ public class GH_Page : GH_Component
         };
     }
 
-    // Manual: legacy behaviour — keep raw world coordinates, Group multi-branch input, and warn
-    // when content overlaps or falls outside the margins so the user can correct positions.
     private DrawElement ComposeManual(List<DrawElement> branches, LayoutOverride overrides)
     {
         if (branches.Count > 1)
@@ -265,9 +245,6 @@ public class GH_Page : GH_Component
         return branches.Count == 1 ? branches[0] : new GroupElement { Children = branches };
     }
 
-    // Shift an element so its bounding box's bottom-left sits at the origin, discarding the
-    // world offset it inherited from where it was drawn in Rhino. Empty/degenerate bounds pass
-    // through unchanged.
     private static DrawElement NormalizeToOrigin(DrawElement element)
     {
         if (element == null) return null;
@@ -320,10 +297,9 @@ public class GH_Page : GH_Component
             $"{slot} element's Origin ({x:0.##}, {y:0.##}) is ignored — chrome is anchored to the page band. Use {slot} Align to control horizontal placement.");
     }
 
-    // Connecting multiple elements directly to Page wraps them in a Group, which preserves
-    // their world coordinates and is treated as one atomic block by pagination. That silently
-    // hides content when children overlap or fall outside the margin box. Surface those
-    // cases as warnings so the user knows to put a Stack/Grid in front.
+    // Multiple elements wired directly into Page become one Group at their raw world
+    // coordinates, which pagination treats as an atomic block — overlaps or margin overruns
+    // fail silently otherwise, so warn instead.
     private void WarnOnDirectMultiElementLayout(List<DrawElement> children, PaperSize paper, Margins margins, bool paperKnown)
     {
         var marginBox = new ModelBoundingBox(
@@ -359,8 +335,8 @@ public class GH_Page : GH_Component
         }
         if (outside > 0)
         {
-            // Without a section override the real paper comes from the Document downstream —
-            // a hard warning against assumed A4 would regularly be wrong in both directions.
+            // Without an override, actual paper comes from the Document downstream, so a hard
+            // warning against assumed A4 would often be wrong either way.
             if (paperKnown)
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
                     $"{outside} element(s) extend outside the page's margin box and will be clipped. Use a Stack to flow content across pages.");
@@ -383,9 +359,8 @@ public class GH_Page : GH_Component
         inner.MinX >= outer.MinX && inner.MaxX <= outer.MaxX &&
         inner.MinY >= outer.MinY && inner.MaxY <= outer.MaxY;
 
-    // Section-local preview: paginate this section alone with no document chrome to give the
-    // user a fast visual confirmation of how the content splits. Doc-level header/footer and
-    // global page counts come from GH_Document at the end of the chain.
+    // Paginates this section alone, with no document chrome, for a quick preview of the page
+    // split — real header/footer and global page counts come from GH_Document.
     private void BuildPreview(Section section)
     {
         var paper = section.PaperSize ?? PaperSize.A4;
@@ -399,9 +374,8 @@ public class GH_Page : GH_Component
         };
         var pages = DocumentLayoutPass.Paginate(layout);
 
-        // Accumulate across solve instances (list-matched inputs produce one section per
-        // instance) — assignment here would leave only the last instance's pages visible.
-        // ClearData resets the lists before the next solve.
+        // Appends across solve instances (list-matched inputs run one section per instance);
+        // ClearData resets these lists before the next solve.
         _previewPages ??= new List<Page>();
         _previewContents ??= new List<DrawElement>();
         foreach (var p in pages)

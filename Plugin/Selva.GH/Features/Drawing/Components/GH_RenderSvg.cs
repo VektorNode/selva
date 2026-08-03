@@ -15,10 +15,8 @@ using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Renders to SVG file(s). Accepts either a Document (one file per page) or loose drawing
-// elements / DrawingViews (wrapped in a single-page document and rendered as one file).
-// Multi-page documents produce "<name>-1.svg", "<name>-2.svg", ...; single-page produces
-// just "<name>.svg".
+// Accepts a Document (one file per page) or loose drawing elements / DrawingViews (wrapped
+// into a single-page document, rendered as one file).
 public class GH_RenderSvg : GH_Component, ISelvaFileOutput
 {
     public GH_RenderSvg()
@@ -110,7 +108,6 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
             var results = new List<FileDataGoo>(rendered.Count);
             for (var i = 0; i < rendered.Count; i++)
             {
-                // Single page → "drawing.svg". Multi-page → "drawing-1.svg", "drawing-2.svg".
                 var fileName = rendered.Count == 1 ? baseName : $"{baseName}-{i + 1}";
                 results.Add(new FileDataGoo(new FileData
                 {

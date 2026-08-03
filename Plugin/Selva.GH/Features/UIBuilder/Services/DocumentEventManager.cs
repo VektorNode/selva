@@ -15,7 +15,7 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
-///     Manages Grasshopper document event subscriptions and handling
+///     Manages Grasshopper document event subscriptions and handling.
 /// </summary>
 public class DocumentEventManager : IDisposable
 {
@@ -24,9 +24,9 @@ public class DocumentEventManager : IDisposable
     private readonly SchemaSynchronizer _schemaSynchronizer;
     private readonly ValueCollector _valueCollector;
 
-    // Watched set — GUIDs of relevant objects (contextual params + output components).
-    // Populated via RegisterWatchedObjects on enable; updated incrementally in OnObjectsAdded/Deleted.
-    // Used to short-circuit UndoStateChanged when no relevant objects exist.
+    // GUIDs of relevant objects (contextual params + output components), so UndoStateChanged
+    // can short-circuit when none exist. Populated via RegisterWatchedObjects on enable, kept
+    // current in OnObjectsAdded/Deleted.
     private readonly HashSet<Guid> _watchedIds = [];
 
     private GH_Document _currentDocument;
@@ -39,7 +39,6 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public bool IsRegistered => _eventsRegistered;
 
-    // Trailing-edge debounce timer for UndoStateChanged — fires 600ms after the last event.
     private Timer _documentModifiedTimer;
     private bool _eventsRegistered;
 
@@ -74,7 +73,6 @@ public class DocumentEventManager : IDisposable
         _disposed = true;
     }
 
-    // Events for component to subscribe to
     public event EventHandler SolutionStarted;
     public event EventHandler SolutionEnded;
     public event EventHandler<ParametersChangedEventArgs> ParametersChanged;
@@ -82,8 +80,7 @@ public class DocumentEventManager : IDisposable
     public event EventHandler DocumentModified;
 
     /// <summary>
-    ///     Seed the watched set from the current schema. Call on EnableRising so that
-    ///     UndoStateChanged can short-circuit immediately when no relevant objects exist.
+    ///     Seed the watched set from the current schema. Call on EnableRising.
     /// </summary>
     public void RegisterWatchedObjects(UISchema schema)
     {
@@ -104,7 +101,7 @@ public class DocumentEventManager : IDisposable
     }
 
     /// <summary>
-    ///     Add individual IDs to the watched set — called when new params are merged into the schema.
+    ///     Add IDs to the watched set when new params are merged into the schema.
     /// </summary>
     public void RegisterWatchedIds(IEnumerable<Guid> ids)
     {
@@ -114,17 +111,11 @@ public class DocumentEventManager : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Clear the watched set. Called from UnregisterEvents on disable/document switch.
-    /// </summary>
     public void ClearWatchedObjects()
     {
         _watchedIds.Clear();
     }
 
-    /// <summary>
-    ///     Register events for a document
-    /// </summary>
     public void RegisterEvents(GH_Document document)
     {
         if (document == null)
@@ -132,13 +123,11 @@ public class DocumentEventManager : IDisposable
             return;
         }
 
-        // Unregister from previous document if switching documents
         if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID)
         {
             UnregisterEvents();
         }
 
-        // Early return if already registered for THIS document
         if (_eventsRegistered && _currentDocument != null && _currentDocument.DocumentID == document.DocumentID)
         {
             return;
@@ -172,13 +161,10 @@ public class DocumentEventManager : IDisposable
     }
 
     /// <summary>
-    ///     Unregister document-side subscriptions (SolutionStart/End, ObjectsAdded/Deleted,
-    ///     UndoStateChanged, DocumentRemoved).
-    ///
-    ///     Does NOT clear the public events (SolutionStarted/SolutionEnded/DocumentModified/
-    ///     ParametersChanged/MetadataChanged) — those are owned by component-side subscribers that
-    ///     bind once per component lifetime. Disposal of those subscriptions belongs to the
-    ///     component's Cleanup()/Dispose(). See GH_UIBuilderComponent.Locked for the matching note.
+    ///     Unregisters document-side subscriptions only. The public events (SolutionStarted,
+    ///     DocumentModified, etc.) stay wired — they're owned by component-side subscribers that
+    ///     bind once per component lifetime and unwire in the component's Cleanup()/Dispose().
+    ///     See GH_UIBuilderComponent.Locked for the matching note.
     /// </summary>
     public void UnregisterEvents()
     {
@@ -230,8 +216,7 @@ public class DocumentEventManager : IDisposable
         SolutionStarted?.Invoke(this, EventArgs.Empty);
 
         if (_webSocketTransport.IsRunning)
-            // Fire and forget is ok for start message - it's informational
-            // Note: SetSolving now returns false if debounced, so we always broadcast to be safe
+            // Fire-and-forget: informational only.
         {
             _ = _webSocketTransport.BroadcastSolvingState(true);
         }
@@ -259,9 +244,8 @@ public class DocumentEventManager : IDisposable
     }
 
     /// <summary>
-    ///     Handle undo/redo state changes. Trailing-edge debounced — fires 600ms after
-    ///     the last event, so a full rename is captured before metadata detection runs.
-    ///     Gated on the watched set: if no relevant objects exist, returns at zero cost.
+    ///     Trailing-edge debounced — fires 600ms after the last event, so a full rename is
+    ///     captured before metadata detection runs.
     /// </summary>
     private void OnUndoStateChanged(object sender, GH_DocUndoEventArgs e)
     {
@@ -275,15 +259,9 @@ public class DocumentEventManager : IDisposable
             return;
         }
 
-        // Reset the timer on every event — fires only after 600ms of silence
         _documentModifiedTimer?.Change(DOCUMENT_MODIFIED_DEBOUNCE_MS, Timeout.Infinite);
     }
 
-
-    /// <summary>
-    ///     Handle objects added to the document. Only fires ParametersChanged if a relevant
-    ///     object (contextual param or output component) was added, and adds it to the watched set.
-    /// </summary>
     private void OnObjectsAdded(object sender, GH_DocObjectEventArgs e)
     {
         if (_currentDocument == null || !_webSocketTransport.IsRunning)
@@ -308,8 +286,8 @@ public class DocumentEventManager : IDisposable
     }
 
     /// <summary>
-    ///     Handle objects deleted from the document. Uses the watched set for O(1) membership
-    ///     check — no need to re-run type predicates on every deleted object.
+    ///     Uses the watched set for O(1) membership — no need to re-run type predicates on
+    ///     every deleted object.
     /// </summary>
     private void OnObjectsDeleted(object sender, GH_DocObjectEventArgs e)
     {
@@ -340,9 +318,6 @@ public class DocumentEventManager : IDisposable
                || ParameterTypeHelper.IsContextBakeComponent(obj);
     }
 
-    /// <summary>
-    ///     Notify that metadata should be detected and broadcast
-    /// </summary>
     public void DetectAndBroadcastMetadataChanges(UISchema schema)
     {
         if (_currentDocument == null || !_webSocketTransport.IsRunning || schema == null)
@@ -377,9 +352,6 @@ public class DocumentEventManager : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Collect and broadcast outputs to connected clients
-    /// </summary>
     public void CollectAndBroadcastOutputs(UISchema schema)
     {
         if (_currentDocument == null || !_webSocketTransport.IsRunning || schema == null)
@@ -391,16 +363,14 @@ public class DocumentEventManager : IDisposable
 
         var outputValues = _valueCollector.CollectOutputValues(_currentDocument, schema);
         var fileOutputs = _valueCollector.CollectFileOutputs(_currentDocument, schema);
-        // Only scan display data when the 3D viewer is enabled — scanning all document objects is
-        // otherwise wasted work.
+        // Only scan display data when the 3D viewer is enabled — otherwise wasted work.
         //
-        // We deliberately re-scan the whole document for ContextBakes here instead of using the
-        // incrementally-tracked _bakeIds set. That set desyncs in practice: ContextBakes added while
-        // the WS server was momentarily down (OnObjectsAdded early-returns on !IsRunning), or restored
-        // by undo/redo or paste without a reliable ObjectsAdded event, never make it into _bakeIds. The
-        // fast path would then silently skip those components, so their meshes never reach the
-        // frontend (and a stale id can resolve to the wrong object, showing a neighbour's material).
-        // A full bake scan on solve-end is O(objects) once and keeps every ContextBake's meshes flowing.
+        // This re-scans the whole document for ContextBakes instead of trusting _watchedIds:
+        // that set misses ContextBakes added while the WS server was down (OnObjectsAdded
+        // early-returns on !IsRunning), or restored by undo/redo/paste without a reliable
+        // ObjectsAdded event. Skipping the full scan would silently drop those components'
+        // meshes from the frontend. A full scan is O(objects) once per solve-end and catches
+        // all of them.
         var displayData = includeDisplayData
             ? _valueCollector.CollectDisplayData(_currentDocument)
             : new List<object>();
@@ -413,17 +383,11 @@ public class DocumentEventManager : IDisposable
     }
 }
 
-/// <summary>
-///     Event args for parameter changes
-/// </summary>
 public class ParametersChangedEventArgs : EventArgs
 {
     public GH_Document Document { get; set; }
 }
 
-/// <summary>
-///     Event args for metadata changes
-/// </summary>
 public class MetadataChangedEventArgs : EventArgs
 {
     public DiscoveredParameters Changes { get; set; }

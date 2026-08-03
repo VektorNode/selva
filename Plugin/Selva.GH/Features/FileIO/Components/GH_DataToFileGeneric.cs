@@ -69,8 +69,6 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
         var metadataLines = new List<string>();
         DA.GetDataList(5, metadataLines);
 
-
-        // Ensure extension starts with a dot
         if (!string.IsNullOrEmpty(extension) && !extension.StartsWith("."))
         {
             extension = "." + extension;

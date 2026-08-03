@@ -13,7 +13,7 @@ namespace Selva.Drawing.Import.Svg;
 
 // ============================================================================
 // Translates an SVG document into the DrawElement model so it renders losslessly
-// to BOTH SVG and PDF through the existing pipeline (no rasterisation). Vector
+// to both SVG and PDF through the existing pipeline (no rasterisation). Vector
 // line-art — paths, basic shapes, groups, transforms, solid fills/strokes — maps
 // cleanly. Unsupported features (gradients, filters, clip-paths, text, embedded
 // images) are skipped and reported via Warnings so the caller can surface them.
@@ -25,11 +25,7 @@ public sealed class SvgImporter
 
     public IReadOnlyList<string> Warnings => _warnings;
 
-    /// <summary>
-    ///     Parses SVG markup into a single GroupElement (or null if nothing usable was found).
-    ///     The result is in the drawing model's Y-up space: SVG is Y-down, so the whole tree
-    ///     is wrapped in a Y-flip translated by the document height.
-    /// </summary>
+    // Null if nothing usable was found.
     public DrawElement Import(string svgMarkup)
     {
         if (string.IsNullOrWhiteSpace(svgMarkup)) return null;
@@ -61,8 +57,8 @@ public sealed class SvgImporter
 
         if (children.Count == 0) return null;
 
-        // SVG Y grows downward; the drawing model is Y-up. Flip about the document height so
-        // the imported art is upright in model space. Use the viewBox/height when available.
+        // SVG Y grows downward; the drawing model is Y-up. Flip about the document height
+        // (viewBox/height when available) so imported art is upright in model space.
         var height = ResolveDocumentHeight(root, children);
         return new GroupElement
         {

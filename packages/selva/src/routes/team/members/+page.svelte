@@ -21,7 +21,7 @@
 
 	// Per spec §3: only `owner` can change roles; `owner`/`admin` can grant
 	// `manage_definitions`/`manage_projects` to a `member`. Server-side
-	// `/api/orgs/[orgId]/members/[userId]` PATCH is the load-bearing check.
+	// `/api/v1/orgs/[orgId]/members/[userId]` PATCH is the load-bearing check.
 	const isOwner = $derived(data.actorRole === 'owner');
 	const isOwnerOrAdmin = $derived(data.actorRole === 'owner' || data.actorRole === 'admin');
 	const ownerCount = $derived(data.members.filter((m) => m.role === 'owner').length);

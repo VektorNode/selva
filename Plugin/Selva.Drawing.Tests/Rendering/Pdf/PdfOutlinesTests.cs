@@ -11,9 +11,9 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
-// Phase 9: PDF outlines (bookmarks) provide a navigable sidebar in viewers. The renderer
-// emits one top-level outline per Page (using Page.Title or "Page N" when blank) plus
-// nested entries for any DrawingView whose Caption is set.
+// PDF outlines (bookmarks) give viewers a navigable sidebar. The renderer emits one
+// top-level outline per Page (Page.Title, or "Page N" when blank) plus nested entries
+// for any DrawingView whose Caption is set.
 public class PdfOutlinesTests
 {
 	[Fact]
@@ -35,7 +35,6 @@ public class PdfOutlinesTests
 		Assert.Equal(3, reopened.Outlines.Count);
 		Assert.Equal("Cover", reopened.Outlines[0].Title);
 		Assert.Equal("Details", reopened.Outlines[1].Title);
-		// Untitled pages get an auto-generated label.
 		Assert.Equal("Page 3", reopened.Outlines[2].Title);
 	}
 

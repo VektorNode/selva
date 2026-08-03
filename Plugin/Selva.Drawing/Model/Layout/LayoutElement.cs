@@ -4,11 +4,10 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing.Model.Layout;
 
-// Phase 7: shared base for layout primitives (Stack, Grid, Frame, TextFlow, Table). Layout
-// elements compose into primitive DrawElements (paths, text, groups) during a layout pass
-// that runs before the renderer. The IElementVisitor surface is intentionally unaware of
-// LayoutElement — Accept(visitor) throws so a missed layout pass surfaces immediately
-// rather than silently producing empty output.
+// Shared base for layout primitives (Stack, Grid, Frame, TextFlow, Table). These resolve
+// into primitive DrawElements (paths, text, groups) during a layout pass that runs before
+// the renderer. Accept(visitor) throws deliberately, so a layout pass that got skipped
+// surfaces as an exception instead of silently rendering nothing.
 public abstract class LayoutElement : DrawElement
 {
 	public sealed override void Accept(IElementVisitor visitor)
@@ -18,26 +17,19 @@ public abstract class LayoutElement : DrawElement
 			"or ensure the page content was passed through a renderer that resolves layout automatically.");
 	}
 
-	// Resolve to a concrete DrawElement (typically a GroupElement of positioned children).
-	// Implementations must be deterministic for a given context — the layout pass may call
-	// Resolve once per render.
+	// Must be deterministic for a given context — the layout pass may call this once per render.
 	public abstract DrawElement Resolve(LayoutContext context);
 
-	// Default: bounds come from a single resolve in an unconstrained context. Subclasses
-	// override when they can compute natural bounds without resolving.
 	public override BoundingBox ComputeBounds()
 		=> Resolve(new LayoutContext(BoundingBox.Empty)).ComputeBounds();
 
-	// Context-aware bounds. Layout primitives whose size depends on the parent (e.g. a
-	// TextFlow that auto-wraps to the available width) override this to honour the
-	// context. Default delegates to the unconstrained ComputeBounds for elements whose
-	// size is independent of the parent.
+	// Override when size depends on the parent context (e.g. a TextFlow that wraps to the
+	// available width). Default just resolves unconstrained.
 	public virtual BoundingBox ComputeBounds(LayoutContext context) => ComputeBounds();
 
-	// Pagination hook: try to fit this layout element into a vertical budget. Default is
-	// atomic — resolve once, take it whole or leave it whole. Subclasses that can break
-	// between children (Stack between items, Table between rows, TextFlow between lines)
-	// override this to produce partial Fits + Overflow.
+	// Pagination hook: fit this element into a vertical budget. Default is atomic — resolve
+	// once, take it whole or not at all. Elements that can break between children (Stack
+	// between items, Table between rows, TextFlow between lines) override this instead.
 	public virtual SplitResult TrySplit(double availableHeight, LayoutContext context)
 	{
 		var resolved = Resolve(context);
@@ -48,11 +40,11 @@ public abstract class LayoutElement : DrawElement
 		return SplitResult.NothingFits(resolved);
 	}
 
-	// Pagination fallback when TrySplit reports NothingFits on a fresh page: place the
-	// smallest leading fragment (oversize if need be) so pagination keeps making progress.
-	// Contract: Fits is always non-null and resolved; Overflow strictly shrinks toward null.
-	// Default places the whole element. Splittable containers override to shed only their
-	// head (first stack child, header + first table row, first text line).
+	// Fallback when TrySplit reports NothingFits on a fresh page: place the smallest leading
+	// fragment (oversize if need be) so pagination keeps making progress. Fits is always
+	// non-null and resolved; Overflow strictly shrinks toward null. Default places the whole
+	// element; splittable containers override to shed only their head (first stack child,
+	// header + first table row, first text line).
 	public virtual SplitResult ForcePlace(double availableHeight, LayoutContext context)
 	{
 		var resolved = Resolve(context);

@@ -10,10 +10,8 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Rendering;
 
-// Phase 10a: benchmark symbol dedupe. Compares inline-expansion (pre-dedupe semantics)
-// against dedupe (10a optimized path). Metrics: render time, output bytes, memory.
-// The plan's Phase 10 acceptance threshold: large drawings should render in <1s
-// (PDF <2MB, SVG <1MB).
+// Benchmarks symbol dedupe against inline expansion: render time and output bytes.
+// Target: large drawings render in <1s (PDF <2MB, SVG <1MB).
 public class SymbolBenchmarkTests
 {
 	private static readonly SymbolDefinition LineSymbol = new SymbolDefinition

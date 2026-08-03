@@ -5,15 +5,13 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing.Model.Layout;
 
-// Phase 7: walks a Document/Page/element tree and replaces every LayoutElement with the
-// primitive DrawElement it resolves to. Renderers call this automatically before drawing.
+// Walks a Document/Page/element tree and replaces every LayoutElement with the primitive
+// DrawElement it resolves to. Renderers call this automatically before drawing.
 //
-// Recursion order: a Stack containing a Frame containing a TextFlow resolves outside-in,
-// so inner LayoutElements receive the rectangle the outer layout placed them in. We achieve
-// that with a single recursive helper: `Resolve(element, context)` calls `element.Resolve`
-// to produce a primitive subtree, then recurses through the subtree to drop any nested
-// LayoutElements. (Implementations of `LayoutElement.Resolve` are encouraged to position
-// children explicitly; if they hand back a still-layout element, this handles it.)
+// Resolves outside-in: a Stack containing a Frame containing a TextFlow resolves the Stack
+// first, so inner LayoutElements receive the rectangle the outer layout placed them in.
+// `Resolve(element, context)` calls `element.Resolve` to get a primitive subtree, then
+// recurses through that subtree in case it still contains unresolved LayoutElements.
 public static class LayoutPass
 {
 	public static Document Resolve(Document document)
@@ -33,10 +31,8 @@ public static class LayoutPass
 		if (page == null) return null;
 		if (page.Content == null) return page;
 
-		// The page-level layout context is the page rect minus margins, in Y-up world coords
-		// with origin (0,0). Layout primitives that care about position (e.g. a Stack that
-		// wants to be top-aligned within the page) anchor against this rect. Zero margins are
-		// a valid setting (full-bleed page) — only a zero-size paper means "no page bounds".
+		// Page rect minus margins, Y-up world coords, origin (0,0). Zero margins are valid
+		// (full-bleed page) — only a zero-size paper means "no page bounds".
 		var available = PaperIsZero(page.Size)
 			? BoundingBox.Empty
 			: new BoundingBox(
@@ -57,9 +53,8 @@ public static class LayoutPass
 		};
 	}
 
-	// Recursively flatten layout elements in a subtree. Returns the same instance when no
-	// LayoutElement is encountered — this keeps the snapshot suite stable for the all-
-	// primitive scenes that don't use any layout primitives.
+	// Returns the same instance when no LayoutElement is encountered, so scenes with no
+	// layout primitives round-trip unchanged (keeps snapshot tests stable).
 	public static DrawElement Resolve(DrawElement element, LayoutContext context)
 	{
 		if (element == null) return null;
@@ -67,9 +62,6 @@ public static class LayoutPass
 		if (element is LayoutElement layout)
 		{
 			var primitive = layout.Resolve(context);
-			// The resolved element is typically a GroupElement of positioned primitives,
-			// but it may itself contain nested LayoutElements that haven't been resolved
-			// yet — recurse so the final tree is layout-free.
 			return Resolve(primitive, context);
 		}
 

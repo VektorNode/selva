@@ -12,7 +12,7 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
-///     Handles schema and values serialization/deserialization for persistence in .gh files.
+///     Serializes schema and values to/from a .gh file's GH_IWriter/GH_IReader archive.
 /// </summary>
 public class SchemaArchiveSerializer
 {
@@ -24,10 +24,7 @@ public class SchemaArchiveSerializer
 
     private readonly Version _pluginVersion;
 
-    /// <summary>
-    ///     Creates a new instance of SchemaArchiveSerializer.
-    /// </summary>
-    /// <param name="pluginVersion">The current plugin version for schema migration.</param>
+    /// <param name="pluginVersion">Current plugin version, used to migrate older saved schemas.</param>
     public SchemaArchiveSerializer(Version pluginVersion)
     {
         _pluginVersion = pluginVersion ?? throw new ArgumentNullException(nameof(pluginVersion));
@@ -44,7 +41,6 @@ public class SchemaArchiveSerializer
         {
             if (schema != null)
             {
-                // Ensure version is set before saving
                 if (string.IsNullOrEmpty(schema.SchemaVersion))
                 {
                     schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
@@ -89,10 +85,10 @@ public class SchemaArchiveSerializer
                 var schemaJson = reader.GetString("Schema");
                 if (!string.IsNullOrEmpty(schemaJson))
                 {
-                    // Parse as JObject first to handle structural migrations
+                    // Parsed as JObject (not deserialized directly) so SchemaMigrator can apply
+                    // structural JSON changes before the shape is locked to UISchema.
                     var jObject = JObject.Parse(schemaJson);
 
-                    // CAPTURE ORIGINAL VERSION BEFORE MIGRATION
                     var originalVersion = jObject["schemaVersion"]?.Value<string>();
                     var needsBackup = string.IsNullOrEmpty(originalVersion) ||
                                       Version.Parse(originalVersion ?? "1.0.0") < SchemaVersion.CURRENT;
@@ -105,7 +101,7 @@ public class SchemaArchiveSerializer
                         needsBackup = false;
                     }
 
-                    // CREATE BACKUP from raw JSON before any migration or deserialization
+                    // Back up the raw JSON before migration mutates it.
                     if (needsBackup)
                     {
                         var schemaName = jObject["name"]?.Value<string>() ?? jObject["id"]?.Value<string>();
@@ -121,16 +117,10 @@ public class SchemaArchiveSerializer
                         }
                     }
 
-                    // Run JSON-level migration (structural changes)
                     jObject = SchemaMigrator.MigrateJson(jObject);
-
-                    // Deserialize the migrated JSON
                     var rawSchema = jObject.ToObject<UISchema>();
-
-                    // MIGRATE TO CURRENT VERSION (Logic/Defaults)
                     schema = SchemaMigrator.MigrateToCurrentVersion(rawSchema, _pluginVersion);
 
-                    // Track migration for reporting
                     if (originalVersion != schema.SchemaVersion)
                     {
                         var msg = $"Schema migrated from v{originalVersion ?? "legacy"} to v{schema.SchemaVersion}";
@@ -164,7 +154,6 @@ public class SchemaArchiveSerializer
             }
         }
 
-        // If we have schema or values, return them along with any migration message
         if (schema != null || values != null)
         {
             return (schema, values, migrationMessage);

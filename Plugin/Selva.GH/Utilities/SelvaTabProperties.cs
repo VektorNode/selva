@@ -17,9 +17,9 @@ public class SelvaTabProperties : GH_AssemblyPriority
         server.AddCategoryShortName("Selva", "SV");
 
 #if !NETCOREAPP
-        // On .NET Framework (net48), the fusion loader can refuse to load a strong-named
-        // assembly from a private path if a different version is already in the process.
-        // Register a resolver so Selva's own copies of its dependencies win.
+        // net48's fusion loader can refuse to load a strong-named assembly from a private
+        // path if a different version is already loaded in the process. Resolve manually so
+        // Selva's own dependency copies win.
         AppDomain.CurrentDomain.AssemblyResolve += ResolveFromPluginDirectory;
 #endif
 

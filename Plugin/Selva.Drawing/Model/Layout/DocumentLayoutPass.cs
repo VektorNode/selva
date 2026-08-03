@@ -7,18 +7,9 @@ using Selva.Drawing.Model.Elements;
 namespace Selva.Drawing.Model.Layout;
 
 // Composes a document from a list of Sections and document-level chrome. Pagination runs
-// per-section so each section keeps its own paper / margins / chrome overrides; token
-// resolution runs once at the end so {page} / {pages} reflect the global page numbering
-// across the entire document, not section-local counts.
-//
-// Algorithm:
-// 1. For each section, compute effective paper / margins / header / footer (section
-//    overrides win over document defaults), pre-resolve the chrome tree once, and either
-//    paginate its body or — when KeepTogether is set — emit one raw page even if it
-//    overflows. Each raw page is tagged with the section context it came from.
-// 2. Once every section has been paginated, run TokenResolver per page with the global
-//    1..N indices to substitute {page}, {pages}, {section}, {title}, {date}, and any
-//    document-level user tokens.
+// per-section so each section keeps its own paper/margins/chrome overrides; token resolution
+// runs once at the end, across all pages, so {page}/{pages} reflect global numbering rather
+// than section-local counts.
 public static class DocumentLayoutPass
 {
 	public static IReadOnlyList<Page> Paginate(DocumentLayout layout)
@@ -36,14 +27,11 @@ public static class DocumentLayoutPass
 			var paper = section.PaperSize ?? layout.PaperSize;
 			var margins = section.Margins ?? layout.Margins;
 
-			// Chrome is measured per section: band height depends on the band width (wrapping
-			// TextFlows), and paper/margins — hence the width — can differ per section.
-			//
-			// Measure the SUBSTITUTED template. Substitution changes text length and layout is
-			// what wraps it, so measuring the raw "{title}" reserved a band sized for the token
-			// rather than for the value. Cross-section numbering means the true {page}/{pages}
-			// aren't known yet; a provisional resolver carrying the real title and section name
-			// gets the length-dominant tokens right, and page numbers vary by a digit at most.
+			// Measure the SUBSTITUTED template, not the raw "{title}" — substitution changes text
+			// length and layout wraps on that length. True {page}/{pages} aren't known yet at this
+			// point (cross-section numbering), but a provisional resolver carrying the real title
+			// and section name gets the length-dominant tokens right; page numbers vary by at most
+			// a digit.
 			var bandWidth = PaginationPass.BandWidth(paper, margins);
 			var measureResolver = new TokenResolver(
 				1, 1, layout.Title, section.Title ?? string.Empty, layout.Tokens,
@@ -71,9 +59,8 @@ public static class DocumentLayoutPass
 				FooterEdgeOffset = section.FooterEdgeOffset ?? layout.FooterEdgeOffset,
 			};
 
-			// KeepTogether forces the whole section onto one page even if it overflows the
-			// content rect. Pagination runs with infinite vertical budget: TrySplit always
-			// reports AllFits and we get a single raw page with all the content.
+			// KeepTogether: paginate with infinite vertical budget so TrySplit always reports
+			// AllFits, forcing the whole section onto one page even if it overflows.
 			var body = section.KeepTogether
 				? PaginationPass.PaginateBody(section.Content, paper, margins, bands, double.PositiveInfinity)
 				: PaginationPass.PaginateBody(section.Content, paper, margins, bands);
@@ -96,9 +83,8 @@ public static class DocumentLayoutPass
 			}
 		}
 
-		// An empty document — no sections, or every section null/empty — still emits one
-		// chrome-only page (with its bands intact) so an empty header/footer template renders
-		// meaningfully and callers always get at least one page out.
+		// No sections (or all null/empty): emit one chrome-only page so callers always get at
+		// least one page out.
 		if (raw.Count == 0)
 		{
 			var paper = layout.PaperSize;
@@ -140,21 +126,18 @@ public static class DocumentLayoutPass
 		{
 			var rp = raw[i];
 
-			// Auto-fill {scale} from the views actually placed on this page: one scale → "1:N",
-			// several distinct → "As shown" (the drafting convention), none → empty so an unfilled
-			// {scale} renders blank rather than leaking the literal token. A doc-level / manual
-			// {scale} still wins. Harvested before chrome resolves so the title block's {scale}
-			// sees it.
+			// Auto-fill {scale} from the views placed on this page: one scale → "1:N", several
+			// distinct → "As shown", none → empty (renders blank instead of leaking the literal
+			// token). A doc-level/manual {scale} still wins. Harvested before chrome resolves so
+			// the title block's {scale} sees it.
 			var tokens = MergeScaleToken(layout.Tokens, HarvestScaleLabel(rp.Layout.RawContents[rp.ContentIndex]) ?? string.Empty);
 			var resolver = new TokenResolver(i + 1, totalPages, rp.Title, rp.SectionTitle, tokens, now, layout.Culture);
 
-			// Chrome resolves per page: this page's tokens substitute into the raw template
-			// first, then the result is laid out against the band rect (so star grids fill the
-			// band width and TextFlows wrap the substituted text, not the token).
+			// Substitute into the raw template first, then lay the result out against the band
+			// rect, so star grids fill the band width and TextFlows wrap the substituted text.
 			var pageHeader = PaginationPass.ResolveChromeForPage(rp.RawHeader, rp.Layout.HeaderRect, resolver);
 			var pageFooter = PaginationPass.ResolveChromeForPage(rp.RawFooter, rp.Layout.FooterRect, resolver);
 
-			// Body text gets the same substitution so tokens work outside chrome too.
 			var rawContent = resolver.ResolveTree(rp.Layout.RawContents[rp.ContentIndex]);
 			var anchoredContent = PaginationPass.AnchorTopLeft(rawContent, rp.Layout.ContentRect);
 			var anchoredHeader = PaginationPass.AnchorChrome(pageHeader, rp.Layout.HeaderRect, rp.HeaderAlign);
@@ -173,10 +156,9 @@ public static class DocumentLayoutPass
 		return pages;
 	}
 
-	// Returns the {scale} label for a resolved page body: the shared "1:N" ratio when every
-	// view drew at one scale, "As shown" when they differ, or null when no view stamped a scale
-	// (so the doc-level token / manual value wins). Distinct scales are compared on the rounded
-	// label so 1:4.999 and 1:5 don't read as divergent.
+	// Shared "1:N" ratio when every view on the page drew at one scale, "As shown" when they
+	// differ, or null when no view stamped a scale (doc-level/manual value wins). Distinct
+	// scales are compared on the rounded label so 1:4.999 and 1:5 don't read as divergent.
 	private static string HarvestScaleLabel(DrawElement body)
 	{
 		var labels = new HashSet<string>(StringComparer.Ordinal);
@@ -205,7 +187,6 @@ public static class DocumentLayoutPass
 			foreach (var c in g.Children) CollectScaleLabels(c, labels);
 	}
 
-	// Bare "1:N" / "N:1" ratio for a title-block field (no "SCALE " prefix).
 	private static string FormatRatio(double scale)
 	{
 		if (Math.Abs(scale - 1.0) < 1e-9) return "1:1";
@@ -222,14 +203,12 @@ public static class DocumentLayoutPass
 	private static IReadOnlyDictionary<string, string> MergeScaleToken(
 		IReadOnlyDictionary<string, string> tokens, string scaleLabel)
 	{
-		// Defensive: a null label means "don't touch tokens". Callers pass "" to render blank.
+		// null label = don't touch tokens; callers pass "" to render blank.
 		if (scaleLabel == null) return tokens;
 		var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		if (tokens != null)
 			foreach (var kv in tokens) map[kv.Key] = kv.Value;
-		// Only auto-fill when the document didn't already define {scale} explicitly — an explicit
-		// project value is intentional and shouldn't be overwritten by inference. Defining it as
-		// empty when nothing is inferred means an unfilled {scale} renders blank, not as "{scale}".
+		// Don't overwrite an explicit doc-level {scale}; inference only fills the gap.
 		if (!map.ContainsKey("scale")) map["scale"] = scaleLabel;
 		return map;
 	}
@@ -249,8 +228,8 @@ public static class DocumentLayoutPass
 	}
 }
 
-// Inputs to DocumentLayoutPass: a list of sections plus document-level defaults and chrome.
-// Section overrides (paper, margins, header, footer) win for that section's pages only.
+// Inputs to DocumentLayoutPass. Section overrides (paper, margins, header, footer) win for
+// that section's pages only.
 public sealed class DocumentLayout
 {
 	public IReadOnlyList<Section> Sections { get; init; } = Array.Empty<Section>();

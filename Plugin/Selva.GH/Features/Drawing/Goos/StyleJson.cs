@@ -5,10 +5,9 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.GH.Features.Drawing.Goos;
 
-// Serializer settings for persisting drawing style types (Stroke, Fill, PathStyle,
-// TextStyle) in goo Write/Read. Required because Color is a readonly struct with a private
-// constructor: without the converter Json.NET silently deserializes default(Color) —
-// transparent black — so every saved/duplicated style loses its color.
+// Serializes Stroke/Fill/PathStyle/TextStyle for goo Write/Read. Color is a readonly
+// struct with a private constructor, so without ColorJsonConverter, Json.NET silently
+// deserializes default(Color) — transparent black — and every saved style loses its color.
 public static class StyleJson
 {
     public static readonly JsonSerializerSettings Settings = new JsonSerializerSettings
@@ -21,8 +20,8 @@ public static class StyleJson
     public static T Deserialize<T>(string json) => JsonConvert.DeserializeObject<T>(json, Settings);
 }
 
-// Writes the same property shape Json.NET produced by default (Space as int, channel
-// floats, Name), so style JSON in previously saved .gh files reads back correctly.
+// Matches Json.NET's default property shape (Space as int, channel floats, Name) so
+// style JSON in existing .gh files still reads back correctly.
 public class ColorJsonConverter : JsonConverter<Color>
 {
     public override void WriteJson(JsonWriter writer, Color value, JsonSerializer serializer)

@@ -9,24 +9,23 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Model.Layout;
 
-// Stage 2 regressions from the 2026-07-27 layout audit. Three themes:
-//   * a view must honour a container budget that is finite-but-exhausted (C2),
+// Three themes:
+//   * a view must honour a container budget that is finite-but-exhausted,
 //   * paper-space styles must survive the view transform wherever they sit in the tree, and at
-//     enlargement scales as well as reductions (C13, U2),
-//   * chrome must not overprint the body, and token text must be laid out after substitution
-//     (C11, C10).
+//     enlargement scales as well as reductions,
+//   * chrome must not overprint the body, and token text must be laid out after substitution.
 public class PaperSpaceInvarianceTests
 {
 	// ========================================================================================
-	// C2 — an exhausted budget is a limit, not an invitation
+	// An exhausted budget is a limit, not an invitation
 	// ========================================================================================
 
 	[Fact]
 	public void Horizontal_stack_of_auto_fit_views_stays_inside_the_content_rect()
 	{
-		// A horizontal Stack is atomic to pagination, so nothing downstream rescues an overflow.
+		// A horizontal Stack is atomic to pagination — nothing downstream rescues an overflow.
 		// The second view used to see a spent (0) main axis, read it as "unconstrained", and fit
-		// to width with no height limit — producing a 3789mm-wide page.
+		// to width with no height limit, producing a 3789mm-wide page.
 		var stack = new Stack
 		{
 			Orientation = StackOrientation.Horizontal,
@@ -73,7 +72,7 @@ public class PaperSpaceInvarianceTests
 	}
 
 	// ========================================================================================
-	// C13 — counter-scaling must reach layout elements below the root of Geometry
+	// Counter-scaling must reach layout elements below the root of Geometry
 	// ========================================================================================
 
 	[Fact]
@@ -109,7 +108,7 @@ public class PaperSpaceInvarianceTests
 	}
 
 	// ========================================================================================
-	// U2 — enlargement views must keep their linework
+	// Enlargement views must keep their linework
 	// ========================================================================================
 
 	[Theory]
@@ -163,7 +162,7 @@ public class PaperSpaceInvarianceTests
 	}
 
 	// ========================================================================================
-	// C11 — a Margin-placed band must not overprint the body
+	// A Margin-placed band must not overprint the body
 	// ========================================================================================
 
 	[Fact]
@@ -210,7 +209,7 @@ public class PaperSpaceInvarianceTests
 	}
 
 	// ========================================================================================
-	// C10 — tokens must be substituted before layout, not after
+	// Tokens must be substituted before layout, not after
 	// ========================================================================================
 
 	[Fact]

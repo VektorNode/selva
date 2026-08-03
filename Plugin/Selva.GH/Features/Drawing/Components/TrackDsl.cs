@@ -5,9 +5,8 @@ using Selva.Drawing.Model.Layout;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Shared column/row track DSL used by Grid and Table: "40 auto 1*" → Absolute(40), Auto,
-// Star(1). Throws FormatException with a user-facing message for invalid tokens — callers
-// surface it via AddRuntimeMessage instead of crashing the solve.
+// Text DSL for column/row tracks: "40 auto 1*" → Absolute(40), Auto, Star(1). Throws
+// FormatException with a user-facing message for invalid tokens.
 public static class TrackDsl
 {
     public static IReadOnlyList<GridLength> Parse(string dsl, string axis)

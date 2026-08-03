@@ -12,8 +12,8 @@ using static Grasshopper.GUI.GH_GraphicsUtil;
 namespace Selva.GH.Utilities;
 
 /// <summary>
-///     Base class for rendering component capsules with a custom accent color.
-///     Provides automatic icon positioning between input and output parameters.
+///     Renders a component capsule with a custom accent color and fades the icon
+///     in/out as the canvas crosses <see cref="ZoomThreshold"/>.
 /// </summary>
 public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
 {
@@ -21,33 +21,20 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
 
     private const double FadeDurationMs = 400.0;
 
-    // Timestamp when the fade transition started.
     private DateTime _fadeStart;
-
-    // Timer that keeps the canvas refreshing while a fade is in progress.
     private Timer _fadeTimer;
-
-    // Direction: true = fading in, false = fading out.
     private bool _fadingIn;
-
-    // Current 0–1 opacity of the icon; drives RenderFadedImage each frame.
     private double _iconOpacity = 1.0;
 
-    // Whether the first render has happened yet (used to sync state without triggering a fade).
+    // Set on first render so that render doesn't animate a fade from the default state.
     private bool _initialized;
-
-    // Whether the icon was visible (above threshold) on the last frame.
     private bool _wasVisible = true;
 
     protected GH_AccentComponentAttributes(IGH_Component component) : base(component)
     {
     }
 
-
-    /// <summary>
-    ///     Gets the accent color to use for the vertical bar on the right side of the component.
-    ///     Override this property in derived classes to change the color.
-    /// </summary>
+    /// <summary>Accent color for the vertical bar on the component's right edge.</summary>
     protected abstract Color AccentColor { get; }
 
     protected override void Render(GH_Canvas canvas, Graphics graphics, GH_CanvasChannel channel)
@@ -94,9 +81,9 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
             capsule.Render(graphics, Selected, Owner.Locked, Owner.Hidden);
         }
 
-        // Draw the parallel-compute indicator: task-capable components get boundary dots
-        // (2 = UseTasks on, 1 = off), matching the stock GH_ComponentAttributes rendering
-        // that our custom capsule path would otherwise drop.
+        // Task-capable components get boundary dots (2 = UseTasks on, 1 = off) in stock
+        // GH_ComponentAttributes rendering; replicate that here since the custom capsule
+        // path above bypasses it.
         if (Owner is IGH_TaskCapableComponent taskCapable)
         {
             var dotStyle = GH_CapsuleRenderEngine.GetImpliedStyle(palette, Selected, Owner.Locked, Owner.Hidden);
@@ -115,7 +102,6 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
         {
             var isVisible = canvas.Viewport.Zoom >= ZoomThreshold;
 
-            // On the very first render, snap to the correct state without animating.
             if (!_initialized)
             {
                 _wasVisible = isVisible;
@@ -123,7 +109,6 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
                 _initialized = true;
             }
 
-            // Detect threshold crossing and start a timed fade.
             if (isVisible != _wasVisible)
             {
                 _fadingIn = isVisible;
@@ -132,7 +117,6 @@ public abstract class GH_AccentComponentAttributes : GH_ComponentAttributes
                 StartFadeTimer(canvas);
             }
 
-            // Only advance opacity while a fade is in progress.
             if (_fadeTimer != null)
             {
                 var elapsed = (DateTime.UtcNow - _fadeStart).TotalMilliseconds;

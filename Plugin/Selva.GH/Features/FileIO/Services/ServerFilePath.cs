@@ -5,23 +5,19 @@ namespace Selva.GH.Features.FileIO.Services;
 
 /// <summary>
 ///     Resolves a file authored as a path relative to a server's data directory into an
-///     absolute path on the host running the solve.
-///
-///     Rhino-free by design so it can be unit-tested without the Grasshopper runtime.
-///
-///     Cross-platform: a relative path authored with either separator ("a\b" or "a/b")
-///     resolves correctly on both Windows and Linux, because every separator is normalised
-///     to the host's <see cref="Path.DirectorySeparatorChar" /> before joining.
+///     absolute path on the host running the solve. Rhino-free so it can be unit-tested
+///     without the Grasshopper runtime.
 /// </summary>
 public static class ServerFilePath
 {
     /// <summary>
     ///     Joins <paramref name="basePath" /> (the server data directory) with
-    ///     <paramref name="relativePath" /> and returns the absolute, normalised result.
+    ///     <paramref name="relativePath" />. Accepts either '\' or '/' in
+    ///     <paramref name="relativePath" /> so paths authored on one OS resolve on the other.
     /// </summary>
     /// <exception cref="ArgumentException">
-    ///     Thrown when either argument is empty, when the relative path is rooted/absolute,
-    ///     or when it escapes the base directory (path traversal).
+    ///     Either argument is empty, the relative path is rooted/absolute, or it escapes the
+    ///     base directory (path traversal).
     /// </exception>
     public static string Resolve(string basePath, string relativePath)
     {
@@ -62,10 +58,6 @@ public static class ServerFilePath
         return resolved;
     }
 
-    /// <summary>
-    ///     Replaces both '\' and '/' with the host directory separator so paths authored on
-    ///     one OS resolve on the other.
-    /// </summary>
     private static string NormalizeSeparators(string path)
     {
         return path
@@ -74,9 +66,8 @@ public static class ServerFilePath
     }
 
     /// <summary>
-    ///     True when <paramref name="candidate" /> sits inside <paramref name="baseDir" />
-    ///     (or equals it). Comparison is case-insensitive on Windows, case-sensitive on Unix,
-    ///     matching the host filesystem.
+    ///     Comparison is case-insensitive on Windows, case-sensitive on Unix, matching the
+    ///     host filesystem.
     /// </summary>
     private static bool IsWithinBase(string baseDir, string candidate)
     {

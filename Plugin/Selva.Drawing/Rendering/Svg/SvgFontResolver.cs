@@ -5,10 +5,9 @@ using System.Reflection;
 
 namespace Selva.Drawing.Rendering.Svg;
 
-// Resolves bundled fonts to base64 data URIs for embedding in SVG `@font-face` rules.
-// Phase 2 only loads the binary; emission of `<style>@font-face{...}</style>` is opt-in
-// at the renderer level (legacy output didn't embed fonts, so the parity path leaves
-// fonts unembedded by default).
+// Resolves bundled fonts to base64 data URIs for `@font-face` embedding. Only loads the
+// binary; emitting the `<style>@font-face{...}</style>` block is the renderer's call,
+// gated by SvgRenderOptions.EmbedFonts.
 public static class SvgFontResolver
 {
 	private const string ResourcePrefix = "Selva.Drawing.Fonts.Resources.";
@@ -17,6 +16,7 @@ public static class SvgFontResolver
 	{
 		// SVG @font-face needs (family, weight, style) tuples. Both bundled fonts share
 		// the Inter family; weight is the only distinguishing axis at Phase 2.
+		// (family, weight, style) — both bundled fonts are Inter, weight is the only axis.
 		[$"{ResourcePrefix}Inter-Regular.ttf"] = "Inter|400|normal",
 		[$"{ResourcePrefix}Inter-Bold.ttf"] = "Inter|700|normal",
 	};

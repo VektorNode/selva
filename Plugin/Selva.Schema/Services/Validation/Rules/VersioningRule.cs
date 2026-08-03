@@ -4,14 +4,10 @@ using Selva.Schema.Models;
 
 namespace Selva.Schema.Services.Validation.Rules;
 
-/// <summary>
-///     Validates schema versioning information
-/// </summary>
 public class VersioningRule : IValidationRule
 {
     public IEnumerable<ValidationIssue> Validate(UISchema schema)
     {
-        // Schema version
         if (string.IsNullOrEmpty(schema.SchemaVersion))
         {
             yield return ValidationIssue.Warning(
@@ -30,7 +26,6 @@ public class VersioningRule : IValidationRule
             }
         }
 
-        // Plugin version
         if (string.IsNullOrEmpty(schema.PluginVersion))
         {
             yield return ValidationIssue.Info(
@@ -49,7 +44,6 @@ public class VersioningRule : IValidationRule
             }
         }
 
-        // Min plugin version
         if (!string.IsNullOrEmpty(schema.MinPluginVersion))
         {
             if (!Version.TryParse(schema.MinPluginVersion, out _))

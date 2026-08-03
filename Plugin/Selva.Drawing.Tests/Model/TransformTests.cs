@@ -44,13 +44,13 @@ public class TransformTests
 	[Fact]
 	public void Multiply_composes_in_function_order()
 	{
-		// Translate then scale: scale * translate. Apply in order: scale(translate(p)).
+		// translate.Then(scale) applies translate first, then scale: scale(translate(p)).
 		var translate = Transform.Translate(10, 0);
 		var scale = Transform.Scale(2);
 		var composed = translate.Then(scale);
 
 		var p = composed.Apply(new Point2D(3, 4));
-		// Expected: scale(translate(3,4)) = scale(13,4) = (26,8)
+		// scale(translate(3,4)) = scale(13,4) = (26,8)
 		Assert.Equal(26, p.X);
 		Assert.Equal(8, p.Y);
 	}

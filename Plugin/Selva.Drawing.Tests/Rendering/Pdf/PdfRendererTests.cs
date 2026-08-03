@@ -13,11 +13,9 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
-// Phase 5 exit-criteria coverage. Byte-level PDF snapshotting is impractical because
-// PdfSharpCore stamps dates and a trailer ID into every produced file, so we verify
-// structural validity instead: header magic, parseable through PdfReader, expected
-// pages/sizes, metadata round-trips, and content streams are non-empty for non-empty
-// scenes. This is the same gate Acrobat/Preview apply when "opening" a PDF.
+// PdfSharpCore stamps dates and a trailer ID into every produced file, so byte-level
+// snapshotting is impractical; these tests check structural validity instead — header
+// magic, parseable through PdfReader, expected pages/sizes, metadata round-trips.
 public class PdfRendererTests
 {
 	private static byte[] RenderScene(DrawElement content, PdfRenderOptions? options = null, DocumentMetadata? metadata = null)

@@ -17,9 +17,7 @@ using ModelPath = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Rendering.Pdf;
 
-// Walks a Document and emits a PDF byte array via PdfSharpCore. Phase 5 target: each
-// element type from the model emits the correct vector primitives, text uses bundled
-// Inter via PdfFontEmbedder, and Document.Metadata flows through to the /Info dictionary.
+// Walks a Document and emits a PDF byte array via PdfSharpCore.
 //
 // Coordinate system: model is Y-up in millimetres, origin bottom-left of the page.
 // PdfSharpCore's XGraphics is Y-down with origin top-left. We apply one root transform
@@ -33,9 +31,9 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	private XGraphics _gfx;
 	private double _pageHeightMm;
 
-	// Per-page transient state. Reset at each RenderPage entry. Hyperlink rects accumulate
-	// during the visitor pass; we attach them to the PdfPage after the visitor finishes so
-	// the page's MediaBox is known and rect math is straightforward.
+	// Per-page transient state, reset at each RenderPage entry. Hyperlink rects accumulate
+	// during the visitor pass and get attached to the PdfPage after it finishes, once the
+	// page's MediaBox is known.
 	private PdfPage _currentPdfPage;
 	private double _pageTranslateXMm;
 	private double _pageTranslateYMm;
@@ -43,16 +41,16 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	private List<PdfPage> _renderedPages;
 
 	// Accumulated group transforms during the visitor pass, mirroring _gfx's matrix stack.
-	// Needed because hyperlink rects are recorded in element-local coordinates but the
-	// /Link annotation wants page space — without this, links inside any transformed group
-	// (page tiles, scaled drawing views) landed at the wrong spot.
+	// Hyperlink rects are recorded in element-local coordinates but the /Link annotation
+	// wants page space — without this, links inside any transformed group (page tiles,
+	// scaled drawing views) land at the wrong spot.
 	private Transform _modelTransform = Transform.Identity;
 
-	// Phase 10a: SymbolDefinition.Id → cached Form XObject. Built once per page in a
-	// pre-pass; Visit(SymbolElement) draws the form via _gfx.DrawImage(form,...) which
-	// causes PdfSharpCore to share the underlying Form XObject across instances.
-	// Form-local interior is set up Y-up so child draw code works identically to the
-	// inline-expansion path. Anonymous definitions (no Id) keep inline expansion.
+	// SymbolDefinition.Id → cached Form XObject, built once per page in a pre-pass.
+	// Visit(SymbolElement) draws the form via _gfx.DrawImage(form,...), which makes
+	// PdfSharpCore share the underlying Form XObject across instances. Form-local interior
+	// is set up Y-up so child draw code works identically to the inline-expansion path.
+	// Anonymous definitions (no Id) keep inline expansion.
 	private Dictionary<string, SymbolFormCache> _symbolForms;
 	private PdfDocument _pdfDocument;
 
@@ -66,10 +64,10 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			HeightMm = heightMm;
 		}
 		public XForm Form { get; }
-		// Bounds in the symbol's local coord system. Used to translate the DrawImage call
-		// so the form's bottom-left lands at the right world position.
+		// Local-space bounds; translates the DrawImage call so the form's bottom-left
+		// lands at the right world position.
 		public BoundingBox Bounds { get; }
-		// Form's actual extent in mm (≥ 1mm in each dimension to satisfy PdfSharpCore).
+		// Form's actual extent in mm (>= 1mm in each dimension — PdfSharpCore rejects zero).
 		public double WidthMm { get; }
 		public double HeightMm { get; }
 	}
@@ -86,10 +84,8 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		PdfFontEmbedder.EnsureInstalled();
 
 		using var pdf = new PdfDocument();
-		// Document-level colour mode (Rgb/Cmyk). PdfSharpCore has no per-page override —
-		// every content stream writes operators in the configured mode, converting input
-		// colours as needed. CMYK is the right choice for print preflight; Rgb is the
-		// default for screen.
+		// PdfSharpCore has no per-page colour-mode override — every content stream writes
+		// operators in this mode, converting input colours as needed.
 		pdf.Options.ColorMode = _options.ColorMode == PdfColorMode.Cmyk
 			? PdfSharpColorMode.Cmyk
 			: PdfSharpColorMode.Rgb;
@@ -98,9 +94,8 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		_pdfDocument = pdf;
 		_renderedPages = new List<PdfPage>();
 
-		// PDF natively supports multi-page documents — append one PdfPage per Page in the
-		// Document. If a Document has zero pages we still emit one blank A4 so the file is
-		// well-formed (same fallback the SVG renderer uses).
+		// Zero pages still gets one blank A4 so the file is well-formed (same fallback the
+		// SVG renderer uses).
 		if (document.Pages.Count == 0)
 		{
 			RenderPage(pdf, document, new Page { Content = new GroupElement() });
@@ -110,8 +105,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			foreach (var page in document.Pages) RenderPage(pdf, document, page);
 		}
 
-		// Phase 9: emit XMP metadata + outlines after pages exist (outlines need page refs;
-		// XMP is independent but goes here for symmetry).
+		// Outlines need page refs, so this runs after all pages exist.
 		if (_options.EmitXmpMetadata) PdfXmpMetadata.Attach(pdf, document.Metadata);
 		if (_options.EmitOutlines) ApplyOutlines(pdf, document, _renderedPages);
 
@@ -125,8 +119,8 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 	private void RenderPage(PdfDocument pdf, Document document, Page page)
 	{
-		// Phase 7: resolve any LayoutElements (Stack/Grid/Frame/TextFlow/Table) into
-		// primitive elements before walking the visitor. The visitor surface stays narrow.
+		// Resolve LayoutElements (Stack/Grid/Frame/TextFlow/Table) into primitives before
+		// the visitor walks the tree, so the visitor surface stays narrow.
 		page = LayoutPass.ResolvePage(page);
 
 		var pdfPage = pdf.AddPage();
@@ -139,16 +133,15 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		{
 			pageWidthMm = contentBounds.Width + _options.Padding * 2;
 			pageHeightMm = contentBounds.Height + _options.Padding * 2;
-			// Place the content's bbox so its (MinX, MinY) sits at (Padding, Padding) in PDF
-			// world space. PDF world space here is still Y-up because we apply the flip at
-			// the XGraphics level below.
+			// Places the content bbox's (MinX, MinY) at (Padding, Padding) in PDF world space
+			// (still Y-up here — the flip happens at the XGraphics level below).
 			translateX = _options.Padding - contentBounds.MinX;
 			translateY = _options.Padding - contentBounds.MinY;
 		}
 		else if (contentBounds.IsEmpty && _options.AutoFitToContent)
 		{
-			// No content and no fixed paper size: emit a blank A4 page (matches the SVG
-			// renderer's "empty document" behaviour of an empty <svg>).
+			// No content, no fixed paper size: blank A4 (matches the SVG renderer's
+			// empty-document fallback).
 			pageWidthMm = HasPaperSize(page) ? page.Size.WidthMm : PaperSize.A4.WidthMm;
 			pageHeightMm = HasPaperSize(page) ? page.Size.HeightMm : PaperSize.A4.HeightMm;
 			translateX = 0;
@@ -171,10 +164,9 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		_pageTranslateYMm = translateY;
 		_pendingLinks = _options.EmitHyperlinks ? new List<(BoundingBox, string)>() : null;
 
-		// Phase 10a: build Form XObjects for every reachable SymbolDefinition with an Id,
-		// before the page graphics is opened. PdfSharpCore reuses Form XObjects when the
-		// same XForm instance is drawn multiple times, so the underlying PDF resource is
-		// emitted once per definition.
+		// Built before the page graphics opens. PdfSharpCore reuses a Form XObject when the
+		// same XForm instance is drawn multiple times, so each definition's PDF resource is
+		// emitted once.
 		_symbolForms = BuildSymbolForms(pdf, page.Content);
 
 		_gfx = XGraphics.FromPdfPage(pdfPage, XGraphicsUnit.Millimeter);
@@ -184,7 +176,6 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		_gfx.TranslateTransform(0, pageHeightMm);
 		_gfx.ScaleTransform(1, -1);
 
-		// Auto-fit translate to position content with padding.
 		if (translateX != 0 || translateY != 0) _gfx.TranslateTransform(translateX, translateY);
 
 		page.Content?.Accept(this);
@@ -192,9 +183,9 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		_gfx.Dispose();
 		_gfx = null;
 
-		// Attach link annotations after the visitor finishes — by now the page's MediaBox
-		// is fixed and PdfPage.AddWebLink can resolve coordinates correctly. Link rects in
-		// PDF user space (points, Y up from page bottom-left).
+		// Attach after the visitor finishes: the page's MediaBox is fixed by now, so
+		// PdfPage.AddWebLink can resolve coordinates (PDF user space, points, Y up from
+		// page bottom-left).
 		if (_pendingLinks != null && _pendingLinks.Count > 0)
 		{
 			foreach (var link in _pendingLinks) AddWebLink(pdfPage, link.WorldBoundsMm, link.Url);
@@ -238,14 +229,12 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		if (metadata.ModifiedAt.HasValue) pdf.Info.ModificationDate = metadata.ModifiedAt.Value;
 	}
 
-	// Phase 9: build the navigation outline. One top-level entry per Page, named after
-	// Page.Title (or "Page N" when blank). Sub-entries for any DrawingView with a Caption,
-	// giving multi-view sheets a sensible navigable tree.
+	// One top-level outline entry per Page, named after Page.Title (or "Page N" when
+	// blank), with sub-entries for any DrawingView that has a Caption.
 	private static void ApplyOutlines(PdfDocument pdf, Document document, IReadOnlyList<PdfPage> pdfPages)
 	{
 		if (pdfPages == null || pdfPages.Count == 0) return;
-		// We only have outlines for pages that have a corresponding model Page — when the
-		// document had zero pages we synthesised a blank page; skip outlines in that case.
+		// A zero-page document gets a synthesised blank page with no model Page to name.
 		if (document.Pages.Count == 0) return;
 
 		var n = Math.Min(document.Pages.Count, pdfPages.Count);
@@ -345,7 +334,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	}
 
 	// ============================================================================
-	// Symbol dedupe (Phase 10a)
+	// Symbol dedupe
 	// ============================================================================
 
 	private Dictionary<string, SymbolFormCache> BuildSymbolForms(PdfDocument pdf, DrawElement root)
@@ -543,10 +532,9 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			horizontalAnchor: style.HorizontalAnchor,
 			verticalAnchor: style.VerticalAnchor);
 
-		// Phase 9: capture clickable hyperlink rect. We use ComputeBounds() over MeasuredBounds
-		// when available — falls back to FontMetrics-based bounds. Rotated text gets an
-		// axis-aligned bounding box; tight rotation isn't supported by PDF /Link annotations
-		// (which only carry a rect, not a quadpoints array).
+		// ComputeBounds() uses MeasuredBounds when set, else falls back to FontMetrics.
+		// Rotated text still gets an axis-aligned box: PDF /Link annotations only carry a
+		// rect, not a quadpoints array, so tight rotation isn't representable anyway.
 		if (_pendingLinks != null && !string.IsNullOrEmpty(element.Hyperlink))
 		{
 			var bounds = TransformBox(element.ComputeBounds(), _modelTransform);
@@ -556,8 +544,8 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 	public void Visit(TextBlockElement element)
 	{
-		// Phase 5 stub matching SvgRenderer: render as a single-line at the box's top-left.
-		// Layout-aware wrapping ships in Phase 7 (TextFlow).
+		// Single-line at the box's top-left, matching SvgRenderer. Layout-aware wrapping
+		// is TextFlow's job, not this.
 		if (element == null) return;
 		var style = element.Style ?? new TextStyle();
 		DrawText(
@@ -709,10 +697,9 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	{
 		if (element?.Definition == null) return;
 
-		// Phase 10a: when the definition has an Id and a cached Form XObject, draw the
-		// shared form rather than re-emitting children. PdfSharpCore reuses the underlying
-		// PDF resource across DrawImage calls. Anonymous definitions (no Id) keep the
-		// inline expansion that's been the behaviour since Phase 5.
+		// When the definition has an Id and a cached Form XObject, draw the shared form
+		// instead of re-emitting children — PdfSharpCore reuses the underlying PDF resource
+		// across DrawImage calls. Anonymous definitions (no Id) always inline-expand.
 		var def = element.Definition;
 		if (!string.IsNullOrEmpty(def.Id)
 			&& _symbolForms != null
@@ -728,13 +715,10 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 				if (hasTransform) _gfx.MultiplyTransform(ToXMatrix(element.Transform), XMatrixOrder.Prepend);
 			}
 
-			// The form's bottom-left in form-local coords corresponds to (bounds.MinX,
-			// bounds.MinY) in symbol-local coords. We want the symbol's natural origin
-			// (0,0) — i.e. the point a child at (0,0) would draw to under inline expansion
-			// — to land at (Position.X + transform·0, Position.Y + transform·0). The
-			// translate/transform above handles Position+transform; here we shift by
-			// (bounds.MinX, bounds.MinY) so the form's bottom-left aligns with symbol-local
-			// (bounds.MinX, bounds.MinY), preserving the same visual placement as inline.
+			// The form's bottom-left in form-local coords is symbol-local (bounds.MinX,
+			// bounds.MinY). Drawing at that offset (rather than at 0,0) puts the symbol's
+			// natural origin where inline expansion would have put it, so cached and inline
+			// draws land at the same spot.
 			_gfx.DrawImage(cache.Form, cache.Bounds.MinX, cache.Bounds.MinY,
 				cache.WidthMm, cache.HeightMm);
 
@@ -1094,8 +1078,6 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			case TextAnchor.Right: xOffset = -width; break;
 		}
 
-		// Mirror DrawText's baseline placement for the style's vertical anchor (raw metrics,
-		// before line-height inflation — same values DrawText reads).
 		double yBaseline;
 		switch (style.VerticalAnchor)
 		{
@@ -1155,14 +1137,9 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			case TextAnchor.Right: xOffset = -measured.Width; break;
 		}
 
-		// PdfSharpCore's DrawString places the *baseline* relative to the (x,y) when using
-		// XStringFormats.BaseLineLeft. Vertical anchor mapping:
-		//   Baseline → y=0 (default)
-		//   Middle   → y=0 - midline shift (cap/2-ish)
-		//   Top      → y=0 - ascent
-		//   Bottom   → y=0 + descent
-		// We use ascent/descent from FontMetrics so the result matches SVG's
-		// dominant-baseline=middle when verticalAnchor=Middle.
+		// XStringFormats.BaseLineLeft places the baseline at (x,y); yOffset shifts that
+		// baseline per anchor using FontMetrics ascent/descent, matching SVG's
+		// dominant-baseline=middle for verticalAnchor=Middle.
 		double yOffset = 0;
 		switch (verticalAnchor)
 		{
@@ -1263,11 +1240,9 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var theta = angleDegrees * Math.PI / 180.0;
 		var ux = Math.Cos(theta);
 		var uy = Math.Sin(theta);
-		// Perpendicular axis along which we sweep.
-		var px = -uy;
+		var px = -uy; // perpendicular sweep axis
 		var py = ux;
 
-		// Project all four bbox corners onto the sweep axis to get the parameter range.
 		var corners = new[]
 		{
 			(bounds.MinX, bounds.MinY),

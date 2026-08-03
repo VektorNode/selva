@@ -8,11 +8,9 @@ using Selva.GH.Properties;
 namespace Selva.GH.Features.FileIO.Params;
 
 /// <summary>
-///     Standalone canvas parameter that holds FileDataGoo values.
-///     Implements ISelvaFileOutput so the schema scanner detects it as a file output
-///     without needing a ContextBakeComponent in between.
-///     Usage: wire from GH_DataToFile / GH_BlockToFile (or any ISelvaFileOutput component),
-///     or from external sources. The Selva UI picks this up as a downloadable file output.
+///     Standalone canvas parameter holding FileDataGoo values. Implements ISelvaFileOutput
+///     so the schema scanner detects it as a file output without a ContextBake in between.
+///     Wire it from GH_DataToFileGeneric / GH_BlockToFile or any other ISelvaFileOutput source.
 /// </summary>
 public class Param_FileData : GH_PersistentParam<FileDataGoo>, ISelvaFileOutput
 {
@@ -34,7 +32,6 @@ public class Param_FileData : GH_PersistentParam<FileDataGoo>, ISelvaFileOutput
 
     protected override GH_GetterResult Prompt_Singular(ref FileDataGoo value)
     {
-        // No interactive picker for file data — values come from wired sources only
         return GH_GetterResult.cancel;
     }
 

@@ -6,10 +6,9 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Rendering;
 
-// Phase 10a: assert the structural contract of symbol dedupe — one <symbol> per
-// unique Id regardless of instance count, and each instance emits a <use href="#id">
-// rather than an inline copy of the children. The pinned snapshot covers byte-level
-// stability; this file documents *why* the output looks that way.
+// Asserts the structural contract of symbol dedupe: one <symbol> per unique Id
+// regardless of instance count, with each instance emitting <use href="#id"> rather
+// than an inline copy of the children.
 public class SvgSymbolDedupeTests
 {
 	private static readonly SymbolDefinition Triangle = new SymbolDefinition
@@ -82,8 +81,7 @@ public class SvgSymbolDedupeTests
 	[Fact]
 	public void Same_id_with_same_definition_does_not_throw()
 	{
-		// Reusing the same SymbolDefinition reference multiple times is the common case
-		// — that's the whole point of dedupe and must not be flagged as a collision.
+		// Reusing the same SymbolDefinition reference is the common case, not a collision.
 		var svg = Render(new[]
 		{
 			new SymbolElement { Definition = Triangle, Position = new Point2D(0, 0) },

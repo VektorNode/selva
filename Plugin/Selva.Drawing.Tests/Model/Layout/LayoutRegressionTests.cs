@@ -9,16 +9,16 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Model.Layout;
 
-// Regressions for the "unpredictable layout" bug batch: force-place pagination, per-axis
-// layout constraints, body token substitution, stripe parity, and empty-child spacing.
+// Regressions covering force-place pagination, per-axis layout constraints, body token
+// substitution, stripe parity, and empty-child spacing.
 public class LayoutRegressionTests
 {
 	[Fact]
 	public void Oversize_first_stack_child_force_places_and_pagination_continues()
 	{
-		// Page content height 10mm. First child is 30mm tall (never fits), second is 4mm.
-		// The oversize child gets its own page and the second child still gets paginated —
-		// previously the whole remaining stack was dumped onto one page and pagination stopped.
+		// Page content height 10mm. First child is 30mm (never fits), second is 4mm — the
+		// oversize child gets its own page and the second still paginates. Previously the
+		// whole remaining stack dumped onto one page and pagination stopped.
 		var stack = new Stack
 		{
 			Children = new DrawElement[] { Rect(5, 30), Rect(5, 4) },
@@ -68,7 +68,7 @@ public class LayoutRegressionTests
 	public void Stack_skips_spacing_for_empty_children()
 	{
 		// An empty group occupies no space, so it must not consume a spacing slot either —
-		// previously the content floated Spacing mm away from the stack's declared extent.
+		// previously the content floated Spacing mm past the stack's declared extent.
 		var stack = new Stack
 		{
 			Spacing = 5,
@@ -81,9 +81,9 @@ public class LayoutRegressionTests
 	[Fact]
 	public void DrawingView_in_vertical_stack_fits_to_width_only()
 	{
-		// Tall geometry (50×100) in a 50mm-wide stack: the stack's main axis is unbounded,
-		// so the view fits width (scale 1.0 → height 100). Previously the stack handed
-		// children a fictitious 50×50 square and the view shrank to half size.
+		// Tall geometry (50×100) in a 50mm-wide stack: the main axis is unbounded, so the
+		// view fits width (scale 1.0 → height 100). Previously the stack handed children a
+		// fictitious 50×50 square and the view shrank to half size.
 		var view = new DrawingView
 		{
 			Geometry = Rect(50, 100),
@@ -100,7 +100,7 @@ public class LayoutRegressionTests
 	public void Frame_sizes_around_the_constrained_child_it_renders()
 	{
 		// Auto-fit view in a 50×50 context resolves to 50×50; the frame must measure that
-		// same constrained subtree, not the unconstrained natural size (100×100).
+		// constrained subtree, not the unconstrained natural size (100×100).
 		var frame = new Frame
 		{
 			Child = new DrawingView { Geometry = Rect(100, 100), Padding = Margins.Zero },

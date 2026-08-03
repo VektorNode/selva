@@ -5,12 +5,9 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing.Tests.Model;
 
-// Two purposes here:
-// 1. Compile-time: implementing IElementVisitor without missing a method means every
-//    element kind in the model has a visitor slot. If anyone adds a new element later
-//    without extending the visitor, this file stops compiling — that's the safety net
-//    the plan calls out under "visitor pattern with compiler-enforced completeness."
-// 2. Run-time: each Accept(visitor) must dispatch to the matching Visit(...) overload.
+// RecordingVisitor implements IElementVisitor exhaustively, so adding an element kind
+// without a matching Visit overload breaks the build. The theory below then checks that
+// Accept actually routes to that overload at runtime.
 public class VisitorDispatchTests
 {
 	private sealed class RecordingVisitor : IElementVisitor

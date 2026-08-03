@@ -4,10 +4,9 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing.Model.Elements;
 
-// Reusable symbol definition: a self-contained subtree that the renderer emits once
-// (as SVG <symbol> / PDF Form XObject) and instances many times. Carrying the children
-// directly in the definition lets bounds work without a separate symbol registry; the
-// renderer dedupes on Definition.Id when emitting.
+// Reusable symbol definition: a self-contained subtree the renderer emits once
+// (as SVG <symbol> / PDF Form XObject) and instances many times. Children live directly
+// on the definition so bounds work without a separate symbol registry.
 public sealed class SymbolDefinition
 {
 	public string Id { get; init; }
@@ -15,8 +14,8 @@ public sealed class SymbolDefinition
 	public BoundingBox? ViewBox { get; init; }
 }
 
-// Instance of a SymbolDefinition. Phase 10 wires the renderer-side dedupe; until then
-// renderers can simply expand each instance inline.
+// Instance of a SymbolDefinition. Renderers may expand it inline or dedupe on
+// Definition.Id — both are valid until dedupe is wired in.
 public sealed class SymbolElement : DrawElement
 {
 	public SymbolDefinition Definition { get; init; }

@@ -17,10 +17,8 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.ComputeIO.Components;
 
-/// <summary>
-///     A contextual parameter that captures value list data including all options and the selected default.
-///     The connected GH_ValueList is the single source of truth - data is read directly from it.
-/// </summary>
+// Captures value list data (options + selected default) as a contextual parameter. The connected
+// GH_ValueList is the single source of truth — data is read directly from it, never cached.
 public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_ContextualParameter
 {
     private Guid _connectedValueListGuid = Guid.Empty;
@@ -43,9 +41,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
     public bool TreeAccess { get; set; }
 
-    /// <summary>
-    ///     Gets the connected ValueList (single source of truth)
-    /// </summary>
     private GH_ValueList ConnectedValueList
     {
         get
@@ -75,23 +70,14 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         }
     }
 
-    /// <summary>
-    ///     All available items - always read directly from connected ValueList
-    /// </summary>
     public IReadOnlyList<GH_ValueListItem> ListItems => ConnectedValueList?.ListItems ??
                                                         (IReadOnlyList<GH_ValueListItem>)Array
                                                             .Empty<GH_ValueListItem>();
 
-    /// <summary>
-    ///     Currently selected items - always read directly from connected ValueList
-    /// </summary>
     public IReadOnlyList<GH_ValueListItem> SelectedItems => ConnectedValueList?.SelectedItems ??
                                                             (IReadOnlyList<GH_ValueListItem>)
                                                             Array.Empty<GH_ValueListItem>();
 
-    /// <summary>
-    ///     Index of the first selected item
-    /// </summary>
     public int SelectedIndex
     {
         get
@@ -106,9 +92,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         }
     }
 
-    /// <summary>
-    ///     Values dictionary for Rhino Compute serialization
-    /// </summary>
     [JsonProperty("values")]
     public Dictionary<string, string> Values
     {
@@ -130,11 +113,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     public int AtMost { get; set; } = 1;
     public bool Immediate { get; set; } = true;
 
-    /// <summary>
-    ///     Enable list/multi-select mode. When true the parameter exposes selected items as a list
-    ///     and AtMost is raised so the underlying ValueList accepts multiple selections.
-    ///     Driven by the schema's `displayAs: 'checklist'` flag and persisted in the GH file.
-    /// </summary>
+    // AtMost is raised to allow multiple selections in list mode, restored to 1 when switching back.
     public void SetListAccess(bool listAccess)
     {
         Access = listAccess ? GH_ParamAccess.list : GH_ParamAccess.item;
@@ -175,11 +154,9 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
                 continue;
             }
 
-            // Find matching index
             var matchIndex = FindMatchingIndex(stringValue);
             var selectedIndex = matchIndex >= 0 ? matchIndex : currentSelectedIndex;
 
-            // Use the expression (not the input string) when a match is found
             var expressionValue = matchIndex >= 0 && matchIndex < items.Count
                 ? items[matchIndex].Expression
                 : stringValue;
@@ -189,7 +166,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
         _contextual = list.ToArray();
 
-        // Also update the ValueList selection if connected
         var vl = ConnectedValueList;
         if (vl != null && _contextual.Length > 0)
         {
@@ -213,9 +189,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     }
 
 
-    /// <summary>
-    ///     Gets the default (selected) value
-    /// </summary>
     public string GetDefaultValue()
     {
         var vl = ConnectedValueList;
@@ -233,12 +206,8 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         return string.Empty;
     }
 
-    /// <summary>
-    ///     Selects multiple items on the connected ValueList by name (or expression).
-    ///     Used for checklist (multi-select) mode. Switches the ValueList into CheckList mode
-    ///     so all matched items can be co-selected, then triggers expire.
-    ///     Returns true if at least one item matched.
-    /// </summary>
+    // Checklist (multi-select) mode: switches the ValueList into CheckList so all matched
+    // items can be co-selected at once, then expires. Returns true if anything matched.
     public bool SelectItemsByName(IEnumerable<string> values)
     {
         var vl = ConnectedValueList;
@@ -255,7 +224,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
         Action apply = () =>
         {
-            // CheckList mode lets the value list hold multiple selections concurrently.
             vl.ListMode = GH_ValueListMode.CheckList;
 
             var matched = false;
@@ -285,17 +253,12 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
             apply();
         }
 
-        // Best-effort: report success if any requested value matched at least one option.
         return vl.ListItems.Any(li =>
             requested.Contains(li.Name) || requested.Contains(li.Expression));
     }
 
-    /// <summary>
-    ///     Selects an item by its name (key). Returns true if found and selected.
-    ///     Primary format: name/key (e.g., "Cylinder")
-    ///     Also accepts expression values (e.g., "1") for Rhino.Compute compatibility
-    ///     Note: Does NOT call ExpireSolution - caller is responsible for triggering solution
-    /// </summary>
+    // Matches by name (e.g. "Cylinder") or by expression (e.g. "1", for Rhino.Compute
+    // compatibility). Does not call ExpireSolution — the caller triggers the solution.
     public bool SelectItemByName(string value)
     {
         var vl = ConnectedValueList;
@@ -305,19 +268,17 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         }
 
         for (var i = 0; i < vl.ListItems.Count; i++)
-            // Match by name (primary) OR expression (Compute compatibility)
         {
             if (vl.ListItems[i].Name == value || vl.ListItems[i].Expression == value)
             {
                 var index = i;
-                // SelectItem accesses UI controls - must run on UI thread
+                // SelectItem touches UI controls, so it must run on the UI thread.
                 try
                 {
                     RhinoApp.InvokeOnUiThread(new Action(() => vl.SelectItem(index)));
                 }
                 catch
                 {
-                    // Fallback if RhinoApp.InvokeOnUiThread fails
                     vl.SelectItem(index);
                 }
 
@@ -334,24 +295,18 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         _contextualDataTree = null;
     }
 
-    /// <summary>
-    ///     Assigns contextual data as a tree structure for multi-branch data.
-    /// </summary>
     public void AssignContextualDataTree(DataTree<GH_ValueListDataGoo> data)
     {
         _contextualDataTree = data;
         ExpireSolution(false);
     }
 
-    /// <summary>
-    ///     Sets a single string value directly - for use from Rhino Compute via reflection.
-    ///     Call this instead of AssignContextualData when you only have strings.
-    /// </summary>
+    // Called from Rhino Compute via reflection when only a plain string is available
+    // (AssignContextualData needs richer objects).
     public void SetValue(string value)
     {
         var items = GetItemTuples();
         var matchIndex = FindMatchingIndex(value);
-        // Use the expression (not the input string) when a match is found
         var expressionValue = matchIndex >= 0 && matchIndex < items.Count
             ? items[matchIndex].Expression
             : value;
@@ -359,10 +314,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         ExpireSolution(false);
     }
 
-    /// <summary>
-    ///     Sets multiple string values directly - for use from Rhino Compute via reflection.
-    ///     Call this instead of AssignContextualData when you only have strings.
-    /// </summary>
+    // Same as SetValue, for multiple values.
     public void SetValues(IEnumerable<string> values)
     {
         var items = GetItemTuples();
@@ -371,7 +323,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         foreach (var value in values)
         {
             var matchIndex = FindMatchingIndex(value);
-            // Use the expression (not the input string) when a match is found
             var expressionValue = matchIndex >= 0 && matchIndex < items.Count
                 ? items[matchIndex].Expression
                 : value;
@@ -382,18 +333,12 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         ExpireSolution(false);
     }
 
-    /// <summary>
-    ///     Populates the stored items from a name→expression dictionary.
-    ///     Call this before SetValues in Rhino Compute where no GH_ValueList is connected.
-    /// </summary>
+    // Call before SetValues/SetValue when solving via Rhino Compute, where no GH_ValueList is connected.
     public void LoadItems(Dictionary<string, string> options)
     {
         _storedItems = options.Select(kvp => (kvp.Key, kvp.Value)).ToList();
     }
 
-    /// <summary>
-    ///     Returns contextual data formatted for JSON serialization
-    /// </summary>
     public JObject GetContextualJson()
     {
         return new JObject
@@ -410,7 +355,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
     protected override void CollectVolatileData_FromSources()
     {
-        // Handle contextual array if present (from AssignContextualData)
         if (_contextual != null)
         {
             m_data.Clear();
@@ -418,7 +362,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
             return;
         }
 
-        // Handle contextual data tree if present
         if (_contextualDataTree != null)
         {
             m_data.Clear();
@@ -441,13 +384,11 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         {
             if (source is GH_ValueList vl)
             {
-                // Track the connected ValueList
                 if (_connectedValueListGuid != vl.InstanceGuid)
                 {
                     _connectedValueListGuid = vl.InstanceGuid;
                 }
 
-                // Build data directly from the ValueList's current state
                 var items = GetItemTuples();
                 var selectedData = new List<GH_ValueListDataGoo>();
 
@@ -464,7 +405,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
             }
             else
             {
-                // Handle non-ValueList sources by matching against our items
                 ProcessGenericSource(source);
             }
         }
@@ -498,7 +438,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
                 }
 
                 var matchIndex = FindMatchingIndex(stringValue);
-                // Use the expression (not the input string) when a match is found
                 var expressionValue = matchIndex >= 0 && matchIndex < items.Count
                     ? items[matchIndex].Expression
                     : stringValue;
@@ -525,7 +464,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
     private int FindMatchingIndex(string value)
     {
-        // Always prefer live ValueList items — also refreshes _storedItems as a side effect
+        // GetItemTuples refreshes _storedItems from the live ValueList as a side effect.
         var items = GetItemTuples();
         for (var i = 0; i < items.Count; i++)
         {
@@ -563,7 +502,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         writer.SetBoolean("Immediate", Immediate);
         writer.SetString("ConnectedValueListGuid", _connectedValueListGuid.ToString());
 
-        // Store items for Compute scenarios - refresh from ValueList if connected
         var items = GetItemTuples();
         var itemsJson = new JArray();
         foreach (var item in items)
@@ -638,7 +576,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
             }
             catch
             {
-                // Ignore parse errors
             }
         }
 

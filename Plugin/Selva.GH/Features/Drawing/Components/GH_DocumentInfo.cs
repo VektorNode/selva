@@ -7,11 +7,6 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Defines the shared {token} values for a document — the reusable "header file" / project
-// parameters. Wire the output into a Document's Info input; every header, footer, title block,
-// and body text then resolves {project}, {client}, {rev}, … from this one source. Define it
-// once and feed the same value into multiple Grasshopper files for unified output.
-//
 // Keys and Values are paired by index. A key with no matching value resolves to an empty
 // string. Keys are case-insensitive ({Project} and {project} both match).
 public class GH_DocumentInfo : GH_Component

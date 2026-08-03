@@ -2,14 +2,8 @@ using Selva.Schema.Models;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
-/// <summary>
-///     Formats status messages for UI Builder component
-/// </summary>
 public static class ComponentMessageFormatter
 {
-    /// <summary>
-    ///     Create the Info output message showing session status
-    /// </summary>
     public static string CreateInfoMessage(string sessionId, bool isEnabled, UISchema schema, bool isConnected,
         bool isHeadless = false)
     {
@@ -48,9 +42,6 @@ public static class ComponentMessageFormatter
             : $"Session: {sessionId}\nStatus: {status}\nNo schema yet\nSet Enable to true to start";
     }
 
-    /// <summary>
-    ///     Create the component display message (shown on canvas)
-    /// </summary>
     public static string CreateDisplayMessage(bool isEnabled, bool isConnected, UISchema schema, string sessionId)
     {
         if (!isEnabled)
@@ -66,9 +57,6 @@ public static class ComponentMessageFormatter
         return $"Ready • {sessionId}";
     }
 
-    /// <summary>
-    ///     Create error message for a specific context
-    /// </summary>
     public static string CreateErrorInfoMessage(string context)
     {
         return $"ERROR: {context}";

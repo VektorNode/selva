@@ -4,10 +4,9 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Import.Svg;
 
-// Parses the SVG/CSS color forms we can represent: #rgb, #rrggbb, #rrggbbaa, rgb()/rgba(),
-// 'none', 'transparent', and a small set of common named colors. Unknown names fall back to
-// Color.Named so they survive into the renderer untouched. 'none' is signalled via the
-// HasColor=false result so callers can distinguish "no fill" from "black fill".
+// Parses SVG/CSS color forms: #rgb, #rrggbb, #rrggbbaa, rgb()/rgba(), 'none', 'transparent',
+// and common named colors. 'none' returns false so callers can tell "no fill" from "black fill";
+// unknown names fall back to Color.Named so they survive into the renderer untouched.
 internal static class SvgColorParser
 {
     public static bool TryParse(string value, out Color color)
@@ -43,7 +42,7 @@ internal static class SvgColorParser
         var h = v.TrimStart('#');
         try
         {
-            // #rgb / #rgba shorthand → expand each nibble.
+            // #rgb / #rgba shorthand: expand each nibble.
             if (h.Length == 3 || h.Length == 4)
             {
                 var r = (byte)(HexNibble(h[0]) * 17);

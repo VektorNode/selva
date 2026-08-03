@@ -11,10 +11,9 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Display.Components;
 
-// Diagnostics-only: wire the Display component's "Web Display" output in to read the payload size.
-// Reports the binary geometry blob in bytes (what actually drives transport cost) plus the JSON
-// items size and vertex/triangle totals. Hidden from the toolbar — it exists for tuning, not for
-// production graphs. Place it with a panel to watch how meshing settings affect payload weight.
+// Diagnostics-only: wire a Display component's Web Display output in to see payload size — the
+// binary mesh blob (what actually drives transport cost), JSON items size, and vertex/triangle
+// totals. Hidden from the toolbar; not meant for production graphs.
 public class GH_DisplaySize : GH_Component
 {
     public GH_DisplaySize()
@@ -55,7 +54,7 @@ public class GH_DisplaySize : GH_Component
         }
 
         var blobBytes = batch.CompressedData?.Length ?? 0;
-        // Items travel as JSON alongside the blob; measure their UTF-8 size the same way they ship.
+        // Items travel as JSON alongside the blob — measure UTF-8 size, matching how they ship.
         var itemBytes = batch.Items != null && batch.Items.Count > 0
             ? System.Text.Encoding.UTF8.GetByteCount(JsonConvert.SerializeObject(batch.Items))
             : 0;
@@ -63,8 +62,6 @@ public class GH_DisplaySize : GH_Component
 
         var (vertices, indices) = CountGeometry(batch);
 
-        // The mesh blob is the actual on-wire size (gzip-compressed when the plugin found it
-        // worthwhile — see BlobCompressor), so this reflects what the client downloads.
         var compressed = batch.CompressedData != null && batch.CompressedData.Length >= 4 &&
                          BitConverter.ToUInt32(batch.CompressedData, 0) == BlobCompressor.CompressedMagic;
         var meshLabel = compressed ? $"{FormatBytes(blobBytes)} mesh, compressed" : $"{FormatBytes(blobBytes)} mesh";
@@ -90,7 +87,7 @@ public class GH_DisplaySize : GH_Component
             return wd.Value;
         }
 
-        // Fall back to a JSON cast (e.g. when the value arrived as a string through compute/file IO).
+        // Fall back to a JSON cast — e.g. the value arrived as a string via compute/file IO.
         var batchGoo = new WebDisplayGoo();
         return batchGoo.CastFrom(goo) ? batchGoo.Value : null;
     }

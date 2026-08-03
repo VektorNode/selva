@@ -5,10 +5,7 @@ using Selva.Schema.Services;
 
 namespace Selva.Tests;
 
-/// <summary>
-///     Unit tests for specific SchemaMigrator behaviours that are NOT covered by SchemaFixtureTests.
-///     Round-trip / golden-fixture coverage lives in SchemaFixtureTests instead.
-/// </summary>
+// Round-trip / golden-fixture coverage lives in SchemaFixtureTests; these cover the rest.
 public class SchemaMigratorTests
 {
     // -------------------------------------------------------------------------
@@ -18,7 +15,7 @@ public class SchemaMigratorTests
     [Fact]
     public void MigrateJson_LegacyFlatLayout_CollapsesTabsIntoGroups()
     {
-        // v1 flat layout stored groups inside a tabs array; migration must flatten it
+        // v1 flat layout stored groups inside a tabs array.
         var json = JObject.Parse("""
                                  {
                                  	"schemaVersion": "1.0.0",
@@ -76,7 +73,6 @@ public class SchemaMigratorTests
     [Fact]
     public void MigrateJson_RenamesInputSourceKinds_FlatLayout()
     {
-        // 2.9.0 renamed source.kind values: external -> client, bound -> server.
         var json = JObject.Parse("""
                                  {
                                  	"schemaVersion": "2.8.0",
@@ -102,7 +98,7 @@ public class SchemaMigratorTests
         Assert.NotNull(items);
         Assert.Equal("client", items[0]["source"]?["kind"]?.ToString());
         Assert.Equal("server", items[1]["source"]?["kind"]?.ToString());
-        // 2.10.0 unified the address: 'path' folds into 'key' and 'path' is dropped.
+        // 'path' folds into 'key' and is dropped.
         Assert.Equal("segment.outline", items[1]["source"]?["key"]?.ToString());
         Assert.Null(items[1]["source"]?["path"]);
         // 'user' and source-less items are untouched.
@@ -195,13 +191,9 @@ public class SchemaMigratorTests
     }
 
     // -------------------------------------------------------------------------
-    // MigrateJson — hostile input (audit Q5.8)
-    //
-    // `schemaVersion` comes off disk, from a .gh file that may be corrupt or
-    // hand-edited, so every value below is reachable without a malicious actor.
-    // The contract: a bad version is an IncompatibleSchemaException (which
-    // SchemaArchiveSerializer already renders as "Incompatible schema: …"),
-    // never a raw parse exception leaking out of the migrator.
+    // MigrateJson — malformed schemaVersion (reachable from a hand-edited or
+    // corrupt .gh file, no malicious actor needed). Contract: always an
+    // IncompatibleSchemaException, never a raw parse exception.
     // -------------------------------------------------------------------------
 
     [Theory]
@@ -222,17 +214,15 @@ public class SchemaMigratorTests
         };
 
         var ex = Assert.Throws<IncompatibleSchemaException>(() => SchemaMigrator.MigrateJson(json));
-        // The message must name the offending value — an operator staring at a
-        // failed file load needs to know WHICH version string was rejected.
+        // Message must name the offending value so an operator can tell which one failed.
         Assert.Contains(versionStr.Trim().Length > 0 ? versionStr : "", ex.Message);
     }
 
     [Fact]
     public void MigrateJson_MissingSchemaVersion_TreatedAsLegacy_1_0_0()
     {
-        // The absent-version case is legitimate (pre-versioning schemas) and must
-        // keep working — it is the reason the malformed cases can't simply be
-        // lumped in with "no version".
+        // Pre-versioning schemas legitimately have no version — distinct from the
+        // malformed cases above, which must still throw.
         var json = new JObject { ["layout"] = new JObject { ["type"] = "flat" } };
 
         var migrated = SchemaMigrator.MigrateJson(json);
@@ -258,9 +248,8 @@ public class SchemaMigratorTests
     [Fact]
     public void MigrateJson_FutureSchemaVersion_IsLeftAlone()
     {
-        // A schema newer than this plugin isn't malformed — MigrateJson has no
-        // migration to apply, so it must pass through rather than throw. (The
-        // version-compatibility verdict belongs to ValidateCompatibility.)
+        // Newer-than-this-plugin isn't malformed: no migration applies, so it passes
+        // through. Compatibility verdicts belong to ValidateCompatibility, not here.
         var json = new JObject
         {
             ["schemaVersion"] = "99.0.0",

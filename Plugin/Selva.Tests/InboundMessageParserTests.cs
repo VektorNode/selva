@@ -6,8 +6,7 @@ namespace Selva.Tests;
 
 /// <summary>
 ///     Tests for InboundMessageParser — the pure parse/classify half of the WebSocket inbound path.
-///     No sockets, no Rhino. Each test pins one branch of the wire contract that used to be checkable
-///     only on a live canvas. Mirrors the inbound message types guarded on the TS side in
+///     No sockets, no Rhino. Mirrors the inbound message types guarded on the TS side in
 ///     messageSchemas.ts.
 /// </summary>
 public class InboundMessageParserTests
@@ -71,7 +70,8 @@ public class InboundMessageParserTests
     [Fact]
     public void RequestInitialData_IsExemptFromSessionCheck()
     {
-        // A mismatched (or absent) session id must still establish the session.
+        // Mismatched or absent session id still establishes the session — this is the message
+        // that bootstraps a fresh client, so there's no prior session to check against yet.
         var msg = Parse(@"{ ""type"": ""requestInitialData"", ""sessionId"": ""some-other-session"" }");
         Assert.Equal(InboundKind.RequestInitialData, msg.Kind);
     }
@@ -95,7 +95,6 @@ public class InboundMessageParserTests
     [Fact]
     public void SaveSchema_MissingBaseHash_IsTolerated()
     {
-        // The conflict check tolerates a null/empty base hash; parsing must not reject it.
         var msg = Parse(@"{ ""type"": ""saveSchema"", ""sessionId"": ""session-1"",
                            ""schema"": { ""id"": ""s1"", ""name"": ""S1"" } }");
 
@@ -148,7 +147,7 @@ public class InboundMessageParserTests
     }
 
     // -------------------------------------------------------------------------
-    // Session, unknown, malformed — the historically-silent failure paths
+    // Session, unknown, malformed
     // -------------------------------------------------------------------------
 
     [Fact]

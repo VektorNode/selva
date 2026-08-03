@@ -13,9 +13,6 @@ using Selva.GH.Config;
 
 namespace Selva.GH.Features.FileIO.Services;
 
-/// <summary>
-///     Centralizes file import logic for multiple file formats.
-/// </summary>
 public static class FileImporter
 {
     private static readonly int MAX_FILE_SIZE_BYTES = AppConfig.ValueLimits.MaxFileSizeBytes;
@@ -25,9 +22,6 @@ public static class FileImporter
         Timeout = TimeSpan.FromSeconds(60)
     };
 
-    /// <summary>
-    ///     Imports a file from path or base64 data.
-    /// </summary>
     public static (bool Success, List<GeometryWithName> Geometry, string DetectedFormat, string ErrorMessage)
         ImportFromFileInputData(FileInputData fileData)
     {
@@ -42,7 +36,6 @@ public static class FileImporter
         var deleteAfterImport = false;
         try
         {
-            // Resolve to local file path based on input type
             switch (fileData.Type?.ToLowerInvariant())
             {
                 case "base64":
@@ -91,9 +84,6 @@ public static class FileImporter
         }
     }
 
-    /// <summary>
-    ///     Imports geometry from a file path. Detects format from extension.
-    /// </summary>
     public static (bool Success, List<GeometryWithName> Geometry, string DetectedFormat, string ErrorMessage)
         ImportFile(string filePath)
     {
@@ -107,7 +97,6 @@ public static class FileImporter
             return (false, new List<GeometryWithName>(), "", $"File not found: {filePath}");
         }
 
-        // Check file size
         var fileInfo = new FileInfo(filePath);
         if (fileInfo.Length > MAX_FILE_SIZE_BYTES)
         {
@@ -117,7 +106,6 @@ public static class FileImporter
 
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
 
-        // Create headless Rhino document for import
         var doc = RhinoDoc.CreateHeadless(null);
         if (doc == null)
         {
@@ -128,7 +116,6 @@ public static class FileImporter
         {
             bool importSuccess;
 
-            // Route to appropriate import method based on extension
             switch (extension)
             {
                 case ".3dm":
@@ -163,7 +150,6 @@ public static class FileImporter
                     $"Failed to import file with extension {extension}");
             }
 
-            // Extract geometry with metadata
             var geometryList = ExtractGeometryFromDocument(doc);
 
             return (true, geometryList, extension, "");
@@ -178,9 +164,6 @@ public static class FileImporter
         }
     }
 
-    /// <summary>
-    ///     Decodes base64 data to a temp file.
-    /// </summary>
     public static (bool Success, string TempPath, string ErrorMessage) DecodeBase64ToTemp(string base64Data,
         string fileEnding)
     {
@@ -191,13 +174,13 @@ public static class FileImporter
                 return (false, null, "Base64 data is empty");
             }
 
-            // Validate base64 length to prevent DoS
-            if (base64Data.Length > MAX_FILE_SIZE_BYTES * 2) // Base64 is ~1.37x larger
+            // Reject oversized input before decoding — base64 is ~1.37x the decoded size, so this
+            // cap must exceed MAX_FILE_SIZE_BYTES or valid files get rejected here first.
+            if (base64Data.Length > MAX_FILE_SIZE_BYTES * 2)
             {
                 return (false, null, "Base64 data too large");
             }
 
-            // Validate and sanitize file extension
             var extension = !string.IsNullOrEmpty(fileEnding) ? fileEnding : ".tmp";
             if (!IsAllowedExtension(extension, out var extensionError))
             {
@@ -206,14 +189,12 @@ public static class FileImporter
 
             var bytes = Convert.FromBase64String(base64Data);
 
-            // Check file size
             if (bytes.Length > MAX_FILE_SIZE_BYTES)
             {
                 return (false, null,
                     $"Decoded file too large: {bytes.Length / 1024 / 1024}MB (max {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)");
             }
 
-            // Use secure temp file name
             var tempPath = Path.Combine(Path.GetTempPath(), $"selva_base64_{Guid.NewGuid():N}{extension}");
 
             File.WriteAllBytes(tempPath, bytes);
@@ -231,8 +212,8 @@ public static class FileImporter
     }
 
     /// <summary>
-    ///     Downloads a file from an http(s) URL to a temp file, enforcing the same size
-    ///     and extension limits as base64 input.
+    ///     Downloads an http(s) URL to a temp file, enforcing the same size and extension
+    ///     limits as base64 input.
     /// </summary>
     public static (bool Success, string TempPath, string ErrorMessage) DownloadUrlToTemp(string url,
         string fileEnding)
@@ -260,8 +241,8 @@ public static class FileImporter
             var (client, ownsClient) = CreatePinnedClient(resolvedAddresses);
             try
             {
-                // HttpClient methods are async-only on net48; blocking is safe here because
-                // HttpClient internals use ConfigureAwait(false) throughout.
+                // net48 has no sync HttpClient API; blocking here is safe since HttpClient
+                // internals use ConfigureAwait(false) throughout.
                 using var response = client
                     .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead)
                     .GetAwaiter().GetResult();
@@ -324,10 +305,9 @@ public static class FileImporter
     }
 
     /// <summary>
-    ///     Returns an HttpClient for the download. On net7+ it pins outgoing connections to
-    ///     the already-validated IPs so a DNS rebind between validation and fetch cannot
-    ///     redirect the request to an internal host. On net48 (no ConnectCallback) it falls
-    ///     back to the shared client — validate-then-fetch, leaving a narrow rebind window.
+    ///     On net7+ pins outgoing connections to the already-validated IPs, so a DNS rebind
+    ///     between validation and fetch can't redirect the request to an internal host. net48
+    ///     has no ConnectCallback, so it falls back to the shared client with a narrow rebind window.
     /// </summary>
     private static (HttpClient client, bool ownsClient) CreatePinnedClient(IPAddress[] resolvedAddresses)
     {
@@ -382,8 +362,7 @@ public static class FileImporter
 #endif
 
     /// <summary>
-    ///     Validates a file extension against the schema-driven allowlist and rejects
-    ///     path-traversal characters.
+    ///     Checks the extension against the schema-driven allowlist and rejects path-traversal characters.
     /// </summary>
     private static bool IsAllowedExtension(string extension, out string errorMessage)
     {
@@ -410,9 +389,6 @@ public static class FileImporter
         return true;
     }
 
-    /// <summary>
-    ///     Import .3dm file.
-    /// </summary>
     private static bool Import3dm(string filePath, RhinoDoc doc)
     {
         try
@@ -425,9 +401,6 @@ public static class FileImporter
         }
     }
 
-    /// <summary>
-    ///     Import STEP file (.stp, .step).
-    /// </summary>
     private static bool ImportStep(string filePath, RhinoDoc doc)
     {
         try
@@ -484,9 +457,6 @@ public static class FileImporter
         }
     }
 
-    /// <summary>
-    ///     Generic import
-    /// </summary>
     private static bool ImportGeneric(string filePath, RhinoDoc doc)
     {
         try
@@ -499,9 +469,6 @@ public static class FileImporter
         }
     }
 
-    /// <summary>
-    ///     Extracts all geometry from a RhinoDoc, preserving block and layer metadata.
-    /// </summary>
     private static List<GeometryWithName> ExtractGeometryFromDocument(RhinoDoc doc)
     {
         var geometryList = new List<GeometryWithName>();
@@ -539,7 +506,8 @@ public static class FileImporter
     }
 
     /// <summary>
-    ///     Recursively explodes block instances, preserving hierarchy and transformations.
+    ///     Recursively flattens nested block instances into world-space geometry, composing
+    ///     transforms down the hierarchy and naming each piece "Outer::Inner".
     /// </summary>
     private static List<GeometryWithName> ExplodeInstanceRecursive(RhinoDoc doc,
         InstanceReferenceGeometry instanceRef,
@@ -630,9 +598,6 @@ public static class FileImporter
         return geometryList;
     }
 
-    /// <summary>
-    ///     Represents geometry with associated block and layer metadata.
-    /// </summary>
     public class GeometryWithName
     {
         public GeometryWithName(GeometryBase geometry, string blockName, string layerName = "")

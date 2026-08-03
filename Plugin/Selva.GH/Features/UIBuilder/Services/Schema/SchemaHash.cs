@@ -10,31 +10,24 @@ using Selva.Schema.Models;
 namespace Selva.GH.Features.UIBuilder.Services.Schema;
 
 /// <summary>
-///     Content hash of a UISchema. Used for save-conflict detection between the
-///     UI's last-seen canonical and the server's current canonical.
+///     Content hash of a UISchema, for save-conflict detection between the UI's last-seen
+///     canonical and the server's current canonical.
 ///
-///     The hash is computed by serializing the schema to JSON with object keys
-///     recursively sorted, then SHA-256 of the UTF-8 bytes. Sorting keys makes
-///     the hash stable across serializer key ordering, which Newtonsoft does
-///     not guarantee for anonymous objects or dictionaries.
-///
-///     The root-level "created" / "lastModified" timestamps are excluded: they are
-///     metadata, not schema content, and both default to DateTime.UtcNow and get bumped
-///     on disk save and on migration. Including them made the hash non-reproducible across
-///     persistence boundaries and could spuriously reject saves. The hash is content-only.
+///     Serializes the schema to JSON with object keys recursively sorted, then SHA-256 of the
+///     UTF-8 bytes. Sorting keys makes the hash stable across serializer key ordering, which
+///     Newtonsoft does not guarantee for anonymous objects or dictionaries.
 /// </summary>
 public static class SchemaHash
 {
-    // Root-level UISchema metadata fields (JSON property names) that must not affect the content hash.
+    // "created"/"lastModified" are metadata, not content: both get bumped on disk save and on
+    // migration, so including them would make the hash non-reproducible across persistence
+    // boundaries and could spuriously reject saves.
     private static readonly string[] ExcludedRootKeys = { "created", "lastModified" };
 
     private static readonly JsonSerializerSettings HashSerializerSettings = new JsonSerializerSettings
     {
         NullValueHandling = NullValueHandling.Ignore,
         DefaultValueHandling = DefaultValueHandling.Ignore,
-        // Newtonsoft has no built-in converter for System.Drawing.Color and serializes it as a
-        // POCO — which on Mono/macOS yields a null property name and throws ArgumentNullException
-        // ('key'). Any stray Color in the schema must serialize to a hex string instead.
         Converters = { new ColorHexConverter() }
     };
 
@@ -62,9 +55,9 @@ public static class SchemaHash
     }
 
     /// <summary>
-    ///     Serializes System.Drawing.Color as a hex string (e.g. "#FF5733"). Read-only: the hash
-    ///     path never deserializes. Guards against Newtonsoft's default Color handling, which throws
-    ///     a null-key ArgumentNullException on Mono/macOS.
+    ///     Serializes System.Drawing.Color as a hex string (e.g. "#FF5733"). Newtonsoft has no
+    ///     built-in converter for Color and falls back to serializing it as a POCO, which on
+    ///     Mono/macOS yields a null property name and throws ArgumentNullException.
     /// </summary>
     private sealed class ColorHexConverter : JsonConverter<Color>
     {

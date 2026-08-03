@@ -5,8 +5,8 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Tests.Rendering;
 
-// Phase 3 contract: the dimension builders return a populated DimensionElement (or null
-// for degenerate input). The renderer is responsible for the actual lines/arrows/text.
+// Dimension builders return a populated DimensionElement, or null for degenerate input.
+// The renderer handles the actual lines/arrows/text.
 public class BuilderPipelineTests
 {
 	[Fact]
@@ -47,7 +47,7 @@ public class BuilderPipelineTests
 	[Fact]
 	public void AngularDimensionBuilder_rejects_collinear_arms()
 	{
-		// vertex(0,0) -> A(10,0) and vertex(0,0) -> B(20,0) point the same direction.
+		// Both arms point the same direction from the vertex.
 		var element = AngularDimensionBuilder.Build(0, 0, 10, 0, 20, 0, null, new DimensionStyle());
 		Assert.Null(element);
 	}
@@ -55,7 +55,7 @@ public class BuilderPipelineTests
 	[Fact]
 	public void AngularDimensionBuilder_rejects_degenerate_arm()
 	{
-		// Arm A length zero.
+		// Arm A has zero length.
 		var element = AngularDimensionBuilder.Build(0, 0, 0, 0, 10, 10, null, new DimensionStyle());
 		Assert.Null(element);
 	}

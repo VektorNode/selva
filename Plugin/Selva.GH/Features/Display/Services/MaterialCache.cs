@@ -3,24 +3,16 @@ using System.Collections.Generic;
 
 namespace Selva.GH.Features.Display.Services;
 
-/// <summary>
-///     Manages material deduplication by caching unique materials and assigning IDs.
-/// </summary>
+/// <summary>Dedupes materials, assigning each unique one an ID.</summary>
 public class MaterialCache
 {
     private readonly List<ThreeMaterial> _materials = new List<ThreeMaterial>();
     private readonly Dictionary<MaterialKey, int> _materialToId = new Dictionary<MaterialKey, int>();
     private int _nextId;
 
-    /// <summary>
-    ///     Gets the total number of unique materials.
-    /// </summary>
     public int Count => _materials.Count;
 
-    /// <summary>
-    ///     Gets or creates a material ID for the given material properties.
-    ///     If an identical material already exists, returns its ID.
-    /// </summary>
+    /// <summary>Returns the existing ID for an identical material, or assigns a new one.</summary>
     public int GetMaterialId(ThreeMaterial material)
     {
         var key = GetMaterialKey(material);
@@ -36,27 +28,20 @@ public class MaterialCache
         return newId;
     }
 
-    /// <summary>
-    ///     Gets all unique materials.
-    /// </summary>
     public List<ThreeMaterial> GetAllMaterials()
     {
         return _materials;
     }
 
-    /// <summary>
-    ///     Creates a unique key for a material based on its properties.
-    /// </summary>
     private static MaterialKey GetMaterialKey(ThreeMaterial material)
     {
         return new MaterialKey(material);
     }
 
     /// <summary>
-    ///     Value key over the identity-relevant material properties. This runs once per mesh in the
-    ///     batch loop, so it must not allocate — the previous string key ($"{argb}|{F3}|…") paid an
-    ///     interpolated string plus three double.ToString calls per mesh. Scalars are rounded to
-    ///     3 decimals, matching the F3 formatting the string key deduped by. Map must participate
+    ///     Key over the identity-relevant material properties. Runs once per mesh in the batch
+    ///     loop, so it must not allocate — a prior string key paid an interpolated string plus
+    ///     three double.ToString calls per mesh. Scalars round to 3 decimals; Map must participate
     ///     or two materials differing only by texture would dedupe into one.
     /// </summary>
     private readonly struct MaterialKey : IEquatable<MaterialKey>

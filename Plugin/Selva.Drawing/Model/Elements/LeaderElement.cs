@@ -7,9 +7,8 @@ namespace Selva.Drawing.Model.Elements;
 
 public enum LeaderHead { Arrow, Dot, None }
 
-// Pointer line + label. Points define the leader polyline (typically 2 or 3 vertices —
-// arrow tip, optional knee, text anchor). The label is rendered as a TextElement-style
-// run anchored at the last point.
+// Pointer line + label. Points are the leader polyline (typically 2 or 3 vertices —
+// arrow tip, optional knee, text anchor), with the label anchored at the last point.
 public sealed class LeaderElement : DrawElement
 {
 	public IReadOnlyList<Point2D> Points { get; init; } = Array.Empty<Point2D>();
@@ -29,8 +28,7 @@ public sealed class LeaderElement : DrawElement
 	{
 		var b = BoundingBox.Empty;
 		foreach (var p in Points) b = b.Union(p);
-		// Inflate a touch for the head and text — Phase 4 will give us real text metrics
-		// to do this precisely.
+		// Rough padding for the head and text; not real glyph metrics.
 		var pad = Math.Max(HeadSize, (TextStyle?.FontSize ?? 0) * (Text?.Length ?? 0) * 0.55);
 		return b.IsEmpty ? b : b.Inflate(pad, (TextStyle?.FontSize ?? 0) * 0.6);
 	}

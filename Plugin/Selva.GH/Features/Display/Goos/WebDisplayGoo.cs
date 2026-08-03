@@ -10,19 +10,13 @@ using Selva.GH.Features.Display.Services;
 namespace Selva.GH.Features.Display.Goos;
 
 /// <summary>
-///     Grasshopper Goo wrapper for WebDisplay data to prevent double JSON encoding.
+///     Grasshopper Goo wrapper for a <see cref="DisplayBatch" />.
 ///
 ///     Derives from <see cref="GH_GeometricGoo{T}" /> (not plain <see cref="GH_Goo{T}" />) so the
 ///     dedicated <c>Param_WebDisplay</c> can derive from <c>GH_PersistentGeometryParam</c> and get
 ///     Grasshopper's native param preview — a plain persistent param's IGH_PreviewObject draw methods
-///     are never invoked by GH. Implements <see cref="IGH_PreviewData" /> to actually draw; the
-///     drawable geometry is reconstructed from the encoded batch (the Goo carries only the quantized
-///     blob + JSON items) and cached on first draw.
-///
-///     The batch is baked display data, not live Rhino geometry, but the geometric-goo
-///     transform/morph operations still relocate it: <see cref="DisplayBatchTransformer" /> decodes
-///     the blob, moves the vertices and curve/point items, and re-encodes a new batch, so
-///     Move/Rotate/Scale/Orient behave as expected on a Web Display wire.
+///     are never invoked by GH. Implements <see cref="IGH_PreviewData" /> to draw; the drawable
+///     geometry is reconstructed from the encoded batch and cached on first draw.
 /// </summary>
 public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGoo, IGH_PreviewData
 {
@@ -290,8 +284,8 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
     public override object ScriptVariable()
     {
-        // Return the JSON string directly for script access
-        // This prevents double-encoding when accessed via GHPython or file I/O
+        // Returns the JSON string directly, not a re-wrapped object — otherwise GHPython/file I/O
+        // would serialize it a second time on top.
         return JsonConvert.SerializeObject(Value);
     }
 

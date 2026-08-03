@@ -74,30 +74,19 @@ public static class BinaryGeometryWriter
 
     public const uint FlagFloat32 = 0x1;
 
-    /// <summary>
-    ///     Bit 1 of the flags word: when set, indices are uint16 instead of uint32. Used when the
-    ///     batch's total vertex count fits in 16 bits (≤ 65535), which halves the index payload —
-    ///     usually the largest part of the blob for unwelded brep meshes.
-    /// </summary>
+    /// <summary>Bit 1: indices are uint16 instead of uint32 (halves the index payload).</summary>
     public const uint FlagUint16Indices = 0x2;
 
     /// <summary>
-    ///     Bit 2 of the flags word: when set, int16 vertices and the index stream are delta+zigzag
-    ///     filtered (see the class remarks). Always set by the v3 writer; the flag exists so decoders
-    ///     handle pre-v3 blobs (persisted .gh params, DMF files) through the same read path.
+    ///     Bit 2: vertices/indices are delta+zigzag filtered. Always set by the v3 writer; exists so
+    ///     decoders handle pre-v3 blobs (persisted .gh params, DMF files) through the same read path.
     /// </summary>
     public const uint FlagDeltaEncoded = 0x4;
 
-    /// <summary>
-    ///     Bit 3 of the flags word: a UV chunk follows the index block (see the class remarks).
-    ///     Absent flag = absent chunk = byte-identical blob to a UV-less write.
-    /// </summary>
+    /// <summary>Bit 3: a UV chunk follows the index block.</summary>
     public const uint FlagHasUvs = 0x8;
 
-    /// <summary>
-    ///     Bit 4 of the flags word: a vertex-color chunk follows the index block (after the UV
-    ///     chunk when both are present). Absent flag = absent chunk.
-    /// </summary>
+    /// <summary>Bit 4: a vertex-color chunk follows the index block (after UVs, if both present).</summary>
     public const uint FlagHasVertexColors = 0x10;
 
     /// <summary>uvFormat value: uint16 quantized UVs (origin/scale reconstruct the range).</summary>

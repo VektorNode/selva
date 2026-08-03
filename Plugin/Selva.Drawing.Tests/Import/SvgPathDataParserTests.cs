@@ -6,16 +6,14 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Import;
 
-// SvgPathDataParser is internal; reached here via InternalsVisibleTo? No — Import namespace is
-// internal-typed. These tests live in the same assembly only if IVT is set; if not, they go
-// through SvgImporter. We test via SvgImporter to keep the parser internal.
+// Goes through SvgImporter rather than calling the internal SvgPathDataParser directly,
+// so these tests don't need to change if the parser's internal shape changes.
 public class SvgPathDataParserTests
 {
     private static Path ParseViaImporter(string d)
     {
         var svg = $"<svg width='100' height='100'><path d='{d}'/></svg>";
         var el = new SvgImporter().Import(svg);
-        // GroupElement(Y-flip) → PathElement
         return FindPath(el)!;
     }
 
@@ -62,7 +60,6 @@ public class SvgPathDataParserTests
     [Fact]
     public void Implicit_repeated_lineto_after_moveto()
     {
-        // "M 0 0 1 1 2 2" = moveto then two implicit linetos.
         var path = ParseViaImporter("M 0 0 1 1 2 2");
         Assert.Equal(3, path.Count);
         Assert.IsType<PathSegment.MoveTo>(path[0]);
@@ -76,7 +73,7 @@ public class SvgPathDataParserTests
         var path = ParseViaImporter("M 0 0 C 1 1 2 1 3 0 S 5 -1 6 0");
         Assert.IsType<PathSegment.CubicTo>(path[1]);
         var smooth = Assert.IsType<PathSegment.CubicTo>(path[2]);
-        // S reflects the previous control (2,1) about current point (3,0) → (4,-1).
+        // S reflects the previous control point (2,1) about the current point (3,0) -> (4,-1).
         Assert.Equal(new Point2D(4, -1), smooth.Control1);
     }
 
@@ -108,7 +105,6 @@ public class SvgPathDataParserTests
     [Fact]
     public void Negative_and_packed_numbers()
     {
-        // Numbers can be packed without separators: "10-5" = 10, -5.
         var path = ParseViaImporter("M0 0L10-5");
         Assert.Equal(new Point2D(10, -5), ((PathSegment.LineTo)path[1]).To);
     }

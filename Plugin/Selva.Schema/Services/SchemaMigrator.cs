@@ -12,14 +12,10 @@ namespace Selva.Schema.Services;
 /// </summary>
 public static class SchemaMigrator
 {
-    /// <summary>
-    ///     Current version of the plugin's schema format.
-    ///     This is now a reference to the centralized version constant.
-    /// </summary>
     [Obsolete("Use SchemaVersion.CURRENT instead", false)]
     public static readonly Version CURRENT_SCHEMA_VERSION = SchemaVersion.CURRENT;
 
-    // Migration registry: maps version -> migration function
+    // Maps version -> migration function
     private static readonly Dictionary<Version, Func<UISchema, UISchema>> _migrations =
         new Dictionary<Version, Func<UISchema, UISchema>>
         {
@@ -37,23 +33,20 @@ public static class SchemaMigrator
         };
 
     /// <summary>
-    ///     Pre-deserialization migration for structural changes that cannot be handled by the C# model
+    ///     Migrates raw JSON before deserialization, for structural changes the C# model can't handle on its own.
     /// </summary>
     public static JObject MigrateJson(JObject json)
     {
         var versionStr = json["schemaVersion"]?.Value<string>();
-        // Handle legacy schemas without version
         if (string.IsNullOrEmpty(versionStr))
         {
             versionStr = "1.0.0";
             json["schemaVersion"] = versionStr;
         }
 
-        // Guard the parse: `schemaVersion` is untrusted input (it arrives from a
-        // .gh file that may be hand-edited or corrupt), and a bare Version.Parse
-        // throws FormatException/ArgumentException/OverflowException depending on
-        // the garbage. Mirror ValidateCompatibility and surface the same
-        // IncompatibleSchemaException, which callers already translate into a
+        // `schemaVersion` comes from a .gh file that may be hand-edited or corrupt, so
+        // a bare Version.Parse can throw Format/Argument/OverflowException. Wrap it in
+        // IncompatibleSchemaException (same as ValidateCompatibility) so callers get a
         // clear "Incompatible schema" message instead of a raw parse failure.
         Version version;
         try
@@ -68,15 +61,14 @@ public static class SchemaMigrator
 
         if (version < SchemaVersion.CURRENT)
         {
-            // Migration to current version:
             var layout = json["layout"] as JObject;
             if (layout != null)
             {
-                // 1. Ensure 'type' discriminator exists (required for v2 polymorphism)
+                // v1 layouts have no 'type' discriminator; infer it from structure
+                // (v2 needs it for polymorphism).
                 var type = layout["type"]?.Value<string>();
                 if (string.IsNullOrEmpty(type))
                 {
-                    // Infer type from structure or default to tabbed (v1 default)
                     if (layout["tabs"] != null)
                     {
                         type = "tabbed";
@@ -87,13 +79,13 @@ public static class SchemaMigrator
                     }
                     else
                     {
-                        type = "tabbed"; // Default
+                        type = "tabbed";
                     }
 
                     layout["type"] = type;
                 }
 
-                // 2. Handle Flat Layout structural change (tabs -> groups)
+                // Flat layout used to nest groups under tabs; flatten tabs[].groups[] into groups[].
                 if (type == "flat")
                 {
                     var tabs = layout["tabs"] as JArray;
@@ -118,21 +110,8 @@ public static class SchemaMigrator
                 }
             }
 
-            // 3. Rename input-source kinds (2.9.0): 'external' -> 'client',
-            //    'bound' -> 'server'. The values were renamed to describe WHO
-            //    supplies the value rather than the mechanism. This is a string
-            //    rewrite so it must run pre-deserialization — the typed enum no
-            //    longer accepts the old spellings.
             RenameInputSourceKinds(json);
-
-            // 4. Unify the input-source address field (2.10.0): the separate
-            //    'path' (server) and short-lived 'producer' (client) fields
-            //    collapse into one opaque 'key'. Fold either spelling into 'key'
-            //    and drop the server-only 'onMissing'. Runs pre-deserialization
-            //    because the typed model no longer has the old fields.
             UnifyInputSourceKey(json);
-
-            // Update version
             json["schemaVersion"] = SchemaVersion.CURRENT_STRING;
         }
 
@@ -140,10 +119,9 @@ public static class SchemaMigrator
     }
 
     /// <summary>
-    ///     Rewrite legacy `source.kind` values on every layout item in place.
-    ///     Walks both tabbed (tabs[].groups[].items[]) and flat
-    ///     (groups[].items[]) layouts. No-op for items without a source or
-    ///     with an already-current kind.
+    ///     Renames legacy `source.kind` values ('external' -> 'client', 'bound' ->
+    ///     'server') on every layout item, in both tabbed and flat layouts. Runs
+    ///     pre-deserialization: the typed enum no longer accepts the old spellings.
     /// </summary>
     private static void RenameInputSourceKinds(JObject json)
     {
@@ -176,10 +154,10 @@ public static class SchemaMigrator
     }
 
     /// <summary>
-    ///     Collapse the old per-side address fields on `source` into one `key`:
-    ///     server `path` and the short-lived client `producer` both become
-    ///     `key`; the server-only `onMissing` is dropped. In-place, both layout
-    ///     shapes. No-op for sources that already use `key` or have none.
+    ///     Collapses the old per-side address fields on `source` into one `key`:
+    ///     server `path` and the short-lived client `producer` both become `key`;
+    ///     the server-only `onMissing` is dropped. Runs pre-deserialization: the
+    ///     typed model no longer has the old fields.
     /// </summary>
     private static void UnifyInputSourceKey(JObject json)
     {
@@ -200,8 +178,6 @@ public static class SchemaMigrator
             {
                 if (item["source"] is not JObject source) continue;
 
-                // Fold legacy address fields into `key` (prefer an existing key,
-                // then path, then producer). Then strip the obsolete fields.
                 if (source["key"] == null)
                 {
                     var legacy = source["path"]?.Value<string>()
@@ -220,7 +196,7 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.0.0";
 
-        // Name field removed in 2.0.0 - now only using nickname
+        // Name field removed - nickname is now the only label.
 
         return schema;
     }
@@ -229,8 +205,8 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.3.0";
 
-        // inputStructure added in 2.3.0 - defaults to "item" for all existing inputs
-        // No explicit migration needed; the C# model defaults to "item" on deserialization.
+        // inputStructure added; the C# model defaults it to "item" on deserialization,
+        // so no explicit migration is needed here.
 
         return schema;
     }
@@ -239,8 +215,7 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.4.0";
 
-        // OutputChartLayoutItem added in 2.4.0 - fully backward-compatible addition.
-        // No data transformation needed; existing schemas without chart outputs load unchanged.
+        // OutputChartLayoutItem added - backward-compatible, no data transform needed.
 
         return schema;
     }
@@ -249,8 +224,7 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.5.0";
 
-        // LineBreakLayoutItem added in 2.5.0 - fully backward-compatible addition.
-        // No data transformation needed; existing schemas load unchanged.
+        // LineBreakLayoutItem added - backward-compatible, no data transform needed.
 
         return schema;
     }
@@ -259,10 +233,9 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.6.0";
 
-        // 2.6.0 additions (all backward-compatible):
-        // - DropdownWidgetConfig.displayAs ('dropdown' | 'checklist'); existing dropdowns
-        //   default to 'dropdown' on deserialization.
-        // - VisibilityRule.operator gains 'contains', 'containsAny', 'isEmpty', 'isNotEmpty'.
+        // DropdownWidgetConfig.displayAs ('dropdown' | 'checklist') added, defaults to
+        // 'dropdown'. VisibilityRule.operator gains 'contains', 'containsAny',
+        // 'isEmpty', 'isNotEmpty'.
 
         return schema;
     }
@@ -271,10 +244,8 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.7.0";
 
-        // 2.7.0 additions (all backward-compatible):
-        // - OutputImageLayoutItem (widgetType: "image") and ImageWidgetConfig for
-        //   rendering image files (PNG/JPG/WEBP/GIF/SVG) inline. Existing schemas
-        //   without image widgets load unchanged.
+        // OutputImageLayoutItem (widgetType: "image") and ImageWidgetConfig added, for
+        // rendering PNG/JPG/WEBP/GIF/SVG inline.
 
         return schema;
     }
@@ -283,11 +254,10 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.8.0";
 
-        // 2.8.0 additions (all backward-compatible):
-        // - LayoutItemBase.source ({ kind: 'user' | 'external' }) signals where an
-        //   input's value comes from. Absent / kind='user' = normal control behavior.
-        //   kind='external' = filled by something outside the form (e.g. a producer
-        //   route writing to sessionStorage). Existing schemas load unchanged.
+        // LayoutItemBase.source ({ kind: 'user' | 'external' }) added: signals where an
+        // input's value comes from. Absent or kind='user' is normal control behavior;
+        // kind='external' means something outside the form fills it (e.g. a producer
+        // route writing to sessionStorage).
 
         return schema;
     }
@@ -296,15 +266,13 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.9.0";
 
-        // 2.9.0 additions (all backward-compatible):
-        // - InputSource.kind values renamed to describe WHO supplies the value:
-        //   'external' -> 'client', 'bound' -> 'server'. The string rewrite runs
-        //   in MigrateJson (RenameInputSourceKinds) before deserialization.
-        // - kind='server' gains optional 'path' and 'onMissing' fields. Server
-        //   inputs are resolved server-side at solve time via the host's
-        //   IBindingResolver and are not rendered by the form. 'onMissing'
-        //   defaults to 'fail' so an unresolved value errors the solve loudly
-        //   rather than silently falling back to a default.
+        // InputSource.kind renamed to describe WHO supplies the value: 'external' ->
+        // 'client', 'bound' -> 'server' (string rewrite happens pre-deserialization in
+        // MigrateJson/RenameInputSourceKinds). kind='server' gains optional 'path' and
+        // 'onMissing': server inputs resolve server-side at solve time via the host's
+        // IBindingResolver and aren't rendered by the form. 'onMissing' defaults to
+        // 'fail' so an unresolved value errors the solve loudly instead of silently
+        // falling back to a default.
 
         return schema;
     }
@@ -313,14 +281,11 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.10.0";
 
-        // 2.10.0 (InputSource address unified):
-        // - The separate 'path' (server) and short-lived 'producer' (client)
-        //   fields collapse into ONE opaque 'key', interpreted by the host per
-        //   'kind' (client → which producer app; server → what to fetch). The
-        //   server-only 'onMissing' is dropped. The fold + cleanup runs in
-        //   MigrateJson (UnifyInputSourceKey) pre-deserialization, so any saved
-        //   2.9.0 'path'/'producer' carries over into 'key'. Existing 'user'
-        //   inputs and sources already using 'key' load unchanged.
+        // The separate 'path' (server) and short-lived 'producer' (client) fields
+        // collapse into one opaque 'key', interpreted by the host per 'kind' (client:
+        // which producer app; server: what to fetch). 'onMissing' is dropped. The fold
+        // runs pre-deserialization in MigrateJson/UnifyInputSourceKey, so a saved
+        // 2.9.0 'path'/'producer' carries over into 'key'.
 
         return schema;
     }
@@ -329,13 +294,10 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.11.0";
 
-        // 2.11.0 additions (all backward-compatible):
-        // - 'dynamicValueList' added to GrasshopperParamType, plus
-        //   InputDynamicValueListLayoutItem / OutputDynamicValueListLayoutItem and
-        //   their configs. A dynamic value list input's options are populated at
-        //   runtime from a dynamic value list output that targets it (by
-        //   targetInputId). Existing schemas without dynamic value lists load
-        //   unchanged.
+        // 'dynamicValueList' added to GrasshopperParamType, plus
+        // InputDynamicValueListLayoutItem / OutputDynamicValueListLayoutItem and their
+        // configs. A dynamic value list input's options populate at runtime from a
+        // dynamic value list output that targets it (by targetInputId).
 
         return schema;
     }
@@ -344,27 +306,20 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
 
-        // 2.12.0: 'schemaVersion' is now REQUIRED on UISchema (backward-compatible
-        // in practice — the C# model has always emitted it via its initializer, and
-        // this migrator stamps it on every legacy schema). Made required so the web
-        // side can treat a stored schema's version as authoritative for its
-        // migrate-on-read (re-extract from compute) staleness check.
+        // 'schemaVersion' is now required on UISchema - in practice backward-compatible,
+        // since the C# model has always emitted it and this migrator stamps it onto
+        // every legacy schema. Made required so the web side can treat a stored
+        // schema's version as authoritative for its migrate-on-read staleness check.
 
         return schema;
     }
 
-    /// <summary>
-    ///     Migrate schema to current version
-    /// </summary>
     public static UISchema MigrateToCurrentVersion(UISchema schema, Version currentPluginVersion)
     {
         var (migratedSchema, _) = MigrateWithTracking(schema, currentPluginVersion);
         return migratedSchema;
     }
 
-    /// <summary>
-    ///     Migrate schema to current version with change tracking
-    /// </summary>
     public static (UISchema Schema, List<string> Changes) MigrateWithTracking(UISchema schema,
         Version currentPluginVersion)
     {
@@ -375,7 +330,6 @@ public static class SchemaMigrator
 
         var changes = new List<string>();
 
-        // Handle legacy schemas without version
         if (string.IsNullOrEmpty(schema.SchemaVersion))
         {
             schema.SchemaVersion = "1.0.0";
@@ -393,7 +347,6 @@ public static class SchemaMigrator
                 $"Invalid schema version format '{schema.SchemaVersion}': {ex.Message}");
         }
 
-        // Validate minimum plugin version compatibility
         if (!string.IsNullOrEmpty(schema.MinPluginVersion))
         {
             Version minVersion;
@@ -414,7 +367,6 @@ public static class SchemaMigrator
             }
         }
 
-        // No migration needed if already at current version
         if (schemaVersion >= SchemaVersion.CURRENT)
         {
             return (schema, changes);
@@ -423,7 +375,6 @@ public static class SchemaMigrator
         var migratedSchema = schema;
         var migrationPath = GetMigrationPath(schemaVersion, SchemaVersion.CURRENT);
 
-        // Apply migrations in order
         foreach (var targetVersion in migrationPath)
         {
             if (_migrations.TryGetValue(targetVersion, out var migration))

@@ -3,8 +3,8 @@ using System.Collections.Generic;
 
 namespace Selva.Drawing.Model;
 
-// PDF /Info dictionary equivalent. Author/Title/Subject/Keywords map directly to PDF
-// metadata fields; SVG renderer surfaces Title in <title> and the rest as <metadata> RDF.
+// PDF /Info dictionary equivalent. The SVG renderer surfaces Title as <title> and the
+// rest as <metadata> RDF.
 public sealed class DocumentMetadata
 {
 	public string Title { get; init; }

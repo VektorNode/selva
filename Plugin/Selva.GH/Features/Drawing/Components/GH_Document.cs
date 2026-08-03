@@ -12,23 +12,17 @@ using Selva.Drawing.RhinoInterop;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Owns the document-wide metadata (Title/Author/...) and drives pagination + token resolution
-// across every section. Section overrides win for that section's pages; everything else
-// inherits from the document defaults — built-in (A4, 10mm, Left, Margin placement) unless a
-// Layout Override is wired in.
-//
-// Page numbering is global: a document with two sections of 2 + 3 pages reads "1/5"…"5/5".
-//
-// Header / Footer accept any DrawElement. TextElement / TextBlockElement nodes inside them
-// can use tokens — built-ins {page}, {pages}, {section}, {title}, {date} (or {date:fmt}).
+// Section overrides win for that section's pages; everything else inherits the document
+// defaults (A4, 10mm, Left, Margin placement) unless a Layout Override is wired in.
+// Page numbering is global: two sections of 2 + 3 pages read "1/5"…"5/5".
 public class GH_Document : GH_Component
 {
     private List<Page> _previewPages;
     private List<DrawElement> _previewContents;
     private BoundingBox _clippingBox = BoundingBox.Empty;
 
-    // Stamped once per component instance so identical inputs produce identical Documents
-    // across recomputes — DateTime.UtcNow per solve made every recompute a "new" file.
+    // Stamped once per instance so identical inputs produce identical Documents across
+    // recomputes — DateTime.UtcNow per solve made every recompute a "new" file.
     private readonly DateTime _createdAt = DateTime.UtcNow;
 
     private const double TileGapMm = 20.0;
@@ -177,8 +171,8 @@ public class GH_Document : GH_Component
 
     private void BuildPreview(IReadOnlyList<Page> pages)
     {
-        // Accumulate across solve instances (a list of titles makes one document per
-        // instance) — assignment here would leave only the last document's pages visible.
+        // Accumulate rather than assign — assignment would leave only the last document's
+        // pages visible.
         _previewPages ??= new List<Page>();
         _previewContents ??= new List<DrawElement>();
         foreach (var p in pages)
@@ -190,8 +184,8 @@ public class GH_Document : GH_Component
         _clippingBox = ComputeClippingBox(_previewPages);
     }
 
-    // Surface what the pagination pass actually reserved so the user has a visible signal
-    // instead of guessing whether 0 / -1 / a positive number did what they expected.
+    // Surfaces what pagination actually reserved, so the user isn't guessing whether
+    // 0 / -1 / a positive height did what they expected.
     private void EmitChromeReservationRemark(LayoutOverride overrides)
     {
         if (overrides.Header == null && overrides.Footer == null) return;
@@ -210,8 +204,8 @@ public class GH_Document : GH_Component
         return $"{measured:0.##} mm (auto)";
     }
 
-    // The chrome's Origin is overwritten by AnchorChrome — surface this instead of letting
-    // users wonder why their carefully positioned header block snapped somewhere else.
+    // AnchorChrome overwrites the element's Origin; warn instead of leaving users to wonder
+    // why a carefully positioned header block snapped somewhere else.
     private void WarnIfChromeHasOrigin(DrawElement element, string slot)
     {
         if (element == null) return;
@@ -287,8 +281,8 @@ public class GH_Document : GH_Component
         }
     }
 
-    // Everything (wires, text, shaded fills) is drawn in the wires pass — repeating it in
-    // the mesh pass doubled preview cost and composited transparent fills twice.
+    // Wires, text, and shaded fills all draw in the wires pass; repeating in the mesh pass
+    // doubled preview cost and composited transparent fills twice.
     public override void DrawViewportMeshes(IGH_PreviewArgs args) { }
 
     private static BoundingBox ComputeClippingBox(IReadOnlyList<Page> pages)
@@ -310,8 +304,7 @@ public class GH_Document : GH_Component
 
     private static string NullIfEmpty(string s) => string.IsNullOrEmpty(s) ? null : s;
 
-    // Parses the Culture code (e.g. "de-DE") used for {date} month / day names. Empty/invalid
-    // falls back to invariant (English); the caller warns on an unrecognised code.
+    // Empty or invalid code falls back to invariant (English); warns on an unrecognised code.
     private System.Globalization.CultureInfo ResolveCulture(string code)
     {
         if (string.IsNullOrWhiteSpace(code)) return System.Globalization.CultureInfo.InvariantCulture;

@@ -10,10 +10,10 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Model.Layout;
 
-// Degenerate-input regressions from the 2026-07-27 layout audit. Every case here is a value the
-// layout treated as "absent" or "unbounded" when it actually meant "none": an infinite budget, a
-// collapsed content rect, and a zero-extent geometry. Each produced silent off-sheet or NaN
-// output rather than an exception, so only an assertion on the numbers catches them.
+// Every case here is a value the layout treated as "absent" or "unbounded" when it actually meant
+// "none": an infinite budget, a collapsed content rect, a zero-extent geometry. Each produced
+// silent off-sheet or NaN output rather than an exception, so only an assertion on the numbers
+// catches them.
 public class DegenerateInputTests
 {
 	// ========================================================================================
@@ -23,8 +23,8 @@ public class DegenerateInputTests
 	[Fact]
 	public void TextFlow_split_with_infinite_budget_fits_everything()
 	{
-		// (int)Math.Floor(+Infinity / lineHeight) is int.MinValue, which read as "nothing fits"
-		// and made a KeepTogether section emit one line per page.
+		// (int)Math.Floor(+Infinity / lineHeight) is int.MinValue, read as "nothing fits" — that
+		// made a KeepTogether section emit one line per page.
 		var flow = LongFlow(40);
 		var context = new LayoutContext(new BoundingBox(0, 0, 100, 100));
 
@@ -48,7 +48,7 @@ public class DegenerateInputTests
 	[Fact]
 	public void Keep_together_section_does_not_explode_into_one_page_per_line()
 	{
-		// The +Infinity budget reaches TextFlow through DocumentLayoutPass's KeepTogether path.
+		// +Infinity reaches TextFlow through DocumentLayoutPass's KeepTogether path.
 		var section = PaginationPass.PaginateBody(
 			LongFlow(60), PaperSize.A4, Margins.Uniform(10), BandConfig.ContentMode(0, 0),
 			availableHeightOverride: double.PositiveInfinity);
@@ -63,9 +63,9 @@ public class DegenerateInputTests
 	[Fact]
 	public void Chrome_that_consumes_the_body_does_not_emit_one_oversized_page()
 	{
-		// An empty content rect meant "no room", but was read as +Infinity ("unlimited room"),
-		// so everything reported a fit and ran off the sheet. A 0.1mm change in header height
-		// used to flip 120 pages to 1.
+		// An empty content rect meant "no room" but was read as +Infinity ("unlimited room"), so
+		// everything reported a fit and ran off the sheet. A 0.1mm header-height change used to
+		// flip 120 pages to 1.
 		var paper = PaperSize.A4;
 		var margins = Margins.Uniform(10);
 		var content = LongFlow(120);
@@ -96,7 +96,7 @@ public class DegenerateInputTests
 	[Fact]
 	public void Zero_extent_geometry_in_a_sized_view_does_not_emit_nan()
 	{
-		// availW / 0 == +Infinity, which multiplied into the group transform as NaN and emitted
+		// availW / 0 == +Infinity, which propagated into the group transform as NaN and emitted
 		// "NaN NaN NaN NaN NaN NaN cm" into the PDF content stream without throwing.
 		var view = new DrawingView
 		{

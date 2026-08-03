@@ -9,11 +9,10 @@ using Selva.GH.Features.UIBuilder.Services.Communication;
 namespace Selva.Tests;
 
 /// <summary>
-///     Golden contract for the outbound WebSocket envelopes the web UI reads. Every message that
-///     historically drifted from the TS handlers has a row pinning its exact shape. These run with no
-///     Grasshopper runtime — they exercise the pure builders the Rhino-typed WebSocketTransport now
-///     delegates to. The two cross-stack fixture tests load the SAME json vitest loads on the TS side,
-///     so a shape change reddens one stack instead of silently freezing a live canvas.
+///     Golden contract for the outbound WebSocket envelopes the web UI reads. Runs with no Grasshopper
+///     runtime — exercises the pure builders WebSocketTransport delegates to. The cross-stack fixture
+///     tests load the same JSON vitest loads on the TS side, so a shape change reddens one stack
+///     instead of silently freezing a live canvas.
 /// </summary>
 public class OutboundEnvelopesTests
 {
@@ -23,7 +22,7 @@ public class OutboundEnvelopesTests
         JObject.Parse(JsonConvert.SerializeObject(envelope));
 
     // -------------------------------------------------------------------------
-    // The two rules that broke the UI silently (ADR 0002)
+    // Envelope shape rules that previously broke the UI silently
     // -------------------------------------------------------------------------
 
     [Fact]
@@ -150,7 +149,6 @@ public class OutboundEnvelopesTests
 
     // -------------------------------------------------------------------------
     // Cross-stack golden fixtures — the SAME json files vitest loads on the TS side.
-    // If these and the TS guards stop agreeing, the wire contract has drifted.
     // -------------------------------------------------------------------------
 
     [Fact]
@@ -162,7 +160,6 @@ public class OutboundEnvelopesTests
             fixture["availableParams"].ToObject<DiscoveredParameters>()));
 
         Assert.Equal((string)fixture["type"], (string)produced["type"]);
-        // availableParams must live at the top level in both.
         Assert.NotNull(produced["availableParams"]);
         Assert.NotNull(fixture["availableParams"]);
         Assert.Null(produced["data"]);

@@ -4,23 +4,9 @@ using Selva.GH.Features.UIBuilder.Services;
 namespace Selva.Tests;
 
 /// <summary>
-///     Tests for ComponentStateManager — the solve-lifecycle state machine that guards against the two
-///     race conditions in the Grasshopper ↔ web bridge:
-///     <list type="bullet">
-///         <item>
-///             <b>Double solve.</b> document.ScheduleSolution defers ~10ms before SolutionStart fires.
-///             A value update arriving in that gap must coalesce, not schedule a second solve. The
-///             <see cref="ComponentStateManager.MarkSolveScheduled" /> flag makes <see
-///             cref="ComponentStateManager.IsBusy" /> true across the whole schedule→start→end cycle.
-///         </item>
-///         <item>
-///             <b>Lost final value.</b> Updates arriving while busy used to be dropped server-side,
-///             silently losing the final slider value. They now merge into a latest-wins buffer drained
-///             after the solve ends.
-///         </item>
-///     </list>
-///     Pure POCO under test — no Rhino, no document, no sockets. The headless seam is injected as a
-///     constant so the enable path never touches Rhino.
+///     Tests for ComponentStateManager: the solve-lifecycle state machine guarding against double-solve
+///     (a value update landing in the ScheduleSolution→SolutionStart gap) and lost updates (one arriving
+///     while busy, which must coalesce instead of being dropped).
 /// </summary>
 public class ComponentStateManagerTests
 {
@@ -52,8 +38,6 @@ public class ComponentStateManagerTests
     {
         var sm = NewManager();
 
-        // The schedule→start gap: a solve is scheduled but SolutionStart hasn't fired, so IsSolving is
-        // still false. IsBusy must already be true so a second update coalesces instead of double-scheduling.
         sm.MarkSolveScheduled();
 
         Assert.True(sm.IsBusy);
@@ -91,8 +75,6 @@ public class ComponentStateManagerTests
         sm.SetSolving(true);
         sm.SetSolving(false);
 
-        // Second solve: scheduled + started, but the start is debounced (returns false) — the gate must
-        // still clear on end, otherwise IsBusy would latch true forever and every later update would coalesce.
         sm.MarkSolveScheduled();
         var startBroadcast = sm.SetSolving(true);
         Assert.False(startBroadcast); // debounced
@@ -131,7 +113,7 @@ public class ComponentStateManagerTests
     {
         var sm = NewManager();
 
-        // A fast slider drag: same key updated repeatedly while busy. Only the final value should survive.
+        // Fast slider drag: same key updated repeatedly while busy.
         sm.MergePendingValues(Values(("slider", 1)));
         sm.MergePendingValues(Values(("slider", 2)));
         sm.MergePendingValues(Values(("slider", 3)));
@@ -168,8 +150,6 @@ public class ComponentStateManagerTests
         var first = sm.TakePendingValues();
         Assert.NotNull(first);
 
-        // Cleared after take: a value changed *during* the drain solve is captured for the next cycle,
-        // not double-applied. A second take with no new merge returns nothing.
         Assert.False(sm.HasPendingValues);
         Assert.Null(sm.TakePendingValues());
     }
@@ -180,8 +160,6 @@ public class ComponentStateManagerTests
         var sm = NewManager();
         sm.MergePendingValues(Values(("a", 1)));
         sm.TakePendingValues();
-
-        // A change arriving after the drain took the buffer begins a new pending cycle.
         sm.MergePendingValues(Values(("b", 2)));
 
         var pending = sm.TakePendingValues();

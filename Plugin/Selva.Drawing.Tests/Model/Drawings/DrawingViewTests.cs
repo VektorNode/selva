@@ -32,9 +32,7 @@ public class DrawingViewTests
 			Padding = Margins.Uniform(5),
 		};
 		var b = view.ComputeBounds();
-		// Geometry path is 100×50; scaled by 0.5 = 50×25; +10×10 padding = 60×35.
-		// Stroke half-width on the inner geometry inflates the path bounds by ±0.125 each.
-		// Frame border is null, so outer width is exactly 50+10 = 60 mm wide.
+		// 100×50 path, scaled 0.5 = 50×25, +10×10 padding = 60×35 (rounded — stroke half-width adds ±0.125).
 		Assert.Equal(60, b.Width, 1);
 		Assert.Equal(35, b.Height, 1);
 	}
@@ -42,7 +40,6 @@ public class DrawingViewTests
 	[Fact]
 	public void Resolved_view_stamps_the_scale_it_rendered_at()
 	{
-		// 100mm geometry pinned to 20mm longest side → scale 0.2 (1:5).
 		var geometry = new PathElement
 		{
 			Path = new Path.Builder().MoveTo(0, 0).LineTo(100, 50).Build(),
@@ -62,7 +59,6 @@ public class DrawingViewTests
 			Path = new Path.Builder().MoveTo(0, 0).LineTo(200, 100).Build(),
 		};
 		var view = new DrawingView { Geometry = geometry, Padding = Margins.Zero };
-		// Fit into a 100×100 band → longest side 200 maps to 100 → scale 0.5.
 		var resolved = view.Resolve(new LayoutContext(new BoundingBox(0, 0, 100, 100)));
 		Assert.True(resolved.Metadata.TryGetValue(DrawingView.ScaleMetadataKey, out var raw));
 		Assert.Equal(0.5, double.Parse(raw, System.Globalization.CultureInfo.InvariantCulture), 6);
@@ -147,15 +143,13 @@ public class DrawingViewTests
 		var bWith = withCaption.ComputeBounds();
 		var bWithout = withoutCaption.ComputeBounds();
 		Assert.True(bWith.Height > bWithout.Height);
-		// Caption sits below Origin.Y (0), so MinY < 0 with caption.
-		Assert.True(bWith.MinY < 0);
+		Assert.True(bWith.MinY < 0); // caption sits below Origin.Y (0)
 	}
 
 	[Fact]
 	public void Length_pins_longest_geometry_side()
 	{
-		// Geometry is 200×50 (landscape). Length=80 should make the long side 80mm and the
-		// short side 80*(50/200)=20mm. Plus uniform 5mm padding on each side.
+		// 200×50 landscape geometry, Length=80: long side → 80mm, short side → 80*(50/200)=20mm.
 		var geometry = new PathElement
 		{
 			Path = new Path.Builder().MoveTo(0, 0).LineTo(200, 50).Build(),
@@ -174,8 +168,6 @@ public class DrawingViewTests
 	[Fact]
 	public void Auto_fits_to_layout_context_when_no_size_or_length()
 	{
-		// 1000×500 geometry resolved into a 100×100 context (post-padding inner = 90×90)
-		// should fit longest side to 90 → effective scale 0.09 → 90×45 inner + 10 padding.
 		var geometry = new PathElement
 		{
 			Path = new Path.Builder().MoveTo(0, 0).LineTo(1000, 500).Build(),
@@ -194,8 +186,8 @@ public class DrawingViewTests
 	[Fact]
 	public void Paper_space_text_keeps_font_size_when_view_is_scaled_down()
 	{
-		// 1000mm geometry pinned to 100mm: effective scale = 0.1. A 3mm paper-space label
-		// should be rewritten to FontSize=30 so the group's 0.1× transform renders it at 3mm.
+		// Effective scale 0.1 (1000mm pinned to 100mm): a 3mm paper-space label must be
+		// rewritten to FontSize=30 so the group's 0.1× transform renders it at 3mm.
 		var label = new TextElement
 		{
 			Text = "Hi",
@@ -217,9 +209,8 @@ public class DrawingViewTests
 	[Fact]
 	public void Paper_space_text_counter_scales_padding_radius_and_letter_spacing()
 	{
-		// Same 0.1× setup as the FontSize test: padding (1mm), corner radius (0.5mm), and
-		// letter spacing (0.2mm) are all paper-space measurements that should multiply by
-		// 1/scale = 10 so the group transform renders them at the requested mm on the page.
+		// Same 0.1× scale as the FontSize test: padding, corner radius, and letter spacing are
+		// all paper-space measurements, so they counter-scale (×10) the same way FontSize does.
 		var label = new TextElement
 		{
 			Text = "Hi",
@@ -246,9 +237,8 @@ public class DrawingViewTests
 	[Fact]
 	public void Stroke_width_and_dash_pattern_are_paper_space()
 	{
-		// View at Scale=0.1 (1:10). A 0.25 mm stroke and a [4, 2] mm dash pattern should be
-		// rewritten to 2.5 and [40, 20] respectively, so the group's 0.1× transform renders
-		// them at the authored mm on the page.
+		// At Scale=0.1, stroke width and dash pattern counter-scale (×10) so the group's
+		// transform renders them at the authored mm on the page.
 		var curve = new PathElement
 		{
 			Path = new Path.Builder().MoveTo(0, 0).LineTo(1000, 500).Build(),
@@ -349,8 +339,6 @@ public class DrawingViewTests
 		var resolved = (GroupElement)view.Resolve(new LayoutContext(BoundingBox.Empty));
 		var rewritten = FindFirstDimension(FindFirstScaledGroup(resolved)!)!;
 
-		// The group transform multiplies by `scale`, so the stored value must be the paper
-		// measurement divided by it for the two to cancel on the page.
 		Assert.Equal(5.0, rewritten.Offset * scale, 6);
 	}
 

@@ -22,7 +22,6 @@ public class LayoutValidationRule : IValidationRule
         var layoutItemIds = new HashSet<string>();
         var allItems = new List<LayoutItemBase>();
 
-        // Validate layout structure and collect items
         IEnumerable<ValidationIssue> structureIssues;
         if (schema.Layout is TabbedLayoutConfig tabbedLayout)
         {
@@ -43,7 +42,6 @@ public class LayoutValidationRule : IValidationRule
             yield return issue;
         }
 
-        // Check for orphaned parameters
         var usedParamIds = new HashSet<Guid>(allItems.Where(i => i.Type != "linebreak").Select(i => i.ParamId));
         var unusedInputs = inputParamIds.Except(usedParamIds).ToList();
         var unusedOutputs = outputParamIds.Except(usedParamIds).ToList();

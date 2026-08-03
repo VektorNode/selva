@@ -12,9 +12,8 @@ namespace Selva.GH.Features.ComputeIO.Components;
 /// <summary>
 ///     "Set Dynamic Value List": emits a <see cref="DynamicValueListGoo" /> carrying a runtime-computed
 ///     value list (name -> value options) routed back into a <see cref="GetDynamicValueListParameter" />
-///     ("Get Dynamic Value List") in the web UI. The target input is referenced by its Grasshopper
-///     instance GUID. Wire the output into a ContextBake (like file/chart outputs) so all Selva outputs
-///     share one authoring gesture and one serialization contract; the Goo owns its compute JSON.
+///     ("Get Dynamic Value List") in the web UI, addressed by the target input's Grasshopper instance
+///     GUID. Wire the output into a ContextBake like other Selva outputs; the Goo owns its compute JSON.
 /// </summary>
 public class GH_DynamicValueListOutput : GH_Component
 {
@@ -34,24 +33,17 @@ public class GH_DynamicValueListOutput : GH_Component
     // ContextualiseIcon overlay, which is reserved for the "Get …" contextual params.
     protected override Bitmap Icon => Resources.GetValueList;
 
-    /// <summary>
-    ///     The instance GUID of the Dynamic Value List input this output's options populate.
-    ///     Persisted on the component and set by the web UI builder (target-input picker).
-    /// </summary>
+    /// <summary>Instance GUID of the Dynamic Value List input this output's options populate.</summary>
     public Guid TargetInputId
     {
         get => _targetInputId;
         set => _targetInputId = value;
     }
 
-    /// <summary>
-    ///     The most recently computed options (name -> value), built from the "Options" input on solve.
-    /// </summary>
     public Dictionary<string, string> Options { get; } = new Dictionary<string, string>();
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        // List of "key" = value pair strings, e.g. "x" = 0
         pManager.AddTextParameter("Options", "O",
             "Value list options as a list of \"key\" = value pair strings (e.g. \"x\" = 0)",
             GH_ParamAccess.list);
@@ -60,8 +52,6 @@ public class GH_DynamicValueListOutput : GH_Component
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        // Emits a DynamicValueListGoo carrying { targetInputId, options }. Wire this into a ContextBake
-        // to expose it as a web UI output; the Goo owns its compute serialization.
         pManager.AddGenericParameter("Dynamic Value List", "DVL",
             "Routing payload { targetInputId, options } consumed by the web UI / Rhino.Compute",
             GH_ParamAccess.item);

@@ -38,7 +38,7 @@ public class StackSplitTests
 	[Fact]
 	public void TrySplit_breaks_between_children_when_partial_fit()
 	{
-		// 3 + 3 + 3 = 9 mm. Budget = 7 mm → first two fit (6mm), third spills.
+		// 3 + 3 + 3 = 9mm, budget 7mm → first two fit (6mm), third spills.
 		var stack = new Stack
 		{
 			Orientation = StackOrientation.Vertical,
@@ -49,7 +49,6 @@ public class StackSplitTests
 		Assert.NotNull(split.Fits);
 		Assert.NotNull(split.Overflow);
 
-		// Overflow should be a Stack with the remaining 1 child.
 		var overflowStack = Assert.IsType<Stack>(split.Overflow);
 		Assert.Single(overflowStack.Children);
 
@@ -60,7 +59,6 @@ public class StackSplitTests
 	[Fact]
 	public void Horizontal_stack_falls_back_to_atomic_split()
 	{
-		// Horizontal stack: 5mm tall, fits in 10mm budget — atomic AllFits.
 		var stack = new Stack
 		{
 			Orientation = StackOrientation.Horizontal,
@@ -74,9 +72,8 @@ public class StackSplitTests
 	[Fact]
 	public void Nested_vertical_stack_can_split_recursively()
 	{
-		// Outer stack: 2mm rect + inner stack of 3 × 3mm rects (= 9mm). Total natural = 11mm.
-		// Budget = 7 mm → outer rect fits (2mm consumed). Inner stack is asked for 5mm. Inner
-		// fits 1 × 3mm rect (3mm consumed); 2 remain in inner overflow.
+		// Outer: 2mm rect + inner stack of 3×3mm rects. Budget 7mm → outer rect fits (2mm),
+		// inner stack gets the remaining 5mm and fits 1 of its 3 rects, 2 spill to overflow.
 		var inner = new Stack
 		{
 			Orientation = StackOrientation.Vertical,
@@ -94,7 +91,6 @@ public class StackSplitTests
 		Assert.NotNull(split.Fits);
 		Assert.NotNull(split.Overflow);
 
-		// Outer overflow should be a Stack containing only the inner-stack overflow remnant.
 		var outerOverflow = Assert.IsType<Stack>(split.Overflow);
 		Assert.Single(outerOverflow.Children);
 		var innerOverflow = Assert.IsType<Stack>(outerOverflow.Children[0]);
@@ -104,10 +100,9 @@ public class StackSplitTests
 	[Fact]
 	public void Keep_together_child_is_treated_as_atomic_and_pushed_whole_to_overflow()
 	{
-		// Outer stack: 2mm rect + an inner stack (3 × 3mm = 9mm) marked keep-together.
-		// Budget = 7mm. Without the flag, Stack.TrySplit would recurse into the inner stack
-		// and split it (1 of 3 fits). With the flag, the inner stack is atomic — only the
-		// 2mm rect fits, and the whole inner stack spills.
+		// Outer: 2mm rect + inner stack (3×3mm) marked keep-together. Budget 7mm: without the
+		// flag TrySplit would recurse into inner and split it; with the flag inner is atomic,
+		// so only the 2mm rect fits and the whole inner stack spills.
 		var inner = new Stack
 		{
 			Orientation = StackOrientation.Vertical,
@@ -126,7 +121,6 @@ public class StackSplitTests
 		Assert.NotNull(split.Fits);
 		var outerOverflow = Assert.IsType<Stack>(split.Overflow);
 		Assert.Single(outerOverflow.Children);
-		// The overflow is the original inner stack (still 3 children, not a 2-of-3 remnant).
 		var innerOverflow = Assert.IsType<Stack>(outerOverflow.Children[0]);
 		Assert.Equal(3, innerOverflow.Children.Count);
 	}
@@ -134,7 +128,6 @@ public class StackSplitTests
 	[Fact]
 	public void Keep_together_does_not_force_atomic_when_child_fits_whole()
 	{
-		// 2mm + 3mm = 5mm fits in 10mm. Keep-together flag is irrelevant when nothing splits.
 		var inner = new Stack
 		{
 			Orientation = StackOrientation.Vertical,
@@ -156,13 +149,10 @@ public class StackSplitTests
 	[Fact]
 	public void TextFlow_split_inside_stack_uses_stack_cross_axis_so_trailing_sibling_lands_below_overflow()
 	{
-		// Multi-line auto-width TextFlow followed by a small element in a vertical stack.
-		// The stack's cross-axis (40mm) is much narrower than the parent context (200mm).
-		// Before the fix, Stack.TrySplit handed `context` (200mm) to the child's TrySplit
-		// while Resolve used `childContext` (40mm) — TextFlow re-wrapped to a wider width
-		// inside TrySplit, reported "everything fits" against the wide measurement, and
-		// the trailing element was placed where the wide-wrap text ended. When rendered at
-		// 40mm the text was much taller, so the trailing element overlapped it.
+		// Stack.TrySplit used to hand the child TrySplit the parent's full-width context (200mm)
+		// while Resolve used the stack's narrower cross-axis (40mm). TextFlow re-wrapped wider
+		// inside TrySplit, under-reported its height, and the trailing element ended up placed
+		// where the wide-wrap text ended — then overlapped it once rendered at 40mm.
 		const string longText =
 			"the quick brown fox jumps over the lazy dog and then jumps back again over the lazy dog";
 		var stack = new Stack
@@ -176,27 +166,21 @@ public class StackSplitTests
 			},
 		};
 
-		// Parent context: 40mm wide (cross-axis source), 200mm tall page slice.
 		var parentContext = new LayoutContext(new BoundingBox(0, 0, 40, 200));
 
-		// Pick a budget that forces a split mid-text: small enough that the wrapped flow
-		// can't all fit, but large enough that several lines do.
+		// Small enough that the wrapped flow can't all fit, large enough that several lines do.
 		var split = stack.TrySplit(15, parentContext);
 
 		Assert.NotNull(split.Fits);
 		Assert.NotNull(split.Overflow);
 
-		// Reported FitsHeight must match the actual rendered height of Fits.
 		var fitsBounds = split.Fits.ComputeBounds();
 		Assert.Equal(split.FitsHeight, fitsBounds.Height, 6);
 
-		// Resolve the overflow Stack at the same cross-axis. The trailing Rect must land
-		// BELOW (smaller MaxY than MinY of) the overflow text — no overlap.
 		var overflowStack = Assert.IsType<Stack>(split.Overflow);
 		Assert.Equal(2, overflowStack.Children.Count); // text overflow + trailing rect
 		var resolvedOverflow = overflowStack.Resolve(parentContext);
 		var overflowBounds = resolvedOverflow.ComputeBounds();
-		// Sanity: overflow should fit within or near the page slice.
 		Assert.True(overflowBounds.Height > 0);
 	}
 

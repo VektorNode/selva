@@ -12,12 +12,9 @@ using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Renders to PDF and emits a FileDataGoo so the result flows into the same download /
-// context-bake pipeline as the other file producers (GeometryToFile, CreateFile). Accepts
-// either a Document (multi-page) or loose drawing elements (wrapped in a single page) —
-// the same inputs as Render SVG, so switching formats doesn't require restructuring the
-// graph. The PDF bytes are base64-encoded into FileData.Data; the Selva UI decodes and
-// serves the download. PdfSharpCore handles multi-page natively.
+// Emits a FileDataGoo, same as GeometryToFile/CreateFile, so PDF output flows through the
+// same download / context-bake pipeline. Accepts a Document (multi-page) or loose drawing
+// elements (wrapped into a single page) — same inputs as Render SVG.
 public class GH_RenderPdf : GH_Component, ISelvaFileOutput
 {
     public GH_RenderPdf()

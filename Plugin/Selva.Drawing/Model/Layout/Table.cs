@@ -7,24 +7,23 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Model.Layout;
 
-// Phase 7: tabular layout. Wraps Grid with row/column borders, an optional header row, and
-// cell padding so callers don't repeat themselves. Each row of `Rows` is one row of cells;
-// each cell is a string (rendered as a TextFlow with optional wrapping) or any DrawElement.
+// Tabular layout on top of Grid: row/column borders, an optional header row, cell padding.
+// Each row of `Rows` is one row of cells; each cell is a string (rendered as a TextFlow) or
+// any DrawElement.
 //
-// Header row (when HeaderText/HeaderCells are supplied) is row 0; data rows follow. Row
-// heights are auto-sized to content unless RowHeight is set; columns default to a single
-// `Star(1)` per column unless explicit widths are passed via ColumnWidths.
+// Header row (when Header is supplied) is row 0; data rows follow. Row heights auto-size to
+// content unless RowHeight is set; columns default to `Star(1)` unless ColumnWidths is set.
 public sealed class TableCell
 {
-	// One of the two will be set. When Element != null, it overrides Text/Style.
+	// Element, when set, overrides Text/Style.
 	public string Text { get; init; }
 	public TextStyle Style { get; init; }
 	public DrawElement Element { get; init; }
 	public int ColumnSpan { get; init; } = 1;
 }
 
-// Which border lines to draw. Outer = the four edges only; HorizontalOnly = no verticals;
-// HeaderAndOuter = outer rect + the rule under the header (clean BOM look); All = full grid.
+// Outer = the four edges only; HorizontalOnly = no verticals; HeaderAndOuter = outer rect +
+// the rule under the header; All = full grid.
 public enum TableBorderStyle { All, HorizontalOnly, HeaderAndOuter, Outer, None }
 
 public sealed class Table : LayoutElement
@@ -33,9 +32,7 @@ public sealed class Table : LayoutElement
 	public IReadOnlyList<IReadOnlyList<TableCell>> Rows { get; init; } = Array.Empty<IReadOnlyList<TableCell>>();
 
 	public IReadOnlyList<GridLength> ColumnWidths { get; init; }
-	// Per-column horizontal text anchor. Applied to text cells whose own Style doesn't
-	// override HorizontalAnchor. Null or short list → cells fall back to the resolved style's
-	// own anchor (typically left). Longer than column count → extra entries are ignored.
+	// Per-column text anchor; only applies to cells that don't set their own Style.HorizontalAnchor.
 	public IReadOnlyList<TextAnchor> ColumnAlignments { get; init; }
 	public double? RowHeight { get; init; }
 	public Margins CellPadding { get; init; } = new Margins(1.5, 2.5, 1.5, 2.5);
@@ -43,17 +40,15 @@ public sealed class Table : LayoutElement
 	public Stroke Border { get; init; } = new Stroke { Width = LineWeight.Fine };
 	public TableBorderStyle BorderStyle { get; init; } = TableBorderStyle.All;
 	public Fill HeaderBackground { get; init; }
-	// Per-row body fills, cycled. Body row k uses RowStripeFills[(StripeOffset + k) % Count].
-	// A null entry in the list = no fill for that slot (so [null, gray] = unstriped/gray
-	// alternation). Null or empty list = no row fills at all.
+	// Body row k uses RowStripeFills[(StripeOffset + k) % Count]; a null entry means no fill
+	// for that slot (e.g. [null, gray] alternates unstriped/gray).
 	public IReadOnlyList<Fill> RowStripeFills { get; init; }
 
-	// Stripe-cycle phase. Carried into the overflow clone when the table splits across pages
-	// so alternating stripes continue seamlessly instead of restarting at slot 0.
+	// Carried into the overflow clone on page split so stripes keep alternating instead of
+	// restarting at slot 0.
 	public int StripeOffset { get; init; }
 	public TextStyle DefaultCellStyle { get; init; } = new TextStyle();
-	// Explicit header text style. When null, header cells inherit DefaultCellStyle with
-	// Weight bumped to Bold (see ResolveCellContent).
+	// When null, header cells inherit DefaultCellStyle with Weight bumped to Bold (ResolveCellContent).
 	public TextStyle HeaderStyle { get; init; }
 
 	public Point2D Origin { get; init; } = Point2D.Zero;
@@ -98,8 +93,7 @@ public sealed class Table : LayoutElement
 
 		var children = new List<DrawElement>();
 
-		// Header background (under content). Drawn before the grid lays out its cells so the
-		// fill sits behind the text.
+		// Header fill drawn before grid content so it sits behind the text.
 		var hasHeader = Header != null && Header.Count > 0;
 		if (hasHeader && HeaderBackground != null)
 		{
@@ -114,9 +108,7 @@ public sealed class Table : LayoutElement
 			children.Add(new PathElement { Path = rect, Fill = HeaderBackground });
 		}
 
-		// Row fills. Body row k cycles through RowStripeFills (k % Count). Null entries skip
-		// the fill for that slot. Drawn under cell content for the same reason as the header
-		// background.
+		// Row fills, drawn under cell content same as the header fill above.
 		if (RowStripeFills != null && RowStripeFills.Count > 0 && Rows != null && Rows.Count > 0)
 		{
 			var dataStart = hasHeader ? 1 : 0;
@@ -138,34 +130,27 @@ public sealed class Table : LayoutElement
 			}
 		}
 
-		// Cell content via the grid.
 		var resolvedGrid = grid.Resolve(context);
 		children.Add(resolvedGrid);
 
-		// Border lines: outer rect + internal rules per BorderStyle. We emit them as a single
-		// PathElement so the renderer treats the whole frame as one stroked path.
+		// One PathElement for the whole border (outer rect + internal rules per BorderStyle)
+		// so the renderer strokes it as a single path.
 		if (Border != null && BorderStyle != TableBorderStyle.None)
 		{
 			var borderPath = BuildBorderPath(gridLayout, totalRect);
 			children.Add(new PathElement { Path = borderPath, Stroke = Border });
 		}
 
-		// Pin outer bounds to the resolved track totals — keeps the natural Table size free
-		// of border-stroke inflation, so a 100mm-wide table reports as 100mm wide regardless
-		// of border width. The renderer still uses the path's stroke-inflated bounds for
-		// viewBox padding, so the visible stroke isn't clipped.
+		// Pin outer bounds to the track totals, not the stroke-inflated border/fill paths, so
+		// a 100mm-wide table reports 100mm regardless of border width. The renderer still uses
+		// the border path's own inflated bounds for viewBox padding, so the stroke isn't clipped.
 		var pinned = new BoundingBox(
 			Origin.X, Origin.Y,
 			Origin.X + totalRect.Width, Origin.Y + totalRect.Height);
 
-		// An explicit RowHeight is an Absolute track, and content taller than its row is drawn
-		// rather than clipped. Reporting only the track total then understates the table by
-		// however much hangs out — a RowHeight of 5 reported h=5 while ~18 mm of wrapped text
-		// was drawn below its own bottom edge, so every container downstream laid out around a
-		// box the table had already overrun.
-		//
-		// Union the GRID's bounds only, never the border or fill paths: those are stroked, and
-		// including them would undo the border-stroke exclusion this pin exists to provide.
+		// RowHeight is an Absolute track, and content taller than its row draws past it rather
+		// than clipping — union in the grid's own ink so the reported bounds cover any overhang
+		// (else downstream containers lay out around a box the table already overran).
 		var cellInk = resolvedGrid?.ComputeBounds() ?? BoundingBox.Empty;
 		if (!cellInk.IsEmpty) pinned = pinned.Union(cellInk);
 
@@ -186,16 +171,8 @@ public sealed class Table : LayoutElement
 		return resolved.ComputeBounds();
 	}
 
-	// Pagination: tables split between data rows. The header row repeats on every page so a
-	// BOM-style table still reads as a table after a break. Tables without a header just
-	// split between rows.
-	//
-	// Edge cases:
-	//   - Header alone is taller than availableHeight → NothingFits, caller defers/force-places.
-	//   - Header fits but no data row fits → NothingFits, same handling. Avoids emitting a page
-	//     of pure chrome (header + zero rows) which would not make forward progress.
-	//   - No data rows at all → fall back to atomic resolve (a header-only table either fits or
-	//     doesn't).
+	// Tables split between data rows; the header repeats on every page. If the header alone
+	// doesn't fit, or fits but no data row does, NothingFits (never emit a page of pure chrome).
 	public override SplitResult TrySplit(double availableHeight, LayoutContext context)
 	{
 		if (Rows == null || Rows.Count == 0)
@@ -230,9 +207,8 @@ public sealed class Table : LayoutElement
 		return SplitAfterRow(fitsRowCount, headerHeight + consumed, context);
 	}
 
-	// Nothing fits on a fresh page (header + first row taller than the budget): force out
-	// the first row anyway so pagination keeps making progress instead of dumping the whole
-	// remaining table onto one page.
+	// Header + first row taller than the budget: force the first row out anyway so pagination
+	// keeps making progress instead of dumping the rest of the table onto one page.
 	public override SplitResult ForcePlace(double availableHeight, LayoutContext context)
 	{
 		if (Rows == null || Rows.Count <= 1)
@@ -248,10 +224,9 @@ public sealed class Table : LayoutElement
 		var overflowRows = new List<IReadOnlyList<TableCell>>(Rows.Count - fitsRowCount);
 		for (var i = fitsRowCount; i < Rows.Count; i++) overflowRows.Add(Rows[i]);
 
-		// Pin the full table's resolved column widths onto both fragments. Auto columns size
-		// to the widest cell present, so letting each fragment re-derive them from its own
-		// row subset makes the column edges jump at the page break whenever the widest cell
-		// lands in the other half.
+		// Pin the whole table's resolved column widths onto both fragments — otherwise each
+		// fragment re-derives Auto widths from its own row subset, and the column edges jump
+		// at the page break whenever the widest cell lands in the other half.
 		var pinnedWidths = ResolvePinnedColumnWidths(context);
 
 		var stripeCount = RowStripeFills?.Count ?? 0;
@@ -265,9 +240,8 @@ public sealed class Table : LayoutElement
 		return SplitResult.Partial(fitsResolved, overflowTable, fitsHeight);
 	}
 
-	// Column widths the whole table resolves to under this context, as absolute tracks.
-	// Only needed when a column depends on content (Auto) or on remaining space (Star with
-	// infinite context falls back to auto-sizing) — a fully absolute column set can't drift.
+	// Resolves the table's column widths under this context down to absolute tracks. Skipped
+	// when every declared width is already Absolute, since those can't drift between fragments.
 	private IReadOnlyList<GridLength> ResolvePinnedColumnWidths(LayoutContext context)
 	{
 		var columnCount = InferColumnCount();
@@ -337,12 +311,9 @@ public sealed class Table : LayoutElement
 		};
 	}
 
-	// Per-row heights used by TrySplit. We build the same Grid Resolve uses, run its full
-	// two-pass layout against the parent context (so Star columns get their real widths and
-	// cells re-measure with that width), and read row heights straight off the resulting
-	// TrackLayout. This keeps TrySplit's "rows that fit" arithmetic consistent with how the
-	// fits half is actually rendered — a TextFlow that wraps to N lines in render also
-	// reports N-line height here, so the trailing rows don't get pushed past the page edge.
+	// Builds the same Grid Resolve would and reads row heights off its TrackLayout, so
+	// TrySplit's "rows that fit" arithmetic matches what actually renders (a TextFlow that
+	// wraps to N lines here also wraps to N lines in Resolve).
 	private (double headerHeight, double[] dataRowHeights) MeasureRowHeights(LayoutContext context)
 	{
 		var columnCount = InferColumnCount();
@@ -407,10 +378,9 @@ public sealed class Table : LayoutElement
 		return n;
 	}
 
-	// Declared widths are honoured as far as they go, and any remaining columns fall back to
-	// Star. A count mismatch used to discard the whole list: two widths for three columns meant
-	// all three came out Star and *every* declared width was silently ignored, which reads as
-	// "ColumnWidths does nothing" rather than "one width is missing".
+	// Declared widths are honoured as far as they go; remaining columns fall back to Star.
+	// A count mismatch used to discard the whole list (two widths for three columns meant all
+	// three came out Star), which reads as "ColumnWidths does nothing" rather than "one width missing".
 	private IReadOnlyList<GridLength> ResolveColumnWidths(int columnCount)
 	{
 		if (ColumnWidths != null && ColumnWidths.Count == columnCount) return ColumnWidths;
@@ -461,9 +431,8 @@ public sealed class Table : LayoutElement
 			}
 		}
 
-		// Per-column alignment overrides the resolved style's HorizontalAnchor — but only
-		// when the cell didn't bring its own Style. A caller that sets cell.Style is making
-		// an explicit choice and shouldn't be silently overridden by the column default.
+		// Column alignment overrides HorizontalAnchor only when the cell has no Style of its
+		// own — an explicit cell.Style shouldn't be silently overridden by the column default.
 		if (cell.Style == null
 			&& ColumnAlignments != null
 			&& columnIndex >= 0 && columnIndex < ColumnAlignments.Count
@@ -472,9 +441,8 @@ public sealed class Table : LayoutElement
 			style = CloneWithAnchor(style, ColumnAlignments[columnIndex]);
 		}
 
-		// Width is left null: the TextFlow inherits its wrap width from the surrounding
-		// Frame (cell padding) which itself inherits from the Grid cell rect. This works
-		// for Absolute, Auto, and Star columns alike — no per-column-type special-casing.
+		// Width left null: TextFlow inherits its wrap width from the Frame (cell padding),
+		// which inherits from the Grid cell rect — works for Absolute, Auto, and Star alike.
 		var flow = new TextFlow
 		{
 			Text = cell.Text ?? string.Empty,
@@ -522,8 +490,7 @@ public sealed class Table : LayoutElement
 		};
 	}
 
-	// Border path: outer rect + optional internal rules per BorderStyle. Each line is a
-	// separate MoveTo/LineTo so the stroker doesn't draw a single open polygon.
+	// Each line is a separate MoveTo/LineTo so the stroker doesn't draw one open polygon.
 	private Path BuildBorderPath(Grid.TrackLayout layout, BoundingBox totalRect)
 	{
 		var b = new Path.Builder();
@@ -541,8 +508,7 @@ public sealed class Table : LayoutElement
 		if (drawOuter)
 			b.MoveTo(x0, y0).LineTo(x1, y0).LineTo(x1, y1).LineTo(x0, y1).Close();
 
-		// Horizontal lines between rows. Top of grid = y1; row 0 top = y1; we want a line
-		// below row 0, below row 1, ..., above the last row.
+		// Lines below row 0, below row 1, ..., above the last row (grid top = y1).
 		if (drawHorizontals)
 		{
 			var cursorY = y1;
@@ -554,7 +520,6 @@ public sealed class Table : LayoutElement
 		}
 		else if (drawHeaderRule)
 		{
-			// Just the rule under the header row (row 0 in track order = top track).
 			var ruleY = y1 - layout.RowHeights[0];
 			b.MoveTo(x0, ruleY).LineTo(x1, ruleY);
 		}
