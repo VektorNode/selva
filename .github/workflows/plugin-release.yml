@@ -60,7 +60,7 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
 
       - uses: actions/setup-node@v7
         with:
