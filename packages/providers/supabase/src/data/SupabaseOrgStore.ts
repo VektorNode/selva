@@ -261,6 +261,26 @@ export class SupabaseOrgStore implements IOrgStore {
 		return data ? rowToOrgMember(data) : null;
 	}
 
+	async getOrgMembersFor(
+		ctx: RequestContext,
+		orgIds: readonly string[],
+		userId: string
+	): Promise<Map<string, OrgMember | null>> {
+		const result = new Map<string, OrgMember | null>(orgIds.map((id) => [id, null]));
+		if (orgIds.length === 0) return result;
+
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('org_members')
+			.select(ORG_MEMBER_COLUMNS)
+			.in('org_id', [...orgIds])
+			.eq('user_id', userId)
+			.is('deleted_at', null);
+		if (error) throw mapPostgrestError(error);
+		for (const row of data ?? []) result.set(row.org_id, rowToOrgMember(row));
+		return result;
+	}
+
 	async findUserMembership(
 		ctx: RequestContext,
 		userId: string

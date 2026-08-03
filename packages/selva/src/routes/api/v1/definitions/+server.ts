@@ -8,6 +8,40 @@ import { CreateDefinitionInputSchema } from '@selvajs/platform/definitions';
 import { GH_EXTENSIONS, MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '$lib/server/admin-config';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { fetchSchemaFromCompute } from '$lib/server/definitions/schemaExtraction.server';
+import { listVisibleDefinitions } from '$lib/server/definitions/visibility.server';
+import { parseDefinitionListOptions } from '$lib/server/pagination.server';
+import { toDefinitionListItem, type DefinitionStatus } from '@selvajs/platform';
+
+const LISTABLE_STATUSES: DefinitionStatus[] = ['draft', 'published', 'archived'];
+
+// GET — definitions the caller can view. Visibility is resolved into the query
+// via `projectIds`, so `limit`/`nextCursor` describe the filtered set.
+export const GET: RequestHandler = async ({ locals, url }) => {
+	if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+
+	const statusParam = url.searchParams.get('status');
+	if (statusParam && !LISTABLE_STATUSES.includes(statusParam as DefinitionStatus)) {
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			`status must be one of: ${LISTABLE_STATUSES.join(', ')}`
+		);
+	}
+
+	try {
+		const page = await listVisibleDefinitions(locals.ctx, {
+			...parseDefinitionListOptions(url),
+			projectId: url.searchParams.get('projectId') ?? undefined,
+			statuses: statusParam ? [statusParam as DefinitionStatus] : undefined
+		});
+		return json({
+			items: page.items.map(toDefinitionListItem),
+			nextCursor: page.nextCursor
+		});
+	} catch (err) {
+		handleApiError(err, 'Failed to list definitions');
+	}
+};
 
 function parseTags(raw: unknown): string[] | undefined {
 	if (typeof raw !== 'string' || !raw.trim()) return undefined;

@@ -34,6 +34,17 @@ export interface DefinitionListOptions extends Omit<ListOptions, 'orderBy'> {
 	 * When set, `includePending` / `includeArchived` are ignored.
 	 */
 	statuses?: DefinitionStatus[];
+	/**
+	 * Restrict to definitions in these projects. An empty array matches nothing
+	 * (an empty page), which is distinct from omitting the filter.
+	 *
+	 * This is what lets visibility filtering happen *in* the query rather than
+	 * over the fetched page: the caller resolves the accessible project-id set
+	 * first, then passes it here so the adapter applies both the filter and the
+	 * cursor. Filtering a fetched page afterwards makes `limit` and `nextCursor`
+	 * describe pre-filter positions — a page of 50 can come back with 3 items.
+	 */
+	projectIds?: readonly string[];
 }
 
 export interface Page<T> {

@@ -121,3 +121,44 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 	return new Response(null, { status: 204 });
 };
+
+/**
+ * Remove a member from the org. Owner/admin via `manage_org_members`, same
+ * tenancy check as PATCH, and the same sole-owner invariant — removing the last
+ * owner would leave the org unadministrable.
+ */
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+	const { orgId, userId } = params;
+	if (!orgId || !userId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing org ID or user ID');
+
+	requireManageOrgMembers(locals);
+	const ctx = locals.ctx!;
+	if (ctx.actingOrgId !== orgId) {
+		apiError(403, ApiErrorCode.FORBIDDEN, 'Acting org does not match the target org.');
+	}
+
+	const orgs = getOrganizationProvider();
+	const target = await orgs.getOrgMember(ctx, orgId, userId);
+	if (!target) apiError(404, ApiErrorCode.NOT_FOUND, 'Member not found in this organization.');
+
+	if (target.role === 'owner') {
+		const page = await orgs.listOrgMembers(ctx, orgId, { limit: 200 });
+		const otherOwners = page.items.filter(
+			(m) => m.role === 'owner' && m.userId !== target.userId && !m.deletedAt
+		);
+		if (otherOwners.length === 0) {
+			apiError(
+				409,
+				ApiErrorCode.CONFLICT,
+				'Cannot remove the sole owner of this organization. Promote another member to owner first.'
+			);
+		}
+	}
+
+	try {
+		await orgs.removeOrgMember(ctx, orgId, userId);
+		return new Response(null, { status: 204 });
+	} catch (err) {
+		handleApiError(err, 'Failed to remove member');
+	}
+};

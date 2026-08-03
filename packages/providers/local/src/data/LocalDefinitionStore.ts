@@ -107,7 +107,11 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		records: DefinitionRecord[],
 		opts?: DefinitionListOptions
 	): DefinitionRecord[] {
-		const filtered = records.filter((r) => r?.displayName && this.live(r));
+		let filtered = records.filter((r) => r?.displayName && this.live(r));
+		if (opts?.projectIds) {
+			const allowedProjects = new Set(opts.projectIds);
+			filtered = filtered.filter((r) => allowedProjects.has(r.projectId));
+		}
 		if (opts?.statuses?.length) {
 			const allowed = new Set(opts.statuses);
 			return filtered.filter((r) => allowed.has(r.status));

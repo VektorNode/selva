@@ -47,6 +47,20 @@ export interface IProjectStore {
 		projectId: string,
 		userId: string
 	): Promise<ProjectMember | null>;
+	/**
+	 * One user's membership row across many projects, in a single query.
+	 *
+	 * The access rules consult a membership row per project, so evaluating
+	 * `canView` over a project list otherwise costs one round-trip per project.
+	 * Keys are the requested `projectIds`; a project the user is not a member of
+	 * maps to `null` rather than being absent, so callers can distinguish
+	 * "checked, not a member" from "never asked".
+	 */
+	getProjectMembersFor(
+		ctx: RequestContext,
+		projectIds: readonly string[],
+		userId: string
+	): Promise<Map<string, ProjectMember | null>>;
 	addProjectMember(ctx: RequestContext, member: ProjectMember): Promise<void>;
 	updateProjectMemberRole(
 		ctx: RequestContext,

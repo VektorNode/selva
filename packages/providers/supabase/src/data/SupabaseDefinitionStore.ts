@@ -111,6 +111,13 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 
 		if (filter?.projectId) query = query.eq('project_id', filter.projectId);
 
+		// An empty `projectIds` must match nothing. PostgREST's `in.()` is a syntax
+		// error, so short-circuit rather than building the query.
+		if (opts?.projectIds) {
+			if (opts.projectIds.length === 0) return { items: [] };
+			query = query.in('project_id', [...opts.projectIds]);
+		}
+
 		if (opts?.statuses?.length) {
 			query = query.in('status', opts.statuses);
 		} else {

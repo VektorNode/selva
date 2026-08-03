@@ -529,7 +529,37 @@ edited in this PR anyway, so both land together rather than churning the same 15
    ([Permissions.md:543](../../packages/selva/specs/Permissions.md#L543)); the handler never did
    (blocker #1). Fix the spec to describe the new endpoint, not the imagined old one.
 
-### Phase B — author the reads (the real new work)
+### Phase B — author the reads (the real new work) — **DONE**
+
+Decisions taken during implementation:
+
+- **Step 0 shipped first, as specified.** `getOrgMembersFor`, `getProjectMembersFor`,
+  `listByProjects`, and the `projectIds` filter on `DefinitionListOptions` all landed with
+  store-suite coverage, so both adapters are held to the same contract. Supabase's grant store is
+  still the 501 stub, so `listByProjects` throws there like its siblings.
+- **`projectIds: []` matches nothing** — distinct from omitting the filter, which matches
+  everything. The Supabase path short-circuits before building the query because PostgREST's
+  `in.()` is a syntax error.
+- **`listVisibleDefinitions` filters in the query**, not over a fetched page. The pagination test
+  interleaves 6 visible and 6 invisible definitions and pages at `limit: 4`, asserting every
+  non-final page is full — a post-hoc filter returns short pages and fails it.
+- **`GET /api/v1/projects` paginates over the in-process accessible set** (cursor = an opaque
+  index), because visibility for projects is resolved in app code rather than by the store. The
+  definitions list gets the real store cursor.
+- **Existence concealment implemented as `null`, not a throw.** `getVisibleDefinition` and
+  `loadVisibleVersion` return `null` for both "missing" and "invisible" so handlers cannot
+  accidentally distinguish them; `loadVisibleVersion` also rejects a version whose `definitionId`
+  doesn't match the guid in the path.
+- **The library and projects page loads both moved to the bulk reads.** Library dropped ~75 lines
+  of inlined access filtering to one helper call; projects kept its own load (it needs per-project
+  member lists for the management UI) but its per-row membership reads are gone.
+- **`listProjects` stays O(orgs)** — it is per-org by interface shape. Collapsing it further needs
+  a cross-org project list on `IProjectStore`; the query-count test pins the current shape so the
+  cost is visible rather than assumed.
+
+Verified: `pnpm type-check`, `pnpm check` (0 errors), `pnpm lint` (0 errors), `pnpm test` (all
+packages green; selva 237/237, up from 211). Query-count and adversarial cross-tenant tests both
+present, per the Verification section.
 
 0. **Add the bulk membership primitives first** (`getOrgMembersFor`, `getProjectMembersFor`,
    `listByProjects`, and a `projectIds` filter on `DefinitionListOptions`). See "Efficiency audit"

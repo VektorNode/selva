@@ -33,6 +33,9 @@ const notImplementedGrantStore: IPlatformProjectGrantStore = {
 	listByProject: async () => {
 		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
 	},
+	listByProjects: async () => {
+		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
+	},
 	create: async () => {
 		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
 	},

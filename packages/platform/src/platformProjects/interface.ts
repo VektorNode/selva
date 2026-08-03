@@ -11,6 +11,14 @@ import type { PlatformProjectGrant } from './types.js';
  */
 export interface IPlatformProjectGrantStore {
 	listByProject(ctx: RequestContext, projectId: string): Promise<PlatformProjectGrant[]>;
+	/**
+	 * Grants for many projects in a single query. Keys are the requested
+	 * `projectIds`; a project with no grants maps to an empty array.
+	 */
+	listByProjects(
+		ctx: RequestContext,
+		projectIds: readonly string[]
+	): Promise<Map<string, PlatformProjectGrant[]>>;
 	create(ctx: RequestContext, grant: PlatformProjectGrant): Promise<void>;
 	delete(ctx: RequestContext, id: string): Promise<void>;
 	/**

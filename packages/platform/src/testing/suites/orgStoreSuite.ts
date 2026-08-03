@@ -211,6 +211,39 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			expect(got).toBeNull();
 		});
 
+		it('getOrgMembersFor resolves membership across the requested orgs', async () => {
+			const store = await createStore();
+			const { u1, orgId } = await setupOrg(store);
+			const u2 = await seed();
+			await store.addOrgMember(ctx(u1), member(orgId, u2));
+			// An id the user is not a member of. In single-org mode there is no
+			// second org to create, and a non-existent id exercises the same
+			// "asked, not a member" path.
+			const otherOrgId = makeUuid();
+
+			const got = await store.getOrgMembersFor(ctx(u1), [orgId, otherOrgId], u2);
+			expect(got.get(orgId)?.role).toBe('member');
+			expect(got.has(otherOrgId)).toBe(true);
+			expect(got.get(otherOrgId)).toBeNull();
+		});
+
+		it('getOrgMembersFor omits soft-deleted memberships', async () => {
+			const store = await createStore();
+			const { u1, orgId } = await setupOrg(store);
+			const u2 = await seed();
+			await store.addOrgMember(ctx(u1), member(orgId, u2));
+			await store.removeOrgMember(ctx(u1), orgId, u2);
+
+			const got = await store.getOrgMembersFor(ctx(u1), [orgId], u2);
+			expect(got.get(orgId)).toBeNull();
+		});
+
+		it('getOrgMembersFor returns an empty map for no ids', async () => {
+			const store = await createStore();
+			const { u1 } = await setupOrg(store);
+			expect((await store.getOrgMembersFor(ctx(u1), [], u1)).size).toBe(0);
+		});
+
 		it('updateOrgMemberRole changes role', async () => {
 			const store = await createStore();
 			const { u1, orgId } = await setupOrg(store);

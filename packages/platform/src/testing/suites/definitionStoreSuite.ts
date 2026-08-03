@@ -215,6 +215,42 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(page.items.map((r) => r.guid)).toEqual([a]);
 		});
 
+		it('list applies the projectIds filter before the page limit', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const visible = makeUuid();
+			const hidden = makeUuid();
+			await store.create(
+				ctx(scope.ownerId),
+				record(scope, { guid: visible, projectId: scope.projectId })
+			);
+			await store.create(
+				ctx(scope.ownerId),
+				record(scope, { guid: hidden, projectId: scope.secondaryProjectId })
+			);
+
+			// The filter has to run in the query, not over the fetched page: with a
+			// limit of 1 a post-hoc filter can return zero items and still report a
+			// cursor, which is what makes paginated visibility filtering incorrect.
+			const page = await store.list(ctx(scope.ownerId), {
+				projectIds: [scope.projectId],
+				limit: 1
+			});
+			expect(page.items.map((r) => r.guid)).toEqual([visible]);
+		});
+
+		it('list with an empty projectIds filter matches nothing', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			await store.create(
+				ctx(scope.ownerId),
+				record(scope, { guid: makeUuid(), projectId: scope.projectId })
+			);
+
+			const page = await store.list(ctx(scope.ownerId), { projectIds: [] });
+			expect(page.items).toEqual([]);
+		});
+
 		it('update applies patch and bumps updatedAt', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();

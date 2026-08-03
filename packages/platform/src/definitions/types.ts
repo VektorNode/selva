@@ -111,6 +111,49 @@ export interface DefinitionRecord {
 }
 
 /**
+ * The list-row projection of a `DefinitionRecord`, and the shape
+ * `GET /api/v1/definitions` returns.
+ *
+ * Deliberately narrower than the full record: `ownerId`, `createdBy`,
+ * `updatedBy`, and `solveCacheLimit` are internal and no list view reads them.
+ * v1 is additive-only, so a field published here can only be removed in v2 —
+ * narrowing is free now and impossible later.
+ *
+ * `liveVersionId` is the pointer, not a version number: the number is not a
+ * native column and joining for it would cost a query per row in both stores.
+ */
+export interface DefinitionListItem {
+	guid: string;
+	projectId: string;
+	displayName: string;
+	description?: string;
+	category?: string;
+	tags?: string[];
+	coverImage?: string;
+	status: DefinitionStatus;
+	solveCount: number;
+	liveVersionId: string | null;
+	updatedAt: string;
+}
+
+/** Project a full record down to the fields v1 publishes. */
+export function toDefinitionListItem(r: DefinitionRecord): DefinitionListItem {
+	return {
+		guid: r.guid,
+		projectId: r.projectId,
+		displayName: r.displayName,
+		description: r.description,
+		category: r.category,
+		tags: r.tags,
+		coverImage: r.coverImage,
+		status: r.status,
+		solveCount: r.solveCount,
+		liveVersionId: r.liveVersionId,
+		updatedAt: r.updatedAt
+	};
+}
+
+/**
  * Patch omits immutable fields and provider-managed ones (use
  * `setLiveVersion`/`setDraftVersion` for the latter).
  *

@@ -30,6 +30,18 @@ export interface IOrgStore {
 	listOrgMembers(ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<OrgMember>>;
 	getOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<OrgMember | null>;
 	/**
+	 * One user's membership row across many orgs, in a single query. The bulk
+	 * counterpart to `getOrgMember`, for evaluating access rules over a list.
+	 *
+	 * Keys are the requested `orgIds`; an org the user is not a member of maps to
+	 * `null` rather than being absent.
+	 */
+	getOrgMembersFor(
+		ctx: RequestContext,
+		orgIds: readonly string[],
+		userId: string
+	): Promise<Map<string, OrgMember | null>>;
+	/**
 	 * Find ONE org membership for the user. Used by the request-bootstrap
 	 * path to resolve `actingOrgId` without N+1-ing over `listOrgs`.
 	 *

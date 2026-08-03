@@ -241,6 +241,18 @@ export class LocalOrgStore implements IOrgStore {
 		return m && isLive(m) ? m : null;
 	}
 
+	async getOrgMembersFor(
+		_ctx: RequestContext,
+		orgIds: readonly string[],
+		userId: string
+	): Promise<Map<string, OrgMember | null>> {
+		const { orgMembers } = await this.loader.get();
+		const byOrgId = new Map(
+			orgMembers.filter((m) => m.userId === userId && isLive(m)).map((m) => [m.orgId, m])
+		);
+		return new Map(orgIds.map((id) => [id, byOrgId.get(id) ?? null]));
+	}
+
 	async findUserMembership(
 		_ctx: RequestContext,
 		userId: string

@@ -260,6 +260,18 @@ export class LocalProjectStore implements IProjectStore {
 		return m && isLive(m) ? m : null;
 	}
 
+	async getProjectMembersFor(
+		_ctx: RequestContext,
+		projectIds: readonly string[],
+		userId: string
+	): Promise<Map<string, ProjectMember | null>> {
+		const { projectMembers } = await this.loader.get();
+		const byProjectId = new Map(
+			projectMembers.filter((m) => m.userId === userId && isLive(m)).map((m) => [m.projectId, m])
+		);
+		return new Map(projectIds.map((id) => [id, byProjectId.get(id) ?? null]));
+	}
+
 	async addProjectMember(ctx: RequestContext, member: ProjectMember): Promise<void> {
 		const store = await this.loader.get();
 		// Reactivate a prior soft-deleted row rather than piling rows up.

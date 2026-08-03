@@ -18,7 +18,6 @@ import {
 import type {
 	DefinitionRecord,
 	DefinitionVersion,
-	OrgMember,
 	Project,
 	ProjectMember,
 	ComputeServerConfig,
@@ -81,32 +80,32 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		// Resolve membership context per project: the caller's project-level row
 		// (drives `canEdit`) and the caller's org-level row in that project's org
-		// (drives `canView` for org/public visibility). Org rows fetched once per
-		// org and reused across that org's projects to avoid N+1.
+		// (drives `canView` for org/public visibility). Both arrive in one bulk
+		// read each, so `canView` below runs with NO further I/O.
 		// `instance_admin` gets NO content bypass — follows canView like everyone
 		// else (Permissions.md §2). Reclaim is the explicit escalation path.
-		const orgMemberByOrgId = new Map<string, OrgMember | null>();
-		await Promise.all(
-			orgsPage.items.map(async (org) => {
-				const m = await orgs.getOrgMember(ctx, org.id, ctx.userId).catch(() => null);
-				orgMemberByOrgId.set(org.id, m);
-			})
-		);
-		const projectMembers = await Promise.all(
-			allProjects.map((p) => projectStore.getProjectMember(ctx, p.id, ctx.userId))
-		);
+		const [orgMemberByOrgId, memberByProjectId] = await Promise.all([
+			orgs.getOrgMembersFor(
+				ctx,
+				orgsPage.items.map((o) => o.id),
+				ctx.userId
+			),
+			projectStore.getProjectMembersFor(
+				ctx,
+				allProjects.map((p) => p.id),
+				ctx.userId
+			)
+		]);
 
-		const visibleIndexes = allProjects
-			.map((project, i) => ({ project, i }))
-			.filter(({ project, i }) =>
-				canView(
-					projectAccessInputFromRows(ctx, project, {
-						member: projectMembers[i],
-						orgMember: orgMemberByOrgId.get(project.orgId) ?? null
-					})
-				)
-			);
-		const accessibleProjects = visibleIndexes.map(({ project }) => project);
+		const visibleProjects = allProjects.filter((project) =>
+			canView(
+				projectAccessInputFromRows(ctx, project, {
+					member: memberByProjectId.get(project.id) ?? null,
+					orgMember: orgMemberByOrgId.get(project.orgId) ?? null
+				})
+			)
+		);
+		const accessibleProjects = visibleProjects;
 
 		// Only show definitions belonging to accessible projects
 		const projectIds = new Set(accessibleProjects.map((p) => p.id));
@@ -114,25 +113,25 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		// Load members for projects if user can manage projects
 		let projects: ProjectWithMembers[];
-		const editInput = (project: Project, i: number) =>
+		const editInput = (project: Project) =>
 			projectAccessInputFromRows(ctx, project, {
-				member: projectMembers[i],
+				member: memberByProjectId.get(project.id) ?? null,
 				orgMember: orgMemberByOrgId.get(project.orgId) ?? null
 			});
 
 		if (canManageProjects) {
 			projects = await Promise.all(
-				visibleIndexes.map(async ({ project, i }) => ({
+				visibleProjects.map(async (project) => ({
 					...project,
 					members: (await projectStore.listProjectMembers(ctx, project.id, { limit: 200 })).items,
-					canEdit: canEdit(editInput(project, i))
+					canEdit: canEdit(editInput(project))
 				}))
 			);
 		} else {
-			projects = visibleIndexes.map(({ project, i }) => ({
+			projects = visibleProjects.map((project) => ({
 				...project,
 				members: [],
-				canEdit: canEdit(editInput(project, i))
+				canEdit: canEdit(editInput(project))
 			}));
 		}
 

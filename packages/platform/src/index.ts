@@ -75,6 +75,7 @@ export {
 // definitions
 export type {
 	DefinitionFileExt,
+	DefinitionListItem,
 	DefinitionRecord,
 	DefinitionRecordPatch,
 	DefinitionStatus,
@@ -87,7 +88,8 @@ export {
 	GH_EXTENSIONS,
 	COVER_IMAGE_EXTENSIONS,
 	ALLOWED_UPLOAD_EXTENSIONS,
-	COVER_IMAGE_CONTENT_TYPES
+	COVER_IMAGE_CONTENT_TYPES,
+	toDefinitionListItem
 } from './definitions/types.js';
 export { definitionPaths } from './definitions/paths.js';
 export type { UpdateMetadataInput } from './definitions/schemas.js';

@@ -270,6 +270,26 @@ export class SupabaseProjectStore implements IProjectStore {
 		return data ? rowToProjectMember(data) : null;
 	}
 
+	async getProjectMembersFor(
+		ctx: RequestContext,
+		projectIds: readonly string[],
+		userId: string
+	): Promise<Map<string, ProjectMember | null>> {
+		const result = new Map<string, ProjectMember | null>(projectIds.map((id) => [id, null]));
+		if (projectIds.length === 0) return result;
+
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('project_members')
+			.select(PROJECT_MEMBER_COLUMNS)
+			.in('project_id', [...projectIds])
+			.eq('user_id', userId)
+			.is('deleted_at', null);
+		if (error) throw mapPostgrestError(error);
+		for (const row of data ?? []) result.set(row.project_id, rowToProjectMember(row));
+		return result;
+	}
+
 	async addProjectMember(ctx: RequestContext, member: ProjectMember): Promise<void> {
 		// Upsert reactivates a prior soft-deleted row instead of throwing
 		// duplicate-key. Mirrors LocalProjectStore.addProjectMember.

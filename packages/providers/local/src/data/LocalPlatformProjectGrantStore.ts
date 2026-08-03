@@ -40,6 +40,16 @@ export class LocalPlatformProjectGrantStore implements IPlatformProjectGrantStor
 		return grants.filter((g) => g.projectId === projectId);
 	}
 
+	async listByProjects(
+		_ctx: RequestContext,
+		projectIds: readonly string[]
+	): Promise<Map<string, PlatformProjectGrant[]>> {
+		const { grants } = await this.read();
+		const result = new Map(projectIds.map((id) => [id, [] as PlatformProjectGrant[]]));
+		for (const g of grants) result.get(g.projectId)?.push(g);
+		return result;
+	}
+
 	async create(_ctx: RequestContext, grant: PlatformProjectGrant): Promise<void> {
 		const data = await this.read();
 		if (data.grants.some((g) => g.id === grant.id)) {

@@ -1,15 +1,67 @@
+import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
-import { requireCanManage, requireCanEditProjectSettings } from '$lib/server/access.server';
+import {
+	getOrganizationProvider,
+	getPlatformProjectGrantStore,
+	getProjectProvider
+} from '$lib/server/providers.server';
+import {
+	requireCanManage,
+	requireCanEditProjectSettings,
+	projectAccessInputFromRows
+} from '$lib/server/access.server';
 import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { slugify } from '@selvajs/platform';
+import { slugify, SYSTEM_CONTEXT, canView, canEdit, canSolve } from '@selvajs/platform';
 import {
 	ProjectVisibilitySchema,
 	canChangeVisibilityToPublic,
 	validateProjectFlags,
 	withAdminBypass
 } from '@selvajs/platform';
+
+/**
+ * Project detail plus the caller's effective capabilities on it.
+ *
+ * A project the caller cannot view returns 404, not 403 — `403` would confirm
+ * the id exists to anyone probing.
+ */
+export const GET: RequestHandler = async ({ params, locals }) => {
+	const { id } = params;
+	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
+	if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+	const ctx = locals.ctx;
+
+	try {
+		const project = await getProjectProvider().getProject(SYSTEM_CONTEXT, id);
+		if (!project) apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+
+		const [orgMembers, projectMembers, grants] = await Promise.all([
+			getOrganizationProvider().getOrgMembersFor(SYSTEM_CONTEXT, [project.orgId], ctx.userId),
+			getProjectProvider().getProjectMembersFor(SYSTEM_CONTEXT, [project.id], ctx.userId),
+			project.visibility === 'platform'
+				? getPlatformProjectGrantStore().listByProject(SYSTEM_CONTEXT, project.id)
+				: Promise.resolve([])
+		]);
+
+		const member = projectMembers.get(project.id) ?? null;
+		const input = projectAccessInputFromRows(ctx, project, {
+			member,
+			orgMember: orgMembers.get(project.orgId) ?? null,
+			platformGrants: grants
+		});
+		if (!canView(input)) apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+
+		return json({
+			...project,
+			role: member?.role ?? null,
+			canEdit: canEdit(input),
+			canSolve: canSolve(input)
+		});
+	} catch (err) {
+		handleApiError(err, 'Failed to load project');
+	}
+};
 
 const UpdateProjectBody = z
 	.object({
