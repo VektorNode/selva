@@ -89,7 +89,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "catalog:",
-		"supabase": "^2.110.0",
+		"supabase": "^2.111.0",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}
