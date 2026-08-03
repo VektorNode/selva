@@ -6,8 +6,8 @@ catalogs:
   default:
     '@floating-ui/dom': ^1.8.0
     '@iconify/svelte': ^5.2.1
-    '@lucide/svelte': ^1.27.0
-    '@playwright/test': ^1.62.0
+    '@lucide/svelte': ^1.28.0
+    '@playwright/test': ^1.62.1
     '@sveltejs/adapter-auto': ^7.0.1
     '@sveltejs/kit': 2.70.1
     '@sveltejs/vite-plugin-svelte': ^7.2.0
@@ -33,7 +33,7 @@ catalogs:
     # restructured compiler host. Tilde so a caret can't walk into the next
     # major on its own — see the matching ignore in .github/dependabot.yml.
     typescript: ~6.0.3
-    vite: ^8.1.5
+    vite: ^8.2.0
     vitest: ^4.1.10
     ws: ^8.21.1
     '@types/ws': ^8.5.13
