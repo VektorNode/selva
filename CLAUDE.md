@@ -34,6 +34,12 @@ The web app runs in two modes: **Local** (`@selvajs/plugin-ui`, the drag-and-dro
 - Write self-documenting code. Keep it simple; avoid premature abstractions.
 - Error handling only at system boundaries (user input, external APIs).
 - Section headers: a title between two lines of `// ====...` (76 equals signs).
+- **Route handlers parse, guard, delegate, serialize — nothing else.** A rule that
+  two endpoints must agree on belongs in `$lib/server/` or `@selvajs/server`, not
+  copied into both. `/api/admin/*` and `/api/v1/*` are siblings over one core, so a
+  rule duplicated across them drifts silently: the compute-config apiKey merge
+  (`$lib/server/compute/serverConfigWrite.ts`) clears or leaks a stored credential
+  if the two copies disagree, and nothing fails at build time.
 
 ### Comments
 

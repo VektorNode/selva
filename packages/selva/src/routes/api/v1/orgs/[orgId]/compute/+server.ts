@@ -11,6 +11,12 @@ import {
 	type OrgComputeServer
 } from '@selvajs/platform';
 import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
+import {
+	validateIncomingServers,
+	resolveApiKey,
+	storedKeysById,
+	type IncomingServerBase
+} from '$lib/server/compute/serverConfigWrite';
 
 /**
  * Per-org compute endpoint. Manages this org's own servers
@@ -23,17 +29,8 @@ import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
  * `ALLOW_ORG_COMPUTE_OVERRIDE`; when off, both methods 403.
  */
 
-interface IncomingOrgServer {
-	id: string;
-	label: string;
-	serverUrl: string;
-	apiKey?: string | null;
-	timeoutMs?: number;
-	retryCount?: number;
-}
-
 interface IncomingConfig {
-	servers: IncomingOrgServer[];
+	servers: IncomingServerBase[];
 	/**
 	 * Org default selection. May reference any server visible to this org
 	 * — a platform server shared with us (or `'all'`, or the global
@@ -113,29 +110,13 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (!Array.isArray(incoming.servers))
 		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'servers must be an array');
 
-	for (const s of incoming.servers) {
-		if (!s.id || typeof s.id !== 'string')
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs an id');
-		if (!s.label || typeof s.label !== 'string')
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a label');
-		if (!s.serverUrl || typeof s.serverUrl !== 'string')
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a serverUrl');
-		try {
-			new URL(s.serverUrl);
-		} catch {
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Invalid serverUrl: ${s.serverUrl}`);
-		}
-		if (s.apiKey !== undefined && s.apiKey !== null && typeof s.apiKey !== 'string')
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a string, null, or omitted');
-	}
+	validateIncomingServers(incoming.servers);
 
 	const provider = getComputeServerConfigStore();
 	// Needs every key: unchanged servers keep their stored key across the write.
 	const existing = await provider.getConfig(ctx, { includeApiKeys: true });
-	const storedKeyById = new Map(
-		existing.servers
-			.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId)
-			.map((s) => [s.id, s.apiKey])
+	const storedKeys = storedKeysById(
+		existing.servers.filter((s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId)
 	);
 
 	const next: OrgComputeServer[] = incoming.servers.map((s) => ({
@@ -146,7 +127,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		serverUrl: s.serverUrl,
 		timeoutMs: s.timeoutMs,
 		retryCount: s.retryCount,
-		apiKey: s.apiKey === null ? undefined : s.apiKey ? s.apiKey : storedKeyById.get(s.id)
+		apiKey: resolveApiKey(s.apiKey, storedKeys.get(s.id))
 	}));
 
 	// Validate the requested orgDefault is visible to this org. Build the

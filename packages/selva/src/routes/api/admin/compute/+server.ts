@@ -9,6 +9,12 @@ import {
 	type PlatformComputeServer
 } from '@selvajs/platform';
 import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
+import {
+	validateIncomingServers,
+	resolveApiKey,
+	storedKeysById,
+	type IncomingServerBase
+} from '$lib/server/compute/serverConfigWrite';
 import { renderThrown } from '@selvajs/server/logging';
 
 /**
@@ -19,14 +25,8 @@ import { renderThrown } from '@selvajs/server/logging';
 
 type ServerPayload = Omit<PlatformComputeServer, 'apiKey' | 'hasApiKey'> & { hasApiKey: boolean };
 
-interface IncomingServer {
-	id: string;
-	label: string;
-	serverUrl: string;
+interface IncomingServer extends IncomingServerBase {
 	sharedWith: 'all' | string[];
-	apiKey?: string | null;
-	timeoutMs?: number;
-	retryCount?: number;
 }
 
 interface IncomingConfig {
@@ -74,18 +74,10 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	if (!Array.isArray(incoming.servers))
 		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'servers must be an array');
 
+	validateIncomingServers(incoming.servers);
+
+	// Platform-only: org servers have an owner instead of a share list.
 	for (const s of incoming.servers) {
-		if (!s.id || typeof s.id !== 'string')
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs an id');
-		if (!s.label || typeof s.label !== 'string')
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a label');
-		if (!s.serverUrl || typeof s.serverUrl !== 'string')
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a serverUrl');
-		try {
-			new URL(s.serverUrl);
-		} catch {
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Invalid serverUrl: ${s.serverUrl}`);
-		}
 		if (s.sharedWith !== 'all' && !Array.isArray(s.sharedWith)) {
 			apiError(
 				400,
@@ -96,8 +88,6 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		if (Array.isArray(s.sharedWith) && s.sharedWith.some((x) => typeof x !== 'string')) {
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'sharedWith array must contain strings');
 		}
-		if (s.apiKey !== undefined && s.apiKey !== null && typeof s.apiKey !== 'string')
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a string, null, or omitted');
 	}
 
 	if (incoming.defaultServerId) {
@@ -115,14 +105,14 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		// One of the few reads that genuinely needs every key: unchanged servers
 		// keep their stored key, and `evictChangedServers` diffs on key rotation.
 		const existing = await provider.getConfig(locals.ctx!, { includeApiKeys: true });
-		const storedKeyById = new Map(platformServers(existing).map((s) => [s.id, s.apiKey]));
+		const storedKeys = storedKeysById(platformServers(existing));
 
 		const next: ComputeServerConfig[] = incoming.servers.map(
 			({ apiKey, sharedWith, ...rest }): PlatformComputeServer => ({
 				...rest,
 				scope: 'platform',
 				sharedWith: sharedWith === 'all' ? 'all' : [...sharedWith],
-				apiKey: apiKey === null ? undefined : apiKey ? apiKey : storedKeyById.get(rest.id)
+				apiKey: resolveApiKey(apiKey, storedKeys.get(rest.id))
 			})
 		);
 
