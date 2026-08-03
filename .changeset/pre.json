@@ -19,6 +19,7 @@
     "@selvajs/website": "0.0.1"
   },
   "changesets": [
+    "api-v1-contract-and-handlers",
     "compute-package-cleanup",
     "edges-config-passthrough",
     "plugin-ui-visualization-package-move",
