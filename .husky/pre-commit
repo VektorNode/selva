@@ -16,4 +16,8 @@ if ! command -v pnpm >/dev/null 2>&1; then
 	exit 1
 fi
 
-pnpm lint-staged
+# pnpm 11 runs an implicit install before any script when node_modules drifts
+# from the lockfile. In a hook there is no TTY, so if that install wants to
+# purge node_modules it aborts and takes the commit with it. Formatting staged
+# files doesn't need fresh deps — run lint-staged against what's on disk.
+pnpm --config.verify-deps-before-run=false lint-staged

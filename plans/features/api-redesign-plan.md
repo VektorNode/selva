@@ -54,13 +54,37 @@ The existing envelope from [api-errors.ts](../../packages/selva/src/lib/server/a
 the OpenAPI spec. No route may return a bare `error(...)` — already true for all 40 route files;
 a conformance test keeps it that way (Phase D).
 
+### Response envelope
+
+**Collections return `{ items: T[], nextCursor?: string }`. Single resources return the resource
+object bare.** No resource-named keys — `{ items: [...] }`, never `{ projects: [...] }`; the project
+object itself, never `{ project: {...} }`.
+
+This is a change from today: `GET /api/projects` currently returns `{ projects: page.items }`,
+discarding the `Page<T>` the store already handed it. A resource-named key forces every client —
+UI, CLI, MCP — to write one unwrapper per endpoint instead of one pagination helper for the whole
+API. Phase A rewrites these call sites anyway, so the cost of fixing it is close to zero now and
+grows with every consumer added later.
+
 ### Pagination
 
 Cursor-based, straight from the platform layer
 ([pagination.ts](../../packages/platform/src/pagination.ts)): query params
 `?limit=&cursor=&orderBy=&orderDir=` → response `{ items: T[], nextCursor?: string }`.
 Limits clamp to `MAX_PAGE_LIMIT` (200), default 50. Cursors are opaque. Every list endpoint —
-no unpaginated collections in v1.
+no unpaginated collections in v1. `GET /api/projects`'s hardcoded `limit: 200` with no cursor
+pass-through is the current offender; it becomes a normal paginated list.
+
+### Idempotency
+
+`POST /api/v1/definitions/{guid}/solve` accepts an optional `Idempotency-Key` header. A repeated
+key within the retention window returns the first response instead of re-solving.
+
+Solve is the one action with real per-call cost, and its two biggest non-browser consumers both
+retry by nature: a CLI wrapping a flaky network, and an LLM re-issuing a tool call it thinks
+failed. Without a key, both double-charge compute. Retrofitting this after PATs ship means changing
+a published contract, so it lands with the endpoint. Scope for v1.0: in-memory store keyed by
+`(tokenId|userId, key)`, short TTL — enough to absorb retries, not a durable result cache.
 
 ### Stability & change policy
 
@@ -70,12 +94,33 @@ no unpaginated collections in v1.
   renames, type or semantics changes). Breaking change ⇒ new route under `/api/v2` alongside.
 - Uploads (definition create, version upload, image) are `multipart/form-data`; documented as such.
 
-### Auth
+### Auth & the two scopes
 
-- `/api/v1/*` accepts **session cookie or `Authorization: Bearer sk_…`** (PAT, per token-plan).
-  This is the _only_ prefix that accepts PATs.
-- `/admin/api/*` stays unversioned, session-only, internal-by-definition.
+The API has exactly two scopes, and the URL says which one you're in:
+
+| Prefix         | Scope                               | Credentials       | Versioned |
+| -------------- | ----------------------------------- | ----------------- | --------- |
+| `/api/v1/*`    | Tenant — acts as the caller's `ctx` | Cookie **or** PAT | Yes       |
+| `/api/admin/*` | Platform — instance administration  | Cookie **only**   | No        |
+
+- `/api/v1/*` is the _only_ prefix that accepts `Authorization: Bearer sk_…`. The token-plan gates
+  on `pathname.startsWith('/api/v1/')` exactly, so this stays an unconditional prefix test with no
+  carve-outs inside it.
+- **`/admin/api/*` moves to `/api/admin/*`** (Phase A). Same handlers, same session-only treatment,
+  same per-handler `requireInstanceAdmin`. What changes is that all HTTP endpoints live under one
+  `/api` root and `/admin` becomes purely the page tree.
 - `/api/health` stays unversioned (LB probe, allowlisted in the route classifier).
+
+Why the split is by scope and not folded into one tree: `/admin/api/projects` lists **every org as
+`SYSTEM_CONTEXT`**, while `/api/projects` lists **the acting org as the caller**. Same resource
+name, deliberately different reach — not duplication to merge. Putting admin inside `/api/v1/*`
+would make instance administration bearer-reachable by default and require an exception inside the
+prefix that is supposed to be uniform.
+
+**Known gap this move does not fix:** `/admin/+layout.server.ts` guards page loads only — SvelteKit
+does not run layout loads for `+server.ts`. Admin endpoints are protected solely by their own
+`requireInstanceAdmin` call. True today, true after the move; the Phase D conformance test is what
+turns it from convention into something enforced.
 
 ---
 
@@ -86,24 +131,26 @@ Status legend: **moved** = same handler, new path; **method** = same handler, co
 
 ### Definitions
 
-| Method | Path                                              | Status  | Notes                                                                                                                                                                                           |
-| ------ | ------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/v1/definitions`                             | **NEW** | List visible definitions. Filters: `projectId`, `status`; cursor pagination (`DefinitionListOptions`). Access filtering extracted from the library load (Phase B).                              |
-| POST   | `/api/v1/definitions`                             | moved   | Create (multipart: file + metadata). Was `POST /api/definitions`.                                                                                                                               |
-| GET    | `/api/v1/definitions/{guid}`                      | **NEW** | Detail: record + live/draft version summary.                                                                                                                                                    |
-| PATCH  | `/api/v1/definitions/{guid}`                      | method  | Metadata update. Was `PUT` — handler unchanged.                                                                                                                                                 |
-| DELETE | `/api/v1/definitions/{guid}`                      | moved   | Soft-delete.                                                                                                                                                                                    |
-| GET    | `/api/v1/definitions/{guid}/versions`             | moved   |                                                                                                                                                                                                 |
-| POST   | `/api/v1/definitions/{guid}/versions`             | method  | Upload new version (multipart). Was `POST /api/definitions/{guid}` — now lives on the collection it creates into.                                                                               |
-| GET    | `/api/v1/definitions/{guid}/versions/{versionId}` | **NEW** | Single version (metadata + changeNote).                                                                                                                                                         |
-| DELETE | `/api/v1/definitions/{guid}/versions/{versionId}` | moved   |                                                                                                                                                                                                 |
-| POST   | `/api/v1/definitions/{guid}/publish`              | moved   | Action.                                                                                                                                                                                         |
-| POST   | `/api/v1/definitions/{guid}/solve`                | **NEW** | **Flagship public action.** Thin alias over the compute handler: injects `definitionUrl: "local:{guid}"`, passes `inputs`/`values`/`channel`/`versionId` through. One implementation (Phase C). |
-| POST   | `/api/v1/definitions/{guid}/image`                | moved   | Upload preview image (multipart).                                                                                                                                                               |
-| GET    | `/api/v1/definitions/{guid}/image/{filename}`     | moved   | Public read (embedded in payloads/pages).                                                                                                                                                       |
-| GET    | `/api/v1/definitions/{guid}/share-links`          | moved   |                                                                                                                                                                                                 |
-| POST   | `/api/v1/definitions/{guid}/share-links`          | moved   |                                                                                                                                                                                                 |
-| DELETE | `/api/v1/definitions/{guid}/share-links/{linkId}` | moved   |                                                                                                                                                                                                 |
+| Method | Path                                                     | Status  | Notes                                                                                                                                                                                                                      |
+| ------ | -------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/definitions`                                    | **NEW** | List visible definitions. Filters: `projectId`, `status`; cursor pagination (`DefinitionListOptions`). Access filtering extracted from the library load (Phase B).                                                         |
+| POST   | `/api/v1/definitions`                                    | moved   | Create (multipart: file + metadata). Was `POST /api/definitions`.                                                                                                                                                          |
+| GET    | `/api/v1/definitions/{guid}`                             | **NEW** | Detail: record + live/draft version summary.                                                                                                                                                                               |
+| PATCH  | `/api/v1/definitions/{guid}`                             | method  | Metadata update. Was `PUT` — handler unchanged.                                                                                                                                                                            |
+| DELETE | `/api/v1/definitions/{guid}`                             | moved   | Soft-delete.                                                                                                                                                                                                               |
+| GET    | `/api/v1/definitions/{guid}/versions`                    | moved   |                                                                                                                                                                                                                            |
+| POST   | `/api/v1/definitions/{guid}/versions`                    | method  | Upload new version (multipart). Was `POST /api/definitions/{guid}` — now lives on the collection it creates into.                                                                                                          |
+| GET    | `/api/v1/definitions/{guid}/versions/{versionId}`        | **NEW** | Single version (metadata + changeNote).                                                                                                                                                                                    |
+| GET    | `/api/v1/definitions/{guid}/versions/{versionId}/schema` | **NEW** | Stored `UISchema` for that version. No compute round-trip — reads what the upload cached.                                                                                                                                  |
+| GET    | `/api/v1/definitions/{guid}/schema`                      | **NEW** | Convenience alias → the live version's schema. 404 if nothing is published.                                                                                                                                                |
+| DELETE | `/api/v1/definitions/{guid}/versions/{versionId}`        | moved   |                                                                                                                                                                                                                            |
+| POST   | `/api/v1/definitions/{guid}/publish`                     | moved   | Action.                                                                                                                                                                                                                    |
+| POST   | `/api/v1/definitions/{guid}/solve`                       | **NEW** | **Flagship public action.** Thin alias over the compute handler: injects `definitionUrl: "local:{guid}"`, passes `inputs`/`values`/`channel`/`versionId` through. One implementation (Phase C). Honours `Idempotency-Key`. |
+| POST   | `/api/v1/definitions/{guid}/image`                       | moved   | Upload preview image (multipart).                                                                                                                                                                                          |
+| GET    | `/api/v1/definitions/{guid}/image/{filename}`            | moved   | Public read (embedded in payloads/pages).                                                                                                                                                                                  |
+| GET    | `/api/v1/definitions/{guid}/share-links`                 | moved   |                                                                                                                                                                                                                            |
+| POST   | `/api/v1/definitions/{guid}/share-links`                 | moved   |                                                                                                                                                                                                                            |
+| DELETE | `/api/v1/definitions/{guid}/share-links/{linkId}`        | moved   |                                                                                                                                                                                                                            |
 
 ### Projects
 
@@ -150,7 +197,9 @@ Status legend: **moved** = same handler, new path; **method** = same handler, co
 
 ### Deliberately outside v1
 
-- `/admin/api/*` — instance administration; unversioned, session-only, never PAT-reachable.
+- `/api/admin/*` (moved from `/admin/api/*`) — instance administration; unversioned, session-only,
+  never PAT-reachable. Relocated for tree consistency, but **not** redesigned: no v1 conventions
+  apply, no OpenAPI coverage, no stability promise. It is internal by definition.
 - `/api/health` — LB probe; moving it breaks probes for zero gain.
 - `/api/diag/throughput` — dev diagnostics; stays unversioned internal.
 - `/api/files/[...path]` — blob serving with URLs embedded in stored payloads; renaming risks
@@ -161,18 +210,33 @@ Status legend: **moved** = same handler, new path; **method** = same handler, co
 
 ## Phases
 
-### Phase A — mechanical move + method/path fixes (one PR, no behavior change)
+### Phase A — move the tree, fix methods, normalize envelopes (one PR)
+
+Mechanical except for step 3, which changes response shapes. Every caller is in-repo and is being
+edited in this PR anyway, so both land together rather than churning the same 15 files twice.
 
 1. Move every route dir listed "moved/renamed/method" from `routes/api/…` to `routes/api/v1/…`
    with the corrected method/path. Handlers untouched except the export name (`PUT`→`PATCH`,
    `POST`→`PUT`) and the version-upload relocation (`definitions/[guid]` POST body →
    `definitions/[guid]/versions` POST).
-2. Update all in-repo callers: ~30 `fetch('/api/…')` sites in 15 files (plus a repo-wide
+2. **Move `routes/admin/api/**` → `routes/api/admin/**`** (16 `+server.ts` files). Handlers
+   untouched — `requireInstanceAdmin` / `requireManageCompute` / `requirePermission` stay exactly as
+   they are. Update the two in-repo callers found by grep:
+   [useServerHealth.svelte.ts:54](../../packages/selva/src/lib/composables/useServerHealth.svelte.ts#L54)
+   and [AssetUpload.svelte:24](../../packages/selva/src/lib/components/AssetUpload.svelte#L24).
+   Note `admin/api/system/health` is a distinct endpoint from `/api/health` — the latter is the LB
+   probe and does not move.
+3. **Normalize response envelopes** on every moved route: collections → `{ items, nextCursor? }`,
+   single resources → the bare object. `GET /projects` stops hardcoding `limit: 200` and passes
+   `limit`/`cursor`/`orderBy`/`orderDir` through to the store. This is the breaking-shape step;
+   it touches both the handlers and the UI call sites that destructure the old keys.
+4. Update all in-repo callers: ~30 `fetch('/api/…')` sites in 15 files (plus a repo-wide
    grep for constructed URLs and `packages/cli`). Legacy `/api/*` routes are **deleted**, not
    deprecated — pre-launch, nothing external to break.
-3. Route classifier / hooks: confirm `isJsonApiRoute` (`/api/` prefix) still covers `/api/v1/`
-   (it does — prefix match) and that nothing allowlists old paths.
-4. If STRUCTURE.md or other docs enumerate routes, update them.
+5. Route classifier / hooks: `isJsonApiRoute` (line 251) currently ORs `/api/` with `/admin/api/` —
+   after the move it collapses to the single `/api/` prefix test. Confirm nothing allowlists old
+   paths.
+6. If STRUCTURE.md or other docs enumerate routes, update them.
 
 ### Phase B — author the reads (the real new work)
 
@@ -184,23 +248,48 @@ Status legend: **moved** = same handler, new path; **method** = same handler, co
    - project detail + org member list are thin over existing store calls.
 2. New routes: `GET /definitions`, `GET /definitions/{guid}`, `GET /definitions/{guid}/versions/{versionId}`,
    `GET /projects/{id}`, `GET /orgs/{orgId}/members`, `DELETE /orgs/{orgId}/members/{userId}`.
-3. Switch the load functions to the extracted helpers (pure refactor, same data).
-4. Every new list endpoint: cursor pagination from day one.
+3. **Schema reads** — `GET /definitions/{guid}/versions/{versionId}/schema` plus the
+   `/definitions/{guid}/schema` live-version alias. Nothing today reads a stored definition's
+   schema over HTTP: `POST /compute/schema` is a _pre-upload_ utility that takes a `.gh` file and
+   round-trips to Rhino.Compute, and it is `x-internal`. Any non-browser client needs to know a
+   definition's inputs before solving it, so this is the read-side partner to
+   `POST /definitions/{guid}/solve`.
+   Schemas belong to a **version**, not a definition — hence the sub-resource, with the
+   definition-level path as a convenience alias rather than the canonical location.
+4. Switch the load functions to the extracted helpers (pure refactor, same data).
+5. Every new list endpoint: cursor pagination from day one.
 
 ### Phase C — definition-addressed solve
 
 Extract the body-independent core of [api/compute/+server.ts](../../packages/selva/src/routes/api/compute/+server.ts)
 so `POST /api/v1/definitions/{guid}/solve` can delegate with `definitionUrl = "local:{guid}"`
 (reject a conflicting `definitionUrl` in the body with 400). Share-token and remote-URL flows stay
-on `/api/v1/compute` (x-internal). This is the endpoint the MCP `solve_definition` tool maps to.
+on `/api/v1/compute` (x-internal). This is the endpoint the CLI's `solve` command and the MCP
+`solve_definition` tool both map to.
+
+**Idempotency lands here, not later.** Optional `Idempotency-Key` header; a repeat within the TTL
+replays the stored response instead of re-solving. In-memory store keyed by
+`(tokenId|userId, key)` — the goal is absorbing client retries, not durable result caching. Adding
+it after PATs ship would mean changing a contract that already has consumers.
 
 ### Phase D — contract artifacts
 
 1. **OpenAPI spec** `packages/selva/openapi/v1.yaml`: all v1 endpoints, auth schemes (cookie +
    bearer), scopes (from token-plan), pagination params, full `ApiErrorCode` enum, `x-internal` tags.
-2. **Conformance test** (vitest): enumerate `routes/api/v1/**/+server.ts` exports and assert every
-   method+path appears in the spec (and vice versa for non-`x-internal` paths) — the spec can't
-   silently drift from the routes.
+2. **Conformance test** (vitest) — enforces the contract, not just its existence. Enumerate
+   `routes/api/v1/**/+server.ts` exports and assert:
+   - every method+path appears in the spec, and every non-`x-internal` spec path exists as a route
+     (no drift in either direction);
+   - no handler returns a bare `error(...)` — every failure carries an `ApiErrorCode`;
+   - every collection endpoint accepts `limit`/`cursor` and returns `{ items, nextCursor? }` — a
+     public list endpoint cannot ship unpaginated;
+   - every `routes/api/admin/**` handler calls a platform-permission guard on every exported
+     method. This is the check that makes admin protection structural: the `/admin` layout guard
+     never ran for endpoints, so today "all admin routes guard themselves" holds only by review.
+
+   Without the last three, `x-internal` is an annotation someone remembers to write rather than a
+   boundary the build enforces.
+
 3. **Docs page** `/docs/api` rendering the public subset of the spec.
 
 ---
@@ -214,19 +303,30 @@ on `/api/v1/compute` (x-internal). This is the endpoint the MCP `solve_definitio
   flows through guards that can consume `ctx.apiScope`.
 - Build order: **Phase A/B of this plan first**, then the token plan — PATs should launch against
   the final surface, and the OpenAPI spec (Phase D) can document bearer auth in one pass.
+- **The CLI is the first PAT consumer, ahead of MCP** (token-plan Phase 5). `selva projects list`,
+  `definitions list`, `definitions schema`, `definitions upload`, `solve` are all tenant-scope
+  `/api/v1/*` calls — none need `/api/admin/*`, which is what keeps the cookie-only admin split
+  free. A PAT never widens permissions (token-plan's intersection rule), so CLI output is scoped to
+  what its minting user can already see; `all-projects-admin` is the one deliberate exception and
+  is read/solve only.
 
 ## Files to create / modify (representative)
 
 **Create**
 
-- `packages/selva/src/routes/api/v1/**` (moved route dirs + 6 new read/delete routes)
+- `packages/selva/src/routes/api/v1/**` (moved route dirs + 8 new read/delete routes)
+- `packages/selva/src/routes/api/admin/**` (16 `+server.ts` moved from `routes/admin/api/**`)
 - `packages/selva/src/lib/server/definitions/visibility.server.ts` (extracted list/get helpers)
+- `packages/selva/src/lib/server/idempotency.server.ts` (solve replay store)
 - `packages/selva/openapi/v1.yaml` + spec↔route conformance test
-- `docs/adr/00xx-api-v1-single-surface.md` (records the no-wrapper decision)
+- `docs/adr/00xx-api-v1-single-surface.md` (no-wrapper decision + the two-scope prefix split)
 
 **Modify**
 
-- 15 UI files with `fetch('/api/…')` call sites (+ any constructed-URL callers found by grep)
+- 15 UI files with `fetch('/api/…')` call sites (+ any constructed-URL callers found by grep),
+  including the envelope destructuring changed by Phase A step 3
+- `lib/composables/useServerHealth.svelte.ts`, `lib/components/AssetUpload.svelte` (admin-path move)
+- `hooks.server.ts` (`isJsonApiRoute` collapses to one `/api/` prefix test)
 - `library/+page.server.ts`, `library/[guid]/+page.server.ts`, `team/members/+page.server.ts`
   (switch to extracted helpers)
 - `api/compute/+server.ts` (extract solve core for the alias)
@@ -235,17 +335,24 @@ on `/api/v1/compute` (x-internal). This is the endpoint the MCP `solve_definitio
 **Delete**
 
 - All legacy `packages/selva/src/routes/api/*` route dirs except `health`, `diag`, `files`.
+- `packages/selva/src/routes/admin/api/` entirely (moved, not copied) — `/admin` keeps only pages.
 
 ## Verification
 
 1. `pnpm check && pnpm type-check && pnpm lint && pnpm test` across the workspace.
-2. Grep gate: no `fetch('/api/` outside `/api/v1/`, `/api/health`, `/api/files`, `/admin/api`.
+2. Grep gates: no `fetch('/api/` outside `/api/v1/`, `/api/admin/`, `/api/health`, `/api/files`;
+   no remaining reference to `/admin/api/` anywhere in the repo.
 3. Manual dev pass (`pnpm dev:selva`): library list/detail, project CRUD + members, team members
    - invites, org compute settings, definition upload → new version → publish → solve (runner),
-     share-link solve, starred toggle.
+     share-link solve, starred toggle. **Plus the full `/admin` UI** — its endpoints all moved, and
+     the layout guard never covered them, so a missed call site fails only at runtime.
 4. New reads: `curl /api/v1/definitions` as two users with different access → visibility matches
    the library page for each.
-5. Conformance test green; spec validates; `/docs/api` renders public endpoints only.
+5. Envelope check: every collection response is `{ items, nextCursor? }`; paging a list with
+   `?limit=1` twice yields distinct items and a working cursor.
+6. Idempotency: same `Idempotency-Key` posted twice to `/definitions/{guid}/solve` → one compute
+   call, two identical responses.
+7. Conformance test green; spec validates; `/docs/api` renders public endpoints only.
 
 ## Open questions (non-blocking)
 

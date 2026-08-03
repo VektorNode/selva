@@ -148,10 +148,14 @@ token whose creator lost `read_all_projects` fails the re-check and the scope is
 ## Phase 2 — Token resolution in the hook
 
 In [packages/selva/src/hooks.server.ts](packages/selva/src/hooks.server.ts) `handle`, add a branch
-**before** the `admin_session` cookie read (line 266). **Not** gated on `isJsonApiRoute` — that
-helper (line 237) also matches `/admin/api/*`, and admin endpoints must stay session-only. Gate the
-PAT branch on `pathname.startsWith('/api/v1/')` exactly (the versioned surface from
-[api-redesign-plan.md](api-redesign-plan.md)):
+**before** the `admin_session` cookie read. **Not** gated on `isJsonApiRoute` — that helper matches
+the whole `/api/` tree including the admin subtree, and admin endpoints must stay session-only.
+Gate the PAT branch on `pathname.startsWith('/api/v1/')` exactly (the versioned surface from
+[api-redesign-plan.md](api-redesign-plan.md)).
+
+Note the api-redesign moves `/admin/api/*` → `/api/admin/*`. This does **not** loosen anything: the
+PAT gate is a `/api/v1/` prefix test, and `/api/admin/` does not match it. The two scopes stay
+separated by prefix, just under one `/api` root.
 
 1. Read `Authorization: Bearer sk_…` (new `packages/selva/src/lib/server/apiTokens/resolve.server.ts`,
    modeled on [shareLinks/resolve.server.ts](packages/selva/src/lib/server/shareLinks/resolve.server.ts)
@@ -164,7 +168,7 @@ PAT branch on `pathname.startsWith('/api/v1/')` exactly (the versioned surface f
 4. No token / bad token on an `/api/*` route → fall through to the existing cookie path (so browser
    sessions on `/api/*` still work), and if that also misses → the existing 401 JSON.
 
-**Page routes, `/admin/api/*`, and unversioned `/api/*` (health/diag/files) never accept PATs** —
+**Page routes, `/api/admin/*`, and unversioned `/api/*` (health/diag/files) never accept PATs** —
 only `/api/v1/*`. This keeps the browser attack surface unchanged and keeps instance administration
 off the token path entirely.
 
@@ -173,7 +177,7 @@ off the token path entirely.
 - **Gate minting** with the new permission. New guard `requireCanMintApiTokens(locals)` in
   [packages/selva/src/lib/server/access.server.ts](packages/selva/src/lib/server/access.server.ts)
   (403 unless `manage_api_tokens` or `instance_admin`). Admin grants the permission through the
-  **existing** user-permission UI (`/admin/api/users/[id]` PATCH already sets platform permissions —
+  **existing** user-permission UI (`/api/admin/users/[id]` PATCH already sets platform permissions —
   the new values flow through the enum automatically). The admin UI does **not** pick up new enum
   values by itself: label/description maps are hardcoded in
   [UserListItem.svelte](packages/selva/src/routes/admin/users/UserListItem.svelte) (~lines 41–54) and
@@ -209,7 +213,40 @@ Still owned by THIS plan:
   limiter to a per-token bucket.
 - Bearer-auth + scope documentation contributed into `packages/selva/openapi/v1.yaml`.
 
-## Phase 5 — MCP server (DESIGNED, DEFERRED — build after v1 API is stable)
+## Phase 5 — PAT-driven clients: CLI first, then MCP
+
+Both clients are the **same architecture**: a pure client of `/api/v1` authenticating with a Selva
+PAT, holding no direct DB/provider access, inheriting every scope/permission guarantee for free.
+The CLI ships first because it needs no generated tool schemas — it can be written against the v1
+surface by hand as soon as Phases A/B land.
+
+### 5a — CLI API mode (build once v1 reads exist)
+
+`packages/cli` today is a deploy/scaffold tool that talks to Supabase directly and never to a
+running Selva instance. This adds a second mode: `selva login --token sk_…` stores a PAT, and the
+commands below are thin `/api/v1` calls.
+
+| Command                           | Endpoint                                |
+| --------------------------------- | --------------------------------------- |
+| `selva projects list`             | `GET /api/v1/projects`                  |
+| `selva definitions list`          | `GET /api/v1/definitions`               |
+| `selva definitions get <guid>`    | `GET /api/v1/definitions/{guid}`        |
+| `selva definitions schema <guid>` | `GET /api/v1/definitions/{guid}/schema` |
+| `selva definitions upload <file>` | `POST /api/v1/definitions` (multipart)  |
+| `selva solve <guid> --inputs …`   | `POST /api/v1/definitions/{guid}/solve` |
+
+Notes that shape the CLI's behaviour:
+
+- **A PAT never widens permissions.** `definitions list` shows what the minting user can already
+  see, not the whole instance. Worth saying plainly in `--help` so the scoping isn't read as a bug.
+- **No admin commands.** Instance administration is `/api/admin/*`, cookie-only and not
+  PAT-reachable. Adding `selva admin …` later is a deliberate decision to widen token reach, not
+  something to inherit by accident.
+- `solve` sends an `Idempotency-Key` per invocation so a retried command doesn't double-charge
+  compute (api-redesign Phase C).
+- Paging is one helper over `{ items, nextCursor }` — uniform across every collection.
+
+### 5b — MCP server (DESIGNED, DEFERRED — build after v1 API is stable)
 
 A separate package `packages/mcp-server/` (Node MCP server) that is a **pure client of `/api/v1`** using a
 Selva PAT — it holds no direct DB/provider access, so it inherits every scope/permission guarantee for free.
@@ -217,8 +254,9 @@ Selva PAT — it holds no direct DB/provider access, so it inherits every scope/
 - **Auth**: operator supplies a Selva PAT (`SELVA_API_TOKEN=sk_…`) + base URL. All MCP tool calls carry it as `Authorization: Bearer`.
 - **Tools** (map 1:1 to v1 endpoints, gated by the token's scopes so an LLM literally cannot exceed them):
   `list_projects`, `get_definition`, `list_definitions`, `solve_definition` (the big one — run a GH definition
-  with inputs, return outputs), `list_versions`, `read_schema`. Write tools (`create_definition`,
-  `publish_version`) only if the token carries `write`.
+  with inputs, return outputs), `list_versions`, `read_schema` (→ `GET /definitions/{guid}/schema`,
+  added in api-redesign Phase B — an LLM needs a definition's inputs before it can solve it). Write
+  tools (`create_definition`, `publish_version`) only if the token carries `write`.
 - **Transport**: stdio for local (Claude Desktop / Claude Code), optional HTTP/SSE for hosted.
 - **Why deferred**: the tool schemas should be generated from the frozen OpenAPI v1 spec (Phase 4). Building
   MCP against a moving `/api/*` means reworking tool schemas on every internal change. Ship v1 first, then MCP is mechanical.
@@ -237,6 +275,8 @@ Selva PAT — it holds no direct DB/provider access, so it inherits every scope/
 - `packages/selva/src/routes/api/v1/tokens/+server.ts`, `.../tokens/[id]/+server.ts`
 - `packages/selva/src/routes/settings/tokens/+page.{svelte,server.ts}` (+ new `settings/+layout.svelte` — section doesn't exist yet)
 - (v1 namespace + `packages/selva/openapi/v1.yaml` come from [api-redesign-plan.md](api-redesign-plan.md))
+- `packages/cli/src/api/` — PAT-authenticated v1 client + credential store (Phase 5a); the existing
+  CLI has no HTTP client for a running Selva instance, only direct Supabase calls
 - `docs/adr/00xx-api-tokens-and-mcp.md`
 - Conformance/unit tests per store (mirror `packages/providers/local/src/**/__tests__/`)
 
@@ -260,7 +300,7 @@ Selva PAT — it holds no direct DB/provider access, so it inherits every scope/
    - Same token `POST`ing an edit → 403 (`FORBIDDEN`).
    - Expired/revoked token → 401 (`UNAUTHORIZED`).
    - A user **without** `manage_api_tokens` hitting `POST /api/v1/tokens` → 403; their `/settings/tokens` shows the "ask an admin" state.
-4. **Isolation regression**: confirm session-cookie browser auth on `/api/v1/*` still works (PAT branch falls through cleanly) and that `/admin/api/*` rejects bearer tokens.
+4. **Isolation regression**: confirm session-cookie browser auth on `/api/v1/*` still works (PAT branch falls through cleanly) and that `/api/admin/*` rejects bearer tokens — including with a token whose creator holds `instance_admin`, since the prefix gate must not care about permissions.
 5. **Docs**: OpenAPI spec validates; `/docs/api` renders.
 6. MCP: N/A this phase (design + ADR only).
 
