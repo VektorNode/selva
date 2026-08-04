@@ -3,9 +3,9 @@
 How the Grasshopper plugin's pieces actually fit together — the wiring rules and identity
 invariants that decide whether a definition works.
 
-[docs/plugin/](./docs/plugin/) is the authoring guide: what each component is, where it sits on the
-ribbon, how to build a definition. Read it first. This file is the layer underneath — the rules a
-tool or a person editing a `.ghx` by hand has to honour, and the traps that fail silently.
+How to author a definition — what each component is, where it sits on the ribbon, how to wire one
+up — is covered by video rather than prose. This file is the layer underneath: the rules a tool or
+a person editing a `.ghx` by hand has to honour, and the traps that fail silently.
 
 **Everything here fails silently.** No exception, no red component, no validation error. The
 symptom is a blank UI, a stale value, or an output that never appears.

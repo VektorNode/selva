@@ -1,14 +1,8 @@
----
-title: The display pipeline
-group: Plugin
-order: 4
-published: true
-description: 'End to end: how Rhino geometry becomes Three.js meshes in the browser viewer.'
----
+# The display pipeline and the SLVA format
 
-# The display pipeline
+What happens between a Brep on the Grasshopper canvas and a lit, selectable mesh in the browser.
 
-What happens between a Brep on the Grasshopper canvas and a lit, selectable mesh in the browser. Most of the time you never need to know this — drop a **Display** component and it works. Read this when you are debugging a scene that looks wrong, tuning a slow one, or extending the viewer.
+This is the reference for the **SLVA wire format** that `batch-parser.ts` and `binary-parser.ts` decode. The encoder lives on the C# side, in the plugin's Display component. Both ends have to agree, so treat the format section below as the specification: change it only alongside the encoder, and bump the version in the header.
 
 ## The short version
 
@@ -63,7 +57,7 @@ The blob is self-describing and transport-agnostic — the browser decoder never
 
 ## Stage 3 — Transport
 
-The blob travels base64-encoded inside the solve response from Rhino.Compute. Large file outputs stream out-of-band instead ([ADR 0003](../adr/0003-large-file-output-streaming.md)); display payloads currently do not.
+The blob travels base64-encoded inside the solve response from Rhino.Compute. Large file outputs stream out-of-band instead ([ADR 0003](../../../../../docs/adr/0003-large-file-output-streaming.md)); display payloads currently do not.
 
 This is the stage to look at when a scene is slow to _appear_ but fast to _interact with_. Check the payload size with the **Display Size** component. If it's large, the usual causes are meshing too finely, or emitting geometry the user can't see.
 
@@ -108,10 +102,9 @@ Three invariants hold across the whole pipeline:
 | Slow to load                               | **Display Size**. Then meshing density, then how much geometry you're emitting at all.     |
 | Slow to orbit once loaded                  | Too many distinct materials — every unique material is its own draw call. Share materials. |
 | Scene looks right, outliner is a flat list | The `Layer` input is empty. It's what builds the tree.                                     |
-| Curves missing, meshes fine                | The host didn't supply a `rhino3dm` instance; curves are skipped with a warning.           |
+| Curves missing, meshes fine                | Curves arrive pre-tessellated from the plugin. An older plugin build won't send them.      |
 
 ## Next
 
-- [Display](../plugin/display.md): the components themselves.
-- [Plugin overview](../plugin/overview.md)
-- [Caching](../Caching.md): what is and isn't reused between solves.
+- [Parse layer](../README.md): the barrel this format is decoded behind.
+- [Caching](../../../../../docs/Caching.md): what is and isn't reused between solves.

@@ -133,7 +133,8 @@ Pluggable provider interfaces (auth, data stores, storage, permissions, access r
 [PLUGIN-CONTEXT.md](./PLUGIN-CONTEXT.md) is authoritative for canvas wiring and schema identity —
 which ContextBake carries what, which GUID is an output's identity, why `paramType` case matters.
 Read it before editing a `.ghx` or touching schema sync; every rule in it fails silently.
-[docs/plugin/](./docs/plugin/) is the authoring guide for the components themselves.
+Component authoring is covered by video, not prose. For the display wire format, see
+[SLVA-FORMAT.md](./packages/visualization/src/parse/webdisplay/SLVA-FORMAT.md).
 
 `Plugin/Selva.GH/Features/`:
 

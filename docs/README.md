@@ -11,7 +11,6 @@ get published: contributor notes, ops notes, and ADRs.
 
 - **Get Started** — [what-is-selva.md](what-is-selva.md), [getting-started/overview.md](./getting-started/overview.md), [getting-started/build-your-own-app.md](./getting-started/build-your-own-app.md), [QuickStart.md](QuickStart.md), [CLI.md](CLI.md), [RhinoCompute.md](RhinoCompute.md)
 - **Concepts** — [architecture.md](architecture.md), [Caching.md](Caching.md), [permissions.md](permissions.md), [admin.md](admin.md), [security-and-limits.md](security-and-limits.md), [providers.md](providers.md)
-- **Plugin** — [plugin/overview.md](./plugin/overview.md) ([ui-builder](./plugin/ui-builder.md), [display](./plugin/display.md), [display-pipeline](./plugin/display-pipeline.md), [compute-io](./plugin/compute-io.md), [dynamic-value-lists](./plugin/dynamic-value-lists.md), [file-io](./plugin/file-io.md), [drawing](./plugin/drawing.md))
 - **Providers** — [providers/local.md](./providers/local.md), [providers/supabase.md](./providers/supabase.md), [providers/header-auth-entra.md](./providers/header-auth-entra.md), [providers/writing-a-provider.md](./providers/writing-a-provider.md)
 - **Deployment** — [deployment/prerequisites.md](./deployment/prerequisites.md), [deployment/reverse-proxy.md](./deployment/reverse-proxy.md)
 
