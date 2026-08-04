@@ -1,5 +1,12 @@
 # @selvajs/platform
 
+## 0.16.1-beta.0
+
+### Patch Changes
+
+- Updated dependencies [5292563]
+  - @selvajs/schemas@5.0.0-beta.0
+
 ## 0.16.0
 
 ### Minor Changes
