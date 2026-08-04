@@ -1,7 +1,6 @@
 ---
 '@selvajs/compute': major
 '@selvajs/schemas': major
-'@selvajs/plugin-ui': major
 '@selvajs/solve': major
 '@selvajs/server': major
 '@selvajs/selva': patch

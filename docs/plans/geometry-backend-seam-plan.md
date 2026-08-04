@@ -144,9 +144,26 @@ status→code mapping, base64, file handling). Six mechanical fixes — four lea
 **Payoff:** `core/` becomes honestly reusable transport, so a second backend inherits all the retry
 and abort machinery for free. **Cost:** low, no cross-stack coordination.
 
-### QW3 — The rename pass
+### QW3 — The rename pass ✅ IMPLEMENTED
 
-Approved as breaking, one coordinated major. Values are already generic — only names are Rhino-flavored.
+All four renames landed as specified, root barrel dropped, env var renamed, workspace
+`type-check`/`lint`/`test` clean, plugin `dotnet build` clean. Approved as breaking, one
+coordinated major, no deprecation shims — historical mentions in CHANGELOGs and applied
+changesets were deliberately left alone. Two notes on what surfaced during implementation:
+
+- The C# generator infers `Guid` vs `string` per field from whether its `description` text
+  contains the word "guid" (`generate-csharp.js:149`), not from an explicit schema type. Rewording
+  two doc strings to drop Rhino branding ("...Grasshopper component InstanceGuid..." /
+  "The Grasshopper instance GUID (paramId)...") incidentally deleted "guid" too, silently flipping
+  `LayoutItemBase.ParamId` and `DynamicValueListOutputConfig.targetInputId` to `string` on
+  regeneration and breaking ~60 call sites that assumed `Guid`. Fixed by keeping "GUID" in both
+  reworded descriptions ("the backend parameter's GUID" instead of "the Grasshopper instance
+  GUID") — same de-Rhino'd phrasing, same generated type.
+- The env var rename's downstream chain was wider than just `.env.example`: `ComputeLimits`'s field
+  (`maxGhFileSize`), `@selvajs/selva`'s re-exported constant, and every admin/API route reading it
+  all needed the matching rename, not just the env key itself.
+
+Values were already generic — only names were Rhino-flavored.
 
 | Old                         | New              | Where                          |
 | --------------------------- | ---------------- | ------------------------------ |
