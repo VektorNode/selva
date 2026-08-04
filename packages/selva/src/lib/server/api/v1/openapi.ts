@@ -190,10 +190,25 @@ function cap(s: string): string {
 	return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function buildOpenApiDocument(version: string): Json {
+/** Route prefix every endpoint in this registry is served under. */
+export const API_BASE_PATH = '/api/v1';
+
+/**
+ * `info.version` describes the API, not the npm package — the two move
+ * independently and deliberately. `/api/v1` is additive-only, so every release
+ * publishes the same contract; embedding the package version made the committed
+ * spec drift on every `chore: version` bump, a failing conformance check that
+ * said nothing about the API.
+ *
+ * Derived from the base path so the major can't contradict the prefix it is
+ * served under: shipping `/api/v2` moves both at once, or neither.
+ */
+export const API_VERSION = `${/v(\d+)$/.exec(API_BASE_PATH)?.[1] ?? '1'}.0.0`;
+
+export function buildOpenApiDocument(version: string = API_VERSION): Json {
 	const paths: Record<string, Record<string, Json>> = {};
 	for (const ep of V1_ENDPOINTS) {
-		const path = `/api/v1${ep.path}`;
+		const path = `${API_BASE_PATH}${ep.path}`;
 		(paths[path] ??= {})[ep.method.toLowerCase()] = operationFor(ep);
 	}
 

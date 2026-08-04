@@ -73,7 +73,17 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 	// npm round-trip for everyone else.
 	const update = canManageUpdates
 		? await checkForUpdate(fetch, channel)
-		: { channel, current: null, latest: null, updateAvailable: false };
+		: {
+				channel,
+				current: null,
+				latest: null,
+				updateAvailable: false,
+				nodeCompatibility: {
+					compatible: null,
+					required: null,
+					running: process.versions.node
+				}
+			};
 
 	return {
 		canManageUpdates,

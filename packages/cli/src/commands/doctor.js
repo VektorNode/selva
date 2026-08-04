@@ -1,7 +1,12 @@
 // Validate deployment without starting it: files, secrets, layout, providers,
-// boot persistence. Read-only; yellow warnings don't fail, red failures exit 1.
+// Node engine, boot persistence. Yellow warnings don't fail, red failures exit 1.
+//
+// Read-only by default. `--fix` applies the repairs attached to individual
+// checks, each behind its own confirmation — and only those needing no root and
+// no runtime restart. See `applyFixes`.
 
 import { existsSync, readFileSync, readdirSync, accessSync, constants, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join, resolve, dirname, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -14,11 +19,12 @@ import { detectDrift } from './migrate.js';
 const HEX_64 = /^[0-9a-f]{64}$/i;
 const PLACEHOLDER = 'replace-this-with-a-random-32-byte-hex-key';
 
-export async function runDoctor() {
+export async function runDoctor(argv = []) {
+	const fix = argv.includes('--fix');
 	const dir = resolveDeploymentDir();
 	requireDeploymentDir(dir);
 
-	p.intro(pc.bgCyan(pc.black(' selva doctor ')));
+	p.intro(pc.bgCyan(pc.black(fix ? ' selva doctor --fix ' : ' selva doctor ')));
 
 	const checks = [];
 	const env = readEnvFile(join(dir, '.env'));
@@ -72,6 +78,7 @@ export async function runDoctor() {
 	}
 
 	checks.push(checkPackage(dir, '@selvajs/selva'));
+	checks.push(checkNodeEngine(dir));
 	checks.push(checkCliRuntimeAlignment(dir));
 	checks.push(...checkBootPersistence(dir));
 	if (env.ORIGIN) {
@@ -101,10 +108,23 @@ export async function runDoctor() {
 	}
 
 	// ── Render ─────────────────────────────────────────────────────────
+	const resolved = await Promise.all(checks);
 	let failures = 0;
-	for (const c of await Promise.all(checks)) {
+	for (const c of resolved) {
 		console.log('  ' + c.line);
 		if (c.severity === 'red') failures += 1;
+	}
+
+	if (fix) {
+		failures = await applyFixes(resolved, failures);
+	} else {
+		const repairable = resolved.filter((c) => c.fix).length;
+		if (repairable > 0) {
+			p.log.info(
+				`${repairable} issue${repairable === 1 ? '' : 's'} can be repaired automatically — ` +
+					`re-run with \`selva doctor --fix\`.`
+			);
+		}
 	}
 
 	if (failures === 0) {
@@ -115,14 +135,66 @@ export async function runDoctor() {
 	}
 }
 
+/**
+ * Apply the repairs attached to failing checks, each behind its own
+ * confirmation. Returns the updated failure count.
+ *
+ * Nothing here needs root: anything privileged (the systemd unit) or that would
+ * restart this process (a Node upgrade) stays a printed instruction, because a
+ * fixer that dies halfway through its own runtime leaves the operator with no
+ * obvious path back.
+ */
+async function applyFixes(resolved, failures) {
+	const repairs = resolved.filter((c) => c.fix && c.severity !== 'green');
+	if (repairs.length === 0) {
+		p.log.info('Nothing to repair automatically.');
+		return failures;
+	}
+
+	console.log('');
+	p.log.step(`${repairs.length} repair${repairs.length === 1 ? '' : 's'} available`);
+
+	for (const check of repairs) {
+		const approved = await p.confirm({
+			message: check.fix.label,
+			initialValue: false
+		});
+		if (p.isCancel(approved) || !approved) {
+			p.log.info('Skipped.');
+			continue;
+		}
+		let result;
+		try {
+			result = await check.fix.run();
+		} catch (err) {
+			result = red(`repair threw: ${err instanceof Error ? err.message : String(err)}`);
+		}
+		console.log('  ' + result.line);
+		if (result.severity === 'green' && check.severity === 'red') failures -= 1;
+	}
+	return failures;
+}
+
 function green(text) {
 	return { severity: 'green', line: `${pc.green('✓')} ${text}` };
 }
-function yellow(text) {
-	return { severity: 'yellow', line: `${pc.yellow('!')} ${text}` };
+function yellow(text, fix) {
+	return { severity: 'yellow', line: `${pc.yellow('!')} ${text}`, fix };
 }
-function red(text) {
-	return { severity: 'red', line: `${pc.red('✗')} ${text}` };
+function red(text, fix) {
+	return { severity: 'red', line: `${pc.red('✗')} ${text}`, fix };
+}
+
+/**
+ * A repair `--fix` may run. `label` is what the operator is asked to approve;
+ * `run()` performs it and returns a result line.
+ *
+ * Only attach one where the repair is unambiguous and reversible-ish. Anything
+ * needing root, or that restarts the runtime running this process, stays a
+ * printed instruction — a half-applied privileged fix is worse than none.
+ */
+function fixable(label, run) {
+	return { label, run };
 }
 
 function checkFile(path, label) {
@@ -312,6 +384,108 @@ function checkCliRuntimeAlignment(dir) {
 }
 
 // Verify VM reboot will resurrect app: dump.pm2 saved, systemd unit installed, no stray global pm2.
+/**
+ * Does this host's Node satisfy the installed runtime's `engines.node`?
+ *
+ * npm only enforces engines under `engine-strict=true`, which no deployment
+ * sets, so a mismatched install succeeds silently and `/api/health` still
+ * returns 200 — routes using newer APIs throw only under real traffic
+ * (issue #176). Deliberately NOT auto-fixable: upgrading Node is
+ * distro-specific and would restart the process running this check.
+ */
+function checkNodeEngine(dir) {
+	let required;
+	try {
+		const pkg = JSON.parse(
+			readFileSync(join(dir, 'node_modules', '@selvajs', 'selva', 'package.json'), 'utf8')
+		);
+		required = pkg.engines?.node;
+	} catch {
+		return yellow('@selvajs/selva engines.node — package.json unreadable, skipped');
+	}
+	if (typeof required !== 'string') {
+		return yellow('@selvajs/selva declares no engines.node — cannot verify this host');
+	}
+
+	const running = process.versions.node;
+	const ok = satisfiesNodeRange(running, required);
+	if (ok === null) {
+		return yellow(`engines.node "${required}" not understood — verify Node v${running} manually`);
+	}
+	if (ok) return green(`Node v${running} satisfies engines.node ${required}`);
+
+	return red(
+		`Node v${running} does NOT satisfy @selvajs/selva's engines.node ${required}.\n     ` +
+			`npm installs it anyway and the health check still passes, so this fails only\n     ` +
+			`under real traffic. Upgrade Node on this host (nvm/fnm or your package manager),\n     ` +
+			`then: npm rebuild && npm run restart`
+	);
+}
+
+/**
+ * Narrow `engines.node` range check — `>=X`, `^`, `~`, `||`, and bare/x-ranges.
+ * Returns null when unparseable so a misread never reports a false failure.
+ *
+ * Mirrors `satisfiesRange` in @selvajs/server/ops. Duplicated because the CLI is
+ * dependency-free by design (it scaffolds the deployment that installs the
+ * runtime, so it cannot import from it).
+ */
+export function satisfiesNodeRange(version, range) {
+	const core = /^v?(\d+)\.(\d+)\.(\d+)/.exec(String(version).trim());
+	if (!core) return null;
+	const v = [Number(core[1]), Number(core[2]), Number(core[3])];
+
+	let anyParsed = false;
+	for (const alt of String(range).split('||')) {
+		const clauses = alt.trim().split(/\s+/).filter(Boolean);
+		if (!clauses.length) continue;
+
+		let all = true;
+		let parsed = true;
+		for (const clause of clauses) {
+			const m = /^(>=|<=|>|<|\^|~|=)?\s*v?(\d+)(?:\.(\d+|x|\*))?(?:\.(\d+|x|\*))?/.exec(clause);
+			if (!m) {
+				parsed = false;
+				break;
+			}
+			const op = m[1] ?? '=';
+			const num = (s) => (s == null || s === 'x' || s === '*' ? 0 : Number(s));
+			const t = [Number(m[2]), num(m[3]), num(m[4])];
+			let cmp = 0;
+			for (let i = 0; i < 3; i++) {
+				if (v[i] > t[i]) {
+					cmp = 1;
+					break;
+				}
+				if (v[i] < t[i]) {
+					cmp = -1;
+					break;
+				}
+			}
+			let ok;
+			if (op === '>=') ok = cmp >= 0;
+			else if (op === '>') ok = cmp > 0;
+			else if (op === '<=') ok = cmp <= 0;
+			else if (op === '<') ok = cmp < 0;
+			else if (op === '^') ok = cmp >= 0 && v[0] === t[0];
+			else if (op === '~') ok = cmp >= 0 && v[0] === t[0] && v[1] === t[1];
+			else
+				ok =
+					v[0] === t[0] &&
+					(m[3] == null || m[3] === 'x' || m[3] === '*' || v[1] === t[1]) &&
+					(m[4] == null || m[4] === 'x' || m[4] === '*' || v[2] === t[2]);
+			if (!ok) {
+				all = false;
+				break;
+			}
+		}
+		if (!parsed) continue;
+		anyParsed = true;
+		if (all) return true;
+	}
+	return anyParsed ? false : null;
+}
+
 function checkBootPersistence(dir) {
 	// pm2's boot integration is Linux/systemd-specific. On macOS it's launchd
 	// (different unit path) and on Windows pm2 boot persistence isn't a thing —
@@ -329,7 +503,15 @@ function checkBootPersistence(dir) {
 		out.push(
 			yellow(
 				'pm2 process list not saved — run `npx pm2 save` so a reboot can ' +
-					'resurrect the app (nothing to restore without it)'
+					'resurrect the app (nothing to restore without it)',
+				fixable('run `pm2 save` to persist the current process list', () => {
+					const bin = join(dir, 'node_modules', '.bin', 'pm2');
+					if (!existsSync(bin)) return red('pm2 not installed in this deployment');
+					const r = spawnSync(bin, ['save'], { cwd: dir, encoding: 'utf8' });
+					return (r.status ?? 1) === 0
+						? green('pm2 process list saved')
+						: red(`pm2 save failed: ${(r.stderr || r.stdout || '').trim()}`);
+				})
 			)
 		);
 	}
@@ -376,11 +558,31 @@ function checkBootPersistence(dir) {
 	// Warn if global pm2 is on PATH (root cause of version skew).
 	const globalPm2 = findGlobalPm2(dir);
 	if (globalPm2) {
+		// Only offer the removal when we could actually perform it. A global
+		// install under /usr is root-owned; attempting it would half-fail and
+		// leave the operator worse informed than a printed instruction.
+		let writable = false;
+		try {
+			accessSync(dirname(globalPm2), constants.W_OK);
+			writable = true;
+		} catch {
+			writable = false;
+		}
+
 		out.push(
 			yellow(
 				`a pm2 outside this deployment is on PATH (${globalPm2}) — it can fork a ` +
 					`mismatched daemon and trigger skew. Prefer \`npm run\` wrappers / \`npx pm2\` ` +
-					`from this directory; consider \`npm uninstall -g pm2\`.`
+					`from this directory; consider \`npm uninstall -g pm2\`.` +
+					(writable ? '' : `\n     (${dirname(globalPm2)} is not writable — needs sudo)`),
+				writable
+					? fixable(`uninstall the global pm2 at ${globalPm2}`, () => {
+							const r = spawnSync('npm', ['uninstall', '-g', 'pm2'], { encoding: 'utf8' });
+							return (r.status ?? 1) === 0
+								? green('global pm2 uninstalled')
+								: red(`npm uninstall -g pm2 failed: ${(r.stderr || r.stdout || '').trim()}`);
+						})
+					: undefined
 			)
 		);
 	}

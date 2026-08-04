@@ -52,7 +52,7 @@ function readRuntimeVersion(dir: string): string | undefined {
 // using the standard `'\''` trick. We pass user-controlled values (plan.cwd
 // is from process.cwd(), npm package names are hardcoded) but defensive
 // quoting is cheap.
-function shellQuote(s: string): string {
+export function shellQuote(s: string): string {
 	return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
@@ -76,7 +76,11 @@ function shellQuote(s: string): string {
 //     AND through stdout (visible to SSE while the connection is still up).
 //   - The runner appends its output directly to the same log file.
 //   - The frontend tolerates the SSE blackout by polling the log file.
-function buildLauncher(runnerScript: string, logPath: string, prelude: string[] = []): string {
+export function buildLauncher(
+	runnerScript: string,
+	logPath: string,
+	prelude: string[] = []
+): string {
 	const echoes = prelude.map((line) => `echo ${shellQuote(line)}`).join('\n');
 	// Note: runner script is embedded via a QUOTED heredoc so no variable
 	// expansion happens — the runner text is written verbatim.
@@ -134,7 +138,7 @@ exit 0
 //
 // Embedded into the launcher via a quoted heredoc, so this whole string is
 // written verbatim — interpolated values must be shell-quoted at JS time.
-function buildNpmRunnerScript(
+export function buildNpmRunnerScript(
 	npmArgs: string[],
 	versionBefore: string | undefined,
 	ecosystemPath: string,
@@ -183,6 +187,26 @@ on_exit() {
 }
 trap on_exit EXIT
 
+# A killed runner must not look like a finished one.
+#
+# \`$?\` inside an EXIT trap reports the last completed command, NOT the signal.
+# When systemd SIGTERMs the whole cgroup (issue #118) the EXIT trap still runs
+# and records \`code=0\` — so deriveOutcome takes the exit-0 success branch and
+# the operator is told "Updated X → Y. The app is back online." while npm never
+# ran and the deployment is unchanged. Catching the signal makes the recorded
+# code truthful; 143/130 are the conventional 128+signal values.
+on_signal() {
+  SIG=$1
+  echo "[FATAL] KILLED: runner received SIG$SIG before finishing."
+  echo "[FATAL] Nothing was installed by this run. If the app is down, recover with:"
+  echo "[FATAL]   cd $(dirname "$ECOSYSTEM") && pm2 start ecosystem.config.cjs --update-env"
+  echo "[FATAL] A systemd-supervised pm2 can do this when 'pm2 update' recycles the daemon."
+  exit $2
+}
+trap 'on_signal TERM 143' TERM
+trap 'on_signal INT 130' INT
+trap 'on_signal HUP 129' HUP
+
 # ---------------------------------------------------------------------------
 # 1. Pre-flight: skip the whole cycle if there's nothing to install.
 # ---------------------------------------------------------------------------
@@ -204,6 +228,27 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 1b. Node engine pre-flight — BEFORE any downtime.
+# ---------------------------------------------------------------------------
+# npm only treats an engine mismatch as fatal under engine-strict=true, which no
+# deployment sets. So a release requiring a newer Node installs "successfully",
+# pm2 starts, and /api/health returns 200 (it touches nothing Node-version
+# specific) — a false green that skips rollback entirely. Warn here so a
+# CLI-driven run sees it too; the admin UI blocks earlier (issue #176).
+REQUIRED_NODE=$(npm view "@selvajs/selva@$TAG" engines.node --silent 2>/dev/null | tr -d '"' | tr -d "'")
+RUNNING_NODE=$(node -p 'process.versions.node' 2>/dev/null)
+if [ -n "$REQUIRED_NODE" ] && [ -n "$RUNNING_NODE" ]; then
+  # Compare majors only — the ranges we publish are all \`>=X\` forms.
+  REQ_MAJOR=$(echo "$REQUIRED_NODE" | grep -o '[0-9]\\+' | head -1)
+  RUN_MAJOR=$(echo "$RUNNING_NODE" | cut -d. -f1)
+  if [ -n "$REQ_MAJOR" ] && [ "$RUN_MAJOR" -lt "$REQ_MAJOR" ] 2>/dev/null; then
+    echo "[WARN] ENGINE_MISMATCH: @selvajs/selva@$LATEST requires Node $REQUIRED_NODE but this host runs v$RUNNING_NODE"
+    echo "[WARN] npm will install it anyway (engine-strict is off) and the health probe will pass,"
+    echo "[WARN] but routes using newer Node APIs will fail at request time. Upgrade Node on this host."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # 2. Resync PM2 daemon if its in-memory version drifted from the CLI on disk.
 # ---------------------------------------------------------------------------
 # After a global pm2 upgrade the daemon keeps running its original version
@@ -213,7 +258,45 @@ fi
 # dump. Doing it before we touch anything keeps the rest of the script
 # talking to a coherent daemon.
 echo "[STEP] Checking PM2 daemon/CLI version sync"
-if pm2 ping 2>&1 | grep -q "out-of-date" || pm2 list 2>&1 | grep -q "out-of-date"; then
+PING_OUT=$(pm2 ping 2>&1)
+if echo "$PING_OUT" | grep -q "out-of-date"; then
+  # pm2 prints both versions alongside the warning. Which is newer decides
+  # whether \`pm2 update\` can help — see the direction check below (issue #118).
+  DAEMON_V=$(echo "$PING_OUT" | sed -e 's/\\x1b\\[[0-9;]*m//g' \\
+    | grep -i "In memory PM2 version" | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+' | head -1)
+  LOCAL_V=$(echo "$PING_OUT" | sed -e 's/\\x1b\\[[0-9;]*m//g' \\
+    | grep -i "Local PM2 version" | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+' | head -1)
+  DAEMON_MAJOR=\${DAEMON_V%%.*}
+  LOCAL_MAJOR=\${LOCAL_V%%.*}
+
+  # A daemon NEWER than the deployment-local CLI means a foreign global pm2 owns
+  # it. \`pm2 update\` would DOWNGRADE the daemon and feed it a dump it can't read,
+  # losing the process table — selva-compute never gets re-registered. That is an
+  # operator problem, not something this script can repair, so stop before we
+  # take the app down.
+  if [ -n "$DAEMON_MAJOR" ] && [ -n "$LOCAL_MAJOR" ] && [ "$DAEMON_MAJOR" -gt "$LOCAL_MAJOR" ] 2>/dev/null; then
+    echo "[FATAL] PM2_SKEW: the running daemon (v$DAEMON_V) is NEWER than this deployment's pm2 (v$LOCAL_V)."
+    echo "[FATAL] A global pm2 owns the daemon. Running 'pm2 update' would downgrade it and drop"
+    echo "[FATAL] the process table. Resolve manually before updating:"
+    echo "[FATAL]   which -a pm2 && pm2 -v && pm2 ping"
+    echo "[FATAL] Aborting WITHOUT stopping the app — it is still running."
+    exit 8
+  fi
+
+  # Under systemd, \`pm2 update\` kills and respawns the daemon. systemd sees its
+  # unit's main process die and, with the default KillMode=control-group,
+  # SIGTERMs everything in the cgroup — including this runner. setsid escapes
+  # PM2's tree-kill but NOT the cgroup, so there is no way to survive it from
+  # here; refuse the resync instead of being killed by it (issue #118).
+  if grep -qs 'pm2.*\\.service' /proc/self/cgroup 2>/dev/null; then
+    echo "[FATAL] SYSTEMD_PM2: this deployment's PM2 is supervised by systemd, and the daemon"
+    echo "[FATAL] needs a resync. Running 'pm2 update' here would restart the systemd unit and"
+    echo "[FATAL] kill this runner mid-update. Resync manually from a shell, then retry:"
+    echo "[FATAL]   cd $(dirname "$ECOSYSTEM") && ./node_modules/.bin/pm2 update"
+    echo "[FATAL] Aborting WITHOUT stopping the app — it is still running."
+    exit 9
+  fi
+
   echo "[STEP] PM2 daemon is out-of-date — running 'pm2 update' to resync"
   if ! pm2 update; then
     echo "[FATAL] pm2 update failed — aborting before stopping the running app"
@@ -320,7 +403,10 @@ fi
 
 echo "[STEP] Rolling back @selvajs/selva to $BEFORE"
 pm2 stop selva-compute >/dev/null 2>&1 || true
-if ! npm install --save "@selvajs/selva@$BEFORE"; then
+# Restore @selvajs/cli alongside the runtime: the forward step installs both at
+# the channel tag, so reverting only the runtime leaves a version pair that was
+# never released together.
+if ! npm install --save "@selvajs/cli@$BEFORE" "@selvajs/selva@$BEFORE"; then
   echo "[FATAL] Rollback npm install failed — EXIT trap will retry restart."
   exit 4
 fi
@@ -360,12 +446,12 @@ type UpdatePlan = { cwd: string; args: string[] };
 // packuments against the registry. Without it, npm's packument cache (5+ min
 // TTL) can silently no-op right after publish. See docs/Hotfix-CLI-Runtime.md
 // "stale-packument-cache trap".
-function npmInstallArgs(channel: ReleaseChannel): string[] {
+export function npmInstallArgs(channel: ReleaseChannel): string[] {
 	const tag = channelTag(channel);
 	return ['install', '--save', '--prefer-online', `@selvajs/cli@${tag}`, `@selvajs/selva@${tag}`];
 }
 
-function detectUpdatePlan(channel: ReleaseChannel): UpdatePlan | null {
+export function detectUpdatePlan(channel: ReleaseChannel): UpdatePlan | null {
 	const dir = findDeploymentDir(env);
 	return dir ? { cwd: dir, args: npmInstallArgs(channel) } : null;
 }

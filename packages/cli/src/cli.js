@@ -62,7 +62,7 @@ function printHelp() {
 			'',
 			pc.bold('Commands:'),
 			'  init                    Reconfigure this deployment (prompts again)',
-			'  doctor                  Validate env, providers, and installed packages',
+			'  doctor [--fix]          Validate env, providers, Node engine, and packages',
 			'  start                   pm2 start ecosystem.config.cjs',
 			'  stop                    pm2 stop selva-compute',
 			'  restart                 pm2 restart selva-compute --update-env',

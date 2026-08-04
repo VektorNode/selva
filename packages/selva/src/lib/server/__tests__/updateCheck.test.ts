@@ -50,3 +50,80 @@ describe('fetchLatestVersion failure tolerance', () => {
 		);
 	});
 });
+
+// ============================================================================
+// Node engine pre-flight (issue #176)
+// ============================================================================
+
+function registry(body: unknown): typeof fetch {
+	return (async () => ({ ok: true, json: async () => body })) as unknown as typeof fetch;
+}
+
+describe('fetchLatestManifest', () => {
+	it('reads engines.node from the same response as version — no extra request', async () => {
+		const { fetchLatestManifest } = await import('../updateCheck.server');
+		let calls = 0;
+		const f = (async () => {
+			calls++;
+			return { ok: true, json: async () => ({ version: '4.8.0', engines: { node: '>=22.0.0' } }) };
+		}) as unknown as typeof fetch;
+		expect(await fetchLatestManifest(f)).toEqual({ version: '4.8.0', enginesNode: '>=22.0.0' });
+		expect(calls).toBe(1);
+	});
+
+	it('reports a null range when the manifest has no engines field', async () => {
+		const { fetchLatestManifest } = await import('../updateCheck.server');
+		const m = await fetchLatestManifest(registry({ version: '4.8.0' }));
+		expect(m).toEqual({ version: '4.8.0', enginesNode: null });
+	});
+
+	it('degrades to nulls when the registry is unreachable', async () => {
+		const { fetchLatestManifest } = await import('../updateCheck.server');
+		const f = (async () => {
+			throw new Error('network down');
+		}) as unknown as typeof fetch;
+		expect(await fetchLatestManifest(f)).toEqual({ version: null, enginesNode: null });
+	});
+});
+
+describe('checkForUpdate nodeCompatibility', () => {
+	const manifest = { version: '4.8.0-beta.4', engines: { node: '>=22.0.0' } };
+
+	it('flags the incident: Node 20 host, release requiring >=22', async () => {
+		const { checkForUpdate } = await import('../updateCheck.server');
+		const r = await checkForUpdate(registry(manifest), 'beta', '20.20.2');
+		expect(r.nodeCompatibility).toEqual({
+			compatible: false,
+			required: '>=22.0.0',
+			running: '20.20.2'
+		});
+	});
+
+	it('passes on a host that satisfies the range', async () => {
+		const { checkForUpdate } = await import('../updateCheck.server');
+		const r = await checkForUpdate(registry(manifest), 'beta', '22.4.0');
+		expect(r.nodeCompatibility.compatible).toBe(true);
+	});
+
+	// A null must read as "couldn't determine", never as a block — the UI keys
+	// the Update button off `=== false` precisely so these cases stay usable.
+	it('is null (not false) when the release declares no engines', async () => {
+		const { checkForUpdate } = await import('../updateCheck.server');
+		const r = await checkForUpdate(registry({ version: '4.8.0' }), 'stable', '20.0.0');
+		expect(r.nodeCompatibility.compatible).toBeNull();
+	});
+
+	it('is null (not false) when the registry is unreachable', async () => {
+		const { checkForUpdate } = await import('../updateCheck.server');
+		const f = (async () => ({ ok: false })) as unknown as typeof fetch;
+		const r = await checkForUpdate(f, 'stable', '20.0.0');
+		expect(r.nodeCompatibility.compatible).toBeNull();
+	});
+
+	it('is null (not false) when the range is unparseable', async () => {
+		const { checkForUpdate } = await import('../updateCheck.server');
+		const weird = { version: '4.8.0', engines: { node: 'whatever-lts' } };
+		const r = await checkForUpdate(registry(weird), 'stable', '22.0.0');
+		expect(r.nodeCompatibility.compatible).toBeNull();
+	});
+});

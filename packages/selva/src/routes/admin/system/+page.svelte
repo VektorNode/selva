@@ -10,7 +10,11 @@
 		isInstanceAdmin: boolean;
 		version: string;
 		channel: 'stable' | 'beta';
-		update: { latest: string | null; updateAvailable: boolean };
+		update: {
+			latest: string | null;
+			updateAvailable: boolean;
+			nodeCompatibility: { compatible: boolean | null; required: string | null; running: string };
+		};
 		flags: {
 			ALLOW_CROSS_ORG_PUBLIC: boolean;
 			ALLOW_ORG_COMPUTE_OVERRIDE: boolean;
@@ -517,6 +521,7 @@
 			isRestarting={updateRestarting}
 			logs={updateLogs}
 			exitCode={updateExitCode}
+			nodeCompatibility={data.update.nodeCompatibility}
 			onRun={runUpdate}
 		/>
 	{/if}

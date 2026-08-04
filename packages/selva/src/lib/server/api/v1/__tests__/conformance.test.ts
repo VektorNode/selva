@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, statSync, existsSync } from 'node:fs';
 import { join, resolve, relative, sep, dirname } from 'node:path';
 import { V1_ENDPOINTS, endpointKey, toRoutePath, type HttpMethod } from '../registry.js';
-import { buildOpenApiDocument, toYaml } from '../openapi.js';
+import { buildOpenApiDocument, toYaml, API_VERSION, API_BASE_PATH } from '../openapi.js';
 
 const packageRoot = resolve(__dirname, '../../../../../..');
 const v1Dir = resolve(packageRoot, 'src/routes/api/v1');
@@ -110,11 +110,27 @@ describe('every route is in the registry, and every registry entry is a route', 
 describe('openapi/v1.yaml', () => {
 	const specPath = resolve(packageRoot, 'openapi/v1.yaml');
 
+	it('takes info.version from the route prefix, not the package version', () => {
+		// The package version bumps every release with `[skip ci]` and no
+		// regeneration; deriving from the prefix means nobody has to remember.
+		expect(API_VERSION).toBe('1.0.0');
+		expect(API_BASE_PATH).toBe('/api/v1');
+
+		const { version: pkgVersion } = JSON.parse(
+			readFileSync(resolve(packageRoot, 'package.json'), 'utf8')
+		) as { version: string };
+		expect(API_VERSION).not.toBe(pkgVersion);
+	});
+
+	it('keeps the API major and the route prefix in lockstep', () => {
+		// Shipping /api/v2 must move info.version too — a spec claiming 1.0.0 on
+		// a v2 prefix is worse than no spec, because clients trust it.
+		const prefixMajor = /v(\d+)$/.exec(API_BASE_PATH)?.[1];
+		expect(API_VERSION.split('.')[0]).toBe(prefixMajor);
+	});
+
 	it('is committed and matches a fresh build', () => {
-		const { version } = JSON.parse(readFileSync(resolve(packageRoot, 'package.json'), 'utf8')) as {
-			version: string;
-		};
-		const expected = toYaml(buildOpenApiDocument(version));
+		const expected = toYaml(buildOpenApiDocument());
 
 		// The spec is generated *here* rather than by a standalone script: the
 		// generator needs `$lib` resolution and the workspace `source` condition,

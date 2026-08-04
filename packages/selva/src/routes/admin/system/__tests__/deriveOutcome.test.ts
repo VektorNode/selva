@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { deriveOutcome } from '$lib/update-outcome';
+import { deriveOutcome, TIMED_OUT } from '$lib/update-outcome';
 
 describe('deriveOutcome', () => {
 	it('is pending while the run has not finished', () => {
@@ -32,7 +32,7 @@ describe('deriveOutcome', () => {
 	});
 
 	it('distinguishes "already up to date" from an actual update', () => {
-		const logs = '[INFO] Already on the latest version (4.2.1)\n[DONE] Nothing to do';
+		const logs = "[INFO] Already on the 'latest' channel version (4.2.1)\n[DONE] Nothing to do";
 		const o = deriveOutcome(0, logs);
 		expect(o.severity).toBe('info');
 		expect(o.title).toMatch(/up to date/i);
@@ -62,8 +62,8 @@ describe('deriveOutcome', () => {
 		expect(o.detail).toMatch(/pm2 start/);
 	});
 
-	it('treats the 5-minute timeout as critical with do-not-retry guidance', () => {
-		const o = deriveOutcome(-2, 'Waiting for app to come back online…');
+	it('treats the harness timeout as critical with do-not-retry guidance', () => {
+		const o = deriveOutcome(TIMED_OUT, 'Waiting for app to come back online…');
 		expect(o.severity).toBe('critical');
 		expect(o.title).toMatch(/did not come back/i);
 		expect(o.detail).toMatch(/crash-loop|background/i);
@@ -77,9 +77,9 @@ describe('deriveOutcome', () => {
 	});
 
 	it('never reports an unknown non-zero exit as success', () => {
-		const o = deriveOutcome(2, '[FATAL] pm2 start failed');
+		const o = deriveOutcome(99, '[FATAL] something we have no case for');
 		expect(o.severity).toBe('critical');
-		expect(o.title).toContain('exit code 2');
+		expect(o.title).toContain('exit code 99');
 	});
 
 	it('handles the -> ascii arrow as well as the unicode arrow', () => {

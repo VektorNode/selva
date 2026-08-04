@@ -4,7 +4,7 @@
 openapi: "3.1.0"
 info:
   title: Selva API
-  version: "4.8.0-beta.3"
+  version: "1.0.0"
   description: "The tenant-scoped Selva API. Every endpoint acts as the calling identity and is confined to that identity's organization.\n\n**Stability.** Public endpoints are additive-only within v1: new optional fields and parameters may appear, but nothing is removed, renamed, or changed in type or meaning. A breaking change ships as a new route under `/api/v2` alongside this one. Anything deprecated inside v1 keeps working for a stated window and returns a `Deprecation` header while it does.\n\n**Operations marked `x-internal` carry none of that promise.** They exist to serve the Selva web UI and may change or disappear without notice.\n\n**Existence is never disclosed.** A resource the caller may not see returns `404`, not `403`. `403` means the resource is visible but the action is not allowed.\n\n**No CORS.** `/api/v1` sends no cross-origin headers; it serves same-origin browser requests and non-browser clients holding a token.\n\nInstance administration lives at `/api/admin`, is session-only, is never reachable with a bearer token, and is not described here."
   license:
     name: MIT

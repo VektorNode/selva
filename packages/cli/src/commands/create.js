@@ -10,12 +10,31 @@ import pc from 'picocolors';
 import { collectConfig, collectConfigFromEnv } from '../prompts.js';
 import { generateKey } from '../secrets.js';
 import { writeEnvFile } from '../env.js';
-import { isEmptyOrMissing } from '../paths.js';
+import { isEmptyOrMissing, requiredNodeRange } from '../paths.js';
+import { satisfiesNodeRange } from './doctor.js';
 
 const CLI_VERSION = '0.1.0';
 
 export async function runCreate(argv) {
 	const { dir: rawDir, force, skipInstall, yes } = parseArgs(argv);
+
+	// Scaffolding under too old a Node produces a deployment that installs
+	// cleanly and passes its health check, then fails only under real traffic —
+	// npm treats an engine mismatch as a warning unless engine-strict is set,
+	// which no deployment sets (issue #176). Refuse at the one moment the
+	// operator is still choosing their environment. The floor comes from this
+	// CLI's own engines.node, so a bump can't leave a stale copy behind.
+	const required = requiredNodeRange();
+	if (required && satisfiesNodeRange(process.versions.node, required) === false) {
+		console.error(
+			`${pc.red('✗')} Selva requires Node ${required}, but this shell runs ` +
+				`v${process.versions.node}.\n` +
+				`  A deployment scaffolded here would install and start, then fail once real\n` +
+				`  requests hit newer Node APIs. Upgrade Node first (nvm, fnm, or your package\n` +
+				`  manager), then re-run this command.`
+		);
+		process.exit(1);
+	}
 
 	const targetDir = resolve(rawDir);
 	if (!isEmptyOrMissing(targetDir) && !force) {
