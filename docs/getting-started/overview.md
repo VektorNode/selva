@@ -8,28 +8,35 @@ description: 'Three steps to a live deployment, plus the mental model for comput
 
 # Get Started
 
-Three steps to a working deployment, plus an optional fourth for building your own app.
+Getting a definition online takes three steps. There's an optional fourth if you'd rather build your own app around it.
 
-| Step                               | What you do                                                                      |
-| ---------------------------------- | -------------------------------------------------------------------------------- |
-| **1. Rhino.Compute**               | Stand up the headless Rhino that solves your definitions.                        |
-| **2. Selva plugin**                | Design the schema in Grasshopper, save it into the `.gh`.                        |
-| **3. Deploy the app**              | Scaffold `@selvajs/selva`, point it at Compute, pick a provider.                 |
-| **4. Build your own** _(optional)_ | Consume the `@selvajs/*` packages to embed the Selva viewer in your own product. |
+| Step                               | What you do                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------ |
+| **1. Rhino.Compute**               | Set up the headless Rhino that solves your definitions.                        |
+| **2. Selva plugin**                | Design the schema in Grasshopper and save it into the `.gh`.                   |
+| **3. Deploy the app**              | Scaffold `@selvajs/selva`, point it at Compute, pick a provider.               |
+| **4. Build your own** _(optional)_ | Use the `@selvajs/*` packages to put the Selva viewer inside your own product. |
+
+## Just want to look around first?
+
+You don't have to rent a server to try this. [Local Dev Setup](../QuickStart.md) runs the whole app on your laptop. You'll still need somewhere to solve geometry, but everything else is local — it's the fastest way to get a feel for the thing before committing to any infrastructure.
 
 ## Before you start
 
-Going live means running two servers: a **Compute server** (Rhino that solves your definitions) and the **app server** (the website your users visit). That's normal for a web app, but if it's new to you, here's the mental model:
+Going live means running two machines, which sounds like more than it is:
 
-- **Compute server** — a Windows machine (usually a cloud VM you rent) running Rhino headlessly. "Headless" just means no screen or mouse: it sits there and solves Grasshopper definitions whenever the app asks. Step 1.
-- **App server** — any machine that runs the Selva web app and serves it to browsers. Step 3.
-- **Provider** — your choice of backend for logins and storage. The simplest one (`local`) just uses files on disk and needs nothing extra, so you can ignore this until step 3.
+- **A Compute server** — a Windows machine, usually a cloud VM you rent, running Rhino with no screen and no mouse. It sits there and solves definitions whenever your app asks. That's step 1.
+- **An app server** — anything that can run the Selva web app and serve it to browsers. That's step 3.
 
-If you only want to _see Selva working on your own machine_ before committing to servers, follow [Local Dev Setup](../QuickStart.md) instead — it runs the whole app locally. You'll still need a Compute server to actually solve geometry, but everything else runs on your laptop.
+You'll also hear about **providers**. That's just where logins and files live. The default (`local`) keeps everything on disk and needs no setup at all, so you can safely not think about it until step 3.
+
+If you've deployed a web app before, none of this will surprise you. If you haven't, the CLI in step 3 asks you a handful of questions and writes the config for you.
 
 ## 1. Rhino.Compute
 
-The headless Rhino that solves your definitions at run time. Use the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) (adds block-instance support). Install Selva and any plugins your definitions need under the `rhino.compute` account.
+This is the headless Rhino that does the actual solving once you're live. Use the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) — it adds block-instance support, which the stock build lacks.
+
+One thing to watch: install Selva and any plugins your definitions rely on under the `rhino.compute` account. Plugins installed under a different user won't be there when Compute goes looking for them.
 
 See [Rhino Compute Setup](../RhinoCompute.md).
 
@@ -40,20 +47,20 @@ See [Rhino Compute Setup](../RhinoCompute.md).
 3. Drop the Selva UI Builder onto your definition and open the designer.
 4. Drag inputs into controls, lay them out, save. The schema is written into the `.gh`.
 
-Install the same `.gha` on the Compute server (step 1) so the deployed app can solve it.
+Put that same `.gha` on the Compute server from step 1, otherwise the deployed app has no way to solve the definition.
 
 ## 3. Deploy the web app
 
 ```bash
-npx @selvajs/cli my-deployment   # scaffolds the app; prompts for provider, origin, tenancy, secrets
+npx @selvajs/cli my-deployment   # asks a few questions, writes the app folder
 cd my-deployment
-npm run doctor                   # checks your config is valid
-npm start                        # launches the app (under pm2, a process manager that keeps it running)
+npm run doctor                   # checks the config before you start
+npm start                        # runs it under pm2, which keeps it alive
 ```
 
-`npx` runs the Selva command-line tool without installing it first. It asks you a few questions (which provider, your site's URL, etc.) and writes out a ready-to-run app folder.
+`npx` fetches and runs the Selva command-line tool without installing it first. It'll ask which provider you want, what your site's URL is, and a few other things, then hand you a folder that's ready to run.
 
-Then: visit `/setup` to create the admin (first boot only), register your Compute server at `/admin/compute`, upload a definition, share the link. Pick your backend here via provider settings; see [Providers](../providers.md).
+From there: open `/setup` to create the admin account (only works on first boot), register your Compute server at `/admin/compute`, upload a definition, and share the link. Backend choices live in the provider settings — see [Providers](../providers.md).
 
 See [CLI](../CLI.md), [Local dev setup](../QuickStart.md), [Deployment prerequisites](../deployment/prerequisites.md).
 

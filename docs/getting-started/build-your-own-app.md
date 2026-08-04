@@ -8,13 +8,13 @@ description: 'Embed the Selva viewer and controls in your own product using the 
 
 # Build your own app
 
-The standalone `@selvajs/selva` app covers most teams. But Selva's capabilities also ship as npm packages, so if you're building your own product, you can embed Selva's viewer, controls, and compute pipeline inside it.
+The standalone `@selvajs/selva` app is enough for most teams. But everything it does also ships as npm packages, so you can drop the viewer, the controls, and the solve pipeline straight into a product of your own.
 
-This is the path for teams who need their own branding, domain model, and routes, with the Selva engine doing the parametric work underneath.
+Take this path when you want your own branding, your own routes, and your own domain model, with Selva doing the parametric work underneath.
 
 ## The model
 
-Build a normal SvelteKit app, add the `@selvajs/*` packages, wrap them in whatever product you're building.
+Build a normal SvelteKit app, add the `@selvajs/*` packages, and wrap them in whatever you're building.
 
 ```mermaid
 flowchart TB
@@ -33,41 +33,41 @@ flowchart TB
     compute -->|solves over HTTP| rc
 ```
 
-Read it top-down: **your app** is the product; it pulls in the viewer (`ui`), the compute client, and a backend (`platform` + provider) as building blocks. `ui` and `compute` both speak the same schema contract (`schemas`), and `compute` is the only piece that talks to your Rhino.Compute server. Take only the boxes you need.
+Read it top-down. **Your app** is the product. It pulls in the viewer (`ui`), the compute client, and a backend (`platform` + a provider) as building blocks. `ui` and `compute` both speak the same schema contract (`schemas`), and `compute` is the only piece that talks to your Rhino.Compute server. Take only the boxes you need.
 
 ## Building blocks
 
-| Package                          | Gives you                                                                                                    |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `@selvajs/ui`                    | Svelte components, theme, and the 3D viewer: the same UI primitives the Selva app uses. Style to your brand. |
-| `@selvajs/compute`               | Type-safe Rhino.Compute client. Turns inputs into solved geometry — no renderer. See below.                  |
-| `@selvajs/schemas`               | Schema types + traversal helpers, so your app speaks the plugin's interface contract.                        |
-| `@selvajs/platform` + a provider | The backend contract + an implementation. See [Providers](../providers.md).                                  |
+| Package                          | Gives you                                                                                                            |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `@selvajs/ui`                    | Svelte components, theme, and the 3D viewer — the same pieces the Selva app is built from. Style them to your brand. |
+| `@selvajs/compute`               | Type-safe Rhino.Compute client. Turns inputs into solved geometry. No renderer. See below.                           |
+| `@selvajs/schemas`               | Schema types and traversal helpers, so your app speaks the same contract as the plugin.                              |
+| `@selvajs/platform` + a provider | The backend contract, plus an implementation of it. See [Providers](../providers.md).                                |
 
-Take only what you need. For example, just `@selvajs/ui` + `@selvajs/compute` for the viewer and compute in an otherwise-bespoke app.
+Mix and match. If you only want the viewer and solving inside an otherwise custom app, `@selvajs/ui` and `@selvajs/compute` are enough on their own.
 
 ## Getting started
 
-These are standard npm packages. Install what you need and point the compute client at your Rhino.Compute server ([step 1](overview.md)).
+These are ordinary npm packages. Install what you need, then point the compute client at your Rhino.Compute server ([step 1](overview.md)).
 
 ```bash
 pnpm add @selvajs/ui @selvajs/compute @selvajs/schemas
 # + @selvajs/platform and a provider for Selva's backend model
 ```
 
-Per-package READMEs document imports and setup. Start from [`@selvajs/ui`](https://www.npmjs.com/package/@selvajs/ui); for the compute pipeline use the reference below.
+Each package README covers its own imports and setup. [`@selvajs/ui`](https://www.npmjs.com/package/@selvajs/ui) is the best place to start; for solving, read on.
 
-## selva-compute
+## The compute client
 
-[`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) is the type-safe Rhino.Compute client. It is pure solve/data — no renderer, no `three`. It handles:
+[`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) talks to Rhino.Compute and nothing else — it has no renderer and no `three` dependency. It gives you:
 
-- Calling Compute and getting geometry back, with discriminated-union error handling.
-- Parsing/serializing Grasshopper **data trees**.
-- Browser + Node.
+- Calls to Compute that return geometry, with errors you can narrow on instead of guess at.
+- Reading and writing Grasshopper **data trees**.
+- The same API in the browser and in Node.
 
-Modular for tree-shaking: `/grasshopper` and `/core`. The root export is empty on purpose — import from a subpath.
+Import from `/grasshopper` or `/core`, whichever you need — that way a bundler drops the rest. The root export is empty on purpose, so importing from the bare package name gets you nothing.
 
-To turn a solve response into Three.js objects, use [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization), which imports from a layer: `/scene`, `/render`, `/parse`.
+Turning a solve response into Three.js objects is a separate job, and [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization) does it. Import from `/scene`, `/render`, or `/parse`.
 
 **Full API reference: <https://vektornode.github.io/selva-compute/>**
 

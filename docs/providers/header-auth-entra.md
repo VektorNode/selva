@@ -8,7 +8,7 @@ description: 'Trust a reverse proxy for identity — front Selva with Entra SSO 
 
 # Header-auth (Entra, Okta, Google Workspace…)
 
-`@selvajs/header-auth-provider` is an **auth-only** adapter that trusts identity headers set by an upstream reverse proxy. Pair it with the IdP your org already uses (Microsoft Entra ID, Okta, Google Workspace) via the proxy, and with any data/storage provider underneath.
+`@selvajs/header-auth-provider` is an **auth-only** adapter that trusts identity headers set by an upstream reverse proxy. Through that proxy, it pairs with whichever IdP your org already uses (Microsoft Entra ID, Okta, Google Workspace), and with any data/storage provider underneath.
 
 ## When to use it
 
@@ -25,13 +25,13 @@ This provider does **no cryptographic verification**; it trusts the headers it r
 2. **Proxy-side auth.** The proxy authenticates every request against the IdP.
 3. **Header scrubbing.** The proxy strips inbound `SELVA-*` headers before adding its own.
 
-There is no runtime check that catches a misconfiguration. Run the README's self-test after every deployment change.
+No runtime check catches a misconfiguration here. Run the README's self-test after every deployment change.
 
 Full setup, header names, proxy examples, and the self-test live in the header-auth-provider README.
 
 ## Prerequisites
 
-Selva already scaffolded and running with `SELVA_AUTH_PROVIDER=header` (see [Prerequisites](../deployment/prerequisites.md) and the [CLI guide](../CLI.md)), and a reverse proxy in front of it (see [Reverse proxy](../deployment/reverse-proxy.md)). This page's walkthrough assumes Caddy + oauth2-proxy — one concrete recipe among several; any proxy that can do `forward_auth` and header injection works the same way in principle.
+You need Selva already scaffolded and running with `SELVA_AUTH_PROVIDER=header` (see [Prerequisites](../deployment/prerequisites.md) and the [CLI guide](../CLI.md)), and a reverse proxy in front of it (see [Reverse proxy](../deployment/reverse-proxy.md)). The walkthrough below uses Caddy + oauth2-proxy, one concrete recipe among several. Any proxy that can do `forward_auth` and header injection works the same way.
 
 ---
 
@@ -44,7 +44,7 @@ Browser ──HTTPS──> Caddy ──forward_auth──> oauth2-proxy ──OI
                         with SELVA-* identity headers injected
 ```
 
-Real domain with A record pointing at the host, port 443 open. Replace `[your-domain]` and `admin@corp.com` throughout.
+You need a real domain with an A record pointing at the host, and port 443 open. Replace `[your-domain]` and `admin@corp.com` throughout.
 
 ### Part 1 — Entra app registration
 
@@ -178,7 +178,7 @@ sudo nano /etc/caddy/Caddyfile
 }
 ```
 
-The `request_header -SELVA-*` lines strip inbound copies first — **essential** to prevent header spoofing. The `handle_response @bad` block redirects 401s to the Entra login page (without it you get a bare unauthorized response). Note: use `header Location ...` + `respond 302`, not `redirect` — the latter is not valid inside `handle_response`.
+The `request_header -SELVA-*` lines strip inbound copies first — **essential** to prevent header spoofing. The `handle_response @bad` block redirects 401s to the Entra login page; without it you get a bare unauthorized response. Use `header Location ...` + `respond 302`, not `redirect` — `redirect` is not valid inside `handle_response`.
 
 ```bash
 sudo caddy validate --config /etc/caddy/Caddyfile

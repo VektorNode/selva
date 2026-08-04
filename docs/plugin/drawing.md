@@ -8,9 +8,9 @@ description: 'Build document-model 2D drawings and render them to SVG or PDF fro
 
 # Drawing
 
-A document-model library for producing 2D drawings — title blocks, dimensions, tables, annotated views — rendered to **SVG** or **PDF**. Reach for it when your app needs fabrication-ready sheets, not just a 3D view.
+A document-model library for 2D drawings — title blocks, dimensions, tables, annotated views — rendered to **SVG** or **PDF**. Reach for it when your app needs fabrication-ready sheets rather than a 3D view alone.
 
-This is the largest feature area in the plugin. What follows is a map; each component's own description on the canvas carries the detail.
+This is the largest feature area in the plugin, so what follows is a map. Each component's own description on the canvas carries the detail.
 
 ## How it composes
 
@@ -23,9 +23,9 @@ elements  →  layout  →  page  →  document  →  Render SVG / Render PDF
 - **Elements** are the marks: curves, surfaces, text, images, symbols, dimensions.
 - **Layout** components arrange them: stacks, grids, frames.
 - **Pages** wrap arranged content; a **Document** bundles pages with shared metadata.
-- **Render** turns any of those into a file. You can render a Document for paginated multi-page output, or wire drawings and views straight in for a single page.
+- **Render** turns any of those into a file. Render a Document for paginated multi-page output, or wire drawings and views straight in for a single page.
 
-Render SVG and Render PDF produce file outputs — wire them into a **ContextBake** to make them downloads, exactly like [File I/O](../plugin/file-io.md).
+Render SVG and Render PDF produce file outputs. Wire them into a **ContextBake** to make them downloads, exactly like [File I/O](../plugin/file-io.md).
 
 ## The components
 
@@ -51,7 +51,7 @@ Render SVG and Render PDF produce file outputs — wire them into a **ContextBak
 - **Drawing View length.** Sets the longest side in mm; leave it at `0` to auto-fit the parent page. One view per input branch.
 - **Table rows are a data tree** — one branch per row.
 - **Title Block and Document Info work together.** Info supplies `{token}` values that the title block and other chrome resolve.
-- **Layout Override** is how you get non-default paper, margins, or chrome — wire it into a Document or a Page.
+- **Layout Override** gives you non-default paper, margins, or chrome. Wire it into a Document or a Page.
 
 ## Next
 

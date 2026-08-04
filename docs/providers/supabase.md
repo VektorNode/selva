@@ -8,11 +8,11 @@ description: 'Auth, Postgres, and Storage on Supabase, with identity living in t
 
 # Supabase provider
 
-`@selvajs/supabase-provider`: Auth + Postgres + Storage in one. The production choice for multi-instance, multi-tenant deployments with row-level security.
+`@selvajs/supabase-provider`: Auth + Postgres + Storage in one. Reach for it in production, for multi-instance or multi-tenant deployments with row-level security.
 
 ## When to use it
 
-- More than one app instance, or you need a real database.
+- You run more than one app instance, or you need a real database.
 - Multi-tenant with RLS isolation.
 - You already run Supabase (hosted or self-hosted).
 
@@ -23,7 +23,7 @@ description: 'Auth, Postgres, and Storage on Supabase, with identity living in t
 3. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` in `.env`.
 4. Set `SELVA_AUTH_PROVIDER=supabase` (and the data/storage vars) and restart.
 
-Same code runs against a local Docker stack or a hosted project; only the URL and keys change.
+The same code runs against a local Docker stack or a hosted project. Only the URL and keys change.
 
 Full setup, env vars, migrations, and RLS notes: [supabase-provider README](https://www.npmjs.com/package/@selvajs/supabase-provider).
 

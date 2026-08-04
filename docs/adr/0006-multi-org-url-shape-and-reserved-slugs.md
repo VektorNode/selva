@@ -1,7 +1,7 @@
 # ADR 0006 — Multi-Org URLs Live Under `/o/{slug}/`; Slugs Are Reserved Now
 
 > **Status: Accepted (2026-07-16).** Resolves audit item
-> [D4](../plans/data-access-efficiency-audit.md). Reserves the multi-org URL
+> [D4](../../plans/fixes/data-access-efficiency-audit.md). Reserves the multi-org URL
 > namespace and the colliding top-level slugs **before any external link is
 > minted**, while deferring the routing itself to when a tenant switcher is
 > actually built.

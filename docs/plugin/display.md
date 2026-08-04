@@ -8,13 +8,13 @@ description: 'Get Grasshopper geometry into the browser 3D viewer, and control h
 
 # Display
 
-Five components. One of them — **Display** — is the one you always use; the rest are supporting cast.
+Five components. You will use **Display** every time; the other four are supporting cast.
 
-For what happens to the payload after these components produce it, see [the display pipeline](../plugin/display-pipeline.md).
+For what happens to the payload once these components produce it, see [the display pipeline](../plugin/display-pipeline.md).
 
 ## Display
 
-Turns geometry into the payload the web viewer renders. Drop it, feed it geometry, and the UI Bridge picks it up automatically — unlike file outputs, it needs no ContextBake.
+Turns geometry into the payload the web viewer renders. Drop it, feed it geometry, and the UI Bridge picks it up on its own — unlike file outputs, it needs no ContextBake.
 
 | Input                   | Access | Purpose                                                                                       |
 | ----------------------- | ------ | --------------------------------------------------------------------------------------------- |
@@ -31,8 +31,8 @@ Only `Geo` and `Name` are required.
 
 Two habits that pay off:
 
-- **Set `Layer`.** Without it the scene outliner is a flat list of every object. With it you get a navigable tree for free.
-- **Share materials.** Every distinct material is a separate draw call. Ten objects sharing one material render far faster than ten objects with ten near-identical materials.
+- **Set `Layer`.** Without it, the scene outliner is a flat list of every object. With it, you get a navigable tree for nothing.
+- **Share materials.** Every distinct material costs a separate draw call. Ten objects sharing one material render far faster than ten objects with ten near-identical materials.
 
 ## Three Material
 
@@ -51,13 +51,13 @@ Builds the material for Display's `Material` input.
 
 A cache pair for expensive meshing. **Display To File** writes a payload to a `.dmf` on disk when its `Write` input goes true; **Display From File** reads one back by path.
 
-Use them when your geometry is slow to mesh and doesn't change every solve — mesh once, then load the `.dmf` on subsequent runs instead of re-meshing.
+Reach for them when your geometry is slow to mesh and doesn't change every solve. Mesh once, then load the `.dmf` on later runs instead of re-meshing.
 
 ## Display Size
 
 Diagnostics for a payload: total bytes, a human-readable size, and vertex and triangle counts.
 
-This is the first thing to check when a scene loads slowly. A large byte count usually means meshing too finely, or shipping geometry the user will never look at.
+Check this first when a scene loads slowly. A large byte count usually means you are meshing too finely, or shipping geometry the user will never look at.
 
 ## Next
 

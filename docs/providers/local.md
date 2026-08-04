@@ -8,7 +8,7 @@ description: 'The zero-dependency filesystem provider — JSON on disk, HMAC ses
 
 # Local provider
 
-`@selvajs/local-provider`: filesystem + JSON + HMAC sessions. The default. All state lives under one directory on disk: no database, no external services.
+`@selvajs/local-provider`: filesystem + JSON + HMAC sessions, and the default. Every piece of state lives under one directory on disk — no database, no external services.
 
 ## When to use it
 
@@ -19,7 +19,7 @@ For multi-instance or multi-tenant, use [Supabase](../providers/supabase.md) ins
 
 ## Setup at a glance
 
-1. It's the default, so no provider env vars are needed.
+1. It's the default, so you need no provider env vars.
 2. Set `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` (see `.env.example`).
 3. Point `DATA_PATH` at a writable directory.
 

@@ -1,11 +1,11 @@
 # Documentation
 
-This is the repo-internal index. Most of what's below is also published at the
-[Selva docs site](https://selva.dev/docs) — the website builds its nav from
-each file's `published: true` frontmatter (see
-[`packages/website/src/lib/docs.ts`](../packages/website/src/lib/docs.ts)), so
-that's the up-to-date source for what's public. This file exists for docs that
-aren't published at all: contributor/ops notes and ADRs.
+This is the repo-internal index. Most of what's below also appears on the
+[Selva docs site](https://selva.dev/docs), which builds its nav from each file's
+`published: true` frontmatter (see
+[`packages/website/src/lib/docs.ts`](../packages/website/src/lib/docs.ts)). Check
+the site for what's currently public. This index also covers the docs that never
+get published: contributor notes, ops notes, and ADRs.
 
 ## Published on the site
 

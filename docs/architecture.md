@@ -8,7 +8,7 @@ description: 'How the plugin, app, Rhino.Compute, and providers fit together, wi
 
 # Architecture
 
-The big-picture view: how the parts flow together, not how they're coded.
+How the parts fit together.
 
 ## Four moving parts
 
@@ -19,19 +19,19 @@ The big-picture view: how the parts flow together, not how they're coded.
 | **Rhino.Compute**                    | Headless Rhino that solves over HTTP           | A Windows VM                           |
 | **Provider**                         | Pluggable auth / data / storage backend        | In-process with the web app            |
 
-Everything else (`@selvajs/ui`, `schemas`, `compute`, `visualization`, `solve`, `server`, `platform`) is a shared library these are built from.
+Everything else (`@selvajs/ui`, `schemas`, `compute`, `visualization`, `solve`, `server`, `platform`) is a shared library these four are built from.
 
 ## The schema is the contract
 
-A **schema** describes a definition's web interface: which inputs are exposed, what control each maps to, the layout, and the outputs. The author creates it in the designer; the web app reads it to render the UI.
+A **schema** describes a definition's web interface: which inputs are exposed, what control each one maps to, the layout, and the outputs. You create it in the designer, and the web app reads it to render the UI.
 
-Its shape is defined once in `ui-schema.json` and code-generated into **both** stacks: TypeScript for the web app, C# for the plugin. CI fails on drift. That's what keeps a C# plugin and a TS web app speaking the same language with no hand-written API spec.
+Its shape is defined once in `ui-schema.json` and code-generated into **both** stacks — TypeScript for the web app, C# for the plugin. CI fails on drift. That's what keeps a C# plugin and a TS web app speaking the same language without a hand-written API spec.
 
 ## Two runtime paths
 
-**Design time: WebSocket to a live Rhino.** While the author builds the interface, the plugin runs a WebSocket server (port 8765) in their Rhino. The designer connects, discovers parameters, and writes the schema back into the `.gh`. Changes round-trip live.
+**Design time: WebSocket to a live Rhino.** While you build the interface, the plugin runs a WebSocket server (port 8765) inside your Rhino. The designer connects to it, discovers parameters, and writes the schema back into the `.gh`. Changes round-trip live.
 
-**Run time: HTTP to Rhino.Compute.** Deployed, there's no live Rhino. The web app loads the saved schema and, on each change, sends inputs to Rhino.Compute over HTTP. Compute solves headlessly and returns geometry to the Three.js viewer.
+**Run time: HTTP to Rhino.Compute.** Once deployed there's no live Rhino. The web app loads the saved schema and sends inputs to Rhino.Compute over HTTP on each change. Compute solves headlessly and returns geometry to the Three.js viewer.
 
 ```mermaid
 flowchart LR
@@ -62,11 +62,11 @@ flowchart LR
 | `@selvajs/*-provider`    | Concrete provider implementations.                                                                                                             |
 | `@selvajs/cli`           | Scaffolds and operates a deployment. See [CLI](CLI.md).                                                                                        |
 
-The .NET side splits schema/drawing logic (no Rhino dependency, unit-testable) from the Rhino-coupled `Selva.GH`/`Selva.Rhino`.
+On the .NET side, schema and drawing logic sit apart from the Rhino-coupled `Selva.GH`/`Selva.Rhino` — that half has no Rhino dependency, so it's unit-testable.
 
 ## What stays in sync
 
-- **Plugin ↔ web app.** Both generate from `ui-schema.json`; CI fails on drift.
+- **Plugin ↔ web app.** Both generate from `ui-schema.json`, and CI fails on drift.
 - **Providers ↔ interfaces.** Every adapter runs a conformance suite, so a new provider behaves like the reference one.
 
 ## Next

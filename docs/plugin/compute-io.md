@@ -12,14 +12,14 @@ Everything the user can drive from the web app enters the definition through one
 
 ## How a contextual param works
 
-An input is a Grasshopper _parameter_, not a component. Left unwired on the canvas it looks inert — but at solve time the web app assigns it a value, and it emits that value downstream like any other param.
+An input is a Grasshopper _parameter_, not a component. Left unwired on the canvas it looks inert. At solve time, though, the web app assigns it a value, and it emits that value downstream like any other param.
 
-That gives you two modes for free:
+You get two modes out of that:
 
 - **In the web app**, the value comes from the control the user drives.
-- **In Rhino**, you can wire an ordinary source into the param and the definition solves normally while you author it.
+- **In Rhino**, wire an ordinary source into the param and the definition solves normally while you author it.
 
-Ordinary Grasshopper params work as inputs too — a slider or a boolean toggle shows up in the schema designer without any Selva component. The `Get …` params exist for the cases plain Grasshopper can't express: a colour picker, a file upload, a list of options the definition computes.
+Ordinary Grasshopper params work as inputs too — a slider or a boolean toggle shows up in the schema designer without any Selva component. The `Get …` params cover what plain Grasshopper can't express: a colour picker, a file upload, a list of options the definition computes.
 
 ## The parameters
 
@@ -32,13 +32,13 @@ Ordinary Grasshopper params work as inputs too — a slider or a boolean toggle 
 | **Get Image**              | Image upload          | The raw image as file data — PNG, JPEG, WEBP, or SVG. Deliberately does _no_ Rhino import; feed it to Drawing's **Draw Image**.                                 |
 | **Get Server File**        | _(none — author-set)_ | Geometry imported from the compute server's data directory.                                                                                                     |
 
-Set any of the two value-list params to **checklist** in the schema designer and it switches to list access, emitting every selected value instead of one.
+Set either of the two value-list params to **checklist** in the schema designer and it switches to list access, emitting every selected value instead of one.
 
 ### Get Server File is the odd one
 
-It has no web control. The author sets a _relative_ path on the component — `geometry/bracket.3dm` — and the server supplies the base directory at solve time. The same definition therefore resolves on any server, regardless of where its data lives, and on Windows or Linux (separators are normalised either way).
+It has no web control. You set a _relative_ path on the component — `geometry/bracket.3dm` — and the server supplies the base directory at solve time. So the same definition resolves on any server, wherever its data lives, and on Windows or Linux (separators are normalised either way).
 
-For testing before you deploy, right-click → **Pick local file…** points it at a real file on your machine. That absolute path is a per-machine override and is never written into the `.gh` — otherwise sharing the definition would break it for everyone else. Server-supplied context always wins over the override.
+To test before you deploy, right-click → **Pick local file…** and point it at a real file on your machine. That absolute path is a per-machine override and is never written into the `.gh` — otherwise sharing the definition would break it for everyone else. Server-supplied context always wins over the override.
 
 ## Environment
 
@@ -48,7 +48,7 @@ One ordinary component rather than a param:
 | --------------- | --------------------------------------------------------------- |
 | **Environment** | `Is Compute` — true on Rhino.Compute, false in a desktop Rhino. |
 
-Use it to branch on work you only want in one place: heavy canvas preview you'd rather skip on the server, or a debug path you don't want running in production.
+Use it to branch on work you want in only one place: a heavy canvas preview you'd rather skip on the server, or a debug path you don't want running in production.
 
 ## Next
 

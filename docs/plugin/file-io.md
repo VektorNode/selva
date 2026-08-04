@@ -8,11 +8,11 @@ description: 'Produce files the deployed app can offer for download.'
 
 # File I/O
 
-Use these when your definition should produce something the user downloads — a cut sheet, a 3D export, a CSV of quantities — alongside the live 3D view.
+Reach for these when your definition should hand the user something to download — a cut sheet, a 3D export, a CSV of quantities — alongside the live 3D view.
 
 ## The pattern
 
-All four producers work the same way: they emit a _File_ output, and you wire that into a **ContextBake** to make it a download in the web app. No ContextBake, no download.
+All four producers work the same way. Each emits a _File_ output; wire that into a **ContextBake** and it becomes a download in the web app. No ContextBake, no download.
 
 | Component            | Produces                                                                                             |
 | -------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -30,9 +30,9 @@ Most take a name and, where it makes sense, an extension or format.
 
 ## Bake Files
 
-The odd one out: it doesn't produce a download, it writes files to a folder on disk. `Files` in, a base path, and a `Bake` boolean to trigger it; out come the paths written and a status message.
+The odd one out. It produces no download; it writes files to a folder on disk. Feed it `Files`, a base path, and a `Bake` boolean to trigger it. Out come the paths written and a status message.
 
-This is an authoring convenience — check that your exports are correct without deploying anything. It is not part of the run-time path.
+This is an authoring convenience, so you can check your exports are correct without deploying anything. It is not part of the run-time path.
 
 ## Next
 

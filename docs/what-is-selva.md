@@ -14,12 +14,12 @@ A designer builds parametric logic once in Grasshopper. Selva exposes its inputs
 
 ## The problem
 
-Grasshopper logic stays locked inside Rhino on the author's machine. Sharing it means sharing a `.gh` file, a Rhino license, and the expectation that the recipient knows Grasshopper. Selva removes that wall: the definition becomes a URL with a clean UI and a live 3D view.
+Grasshopper logic stays trapped inside Rhino on the author's machine. Sharing it means handing over a `.gh` file, expecting the other person to own a Rhino license, and expecting them to know Grasshopper well enough to open it without breaking anything. Selva takes that wall down: the definition becomes a URL with a clean UI and a live 3D view.
 
 ## Two halves
 
-- **The plugin** (`Selva.gha`) is where the author _designs the interface_. It reads the definition's parameters, maps them to web controls via a drag-and-drop designer, and saves that layout (the **schema**) into the `.gh` file. (A `.gha` is just a Grasshopper plugin file — like any other component you install.)
-- **The web app** (`@selvajs/selva`) is where the interface _runs_. It loads the schema, renders the controls, and solves the definition through **Rhino.Compute** — a copy of Rhino running on a server with no window, no mouse, just solving definitions on request. End users need no Rhino.
+- **The plugin** (`Selva.gha`) is where you _design the interface_. It reads your definition's parameters, lets you drag them onto web controls, and saves that layout — the **schema** — into the `.gh` file itself. (A `.gha` is just a Grasshopper plugin, like any other component you install.)
+- **The web app** (`@selvajs/selva`) is where that interface _runs_. It loads the schema, draws the controls, and solves the definition through **Rhino.Compute**: a copy of Rhino on a server with no window and no mouse, doing nothing but solving definitions on request. Your users never touch Rhino.
 
 > **New to the web side?** A few terms show up throughout these docs — _schema_, _Rhino.Compute_, _provider_, _the CLI_. Each is explained where it first matters, and the [Architecture](architecture.md) page lays them all out together. You don't need web-dev experience to follow along.
 
