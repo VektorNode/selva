@@ -1,5 +1,7 @@
 # @selvajs/cli
 
+## 4.8.0-beta.7
+
 ## 4.8.0-beta.6
 
 ## 4.8.0-beta.5

@@ -21,6 +21,7 @@
   "changesets": [
     "api-v1-contract-and-handlers",
     "compute-package-cleanup",
+    "compute-schema-health-fixes",
     "curves-pretessellated-app",
     "curves-pretessellated-solve",
     "curves-pretessellated-ui",
