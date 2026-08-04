@@ -67,19 +67,17 @@ export function assertSupportedSchemaVersion(schema: UISchema): void {
 }
 
 /**
- * Fetch the UI schema from Rhino Compute's `/grasshopper/schema` endpoint (no
- * solve required). Throws `SchemaExtractionError` so callers can map to the
- * right HTTP status (503 unreachable / 422 invalid or unsupported).
+ * POST a multipart form to Rhino Compute's `/grasshopper/schema` endpoint (no
+ * solve required) and return the per-file results. Throws `SchemaExtractionError`
+ * ('unreachable') on a network failure or non-2xx — the per-file `error` field
+ * Compute reports on its 200-with-no-schemas case is left for the caller to
+ * diagnose, since single-file and multi-file callers want different messages.
  */
-export async function fetchSchemaFromCompute(
-	definitionBytes: Uint8Array,
+export async function postSchemaFormData(
+	formData: FormData,
 	server: ComputeServerConfig
-): Promise<UISchema> {
+): Promise<SchemaExtractionResult[]> {
 	const schemaUrl = new URL('/grasshopper/schema', server.serverUrl).toString();
-
-	const formData = new FormData();
-	const blob = new Blob([new Uint8Array(definitionBytes)], { type: 'application/octet-stream' });
-	formData.append('file', blob, 'definition.gh');
 
 	const headers: Record<string, string> = {};
 	if (server.apiKey) {
@@ -103,14 +101,31 @@ export async function fetchSchemaFromCompute(
 		);
 	}
 
-	const results = readSchemaResults(await response.json());
+	return readSchemaResults(await response.json());
+}
+
+/**
+ * Fetch the UI schema from Rhino Compute's `/grasshopper/schema` endpoint (no
+ * solve required). Throws `SchemaExtractionError` so callers can map to the
+ * right HTTP status (503 unreachable / 422 invalid or unsupported).
+ */
+export async function fetchSchemaFromCompute(
+	definitionBytes: Uint8Array,
+	server: ComputeServerConfig
+): Promise<UISchema> {
+	const formData = new FormData();
+	const blob = new Blob([new Uint8Array(definitionBytes)], { type: 'application/octet-stream' });
+	formData.append('file', blob, 'definition.gh');
+
+	const results = await postSchemaFormData(formData, server);
 	const schemas = results.flatMap((r) => r.schemas ?? []);
 
 	if (schemas.length === 0) {
 		// Compute reports a per-file diagnosis in an `error` field and still answers 200, so
-		// the !response.ok guard above never fires for it. Surface that message verbatim —
-		// it names the actual cause (bad Schema source, no embedded schema, ...), which the
-		// generic fallback below cannot, and its absence sends people debugging the wrong thing.
+		// the !response.ok guard in postSchemaFormData never fires for it. Surface that message
+		// verbatim — it names the actual cause (bad Schema source, no embedded schema, ...),
+		// which the generic fallback below cannot, and its absence sends people debugging the
+		// wrong thing.
 		const diagnosis = results.map((r) => r.error).filter(Boolean);
 		if (diagnosis.length > 0) {
 			throw new SchemaExtractionError('invalid', diagnosis.join('\n'));

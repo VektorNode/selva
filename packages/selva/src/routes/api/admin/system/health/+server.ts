@@ -5,6 +5,7 @@ import { writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { env as privateEnv } from '$env/dynamic/private';
 import { LocalComputeServerStore } from '@selvajs/local-provider';
+import { ComputeServerStats } from '@selvajs/compute/grasshopper';
 import {
 	findServerById,
 	type SchemaVersionReport,
@@ -24,8 +25,8 @@ import { requirePermission } from '$lib/server/access.server';
  *   1. At-rest secret decryption — stored compute API keys decrypt under the
  *      current SELVA_AT_REST_KEY (local provider only; the compute-key state
  *      that otherwise surfaces as opaque 401/403s from Rhino.Compute).
- *   2. Compute reachability — the default platform server answers
- *      `/healthcheck`. Catches "key decrypts fine but the server is down", a
+ *   2. Compute reachability — the default platform server answers its
+ *      liveness probe. Catches "key decrypts fine but the server is down", a
  *      gap check #1 can't see: a healthy at-rest key with an unreachable
  *      server still fails every solve.
  *   3. Data path writable — for the local provider, a temp file can be
@@ -118,8 +119,9 @@ function schemaVersionCheck(report: SchemaVersionReport | null): HealthCheck {
 const COMPUTE_PING_TIMEOUT_MS = 8000;
 
 /**
- * Ping the global default compute server's `/healthcheck`. We probe the
- * default specifically because that's the server every solve falls back to;
+ * Ping the global default compute server's liveness root (`GET /` — the
+ * rhino.compute proxy has no `/healthcheck` route). We probe the default
+ * specifically because that's the server every solve falls back to;
  * a degraded default breaks the baseline for all orgs. Org-private and
  * non-default platform servers are out of scope here — they have their own
  * per-server status probe at /api/admin/compute/status.
@@ -150,42 +152,23 @@ async function computeReachabilityCheck(locals: App.Locals): Promise<HealthCheck
 		};
 	}
 
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), COMPUTE_PING_TIMEOUT_MS);
+	const apiKey = server.hasApiKey
+		? await getComputeServerConfigStore().getServerApiKey(locals.ctx!, server.id)
+		: undefined;
+	const stats = new ComputeServerStats(server.serverUrl, apiKey ?? undefined);
 	try {
-		const headers: Record<string, string> = {};
-		if (server.hasApiKey) {
-			const apiKey = await getComputeServerConfigStore().getServerApiKey(locals.ctx!, server.id);
-			if (apiKey) headers['RhinoComputeKey'] = apiKey;
-		}
-		const res = await fetch(new URL('/healthcheck', server.serverUrl).toString(), {
-			signal: controller.signal,
-			headers
-		});
-		if (res.ok) {
-			return { ...base, status: 'ok', summary: `"${server.label}" answered /healthcheck (200).` };
+		const online = await stats.isServerOnline(COMPUTE_PING_TIMEOUT_MS);
+		if (online) {
+			return { ...base, status: 'ok', summary: `"${server.label}" is reachable.` };
 		}
 		return {
 			...base,
 			status: 'degraded',
-			summary: `"${server.label}" responded ${res.status} to /healthcheck.`,
-			remediation:
-				res.status === 401 || res.status === 403
-					? 'Authentication rejected — verify the API key in /admin/compute.'
-					: 'The server is reachable but unhealthy. Check the Rhino.Compute host.'
-		};
-	} catch (err) {
-		const aborted = err instanceof Error && err.name === 'AbortError';
-		return {
-			...base,
-			status: 'degraded',
-			summary: aborted
-				? `"${server.label}" did not respond within ${COMPUTE_PING_TIMEOUT_MS / 1000}s.`
-				: `"${server.label}" is unreachable: ${err instanceof Error ? err.message : String(err)}.`,
-			remediation: `Confirm the Rhino.Compute host is running and ${server.serverUrl} is correct.`
+			summary: `"${server.label}" did not respond within ${COMPUTE_PING_TIMEOUT_MS / 1000}s or answered with an error.`,
+			remediation: `Confirm the Rhino.Compute host is running, ${server.serverUrl} is correct, and the API key in /admin/compute is valid.`
 		};
 	} finally {
-		clearTimeout(timer);
+		await stats.dispose();
 	}
 }
 

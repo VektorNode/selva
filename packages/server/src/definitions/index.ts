@@ -7,6 +7,7 @@ export { DefinitionService, type CreateDefinitionRecord } from './definition-ser
 
 export {
 	fetchSchemaFromCompute,
+	postSchemaFormData,
 	assertSupportedSchemaVersion,
 	readSchemaResults,
 	SchemaExtractionError

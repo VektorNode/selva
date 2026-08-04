@@ -7,7 +7,7 @@ import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { MAX_DEFINITION_FILE_SIZE } from '$lib/server/computeLimits';
-import { readSchemaResults } from '@selvajs/server/definitions';
+import { postSchemaFormData, SchemaExtractionError } from '@selvajs/server/definitions';
 
 // Multipart envelope (boundaries + Content-Disposition headers) adds a small
 // constant overhead on top of the raw .gh bytes; 1 MB clears it comfortably.
@@ -48,25 +48,15 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	}
 	const formData = await request.formData();
 
-	const schemaUrl = new URL('/grasshopper/schema', server.serverUrl).toString();
-
-	const headers: Record<string, string> = {};
-	if (server.apiKey) {
-		headers['RhinoComputeKey'] = server.apiKey;
-	}
-
-	let response: Response;
+	let results;
 	try {
-		response = await fetch(schemaUrl, { method: 'POST', headers, body: formData });
-	} catch {
-		apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, 'Compute server is unreachable');
+		results = await postSchemaFormData(formData, server);
+	} catch (err) {
+		if (err instanceof SchemaExtractionError) {
+			apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, err.message);
+		}
+		throw err;
 	}
-
-	if (!response.ok) {
-		apiError(response.status, ApiErrorCode.COMPUTE_UNAVAILABLE, 'Compute server error');
-	}
-
-	const results = readSchemaResults(await response.json());
 	const schemas = results.flatMap((r) => r.schemas ?? []);
 
 	if (schemas.length === 0) {
