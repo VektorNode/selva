@@ -57,11 +57,20 @@ public class DisplayItem
     // ── Curve-only ────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     Rhino-native curve JSON (<c>curve.ToNurbsCurve().ToJSON()</c>), decoded on the web via
-    ///     rhino3dm and tessellated to a THREE.Line. Null except for curve items.
+    ///     Rhino-native curve JSON (<c>curve.ToNurbsCurve().ToJSON()</c>). Superseded by
+    ///     <see cref="Points" />; still emitted so a new plugin paired with an older published UI
+    ///     can render curves. Null except for curve items.
     /// </summary>
     [JsonProperty("json", NullValueHandling = NullValueHandling.Ignore)]
     public string Json { get; set; }
+
+    /// <summary>
+    ///     Tessellated polyline vertices, flat <c>[x,y,z, x,y,z, …]</c> in world coords, Rhino's
+    ///     Z-up frame. The web builds the line straight from these — no rhino3dm in the browser.
+    ///     Null except for curve items.
+    /// </summary>
+    [JsonProperty("points", NullValueHandling = NullValueHandling.Ignore)]
+    public double[] Points { get; set; }
 
     // ── Point-only ────────────────────────────────────────────────────────────────────────────
 
@@ -77,10 +86,17 @@ public class DisplayItem
     public static DisplayItem Curve(string json, string id, string name, string layer,
         Dictionary<string, string> metadata, string color, double? opacity)
     {
+        return Curve(json, null, id, name, layer, metadata, color, opacity);
+    }
+
+    public static DisplayItem Curve(string json, double[] points, string id, string name, string layer,
+        Dictionary<string, string> metadata, string color, double? opacity)
+    {
         return new DisplayItem
         {
             Kind = "curve",
             Json = json,
+            Points = points,
             Id = id,
             Name = name,
             Layer = layer,
