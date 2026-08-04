@@ -3,7 +3,7 @@ import { getDefinitionMeta, getDefinitionService } from '$lib/server/providers.s
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { requireCanViewProject, requireEditableDefinition } from '$lib/server/access.server';
 import { GuidSchema } from '@selvajs/platform/definitions';
-import { GH_EXTENSIONS, MAX_GH_FILE_SIZE } from '$lib/server/admin-config';
+import { GH_EXTENSIONS, MAX_DEFINITION_FILE_SIZE } from '$lib/server/admin-config';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { fetchSchemaFromCompute } from '$lib/server/definitions/schemaExtraction.server';
 import { parseListOptions } from '$lib/server/pagination.server';
@@ -42,7 +42,7 @@ export const POST: RequestHandler = apiRoute(
 
 		const form = await request.formData();
 		const { file, extension } = requireUpload(form, 'file', {
-			maxBytes: MAX_GH_FILE_SIZE,
+			maxBytes: MAX_DEFINITION_FILE_SIZE,
 			extensions: GH_EXTENSIONS,
 			label: 'Grasshopper (.gh or .ghx) file'
 		});

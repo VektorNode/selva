@@ -1,4 +1,4 @@
-import { ErrorCodes, RhinoComputeError } from '@/core/errors';
+import { ErrorCodes, ComputeError } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 import { readField } from '@/core/utils/read-field';
 import ComputeServerStats from '../server/compute-server-stats';
@@ -122,9 +122,9 @@ export default class GrasshopperClient {
 	 * exponential backoff before giving up. Each probe is also bounded by a
 	 * timeout so a hung connection can't stall construction.
 	 *
-	 * @throws {RhinoComputeError} with code NETWORK_ERROR if the server stays
+	 * @throws {ComputeError} with code NETWORK_ERROR if the server stays
 	 *   unreachable across all attempts
-	 * @throws {RhinoComputeError} with code INVALID_CONFIG if configuration is invalid
+	 * @throws {ComputeError} with code INVALID_CONFIG if configuration is invalid
 	 */
 	static async create(config: GrasshopperComputeConfig): Promise<GrasshopperClient> {
 		const client = new GrasshopperClient(config);
@@ -149,7 +149,7 @@ export default class GrasshopperClient {
 		}
 
 		await client.dispose();
-		throw new RhinoComputeError('Rhino Compute server is not online', ErrorCodes.NETWORK_ERROR, {
+		throw new ComputeError('Rhino Compute server is not online', ErrorCodes.NETWORK_ERROR, {
 			context: { serverUrl: client.config.serverUrl, attempts }
 		});
 	}
@@ -179,9 +179,9 @@ export default class GrasshopperClient {
 	/**
 	 * Run a compute job with a Grasshopper definition.
 	 *
-	 * @throws {RhinoComputeError} with code INVALID_INPUT if definition is empty
-	 * @throws {RhinoComputeError} with code NETWORK_ERROR if server is offline
-	 * @throws {RhinoComputeError} with code COMPUTATION_ERROR if computation fails.
+	 * @throws {ComputeError} with code INVALID_INPUT if definition is empty
+	 * @throws {ComputeError} with code NETWORK_ERROR if server is offline
+	 * @throws {ComputeError} with code COMPUTATION_ERROR if computation fails.
 	 *   On a partial-success response (some outputs computed, some errored) the
 	 *   error's `context.values` carries the outputs that did compute — pass
 	 *   `{ values } as GrasshopperComputeResponse` to the response processors to
@@ -198,17 +198,13 @@ export default class GrasshopperClient {
 		try {
 			// Validate inputs
 			if (typeof definition === 'string' && !definition?.trim()) {
-				throw new RhinoComputeError(
-					'Definition URL/content is required',
-					ErrorCodes.INVALID_INPUT,
-					{
-						context: { receivedUrl: definition }
-					}
-				);
+				throw new ComputeError('Definition URL/content is required', ErrorCodes.INVALID_INPUT, {
+					context: { receivedUrl: definition }
+				});
 			} else if (definition instanceof Uint8Array && definition.length === 0) {
-				throw new RhinoComputeError('Definition content is empty', ErrorCodes.INVALID_INPUT);
+				throw new ComputeError('Definition content is empty', ErrorCodes.INVALID_INPUT);
 			} else if (isDefinitionRef(definition) && !definition.key.trim()) {
-				throw new RhinoComputeError('DefinitionRef key is empty', ErrorCodes.INVALID_INPUT);
+				throw new ComputeError('DefinitionRef key is empty', ErrorCodes.INVALID_INPUT);
 			}
 
 			// Per-call options override the client's stored config for this request only
@@ -219,7 +215,7 @@ export default class GrasshopperClient {
 				...(options?.retry !== undefined && { retry: options.retry })
 			};
 
-			// Skip the redundant pre-flight healthcheck — fetchRhinoCompute already surfaces
+			// Skip the redundant pre-flight healthcheck — fetchCompute already surfaces
 			// network failures with a NETWORK_ERROR code, so adding a roundtrip here only
 			// doubles latency on every solve.
 			const result = await solveGrasshopperDefinition(dataTree, definition, effectiveConfig);
@@ -228,7 +224,7 @@ export default class GrasshopperClient {
 			// containing both `values` and `errors`/`warnings`). Surface that as a
 			// COMPUTATION_ERROR so callers don't silently consume a broken result.
 			if (result?.errors && result.errors.length > 0) {
-				throw new RhinoComputeError(
+				throw new ComputeError(
 					result.errors.join('; ') || 'Computation failed',
 					ErrorCodes.COMPUTATION_ERROR,
 					{
@@ -255,11 +251,11 @@ export default class GrasshopperClient {
 				getLogger().error('Compute failed:', error);
 			}
 
-			if (error instanceof RhinoComputeError) {
+			if (error instanceof ComputeError) {
 				throw error;
 			}
 
-			throw new RhinoComputeError(
+			throw new ComputeError(
 				error instanceof Error ? error.message : String(error),
 				ErrorCodes.COMPUTATION_ERROR,
 				{
@@ -326,7 +322,7 @@ export default class GrasshopperClient {
 	 */
 	private ensureNotDisposed(): void {
 		if (this.disposed) {
-			throw new RhinoComputeError(
+			throw new ComputeError(
 				'GrasshopperClient has been disposed and cannot be used',
 				ErrorCodes.INVALID_STATE
 			);
@@ -336,7 +332,7 @@ export default class GrasshopperClient {
 	/**
 	 * Validates and normalizes a compute configuration.
 	 *
-	 * @throws {RhinoComputeError} with code INVALID_CONFIG if configuration is invalid
+	 * @throws {ComputeError} with code INVALID_CONFIG if configuration is invalid
 	 */
 	private normalizeComputeConfig<T extends ComputeConfig | GrasshopperComputeConfig>(config: T): T {
 		return {

@@ -10,14 +10,24 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { gunzipSync } from 'node:zlib';
-import type { GrasshopperClient, InputParam, SolveScheduler } from '@selvajs/compute';
+import type { GrasshopperClient, InputParam, SolveScheduler } from '@selvajs/compute/grasshopper';
 
-// vi.mock factories are hoisted above module top-level, so RhinoComputeError is
+// vi.mock factories are hoisted above module top-level, so ComputeError is
 // declared INSIDE this one. The pipeline classifies shed outcomes with
-// `err instanceof RhinoComputeError && err.code === ErrorCodes.QUEUE_*`, so the
+// `err instanceof ComputeError && err.code === ErrorCodes.QUEUE_*`, so the
 // mock must export a real class plus the code constants.
-vi.mock('@selvajs/compute', () => {
-	class RhinoComputeError extends Error {
+vi.mock('@selvajs/compute/grasshopper', () => {
+	return {
+		TreeBuilder: {
+			fromInputParams: (params: unknown[]) => ({ __tree: true, count: params.length })
+		},
+		processInput: (raw: InputParam) => raw,
+		stableStringify: (value: unknown) => JSON.stringify(value)
+	};
+});
+
+vi.mock('@selvajs/compute/core', () => {
+	class MockComputeError extends Error {
 		code: string;
 		statusCode?: number;
 		context?: Record<string, unknown>;
@@ -27,31 +37,26 @@ vi.mock('@selvajs/compute', () => {
 			options?: { statusCode?: number; context?: Record<string, unknown> }
 		) {
 			super(message);
-			this.name = 'RhinoComputeError';
+			this.name = 'ComputeError';
 			this.code = code;
 			this.statusCode = options?.statusCode;
 			this.context = options?.context;
 		}
 	}
 	return {
-		TreeBuilder: {
-			fromInputParams: (params: unknown[]) => ({ __tree: true, count: params.length })
-		},
-		processInput: (raw: InputParam) => raw,
-		stableStringify: (value: unknown) => JSON.stringify(value),
-		RhinoComputeError,
+		ComputeError: MockComputeError,
 		ErrorCodes: { QUEUE_FULL: 'QUEUE_FULL', QUEUE_TIMEOUT: 'QUEUE_TIMEOUT' }
 	};
 });
 
-import { RhinoComputeError as MockRhinoComputeError } from '@selvajs/compute';
+import { ComputeError as MockComputeError } from '@selvajs/compute/core';
 const makeShedError = (
 	message: string,
 	code: 'QUEUE_FULL' | 'QUEUE_TIMEOUT' | 'UNKNOWN_ERROR',
 	options?: { statusCode?: number; context?: Record<string, unknown> }
 ) =>
 	new (
-		MockRhinoComputeError as unknown as new (
+		MockComputeError as unknown as new (
 			m: string,
 			c: string,
 			o?: { statusCode?: number; context?: Record<string, unknown> }
@@ -413,7 +418,7 @@ describe('runSolvePipeline — failure outcomes', () => {
 		expect(outcome.retryAfterSeconds).toBeGreaterThan(0);
 	});
 
-	it('does NOT shed a RhinoComputeError with an unrelated code (stays compute_error)', async () => {
+	it('does NOT shed a ComputeError with an unrelated code (stays compute_error)', async () => {
 		const boom = makeShedError('server exploded', 'UNKNOWN_ERROR', {
 			statusCode: 500
 		});

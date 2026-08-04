@@ -708,7 +708,7 @@ export const ENV_VAR_GROUPS: EnvVarGroup[] = [
 				text: 'Length of the fixed rate-limit window, in ms.'
 			},
 			{
-				name: 'MAX_GH_FILE_SIZE_BYTES',
+				name: 'MAX_DEFINITION_FILE_SIZE_BYTES',
 				default: '50 MB',
 				text: 'Largest .gh definition accepted on upload, and the largest remote definition fetched — kept in lockstep so a remote URL can’t smuggle a bigger file past the upload cap. Matches Rhino.Compute’s own request-size default.'
 			},

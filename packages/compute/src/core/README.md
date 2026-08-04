@@ -5,7 +5,7 @@ Foundational utilities and low-level clients that power the `@selvajs/compute` l
 ## Key Responsibilities
 
 - **Compute Communication**: Type-safe HTTP wrappers for the Rhino Compute API.
-- **Error Handling**: Specialized `RhinoComputeError` classes for precise debugging of API and network failures.
+- **Error Handling**: Specialized `ComputeError` classes for precise debugging of API and network failures.
 - **Server Monitoring**: Utilities to fetch runtime stats and telemetry from Compute instances.
 - **Data Processing**: Utilities for base64 encoding/decoding and camelCase normalization of API responses.
 
@@ -26,21 +26,17 @@ The `core` module provides the building blocks for the rest of the library. Belo
 
 ### 1. Low-level API Requests
 
-Use `fetchRhinoCompute` for type-safe requests to arbitrary Rhino Compute endpoints.
+Use `fetchCompute` for type-safe requests to arbitrary Rhino Compute endpoints.
 
 ```typescript
-import { fetchRhinoCompute, RhinoComputeError } from '@selvajs/compute/core';
+import { fetchCompute, ComputeError } from '@selvajs/compute/core';
 
 async function performCustomJob(config) {
 	try {
-		const response = await fetchRhinoCompute(
-			'rhino/geometry/point/at',
-			{ x: 1, y: 0, z: 0 },
-			config
-		);
+		const response = await fetchCompute('rhino/geometry/point/at', { x: 1, y: 0, z: 0 }, config);
 		return response;
 	} catch (error) {
-		if (error instanceof RhinoComputeError) {
+		if (error instanceof ComputeError) {
 			// Handle specific error codes (e.g. AUTH_ERROR, COMPUTATION_ERROR)
 			console.error(`[${error.code}] ${error.message} (HTTP ${error.statusCode ?? 'n/a'})`);
 		}

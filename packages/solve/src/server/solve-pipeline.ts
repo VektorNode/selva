@@ -6,15 +6,13 @@
  * metric sinks are the calling route's job, not this file's.
  */
 
+import { ErrorCodes, ComputeError, type SolveDefinition } from '@selvajs/compute/core';
 import {
-	ErrorCodes,
-	RhinoComputeError,
 	TreeBuilder,
 	type DataTree,
 	type GrasshopperComputeResponse,
-	type InputParam,
-	type SolveDefinition
-} from '@selvajs/compute';
+	type InputParam
+} from '@selvajs/compute/grasshopper';
 import type { SchemaInput } from '@selvajs/schemas';
 import { gzip, gunzipSync } from 'node:zlib';
 import { promisify } from 'node:util';
@@ -187,7 +185,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		}
 		// Queue-full or queue-timeout rejects the solve before compute runs — a load
 		// signal, not a failure, so it's `shed` rather than `compute_error`.
-		if (err instanceof RhinoComputeError) {
+		if (err instanceof ComputeError) {
 			if (err.code === ErrorCodes.QUEUE_FULL) {
 				return {
 					kind: 'shed',

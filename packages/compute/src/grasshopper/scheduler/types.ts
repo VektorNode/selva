@@ -1,6 +1,6 @@
 // Public declarations for the solve scheduler. The class itself lives in `solve-scheduler.ts`.
 
-import type { RhinoComputeError } from '@/core/errors';
+import type { ComputeError } from '@/core/errors';
 import type { RetryPolicy } from '@/core/types';
 
 import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } from '../types';
@@ -125,7 +125,7 @@ export type SolveResult =
 			 */
 			definitionReuploaded?: boolean;
 	  }
-	| { status: 'error'; error: RhinoComputeError; durationMs: number }
+	| { status: 'error'; error: ComputeError; durationMs: number }
 	| { status: 'superseded' };
 
 export type SolveExecutor = (

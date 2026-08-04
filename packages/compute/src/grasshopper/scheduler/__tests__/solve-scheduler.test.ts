@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SolveScheduler, type SolveExecutor } from '../solve-scheduler';
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes } from '@/core/errors';
 import { setResponseWireSize } from '@/core/compute-fetch/wire-size';
 import type { SolveDefinition } from '@/core/definition-ref';
 import type { GrasshopperComputeConfig, GrasshopperComputeResponse } from '@/grasshopper/types';
@@ -177,7 +177,7 @@ describe('SolveScheduler', () => {
 			for (const s of settled) {
 				expect(s.status).toBe('rejected');
 				if (s.status === 'rejected') {
-					expect((s.reason as RhinoComputeError).code).toBe(ErrorCodes.SUPERSEDED);
+					expect((s.reason as ComputeError).code).toBe(ErrorCodes.SUPERSEDED);
 				}
 			}
 
@@ -412,7 +412,7 @@ describe('SolveScheduler', () => {
 
 			scheduler.cancelAll();
 
-			await expect(a).rejects.toBeInstanceOf(RhinoComputeError);
+			await expect(a).rejects.toBeInstanceOf(ComputeError);
 			await expect(b).rejects.toMatchObject({ message: expect.stringMatching(/aborted/i) });
 		});
 
@@ -534,7 +534,7 @@ describe('SolveScheduler', () => {
 			const b = scheduler.solve('def', [{ ParamName: 'b', InnerTree: {} } as any]);
 
 			ctrlA.abort();
-			await expect(a).rejects.toBeInstanceOf(RhinoComputeError);
+			await expect(a).rejects.toBeInstanceOf(ComputeError);
 
 			// b should still be in flight
 			expect(scheduler.inFlightCount).toBe(1);
@@ -933,8 +933,8 @@ describe('SolveScheduler', () => {
 
 			const p2 = scheduler.solve('def', [{ ParamName: 'fail', InnerTree: {} } as any]);
 			queue[1].fail(new Error('boom'));
-			await expect(p2).rejects.toBeInstanceOf(RhinoComputeError);
-			expect(scheduler.lastError).toBeInstanceOf(RhinoComputeError);
+			await expect(p2).rejects.toBeInstanceOf(ComputeError);
+			expect(scheduler.lastError).toBeInstanceOf(ComputeError);
 		});
 
 		it('fires onStart and onSettle hooks', async () => {
@@ -967,8 +967,8 @@ describe('SolveScheduler', () => {
 
 			scheduler.dispose();
 
-			await expect(a).rejects.toBeInstanceOf(RhinoComputeError);
-			await expect(b).rejects.toBeInstanceOf(RhinoComputeError);
+			await expect(a).rejects.toBeInstanceOf(ComputeError);
+			await expect(b).rejects.toBeInstanceOf(ComputeError);
 
 			await expect(scheduler.solve('def', [])).rejects.toMatchObject({
 				code: ErrorCodes.INVALID_STATE

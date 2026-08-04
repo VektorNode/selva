@@ -1,4 +1,4 @@
-import { RhinoComputeError, ErrorCodes } from '../errors';
+import { ComputeError, ErrorCodes } from '../errors';
 
 /**
  * Logger interface for structured logging
@@ -66,13 +66,13 @@ export function getLogger(): Logger {
  * @public Use this to configure custom logging behavior.
  *
  * @param logger - Custom logger implementation or null to disable logging
- * @throws {RhinoComputeError} `INVALID_CONFIG` if the logger is missing any of
+ * @throws {ComputeError} `INVALID_CONFIG` if the logger is missing any of
  *   the four required methods — failing here beats a confusing
  *   "getLogger().debug is not a function" at some later, unrelated call site.
  *
  * @example
  * ```typescript
- * import { setLogger } from '@selvajs/compute';
+ * import { setLogger } from '@selvajs/compute/core';
  *
  * // Enable console logging
  * setLogger(console);
@@ -99,7 +99,7 @@ export function setLogger(logger: Logger | Console | null): void {
 		(method) => typeof (logger as unknown as Record<string, unknown>)[method] !== 'function'
 	);
 	if (missing.length > 0) {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			`Logger is missing required method(s): ${missing.join(', ')}. A logger must implement debug, info, warn and error.`,
 			ErrorCodes.INVALID_CONFIG,
 			{ context: { missingMethods: missing } }
@@ -116,7 +116,7 @@ export function setLogger(logger: Logger | Console | null): void {
  *
  * @example
  * ```typescript
- * import { enableDebugLogging } from '@selvajs/compute';
+ * import { enableDebugLogging } from '@selvajs/compute/core';
  *
  * enableDebugLogging();
  * ```

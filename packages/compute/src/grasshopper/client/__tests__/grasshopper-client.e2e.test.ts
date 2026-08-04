@@ -2,7 +2,7 @@
  * End-to-end tests for GrasshopperClient driven through the stubbed global
  * `fetch` (the production transport seam). These prove the whole path works —
  * client.create() health check, client.solve() → solveGrasshopperDefinition →
- * fetchRhinoCompute → HTTP, and client.getIO() → fetchParsedDefinitionIO → the
+ * fetchCompute → HTTP, and client.getIO() → fetchParsedDefinitionIO → the
  * input-type parser pipeline — without a live Compute server.
  *
  * fetch is routed by URL so each leg (liveness `/` / grasshopper / io) is stubbed

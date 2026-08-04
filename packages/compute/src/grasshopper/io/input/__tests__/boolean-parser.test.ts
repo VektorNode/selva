@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { INPUT_TYPE_PARSERS } from '@/grasshopper/io/input/input-type-parsers';
 import { createBooleanInputSchema } from '@tests/helpers/test-data-builders';
-import { RhinoComputeError } from '@/core';
+import { ComputeError } from '@/core';
 import type { BaseInputType, InputParamSchema } from '@/grasshopper/types';
 
 const base: BaseInputType = {
@@ -25,7 +25,7 @@ describe('boolean parser', () => {
 
 		it('should throw error for invalid boolean string', () => {
 			const input = createBooleanInputSchema({ default: 'invalid' });
-			expect(() => parseBoolean(input)).toThrow(RhinoComputeError);
+			expect(() => parseBoolean(input)).toThrow(ComputeError);
 		});
 	});
 

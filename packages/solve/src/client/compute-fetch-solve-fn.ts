@@ -12,7 +12,10 @@
  * `getThreeMeshesFromComputeResponse` from `@selvajs/visualization/parse`).
  */
 
-import { GrasshopperResponseProcessor, type GrasshopperComputeResponse } from '@selvajs/compute';
+import {
+	GrasshopperResponseProcessor,
+	type GrasshopperComputeResponse
+} from '@selvajs/compute/grasshopper';
 import type { SolveFn, SolveResult } from '../shared/solve-fn.js';
 
 export interface ComputeFetchSolveFnOptions<TMesh = unknown> {

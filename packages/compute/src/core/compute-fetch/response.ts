@@ -1,4 +1,4 @@
-import { RhinoComputeError, ErrorCodes, type ErrorCode } from '../errors';
+import { ComputeError, ErrorCodes, type ErrorCode } from '../errors';
 import { log } from './log';
 import { fireServerTiming } from './server-timing';
 import { setResponseWireSize } from './wire-size';
@@ -85,7 +85,7 @@ export function throwHttpError(
 	// for context.
 	const code = mapServerErrorCode(serverCode, serverErrorCodes) ?? error.code;
 
-	throw new RhinoComputeError(error.message, code, { statusCode: status, context });
+	throw new ComputeError(error.message, code, { statusCode: status, context });
 }
 
 /**
@@ -247,7 +247,7 @@ export async function handleResponse(
 		const contentType = (response.headers.get('Content-Type') ?? '').toLowerCase();
 		const declaredNonJson = contentType !== '' && !contentType.includes('json');
 		if (declaredNonJson) {
-			throw new RhinoComputeError(
+			throw new ComputeError(
 				`Server returned a non-JSON response (Content-Type: ${contentType}) — check the server URL / proxy configuration`,
 				ErrorCodes.INVALID_RESPONSE,
 				{
@@ -257,7 +257,7 @@ export async function handleResponse(
 				}
 			);
 		}
-		throw new RhinoComputeError('Failed to parse JSON response', ErrorCodes.NETWORK_ERROR, {
+		throw new ComputeError('Failed to parse JSON response', ErrorCodes.NETWORK_ERROR, {
 			statusCode: response.status,
 			context: {
 				url: fullUrl,

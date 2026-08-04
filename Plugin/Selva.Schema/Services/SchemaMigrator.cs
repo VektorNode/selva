@@ -29,7 +29,8 @@ public static class SchemaMigrator
             { new Version(2, 9, 0), MigrateTo_2_9_0 },
             { new Version(2, 10, 0), MigrateTo_2_10_0 },
             { new Version(2, 11, 0), MigrateTo_2_11_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_12_0 }
+            { new Version(2, 12, 0), MigrateTo_2_12_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_13_0 }
         };
 
     /// <summary>
@@ -294,7 +295,7 @@ public static class SchemaMigrator
     {
         schema.SchemaVersion = "2.11.0";
 
-        // 'dynamicValueList' added to GrasshopperParamType, plus
+        // 'dynamicValueList' added to ParamType, plus
         // InputDynamicValueListLayoutItem / OutputDynamicValueListLayoutItem and their
         // configs. A dynamic value list input's options populate at runtime from a
         // dynamic value list output that targets it (by targetInputId).
@@ -310,6 +311,17 @@ public static class SchemaMigrator
         // since the C# model has always emitted it and this migrator stamps it onto
         // every legacy schema. Made required so the web side can treat a stored
         // schema's version as authoritative for its migrate-on-read staleness check.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_13_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // GrasshopperParamType -> ParamType, GrasshopperInputStructure -> InputStructure
+        // renamed (schema definition names only; no persisted field values changed,
+        // paramType/inputStructure still serialize as their lowercase enum strings).
 
         return schema;
     }

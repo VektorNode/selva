@@ -20,8 +20,8 @@ Grasshopper in them, and they sit in the solve port's own signature — they now
 `/core` as well as `/grasshopper`, so a second backend's author isn't forced to import them from
 the Grasshopper subpath. `RhinoModelUnit` moved from `/core` to `/grasshopper`.
 
-The root `@selvajs/compute` entrypoint re-exports both subpaths, so importers from the root are
-unaffected.
+There is no root-barrel fallback for either move — the root entrypoint is deliberately empty in
+this same release (see the vocabulary-rename changeset), so every import states its subpath.
 
 Three new seams carry what used to be hardcoded in core:
 

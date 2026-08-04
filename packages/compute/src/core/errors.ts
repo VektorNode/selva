@@ -59,7 +59,7 @@ export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
  *
  * @public Use this for error handling with error codes and context.
  */
-export class RhinoComputeError extends Error {
+export class ComputeError extends Error {
 	public readonly code: ErrorCode;
 	public readonly statusCode?: number;
 	public readonly context?: Record<string, unknown>;
@@ -71,7 +71,7 @@ export class RhinoComputeError extends Error {
 		options?: { statusCode?: number; context?: Record<string, unknown>; originalError?: Error }
 	) {
 		super(message);
-		this.name = 'RhinoComputeError';
+		this.name = 'ComputeError';
 		this.code = code;
 		this.statusCode = options?.statusCode;
 		this.context = options?.context;
@@ -89,7 +89,7 @@ export class RhinoComputeError extends Error {
 		expectedType?: string,
 		context?: Record<string, unknown>
 	) {
-		return new RhinoComputeError(
+		return new ComputeError(
 			`Input "${inputName}" has no values defined${expectedType ? ` (expected ${expectedType})` : ''}`,
 			ErrorCodes.INVALID_INPUT,
 			{ context: { inputName, expectedType, ...context } }
@@ -104,7 +104,7 @@ export class RhinoComputeError extends Error {
 		paramName?: string,
 		context?: Record<string, unknown>
 	) {
-		return new RhinoComputeError(`Unknown paramType: ${paramType}`, ErrorCodes.VALIDATION_ERROR, {
+		return new ComputeError(`Unknown paramType: ${paramType}`, ErrorCodes.VALIDATION_ERROR, {
 			context: { receivedParamType: paramType, paramName, ...context }
 		});
 	}

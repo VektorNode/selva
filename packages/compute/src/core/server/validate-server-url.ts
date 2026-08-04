@@ -1,4 +1,4 @@
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes } from '@/core/errors';
 
 /**
  * The public McNeel endpoint's host — the default blocked host; users must point at
@@ -42,18 +42,18 @@ export interface ValidateServerUrlOptions {
  * @param raw - The candidate server URL.
  * @param options - Override the blocked-host list for a non-Rhino backend.
  * @returns The trimmed, normalized URL with any trailing slashes removed.
- * @throws {RhinoComputeError} `INVALID_CONFIG` if any rule fails.
+ * @throws {ComputeError} `INVALID_CONFIG` if any rule fails.
  */
 export function validateServerUrl(raw: string, options?: ValidateServerUrlOptions): string {
 	const trimmed = raw?.trim() ?? '';
 	if (!trimmed) {
-		throw new RhinoComputeError('serverUrl is required', ErrorCodes.INVALID_CONFIG, {
+		throw new ComputeError('serverUrl is required', ErrorCodes.INVALID_CONFIG, {
 			context: { receivedServerUrl: raw }
 		});
 	}
 
 	if (!/^https?:\/\//i.test(trimmed)) {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			`Invalid serverUrl: "${trimmed}". Must start with "http://" or "https://". ` +
 				`For example: "http://localhost:5000" or "https://example.com"`,
 			ErrorCodes.INVALID_CONFIG,
@@ -65,7 +65,7 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 	try {
 		parsed = new URL(trimmed);
 	} catch (err) {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			`Invalid serverUrl: "${trimmed}". Must be a valid URL. ` +
 				`Received error: ${err instanceof Error ? err.message : String(err)}`,
 			ErrorCodes.INVALID_CONFIG,
@@ -77,7 +77,7 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 	}
 
 	if (parsed.username !== '' || parsed.password !== '') {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			`Invalid serverUrl: "${trimmed}". Must not embed credentials (user:pass@host) — ` +
 				`fetch rejects credentialed URLs at request time. Pass the API key separately.`,
 			ErrorCodes.INVALID_CONFIG,
@@ -88,7 +88,7 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 	// String check rather than parsed.search/hash: a bare trailing "?" or "#"
 	// parses to an empty search/hash but still corrupts endpoint concatenation.
 	if (trimmed.includes('?') || trimmed.includes('#')) {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			`Invalid serverUrl: "${trimmed}". Must not contain a query string or fragment — ` +
 				`endpoint paths are appended to this URL (e.g. "\${serverUrl}/version"), ` +
 				`and a "?" or "#" suffix would corrupt every request path.`,
@@ -103,7 +103,7 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 		h.toLowerCase().replace(/\.+$/, '')
 	);
 	if (blocked.includes(hostname)) {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			'serverUrl must be set to your Compute server URL. The shared public endpoint is not allowed.',
 			ErrorCodes.INVALID_CONFIG,
 			{ context: { receivedServerUrl: raw } }

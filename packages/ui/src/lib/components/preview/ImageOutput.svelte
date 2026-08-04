@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { OutputImageLayoutItem } from '@selvajs/schemas';
-	import type { FileData } from '@selvajs/compute';
+	import type { FileData } from '@selvajs/compute/core';
 	import { Download, Maximize, Minimize } from '@lucide/svelte';
 	import { downloadFiles, isFileData, MIME_BY_EXT } from '$lib/utils/file-download';
 

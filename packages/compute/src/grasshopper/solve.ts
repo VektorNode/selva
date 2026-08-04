@@ -1,4 +1,4 @@
-import { fetchRhinoCompute, RhinoComputeError, ErrorCodes } from '@/core';
+import { fetchCompute, ComputeError, ErrorCodes } from '@/core';
 import type { ComputeConfig, ServerErrorCodeMap } from '@/core/types';
 import { getResponseWireSize, setResponseWireSize } from '@/core/compute-fetch/wire-size';
 import { base64ByteArray, detectBase64Payload, encodeStringToBase64 } from '@/core/utils/encoding';
@@ -48,7 +48,7 @@ export function withGrasshopperErrorCodes<T extends ComputeConfig>(config: T): T
 
 /** Does this error look like a server-side definition-load miss? */
 function isDefinitionLoadMiss(error: unknown): boolean {
-	if (!(error instanceof RhinoComputeError)) return false;
+	if (!(error instanceof ComputeError)) return false;
 	return (
 		error.code === ErrorCodes.DEFINITION_NOT_CACHED ||
 		error.message.includes(DEFINITION_LOAD_FAILED)
@@ -208,7 +208,7 @@ export async function solveByCacheKey(
 
 /**
  * Resolve a definition to uploadable form: a `DefinitionRef` is materialized
- * via `load()` (failures are wrapped so callers get a `RhinoComputeError`
+ * via `load()` (failures are wrapped so callers get a `ComputeError`
  * naming the ref, not an opaque loader exception); other forms pass through.
  */
 async function materializeDefinition(definition: SolveDefinition): Promise<string | Uint8Array> {
@@ -216,7 +216,7 @@ async function materializeDefinition(definition: SolveDefinition): Promise<strin
 	try {
 		return await definition.load();
 	} catch (error) {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			`Failed to load definition bytes for ref '${definition.key}'`,
 			ErrorCodes.INVALID_INPUT,
 			{
@@ -241,7 +241,7 @@ async function runSolve(
 ): Promise<SolveWithCacheKey> {
 	applyOptionalComputeSettings(args, config);
 
-	const result = await fetchRhinoCompute<GrasshopperComputeResponse>(
+	const result = await fetchCompute<GrasshopperComputeResponse>(
 		'grasshopper',
 		args,
 		withGrasshopperErrorCodes(config)

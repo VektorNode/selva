@@ -1,4 +1,4 @@
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes } from '@/core/errors';
 import type { RetryPolicy } from '@/core/types';
 import { getLogger } from '@/core/utils/logger';
 import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
@@ -51,7 +51,7 @@ interface PendingItem {
 	/** Monotonic solve() ordinal — used to keep older items' late settles from overwriting newer state. */
 	seq: number;
 	resolve: (response: GrasshopperComputeResponse) => void;
-	reject: (error: RhinoComputeError) => void;
+	reject: (error: ComputeError) => void;
 	externalSignal?: AbortSignal;
 	/**
 	 * Abort listener attached while the item waits in a queue, so a signal
@@ -66,7 +66,7 @@ interface PendingItem {
 	 */
 	queueWaitTimer?: ReturnType<typeof setTimeout>;
 	/** Set once the promise has been settled, so a late executor rejection becomes a no-op. */
-	settled?: { error: RhinoComputeError } | { ok: true };
+	settled?: { error: ComputeError } | { ok: true };
 }
 
 interface InFlightItem extends PendingItem {
@@ -188,7 +188,7 @@ export class SolveScheduler {
 	private readonly fifoQueue: PendingItem[] = [];
 
 	private _lastResult: GrasshopperComputeResponse | null = null;
-	private _lastError: RhinoComputeError | null = null;
+	private _lastError: ComputeError | null = null;
 	private _lastDurationMs: number | null = null;
 
 	/** Ordinal handed to each solve() call. */
@@ -262,7 +262,7 @@ export class SolveScheduler {
 		return this._lastResult;
 	}
 
-	get lastError(): RhinoComputeError | null {
+	get lastError(): ComputeError | null {
 		return this._lastError;
 	}
 
@@ -310,7 +310,7 @@ export class SolveScheduler {
 	/**
 	 * Schedule a solve. Returns a promise that:
 	 * - Resolves with the compute response on success.
-	 * - Rejects with `RhinoComputeError` on failure.
+	 * - Rejects with `ComputeError` on failure.
 	 * - Rejects with `code: ErrorCodes.SUPERSEDED` when the call was canceled because
 	 *   newer values arrived (latest-wins mode).
 	 * - Rejects with `code: ErrorCodes.ABORTED` when the call was canceled via
@@ -339,7 +339,7 @@ export class SolveScheduler {
 	): Promise<GrasshopperComputeResponse> {
 		if (this.disposed) {
 			return Promise.reject(
-				new RhinoComputeError(
+				new ComputeError(
 					'SolveScheduler has been disposed and cannot be used',
 					ErrorCodes.INVALID_STATE
 				)
@@ -421,7 +421,7 @@ export class SolveScheduler {
 		seq: number,
 		state:
 			| { result: GrasshopperComputeResponse; durationMs: number }
-			| { error: RhinoComputeError; durationMs: number }
+			| { error: ComputeError; durationMs: number }
 	): boolean {
 		if (seq < this.lastStateSeq) return false;
 		this.lastStateSeq = seq;
@@ -464,7 +464,7 @@ export class SolveScheduler {
 	 * it. The structured context lets an HTTP layer map it to 503 + Retry-After.
 	 */
 	private shedAsQueueFull(item: PendingItem): void {
-		const err = new RhinoComputeError(
+		const err = new ComputeError(
 			'Solve queue is full; request rejected (backpressure)',
 			ErrorCodes.QUEUE_FULL,
 			{
@@ -496,7 +496,7 @@ export class SolveScheduler {
 			const queued = this.fifoQueue.indexOf(item);
 			if (queued >= 0) this.fifoQueue.splice(queued, 1);
 
-			const err = new RhinoComputeError(
+			const err = new ComputeError(
 				`Solve waited longer than ${waitMs}ms in queue; rejected (backpressure)`,
 				ErrorCodes.QUEUE_TIMEOUT,
 				{
@@ -702,7 +702,7 @@ export class SolveScheduler {
 	}
 
 	private supersede(item: PendingItem): void {
-		const err = new RhinoComputeError('Superseded by newer solve', ErrorCodes.SUPERSEDED, {
+		const err = new ComputeError('Superseded by newer solve', ErrorCodes.SUPERSEDED, {
 			context: { key: item.ctx.key, enqueuedAt: item.ctx.enqueuedAt }
 		});
 		if (this.settleError(item, err)) {
@@ -710,8 +710,8 @@ export class SolveScheduler {
 		}
 	}
 
-	private makeAbortError(ctx: SolveContext): RhinoComputeError {
-		return new RhinoComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
+	private makeAbortError(ctx: SolveContext): ComputeError {
+		return new ComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
 			context: { key: ctx.key, enqueuedAt: ctx.enqueuedAt }
 		});
 	}
@@ -729,7 +729,7 @@ export class SolveScheduler {
 	 *
 	 * @returns `true` if this call settled the item; `false` if it was already settled.
 	 */
-	private settleError(item: PendingItem, err: RhinoComputeError): boolean {
+	private settleError(item: PendingItem, err: ComputeError): boolean {
 		if (item.settled) return false;
 		item.settled = { error: err };
 		this.clearQueueWaitTimer(item);
@@ -771,20 +771,20 @@ export class SolveScheduler {
 		return false;
 	}
 
-	private normalizeExecutionError(error: unknown, item: InFlightItem): RhinoComputeError {
+	private normalizeExecutionError(error: unknown, item: InFlightItem): ComputeError {
 		// If the item was already settled (e.g. by supersede), return that error so
 		// _lastError reflects the original cause rather than the downstream abort.
 		if (item.settled && 'error' in item.settled) {
 			return item.settled.error;
 		}
 
-		if (error instanceof RhinoComputeError) return error;
+		if (error instanceof ComputeError) return error;
 
 		if (this.isAbortLikeError(error)) {
 			return this.makeAbortError(item.ctx);
 		}
 
-		return new RhinoComputeError(
+		return new ComputeError(
 			error instanceof Error ? error.message : String(error),
 			ErrorCodes.UNKNOWN_ERROR,
 			{ originalError: error instanceof Error ? error : new Error(String(error)) }

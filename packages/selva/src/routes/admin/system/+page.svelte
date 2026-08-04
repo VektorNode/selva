@@ -26,7 +26,7 @@
 			SOLVE_DEADLINE_MS: number;
 			RATE_LIMIT_WINDOW_MS: number;
 			RATE_LIMIT_MAX_REQUESTS: number;
-			MAX_GH_FILE_SIZE: number;
+			MAX_DEFINITION_FILE_SIZE: number;
 			MAX_IMAGE_FILE_SIZE: number;
 			COMPUTE_REQUEST_MAX_BYTES: number;
 			COMPUTE_RESPONSE_MAX_BYTES: number;
@@ -84,10 +84,10 @@
 			description: 'Max solves per key (user or share-link) within the fixed window.'
 		},
 		{
-			key: 'MAX_GH_FILE_SIZE',
+			key: 'MAX_DEFINITION_FILE_SIZE',
 			label: 'Max .gh upload size',
-			env: 'MAX_GH_FILE_SIZE_BYTES',
-			value: (l) => formatBytes(l.MAX_GH_FILE_SIZE),
+			env: 'MAX_DEFINITION_FILE_SIZE_BYTES',
+			value: (l) => formatBytes(l.MAX_DEFINITION_FILE_SIZE),
 			description: 'Largest Grasshopper definition accepted on upload.'
 		},
 		{
@@ -114,7 +114,7 @@
 		{
 			key: 'REMOTE_DEFINITION_MAX_BYTES',
 			label: 'Remote definition fetch cap',
-			env: 'MAX_GH_FILE_SIZE_BYTES',
+			env: 'MAX_DEFINITION_FILE_SIZE_BYTES',
 			value: (l) => formatBytes(l.REMOTE_DEFINITION_MAX_BYTES),
 			description: 'Max size of a remotely-fetched .gh (tracks the upload cap).'
 		},

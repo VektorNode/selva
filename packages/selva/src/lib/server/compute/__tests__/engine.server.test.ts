@@ -23,8 +23,10 @@ const createSpy = vi.fn(async (cfg: { serverUrl: string; apiKey?: string }) => {
 	};
 });
 
-vi.mock('@selvajs/compute', () => ({
-	GrasshopperClient: { create: createSpy },
+vi.mock('@selvajs/compute/grasshopper', () => ({
+	GrasshopperClient: { create: createSpy }
+}));
+vi.mock('@selvajs/compute/core', () => ({
 	enableDebugLogging: () => {}
 }));
 

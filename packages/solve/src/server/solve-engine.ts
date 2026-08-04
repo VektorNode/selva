@@ -17,7 +17,7 @@ import {
 	stableStringify,
 	type DefinitionRef,
 	type SolveDefinition
-} from '@selvajs/compute';
+} from '@selvajs/compute/grasshopper';
 import { NoopLogger, type ILogger } from '@selvajs/platform';
 import {
 	createClientCache,

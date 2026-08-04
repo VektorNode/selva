@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchRhinoCompute } from '../compute-fetch';
+import { fetchCompute } from '../compute-fetch';
 import { parseServerTiming } from '../server-timing';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
@@ -61,7 +61,7 @@ describe('onServerTiming callback', () => {
 			)
 		);
 
-		await fetchRhinoCompute('grasshopper', {}, { ...config, onServerTiming });
+		await fetchCompute('grasshopper', {}, { ...config, onServerTiming });
 
 		expect(onServerTiming).toHaveBeenCalledTimes(1);
 		expect(onServerTiming).toHaveBeenCalledWith(
@@ -76,7 +76,7 @@ describe('onServerTiming callback', () => {
 			createMockResponse({ values: [] }, { headers: { 'Server-Timing': 'solve;dur=1' } })
 		);
 
-		await fetchRhinoCompute('grasshopper', {}, { ...config, onServerTiming });
+		await fetchCompute('grasshopper', {}, { ...config, onServerTiming });
 
 		const sentHeaders = fetchMock.mock.calls[0][1].headers as Record<string, string>;
 		const [, requestId] = onServerTiming.mock.calls[0];
@@ -89,7 +89,7 @@ describe('onServerTiming callback', () => {
 		const onServerTiming = vi.fn();
 		fetchMock.mockResolvedValueOnce(createMockResponse({ values: [] }));
 
-		await fetchRhinoCompute('grasshopper', {}, { ...config, onServerTiming });
+		await fetchCompute('grasshopper', {}, { ...config, onServerTiming });
 
 		expect(onServerTiming).not.toHaveBeenCalled();
 	});
@@ -106,7 +106,7 @@ describe('onServerTiming callback', () => {
 			})
 		);
 
-		const res = await fetchRhinoCompute('grasshopper', {}, { ...config, onServerTiming });
+		const res = await fetchCompute('grasshopper', {}, { ...config, onServerTiming });
 
 		// The partial-success body is returned, not thrown — and its timing (often
 		// the slowest solves) must not be dropped from telemetry.
@@ -126,9 +126,9 @@ describe('onServerTiming callback', () => {
 			createMockResponse({ values: [1] }, { headers: { 'Server-Timing': 'solve;dur=9' } })
 		);
 
-		await expect(
-			fetchRhinoCompute('grasshopper', {}, { ...config, onServerTiming })
-		).resolves.toEqual({ values: [1] });
+		await expect(fetchCompute('grasshopper', {}, { ...config, onServerTiming })).resolves.toEqual({
+			values: [1]
+		});
 		expect(onServerTiming).toHaveBeenCalled();
 	});
 });

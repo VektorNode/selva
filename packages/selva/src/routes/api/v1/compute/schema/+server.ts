@@ -6,7 +6,7 @@ import { requireCanCreateDefinition } from '$lib/server/access.server';
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
-import { MAX_GH_FILE_SIZE } from '$lib/server/computeLimits';
+import { MAX_DEFINITION_FILE_SIZE } from '$lib/server/computeLimits';
 import { readSchemaResults } from '@selvajs/server/definitions';
 
 // Multipart envelope (boundaries + Content-Disposition headers) adds a small
@@ -24,7 +24,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	// BODY_SIZE_LIMIT (or an upstream proxy), which returns an opaque non-JSON
 	// 413 — the client then can't read a message and shows a misleading
 	// "Compute server error". This makes the real reason (file too large) loud.
-	requireMaxBodySize(request, MAX_GH_FILE_SIZE + MULTIPART_OVERHEAD);
+	requireMaxBodySize(request, MAX_DEFINITION_FILE_SIZE + MULTIPART_OVERHEAD);
 
 	// Same gate as POST /api/definitions: container projects need owner/editor;
 	// commons projects (`autoJoinOnUpload=true`) accept any authenticated user.

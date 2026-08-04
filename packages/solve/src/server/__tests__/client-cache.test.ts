@@ -31,7 +31,7 @@ const disposedSchedulers: { disposed: boolean }[] = [];
 // for a server that cannot answer (stock McNeel build, network blip).
 let activeChildren: number | null = null;
 
-vi.mock('@selvajs/compute', () => {
+vi.mock('@selvajs/compute/grasshopper', () => {
 	class GrasshopperClient {
 		static async create(config: Recorded) {
 			createdConfigs.push(config);
@@ -69,8 +69,10 @@ vi.mock('@selvajs/compute', () => {
 			return scheduler;
 		}
 	}
-	return { GrasshopperClient, enableDebugLogging: vi.fn() };
+	return { GrasshopperClient };
 });
+
+vi.mock('@selvajs/compute/core', () => ({ enableDebugLogging: vi.fn() }));
 
 import { createClientCache, serverIdentity } from '../client-cache.js';
 

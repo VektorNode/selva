@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import type { InputParam } from '@selvajs/compute';
+import type { InputParam } from '@selvajs/compute/grasshopper';
 
 type Recorded = Record<string, unknown>;
 
@@ -16,7 +16,7 @@ let scriptedSolve: (
 	opts: { signal?: AbortSignal }
 ) => Promise<Record<string, unknown>> = async () => ({ values: [], errors: [], warnings: [] });
 
-vi.mock('@selvajs/compute', () => {
+vi.mock('@selvajs/compute/grasshopper', () => {
 	class GrasshopperClient {
 		static async create(config: Recorded) {
 			createdConfigs.push(config);
@@ -34,7 +34,24 @@ vi.mock('@selvajs/compute', () => {
 			};
 		}
 	}
-	class RhinoComputeError extends Error {
+	return {
+		GrasshopperClient,
+		TreeBuilder: {
+			fromInputParams: (params: unknown[]) => ({ __tree: true, count: params.length })
+		},
+		processInput: (raw: InputParam) => raw,
+		stableStringify: (value: unknown) => JSON.stringify(value),
+		isDefinitionRef: (d: unknown) =>
+			typeof d === 'object' &&
+			d !== null &&
+			!(d instanceof Uint8Array) &&
+			typeof (d as Recorded).key === 'string' &&
+			typeof (d as Recorded).load === 'function'
+	};
+});
+
+vi.mock('@selvajs/compute/core', () => {
+	class MockComputeError extends Error {
 		code: string;
 		constructor(message: string, code: string) {
 			super(message);
@@ -42,21 +59,9 @@ vi.mock('@selvajs/compute', () => {
 		}
 	}
 	return {
-		GrasshopperClient,
 		enableDebugLogging: vi.fn(),
-		TreeBuilder: {
-			fromInputParams: (params: unknown[]) => ({ __tree: true, count: params.length })
-		},
-		processInput: (raw: InputParam) => raw,
-		stableStringify: (value: unknown) => JSON.stringify(value),
-		RhinoComputeError,
-		ErrorCodes: { QUEUE_FULL: 'QUEUE_FULL', QUEUE_TIMEOUT: 'QUEUE_TIMEOUT' },
-		isDefinitionRef: (d: unknown) =>
-			typeof d === 'object' &&
-			d !== null &&
-			!(d instanceof Uint8Array) &&
-			typeof (d as Recorded).key === 'string' &&
-			typeof (d as Recorded).load === 'function'
+		ComputeError: MockComputeError,
+		ErrorCodes: { QUEUE_FULL: 'QUEUE_FULL', QUEUE_TIMEOUT: 'QUEUE_TIMEOUT' }
 	};
 });
 

@@ -11,12 +11,12 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchRhinoCompute } from '../compute-fetch';
+import { fetchCompute } from '../compute-fetch';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
 import { ErrorCodes } from '@/core/errors';
 
-import type { RhinoComputeError } from '@/core/errors';
+import type { ComputeError } from '@/core/errors';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
 const config = { serverUrl: 'http://localhost:6500' };
@@ -43,13 +43,13 @@ describe('Compute8 server-exception body is surfaced to the user', () => {
 			})
 		);
 
-		await expect(fetchRhinoCompute('grasshopper', {}, config)).rejects.toMatchObject({
+		await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
 			code: 'COMPUTATION_ERROR',
 			statusCode: 500
 		});
 
 		// The actionable detail must reach the user, not just the generic label.
-		await expect(fetchRhinoCompute('grasshopper', {}, config)).rejects.toThrow(
+		await expect(fetchCompute('grasshopper', {}, config)).rejects.toThrow(
 			/Radius must be positive/
 		);
 	});
@@ -65,7 +65,7 @@ describe('Compute8 server-exception body is surfaced to the user', () => {
 		);
 
 		try {
-			await fetchRhinoCompute('grasshopper', {}, config);
+			await fetchCompute('grasshopper', {}, config);
 			throw new Error('should have thrown');
 		} catch (e) {
 			expect((e as Error).message).toContain('Malformed JSON received');
@@ -86,10 +86,10 @@ describe('error context.responseBody holds the raw, bounded server body (issue 1
 		);
 
 		try {
-			await fetchRhinoCompute('grasshopper', {}, config);
+			await fetchCompute('grasshopper', {}, config);
 			throw new Error('should have thrown');
 		} catch (e) {
-			const err = e as RhinoComputeError;
+			const err = e as ComputeError;
 			// The context must hold what actually came over the wire — the message
 			// rewrite ("<type>: <message>\n<stack>") belongs to err.message only.
 			expect(err.context?.responseBody).toBe(raw);
@@ -108,10 +108,10 @@ describe('error context.responseBody holds the raw, bounded server body (issue 1
 		);
 
 		try {
-			await fetchRhinoCompute('grasshopper', {}, config);
+			await fetchCompute('grasshopper', {}, config);
 			throw new Error('should have thrown');
 		} catch (e) {
-			const body = (e as RhinoComputeError).context?.responseBody as string;
+			const body = (e as ComputeError).context?.responseBody as string;
 			expect(body.length).toBeLessThan(5_000);
 			expect(body).toMatch(/truncated 5904 chars/);
 			expect(body.startsWith('xxxx')).toBe(true);
@@ -135,7 +135,7 @@ describe('Grasshopper partial-success (500 with values) still passes through', (
 			})
 		);
 
-		const res = await fetchRhinoCompute('grasshopper', {}, config);
+		const res = await fetchCompute('grasshopper', {}, config);
 		expect(res).toEqual(partial);
 	});
 });
@@ -155,9 +155,9 @@ describe('server error codes are caller-supplied', () => {
 
 		expect.assertions(1);
 		try {
-			await fetchRhinoCompute('solve', {}, config);
+			await fetchCompute('solve', {}, config);
 		} catch (e) {
-			expect((e as RhinoComputeError).code).toBe(ErrorCodes.NETWORK_ERROR);
+			expect((e as ComputeError).code).toBe(ErrorCodes.NETWORK_ERROR);
 		}
 	});
 
@@ -166,7 +166,7 @@ describe('server error codes are caller-supplied', () => {
 
 		expect.assertions(1);
 		try {
-			await fetchRhinoCompute(
+			await fetchCompute(
 				'solve',
 				{},
 				{
@@ -175,7 +175,7 @@ describe('server error codes are caller-supplied', () => {
 				}
 			);
 		} catch (e) {
-			expect((e as RhinoComputeError).code).toBe(ErrorCodes.DEFINITION_NOT_CACHED);
+			expect((e as ComputeError).code).toBe(ErrorCodes.DEFINITION_NOT_CACHED);
 		}
 	});
 });

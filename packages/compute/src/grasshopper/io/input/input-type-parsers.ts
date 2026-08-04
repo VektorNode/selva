@@ -1,4 +1,4 @@
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core';
 import { isDataTreeDefault } from '../../data-tree/tree-path';
 import type {
@@ -24,7 +24,7 @@ import type {
  *
  * Parsers are pure: they read from a (already-`normalizeDefault`'d) schema and
  * return a typed param. They do not mutate the schema. `parse` throws a
- * {@link RhinoComputeError} on recoverable bad input; the registry boundary
+ * {@link ComputeError} on recoverable bad input; the registry boundary
  * catches it and pairs it with `fallback`.
  */
 export interface InputTypeParser<T extends InputParam = InputParam> {
@@ -79,7 +79,7 @@ function computeNumeric(
 		schema.default.trim() !== '' &&
 		numericTransformer(schema.default) === null
 	) {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			`Invalid numeric default "${schema.default}" for input "${schema.name || 'unknown'}"`,
 			ErrorCodes.VALIDATION_ERROR,
 			{ context: { inputName: schema.name, default: schema.default } }
@@ -220,7 +220,7 @@ const booleanParser: InputTypeParser<BooleanInputType> = {
 			typeof value !== 'boolean' &&
 			!Array.isArray(value)
 		) {
-			throw new RhinoComputeError(
+			throw new ComputeError(
 				`Invalid boolean default "${String(value)}" for input "${schema.name || 'unknown'}"`,
 				ErrorCodes.VALIDATION_ERROR,
 				{ context: { inputName: schema.name, default: schema.default } }
@@ -254,7 +254,7 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 			typeof schema.values !== 'object' ||
 			Object.keys(schema.values).length === 0
 		) {
-			throw RhinoComputeError.missingValues(schema.nickname || 'unnamed', 'ValueList');
+			throw ComputeError.missingValues(schema.nickname || 'unnamed', 'ValueList');
 		}
 
 		let defaultValue = schema.default as string | undefined;
@@ -262,7 +262,7 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 			// A tree/array-shaped default can't index the values map — `String()`
 			// would silently turn it into '[object Object]'. Reject it properly.
 			if (typeof schema.default === 'object') {
-				throw new RhinoComputeError(
+				throw new ComputeError(
 					`ValueList input "${schema.nickname || 'unnamed'}" default is not a string-able value`,
 					ErrorCodes.VALIDATION_ERROR,
 					{ context: { inputName: schema.name, default: schema.default } }

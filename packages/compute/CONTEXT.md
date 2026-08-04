@@ -19,10 +19,10 @@ named after a concept, it should be the concept named here.
 - **IO** — the inputs and outputs a definition declares. `getIO` fetches them.
 - **Input param** — one declared input of a definition, parsed into a typed
   shape (`NumericInputType`, `TextInputType`, …). The union is `InputParam`.
-- **Transport** — the HTTP layer talking to a compute server (`fetchRhinoCompute`).
+- **Transport** — the HTTP layer talking to a compute server (`fetchCompute`).
   Owns retries, backoff, timeout/abort composition, and HTTP→error-code mapping.
   Response-type-agnostic: it takes an endpoint string and a `ComputeConfig` and
-  returns a caller-supplied response type (`fetchRhinoCompute<R>`). It does not
+  returns a caller-supplied response type (`fetchCompute<R>`). It does not
   know which response a given endpoint produces — each endpoint caller names its
   own response type. This keeps the dependency arrow pointing feature → core, so
   a second endpoint family can be added without `core` importing any feature.

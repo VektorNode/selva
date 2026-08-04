@@ -1,4 +1,4 @@
-import { RhinoComputeError, ErrorCodes } from '../errors';
+import { ComputeError, ErrorCodes } from '../errors';
 import { utf8ByteLength } from '../utils/encoding';
 import { log } from './log';
 import { buildUrl, buildHeaders, generateRequestId } from './request';
@@ -34,13 +34,13 @@ interface AttemptRetry {
 	ok: false;
 	retry: true;
 	delayMs: number;
-	cause: RhinoComputeError;
+	cause: ComputeError;
 }
 
 interface AttemptFatal {
 	ok: false;
 	retry: false;
-	cause: RhinoComputeError;
+	cause: ComputeError;
 }
 
 async function attemptFetch(
@@ -83,7 +83,7 @@ async function attemptFetch(
 				ok: false,
 				retry: true,
 				delayMs,
-				cause: new RhinoComputeError(
+				cause: new ComputeError(
 					`HTTP ${response.status} ${response.statusText} (will retry)`,
 					response.status === 429 ? ErrorCodes.RATE_LIMIT : ErrorCodes.NETWORK_ERROR,
 					{ statusCode: response.status, context: { requestId: ctx.requestId } }
@@ -113,7 +113,7 @@ async function attemptFetch(
 				return {
 					ok: false,
 					retry: false,
-					cause: new RhinoComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
+					cause: new ComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
 						context: {
 							endpoint: ctx.endpoint,
 							requestId: ctx.requestId,
@@ -131,7 +131,7 @@ async function attemptFetch(
 			// instead of "timed out after undefinedms" / TIMEOUT_ERROR.
 			const timeoutArmed = typeof ctx.config.timeoutMs === 'number' && ctx.config.timeoutMs > 0;
 			const fatal = timeoutArmed
-				? new RhinoComputeError(
+				? new ComputeError(
 						`Request timed out after ${ctx.config.timeoutMs}ms`,
 						ErrorCodes.TIMEOUT_ERROR,
 						{
@@ -146,7 +146,7 @@ async function attemptFetch(
 							originalError: error
 						}
 					)
-				: new RhinoComputeError(
+				: new ComputeError(
 						`Request aborted by the runtime (${error.name}): ${error.message}`,
 						ErrorCodes.NETWORK_ERROR,
 						{
@@ -195,12 +195,12 @@ async function attemptFetch(
 				requestSize: ctx.requestSize
 			};
 			const fatal = inBrowser
-				? new RhinoComputeError(
+				? new ComputeError(
 						`Request failed: ${error.message} — in a browser this usually means a CORS misconfiguration on the server (or a network failure; the browser does not distinguish them)`,
 						ErrorCodes.CORS_ERROR,
 						{ context: errorContext, originalError: error }
 					)
-				: new RhinoComputeError(`Network error: ${error.message}`, ErrorCodes.NETWORK_ERROR, {
+				: new ComputeError(`Network error: ${error.message}`, ErrorCodes.NETWORK_ERROR, {
 						context: errorContext,
 						originalError: error
 					});
@@ -214,9 +214,9 @@ async function attemptFetch(
 			}
 			return { ok: false, retry: false, cause: fatal };
 		}
-		// RhinoComputeError thrown from handleResponse — already has full context.
+		// ComputeError thrown from handleResponse — already has full context.
 		// Retryable only if it carries a retryable status code.
-		if (error instanceof RhinoComputeError) {
+		if (error instanceof ComputeError) {
 			const status = error.statusCode;
 			// A 2xx whose body failed to parse UNDER A JSON CONTENT-TYPE
 			// (NETWORK_ERROR from handleResponse) means the stream was cut mid-body —
@@ -247,7 +247,7 @@ async function attemptFetch(
 		return {
 			ok: false,
 			retry: false,
-			cause: new RhinoComputeError(
+			cause: new ComputeError(
 				error instanceof Error ? error.message : String(error),
 				ErrorCodes.UNKNOWN_ERROR,
 				{
@@ -293,7 +293,7 @@ async function attemptFetch(
  *
  * @example
  * // Basic usage for the Grasshopper endpoint:
- * const response = await fetchRhinoCompute(
+ * const response = await fetchCompute(
  *   'grasshopper',
  *   { ... },
  *   {
@@ -305,7 +305,7 @@ async function attemptFetch(
  *   }
  * );
  */
-export async function fetchRhinoCompute<R = unknown>(
+export async function fetchCompute<R = unknown>(
 	endpoint: string,
 	args: Record<string, any>,
 	config: ComputeConfig
@@ -358,7 +358,7 @@ export async function fetchRhinoCompute<R = unknown>(
 			await sleep(result.delayMs, config.signal);
 		} catch {
 			// Caller cancelled during backoff
-			throw new RhinoComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
+			throw new ComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
 				context: { endpoint, requestId, requestSize },
 				originalError: result.cause
 			});

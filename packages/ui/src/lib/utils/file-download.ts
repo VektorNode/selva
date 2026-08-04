@@ -1,4 +1,4 @@
-import { downloadFileData, type FileData } from '@selvajs/compute';
+import { downloadFileData, type FileData } from '@selvajs/compute/core';
 import { SvelteMap } from 'svelte/reactivity';
 import { APP_DEFAULTS } from '../constants';
 

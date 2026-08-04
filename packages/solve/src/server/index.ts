@@ -76,8 +76,8 @@ export {
 	type FrameworkAgnosticResponse
 } from './solve-engine.js';
 
-export type { DefinitionRef, SolveDefinition } from '@selvajs/compute';
-export { isDefinitionRef } from '@selvajs/compute';
+export type { DefinitionRef, SolveDefinition } from '@selvajs/compute/core';
+export { isDefinitionRef } from '@selvajs/compute/core';
 
 // ============================================================================
 // Shared vocabulary

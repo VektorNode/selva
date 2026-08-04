@@ -1,5 +1,5 @@
-import { ComputeConfig, RhinoComputeError, ErrorCodes } from '@/core';
-import { fetchRhinoCompute } from '@/core/compute-fetch/compute-fetch';
+import { ComputeConfig, ComputeError, ErrorCodes } from '@/core';
+import { fetchCompute } from '@/core/compute-fetch/compute-fetch';
 import { readField } from '@/core/utils/read-field';
 import { warnIfClientSide } from '@/core/utils/warnings';
 import { prepareGrasshopperArgs, withGrasshopperErrorCodes } from '../solve';
@@ -24,7 +24,7 @@ import { normalizeInputSchema, normalizeOutputSchema } from './normalize-schema'
  * @param definition - The Grasshopper definition (URL, base64 string, or Uint8Array)
  * @param config - Compute configuration (server URL, API key, etc.)
  * @returns Key-normalized inputs and outputs with no per-type processing
- * @throws {RhinoComputeError} If fetch fails or response is invalid
+ * @throws {ComputeError} If fetch fails or response is invalid
  *
  * @public Use `fetchParsedDefinitionIO()` for processed, type-safe inputs
  */
@@ -38,21 +38,21 @@ export async function fetchDefinitionIO(
 	if (args.pointer) payload.pointer = args.pointer;
 
 	if (!payload.algo && !payload.pointer) {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			'Definition must resolve to either a URL pointer or base64 algo',
 			ErrorCodes.INVALID_INPUT,
 			{ context: { definition } }
 		);
 	}
 
-	const response = await fetchRhinoCompute<IoResponseSchema>(
+	const response = await fetchCompute<IoResponseSchema>(
 		'io',
 		payload,
 		withGrasshopperErrorCodes(config)
 	);
 
 	if (!response || typeof response !== 'object') {
-		throw new RhinoComputeError('Invalid IO response structure', ErrorCodes.INVALID_INPUT, {
+		throw new ComputeError('Invalid IO response structure', ErrorCodes.INVALID_INPUT, {
 			context: { response, definition }
 		});
 	}
@@ -143,7 +143,7 @@ function coerceDiagnostic(value: unknown): string | undefined {
  * @param definition - The Grasshopper definition (URL, base64 string, or Uint8Array)
  * @param config - Compute configuration (server URL, API key, etc.)
  * @returns Processed inputs with discriminated union types and outputs
- * @throws {RhinoComputeError} If fetch fails or response is invalid
+ * @throws {ComputeError} If fetch fails or response is invalid
  *
  * @example
  * ```typescript

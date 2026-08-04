@@ -153,7 +153,7 @@ export interface ComputeLimits {
 	 * `RHINO_COMPUTE_MAX_REQUEST_SIZE` default: a larger file 413s at compute
 	 * regardless, so accepting it here only defers the failure.
 	 */
-	maxGhFileSize: number;
+	maxDefinitionFileSize: number;
 	maxImageFileSize: number;
 	/**
 	 * /api/v1/compute JSON *request* body cap (inputs + values, not the .gh). A
@@ -175,7 +175,7 @@ export interface ComputeLimits {
 	 * not bounded by BODY_SIZE_LIMIT, which only applies to inbound bodies.
 	 */
 	computeResponseMaxBytes: number;
-	/** Hard cap on fetching a remote definition — tracks `maxGhFileSize`. */
+	/** Hard cap on fetching a remote definition — tracks `maxDefinitionFileSize`. */
 	remoteDefinitionMaxBytes: number;
 	/** Deadline on fetching a remote definition (slow-loris protection). */
 	remoteDefinitionFetchTimeoutMs: number;
@@ -269,17 +269,23 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 	// bounds — one solve — rather than a vague "duration".
 	env = readRenamed(env, 'COMPUTE_SOLVE_DEADLINE_MS', 'MAX_SOLVE_DURATION_MS', logger);
 
-	const maxGhFileSize = readPositiveInt(env, 'MAX_GH_FILE_SIZE_BYTES', 50 * MB, logger);
+	// Intentional clean-cut rename (no old-name dual-read): pre-1.0 breaking change.
+	const maxDefinitionFileSize = readPositiveInt(
+		env,
+		'MAX_DEFINITION_FILE_SIZE_BYTES',
+		50 * MB,
+		logger
+	);
 	return {
 		solveDeadlineMs: readPositiveInt(env, 'COMPUTE_SOLVE_DEADLINE_MS', 100_000, logger),
 		rateLimitWindowMs: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_WINDOW_MS', 100_000, logger),
 		rateLimitMaxRequests: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_MAX', 120, logger),
-		maxGhFileSize,
+		maxDefinitionFileSize,
 		maxImageFileSize: readPositiveInt(env, 'MAX_IMAGE_FILE_SIZE_BYTES', 10 * MB, logger),
 		computeRequestMaxBytes: readPositiveInt(env, 'COMPUTE_REQUEST_MAX_BYTES', 210 * MB, logger),
 		computeResponseMaxBytes: readPositiveInt(env, 'COMPUTE_RESPONSE_MAX_BYTES', 300 * MB, logger),
 		// Tracks the upload cap so a remote URL can't smuggle a larger file.
-		remoteDefinitionMaxBytes: maxGhFileSize,
+		remoteDefinitionMaxBytes: maxDefinitionFileSize,
 		remoteDefinitionFetchTimeoutMs: readPositiveInt(
 			env,
 			'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',

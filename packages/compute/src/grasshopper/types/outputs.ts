@@ -32,9 +32,9 @@ export interface InputParseError {
 	inputName: string;
 	/** The declared paramType from the raw schema. */
 	paramType: string;
-	/** Human-readable reason from the underlying RhinoComputeError. */
+	/** Human-readable reason from the underlying ComputeError. */
 	message: string;
-	/** Error code from the underlying RhinoComputeError, if available. */
+	/** Error code from the underlying ComputeError, if available. */
 	code?: string;
 }
 

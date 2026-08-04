@@ -54,7 +54,7 @@
   export * from './errors';
 
   // GOOD - clear what's public
-  export { RhinoComputeError } from './base';
+  export { ComputeError } from './base';
   export { ErrorCodes } from './error-codes';
   ```
 
@@ -87,17 +87,17 @@ When adding/modifying exports:
 
 ## Error Handling
 
-Use `RhinoComputeError` with static helper methods:
+Use `ComputeError` with static helper methods:
 
 ```typescript
 // Generic validation error
-throw RhinoComputeError.validation('inputName', 'reason');
+throw ComputeError.validation('inputName', 'reason');
 
 // Specific cases
-throw RhinoComputeError.missingValues('inputName', 'Type');
-throw RhinoComputeError.invalidDefault('inputName', defaultValue, availableValues);
-throw RhinoComputeError.unknownParamType(paramType, paramName);
-throw RhinoComputeError.invalidStructure('inputName', 'expected structure');
+throw ComputeError.missingValues('inputName', 'Type');
+throw ComputeError.invalidDefault('inputName', defaultValue, availableValues);
+throw ComputeError.unknownParamType(paramType, paramName);
+throw ComputeError.invalidStructure('inputName', 'expected structure');
 ```
 
 Include proper error codes—never pass `undefined`.
@@ -112,7 +112,7 @@ If a feature requires Selva plugin components or custom compute, document it:
  *
  * **Requires:** Selva Display component in Grasshopper + custom VektorNode compute branch.
  *
- * @throws {RhinoComputeError} If three.js is not installed
+ * @throws {ComputeError} If three.js is not installed
  */
 public async extractMeshesFromResponse(options?: MeshExtractionOptions) { }
 ```

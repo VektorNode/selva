@@ -77,7 +77,7 @@ function checkSchemaVersionBumped() {
 
 // String-enum types that are represented as plain 'string' in C# for compatibility.
 // Add new string-enum definition names here when they are introduced in the schema.
-const STRING_ALIAS_TYPES = new Set(['GrasshopperParamType', 'GrasshopperInputStructure']);
+const STRING_ALIAS_TYPES = new Set(['ParamType', 'InputStructure']);
 
 // Helper to resolve properties from allOf inheritance
 function resolveDefinition(def) {
@@ -372,8 +372,8 @@ output += `// ==================================================================
     // ============================================================================
 
     // String-enum types are represented as 'string' in C# for compatibility
-    // GrasshopperParamType valid values: ${definitions.GrasshopperParamType?.enum?.map((v) => `"${v}"`).join(', ') || 'N/A'}
-    // GrasshopperInputStructure valid values: ${definitions.GrasshopperInputStructure?.enum?.map((v) => `"${v}"`).join(', ') || 'N/A'}
+    // ParamType valid values: ${definitions.ParamType?.enum?.map((v) => `"${v}"`).join(', ') || 'N/A'}
+    // InputStructure valid values: ${definitions.InputStructure?.enum?.map((v) => `"${v}"`).join(', ') || 'N/A'}
 
 `;
 

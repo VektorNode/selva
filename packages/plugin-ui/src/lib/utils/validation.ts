@@ -1,7 +1,7 @@
 import type {
 	VisibilityRule,
 	DiscoveredInput,
-	GrasshopperParamType,
+	ParamType,
 	UISchema,
 	SchemaInput,
 	SchemaOutput,
@@ -245,9 +245,7 @@ export function validateDynamicValueListOutputs(schema: UISchema): DynamicValueL
 /**
  * Returns appropriate operators based on parameter type
  */
-export function getOperatorsForType(
-	paramType?: GrasshopperParamType
-): { value: string; label: string }[] {
+export function getOperatorsForType(paramType?: ParamType): { value: string; label: string }[] {
 	const baseOperators = [
 		{ value: 'equals', label: 'equals' },
 		{ value: 'notEquals', label: 'not equals' }

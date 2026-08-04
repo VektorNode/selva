@@ -1,4 +1,4 @@
-import { RhinoComputeError } from '@/core/errors';
+import { ComputeError } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 
 import { normalizeDefaultWithWarning } from './normalize-default';
@@ -45,7 +45,7 @@ export function processInput(rawInput: InputParamSchema): InputParam {
  * {@link InputParseError} docs — not the canonicalized casing — so clients can
  * match on the casing they sent.
  *
- * Unexpected (non-RhinoComputeError) failures still throw — they indicate a
+ * Unexpected (non-ComputeError) failures still throw — they indicate a
  * programming bug, not bad user input.
  *
  * @internal Used by {@link processInputsWithErrors} / {@link fetchParsedDefinitionIO}.
@@ -105,7 +105,7 @@ export function processInputWithError(rawInput: InputParamSchema): {
 
 	try {
 		if (!parser) {
-			throw RhinoComputeError.unknownParamType(paramType, rawInput.name);
+			throw ComputeError.unknownParamType(paramType, rawInput.name);
 		}
 		// A malformed-default warning rides through on the otherwise-successful parse.
 		return {
@@ -114,7 +114,7 @@ export function processInputWithError(rawInput: InputParamSchema): {
 			...(defaultWarningError && { errors: [defaultWarningError] })
 		};
 	} catch (error) {
-		if (error instanceof RhinoComputeError) {
+		if (error instanceof ComputeError) {
 			getLogger().error(`Validation error for input ${rawInput.name || 'unknown'}:`, error.message);
 			const parserError: InputParseError = {
 				inputName: rawInput.name || 'unknown',
@@ -134,7 +134,7 @@ export function processInputWithError(rawInput: InputParamSchema): {
 		}
 
 		// Unexpected failure — surface it.
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			error instanceof Error ? error.message : String(error),
 			'VALIDATION_ERROR',
 			{

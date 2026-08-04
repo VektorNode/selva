@@ -1,4 +1,4 @@
-import { RhinoComputeError, ErrorCodes } from '../errors';
+import { ComputeError, ErrorCodes } from '../errors';
 
 /** Node's `Buffer` when present (faster path), else `undefined` in browsers/workers. */
 function getNodeBuffer(): typeof Buffer | undefined {
@@ -86,7 +86,7 @@ export function detectBase64Payload(str: string): string | null {
  *
  * @param base64File - Base64 encoded string
  * @returns Decoded binary data as Uint8Array
- * @throws {RhinoComputeError} `ENCODING_ERROR` if invalid, or `INVALID_STATE` if decoder unavailable
+ * @throws {ComputeError} `ENCODING_ERROR` if invalid, or `INVALID_STATE` if decoder unavailable
  */
 export function decodeBase64ToBinary(base64File: string): Uint8Array {
 	// Forgiving-base64 normalization: strip ASCII whitespace (wrapped /
@@ -95,7 +95,7 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
 	let data = base64File.replace(/[\t\n\f\r ]/g, '');
 	if (data.length % 4 === 0) data = data.replace(/={1,2}$/, '');
 	if (data.length % 4 === 1 || !/^[A-Za-z0-9+/]*$/.test(data)) {
-		throw new RhinoComputeError('Invalid base64 input.', ErrorCodes.ENCODING_ERROR, {
+		throw new ComputeError('Invalid base64 input.', ErrorCodes.ENCODING_ERROR, {
 			context: { inputLength: base64File.length }
 		});
 	}
@@ -120,7 +120,7 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
 		return bytes;
 	}
 
-	throw new RhinoComputeError(
+	throw new ComputeError(
 		'Base64 decoding not supported in this environment.',
 		ErrorCodes.INVALID_STATE,
 		{ context: { environmentInfo: 'atob or Buffer not available' } }
@@ -194,7 +194,7 @@ export function base64ByteArray(bytes: Uint8Array): string {
 		}
 		return parts.join('');
 	}
-	throw new RhinoComputeError(
+	throw new ComputeError(
 		'Base64 encoding not supported in this environment.',
 		ErrorCodes.INVALID_STATE,
 		{ context: { environmentInfo: 'btoa or Buffer not available' } }

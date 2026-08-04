@@ -42,9 +42,9 @@ export const RATE_LIMIT_MAX_REQUESTS = limits.rateLimitMaxRequests;
 // Upload + payload caps. Defaults live in `@selvajs/server` (`resolveComputeLimits`),
 // which documents the sizing of each; override per-deployment via the *_BYTES env
 // vars. NOTE: the Rhino.Compute server caps at RHINO_COMPUTE_MAX_REQUEST_SIZE
-// (default 50 MB), so raising MAX_GH_FILE_SIZE past that only defers the 413 to
-// compute — raise it there too.
-export const MAX_GH_FILE_SIZE = limits.maxGhFileSize;
+// (default 50 MB), so raising MAX_DEFINITION_FILE_SIZE past that only defers the
+// 413 to compute — raise it there too.
+export const MAX_DEFINITION_FILE_SIZE = limits.maxDefinitionFileSize;
 export const MAX_IMAGE_FILE_SIZE = limits.maxImageFileSize;
 
 // /api/compute JSON request/response body caps. In a production (adapter-node)

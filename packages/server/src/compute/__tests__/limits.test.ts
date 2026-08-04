@@ -30,7 +30,7 @@ describe('resolveComputeLimits', () => {
 	describe('defaults (release gate — see audit B3)', () => {
 		it('caps .gh uploads at 50 MB, matching Rhino.Compute RHINO_COMPUTE_MAX_REQUEST_SIZE', () => {
 			// Above this, compute 413s regardless — accepting more only defers the failure.
-			expect(resolveComputeLimits({}).maxGhFileSize).toBe(50 * MB);
+			expect(resolveComputeLimits({}).maxDefinitionFileSize).toBe(50 * MB);
 		});
 
 		it('caps the /api/compute request body at 210 MB, matching the shipped BODY_SIZE_LIMIT', () => {
@@ -152,15 +152,15 @@ describe('resolveComputeLimits', () => {
 	});
 
 	describe('cross-limit invariants', () => {
-		it('tracks remoteDefinitionMaxBytes to maxGhFileSize so a URL cannot smuggle a larger file', () => {
+		it('tracks remoteDefinitionMaxBytes to maxDefinitionFileSize so a URL cannot smuggle a larger file', () => {
 			expect(resolveComputeLimits({}).remoteDefinitionMaxBytes).toBe(
-				resolveComputeLimits({}).maxGhFileSize
+				resolveComputeLimits({}).maxDefinitionFileSize
 			);
 		});
 
-		it('keeps the lockstep when maxGhFileSize is overridden', () => {
-			const limits = resolveComputeLimits({ MAX_GH_FILE_SIZE_BYTES: String(12 * MB) });
-			expect(limits.maxGhFileSize).toBe(12 * MB);
+		it('keeps the lockstep when maxDefinitionFileSize is overridden', () => {
+			const limits = resolveComputeLimits({ MAX_DEFINITION_FILE_SIZE_BYTES: String(12 * MB) });
+			expect(limits.maxDefinitionFileSize).toBe(12 * MB);
 			expect(limits.remoteDefinitionMaxBytes).toBe(12 * MB);
 		});
 
@@ -175,11 +175,11 @@ describe('resolveComputeLimits', () => {
 	describe('env overrides', () => {
 		it('honors explicit byte overrides', () => {
 			const limits = resolveComputeLimits({
-				MAX_GH_FILE_SIZE_BYTES: String(1 * MB),
+				MAX_DEFINITION_FILE_SIZE_BYTES: String(1 * MB),
 				COMPUTE_REQUEST_MAX_BYTES: String(2 * MB),
 				COMPUTE_RESPONSE_MAX_BYTES: String(3 * MB)
 			});
-			expect(limits.maxGhFileSize).toBe(1 * MB);
+			expect(limits.maxDefinitionFileSize).toBe(1 * MB);
 			expect(limits.computeRequestMaxBytes).toBe(2 * MB);
 			expect(limits.computeResponseMaxBytes).toBe(3 * MB);
 		});

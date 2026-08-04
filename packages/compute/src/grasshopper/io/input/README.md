@@ -70,7 +70,7 @@ const { schema } = normalizeDefaultWithWarning({ ...rawInput, paramType });
 const parser = INPUT_TYPE_PARSERS.get(paramType);
 
 try {
-	if (!parser) throw RhinoComputeError.unknownParamType(paramType, rawInput.name);
+	if (!parser) throw ComputeError.unknownParamType(paramType, rawInput.name);
 	return { input: parser.parse(schema, base) };
 } catch (error) {
 	// recoverable failure → the parser's own fallback + an error report
@@ -150,7 +150,7 @@ export type InputParam =
 ### 2. Write the parser adapter
 
 A parser implements `InputTypeParser`: it declares the canonical `types` it
-owns, a `parse` (happy path — throws a `RhinoComputeError` on recoverable bad
+owns, a `parse` (happy path — throws a `ComputeError` on recoverable bad
 input), and a `fallback` (this type's safe default when `parse` throws). It
 reads from an already-`normalizeDefault`'d schema and is **pure** — it returns a
 typed param and never mutates the schema.
@@ -225,7 +225,7 @@ pipeline behavior (including your fallback on bad input) is pinned.
 
 1. **Keep parsers pure** — read from the schema, return a typed param, never mutate.
 2. **Own your fallback** — `fallback` is where this type's safe default lives; don't push it into the orchestrator.
-3. **Throw `RhinoComputeError` for recoverable bad input** — the registry pairs it with your fallback.
+3. **Throw `ComputeError` for recoverable bad input** — the registry pairs it with your fallback.
 4. **Leave tree-flattening to `normalizeDefault`** — it's shared and type-independent.
 5. **Handle null/undefined gracefully** — API responses may have missing fields.
 

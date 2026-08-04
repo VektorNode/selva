@@ -6,7 +6,11 @@ through Rhino Compute.
 ## Quick Start
 
 ```typescript
-import { GrasshopperClient, TreeBuilder, GrasshopperResponseProcessor } from '@selvajs/compute';
+import {
+	GrasshopperClient,
+	TreeBuilder,
+	GrasshopperResponseProcessor
+} from '@selvajs/compute/grasshopper';
 
 // The constructor is private — create() validates the server is reachable first.
 const client = await GrasshopperClient.create({
@@ -143,7 +147,7 @@ const result = await client.solve(definitionUrl, inputTree, {
 ### Error Handling
 
 ```typescript
-import { RhinoComputeError } from '@selvajs/compute';
+import { ComputeError } from '@selvajs/compute/core';
 
 try {
 	const result = await client.solve(definitionUrl, inputTree);
@@ -156,7 +160,7 @@ try {
 		console.warn('Computation warnings:', result.warnings);
 	}
 } catch (error) {
-	if (error instanceof RhinoComputeError) {
+	if (error instanceof ComputeError) {
 		console.error('Code:', error.code);
 		console.error('Context:', error.context);
 	}

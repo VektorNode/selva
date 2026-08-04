@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 
 import { validateServerUrl } from '../validate-server-url';
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes } from '@/core/errors';
 
 const expectInvalidConfig = (fn: () => unknown) => {
 	try {
 		fn();
 	} catch (err) {
-		expect(err).toBeInstanceOf(RhinoComputeError);
-		expect((err as RhinoComputeError).code).toBe(ErrorCodes.INVALID_CONFIG);
+		expect(err).toBeInstanceOf(ComputeError);
+		expect((err as ComputeError).code).toBe(ErrorCodes.INVALID_CONFIG);
 		return;
 	}
 	throw new Error('expected validateServerUrl to throw');

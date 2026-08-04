@@ -46,7 +46,11 @@ handles cancellation, retries, loading state, and (optionally) a response cache
 — things every real app needs and shouldn't have to rebuild.
 
 ```ts
-import { GrasshopperClient, TreeBuilder, GrasshopperResponseProcessor } from '@selvajs/compute';
+import {
+	GrasshopperClient,
+	TreeBuilder,
+	GrasshopperResponseProcessor
+} from '@selvajs/compute/grasshopper';
 
 const client = await GrasshopperClient.create({
 	serverUrl: 'http://localhost:6500',

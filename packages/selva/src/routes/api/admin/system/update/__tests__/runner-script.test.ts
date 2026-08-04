@@ -20,7 +20,12 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildNpmRunnerScript, buildLauncher, npmInstallArgs, shellQuote } from '../+server';
+import {
+	buildNpmRunnerScript,
+	buildLauncher,
+	npmInstallArgs,
+	shellQuote
+} from '$lib/server/updateRunner.server';
 import { deriveOutcome, TIMED_OUT } from '$lib/update-outcome';
 
 const ECOSYSTEM = '/srv/selva/ecosystem.config.cjs';

@@ -1,10 +1,5 @@
 <script lang="ts">
-	import type {
-		DiscoveredInput,
-		DiscoveredOutput,
-		GrasshopperParamType,
-		TabConfig
-	} from '@selvajs/schemas';
+	import type { DiscoveredInput, DiscoveredOutput, ParamType, TabConfig } from '@selvajs/schemas';
 	import { StateDisplay, Input, Badge, Select, Collapsible } from '@selvajs/ui';
 	import DraggableItem from './DraggableItem.svelte';
 	import { Search, X, ChevronDown } from '@lucide/svelte';
@@ -39,7 +34,7 @@
 	}: AvailableItemListProps = $props();
 
 	let searchQuery = $state('');
-	const selectedTypes = new SvelteSet<GrasshopperParamType | string>();
+	const selectedTypes = new SvelteSet<ParamType | string>();
 
 	const sessionId = $derived(getSessionIdFromUrl());
 

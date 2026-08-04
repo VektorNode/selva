@@ -9,18 +9,18 @@
  *
  * @example Performing a low-level compute request
  * ```typescript
- * import { fetchRhinoCompute, RhinoComputeError } from '@selvajs/compute/core';
+ * import { fetchCompute, ComputeError } from '@selvajs/compute/core';
  *
  * try {
- *   // POST to the Grasshopper solve endpoint (fetchRhinoCompute always POSTs JSON)
- *   const data = await fetchRhinoCompute(
+ *   // POST to the Grasshopper solve endpoint (fetchCompute always POSTs JSON)
+ *   const data = await fetchCompute(
  *     'grasshopper',
  *     { pointer: definitionUrl, values: inputTree },
  *     config
  *   );
  *   console.log('Solve response:', data);
  * } catch (error) {
- *   if (error instanceof RhinoComputeError) {
+ *   if (error instanceof ComputeError) {
  *     console.error(`API Error [${error.code}]: ${error.message}`);
  *   }
  * }
@@ -29,10 +29,10 @@
  * @module core
  */
 
-export { fetchRhinoCompute } from './compute-fetch/compute-fetch';
+export { fetchCompute } from './compute-fetch/compute-fetch';
 export { getResponseWireSize, setResponseWireSize } from './compute-fetch/wire-size';
 
-export { RhinoComputeError, ErrorCodes } from './errors';
+export { ComputeError, ErrorCodes } from './errors';
 export type { ErrorCode } from './errors';
 
 // Logging

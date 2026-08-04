@@ -10,4 +10,4 @@ export {
 	COVER_IMAGE_CONTENT_TYPES as IMAGE_CONTENT_TYPES
 } from '@selvajs/platform';
 
-export { MAX_GH_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from './computeLimits';
+export { MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from './computeLimits';

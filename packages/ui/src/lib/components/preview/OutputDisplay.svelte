@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { OutputLayoutItem } from '@selvajs/schemas';
-	import type { FileData } from '@selvajs/compute';
+	import type { FileData } from '@selvajs/compute/core';
 	import ChartOutput from './ChartOutput.svelte';
 	import ImageOutput from './ImageOutput.svelte';
 	import {

@@ -1,4 +1,4 @@
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 import { validateServerUrl } from '@/core/server/validate-server-url';
 
@@ -686,7 +686,7 @@ export default class ComputeServerStats {
 	 */
 	private ensureNotDisposed(): void {
 		if (this.disposed) {
-			throw new RhinoComputeError(
+			throw new ComputeError(
 				'ComputeServerStats has been disposed and cannot be used',
 				ErrorCodes.INVALID_STATE,
 				{ context: { disposed: this.disposed } }

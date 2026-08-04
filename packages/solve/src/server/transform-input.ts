@@ -1,4 +1,4 @@
-import { type InputParam, type InputParamSchema, processInput } from '@selvajs/compute';
+import { type InputParam, type InputParamSchema, processInput } from '@selvajs/compute/grasshopper';
 import type { SchemaInput } from '@selvajs/schemas';
 
 /**

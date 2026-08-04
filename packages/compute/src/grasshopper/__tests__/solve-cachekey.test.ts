@@ -231,7 +231,7 @@ describe('DefinitionRef — bytes are materialized only when an upload is unavoi
 		expect(body().algo).toBe('aGk=');
 	});
 
-	it('wraps a load() failure in a RhinoComputeError naming the ref, without fetching', async () => {
+	it('wraps a load() failure in a ComputeError naming the ref, without fetching', async () => {
 		const ref: DefinitionRef = {
 			key: 'version-uuid-broken',
 			load: async () => {

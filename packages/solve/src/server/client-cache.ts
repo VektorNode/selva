@@ -1,9 +1,9 @@
 import {
 	GrasshopperClient,
-	enableDebugLogging,
 	type GrasshopperComputeConfig,
 	type SolveScheduler
-} from '@selvajs/compute';
+} from '@selvajs/compute/grasshopper';
+import { enableDebugLogging } from '@selvajs/compute/core';
 
 // ============================================================================
 // Shared compute client cache

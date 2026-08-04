@@ -103,7 +103,7 @@ The package logs nothing by default. To route its output into a host's logger â€
 
 ```ts
 import { setLogger } from '@selvajs/visualization/render';
-import { getLogger } from '@selvajs/compute';
+import { getLogger } from '@selvajs/compute/core';
 
 setLogger(getLogger());
 ```

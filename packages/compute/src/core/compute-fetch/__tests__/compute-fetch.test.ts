@@ -1,5 +1,5 @@
 /**
- * Contract tests for the Rhino Compute transport (`fetchRhinoCompute`).
+ * Contract tests for the Rhino Compute transport (`fetchCompute`).
  *
  * The transport is the deepest module in the library — retry/backoff, the
  * HTTP-status → error-code mapping table, the timeout-vs-caller-abort
@@ -10,7 +10,7 @@
  * Time is controlled with fake timers so backoff sleeps resolve instantly.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchRhinoCompute } from '@/core/compute-fetch/compute-fetch';
+import { fetchCompute } from '@/core/compute-fetch/compute-fetch';
 import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
 import { setLogger } from '@/core/utils/logger';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
@@ -22,11 +22,11 @@ afterEach(() => {
 	fetchMock.mockReset();
 });
 
-describe('fetchRhinoCompute — request shape', () => {
+describe('fetchCompute — request shape', () => {
 	it('POSTs to <serverUrl>/<endpoint> with JSON body and request id header', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
 
-		await fetchRhinoCompute('grasshopper', { values: [1, 2] }, config);
+		await fetchCompute('grasshopper', { values: [1, 2] }, config);
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		const [url, init] = fetchMock.mock.calls[0];
@@ -40,7 +40,7 @@ describe('fetchRhinoCompute — request shape', () => {
 	it('sends the API key as the RhinoComputeKey header when configured', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
 
-		await fetchRhinoCompute('io', {}, { ...config, apiKey: 'secret' });
+		await fetchCompute('io', {}, { ...config, apiKey: 'secret' });
 
 		const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
 		expect(headers.RhinoComputeKey).toBe('secret');
@@ -49,11 +49,7 @@ describe('fetchRhinoCompute — request shape', () => {
 	it('sends the API key under a caller-configured apiKeyHeader', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
 
-		await fetchRhinoCompute(
-			'solve',
-			{},
-			{ ...config, apiKey: 'secret', apiKeyHeader: 'X-Backend-Key' }
-		);
+		await fetchCompute('solve', {}, { ...config, apiKey: 'secret', apiKeyHeader: 'X-Backend-Key' });
 
 		const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
 		expect(headers['X-Backend-Key']).toBe('secret');
@@ -66,7 +62,7 @@ describe('fetchRhinoCompute — request shape', () => {
 		// header that actually carries the key still can't be clobbered.
 		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
 
-		await fetchRhinoCompute(
+		await fetchCompute(
 			'solve',
 			{},
 			{
@@ -85,7 +81,7 @@ describe('fetchRhinoCompute — request shape', () => {
 	it('sends the auth token as the Authorization header when configured', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
 
-		await fetchRhinoCompute('io', {}, { ...config, authToken: 'Bearer xyz' });
+		await fetchCompute('io', {}, { ...config, authToken: 'Bearer xyz' });
 
 		const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
 		expect(headers.Authorization).toBe('Bearer xyz');
@@ -94,7 +90,7 @@ describe('fetchRhinoCompute — request shape', () => {
 	it('sends caller-supplied config.headers on the request', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
 
-		await fetchRhinoCompute(
+		await fetchCompute(
 			'grasshopper',
 			{},
 			{ ...config, headers: { 'X-Selva-Definition': 'guid-123' } }
@@ -107,7 +103,7 @@ describe('fetchRhinoCompute — request shape', () => {
 	it('never lets config.headers override the transport/auth headers', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
 
-		await fetchRhinoCompute(
+		await fetchCompute(
 			'grasshopper',
 			{},
 			{
@@ -134,7 +130,7 @@ describe('fetchRhinoCompute — request shape', () => {
 		setLogger({ debug: () => {}, info: () => {}, warn, error: () => {} });
 		try {
 			fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
-			await fetchRhinoCompute(
+			await fetchCompute(
 				'io',
 				{},
 				{ serverUrl: 'https://compute.example.com', authToken: 'Bearer xyz' }
@@ -142,7 +138,7 @@ describe('fetchRhinoCompute — request shape', () => {
 			expect(warn).not.toHaveBeenCalled();
 
 			fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
-			await fetchRhinoCompute('io', {}, { serverUrl: 'https://compute.example.com' });
+			await fetchCompute('io', {}, { serverUrl: 'https://compute.example.com' });
 			expect(warn).toHaveBeenCalledTimes(1);
 		} finally {
 			setLogger(null);
@@ -151,19 +147,19 @@ describe('fetchRhinoCompute — request shape', () => {
 
 	it('returns the parsed JSON response', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ values: [], extra: 7 }));
-		const res = await fetchRhinoCompute('grasshopper', {}, config);
+		const res = await fetchCompute('grasshopper', {}, config);
 		expect(res).toEqual({ values: [], extra: 7 });
 	});
 
 	it('records the response wire size for downstream byte-budgeted caches', async () => {
 		const body = JSON.stringify({ values: [1, 2, 3] });
 		fetchMock.mockResolvedValueOnce(createMockResponse(null, { body }));
-		const res = await fetchRhinoCompute('grasshopper', {}, config);
+		const res = await fetchCompute('grasshopper', {}, config);
 		expect(getResponseWireSize(res)).toBe(body.length);
 	});
 });
 
-describe('fetchRhinoCompute — HTTP status → error code mapping', () => {
+describe('fetchCompute — HTTP status → error code mapping', () => {
 	const cases: Array<[number, string, string]> = [
 		[401, 'Unauthorized', 'AUTH_ERROR'],
 		[403, 'Forbidden', 'AUTH_ERROR'],
@@ -178,7 +174,7 @@ describe('fetchRhinoCompute — HTTP status → error code mapping', () => {
 			createMockResponse({ msg: 'fail' }, { ok: false, status, statusText })
 		);
 
-		await expect(fetchRhinoCompute('grasshopper', {}, config)).rejects.toMatchObject({
+		await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
 			code,
 			statusCode: status
 		});
@@ -188,7 +184,7 @@ describe('fetchRhinoCompute — HTTP status → error code mapping', () => {
 		fetchMock.mockResolvedValueOnce(
 			createMockResponse({}, { ok: false, status: 418, statusText: "I'm a teapot" })
 		);
-		await expect(fetchRhinoCompute('grasshopper', {}, config)).rejects.toMatchObject({
+		await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
 			code: 'UNKNOWN_ERROR',
 			statusCode: 418
 		});
@@ -203,11 +199,11 @@ describe('fetchRhinoCompute — HTTP status → error code mapping', () => {
 				body: 'invalid api key'
 			})
 		);
-		await expect(fetchRhinoCompute('grasshopper', {}, config)).rejects.toThrow(/invalid api key/);
+		await expect(fetchCompute('grasshopper', {}, config)).rejects.toThrow(/invalid api key/);
 	});
 });
 
-describe('fetchRhinoCompute — partial success (HTTP 500 with values)', () => {
+describe('fetchCompute — partial success (HTTP 500 with values)', () => {
 	it('returns the body instead of throwing when a 500 carries values + errors', async () => {
 		const partial = { values: [{ ParamName: 'out' }], errors: ['boom'], warnings: [] };
 		fetchMock.mockResolvedValueOnce(
@@ -219,7 +215,7 @@ describe('fetchRhinoCompute — partial success (HTTP 500 with values)', () => {
 			})
 		);
 
-		const res = await fetchRhinoCompute('grasshopper', {}, config);
+		const res = await fetchCompute('grasshopper', {}, config);
 		expect(res).toEqual(partial);
 	});
 
@@ -238,24 +234,24 @@ describe('fetchRhinoCompute — partial success (HTTP 500 with values)', () => {
 				})
 			})
 		);
-		await expect(fetchRhinoCompute('grasshopper', {}, config)).rejects.toMatchObject({
+		await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
 			code: 'COMPUTATION_ERROR',
 			statusCode: 500
 		});
-		await expect(fetchRhinoCompute('grasshopper', {}, config)).rejects.toThrow(
+		await expect(fetchCompute('grasshopper', {}, config)).rejects.toThrow(
 			/Invalid argument: bad input/
 		);
 	});
 });
 
-describe('fetchRhinoCompute — malformed responses', () => {
+describe('fetchCompute — malformed responses', () => {
 	it('throws NETWORK_ERROR when a 200 body with no declared Content-Type is not valid JSON', async () => {
 		// No Content-Type header → could be a stream cut mid-body, so this stays
 		// the retryable NETWORK_ERROR classification.
 		fetchMock.mockResolvedValueOnce(
 			createMockResponse(null, { ok: true, status: 200, body: 'not json {' })
 		);
-		await expect(fetchRhinoCompute('grasshopper', {}, config)).rejects.toMatchObject({
+		await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
 			code: 'NETWORK_ERROR'
 		});
 	});
@@ -273,7 +269,7 @@ describe('fetchRhinoCompute — malformed responses', () => {
 			})
 		);
 		await expect(
-			fetchRhinoCompute(
+			fetchCompute(
 				'grasshopper',
 				{},
 				{ ...config, retry: { attempts: 3, baseDelayMs: 1, maxDelayMs: 1 } }
@@ -284,7 +280,7 @@ describe('fetchRhinoCompute — malformed responses', () => {
 
 	it('wraps a network-layer TypeError as NETWORK_ERROR', async () => {
 		fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-		await expect(fetchRhinoCompute('grasshopper', {}, config)).rejects.toMatchObject({
+		await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
 			code: 'NETWORK_ERROR'
 		});
 	});
@@ -296,7 +292,7 @@ describe('fetchRhinoCompute — malformed responses', () => {
 		(globalThis as any).window.document = {};
 		try {
 			fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-			await expect(fetchRhinoCompute('grasshopper', {}, config)).rejects.toMatchObject({
+			await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
 				code: 'CORS_ERROR'
 			});
 		} finally {
@@ -305,7 +301,7 @@ describe('fetchRhinoCompute — malformed responses', () => {
 	});
 });
 
-describe('fetchRhinoCompute — retry', () => {
+describe('fetchCompute — retry', () => {
 	beforeEach(() => vi.useFakeTimers());
 	afterEach(() => vi.useRealTimers());
 
@@ -316,7 +312,7 @@ describe('fetchRhinoCompute — retry', () => {
 			.mockResolvedValueOnce(createMockResponse({}, { ok: false, status: 503, statusText: 'down' }))
 			.mockResolvedValueOnce(createMockResponse({ ok: 'recovered' }));
 
-		const promise = fetchRhinoCompute('grasshopper', {}, retryCfg);
+		const promise = fetchCompute('grasshopper', {}, retryCfg);
 		await vi.advanceTimersByTimeAsync(200);
 
 		await expect(promise).resolves.toEqual({ ok: 'recovered' });
@@ -328,7 +324,7 @@ describe('fetchRhinoCompute — retry', () => {
 			createMockResponse({}, { ok: false, status: 502, statusText: 'bad gateway' })
 		);
 
-		const promise = fetchRhinoCompute('grasshopper', {}, retryCfg);
+		const promise = fetchCompute('grasshopper', {}, retryCfg);
 		const assertion = expect(promise).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
 		await vi.advanceTimersByTimeAsync(1000);
 		await assertion;
@@ -341,7 +337,7 @@ describe('fetchRhinoCompute — retry', () => {
 		fetchMock.mockResolvedValue(
 			createMockResponse({}, { ok: false, status: 401, statusText: 'Unauthorized' })
 		);
-		await expect(fetchRhinoCompute('grasshopper', {}, retryCfg)).rejects.toMatchObject({
+		await expect(fetchCompute('grasshopper', {}, retryCfg)).rejects.toMatchObject({
 			code: 'AUTH_ERROR'
 		});
 		expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -362,7 +358,7 @@ describe('fetchRhinoCompute — retry', () => {
 			)
 			.mockResolvedValueOnce(createMockResponse({ ok: 'after-wait' }));
 
-		const promise = fetchRhinoCompute('grasshopper', {}, retryCfg);
+		const promise = fetchCompute('grasshopper', {}, retryCfg);
 
 		// Retry-After 5s wins over the policy's maxDelayMs (100ms) — retrying
 		// earlier would all but guarantee another 429.
@@ -389,7 +385,7 @@ describe('fetchRhinoCompute — retry', () => {
 			)
 			.mockResolvedValueOnce(createMockResponse({ ok: 'after-cap' }));
 
-		const promise = fetchRhinoCompute('grasshopper', {}, retryCfg);
+		const promise = fetchCompute('grasshopper', {}, retryCfg);
 
 		await vi.advanceTimersByTimeAsync(59_000);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -415,7 +411,7 @@ describe('fetchRhinoCompute — retry', () => {
 			)
 			.mockResolvedValueOnce(createMockResponse({ ok: 'after-date' }));
 
-		const promise = fetchRhinoCompute('grasshopper', {}, retryCfg);
+		const promise = fetchCompute('grasshopper', {}, retryCfg);
 
 		await vi.advanceTimersByTimeAsync(4900);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -429,7 +425,7 @@ describe('fetchRhinoCompute — retry', () => {
 		fetchMock.mockResolvedValue(
 			createMockResponse({}, { ok: false, status: 429, statusText: 'Too Many Requests' })
 		);
-		const promise = fetchRhinoCompute(
+		const promise = fetchCompute(
 			'grasshopper',
 			{},
 			{
@@ -453,7 +449,7 @@ describe('fetchRhinoCompute — retry', () => {
 			)
 			.mockResolvedValueOnce(createMockResponse({ values: [1, 2] }));
 
-		const promise = fetchRhinoCompute('grasshopper', {}, retryCfg);
+		const promise = fetchCompute('grasshopper', {}, retryCfg);
 		await vi.advanceTimersByTimeAsync(500);
 
 		await expect(promise).resolves.toEqual({ values: [1, 2] });
@@ -461,7 +457,7 @@ describe('fetchRhinoCompute — retry', () => {
 	});
 });
 
-describe('fetchRhinoCompute — abort and timeout', () => {
+describe('fetchCompute — abort and timeout', () => {
 	it('a caller-aborted request rejects and is never retried', async () => {
 		const controller = new AbortController();
 		controller.abort();
@@ -474,7 +470,7 @@ describe('fetchRhinoCompute — abort and timeout', () => {
 		});
 
 		await expect(
-			fetchRhinoCompute(
+			fetchCompute(
 				'grasshopper',
 				{},
 				{
@@ -493,7 +489,7 @@ describe('fetchRhinoCompute — abort and timeout', () => {
 			// fetch rejects with a non-caller TimeoutError each attempt.
 			fetchMock.mockRejectedValue(new DOMException('The operation timed out', 'TimeoutError'));
 
-			const promise = fetchRhinoCompute(
+			const promise = fetchCompute(
 				'grasshopper',
 				{},
 				{
@@ -527,7 +523,7 @@ describe('fetchRhinoCompute — abort and timeout', () => {
 		);
 
 		const controller = new AbortController();
-		const promise = fetchRhinoCompute(
+		const promise = fetchCompute(
 			'grasshopper',
 			{},
 			{
@@ -553,7 +549,7 @@ describe('fetchRhinoCompute — abort and timeout', () => {
 			// transient as a network drop, so it stays retryable.
 			fetchMock.mockRejectedValue(new DOMException('The operation was aborted', 'AbortError'));
 
-			const promise = fetchRhinoCompute(
+			const promise = fetchCompute(
 				'grasshopper',
 				{},
 				{ ...config, retry: { attempts: 1, baseDelayMs: 100, maxDelayMs: 100 } }
@@ -580,7 +576,7 @@ describe('fetchRhinoCompute — abort and timeout', () => {
 				.mockRejectedValueOnce(new DOMException('The operation timed out', 'TimeoutError'))
 				.mockResolvedValueOnce(createMockResponse({ ok: true }));
 
-			const promise = fetchRhinoCompute(
+			const promise = fetchCompute(
 				'grasshopper',
 				{},
 				{

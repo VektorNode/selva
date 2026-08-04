@@ -1,4 +1,4 @@
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 import { decodeBase64ToBinary } from '@/core/utils/encoding';
 import { readField } from '@/core/utils/read-field';
@@ -13,7 +13,7 @@ export const extractFilesFromComputeResponse = async (
 	try {
 		return await processFiles(downloadableFiles, additionalFiles);
 	} catch (err) {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			'Failed to extract files from compute response',
 			ErrorCodes.INVALID_STATE,
 			{
@@ -32,7 +32,7 @@ export const downloadFileData = async (
 ): Promise<void> => {
 	// Check if we're in a browser environment
 	if (typeof document === 'undefined' || typeof Blob === 'undefined') {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			'File download functionality is only available in browser environments. This function requires the DOM API (document, Blob).',
 			ErrorCodes.BROWSER_ONLY,
 			{
@@ -49,11 +49,11 @@ export const downloadFileData = async (
 		const processedFiles = await processFiles(downloadableFiles, additionalFiles);
 		await createAndDownloadZip(processedFiles, fileFoldername);
 	} catch (err) {
-		// Re-throw if it's already a RhinoComputeError
-		if (err instanceof RhinoComputeError) {
+		// Re-throw if it's already a ComputeError
+		if (err instanceof ComputeError) {
 			throw err;
 		}
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			'Failed to download files from compute response',
 			ErrorCodes.INVALID_STATE,
 			{
@@ -290,7 +290,7 @@ function uniqueArchivePath(path: string, taken: ReadonlySet<string>): string {
 /** Saves a Blob object as a file in the user's browser. */
 function saveFile(blob: Blob, filename: string) {
 	if (typeof document === 'undefined') {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			'saveFile requires a browser environment with DOM API access.',
 			ErrorCodes.BROWSER_ONLY,
 			{
