@@ -13,14 +13,16 @@ export interface NavSection {
 	links: NavLink[];
 }
 
+// The repository is private until the first public release, so nothing links to
+// it yet. Restore the GitHub entries in primaryNav/footerNav and the source
+// links in packages.ts when it goes public.
 export const GITHUB_URL = 'https://github.com/vektornode/selva';
 
 /** Primary navigation shown in the site header. */
 export const primaryNav: NavLink[] = [
 	{ label: 'Docs', href: '/docs' },
 	{ label: 'Packages', href: '/packages' },
-	{ label: 'Architecture', href: '/architecture' },
-	{ label: 'GitHub', href: GITHUB_URL, external: true }
+	{ label: 'Architecture', href: '/architecture' }
 ];
 
 /** Grouped links shown in the site footer. */
@@ -36,10 +38,7 @@ export const footerNav: NavSection[] = [
 	},
 	{
 		title: 'Resources',
-		links: [
-			{ label: 'GitHub', href: GITHUB_URL, external: true },
-			{ label: 'Issues', href: `${GITHUB_URL}/issues`, external: true }
-		]
+		links: [{ label: 'What is Selva', href: '/docs/what-is-selva' }]
 	}
 ];
 

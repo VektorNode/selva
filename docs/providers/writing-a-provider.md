@@ -19,7 +19,7 @@ None of the shipped providers fit? Write an adapter for an in-house identity ser
 
 ## The contract
 
-The [platform README](https://github.com/VektorNode/selva/tree/main/packages/platform) is authoritative, including the transaction-ordering rules that keep the metadata store and blob store recoverable when one fails mid-operation (they share no transaction).
+The [platform README](https://www.npmjs.com/package/@selvajs/platform) is authoritative, including the transaction-ordering rules that keep the metadata store and blob store recoverable when one fails mid-operation (they share no transaction).
 
 ## Next
 

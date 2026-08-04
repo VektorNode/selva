@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { GITHUB_URL } from '$lib/nav';
 	import { packagesByCategory } from '$lib/packages';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 
@@ -39,12 +38,6 @@
 				href="/docs/getting-started/build-your-own-app"
 				class="text-primary font-medium hover:underline">Build your own app →</a
 			>
-			<a
-				href={`${GITHUB_URL}/tree/main/packages`}
-				target="_blank"
-				rel="noreferrer"
-				class="text-muted-foreground hover:text-foreground">Browse the source →</a
-			>
 		</div>
 	</div>
 
@@ -59,17 +52,22 @@
 
 				<div class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
 					{#each group.items as pkg (pkg.name)}
-						<a
+						<svelte:element
+							this={pkg.href ? 'a' : 'div'}
 							href={pkg.href}
-							target="_blank"
-							rel="noreferrer"
-							class="group border-border bg-card hover:border-muted-foreground/40 flex flex-col rounded-xl border p-5 transition hover:shadow-sm"
+							target={pkg.href ? '_blank' : undefined}
+							rel={pkg.href ? 'noreferrer' : undefined}
+							class="group border-border bg-card flex flex-col rounded-xl border p-5 transition {pkg.href
+								? 'hover:border-muted-foreground/40 hover:shadow-sm'
+								: ''}"
 						>
 							<div class="flex items-start justify-between gap-3">
 								<code class="text-foreground text-sm font-semibold break-all">{pkg.name}</code>
-								<ArrowUpRight
-									class="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition"
-								/>
+								{#if pkg.href}
+									<ArrowUpRight
+										class="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition"
+									/>
+								{/if}
 							</div>
 							<p class="text-primary mt-2 text-sm font-medium">{pkg.tagline}</p>
 							<p class="text-muted-foreground mt-2 flex-1 text-sm leading-relaxed">
@@ -91,7 +89,7 @@
 									</span>
 								{/if}
 							</div>
-						</a>
+						</svelte:element>
 					{/each}
 				</div>
 			</section>

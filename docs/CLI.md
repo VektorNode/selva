@@ -56,9 +56,11 @@ All commands run from the deployment directory.
 
 Re-prompts for config and rewrites `.env` (uses existing values as defaults). Does not regenerate secrets or touch `package.json`. Restart afterwards.
 
-### `selva doctor`
+### `selva doctor [--fix]`
 
-Validates the deployment without starting it. Exits 0 on success, 1 on any failure. Checks: required files, secret key format, provider/tenancy values, `DATA_PATH` writability, `@selvajs/selva` installed, `ORIGIN` valid.
+Validates the deployment without starting it. Exits 0 on success, 1 on any failure. Checks: required files, secret key format, provider/tenancy values, `DATA_PATH` writability, `@selvajs/selva` installed, `ORIGIN` valid, Node engine compatibility, CLI/runtime version alignment, boot persistence, scaffold layout drift, provider-specific config (Supabase, header-auth), and deprecated env var names.
+
+`--fix` applies the repairs it can make safely, prompting for confirmation on each.
 
 ### `selva start / stop / restart`
 
@@ -76,7 +78,7 @@ To persist the process list across reboots: `npx pm2 save`. To auto-start PM2 on
 
 ### `selva update`
 
-Runs `npm update --save --prefer-online @selvajs/cli @selvajs/selva` and restarts. If before/after versions are identical despite a known new release, you've hit npm's stale packument cache — see [Publishing.md](https://github.com/VektorNode/selva/blob/main/docs/Publishing.md#troubleshooting).
+Runs `npm update --save --prefer-online @selvajs/cli @selvajs/selva` and restarts. If before/after versions are identical despite a known new release, you've hit npm's stale packument cache — wait for the cache to expire and re-run.
 
 ### `selva migrate`
 

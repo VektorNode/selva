@@ -3,7 +3,9 @@
 // the home teaser stay in sync. STRUCTURE.md is authoritative for what each
 // package is; keep these descriptions consistent with it when a role changes.
 
-import { GITHUB_URL } from './nav';
+// Unpublished packages have no href while the repository is private — their
+// cards render as plain, non-clickable tiles. Point them at the source tree
+// when it goes public.
 
 export interface PackageInfo {
 	/** npm-style name shown on the card. */
@@ -16,13 +18,12 @@ export interface PackageInfo {
 	category: 'App & UI' | 'Core libraries' | 'Providers' | 'Tooling';
 	/** True when the package is published to npm (public API surface). */
 	npm?: boolean;
-	/** Link to the package's README on GitHub, or its npm page. */
-	href: string;
+	/** Link to the package's npm page. Absent for packages with nowhere public to point. */
+	href?: string;
 	/** Short badge, e.g. the runtime or stack it targets. */
 	badge?: string;
 }
 
-const repoTree = (path: string) => `${GITHUB_URL}/tree/main/${path}`;
 const npmPage = (name: string) => `https://www.npmjs.com/package/${name}`;
 
 export const packages: PackageInfo[] = [
@@ -43,7 +44,6 @@ export const packages: PackageInfo[] = [
 		description:
 			'The drag-and-drop UI that ships embedded in Selva.gha. Map Grasshopper parameters to web controls and preview the result live over WebSocket. Not published — it is built into the plugin.',
 		category: 'App & UI',
-		href: repoTree('packages/plugin-ui'),
 		badge: 'Svelte'
 	},
 	{
@@ -143,8 +143,7 @@ export const packages: PackageInfo[] = [
 		tagline: 'Reverse-proxy identity',
 		description:
 			'Auth-only adapter that trusts identity headers from an upstream reverse proxy — front Selva with corporate SSO such as Entra via oauth2-proxy. Pair it with any data and storage provider.',
-		category: 'Providers',
-		href: repoTree('packages/providers/header-auth')
+		category: 'Providers'
 	},
 
 	// ── Tooling ───────────────────────────────────────────────────────────────
@@ -163,8 +162,7 @@ export const packages: PackageInfo[] = [
 		tagline: 'Shared build config',
 		description:
 			'The ESLint, Vite, and Prettier configuration every package in the monorepo extends. Internal to the workspace — listed here so the map is complete.',
-		category: 'Tooling',
-		href: repoTree('packages/config')
+		category: 'Tooling'
 	}
 ];
 

@@ -55,7 +55,7 @@ const { scene, camera, controls, applyEdges, dispose } = initThree(canvas, {
 	grid: { enabled: true }
 });
 
-const meshes = await getThreeMeshesFromComputeResponse(response, { rhino });
+const meshes = await getThreeMeshesFromComputeResponse(response);
 updateScene(scene, meshes, camera, controls, false);
 applyEdges(scene);
 

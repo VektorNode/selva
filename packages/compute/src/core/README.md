@@ -6,8 +6,8 @@ Foundational utilities and low-level clients that power the `@selvajs/compute` l
 
 - **Compute Communication**: Type-safe HTTP wrappers for the Rhino Compute API.
 - **Error Handling**: Specialized `ComputeError` classes for precise debugging of API and network failures.
-- **Server Monitoring**: Utilities to fetch runtime stats and telemetry from Compute instances.
-- **Data Processing**: Utilities for base64 encoding/decoding and camelCase normalization of API responses.
+- **Server URL Validation**: Normalizing and guarding a configured Compute endpoint.
+- **Data Processing**: Base64 encoding/decoding and case-insensitive field reads (`readField`/`hasField`) over API responses.
 
 ## Structure
 
@@ -15,8 +15,10 @@ Foundational utilities and low-level clients that power the `@selvajs/compute` l
 src/core/
 ├── compute-fetch/    # Low-level HTTP client logic
 ├── errors/           # Custom error types and factory
-├── server/           # Server health and stats monitoring
-├── utils/            # Encoding, logging, and string utilities
+├── files/            # File-output helpers
+├── server/           # Server URL validation
+├── utils/            # Encoding, logging, field reads
+├── definition-ref.ts # Definition reference resolution
 └── types.ts          # Core shared configuration types
 ```
 

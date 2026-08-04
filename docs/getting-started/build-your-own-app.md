@@ -40,7 +40,7 @@ Read it top-down: **your app** is the product; it pulls in the viewer (`ui`), th
 | Package                          | Gives you                                                                                                    |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `@selvajs/ui`                    | Svelte components, theme, and the 3D viewer: the same UI primitives the Selva app uses. Style to your brand. |
-| `@selvajs/compute`               | Type-safe Rhino.Compute client + Three.js helpers. Turns inputs into solved geometry. See below.             |
+| `@selvajs/compute`               | Type-safe Rhino.Compute client. Turns inputs into solved geometry — no renderer. See below.                  |
 | `@selvajs/schemas`               | Schema types + traversal helpers, so your app speaks the plugin's interface contract.                        |
 | `@selvajs/platform` + a provider | The backend contract + an implementation. See [Providers](../providers.md).                                  |
 
@@ -55,18 +55,19 @@ pnpm add @selvajs/ui @selvajs/compute @selvajs/schemas
 # + @selvajs/platform and a provider for Selva's backend model
 ```
 
-Per-package READMEs document imports and setup. Start from [`@selvajs/ui`](https://github.com/VektorNode/selva/tree/main/packages/ui); for the compute pipeline use the reference below.
+Per-package READMEs document imports and setup. Start from [`@selvajs/ui`](https://www.npmjs.com/package/@selvajs/ui); for the compute pipeline use the reference below.
 
 ## selva-compute
 
-[`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) is the type-safe Rhino.Compute client and the bridge into Three.js. It handles:
+[`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) is the type-safe Rhino.Compute client. It is pure solve/data — no renderer, no `three`. It handles:
 
 - Calling Compute and getting geometry back, with discriminated-union error handling.
 - Parsing/serializing Grasshopper **data trees**.
-- Converting Rhino geometry into Three.js meshes.
 - Browser + Node.
 
-Modular for tree-shaking: `/grasshopper`, `/visualization`, `/files`, `/core`.
+Modular for tree-shaking: `/grasshopper` and `/core`. The root export is empty on purpose — import from a subpath.
+
+To turn a solve response into Three.js objects, use [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization), which imports from a layer: `/scene`, `/render`, `/parse`.
 
 **Full API reference: <https://vektornode.github.io/selva-compute/>**
 

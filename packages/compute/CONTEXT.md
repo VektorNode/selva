@@ -66,10 +66,10 @@ definition`) the `solveByCacheKey` primitive transparently falls back to a full
 - **Decoder** — turns a typed value (system type or Rhino geometry) into a JS
   value. Rhino geometry decoding uses a registry (`registerDecoder`).
 - **Mesh batch** — the binary (SLVA) payload carrying display meshes; parsed by
-  the webdisplay layer into three.js meshes. Three entry points decode it —
-  `parseMeshBatch` (JSON envelope), `parseMeshBatchObject` (parsed `MeshBatch`),
-  `parseMeshBatchBlob` (raw binary frame) — and all share the one public options
-  type `MeshBatchParsingOptions` (`mergeByMaterial` / `applyTransforms` / `debug`).
+  the webdisplay layer into three.js meshes. Two entry points decode it —
+  `parseMeshBatchObject` (parsed `MeshBatch`) and `parseMeshBatchBlob` (raw binary
+  frame) — and both share the one public options type `MeshBatchParsingOptions`
+  (`mergeByMaterial` / `applyTransforms` / `debug`).
   Telemetry timings and the envelope `fallback` merge are private to the build
   step (`BuildOptions`), never on a caller-facing surface.
 
@@ -195,7 +195,8 @@ definition`) the `solveByCacheKey` primitive transparently falls back to a full
 
 ## Display-pipeline performance
 
-The concepts (these outlive whatever plan doc introduced them):
+Paths below are in `@selvajs/visualization` (`packages/visualization/src/`), not
+this package. The concepts (these outlive whatever plan doc introduced them):
 
 - **No cross-solve caching.** The viewer rebuilds the scene every solve and the
   scene owns every geometry and texture it holds, so `clearScene` disposes them
@@ -206,11 +207,11 @@ The concepts (these outlive whatever plan doc introduced them):
   dequantize + merge + vertex normals as a single zero-capture pure function,
   run in a blob-URL Worker for batches ≥ 50k triangles. Buffer equivalence with
   the sync path is pinned by `mesh-assembly.test.ts`.
-- **Edge worker** (`threejs/edge-extract.ts`, `edges.ts`) — crease-edge
+- **Edge worker** (`render/edge-extract.ts`, `render/edges.ts`) — crease-edge
   extraction offloaded to a worker, with an in-flight map so meshes with
   identical content share one round-trip, plus triangle/segment caps and a
-  screen-space fallback pass (`threejs/edge-detection-pass.ts`).
-- **On-demand render loop** (`threejs/three-initializer.ts`) — draws only on
+  screen-space fallback pass (`render/edge-detection-pass.ts`).
+- **On-demand render loop** (`render/scene-setup/init-three.ts`) — draws only on
   invalidate()/camera motion/pointer input, with a 500 ms safety repaint;
   `render.onDemand: false` restores the continuous loop.
 

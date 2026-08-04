@@ -5,7 +5,6 @@
 	import ThrottleDemo from './demos/ThrottleDemo.svelte';
 	import SingleFlightDemo from './demos/SingleFlightDemo.svelte';
 	import QueueDemo from './demos/QueueDemo.svelte';
-	import SolveAnimation from './demos/SolveAnimation.svelte';
 
 	// A demo block names its component here. Statically mapped rather than
 	// dynamically imported so an unknown name fails visibly in dev and the whole
@@ -15,8 +14,7 @@
 		LruDemo,
 		ThrottleDemo,
 		SingleFlightDemo,
-		QueueDemo,
-		SolveAnimation
+		QueueDemo
 	};
 
 	let { blocks }: { blocks: DetailBlock[] } = $props();

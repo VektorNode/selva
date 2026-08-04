@@ -13,7 +13,10 @@ Two independent release tracks: **npm packages** (changesets) and **Grasshopper 
 | `@selvajs/ui`                | Shared Svelte component library.                                             |
 | `@selvajs/schemas`           | UI schema types + TS/C# generators.                                          |
 | `@selvajs/platform`          | Provider interfaces + Zod schemas.                                           |
-| `@selvajs/compute`           | Rhino.Compute client, data trees, Three.js visualization helpers.            |
+| `@selvajs/compute`           | Rhino.Compute client and data trees. Pure solve/data — no renderer.          |
+| `@selvajs/visualization`     | Headless viewer core: solve response → Three.js.                             |
+| `@selvajs/solve`             | The solve flow, both sides of the wire.                                      |
+| `@selvajs/server`            | Server building blocks: limits, rate limit, SSRF guard, definitions.         |
 | `@selvajs/local-provider`    | Filesystem implementation of platform interfaces.                            |
 | `@selvajs/supabase-provider` | Supabase implementation of platform interfaces.                              |
 

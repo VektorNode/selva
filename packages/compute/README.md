@@ -143,7 +143,7 @@ and expose a status endpoint to the browser.
 
 ### Core Requirements
 
-- **Node.js** >= 20
+- **Node.js** >= 22
 
 ### Rhino Compute Compatibility
 

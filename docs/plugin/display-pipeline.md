@@ -69,7 +69,7 @@ This is the stage to look at when a scene is slow to _appear_ but fast to _inter
 
 ## Stage 4 — Parsing (browser)
 
-Handled by `@selvajs/visualization` in its [`/parse`](https://github.com/VektorNode/selva/tree/main/packages/visualization/src/parse) layer. It reverses the encode:
+Handled by `@selvajs/visualization` in its `/parse` layer. It reverses the encode:
 
 ```
 solve response

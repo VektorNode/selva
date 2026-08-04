@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { CLOUD_STEPS, LOCAL_STEPS, LAYERS, ENV_VAR_GROUPS, type Mode } from '$lib/architecture';
 	import DetailBlocks from './DetailBlocks.svelte';
-	import SolveAnimation from './demos/SolveAnimation.svelte';
+	import SolveWalkthrough from './SolveWalkthrough.svelte';
 	import Cloud from '@lucide/svelte/icons/cloud';
 	import Plug from '@lucide/svelte/icons/plug';
 
@@ -178,12 +178,15 @@
 			What actually crosses the wire
 		</h2>
 		<p class="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
-			The same cloud-mode solve as above, but as headers and JSON bodies — set the inputs, hit
-			Solve, and watch the request cross each hop.
+			The same cloud-mode solve as above, as headers and JSON bodies. One request —
+			<code class="bg-muted rounded px-1 py-0.5 text-xs">radius 12.5</code>,
+			<code class="bg-muted rounded px-1 py-0.5 text-xs">capped true</code> — from the browser to Grasshopper
+			and back. Read the bodies top to bottom: a flat object becomes a named tree, solves, and comes back
+			flat again.
 		</p>
 
-		<div class="border-border bg-card mt-6 rounded-lg border p-4">
-			<SolveAnimation />
+		<div class="mt-6">
+			<SolveWalkthrough />
 		</div>
 	</div>
 

@@ -27,7 +27,7 @@ This provider does **no cryptographic verification**; it trusts the headers it r
 
 There is no runtime check that catches a misconfiguration. Run the README's self-test after every deployment change.
 
-Full setup, header names, proxy examples, and the self-test: [header-auth-provider README](https://github.com/VektorNode/selva/tree/main/packages/providers/header-auth).
+Full setup, header names, proxy examples, and the self-test live in the header-auth-provider README.
 
 ## Prerequisites
 

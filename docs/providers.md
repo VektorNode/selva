@@ -26,7 +26,7 @@ You can mix implementations (e.g. Supabase for auth + data, files elsewhere).
 | **Data**    | `IDataProvider`    | Metadata: orgs, projects, definitions + version history, share links, invites, compute config, profiles, permissions. |
 | **Storage** | `IStorageProvider` | Blob storage for definition files and assets.                                                                         |
 
-These are pure TypeScript interfaces in [`@selvajs/platform`](https://github.com/VektorNode/selva/tree/main/packages/platform). Each adapter lives in its own package.
+These are pure TypeScript interfaces in [`@selvajs/platform`](https://www.npmjs.com/package/@selvajs/platform). Each adapter lives in its own package.
 
 ## What ships
 
@@ -36,7 +36,7 @@ These are pure TypeScript interfaces in [`@selvajs/platform`](https://github.com
 | [`supabase`](providers/supabase.md)             | Supabase Auth + Postgres + Storage    | Multi-instance, multi-tenant, RLS         |
 | [`header-auth`](providers/header-auth-entra.md) | Trusts reverse-proxy identity headers | Existing SSO (Caddy, oauth2-proxy, Entra) |
 
-Select with `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER` and restart. Reference: [`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example).
+Select with `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER` and restart. Reference: the `.env.example` shipped in your scaffolded deployment.
 
 ## The scoping rule
 

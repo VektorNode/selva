@@ -23,7 +23,7 @@ For multi-instance or multi-tenant, use [Supabase](../providers/supabase.md) ins
 2. Set `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` (see `.env.example`).
 3. Point `DATA_PATH` at a writable directory.
 
-On-disk layout, env vars, and architecture notes: [local-provider README](https://github.com/VektorNode/selva/tree/main/packages/providers/local).
+On-disk layout, env vars, and architecture notes: [local-provider README](https://www.npmjs.com/package/@selvajs/local-provider).
 
 ## Next
 

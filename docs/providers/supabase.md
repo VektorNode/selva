@@ -25,7 +25,7 @@ description: 'Auth, Postgres, and Storage on Supabase, with identity living in t
 
 Same code runs against a local Docker stack or a hosted project; only the URL and keys change.
 
-Full setup, env vars, migrations, and RLS notes: [supabase-provider README](https://github.com/VektorNode/selva/tree/main/packages/providers/supabase).
+Full setup, env vars, migrations, and RLS notes: [supabase-provider README](https://www.npmjs.com/package/@selvajs/supabase-provider).
 
 ## Next
 

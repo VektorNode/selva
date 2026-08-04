@@ -128,7 +128,7 @@ Open the designer at the UI Bridge's URL, drag the input onto a control, save. T
 2. Restart Rhino.
 3. Install the same `.gha` on your Rhino.Compute server, or the deployed app cannot solve.
 
-Install paths per OS are in the repo [README](https://github.com/VektorNode/selva#readme).
+Install paths per OS are in the repo README.
 
 ## Selva Canopy
 
