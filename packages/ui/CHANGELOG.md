@@ -1,5 +1,12 @@
 # @selvajs/ui
 
+## 6.0.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies [5292563]
+  - @selvajs/schemas@5.0.0-beta.0
+
 ## 6.0.0-beta.2
 
 ### Patch Changes

@@ -29,6 +29,8 @@
     "drop-deprecated-compute",
     "edges-config-passthrough",
     "plugin-ui-visualization-package-move",
+    "rhino-vocabulary-rename-plugin-ui",
+    "rhino-vocabulary-rename",
     "scheduler-cache-bytes-only",
     "solve-client-half",
     "solve-deadline-single-source",

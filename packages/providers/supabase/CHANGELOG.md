@@ -1,5 +1,11 @@
 # @selvajs/supabase-provider
 
+## 0.16.1-beta.1
+
+### Patch Changes
+
+- @selvajs/platform@0.16.1-beta.0
+
 ## 0.16.1-beta.0
 
 ### Patch Changes
