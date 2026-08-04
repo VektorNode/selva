@@ -1,6 +1,6 @@
-import { RhinoComputeError, ErrorCodes } from '../errors';
-import { getLogger } from '../utils/logger';
-import { validateServerUrl } from './validate-server-url';
+import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { getLogger } from '@/core/utils/logger';
+import { validateServerUrl } from '@/core/server/validate-server-url';
 
 /**
  * ComputeServerStats provides methods to query Rhino Compute server statistics.

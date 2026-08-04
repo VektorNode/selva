@@ -8,7 +8,7 @@ from `render/` or `scene/`.
 | Kind              | Entry point                         | Wire format                                           |
 | ----------------- | ----------------------------------- | ----------------------------------------------------- |
 | **Mesh batches**  | `getThreeMeshesFromComputeResponse` | binary `SLVA` blob (base64 or raw), `SLVZ` = deflated |
-| **Display items** | `parseDisplayItems`                 | Rhino-native JSON, decoded via `rhino3dm`             |
+| **Display items** | `parseDisplayItems`                 | plain JSON — tessellated polylines and raw positions  |
 
 ## Mesh batch pipeline
 
@@ -33,13 +33,15 @@ across solves: every solve decodes its own geometry and textures, and the scene 
 
 ```
 display-items/display-items-parser.ts      dispatch per item kind
-  ├─ display-items/items/curves.ts         rhino3dm decode → adaptive tessellation → fat Line2
+  ├─ display-items/items/curves.ts         backend-tessellated points → fat Line2
   ├─ display-items/items/points.ts         raw positions → one THREE.Points
   └─ display-items/items/appearance.ts     shared color/opacity → material params
 ```
 
-Curves need a caller-supplied `rhino3dm` instance (the WASM is heavy and the host owns it). Without
-one, curves are skipped with a warning and points still render.
+Nothing here decodes geometry: the backend tessellates curves and sends `points`, so this package
+has no rhino3dm dependency at all. A curve arriving without `points` came from a Display component
+too old to render — `parseDisplayItems` **throws** rather than skipping it, because a scene quietly
+missing its curves looks identical to a definition that has none.
 
 ## Extension points
 

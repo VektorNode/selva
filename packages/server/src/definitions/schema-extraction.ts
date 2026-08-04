@@ -7,9 +7,20 @@
 // Extraction IS validation: a `.gh` with no valid "Schema" output, or an
 // unreachable compute server, throws here and the caller rejects the upload.
 
-import { camelcaseKeys } from '@selvajs/compute/core';
+import {
+	readSchemaResults as readWrapper,
+	type SchemaEndpointResult
+} from '@selvajs/compute/grasshopper';
 import { UI_SCHEMA_VERSION, type UISchema } from '@selvajs/schemas';
 import type { ComputeServerConfig } from '@selvajs/platform';
+
+/** One entry of the compute schema endpoint's response, typed to our `UISchema`. */
+export type SchemaExtractionResult = SchemaEndpointResult<UISchema>;
+
+/** Read compute's schema-endpoint body, typed to `UISchema`. See {@link readSchemaResults}. */
+export function readSchemaResults(raw: unknown): SchemaExtractionResult[] {
+	return readWrapper<UISchema>(raw);
+}
 
 /** Thrown when compute is reachable but the definition yields no usable schema. */
 export class SchemaExtractionError extends Error {
@@ -92,17 +103,7 @@ export async function fetchSchemaFromCompute(
 		);
 	}
 
-	// Compute returns [{ FileName, Schemas }] with PascalCase wrapper keys only.
-	// The schema contents are already camelCase from our C# serializer, so we only
-	// need a shallow camelcase per wrapper to normalize FileName→fileName,
-	// Schemas→schemas (shallow camelcaseKeys is a no-op on arrays, so each
-	// element is normalized individually). deep:true would mangle user-defined
-	// option names (e.g. "Display3d" → "display3d").
-	const raw = await response.json();
-	const results = (Array.isArray(raw) ? raw : [raw]).map((r) => camelcaseKeys(r)) as {
-		schemas?: UISchema[];
-		error?: string;
-	}[];
+	const results = readSchemaResults(await response.json());
 	const schemas = results.flatMap((r) => r.schemas ?? []);
 
 	if (schemas.length === 0) {

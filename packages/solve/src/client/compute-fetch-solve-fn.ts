@@ -15,7 +15,7 @@
 import { GrasshopperResponseProcessor, type GrasshopperComputeResponse } from '@selvajs/compute';
 import type { SolveFn, SolveResult } from '../shared/solve-fn.js';
 
-export interface ComputeFetchSolveFnOptions<TMesh = unknown, TRhino = unknown> {
+export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	/** The compute endpoint to POST to, e.g. `/api/compute`. */
 	endpoint: string;
 	/** Definition URL (or `local:<guid>`) to solve — read per-solve so it can track a route param. */
@@ -26,16 +26,11 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown, TRhino = unknown> {
 	outputs: () => Array<{ id: string; nickname?: string }>;
 	channel?: () => 'live' | 'draft' | undefined;
 	versionId?: () => string | null | undefined;
-	/**
-	 * Omit entirely for a non-viewer consumer — `meshes` on the result stays `[]`
-	 * and no rhino3dm module is ever loaded. `loadRhino` is called lazily on the
-	 * first solve that needs meshes and cached for the lifetime of this `SolveFn`.
-	 */
+	/** Omit entirely for a non-viewer consumer — `meshes` on the result stays `[]`. */
 	meshes?: {
-		loadRhino: () => Promise<TRhino>;
 		extract: (
 			response: GrasshopperComputeResponse,
-			opts: { debug: boolean; rhino: TRhino }
+			opts: { debug: boolean }
 		) => TMesh[] | Promise<TMesh[]>;
 	};
 	/** Gates ALL console telemetry (timing, cache verdicts, whales, heap). Default `false`. */
@@ -69,20 +64,13 @@ const defaultOnSessionExpired = (): never => {
 	);
 };
 
-export function createComputeFetchSolveFn<TMesh = unknown, TRhino = unknown>(
-	opts: ComputeFetchSolveFnOptions<TMesh, TRhino>
+export function createComputeFetchSolveFn<TMesh = unknown>(
+	opts: ComputeFetchSolveFnOptions<TMesh>
 ): SolveFn<TMesh, GrasshopperComputeResponse> {
 	const debug = opts.debug ?? false;
 	const log = (...args: unknown[]) => {
 		if (debug) console.info(...args);
 	};
-
-	let rhinoPromise: Promise<TRhino> | null = null;
-	function getRhino(): Promise<TRhino> {
-		if (!opts.meshes) throw new Error('createComputeFetchSolveFn: meshes option not configured.');
-		if (!rhinoPromise) rhinoPromise = opts.meshes.loadRhino();
-		return rhinoPromise;
-	}
 
 	let cooldownUntil = 0;
 
@@ -183,9 +171,7 @@ export function createComputeFetchSolveFn<TMesh = unknown, TRhino = unknown>(
 		}
 		const processor = new GrasshopperResponseProcessor(solved, false);
 
-		const meshes = opts.meshes
-			? await opts.meshes.extract(processor.response, { debug, rhino: await getRhino() })
-			: [];
+		const meshes = opts.meshes ? await opts.meshes.extract(processor.response, { debug }) : [];
 
 		const resultOutputs: Record<string, unknown> = {};
 		for (const o of outputs) {

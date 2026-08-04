@@ -214,8 +214,8 @@ public class WebSocketTransport : IDisposable
         // DisplayBatch blobs travel as binary WebSocket frames instead of base64-in-JSON; the SLVA
         // blob already embeds materials/groups/sourceComponentId, so no separate envelope is needed.
         // Non-mesh items (curves, points) have no binary form and ride the JSON envelope as
-        // `displayItems`, flattened across all batches; the client tessellates them alongside the
-        // mesh frames.
+        // `displayItems`, flattened across all batches. They arrive already tessellated, so the
+        // client builds lines straight from them alongside the mesh frames.
         var binaryBlobs = new List<byte[]>();
         var displayItems = new List<DisplayItem>();
         if (includeDisplayData && displayData != null)
@@ -235,6 +235,28 @@ public class WebSocketTransport : IDisposable
                     }
                 }
             }
+        }
+
+        // The web renders curves only from `Points`. Anything still lacking them came from a Display
+        // component too old to tessellate, and would throw in the viewer with no hint of which
+        // definition to fix — so name it here, where the log sits next to the canvas.
+        //
+        // TRANSITIONAL — goes with WebDisplayGoo.BackfillCurvePoints; see the removal note there.
+        var untessellated = 0;
+        foreach (var item in displayItems)
+        {
+            if (item?.Kind == "curve" && item.Points == null)
+            {
+                untessellated++;
+            }
+        }
+
+        if (untessellated > 0)
+        {
+            Logger.Warn(
+                $"[WebSocketTransport] {untessellated} curve(s) have no tessellated points and " +
+                "will fail to render. Upgrade the Display component in this definition " +
+                "(Grasshopper → Solution → Upgrade obsolete components) and re-save.");
         }
 
         // `displayItems` is null when empty so mesh-only solves stay unchanged on the wire.

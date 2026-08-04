@@ -639,7 +639,11 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
                 }
 
                 var json = nurbs.ToJSON(new Rhino.FileIO.SerializationOptions());
-                item = DisplayItem.Curve(json, id, displayName, layer ?? "", metadata, colorHex, opacity);
+                // Tessellates like the live component: what's frozen here is the param list and GUID,
+                // not the payload. A snapshot emitting untessellated curves would fail in the viewer.
+                var points = CurveTessellator.Tessellate(curve);
+                item = DisplayItem.Curve(json, points, id, displayName, layer ?? "", metadata,
+                    colorHex, opacity);
                 previewCurve = curve;
                 return true;
             }

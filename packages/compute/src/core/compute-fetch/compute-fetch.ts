@@ -99,7 +99,8 @@ async function attemptFetch(
 			ctx.config.serverUrl,
 			startTime,
 			ctx.config.debug,
-			ctx.config.onServerTiming
+			ctx.config.onServerTiming,
+			ctx.config.serverErrorCodes
 		);
 		return { ok: true, value };
 	} catch (error) {

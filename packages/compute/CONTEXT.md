@@ -19,13 +19,35 @@ named after a concept, it should be the concept named here.
 - **IO** — the inputs and outputs a definition declares. `getIO` fetches them.
 - **Input param** — one declared input of a definition, parsed into a typed
   shape (`NumericInputType`, `TextInputType`, …). The union is `InputParam`.
-- **Transport** — the HTTP layer talking to Rhino Compute (`fetchRhinoCompute`).
+- **Transport** — the HTTP layer talking to a compute server (`fetchRhinoCompute`).
   Owns retries, backoff, timeout/abort composition, and HTTP→error-code mapping.
   Response-type-agnostic: it takes an endpoint string and a `ComputeConfig` and
   returns a caller-supplied response type (`fetchRhinoCompute<R>`). It does not
   know which response a given endpoint produces — each endpoint caller names its
   own response type. This keeps the dependency arrow pointing feature → core, so
   a second endpoint family can be added without `core` importing any feature.
+
+  **`core/` is backend-agnostic — it names no Rhino concept.** Everything
+  backend-specific arrives from the caller through three seams, and adding a
+  fourth belongs here rather than inlined in core:
+
+  - `ComputeConfig.apiKeyHeader` — the auth header's NAME (default
+    `RhinoComputeKey`). Note the key still merges over `config.headers`, so a
+    caller can't clobber whichever header actually carries it.
+  - `ComputeConfig.serverErrorCodes` — this backend's machine wire codes → our
+    `ErrorCodes`, outranking the status-based mapping. Grasshopper's table is
+    `GRASSHOPPER_SERVER_ERROR_CODES` in `grasshopper/solve.ts`, applied at both
+    GH fetch sites via `withGrasshopperErrorCodes`.
+  - `validateServerUrl(url, { blockedHosts })` — the shared public endpoint a
+    caller must not point at. Defaults to `compute.rhino3d.com`.
+
+  `ComputeServerStats` is NOT transport: it probes rhino.compute's control plane
+  (`/activechildren`, `/plugins/gh/installed`, `/idlespan`), so it ships from
+  `/grasshopper`. Conversely `DefinitionRef`/`SolveDefinition` are pure
+  bytes-or-lazy-byte-ref with nothing Grasshopper in them, and sit in the solve
+  port's own signature — so they live in `/core`, and a second backend's author
+  never has to import them from the Grasshopper subpath.
+
 - **Scheduler** — orchestrates solves over time (latest-wins / queue / parallel),
   with cancellation, retries, caching, and an observable state surface.
 - **Server definition-cache reuse** — a large (base64/binary) definition is

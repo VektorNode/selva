@@ -1,11 +1,11 @@
 /**
  * Core utilities and configuration for @selvajs/compute
  *
- * This module provides the foundational building blocks for the library, including:
- * - **Networking**: Type-safe HTTP wrappers for the Rhino Compute API
- * - **Server Monitoring**: Health checks and telemetry monitoring
+ * Backend-agnostic transport: nothing here knows about Grasshopper or Rhino.
+ * - **Networking**: retry, backoff, abort composition, `Retry-After`, status→code mapping
  * - **Error Handling**: Specialized error classes for API and network failures
  * - **Logging**: Configurable debug and production logging
+ * - **Definitions**: the by-value / by-reference forms a solve accepts
  *
  * @example Performing a low-level compute request
  * ```typescript
@@ -26,26 +26,11 @@
  * }
  * ```
  *
- * @example Monitoring server status
- * ```typescript
- * import { ComputeServerStats } from '@selvajs/compute/core';
- *
- * const stats = new ComputeServerStats(serverUrl, apiKey);
- * if (await stats.isServerOnline()) {
- *   const info = await stats.getServerStats();
- *   // version is an object: { rhino, compute, git_sha }
- *   console.log(`Compute Version: ${info.version?.compute}`);
- * }
- * await stats.dispose();
- * ```
- *
  * @module core
  */
 
 export { fetchRhinoCompute } from './compute-fetch/compute-fetch';
 export { getResponseWireSize, setResponseWireSize } from './compute-fetch/wire-size';
-
-export { default as ComputeServerStats } from './server/compute-server-stats';
 
 export { RhinoComputeError, ErrorCodes } from './errors';
 export type { ErrorCode } from './errors';
@@ -54,8 +39,11 @@ export type { ErrorCode } from './errors';
 export type { Logger } from './utils/logger';
 export { setLogger, enableDebugLogging, getLogger } from './utils/logger';
 
-// String utilities
-export { toCamelCase, camelcaseKeys } from './utils/camel-case';
+// Wire-payload field reader. Server branches disagree on casing (mcneel serializes
+// the IO schema PascalCase, the VektorNode fork camelCase), so read the specific
+// fields you need case-insensitively rather than rewriting every key — a blanket
+// rewrite corrupts user-authored keys like value-list labels.
+export { readField, hasField } from './utils/read-field';
 
 // Encoding utilities. `@selvajs/visualization` keeps its own copy of this logic rather than
 // importing it — it raises `VisualizationError`, and importing would couple it to the Compute
@@ -64,7 +52,15 @@ export { toCamelCase, camelcaseKeys } from './utils/camel-case';
 export { decodeBase64ToBinary } from './utils/encoding';
 
 // Configuration
-export type { ComputeConfig, RhinoModelUnit, RetryPolicy, ServerTiming } from './types';
+export type { ComputeConfig, RetryPolicy, ServerErrorCodeMap, ServerTiming } from './types';
+
+// Definition forms — backend-agnostic (bytes, or a lazy identity-keyed byte ref),
+// so a second backend's solve signature doesn't reach into `/grasshopper`.
+export { isDefinitionRef } from './definition-ref';
+export type { DefinitionRef, SolveDefinition } from './definition-ref';
+
+export { validateServerUrl, DEFAULT_BLOCKED_HOST } from './server/validate-server-url';
+export type { ValidateServerUrlOptions } from './server/validate-server-url';
 
 export { extractFilesFromComputeResponse, downloadFileData } from './files/handle-files';
 export type { ProcessedFile, FileData, FileBaseInfo } from './files/types';

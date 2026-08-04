@@ -3,8 +3,8 @@
  *
  * Takes a raw GH compute response (the exact shape a host app receives) and runs it through the
  * library's `getThreeMeshesFromComputeResponse`: it walks the value trees, finds each Display batch,
- * decodes the binary mesh blob plus the non-mesh display items (curves via rhino3dm, points raw),
- * and returns a flat array of THREE objects. Points need no decode; curves need the rhino3dm instance.
+ * decodes the binary mesh blob plus the non-mesh display items, and returns a flat array of THREE
+ * objects.
  */
 // `DisplayComputeResponse` is this package's Rhino-free view of a GH response — the minimal shape the
 // parser reads. `@selvajs/compute`'s `GrasshopperComputeResponse` is a superset and stays assignable
@@ -12,7 +12,6 @@
 import { getThreeMeshesFromComputeResponse, type DisplayComputeResponse } from '@/parse/index.js';
 
 import { createPlayground } from '../shared/playground';
-import { loadRhino } from '../shared/rhino';
 import responseUrl from '../shared/samples/compute-response.json?url';
 
 const pg = createPlayground({ title: 'Display Items' });
@@ -24,16 +23,13 @@ pg.addSelect('Look', ['technical', 'studio', 'showcase'], 'technical', (v) =>
 );
 
 async function load() {
-	pg.setStatus('Loading rhino3dm + response…');
+	pg.setStatus('Loading response…');
 	pg.clearObjects();
 
-	const [rhino, response] = await Promise.all([
-		loadRhino(),
-		fetch(responseUrl).then((r) => r.json() as Promise<DisplayComputeResponse>)
-	]);
+	const response = await fetch(responseUrl).then((r) => r.json() as Promise<DisplayComputeResponse>);
 
-	// Same call a host app makes. rhino decodes curves; meshes and points need no instance.
-	const objects = await getThreeMeshesFromComputeResponse(response, { rhino });
+	// Same call a host app makes.
+	const objects = await getThreeMeshesFromComputeResponse(response);
 	pg.addObjects(objects);
 
 	const counts = objects.reduce<Record<string, number>>((acc, o) => {

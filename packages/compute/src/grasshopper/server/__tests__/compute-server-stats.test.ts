@@ -17,7 +17,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ComputeServerStats from '../compute-server-stats';
-import { setLogger } from '../../utils/logger';
+import { setLogger } from '@/core/utils/logger';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
 const SERVER = 'http://localhost:6500';

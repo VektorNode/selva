@@ -83,7 +83,7 @@ covered by `pnpm type-check`, so a rename that breaks a demo fails the build ins
 
 ## Dependencies
 
-This package depends on **nothing from Selva** — only `rhino3dm`, `fflate`, and `three` as a peer
+This package depends on **nothing from Selva** — only `fflate`, and `three` as a peer
 dependency. It owns its
 own errors ([`shared/errors.ts`](./src/shared/errors.ts)), logging
 ([`shared/logger.ts`](./src/shared/logger.ts)) and base64 decoding

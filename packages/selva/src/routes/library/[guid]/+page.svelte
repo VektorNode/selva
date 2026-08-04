@@ -1,14 +1,10 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
-	import type { RhinoModule } from 'rhino3dm';
 	import { ComputeApp } from '@selvajs/ui';
 	import { createComputeFetchSolveFn } from '@selvajs/solve/client';
 	import { getThreeMeshesFromComputeResponse } from '@selvajs/visualization/parse';
 	import ServerFooter from '$lib/components/ServerFooter.svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
-
-	// Pass rhino3dm.wasm via locateFile to avoid 404 on dynamic routes.
-	import rhinoWasmUrl from 'rhino3dm/rhino3dm.wasm?url';
 
 	let { data }: PageProps = $props();
 
@@ -27,16 +23,7 @@
 		channel: () => (data.channel === 'draft' ? 'draft' : undefined),
 		versionId: () => data.versionId,
 		meshes: shouldShowViewer()
-			? {
-					loadRhino: () =>
-						import('rhino3dm').then((m) => {
-							const init = m.default as (opts?: {
-								locateFile?: (path: string) => string;
-							}) => Promise<RhinoModule>;
-							return init({ locateFile: () => rhinoWasmUrl });
-						}),
-					extract: (response, opts) => getThreeMeshesFromComputeResponse(response, opts)
-				}
+			? { extract: (response, opts) => getThreeMeshesFromComputeResponse(response, opts) }
 			: undefined,
 		// Preserves the always-on [Compute] console telemetry (timing, cache verdicts).
 		debug: true

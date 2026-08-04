@@ -4,7 +4,7 @@ import type { RhinoComputeError } from '@/core/errors';
 import type { RetryPolicy } from '@/core/types';
 
 import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } from '../types';
-import type { SolveDefinition } from '../definition-ref';
+import type { SolveDefinition } from '@/core/definition-ref';
 
 /**
  * Scheduling mode — controls how concurrent `solve()` calls interact.

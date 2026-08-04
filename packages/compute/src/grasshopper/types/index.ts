@@ -20,6 +20,7 @@ export type {
 } from './inputs';
 
 export type {
+	RhinoModelUnit,
 	GrasshopperBaseSchema,
 	GrasshopperDefinitionSource,
 	GrasshopperComputeConfig,

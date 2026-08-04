@@ -14,6 +14,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchRhinoCompute } from '../compute-fetch';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
+import { ErrorCodes } from '@/core/errors';
+
 import type { RhinoComputeError } from '@/core/errors';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
@@ -135,5 +137,45 @@ describe('Grasshopper partial-success (500 with values) still passes through', (
 
 		const res = await fetchRhinoCompute('grasshopper', {}, config);
 		expect(res).toEqual(partial);
+	});
+});
+
+describe('server error codes are caller-supplied', () => {
+	/** A 502 whose body carries a machine code — status maps to NETWORK_ERROR by default. */
+	const coded = () =>
+		createMockResponse(null, {
+			ok: false,
+			status: 502,
+			statusText: 'Bad Gateway',
+			body: JSON.stringify({ error: 'Bad Gateway', code: 'definition_not_cached' })
+		});
+
+	it('ignores a server code the caller did not declare', async () => {
+		fetchMock.mockResolvedValueOnce(coded());
+
+		expect.assertions(1);
+		try {
+			await fetchRhinoCompute('solve', {}, config);
+		} catch (e) {
+			expect((e as RhinoComputeError).code).toBe(ErrorCodes.NETWORK_ERROR);
+		}
+	});
+
+	it('lets a declared code outrank the status-based mapping', async () => {
+		fetchMock.mockResolvedValueOnce(coded());
+
+		expect.assertions(1);
+		try {
+			await fetchRhinoCompute(
+				'solve',
+				{},
+				{
+					...config,
+					serverErrorCodes: { definition_not_cached: ErrorCodes.DEFINITION_NOT_CACHED }
+				}
+			);
+		} catch (e) {
+			expect((e as RhinoComputeError).code).toBe(ErrorCodes.DEFINITION_NOT_CACHED);
+		}
 	});
 });

@@ -53,6 +53,29 @@ describe('validateServerUrl', () => {
 		expectInvalidConfig(() => validateServerUrl('http://compute.rhino3d.com.:80/path'));
 	});
 
+	// The blocked host is a backend's shared public endpoint, not a property of
+	// the transport — a non-Rhino backend names its own (or none).
+	it('blocks a caller-supplied host list instead of the Rhino default', () => {
+		expectInvalidConfig(() =>
+			validateServerUrl('https://api.example.com', { blockedHosts: ['api.example.com'] })
+		);
+		expect(
+			validateServerUrl('https://compute.rhino3d.com', { blockedHosts: ['api.example.com'] })
+		).toBe('https://compute.rhino3d.com');
+	});
+
+	it('blocks nothing when given an empty host list', () => {
+		expect(validateServerUrl('https://compute.rhino3d.com/', { blockedHosts: [] })).toBe(
+			'https://compute.rhino3d.com'
+		);
+	});
+
+	it('normalizes caller-supplied hosts the same way as the parsed hostname', () => {
+		expectInvalidConfig(() =>
+			validateServerUrl('https://api.example.com.', { blockedHosts: ['API.Example.com'] })
+		);
+	});
+
 	// Issue 112: URL schemes are case-insensitive per RFC 3986.
 	it('accepts an uppercase or mixed-case http(s) scheme', () => {
 		expect(validateServerUrl('HTTP://localhost:6500')).toBe('HTTP://localhost:6500');

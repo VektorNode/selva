@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Rhino.Geometry;
@@ -57,9 +58,15 @@ public class DisplayItem
     // ── Curve-only ────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     Rhino-native curve JSON (<c>curve.ToNurbsCurve().ToJSON()</c>). Superseded by
-    ///     <see cref="Points" />; still emitted so a new plugin paired with an older published UI
-    ///     can render curves. Null except for curve items.
+    ///     Rhino-native curve JSON (<c>curve.ToNurbsCurve().ToJSON()</c>). Null except for curve
+    ///     items.
+    ///
+    ///     Rhino-side only — the web ignores it and renders from <see cref="Points" />. Keep it:
+    ///     <see cref="WebDisplayPreview" /> rebuilds real curves from it for the viewport (points
+    ///     would draw a faceted polyline) and <see cref="DisplayBatchTransformer" /> needs the
+    ///     NURBS so repeated transforms don't compound a tessellation error. It still serializes
+    ///     because <c>WebDisplayGoo.Read</c> round-trips this class through a <c>.gh</c> archive,
+    ///     where losing it would degrade a saved definition's preview to its tessellation.
     /// </summary>
     [JsonProperty("json", NullValueHandling = NullValueHandling.Ignore)]
     public string Json { get; set; }
@@ -82,12 +89,6 @@ public class DisplayItem
     public DisplayPosition Position { get; set; }
 
     // ── Factories ─────────────────────────────────────────────────────────────────────────────
-
-    public static DisplayItem Curve(string json, string id, string name, string layer,
-        Dictionary<string, string> metadata, string color, double? opacity)
-    {
-        return Curve(json, null, id, name, layer, metadata, color, opacity);
-    }
 
     public static DisplayItem Curve(string json, double[] points, string id, string name, string layer,
         Dictionary<string, string> metadata, string color, double? opacity)

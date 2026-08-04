@@ -1,8 +1,25 @@
 // Rhino Compute API request/response schema types.
 
-import type { ComputeConfig, RhinoModelUnit } from '@/core/types';
+import type { ComputeConfig } from '@/core/types';
 
 import type { DataTree } from './inputs';
+
+// Rhino model unit types supported by Rhino.Compute
+export type RhinoModelUnit =
+	| 'None'
+	| 'Microns'
+	| 'Millimeters'
+	| 'Centimeters'
+	| 'Decimeters'
+	| 'Meters'
+	| 'Kilometers'
+	| 'Mils'
+	| 'Inches'
+	| 'Feet'
+	| 'Yards'
+	| 'Miles'
+	| 'CustomUnits'
+	| 'Unset';
 
 /**
  * Base Grasshopper schema properties shared by config, args, and response

@@ -1,16 +1,25 @@
 import { RhinoComputeError, ErrorCodes } from '@/core/errors';
 
 /**
- * The public McNeel endpoint's host — disallowed as a `serverUrl`; users must point at
+ * The public McNeel endpoint's host — the default blocked host; users must point at
  * their own server. Compared against the parsed hostname lowercased and with any
  * trailing dot stripped, so the FQDN form (`compute.rhino3d.com.`) can't bypass it.
  * Known limitation: the endpoint's raw IP is not blocked — it sits behind a load
  * balancer with no single stable, verifiable address to pin.
  */
-const DEFAULT_PUBLIC_HOST = 'compute.rhino3d.com';
+export const DEFAULT_BLOCKED_HOST = 'compute.rhino3d.com';
+
+export interface ValidateServerUrlOptions {
+	/**
+	 * Hostnames rejected as a `serverUrl` — a backend's shared public endpoint,
+	 * which callers must not point at. Defaults to `[DEFAULT_BLOCKED_HOST]`; pass
+	 * `[]` to block nothing. Compared lowercased with any trailing dot stripped.
+	 */
+	blockedHosts?: readonly string[];
+}
 
 /**
- * Validate and normalize a Rhino Compute `serverUrl`.
+ * Validate and normalize a compute `serverUrl`.
  *
  * This is the single source of truth for "is this a usable server URL?" — both
  * `GrasshopperClient` (via `normalizeComputeConfig`) and the standalone-exported
@@ -26,15 +35,16 @@ const DEFAULT_PUBLIC_HOST = 'compute.rhino3d.com';
  *   reject credentialed URLs at runtime, so they must fail here instead
  * - no query string or fragment — endpoint paths are appended to this URL
  *   (`${serverUrl}/version`), which a `?…` or `#…` suffix would corrupt
- * - not the public McNeel endpoint — compared by parsed hostname (lowercased,
- *   trailing dot stripped), so scheme, casing, port, path, trailing-slash, or
- *   FQDN-dot variants can't slip past the block
+ * - not a blocked host (by default the public McNeel endpoint) — compared by
+ *   parsed hostname (lowercased, trailing dot stripped), so scheme, casing, port,
+ *   path, trailing-slash, or FQDN-dot variants can't slip past the block
  *
  * @param raw - The candidate server URL.
+ * @param options - Override the blocked-host list for a non-Rhino backend.
  * @returns The trimmed, normalized URL with any trailing slashes removed.
  * @throws {RhinoComputeError} `INVALID_CONFIG` if any rule fails.
  */
-export function validateServerUrl(raw: string): string {
+export function validateServerUrl(raw: string, options?: ValidateServerUrlOptions): string {
 	const trimmed = raw?.trim() ?? '';
 	if (!trimmed) {
 		throw new RhinoComputeError('serverUrl is required', ErrorCodes.INVALID_CONFIG, {
@@ -89,9 +99,12 @@ export function validateServerUrl(raw: string): string {
 
 	// Lowercase + strip any trailing dot so the FQDN form can't bypass the block.
 	const hostname = parsed.hostname.toLowerCase().replace(/\.+$/, '');
-	if (hostname === DEFAULT_PUBLIC_HOST) {
+	const blocked = (options?.blockedHosts ?? [DEFAULT_BLOCKED_HOST]).map((h) =>
+		h.toLowerCase().replace(/\.+$/, '')
+	);
+	if (blocked.includes(hostname)) {
 		throw new RhinoComputeError(
-			'serverUrl must be set to your Compute server URL. The default public endpoint is not allowed.',
+			'serverUrl must be set to your Compute server URL. The shared public endpoint is not allowed.',
 			ErrorCodes.INVALID_CONFIG,
 			{ context: { receivedServerUrl: raw } }
 		);

@@ -3,7 +3,7 @@ import { log } from './log';
 import { fireServerTiming } from './server-timing';
 import { setResponseWireSize } from './wire-size';
 
-import type { ServerTiming } from '../types';
+import type { ServerErrorCodeMap, ServerTiming } from '../types';
 
 /** Upper bound for the raw server body stored on error `context.responseBody`. */
 const MAX_CONTEXT_BODY_CHARS = 4096;
@@ -22,7 +22,8 @@ export function throwHttpError(
 	serverUrl: string,
 	errorBody: string,
 	serverCode?: string,
-	rawBody?: string
+	rawBody?: string,
+	serverErrorCodes?: ServerErrorCodeMap
 ): never {
 	const { status, statusText } = response;
 
@@ -78,11 +79,11 @@ export function throwHttpError(
 		code: ErrorCodes.UNKNOWN_ERROR
 	};
 
-	// A machine code in the server's error body (e.g. "definition_not_cached")
-	// outranks the status-based mapping: it's stable across the server's
-	// production message-scrubbing, where the human message is replaced with a
-	// generic string. Keep the status-derived message for context.
-	const code = mapServerErrorCode(serverCode) ?? error.code;
+	// A machine code in the server's error body outranks the status-based mapping:
+	// it's stable across the server's production message-scrubbing, where the human
+	// message is replaced with a generic string. Keep the status-derived message
+	// for context.
+	const code = mapServerErrorCode(serverCode, serverErrorCodes) ?? error.code;
 
 	throw new RhinoComputeError(error.message, code, { statusCode: status, context });
 }
@@ -91,14 +92,16 @@ export function throwHttpError(
  * Map a server-supplied error code (from the JSON error body's `code` field) to
  * one of our {@link ErrorCodes}. Returns `undefined` for an absent or unknown
  * code so the caller falls back to its status-based mapping.
+ *
+ * Which wire codes exist is backend-specific, so the table comes from the caller
+ * ({@link ComputeConfig.serverErrorCodes}) — core does not know any of them.
  */
-export function mapServerErrorCode(serverCode?: string): ErrorCode | undefined {
-	switch (serverCode) {
-		case 'definition_not_cached':
-			return ErrorCodes.DEFINITION_NOT_CACHED;
-		default:
-			return undefined;
-	}
+export function mapServerErrorCode(
+	serverCode?: string,
+	serverErrorCodes?: ServerErrorCodeMap
+): ErrorCode | undefined {
+	if (!serverCode || !serverErrorCodes) return undefined;
+	return serverErrorCodes[serverCode];
 }
 
 export async function handleResponse(
@@ -109,7 +112,8 @@ export async function handleResponse(
 	serverUrl: string,
 	startTime: number,
 	debug?: boolean,
-	onServerTiming?: (timing: ServerTiming, requestId: string) => void
+	onServerTiming?: (timing: ServerTiming, requestId: string) => void,
+	serverErrorCodes?: ServerErrorCodeMap
 ): Promise<any> {
 	const responseTime = Math.round(performance.now() - startTime);
 
@@ -135,11 +139,11 @@ export async function handleResponse(
 			}
 		}
 
-		// A machine-readable code the server may tag onto its error body (e.g.
-		// "definition_not_cached"). Unlike the human `message`, it isn't scrubbed in
-		// the server's production (non-debug) mode, so it's the reliable signal for
-		// classifying the error (see throwHttpError → mapServerErrorCode). It can
-		// ride any error status, not just 500, so read it here.
+		// A machine-readable code the server may tag onto its error body. Unlike the
+		// human `message`, it isn't scrubbed in the server's production (non-debug)
+		// mode, so it's the reliable signal for classifying the error (see
+		// throwHttpError → mapServerErrorCode). It can ride any error status, not
+		// just 500, so read it here.
 		let serverCode: string | undefined;
 
 		try {
@@ -158,7 +162,7 @@ export async function handleResponse(
 					setResponseWireSize(parsed, errorBody.length);
 					if (debug) {
 						log(
-							`⚠️ Request [${requestId}] completed with Grasshopper errors in ${responseTime}ms`,
+							`⚠️ Request [${requestId}] completed with solver errors in ${responseTime}ms`,
 							true
 						);
 						if (parsed.errors?.length > 0) {
@@ -215,7 +219,8 @@ export async function handleResponse(
 			serverUrl,
 			errorBody,
 			serverCode,
-			rawBody
+			rawBody,
+			serverErrorCodes
 		);
 	}
 

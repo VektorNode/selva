@@ -4,7 +4,7 @@ import { getLogger } from '@/core/utils/logger';
 import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
 
 import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } from '../types';
-import type { SolveDefinition } from '../definition-ref';
+import type { SolveDefinition } from '@/core/definition-ref';
 import { hashSolveInputForDefinition, hashDefinition } from './stable-hash';
 
 import type {

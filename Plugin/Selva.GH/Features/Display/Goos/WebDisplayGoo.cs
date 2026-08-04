@@ -188,7 +188,42 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
         var json = reader.GetString("WebDisplayJson");
         Value = JsonConvert.DeserializeObject<DisplayBatch>(json);
+        BackfillCurvePoints(Value);
         return true;
+    }
+
+    /// <summary>
+    ///     Tessellates curve items saved before the plugin did it server-side. Those carry NURBS
+    ///     <c>Json</c> but no <c>Points</c>, and the web renders only from <c>Points</c> — without
+    ///     this, reopening such a definition solves fine in Rhino and then fails in the viewer.
+    ///     Rebuilding here is free: the NURBS is already in hand.
+    ///
+    ///     TRANSITIONAL — delete once no definition in circulation predates tessellated curves.
+    ///     Re-saving a definition through any current plugin build makes its batch self-sufficient,
+    ///     so this only serves <c>.gh</c> files not opened since the upgrade. Removing it early is
+    ///     not silent: such a file starts failing in the viewer with an upgrade message instead.
+    ///     Delete this method, both call sites, and the <c>untessellated</c> warning in
+    ///     <c>WebSocketTransport</c> together.
+    /// </summary>
+    internal static void BackfillCurvePoints(DisplayBatch batch)
+    {
+        if (batch?.Items == null)
+        {
+            return;
+        }
+
+        foreach (var item in batch.Items)
+        {
+            if (item?.Kind != "curve" || item.Points != null || string.IsNullOrEmpty(item.Json))
+            {
+                continue;
+            }
+
+            if (GeometryBase.FromJSON(item.Json) is Curve curve)
+            {
+                item.Points = CurveTessellator.Tessellate(curve);
+            }
+        }
     }
 
     public override bool CastFrom(object source)
@@ -204,6 +239,7 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
             try
             {
                 Value = JsonConvert.DeserializeObject<DisplayBatch>(ghString.Value);
+                BackfillCurvePoints(Value);
                 return true;
             }
             catch

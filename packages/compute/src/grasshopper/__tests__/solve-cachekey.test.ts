@@ -17,7 +17,7 @@ import {
 	solveGrasshopperDefinitionWithCacheKey,
 	solveGrasshopperDefinition
 } from '../solve';
-import type { DefinitionRef } from '../definition-ref';
+import type { DefinitionRef } from '@/core/definition-ref';
 import { ErrorCodes } from '@/core/errors';
 import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
 import { createMockResponse } from '@tests/helpers/mock-fetch';

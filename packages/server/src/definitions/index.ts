@@ -8,8 +8,10 @@ export { DefinitionService, type CreateDefinitionRecord } from './definition-ser
 export {
 	fetchSchemaFromCompute,
 	assertSupportedSchemaVersion,
+	readSchemaResults,
 	SchemaExtractionError
 } from './schema-extraction.js';
+export type { SchemaExtractionResult } from './schema-extraction.js';
 
 export {
 	createDefinitionLoader,

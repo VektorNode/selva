@@ -7,8 +7,7 @@ import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { MAX_GH_FILE_SIZE } from '$lib/server/computeLimits';
-import { camelcaseKeys } from '@selvajs/compute/core';
-import type { UISchema } from '@selvajs/schemas';
+import { readSchemaResults } from '@selvajs/server/definitions';
 
 // Multipart envelope (boundaries + Content-Disposition headers) adds a small
 // constant overhead on top of the raw .gh bytes; 1 MB clears it comfortably.
@@ -67,14 +66,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		apiError(response.status, ApiErrorCode.COMPUTE_UNAVAILABLE, 'Compute server error');
 	}
 
-	// Compute returns [{ FileName, Schemas }] with PascalCase wrapper keys only.
-	// The schema contents are already camelCase from our C# serializer, so we only
-	// need a shallow camelcase to normalize FileName→fileName, Schemas→schemas.
-	// deep:true would mangle user-defined option names (e.g. "Display3d" → "display3d").
-	const raw = await response.json();
-	const results: { schemas?: UISchema[]; error?: string }[] = camelcaseKeys(
-		Array.isArray(raw) ? raw : [raw]
-	) as { schemas?: UISchema[]; error?: string }[];
+	const results = readSchemaResults(await response.json());
 	const schemas = results.flatMap((r) => r.schemas ?? []);
 
 	if (schemas.length === 0) {

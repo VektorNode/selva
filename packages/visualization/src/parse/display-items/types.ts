@@ -24,10 +24,17 @@ export interface DisplayPosition {
 	Z: number;
 }
 
-/** Rhino-native JSON (`curve.ToNurbsCurve().ToJSON()`), tessellated to a fat `Line2` on decode. */
+/** Rendered as a fat `Line2` straight from `points` — nothing decodes geometry in the browser. */
 export interface DisplayCurve extends DisplayItemBase {
 	kind: 'curve';
-	json: string;
+	/**
+	 * Backend-tessellated polyline, flat `[x,y,z, …]` in Rhino's Z-up frame.
+	 *
+	 * Typed as required even though the plugin still sends a legacy `json` field alongside it: a
+	 * payload without `points` came from a Display component too old to render, and parsing throws
+	 * rather than treating it as a shape this package supports.
+	 */
+	points: number[];
 	/** Screen-space CSS px, constant regardless of zoom. Omitted uses the viewer default. */
 	width?: number;
 }

@@ -1,14 +1,14 @@
 import { ErrorCodes, RhinoComputeError } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 import { readField } from '@/core/utils/read-field';
-import ComputeServerStats from '@/core/server/compute-server-stats';
+import ComputeServerStats from '../server/compute-server-stats';
 import { validateServerUrl } from '@/core/server/validate-server-url';
 import { ComputeConfig, RetryPolicy } from '@/core/types';
 
 import { fetchDefinitionIO, fetchParsedDefinitionIO, solveGrasshopperDefinition } from '..';
 import { solveByCacheKey, solveGrasshopperDefinitionWithCacheKey } from '../solve';
 import { GrasshopperComputeConfig, GrasshopperComputeResponse, DataTree } from '../types';
-import { isDefinitionRef, type SolveDefinition } from '../definition-ref';
+import { isDefinitionRef, type SolveDefinition } from '@/core/definition-ref';
 import {
 	SolveScheduler,
 	SolveSchedulerOptions,
@@ -345,7 +345,7 @@ export default class GrasshopperClient {
 			apiKey: config.apiKey,
 			authToken: config.authToken,
 			debug: config.debug ?? false,
-			suppressBrowserWarning: config.suppressBrowserWarning ?? config.suppressClientSideWarning
+			suppressBrowserWarning: config.suppressBrowserWarning
 		} as T;
 	}
 }

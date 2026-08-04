@@ -4,7 +4,7 @@ import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { findServerById } from '@selvajs/platform';
 import { requireManageCompute } from '$lib/server/access.server';
-import { ComputeServerStats } from '@selvajs/compute/core';
+import { ComputeServerStats } from '@selvajs/compute/grasshopper';
 
 /**
  * Admin compute actions — `manage_compute` only. Operator-initiated, mutating

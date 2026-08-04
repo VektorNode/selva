@@ -8,7 +8,6 @@ import { parseMeshBatchObject } from './batch-parser.js';
 
 import type { DisplayDataItem, DisplayComputeResponse } from './response-envelope.js';
 import type { DisplayBatch, MeshExtractionOptions, MeshBatchParsingOptions } from './types.js';
-import type { RhinoModule } from 'rhino3dm';
 
 // Constants
 
@@ -80,14 +79,13 @@ export async function getThreeMeshesFromComputeResponse(
 		// rather than shifting per transport.
 		allowAutoPosition = false,
 		groundAxis = 'z',
-		rhino,
 		debug = false,
 		parsing: parsingOptions = {}
 	} = options ?? {};
 
 	try {
 		const scaleFactor = allowScaling ? getScaleFactor(data.modelunits) : 1;
-		await extractDisplayFromData(data, objects, scaleFactor, parsingOptions, rhino, debug);
+		await extractDisplayFromData(data, objects, scaleFactor, parsingOptions, debug);
 
 		if (allowAutoPosition) {
 			applyGroundOffset(objects, groundAxis);
@@ -128,7 +126,6 @@ async function extractDisplayFromData(
 	objects: THREE.Object3D[],
 	scaleFactor: number,
 	parsingOptions: MeshBatchParsingOptions,
-	rhino: RhinoModule | undefined,
 	debug: boolean
 ): Promise<void> {
 	for (const value of data.values) {
@@ -138,7 +135,7 @@ async function extractDisplayFromData(
 			const branch = innerTree[path];
 			if (!branch) continue;
 
-			await processDataBranch(branch, objects, scaleFactor, parsingOptions, rhino, debug);
+			await processDataBranch(branch, objects, scaleFactor, parsingOptions, debug);
 		}
 	}
 }
@@ -149,7 +146,6 @@ async function processDataBranch(
 	objects: THREE.Object3D[],
 	scaleFactor: number,
 	parsingOptions: MeshBatchParsingOptions,
-	rhino: RhinoModule | undefined,
 	debug: boolean
 ): Promise<void> {
 	for (const item of branch) {
@@ -171,7 +167,7 @@ async function processDataBranch(
 
 		const batchMeshes = await parseMeshBatchObject(batch, mergedParsingOptions);
 
-		const batchItems = parseDisplayItems(batch.items, { rhino });
+		const batchItems = parseDisplayItems(batch.items);
 
 		const batchObjects: THREE.Object3D[] = [...batchMeshes, ...batchItems];
 

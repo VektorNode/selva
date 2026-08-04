@@ -22,6 +22,9 @@ export function isLocalhost(serverUrl: string): boolean {
 /** Server URLs already warned about missing auth — warn once per server, not per request. */
 const warnedNoAuth = new Set<string>();
 
+/** Header name rhino.compute reads the API key from. Override via `ComputeConfig.apiKeyHeader`. */
+export const DEFAULT_API_KEY_HEADER = 'RhinoComputeKey';
+
 export function buildHeaders(requestId: string, config: ComputeConfig): HeadersInit {
 	const headers: HeadersInit = {
 		// Caller headers first so the transport's own headers below OVERWRITE them —
@@ -30,7 +33,7 @@ export function buildHeaders(requestId: string, config: ComputeConfig): HeadersI
 		'X-Request-ID': requestId,
 		'Content-Type': 'application/json',
 		...(config.authToken && { Authorization: config.authToken }),
-		...(config.apiKey && { RhinoComputeKey: config.apiKey })
+		...(config.apiKey && { [config.apiKeyHeader ?? DEFAULT_API_KEY_HEADER]: config.apiKey })
 	};
 
 	if (
@@ -41,7 +44,7 @@ export function buildHeaders(requestId: string, config: ComputeConfig): HeadersI
 	) {
 		warnedNoAuth.add(config.serverUrl);
 		getLogger().warn(
-			`⚠️ [Rhino Compute] Request [${requestId}] targets remote server (${config.serverUrl}) but no API key or auth token is configured. Requests may fail or be rate-limited. (warned once per server)`
+			`⚠️ [Compute] Request [${requestId}] targets remote server (${config.serverUrl}) but no API key or auth token is configured. Requests may fail or be rate-limited. (warned once per server)`
 		);
 	}
 

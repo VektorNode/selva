@@ -1,34 +1,12 @@
-// Rhino model unit types supported by Rhino.Compute
-export type RhinoModelUnit =
-	| 'None'
-	| 'Microns'
-	| 'Millimeters'
-	| 'Centimeters'
-	| 'Meters'
-	| 'Kilometers'
-	| 'Microinches'
-	| 'Mils'
-	| 'Inches'
-	| 'Feet'
-	| 'Miles'
-	| 'CustomUnits'
-	| 'Angstroms'
-	| 'Nanometers'
-	| 'Decimeters'
-	| 'Dekameters'
-	| 'Hectometers'
-	| 'Megameters'
-	| 'Gigameters'
-	| 'Yards'
-	| 'PrinterPoints'
-	| 'PrinterPicas'
-	| 'NauticalMiles'
-	| 'AstronomicalUnits'
-	| 'LightYears'
-	| 'Parsecs'
-	| 'Unset';
+import type { ErrorCode } from './errors';
 
 // Config
+
+/**
+ * Backend wire code (the JSON error body's `code` field) → one of our
+ * {@link ErrorCodes}. An unlisted code falls back to the status-based mapping.
+ */
+export type ServerErrorCodeMap = Record<string, ErrorCode>;
 
 // Retry policy: exponential backoff, respects Retry-After header (up to 60s safety cap).
 // WHY: Duplicate-POST risk — network errors after send but before response may have
@@ -49,8 +27,13 @@ export interface ComputeConfig {
 	// WHY: must target the proxy, not bare compute.geometry child process.
 	// ComputeServerStats needs proxy endpoints like / and /activechildren.
 	serverUrl: string;
-	/** Optional API key for authenticating with the server (RhinoComputeKey) */
+	/** Optional API key for authenticating with the server. Sent as {@link apiKeyHeader}. */
 	apiKey?: string;
+	/**
+	 * Header name carrying `apiKey`. Defaults to `'RhinoComputeKey'` — the name
+	 * rhino.compute expects. A different backend sets its own.
+	 */
+	apiKeyHeader?: string;
 	/** Optional Bearer token for authentication (e.g., when behind a proxy or API gateway) */
 	authToken?: string;
 	// WHY: merged UNDER auth/request-id headers so they can't be overridden.
@@ -60,8 +43,6 @@ export interface ComputeConfig {
 	debug?: boolean;
 	/** Suppress browser security warnings in the console */
 	suppressBrowserWarning?: boolean;
-	/** @deprecated Renamed to `suppressBrowserWarning`. */
-	suppressClientSideWarning?: boolean;
 	// WHY: per-attempt timeout (not total deadline). Re-armed on each retry, so
 	// worst-case = (attempts + 1) × timeoutMs + backoff. Pass your own signal for
 	// a hard overall deadline. Using AbortSignal.timeout avoids tab throttling.
@@ -76,6 +57,12 @@ export interface ComputeConfig {
 	 * (e.g. on component unmount or when superseding a stale solve).
 	 */
 	signal?: AbortSignal;
+	/**
+	 * Machine-readable error codes this backend tags onto its error bodies, mapped
+	 * to our {@link ErrorCodes}. A code here outranks the status-based mapping.
+	 * Core knows no backend's codes — the client supplies its own table.
+	 */
+	serverErrorCodes?: ServerErrorCodeMap;
 	// WHY: telemetry side-channel. Fires once per request (before return), including
 	// on partial-success (HTTP 500 with real timings). Doesn't change behavior.
 	// requestId matches X-Request-ID header for correlating with debug logs.

@@ -661,7 +661,9 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 }
 
                 var json = nurbs.ToJSON(new Rhino.FileIO.SerializationOptions());
-                item = DisplayItem.Curve(json, id, displayName, layer ?? "", metadata, colorHex, opacity);
+                var points = CurveTessellator.Tessellate(curve);
+                item = DisplayItem.Curve(json, points, id, displayName, layer ?? "", metadata,
+                    colorHex, opacity);
                 previewCurve = curve;
                 return true;
             }

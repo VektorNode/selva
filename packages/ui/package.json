@@ -109,7 +109,6 @@
 		"@selvajs/solve": "workspace:*",
 		"@types/three": "catalog:",
 		"bits-ui": "catalog:",
-		"rhino3dm": "8.32.1",
 		"rimraf": "catalog:",
 		"svelte": "catalog:",
 		"tailwind-variants": "catalog:",

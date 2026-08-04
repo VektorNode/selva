@@ -47,9 +47,9 @@ async function seedComputeServer(): Promise<void> {
 }
 
 /**
- * Compute returns `[{ fileName, schemas: [<schema>] }]`. The C# serializer
- * already camelCases the wrapper keys, so they arrive lowercase (the shallow
- * `camelcaseKeys` call in the helper is a no-op safety net on this array shape).
+ * Compute returns `[{ fileName, schemas: [<schema>] }]`. The wrapper keys arrive
+ * camelCase from our fork and PascalCase from mcneel branches; `readSchemaResults`
+ * reads them case-insensitively, so either shape works here.
  */
 function mockComputeSchemaOk(schema: Record<string, unknown>): void {
 	vi.spyOn(globalThis, 'fetch').mockResolvedValue(

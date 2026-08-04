@@ -14,7 +14,8 @@ import type { ComputeServerConfig } from '@selvajs/platform';
 import {
 	fetchSchemaFromCompute,
 	assertSupportedSchemaVersion,
-	SchemaExtractionError
+	SchemaExtractionError,
+	readSchemaResults
 } from '../schema-extraction.js';
 
 function schema(version?: string): UISchema {
@@ -158,5 +159,16 @@ describe('fetchSchemaFromCompute', () => {
 		await expect(fetchSchemaFromCompute(new Uint8Array([1]), server)).rejects.toMatchObject({
 			kind: 'unsupported'
 		});
+	});
+});
+
+describe('readSchemaResults', () => {
+	// The unwrap itself (both server casings, multi-file, content pass-through) is
+	// owned and tested by @selvajs/compute. This only pins that we re-export it
+	// typed to UISchema, so a wiring mistake here can't go unnoticed.
+	it('reads the PascalCase wrapper compute actually sends', () => {
+		const [result] = readSchemaResults([{ FileName: 'a.gh', Schemas: [schema()] }]);
+
+		expect(result.schemas).toHaveLength(1);
 	});
 });

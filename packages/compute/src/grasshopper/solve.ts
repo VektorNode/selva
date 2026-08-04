@@ -1,4 +1,5 @@
 import { fetchRhinoCompute, RhinoComputeError, ErrorCodes } from '@/core';
+import type { ComputeConfig, ServerErrorCodeMap } from '@/core/types';
 import { getResponseWireSize, setResponseWireSize } from '@/core/compute-fetch/wire-size';
 import { base64ByteArray, detectBase64Payload, encodeStringToBase64 } from '@/core/utils/encoding';
 import { getLogger } from '@/core/utils/logger';
@@ -11,7 +12,7 @@ import {
 	GrasshopperComputeResponse,
 	DataTree
 } from './types';
-import { isDefinitionRef, type SolveDefinition } from './definition-ref';
+import { isDefinitionRef, type SolveDefinition } from '@/core/definition-ref';
 
 /**
  * The exact message the server throws when it can neither resolve a `pointer`
@@ -28,6 +29,22 @@ import { isDefinitionRef, type SolveDefinition } from './definition-ref';
  * kept as a fallback for debug-mode servers and forks that don't yet emit a code.
  */
 const DEFINITION_LOAD_FAILED = 'Unable to load grasshopper definition';
+
+/**
+ * Wire codes rhino.compute tags onto its error bodies. Passed to the transport
+ * on every Grasshopper request — `core/` deliberately knows no backend's codes.
+ */
+export const GRASSHOPPER_SERVER_ERROR_CODES: ServerErrorCodeMap = {
+	definition_not_cached: ErrorCodes.DEFINITION_NOT_CACHED
+};
+
+/** Attach the Grasshopper wire-code table without clobbering a caller's own entries. */
+export function withGrasshopperErrorCodes<T extends ComputeConfig>(config: T): T {
+	return {
+		...config,
+		serverErrorCodes: { ...GRASSHOPPER_SERVER_ERROR_CODES, ...config.serverErrorCodes }
+	};
+}
 
 /** Does this error look like a server-side definition-load miss? */
 function isDefinitionLoadMiss(error: unknown): boolean {
@@ -126,10 +143,7 @@ export async function solveGrasshopperDefinition(
 ): Promise<GrasshopperComputeResponse> {
 	// Not gated on `debug`: exposing an API key in the browser is a security
 	// concern in every configuration. `suppressBrowserWarning` is the opt-out.
-	warnIfClientSide(
-		'solveGrasshopperDefinition',
-		config.suppressBrowserWarning ?? config.suppressClientSideWarning
-	);
+	warnIfClientSide('solveGrasshopperDefinition', config.suppressBrowserWarning);
 
 	const bytes = await materializeDefinition(definition);
 	const { response } = await runSolve(prepareGrasshopperArgs(bytes, dataTree), config);
@@ -151,10 +165,7 @@ export async function solveGrasshopperDefinitionWithCacheKey(
 	definition: SolveDefinition,
 	config: GrasshopperComputeConfig
 ): Promise<SolveWithCacheKey> {
-	warnIfClientSide(
-		'solveGrasshopperDefinitionWithCacheKey',
-		config.suppressBrowserWarning ?? config.suppressClientSideWarning
-	);
+	warnIfClientSide('solveGrasshopperDefinitionWithCacheKey', config.suppressBrowserWarning);
 
 	const bytes = await materializeDefinition(definition);
 	return runSolve(prepareGrasshopperArgs(bytes, dataTree), config);
@@ -179,10 +190,7 @@ export async function solveByCacheKey(
 	definition: SolveDefinition,
 	config: GrasshopperComputeConfig
 ): Promise<SolveWithCacheKey & { missed: boolean }> {
-	warnIfClientSide(
-		'solveByCacheKey',
-		config.suppressBrowserWarning ?? config.suppressClientSideWarning
-	);
+	warnIfClientSide('solveByCacheKey', config.suppressBrowserWarning);
 
 	const pointerArgs: GrasshopperRequestSchema = { algo: null, pointer: cacheKey, values: dataTree };
 
@@ -233,7 +241,11 @@ async function runSolve(
 ): Promise<SolveWithCacheKey> {
 	applyOptionalComputeSettings(args, config);
 
-	const result = await fetchRhinoCompute<GrasshopperComputeResponse>('grasshopper', args, config);
+	const result = await fetchRhinoCompute<GrasshopperComputeResponse>(
+		'grasshopper',
+		args,
+		withGrasshopperErrorCodes(config)
+	);
 
 	const {
 		pointer,

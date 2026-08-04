@@ -8,7 +8,8 @@ namespace Selva.GH.Features.Display.Services;
 ///     Reconstructs drawable Rhino geometry from a <see cref="DisplayBatch" /> for viewport preview.
 ///     The batch carries only the encoded mesh blob (quantized) plus JSON curve/point items, so the
 ///     param has no original Rhino geometry to draw — this rebuilds it: dequantized meshes per group,
-///     curves from their serialized NURBS JSON, and points from their stored positions.
+///     curves from their serialized NURBS JSON (falling back to their tessellated points), and
+///     points from their stored positions.
 /// </summary>
 public sealed class WebDisplayPreview
 {
@@ -143,6 +144,17 @@ public sealed class WebDisplayPreview
                     _boundingBox.Union(curve.GetBoundingBox(false));
                 }
             }
+            else if (item.Kind == "curve" && item.Points != null)
+            {
+                // Faceted next to the NURBS the Json branch rebuilds, but a visible preview beats
+                // none — this is the shape a transformed batch carries.
+                var polyline = ToPolyline(item.Points);
+                if (polyline != null)
+                {
+                    Curves.Add((polyline, color));
+                    _boundingBox.Union(polyline.GetBoundingBox(false));
+                }
+            }
             else if (item.Kind == "point" && item.Position != null)
             {
                 var pt = new Point3d(item.Position.X, item.Position.Y, item.Position.Z);
@@ -150,6 +162,25 @@ public sealed class WebDisplayPreview
                 _boundingBox.Union(new BoundingBox(pt, pt));
             }
         }
+    }
+
+    /// <summary>
+    ///     Flat <c>[x,y,z, …]</c> to a polyline curve, or null if there are fewer than two vertices.
+    /// </summary>
+    private static Curve ToPolyline(double[] points)
+    {
+        if (points == null || points.Length < 6)
+        {
+            return null;
+        }
+
+        var vertices = new List<Point3d>(points.Length / 3);
+        for (var i = 0; i + 2 < points.Length; i += 3)
+        {
+            vertices.Add(new Point3d(points[i], points[i + 1], points[i + 2]));
+        }
+
+        return new Polyline(vertices).ToPolylineCurve();
     }
 
     private static Color MaterialColor(DisplayBatch batch, int materialId)

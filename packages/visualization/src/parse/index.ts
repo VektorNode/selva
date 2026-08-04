@@ -46,7 +46,6 @@ export type {
 // ============================================================================
 
 export { parseDisplayItems } from './display-items/display-items-parser.js';
-export type { DisplayItemParseOptions } from './display-items/display-items-parser.js';
 
 export type {
 	DisplayItem,

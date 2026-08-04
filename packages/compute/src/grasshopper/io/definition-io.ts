@@ -2,7 +2,7 @@ import { ComputeConfig, RhinoComputeError, ErrorCodes } from '@/core';
 import { fetchRhinoCompute } from '@/core/compute-fetch/compute-fetch';
 import { readField } from '@/core/utils/read-field';
 import { warnIfClientSide } from '@/core/utils/warnings';
-import { prepareGrasshopperArgs } from '../solve';
+import { prepareGrasshopperArgs, withGrasshopperErrorCodes } from '../solve';
 
 import { GrasshopperParsedIO, GrasshopperParsedIORaw, IoResponseSchema } from '../types';
 
@@ -45,7 +45,11 @@ export async function fetchDefinitionIO(
 		);
 	}
 
-	const response = await fetchRhinoCompute<IoResponseSchema>('io', payload, config);
+	const response = await fetchRhinoCompute<IoResponseSchema>(
+		'io',
+		payload,
+		withGrasshopperErrorCodes(config)
+	);
 
 	if (!response || typeof response !== 'object') {
 		throw new RhinoComputeError('Invalid IO response structure', ErrorCodes.INVALID_INPUT, {
@@ -160,10 +164,7 @@ export async function fetchParsedDefinitionIO(
 	definition: string | Uint8Array,
 	config: ComputeConfig
 ): Promise<GrasshopperParsedIO> {
-	warnIfClientSide(
-		'fetchParsedDefinitionIO',
-		config.suppressBrowserWarning ?? config.suppressClientSideWarning
-	);
+	warnIfClientSide('fetchParsedDefinitionIO', config.suppressBrowserWarning);
 
 	const {
 		inputs: rawInputs,

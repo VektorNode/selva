@@ -7,6 +7,12 @@
 > Breaking renames are in scope — `@selvajs/compute` is `4.0.0-beta.1`, pre-1.0, and this lands as
 > one coordinated major. Background and the full coupling audit:
 > [geometry-backend-seam-investigation.md](./geometry-backend-seam-investigation.md).
+>
+> **Progress:** QW1 (pre-tessellated curves) and QW2 (`core/` de-Rhino) are code-complete — see the
+> status box on each section. QW3 (the rename pass) is unblocked: it collides with QW2 on
+> `core/compute-fetch/response.ts` and `core/index.ts`, and QW2 has landed.
+> for what shipped, where the implementation diverged from this plan, and the two live checks plus
+> changesets still outstanding. Everything else is unstarted.
 
 ## What "one-way door" means here
 
@@ -31,45 +37,90 @@ feature and can wait. It is genuinely deferrable — see [Explicitly out of scop
 Ordered by value-per-hour. 1–3 are pure decoupling and stand on their own merits even if the seam
 work never happens.
 
-### QW1 — Pre-tessellated curves: delete rhino3dm from the frontend
+### QW1 — Pre-tessellated curves: delete rhino3dm from the frontend ✅ IMPLEMENTED
 
-**The single highest-leverage change in this document.** rhino3dm is used in the browser for exactly
-one thing: tessellating curve display items. Meshes and points never touch it.
+> **Status: code complete, not yet live-verified.** All of the below shipped except the Rhino
+> check in [Step 3](#step-3--qw1-pre-tessellated-curves). Changesets still outstanding.
 
-Today `DisplayCurve.json` carries openNURBS JSON (`curve.ToNurbsCurve().ToJSON()`), decoded via
-`rhino.CommonObject.decode()` and tessellated with `pointAt`/`isPolyline`/`tryGetPolyline`.
+**The single highest-leverage change in this document.** rhino3dm was used in the browser for
+exactly one thing: tessellating curve display items. Meshes and points never touched it.
 
-**This is additive, not breaking.** `DisplayItem.Json` is already
-`NullValueHandling.Ignore` — add a `points` field alongside it, tessellate C#-side, and old
-payloads keep working while the new path needs no WASM.
+`DisplayCurve.json` carries openNURBS JSON (`curve.ToNurbsCurve().ToJSON()`), decoded via
+`rhino.CommonObject.decode()` and tessellated with `pointAt`/`isPolyline`/`tryGetPolyline`. It now
+carries `points` alongside, and the web prefers it.
 
-- **C#** — `Features/Display/Services/DisplayItem.cs`: add `Points` (flat `double[]`, world coords)
-  next to `Json`, plus a `Curve(...)` factory overload. Tessellate in
-  `GH_WebDisplay.cs:657-663` and `DisplayBatchTransformer.cs:114-118` using Rhino's own
-  tolerance-aware tessellation. **Keep emitting `json` alongside `points`** for now — a new plugin
-  paired with an older published UI can only render curves from `json`; drop it in a later major.
-  Leave the `OBSOLETE/` snapshots alone (six frozen shapes, five WebDisplay + one ThreeMaterial).
-- **TS** — `parse/display-items/types.ts`: `DisplayCurve` gains `points?: number[]`, `json` becomes
-  optional. `items/curves.ts`: build `Line2` directly from `points`; keep the rhino3dm branch as a
-  fallback for old payloads, behind the existing optional `rhino` param.
-- **Then drop the WASM loads — four sites, not two.** `plugin-ui/src/lib/schema-source/websocket-solve-driver.ts`
-  and `selva/src/routes/library/[guid]/+page.svelte` as planned, plus:
-  `solve/src/client/compute-fetch-solve-fn.ts` loads rhino3dm **unconditionally whenever `meshes`
-  is configured** (`rhino: await getRhino()` on every extract), not just when curves arrive — so the
-  cloud app pays the WASM on every viewer solve today, and `ComputeFetchSolveFnOptions.meshes.loadRhino`
-  (public `@selvajs/solve/client` API) must be dropped or made optional in the same major. And
-  `ui/src/demo/dummy-output-values.ts` mirrors the loader for the demo.
-- **Dependency removal spans four package.jsons**, not one: `visualization` (8.17.0, already
-  `import type`-only), plus `selva`, `plugin-ui`, and `ui` (8.32.1 each). `@selvajs/compute` keeps
-  its rhino3dm dep — it _is_ the Rhino backend.
+**Shipped without a compatibility path, on purpose.** The plan proposed keeping the rhino3dm
+branch as a fallback for old payloads. That was rejected during the build: with no users on the
+product yet, carrying a second tessellation implementation plus a WASM dependency to serve
+hypothetical stale definitions is pure cost. **Old definitions fail loudly and get upgraded.**
 
-**Payoff:** one heavy WASM dependency and its `locateFile` plumbing leave the frontend entirely.
-Faster first paint, smaller bundle, one less Rhino tie — independent of any backend work.
+- **C#** — `DisplayItem.cs` gained `Points` (flat `double[]`, world coords) plus a `Curve(...)`
+  overload; the json-only overload is `[Obsolete]`. New `CurveTessellator.cs` runs at
+  `GH_WebDisplay.cs:657-666` and `DisplayBatchTransformer.cs:114-122`.
+- **TS** — `DisplayCurve.points` is **required**; `DisplayCurve.json` is deleted. `items/curves.ts`
+  went 290 → 76 lines: all tessellation, `decodeCurve`, and the rhino3dm import are gone.
+- **A curve without `points` throws** `VisualizationError` naming the item and telling the author to
+  run Solution → Upgrade obsolete components. Skipping was rejected — a scene quietly missing its
+  curves is indistinguishable from a definition that has none.
+- **rhino3dm is gone from all four frontends**, not three: `plugin-ui`, `ui`, `selva`, and
+  `visualization` (which also lost `examples/shared/rhino.ts`). `@selvajs/compute` keeps it — it
+  _is_ the Rhino backend.
+- **Removed public API:** `MeshExtractionOptions.rhino` / `.loadRhino`, `DisplayItemParseOptions`
+  entirely (`parseDisplayItems` now takes one argument), and
+  `ComputeFetchSolveFnOptions.meshes.loadRhino` with its `TRhino` type param. Deleted outright, not
+  left as deprecated stubs — this is a coordinated pre-1.0 major, so there is nothing to ease.
 
-**Cost:** medium. It is a cross-stack wire change, so it needs a plugin release and a live check in
-Rhino that tessellated curves match the old visual result.
+#### Where implementation diverged from this plan
 
-### QW2 — De-Rhino `@selvajs/compute/core`
+1. **The fallback was cut, not kept.** See above — this is the big one, and it reverses the plan's
+   central assumption. Two intermediate designs were built and then discarded on the way here: a
+   renamed `loadRhino?: () => Promise<RhinoModule>` (lazy, so a current definition paid nothing),
+   and a throw-but-keep-the-fallback hybrid. Both are gone.
+2. **`DisplayItem.Json` stays, and keeps serializing.** `WebDisplayPreview.cs:138` rebuilds real
+   curves from it for the **Grasshopper viewport** (points would draw a faceted polyline) and
+   `DisplayBatchTransformer.cs:115` needs the NURBS so repeated transforms don't compound a
+   tessellation error. It must stay serialized because `WebDisplayGoo` round-trips the whole
+   `DisplayBatch` through `JsonConvert` into the `.gh` archive — dropping it would degrade a saved
+   definition's preview to its tessellation. It is Rhino-internal geometry the web ignores, not a
+   wire shim, so the plan's "drop it in a later major" was wrong.
+3. **`OBSOLETE/` could not be left alone.** Both frozen WebDisplay snapshots emitted curves, so
+   they now tessellate like the live component. What is frozen there is the param list and GUID,
+   not the payload — a snapshot emitting untessellated curves would fail in the viewer.
+
+Both demo fixtures (`ui/src/demo/example-mesh.json`, `visualization/examples/shared/samples/`)
+held opennurbs-blob curves that would now throw; `points` were baked into them.
+
+**A `wire-format.json` codegen seam was built and then removed.** While the TS fallback still
+existed, its four tuning constants duplicated the C# ones by hand, so they were generated into both
+stacks from one JSON. Cutting the fallback orphaned the TS half — one consumer in one language
+needs no codegen — so the constants went back inline in `CurveTessellator.cs`. Worth knowing if
+SLVA ever wants the same treatment (compat-gate plan, work item 5): the generator pattern works,
+it just had nothing left to keep in sync here.
+
+**Payoff:** rhino3dm and its `locateFile` plumbing leave the frontend entirely — 2.5 MB of WASM
+never fetched, one less Rhino tie, and one tessellation implementation instead of two.
+
+**Cost:** medium, as estimated. Cross-stack, so it still needs a plugin release and the live check.
+
+### QW2 — De-Rhino `@selvajs/compute/core` ✅ IMPLEMENTED
+
+All six landed as specified; 620 compute tests pass (7 new), workspace type-check and lint clean.
+Three notes on what the implementation added beyond the letter of the plan:
+
+- The `serverErrorCodes` map is applied at **both** Grasshopper fetch sites (`solve.ts` runSolve
+  and `io/definition-io.ts`), not just the solve path, via `withGrasshopperErrorCodes`. The `io`
+  endpoint can return the same coded errors; supplying the table on only one would have made the
+  classification depend on which call produced it.
+- `apiKeyHeader` interacts with the caller-headers precedence rule. The key still merges over
+  `config.headers`, but only under **whichever** name is configured — so with a custom header,
+  `config.headers.RhinoComputeKey` becomes an ordinary caller header and is no longer shadowed.
+  Both directions are pinned by tests.
+- `ComputeServerStats` moved as a file too (`core/server/` → `grasshopper/server/`), not just its
+  export line, so the class no longer sits under a directory it doesn't belong to.
+
+Also swept the three Rhino-branded strings core emitted at runtime (`[Rhino Compute]` in the
+no-auth warning, "Grasshopper errors" in the partial-success log, "the default public endpoint" in
+the blocked-host error) — user-visible text is part of the leak.
 
 `core/` is already ~85% backend-agnostic (retry, backoff, abort composition, `Retry-After`,
 status→code mapping, base64, file handling). Six mechanical fixes — four leaks in, two wrong homes:
@@ -169,12 +220,40 @@ signal.
 
 ### Step 3 — QW1 (pre-tessellated curves)
 
-Additive wire change; ship the C# and TS sides together. Keep the rhino3dm fallback path so old
-saved payloads still render.
+⚠️ **Code complete; verification outstanding.**
 
-**Verify:** build the `.gha`, open a definition with curve output in Rhino, confirm curves render
-identically in `/preview` and in the app viewer, then confirm no `rhino3dm.wasm` request appears in
-the network tab.
+Additive wire change; ship the C# and TS sides together. The rhino3dm fallback path is retained so
+old saved payloads still render.
+
+**Done:** `pnpm type-check`, `pnpm lint` (0 errors), `pnpm test`; `Selva.GH` builds clean on
+net48/net7.0/net9.0; 328 `Selva.Tests` pass. Both wire-format guard tests were confirmed to fail
+on a hand-edit, not just assumed to work.
+
+**Still to do before this ships:**
+
+1. **Live check in Rhino** (the original verify step, unchanged): build the `.gha`, open a
+   definition with curve output, confirm curves render identically in `/preview` and in the app
+   viewer, then confirm no `rhino3dm.wasm` request appears in the network tab.
+2. **Live check the stale-definition path**, which the original step didn't cover: open a `.gh`
+   saved by a pre-QW1 plugin and confirm `WebDisplayGoo.BackfillCurvePoints` rescues its curves on
+   load. Then confirm a batch it can't rescue surfaces the upgrade message rather than a bare
+   render failure.
+
+Changesets are written (`@selvajs/visualization` and `@selvajs/solve` major, `@selvajs/ui` and
+`@selvajs/selva` patch).
+
+**Transitional code to delete later.** Two pieces exist only to carry definitions saved before
+tessellated curves, and should go once none are in circulation:
+
+- `WebDisplayGoo.BackfillCurvePoints` plus both call sites (`Read`, `CastFrom`)
+- the `untessellated` warning in `WebSocketTransport`
+
+Re-saving a definition through any current plugin build makes its batch self-sufficient, so these
+only serve `.gh` files not opened since the upgrade. Removing them early is not silent — such a file
+starts failing in the viewer with an upgrade message instead. Delete both together.
+
+**Environment note:** `dotnet test` runs fine here — the "aborts at CoreCLR launch" caveat noted
+elsewhere in this repo did not reproduce.
 
 ### Step 4 — Add `kind` to `ComputeServerConfig`
 
@@ -314,10 +393,12 @@ proof the extraction is behavior-preserving. Then a live solve in the app.
   register per-server rather than per-process, and what a contributor must implement. This is the
   artifact that makes the seam legible to an outside contributor. Also declare **SLVA + the
   display-item JSON the backend-neutral display interchange**: the blob is positions/indices/
-  normals/uv/color with delta+zigzag — nothing Rhino in it — and after QW1 the display items are
-  plain points too, so a second backend that emits the same wire gets the entire viewer
+  normals/uv/color with delta+zigzag — nothing Rhino in it — and since QW1 shipped the display
+  items are plain points too, so a second backend that emits the same wire gets the entire viewer
   (`parseMeshBatch*` → THREE, outliner, measure) for free. Without this line, an OCC contributor
-  reads "SLVA is private to the Rhino path" and builds a parallel mesh pipeline.
+  reads "SLVA is private to the Rhino path" and builds a parallel mesh pipeline. **Say explicitly
+  that `DisplayCurve.json` is Rhino-only and deprecated** — a second backend emits `points` and
+  nothing else; the field survives purely for pre-QW1 payloads.
 - Update `CLAUDE.md` / `STRUCTURE.md` so the `three`-prohibition-style rules mention the new port.
 
 ---
@@ -385,8 +466,8 @@ the one that must land before open-sourcing, because it is the only change here 
 cannot make themselves without breaking published types.
 
 If time runs short, the honest minimum is **steps 2, 4, and 5**: the rename, the discriminator, and
-the port. QW1 is the most satisfying win but is the most deferrable, since dropping a frontend
-dependency later breaks nobody.
+the port. QW1 was the most satisfying win and the most deferrable — dropping a frontend dependency
+later breaks nobody — but it is now done, so what remains is 1, 2, 4, 5.
 
 ---
 
@@ -404,13 +485,14 @@ The numbering above is a reading order, not a dependency chain. Verified file-le
 
 ### Three tracks that can run at once
 
-**Track A — curves (QW1).** Fully isolated: `visualization/parse/display-items/*`,
-`plugin-ui/websocket-solve-driver.ts`, `selva/routes/library/[guid]/+page.svelte`,
-`solve/src/client/compute-fetch-solve-fn.ts`, `ui/src/demo/dummy-output-values.ts`, four
-package.jsons, and the C# display feature. Still touches **nothing** any other track touches (the
-solve/client file is untouched by QW3/S5, which live in `solve/src/server`). This is also the only
-track needing Rhino for live verification, so it parallelizes especially well — it is blocked on a
-human at a Rhino box, not on code.
+**Track A — curves (QW1).** ✅ **Done** apart from live verification. Was fully isolated:
+`visualization/parse/display-items/*`, `plugin-ui/websocket-solve-driver.ts`,
+`selva/routes/library/[guid]/+page.svelte`, `solve/src/client/compute-fetch-solve-fn.ts`,
+`ui/src/demo/dummy-output-values.ts`, three package.jsons, the C# display feature, and (added
+during the build) `schemas/wire-format.json` plus both codegen scripts. Touched **nothing** any
+other track touches — the solve/client file is untouched by QW3/S5, which live in
+`solve/src/server`, and the codegen additions only append. What remains is blocked on a human at a
+Rhino box, not on code, so it parallelizes with everything below.
 
 **Track B — `core/` cleanup + the two bug fixes (QW2 + QW4).** Confined to
 `compute/src/core/**` plus two route/lib files. Independent of everything else.

@@ -1,5 +1,4 @@
 import type { DisplayItem } from '../display-items/types.js';
-import type { RhinoModule } from 'rhino3dm';
 import type { MaterialAppearanceOptions } from '../../shared/types.js';
 
 export interface SerializableMaterial {
@@ -97,8 +96,5 @@ export interface MeshExtractionOptions {
 	/** Up axis for `allowAutoPosition` grounding. Defaults to `'z'` (Rhino's frame) — only set this
 	 *  if the viewer is configured with a non-default `sceneUp`. */
 	groundAxis?: 'x' | 'y' | 'z';
-	/** rhino3dm instance for decoding curve display items — selva-compute doesn't own the WASM
-	 *  instance, the host threads it in. Omit to skip curves (points still render). */
-	rhino?: RhinoModule;
 	debug?: boolean;
 }

@@ -148,9 +148,9 @@ describe('seam B — IO response fields the client reads', () => {
 	}
 
 	it('every IO input field is camelCase/lowercase (no PascalCase leak)', () => {
-		// The client runs camelcaseKeys on the IO response; this asserts the
-		// server already emits camelCase so that conversion is a no-op and the
-		// raw shape matches the client's typed InputParamSchema directly.
+		// The client reads these fields case-insensitively (`readField`), so a
+		// PascalCase leak wouldn't break it — this asserts the fork keeps emitting
+		// camelCase, so the raw shape matches the typed InputParamSchema directly.
 		for (const field of inputFields) {
 			expect(isLowerOrCamel(field), `'${field}' is not camelCase`).toBe(true);
 		}

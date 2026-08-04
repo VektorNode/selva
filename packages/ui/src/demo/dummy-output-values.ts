@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import type { RhinoModule } from 'rhino3dm';
-import rhinoWasmUrl from 'rhino3dm/rhino3dm.wasm?url';
 import chart from './dummy-surface-chart.json';
 import meshData from './example-mesh.json';
 import {
@@ -8,21 +6,6 @@ import {
 	parseDisplayItems,
 	type DisplayBatch
 } from '@selvajs/visualization/parse';
-
-// rhino3dm decodes curve display items. Load it once, lazily — points and meshes need nothing.
-// Mirrors the production websocket-solve-driver loader (Vite URL asset so the WASM resolves).
-let rhinoPromise: Promise<RhinoModule> | null = null;
-function getRhino(): Promise<RhinoModule> {
-	if (!rhinoPromise) {
-		rhinoPromise = import('rhino3dm').then((m) => {
-			const init = m.default as (opts?: {
-				locateFile?: (path: string) => string;
-			}) => Promise<RhinoModule>;
-			return init({ locateFile: () => rhinoWasmUrl });
-		});
-	}
-	return rhinoPromise;
-}
 
 // Create a fallback cube mesh for sync use cases
 export const cubeMesh = new THREE.Mesh(
@@ -40,7 +23,6 @@ cubeMesh.name = 'cube_mesh';
 
 // Parse the example batch into renderable THREE objects, mirroring the real solve driver:
 // `parseMeshBatchObject` builds the meshes; `parseDisplayItems` builds the points/curves.
-// Curves need rhino3dm (lazy-loaded); points and meshes don't.
 export async function getParsedMeshes() {
 	// JSON imports widen `kind` to `string`; the batch's runtime shape matches DisplayBatch.
 	const batch = meshData as unknown as DisplayBatch;
@@ -52,9 +34,7 @@ export async function getParsedMeshes() {
 
 	const items = batch.items;
 	if (items?.length) {
-		const needsRhino = items.some((it) => it.kind === 'curve');
-		const rhino = needsRhino ? await getRhino() : undefined;
-		objects.push(...parseDisplayItems(items, { rhino }));
+		objects.push(...parseDisplayItems(items));
 	}
 
 	return objects;

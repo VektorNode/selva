@@ -5,20 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { parseDisplayItems } from '../display-items-parser';
 
 import type { DisplayItem } from '../types';
-import type { RhinoModule } from 'rhino3dm';
-
-/** Returns a straight-line curve that reports as NOT a polyline, exercising the uniform-sampling path. */
-function fakeRhino(): RhinoModule {
-	const curve = {
-		isPolyline: () => false,
-		domain: [0, 1],
-		pointAt: (t: number) => [t, 0, 0],
-		getBoundingBox: () => ({ min: [0, 0, 0], max: [1, 0, 0] })
-	};
-	return {
-		CommonObject: { decode: () => curve }
-	} as unknown as RhinoModule;
-}
 
 describe('parseDisplayItems', () => {
 	it('returns empty for undefined or empty items', () => {
@@ -73,9 +59,38 @@ describe('parseDisplayItems', () => {
 		expect(mat.color.getHexString()).toBe('ff0000');
 	});
 
-	it('skips curve items when no rhino3dm instance is provided (points still render)', () => {
+	it('builds a curve from backend-tessellated points', () => {
 		const items: DisplayItem[] = [
-			{ kind: 'curve', id: 'c:0', name: 'edge', layer: '', json: '{}' },
+			{
+				kind: 'curve',
+				id: 'c:0',
+				name: 'edge',
+				layer: 'L',
+				points: [0, 0, 0, 1, 2, 3, 4, 5, 6],
+				width: 5,
+				color: '#00ff00'
+			}
+		];
+
+		const objs = parseDisplayItems(items);
+		expect(objs).toHaveLength(1);
+
+		const line = objs[0] as Line2;
+		expect(line).toBeInstanceOf(Line2);
+		expect(line.name).toBe('edge');
+		expect(line.userData).toMatchObject({ id: 'c:0', layer: 'L', kind: 'curve' });
+
+		// Line2 stores an instanced start/end pair per segment; 3 vertices → 2 segments.
+		expect(line.geometry.getAttribute('instanceStart').count).toBe(2);
+
+		const mat = line.material as Line2['material'] & { linewidth: number };
+		expect(mat.linewidth).toBe(5);
+		expect(mat.color.getHexString()).toBe('00ff00');
+	});
+
+	it('skips a curve with fewer than two points', () => {
+		const items: DisplayItem[] = [
+			{ kind: 'curve', id: 'c:0', name: 'degenerate', layer: '', points: [1, 2, 3] },
 			{ kind: 'point', id: 'c:1', name: 'P', layer: '', position: { X: 0, Y: 0, Z: 0 } }
 		];
 
@@ -84,12 +99,48 @@ describe('parseDisplayItems', () => {
 		expect(objs[0]).toBeInstanceOf(THREE.Points);
 	});
 
+	it('throws on a curve with no tessellated points', () => {
+		// A Display component predating backend tessellation sends legacy Rhino JSON and no `points`.
+		// Skipping would render a scene silently missing geometry, with no hint that the definition
+		// needs its Display component upgraded.
+		const items = [
+			{ kind: 'curve', id: 'c:0', name: 'edge', layer: '', json: '{}' }
+		] as unknown as DisplayItem[];
+
+		expect(() => parseDisplayItems(items)).toThrowError(/outdated Display component/);
+	});
+
+	it('names the offending item so the definition can be traced', () => {
+		const items = [
+			{ kind: 'curve', id: 'batch7:3', name: 'edge', layer: '', json: '{}' }
+		] as unknown as DisplayItem[];
+
+		expect(() => parseDisplayItems(items)).toThrowError(/batch7:3/);
+	});
+
+	it('aborts the batch rather than rendering the items around a stale curve', () => {
+		const items = [
+			{ kind: 'point', id: 'c:0', name: 'P', layer: '', position: { X: 0, Y: 0, Z: 0 } },
+			{ kind: 'curve', id: 'c:1', name: 'stale', layer: '' }
+		] as unknown as DisplayItem[];
+
+		expect(() => parseDisplayItems(items)).toThrow();
+	});
+
 	it('builds a fat Line2 from a curve, honoring width, color, and userData', () => {
 		const items: DisplayItem[] = [
-			{ kind: 'curve', id: 'c:0', name: 'edge', layer: 'L', json: '{}', width: 5, color: '#00ff00' }
+			{
+				kind: 'curve',
+				id: 'c:0',
+				name: 'edge',
+				layer: 'L',
+				points: [0, 0, 0, 1, 0, 0],
+				width: 5,
+				color: '#00ff00'
+			}
 		];
 
-		const objs = parseDisplayItems(items, { rhino: fakeRhino() });
+		const objs = parseDisplayItems(items);
 		expect(objs).toHaveLength(1);
 
 		const line = objs[0] as Line2;
@@ -103,9 +154,11 @@ describe('parseDisplayItems', () => {
 	});
 
 	it('falls back to the default line width when a curve omits width', () => {
-		const items: DisplayItem[] = [{ kind: 'curve', id: 'c:0', name: 'e', layer: '', json: '{}' }];
+		const items: DisplayItem[] = [
+			{ kind: 'curve', id: 'c:0', name: 'e', layer: '', points: [0, 0, 0, 1, 0, 0] }
+		];
 
-		const line = parseDisplayItems(items, { rhino: fakeRhino() })[0] as Line2;
+		const line = parseDisplayItems(items)[0] as Line2;
 		const mat = line.material as Line2['material'] & { linewidth: number };
 		expect(mat.linewidth).toBe(2);
 	});
@@ -141,37 +194,17 @@ describe('parseDisplayItems', () => {
 		expect(
 			label({ kind: 'point', id: 'c:0', name: 'P', layer: '', position: { X: 0, Y: 0, Z: 0 } })
 		).toBe('point:P');
-		expect(label({ kind: 'curve', id: 'c:1', name: 'E', layer: '', json: '{}' })).toBe('curve:E');
+		expect(label({ kind: 'curve', id: 'c:1', name: 'E', layer: '', points: [] })).toBe('curve:E');
 	});
 
-	it('skips a curve whose tessellation throws without aborting the rest of the batch', () => {
-		const goodCurve = {
-			isPolyline: () => false,
-			domain: [0, 1],
-			pointAt: (t: number) => [t, 0, 0],
-			getBoundingBox: () => ({ min: [0, 0, 0], max: [1, 0, 0] })
-		};
-		const badCurve = {
-			isPolyline: () => false,
-			domain: [0, 1],
-			pointAt: () => {
-				throw new Error('WASM pointAt failure');
-			},
-			getBoundingBox: () => ({ min: [0, 0, 0], max: [1, 0, 0] })
-		};
-		const rhino = {
-			CommonObject: {
-				decode: (parsed: { bad?: boolean }) => (parsed.bad ? badCurve : goodCurve)
-			}
-		} as unknown as RhinoModule;
-
+	it('skips a degenerate curve without aborting the rest of the batch', () => {
 		const items: DisplayItem[] = [
-			{ kind: 'curve', id: 'c:0', name: 'bad', layer: '', json: '{"bad":true}' },
+			{ kind: 'curve', id: 'c:0', name: 'degenerate', layer: '', points: [1, 2, 3] },
 			{ kind: 'point', id: 'c:1', name: 'P', layer: '', position: { X: 0, Y: 0, Z: 0 } },
-			{ kind: 'curve', id: 'c:2', name: 'good', layer: '', json: '{}' }
+			{ kind: 'curve', id: 'c:2', name: 'good', layer: '', points: [0, 0, 0, 1, 0, 0] }
 		];
 
-		const objs = parseDisplayItems(items, { rhino });
+		const objs = parseDisplayItems(items);
 		expect(objs).toHaveLength(2);
 		expect(objs[0]).toBeInstanceOf(THREE.Points);
 		expect(objs[1]).toBeInstanceOf(Line2);

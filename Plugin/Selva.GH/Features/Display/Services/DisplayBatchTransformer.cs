@@ -89,9 +89,10 @@ public static class DisplayBatchTransformer
     }
 
     /// <summary>
-    ///     Transforms curve/point display items. Curves round-trip through Rhino JSON, the only form
-    ///     the item carries. Items are deep-copied so the source batch stays untouched — GH treats
-    ///     transform as producing a new value.
+    ///     Transforms curve/point display items. Curves round-trip through Rhino JSON — the exact
+    ///     form, which the tessellated points are re-derived from after the move. Items are
+    ///     deep-copied so the source batch stays untouched — GH treats transform as producing a new
+    ///     value.
     /// </summary>
     private static List<DisplayItem> TransformItems(
         List<DisplayItem> items,
@@ -116,8 +117,16 @@ public static class DisplayBatchTransformer
             {
                 moveCurve(curve);
                 var json = curve.ToNurbsCurve()?.ToJSON(new Rhino.FileIO.SerializationOptions()) ?? item.Json;
-                result.Add(DisplayItem.Curve(json, item.Id, item.Name, item.Layer, item.Metadata,
-                    item.Color, item.Opacity));
+                var points = CurveTessellator.Tessellate(curve);
+                result.Add(DisplayItem.Curve(json, points, item.Id, item.Name, item.Layer,
+                    item.Metadata, item.Color, item.Opacity));
+            }
+            else if (item.Kind == "curve" && item.Points != null)
+            {
+                // No NURBS to move — transform the tessellation itself. Exact for affine transforms;
+                // a morph bends between samples, but the alternative is dropping the curve.
+                result.Add(DisplayItem.Curve(null, MovePoints(item.Points, movePoint), item.Id,
+                    item.Name, item.Layer, item.Metadata, item.Color, item.Opacity));
             }
             else if (item.Kind == "point" && item.Position != null)
             {
@@ -132,6 +141,21 @@ public static class DisplayBatchTransformer
         }
 
         return result;
+    }
+
+    /// <summary>Moves a flat <c>[x,y,z, …]</c> vertex run through <paramref name="movePoint" />.</summary>
+    private static double[] MovePoints(double[] points, System.Func<Point3d, Point3d> movePoint)
+    {
+        var moved = new double[points.Length];
+        for (var i = 0; i + 2 < points.Length; i += 3)
+        {
+            var p = movePoint(new Point3d(points[i], points[i + 1], points[i + 2]));
+            moved[i] = p.X;
+            moved[i + 1] = p.Y;
+            moved[i + 2] = p.Z;
+        }
+
+        return moved;
     }
 
     private static void ApplyTransform(float[] verts, Transform xform)

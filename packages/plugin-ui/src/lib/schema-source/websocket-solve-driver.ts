@@ -13,32 +13,7 @@ import type { SolveReporter } from '@selvajs/ui';
 import type { PreviewSolveDriver } from './schema-source';
 import { parseDisplayItems, parseMeshBatchBlob, SCALE_FACTORS } from '@selvajs/visualization/parse';
 import type { DisplayItem } from '@selvajs/visualization/parse';
-import type { RhinoModule } from 'rhino3dm';
 import type * as THREE from 'three';
-
-// rhino3dm ships its WASM as a sibling `.wasm` the JS loader fetches at runtime. By default it
-// requests `/rhino3dm.wasm` (relative to the page), which SvelteKit doesn't serve → 404. Import the
-// file as a Vite URL asset instead: Vite emits it to a real served URL (dev and build) and we hand
-// that to rhino3dm via `locateFile`. No manual static/ copy, and it survives version bumps.
-import rhinoWasmUrl from 'rhino3dm/rhino3dm.wasm?url';
-
-// rhino3dm is a heavy WASM module needed only to decode curve display items. Load it once, lazily,
-// the first time a solve actually carries curves — and share the promise across solves. Points and
-// meshes need nothing; curves are skipped (with a warning) until it resolves on a later solve.
-let rhinoPromise: Promise<RhinoModule> | null = null;
-function getRhino(): Promise<RhinoModule> {
-	if (!rhinoPromise) {
-		rhinoPromise = import('rhino3dm').then((m) => {
-			// rhino3dm's published types declare `default()` with no args, but the underlying
-			// Emscripten module accepts `{ locateFile }` at runtime. Cast over the type gap.
-			const init = m.default as (opts?: {
-				locateFile?: (path: string) => string;
-			}) => Promise<RhinoModule>;
-			return init({ locateFile: () => rhinoWasmUrl });
-		});
-	}
-	return rhinoPromise;
-}
 
 /** Strip file metadata objects — Grasshopper already has the file. */
 function prepareValuesForSend(values: Record<string, unknown>): Record<string, unknown> {
@@ -174,17 +149,13 @@ export function createWebSocketSolveDriver(
 			}
 		}
 
-		// Non-mesh display items ride the JSON envelope. Curves need rhino3dm (lazy-loaded); points
-		// don't. Tessellated objects get the same unit scale the mesh blobs received, so items and
-		// meshes share one frame.
+		// Non-mesh display items ride the JSON envelope, already tessellated by the plugin.
+		// Tessellated objects get the same unit scale the mesh blobs received, so items and meshes
+		// share one frame.
 		if (hasDisplayItems) {
 			try {
-				const items = message.displayItems as DisplayItem[];
-				const needsRhino = items.some((it) => it.kind === 'curve');
-				const rhino = needsRhino ? await getRhino() : undefined;
-
 				if (myToken === outputsToken) {
-					const objects = parseDisplayItems(items, { rhino });
+					const objects = parseDisplayItems(message.displayItems as DisplayItem[]);
 					if (scaleFactor !== 1) {
 						for (const obj of objects) obj.scale.set(scaleFactor, scaleFactor, scaleFactor);
 					}
@@ -192,7 +163,11 @@ export function createWebSocketSolveDriver(
 					sceneObjects = [...(sceneObjects ?? []), ...objects];
 				}
 			} catch (err) {
+				// Surfaced, not just logged: the usual cause is a Display component old enough to emit
+				// untessellated curves, and the fix is on the canvas the author is looking at.
+				const detail = err instanceof Error ? err.message : String(err);
 				console.error('[Preview] Error parsing display items:', err);
+				getReporter().reportError(detail);
 			}
 		}
 

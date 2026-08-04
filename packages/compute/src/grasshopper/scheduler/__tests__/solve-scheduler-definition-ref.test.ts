@@ -6,7 +6,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 import { SolveScheduler, type SolveExecutor, type CacheKeyExecutor } from '../solve-scheduler';
-import type { DefinitionRef } from '../../definition-ref';
+import type { DefinitionRef } from '@/core/definition-ref';
 import { ErrorCodes } from '@/core/errors';
 import type { GrasshopperComputeConfig, GrasshopperComputeResponse } from '@/grasshopper/types';
 

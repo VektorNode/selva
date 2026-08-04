@@ -33,13 +33,26 @@ export { stableStringify, hashDefinition, hashSolveInput } from './scheduler/sta
 // COMPUTATION
 // ============================================================================
 export { solveGrasshopperDefinition } from './solve';
-export { isDefinitionRef } from './definition-ref';
-export type { DefinitionRef, SolveDefinition } from './definition-ref';
+
+// Backend-agnostic definition forms — they live in `core/` (a second backend must
+// not have to import them from this subpath) and are re-exported here for the
+// existing Grasshopper call sites.
+export { isDefinitionRef } from '@/core/definition-ref';
+export type { DefinitionRef, SolveDefinition } from '@/core/definition-ref';
+
+// ============================================================================
+// SERVER MONITORING
+// ============================================================================
+// rhino.compute's control plane (/activechildren, /plugins/gh/installed,
+// /idlespan) — Grasshopper-specific, so it lives on this subpath, not `/core`.
+export { default as ComputeServerStats } from './server/compute-server-stats';
 
 // ============================================================================
 // I/O PROCESSING
 // ============================================================================
 export { fetchDefinitionIO, fetchParsedDefinitionIO } from './io/definition-io';
+export { readSchemaResults } from './io/schema-endpoint';
+export type { SchemaEndpointResult } from './io/schema-endpoint';
 export { processInput } from './io/input/input-processors';
 export type {
 	GetValuesOptions,
@@ -63,6 +76,7 @@ export type { ProcessedFile, FileData, FileBaseInfo } from '@/core/files/types';
 // TYPES
 // ============================================================================
 export type {
+	RhinoModelUnit,
 	DataTreePath,
 	DataItem,
 	DataTreeDefault,

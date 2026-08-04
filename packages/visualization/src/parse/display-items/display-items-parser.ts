@@ -6,26 +6,23 @@ import { buildCurveLine } from './items/curves.js';
 import { buildPoint } from './items/points.js';
 
 import type { DisplayItem } from './types';
-import type { RhinoModule } from 'rhino3dm';
 
-export interface DisplayItemParseOptions {
-	/** Omit to skip curves; points still render. */
-	rhino?: RhinoModule;
-}
-
-export function parseDisplayItems(
-	items: DisplayItem[] | undefined,
-	options: DisplayItemParseOptions = {}
-): THREE.Object3D[] {
+/**
+ * Builds THREE objects for the batch's non-mesh items.
+ *
+ * @throws VisualizationError when a curve predates backend tessellation, so a stale definition
+ * surfaces as an actionable error instead of a scene quietly missing its curves. Every other
+ * unrenderable item is logged and skipped.
+ */
+export function parseDisplayItems(items: DisplayItem[] | undefined): THREE.Object3D[] {
 	if (!items || items.length === 0) return [];
 
-	const { rhino } = options;
 	const objects: THREE.Object3D[] = [];
 
 	for (const item of items) {
 		switch (item.kind) {
 			case 'curve': {
-				const line = buildCurveLine(item, rhino);
+				const line = buildCurveLine(item);
 				if (line) objects.push(line);
 				break;
 			}

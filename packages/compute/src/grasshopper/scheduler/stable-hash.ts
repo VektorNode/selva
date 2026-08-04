@@ -12,7 +12,7 @@
  * (`hashSolveInputForDefinition`) stay internal.
  */
 
-import { isDefinitionRef, type SolveDefinition } from '../definition-ref';
+import { isDefinitionRef, type SolveDefinition } from '@/core/definition-ref';
 
 /**
  * Deterministic stringify with sorted keys. {a:1,b:2} and {b:2,a:1} produce

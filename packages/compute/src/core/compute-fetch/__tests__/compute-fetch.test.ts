@@ -46,6 +46,42 @@ describe('fetchRhinoCompute — request shape', () => {
 		expect(headers.RhinoComputeKey).toBe('secret');
 	});
 
+	it('sends the API key under a caller-configured apiKeyHeader', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
+
+		await fetchRhinoCompute(
+			'solve',
+			{},
+			{ ...config, apiKey: 'secret', apiKeyHeader: 'X-Backend-Key' }
+		);
+
+		const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+		expect(headers['X-Backend-Key']).toBe('secret');
+		expect(headers.RhinoComputeKey).toBeUndefined();
+	});
+
+	it('lets config.headers set RhinoComputeKey once apiKeyHeader has moved the real key elsewhere', async () => {
+		// With a custom apiKeyHeader the default name is no longer a transport
+		// header, so it falls under the caller-headers layer like any other. The
+		// header that actually carries the key still can't be clobbered.
+		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
+
+		await fetchRhinoCompute(
+			'solve',
+			{},
+			{
+				...config,
+				apiKey: 'real-key',
+				apiKeyHeader: 'X-Backend-Key',
+				headers: { RhinoComputeKey: 'stale', 'X-Backend-Key': 'attacker-key' }
+			}
+		);
+
+		const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+		expect(headers['X-Backend-Key']).toBe('real-key');
+		expect(headers.RhinoComputeKey).toBe('stale');
+	});
+
 	it('sends the auth token as the Authorization header when configured', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
 

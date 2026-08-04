@@ -48,28 +48,29 @@ async function performCustomJob(config) {
 }
 ```
 
-### 2. Server Monitoring
+### 2. Definition forms
 
-Use `ComputeServerStats` to check server health, get the version, or monitor active child processes.
+A solve takes bytes directly, or a `DefinitionRef` — a stable key plus a lazy
+`load()`, so a caller that already knows a definition's identity (e.g. a stored
+version's UUID) can schedule solves without materializing multi-MB bytes.
 
 ```typescript
-import { ComputeServerStats } from '@selvajs/compute/core';
-
-async function checkServer(url, apiKey) {
-	const stats = new ComputeServerStats(url, apiKey);
-
-	try {
-		if (await stats.isServerOnline()) {
-			const info = await stats.getServerStats();
-			// version is an object: { rhino, compute, git_sha }
-			console.log(`Compute Version: ${info.version?.compute}`);
-			// activeChildren is a count (number), absent if the read failed
-			console.log(`Active Children: ${info.activeChildren ?? 'unknown'}`);
-		}
-	} finally {
-		await stats.dispose(); // Always dispose to clear monitoring timeouts
-	}
-}
+import { isDefinitionRef, type SolveDefinition } from '@selvajs/compute/core';
 ```
+
+Read `DefinitionRef`'s immutability contract before constructing one: two
+different byte contents sharing a key poisons every cache built on it.
+
+### 3. Backend configuration
+
+`core/` knows nothing about Rhino. Three knobs carry what a backend needs:
+
+- `ComputeConfig.apiKeyHeader` — header name for `apiKey` (default `RhinoComputeKey`)
+- `ComputeConfig.serverErrorCodes` — this backend's wire codes → our `ErrorCodes`
+- `validateServerUrl(url, { blockedHosts })` — the shared public endpoint to reject
+
+`ComputeServerStats` used to live here. It probes rhino.compute's control plane
+(`/activechildren`, `/plugins/gh/installed`, `/idlespan`), so it now ships from
+`@selvajs/compute/grasshopper`.
 
 > **Note:** Higher-level features like the `GrasshopperClient` use these modules internally. Direct use is recommended for custom low-level API calls or dedicated monitoring services.

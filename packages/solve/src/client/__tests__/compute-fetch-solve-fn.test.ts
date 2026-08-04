@@ -78,30 +78,17 @@ describe('createComputeFetchSolveFn — happy path', () => {
 		expect(body.channel).toBeUndefined();
 	});
 
-	it('calls meshes.extract with the loaded rhino module when meshes is configured', async () => {
+	it('calls meshes.extract once per solve when meshes is configured', async () => {
 		fetchMock.mockResolvedValue(jsonResponse({ values: [], errors: [], warnings: [] }));
-		const loadRhino = vi.fn(async () => ({ fakeRhino: true }));
-		const extract = vi.fn(() => [{ mesh: 1 }]);
-		const solve = createComputeFetchSolveFn(baseOpts({ meshes: { loadRhino, extract } }));
+		const extract = vi.fn((_response: unknown, _opts: { debug: boolean }) => [{ mesh: 1 }]);
+		const solve = createComputeFetchSolveFn(baseOpts({ meshes: { extract } }));
 		const result = await solve({}, new AbortController().signal);
-		expect(loadRhino).toHaveBeenCalledTimes(1);
 		expect(extract).toHaveBeenCalledTimes(1);
+		expect(extract.mock.calls[0][1]).toEqual({ debug: false });
 		expect(result.meshes).toEqual([{ mesh: 1 }]);
 	});
 
-	it('loadRhino is cached across solves', async () => {
-		fetchMock.mockImplementation(async () =>
-			jsonResponse({ values: [], errors: [], warnings: [] })
-		);
-		const loadRhino = vi.fn(async () => ({}));
-		const extract = vi.fn(() => []);
-		const solve = createComputeFetchSolveFn(baseOpts({ meshes: { loadRhino, extract } }));
-		await solve({}, new AbortController().signal);
-		await solve({}, new AbortController().signal);
-		expect(loadRhino).toHaveBeenCalledTimes(1);
-	});
-
-	it('meshes omitted: never calls a loader, result.meshes is always []', async () => {
+	it('meshes omitted: result.meshes is always []', async () => {
 		fetchMock.mockResolvedValue(jsonResponse({ values: [], errors: [], warnings: [] }));
 		const solve = createComputeFetchSolveFn(baseOpts());
 		const result = await solve({}, new AbortController().signal);

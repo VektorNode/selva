@@ -637,7 +637,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 		detail: [
 			{
 				kind: 'prose',
-				text: 'The page hands the raw solve response to this package and gets back three.js meshes. Meshes do not go through rhino3dm: each display batch carries them as one binary SLVA blob, decoded directly into geometry. rhino3dm is only needed to rebuild curves, so it is lazily loaded once per session and only for those.'
+				text: 'The page hands the raw solve response to this package and gets back three.js meshes. Nothing is decoded from Rhino geometry in the browser: each display batch carries meshes as one binary SLVA blob, and curves arrive already tessellated as plain points. No WASM, no Rhino dependency on the frontend at all.'
 			},
 			{
 				kind: 'prose',
@@ -876,7 +876,7 @@ export const LOCAL_STEPS: FlowStep[] = [
 			},
 			{
 				kind: 'prose',
-				text: 'Curves in the JSON envelope need rhino3dm, which is lazy-loaded on the first solve that carries them; meshes and points do not.'
+				text: 'Curves ride the JSON envelope already tessellated by the plugin, so the browser builds lines straight from their points — nothing here decodes Rhino geometry.'
 			}
 		],
 		files: ['packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts']
