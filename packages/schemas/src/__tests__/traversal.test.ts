@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getGroups, getLayoutItems, getInputItems } from '@selvajs/schemas';
-import type { UISchema } from '@selvajs/schemas';
+import { getGroups, getLayoutItems, getInputItems } from '../index.js';
+import type { UISchema } from '../index.js';
 
 // These pin the layout-union discrimination (tabbed vs flat) and the defensive contract
 // (missing layout / groups / items yield empty, never throw), since this module is the

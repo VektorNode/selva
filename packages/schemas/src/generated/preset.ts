@@ -1,8 +1,8 @@
 /* eslint-disable */
 /**
- * This file was automatically generated from schemas/preset-schema.json.
- * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file,
- * and run `npm run generate:ts` in the schemas directory to regenerate this file.
+ * This file was automatically generated from packages/schemas/preset-schema.json.
+ * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file
+ * and run `pnpm generate` at the repo root to regenerate it.
  */
 
 /**

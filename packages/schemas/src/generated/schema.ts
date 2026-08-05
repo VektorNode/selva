@@ -1,8 +1,8 @@
 /* eslint-disable */
 /**
- * This file was automatically generated from schemas/ui-schema.json.
- * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file,
- * and run `npm run generate:ts` in the schemas directory to regenerate this file.
+ * This file was automatically generated from packages/schemas/ui-schema.json.
+ * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file
+ * and run `pnpm generate` at the repo root to regenerate it.
  */
 
 export type ParamType =
@@ -591,34 +591,34 @@ export const ACCEPTED_FILE_FORMATS = [
 ] as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.13.0';
+export const UI_SCHEMA_VERSION = '2.14.0';
 
 // ============================================================================
-// TYPE GUARDS
+// TYPE ALIASES AND GUARDS (derived from the LayoutItem union)
 // ============================================================================
 
-export function isInputLayoutItem(
-	item: LayoutItem
-): item is
+export type InputLayoutItem =
 	| InputNumberLayoutItem
 	| InputTextLayoutItem
 	| InputDropdownLayoutItem
 	| InputDynamicValueListLayoutItem
 	| InputCheckboxLayoutItem
 	| InputFileLayoutItem
-	| InputColorLayoutItem {
-	return item.type === 'input';
-}
-
-export function isOutputLayoutItem(
-	item: LayoutItem
-): item is
+	| InputColorLayoutItem;
+export type OutputLayoutItem =
 	| OutputTextLayoutItem
 	| OutputNumberLayoutItem
 	| OutputFileLayoutItem
 	| OutputChartLayoutItem
 	| OutputImageLayoutItem
-	| OutputDynamicValueListLayoutItem {
+	| OutputDynamicValueListLayoutItem;
+export type SupportedTypes = string | number | boolean | string[];
+
+export function isInputLayoutItem(item: LayoutItem): item is InputLayoutItem {
+	return item.type === 'input';
+}
+
+export function isOutputLayoutItem(item: LayoutItem): item is OutputLayoutItem {
 	return item.type === 'output';
 }
 
@@ -656,24 +656,28 @@ export function isColorWidget(item: LayoutItem): item is InputColorLayoutItem {
 	return item.type === 'input' && item.widgetType === 'color';
 }
 
-export function isImageWidget(item: LayoutItem): item is OutputImageLayoutItem {
+export function isTextOutputWidget(item: LayoutItem): item is OutputTextLayoutItem {
+	return item.type === 'output' && item.widgetType === 'text';
+}
+
+export function isNumberOutputWidget(item: LayoutItem): item is OutputNumberLayoutItem {
+	return item.type === 'output' && item.widgetType === 'number';
+}
+
+export function isFileOutputWidget(item: LayoutItem): item is OutputFileLayoutItem {
+	return item.type === 'output' && item.widgetType === 'file';
+}
+
+export function isChartOutputWidget(item: LayoutItem): item is OutputChartLayoutItem {
+	return item.type === 'output' && item.widgetType === 'chart';
+}
+
+export function isImageOutputWidget(item: LayoutItem): item is OutputImageLayoutItem {
 	return item.type === 'output' && item.widgetType === 'image';
 }
 
-// Helper type aliases
-export type InputLayoutItem =
-	| InputNumberLayoutItem
-	| InputTextLayoutItem
-	| InputDropdownLayoutItem
-	| InputDynamicValueListLayoutItem
-	| InputCheckboxLayoutItem
-	| InputFileLayoutItem
-	| InputColorLayoutItem;
-export type OutputLayoutItem =
-	| OutputTextLayoutItem
-	| OutputNumberLayoutItem
-	| OutputFileLayoutItem
-	| OutputChartLayoutItem
-	| OutputImageLayoutItem
-	| OutputDynamicValueListLayoutItem;
-export type SupportedTypes = string | number | boolean | string[];
+export function isDynamicValueListOutputWidget(
+	item: LayoutItem
+): item is OutputDynamicValueListLayoutItem {
+	return item.type === 'output' && item.widgetType === 'dynamicValueList';
+}

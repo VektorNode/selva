@@ -51,7 +51,7 @@ See [CLAUDE.md](./CLAUDE.md) for full setup details.
 **Important:** Never edit generated files directly
 
 - Modify `packages/schemas/ui-schema.json`
-- Run `cd packages/schemas && pnpm run generate:all`
+- Run `pnpm generate` at the repo root
 - Generated files: `packages/schemas/src/generated/schema.ts` and `Plugin/Selva.Schema/Models/UISchema.Generated.cs`
 
 ## Before You Submit

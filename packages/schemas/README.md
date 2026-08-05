@@ -1,115 +1,68 @@
-# Schema Generation
+# @selvajs/schemas
 
-Single source of truth for type-safe C# and TypeScript types across the entire codebase.
+Single source of truth for the shapes shared between the web UI and the Grasshopper plugin. `ui-schema.json` generates both sides:
 
-## Quick Start
+- TypeScript: `src/generated/schema.ts` (plus `preset.ts` from `preset-schema.json`)
+- C#: `Plugin/Selva.Schema/Models/UISchema.Generated.cs` and `Plugin/Selva.Schema/Constants/SchemaVersion.cs`
 
-1. Edit `ui-schema.json`
-2. Run:
-   ```bash
-   cd packages/schemas && pnpm run generate:all
-   ```
-3. Types auto-update in:
-   - TypeScript: `packages/schemas/src/generated/schema.ts`
-   - C#: `Plugin/Selva.Schema/Models/UISchema.Generated.cs`
+Never edit the generated files. Edit the JSON schema and run, from the repo root:
 
-## Adding a Type
-
-```json
-{
-	"definitions": {
-		"MyType": {
-			"type": "object",
-			"properties": {
-				"id": { "type": "string" },
-				"name": { "type": "string" }
-			},
-			"required": ["id", "name"]
-		}
-	}
-}
+```bash
+pnpm generate
 ```
 
-## Adding a Property to an Existing Type
+Generated output is committed; CI regenerates and fails if it is stale.
 
-1. **Open** `ui-schema.json`
-2. **Find** the type in `definitions` (e.g., `User`)
-3. **Add** property to `properties`:
-   ```json
-   "properties": {
-     "id": { "type": "string" },
-     "name": { "type": "string" },
-     "email": { "type": "string" }  // ← New property
-   }
-   ```
-4. **(Optional) Make it required** — Add to `required` array:
-   ```json
-   "required": ["id", "name", "email"]
-   ```
-5. **Save and run:**
-   ```bash
-   cd packages/schemas && pnpm run generate:all
-   ```
-6. **TypeScript and C# types update automatically** ✓
+## Editing the schema
 
-### Full Example
+Standard JSON Schema draft-07 under `definitions`. A property is optional unless listed in `required`; optional value types become nullable in C#.
 
-```json
-{
-	"definitions": {
-		"User": {
-			"type": "object",
-			"properties": {
-				"id": { "type": "string" },
-				"name": { "type": "string" },
-				"email": { "type": "string" },
-				"age": { "type": "integer" },
-				"active": { "type": "boolean" }
-			},
-			"required": ["id", "name", "email"]
-		}
-	}
-}
+| JSON                             | TypeScript | C# (required) | C# (optional) |
+| -------------------------------- | ---------- | ------------- | ------------- |
+| `string`                         | `string`   | `string`      | `string`      |
+| `number`                         | `number`   | `double`      | `double?`     |
+| `integer`                        | `number`   | `int`         | `int?`        |
+| `boolean`                        | `boolean`  | `bool`        | `bool?`       |
+| `array`                          | `T[]`      | `List<T>`     | `List<T>`     |
+| `string` + `format: "date-time"` | `string`   | `DateTime`    | `DateTime`    |
+| `string` + `format: "guid"`      | `string`   | `Guid`        | `Guid`        |
+
+Conventions the generators rely on:
+
+- **GUID fields declare `format: "guid"`.** That is the only thing that makes a C# property `System.Guid` — the description is documentation and nothing more.
+- **Section comments** are `"//_NAME": "--- ... ---"` pseudo-keys inside `definitions`. Keys must be unique: JSON silently drops duplicate keys on parse. A test enforces this.
+- **Top-level string enums** (`ParamType`, `InputStructure`) become TS string unions and plain `string` in C# — the wire value is the lowercase string, never an enum ordinal.
+- **Discriminated unions** are `oneOf` refs whose variants carry `const` discriminators (`type`, `widgetType`). The C# generator emits a base class and a JsonConverter per union. The TS generator derives the `InputLayoutItem` / `OutputLayoutItem` aliases and every `is...Widget` guard from the union, so a new variant gets its guard for free — nothing to keep in sync by hand.
+
+## Changing the schema format = version bump
+
+The `default` on `UISchema.properties.schemaVersion` versions the **saved-schema format**; it is what lets the plugin migrate old saved definitions. The generators refuse to run when definitions changed without a bump (`scripts/lib/version-guard.js`). Doc-only edits — descriptions, section comments — don't count as changes.
+
+When you bump:
+
+1. Raise the `schemaVersion` default (e.g. `2.14.0` → `2.15.0`).
+2. Add a `MigrateTo_X_Y_Z` entry in `Plugin/Selva.Schema/Services/SchemaMigrator.cs` — a no-op entry documenting the change is fine when no data transform is needed.
+3. Add a changeset describing the change.
+
+Locally the guard compares against `HEAD`, so it fires before you commit. In CI the working tree always matches `HEAD`, so the workflow sets `SCHEMA_GUARD_BASE_REF` to the PR's base branch instead.
+
+## Runtime exports
+
+Besides the generated types, the package exports two small modules every schema consumer shares:
+
+- `traversal.ts` — `getGroups` / `getLayoutItems` / `getInputItems`, the single place that knows how to walk a layout (tabbed vs flat). Readers are defensive: missing layout or groups yield empty results, never a throw.
+- `defaults.ts` — `getDefaultValue(paramType)`, the value an input carries when the schema provides none.
+
+The JSON schemas themselves are published and importable: `@selvajs/schemas/ui-schema.json`, `@selvajs/schemas/preset-schema.json`.
+
+## Fixtures
+
+`fixtures/` holds wire-format payloads asserted from **both** stacks: the `packages/ui` and `packages/plugin-ui` vitest suites and the C# `OutputPayloadContractTests` read the same files, so the two sides cannot drift apart silently. They are test contracts, not published artifacts.
+
+## Testing
+
+```bash
+pnpm test
 ```
 
-**Optional properties** (`age`, `active`) are not in `required` and become nullable in C# (`int?`, `bool?`).
-
-## Type Mappings
-
-| JSON      | TypeScript | C# (required) | C# (optional) |
-| --------- | ---------- | ------------- | ------------- |
-| `string`  | `string`   | `string`      | `string`      |
-| `number`  | `number`   | `double`      | `double?`     |
-| `integer` | `number`   | `int`         | `int?`        |
-| `boolean` | `boolean`  | `bool`        | `bool?`       |
-| `array`   | `T[]`      | `List<T>`     | `List<T>`     |
-
-A property is "required" when it appears in the parent schema's `required` array.
-
-## Discriminated Unions
-
-Define variants with `const` discriminator:
-
-```json
-{
-	"Widget": {
-		"oneOf": [{ "$ref": "#/definitions/TextWidget" }, { "$ref": "#/definitions/NumberWidget" }]
-	},
-	"TextWidget": {
-		"type": "object",
-		"properties": {
-			"type": { "type": "string", "const": "text" },
-			"placeholder": { "type": "string" }
-		}
-	},
-	"NumberWidget": {
-		"type": "object",
-		"properties": {
-			"type": { "type": "string", "const": "number" },
-			"min": { "type": "number" }
-		}
-	}
-}
-```
-
-The C# and TypeScript generators automatically create the classes and converters.
+Covers layout traversal, input defaults, the version guard's canonicalisation, and `schema-integrity.test.ts`, which validates `ui-schema.json` itself: every `$ref` resolves, every union variant declares its discriminators, comment keys are unique, and the schema version matches the generated `UI_SCHEMA_VERSION`. The generator scripts have no direct tests beyond the guard; their committed output plus the CI regeneration check acts as the snapshot.

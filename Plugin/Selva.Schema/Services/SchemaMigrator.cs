@@ -30,7 +30,8 @@ public static class SchemaMigrator
             { new Version(2, 10, 0), MigrateTo_2_10_0 },
             { new Version(2, 11, 0), MigrateTo_2_11_0 },
             { new Version(2, 12, 0), MigrateTo_2_12_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_13_0 }
+            { new Version(2, 13, 0), MigrateTo_2_13_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_14_0 }
         };
 
     /// <summary>
@@ -305,7 +306,7 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_12_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.12.0";
 
         // 'schemaVersion' is now required on UISchema - in practice backward-compatible,
         // since the C# model has always emitted it and this migrator stamps it onto
@@ -317,11 +318,23 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_13_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.13.0";
 
         // GrasshopperParamType -> ParamType, GrasshopperInputStructure -> InputStructure
         // renamed (schema definition names only; no persisted field values changed,
         // paramType/inputStructure still serialize as their lowercase enum strings).
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_14_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // GUID-valued string properties now declare `format: "guid"` in the JSON
+        // schema instead of being inferred from description text. Codegen-only:
+        // the C# properties were already System.Guid, and the wire format is
+        // unchanged (GUIDs serialize as strings either way).
 
         return schema;
     }

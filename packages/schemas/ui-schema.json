@@ -7,7 +7,7 @@
 		"acceptedFileFormats": [".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".stl"]
 	},
 	"definitions": {
-		"//_COMMENT": "--- PRIMITIVES ---",
+		"//_PRIMITIVES": "--- PRIMITIVES ---",
 		"ParamType": {
 			"type": "string",
 			"enum": [
@@ -24,7 +24,7 @@
 			"description": "Contextual parameter data types"
 		},
 
-		"//_COMMENT": "--- VISIBILITY RULES --- Visibility conditions define when to show/hide/disable parameters based on other parameter values. Can be applied to individual items or entire groups. Ex1: action='disable'+defaultValue=2 when Leg Type='Square'. Ex2: action='hide' when Height>120. Ex3: mode='all'+action='hide'+defaultValue=5 when Width>100 AND Length<100. Ex4: hide entire 'Advanced Options' group when Mode='Basic'",
+		"//_VISIBILITY_RULES": "--- VISIBILITY RULES --- Visibility conditions define when to show/hide/disable parameters based on other parameter values. Can be applied to individual items or entire groups. Ex1: action='disable'+defaultValue=2 when Leg Type='Square'. Ex2: action='hide' when Height>120. Ex3: mode='all'+action='hide'+defaultValue=5 when Width>100 AND Length<100. Ex4: hide entire 'Advanced Options' group when Mode='Basic'",
 		"VisibilityRule": {
 			"type": "object",
 			"description": "Single rule for conditional visibility/state",
@@ -120,7 +120,7 @@
 			"additionalProperties": false
 		},
 
-		"//_COMMENT": "--- WIDGET CONFIGURATIONS ---",
+		"//_WIDGET_CONFIGURATIONS": "--- WIDGET CONFIGURATIONS ---",
 		"NumberWidgetConfig": {
 			"type": "object",
 			"properties": {
@@ -205,6 +205,7 @@
 			"properties": {
 				"targetInputId": {
 					"type": "string",
+					"format": "guid",
 					"description": "The backend parameter's GUID (paramId) of the DynamicValueList input that this output's computed options populate."
 				}
 			},
@@ -258,7 +259,7 @@
 			"additionalProperties": false
 		},
 
-		"//_COMMENT": "--- LAYOUT DEFINITIONS ---",
+		"//_LAYOUT_DEFINITIONS": "--- LAYOUT DEFINITIONS ---",
 		"LayoutItemBase": {
 			"type": "object",
 			"description": "Base properties shared by all layout items",
@@ -269,6 +270,7 @@
 				},
 				"paramId": {
 					"type": "string",
+					"format": "guid",
 					"description": "References the backend parameter's GUID (Data Source)"
 				},
 				"displayName": { "type": "string" },
@@ -641,13 +643,14 @@
 			]
 		},
 
-		"//_COMMENT": "--- DISCOVERY MODELS (From Grasshopper) ---",
+		"//_DISCOVERY_MODELS": "--- DISCOVERY MODELS (From Grasshopper) ---",
 		"DiscoveredInput": {
 			"type": "object",
 			"description": "Input parameter discovered in Grasshopper document",
 			"properties": {
 				"id": {
 					"type": "string",
+					"format": "guid",
 					"description": "Grasshopper parameter instance GUID"
 				},
 				"name": { "type": "string" },
@@ -684,6 +687,7 @@
 			"properties": {
 				"id": {
 					"type": "string",
+					"format": "guid",
 					"description": "Grasshopper component instance GUID"
 				},
 				"nickname": { "type": "string" },
@@ -695,6 +699,7 @@
 				},
 				"targetInputId": {
 					"type": "string",
+					"format": "guid",
 					"description": "For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate."
 				},
 				"groupName": {
@@ -725,7 +730,7 @@
 			"required": ["sessionId", "timestamp", "inputs", "outputs"]
 		},
 
-		"//_COMMENT": "--- SCHEMA MODELS (Persisted) ---",
+		"//_SCHEMA_MODELS": "--- SCHEMA MODELS (Persisted) ---",
 		"InputStructure": {
 			"type": "string",
 			"enum": ["item", "list", "tree"],
@@ -736,6 +741,7 @@
 			"properties": {
 				"id": {
 					"type": "string",
+					"format": "guid",
 					"description": "Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)"
 				},
 				"nickname": { "type": "string" },
@@ -756,6 +762,7 @@
 			"properties": {
 				"id": {
 					"type": "string",
+					"format": "guid",
 					"description": "Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)"
 				},
 				"nickname": { "type": "string" },
@@ -767,6 +774,7 @@
 				},
 				"targetInputId": {
 					"type": "string",
+					"format": "guid",
 					"description": "For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate."
 				}
 			},
@@ -808,6 +816,7 @@
 				},
 				"documentId": {
 					"type": "string",
+					"format": "guid",
 					"description": "Grasshopper document unique identifier (GUID)"
 				},
 				"pluginVersion": {
@@ -834,7 +843,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.13.0",
+					"default": "2.14.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {
@@ -872,7 +881,7 @@
 			"additionalProperties": false
 		},
 
-		"//_COMMENT": "--- STATE & RUNTIME ---",
+		"//_STATE_AND_RUNTIME": "--- STATE & RUNTIME ---",
 
 		"SessionState": {
 			"type": "object",

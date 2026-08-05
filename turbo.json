@@ -9,7 +9,8 @@
 				"../../Plugin/Selva.Schema/Models/UISchema.Generated.cs",
 				"../../Plugin/Selva.Schema/Constants/SchemaVersion.cs"
 			],
-			"inputs": ["ui-schema.json", "preset-schema.json", "scripts/generate-*.js"]
+			"inputs": ["ui-schema.json", "preset-schema.json", "scripts/**"],
+			"env": ["SCHEMA_GUARD_BASE_REF"]
 		},
 		"build": {
 			"dependsOn": ["^build"],

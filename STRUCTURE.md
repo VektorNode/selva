@@ -114,7 +114,9 @@ A feature folder may also have a small growth area beyond this base layout — e
 
 **Adding or removing an input/output param on a released component requires a new `ComponentGuid`.** Grasshopper stores wire connections in the `.ghx` by parameter _index_, not by name. Keeping the same GUID while the param list shifts silently rewires saved definitions to the wrong inputs — this happened once already and is recorded in [Plugin/CHANGELOG.md](./Plugin/CHANGELOG.md) under 0.11.2.
 
-Cosmetic edits (description, nickname, default value, `SolveInstance` behaviour) do **not** need this — only changes to the number or order of params.
+Cosmetic edits (description, nickname, default value, `SolveInstance` behaviour) do **not** need this — only changes to the number, order, type, or access of params.
+
+**CI enforces this.** `scripts/check-component-signatures.mjs --check` compares every live component's param signature against the committed snapshot ([Plugin/Selva.GH/component-signatures.json](./Plugin/Selva.GH/component-signatures.json)) and fails on a structural change to an existing GUID. After following the procedure below (or adding a new component), bless the new state with `node scripts/check-component-signatures.mjs --update`.
 
 The procedure:
 
@@ -200,7 +202,7 @@ The plugin (C#) and UI (TS) are two implementations of one contract over WebSock
 
 ### Adding a new output type
 
-1. **Schema** — add to `ui-schema.json`, run `cd packages/schemas && pnpm run generate:all`.
+1. **Schema** — add to `ui-schema.json`, run `pnpm generate` at the repo root.
 2. **C# Goo** — `*Goo : ISelvaSerializableGoo` with a Rhino-free payload type for the wire shape.
 3. **C# collect** — branch in `OutputPayloadBuilder` + golden row in `OutputPayloadContractTests`. Don't add a new extractor in `ValueCollector`.
 4. **C# canonicalize** — if it can appear in layout, mirror into `schema.Outputs` in `SchemaOutputCanonicalizer` + invariant test.

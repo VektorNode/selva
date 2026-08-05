@@ -25,6 +25,7 @@
 		"node": ">=22.0.0"
 	},
 	"type": "module",
+	"sideEffects": false,
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"exports": {
@@ -32,7 +33,9 @@
 			"selva-source": "./src/index.ts",
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
-		}
+		},
+		"./ui-schema.json": "./ui-schema.json",
+		"./preset-schema.json": "./preset-schema.json"
 	},
 	"files": [
 		"dist",
@@ -47,14 +50,18 @@
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
 		"prepack": "publint --strict",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"generate": "pnpm run generate:ts && pnpm run generate:cs",
 		"generate:ts": "node scripts/generate-typescript.js",
-		"generate:cs": "node scripts/generate-csharp.js",
-		"generate:all": "pnpm run generate"
+		"generate:cs": "node scripts/generate-csharp.js"
 	},
 	"devDependencies": {
+		"@selvajs/config": "workspace:*",
+		"@types/node": "catalog:",
 		"json-schema-to-typescript": "^15.0.4",
 		"prettier": "catalog:",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "catalog:"
 	}
 }
