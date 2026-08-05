@@ -1,9 +1,10 @@
 # Testing
 
-| Layer              | Tool       | Where                                   | Command                                 |
-| ------------------ | ---------- | --------------------------------------- | --------------------------------------- |
-| Unit / integration | Vitest     | `packages/*/src/**/__tests__/*.test.ts` | `pnpm test`                             |
-| End-to-end         | Playwright | `packages/*/e2e/*.spec.ts`              | `pnpm test:e2e --filter=@selvajs/selva` |
+| Layer              | Tool       | Where                                    | Command                                 |
+| ------------------ | ---------- | ---------------------------------------- | --------------------------------------- |
+| Unit / integration | Vitest     | `packages/*/src/**/__tests__/*.test.ts`  | `pnpm test`                             |
+| Benchmarks         | Vitest     | `packages/*/src/**/__tests__/*.bench.ts` | `pnpm --filter <pkg> bench`             |
+| End-to-end         | Playwright | `packages/*/e2e/*.spec.ts`               | `pnpm test:e2e --filter=@selvajs/selva` |
 
 ## Where tests live
 
@@ -21,6 +22,12 @@ Shared fixtures and harness that several suites import go in a package-level
 `tests/` directory (`tests/setup.ts`, `tests/helpers/`). Only put a `.test.ts`
 there when it isn't testing one module — `@selvajs/compute`'s
 `tests/contract/` holds seam tests against a recorded server snapshot.
+
+Benchmarks live beside the tests as `*.bench.ts`. `pnpm test` never runs them;
+they're on-demand via a package's `bench` script (`@selvajs/visualization` has
+one). They record a baseline for the two costs that scale with mesh size —
+edge extraction and mesh-batch parsing — so a regression is measurable rather
+than remembered.
 
 ## Vitest config
 
