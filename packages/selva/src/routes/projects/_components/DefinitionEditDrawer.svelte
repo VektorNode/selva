@@ -24,9 +24,9 @@
 
 	export interface EditPatch {
 		displayName: string;
-		description?: string;
-		category?: string;
-		tags?: string[];
+		description?: string | null;
+		category?: string | null;
+		tags?: string[] | null;
 		coverImage?: string;
 		status: DefinitionStatus;
 		projectId?: string;
@@ -175,9 +175,9 @@
 	function save() {
 		onSave(record.guid, {
 			displayName,
-			description: description || undefined,
-			category: category || undefined,
-			tags: tags.length ? tags : undefined,
+			description: description || null,
+			category: category || null,
+			tags: tags.length ? tags : null,
 			coverImage: coverImageUrl || undefined,
 			status,
 			projectId: projectId || undefined,

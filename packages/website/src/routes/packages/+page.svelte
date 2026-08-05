@@ -27,9 +27,9 @@
 	<div class="max-w-2xl">
 		<h1 class="text-4xl font-bold tracking-tight">Packages</h1>
 		<p class="text-muted-foreground mt-4 text-lg text-pretty">
-			Selva is built from small, separate pieces rather than one big program. Run the whole thing as
-			it comes, or take just the parts you need — the Rhino.Compute client, the 3D viewer, the solve
-			flow — into a product of your own. The core libraries depend on no UI framework.
+			Selva is built from small, independent pieces — use the whole thing, or take only what you
+			need: the Rhino.Compute client, the 3D viewer, the solve flow. Core libraries have no UI
+			framework dependency.
 		</p>
 		<div class="mt-6 flex flex-wrap gap-4 text-sm">
 			<a href="/architecture" class="text-primary font-medium hover:underline"
