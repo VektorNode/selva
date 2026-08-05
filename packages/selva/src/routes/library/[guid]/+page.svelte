@@ -34,7 +34,7 @@
 	schema={data.schema}
 	{onSolve}
 	definitionKey={data.currentDefinition}
-	title={data.schema?.description || data.schema.name}
+	title={data.schema?.name || data.schema.description}
 	logo={data.orgLogoUrl ?? undefined}
 	showModeToggle={true}
 	solveDeadlineMs={data.solveDeadlineMs}
