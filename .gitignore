@@ -74,6 +74,7 @@ skills-lock.json
 .env
 .env.local
 *.local.json
+fixtures/meshes/local/
 
 # Local provider data directory (user-specific runtime data)
 # Holds users.json, orgs/projects/definitions JSON, compute.config.json,
