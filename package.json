@@ -41,8 +41,9 @@
 		"clean": "node scripts/clean.js",
 		"rebuild": "pnpm clean && pnpm install && pnpm build",
 		"changeset": "changeset",
-		"release": "turbo run build --concurrency=20 --filter=!@selvajs/website && node scripts/changeset-publish.mjs",
-		"prepare": "husky"
+		"release": "turbo run build --concurrency=20 --filter=!@selvajs/website && node scripts/verify-pack.mjs && node scripts/changeset-publish.mjs",
+		"prepare": "husky",
+		"test:pack": "node scripts/verify-pack.mjs"
 	},
 	"lint-staged": {
 		"*.{ts,tsx,svelte}": [

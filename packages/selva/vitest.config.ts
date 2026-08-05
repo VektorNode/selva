@@ -6,11 +6,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
 	resolve: {
-		// Prefer the `"source"` export condition on workspace packages so tests
+		// Prefer the `"selva-source"` export condition on workspace packages so tests
 		// read TypeScript source directly — no upstream rebuild needed between
 		// editing a rule and re-running tests. Production picks the `"import"`
 		// condition (dist/) because it doesn't set this flag.
-		conditions: ['source'],
+		conditions: ['selva-source'],
 		alias: {
 			// SvelteKit virtual modules — replicate just what server-side tests need.
 			$lib: path.resolve(__dirname, 'src/lib'),

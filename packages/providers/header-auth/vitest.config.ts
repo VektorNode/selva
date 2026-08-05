@@ -2,10 +2,10 @@ import { defineConfig, defaultExclude } from 'vitest/config';
 
 export default defineConfig({
 	resolve: {
-		// Read @selvajs/platform source directly via the `"source"` export
+		// Read @selvajs/platform source directly via the `"selva-source"` export
 		// condition so editing platform types doesn't require an upstream
 		// rebuild between iterations.
-		conditions: ['source']
+		conditions: ['selva-source']
 	},
 	test: {
 		// The build emits these test files into dist/ too, and vitest 4 dropped

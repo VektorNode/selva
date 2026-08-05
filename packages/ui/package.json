@@ -29,7 +29,7 @@
 	"types": "./dist/public.d.ts",
 	"exports": {
 		".": {
-			"source": {
+			"selva-source": {
 				"types": "./dist/index.d.ts",
 				"svelte": "./dist/index.js"
 			},

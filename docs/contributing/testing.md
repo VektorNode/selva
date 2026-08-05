@@ -7,7 +7,7 @@
 
 ## Vitest
 
-`pnpm test` runs `vitest run` per package via turbo. Tests import workspace source directly through the `"source"` export condition — no upstream rebuild needed.
+`pnpm test` runs `vitest run` per package via turbo. Tests import workspace source directly through the `"selva-source"` export condition — no upstream rebuild needed.
 
 The selva suite is serial (`fileParallelism: false`): each test owns a tmpdir and the global provider holder must stay unambiguous.
 

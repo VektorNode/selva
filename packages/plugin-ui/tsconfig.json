@@ -14,9 +14,8 @@
 		// @selvajs/ui's published "." entry is the curated public SDK (dist/public).
 		// Inside the monorepo we still use its full barrel — primitives, layout,
 		// toast — so point type resolution at the full declarations. Scoped via
-		// `paths` (not `customConditions: ["source"]`, which would also pull every
-		// third-party dep that ships a "source" condition into its raw .ts and trip
-		// verbatimModuleSyntax — e.g. @internationalized/date via bits-ui).
+		// `paths` (not `customConditions: ["selva-source"]`, which would resolve every
+		// workspace dep to raw source and re-attribute its type errors here).
 		// Re-state SvelteKit's generated $lib/$app paths (overriding `paths` here
 		// replaces, not merges, the extended config's) alongside the @selvajs/ui map.
 		"paths": {

@@ -29,14 +29,13 @@
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
-			"source": "./src/index.ts",
+			"selva-source": "./src/index.ts",
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		}
 	},
 	"files": [
 		"dist",
-		"src",
 		"ui-schema.json",
 		"preset-schema.json"
 	],
@@ -44,8 +43,7 @@
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
-		"prepack": "node ../../scripts/prepack.js",
-		"postpack": "node ../../scripts/prepack.js --restore",
+		"prepack": "publint --strict",
 		"generate": "pnpm run generate:ts && pnpm run generate:cs",
 		"generate:ts": "node scripts/generate-typescript.js",
 		"generate:cs": "node scripts/generate-csharp.js",

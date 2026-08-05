@@ -68,6 +68,11 @@ export default [
 				project: null,
 				program: null
 			}
+		},
+		// Typed rules crash without the project service — off, not just unmet.
+		rules: {
+			'@typescript-eslint/no-floating-promises': 'off',
+			'@typescript-eslint/no-misused-promises': 'off'
 		}
 	},
 	{

@@ -29,11 +29,13 @@ The publish set is derived from the workspace by `scripts/publishable-packages.m
 ```bash
 pnpm changeset           # record what changed
 pnpm changeset version   # apply bumps + write CHANGELOGs
-pnpm release             # build + changeset publish
+pnpm release             # build + verify tarballs + changeset publish
 git push --follow-tags
 ```
 
 **Never use `npm publish`** — it ships literal `workspace:*` strings. Always use `pnpm publish` or `changeset publish`.
+
+Two gates run before anything reaches npm. Each package's `prepack` runs `publint --strict` (export-map sanity). `pnpm release` also runs `scripts/verify-pack.mjs` (or standalone: `pnpm test:pack`, after a build), which packs every publishable package and asserts the tarball contents: every export/bin target ships, no test files, no stray `src/`. The `selva-source` export condition is the one deliberate dangler — it serves the monorepo dev loop (vitest/vite resolve raw workspace TypeScript through it) and its `src/` targets are intentionally absent from published tarballs; being namespaced, no consumer resolves it by accident.
 
 ## Automated releases (CI)
 

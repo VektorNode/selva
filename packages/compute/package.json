@@ -96,8 +96,7 @@
 		"test:stats:live": "vitest run tests/contract/compute-server-stats.live.test.ts",
 		"type-check": "tsc --noEmit",
 		"build-docs": "typedoc",
-		"prepack": "node ../../scripts/prepack.js",
-		"postpack": "node ../../scripts/prepack.js --restore"
+		"prepack": "publint --strict"
 	},
 	"lint-staged": {
 		"*.{ts,js,mjs,svelte,json,md}": "prettier --write",

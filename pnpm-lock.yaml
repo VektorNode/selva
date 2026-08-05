@@ -302,7 +302,7 @@ importers:
         specifier: ^5.0.0
         version: 5.56.4(@typescript-eslint/types@8.65.0)
       vite:
-        specifier: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
+        specifier: ^6.0.0 || ^7.0.0 || ^8.0.0
         version: 8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
 
   packages/platform:
