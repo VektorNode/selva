@@ -5,7 +5,7 @@ import {
 	evaluateGroupVisibility,
 	buildVisibilityMap,
 	itemKey
-} from './visibility-rules';
+} from '../visibility-rules';
 import type { GroupVisibilityCondition, LayoutItem, VisibilityRule } from '@selvajs/schemas';
 
 // These tests pin the non-obvious branches: operator edge cases that are easy to

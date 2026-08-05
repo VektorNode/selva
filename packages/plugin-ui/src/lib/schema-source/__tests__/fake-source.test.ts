@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFakeSource } from './fake-source';
+import { createFakeSource } from '../fake-source';
 import type { SolveReporter } from '@selvajs/ui';
 
 // Exercises the FakeSource facets that prove the SchemaSource seam end-to-end: connect,

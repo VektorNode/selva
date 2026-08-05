@@ -51,31 +51,6 @@ export default [
 		}
 	},
 	{
-		// @selvajs/supabase-provider's tsconfig deliberately EXCLUDES tests from the
-		// build (they must not emit into the published `dist`). But that also drops
-		// them out of eslint 10's typed `projectService`, which then errors on every
-		// test file with "not found by the project service". Every other package
-		// includes tests in its tsconfig and lints fine; this package can't without
-		// polluting its npm output. So disable typed parsing for these files only —
-		// they still get every non-type-aware rule.
-		files: [
-			'packages/providers/supabase/src/**/__tests__/**/*.ts',
-			'packages/providers/supabase/src/**/*.{test,spec}.ts'
-		],
-		languageOptions: {
-			parserOptions: {
-				projectService: false,
-				project: null,
-				program: null
-			}
-		},
-		// Typed rules crash without the project service — off, not just unmet.
-		rules: {
-			'@typescript-eslint/no-floating-promises': 'off',
-			'@typescript-eslint/no-misused-promises': 'off'
-		}
-	},
-	{
 		// Selva app server code should read env via SvelteKit's `$env/dynamic/private`,
 		// not bare `process.env`: under `vite dev` Vite loads `.env` but does NOT
 		// mirror it into `process.env`, so a raw read silently falls back to its

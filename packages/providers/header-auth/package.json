@@ -25,13 +25,14 @@
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
-		"test": "vitest run --passWithNoTests",
+		"test": "vitest run",
 		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@selvajs/platform": "workspace:*"
 	},
 	"devDependencies": {
+		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"

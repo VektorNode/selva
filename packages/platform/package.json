@@ -124,7 +124,9 @@
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
-		"prepack": "publint --strict"
+		"prepack": "publint --strict",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@selvajs/schemas": "workspace:^",
@@ -143,6 +145,7 @@
 		}
 	},
 	"devDependencies": {
+		"@selvajs/config": "workspace:*",
 		"sharp": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"

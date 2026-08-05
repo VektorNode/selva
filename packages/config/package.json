@@ -6,12 +6,19 @@
 	"exports": {
 		"./eslint": "./eslint.config.js",
 		"./vite": "./vite.config.js",
+		"./vitest": "./vitest.config.js",
 		"./prettier": "./prettier.config.js"
 	},
 	"peerDependencies": {
 		"eslint": "^9.0.0 || ^10.0.0",
 		"vite": "^6.0.0 || ^7.0.0 || ^8.0.0",
+		"vitest": "^4.0.0",
 		"svelte": "^5.0.0",
 		"prettier": "^3.0.0"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
 	}
 }

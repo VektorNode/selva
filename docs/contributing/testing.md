@@ -1,15 +1,71 @@
 # Testing
 
-| Layer              | Tool       | Where                                | Command                                 |
-| ------------------ | ---------- | ------------------------------------ | --------------------------------------- |
-| Unit / integration | Vitest     | `packages/*/src/**/*.{test,spec}.ts` | `pnpm test`                             |
-| End-to-end         | Playwright | `packages/selva/e2e/`                | `pnpm test:e2e --filter=@selvajs/selva` |
+| Layer              | Tool       | Where                                   | Command                                 |
+| ------------------ | ---------- | --------------------------------------- | --------------------------------------- |
+| Unit / integration | Vitest     | `packages/*/src/**/__tests__/*.test.ts` | `pnpm test`                             |
+| End-to-end         | Playwright | `packages/*/e2e/*.spec.ts`              | `pnpm test:e2e --filter=@selvajs/selva` |
 
-## Vitest
+## Where tests live
 
-`pnpm test` runs `vitest run` per package via turbo. Tests import workspace source directly through the `"selva-source"` export condition — no upstream rebuild needed.
+Unit tests sit in a `__tests__/` folder next to the code they cover, named `*.test.ts`:
 
-The selva suite is serial (`fileParallelism: false`): each test owns a tmpdir and the global provider holder must stay unambiguous.
+```
+src/compute/rate-limit.ts
+src/compute/__tests__/rate-limit.test.ts
+```
+
+`*.spec.ts` is reserved for Playwright, so the two never collide — the shared vitest
+config excludes `**/e2e/**` and Playwright only collects from `e2e/`.
+
+Shared fixtures and harness that several suites import go in a package-level
+`tests/` directory (`tests/setup.ts`, `tests/helpers/`). Only put a `.test.ts`
+there when it isn't testing one module — `@selvajs/compute`'s
+`tests/contract/` holds seam tests against a recorded server snapshot.
+
+## Vitest config
+
+Every package's `vitest.config.ts` starts from the shared base:
+
+```ts
+import { createVitestConfig } from '@selvajs/config/vitest';
+
+export default createVitestConfig();
+```
+
+The base carries only rules that fail _silently_ when a package forgets them:
+the `selva-source` condition (so tests read workspace TypeScript source, no
+upstream rebuild), and excludes for `**/dist/**` (tsc emits test files there;
+without it every suite runs twice against stale output) and `**/e2e/**`.
+
+Pass an override object for anything package-specific — setup files, path
+aliases, plugins, timeouts. Keep the reason in a comment next to it; a setting
+nobody can justify is one nobody can safely delete later.
+
+**Don't add `isolate: false`.** Several suites use `vi.mock()`. With a shared
+module graph, whichever file imports the target first wins and the mock silently
+never applies — order-dependent, so it passes locally and fails in CI. The
+speedup is a fraction of a second; the failure mode costs an afternoon.
+
+Two suites run serially, both because they share mutable state: `@selvajs/selva`
+(the global provider holder) and `@selvajs/supabase-provider` (one local
+Postgres, reset in `beforeEach`).
+
+## Providers implement a conformance kit
+
+`@selvajs/platform` defines the provider interfaces; each implementation proves
+it satisfies them with a `*-conformance.test.ts` per interface
+(`packages/providers/local/src/data/__tests__/`, and the Supabase mirror). A new
+provider is expected to run the same kit rather than invent its own coverage —
+that's what keeps the implementations swappable.
+
+Supabase's conformance suites need a live local stack (`npx supabase start`).
+Without one they skip with a single warning instead of failing per test.
+
+## Exception: `@selvajs/cli`
+
+The CLI uses `node --test`, not vitest. It scaffolds the deployment that
+installs the runtime, so it can't depend on workspace packages — including the
+test tooling. It stays out of the shared config on purpose.
 
 ## Playwright
 

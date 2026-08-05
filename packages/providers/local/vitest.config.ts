@@ -1,16 +1,3 @@
-import { defineConfig, defaultExclude } from 'vitest/config';
+import { createVitestConfig } from '@selvajs/config/vitest';
 
-export default defineConfig({
-	resolve: {
-		// Read @selvajs/platform source directly via the `"selva-source"` export
-		// condition — no upstream rebuild needed between editing a rule and
-		// running these tests.
-		conditions: ['selva-source']
-	},
-	test: {
-		// The build emits these test files into dist/ too, and vitest 4 dropped
-		// `**/dist/**` from its default excludes — without this every suite runs
-		// twice, against stale compiled output.
-		exclude: [...defaultExclude, '**/dist/**']
-	}
-});
+export default createVitestConfig();

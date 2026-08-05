@@ -37,7 +37,10 @@
 	"files": [
 		"dist",
 		"ui-schema.json",
-		"preset-schema.json"
+		"preset-schema.json",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
 	],
 	"scripts": {
 		"build": "tsc",

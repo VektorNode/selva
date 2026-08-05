@@ -70,7 +70,10 @@
 	},
 	"files": [
 		"dist",
-		"README.md"
+		"README.md",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
 	],
 	"sideEffects": false,
 	"scripts": {
@@ -95,9 +98,9 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
+		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
 		"@types/three": "catalog:",
-		"@vitest/coverage-v8": "^4.1.10",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
 		"globals": "^17.5.0",

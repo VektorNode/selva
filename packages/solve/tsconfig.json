@@ -23,12 +23,8 @@
 		"noFallthroughCasesInSwitch": true,
 
 		"outDir": "dist",
-		"paths": {
-			"@/*": ["./src/*"],
-			"@tests/*": ["./tests/*"]
-		},
-		"types": ["node", "vitest/globals"]
+		"types": ["node"]
 	},
-	"include": ["src/**/*", "tests/**/*"],
+	"include": ["src/**/*"],
 	"exclude": ["node_modules", "dist"]
 }

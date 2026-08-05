@@ -8,10 +8,10 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import { validateInboundMessage } from './messageSchemas';
+import { validateInboundMessage } from '../messageSchemas';
 
 function loadFixture(name: string): Record<string, unknown> {
-	const path = new URL(`../../../../schemas/fixtures/wire/${name}`, import.meta.url);
+	const path = new URL(`../../../../../schemas/fixtures/wire/${name}`, import.meta.url);
 	return JSON.parse(readFileSync(path, 'utf-8'));
 }
 

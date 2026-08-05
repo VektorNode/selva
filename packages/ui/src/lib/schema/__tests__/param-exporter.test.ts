@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateSavedState, extractLoadableValues, loadPreset } from './param-exporter';
+import { validateSavedState, extractLoadableValues, loadPreset } from '../param-exporter';
 import type { UISchema, ParameterPreset } from '@selvajs/schemas';
 
 // These tests cover the load path a user hits when restoring a preset against a

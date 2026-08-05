@@ -1,41 +1,31 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, defaultExclude } from 'vitest/config';
+import { createVitestConfig } from '@selvajs/config/vitest';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig(async () => ({
-	resolve: {
-		// Read @selvajs/platform source directly via the `"selva-source"` export
-		// condition — no upstream rebuild needed between editing a rule and
-		// running these tests.
-		conditions: ['selva-source']
-	},
-	test: {
-		// The build emits these test files into dist/ too, and vitest 4 dropped
-		// `**/dist/**` from its default excludes — without this every suite runs
-		// twice, against stale compiled output.
-		exclude: [...defaultExclude, '**/dist/**'],
-		// Conformance tests hit a live local Supabase stack — give the network
-		// room to breathe (bucket listing, cleanup between tests).
-		testTimeout: 30_000,
-		hookTimeout: 30_000,
-		// Pick up test env from .env.test if present. Created by `npx supabase start`:
-		// copy the printed URL + keys into packages/providers/supabase/.env.test.
-		env: await reachableTestEnv(),
-		// Run every test file serially. The conformance suites all reset the
-		// shared DB in their beforeEach hooks; parallel execution would have
-		// one file wiping state the next file is mid-write on.
-		fileParallelism: false,
-		// Force a single worker — with fileParallelism off this shouldn't
-		// matter, but belt-and-braces against vitest's default pool behavior.
-		pool: 'forks',
-		poolOptions: {
-			forks: { singleFork: true }
+export default async () =>
+	createVitestConfig({
+		test: {
+			// Conformance tests hit a live local Supabase stack — give the network
+			// room to breathe (bucket listing, cleanup between tests).
+			testTimeout: 30_000,
+			hookTimeout: 30_000,
+			// Pick up test env from .env.test if present. Created by `npx supabase start`:
+			// copy the printed URL + keys into packages/providers/supabase/.env.test.
+			env: await reachableTestEnv(),
+			// Run every test file serially. The conformance suites all reset the
+			// shared DB in their beforeEach hooks; parallel execution would have
+			// one file wiping state the next file is mid-write on.
+			fileParallelism: false,
+			// Force a single worker — with fileParallelism off this shouldn't
+			// matter, but belt-and-braces against vitest's default pool behavior.
+			pool: 'forks',
+			maxForks: 1,
+			minForks: 1
 		}
-	}
-}));
+	});
 
 /**
  * `.env.test` is checked in with local-stack defaults, so its mere presence

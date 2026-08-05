@@ -55,7 +55,10 @@
 	},
 	"files": [
 		"dist",
-		"README.md"
+		"README.md",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
 	],
 	"sideEffects": false,
 	"scripts": {
@@ -77,6 +80,7 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
+		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
 		"esbuild": "^0.28.1",
 		"eslint": "catalog:",

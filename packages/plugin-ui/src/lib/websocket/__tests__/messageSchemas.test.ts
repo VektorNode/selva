@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateInboundMessage } from './messageSchemas';
+import { validateInboundMessage } from '../messageSchemas';
 
 const SID = 'session-1';
 

@@ -16,7 +16,7 @@ import {
 	discardDraft,
 	type BuilderDeps,
 	type BuilderNotifier
-} from './builder-state-core';
+} from '../builder-state-core';
 
 // builder-state-core holds the pure transition logic behind the SchemaSource seam. These
 // drive it through a FakeSource — no runes, no socket, no Grasshopper — which is the whole

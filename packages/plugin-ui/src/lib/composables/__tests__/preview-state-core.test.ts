@@ -12,7 +12,7 @@ import {
 	type PreviewDeps,
 	type PreviewSession,
 	type PreviewNotifier
-} from './preview-state-core';
+} from '../preview-state-core';
 
 // preview-state-core holds the schema/notification transitions behind the seam; values and
 // the solve loop live in a SolveSession, modelled here by a tiny fake. No runes, no socket.

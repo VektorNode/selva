@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { remapImportedSchema } from './schema-remap';
+import { remapImportedSchema } from '../schema-remap';
 import type { DiscoveredInput, DiscoveredOutput, UISchema } from '@selvajs/schemas';
 
 // Imported .sls schemas carry parameter ids from the document they were exported from.

@@ -8,7 +8,7 @@ import {
 	handleItemDrop,
 	batchSetNumberWidgetType,
 	removeItem
-} from './operations';
+} from '../operations';
 import type { DiscoveredOutput, GroupConfig, UISchema } from '@selvajs/schemas';
 
 // operations.ts mutates the schema's layout in place. These pin the behaviour that's

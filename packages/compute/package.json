@@ -68,7 +68,10 @@
 	"files": [
 		"dist",
 		"README.md",
-		"LICENSE"
+		"LICENSE",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
 	],
 	"engines": {
 		"node": ">=22.0.0"
@@ -86,8 +89,8 @@
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"test": "vitest",
-		"test:watch": "vitest watch",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"bench": "vitest bench --run",
 		"contract:snapshot": "node scripts/fetch-server-contract.mjs",
 		"contract:check": "node scripts/fetch-server-contract.mjs --check",
@@ -108,8 +111,8 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
+		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
-		"@vitest/coverage-v8": "^4.1.10",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.22.0",

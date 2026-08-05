@@ -86,6 +86,7 @@
 		"sharp": "catalog:"
 	},
 	"devDependencies": {
+		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
 		"supabase": "^2.110.0",
 		"typescript": "catalog:",

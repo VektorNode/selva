@@ -1,4 +1,3 @@
-// tests/setup.ts
 import { afterEach, vi } from 'vitest';
 
 // Mock browser APIs if needed

@@ -1,25 +1,12 @@
-import path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { defineConfig } from 'vitest/config';
+import { createVitestConfig } from '@selvajs/config/vitest';
 
-export default defineConfig({
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export default createVitestConfig({
 	test: {
-		globals: true,
-		environment: 'node',
-		// Per-file isolation is REQUIRED: several suites use `vi.mock()` to replace
-		// modules (render-pipeline's GTAOPass, solve-scheduler-hash-memo's
-		// stable-hash, grasshopper-response-processor's file downloader). With
-		// `isolate: false` the module graph is shared across files in one worker,
-		// so whichever file imports the target first wins and the mock silently
-		// never applies — the failure is order-dependent, so it passes locally and
-		// fails on CI. If you want the ~20% speedup back, first remove every
-		// `vi.mock` from this package.
-		pool: 'threads',
-		coverage: {
-			provider: 'v8',
-			reporter: ['text', 'json', 'html'],
-			exclude: ['node_modules/', 'dist/', 'types/', '**/*.test.ts', '**/*.spec.ts']
-		},
 		setupFiles: ['./tests/setup.ts']
 	},
 	resolve: {

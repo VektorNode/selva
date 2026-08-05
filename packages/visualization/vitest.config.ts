@@ -1,21 +1,12 @@
-import path from 'path';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { defineConfig } from 'vitest/config';
+import { createVitestConfig } from '@selvajs/config/vitest';
 
-export default defineConfig({
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export default createVitestConfig({
 	test: {
-		globals: true,
-		environment: 'node',
-		// Per-file isolation is REQUIRED while any suite uses `vi.mock()` to replace a module.
-		// With `isolate: false` the module graph is shared across files in one worker, so whichever
-		// file imports the target first wins and the mock silently never applies — an
-		// order-dependent failure that passes locally and fails on CI.
-		pool: 'threads',
-		coverage: {
-			provider: 'v8',
-			reporter: ['text', 'json', 'html'],
-			exclude: ['node_modules/', 'dist/', '**/*.test.ts', '**/*.bench.ts']
-		},
 		setupFiles: ['./tests/setup.ts']
 	},
 	resolve: {

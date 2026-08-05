@@ -31,7 +31,7 @@ selva/
 │   ├── selva/                      # @selvajs/selva — deployable Selva app (cloud mode)
 │   ├── website/                    # @selvajs/website — docs/marketing site
 │   ├── cli/                        # @selvajs/cli — scaffold and operate a Selva deployment
-│   └── config/                     # Shared ESLint/Vite/Prettier config
+│   └── config/                     # Shared ESLint/Vite/Vitest/Prettier config
 │
 ├── docs/                           # Project documentation, grouped by audience
 │   ├── self-hosting/               # Operators: deploy and run the Selva app
@@ -206,6 +206,18 @@ The plugin (C#) and UI (TS) are two implementations of one contract over WebSock
 4. **C# canonicalize** — if it can appear in layout, mirror into `schema.Outputs` in `SchemaOutputCanonicalizer` + invariant test.
 5. **TS** — handle the new payload in the UI consumer + a vitest.
 6. `dotnet test` and `pnpm test` must both be green.
+
+## Where TypeScript tests live
+
+Unit tests go in a `__tests__/` folder beside the code, named `*.test.ts`
+(`src/compute/rate-limit.ts` → `src/compute/__tests__/rate-limit.test.ts`).
+`*.spec.ts` is reserved for Playwright specs under `e2e/`. Cross-suite fixtures
+and setup files go in a package-level `tests/`.
+
+Every package's `vitest.config.ts` starts from `createVitestConfig()` in
+`@selvajs/config/vitest` and overrides only what it can justify.
+[docs/contributing/testing.md](./docs/contributing/testing.md) covers the base
+config, the provider conformance kits, and why `@selvajs/cli` is exempt.
 
 ## Filename casing
 

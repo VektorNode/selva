@@ -46,10 +46,9 @@
 	"files": [
 		"dist",
 		"src/lib",
-		"!dist/**/*.test.*",
-		"!dist/**/*.spec.*",
-		"!src/lib/**/*.test.*",
-		"!src/lib/**/*.spec.*"
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
 	],
 	"sideEffects": [
 		"**/*.css"

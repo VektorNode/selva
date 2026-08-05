@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { UISchema } from '@selvajs/schemas';
-import { buildDynamicValueListOptions } from './dynamic-value-list';
+import { buildDynamicValueListOptions } from '../dynamic-value-list';
 
 // The collector keys `values` by the ContextBake GUID. A dynamicValueList output can live in
 // schema.outputs[] OR only in the layout (a routing sink). These pin that BOTH are honoured —
@@ -137,7 +137,7 @@ describe('buildDynamicValueListOptions', () => {
 	// this shape, one side's CI goes red — that's the cross-stack drift guard.
 	it('routes the shared cross-stack golden fixture', () => {
 		const fixturePath = fileURLToPath(
-			new URL('../../../../schemas/fixtures/dynamic-value-list-payload.json', import.meta.url)
+			new URL('../../../../../schemas/fixtures/dynamic-value-list-payload.json', import.meta.url)
 		);
 		const fixture = JSON.parse(readFileSync(fixturePath, 'utf-8'));
 		const schema = schemaWith({ layoutItems: [layoutItem(BAKE, fixture.targetInputId)] });

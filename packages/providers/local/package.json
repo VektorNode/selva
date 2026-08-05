@@ -78,6 +78,7 @@
 		"zod": "catalog:"
 	},
 	"devDependencies": {
+		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
