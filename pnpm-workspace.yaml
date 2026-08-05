@@ -57,3 +57,6 @@ allowBuilds:
   '@tailwindcss/oxide': true
   supabase: true
   protobufjs: false
+  # firebase-tools' optional native regex engine. Unbuilt it falls back to
+  # JS RegExp, which is all the hosting deploy path uses.
+  re2: false

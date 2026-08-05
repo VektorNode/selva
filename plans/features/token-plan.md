@@ -39,7 +39,7 @@ Reused primitives (do **not** reinvent):
 - **Token codec** — `createTokenCodec({ prefix, secret })` in
   [packages/server/src/tokens/token-codec.ts](packages/server/src/tokens/token-codec.ts). Two-part
   design (per-token random secret shown once, instance HMAC secret hashes at rest), `timingSafeEqual`,
-  `MIN_TOKEN_SECRET_LENGTH = 32`. New prefix `sk_`, new secret `API_TOKEN_SECRET` (falls back to `SELVA_HMAC_KEY` in dev, like `SHARE_LINK_SECRET`).
+  `MIN_TOKEN_SECRET_LENGTH = 32`. New prefix `sk_`, hashed with `SELVA_HMAC_KEY` like share-link and invite tokens.
 - **Store template** — model the new store on `IInviteStore`
   ([packages/platform/src/invites/interface.ts](packages/platform/src/invites/interface.ts)) +
   `Invite` type ([types.ts](packages/platform/src/invites/types.ts)): `create` / `getByTokenHash(SYSTEM_CONTEXT, hash)` / `listBy...` / `revoke` / `deleteBy...`. Store keeps only `tokenHash`, never the raw token.
@@ -287,7 +287,6 @@ Selva PAT — it holds no direct DB/provider access, so it inherits every scope/
 - `packages/selva/src/hooks.server.ts` (PAT branch before cookie path)
 - `packages/selva/src/lib/server/access.server.ts` (`requireCanMintApiTokens`; `scopeAllows` in guards; `all-projects-admin` read/solve bypass added to the three `contentCheck` guards — view/solve/def-edit — for read+solve only)
 - Admin user-permission UI — add label/description entries for both new permissions in `UserListItem.svelte` and `admin/users/+page.svelte` (hardcoded maps; new enum values don't render automatically)
-- `packages/selva/.env.example` (`API_TOKEN_SECRET` documented, like `SHARE_LINK_SECRET`)
 
 ---
 

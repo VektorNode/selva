@@ -44,6 +44,15 @@
 	content: none;
 }
 
+/* Wide content scrolls inside itself rather than pushing the page sideways.
+   Without this a 5-column table or an ASCII diagram makes the whole document
+   scroll horizontally on a phone, which drags the body text off-screen too. */
+.prose :where(pre, table) {
+	display: block;
+	max-width: 100%;
+	overflow-x: auto;
+}
+
 /* Center build-time mermaid diagrams (rendered as inline SVG). */
 .prose > svg {
 	display: block;

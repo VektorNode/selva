@@ -2,18 +2,18 @@
 title: Supabase provider
 group: Providers
 order: 2
-published: true
+published: false
 description: 'Auth, Postgres, and Storage on Supabase, with identity living in the provider.'
 ---
 
 # Supabase provider
 
-`@selvajs/supabase-provider`: Auth + Postgres + Storage in one. Reach for it in production, for multi-instance or multi-tenant deployments with row-level security.
+`@selvajs/supabase-provider`: Auth + Postgres + Storage in one. Reach for it in production, and for deployments serving several tenants: the database itself enforces who can see which rows, so one tenant's query cannot return another's data even if the app asks for it. Postgres calls this row-level security, or RLS.
 
 ## When to use it
 
 - You run more than one app instance, or you need a real database.
-- Multi-tenant with RLS isolation.
+- Several tenants share the database and must not see each other's rows.
 - You already run Supabase (hosted or self-hosted).
 
 ## Setup at a glance

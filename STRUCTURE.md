@@ -143,6 +143,17 @@ One-file folders are a code smell. If `State/` has one file and the file moves t
 
 ## TypeScript / Svelte conventions
 
+### A word used throughout: seam
+
+Package READMEs and the ADRs talk about a **seam**. It means a deliberate joint where one
+implementation can be swapped for another without the code around it changing — an interface plus
+the injection point that fills it. `SolveDriver` is the transport seam: the session calls it and
+never learns whether the answer came over HTTP or a WebSocket. The logger seam lets a host supply
+its own logger instead of the default.
+
+A seam is a design commitment, not an accident. Adding or moving one changes what a package
+promises, so it belongs in review.
+
 ### Per-package `src/lib/` shape
 
 This is the shared vocabulary. Not every package uses every folder, but when a folder appears, it means the same thing everywhere:

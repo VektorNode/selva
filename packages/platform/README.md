@@ -57,7 +57,7 @@ If step 2 fails, a retry re-deletes blobs (no-op) and succeeds.
 
 **Update-file — best-effort, retry-safe:**
 
-Archive current → append history → write new → prune history. Not atomic; retrying the same file converges.
+Archive current → append history → write new → prune history. These are four separate writes, so a crash can leave the sequence half-done. That is survivable because re-running the same update from the start lands on the same end state — each step either has already happened or still needs to, and repeating one is harmless.
 
 ---
 
@@ -111,7 +111,7 @@ Throw `ProviderError` for user-facing failures (`new ProviderError('...', 404)`)
 
 ## Data privacy
 
-User identity, credentials, and PII are owned by the auth provider. Selva stores only opaque session tokens, user IDs, and authorization metadata. See the root `CLAUDE.md` for the full data-privacy posture.
+User identity, credentials, and personal data are owned by the auth provider. Selva stores session tokens that carry no information themselves, plus user IDs and authorization metadata. What a deployment holds and who is responsible for it: [Providers](https://github.com/VektorNode/selva/blob/main/docs/providers.md) and [Security & Limits](https://github.com/VektorNode/selva/blob/main/docs/security-and-limits.md).
 
 ---
 

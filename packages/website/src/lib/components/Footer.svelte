@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { footerNav } from '$lib/nav';
+	import { footerNav, VEKTORNODE_URL } from '$lib/nav';
 	import logo from '$lib/assets/selva-logo.svg';
 
 	const year = new Date().getFullYear();
 </script>
 
 <footer class="border-border mt-24 border-t">
-	<div class="mx-auto grid max-w-6xl gap-10 px-6 py-12 sm:grid-cols-2 md:grid-cols-4">
+	<div class="mx-auto grid max-w-7xl gap-10 px-6 py-12 sm:grid-cols-2 md:grid-cols-4">
 		<div class="sm:col-span-2 md:col-span-1">
 			<a href="/" class="flex items-center gap-2 text-lg font-bold tracking-tight">
 				<img src={logo} alt="" class="h-7 w-7" />
@@ -14,6 +14,17 @@
 			</a>
 			<p class="text-muted-foreground mt-2 max-w-xs text-sm">
 				Grasshopper-driven web applications.
+			</p>
+			<p class="text-muted-foreground mt-4 text-sm">
+				Built by
+				<a
+					href={VEKTORNODE_URL}
+					target="_blank"
+					rel="noreferrer"
+					class="text-foreground font-semibold underline-offset-4 hover:underline"
+				>
+					VektorNode
+				</a>
 			</p>
 		</div>
 
@@ -39,8 +50,16 @@
 	</div>
 
 	<div class="border-border border-t">
-		<div class="text-muted-foreground mx-auto max-w-6xl px-6 py-6 text-sm">
-			© {year} Selva. MIT licensed.
+		<div class="text-muted-foreground mx-auto max-w-7xl px-6 py-6 text-sm">
+			© {year}
+			<a
+				href={VEKTORNODE_URL}
+				target="_blank"
+				rel="noreferrer"
+				class="hover:text-foreground underline-offset-4 transition hover:underline"
+			>
+				VektorNode
+			</a>. Selva is MIT licensed.
 		</div>
 	</div>
 </footer>

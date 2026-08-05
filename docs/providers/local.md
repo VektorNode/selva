@@ -2,13 +2,13 @@
 title: Local provider
 group: Providers
 order: 1
-published: true
-description: 'The zero-dependency filesystem provider — JSON on disk, HMAC sessions, WebP transcoding.'
+published: false
+description: 'The zero-dependency filesystem provider: JSON on disk, HMAC sessions, WebP transcoding.'
 ---
 
 # Local provider
 
-`@selvajs/local-provider`: filesystem + JSON + HMAC sessions, and the default. Every piece of state lives under one directory on disk — no database, no external services.
+`@selvajs/local-provider`: filesystem + JSON + HMAC sessions, and the default. Every piece of state lives under one directory on disk. No database, no external services.
 
 ## When to use it
 

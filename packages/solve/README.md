@@ -4,7 +4,8 @@ One owner for the solve flow — **from an input change to a solve result, on bo
 with no transport and no UI.**
 
 Before this package the solve flow was scattered across four packages and owned by none of them, so
-both apps hand-wrote a solve coordinator — one of them paid for it with a poisoned-cache bug.
+both apps hand-wrote a solve coordinator — and one of them ended up serving results from the wrong
+definition out of its cache.
 
 ## Layout
 
@@ -25,7 +26,7 @@ tiers.
 ## What it must never know
 
 - **No UI framework.** No Svelte, no runes, no DOM. `client/` is a state machine, not a component.
-- **No renderer.** No `three`. `SolveResult<TMesh>` keeps meshes opaque — the app that parses a
+- **No renderer.** No `three`. `SolveResult<TMesh>` never inspects a mesh — the app that parses a
   response into `THREE.Object3D[]` is the only place that knows the concrete type. This is what lets
   a headless CLI solve without dragging in a parse layer. See
   [`src/client/README.md`](./src/client/README.md#mesh-ownership-is-injected-not-known-here) for how

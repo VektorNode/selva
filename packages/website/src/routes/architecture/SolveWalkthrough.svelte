@@ -34,7 +34,7 @@
 			at: 'Selva server',
 			title: 'Selva repacks it for Grasshopper',
 			explain:
-				'Grasshopper addresses inputs by parameter name, and every input is a tree even when it holds one item. So each bare value gets wrapped: the name it is wired to, and a tree with a single branch {0}. The server attaches its own key here — the browser never holds it.',
+				'Grasshopper addresses inputs by parameter name, and every input is a tree even when it holds one item. So each bare value gets wrapped in the name it is wired to plus a tree with one branch, {0}. The server adds its own key here — the browser never holds it.',
 			headers: ['POST /grasshopper', 'Content-Type: application/json', 'RhinoComputeKey: ••••••'],
 			body: `{
   "pointer": "md5:7ab3…",
@@ -53,7 +53,7 @@
 			at: 'Rhino.Compute',
 			title: 'The solve happens here',
 			explain:
-				'Nothing travels during this step. Grasshopper is already open on the Rhino.Compute machine; it plugs the two values into the definition and recomputes. Every hop before this was getting the inputs to this machine, and every hop after is getting the answer back out.',
+				'Nothing travels during this step. Grasshopper is already open on the Rhino.Compute machine; it plugs the two values into the definition and recomputes. Every hop before this got the inputs to this machine, and every hop after gets the answer back out.',
 			headers: [],
 			body: '',
 			transform: null
@@ -64,7 +64,7 @@
 			at: 'Rhino.Compute',
 			title: 'Rhino answers with more than it got',
 			explain:
-				'One tree per output, in the same shape as the request — but each item now carries its .NET type, and the value comes back as a string. Rhino knows exactly what kind of thing it produced, and says so.',
+				'One tree per output, in the same shape as the request — but each item now carries its .NET type, and the value comes back as a string. Rhino knows what it produced, and says so.',
 			headers: ['200 OK', 'Server-Timing: decode;dur=1, solve;dur=4, encode;dur=1'],
 			body: `{
   "values": [
@@ -82,7 +82,7 @@
 			at: 'Selva server',
 			title: 'Selva flattens it and sends it back',
 			explain:
-				'The tree collapses back to a plain value, typed as JSON rather than .NET. The body the browser receives mirrors the one it sent — flat, one key per output — so nothing in the page ever handles a tree.',
+				'The tree collapses back to a plain value, typed as JSON rather than .NET. The body the browser gets mirrors the one it sent — flat, one key per output — so nothing in the page ever handles a tree.',
 			headers: [
 				'200 OK',
 				'Content-Encoding: gzip',

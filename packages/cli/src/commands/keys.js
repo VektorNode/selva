@@ -14,8 +14,7 @@ const TARGETS = {
 		warning: [
 			'This will:',
 			pc.red('  • log every signed-in user out (existing session cookies stop verifying)'),
-			pc.red('  • invalidate share-link and invite tokens that fell back to this key'),
-			pc.dim('    (only relevant when SHARE_LINK_SECRET / INVITE_TOKEN_SECRET are unset)')
+			pc.red('  • invalidate every share link and pending invite')
 		].join('\n')
 	},
 	'at-rest': {

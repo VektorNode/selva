@@ -2,7 +2,7 @@
 title: Providers
 group: Concepts
 order: 3
-published: true
+published: false
 description: 'Bring your own backend: auth, data, and storage are pluggable interfaces you pick at deploy time.'
 ---
 
@@ -14,11 +14,11 @@ Selva doesn't own a database, an auth service, or a file store. Those are **prov
 
 A parametric tool gets deployed everywhere: a solo consultant's box, a multi-tenant SaaS, an enterprise behind Entra ID. Baking in one backend forces all of them into one shape. Selva instead defines the _contract_ a backend has to satisfy and lets you supply the implementation.
 
-You also get to choose where credentials live. Point Selva at Supabase or corporate SSO and identity stays there, while Selva keeps only session tokens and authorization data. Run the local provider and Selva _is_ the auth provider, storing emails and password hashes itself. Either way you remain the data controller, because Selva also persists display names, invite emails, audit-event payloads, and solve telemetry. See [CLAUDE.md](../CLAUDE.md#data-privacy--compliance) for the full inventory.
+You also get to choose where credentials live. Point Selva at Supabase or corporate SSO and identity stays there, while Selva keeps only session tokens and authorization data. Run the local provider and Selva _is_ the auth provider, storing emails and password hashes itself. Either way the deployment is yours and so is responsibility for the personal data in it, because Selva also stores display names, invite emails, audit-event payloads, and solve telemetry.
 
 ## Three roles
 
-You can mix implementations — Supabase for auth and data, files elsewhere, for example.
+You can mix implementations: Supabase for auth and data, files elsewhere, for example.
 
 | Role        | Interface          | Owns                                                                                                                  |
 | ----------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
@@ -33,14 +33,14 @@ These are plain TypeScript interfaces in [`@selvajs/platform`](https://www.npmjs
 | Provider                                        | Backend                               | Best for                                  |
 | ----------------------------------------------- | ------------------------------------- | ----------------------------------------- |
 | [`local`](providers/local.md)                   | Files (JSON) + HMAC sessions          | Eval, single-instance                     |
-| [`supabase`](providers/supabase.md)             | Supabase Auth + Postgres + Storage    | Multi-instance, multi-tenant, RLS         |
+| [`supabase`](providers/supabase.md)             | Supabase Auth + Postgres + Storage    | Multi-instance, several tenants           |
 | [`header-auth`](providers/header-auth-entra.md) | Trusts reverse-proxy identity headers | Existing SSO (Caddy, oauth2-proxy, Entra) |
 
 Pick one with `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER`, then restart. The `.env.example` shipped in your scaffolded deployment documents each one.
 
 ## The scoping rule
 
-Every request carries a `RequestContext` — the caller's identity and scope. One rule makes multi-tenancy safe: **the query is the security boundary.** Providers filter every read and write by that context, so an unauthorized caller gets empty results or an error, never someone else's data.
+Every request carries a `RequestContext`, the caller's identity and scope. One rule makes multi-tenancy safe: **the query is the security boundary.** Providers filter every read and write by that context, so an unauthorized caller gets empty results or an error, never someone else's data.
 
 ## Writing your own
 

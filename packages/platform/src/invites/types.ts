@@ -16,7 +16,7 @@ import type { OrgRole, OrgPermission } from '../organizations/schemas.js';
 export interface Invite {
 	id: string;
 	/**
-	 * `HMAC-SHA256(INVITE_TOKEN_SECRET, rawToken)` — base64url. The raw token
+	 * `HMAC-SHA256(SELVA_HMAC_KEY, rawToken)` — base64url. The raw token
 	 * never crosses the store boundary; the route layer hashes inbound tokens
 	 * before lookup.
 	 */

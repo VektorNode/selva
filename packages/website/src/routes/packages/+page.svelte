@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { packagesByCategory } from '$lib/packages';
-	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 
 	const groups = packagesByCategory();
 
 	// One-line intent per category, shown under each section heading.
 	const categoryBlurb: Record<string, string> = {
-		'App & UI': 'The runnable app, the schema designer, and the shared Svelte layer.',
+		'App & UI': 'What you and your users actually see and click.',
 		'Core libraries':
-			'Framework-free building blocks — compute, viewer, solve, server policy, interfaces. Consume any of them on their own.',
-		Providers: 'Swappable backends for auth, data, and storage — pick one at deploy time.',
-		Tooling: 'Scaffolding, operations, and the shared build configuration.'
+			'The engine room: talking to Rhino, drawing the model, deciding when to recalculate. Each works on its own, in your own project.',
+		Providers:
+			'Where logins, data, and uploaded files live. Sign-in, data, and storage are chosen separately, so you can mix them — Supabase accounts with files on your own disk, or a company login in front of either.',
+		Tooling: 'Getting a site running and keeping it running.'
 	};
 </script>
 
@@ -18,25 +18,22 @@
 	<title>Packages · Selva</title>
 	<meta
 		name="description"
-		content="The @selvajs/* workspace: the deployable app, core libraries, swappable providers, and CLI tooling."
+		content="The pieces Selva is built from: the web app, the 3D viewer, the Rhino connection, and the parts you can swap out."
 	/>
 </svelte:head>
 
-<div class="mx-auto max-w-6xl px-6 py-16">
+<div class="mx-auto max-w-7xl px-6 py-16">
 	<!-- Header -->
 	<div class="max-w-2xl">
 		<h1 class="text-4xl font-bold tracking-tight">Packages</h1>
 		<p class="text-muted-foreground mt-4 text-lg text-pretty">
-			Selva is a monorepo of focused <code class="bg-muted rounded px-1.5 py-0.5 text-base"
-				>@selvajs/*</code
-			> packages. Deploy the whole app, or take just the pieces you need — the compute client, the headless
-			viewer, the solve flow, the provider interfaces — into your own product. The cores are framework-free;
-			the Svelte layer sits on top of them, never inside.
+			Selva is built from small, separate pieces rather than one big program. Run the whole thing as
+			it comes, or take just the parts you need — the Rhino.Compute client, the 3D viewer, the solve
+			flow — into a product of your own. The core libraries depend on no UI framework.
 		</p>
 		<div class="mt-6 flex flex-wrap gap-4 text-sm">
-			<a
-				href="/docs/getting-started/build-your-own-app"
-				class="text-primary font-medium hover:underline">Build your own app →</a
+			<a href="/architecture" class="text-primary font-medium hover:underline"
+				>How the pieces fit together →</a
 			>
 		</div>
 	</div>
@@ -52,44 +49,22 @@
 
 				<div class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
 					{#each group.items as pkg (pkg.name)}
-						<svelte:element
-							this={pkg.href ? 'a' : 'div'}
-							href={pkg.href}
-							target={pkg.href ? '_blank' : undefined}
-							rel={pkg.href ? 'noreferrer' : undefined}
-							class="group border-border bg-card flex flex-col rounded-xl border p-5 transition {pkg.href
-								? 'hover:border-muted-foreground/40 hover:shadow-sm'
-								: ''}"
-						>
-							<div class="flex items-start justify-between gap-3">
-								<code class="text-foreground text-sm font-semibold break-all">{pkg.name}</code>
-								{#if pkg.href}
-									<ArrowUpRight
-										class="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition"
-									/>
-								{/if}
-							</div>
+						<div class="border-border bg-card flex flex-col rounded-xl border p-5">
+							<code class="text-foreground text-sm font-semibold break-all">{pkg.name}</code>
 							<p class="text-primary mt-2 text-sm font-medium">{pkg.tagline}</p>
 							<p class="text-muted-foreground mt-2 flex-1 text-sm leading-relaxed">
 								{pkg.description}
 							</p>
-							<div class="mt-4 flex flex-wrap items-center gap-2">
-								{#if pkg.npm}
-									<span
-										class="border-primary/30 text-primary inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs"
-									>
-										on npm
-									</span>
-								{/if}
-								{#if pkg.badge && pkg.badge !== 'npm'}
+							{#if pkg.badge}
+								<div class="mt-4">
 									<span
 										class="border-border text-muted-foreground inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs"
 									>
 										{pkg.badge}
 									</span>
-								{/if}
-							</div>
-						</svelte:element>
+								</div>
+							{/if}
+						</div>
 					{/each}
 				</div>
 			</section>
@@ -99,12 +74,8 @@
 	<!-- Footer note -->
 	<div class="border-border mt-16 border-t pt-8">
 		<p class="text-muted-foreground text-sm">
-			Not sure where to start? Read <a
-				href="/docs/what-is-selva"
-				class="text-primary hover:underline">What is Selva</a
-			>
-			for the big picture, or the
-			<a href="/architecture" class="text-primary hover:underline">Architecture</a> page to see how these
+			Not sure where to start? The
+			<a href="/architecture" class="text-primary hover:underline">Architecture</a> page shows how these
 			pieces fit together at runtime.
 		</p>
 	</div>

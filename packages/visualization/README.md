@@ -45,7 +45,7 @@ layering enforced by the import graph rather than merely documented.
 Only what a consumer genuinely needs is exported. In particular:
 
 - **`initThree` owns the render toolkit.** It builds the camera controller, grid, gizmo, measure
-  tool, render pipeline and near-plane fitter, and returns the live instances on
+  tool, render pipeline and the camera's near-clip fitting, and returns the live instances on
   [`ThreeViewer`](./src/render/scene-setup/viewer.ts). Configure them through
   `ThreeInitializerOptions`, reach them through the viewer (`viewer.grid`, `viewer.measureTool`,
   `viewer.applyEdges`, …). The factories themselves are internal — their handle _types_ are exported
@@ -91,10 +91,10 @@ own errors ([`shared/errors.ts`](./src/shared/errors.ts)), logging
 `@selvajs/compute`, so mesh conversion and the viewer work for a consumer with neither Selva nor
 Rhino.Compute.
 
-The Grasshopper response envelope `getThreeMeshesFromComputeResponse` accepts is declared
-structurally in [`parse/webdisplay/response-envelope.ts`](./src/parse/webdisplay/response-envelope.ts)
-— only the fields the parser reads. Compute's `GrasshopperComputeResponse` is a superset and stays
-assignable to it.
+The Grasshopper response shape `getThreeMeshesFromComputeResponse` accepts is declared in
+[`parse/webdisplay/response-envelope.ts`](./src/parse/webdisplay/response-envelope.ts) as **only the
+fields the parser reads**, not as a named import. Compute's `GrasshopperComputeResponse` has more
+fields and still satisfies it, so neither package has to depend on the other.
 
 ### Unified logging
 

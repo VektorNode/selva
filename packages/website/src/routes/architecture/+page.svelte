@@ -2,11 +2,15 @@
 	import { CLOUD_STEPS, LOCAL_STEPS, LAYERS, ENV_VAR_GROUPS, type Mode } from '$lib/architecture';
 	import DetailBlocks from './DetailBlocks.svelte';
 	import SolveWalkthrough from './SolveWalkthrough.svelte';
+	import LocalWalkthrough from './LocalWalkthrough.svelte';
 	import Cloud from '@lucide/svelte/icons/cloud';
 	import Plug from '@lucide/svelte/icons/plug';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 
 	let mode = $state<Mode>('cloud');
 	let expanded = $state<string | null>(null);
+	let wireOpen = $state(false);
+	let configOpen = $state(false);
 
 	const steps = $derived(mode === 'cloud' ? CLOUD_STEPS : LOCAL_STEPS);
 
@@ -23,7 +27,7 @@
 	/>
 </svelte:head>
 
-<div class="mx-auto max-w-3xl px-6 pt-16 pb-24">
+<div class="mx-auto max-w-5xl px-6 pt-16 pb-24">
 	<!-- Intro -->
 	<p class="text-primary text-sm font-semibold tracking-wide uppercase">Architecture</p>
 	<h1 class="mt-2 text-4xl font-bold tracking-tight text-balance">
@@ -76,8 +80,8 @@
 		{#if mode === 'cloud'}
 			The deployed app: the browser talks to the Selva server, which solves through
 			<span class="font-mono text-xs">Rhino.Compute</span>. The server reads records and blobs
-			through provider interfaces, so the flow is the same whether they are backed by Postgres or by
-			files on disk.
+			through provider interfaces, so the flow is the same whether Postgres or files on disk sit
+			behind them.
 		{:else}
 			The plugin preview: the browser talks straight to Grasshopper over one WebSocket. No server,
 			no auth, no database — the definition is already open in Rhino.
@@ -175,25 +179,67 @@
 	<div class="mt-20">
 		<p class="text-primary text-sm font-semibold tracking-wide uppercase">Wire format</p>
 		<h2 class="mt-2 text-2xl font-bold tracking-tight text-balance">
-			What actually crosses the wire
+			<button
+				class="group hover:text-primary flex items-center gap-2 text-left transition"
+				aria-expanded={wireOpen}
+				aria-controls="wire-format-panel"
+				onclick={() => (wireOpen = !wireOpen)}
+			>
+				<ChevronRight
+					class="text-muted-foreground group-hover:text-primary size-5 shrink-0 transition-transform {wireOpen
+						? 'rotate-90'
+						: ''}"
+					aria-hidden="true"
+				/>
+				What actually crosses the wire
+			</button>
 		</h2>
 		<p class="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
-			The same cloud-mode solve as above, as headers and JSON bodies. One request —
-			<code class="bg-muted rounded px-1 py-0.5 text-xs">radius 12.5</code>,
-			<code class="bg-muted rounded px-1 py-0.5 text-xs">capped true</code> — from the browser to Grasshopper
-			and back. Read the bodies top to bottom: a flat object becomes a named tree, solves, and comes back
-			flat again.
+			{#if mode === 'cloud'}
+				The same cloud-mode solve as above, as headers and JSON bodies. One request —
+				<code class="bg-muted rounded px-1 py-0.5 text-xs">radius 12.5</code>,
+				<code class="bg-muted rounded px-1 py-0.5 text-xs">capped true</code> — from the browser to Grasshopper
+				and back. Read the bodies top to bottom: a flat object becomes a named tree, solves, and comes
+				back flat.
+			{:else}
+				The same local-mode solve as above, as the frames that cross the socket. The same two values
+				— <code class="bg-muted rounded px-1 py-0.5 text-xs">radius 12.5</code>,
+				<code class="bg-muted rounded px-1 py-0.5 text-xs">capped true</code> — but no request and no
+				response: four frames in one direction, then the other. Watch where the meshes go, and what keeps
+				them in order.
+			{/if}
 		</p>
 
-		<div class="mt-6">
-			<SolveWalkthrough />
-		</div>
+		{#if wireOpen}
+			<div id="wire-format-panel" class="mt-6">
+				{#if mode === 'cloud'}
+					<SolveWalkthrough />
+				{:else}
+					<LocalWalkthrough />
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	<!-- Configuration — every knob from the steps above, gathered in one place -->
 	<div class="mt-20">
 		<p class="text-primary text-sm font-semibold tracking-wide uppercase">Configuration</p>
-		<h2 class="mt-2 text-2xl font-bold tracking-tight text-balance">Every knob, in one place</h2>
+		<h2 class="mt-2 text-2xl font-bold tracking-tight text-balance">
+			<button
+				class="group hover:text-primary flex items-center gap-2 text-left transition"
+				aria-expanded={configOpen}
+				aria-controls="configuration-panel"
+				onclick={() => (configOpen = !configOpen)}
+			>
+				<ChevronRight
+					class="text-muted-foreground group-hover:text-primary size-5 shrink-0 transition-transform {configOpen
+						? 'rotate-90'
+						: ''}"
+					aria-hidden="true"
+				/>
+				Every knob, in one place
+			</button>
+		</h2>
 		<p class="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
 			Each one is an environment variable read once at boot — the limits through <code
 				class="bg-muted rounded px-1 py-0.5 text-xs">resolveComputeLimits</code
@@ -201,26 +247,28 @@
 			below — nothing here is required to run Selva.
 		</p>
 
-		<div class="mt-6 space-y-8">
-			{#each ENV_VAR_GROUPS as group (group.title)}
-				<div>
-					<h3 class="text-sm font-semibold">{group.title}</h3>
-					<dl class="border-border divide-border mt-3 divide-y rounded-md border text-sm">
-						{#each group.vars as v (v.name)}
-							<div class="px-3 py-2.5">
-								<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-									<code class="font-mono text-xs font-semibold">{v.name}</code>
-									<span
-										class="rounded bg-violet-500/10 px-1.5 py-0.5 font-mono text-[11px] text-violet-600 dark:text-violet-400"
-										>{v.default}</span
-									>
+		{#if configOpen}
+			<div id="configuration-panel" class="mt-6 space-y-8">
+				{#each ENV_VAR_GROUPS as group (group.title)}
+					<div>
+						<h3 class="text-sm font-semibold">{group.title}</h3>
+						<dl class="border-border divide-border mt-3 divide-y rounded-md border text-sm">
+							{#each group.vars as v (v.name)}
+								<div class="px-3 py-2.5">
+									<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+										<code class="font-mono text-xs font-semibold">{v.name}</code>
+										<span
+											class="rounded bg-violet-500/10 px-1.5 py-0.5 font-mono text-[11px] text-violet-600 dark:text-violet-400"
+											>{v.default}</span
+										>
+									</div>
+									<p class="text-muted-foreground mt-1 text-xs leading-relaxed">{v.text}</p>
 								</div>
-								<p class="text-muted-foreground mt-1 text-xs leading-relaxed">{v.text}</p>
-							</div>
-						{/each}
-					</dl>
-				</div>
-			{/each}
-		</div>
+							{/each}
+						</dl>
+					</div>
+				{/each}
+			</div>
+		{/if}
 	</div>
 </div>

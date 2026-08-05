@@ -62,8 +62,12 @@ self-test in the Verification section after every deployment change.
                   └───────────────────────────────────┘
 ```
 
-Admin pre-allowlists a UPN (no password collected). On the user's first
-visit through the proxy, the provider matches the UPN against the allowlist,
+The identity here is a **UPN** — user principal name, the `user@domain` string
+Entra uses to name an account. It usually looks like an email address and is
+often the same string, but it is the directory's own identifier, not a mailbox.
+
+An admin adds a UPN to the allowlist ahead of time; no password is collected. On
+the user's first visit through the proxy, the provider matches the UPN against the allowlist,
 fills in `email` / `displayName` from the matching headers, and the user is
 authenticated. On subsequent visits the same lookup runs — no session
 cookie, no token, no state in the browser beyond what the proxy already has.

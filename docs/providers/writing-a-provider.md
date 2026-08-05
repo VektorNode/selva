@@ -2,7 +2,7 @@
 title: Writing a provider
 group: Providers
 order: 4
-published: true
+published: false
 description: 'Implement the platform interfaces to back Selva with any auth, data, or storage system.'
 ---
 

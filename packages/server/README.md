@@ -4,8 +4,8 @@ Transport-agnostic server building blocks for apps built on the Selva engine: li
 limiting, SSRF guard, definition service, render loader, and structured logging. Consumed by
 `@selvajs/selva`; not tied to SvelteKit or any specific HTTP framework.
 
-**The solve core lives in [`@selvajs/solve/server`](../solve/README.md)** — pipeline, L2 result
-cache, single-flight, client and definition-byte caches. This package does not re-export it and does
+**The solve core lives in [`@selvajs/solve/server`](../solve/README.md)** — pipeline, result cache,
+single-flight, client and definition-byte caches. This package does not re-export it and does
 not depend on it. What stays here is HTTP _request policy_, which is a different job from running a
 solve.
 
@@ -13,7 +13,7 @@ Logging follows the same rule as the rest of the package: nothing here logs unle
 it. Modules that emit diagnostics take an optional `logger?: ILogger` and default to
 `NoopLogger`, so an embedder that wires nothing gets silence rather than unsolicited stdout
 writes. `@selvajs/server/logging` provides a pino-backed implementation (`createLogger`);
-`pino` is an **optional** peer dependency, and without it `createLogger` degrades to a
+`pino` is an **optional** peer dependency, and without it `createLogger` falls back to a
 console-backed logger rather than failing.
 
 ## Install
@@ -33,7 +33,7 @@ hid which slice a consumer actually depended on; nothing in this repo used it.
 | `@selvajs/server/compute`     | Compute limits, rate limiting, SSRF guard, remote-definition fetch |
 | `@selvajs/server/definitions` | Definition service + render loader                                 |
 | `@selvajs/server/providers`   | Provider composition helpers                                       |
-| `@selvajs/server/tokens`      | API token (PAT) codec                                              |
+| `@selvajs/server/tokens`      | Mints and verifies personal API tokens                             |
 | `@selvajs/server/errors`      | Shared error types                                                 |
 | `@selvajs/server/logging`     | pino-backed `ILogger` + request-id correlation                     |
 | `@selvajs/server/http`        | Security headers, request limits, route classification             |

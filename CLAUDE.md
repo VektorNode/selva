@@ -23,7 +23,7 @@ Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for b
 
 - **Backend**: C# (.NET multi-target: net48/net7.0/net9.0) — Grasshopper plugin
 - **Frontend**: SvelteKit with TypeScript + Tailwind CSS
-- **Communication**: WebSocket (port 8765) + embedded HTTP server
+- **Communication**: WebSocket served by the plugin on loopback (8765 by default, a free port if taken) + embedded HTTP server
 
 Monorepo: `packages/` (TypeScript/Svelte workspace) and `Plugin/` (.NET / Grasshopper). Shared dep versions are pinned in `pnpm-workspace.yaml` catalogs — reference `catalog:` in a package's `package.json` rather than hardcoding a version.
 
@@ -186,7 +186,7 @@ Plus `cd Plugin && dotnet build && dotnet test` if C# changed, and `pnpm generat
 
 ### Local development
 
-Two terminals: `pnpm dev:plugin` (web on :5173), and `cd Plugin && dotnet build` then run in your IDE. The plugin auto-connects to the dev server over WebSocket on 8765, giving hot reload on web changes while the plugin stays debuggable.
+Two terminals: `pnpm dev:plugin` (web on :5173), and `cd Plugin && dotnet build` then run in your IDE. The plugin opens the dev-server URL with its own `wsPort` in the query string, and the page connects back over WebSocket — hot reload on web changes while the plugin stays debuggable.
 
 ### Installing to Grasshopper
 
@@ -228,7 +228,7 @@ How much the auth provider owns depends on which one runs:
 
 [packages/selva/.env.example](packages/selva/.env.example) is authoritative — every var the Selva app reads is documented inline there. Don't duplicate it here or in provider READMEs; link to it.
 
-The plugin UI needs none (WebSocket on 8765 by default). Rhino.Compute server URL and API key are configured at `/admin/compute` and persisted via `IComputeServerStore`, not env vars.
+The plugin UI needs none (WebSocket port comes from the `wsPort` query param, 8765 by default). Rhino.Compute server URL and API key are configured at `/admin/compute` and persisted via `IComputeServerStore`, not env vars.
 
 ## Requirements
 

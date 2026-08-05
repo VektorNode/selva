@@ -9,16 +9,9 @@ import { createTokenCodec, type TokenCodec } from '@selvajs/server/tokens';
  *
  * ## Format
  *   raw    = `share_<base64url(32 random bytes)>`
- *   hash   = base64url( HMAC-SHA256(SHARE_LINK_SECRET, raw) )
+ *   hash   = base64url( HMAC-SHA256(SELVA_HMAC_KEY, raw) )
  *
- * ## Setup
- *
- * See [packages/selva/.env.example](../../../../.env.example) for the canonical
- * env-var documentation, generation command, and rotation notes. tl;dr:
- *
- *   - Set `SHARE_LINK_SECRET` to a random ≥32-byte string in production.
- *   - In dev, omitting it makes the code fall back to `SELVA_HMAC_KEY`.
- *   - Rotation invalidates every existing share link.
+ * Rotating `SELVA_HMAC_KEY` invalidates every existing share link.
  */
 
 const TOKEN_PREFIX = 'share_';
@@ -28,10 +21,10 @@ const TOKEN_PREFIX = 'share_';
 // the env stub per-scenario see the change.
 let cached: { secret: string; codec: TokenCodec } | null = null;
 function getCodec(): TokenCodec {
-	const secret = env.SHARE_LINK_SECRET || env.SELVA_HMAC_KEY;
+	const secret = env.SELVA_HMAC_KEY;
 	if (!secret) {
 		throw new Error(
-			'Missing required env var: SHARE_LINK_SECRET (or SELVA_HMAC_KEY as fallback). ' +
+			'Missing required env var: SELVA_HMAC_KEY. ' +
 				'See packages/selva/.env.example for setup instructions.'
 		);
 	}
@@ -49,11 +42,6 @@ export function mintRawToken(): string {
 /** Hash a raw token to its store-side representation. */
 export function hashToken(raw: string): string {
 	return getCodec().hashToken(raw);
-}
-
-/** Constant-time equality for two stored hashes. */
-export function hashesEqual(a: string, b: string): boolean {
-	return getCodec().hashesEqual(a, b);
 }
 
 /** Recognize our own token format on inbound requests. */

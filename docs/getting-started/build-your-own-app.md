@@ -2,7 +2,7 @@
 title: Build your own app
 group: Get Started
 order: 6
-published: true
+published: false
 description: 'Embed the Selva viewer and controls in your own product using the @selvajs/* packages.'
 ---
 
@@ -37,12 +37,12 @@ Read it top-down. **Your app** is the product. It pulls in the viewer (`ui`), th
 
 ## Building blocks
 
-| Package                          | Gives you                                                                                                            |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `@selvajs/ui`                    | Svelte components, theme, and the 3D viewer — the same pieces the Selva app is built from. Style them to your brand. |
-| `@selvajs/compute`               | Type-safe Rhino.Compute client. Turns inputs into solved geometry. No renderer. See below.                           |
-| `@selvajs/schemas`               | Schema types and traversal helpers, so your app speaks the same contract as the plugin.                              |
-| `@selvajs/platform` + a provider | The backend contract, plus an implementation of it. See [Providers](../providers.md).                                |
+| Package                          | Gives you                                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `@selvajs/ui`                    | Svelte components, theme, and the 3D viewer: the same pieces the Selva app is built from. Style them to your brand. |
+| `@selvajs/compute`               | Type-safe Rhino.Compute client. Turns inputs into solved geometry. No renderer. See below.                          |
+| `@selvajs/schemas`               | Schema types and traversal helpers, so your app speaks the same contract as the plugin.                             |
+| `@selvajs/platform` + a provider | The backend contract, plus an implementation of it. See [Providers](../providers.md).                               |
 
 Mix and match. If you only want the viewer and solving inside an otherwise custom app, `@selvajs/ui` and `@selvajs/compute` are enough on their own.
 
@@ -59,13 +59,13 @@ Each package README covers its own imports and setup. [`@selvajs/ui`](https://ww
 
 ## The compute client
 
-[`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) talks to Rhino.Compute and nothing else — it has no renderer and no `three` dependency. It gives you:
+[`@selvajs/compute`](https://www.npmjs.com/package/@selvajs/compute) talks to Rhino.Compute and nothing else; it has no renderer and no `three` dependency. It gives you:
 
 - Calls to Compute that return geometry, with errors you can narrow on instead of guess at.
 - Reading and writing Grasshopper **data trees**.
 - The same API in the browser and in Node.
 
-Import from `/grasshopper` or `/core`, whichever you need — that way a bundler drops the rest. The root export is empty on purpose, so importing from the bare package name gets you nothing.
+Import from `/grasshopper` or `/core`, whichever you need, so a bundler drops the rest. The root export is empty on purpose, so importing from the bare package name gets you nothing.
 
 Turning a solve response into Three.js objects is a separate job, and [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization) does it. Import from `/scene`, `/render`, or `/parse`.
 

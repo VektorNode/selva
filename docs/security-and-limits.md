@@ -2,16 +2,16 @@
 title: Security & Limits
 group: Concepts
 order: 6
-published: true
-description: 'Request limits, SSRF guards, rate limiting, and the boundaries that keep a deployment safe.'
+published: false
+description: 'Request limits, rate limiting, guards on outbound fetches, and the boundaries that keep a deployment safe.'
 ---
 
 # Security & Limits
 
 A reference for the guardrails an operator tunes: rate limits, request-size and
-concurrency caps, the SSRF guard on remote definitions, the two secret keys, and
+concurrency caps, the guard on remote-definition URLs, the two secret keys, and
 cookie/transport behaviour. Every setting below is verified against the code;
-[`.env.example`](../packages/selva/.env.example) is the authoritative env-var list
+[`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example) is the authoritative env-var list
 and documents each inline.
 
 Sizes below use `MB = 1024 × 1024`. All the `COMPUTE_*` / `*_BYTES` / `*_MS` caps
@@ -19,9 +19,11 @@ are resolved once at boot; an invalid value warns and falls back to the default.
 
 ## Rate limiting
 
-Two independent limiters, both **fixed-window** and **in-memory** (nothing is
-persisted). In a multi-instance deployment each instance keeps its own counters,
-so the effective rate is roughly N× the per-key limit.
+Two independent limiters. Both count requests in a **fixed window** (the count
+resets wholesale when the window ends, rather than sliding), and both keep those
+counts **in memory only**, so nothing is persisted. In a multi-instance deployment
+each instance keeps its own counts, so the effective rate is roughly N× the
+per-key limit.
 
 ### Compute solves (`/api/v1/compute`)
 
@@ -37,107 +39,167 @@ Over the limit returns **429** with a `Retry-After` header.
 ### Login
 
 Hardcoded, **not** env-configurable: **5 failed attempts per 15 minutes**, keyed
-by client IP. Only failed logins count; a success clears the bucket. Over the
-limit returns **429**.
+by client IP. Only failed logins count, and a success resets the count to zero.
+Over the limit returns **429**.
 
 ### Share-link solve cap
 
-Separate from rate limiting: each share link carries a persisted `maxSolves`
-counter, checked-and-incremented atomically before each solve. When exhausted the
+Separate from rate limiting: each share link carries a stored `maxSolves` counter,
+checked and raised in one indivisible step before each solve, so two solves
+arriving together can't both slip past the last remaining slot. When exhausted the
 solve returns **429** ("Share link solve cap reached").
 
 ## Size, concurrency, and queue caps
 
 All resolved in `packages/server/src/compute/limits.ts`.
 
-| Env var                              | Default              | Guards                                                                                                                                                                                                       |
-| ------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `COMPUTE_SOLVE_DEADLINE_MS`          | `100000`             | Longest a single solve may run before it is aborted. Renamed from `MAX_SOLVE_DURATION_MS`, which still works for one minor version and warns at boot.                                                        |
-| `COMPUTE_MAX_QUEUE_DEPTH`            | `0` (unbounded)      | Max solves allowed to wait. A full queue is rejected with **503** + `Retry-After`.                                                                                                                           |
-| `COMPUTE_QUEUE_WAIT_MS`              | `0` (no deadline)    | Max time a solve may sit queued before it is rejected with **503**.                                                                                                                                          |
-| `MAX_DEFINITION_FILE_SIZE_BYTES`     | `52428800` (50 MB)   | Largest `.gh` on upload, and the cap on remote-definition fetches.                                                                                                                                           |
-| `MAX_IMAGE_FILE_SIZE_BYTES`          | `10485760` (10 MB)   | Cover-image upload cap.                                                                                                                                                                                      |
-| `COMPUTE_REQUEST_MAX_BYTES`          | `220200960` (210 MB) | `/api/v1/compute` request-body cap (inputs, values, base64 file widgets). Keep ≤ `BODY_SIZE_LIMIT`.                                                                                                          |
-| `COMPUTE_RESPONSE_MAX_BYTES`         | `314572800` (300 MB) | `/api/v1/compute` response cap; a backstop under V8's ~512 MB string wall. Over the cap returns **413**.                                                                                                     |
-| `REMOTE_DEFINITION_FETCH_TIMEOUT_MS` | `30000`              | Deadline on remote-definition fetch (slow-loris protection).                                                                                                                                                 |
-| `BODY_SIZE_LIMIT`                    | `210M`               | adapter-node's global body cap on **every** route. Must be ≥ `COMPUTE_REQUEST_MAX_BYTES`. Use `210M` or a raw byte count — adapter-node reads only the last suffix character, and `Infinity` throws on boot. |
+| Env var                              | Default              | Guards                                                                                                                                                                                                      |
+| ------------------------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `COMPUTE_SOLVE_DEADLINE_MS`          | `100000`             | Longest a single solve may run before it is aborted. Renamed from `MAX_SOLVE_DURATION_MS`, which still works for one minor version and warns at boot.                                                       |
+| `COMPUTE_MAX_QUEUE_DEPTH`            | `0` (unbounded)      | Max solves allowed to wait. A full queue is rejected with **503** + `Retry-After`.                                                                                                                          |
+| `COMPUTE_QUEUE_WAIT_MS`              | `0` (no deadline)    | Max time a solve may sit queued before it is rejected with **503**.                                                                                                                                         |
+| `MAX_DEFINITION_FILE_SIZE_BYTES`     | `52428800` (50 MB)   | Largest `.gh` on upload, and the cap on remote-definition fetches.                                                                                                                                          |
+| `MAX_IMAGE_FILE_SIZE_BYTES`          | `10485760` (10 MB)   | Cover-image upload cap.                                                                                                                                                                                     |
+| `COMPUTE_REQUEST_MAX_BYTES`          | `220200960` (210 MB) | `/api/v1/compute` request-body cap (inputs, values, base64 file widgets). Keep ≤ `BODY_SIZE_LIMIT`.                                                                                                         |
+| `COMPUTE_RESPONSE_MAX_BYTES`         | `314572800` (300 MB) | `/api/v1/compute` response cap, kept under the ~512 MB ceiling on a single text value in Node so a huge result fails cleanly rather than crashing. Over the cap returns **413**.                            |
+| `REMOTE_DEFINITION_FETCH_TIMEOUT_MS` | `30000`              | Deadline on remote-definition fetch, so a server that trickles bytes forever can't tie one up indefinitely.                                                                                                 |
+| `BODY_SIZE_LIMIT`                    | `210M`               | adapter-node's global body cap on **every** route. Must be ≥ `COMPUTE_REQUEST_MAX_BYTES`. Use `210M` or a raw byte count; adapter-node reads only the last suffix character, and `Infinity` throws on boot. |
 
-In-flight concurrency is not an env var: Selva always auto-detects it from the
-compute server's active `compute.geometry` child count (re-probed periodically
-as the pool resizes), falling back to `1` if that count can't be read. The one
+How many solves may run at once is not an env var: Selva reads it from the number
+of Rhino worker processes the compute server has running, re-checking periodically
+as that number changes, and falls back to `1` if it can't be read. The one
 place to change it is `--childcount` on the compute server itself.
 
 Cache byte budgets (`COMPUTE_DEFINITION_CACHE_MB`, `COMPUTE_SOLVE_CACHE_MB`) and the
 Rhino.Compute server flags are covered in [Caching](Caching.md).
 
-## SSRF guard on remote definitions
+## Guard on remote-definition URLs
 
-When a definition is loaded from a user-supplied URL, the URL is validated before
-any fetch (`packages/server/src/compute/safe-url.ts`). There is **no allowlist** —
-it is a denylist of private and reserved ranges, applied in two passes:
+A definition can be loaded from a URL someone supplies. Without a check, that URL
+could point back at your own network, at a database on a private address or a
+cloud metadata endpoint, and the server would dutifully fetch it and hand back
+the result. The attack has a name: server-side request forgery, or SSRF.
 
-1. A DNS-free literal pre-filter (scheme must be `http`/`https`; rejects
-   `localhost`, all IPv4 encodings — integer, octal, hex, short-form — and mapped
-   IPv6).
-2. A DNS resolution that re-checks every resolved A/AAAA address.
+So the URL is validated before any fetch (`packages/server/src/compute/safe-url.ts`). Rather than
+listing the addresses that are allowed, it lists the ones that are blocked, and checks twice:
+
+1. First the URL text itself, without touching DNS: the scheme must be `http` or
+   `https`, and `localhost` is rejected along with every way of writing a private
+   IPv4 address (decimal, octal, hex, short-form) and its IPv6 equivalents.
+2. Then the addresses the name actually resolves to, each re-checked against the
+   same list, because a harmless-looking hostname can resolve to a private one.
 
 Blocked: loopback (`127/8`, `::1`), private ranges (`10/8`, `172.16–31`,
 `192.168/16`, `fc00::/7`), link-local **including the cloud metadata endpoint
 `169.254.169.254`**, and the unspecified/`0.0.0.0` addresses. Rejections return a
-deliberately generic message ("Remote definition URL is not allowed") so the guard
-can't be used as a probe; the specific reason is logged server-side.
+deliberately vague message ("Remote definition URL is not allowed") so nobody can
+use the guard to map your internal network by watching which URLs it complains
+about differently; the specific reason is logged server-side.
 
-DNS-rebinding is not fully closed (the resolved IP could change between the check
-and the fetch) — a documented limitation. Rhino.Compute _server_ URLs are not
-subject to this guard; they are configured in `/admin/compute` and stored by the
-data provider, not fetched from user input.
+One gap is documented rather than closed: an address can change between the check
+and the fetch, so a hostname that passes could still be pointed somewhere else a
+moment later.
+
+Rhino.Compute _server_ URLs are not subject to this guard; they are configured in
+`/admin/compute` and stored by the data provider, not fetched from user input.
 
 ## Secrets
 
-Two keys, both required (the `local` provider needs both; `supabase` needs
-`SELVA_AT_REST_KEY`). Generate them with the command shown in `.env.example`.
+Two keys. Both are required under every provider, and `npx @selvajs/cli` generates
+both for you at scaffold time, so you never write one by hand.
 
-| Key                 | Protects                                                                             | Format                                               | Rotating it…                                                                |
-| ------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------- | --------------------------------------------------------------------------- |
-| `SELVA_HMAC_KEY`    | Signs session cookies; fallback secret for share-link and invite tokens.             | ≥ 32 characters.                                     | Logs everyone out and invalidates share/invite tokens that fell back to it. |
-| `SELVA_AT_REST_KEY` | AES-256-GCM encryption of the Rhino.Compute API key at rest (on disk and in the DB). | 64-char hex, or base64 decoding to exactly 32 bytes. | Makes the stored API key undecryptable — re-enter it at `/admin/compute`.   |
+| Key                 | Protects                                                                             | Format                                               | Rotating it…                                                             |
+| ------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| `SELVA_HMAC_KEY`    | Signs session cookies; hashes share-link and invite tokens at rest.                  | ≥ 32 characters.                                     | Logs everyone out and invalidates every share link and pending invite.   |
+| `SELVA_AT_REST_KEY` | AES-256-GCM encryption of the Rhino.Compute API key at rest (on disk and in the DB). | 64-char hex, or base64 decoding to exactly 32 bytes. | Makes the stored API key undecryptable; re-enter it at `/admin/compute`. |
 
-Dedicated `SHARE_LINK_SECRET` and `INVITE_TOKEN_SECRET` can override the HMAC-key
-fallback; rotating either instantly invalidates all tokens of that kind.
-`SELVA_AT_REST_KEY` is encryption at rest — it defends against a leaked backup or
+What each key covers shifts with the auth provider, but neither becomes optional:
+
+- **`local`:** the HMAC key signs session cookies _and_ hashes tokens; the at-rest
+  key encrypts the compute API key in `compute.config.json`.
+- **`supabase`:** sessions are Supabase JWTs, so the HMAC key only hashes tokens.
+  The at-rest key still encrypts `compute_servers.api_key`, and
+  `SupabaseDataProvider` refuses to construct without it.
+
+`SELVA_AT_REST_KEY` is encryption at rest: it defends against a leaked backup or
 read-only storage access, not against an attacker who already holds the running
 process's memory. A key mismatch is detected at boot and surfaced in the admin
 system health view.
 
+### Why two keys and not one
+
+One signs and one encrypts. Merging them would use a single secret for two
+different jobs, worth avoiding on its own. The practical reason is recovery cost. The two keys fail in deliberately asymmetric ways: losing the HMAC
+key costs a round of logins, while losing the at-rest key costs a credential you
+must re-enter by hand. Keeping them separate is what lets `selva keys rotate` treat
+a suspected session-secret leak as a cheap, routine action instead of one that also
+takes compute offline until an operator notices.
+
+They aren't interchangeable in practice either. At-rest must decode to exactly 32
+bytes, HMAC only needs 32 characters, and under Supabase the two are wanted
+independently. If one `.env` entry ever becomes the goal, derive two separate keys
+from a single root secret rather than passing the same bytes to both. That keeps
+the two jobs apart, though it still ties their rotation together.
+
+### What rotating `SELVA_HMAC_KEY` breaks
+
+`selva keys rotate hmac` takes effect on restart and hits three things. Nothing
+errors or requires a cleanup pass; everything affected simply stops being found:
+
+1. **Sessions (local provider only).** A cookie carries a signature made with this
+   key, so once it changes every issued cookie fails its check and everyone signs
+   in again. Under `supabase` or
+   `header` auth, sessions are unaffected; those never touch this key.
+2. **Share links (all providers).** A link is looked up by a hash made with this
+   key, so previously issued links resolve to nothing and read as invalid. Mint replacements from the
+   definition's share dialog.
+3. **Pending invites (all providers).** Same mechanism: unaccepted invites stop
+   resolving and read as "invalid or has expired". Already-accepted invites are
+   unaffected; membership is a stored record, not a token. Re-send any still open.
+
+Rows for dead links and invites stay in the store. They're matched by hash, and a
+hash that no longer matches is simply never found. They're harmless, but rotation
+does not clean them up.
+
+What rotation does **not** touch: user accounts, passwords (hashed with their own
+scheme, unrelated to this key), org membership and permissions, projects,
+definitions, uploaded files, and the Rhino.Compute API key (that's
+`SELVA_AT_REST_KEY`).
+
 ## Cookies and transport
 
-- **Secure cookies.** In production, session/refresh cookies are `Secure` (plus
-  `httpOnly`, `sameSite=lax`). Setting `ALLOW_INSECURE_COOKIES=true` disables
-  `Secure` — the escape hatch for HTTP-only deployments. This var is code-only and
+- **Secure cookies.** In production, session and refresh cookies are marked
+  `Secure`, so the browser only sends them over HTTPS. They are also `httpOnly`
+  (JavaScript on the page cannot read them) and `sameSite=lax` (they are not sent
+  along with requests originating from another site). Setting
+  `ALLOW_INSECURE_COOKIES=true` drops the `Secure` mark, the escape hatch for
+  HTTP-only deployments. This var is code-only and
   not listed in `.env.example`; without it, cookies over plain `http://` in
   production are dropped and login silently fails.
-- **`ORIGIN` / CSRF.** Behind a reverse proxy, set `ORIGIN=https://your-domain.com`
-  (no trailing slash). Without it, form POSTs fail with "Cross-site POST form
-  submissions are forbidden".
+- **`ORIGIN`.** Selva checks that a form submission came from its own site, which
+  stops another site from making a logged-in visitor's browser submit one on their
+  behalf. To do that it has to know its own public address: behind a reverse proxy,
+  set `ORIGIN=https://your-domain.com` (no trailing slash). Without it, form POSTs
+  fail with "Cross-site POST form submissions are forbidden".
 - **`HOST` / header-auth boundary.** `HOST` defaults to `0.0.0.0`. When running the
   header-auth provider, the app **must** be reachable only through the trusted
   proxy (bind `127.0.0.1` or firewall the port), the proxy must authenticate every
-  request, and it must strip inbound `SELVA-*` headers. There is no runtime check —
+  request, and it must strip inbound `SELVA-*` headers. There is no runtime check:
   the deployment is the entire trust boundary.
 
 ## Logging and personal data
 
-`PinoLogger` redacts by **credential field name** only (`token`, `apiKey`,
-`password`, `authorization`, `cookie`, and one level of nesting for most). It does
-**not** catch emails or other personal data nested inside a payload, and redaction
-only applies when the optional `pino` package is installed (the console fallback
-does none). Log identifiers (`eventType`, `actorId`, `userId`), never whole domain
-objects — an audit payload can embed an invitee's email, and logs are the one
+`PinoLogger` strips values by **field name** only, and only credential-shaped names:
+`token`, `apiKey`, `password`, `authorization`, `cookie`. For most of those it also
+looks one level down into nested objects, but no further. It does **not** catch
+emails or other personal data buried in a payload, and it only runs when the
+optional `pino` package is installed; the console fallback strips nothing. Log identifiers (`eventType`, `actorId`, `userId`), never whole domain
+objects. An audit payload can embed an invitee's email, and logs are the one
 place erasure cannot reach. See the Data Privacy section of the repo `CLAUDE.md`
 for the full contract.
 
 ## Next
 
-- [Caching](Caching.md) — the cache byte budgets referenced above.
-- [Providers](providers.md) — where secrets and the trust boundary come from.
-- [Admin guide](admin.md) — where compute keys and limits surface in the UI.
+- [Caching](Caching.md): the cache byte budgets referenced above.
+- [Providers](providers.md): where secrets and the trust boundary come from.
+- [Admin guide](admin.md): where compute keys and limits surface in the UI.

@@ -2,8 +2,8 @@
 title: What is Selva
 group: Concepts
 order: 1
-published: true
-description: 'Turn a Grasshopper definition into a web app — the problem it solves and the two halves that make it work.'
+published: false
+description: 'Turn a Grasshopper definition into a web app: the problem it solves and the two halves that make it work.'
 ---
 
 # What is Selva
@@ -14,32 +14,18 @@ A designer builds parametric logic once in Grasshopper. Selva exposes its inputs
 
 ## The problem
 
-Grasshopper logic stays trapped inside Rhino on the author's machine. Sharing it means handing over a `.gh` file, expecting the other person to own a Rhino license, and expecting them to know Grasshopper well enough to open it without breaking anything. Selva takes that wall down: the definition becomes a URL with a clean UI and a live 3D view.
+Grasshopper logic stays trapped inside Rhino on the author's machine. Sharing it means handing over a `.gh` file, expecting the other person to own a Rhino license, and expecting them to know Grasshopper well enough to open it without breaking anything.
+
+And handing over the file hands over everything in it. A definition is the method, not just the result: the tolerances, the rules of thumb, the years of solving the same problem badly until it came out right. Send the `.gh` to a client or a contractor and they have your process, permanently, to reuse or pass on.
+
+Selva takes down both walls. The definition stays on your server; what you share is a URL with a clean UI and a live 3D view. Users drive the model and get geometry back; they never see the canvas.
 
 ## Two halves
 
-- **The plugin** (`Selva.gha`) is where you _design the interface_. It reads your definition's parameters, lets you drag them onto web controls, and saves that layout — the **schema** — into the `.gh` file itself. (A `.gha` is just a Grasshopper plugin, like any other component you install.)
+- **The Selva plugin** is where you _design the interface_. You install it into Grasshopper and drop its components on the canvas to mark which parameters your users get to drive and what comes back out. It opens a designer where you arrange those parameters into web controls, and saves that layout, the **schema**, into the `.gh` file itself.
 - **The web app** (`@selvajs/selva`) is where that interface _runs_. It loads the schema, draws the controls, and solves the definition through **Rhino.Compute**: a copy of Rhino on a server with no window and no mouse, doing nothing but solving definitions on request. Your users never touch Rhino.
 
-> **New to the web side?** A few terms show up throughout these docs — _schema_, _Rhino.Compute_, _provider_, _the CLI_. Each is explained where it first matters, and the [Architecture](architecture.md) page lays them all out together. You don't need web-dev experience to follow along.
-
 One schema drives both, generated into TypeScript (UI) and C# (plugin) so they never drift.
-
-## The flow
-
-```mermaid
-flowchart LR
-    subgraph author["Author in Rhino"]
-        a["Selva.gha reads inputs<br/>author maps to controls<br/>schema saved in the .gh"]
-    end
-    subgraph server["Deployed on a server"]
-        b["@selvajs/selva loads schema<br/>solves via Rhino.Compute"]
-    end
-    subgraph user["End user in a browser"]
-        c["changes a value<br/>sees geometry update live"]
-    end
-    author --> server --> user
-```
 
 ## What you get
 

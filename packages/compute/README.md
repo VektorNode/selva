@@ -28,7 +28,7 @@ npm install @selvajs/compute
 
 - **Type-safe API** — Full TypeScript with structured error codes and rich error context.
 - **High-level client** — `GrasshopperClient` for one-off solves, `client.createScheduler()` for any UI that fires solves frequently.
-- **Robust transport** — Configurable timeout, caller-supplied `AbortSignal`, exponential-backoff retries on transient errors, and `Retry-After` honored on 429.
+- **Robust transport** — Configurable timeout, caller-supplied `AbortSignal`, and retries on errors that look temporary, waiting longer before each attempt. A server asking to be left alone with `Retry-After` is obeyed.
 - **Slider-friendly** — `latest-wins` scheduling aborts stale solves when newer values arrive. Optional response cache makes repeated inputs instant.
 
 Whether you're building a simple solver, a slider-driven configurator, or a long-running job submission flow, `@selvajs/compute` handles the plumbing so you can focus on your Grasshopper definitions.

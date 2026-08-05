@@ -2,15 +2,15 @@
 title: Permissions & Orgs
 group: Concepts
 order: 4
-published: true
+published: false
 description: 'How organizations, roles, and per-resource permissions decide who can see and do what.'
 ---
 
 # Permissions & Organizations
 
 Selva's authorization model has three independent scopes: **platform**, **org**,
-and **project**. On top of those sit **share links**, a tokenized path that bypasses
-all three. A user's identity (`id`, `email`) carries no permissions of its own —
+and **project**. On top of those sit **share links**, which carry their own access
+in the link itself and bypass all three. A user's identity (`id`, `email`) carries no permissions of its own;
 every grant lives in a store keyed by user id, so an external identity provider
 never has to model Selva's authorization.
 
@@ -18,12 +18,12 @@ never has to model Selva's authorization.
 
 Platform permissions are instance-wide operator authority. There are four:
 
-| Permission              | Grants                                               |
-| ----------------------- | ---------------------------------------------------- |
-| `instance_admin`        | Superuser — implies every other platform permission. |
-| `manage_compute`        | Configure the instance-wide Rhino.Compute pool.      |
-| `manage_instance_users` | Create, delete, and enable/disable any user.         |
-| `manage_updates`        | Run system updates and switch release channel.       |
+| Permission              | Grants                                              |
+| ----------------------- | --------------------------------------------------- |
+| `instance_admin`        | Superuser; implies every other platform permission. |
+| `manage_compute`        | Configure the instance-wide Rhino.Compute pool.     |
+| `manage_instance_users` | Create, delete, and enable/disable any user.        |
+| `manage_updates`        | Run system updates and switch release channel.      |
 
 Regular users hold none of these. Holding any one of them gets you into `/admin`.
 Org-scope permissions don't, even though several of those also start with `manage_`.
@@ -31,7 +31,7 @@ Org-scope permissions don't, even though several of those also start with `manag
 A hard **sole-admin invariant** applies throughout: the data layer refuses any action
 that would leave the instance with zero enabled `instance_admin` users, so it holds
 even when the UI is bypassed. `instance_admin` skips _management_ checks such as org
-governance and project admin, but **not** _content_ checks — platform staff have to
+governance and project admin, but **not** _content_ checks. Platform staff have to
 use "Reclaim" to touch a project's content, and that leaves an audit trail.
 
 ## Org scope (multi-tenant)
@@ -52,8 +52,9 @@ permissions and **can never be granted to a `member`**; only `manage_definitions
 and `manage_projects` are member-assignable. The role is the user-facing summary,
 but the permission set is what actually gets checked.
 
-Deleting an org soft-deletes it and cascades to org members, projects, and project
-members. Pending invites and org compute config are hard-deleted.
+Deleting an org marks it deleted rather than erasing the row, and the same happens
+to its members, projects, and project members. Pending invites and the org's
+compute config are removed outright.
 
 ## Project scope
 
@@ -82,9 +83,10 @@ role. The invite carries the target org, the role, and the org permissions.
 Governance permissions are stripped for `member` invites, while owner and admin
 invites always get the full default set. Invites expire after **7 days**.
 
-The raw token is the capability. Selva shows it once and stores only an HMAC hash of
-it, and the acceptance page (`/accept-invite`) works without a session. Accepting
-creates the user — by password or upstream-header identity — and adds them to the
+Whoever holds the raw token can accept the invite; there is nothing else to check.
+Selva shows it once and stores only a hash of it, and the acceptance page
+(`/accept-invite`) works without a session. Accepting
+creates the user (by password or upstream-header identity) and adds them to the
 org. New users start with **no platform permissions**.
 `SELVA_FLAG_ALLOW_ORG_CREATION` decides whether non-admins can create their own org,
 and it's off by default.
@@ -96,10 +98,11 @@ either live or draft. It's the one path that bypasses org and project authorizat
 
 - `allowSolve: false` grants view and schema access only, `true` allows solving.
 - `maxSolves` caps total solves. It defaults to **1000** when unspecified, and
-  `null` uncaps it. Each solve increments the counter atomically, and anything over
-  the cap returns **429**.
-- `expiresAt` is optional. Links can also be revoked, which is a soft-delete and
-  idempotent.
+  `null` uncaps it. Each solve raises the counter in one indivisible step, so two
+  solves arriving at once can't both take the last slot. Anything over the cap
+  returns **429**.
+- `expiresAt` is optional. Links can also be revoked, which marks the link dead
+  rather than deleting it, and revoking one twice is harmless.
 
 Minting and revoking a link takes the same authority as uploading the definition
 (`canEditDefinition`). `SELVA_FLAG_ENABLE_SHARING` gates the whole feature, and
@@ -110,10 +113,10 @@ turning it off both blocks the admin routes and stops honouring existing tokens.
 `tenancy: 'single'` collapses the org scope: setup creates one org and every
 authenticated user acts within it. `tenancy: 'multi'` makes orgs first-class, so
 setup creates only the platform admin and users create their own orgs from there.
-Each mode bootstraps the first platform admin differently; see
-[the admin guide](admin.md#first-run-bootstrap).
+The two modes create that first platform admin differently; see
+[the admin guide](admin.md#first-run-setup).
 
 ## Next
 
-- [Admin guide](admin.md) — where these grants are managed day to day.
-- [Providers](providers.md) — which store backs each of these grants.
+- [Admin guide](admin.md): where these grants are managed day to day.
+- [Providers](providers.md): which store backs each of these grants.

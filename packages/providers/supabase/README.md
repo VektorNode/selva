@@ -34,7 +34,10 @@ Runs the Selva backend against **either** a managed Supabase project (production
 
 All env vars are documented in [`packages/selva/.env.example`](../../selva/.env.example) — copy that file to `.env` and edit it. The Supabase provider needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; the optional bucket / private-URL / signup overrides are also listed there.
 
-`SELVA_HMAC_KEY` is not used for sessions by the Supabase provider — those are Supabase JWTs. It's still consulted as the fallback secret for share-link / invite token hashing if `SHARE_LINK_SECRET` / `INVITE_TOKEN_SECRET` are unset. `SELVA_AT_REST_KEY` is local-provider-only and is ignored. Both are harmless if left set.
+Both `SELVA_*` keys are still required under this provider, for narrower jobs than under the local provider:
+
+- `SELVA_HMAC_KEY` — **not** used for sessions here (those are Supabase JWTs), but still hashes share-link and invite tokens before they're stored.
+- `SELVA_AT_REST_KEY` — encrypts `compute_servers.api_key` before it reaches the database. `SupabaseDataProvider` refuses to construct without it.
 
 Rhino.Compute URL + API key are configured in `/admin/compute` and persisted in the `compute_config` table — unchanged by the provider choice.
 
@@ -116,7 +119,7 @@ npx supabase db diff
 npx supabase db push
 ```
 
-Alternatively you can copy each `.sql` file into Supabase Dashboard → **SQL Editor** and run them in order. The CLI path is strongly preferred — it's idempotent and version-controlled.
+Alternatively you can copy each `.sql` file into Supabase Dashboard → **SQL Editor** and run them in order. The CLI path is strongly preferred: it tracks which migrations already ran, so re-running it is safe, and the files stay under version control.
 
 ### Exposing the `selva` schema to PostgREST
 

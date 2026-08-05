@@ -3,12 +3,11 @@
 // the home teaser stay in sync. STRUCTURE.md is authoritative for what each
 // package is; keep these descriptions consistent with it when a role changes.
 
-// Unpublished packages have no href while the repository is private — their
-// cards render as plain, non-clickable tiles. Point them at the source tree
-// when it goes public.
+// Descriptions are written for someone evaluating Selva, not for someone who
+// already works on it — say what the piece does, not which framework it uses.
 
 export interface PackageInfo {
-	/** npm-style name shown on the card. */
+	/** Package name shown on the card. */
 	name: string;
 	/** One-line role. */
 	tagline: string;
@@ -16,153 +15,137 @@ export interface PackageInfo {
 	description: string;
 	/** Grouping for the packages page layout. */
 	category: 'App & UI' | 'Core libraries' | 'Providers' | 'Tooling';
-	/** True when the package is published to npm (public API surface). */
-	npm?: boolean;
-	/** Link to the package's npm page. Absent for packages with nowhere public to point. */
-	href?: string;
-	/** Short badge, e.g. the runtime or stack it targets. */
+	/** Short badge, e.g. what the piece is. */
 	badge?: string;
+	/** Shown in the landing-page teaser. Keep this to a handful. */
+	featured?: boolean;
 }
-
-const npmPage = (name: string) => `https://www.npmjs.com/package/${name}`;
 
 export const packages: PackageInfo[] = [
 	// ── App & UI ──────────────────────────────────────────────────────────────
 	{
 		name: '@selvajs/selva',
-		tagline: 'The deployable web app',
+		tagline: 'The web app you deploy',
 		description:
-			'The standalone cloud app your users visit. Loads a schema, renders the controls, and solves the definition through Rhino.Compute. Scaffolded and operated with the CLI.',
+			'Where your definition actually runs. It loads the schema you saved in the .gh file, draws the controls from it, and solves through Rhino.Compute.',
 		category: 'App & UI',
-		npm: true,
-		href: npmPage('@selvajs/selva'),
-		badge: 'SvelteKit'
+		badge: 'Web app',
+		featured: true
 	},
 	{
 		name: '@selvajs/plugin-ui',
-		tagline: 'The schema designer',
+		tagline: 'Where you design the interface',
 		description:
-			'The drag-and-drop UI that ships embedded in Selva.gha. Map Grasshopper parameters to web controls and preview the result live over WebSocket. Not published — it is built into the plugin.',
+			'Opens inside the Grasshopper plugin. Drag a definition parameter onto the page to turn it into a slider, dropdown, or colour picker; the layout is saved as a schema inside the .gh file itself. The preview updates live as you edit.',
 		category: 'App & UI',
-		badge: 'Svelte'
+		badge: 'Part of the plugin',
+		featured: true
 	},
 	{
 		name: '@selvajs/ui',
-		tagline: 'Components, theme & Svelte shells',
+		tagline: 'Buttons, inputs & theming',
 		description:
-			'The component library, design tokens, and theme runtime shared across the app and the plugin UI. Also home to the Svelte shells over the headless cores — Viewer, SceneManager, and the useSolveSession rune wrapper.',
+			'The component library behind both the deployed site and the layout tool: the input controls, the design tokens, and the light/dark theme runtime.',
 		category: 'App & UI',
-		npm: true,
-		href: npmPage('@selvajs/ui'),
-		badge: 'Svelte 5'
+		badge: 'Design system'
 	},
 
 	// ── Core libraries ────────────────────────────────────────────────────────
 	{
 		name: '@selvajs/compute',
-		tagline: 'Rhino.Compute client',
+		tagline: 'Type-safe Rhino.Compute client',
 		description:
-			'A type-safe Rhino.Compute client with data-tree parsing and input/output handling. Pure solve and data — no renderer, no three dependency. Browser- and Node-compatible, with modular exports for tree-shaking.',
+			'Sends inputs to a Rhino.Compute server and unpacks the results, data trees included. Both sides are typed in TypeScript, so mismatches surface while you write the code rather than at runtime. Data only; it never draws anything.',
 		category: 'Core libraries',
-		npm: true,
-		href: npmPage('@selvajs/compute'),
-		badge: 'npm'
+		badge: 'TypeScript',
+		featured: true
 	},
 	{
 		name: '@selvajs/visualization',
-		tagline: 'Headless viewer core',
+		tagline: 'The 3D viewer',
 		description:
-			'Turns a solve response into Three.js meshes and drives the CAD viewer — parse, render, and scene as three layers that depend downward only. Framework-free, with three as a peer dep, so you can build your own UI over it.',
+			'Renders the geometry Rhino sends back, with camera controls, edges, a grid, and measuring. Built on Three.js and tied to no UI framework, so you can put your own interface around it.',
 		category: 'Core libraries',
-		npm: true,
-		href: npmPage('@selvajs/visualization'),
-		badge: 'Three.js'
+		badge: 'Three.js',
+		featured: true
 	},
 	{
 		name: '@selvajs/solve',
-		tagline: 'The solve flow, both sides',
+		tagline: 'Decides when to recalculate',
 		description:
-			'One owner for the path from an input change to a solve result. /client is a transport-free state machine (auto vs. manual, throttling, result memo); /server is the solve pipeline with its caches and single-flight. No UI, no HTTP, no renderer.',
+			'Owns everything between someone moving a slider and a new result appearing: solve on every change or only on a button press, throttling so a drag does not flood the server, and caching so an input the server has already seen comes back instantly.',
 		category: 'Core libraries',
-		npm: true,
-		href: npmPage('@selvajs/solve'),
-		badge: 'npm'
+		badge: 'Client & server',
+		featured: true
 	},
 	{
 		name: '@selvajs/server',
-		tagline: 'HTTP request policy',
+		tagline: 'Guards incoming requests',
 		description:
-			'Transport-agnostic server pieces — request limits, the SSRF guard, rate limiting, the definition service, structured logging. Tied to no HTTP framework, and deliberately separate from the solve core in @selvajs/solve/server.',
+			'The safety layer in front of a deployment: request size limits, rate limiting to blunt abuse, an SSRF guard so a configured URL cannot be pointed at your internal network, and structured logging. Bound to no particular web framework.',
 		category: 'Core libraries',
-		npm: true,
-		href: npmPage('@selvajs/server'),
 		badge: 'Node'
 	},
 	{
 		name: '@selvajs/platform',
-		tagline: 'Provider interfaces',
+		tagline: 'Bring your own backend',
 		description:
-			'The auth, data, storage, and permissions interfaces (with Zod schemas) that Selva is written against. No implementations — implement these to bring your own backend, and use /testing to run the conformance suite against it.',
+			'The interfaces Selva is written against for auth, data, storage, and permissions — definitions only, no implementations. Write one against your own infrastructure and run the included conformance tests to check it behaves the way Selva expects.',
 		category: 'Core libraries',
-		npm: true,
-		href: npmPage('@selvajs/platform'),
 		badge: 'Interfaces'
 	},
 	{
 		name: '@selvajs/schemas',
-		tagline: 'One schema, both stacks',
+		tagline: 'Keeps both halves in step',
 		description:
-			'The single ui-schema.json source of truth plus the generators that emit TypeScript types for the UI and C# types for the plugin, so the two stacks never drift.',
+			'Defines what a schema can contain — the format both halves read. One source file generates the TypeScript types the web app uses and the C# types the plugin uses, so the two stacks cannot drift apart.',
 		category: 'Core libraries',
-		npm: true,
-		href: npmPage('@selvajs/schemas'),
-		badge: 'Codegen'
+		badge: 'Code generation'
 	},
 
 	// ── Providers ─────────────────────────────────────────────────────────────
 	{
 		name: '@selvajs/local-provider',
-		tagline: 'Filesystem backend',
+		tagline: 'Everything on one machine',
 		description:
-			'Zero-dependency provider: JSON on disk, HMAC sessions, atomic writes, WebP image transcoding. The default for a single box or getting started.',
+			'Keeps accounts, files, and settings on the server’s own disk as plain JSON. No external service to sign up for — the default for getting started or running on a single box. Take all three roles or just one.',
 		category: 'Providers',
-		npm: true,
-		href: npmPage('@selvajs/local-provider')
+		badge: 'Default'
 	},
 	{
 		name: '@selvajs/supabase-provider',
-		tagline: 'Supabase backend',
+		tagline: 'Hosted database & logins',
 		description:
-			'Auth, Postgres, and Storage on Supabase, with the SQL migrations to provision it. Identity lives in Supabase; Selva keeps only session tokens and authorization data. The choice for multi-instance deployments.',
+			'Puts accounts, data, and uploaded files in Supabase rather than on the server itself, with the SQL migrations to set it up. Needed when you run more than one copy of Selva at once. Usable for all three roles or only the ones you want hosted.',
 		category: 'Providers',
-		npm: true,
-		href: npmPage('@selvajs/supabase-provider')
+		badge: 'Hosted'
 	},
 	{
 		name: '@selvajs/header-auth-provider',
-		tagline: 'Reverse-proxy identity',
+		tagline: 'Use your company login',
 		description:
-			'Auth-only adapter that trusts identity headers from an upstream reverse proxy — front Selva with corporate SSO such as Entra via oauth2-proxy. Pair it with any data and storage provider.',
-		category: 'Providers'
+			'Hands sign-in to corporate SSO such as Entra, sitting behind a reverse proxy that vouches for the user. Sign-in only — it stores nothing, so it always pairs with one of the two above.',
+		category: 'Providers',
+		badge: 'Single sign-on'
 	},
 
 	// ── Tooling ───────────────────────────────────────────────────────────────
 	{
 		name: '@selvajs/cli',
-		tagline: 'Scaffold & operate a deployment',
+		tagline: 'Sets up and runs your site',
 		description:
-			'Creates a ready-to-run deployment, prompts for provider and secrets, and ships the doctor, start, update, and key-rotation commands you operate it with.',
+			'Scaffolds a deployment, prompting for the provider and secrets it needs, and gives you the commands to start it, update it, rotate keys, and diagnose a broken install.',
 		category: 'Tooling',
-		npm: true,
-		href: npmPage('@selvajs/cli'),
-		badge: 'CLI'
+		badge: 'Setup tool',
+		featured: true
 	},
 	{
 		name: '@selvajs/config',
-		tagline: 'Shared build config',
+		tagline: 'Shared build settings',
 		description:
-			'The ESLint, Vite, and Prettier configuration every package in the monorepo extends. Internal to the workspace — listed here so the map is complete.',
-		category: 'Tooling'
+			'The build and formatting settings every other package reuses. Purely internal plumbing — listed only so the map is complete.',
+		category: 'Tooling',
+		badge: 'Internal'
 	}
 ];
 
@@ -179,3 +162,5 @@ export function packagesByCategory(): { title: PackageInfo['category']; items: P
 		items: packages.filter((p) => p.category === title)
 	}));
 }
+
+export const featuredPackages = packages.filter((p) => p.featured);

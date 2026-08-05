@@ -25,11 +25,11 @@ selva keys rotate at-rest   # rotate SELVA_AT_REST_KEY (compute API key needs re
 
 All operator commands run inside the deployment directory (the one that contains `.env` and `ecosystem.config.cjs`).
 
-## Idempotency rules
+## Re-running a command is safe
 
 - `npx @selvajs/cli` refuses to overwrite a non-empty directory without `--force`.
 - `selva init` reads the current `.env`, lets the user edit, and **never** regenerates `SELVA_HMAC_KEY` / `SELVA_AT_REST_KEY` if they're already set.
-- A `.selva-version` marker is written so future CLI versions can migrate config schema cleanly.
+- A `.selva-version` marker is written so a future CLI version knows which config layout it is looking at and can upgrade it cleanly.
 
 ## Relationship to `@selvajs/selva`
 

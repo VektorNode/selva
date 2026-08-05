@@ -94,6 +94,44 @@ export function getDoc(slug: string): DocEntry | undefined {
 	return docs.find((d) => d.slug === slug);
 }
 
+/**
+ * Docs held back for the first release. They get a "not public yet" stub page
+ * rather than a 404, because the two published docs still link to them and the
+ * URLs are already in the wild. Listed explicitly — the rest of `docs/` is
+ * internal (plans, testing notes, contributor guides) and has no public URL at all.
+ */
+const PENDING_SLUGS = [
+	'cli',
+	'caching',
+	'quick-start',
+	'rhino-compute',
+	'admin',
+	'permissions',
+	'providers',
+	'providers/local',
+	'providers/supabase',
+	'providers/header-auth-entra',
+	'providers/writing-a-provider',
+	'security-and-limits',
+	'getting-started/overview',
+	'getting-started/build-your-own-app',
+	'deployment/prerequisites',
+	'deployment/reverse-proxy'
+];
+
+const eagerSlugs = new Map(Object.entries(eager).map(([path, mod]) => [pathToSlug(path), mod]));
+
+/** Pending slugs that still exist on disk and aren't published. */
+export const unpublishedSlugs: string[] = PENDING_SLUGS.filter(
+	(slug) => eagerSlugs.has(slug) && eagerSlugs.get(slug)?.metadata?.published !== true
+);
+
+/** Title to show on an unpublished doc's stub page. */
+export function getUnpublishedTitle(slug: string): string | undefined {
+	if (!unpublishedSlugs.includes(slug)) return undefined;
+	return eagerSlugs.get(slug)?.metadata?.title ?? titleFromSlug(slug);
+}
+
 // Fixed group order for both the sidebar and the docs index. Groups not listed
 // here fall to the end, alphabetically. Keeps "Get Started" first, reference
 // material last, regardless of per-doc `order`.

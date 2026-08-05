@@ -2,115 +2,125 @@
 title: CLI
 group: Get Started
 order: 3
-published: true
+published: false
 description: 'Scaffold, configure, and operate a Selva deployment from the command line.'
 ---
 
 # Selva CLI
 
-Two binaries ship with a deployment:
+There are two commands, and the split matters:
 
-- **`@selvajs/cli`** — scaffolds a new deployment (`npx @selvajs/cli <dir>`).
-- **`selva`** — operates an existing deployment (`node_modules/.bin/selva`), also exposed as `npm run <name>` scripts.
+- **`npx @selvajs/cli <dir>`** creates a deployment. You run it once.
+- **`selva …`** operates one that already exists. You run it from inside the deployment directory, forever after.
 
-## Quick start
+The scaffold also writes `npm run` aliases for the commands you'll use most, so `npm start` and `selva start` are the same thing. Use whichever you like.
+
+## Create a deployment
 
 ```bash
 npx @selvajs/cli my-deployment
 cd my-deployment
-npm run doctor    # validate before starting
-npm start         # selva start → pm2 start
-npm run logs      # tail logs
-npm run update    # update @selvajs/* and restart
+npm run doctor    # checks the config before anything starts
+npm start         # runs under pm2, which keeps it alive
 ```
 
-## `npx @selvajs/cli <dir>`
+It asks a handful of questions (provider, origin, tenancy), generates your secrets, and runs `npm install`. That's the whole setup.
 
-Scaffolds a fresh deployment. Prompts for provider, origin, tenancy, and secrets; runs `npm install`.
+Flags, if you need them:
+
+| Flag             | Use it when                                            |
+| ---------------- | ------------------------------------------------------ |
+| `--force`        | The target directory exists and isn't empty.           |
+| `--skip-install` | You want the files now and `npm install` later.        |
+| `--yes` / `-y`   | Unattended: accept every default. `CI=1` implies this. |
+
+### What lands in the directory
+
+| File                   | What it's for                                                       |
+| ---------------------- | ------------------------------------------------------------------- |
+| `.env`                 | All config, including two secrets you should back up. See below.    |
+| `ecosystem.config.cjs` | Tells pm2 how to run the app.                                       |
+| `package.json`         | Depends on `@selvajs/selva`, `@selvajs/cli`, and a pinned `pm2`.    |
+| `.selva-version`       | Marks the scaffold layout so `selva migrate` knows what to upgrade. |
+
+**Back up `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` from `.env`.** They're generated once, at create time. Losing the first logs everyone out; losing the second makes your stored Rhino.Compute API key unreadable. Every setting in the file is documented inline in [`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example).
+
+### First boot, before HTTPS
+
+If you start the app before a domain and reverse proxy are in front of it, logins will appear to succeed and then silently not stick. Session cookies are marked `Secure`, and browsers drop those over plain HTTP.
+
+Add `ALLOW_INSECURE_COOKIES=true` to `.env` to get through the first boot, and remove it once HTTPS is live. Edit with a real editor (`nano`) rather than `echo >>`; if the file's last line has no trailing newline, `echo >>` glues your line onto the end of it.
+
+## Operate a deployment
+
+Run these from the deployment directory.
+
+| Command                             | What it does                                                       |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `selva doctor [--fix]`              | Validates everything without starting the app.                     |
+| `selva start`                       | Starts the app under pm2.                                          |
+| `selva stop`                        | Stops it.                                                          |
+| `selva restart`                     | Restarts it, picking up `.env` changes.                            |
+| `selva logs`                        | Tails the logs. Extra args pass through: `selva logs --lines 200`. |
+| `selva update`                      | Updates the `@selvajs/*` packages and restarts.                    |
+| `selva init`                        | Re-asks the setup questions and rewrites `.env`.                   |
+| `selva migrate`                     | Brings an old deployment onto the current scaffold layout.         |
+| `selva keys rotate <hmac\|at-rest>` | Replaces a secret. Destructive; see below.                         |
+
+`npm start`, `npm run stop`, `npm run restart`, `npm run logs`, `npm run doctor`, and `npm run update` alias the matching `selva` commands.
+
+### `doctor` is the first thing to run when something's wrong
+
+It checks the deployment without starting it, and exits non-zero on any failure, so it works in a CI job or a health script too. It covers required files, secret key format, provider and tenancy values, whether `DATA_PATH` is writable, whether `@selvajs/selva` is actually installed, `ORIGIN` validity, Node version, CLI/runtime version alignment, boot persistence, scaffold drift, provider-specific config, and deprecated env var names.
+
+`--fix` repairs what it safely can, asking before each change.
+
+### `restart` vs. `pm2 restart`
+
+Always use `selva restart`. It passes `--update-env`, and without that flag pm2 reuses the environment it started with, so your `.env` edit does nothing and the app looks broken for no visible reason.
+
+### `init` doesn't touch your secrets
+
+It re-prompts for config using your current values as defaults and rewrites `.env`. It won't regenerate `SELVA_HMAC_KEY` or `SELVA_AT_REST_KEY`, and it won't touch `package.json`. Restart afterwards.
+
+### `keys rotate` is deliberately destructive
+
+| Target    | Env var             | What breaks                                                                           |
+| --------- | ------------------- | ------------------------------------------------------------------------------------- |
+| `hmac`    | `SELVA_HMAC_KEY`    | Everyone is logged out; every share link and pending invite stops resolving.          |
+| `at-rest` | `SELVA_AT_REST_KEY` | The stored Rhino.Compute API key becomes unreadable; re-enter it at `/admin/compute`. |
+
+It asks for confirmation and prints the blast radius first. Restart afterwards.
+
+Rotating one doesn't affect the other, which is the point of keeping them separate:
+[Secrets](security-and-limits.md#secrets) covers why, and exactly what an HMAC
+rotation does and doesn't break.
+
+## About pm2
+
+Selva runs the app under [pm2](https://pm2.keymetrics.io), a process manager that restarts it if it crashes and brings it back after a reboot.
+
+**Don't install pm2 globally.** The deployment ships its own pinned copy in `node_modules/.bin/`, which is what `npx pm2` resolves to from inside the directory. Two different pm2 versions talking to the same background daemon causes version-skew warnings and hung restarts, and the `selva` commands refuse to fall back to a global one for exactly that reason.
+
+To survive reboots:
 
 ```bash
-npx @selvajs/cli my-deployment
-npx @selvajs/cli my-deployment --force          # overwrite non-empty dir
-npx @selvajs/cli my-deployment --skip-install
-npx @selvajs/cli my-deployment --yes            # unattended: accept all defaults (also implied by CI=1)
+npx pm2 save                                    # remember the running process list
+npx pm2 startup systemd -u $USER --hp $HOME     # prints a sudo command to run
+npx pm2 save                                    # save again once the unit exists
 ```
 
-What lands in `<dir>`:
+The `startup` command prints a `sudo env PATH=…` line for you to paste. **Check it references the deployment-local pm2** (something like `/home/you/apps/selva/node_modules/pm2/bin/pm2`) before running it, and rewrite the path if it doesn't. Verify afterwards:
 
-| File                   | Purpose                                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------ |
-| `.env`                 | All config. Contains `SELVA_HMAC_KEY` + `SELVA_AT_REST_KEY` — back these up.         |
-| `ecosystem.config.cjs` | PM2 process definition.                                                              |
-| `package.json`         | Depends on `@selvajs/selva` + `@selvajs/cli` (tracking `latest`) and a pinned `pm2`. |
-| `.selva-version`       | Marker for CLI migrations.                                                           |
-
-Secrets are generated once — use `selva keys rotate` to rotate them later. Env-var reference: [packages/selva/.env.example](../packages/selva/.env.example).
-
-If HTTPS isn't live yet (e.g. first boot before a domain/reverse proxy is configured), session cookies default to `Secure` and get dropped by the browser over plain HTTP. Add `ALLOW_INSECURE_COOKIES=true` to `.env` temporarily, and remove it once HTTPS is live — edit with a real editor (`nano`), not `echo >>`: if the file's last line has no trailing newline, `echo >>` concatenates onto it instead of adding a new line.
-
-## `selva` commands
-
-All commands run from the deployment directory.
-
-### `selva init`
-
-Re-prompts for config and rewrites `.env` (uses existing values as defaults). Does not regenerate secrets or touch `package.json`. Restart afterwards.
-
-### `selva doctor [--fix]`
-
-Validates the deployment without starting it. Exits 0 on success, 1 on any failure. Checks: required files, secret key format, provider/tenancy values, `DATA_PATH` writability, `@selvajs/selva` installed, `ORIGIN` valid, Node engine compatibility, CLI/runtime version alignment, boot persistence, scaffold layout drift, provider-specific config (Supabase, header-auth), and deprecated env var names.
-
-`--fix` applies the repairs it can make safely, prompting for confirmation on each.
-
-### `selva start / stop / restart`
-
-- `start` — `pm2 start ecosystem.config.cjs`
-- `stop` — `pm2 stop selva-compute`
-- `restart` — `pm2 restart selva-compute --update-env` (the `--update-env` flag picks up `.env` changes — always use this, never raw `pm2 restart`)
-
-Do **not** install PM2 globally — use the deployment-local `pm2` in `node_modules/.bin/` (what `npx pm2` resolves to from inside the deployment directory). Two PM2s managing the same daemon causes version-skew issues.
-
-To persist the process list across reboots: `npx pm2 save`. To auto-start PM2 on boot: `npx pm2 startup systemd -u $USER --hp $HOME` — it prints a `sudo env PATH=...` command. **Before pasting it, verify it references the deployment-local `pm2`** (e.g. `/home/you/apps/selva/node_modules/pm2/bin/pm2`), not a global one; rewrite it if not. Then run `npx pm2 save` again. Confirm the systemd unit uses the local binary with `grep -E 'ExecStart|ExecStop' /etc/systemd/system/pm2-$USER.service`.
-
-### `selva logs`
-
-`pm2 logs selva-compute`. Extra args pass through (e.g. `selva logs --lines 200`).
-
-### `selva update`
-
-Runs `npm update --save --prefer-online @selvajs/cli @selvajs/selva` and restarts. If before/after versions are identical despite a known new release, you've hit npm's stale packument cache — wait for the cache to expire and re-run.
-
-### `selva migrate`
-
-Brings an existing deployment's `package.json` onto the current scaffold layout (scripts, dependency shape). Run after major CLI upgrades; safe to re-run.
-
-### `selva keys rotate <hmac|at-rest>`
-
-Generates a fresh secret and writes it to `.env`. Asks for confirmation.
-
-| Target    | Env var             | What it breaks                                                             |
-| --------- | ------------------- | -------------------------------------------------------------------------- |
-| `hmac`    | `SELVA_HMAC_KEY`    | Logs everyone out; invalidates share/invite tokens.                        |
-| `at-rest` | `SELVA_AT_REST_KEY` | Encrypted Rhino API key becomes unreadable — re-enter at `/admin/compute`. |
-
-Restart afterwards.
-
-## npm script aliases
-
-| `npm run …`       | Runs            |
-| ----------------- | --------------- |
-| `npm start`       | `selva start`   |
-| `npm run stop`    | `selva stop`    |
-| `npm run restart` | `selva restart` |
-| `npm run logs`    | `selva logs`    |
-| `npm run doctor`  | `selva doctor`  |
-| `npm run update`  | `selva update`  |
+```bash
+grep -E 'ExecStart|ExecStop' /etc/systemd/system/pm2-$USER.service
+```
 
 ## Troubleshooting
 
-### Login appears to succeed but I'm not signed in
+### Login succeeds but I'm not signed in
 
-Session cookie has `Secure` flag but you're on HTTP — the browser drops it. Diagnose:
+Almost always the `Secure` cookie problem described above. Confirm it:
 
 ```bash
 curl -i -X POST http://localhost:3000/login \
@@ -120,19 +130,19 @@ curl -i -X POST http://localhost:3000/login \
   2>&1 | grep -iE "HTTP/|set-cookie|location"
 ```
 
-If `set-cookie` contains `Secure` and you're on HTTP → add `ALLOW_INSECURE_COOKIES=true`. If the response is `200` + `401` JSON → wrong password. To reset a local-provider admin password: `cp .selva-data/auth-users.json{,.bak} && rm .selva-data/auth-users.json`, then visit `/setup`.
+If `set-cookie` carries `Secure` and you're on HTTP, set `ALLOW_INSECURE_COOKIES=true`. If you get a `200` with `401` JSON instead, the password is simply wrong. To reset a local-provider admin, run `cp .selva-data/auth-users.json{,.bak} && rm .selva-data/auth-users.json` and visit `/setup`.
 
 ### "Cross-site POST form submissions are forbidden"
 
-`ORIGIN` in `.env` must exactly match the browser URL — same scheme, same host, no trailing slash. Fix with `nano`, then `npm run restart`.
+`ORIGIN` in `.env` has to match the URL in the browser exactly: same scheme, same host, no trailing slash. Fix it and `npm run restart`.
 
-### App running but nothing reachable from outside
+### The app is running but unreachable from outside
 
-Expected before a reverse proxy is in front of it — see [Reverse proxy](deployment/reverse-proxy.md). Selva should only ever be bound to `127.0.0.1`.
+Expected until a reverse proxy is in front of it. Selva should only ever bind to `127.0.0.1`. See [Reverse proxy](deployment/reverse-proxy.md).
 
-### `npm run update` shows the same version before/after
+### `npm run update` reports the same version before and after
 
-npm packument cache. Force-clear:
+npm's packument cache is stale. Force it:
 
 ```bash
 npm cache clean --force && rm -rf node_modules package-lock.json && npm install --prefer-online
@@ -141,21 +151,27 @@ npm run restart
 
 ### `@selvajs/selva@0.10.2` fails with unresolved `workspace:*`
 
-That version was published incorrectly. Force past the cache:
+That version was published broken and unpublished since; your cache is holding onto it.
 
 ```bash
 npm cache clean --force && rm -rf node_modules package-lock.json
 npx --yes @selvajs/cli@latest .   # re-scaffold in place, or into a fresh dir
 ```
 
-### PM2 version-skew warning on boot
+### pm2 version-skew warning on boot
 
-The systemd unit points at a different `pm2` than you manage with. Rewrite the `ExecStart`/`ExecStop` lines in `/etc/systemd/system/pm2-$USER.service` to the deployment-local binary, then `sudo systemctl daemon-reload && sudo systemctl restart pm2-$USER`.
+The systemd unit points at a different pm2 than the one you manage the deployment with. Rewrite the `ExecStart` and `ExecStop` lines in `/etc/systemd/system/pm2-$USER.service` to the deployment-local binary, then:
 
-## Source locations
+```bash
+sudo systemctl daemon-reload && sudo systemctl restart pm2-$USER
+```
 
-- CLI source: [packages/cli/src/](../packages/cli/src/)
-- Deployment templates: [packages/selva/templates/](../packages/selva/templates/)
-- Env-var reference: [packages/selva/.env.example](../packages/selva/.env.example)
+If `selva start` refuses outright, saying the running daemon is _newer_ than the local pm2, a global pm2 owns the daemon. Don't run `pm2 update`; it would downgrade the daemon and drop its process table. Find the conflict first with `which -a pm2`, `pm2 -v`, and `pm2 ping`.
+
+## Reference
+
+- CLI source: [packages/cli/src/](https://github.com/VektorNode/selva/tree/main/packages/cli/src/)
+- Deployment templates: [packages/selva/templates/](https://github.com/VektorNode/selva/tree/main/packages/selva/templates/)
+- Every env var, documented inline: [packages/selva/.env.example](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example)
 - Host prerequisites: [deployment/prerequisites.md](deployment/prerequisites.md)
 - Reverse proxy: [deployment/reverse-proxy.md](deployment/reverse-proxy.md)

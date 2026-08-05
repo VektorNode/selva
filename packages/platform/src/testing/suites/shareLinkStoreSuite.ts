@@ -148,6 +148,45 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 			expect(got).toBeNull();
 		});
 
+		// Expiry is a store-level filter, not just a route-level check: the local
+		// store once tested only `revokedAt`, so an expired link stayed listed and
+		// resolvable while Supabase (which filters both in SQL) reported it dead.
+		it('an expired link is excluded from listByDefinition', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const l = link(scope, { expiresAt: new Date(Date.now() - 60_000).toISOString() });
+			await store.create(ctx(scope.ownerId), l);
+
+			const page = await store.listByDefinition(ctx(scope.ownerId), scope.definitionId);
+			expect(page.items.map((x) => x.id)).not.toContain(l.id);
+		});
+
+		it('an expired link makes getByTokenHash return null', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const l = link(scope, {
+				tokenHash: 'already-expired',
+				expiresAt: new Date(Date.now() - 60_000).toISOString()
+			});
+			await store.create(ctx(scope.ownerId), l);
+
+			const got = await store.getByTokenHash(ctx(scope.ownerId), 'already-expired');
+			expect(got).toBeNull();
+		});
+
+		it('a link expiring in the future still resolves', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const l = link(scope, {
+				tokenHash: 'not-yet-expired',
+				expiresAt: new Date(Date.now() + 600_000).toISOString()
+			});
+			await store.create(ctx(scope.ownerId), l);
+
+			const got = await store.getByTokenHash(ctx(scope.ownerId), 'not-yet-expired');
+			expect(got?.id).toBe(l.id);
+		});
+
 		it('revoke is idempotent (no error on double-revoke)', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();

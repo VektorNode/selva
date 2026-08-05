@@ -37,6 +37,9 @@ export class LocalShareLinkStore implements IShareLinkStore {
 	private readonly events: IEventSink;
 	private readonly configFilePath: string;
 
+	// Callers must still `setDefinitionProvider` before token resolution, or the
+	// §7 soft-delete cascade check silently no-ops. LocalDataProvider builds this
+	// store directly and does that wiring.
 	static fromEnv(env: Record<string, string | undefined>): LocalShareLinkStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		return new LocalShareLinkStore({
@@ -68,8 +71,11 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		await writeJsonFile(this.configFilePath, data);
 	}
 
+	// Revoked OR expired is dead. Supabase filters both in SQL, so leaving
+	// expiry out here made the same link read as live locally and dead there.
 	private isLive(l: ShareLink | undefined | null): l is ShareLink {
-		return Boolean(l && l.revokedAt == null);
+		if (!l || l.revokedAt != null) return false;
+		return l.expiresAt == null || Date.parse(l.expiresAt) > Date.now();
 	}
 
 	async create(ctx: RequestContext, link: ShareLink): Promise<void> {

@@ -31,8 +31,8 @@ Pick [Supabase](../supabase/README.md) when:
 
 - You need multiple selva app instances behind a load balancer
 - You want managed auth (password reset, MFA, OAuth)
-- You want managed Postgres + storage with backups + RLS
-- You need atomic counters across processes
+- You want managed Postgres + storage with backups, and per-row access rules enforced by the database
+- You need a counter several processes can raise at once without losing increments
 
 ---
 
@@ -114,7 +114,7 @@ Users live in `users.json` with `PBKDF2-SHA256` password hashes and platform per
 
 Each store (`LocalOrgStore`, `LocalProjectStore`, `LocalDefinitionStore`, `LocalInviteStore`, `LocalComputeServerStore`) reads its JSON file fully into memory on each call, mutates, and writes back. Fine at config-scale; not for high-churn data.
 
-Access control is enforced **in-process** by inspecting `RequestContext.adapterContext` — there's no RLS layer to lean on. Tests for these checks live alongside each store.
+Access control is enforced **in the app process** by inspecting `RequestContext.adapterContext`. There is no database underneath to enforce it a second time, so these checks are the only thing standing between a caller and someone else's data. Tests for them live alongside each store.
 
 ### Storage
 

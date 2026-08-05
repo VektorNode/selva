@@ -241,7 +241,7 @@ matter how clever the cache. The strategy shifts:
 
 ## 4. Networking and Selva server scaling
 
-- Client ↔ Selva stays HTTPS. The WebSocket (port 8765) remains plugin-local;
+- Client ↔ Selva stays HTTPS. The WebSocket stays plugin-local, bound to loopback;
   for job-status pushes in the cloud path, **SSE** is sufficient and far easier
   behind load balancers.
 - Put compute servers, the Selva server, and storage **in the same VPC/region**

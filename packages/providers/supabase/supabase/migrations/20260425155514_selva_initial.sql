@@ -744,7 +744,7 @@ with check (
 -- Invite tokens are HMAC-hashed at the route layer (the selva app's
 -- `lib/server/invites/token.server.ts`) before reaching the store — the raw
 -- token is shown to the admin once and never persisted. A DB-only leak
--- therefore can't be replayed without the instance's INVITE_TOKEN_SECRET.
+-- therefore can't be replayed without the instance's SELVA_HMAC_KEY.
 -- Mirrors the share-link design (`share_links.token_hash`).
 create table if not exists selva.invites (
 	id uuid primary key,
@@ -965,7 +965,7 @@ with check (selva.is_instance_admin());
 -- 10. share_links (spec §7)
 --
 -- Per-definition tokens granting unauthenticated access to one
--- (definitionId, channel). token_hash is HMAC(SHARE_LINK_SECRET, raw); the
+-- (definitionId, channel). token_hash is HMAC(SELVA_HMAC_KEY, raw); the
 -- raw token is shown to the minter once at creation.
 -- ============================================================================
 

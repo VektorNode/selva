@@ -2,7 +2,7 @@
 title: Get Started Overview
 group: Get Started
 order: 1
-published: true
+published: false
 description: 'Three steps to a live deployment, plus the mental model for compute vs. app servers.'
 ---
 
@@ -19,14 +19,14 @@ Getting a definition online takes three steps. There's an optional fourth if you
 
 ## Just want to look around first?
 
-You don't have to rent a server to try this. [Local Dev Setup](../QuickStart.md) runs the whole app on your laptop. You'll still need somewhere to solve geometry, but everything else is local — it's the fastest way to get a feel for the thing before committing to any infrastructure.
+You don't have to rent a server to try this. [Local Dev Setup](../QuickStart.md) runs the whole app on your laptop. You'll still need somewhere to solve geometry, but everything else is local. It's the fastest way to get a feel for the thing before committing to any infrastructure.
 
 ## Before you start
 
 Going live means running two machines, which sounds like more than it is:
 
-- **A Compute server** — a Windows machine, usually a cloud VM you rent, running Rhino with no screen and no mouse. It sits there and solves definitions whenever your app asks. That's step 1.
-- **An app server** — anything that can run the Selva web app and serve it to browsers. That's step 3.
+- **A Compute server:** a Windows machine, usually a cloud VM you rent, running Rhino with no screen and no mouse. It sits there and solves definitions whenever your app asks. That's step 1.
+- **An app server:** anything that can run the Selva web app and serve it to browsers. That's step 3.
 
 You'll also hear about **providers**. That's just where logins and files live. The default (`local`) keeps everything on disk and needs no setup at all, so you can safely not think about it until step 3.
 
@@ -34,7 +34,7 @@ If you've deployed a web app before, none of this will surprise you. If you have
 
 ## 1. Rhino.Compute
 
-This is the headless Rhino that does the actual solving once you're live. Use the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) — it adds block-instance support, which the stock build lacks.
+This is the headless Rhino that does the actual solving once you're live. Use the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d); it carries several changes Selva relies on, block instances among them.
 
 One thing to watch: install Selva and any plugins your definitions rely on under the `rhino.compute` account. Plugins installed under a different user won't be there when Compute goes looking for them.
 
@@ -60,7 +60,7 @@ npm start                        # runs it under pm2, which keeps it alive
 
 `npx` fetches and runs the Selva command-line tool without installing it first. It'll ask which provider you want, what your site's URL is, and a few other things, then hand you a folder that's ready to run.
 
-From there: open `/setup` to create the admin account (only works on first boot), register your Compute server at `/admin/compute`, upload a definition, and share the link. Backend choices live in the provider settings — see [Providers](../providers.md).
+From there: open `/setup` to create the admin account (only works on first boot), register your Compute server at `/admin/compute`, upload a definition, and share the link. Backend choices live in the provider settings, see [Providers](../providers.md).
 
 See [CLI](../CLI.md), [Local dev setup](../QuickStart.md), [Deployment prerequisites](../deployment/prerequisites.md).
 

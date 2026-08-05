@@ -104,6 +104,9 @@ export const actions = {
 				return fail(501, { error: 'This provider does not support invite-based signup.' });
 			}
 		} catch (err) {
+			// The account is created before the invite is consumed on purpose: a
+			// failed signup must leave the invite usable. A re-submit is caught by
+			// the `!invite` guard above, which already returns 410.
 			const msg = err instanceof Error ? err.message : 'Could not create your account.';
 			return fail(400, { error: msg });
 		}
