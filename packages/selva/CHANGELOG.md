@@ -1,5 +1,7 @@
 # @selvajs/selva
 
+## 4.8.0-beta.8
+
 ## 4.8.0-beta.7
 
 ### Patch Changes

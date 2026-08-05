@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/ui",
-	"version": "6.0.0-beta.3",
+	"version": "6.0.0-beta.4",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
 	"author": "VektorNode",

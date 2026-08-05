@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/selva",
-	"version": "4.8.0-beta.7",
+	"version": "4.8.0-beta.8",
 	"description": "Selva — self-contained Grasshopper-driven web app. Install, configure via .env, deploy.",
 	"license": "MIT",
 	"author": "VektorNode",

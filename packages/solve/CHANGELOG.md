@@ -1,5 +1,14 @@
 # @selvajs/solve
 
+## 1.0.0-beta.8
+
+### Patch Changes
+
+- Updated dependencies [0e2c428]
+  - @selvajs/platform@0.16.1-beta.1
+  - @selvajs/schemas@5.0.0-beta.1
+  - @selvajs/compute@4.0.0-beta.4
+
 ## 1.0.0-beta.7
 
 ### Major Changes

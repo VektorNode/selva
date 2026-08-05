@@ -1,5 +1,15 @@
 # @selvajs/server
 
+## 1.0.0-beta.7
+
+### Patch Changes
+
+- 0e2c428: Clean up published tarballs. The monorepo-internal `source` export condition is renamed to `selva-source` so it can never collide with a consumer resolving the common `source` condition; published packages no longer ship raw `src/` TypeScript or compiled test files. Publish-time manifest rewriting is gone — the committed package.json is what ships, gated by `publint --strict` and a tarball contents check.
+- Updated dependencies [0e2c428]
+  - @selvajs/platform@0.16.1-beta.1
+  - @selvajs/schemas@5.0.0-beta.1
+  - @selvajs/compute@4.0.0-beta.4
+
 ## 1.0.0-beta.6
 
 ### Patch Changes
