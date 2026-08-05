@@ -13,58 +13,35 @@
 	/>
 </svelte:head>
 
-<!-- Hero: the claim on the left, the claim demonstrated on the right. -->
 <section class="mx-auto max-w-7xl px-6 pt-16 pb-16 sm:pt-24">
-	<div class="grid items-center gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-		<div>
-			<span
-				class="border-border bg-muted/50 text-muted-foreground mb-6 inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-xs"
+	<div class="mx-auto max-w-2xl text-center">
+		<span
+			class="border-border bg-muted/50 text-muted-foreground mb-6 inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-xs"
+		>
+			<span class="bg-primary size-1.5 animate-pulse rounded-full"></span>
+			plugin out now · web app in development
+		</span>
+		<h1 class="text-4xl font-bold tracking-tight text-balance sm:text-5xl">
+			Grasshopper logic,<br />
+			<span class="text-primary">made shareable.</span>
+		</h1>
+		<p class="text-muted-foreground/80 mt-6 text-sm text-pretty">
+			The plugin is out now. The hosted web app is still in development.
+		</p>
+
+		<div class="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
+			<a
+				href={FOOD4RHINO_URL}
+				target="_blank"
+				rel="noreferrer"
+				class="bg-primary text-primary-foreground inline-flex items-center rounded-lg px-5 py-2.5 text-sm font-semibold transition hover:opacity-90"
 			>
-				<span class="bg-primary size-1.5 animate-pulse rounded-full"></span>
-				plugin out now · web app in development
-			</span>
-			<!-- The vw term only bites between lg and ~1100px, where the two-column layout
-			     leaves the first line a few px short of fitting and orphans the comma. -->
-			<h1
-				class="text-4xl font-bold tracking-tight text-balance sm:text-5xl lg:text-[min(3.75rem,5.4vw)]"
-			>
-				Grasshopper logic,<br />
-				<span class="text-primary">made shareable.</span>
-			</h1>
-			<p class="text-muted-foreground/80 mt-6 max-w-lg text-sm text-pretty">
-				The plugin is out now. The hosted web app is still in development — the video shows where it
-				stands.
+				Install from Food4Rhino
+			</a>
+			<p class="text-muted-foreground text-sm">
+				or search <code class="text-foreground font-semibold">{YAK_PACKAGE_NAME}</code> in Rhino's Package
+				Manager
 			</p>
-
-			<div class="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
-				<a
-					href={FOOD4RHINO_URL}
-					target="_blank"
-					rel="noreferrer"
-					class="bg-primary text-primary-foreground inline-flex items-center rounded-lg px-5 py-2.5 text-sm font-semibold transition hover:opacity-90"
-				>
-					Install from Food4Rhino
-				</a>
-				<p class="text-muted-foreground text-sm">
-					or search <code class="text-foreground font-semibold">{YAK_PACKAGE_NAME}</code> in Rhino's Package
-					Manager
-				</p>
-			</div>
-		</div>
-
-		<div class="border-border bg-card overflow-hidden rounded-2xl border shadow-sm">
-			<!-- Drop the file in packages/website/static/ and uncomment the <source>
-			     below. Add poster="/selva-demo.jpg" if you have a still frame,
-			     otherwise the box stays black until it loads. -->
-			<video
-				controls
-				playsinline
-				preload="metadata"
-				class="aspect-video w-full bg-black"
-				aria-label="Selva demo"
-			>
-				<!-- <source src="/selva-demo.mp4" type="video/mp4" /> -->
-			</video>
 		</div>
 	</div>
 </section>
