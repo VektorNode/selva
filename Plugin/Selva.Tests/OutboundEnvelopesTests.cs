@@ -147,56 +147,6 @@ public class OutboundEnvelopesTests
         Assert.False(string.IsNullOrEmpty((string)json["reason"]));
     }
 
-    // -------------------------------------------------------------------------
-    // Cross-stack golden fixtures — the SAME json files vitest loads on the TS side.
-    // -------------------------------------------------------------------------
-
-    [Fact]
-    public void ParametersAdded_MatchesSharedCrossStackFixture()
-    {
-        var fixture = LoadFixture("parameters-added.json");
-        var produced = Json(OutboundEnvelopes.ParametersAdded(
-            (string)fixture["sessionId"],
-            fixture["availableParams"].ToObject<DiscoveredParameters>()));
-
-        Assert.Equal((string)fixture["type"], (string)produced["type"]);
-        Assert.NotNull(produced["availableParams"]);
-        Assert.NotNull(fixture["availableParams"]);
-        Assert.Null(produced["data"]);
-    }
-
-    [Fact]
-    public void MetadataUpdated_MatchesSharedCrossStackFixture()
-    {
-        var fixture = LoadFixture("metadata-updated.json");
-        var produced = Json(OutboundEnvelopes.MetadataUpdated(
-            (string)fixture["sessionId"],
-            new DiscoveredParameters
-            {
-                Inputs = fixture["_source"]["inputs"].ToObject<List<DiscoveredInput>>(),
-                Outputs = fixture["_source"]["outputs"].ToObject<List<DiscoveredOutput>>()
-            }));
-
-        Assert.Equal((string)fixture["type"], (string)produced["type"]);
-        Assert.True(JToken.DeepEquals(fixture["changedParams"], produced["changedParams"]),
-            $"changedParams drift:\n fixture={fixture["changedParams"]}\n c#={produced["changedParams"]}");
-    }
-
-    private static JObject LoadFixture(string name)
-    {
-        var path = Path.Combine(FindRepoRoot(), "packages", "schemas", "fixtures", "wire", name);
-        return JObject.Parse(File.ReadAllText(path));
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "pnpm-workspace.yaml")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new DirectoryNotFoundException(
-            "Could not locate repo root (pnpm-workspace.yaml) from " + AppContext.BaseDirectory);
-    }
+    // Cross-stack golden fixtures (one per envelope, shared with vitest) live in
+    // WireFixtureContractTests — completeness is enforced there by reflection.
 }

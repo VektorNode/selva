@@ -1,0 +1,6 @@
+{
+	"type": "syncApplied",
+	"sessionId": "session-fixture",
+	"success": true,
+	"message": "Sync completed successfully"
+}

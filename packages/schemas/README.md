@@ -57,7 +57,15 @@ The JSON schemas themselves are published and importable: `@selvajs/schemas/ui-s
 
 ## Fixtures
 
-`fixtures/` holds wire-format payloads asserted from **both** stacks: the `packages/ui` and `packages/plugin-ui` vitest suites and the C# `OutputPayloadContractTests` read the same files, so the two sides cannot drift apart silently. They are test contracts, not published artifacts.
+`fixtures/` holds wire-format payloads asserted from **both** stacks — test contracts, not published artifacts.
+
+`fixtures/wire/` carries one fixture per outbound WebSocket envelope. The C# side generates them and keeps them honest (`WireFixtureContractTests` serializes every `OutboundEnvelopes` factory and compares byte-for-byte; a reflection test forbids a factory without a fixture), and the TS side validates every fixture against the Zod guards the dispatcher runs on live messages (`plugin-ui`'s `wire-fixtures.test.ts`, which also requires a fixture per validated message type). After an intentional shape change, regenerate with:
+
+```bash
+UPDATE_WIRE_FIXTURES=1 dotnet test --filter WireFixtureContractTests
+```
+
+The remaining fixtures (`dynamic-value-list-payload.json`) are shared the same way by `packages/ui` and the C# `OutputPayloadContractTests`.
 
 ## Testing
 

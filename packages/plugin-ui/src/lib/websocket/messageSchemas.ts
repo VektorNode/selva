@@ -191,6 +191,9 @@ const schemasByType = {
 
 export type ValidatedMessageType = keyof typeof schemasByType;
 
+/** Every message type with a validator — the wire-fixtures test derives its completeness check from this. */
+export const validatedMessageTypes = Object.keys(schemasByType) as ValidatedMessageType[];
+
 export type ValidationResult =
 	{ ok: true; message: unknown } | { ok: false; type: string; error: z.ZodError; payload: unknown };
 

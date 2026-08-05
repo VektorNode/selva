@@ -1,0 +1,11 @@
+{
+	"type": "outputs",
+	"sessionId": "session-fixture",
+	"outputs": {
+		"22222222-2222-4222-8222-222222222222": 9.5
+	},
+	"fileOutputs": {},
+	"binaryBatchCount": 2,
+	"modelUnits": "Meters",
+	"displayItems": null
+}

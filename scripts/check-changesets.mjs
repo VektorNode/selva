@@ -41,13 +41,14 @@ const changedFiles = execFileSync('git', ['diff', '--name-only', baseRef, headRe
 	.split('\n')
 	.filter(Boolean);
 
-// Files that don't ship: tests, docs, and local tooling config. Everything
-// else in a package dir counts — conservative on purpose, with the empty
-// changeset as the explicit escape hatch.
+// Files that don't ship: tests, cross-stack test fixtures, docs, and local
+// tooling config. Everything else in a package dir counts — conservative on
+// purpose, with the empty changeset as the explicit escape hatch.
 function shipsToConsumers(pathInPackage) {
 	return !(
 		/(^|\/)__tests__\//.test(pathInPackage) ||
 		/\.(test|spec)\.[cm]?[jt]sx?$/.test(pathInPackage) ||
+		/^fixtures\//.test(pathInPackage) ||
 		pathInPackage.endsWith('.md') ||
 		/(^|\/)(vitest|playwright)\.config\./.test(pathInPackage) ||
 		/(^|\/)e2e\//.test(pathInPackage)
