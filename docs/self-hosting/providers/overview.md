@@ -1,6 +1,5 @@
 ---
 title: Providers
-group: Concepts
 order: 3
 published: false
 description: 'Bring your own backend: auth, data, and storage are pluggable interfaces you pick at deploy time.'
@@ -30,11 +29,11 @@ These are plain TypeScript interfaces in [`@selvajs/platform`](https://www.npmjs
 
 ## What ships
 
-| Provider                                        | Backend                               | Best for                                  |
-| ----------------------------------------------- | ------------------------------------- | ----------------------------------------- |
-| [`local`](providers/local.md)                   | Files (JSON) + HMAC sessions          | Eval, single-instance                     |
-| [`supabase`](providers/supabase.md)             | Supabase Auth + Postgres + Storage    | Multi-instance, several tenants           |
-| [`header-auth`](providers/header-auth-entra.md) | Trusts reverse-proxy identity headers | Existing SSO (Caddy, oauth2-proxy, Entra) |
+| Provider                                | Backend                               | Best for                                  |
+| --------------------------------------- | ------------------------------------- | ----------------------------------------- |
+| [`local`](./local.md)                   | Files (JSON) + HMAC sessions          | Eval, single-instance                     |
+| [`supabase`](./supabase.md)             | Supabase Auth + Postgres + Storage    | Multi-instance, several tenants           |
+| [`header-auth`](./header-auth-entra.md) | Trusts reverse-proxy identity headers | Existing SSO (Caddy, oauth2-proxy, Entra) |
 
 Pick one with `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER`, then restart. The `.env.example` shipped in your scaffolded deployment documents each one.
 
@@ -44,17 +43,17 @@ Every request carries a `RequestContext`, the caller's identity and scope. One r
 
 ## Writing your own
 
-To back Selva with an in-house identity service, a different database, or an S3-compatible store, see [Writing a provider](providers/writing-a-provider.md).
+To back Selva with an in-house identity service, a different database, or an S3-compatible store, see [Writing a provider](./writing-a-provider.md).
 
 ## Per-backend setup
 
-- [Local](providers/local.md): filesystem, the default.
-- [Supabase](providers/supabase.md): Postgres + Auth + Storage.
-- [Header-auth & Entra](providers/header-auth-entra.md): SSO behind a reverse proxy.
-- [Writing a provider](providers/writing-a-provider.md): roll your own.
+- [Local](./local.md): filesystem, the default.
+- [Supabase](./supabase.md): Postgres + Auth + Storage.
+- [Header-auth & Entra](./header-auth-entra.md): SSO behind a reverse proxy.
+- [Writing a provider](./writing-a-provider.md): roll your own.
 
 ## Next
 
-- [Architecture](architecture.md): where providers sit.
-- [Permissions & Organizations](permissions.md): the authorization model providers store.
-- [Get Started](getting-started/overview.md): deploy with a provider.
+- [Architecture](../../architecture.md): where providers sit.
+- [Permissions & Organizations](../concepts/permissions.md): the authorization model providers store.
+- [Get Started](../get-started/overview.md): deploy with a provider.

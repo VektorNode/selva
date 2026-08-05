@@ -4,8 +4,8 @@ import type { DataTree, InputParam } from '../../types';
 
 /**
  * Characterization tests for TreeBuilder. These pin real-world behavior so a
- * future refactor (#20 in docs/audit-2025.md — collapse the duplicate
- * `TreeBuilder[]` vs `DataTree[]` paths) doesn't silently change semantics.
+ * future refactor (collapsing the duplicate `TreeBuilder[]` vs `DataTree[]`
+ * paths) doesn't silently change semantics.
  *
  * Scenarios mirror the README examples and the way the library is actually
  * used end-to-end: `getIO` -> `fromInputParams` -> `solve` -> `getTreeValue`,

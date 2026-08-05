@@ -1,6 +1,5 @@
 ---
 title: Header-auth & Entra
-group: Providers
 order: 3
 published: false
 description: 'Trust a reverse proxy for identity: front Selva with Entra SSO via oauth2-proxy.'
@@ -15,7 +14,7 @@ description: 'Trust a reverse proxy for identity: front Selva with Entra SSO via
 - Your org already authenticates through an SSO IdP.
 - A reverse proxy (Caddy `forward_auth`, oauth2-proxy, Authelia, Entra) sits in front of the app.
 
-It does auth only. Pair it with [`local`](../providers/local.md) or [`supabase`](../providers/supabase.md) for data and storage.
+It does auth only. Pair it with [`local`](./local.md) or [`supabase`](./supabase.md) for data and storage.
 
 ## ⚠ Security: the deployment IS the boundary
 
@@ -25,7 +24,7 @@ This provider does **no cryptographic verification.** It trusts the headers it r
 
 ## Prerequisites
 
-You need Selva already scaffolded and running with `SELVA_AUTH_PROVIDER=header` (see [Prerequisites](../deployment/prerequisites.md) and the [CLI guide](../CLI.md)), and a reverse proxy in front of it (see [Reverse proxy](../deployment/reverse-proxy.md)). The walkthrough below uses Caddy + oauth2-proxy, one concrete recipe among several. Any proxy that can do `forward_auth` and header injection works the same way.
+You need Selva already scaffolded and running with `SELVA_AUTH_PROVIDER=header` (see [Prerequisites](../deployment/prerequisites.md) and the [CLI guide](../get-started/cli.md)), and a reverse proxy in front of it (see [Reverse proxy](../deployment/reverse-proxy.md)). The walkthrough below uses Caddy + oauth2-proxy, one concrete recipe among several. Any proxy that can do `forward_auth` and header injection works the same way.
 
 ---
 
@@ -245,5 +244,5 @@ Re-run all three after any change to the Caddyfile, oauth2-proxy config, or fire
 
 ## Next
 
-- [Providers overview](../providers.md)
-- [Get Started](../getting-started/overview.md)
+- [Providers overview](./overview.md)
+- [Get Started](../get-started/overview.md)

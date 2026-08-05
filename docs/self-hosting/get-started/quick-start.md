@@ -1,6 +1,5 @@
 ---
 title: Local Dev Setup
-group: Get Started
 order: 4
 published: false
 description: 'Run the whole app on your own machine with hot reload before committing to servers.'
@@ -8,7 +7,7 @@ description: 'Run the whole app on your own machine with hot reload before commi
 
 # Local Dev Setup
 
-This runs the full Selva web app on your own machine, the fastest way to see it working before you deploy anything. One thing stays remote: solving needs a Rhino.Compute server, which is Windows-only and doesn't run as part of this. For a real deployment, see [Get Started](getting-started/overview.md) instead.
+This runs the full Selva web app on your own machine, the fastest way to see it working before you deploy anything. One thing stays remote: solving needs a Rhino.Compute server, which is Windows-only and doesn't run as part of this. For a real deployment, see [Get Started](./overview.md) instead.
 
 ## Prerequisites
 
@@ -56,7 +55,7 @@ pnpm dev:selva
 
 On first boot, visit `/setup` to create the platform admin: an email, a password of at least 8 characters, and (in single-tenant mode) a company name, which becomes your first organization with a "Default" project inside it. Once an admin exists the page redirects to `/login`.
 
-Then register your Rhino.Compute server at `/admin/compute`, covered in [RhinoCompute.md](RhinoCompute.md). Until you do, the app runs but no definition will solve.
+Then register your Rhino.Compute server at `/admin/compute`, covered in [RhinoCompute.md](./rhino-compute.md). Until you do, the app runs but no definition will solve.
 
 ## Plugin UI (optional)
 

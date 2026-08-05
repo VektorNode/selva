@@ -1,7 +1,7 @@
 {
 	"$schema": "https://turborepo.com/schema.json",
 	"ui": "stream",
-	"globalDependencies": ["pnpm-workspace.yaml", "pnpm-lock.yaml", "tsconfig.base.json"],
+	"globalDependencies": ["pnpm-workspace.yaml", "pnpm-lock.yaml", "tsconfig.base.json", "docs/**"],
 	"tasks": {
 		"generate": {
 			"outputs": [
@@ -38,7 +38,7 @@
 		"test": {
 			"dependsOn": ["^build"],
 			"outputs": [],
-			"inputs": ["src/**", "vitest.config.ts", ".env.test"]
+			"inputs": ["src/**", "tests/**", "vitest.config.ts", ".env.test"]
 		},
 		"test:e2e": {
 			"dependsOn": ["build"],

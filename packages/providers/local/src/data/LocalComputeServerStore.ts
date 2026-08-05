@@ -129,8 +129,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 				this.logger.warn(
 					'Could not decrypt apiKey: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
 						'This server is returned without an apiKey and solves against it will fail. ' +
-						'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY. ' +
-						'See docs/Troubleshooting.md',
+						'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY.',
 					{
 						component: 'selva',
 						serverLabel: s.label,

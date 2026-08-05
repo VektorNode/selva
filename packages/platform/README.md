@@ -111,7 +111,7 @@ Throw `ProviderError` for user-facing failures (`new ProviderError('...', 404)`)
 
 ## Data privacy
 
-User identity, credentials, and personal data are owned by the auth provider. Selva stores session tokens that carry no information themselves, plus user IDs and authorization metadata. What a deployment holds and who is responsible for it: [Providers](https://github.com/VektorNode/selva/blob/main/docs/providers.md) and [Security & Limits](https://github.com/VektorNode/selva/blob/main/docs/security-and-limits.md).
+User identity, credentials, and personal data are owned by the auth provider. Selva stores session tokens that carry no information themselves, plus user IDs and authorization metadata. What a deployment holds and who is responsible for it: [Providers](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/providers/overview.md) and [Security & Limits](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/concepts/security-and-limits.md).
 
 ---
 

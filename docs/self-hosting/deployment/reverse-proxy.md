@@ -1,6 +1,5 @@
 ---
 title: Reverse Proxy
-group: Deployment
 order: 2
 published: false
 description: 'Why Selva needs a reverse proxy in front of it, and a minimal Caddy example.'
@@ -12,7 +11,7 @@ Selva must be unreachable except through a reverse proxy: bind it to `127.0.0.1`
 
 Any reverse proxy that can do a simple `reverse_proxy` and, later, `forward_auth` works: Caddy, nginx, Traefik, a platform-managed proxy. The example below uses Caddy for its automatic HTTPS and simple config; treat it as illustrative, not a requirement.
 
-Assumes Selva is already scaffolded and running per the [CLI guide](../CLI.md).
+Assumes Selva is already scaffolded and running per the [CLI guide](../get-started/cli.md).
 
 ---
 
@@ -29,7 +28,7 @@ sudo systemctl reload caddy
 
 Open port 443 (and 80, for ACME + redirect) in your host's firewall; consult its docs, since this varies per provider. Caddy issues and renews the TLS cert automatically. Update `.env`: `ORIGIN=https://selva.yourdomain.com`, and remove `ALLOW_INSECURE_COOKIES=true` if it was set for HTTP-only testing. Then `npm run restart`.
 
-No domain yet? Swap the site block for `:80 { reverse_proxy 127.0.0.1:3000 }`. Cookies will need `ALLOW_INSECURE_COOKIES=true` until HTTPS is live (see [CLI guide](../CLI.md)).
+No domain yet? Swap the site block for `:80 { reverse_proxy 127.0.0.1:3000 }`. Cookies will need `ALLOW_INSECURE_COOKIES=true` until HTTPS is live (see [CLI guide](../get-started/cli.md)).
 
 For a hardened config (security headers, per-route caching, access logging), start from [Caddyfile.example](./Caddyfile.example).
 

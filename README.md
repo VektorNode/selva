@@ -51,7 +51,7 @@ authoritative for the full folder layout.
 
 ## Quick Start
 
-See [docs/QuickStart.md](./docs/QuickStart.md) for setup and development instructions.
+See [docs/self-hosting/get-started/quick-start.md](./docs/self-hosting/get-started/quick-start.md) for setup and development instructions.
 
 ---
 

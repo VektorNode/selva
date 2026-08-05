@@ -1,6 +1,5 @@
 ---
 title: Permissions & Orgs
-group: Concepts
 order: 4
 published: false
 description: 'How organizations, roles, and per-resource permissions decide who can see and do what.'
@@ -114,9 +113,9 @@ turning it off both blocks the admin routes and stops honouring existing tokens.
 authenticated user acts within it. `tenancy: 'multi'` makes orgs first-class, so
 setup creates only the platform admin and users create their own orgs from there.
 The two modes create that first platform admin differently; see
-[the admin guide](admin.md#first-run-setup).
+[the admin guide](./admin.md#first-run-setup).
 
 ## Next
 
-- [Admin guide](admin.md): where these grants are managed day to day.
-- [Providers](providers.md): which store backs each of these grants.
+- [Admin guide](./admin.md): where these grants are managed day to day.
+- [Providers](../providers/overview.md): which store backs each of these grants.

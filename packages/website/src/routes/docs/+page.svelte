@@ -11,7 +11,7 @@
 	// unpublished doc simply drops out instead of 404-ing.
 	const startHere = [
 		{ slug: 'what-is-selva', hint: 'The 2-minute overview' },
-		{ slug: 'getting-started/overview', hint: 'Three steps to a deployment' },
+		{ slug: 'self-hosting/get-started/overview', hint: 'Three steps to a deployment' },
 		{ slug: 'architecture', hint: 'How the parts fit together' }
 	]
 		.map((s) => ({ ...s, doc: getDoc(s.slug) }))

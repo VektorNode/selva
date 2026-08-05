@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { composeSignal } from '../signal';
 
 /**
- * Listener-leak audit for `composeSignal` (#22 in docs/audit-2025.md).
+ * Listener-leak audit for `composeSignal`.
  *
  * The fast paths use `AbortSignal.any` / `AbortSignal.timeout`, which manage
  * their own listeners. The manual-fallback path (older runtimes) attaches

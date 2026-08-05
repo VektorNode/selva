@@ -1,13 +1,22 @@
-import { docs, getDoc, getDocNeighbors, getUnpublishedTitle, unpublishedSlugs } from '$lib/docs';
+import {
+	docs,
+	getDoc,
+	getDocNeighbors,
+	getUnpublishedTitle,
+	redirectSlugs,
+	unpublishedSlugs
+} from '$lib/docs';
 import { error } from '@sveltejs/kit';
 import type { EntryGenerator, PageLoad } from './$types';
 
 export const prerender = true;
 
 // Every published doc, plus a stub for each unpublished one so its URL explains
-// itself rather than 404-ing.
+// itself rather than 404-ing, plus any old slug that now redirects.
 export const entries: EntryGenerator = () => {
-	return [...docs.map((d) => d.slug), ...unpublishedSlugs].map((slug) => ({ slug }));
+	return [...docs.map((d) => d.slug), ...unpublishedSlugs, ...redirectSlugs].map((slug) => ({
+		slug
+	}));
 };
 
 export const load: PageLoad = async ({ params }) => {

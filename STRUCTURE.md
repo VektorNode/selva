@@ -33,7 +33,11 @@ selva/
 │   ├── cli/                        # @selvajs/cli — scaffold and operate a Selva deployment
 │   └── config/                     # Shared ESLint/Vite/Prettier config
 │
-├── docs/                           # Project documentation
+├── docs/                           # Project documentation, grouped by audience
+│   ├── self-hosting/               # Operators: deploy and run the Selva app
+│   ├── packages/                   # Developers building on @selvajs/*
+│   ├── contributing/               # Repo-only: build, test, release
+│   └── adr/                        # Architecture decision records
 ├── infra/                          # Terraform, deployment configs
 ├── scripts/                        # Build and setup scripts
 └── .github/                        # Issue templates, workflows
@@ -223,3 +227,4 @@ The plugin (C#) and UI (TS) are two implementations of one contract over WebSock
 - `CONTRIBUTING.md` is for human contributors.
 - `STRUCTURE.md` (this file) is the source of truth for layout/naming.
 - Project-internal docs (developer notes, architecture deep-dives) go in `docs/`. Keep `examples/` for runnable artifacts only.
+- `docs/` is grouped by audience, and any doc that can reach the website lives at `audience/group/doc.md` — the folder decides its sidebar group, so there is no `group:` frontmatter to drift. `docs/contributing/` is exempt: it never gets published. See [docs/README.md](./docs/README.md).

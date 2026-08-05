@@ -24,6 +24,6 @@ Selva uses [Turborepo](https://turborepo.com) to run workspace tasks in dependen
 - `turbo run build --force` bypasses the cache.
 - On Windows, `vite build` can occasionally fail with `ENOTEMPTY` in `@selvajs/ui` or `@selvajs/selva` — re-running fixes it.
 
-## When to edit [turbo.json](../turbo.json)
+## When to edit [turbo.json](../../turbo.json)
 
 Only when a task needs explicit deps, outputs, inputs, or env tracking. Adding a script to a package is usually enough.

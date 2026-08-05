@@ -1,6 +1,5 @@
 ---
 title: What is Selva
-group: Concepts
 order: 1
 published: false
 description: 'Turn a Grasshopper definition into a web app: the problem it solves and the two halves that make it work.'
@@ -33,15 +32,15 @@ One schema drives both, generated into TypeScript (UI) and C# (plugin) so they n
 - **Live 3D viewer.** Grasshopper geometry in the browser via Three.js.
 - **Cloud solving.** Runs on Rhino.Compute; users need no Rhino.
 - **Type-safe end to end.** One schema, both stacks generated from it.
-- **Bring your own backend.** Auth, data, storage are pluggable [providers](providers.md).
+- **Bring your own backend.** Auth, data, storage are pluggable [providers](./self-hosting/providers/overview.md).
 
 ## Two ways to use it
 
-1. **Deploy the standalone app** with `@selvajs/selva` + the [CLI](CLI.md) (a command-line tool that sets up and runs your deployment for you). A multi-user platform for hosting and sharing definitions. Most teams take this path.
-2. **Build your own app.** Selva's viewer, controls, and compute client ship as reusable `@selvajs/*` code packages you can drop into your own product. See [Build your own app](getting-started/build-your-own-app.md).
+1. **Deploy the standalone app** with `@selvajs/selva` + the [CLI](./self-hosting/get-started/cli.md) (a command-line tool that sets up and runs your deployment for you). A multi-user platform for hosting and sharing definitions. Most teams take this path.
+2. **Build your own app.** Selva's viewer, controls, and compute client ship as reusable `@selvajs/*` code packages you can drop into your own product. See [Build your own app](./packages/build/overview.md).
 
 ## Next
 
-- [Architecture](architecture.md): how the parts fit together.
-- [Providers](providers.md): the bring-your-own-backend model.
-- [Get Started](getting-started/overview.md): set it up.
+- [Architecture](./architecture.md): how the parts fit together.
+- [Providers](./self-hosting/providers/overview.md): the bring-your-own-backend model.
+- [Get Started](./self-hosting/get-started/overview.md): set it up.

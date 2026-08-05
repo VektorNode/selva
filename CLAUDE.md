@@ -151,7 +151,7 @@ Component authoring is covered by video, not prose. For the display wire format,
 
 ## Commands
 
-`pnpm install` first. Builds are orchestrated by Turborepo (see `docs/Turborepo.md`); most scripts run through it, with the exceptions noted.
+`pnpm install` first. Builds are orchestrated by Turborepo (see `docs/contributing/turborepo.md`); most scripts run through it, with the exceptions noted.
 
 ```bash
 pnpm dev:plugin             # plugin-ui dev server (http://localhost:5173)

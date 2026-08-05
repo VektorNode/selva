@@ -1,6 +1,5 @@
 ---
 title: Architecture
-group: Concepts
 order: 2
 published: false
 description: 'How the plugin, app, Rhino.Compute, and providers fit together, with an interactive solve-flow map.'
@@ -48,19 +47,19 @@ flowchart LR
 
 ## The packages
 
-| Package                  | Role                                                                                                                                          |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@selvajs/schemas`       | The schema contract + TS/C# generators. Source of truth for both stacks.                                                                      |
-| `@selvajs/plugin-ui`     | The schema designer UI. Embedded into `Selva.gha`.                                                                                            |
-| `@selvajs/selva`         | The deployable web app.                                                                                                                       |
-| `@selvajs/ui`            | Shared Svelte components, theme, viewer building blocks.                                                                                      |
-| `@selvajs/compute`       | Type-safe Rhino.Compute client and data trees. Pure solve/data, no renderer. See [Build your own app](getting-started/build-your-own-app.md). |
-| `@selvajs/visualization` | Headless viewer core: solve response → Three.js. Layers `scene` → `render` → `parse`.                                                         |
-| `@selvajs/solve`         | The solve flow, both sides of the wire (`client` / `server`).                                                                                 |
-| `@selvajs/server`        | Server building blocks: limits, rate limit, SSRF guard, definitions.                                                                          |
-| `@selvajs/platform`      | Provider _interfaces_, no implementations. See [Providers](providers.md).                                                                     |
-| `@selvajs/*-provider`    | Concrete provider implementations.                                                                                                            |
-| `@selvajs/cli`           | Scaffolds and operates a deployment. See [CLI](CLI.md).                                                                                       |
+| Package                  | Role                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `@selvajs/schemas`       | The schema contract + TS/C# generators. Source of truth for both stacks.                                                             |
+| `@selvajs/plugin-ui`     | The schema designer UI. Embedded into `Selva.gha`.                                                                                   |
+| `@selvajs/selva`         | The deployable web app.                                                                                                              |
+| `@selvajs/ui`            | Shared Svelte components, theme, viewer building blocks.                                                                             |
+| `@selvajs/compute`       | Type-safe Rhino.Compute client and data trees. Pure solve/data, no renderer. See [Build your own app](./packages/build/overview.md). |
+| `@selvajs/visualization` | Headless viewer core: solve response → Three.js. Layers `scene` → `render` → `parse`.                                                |
+| `@selvajs/solve`         | The solve flow, both sides of the wire (`client` / `server`).                                                                        |
+| `@selvajs/server`        | Server building blocks: limits, rate limit, SSRF guard, definitions.                                                                 |
+| `@selvajs/platform`      | Provider _interfaces_, no implementations. See [Providers](./self-hosting/providers/overview.md).                                    |
+| `@selvajs/*-provider`    | Concrete provider implementations.                                                                                                   |
+| `@selvajs/cli`           | Scaffolds and operates a deployment. See [CLI](./self-hosting/get-started/cli.md).                                                   |
 
 On the .NET side, schema and drawing logic sit apart from the Rhino-coupled `Selva.GH`/`Selva.Rhino`. That half has no Rhino dependency, so it's unit-testable.
 
@@ -71,6 +70,6 @@ On the .NET side, schema and drawing logic sit apart from the Rhino-coupled `Sel
 
 ## Next
 
-- [Providers](providers.md): the backend model.
-- [Get Started](getting-started/overview.md): stand it up.
-- [Build your own app](getting-started/build-your-own-app.md): use the packages directly.
+- [Providers](./self-hosting/providers/overview.md): the backend model.
+- [Get Started](./self-hosting/get-started/overview.md): stand it up.
+- [Build your own app](./packages/build/overview.md): use the packages directly.

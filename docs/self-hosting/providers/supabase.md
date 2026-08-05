@@ -1,6 +1,5 @@
 ---
 title: Supabase provider
-group: Providers
 order: 2
 published: false
 description: 'Auth, Postgres, and Storage on Supabase, with identity living in the provider.'
@@ -29,5 +28,5 @@ Full setup, env vars, migrations, and RLS notes: [supabase-provider README](http
 
 ## Next
 
-- [Providers overview](../providers.md)
-- [Get Started](../getting-started/overview.md)
+- [Providers overview](./overview.md)
+- [Get Started](../get-started/overview.md)

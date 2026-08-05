@@ -1,6 +1,5 @@
 ---
 title: Rhino Compute Setup
-group: Get Started
 order: 2
 published: false
 description: 'Stand up the headless Rhino that solves your definitions, using the VektorNode fork.'

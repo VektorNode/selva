@@ -1,3 +1,10 @@
+---
+title: Scaling
+order: 8
+published: false
+description: 'Current limits of the compute and data path, and the staged plan for lifting them.'
+---
+
 # Scaling
 
 Selva currently runs fine for a handful of concurrent users. This page maps where
@@ -22,21 +29,21 @@ Browser ──HTTP POST /api/v1/compute──► Selva server ──HTTP──�
 
 - The client never talks to Rhino.Compute directly. The Selva server proxies
   everything and holds the compute URL + API key
-  ([+server.ts](../packages/selva/src/routes/api/v1/compute/+server.ts)).
+  ([+server.ts](../../../packages/selva/src/routes/api/v1/compute/+server.ts)).
 - The full `.gh`, the full input tree, and the full result are each **buffered
   whole in Node memory**, then `JSON.stringify`-ed once and gzipped with
   `gzipSync`. The size caps in
-  [computeLimits.ts](../packages/selva/src/lib/server/computeLimits.ts) exist
+  [computeLimits.ts](../../../packages/selva/src/lib/server/computeLimits.ts) exist
   because a single serialized response approaches V8's ~512 MB string ceiling.
 - File/geometry **inputs and outputs travel as base64 inside JSON** (~4/3
   inflation). ADR 0003 (below) addresses the output side.
 - Multiple compute servers are supported
-  ([IComputeServerStore](../packages/platform/src/computeServer/interface.ts)),
+  ([IComputeServerStore](../../../packages/platform/src/computeServer/interface.ts)),
   but resolution is **pinning, not load balancing**: each definition resolves to
   exactly one server, with a per-server in-process FIFO queue
-  ([clientCache.server.ts](../packages/selva/src/lib/server/compute/clientCache.server.ts)).
+  ([engine.server.ts](../../../packages/selva/src/lib/server/compute/engine.server.ts)).
   `@selvajs/compute` has a `RetryPolicy`, but Selva never wires it (`attempts: 0`).
-- Three cache layers already exist and stack — see [Caching.md](./Caching.md).
+- Three cache layers already exist and stack — see [Caching.md](./caching.md).
   The **definition pointer cache is per compute server**, which constrains how
   load balancing must work (see below).
 - Telemetry is good: `Server-Timing` headers on every solve, per-attempt solve
@@ -69,7 +76,7 @@ Near-term, no architecture change:
   (chunked transfer, drop the explicit `Content-Length`) so a big response never
   blocks the event loop.
 - **File outputs go out-of-band** — this is
-  [ADR 0003](./adr/0003-large-file-output-streaming.md): large `file` outputs are
+  [ADR 0003](../../adr/0003-large-file-output-streaming.md): large `file` outputs are
   staged to storage and the solve response carries a small `file-ref` descriptor;
   the browser streams the download separately. Eliminates the V8 wall and the
   ~5 concurrent in-memory copies in the tab.
@@ -94,7 +101,7 @@ Structural (the keystone for everything in §2):
 ## 2. Compute load balancing and autoscaling
 
 The critical constraint: **the definition pointer cache and `cachesolve` are per
-compute server** ([Caching.md](./Caching.md)). Naive round-robin destroys both —
+compute server** ([Caching.md](./caching.md)). Naive round-robin destroys both —
 every solve would re-upload a multi-MB `.gh`.
 
 - **Definition-sticky routing.** Consistent-hash on definition ID across the
@@ -110,7 +117,7 @@ every solve would re-upload a multi-MB `.gh`.
 - **Wire the retry policy** that `@selvajs/compute` already ships — transient
   failures are routine when compute instances recycle.
 - **Health-based eviction.** The status probe exists
-  ([useServerHealth.svelte.ts](../packages/selva/src/lib/composables/useServerHealth.svelte.ts));
+  ([useServerHealth.svelte.ts](../../../packages/selva/src/lib/composables/useServerHealth.svelte.ts));
   extend it so unhealthy servers are pulled from routing automatically, not just
   shown in the admin UI.
 - **Autoscaling Rhino.Compute** — no official solution exists (McNeel
@@ -208,7 +215,7 @@ When outputs are unique per input, result caching has near-zero hit rate no
 matter how clever the cache. The strategy shifts:
 
 - **Cache the stable upstream artifacts aggressively** — definition bytes,
-  pointer reuse, warm clients. Already done ([Caching.md](./Caching.md));
+  pointer reuse, warm clients. Already done ([Caching.md](./caching.md));
   protect it (that's what sticky routing is for).
 - **Keep input-hash result caching only for the cheap cases.** The in-process
   cache + `cachesolve` already catch "same user re-solves identical inputs"
@@ -265,12 +272,12 @@ matter how clever the cache. The strategy shifts:
 
 ## Roadmap
 
-| Phase | When            | Work                                                                                                                                                                                                                                                                    |
-| ----- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Now (cheap)     | Wire retries; streaming gzip; file inputs via storage/multipart; revert the TEMP 300 MB limits; browser parsing in a Web Worker; ship [ADR 0003](./adr/0003-large-file-output-streaming.md); Rhino 9 Linux prototype spike (VektorNode fork port is the long-lead item) |
-| 2     | Next (keystone) | Async job model: queue + worker + results-to-storage + presigned downloads + binary mesh encoding (needs its own ADR)                                                                                                                                                   |
-| 3     | Then            | Multiple compute servers behind definition-sticky routing with health-based eviction; collect queue-depth metrics                                                                                                                                                       |
-| 4     | When justified  | Warm-pool compute autoscaling (Core-Hour Billing); horizontal Selva instances; content-addressed output blobs                                                                                                                                                           |
+| Phase | When            | Work                                                                                                                                                                                                                                                                        |
+| ----- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Now (cheap)     | Wire retries; streaming gzip; file inputs via storage/multipart; revert the TEMP 300 MB limits; browser parsing in a Web Worker; ship [ADR 0003](../../adr/0003-large-file-output-streaming.md); Rhino 9 Linux prototype spike (VektorNode fork port is the long-lead item) |
+| 2     | Next (keystone) | Async job model: queue + worker + results-to-storage + presigned downloads + binary mesh encoding (needs its own ADR)                                                                                                                                                       |
+| 3     | Then            | Multiple compute servers behind definition-sticky routing with health-based eviction; collect queue-depth metrics                                                                                                                                                           |
+| 4     | When justified  | Warm-pool compute autoscaling (Core-Hour Billing); horizontal Selva instances; content-addressed output blobs                                                                                                                                                               |
 
 Each phase ends with a measurement checkpoint: `Server-Timing` breakdowns and
 the solve-metric sink already record where time and bytes go — let them pick the

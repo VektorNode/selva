@@ -1,6 +1,5 @@
 ---
 title: Local provider
-group: Providers
 order: 1
 published: false
 description: 'The zero-dependency filesystem provider: JSON on disk, HMAC sessions, WebP transcoding.'
@@ -15,7 +14,7 @@ description: 'The zero-dependency filesystem provider: JSON on disk, HMAC sessio
 - Developing or evaluating Selva.
 - A small, single-instance deployment.
 
-For multi-instance or multi-tenant, use [Supabase](../providers/supabase.md) instead.
+For multi-instance or multi-tenant, use [Supabase](./supabase.md) instead.
 
 ## Setup at a glance
 
@@ -27,5 +26,5 @@ On-disk layout, env vars, and architecture notes: [local-provider README](https:
 
 ## Next
 
-- [Providers overview](../providers.md)
-- [Get Started](../getting-started/overview.md)
+- [Providers overview](./overview.md)
+- [Get Started](../get-started/overview.md)

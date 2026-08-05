@@ -3,7 +3,7 @@
 Thanks for using Selva! Here's where to go depending on what you need:
 
 - **Documentation** — start with the [docs](./docs/README.md) and
-  [Quick Start](./docs/QuickStart.md).
+  [Quick Start](./docs/self-hosting/get-started/quick-start.md).
 - **Questions & ideas** — open a thread in
   [GitHub Discussions](https://github.com/VektorNode/selva/discussions).
 - **Bugs & feature requests** — file an issue using the

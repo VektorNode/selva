@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { packagesByCategory } from '$lib/packages';
+	import { npmUrl, packagesByCategory, readmeUrl } from '$lib/packages';
 
 	const groups = packagesByCategory();
 
@@ -55,15 +55,31 @@
 							<p class="text-muted-foreground mt-2 flex-1 text-sm leading-relaxed">
 								{pkg.description}
 							</p>
-							{#if pkg.badge}
-								<div class="mt-4">
+							<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+								{#if pkg.badge}
 									<span
 										class="border-border text-muted-foreground inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs"
 									>
 										{pkg.badge}
 									</span>
-								</div>
-							{/if}
+								{/if}
+								<a
+									href={readmeUrl(pkg)}
+									class="text-primary text-xs font-medium hover:underline"
+									rel="noreferrer"
+								>
+									Docs
+								</a>
+								{#if npmUrl(pkg)}
+									<a
+										href={npmUrl(pkg)}
+										class="text-primary text-xs font-medium hover:underline"
+										rel="noreferrer"
+									>
+										npm
+									</a>
+								{/if}
+							</div>
 						</div>
 					{/each}
 				</div>

@@ -1,6 +1,5 @@
 ---
 title: Build your own app
-group: Get Started
 order: 6
 published: false
 description: 'Embed the Selva viewer and controls in your own product using the @selvajs/* packages.'
@@ -42,13 +41,17 @@ Read it top-down. **Your app** is the product. It pulls in the viewer (`ui`), th
 | `@selvajs/ui`                    | Svelte components, theme, and the 3D viewer: the same pieces the Selva app is built from. Style them to your brand. |
 | `@selvajs/compute`               | Type-safe Rhino.Compute client. Turns inputs into solved geometry. No renderer. See below.                          |
 | `@selvajs/schemas`               | Schema types and traversal helpers, so your app speaks the same contract as the plugin.                             |
-| `@selvajs/platform` + a provider | The backend contract, plus an implementation of it. See [Providers](../providers.md).                               |
+| `@selvajs/platform` + a provider | The backend contract, plus an implementation of it. See [Providers](../../self-hosting/providers/overview.md).                               |
 
 Mix and match. If you only want the viewer and solving inside an otherwise custom app, `@selvajs/ui` and `@selvajs/compute` are enough on their own.
 
+These are the ones you'll reach for first, not the whole set — the
+[packages page](https://selva.dev/packages) lists every `@selvajs/*` package with
+a link to its README and npm entry. Each README is the reference for its own API.
+
 ## Getting started
 
-These are ordinary npm packages. Install what you need, then point the compute client at your Rhino.Compute server ([step 1](overview.md)).
+These are ordinary npm packages. Install what you need, then point the compute client at your Rhino.Compute server ([step 1](../../self-hosting/get-started/overview.md)).
 
 ```bash
 pnpm add @selvajs/ui @selvajs/compute @selvajs/schemas
@@ -73,5 +76,5 @@ Turning a solve response into Three.js objects is a separate job, and [`@selvajs
 
 ## Next
 
-- [Architecture](../architecture.md): how these relate to the plugin and Compute.
-- [Providers](../providers.md): wiring in a backend.
+- [Architecture](../../architecture.md): how these relate to the plugin and Compute.
+- [Providers](../../self-hosting/providers/overview.md): wiring in a backend.

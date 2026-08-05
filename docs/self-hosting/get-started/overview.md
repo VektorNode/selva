@@ -1,6 +1,5 @@
 ---
 title: Get Started Overview
-group: Get Started
 order: 1
 published: false
 description: 'Three steps to a live deployment, plus the mental model for compute vs. app servers.'
@@ -19,7 +18,7 @@ Getting a definition online takes three steps. There's an optional fourth if you
 
 ## Just want to look around first?
 
-You don't have to rent a server to try this. [Local Dev Setup](../QuickStart.md) runs the whole app on your laptop. You'll still need somewhere to solve geometry, but everything else is local. It's the fastest way to get a feel for the thing before committing to any infrastructure.
+You don't have to rent a server to try this. [Local Dev Setup](./quick-start.md) runs the whole app on your laptop. You'll still need somewhere to solve geometry, but everything else is local. It's the fastest way to get a feel for the thing before committing to any infrastructure.
 
 ## Before you start
 
@@ -38,7 +37,7 @@ This is the headless Rhino that does the actual solving once you're live. Use th
 
 One thing to watch: install Selva and any plugins your definitions rely on under the `rhino.compute` account. Plugins installed under a different user won't be there when Compute goes looking for them.
 
-See [Rhino Compute Setup](../RhinoCompute.md).
+See [Rhino Compute Setup](./rhino-compute.md).
 
 ## 2. Plugin + schema
 
@@ -60,12 +59,12 @@ npm start                        # runs it under pm2, which keeps it alive
 
 `npx` fetches and runs the Selva command-line tool without installing it first. It'll ask which provider you want, what your site's URL is, and a few other things, then hand you a folder that's ready to run.
 
-From there: open `/setup` to create the admin account (only works on first boot), register your Compute server at `/admin/compute`, upload a definition, and share the link. Backend choices live in the provider settings, see [Providers](../providers.md).
+From there: open `/setup` to create the admin account (only works on first boot), register your Compute server at `/admin/compute`, upload a definition, and share the link. Backend choices live in the provider settings, see [Providers](../providers/overview.md).
 
-See [CLI](../CLI.md), [Local dev setup](../QuickStart.md), [Deployment prerequisites](../deployment/prerequisites.md).
+See [CLI](./cli.md), [Local dev setup](./quick-start.md), [Deployment prerequisites](../deployment/prerequisites.md).
 
 ## 4. (Optional) Build your own app
 
 Want your own branding, domain features, or the viewer embedded in a larger product? Consume the `@selvajs/*` packages directly.
 
-See [Build your own app](build-your-own-app.md).
+See [Build your own app](../../packages/build/overview.md).

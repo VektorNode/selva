@@ -1,6 +1,5 @@
 ---
 title: Security & Limits
-group: Concepts
 order: 6
 published: false
 description: 'Request limits, rate limiting, guards on outbound fetches, and the boundaries that keep a deployment safe.'
@@ -71,7 +70,7 @@ as that number changes, and falls back to `1` if it can't be read. The one
 place to change it is `--childcount` on the compute server itself.
 
 Cache byte budgets (`COMPUTE_DEFINITION_CACHE_MB`, `COMPUTE_SOLVE_CACHE_MB`) and the
-Rhino.Compute server flags are covered in [Caching](Caching.md).
+Rhino.Compute server flags are covered in [Caching](./caching.md).
 
 ## Guard on remote-definition URLs
 
@@ -200,6 +199,6 @@ for the full contract.
 
 ## Next
 
-- [Caching](Caching.md): the cache byte budgets referenced above.
-- [Providers](providers.md): where secrets and the trust boundary come from.
-- [Admin guide](admin.md): where compute keys and limits surface in the UI.
+- [Caching](./caching.md): the cache byte budgets referenced above.
+- [Providers](../providers/overview.md): where secrets and the trust boundary come from.
+- [Admin guide](./admin.md): where compute keys and limits surface in the UI.

@@ -107,4 +107,4 @@ Three invariants hold across the whole pipeline:
 ## Next
 
 - [Parse layer](../README.md): the barrel this format is decoded behind.
-- [Caching](../../../../../docs/Caching.md): what is and isn't reused between solves.
+- [Caching](../../../../../docs/self-hosting/concepts/caching.md): what is and isn't reused between solves.

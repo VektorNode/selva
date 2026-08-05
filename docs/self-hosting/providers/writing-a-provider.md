@@ -1,6 +1,5 @@
 ---
 title: Writing a provider
-group: Providers
 order: 4
 published: false
 description: 'Implement the platform interfaces to back Selva with any auth, data, or storage system.'
@@ -23,4 +22,4 @@ The [platform README](https://www.npmjs.com/package/@selvajs/platform) is author
 
 ## Next
 
-- [Providers overview](../providers.md)
+- [Providers overview](./overview.md)

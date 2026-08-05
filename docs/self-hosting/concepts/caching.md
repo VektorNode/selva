@@ -1,6 +1,5 @@
 ---
 title: Caching
-group: Concepts
 order: 5
 published: false
 description: 'Where Selva caches (browser, server, and Rhino.Compute), what invalidates each cache, and how to tell one is working.'

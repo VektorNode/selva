@@ -8,8 +8,8 @@ import { extractEdgeSegments } from '../edge-extract';
 import { addEdges, removeEdges } from '../edges';
 
 /**
- * Baseline for the edge-overlay performance plan (docs/plans/4.edge-overlay-performance.md).
- * Measures the three costs that scale with mesh size:
+ * Baseline for edge-overlay performance. Measures the three costs that scale
+ * with mesh size:
  *
  * 1. `THREE.EdgesGeometry` extraction (the known main-thread stall) across the
  *    best/smooth/worst shapes in bench-geometry.

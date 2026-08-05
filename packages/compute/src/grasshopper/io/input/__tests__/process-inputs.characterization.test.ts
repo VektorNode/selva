@@ -197,7 +197,7 @@ describe('input pipeline characterization', () => {
 			}
 		};
 
-		// Previously a known bug (see git history / docs/audit-2025.md): the numeric
+		// Previously a known bug: the numeric
 		// parser collapsed a tree-access default to `undefined`, silently dropping a
 		// tree-access slider's values. Now fixed — the tree is preserved as a
 		// DataTreeDefault for TreeBuilder.fromInputParams to consume.

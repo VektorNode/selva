@@ -1,6 +1,5 @@
 ---
 title: CLI
-group: Get Started
 order: 3
 published: false
 description: 'Scaffold, configure, and operate a Selva deployment from the command line.'
@@ -93,7 +92,7 @@ It re-prompts for config using your current values as defaults and rewrites `.en
 It asks for confirmation and prints the blast radius first. Restart afterwards.
 
 Rotating one doesn't affect the other, which is the point of keeping them separate:
-[Secrets](security-and-limits.md#secrets) covers why, and exactly what an HMAC
+[Secrets](../concepts/security-and-limits.md#secrets) covers why, and exactly what an HMAC
 rotation does and doesn't break.
 
 ## About pm2
@@ -138,7 +137,7 @@ If `set-cookie` carries `Secure` and you're on HTTP, set `ALLOW_INSECURE_COOKIES
 
 ### The app is running but unreachable from outside
 
-Expected until a reverse proxy is in front of it. Selva should only ever bind to `127.0.0.1`. See [Reverse proxy](deployment/reverse-proxy.md).
+Expected until a reverse proxy is in front of it. Selva should only ever bind to `127.0.0.1`. See [Reverse proxy](../deployment/reverse-proxy.md).
 
 ### `npm run update` reports the same version before and after
 
@@ -173,5 +172,5 @@ If `selva start` refuses outright, saying the running daemon is _newer_ than the
 - CLI source: [packages/cli/src/](https://github.com/VektorNode/selva/tree/main/packages/cli/src/)
 - Deployment templates: [packages/selva/templates/](https://github.com/VektorNode/selva/tree/main/packages/selva/templates/)
 - Every env var, documented inline: [packages/selva/.env.example](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example)
-- Host prerequisites: [deployment/prerequisites.md](deployment/prerequisites.md)
-- Reverse proxy: [deployment/reverse-proxy.md](deployment/reverse-proxy.md)
+- Host prerequisites: [deployment/prerequisites.md](../deployment/prerequisites.md)
+- Reverse proxy: [deployment/reverse-proxy.md](../deployment/reverse-proxy.md)
