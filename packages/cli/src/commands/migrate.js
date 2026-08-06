@@ -24,8 +24,23 @@ import { APP_NAME, runPm2 } from './pm2.js';
  */
 export const NODE_MODULES_STASH = 'node_modules.selva-migrate-bak';
 
-export async function runMigrate() {
-	const dir = resolveDeploymentDir();
+/**
+ * @param {object} [deps] Seams for tests. The rollback path destroys and
+ *   restores a real dependency tree, so it has to be exercised against a real
+ *   directory — but not against a real npm or a real pm2 daemon.
+ */
+export async function runMigrate(
+	_argv,
+	{
+		dir: injectedDir,
+		// --prefer-online bypasses the stale-packument trap: npm can otherwise
+		// resolve a cached packument that predates the release being migrated to.
+		install = (cwd) => execSync('npm install --prefer-online', { cwd, stdio: 'pipe' }),
+		confirm = (message) => p.confirm({ message, initialValue: true }),
+		pm2 = runPm2
+	} = {}
+) {
+	const dir = injectedDir ?? resolveDeploymentDir();
 	requireDeploymentDir(dir);
 
 	p.intro(pc.bgCyan(pc.black(' selva migrate ')));
@@ -84,10 +99,7 @@ export async function runMigrate() {
 	for (const line of pkgDiff) console.log('  ' + line);
 	for (const line of sideFileChanges) console.log('  ' + line);
 
-	const confirmed = await p.confirm({
-		message: 'Apply these changes, reinstall, and restart?',
-		initialValue: true
-	});
+	const confirmed = await confirm('Apply these changes, reinstall, and restart?');
 	if (p.isCancel(confirmed) || !confirmed) {
 		p.cancel('Cancelled.');
 		return;
@@ -97,7 +109,7 @@ export async function runMigrate() {
 	// A legacy deployment may predate the local-pm2 layout, so a missing binary
 	// is not fatal here — there is nothing running for us to stop.
 	try {
-		const stopStatus = runPm2(dir, ['stop', APP_NAME], { inherit: false });
+		const stopStatus = pm2(dir, ['stop', APP_NAME], { inherit: false });
 		if (stopStatus !== 0) {
 			p.log.warn('pm2 stop did not succeed — selva-compute may not be running. Continuing.');
 		}
@@ -147,12 +159,7 @@ export async function runMigrate() {
 	const s = p.spinner();
 	s.start('Installing new dependencies (this can take a minute)');
 	try {
-		// --prefer-online to bypass the stale-packument trap documented in
-		// docs/Hotfix-CLI-Runtime.md.
-		execSync('npm install --prefer-online', {
-			cwd: dir,
-			stdio: 'pipe'
-		});
+		install(dir);
 		s.stop('Dependencies installed');
 		rmSync(nodeModulesBak, { recursive: true, force: true });
 	} catch (err) {
@@ -174,14 +181,14 @@ export async function runMigrate() {
 		if (existsSync(nodeModulesBak)) renameSync(nodeModulesBak, nodeModules);
 		if (lockBak !== null) writeFileSync(lockPath, lockBak, 'utf8');
 
-		restartAfterRollback(dir);
+		restartAfterRollback(dir, pm2);
 		p.outro(pc.red(`Migration aborted: ${err.message ?? err}`));
 		process.exit(1);
 	}
 
 	let status;
 	try {
-		status = runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
+		status = pm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
 	} catch (err) {
 		status = 1;
 		p.log.error(`Could not invoke pm2: ${err instanceof Error ? err.message : err}`);
@@ -212,9 +219,9 @@ export async function runMigrate() {
  * the operator's problem to act on, so it must be stated, not swallowed — the
  * old code returned a bare 1 and printed nothing.
  */
-function restartAfterRollback(dir) {
+function restartAfterRollback(dir, pm2 = runPm2) {
 	try {
-		const status = runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
+		const status = pm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
 		if (status === 0) {
 			p.log.success(`Rolled back and restarted ${APP_NAME}.`);
 			return;
