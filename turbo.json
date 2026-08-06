@@ -28,7 +28,8 @@
 				"tsconfig.json",
 				"svelte.config.js",
 				"vite.config.ts",
-				"vite.config.js"
+				"vite.config.js",
+				"tsdown.config.ts"
 			],
 			"env": ["ADAPTER", "NODE_ENV", "SELVA_HMAC_KEY", "SELVA_AT_REST_KEY", "DATA_PATH"]
 		},

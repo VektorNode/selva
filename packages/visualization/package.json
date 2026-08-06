@@ -77,8 +77,8 @@
 	],
 	"sideEffects": false,
 	"scripts": {
-		"build": "pnpm type-check && tsup",
-		"dev": "tsup --watch",
+		"build": "pnpm type-check && tsdown",
+		"dev": "tsdown --watch",
 		"example": "vite --config vite.config.ts",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
@@ -105,7 +105,7 @@
 		"globals": "^17.5.0",
 		"prettier": "catalog:",
 		"three": "catalog:",
-		"tsup": "^8.5.1",
+		"tsdown": "catalog:",
 		"typescript": "catalog:",
 		"vite": "catalog:",
 		"vitest": "catalog:"

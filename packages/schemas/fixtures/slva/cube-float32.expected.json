@@ -1,0 +1,26 @@
+{
+	"description": "float32 raw vertices (forced), uint16 indices",
+	"flags": {
+		"float32": true,
+		"uint16Indices": true,
+		"deltaEncoded": true,
+		"hasUvs": false,
+		"hasColors": false,
+		"float32Uvs": false
+	},
+	"vertexCount": 8,
+	"indexCount": 36,
+	"origin": [0.0, 0.0, 0.0],
+	"scale": [1.0, 1.0, 1.0],
+	"positionTolerance": 1e-6,
+	"uvTolerance": 0.0,
+	"sourceComponentId": "44444444-4444-4444-8444-444444444444",
+	"positions": [
+		0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0,
+		1.0, 1.0, 0.0, 1.0, 1.0
+	],
+	"indices": [
+		0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6, 1, 2, 6, 1, 6, 5, 3, 0,
+		4, 3, 4, 7
+	]
+}

@@ -24,7 +24,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { readWorkspacePackages } from './publishable-packages.mjs';
 
 const failures = [];
@@ -43,7 +43,12 @@ function pack(dir, dest) {
 }
 
 function tarballEntries(tarball) {
-	const out = execFileSync('tar', ['-tzf', tarball], { encoding: 'utf8' });
+	// Relative path + cwd: GNU tar reads `C:\...` as a remote host ("Cannot
+	// connect to C") when handed a Windows absolute path.
+	const out = execFileSync('tar', ['-tzf', basename(tarball)], {
+		cwd: dirname(tarball),
+		encoding: 'utf8'
+	});
 	// npm tarballs prefix every entry with `package/`.
 	return out
 		.trim()
@@ -75,7 +80,9 @@ function targetShipped(target, entries) {
 
 function verify(pkg, entries) {
 	const manifest = JSON.parse(
-		execFileSync('tar', ['-xzOf', pkg.tarball, 'package/package.json'], {
+		// Relative path + cwd for the same GNU-tar reason as tarballEntries().
+		execFileSync('tar', ['-xzOf', basename(pkg.tarball), 'package/package.json'], {
+			cwd: dirname(pkg.tarball),
 			encoding: 'utf8'
 		})
 	);

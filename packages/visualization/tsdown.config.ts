@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from 'tsdown';
 
 // `shared/` is intentionally absent: it is the internal cross-layer surface, not a published
 // entrypoint. What consumers need from it is re-exported by `render/`.
@@ -13,9 +13,9 @@ export default defineConfig({
 	entry: entries,
 	format: ['esm', 'cjs'],
 	dts: true,
-	splitting: true,
 	minify: true,
 	sourcemap: true,
 	clean: true,
+	fixedExtension: false,
 	external: ['three']
 });

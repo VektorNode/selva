@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from 'tsdown';
 
 const entries = {
 	index: 'src/index.ts',
@@ -10,8 +10,8 @@ export default defineConfig({
 	entry: entries,
 	format: ['esm', 'cjs'],
 	dts: true,
-	splitting: true,
 	minify: true,
 	sourcemap: true,
-	clean: true
+	clean: true,
+	fixedExtension: false
 });

@@ -62,8 +62,8 @@
 	],
 	"sideEffects": false,
 	"scripts": {
-		"build": "pnpm type-check && tsup",
-		"dev": "tsup --watch",
+		"build": "pnpm type-check && tsdown",
+		"dev": "tsdown --watch",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",
@@ -86,7 +86,7 @@
 		"eslint-config-prettier": "^10.1.8",
 		"globals": "^17.5.0",
 		"prettier": "catalog:",
-		"tsup": "^8.5.1",
+		"tsdown": "catalog:",
 		"typescript": "catalog:",
 		"vite": "catalog:",
 		"vitest": "catalog:"

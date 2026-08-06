@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from 'tsdown';
 
 /**
  * Sub-path entries only — there is deliberately NO root barrel.
@@ -17,8 +17,8 @@ export default defineConfig({
 	entry: entries,
 	format: ['esm', 'cjs'],
 	dts: true,
-	splitting: true,
 	minify: true,
 	sourcemap: true,
-	clean: true
+	clean: true,
+	fixedExtension: false
 });

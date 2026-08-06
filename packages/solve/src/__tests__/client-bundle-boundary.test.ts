@@ -7,7 +7,7 @@ import path from 'node:path';
 /**
  * Checks the client/server boundary on the SHIPPED ARTIFACT.
  *
- * Two other guards work on source: `tsup.config.ts` exports no root barrel (so a consumer can't
+ * Two other guards work on source: `tsdown.config.ts` exports no root barrel (so a consumer can't
  * reach `server/` through one innocent import), and eslint `no-restricted-imports` stops `client/`
  * from importing `server/`, `@selvajs/platform`, `@selvajs/server` or `node:*`. Both are worth
  * having, and neither can see through a bundler.
