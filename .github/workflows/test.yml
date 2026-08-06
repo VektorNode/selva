@@ -44,6 +44,11 @@ jobs:
       - name: Check component signatures
         run: node scripts/check-component-signatures.mjs --check
 
+      # Mixed or misnamed changesets only fail in `changeset version`, i.e. in
+      # the release job after the test gate has already passed.
+      - name: Validate changeset contents
+        run: node scripts/validate-changesets.mjs
+
       # Releases are changeset-driven: a publishable-package change without a
       # changeset never ships. `pnpm changeset --empty` is the opt-out.
       - name: Check changesets
