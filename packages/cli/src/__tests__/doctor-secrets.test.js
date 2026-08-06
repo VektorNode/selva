@@ -8,7 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkSecret } from '../commands/doctor.js';
+import { checkSecret } from '../checks/config.js';
 import { generateKey } from '../secrets.js';
 
 const PLACEHOLDER = 'replace-this-with-a-random-32-byte-hex-key';

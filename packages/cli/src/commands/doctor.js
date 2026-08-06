@@ -14,19 +14,24 @@ import {
 	statSync,
 	rmSync
 } from 'node:fs';
-import { spawnSync } from 'node:child_process';
-import { join, resolve, dirname, delimiter } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { readEnvFile, RENAMED_ENV_VARS, REPLACED_ENV_VARS } from '../env.js';
+import { readEnvFile } from '../env.js';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 import { satisfiesNodeRange } from '../node-range.js';
+import { green, yellow, red, fixable } from '../checks/result.js';
+import { checkBootPersistence } from '../checks/boot.js';
+import {
+	checkDeprecatedEnv,
+	checkOrigin,
+	checkProviders,
+	checkSecret,
+	checkTenancy,
+	resolveProviders
+} from '../checks/config.js';
 import { detectDrift, NODE_MODULES_STASH } from './migrate.js';
-
-const HEX_64 = /^[0-9a-f]{64}$/i;
-const PLACEHOLDER = 'replace-this-with-a-random-32-byte-hex-key';
 
 export async function runDoctor(argv = []) {
 	const fix = argv.includes('--fix');
@@ -45,25 +50,8 @@ export async function runDoctor(argv = []) {
 	checks.push(checkSecret(env.SELVA_HMAC_KEY, 'SELVA_HMAC_KEY is a 32-byte hex string'));
 	checks.push(checkSecret(env.SELVA_AT_REST_KEY, 'SELVA_AT_REST_KEY is a 32-byte hex string'));
 
-	// Header-auth: auth only; data/storage must be local or supabase.
-	const providers = {
-		auth: (env.SELVA_AUTH_PROVIDER ?? 'local').toLowerCase(),
-		data: (env.SELVA_DATA_PROVIDER ?? 'local').toLowerCase(),
-		storage: (env.SELVA_STORAGE_PROVIDER ?? 'local').toLowerCase()
-	};
-
-	const validForAuth = new Set(['local', 'supabase', 'header']);
-	const validForData = new Set(['local', 'supabase']);
-
-	if (!validForAuth.has(providers.auth)) {
-		checks.push(red(`SELVA_AUTH_PROVIDER="${providers.auth}" — expected local|supabase|header`));
-	}
-	if (!validForData.has(providers.data)) {
-		checks.push(red(`SELVA_DATA_PROVIDER="${providers.data}" — expected local|supabase`));
-	}
-	if (!validForData.has(providers.storage)) {
-		checks.push(red(`SELVA_STORAGE_PROVIDER="${providers.storage}" — expected local|supabase`));
-	}
+	const providers = resolveProviders(env);
+	checks.push(...checkProviders(providers));
 
 	const used = new Set(Object.values(providers));
 
@@ -80,42 +68,14 @@ export async function runDoctor(argv = []) {
 		checks.push(...checkHeaderAuth(dir, env, providers.data));
 	}
 
-	const tenancy = (env.SELVA_TENANCY ?? 'single').toLowerCase();
-	if (tenancy !== 'single' && tenancy !== 'multi') {
-		checks.push(red(`SELVA_TENANCY="${tenancy}" — expected single|multi`));
-	} else {
-		checks.push(green(`SELVA_TENANCY=${tenancy}`));
-	}
+	checks.push(checkTenancy(env));
 
 	checks.push(checkPackage(dir, '@selvajs/selva'));
 	checks.push(checkNodeEngine(dir));
 	checks.push(checkCliRuntimeAlignment(dir));
 	checks.push(...checkBootPersistence(dir));
-	if (env.ORIGIN) {
-		try {
-			new URL(env.ORIGIN);
-			checks.push(green(`ORIGIN=${env.ORIGIN}`));
-		} catch {
-			checks.push(red(`ORIGIN="${env.ORIGIN}" is not a valid URL`));
-		}
-	} else {
-		checks.push(yellow('ORIGIN unset — required behind a reverse proxy'));
-	}
-
-	for (const [oldName, newName] of Object.entries(RENAMED_ENV_VARS)) {
-		if (env[oldName] === undefined) continue;
-		checks.push(
-			env[newName] === undefined
-				? yellow(`${oldName} is deprecated — \`selva migrate\` renames it to ${newName}`)
-				: yellow(`${oldName} is deprecated and ignored — ${newName} is set and wins`)
-		);
-	}
-
-	// Not auto-fixable: the replacement encodes a value, so migrate won't guess.
-	for (const [oldName, replacement] of Object.entries(REPLACED_ENV_VARS)) {
-		if (env[oldName] === undefined) continue;
-		checks.push(yellow(`${oldName} is deprecated — replace it with ${replacement}`));
-	}
+	checks.push(checkOrigin(env));
+	checks.push(...checkDeprecatedEnv(env));
 
 	// ── Render ─────────────────────────────────────────────────────────
 	const resolved = await Promise.all(checks);
@@ -185,42 +145,8 @@ async function applyFixes(resolved, failures) {
 	return failures;
 }
 
-function green(text) {
-	return { severity: 'green', line: `${pc.green('✓')} ${text}` };
-}
-function yellow(text, fix) {
-	return { severity: 'yellow', line: `${pc.yellow('!')} ${text}`, fix };
-}
-function red(text, fix) {
-	return { severity: 'red', line: `${pc.red('✗')} ${text}`, fix };
-}
-
-/**
- * A repair `--fix` may run. `label` is what the operator is asked to approve;
- * `run()` performs it and returns a result line.
- *
- * Only attach one where the repair is unambiguous and reversible-ish. Anything
- * needing root, or that restarts the runtime running this process, stays a
- * printed instruction — a half-applied privileged fix is worse than none.
- */
-function fixable(label, run) {
-	return { label, run };
-}
-
 function checkFile(path, label) {
 	return existsSync(path) ? green(label) : red(`${label} (missing: ${path})`);
-}
-
-/**
- * Guards SELVA_HMAC_KEY and SELVA_AT_REST_KEY. A placeholder or short key
- * starts and serves traffic — the damage (forgeable sessions, weak at-rest
- * encryption) is invisible until someone looks for it.
- */
-export function checkSecret(value, label) {
-	if (!value) return red(`${label} — unset`);
-	if (value === PLACEHOLDER) return red(`${label} — still the placeholder`);
-	if (!HEX_64.test(value)) return red(`${label} — not 64 hex chars`);
-	return green(label);
 }
 
 function checkDataPath(dir, dataPath) {
@@ -435,122 +361,6 @@ function checkNodeEngine(dir) {
 			`under real traffic. Upgrade Node on this host (nvm/fnm or your package manager),\n     ` +
 			`then: npm rebuild && npm run restart`
 	);
-}
-
-function checkBootPersistence(dir) {
-	// pm2's boot integration is Linux/systemd-specific. On macOS it's launchd
-	// (different unit path) and on Windows pm2 boot persistence isn't a thing —
-	// stay silent rather than emit misleading checks.
-	if (process.platform !== 'linux') return [];
-
-	const out = [];
-
-	// dump.pm2 (what pm2 startup resurrects).
-	const pm2Home = process.env.PM2_HOME ?? join(homedir(), '.pm2');
-	const dumpPath = join(pm2Home, 'dump.pm2');
-	if (existsSync(dumpPath)) {
-		out.push(green('pm2 process list saved (dump.pm2 present)'));
-	} else {
-		out.push(
-			yellow(
-				'pm2 process list not saved — run `npx pm2 save` so a reboot can ' +
-					'resurrect the app (nothing to restore without it)',
-				fixable('run `pm2 save` to persist the current process list', () => {
-					const bin = join(dir, 'node_modules', '.bin', 'pm2');
-					if (!existsSync(bin)) return red('pm2 not installed in this deployment');
-					const r = spawnSync(bin, ['save'], { cwd: dir, encoding: 'utf8' });
-					return (r.status ?? 1) === 0
-						? green('pm2 process list saved')
-						: red(`pm2 save failed: ${(r.stderr || r.stdout || '').trim()}`);
-				})
-			)
-		);
-	}
-
-	// systemd unit: present and pointing at deployment-local pm2.
-	const user = process.env.USER ?? process.env.LOGNAME;
-	const unitPath = user ? `/etc/systemd/system/pm2-${user}.service` : null;
-
-	if (unitPath && existsSync(unitPath)) {
-		const localPm2 = join(dir, 'node_modules', 'pm2', 'bin', 'pm2');
-		let unit = '';
-		try {
-			unit = readFileSync(unitPath, 'utf8');
-		} catch {
-			out.push(yellow(`pm2 systemd unit present but unreadable (${unitPath})`));
-			return out;
-		}
-		const execStart = /^ExecStart=(.+)$/m.exec(unit)?.[1] ?? '';
-		if (execStart.includes(localPm2)) {
-			out.push(green('pm2 systemd boot unit installed (uses deployment-local pm2)'));
-		} else {
-			out.push(
-				red(
-					`pm2 systemd boot unit points at a different pm2 than this deployment's.\n     ` +
-						`ExecStart: ${execStart || '(not found)'}\n     ` +
-						`expected:  ${localPm2} resurrect\n     ` +
-						`Reboots will resurrect via the wrong pm2 (version skew). Re-run startup ` +
-						`with the local binary:\n     ` +
-						`sudo env PATH=$PATH:${join(dir, 'node_modules', '.bin')} ${localPm2} ` +
-						`startup systemd -u $USER --hp $HOME`
-				)
-			);
-		}
-	} else {
-		out.push(
-			yellow(
-				'pm2 systemd boot unit not installed — the app will NOT restart after a ' +
-					'reboot. Run `npx pm2 startup systemd -u $USER --hp $HOME` and paste the ' +
-					'printed command (point it at this deployment’s pm2).'
-			)
-		);
-	}
-
-	// Warn if global pm2 is on PATH (root cause of version skew).
-	const globalPm2 = findGlobalPm2(dir);
-	if (globalPm2) {
-		// Only offer the removal when we could actually perform it. A global
-		// install under /usr is root-owned; attempting it would half-fail and
-		// leave the operator worse informed than a printed instruction.
-		let writable = false;
-		try {
-			accessSync(dirname(globalPm2), constants.W_OK);
-			writable = true;
-		} catch {
-			writable = false;
-		}
-
-		out.push(
-			yellow(
-				`a pm2 outside this deployment is on PATH (${globalPm2}) — it can fork a ` +
-					`mismatched daemon and trigger skew. Prefer \`npm run\` wrappers / \`npx pm2\` ` +
-					`from this directory; consider \`npm uninstall -g pm2\`.` +
-					(writable ? '' : `\n     (${dirname(globalPm2)} is not writable — needs sudo)`),
-				writable
-					? fixable(`uninstall the global pm2 at ${globalPm2}`, () => {
-							const r = spawnSync('npm', ['uninstall', '-g', 'pm2'], { encoding: 'utf8' });
-							return (r.status ?? 1) === 0
-								? green('global pm2 uninstalled')
-								: red(`npm uninstall -g pm2 failed: ${(r.stderr || r.stdout || '').trim()}`);
-						})
-					: undefined
-			)
-		);
-	}
-
-	return out;
-}
-
-// Scan PATH for stray pm2 binary (read-only).
-function findGlobalPm2(dir) {
-	const localBin = resolve(dir, 'node_modules', '.bin');
-	const dirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
-	for (const d of dirs) {
-		if (resolve(d) === localBin) continue;
-		const candidate = join(d, 'pm2');
-		if (existsSync(candidate)) return candidate;
-	}
-	return null;
 }
 
 /**

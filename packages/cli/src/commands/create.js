@@ -196,7 +196,7 @@ function runNpmInstall(cwd) {
 				console.error(
 					pc.yellow(
 						'npm resolved @selvajs/selva@0.10.2 — that version is broken (unresolved\n' +
-							"workspace:* / catalog: specs) and has been unpublished. Your local npm\n" +
+							'workspace:* / catalog: specs) and has been unpublished. Your local npm\n' +
 							'cache is stale. Clear it and retry:\n\n' +
 							'  npm cache clean --force\n' +
 							'  rm -rf node_modules package-lock.json\n' +
@@ -228,9 +228,7 @@ function parseArgs(argv) {
 		}
 	}
 	if (!dir) {
-		throw new Error(
-			'Usage: npx @selvajs/cli <directory> [--force] [--skip-install] [--yes]'
-		);
+		throw new Error('Usage: npx @selvajs/cli <directory> [--force] [--skip-install] [--yes]');
 	}
 	return { dir, force, skipInstall, yes };
 }

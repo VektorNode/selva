@@ -111,7 +111,8 @@ test('Supabase credentials are required even when only storage uses Supabase', (
 
 test('a malformed SUPABASE_URL is rejected', () => {
 	assert.throws(
-		() => collectConfigFromEnv({ SELVA_AUTH_PROVIDER: 'supabase', ...SUPABASE, SUPABASE_URL: 'nope' }),
+		() =>
+			collectConfigFromEnv({ SELVA_AUTH_PROVIDER: 'supabase', ...SUPABASE, SUPABASE_URL: 'nope' }),
 		/SUPABASE_URL must be a valid URL/
 	);
 });

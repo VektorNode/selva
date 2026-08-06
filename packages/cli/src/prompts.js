@@ -527,4 +527,3 @@ function headerAuthSecurityWarning() {
 		pc.dim('See packages/providers/header-auth/README.md for the full deployment checklist.')
 	].join('\n');
 }
-
