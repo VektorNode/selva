@@ -528,4 +528,3 @@ function headerAuthSecurityWarning() {
 	].join('\n');
 }
 
-export { p as prompts, pc as colors };

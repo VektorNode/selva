@@ -3,17 +3,21 @@
 // templates are the source of truth; providers are env-driven.
 
 import { writeFileSync, existsSync, mkdirSync, readFileSync, cpSync } from 'node:fs';
-import { resolve, join, basename } from 'node:path';
+import { resolve, join, basename, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { collectConfig, collectConfigFromEnv } from '../prompts.js';
 import { generateKey } from '../secrets.js';
 import { writeEnvFile } from '../env.js';
-import { isEmptyOrMissing, requiredNodeRange } from '../paths.js';
-import { satisfiesNodeRange } from './doctor.js';
-
-const CLI_VERSION = '0.1.0';
+import {
+	isEmptyOrMissing,
+	requiredNodeRange,
+	runtimeTemplatePath,
+	scaffoldVersion
+} from '../paths.js';
+import { buildDeploymentPackageJson } from '../deployment-package.js';
+import { satisfiesNodeRange } from '../node-range.js';
 
 export async function runCreate(argv) {
 	const { dir: rawDir, force, skipInstall, yes } = parseArgs(argv);
@@ -59,7 +63,7 @@ export async function runCreate(argv) {
 	const deployName = basename(targetDir);
 
 	// Write package.json, then install (need templates from @selvajs/selva).
-	const pkgJson = buildPackageJson(deployName, values);
+	const pkgJson = JSON.stringify(buildDeploymentPackageJson({ name: deployName }), null, 2);
 	writeFileSync(join(targetDir, 'package.json'), pkgJson + '\n', 'utf8');
 
 	if (!skipInstall) {
@@ -71,23 +75,23 @@ export async function runCreate(argv) {
 	}
 
 	// Copy templates from installed runtime.
-	const runtimeTemplates = join(targetDir, 'node_modules', '@selvajs', 'selva', 'templates');
-	if (skipInstall || !existsSync(runtimeTemplates)) {
+	const envTemplatePath = runtimeTemplatePath(targetDir, '.env.example');
+	const ecosystemTemplatePath = runtimeTemplatePath(targetDir, 'ecosystem.config.cjs');
+	if (skipInstall || !existsSync(envTemplatePath)) {
 		p.log.warn(
-			`Couldn't read runtime templates from ${runtimeTemplates}. ` +
+			`Couldn't read runtime templates from ${dirname(envTemplatePath)}. ` +
 				`Run \`npm install\`, then \`selva init\` to finish setup.`
 		);
-		writeFileSync(join(targetDir, '.selva-version'), CLI_VERSION + '\n', 'utf8');
+		writeFileSync(join(targetDir, '.selva-version'), scaffoldVersion() + '\n', 'utf8');
 		p.outro(`Partial scaffold at ${pc.cyan(targetDir)}.`);
 		return;
 	}
 
-	const envTemplate = readFileSync(join(runtimeTemplates, '.env.example'), 'utf8');
-	writeEnvFile(join(targetDir, '.env'), envTemplate, values);
+	writeEnvFile(join(targetDir, '.env'), readFileSync(envTemplatePath, 'utf8'), values);
 
-	cpSync(join(runtimeTemplates, 'ecosystem.config.cjs'), join(targetDir, 'ecosystem.config.cjs'));
+	cpSync(ecosystemTemplatePath, join(targetDir, 'ecosystem.config.cjs'));
 
-	writeFileSync(join(targetDir, '.selva-version'), CLI_VERSION + '\n', 'utf8');
+	writeFileSync(join(targetDir, '.selva-version'), scaffoldVersion() + '\n', 'utf8');
 	writeGitignore(targetDir);
 
 	p.outro(
@@ -234,44 +238,6 @@ function parseArgs(argv) {
 function envBool(v) {
 	if (!v) return false;
 	return ['1', 'true', 'yes'].includes(String(v).toLowerCase());
-}
-
-// Depends on @selvajs/selva (prebuilt) + @selvajs/cli (operator tool).
-// @selvajs/cli links the `selva` bin; without it, only global CLI works.
-function buildPackageJson(name /*, values */) {
-	const deps = {
-		'@selvajs/cli': 'latest',
-		'@selvajs/selva': 'latest',
-		// Deployment-local pm2 (pinned exact to prevent daemon version skew).
-		pm2: '5.4.3'
-	};
-
-	const pkg = {
-		name: sanitizePackageName(name),
-		version: '0.1.0',
-		private: true,
-		type: 'module',
-		scripts: {
-			start: 'selva start',
-			stop: 'selva stop',
-			restart: 'selva restart',
-			logs: 'selva logs',
-			doctor: 'selva doctor',
-			update: 'selva update'
-		},
-		dependencies: deps
-	};
-	return JSON.stringify(pkg, null, 2);
-}
-
-function sanitizePackageName(name) {
-	// npm package names: lowercase, no spaces, limited punctuation.
-	return (
-		name
-			.toLowerCase()
-			.replace(/[^a-z0-9._-]+/g, '-')
-			.replace(/^[-._]+|[-._]+$/g, '') || 'selva-deployment'
-	);
 }
 
 function writeGitignore(dir) {

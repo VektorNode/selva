@@ -5,7 +5,15 @@
 // checks, each behind its own confirmation — and only those needing no root and
 // no runtime restart. See `applyFixes`.
 
-import { existsSync, readFileSync, readdirSync, accessSync, constants, statSync } from 'node:fs';
+import {
+	existsSync,
+	readFileSync,
+	readdirSync,
+	accessSync,
+	constants,
+	statSync,
+	rmSync
+} from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, resolve, dirname, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +22,8 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { readEnvFile, RENAMED_ENV_VARS, REPLACED_ENV_VARS } from '../env.js';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
-import { detectDrift } from './migrate.js';
+import { satisfiesNodeRange } from '../node-range.js';
+import { detectDrift, NODE_MODULES_STASH } from './migrate.js';
 
 const HEX_64 = /^[0-9a-f]{64}$/i;
 const PLACEHOLDER = 'replace-this-with-a-random-32-byte-hex-key';
@@ -32,6 +41,7 @@ export async function runDoctor(argv = []) {
 	checks.push(checkFile(join(dir, '.env'), '.env present'));
 	checks.push(checkFile(join(dir, 'ecosystem.config.cjs'), 'ecosystem.config.cjs present'));
 	checks.push(checkLayoutDrift(dir));
+	checks.push(checkMigrationLeftovers(dir));
 	checks.push(checkSecret(env.SELVA_HMAC_KEY, 'SELVA_HMAC_KEY is a 32-byte hex string'));
 	checks.push(checkSecret(env.SELVA_AT_REST_KEY, 'SELVA_AT_REST_KEY is a 32-byte hex string'));
 
@@ -422,70 +432,6 @@ function checkNodeEngine(dir) {
 	);
 }
 
-/**
- * Narrow `engines.node` range check — `>=X`, `^`, `~`, `||`, and bare/x-ranges.
- * Returns null when unparseable so a misread never reports a false failure.
- *
- * Mirrors `satisfiesRange` in @selvajs/server/ops. Duplicated because the CLI is
- * dependency-free by design (it scaffolds the deployment that installs the
- * runtime, so it cannot import from it).
- */
-export function satisfiesNodeRange(version, range) {
-	const core = /^v?(\d+)\.(\d+)\.(\d+)/.exec(String(version).trim());
-	if (!core) return null;
-	const v = [Number(core[1]), Number(core[2]), Number(core[3])];
-
-	let anyParsed = false;
-	for (const alt of String(range).split('||')) {
-		const clauses = alt.trim().split(/\s+/).filter(Boolean);
-		if (!clauses.length) continue;
-
-		let all = true;
-		let parsed = true;
-		for (const clause of clauses) {
-			const m = /^(>=|<=|>|<|\^|~|=)?\s*v?(\d+)(?:\.(\d+|x|\*))?(?:\.(\d+|x|\*))?/.exec(clause);
-			if (!m) {
-				parsed = false;
-				break;
-			}
-			const op = m[1] ?? '=';
-			const num = (s) => (s == null || s === 'x' || s === '*' ? 0 : Number(s));
-			const t = [Number(m[2]), num(m[3]), num(m[4])];
-			let cmp = 0;
-			for (let i = 0; i < 3; i++) {
-				if (v[i] > t[i]) {
-					cmp = 1;
-					break;
-				}
-				if (v[i] < t[i]) {
-					cmp = -1;
-					break;
-				}
-			}
-			let ok;
-			if (op === '>=') ok = cmp >= 0;
-			else if (op === '>') ok = cmp > 0;
-			else if (op === '<=') ok = cmp <= 0;
-			else if (op === '<') ok = cmp < 0;
-			else if (op === '^') ok = cmp >= 0 && v[0] === t[0];
-			else if (op === '~') ok = cmp >= 0 && v[0] === t[0] && v[1] === t[1];
-			else
-				ok =
-					v[0] === t[0] &&
-					(m[3] == null || m[3] === 'x' || m[3] === '*' || v[1] === t[1]) &&
-					(m[4] == null || m[4] === 'x' || m[4] === '*' || v[2] === t[2]);
-			if (!ok) {
-				all = false;
-				break;
-			}
-		}
-		if (!parsed) continue;
-		anyParsed = true;
-		if (all) return true;
-	}
-	return anyParsed ? false : null;
-}
-
 function checkBootPersistence(dir) {
 	// pm2's boot integration is Linux/systemd-specific. On macOS it's launchd
 	// (different unit path) and on Windows pm2 boot persistence isn't a thing —
@@ -600,6 +546,29 @@ function findGlobalPm2(dir) {
 		if (existsSync(candidate)) return candidate;
 	}
 	return null;
+}
+
+/**
+ * `selva migrate` parks the old node_modules aside so a failed install can be
+ * rolled back, and removes it on either outcome. One surviving here means the
+ * migration was killed mid-flight — worth saying, because it is a full copy of
+ * the dependency tree and the deployment may be running on the wrong one.
+ */
+function checkMigrationLeftovers(dir) {
+	const stash = join(dir, NODE_MODULES_STASH);
+	if (!existsSync(stash)) return green('no interrupted migration left behind');
+	return yellow(
+		`${NODE_MODULES_STASH} exists — a \`selva migrate\` was interrupted. If the app ` +
+			`is healthy, delete it: rm -rf ${stash}`,
+		fixable(`delete the leftover ${NODE_MODULES_STASH}`, () => {
+			try {
+				rmSync(stash, { recursive: true, force: true });
+				return green(`removed ${NODE_MODULES_STASH}`);
+			} catch (err) {
+				return red(`could not remove ${stash}: ${err instanceof Error ? err.message : err}`);
+			}
+		})
+	);
 }
 
 function checkLayoutDrift(dir) {

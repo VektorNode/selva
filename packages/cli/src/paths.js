@@ -21,6 +21,50 @@ export function requiredNodeRange() {
 	}
 }
 
+/**
+ * This CLI's own version, written into `.selva-version` so a later `selva
+ * migrate` can tell which scaffold layout it is looking at.
+ *
+ * Read from package.json for the same reason as `requiredNodeRange`: a literal
+ * in code stops tracking the release the moment someone forgets to bump it, and
+ * the marker's whole job is to be accurate about which CLI wrote the directory.
+ */
+export function scaffoldVersion() {
+	try {
+		const here = dirname(fileURLToPath(import.meta.url));
+		const pkg = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8'));
+		return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
+	} catch {
+		return '0.0.0';
+	}
+}
+
+/**
+ * A scaffolding template shipped inside the installed runtime. The CLI cannot
+ * import from `@selvajs/selva` — it is what installs it — so it reads the files
+ * out of node_modules after install.
+ */
+export function runtimeTemplatePath(dir, name) {
+	return join(dir, 'node_modules', '@selvajs', 'selva', 'templates', name);
+}
+
+/**
+ * The `.env` template to merge operator values into: the runtime's `.env.example`
+ * when installed, otherwise the deployment's own `.env` so its comments and
+ * ordering survive a rewrite.
+ *
+ * Returns `''` when neither exists rather than throwing — `mergeEnv` appends
+ * every value to an empty template, so the operator gets a usable file instead
+ * of an ENOENT from a command that was only asked to change one key.
+ */
+export function readEnvTemplate(dir) {
+	const template = runtimeTemplatePath(dir, '.env.example');
+	if (existsSync(template)) return readFileSync(template, 'utf8');
+	const env = join(dir, '.env');
+	if (existsSync(env)) return readFileSync(env, 'utf8');
+	return '';
+}
+
 // A deployment directory must contain an .env and an ecosystem.config.cjs.
 // Anything else (selva.config.js, node_modules) is "should be there" but the
 // CLI doesn't require it — `selva init` is allowed to fix a partial install.

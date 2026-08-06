@@ -9,10 +9,10 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 
-const APP_NAME = 'selva-compute';
+export const APP_NAME = 'selva-compute';
 
 // Resolve to deployment-local pm2 (no global fallback; prevents version skew).
-function pm2Bin(dir) {
+export function pm2Bin(dir) {
 	const local = join(dir, 'node_modules', '.bin', process.platform === 'win32' ? 'pm2.cmd' : 'pm2');
 	if (!existsSync(local)) {
 		throw new Error(
@@ -92,8 +92,14 @@ function ensurePm2InSync(dir) {
 	}
 }
 
-function runPm2(dir, args, { inherit = true } = {}) {
-	const bin = pm2Bin(dir);
+/**
+ * Run the deployment-local pm2.
+ *
+ * `bin` overrides where pm2 is resolved from — `selva migrate` wipes
+ * node_modules mid-flight and passes the binary it stashed beforehand, because
+ * resolving from the deployment at that moment would find nothing.
+ */
+export function runPm2(dir, args, { inherit = true, bin = pm2Bin(dir) } = {}) {
 	const result = spawnSync(bin, args, {
 		cwd: dir,
 		stdio: inherit ? 'inherit' : 'pipe',

@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { satisfiesNodeRange } from '../commands/doctor.js';
+import { satisfiesNodeRange } from '../node-range.js';
 
 test('catches the reported incident — Node 20 host, runtime requiring >=22', () => {
 	assert.equal(satisfiesNodeRange('20.20.2', '>=22.0.0'), false);

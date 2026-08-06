@@ -2,39 +2,27 @@
 // provider packages), remove stale selva.config.js, update ecosystem.config.cjs.
 // Idempotent; mirrors update's lifecycle (stop/mutate/start with rollback on failure).
 
-import { existsSync, readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, copyFileSync, rmSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
-import { spawnSync, execSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 import { renameEnvKeys, RENAMED_ENV_VARS } from '../env.js';
+import {
+	buildDeploymentPackageJson,
+	DEPENDENCIES,
+	LEGACY_DEPENDENCIES
+} from '../deployment-package.js';
+import { APP_NAME, runPm2 } from './pm2.js';
 
-const APP_NAME = 'selva-compute';
-
-// Packages we own. Everything in this set is rewritten wholesale by migrate;
-// anything outside it (operator's own deps) gets dropped, which is the
-// explicit design choice — operators with custom deps should fork the
-// template rather than hand-patch the deployment package.json.
-const SELVA_DEPS = new Set([
-	'@selvajs/cli',
-	'@selvajs/selva',
-	'@selvajs/runtime', // legacy — removed during migrate
-	'@selvajs/platform', // legacy — bundled into @selvajs/selva
-	'@selvajs/local-provider', // legacy — bundled into @selvajs/selva
-	'@selvajs/supabase-provider', // legacy — bundled into @selvajs/selva
-	'@selvajs/header-auth-provider', // legacy — bundled into @selvajs/selva
-	'@selvajs/create' // legacy CLI — removed during migrate
-]);
-
-const CANONICAL_SCRIPTS = {
-	start: 'selva start',
-	stop: 'selva stop',
-	restart: 'selva restart',
-	logs: 'selva logs',
-	doctor: 'selva doctor',
-	update: 'selva update'
-};
+/**
+ * Where `migrate` parks the old node_modules while npm installs the new one.
+ * Left behind only if the process is killed mid-migration — `detectDrift`
+ * reports it, because a stray copy of the dependency tree is both confusing and
+ * large enough to matter on a small VM.
+ */
+export const NODE_MODULES_STASH = 'node_modules.selva-migrate-bak';
 
 export async function runMigrate() {
 	const dir = resolveDeploymentDir();
@@ -106,9 +94,15 @@ export async function runMigrate() {
 	}
 
 	// Stop pm2 before npm rewrites (SvelteKit lazy-loads chunks; see update command).
-	const stopStatus = runPm2(dir, ['stop', APP_NAME], { inherit: false });
-	if (stopStatus !== 0) {
-		p.log.warn('pm2 stop did not succeed — selva-compute may not be running. Continuing.');
+	// A legacy deployment may predate the local-pm2 layout, so a missing binary
+	// is not fatal here — there is nothing running for us to stop.
+	try {
+		const stopStatus = runPm2(dir, ['stop', APP_NAME], { inherit: false });
+		if (stopStatus !== 0) {
+			p.log.warn('pm2 stop did not succeed — selva-compute may not be running. Continuing.');
+		}
+	} catch {
+		p.log.warn('No deployment-local pm2 to stop — continuing.');
 	}
 
 	// Back up for rollback on npm-install failure.
@@ -136,9 +130,19 @@ export async function runMigrate() {
 		writeFileSync(envPath, envRename.text, 'utf8');
 	}
 
-	// Clean install required (major version changes break legacy lockfile).
-	rmSync(join(dir, 'node_modules'), { recursive: true, force: true });
-	rmSync(join(dir, 'package-lock.json'), { force: true });
+	// A clean install is required — a legacy lockfile pins the old package set
+	// across a major bump. But node_modules is also where pm2 lives, and the
+	// rollback below has to restart the app, so deleting it outright leaves a
+	// failed migration with no way back up. Rename instead: atomic, keeps the
+	// .bin symlinks intact, and restorable until the install succeeds.
+	const nodeModules = join(dir, 'node_modules');
+	const nodeModulesBak = join(dir, NODE_MODULES_STASH);
+	const lockPath = join(dir, 'package-lock.json');
+
+	rmSync(nodeModulesBak, { recursive: true, force: true });
+	if (existsSync(nodeModules)) renameSync(nodeModules, nodeModulesBak);
+	const lockBak = existsSync(lockPath) ? readFileSync(lockPath, 'utf8') : null;
+	rmSync(lockPath, { force: true });
 
 	const s = p.spinner();
 	s.start('Installing new dependencies (this can take a minute)');
@@ -150,8 +154,9 @@ export async function runMigrate() {
 			stdio: 'pipe'
 		});
 		s.stop('Dependencies installed');
+		rmSync(nodeModulesBak, { recursive: true, force: true });
 	} catch (err) {
-		s.stop(pc.red('npm install failed — rolling back package.json'));
+		s.stop(pc.red('npm install failed — rolling back'));
 		copyFileSync(bakPath, pkgPath);
 		if (hasStaleConfig && existsSync(configPath + '.bak')) {
 			copyFileSync(configPath + '.bak', configPath);
@@ -162,13 +167,25 @@ export async function runMigrate() {
 		if (envRename.changes.length > 0 && existsSync(envPath + '.bak')) {
 			copyFileSync(envPath + '.bak', envPath);
 		}
-		// Try to bring the process back up (best-effort; at least package.json is consistent).
-		runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
+
+		// Restore the dependency tree the app was running on. A half-installed
+		// node_modules from the failed attempt is worse than the old one.
+		rmSync(nodeModules, { recursive: true, force: true });
+		if (existsSync(nodeModulesBak)) renameSync(nodeModulesBak, nodeModules);
+		if (lockBak !== null) writeFileSync(lockPath, lockBak, 'utf8');
+
+		restartAfterRollback(dir);
 		p.outro(pc.red(`Migration aborted: ${err.message ?? err}`));
 		process.exit(1);
 	}
 
-	const status = runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
+	let status;
+	try {
+		status = runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
+	} catch (err) {
+		status = 1;
+		p.log.error(`Could not invoke pm2: ${err instanceof Error ? err.message : err}`);
+	}
 	const backupHints = ['package.json.bak'];
 	if (hasStaleConfig) backupHints.push('selva.config.js.bak');
 	if (ecoHasStaleRuntime) backupHints.push('ecosystem.config.cjs.bak');
@@ -187,23 +204,38 @@ export async function runMigrate() {
 	}
 }
 
-// Build target package.json with canonical dependencies (wholesale replace).
-// Drops non-canonical @selvajs/* and operator's own deps (by design).
-function buildTargetPackageJson(current) {
-	const deps = {
-		'@selvajs/cli': 'latest',
-		'@selvajs/selva': 'latest',
-		pm2: '^5.4.0'
-	};
+/**
+ * Bring the app back up after a failed migration.
+ *
+ * Never throws: the migration is already aborting, and an exception here would
+ * replace the rollback's diagnosis with a stack trace. A failure to restart is
+ * the operator's problem to act on, so it must be stated, not swallowed — the
+ * old code returned a bare 1 and printed nothing.
+ */
+function restartAfterRollback(dir) {
+	try {
+		const status = runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
+		if (status === 0) {
+			p.log.success(`Rolled back and restarted ${APP_NAME}.`);
+			return;
+		}
+		p.log.error(
+			`Rolled back, but \`pm2 start\` exited ${status}. The app may be down — ` +
+				`check \`pm2 logs ${APP_NAME}\` and start it with \`selva start\`.`
+		);
+	} catch (err) {
+		p.log.error(
+			`Rolled back, but pm2 could not be invoked (${err instanceof Error ? err.message : err}). ` +
+				`The app is likely down — run \`npm install\` then \`selva start\`.`
+		);
+	}
+}
 
-	return {
+function buildTargetPackageJson(current) {
+	return buildDeploymentPackageJson({
 		name: current.name ?? 'selva-deployment',
-		version: current.version ?? '0.1.0',
-		private: true,
-		type: 'module',
-		scripts: { ...CANONICAL_SCRIPTS },
-		dependencies: deps
-	};
+		version: current.version ?? '0.1.0'
+	});
 }
 
 // Format package.json diff for confirmation prompt (concise, not full diff).
@@ -238,36 +270,17 @@ function diffPackageJson(before, after) {
 	return lines;
 }
 
-// Local pm2 runner (avoid circular dep; duplication is small).
-function runPm2(dir, args, { inherit = true } = {}) {
-	const local = join(dir, 'node_modules', '.bin', process.platform === 'win32' ? 'pm2.cmd' : 'pm2');
-	const bin = existsSync(local) ? local : 'pm2';
-	const result = spawnSync(bin, args, {
-		cwd: dir,
-		stdio: inherit ? 'inherit' : 'pipe',
-		shell: process.platform === 'win32'
-	});
-	if (result.error) return 1;
-	return result.status ?? 0;
-}
-
 // Exported for `selva doctor` to check layout drift without duplication.
 export function detectDrift(pkgJson, dir) {
 	const deps = pkgJson?.dependencies ?? {};
 	const reasons = [];
-	if (deps['@selvajs/runtime']) reasons.push('@selvajs/runtime is the old runtime package');
-	if (deps['@selvajs/create']) reasons.push('@selvajs/create is the old CLI package');
-	if (deps['@selvajs/platform'])
-		reasons.push('@selvajs/platform is now bundled into @selvajs/selva');
-	if (deps['@selvajs/local-provider'])
-		reasons.push('@selvajs/local-provider is now bundled into @selvajs/selva');
-	if (deps['@selvajs/supabase-provider'])
-		reasons.push('@selvajs/supabase-provider is now bundled into @selvajs/selva');
-	if (deps['@selvajs/header-auth-provider'])
-		reasons.push('@selvajs/header-auth-provider is now bundled into @selvajs/selva');
-	if (!deps['@selvajs/selva']) reasons.push('@selvajs/selva is missing');
-	if (!deps['@selvajs/cli']) reasons.push('@selvajs/cli is missing');
-	if (!deps['pm2']) reasons.push('pm2 is not in dependencies');
+
+	for (const [name, why] of Object.entries(LEGACY_DEPENDENCIES)) {
+		if (deps[name]) reasons.push(`${name} is ${why}`);
+	}
+	for (const name of Object.keys(DEPENDENCIES)) {
+		if (!deps[name]) reasons.push(`${name} is missing`);
+	}
 
 	if (dir) {
 		const configPath = join(dir, 'selva.config.js');
@@ -290,5 +303,4 @@ export function detectDrift(pkgJson, dir) {
 	return reasons;
 }
 
-// Re-exported for tests to verify without running migrate.
-export { buildTargetPackageJson, SELVA_DEPS };
+export { buildTargetPackageJson };

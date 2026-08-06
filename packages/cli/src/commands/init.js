@@ -7,14 +7,13 @@
 //     `selva keys rotate`'s job, not init's.
 //   • Doesn't touch package.json or run npm install.
 
-import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { collectConfig } from '../prompts.js';
 import { readEnvFile, writeEnvFile } from '../env.js';
 import { generateKey } from '../secrets.js';
-import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
+import { readEnvTemplate, requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 
 export async function runInit() {
 	const dir = resolveDeploymentDir();
@@ -48,24 +47,7 @@ export async function runInit() {
 		p.log.warn('SELVA_AT_REST_KEY was missing — generated a fresh one.');
 	}
 
-	// Use whatever .env.example shipped with the installed runtime as the
-	// canonical template. Falls back to the current .env if the runtime
-	// templates aren't present (shouldn't happen post-install).
-	const templatePath = join(
-		dir,
-		'node_modules',
-		'@selvajs',
-		'selva',
-		'templates',
-		'.env.example'
-	);
-	const template = existsSync(templatePath)
-		? readFileSync(templatePath, 'utf8')
-		: existsSync(envPath)
-			? readFileSync(envPath, 'utf8')
-			: '';
-
-	writeEnvFile(envPath, template, values);
+	writeEnvFile(envPath, readEnvTemplate(dir), values);
 
 	p.outro(
 		[

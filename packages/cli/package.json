@@ -39,7 +39,7 @@
 	"scripts": {
 		"start": "node ./bin/cli.js",
 		"selva": "node ./bin/selva.js",
-		"test": "node --check ./bin/cli.js && node --check ./bin/selva.js && node --input-type=module -e \"for (const m of ['./src/cli.js','./src/prompts.js','./src/env.js','./src/paths.js','./src/secrets.js','./src/commands/create.js','./src/commands/init.js','./src/commands/doctor.js','./src/commands/pm2.js','./src/commands/migrate.js','./src/commands/keys.js']) { await import(m); }\" && node --test \"./src/__tests__/*.test.js\""
+		"test": "node --check ./bin/cli.js && node --check ./bin/selva.js && node --input-type=module -e \"for (const m of ['./src/cli.js','./src/prompts.js','./src/env.js','./src/paths.js','./src/secrets.js','./src/node-range.js','./src/deployment-package.js','./src/commands/create.js','./src/commands/init.js','./src/commands/doctor.js','./src/commands/pm2.js','./src/commands/migrate.js','./src/commands/keys.js']) { await import(m); }\" && node --test \"./src/__tests__/*.test.js\""
 	},
 	"dependencies": {
 		"@clack/prompts": "^1.7.0",
