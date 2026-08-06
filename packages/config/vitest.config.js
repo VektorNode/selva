@@ -33,7 +33,12 @@ export function createVitestConfig(overrides = {}) {
 					'**/dist/**',
 					// Playwright specs. Vitest would otherwise collect them and fail on
 					// the `@playwright/test` import.
-					'**/e2e/**'
+					'**/e2e/**',
+					// svelte-package copies test files into .svelte-kit/__package__/, so
+					// the same double-run problem as dist/ — plus a race: a parallel turbo
+					// build regenerating .svelte-kit deletes files vitest has already
+					// collected, failing the run with "Cannot find module".
+					'**/.svelte-kit/**'
 				]
 			}
 		}),
