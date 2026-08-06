@@ -211,7 +211,12 @@ function checkFile(path, label) {
 	return existsSync(path) ? green(label) : red(`${label} (missing: ${path})`);
 }
 
-function checkSecret(value, label) {
+/**
+ * Guards SELVA_HMAC_KEY and SELVA_AT_REST_KEY. A placeholder or short key
+ * starts and serves traffic — the damage (forgeable sessions, weak at-rest
+ * encryption) is invisible until someone looks for it.
+ */
+export function checkSecret(value, label) {
 	if (!value) return red(`${label} — unset`);
 	if (value === PLACEHOLDER) return red(`${label} — still the placeholder`);
 	if (!HEX_64.test(value)) return red(`${label} — not 64 hex chars`);
