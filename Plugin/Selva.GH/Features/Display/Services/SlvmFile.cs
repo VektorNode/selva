@@ -6,8 +6,8 @@ using Newtonsoft.Json;
 namespace Selva.GH.Features.Display.Services;
 
 /// <summary>
-///     Reads and writes the Selva Display Mesh File (<c>.dmf</c>) — a self-contained, on-disk copy
-///     of a <see cref="DisplayBatch" />. The point is preprocessing: meshing/quantizing/compressing
+///     Reads and writes the Selva mesh file (<c>.slvm</c>; legacy <c>.dmf</c>) — a self-contained,
+///     on-disk copy of a <see cref="DisplayBatch" />. The point is preprocessing: meshing/quantizing/compressing
 ///     a part once, saving the finished blob, then reloading it cheaply (no re-mesh) when the same
 ///     part is reused many times in a scene.
 ///
@@ -26,12 +26,19 @@ namespace Selva.GH.Features.Display.Services;
 ///     The blob is written verbatim and never re-encoded, so save/load adds no quantization or
 ///     compression cost — it's a byte copy on each side.
 /// </summary>
-public static class DmfFile
+public static class SlvmFile
 {
     public const uint Magic = 0x31464D44; // "DMF1" little-endian
     public const uint Version = 1;
 
-    public const string Extension = ".dmf";
+    public const string Extension = ".slvm";
+
+    /// <summary>
+    ///     The extension the writer used before the slv* family unification. Files with it exist on
+    ///     users' disks, so readers accept it forever; only the writer default changed. Identity is
+    ///     the DMF1 magic either way — the magic never changes.
+    /// </summary>
+    public const string LegacyExtension = ".dmf";
 
     /// <summary>
     ///     The non-blob parts of a <see cref="DisplayBatch" />. Serialized as the file's JSON sidecar

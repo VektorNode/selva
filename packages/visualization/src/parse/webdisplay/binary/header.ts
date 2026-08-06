@@ -19,7 +19,7 @@ export const BINARY_MESH_VERSION = 3;
 /**
  * Oldest wire version this parser still decodes. Each version only added a flag bit, so the
  * flag-driven read path handles every older blob unchanged — needed since persisted/cached blobs
- * (saved `.gh` files, DMF files, cached compute results) must stay decodable after upgrade.
+ * (saved `.gh` files, `.slvm`/`.dmf` mesh files, cached compute results) must stay decodable after upgrade.
  */
 export const MIN_SUPPORTED_VERSION = 1;
 /** Bit 0 of the geometry flags word: 0 = int16 quantized, 1 = float32 raw. */

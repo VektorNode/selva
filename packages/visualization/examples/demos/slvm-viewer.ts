@@ -1,8 +1,8 @@
 /**
- * Demo: load a Selva `.dmf` (Display Mesh File) through the EXACT pipeline the Selva app uses, so
- * the look/materials can be verified and debugged 1:1 with production.
+ * Demo: load a Selva mesh file (`.slvm`, legacy `.dmf`) through the EXACT pipeline the Selva app
+ * uses, so the look/materials can be verified and debugged 1:1 with production.
  *
- * A `.dmf` is a saved `DisplayBatch`: a small JSON sidecar header followed by the raw SLVA/SLVZ mesh
+ * A mesh file is a saved `DisplayBatch`: a small JSON sidecar header followed by the raw SLVA/SLVZ mesh
  * blob. This demo strips the header and runs the blob through the same two calls Selva's viewer makes:
  *
  *   1. Parse — `parseMeshBatchBlob(blob, { mergeByMaterial: false })`, the
@@ -24,9 +24,9 @@ import { createPlayground } from '../shared/playground';
 import { parseMeshBatchBlob } from '@/parse/index.js';
 import { updateScene, type ThreeInitializerOptions, type Look } from '@/render/index.js';
 
-// Bundled sample DMFs, served by Vite via ?url.
-import sampleSmallUrl from '../fixtures/test_file.dmf?url';
-import sampleMeshUrl from '../fixtures/test_mesh.dmf?url';
+// Bundled sample mesh files, served by Vite via ?url.
+import sampleSmallUrl from '../fixtures/test_file.slvm?url';
+import sampleMeshUrl from '../fixtures/test_mesh.slvm?url';
 
 // ============================================================================
 // SELVA VIEWER CONFIG — copied verbatim from packages/ui Viewer.svelte onMount
@@ -79,7 +79,7 @@ let edgesVisible = true;
 let renderStyle: Look = 'technical';
 
 const hint =
-	'Load a .dmf to render it through the Selva pipeline.\n' +
+	'Load a mesh file (.slvm or legacy .dmf) to render it through the Selva pipeline.\n' +
 	'Look / Edges below mirror Selva’s Display menu.';
 
 // ── DMF blob extraction ─────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ async function loadDmfBytes(bytes: Uint8Array, name: string) {
 			debug: false
 		});
 		if (meshes.length === 0) {
-			pg.setStatus(`${name}: no meshes in this DMF (empty or items-only batch).`);
+			pg.setStatus(`${name}: no meshes in this file (empty or items-only batch).`);
 			return;
 		}
 
@@ -145,7 +145,7 @@ async function loadDmfBytes(bytes: Uint8Array, name: string) {
 	} catch (err) {
 		const msg = err instanceof Error ? (err.stack ?? err.message) : String(err);
 		pg.setStatus(`Failed to load ${name}:\n${msg}`);
-		console.error(`[dmf-viewer] DMF load failed for ${name}:`, err);
+		console.error(`[slvm-viewer] DMF load failed for ${name}:`, err);
 	}
 }
 
@@ -158,7 +158,7 @@ async function loadDmfUrl(url: string, name: string) {
 	} catch (err) {
 		const msg = err instanceof Error ? (err.stack ?? err.message) : String(err);
 		pg.setStatus(`Failed to fetch ${name}:\n${msg}`);
-		console.error(`[dmf-viewer] DMF fetch failed for ${name}:`, err);
+		console.error(`[slvm-viewer] DMF fetch failed for ${name}:`, err);
 	}
 }
 
@@ -176,7 +176,7 @@ function computeMeshesBounds(meshes: THREE.Object3D[]): THREE.Box3 {
 // The playground has no file-input helper, so wire a bare hidden <input> and forward its selection.
 const dmfInput = document.createElement('input');
 dmfInput.type = 'file';
-dmfInput.accept = '.dmf';
+dmfInput.accept = '.slvm,.dmf';
 dmfInput.style.display = 'none';
 dmfInput.addEventListener('change', async () => {
 	const file = dmfInput.files?.[0];
@@ -185,12 +185,12 @@ dmfInput.addEventListener('change', async () => {
 });
 document.body.appendChild(dmfInput);
 
-// ── DMF section ───────────────────────────────────────────────────────────────
-pg.addSection('DMF');
-pg.addButton('Load DMF File…', () => dmfInput.click());
+// ── Mesh file section ─────────────────────────────────────────────────────────
+pg.addSection('Mesh file');
+pg.addButton('Load Mesh File…', () => dmfInput.click());
 // One-click samples straight from the repo fixtures — no file dialog needed.
-pg.addButton('Sample: test_file.dmf', () => void loadDmfUrl(sampleSmallUrl, 'test_file.dmf'));
-pg.addButton('Sample: test_mesh.dmf', () => void loadDmfUrl(sampleMeshUrl, 'test_mesh.dmf'));
+pg.addButton('Sample: test_file.slvm', () => void loadDmfUrl(sampleSmallUrl, 'test_file.slvm'));
+pg.addButton('Sample: test_mesh.slvm', () => void loadDmfUrl(sampleMeshUrl, 'test_mesh.slvm'));
 
 // ── Display (mirrors Selva's Display submenu) ────────────────────────────────
 // These are the two controls that shape the look. The look retunes lighting/material; edges overlay

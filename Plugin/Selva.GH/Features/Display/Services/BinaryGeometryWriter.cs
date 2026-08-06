@@ -79,7 +79,7 @@ public static class BinaryGeometryWriter
 
     /// <summary>
     ///     Bit 2: vertices/indices are delta+zigzag filtered. Always set by the v3 writer; exists so
-    ///     decoders handle pre-v3 blobs (persisted .gh params, DMF files) through the same read path.
+    ///     decoders handle pre-v3 blobs (persisted .gh params, mesh files) through the same read path.
     /// </summary>
     public const uint FlagDeltaEncoded = 0x4;
 

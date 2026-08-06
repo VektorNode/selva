@@ -34,7 +34,7 @@
 		panelActions?: ActionButton[];
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
-		/** When set, persist saved states via this callback instead of downloading a .sps file. */
+		/** When set, persist saved states via this callback instead of downloading a .slvp file. */
 		onSaveState?: (state: ParameterPreset) => void | Promise<void>;
 		/** When set, the Load dialog lists these states instead of showing a file input. */
 		onListStates?: () => ParameterPreset[] | Promise<ParameterPreset[]>;

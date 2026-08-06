@@ -52,7 +52,7 @@ export const DEFAULT_PRESET_LABELS: PresetLabels = {
 	loadButton: 'Load State',
 
 	saveDialogTitle: 'Save Parameter State',
-	saveDialogDescription: 'Save the current parameter values as a .sps file',
+	saveDialogDescription: 'Save the current parameter values as a .slvp file',
 	saveNameLabel: 'State Name *',
 	saveNamePlaceholder: 'e.g., Design Option A',
 	saveDescriptionLabel: 'Description',
@@ -64,8 +64,8 @@ export const DEFAULT_PRESET_LABELS: PresetLabels = {
 	saveNameRequired: 'Please enter a name for this state',
 
 	loadDialogTitle: 'Load Parameter State',
-	loadDialogDescription: 'Select a .sps state file from your drive to load',
-	loadFromFileButton: 'Select .sps File',
+	loadDialogDescription: 'Select a .slvp state file from your drive to load',
+	loadFromFileButton: 'Select .slvp File',
 	loadEmptyList: 'No saved states found',
 	loadImportError: 'Failed to import state: ',
 

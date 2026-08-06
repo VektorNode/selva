@@ -6,8 +6,8 @@ declare module '*.json?url' {
 	export default url;
 }
 
-// Bundled binary sample fixtures (Selva Display Mesh Files) imported as resolved URLs.
-declare module '*.dmf?url' {
+// Bundled binary sample fixtures (Selva mesh files) imported as resolved URLs.
+declare module '*.slvm?url' {
 	const url: string;
 	export default url;
 }

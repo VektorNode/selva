@@ -16,7 +16,7 @@ public class GH_DisplayToFile : GH_Component
 {
     public GH_DisplayToFile()
         : base("Display To File", "D2F",
-            "Saves a Web Display payload to a .dmf file on disk for fast reuse (no re-meshing on reload).",
+            "Saves a Web Display payload to a Selva mesh file (.slvm) on disk for fast reuse (no re-meshing on reload).",
             "Selva", "Display")
     {
     }
@@ -30,14 +30,14 @@ public class GH_DisplayToFile : GH_Component
         pManager.AddParameter(new Param_WebDisplay("Web Display", "WD",
             "Web Display payload from the Display component", "Selva", "Display", GH_ParamAccess.item));
         pManager.AddTextParameter("Path", "P",
-            "Absolute path to write the .dmf file to (the .dmf extension is added if missing)",
+            "Absolute path to write the mesh file to (.slvm is added when the path has neither .slvm nor .dmf)",
             GH_ParamAccess.item);
         pManager.AddBooleanParameter("Write", "W", "Set to true to write the file", GH_ParamAccess.item, false);
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddTextParameter("Path", "P", "The path the .dmf file was written to", GH_ParamAccess.item);
+        pManager.AddTextParameter("Path", "P", "The path the mesh file was written to", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
@@ -64,9 +64,12 @@ public class GH_DisplayToFile : GH_Component
             return;
         }
 
-        if (!path.EndsWith(DmfFile.Extension, StringComparison.OrdinalIgnoreCase))
+        // A path already carrying the legacy extension is kept as-is — appending .slvm to
+        // "part.dmf" would silently fork the file the rest of the definition references.
+        if (!path.EndsWith(SlvmFile.Extension, StringComparison.OrdinalIgnoreCase)
+            && !path.EndsWith(SlvmFile.LegacyExtension, StringComparison.OrdinalIgnoreCase))
         {
-            path += DmfFile.Extension;
+            path += SlvmFile.Extension;
         }
 
         if (!write)
@@ -86,12 +89,12 @@ public class GH_DisplayToFile : GH_Component
 
             using (var fs = File.Create(path))
             {
-                DmfFile.Write(fs, batch);
+                SlvmFile.Write(fs, batch);
             }
         }
         catch (Exception ex)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to write .dmf: {ex.Message}");
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to write mesh file: {ex.Message}");
             return;
         }
 

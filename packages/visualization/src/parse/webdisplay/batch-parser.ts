@@ -201,7 +201,7 @@ function buildMeshesFromParsed(
 	const materialsSrc = parsed.metadata.materials ?? fallback?.materials ?? [];
 	const groups = parsed.metadata.groups ?? fallback?.groups ?? [];
 	// Envelope sourceComponentId wins over the blob's embedded one: the blob bakes in the id at
-	// encode time, but a reloaded part (e.g. a .dmf instanced many times) re-stamps a fresh id on
+	// encode time, but a reloaded part (e.g. a .slvm mesh file instanced many times) re-stamps a fresh id on
 	// the envelope so web pick identity stays distinct per placement. The blob value only applies
 	// to the raw-blob transport, which has no envelope.
 	const sourceComponentId = fallback?.sourceComponentId ?? parsed.metadata.sourceComponentId;

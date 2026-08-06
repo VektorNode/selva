@@ -161,7 +161,9 @@ export function exportStateAsJson(savedState: ParameterPreset): void {
 
 	const link = document.createElement('a');
 	link.href = URL.createObjectURL(blob);
-	link.download = `${safeName}_${date}.sps`;
+	// .slvp = Selva parameter preset. Import accepts legacy .sps files too — the content is
+	// identical JSON, only the writer's extension changed.
+	link.download = `${safeName}_${date}.slvp`;
 	link.click();
 	URL.revokeObjectURL(link.href);
 }

@@ -72,8 +72,8 @@ jsdom has no WebGL.
 pnpm example        # http://localhost:5173
 ```
 
-Three demos: **Viewer — Full API** (every `initThree` control), **DMF — Selva Pipeline** (loads a
-`.dmf` through the same parse + `updateScene` calls `Viewer.svelte` makes), and **Display Items**
+Three demos: **Viewer — Full API** (every `initThree` control), **Mesh File — Selva Pipeline** (loads a
+`.slvm` mesh file through the same parse + `updateScene` calls `Viewer.svelte` makes), and **Display Items**
 (a GH compute response through `getThreeMeshesFromComputeResponse`).
 
 They live here rather than in `@selvajs/compute` because that package must not depend on `three`.

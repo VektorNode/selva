@@ -209,6 +209,26 @@ The plugin (C#) and UI (TS) are two implementations of one contract over WebSock
 5. **TS** — handle the new payload in the UI consumer + a vitest.
 6. `dotnet test` and `pnpm test` must both be green.
 
+## File formats Selva owns
+
+Every format has three names with different lifetimes. The **magic bytes** are the identity of
+files already on users' disks — frozen forever. The **extension** is what writers emit; renaming
+it is cheap (readers detect by magic) but readers must accept retired extensions forever. The
+**human name** in UI and docs can change freely.
+
+| Format           | Extension            | Magic            | Spec                                                |
+| ---------------- | -------------------- | ---------------- | --------------------------------------------------- |
+| Mesh batch blob  | wire-only            | `SLVA` / `SLVZ`* | `BinaryGeometryWriter.cs` header / `SLVA-FORMAT.md` |
+| Selva mesh file  | `.slvm` (was `.dmf`) | `DMF1`           | `DmfFile.cs` header — JSON sidecar + SLVA/SLVZ blob |
+| Parameter preset | `.slvp` (was `.sps`) | none (JSON)      | `packages/schemas/preset-schema.json`               |
+
+\* `SLVZ` is `SLVA` in an optional DEFLATE container; decoders sniff which by the leading magic.
+
+Naming rule for new formats: human name **"Selva _thing_ file"**, extension **`slv` + one
+mnemonic letter**, magic four ASCII bytes. Retired extensions (`.dmf`, `.sps`) stay accepted on
+every read path; only writers moved to the `slv*` names. Cross-stack golden fixtures for these
+formats live in `packages/schemas/fixtures/` (see "Where fixtures live").
+
 ## Where TypeScript tests live
 
 Unit tests go in a `__tests__/` folder beside the code, named `*.test.ts`

@@ -9,17 +9,17 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Display.Components;
 
-// Reads the finished blob straight back from a .dmf file, skipping the mesh/quantize/compress path
+// Reads the finished blob straight back from a mesh file, skipping the mesh/quantize/compress path
 // — cheap to reuse a saved part many times.
 //
-// The web keys pick selection on sourceComponentId (+ per-item ids). Loading the same .dmf into many
+// The web keys pick selection on sourceComponentId (+ per-item ids). Loading the same file into many
 // instances would collide on one shared id, so each loader stamps its own InstanceGuid by default;
 // an explicit Id input pins a stable identity instead.
 public class GH_DisplayFromFile : GH_Component
 {
     public GH_DisplayFromFile()
         : base("Display From File", "DFF",
-            "Reloads a Web Display payload from a .dmf file (no re-meshing).",
+            "Reloads a Web Display payload from a Selva mesh file (.slvm or legacy .dmf, no re-meshing).",
             "Selva", "Display")
     {
     }
@@ -30,7 +30,8 @@ public class GH_DisplayFromFile : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddTextParameter("Path", "P", "Absolute path to the .dmf file", GH_ParamAccess.item);
+        pManager.AddTextParameter("Path", "P", "Absolute path to the mesh file (.slvm or legacy .dmf)",
+            GH_ParamAccess.item);
         pManager.AddTextParameter("Id", "Id",
             "Optional source component id to stamp on the payload (for stable web pick identity). " +
             "Leave empty to use this component's own id so each instance is distinct.",
@@ -66,12 +67,12 @@ public class GH_DisplayFromFile : GH_Component
         {
             using (var fs = File.OpenRead(path))
             {
-                batch = DmfFile.Read(fs);
+                batch = SlvmFile.Read(fs);
             }
         }
         catch (Exception ex)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to read .dmf: {ex.Message}");
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to read mesh file: {ex.Message}");
             return;
         }
 

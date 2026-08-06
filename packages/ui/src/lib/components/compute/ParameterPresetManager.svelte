@@ -20,7 +20,7 @@
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
 		actions?: ActionButton[];
-		/** When set, persist saved states via this callback instead of downloading a .sps file. */
+		/** When set, persist saved states via this callback instead of downloading a .slvp file. */
 		onSaveState?: (state: ParameterPreset) => void | Promise<void>;
 		/** When set, the Load dialog lists these states instead of showing a file input. */
 		onListStates?: () => ParameterPreset[] | Promise<ParameterPreset[]>;
@@ -182,7 +182,14 @@
 	</Button>
 {/each}
 
-<input bind:this={fileInputRef} type="file" accept=".sps" onchange={handleImport} class="hidden" />
+<!-- .sps is the pre-rename extension; files with it exist on users' drives, so keep accepting it. -->
+<input
+	bind:this={fileInputRef}
+	type="file"
+	accept=".slvp,.sps"
+	onchange={handleImport}
+	class="hidden"
+/>
 
 <!-- Save Dialog -->
 <Dialog.Root bind:open={showExportDialog}>
