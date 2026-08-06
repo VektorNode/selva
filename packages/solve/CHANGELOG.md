@@ -1,5 +1,25 @@
 # @selvajs/solve
 
+## 1.0.0-beta.9
+
+### Patch Changes
+
+- a011c5e: Unify the vitest setup across the workspace behind `@selvajs/config/vitest`.
+
+  Packaging fix: `@selvajs/compute`, `@selvajs/solve`, `@selvajs/visualization`
+  and `@selvajs/schemas` had no test-file exclusion in `files`, so a change of
+  build tool would have shipped tests to npm. All publishable packages now carry
+  the same exclusion.
+
+  `@selvajs/platform`'s test suite was never wired to a runner and had never
+  executed; it now runs with the rest.
+
+- Updated dependencies [0629321]
+- Updated dependencies [a011c5e]
+  - @selvajs/schemas@5.0.0-beta.2
+  - @selvajs/platform@0.16.1-beta.2
+  - @selvajs/compute@4.0.0-beta.5
+
 ## 1.0.0-beta.8
 
 ### Patch Changes

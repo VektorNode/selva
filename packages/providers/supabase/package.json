@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/supabase-provider",
-	"version": "0.16.1-beta.2",
+	"version": "0.16.1-beta.3",
 	"description": "Supabase (Auth + Postgres + Storage) implementations of @selvajs/platform interfaces",
 	"license": "MIT",
 	"author": "VektorNode",
