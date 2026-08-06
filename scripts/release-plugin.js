@@ -93,7 +93,9 @@ function info(msg) {
 	console.log(msg);
 }
 
-function run(cmd, cmdArgs, { capture = false } = {}) {
+// shell is needed to spawn pnpm on Windows (it's pnpm.cmd) — but a shell does
+// not escape args, so only pass it for calls whose args are space-free.
+function run(cmd, cmdArgs, { capture = false, shell = false } = {}) {
 	if (DRY_RUN) {
 		info(`  [dry-run] ${cmd} ${cmdArgs.join(' ')}`);
 		return '';
@@ -101,7 +103,8 @@ function run(cmd, cmdArgs, { capture = false } = {}) {
 	return execFileSync(cmd, cmdArgs, {
 		cwd: projectRoot,
 		stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
-		encoding: 'utf8'
+		encoding: 'utf8',
+		shell
 	});
 }
 
@@ -323,7 +326,7 @@ if (DRY_RUN) {
 
 if (BUILD) {
 	info('→ Building plugin (pnpm build:plugin)…');
-	run('pnpm', ['run', 'build:plugin']);
+	run('pnpm', ['run', 'build:plugin'], { shell: process.platform === 'win32' });
 }
 
 // ============================================================================

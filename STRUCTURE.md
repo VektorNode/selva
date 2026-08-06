@@ -216,6 +216,33 @@ Unit tests go in a `__tests__/` folder beside the code, named `*.test.ts`
 `*.spec.ts` is reserved for Playwright specs under `e2e/`. Cross-suite fixtures
 and setup files go in a package-level `tests/`.
 
+### Where fixtures live
+
+A fixture goes in a `fixtures/` directory at the narrowest scope all its
+consumers share:
+
+- **One suite** → `__tests__/fixtures/` beside the test that reads it.
+- **Several suites in one package** → `tests/fixtures/` (data) or
+  `tests/helpers/` (code that builds test data).
+- **Both stacks (TS + C#)** → `packages/schemas/fixtures/`. This is the only
+  cross-stack location — `Selva.Tests` resolves it from the repo root, so it
+  must stay outside `src/`. These are contract artifacts with an update
+  procedure (see the schemas README), not test-private data.
+- **Playwright** → `packages/selva/e2e/fixtures/`. Binary `.gh` files there
+  need the `.gitignore` negation — the blanket `*.gh` rule swallows them
+  otherwise.
+
+Don't promote a fixture to a wider scope speculatively; move it when a second
+consumer appears. Code that constructs test data is a helper, not a data
+fixture — colocate it (`__tests__/fixtures.ts`) or put it in `tests/helpers/`.
+Assets for `examples/` demos aren't fixtures in this sense and stay under
+`examples/`.
+
+The repo-root `fixtures/` is for local development aids no test reads —
+Grasshopper definitions for manual plugin testing and their rhino-mcp
+regeneration recipes. If a test starts reading one of these files, it becomes
+a test fixture: move it to the scope its consumers share.
+
 Every package's `vitest.config.ts` starts from `createVitestConfig()` in
 `@selvajs/config/vitest` and overrides only what it can justify.
 [docs/contributing/testing.md](./docs/contributing/testing.md) covers the base

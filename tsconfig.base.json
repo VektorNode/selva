@@ -1,5 +1,9 @@
 {
 	"compilerOptions": {
+		// Plain `tsc` doesn't need this, but tsup's DTS build injects `baseUrl`
+		// (to resolve `paths`), which TS 6.0 deprecates — without it the compute/
+		// solve/visualization builds fail with TS5101.
+		"ignoreDeprecations": "6.0",
 		"target": "ES2020",
 		"useDefineForClassFields": true,
 		"lib": ["ES2020", "DOM", "DOM.Iterable"],

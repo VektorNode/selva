@@ -20,7 +20,7 @@ Selva uses [Turborepo](https://turborepo.com) to run workspace tasks in dependen
 
 - `build` depends on `^build` — upstream packages build first.
 - `schemas#build` depends on `generate` — codegen runs before `tsc`.
-- Cache lives in `.turbo/`. Invalidated by `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `tsconfig.base.json`, and the `ADAPTER`/`NODE_ENV` env vars.
+- Cache lives in `.turbo/`. Invalidated by `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `tsconfig.base.json`, `tsconfig.node.json`, and the `ADAPTER`/`NODE_ENV` env vars.
 - `turbo run build --force` bypasses the cache.
 - On Windows, `vite build` can occasionally fail with `ENOTEMPTY` in `@selvajs/ui` or `@selvajs/selva` — re-running fixes it.
 

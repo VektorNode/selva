@@ -77,10 +77,9 @@
 	],
 	"sideEffects": false,
 	"scripts": {
-		"build": "pnpm type-check && pnpm clean && tsup",
+		"build": "pnpm type-check && tsup",
 		"dev": "tsup --watch",
 		"example": "vite --config vite.config.ts",
-		"clean": "node --input-type=module -e \"import fs from 'fs'; fs.rmSync('dist', { recursive: true, force: true })\"",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",

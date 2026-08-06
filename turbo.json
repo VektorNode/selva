@@ -1,7 +1,13 @@
 {
 	"$schema": "https://turborepo.com/schema.json",
 	"ui": "stream",
-	"globalDependencies": ["pnpm-workspace.yaml", "pnpm-lock.yaml", "tsconfig.base.json", "docs/**"],
+	"globalDependencies": [
+		"pnpm-workspace.yaml",
+		"pnpm-lock.yaml",
+		"tsconfig.base.json",
+		"tsconfig.node.json",
+		"docs/**"
+	],
 	"tasks": {
 		"generate": {
 			"outputs": [
