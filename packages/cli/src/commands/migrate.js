@@ -11,6 +11,7 @@ import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 import { renameEnvKeys, RENAMED_ENV_VARS } from '../env.js';
 import {
 	buildDeploymentPackageJson,
+	CANONICAL_FIELDS,
 	DEPENDENCIES,
 	LEGACY_DEPENDENCIES
 } from '../deployment-package.js';
@@ -241,7 +242,8 @@ function restartAfterRollback(dir, pm2 = runPm2) {
 function buildTargetPackageJson(current) {
 	return buildDeploymentPackageJson({
 		name: current.name ?? 'selva-deployment',
-		version: current.version ?? '0.1.0'
+		version: current.version ?? '0.1.0',
+		engines: current.engines
 	});
 }
 
@@ -274,7 +276,23 @@ function diffPackageJson(before, after) {
 		}
 	}
 
+	// Anything outside the canonical set is discarded by the rewrite.
+	// devDependencies and description used to vanish without appearing here, so
+	// the operator confirmed a change they were never shown.
+	for (const key of Object.keys(before).sort()) {
+		if (CANONICAL_FIELDS.has(key)) continue;
+		lines.push(`${pc.red('-')} ${key} ${pc.dim(summarize(before[key]))}`);
+	}
+
 	return lines;
+}
+
+// One-line preview of a dropped field, enough to recognise what is being lost.
+function summarize(value) {
+	if (value === null || typeof value !== 'object') return String(value);
+	const keys = Object.keys(value);
+	if (Array.isArray(value)) return `[${keys.length} item${keys.length === 1 ? '' : 's'}]`;
+	return keys.length ? `{${keys.join(', ')}}` : '{}';
 }
 
 // Exported for `selva doctor` to check layout drift without duplication.
@@ -310,4 +328,4 @@ export function detectDrift(pkgJson, dir) {
 	return reasons;
 }
 
-export { buildTargetPackageJson };
+export { buildTargetPackageJson, diffPackageJson };

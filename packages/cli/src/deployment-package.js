@@ -54,9 +54,15 @@ export const LEGACY_DEPENDENCIES = {
  * additions are dropped. That is deliberate — a deployment directory is
  * generated output, and anyone needing custom dependencies should depend on
  * `@selvajs/selva` from their own project instead of editing this file.
+ *
+ * `engines` is the one exception, carried over when present: npm only enforces
+ * it under `engine-strict`, so an operator who pinned a Node floor did it
+ * deliberately, and dropping it removes a guard whose absence shows up only
+ * under real traffic (issue #176). Everything else a migration discards is
+ * listed by `diffPackageJson` before the operator confirms.
  */
-export function buildDeploymentPackageJson({ name, version = '0.1.0' }) {
-	return {
+export function buildDeploymentPackageJson({ name, version = '0.1.0', engines }) {
+	const pkg = {
 		name: sanitizePackageName(name),
 		version,
 		private: true,
@@ -64,7 +70,24 @@ export function buildDeploymentPackageJson({ name, version = '0.1.0' }) {
 		scripts: { ...SCRIPTS },
 		dependencies: { ...DEPENDENCIES }
 	};
+	if (engines && typeof engines === 'object') pkg.engines = { ...engines };
+	return pkg;
 }
+
+/**
+ * Top-level keys the canonical package.json defines. Anything outside this set
+ * that an operator added is dropped by `migrate` — `diffPackageJson` reports
+ * them so the loss is declared rather than discovered later.
+ */
+export const CANONICAL_FIELDS = new Set([
+	'name',
+	'version',
+	'private',
+	'type',
+	'scripts',
+	'dependencies',
+	'engines'
+]);
 
 export function sanitizePackageName(name) {
 	// npm package names: lowercase, no spaces, limited punctuation.
