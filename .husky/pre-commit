@@ -21,3 +21,18 @@ fi
 # purge node_modules it aborts and takes the commit with it. Formatting staged
 # files doesn't need fresh deps — run lint-staged against what's on disk.
 pnpm --config.verify-deps-before-run=false lint-staged
+
+# A malformed changeset (mixing `ignore`d and publishable packages, naming a
+# package that doesn't exist) only surfaces when the release workflow runs
+# `changeset version` — one CI round-trip after the commit that caused it.
+# Only when a changeset is staged: `changeset status` reads the whole
+# .changeset dir, so an unrelated commit would pay for it on every run.
+if git diff --cached --name-only --diff-filter=d \
+	| grep -E '^\.changeset/[^/]+\.md$' \
+	| grep -qv '^\.changeset/README\.md$'; then
+	if ! pnpm --config.verify-deps-before-run=false changeset status >/dev/null 2>&1; then
+		echo "pre-commit: changeset validation failed." >&2
+		pnpm --config.verify-deps-before-run=false changeset status >&2
+		exit 1
+	fi
+fi

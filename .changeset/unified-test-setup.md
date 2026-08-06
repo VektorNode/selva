@@ -1,6 +1,5 @@
 ---
 '@selvajs/supabase-provider': patch
-'@selvajs/header-auth-provider': patch
 '@selvajs/local-provider': patch
 '@selvajs/visualization': patch
 '@selvajs/platform': patch
