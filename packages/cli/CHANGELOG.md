@@ -1,5 +1,23 @@
 # @selvajs/cli
 
+## 4.8.0-beta.9
+
+### Patch Changes
+
+- 544906b: `selva migrate` now shows every field it discards, and keeps `engines`.
+
+  The rewrite replaces a deployment's `package.json` wholesale, which is deliberate — the directory is generated output. But the confirmation prompt only diffed `dependencies` and `scripts`, so `devDependencies`, `description`, and any other top-level field the operator had added disappeared without ever being shown. The diff now lists them, so a confirmed migration has no unadvertised losses. `selva doctor` was quiet about them too: `detectDrift` reported "layout is current" on a deployment `migrate` would strip.
+
+  `engines` is now carried over rather than dropped. npm only enforces it under `engine-strict`, so an operator who pinned a Node floor did it deliberately — and removing it takes away a guard whose absence surfaces only under real traffic (the failure mode behind issue #176).
+
+- 43bb98d: Fix `selva migrate` leaving a deployment down when `npm install` fails, and `selva keys rotate` crashing on a deployment with no `.env`.
+
+  - **A failed migration can now recover.** `migrate` needs a clean install (a legacy lockfile pins the old package set across a major bump), so it deleted `node_modules` before running `npm install`. But `node_modules` is also where the deployment's pm2 lives, and the rollback has to restart the app — so when an install failed, the restart resolved no pm2, `spawnSync` set `error`, and the helper returned a bare `1` with nothing printed. The operator was left with a stopped app, no dependency tree, and no indication why. The old tree is now renamed aside rather than deleted (atomic, keeps the `.bin` symlinks intact) and restored along with `package-lock.json` if the install fails, so pm2 resolves again and the app comes back. A restart that still fails is now reported instead of swallowed.
+  - **`migrate` no longer falls back to a global pm2.** It carried a private pm2 resolver that silently used whatever `pm2` was on `PATH` when the local one was missing — the version-skew source `pm2.js` exists to prevent, and which it refuses with an explicit error. Both now use the same strict resolver; the two call sites where a missing pm2 is legitimate (a legacy deployment has nothing to stop) handle it explicitly.
+  - **`selva doctor` reports an interrupted migration.** A killed `migrate` leaves the stashed dependency tree behind; doctor now flags it and `--fix` removes it.
+  - **`selva keys rotate` no longer crashes without an `.env`.** It read the file unconditionally when the runtime templates were absent, throwing a raw `ENOENT` on a deployment that has `ecosystem.config.cjs` but no `.env` — a state the CLI otherwise treats as valid and `selva init` already handled.
+  - **`create` and `migrate` can no longer disagree about the deployment `package.json`.** They built it separately and had already drifted: `create` pinned pm2 exactly to avoid daemon skew while `migrate` rewrote it to a caret range. Both now use one builder. `.selva-version` also records the real CLI version instead of a hardcoded `0.1.0` that had been stale since the marker was introduced.
+
 ## 4.8.0-beta.8
 
 ### Patch Changes

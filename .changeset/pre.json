@@ -21,6 +21,8 @@
   "changesets": [
     "api-v1-contract-and-handlers",
     "clean-published-tarballs",
+    "cli-migrate-declares-dropped-fields",
+    "cli-migrate-rollback-recovery",
     "compute-package-cleanup",
     "compute-schema-health-fixes",
     "curves-pretessellated-app",
@@ -46,6 +48,8 @@
     "solve-server-half",
     "supabase-org-assets-not-null",
     "unified-test-setup",
+    "viewer-app-seam-ui",
+    "viewer-app-seam-visualization",
     "viewer-mesh-metadata-callback-type",
     "visualization-drop-deprecated",
     "visualization-minimal-api",
