@@ -3,6 +3,7 @@
 	import type { ActionButton } from '../../types/actionButton';
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { ChevronUp } from '@lucide/svelte';
+	import type { ThreeViewer } from '@selvajs/visualization/render';
 	import Viewer, { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import CalculateButton from '../primitives/CalculateButton.svelte';
 	import SolvingIndicator from '../primitives/SolvingIndicator.svelte';
@@ -39,6 +40,8 @@
 		viewerConfig?: ViewerConfig;
 		/** Branding logo URL shown as a watermark in the viewer's bottom-right corner. */
 		logoUrl?: string;
+		/** Hands the live three.js viewer to the host. See `Viewer.svelte`. */
+		onViewerReady?: (viewer: ThreeViewer) => void | (() => void);
 	}
 
 	let {
@@ -60,7 +63,8 @@
 		onListStates,
 		presetLabels,
 		viewerConfig = {},
-		logoUrl
+		logoUrl,
+		onViewerReady
 	}: Props = $props();
 
 	const hasViewer = $derived(
@@ -189,6 +193,7 @@
 					isBlurred={drawerOpen}
 					{drawerOpen}
 					{logoUrl}
+					{onViewerReady}
 					viewerConfig={{
 						...viewerConfig,
 						backgroundColor: schema?.viewerOptions?.backgroundColor,
@@ -352,6 +357,7 @@
 							bind:isFullscreen={isViewerFullscreen}
 							{isSolving}
 							{logoUrl}
+							{onViewerReady}
 							viewerConfig={{
 								backgroundColor: schema?.viewerOptions?.backgroundColor
 							}}

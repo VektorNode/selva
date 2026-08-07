@@ -7,8 +7,9 @@
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
 	import { createRequestResponseDriver } from '@selvajs/solve/client';
-	import type { RetainedSolveResult } from '@selvajs/solve/client';
+	import type { RetainedSolveResult, SolveSession } from '@selvajs/solve/client';
 	import { meshPolicy } from '@selvajs/visualization/parse';
+	import type { ThreeViewer } from '@selvajs/visualization/render';
 	import { useSolveSession } from '../../compute/useSolveSession.svelte';
 	import { useFooterItem } from '../../composables/useFooterItem.svelte';
 	import { hexToOklch } from '../../utils/color';
@@ -62,7 +63,20 @@
 			 * A getter, not a snapshot: `onReady` fires once.
 			 */
 			getLastResult: () => RetainedSolveResult | null;
+			/**
+			 * The live solve session, for hosts driving solves from their own state —
+			 * `setValue`/`solve` to push inputs, `subscribe` to react to results.
+			 *
+			 * A getter for the same reason as `getLastResult`. Values written here go through the
+			 * same throttle and memo as the UI's, so it's safe to call at interaction rate.
+			 */
+			getSession: () => SolveSession;
 		}) => void;
+		/**
+		 * Hands the live three.js viewer to the host once it mounts, for apps drawing their own
+		 * content alongside solve results. See `Viewer.svelte` for the contract.
+		 */
+		onViewerReady?: (viewer: ThreeViewer) => void | (() => void);
 		headerRight?: Snippet;
 		// Replaces the built-in header; takes precedence over `headerRight`.
 		header?: Snippet;
@@ -104,6 +118,7 @@
 		headerRight,
 		header,
 		onReady,
+		onViewerReady,
 		externalScopeKey,
 		clientSlot,
 		lang
@@ -152,7 +167,8 @@
 	$effect(() => {
 		onReady?.({
 			loadValues: (incoming) => session.loadValues(incoming),
-			getLastResult: () => session.lastResult
+			getLastResult: () => session.lastResult,
+			getSession: () => session
 		});
 	});
 
@@ -240,6 +256,7 @@
 					bind:isViewerFullscreen
 					values={session.values}
 					logoUrl={logo}
+					{onViewerReady}
 					{panelActions}
 					{showSaveButton}
 					{showLoadButton}

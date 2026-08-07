@@ -3,7 +3,9 @@ import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import type { CameraController } from '../camera-controller.js';
 import type { Grid } from '../grid.js';
+import type { LabelLayer } from '../label-layer.js';
 import type { MeasureTool } from '../measure.js';
+import type { ToolRegistry } from '../tool-registry.js';
 import type { MaterialAppearanceOptions } from '../types.js';
 import type { ViewGizmo } from '../view-gizmo.js';
 
@@ -17,6 +19,13 @@ export interface ThreeViewer {
 	gizmo: ViewGizmo | null;
 	/** Null unless `measure.enabled`. */
 	measureTool: MeasureTool | null;
+	/** CSS2D annotation overlay. Always present — labels render above the canvas and don't take input. */
+	labelLayer: LabelLayer;
+	/**
+	 * Pointer tools competing for canvas clicks, ahead of object selection. Built-ins are already
+	 * registered as `'measure'` and `'gizmo'`; register your own and drive it with `setActive`.
+	 */
+	tools: ToolRegistry;
 	/**
 	 * No-op unless `edges.enabled`. Extraction runs off-thread for large meshes, so overlays can
 	 * attach a beat later; meshes over `edges.maxTriangles` fall back to the screen-space edge shader.
@@ -66,9 +75,15 @@ export interface ThreeViewer {
 	dispose: () => void;
 	fitToView: () => void;
 	clearSelection: () => void;
-	/** Tagged `userData.source = 'user'` so it survives `updateScene` solves and counts for fit-to-view. */
-	addUserGeometry: (object: THREE.Object3D) => void;
+	/**
+	 * Adds host-owned geometry that survives `updateScene` solves and counts for fit-to-view.
+	 * Pass `appId` to scope it to one app (`userData.source = 'app:<id>'`) so `clearUserGeometry`
+	 * can clear that app alone; without one it's tagged `'user'` and only a global clear removes it.
+	 *
+	 * Not restyled by `setLook` — the caller owns these materials.
+	 */
+	addUserGeometry: (object: THREE.Object3D, appId?: string) => void;
 	removeUserGeometry: (object: THREE.Object3D) => void;
-	/** Removes and disposes everything added via `addUserGeometry`. */
-	clearUserGeometry: () => void;
+	/** Removes and disposes geometry added via `addUserGeometry` — one app's, or all of it. */
+	clearUserGeometry: (appId?: string) => void;
 }

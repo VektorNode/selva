@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import { computeCombinedBoundingBox, disposeObjectTree } from '../shared/index.js';
+import { isHostOwned } from './scene-ownership.js';
 import { isoOffset } from './up-axis';
 
 const CAMERA_CONFIG = {
@@ -120,9 +121,9 @@ export function clearScene(scene: THREE.Scene): void {
 		// by walking the live scene, so labels added afterwards would never render.
 		if (PERSISTENT_SCENE_IDS.has(object.userData.id)) return;
 
-		// User-drawn geometry (tagged source==='user' by the viewer's addUserGeometry) persists
-		// across solves so it isn't lost when compute content is replaced.
-		if (object.userData.source === 'user') return;
+		// Host-added geometry (tagged by addUserGeometry, either plain 'user' or an app: scope)
+		// persists across solves so it isn't lost when compute content is replaced.
+		if (isHostOwned(object)) return;
 
 		// Edge overlays are children of the meshes they outline, so this traversal disposes their
 		// line geometries too — each overlay owns its geometry outright.

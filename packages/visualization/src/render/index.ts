@@ -22,6 +22,26 @@ export type { CameraController, CameraProjection, ViewPreset } from './camera-co
 export type { Grid } from './grid.js';
 export type { ViewGizmo } from './view-gizmo.js';
 export type { MeasureTool } from './measure.js';
+export type { LabelLayer, LabelHandle } from './label-layer.js';
+
+// ============================================================================
+// Host apps — pointer tools and scene ownership
+// ============================================================================
+
+export { pointerToNdc } from './tool-registry.js';
+export type { PointerTool, ToolRegistry, ToolRegistration } from './tool-registry.js';
+
+// Picking primitives, so a host tool's grab band matches the built-in ones.
+export { pickThreshold, snapToVertex } from './measure.js';
+
+export {
+	SOURCE_COMPUTE,
+	SOURCE_USER,
+	appSource,
+	appIdFromSource,
+	isHostOwned,
+	isOwnedBy
+} from './scene-ownership.js';
 
 // ============================================================================
 // Scene helpers

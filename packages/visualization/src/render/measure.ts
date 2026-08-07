@@ -88,7 +88,8 @@ export function makeFormatter(displayUnit?: string): (n: number) => string {
  * stays constant on screen while zooming. Perspective uses camera→target distance (see
  * `MeasureDeps.getViewTarget`); orthographic uses frustum height `(top − bottom) / zoom`, since
  * ortho zoom changes `camera.zoom` rather than position.
- * @internal exported for tests
+ *
+ * Shared with any tool doing its own picking, so grab bands stay consistent across tools.
  */
 export function pickThreshold(camera: THREE.Camera, viewTarget?: THREE.Vector3): number {
 	if ((camera as THREE.OrthographicCamera).isOrthographicCamera) {

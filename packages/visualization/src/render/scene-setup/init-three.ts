@@ -7,7 +7,9 @@ import { createGrid } from '../grid.js';
 import { createLabelLayer, type LabelLayer } from '../label-layer.js';
 import { createMeasureTool, type MeasureTool } from '../measure.js';
 import { createNearPlaneFitter, type NearPlaneFitter } from '../near-plane.js';
+import { SOURCE_USER, appSource, isOwnedBy } from '../scene-ownership.js';
 import { computeContentBounds } from '../three-helpers.js';
+import { createToolRegistry } from '../tool-registry.js';
 import type { ThreeInitializerOptions } from '../types.js';
 import { upToAxis } from '../up-axis.js';
 import { createViewGizmo } from '../view-gizmo.js';
@@ -119,31 +121,36 @@ export const initThree = function (
 		? createNearPlaneFitter({ camera, scene, groundNormals })
 		: null;
 
+	// Built unconditionally: measure was the first consumer, but any tool or app annotating the
+	// scene needs it, and gating it behind measure.enabled left them with no way to get one.
 	const labelContainer = canvas.parentElement ?? canvas;
-	const labelLayer: LabelLayer | null = config.measure.enabled
-		? createLabelLayer(labelContainer, scene)
+	const labelLayer: LabelLayer = createLabelLayer(labelContainer, scene);
+	const measureTool: MeasureTool | null = config.measure.enabled
+		? createMeasureTool({
+				canvas,
+				scene,
+				getActiveCamera,
+				labelLayer,
+				options: {
+					snapPixels: config.measure.snapPixels,
+					color: config.measure.color,
+					labelClassName: config.measure.labelClassName,
+					displayUnit: config.measure.displayUnit,
+					format: config.measure.format
+				}
+			})
 		: null;
-	const measureTool: MeasureTool | null =
-		config.measure.enabled && labelLayer
-			? createMeasureTool({
-					canvas,
-					scene,
-					getActiveCamera,
-					labelLayer,
-					options: {
-						snapPixels: config.measure.snapPixels,
-						color: config.measure.color,
-						labelClassName: config.measure.labelClassName,
-						displayUnit: config.measure.displayUnit,
-						format: config.measure.format
-					}
-				})
-			: null;
 
 	const eventHandlers =
 		config.events.enableEventHandlers !== false
 			? setupEventHandlers(canvas, scene, cameraController, config)
 			: { dispose: () => {}, fitToView: () => {}, clearSelection: () => {} };
+
+	// Built-ins register at the priorities documented on ToolRegistration, so a host tool can slot
+	// above or below them. Listeners are attached unconditionally — a tool can register at any time.
+	const tools = createToolRegistry();
+	if (measureTool) tools.register({ id: 'measure', tool: measureTool, priority: 0 });
+	if (gizmo) tools.register({ id: 'gizmo', tool: gizmo, priority: -100 });
 
 	// A drag to orbit/pan ends with a `click` on mouseup; without this guard that release would be
 	// mistaken for a measurement point.
@@ -157,27 +164,18 @@ export const initThree = function (
 	const wasDrag = (event: MouseEvent) =>
 		Math.hypot(event.clientX - pressX, event.clientY - pressY) > DRAG_SLOP_PX;
 
-	// Capture-phase so these see the click before bubble-phase selection; measurement claims it
-	// first, then the gizmo, and stopImmediatePropagation keeps selection from also firing.
+	// Capture-phase so tools see the click before bubble-phase selection; the first to claim it
+	// wins, and stopImmediatePropagation keeps selection from also firing.
 	const handleToolClick = (event: MouseEvent) => {
 		if (wasDrag(event)) return;
-		if (measureTool?.handleClick(event)) {
-			event.stopImmediatePropagation();
-			return;
-		}
-		if (gizmo?.handleClick(event)) {
-			event.stopImmediatePropagation();
-		}
+		if (tools.handleClick(event)) event.stopImmediatePropagation();
 	};
-	if (gizmo || measureTool) {
-		canvas.addEventListener('mousedown', handlePointerDown, { capture: true });
-		canvas.addEventListener('click', handleToolClick, { capture: true });
-	}
-	// Passive: only previews the snap point, never consumes, so it can't interfere with orbit/pan.
-	const handleToolMove = (event: MouseEvent) => measureTool?.handleMove(event);
-	if (measureTool) {
-		canvas.addEventListener('mousemove', handleToolMove, { passive: true });
-	}
+	canvas.addEventListener('mousedown', handlePointerDown, { capture: true });
+	canvas.addEventListener('click', handleToolClick, { capture: true });
+
+	// Passive: moves only drive previews, never consume, so they can't interfere with orbit/pan.
+	const handleToolMove = (event: MouseEvent) => tools.handleMove(event);
+	canvas.addEventListener('mousemove', handleToolMove, { passive: true });
 
 	// Rebound to the animation loop's real invalidate once it's created below.
 	let requestRender: () => void = () => {};
@@ -274,23 +272,26 @@ export const initThree = function (
 	updateShadowBounds();
 	updateGridScale();
 
-	const addUserGeometry = (object: THREE.Object3D) => {
-		object.userData.source = 'user';
+	const addUserGeometry = (object: THREE.Object3D, appId?: string) => {
+		object.userData.source = appId === undefined ? SOURCE_USER : appSource(appId);
 		scene.add(object);
+		requestRender();
 	};
 
 	const removeUserGeometry = (object: THREE.Object3D) => {
 		object.removeFromParent();
 		disposeObjectTree(object);
+		requestRender();
 	};
 
-	const clearUserGeometry = () => {
+	const clearUserGeometry = (appId?: string) => {
 		// Snapshot first: removeFromParent would mutate scene.children mid-iteration otherwise.
-		const userObjects = scene.children.filter((child) => child.userData.source === 'user');
-		userObjects.forEach((object) => {
+		const owned = scene.children.filter((child) => isOwnedBy(child, appId));
+		owned.forEach((object) => {
 			object.removeFromParent();
 			disposeObjectTree(object);
 		});
+		requestRender();
 	};
 
 	const dispose = () => {
@@ -300,13 +301,9 @@ export const initThree = function (
 		disposed = true;
 		disposeAnimation();
 		eventHandlers.dispose();
-		if (gizmo || measureTool) {
-			canvas.removeEventListener('mousedown', handlePointerDown, { capture: true });
-			canvas.removeEventListener('click', handleToolClick, { capture: true });
-		}
-		if (measureTool) {
-			canvas.removeEventListener('mousemove', handleToolMove);
-		}
+		canvas.removeEventListener('mousedown', handlePointerDown, { capture: true });
+		canvas.removeEventListener('click', handleToolClick, { capture: true });
+		canvas.removeEventListener('mousemove', handleToolMove);
 		measureTool?.dispose();
 		labelLayer?.dispose();
 		gizmo?.dispose();
@@ -337,6 +334,8 @@ export const initThree = function (
 		grid,
 		gizmo,
 		measureTool,
+		labelLayer,
+		tools,
 		applyEdges,
 		clearEdges,
 		invalidate,

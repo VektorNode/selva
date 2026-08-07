@@ -62,7 +62,19 @@ applyEdges(scene);
 dispose(); // frees the GL context, not just its objects
 ```
 
+## Host apps
+
+An app can own scene content and pointer input inside a viewer it doesn't otherwise control —
+drawing on top of solve results rather than in a stage before them. Three runtime seams:
+`addUserGeometry` (content that survives solves), `viewer.tools` (clicks ahead of selection), and
+`labelLayer` (annotations). This package ships no tools of its own beyond measure and the gizmo;
+apps bring their own.
+
+**[VIEWER-APPS.md](./VIEWER-APPS.md) is the guide** — the seams, the traps, and a checklist.
+
 ## Extension points
+
+These require editing this package, unlike the host-app seams above.
 
 - **A new look** — add to `LOOKS` + `LOOK_PRESETS` in `shared/`. A look carries only
   lighting/material dials; edges and grid are independent overlays and a look never toggles them.

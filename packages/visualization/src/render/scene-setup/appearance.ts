@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import { LOOK_PRESETS, materialAppearanceForLook } from '../../shared/index.js';
+import { SOURCE_COMPUTE } from '../scene-ownership.js';
 import type { Look, MaterialAppearanceOptions } from '../types.js';
 import { defaultUp, type ResolvedOptions } from './defaults.js';
 import type { PipelineController } from './pipeline-controller.js';
@@ -103,8 +104,11 @@ export function createAppearanceController(params: {
 		pipeline.setAmbientOcclusion(preset.ambientOcclusion);
 		if (hadPipeline) pipeline.rebuild();
 
+		// Solve output only. Host-added geometry (`user`/`app:` scopes) owns its own materials —
+		// a point cloud or draft line has a deliberate look that a render-style switch must not
+		// overwrite. Hosts that do want to follow the look read `getMaterialAppearance()`.
 		scene.traverse((object) => {
-			if (object.userData.source !== 'compute') return;
+			if (object.userData.source !== SOURCE_COMPUTE) return;
 			const mesh = object as Partial<THREE.Mesh> & THREE.Object3D;
 			const materials = Array.isArray(mesh.material)
 				? mesh.material

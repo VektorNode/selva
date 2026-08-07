@@ -29,6 +29,24 @@ export { default as ComputeApp } from './components/compute/ComputeApp.svelte';
 // locale context (setLocaleContext) at the host root to drive it app-wide.
 export { default as Viewer, type ViewerConfig } from './components/viewer/Viewer.svelte';
 
+// Viewer app seam. `onViewerReady` (on <Viewer> and <ComputeApp>) hands over the
+// live three.js viewer, so a host can draw its own content into the same scene as
+// the solve results — a point cloud, draft lines, annotations — and register
+// pointer tools that claim clicks ahead of object selection. Re-exported from
+// @selvajs/visualization/render so hosts can annotate without depending on it
+// directly; `three` stays a peer dep of that package either way.
+export type {
+	ThreeViewer,
+	PointerTool,
+	ToolRegistry,
+	ToolRegistration,
+	LabelLayer,
+	LabelHandle,
+	CameraController,
+	ViewPreset
+} from '@selvajs/visualization/render';
+export { appSource, isHostOwned, isOwnedBy, pointerToNdc } from '@selvajs/visualization/render';
+
 // Viewer localization. The library renders English + German chrome; switch at
 // runtime by passing `lang` to <Viewer> or by setting a reactive locale context
 // once at the host root (e.g. feed in an app-wide Paraglide locale). Does not

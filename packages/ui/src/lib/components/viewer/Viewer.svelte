@@ -11,7 +11,8 @@
 		type CameraProjection,
 		type MeasureTool,
 		type ViewPreset,
-		type Grid
+		type Grid,
+		type ThreeViewer
 	} from '@selvajs/visualization/render';
 	import {
 		Maximize,
@@ -49,7 +50,7 @@
 		showGridToggle?: boolean;
 		/**
 		 * Expose the "Display" submenu (render style picker + edges toggle) in the tools menu.
-		 * Defaults on. Starts on the 'technical' style with edges shown.
+		 * Defaults on. Starts on the 'technical' style with edges hidden.
 		 */
 		showDisplayMenu?: boolean;
 		enableMeshClick?: boolean;
@@ -68,6 +69,16 @@
 		 * bottom-right corner. Omitted/empty renders nothing.
 		 */
 		logoUrl?: string;
+		/**
+		 * Hands the live three.js viewer to the host once the canvas is up, for apps drawing their
+		 * own content — `addUserGeometry` (survives solves), `tools.register` (claim clicks before
+		 * selection), `labelLayer`, `cameraController`.
+		 *
+		 * Return a cleanup function to tear down what you added; it runs before the viewer disposes.
+		 * Anything added outside a solve needs `viewer.invalidate()` to repaint — the render loop is
+		 * on-demand.
+		 */
+		onViewerReady?: (viewer: ThreeViewer) => void | (() => void);
 		/**
 		 * UI language for the viewer's own chrome (tools menu, panels, dialogs).
 		 * When set, the viewer provides it to its subtree. When omitted, the viewer
@@ -96,6 +107,7 @@
 		drawerOpen = false,
 		viewerConfig = {},
 		logoUrl,
+		onViewerReady,
 		lang
 	}: Props = $props();
 
@@ -141,10 +153,10 @@
 	let projection: CameraProjection = $state('perspective');
 	let measureActive = $state(false);
 	let gridVisible = $state(false);
-	// Render style + edge overlays. 'technical' is the default look; edges (crease lines) start on so
-	// the technical look reads as a CAD shaded view — both are user-switchable via the Display submenu.
+	// Render style + edge overlays. 'technical' is the default look; edges (crease lines) start off —
+	// both are user-switchable via the Display submenu.
 	let renderStyle: Look = $state('technical');
-	let edgesVisible = $state(true);
+	let edgesVisible = $state(false);
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
 
@@ -225,7 +237,13 @@
 
 		const renderer = init.renderer;
 
+		// Untracked: the host's setup runs once against this canvas, and reading `meshes` or config
+		// inside it must not re-run onMount's teardown.
+		const hostCleanup = untrack(() => onViewerReady?.(init));
+
 		return () => {
+			// Before dispose, so the host can still remove its own objects from a live scene.
+			hostCleanup?.();
 			init.dispose();
 			// `{#key definitionKey}` recreates the canvas + WebGLRenderer + GL context
 			// on every definition switch; browsers cap live contexts (~16). Explicitly
@@ -352,7 +370,12 @@
 		: 'overflow-hidden rounded-[0.625rem]'}"
 >
 	<Resizable.PaneGroup direction="horizontal" class="h-full w-full">
-		<Resizable.Pane defaultSize={100} minSize={40}>
+		<!-- `defaultSize` must sum to 100 across the live panes. Panes register a frame before the
+		     group recomputes its layout, so a sum of 115 renders one frame at the raw flex-grow ratio
+		     and is then renormalized — and if the recompute short-circuits on an equal layout, the
+		     scene pane keeps a sliver of its intended width. Hence 85 + 15, and the explicit
+		     id/order so a conditionally-rendered pane keeps its slot. -->
+		<Resizable.Pane id="viewport" order={1} defaultSize={sceneManagerOpen ? 85 : 100} minSize={40}>
 			<div class="relative h-full w-full" style="touch-action: none;">
 				<canvas class="block h-full w-full" bind:this={canvas}></canvas>
 
@@ -565,7 +588,7 @@
 		<!-- Scene Manager Pane -->
 		{#if sceneManagerOpen && scene && outliner}
 			<Resizable.Handle withHandle />
-			<Resizable.Pane defaultSize={15} minSize={8} maxSize={30}>
+			<Resizable.Pane id="scene-manager" order={2} defaultSize={15} minSize={8} maxSize={30}>
 				<SceneManager {outliner} {sceneVersion} />
 			</Resizable.Pane>
 		{/if}
