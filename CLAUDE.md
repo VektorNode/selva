@@ -233,7 +233,7 @@ The plugin UI needs none (WebSocket port comes from the `wsPort` query param, 87
 ## Requirements
 
 - [pnpm](https://pnpm.io) >= 11.0.0 (pinned in `packageManager`, activated via Corepack)
-- Node.js >= 22.0.0
+- Node.js >= 24.0.0
 - .NET SDK 7.0+ (plugin development)
 - Rhino 8 or 9 — Rhino 7 is not supported
 - Rhino.Compute: the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support

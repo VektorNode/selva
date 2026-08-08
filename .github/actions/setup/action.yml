@@ -15,7 +15,7 @@ inputs:
   node-version:
     description: Node major to install.
     required: false
-    default: '22'
+    default: '24'
 
 runs:
   using: composite

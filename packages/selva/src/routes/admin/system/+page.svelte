@@ -4,6 +4,7 @@
 	import ChannelSection from './ChannelSection.svelte';
 	import HealthSection from './HealthSection.svelte';
 	import NetworkSection from './NetworkSection.svelte';
+	import { pollForRestart, type RestartHealth } from '$lib/update-restart-poll';
 
 	interface PageData {
 		canManageUpdates: boolean;
@@ -169,17 +170,21 @@
 	let updateExitCode = $state<number | null>(null);
 	let updateRestarting = $state(false);
 
-	type HealthResponse = {
-		status: string;
-		instanceId?: string | null;
-		version?: string | null;
-	};
+	// A probe against a stopped app usually does NOT fail fast: the reverse proxy
+	// in front of it holds the connection open until its own read timeout rather
+	// than refusing it. Bare `fetch` has no timeout, so without this the restart
+	// poll below blocks for a minute or more per attempt — the banner freezes on
+	// "PM2 is restarting…" and only a manual reload shows the real state.
+	const PROBE_TIMEOUT_MS = 4000;
 
-	async function fetchHealth(): Promise<HealthResponse | null> {
+	async function fetchHealth(): Promise<RestartHealth | null> {
 		try {
-			const res = await fetch('/api/health', { cache: 'no-store' });
+			const res = await fetch('/api/health', {
+				cache: 'no-store',
+				signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
+			});
 			if (!res.ok) return null;
-			return (await res.json()) as HealthResponse;
+			return (await res.json()) as RestartHealth;
 		} catch {
 			return null;
 		}
@@ -197,7 +202,10 @@
 	// Returns true only on a real 200; false on any non-2xx or transport error.
 	async function isReadinessProbeWarm(): Promise<boolean> {
 		try {
-			const res = await fetch('/api/admin/system/health', { cache: 'no-store' });
+			const res = await fetch('/api/admin/system/health', {
+				cache: 'no-store',
+				signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
+			});
 			return res.ok;
 		} catch {
 			return false;
@@ -211,7 +219,10 @@
 	// hasn't booted yet).
 	async function fetchUpdateLog(): Promise<string | null> {
 		try {
-			const res = await fetch('/api/admin/system/update', { cache: 'no-store' });
+			const res = await fetch('/api/admin/system/update', {
+				cache: 'no-store',
+				signal: AbortSignal.timeout(PROBE_TIMEOUT_MS * 2)
+			});
 			if (!res.ok) return null;
 			return await res.text();
 		} catch {
@@ -219,125 +230,32 @@
 		}
 	}
 
-	// The health poller only proves the app is *reachable* — NOT that the update
-	// succeeded. A rollback (runner exit 5) leaves the app perfectly healthy on
-	// the OLD version; if we reported that as exit 0 the operator would think
-	// the update worked. So once the app is back we read the runner's own
-	// verdict out of the log file and map it to the exit code the UI classifies.
-	// Returns null when the log carries no terminal marker (fall back to health).
-	function exitCodeFromLog(log: string): number | null {
-		if (/\bManual recovery required\b/.test(log)) return 6; // rollback failed — app may be DOWN
-		if (/\bRolled back to .* — previous version is online\b/.test(log)) return 5; // safe rollback
-		if (/New process failed health check/.test(log) && !/Rolled back/.test(log)) return 3;
-		if (/\[FATAL\]/.test(log) && !/\[DONE\]/.test(log)) return 1; // fatal with no clean finish
-		if (/\[DONE\]/.test(log)) return 0; // runner reported clean completion
-		return null;
-	}
-
-	// Poll until we're confident the *new* process is serving.
-	//
-	// The reliable signal is `instanceId`: a per-boot fingerprint from
-	// /api/health that changes on every restart. We wait for it to differ from
-	// the process that was running before we started — that's the ONLY moment
-	// we know the old process is gone and a fresh one is answering. This works
-	// in every deployment shape (npm has no git commit) and even when the new
-	// build is the same version (rollback / reinstall).
-	//
-	// Crucially we do NOT treat "reachable" as "ready": fetchHealth returns null
-	// for a 503 (degraded / still booting) or a refused connection, and we keep
-	// waiting. A bare 200 from the OLD process carries the OLD instanceId, so it
-	// can't satisfy the check either. And even a fresh instanceId isn't enough on
-	// its own — /api/health answers the instant the process boots, a beat before
-	// real routes serve through the proxy, so we additionally require the heavier
-	// /api/admin/system/health route to answer 200 (isReadinessProbeWarm). That
-	// pairing is what prevents the premature "online" verdict that left an
-	// immediate reload / health-check click hitting a 502.
-	//
-	// While polling we also fetch the update log file. The SSE stream died at
-	// `pm2 stop`, so any output the script produced afterwards (npm update,
-	// pm2 start, health probe, rollback) is invisible until the new process is
-	// reachable. Each successful log fetch replaces the displayed logs with
-	// the full file content, surfacing the blackout chunk in one shot.
+	// Poll until the new process is serving. The loop itself lives in
+	// `$lib/update-restart-poll` so it can be tested against a clock and probes
+	// that misbehave on demand; this wrapper owns only the `$state` writes.
 	async function waitForAppRestart(previousInstanceId: string | null | undefined) {
 		// The daemonized runner never streams over SSE, so the SSE `restarting`
 		// event can't drive this flag — set it here, where we actually begin the
 		// restart wait, so the "PM2 is restarting…" banner reflects reality.
 		updateRestarting = true;
-		updateLogs += '\nWaiting for app to come back online…\n';
-		// Give PM2 a moment to actually kill the old process before we start polling.
-		await new Promise((r) => setTimeout(r, 2000));
 
-		// 5 minutes. npm update on a slow VPS with a cold packument cache plus
-		// pm2 cold-start can legitimately take 60–90s; 90s total wasn't enough
-		// headroom and was failing live customers even when the update was
-		// otherwise succeeding in the background.
-		const maxAttempts = 150; // ~5min
-		for (let i = 0; i < maxAttempts; i++) {
-			const [health, log, ready] = await Promise.all([
-				fetchHealth(),
-				fetchUpdateLog(),
-				isReadinessProbeWarm()
-			]);
-			// Backfill blackout output as soon as either the old process briefly
-			// recovers or the new one comes up. We ignore empty bodies — those
-			// mean either the file isn't there yet or we'd needlessly clobber
-			// the SSE-collected prefix with nothing.
-			if (log && log.trim().length > 0) {
+		const { exitCode } = await pollForRestart(previousInstanceId, {
+			probes: {
+				health: fetchHealth,
+				log: fetchUpdateLog,
+				ready: isReadinessProbeWarm
+			},
+			now: () => Date.now(),
+			sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+			onLog: (log) => {
 				updateLogs = log;
+			},
+			appendLog: (line) => {
+				updateLogs += line;
 			}
-			// A *new* instanceId means the new process is up and serving (status
-			// was 'ok', or fetchHealth would have returned null). Trust the
-			// runner's logged verdict over a bare assumption of success — a
-			// rollback also brings up a fresh process but must not be reported
-			// as a clean update.
-			//
-			// If we never captured a baseline instanceId (the pre-update health
-			// fetch failed, or an old build with no fingerprint), we can't tell
-			// the new process from the old one by id alone — so we hold out for
-			// the runner's own terminal marker in the log ([DONE]/rollback/fatal)
-			// before accepting. That avoids latching onto the still-running old
-			// process and reporting "online" prematurely.
-			// "Online" requires BOTH a fresh process (new instanceId) AND the
-			// heavier readiness probe answering 200 — the latter is what closes the
-			// premature-online race, where /api/health flips to the new instanceId a
-			// beat before the app can actually serve real routes through the proxy.
-			const newProcessUp =
-				!!health?.instanceId && health.instanceId !== previousInstanceId && ready;
-			const logVerdict = exitCodeFromLog(updateLogs);
-			if (newProcessUp) {
-				updateExitCode = logVerdict ?? 0;
-				updateRunning = false;
-				updateRestarting = false;
-				return;
-			}
-			// No-restart terminal: the runner reached a verdict WITHOUT bringing up
-			// a new process — the pre-flight "already up to date" path exits before
-			// `pm2 stop`, and an early failure (e.g. `pm2 update` failed) aborts while
-			// the old process is still serving. In both cases the instanceId never
-			// changes, so newProcessUp can never fire; keying on it alone would wait
-			// out the full 5-minute timeout and report a false failure. When the app
-			// is currently reachable+warm on the SAME instanceId and the log carries a
-			// terminal marker, that marker IS the outcome.
-			if (logVerdict !== null && health && ready && health.instanceId === previousInstanceId) {
-				updateExitCode = logVerdict;
-				updateRunning = false;
-				updateRestarting = false;
-				return;
-			}
-			if (!previousInstanceId && health && ready && logVerdict !== null) {
-				updateExitCode = logVerdict;
-				updateRunning = false;
-				updateRestarting = false;
-				return;
-			}
-			await new Promise((r) => setTimeout(r, 2000));
-		}
-		// Final log fetch so the post-mortem has the latest content the script
-		// managed to write before the timeout.
-		const finalLog = await fetchUpdateLog();
-		if (finalLog && finalLog.trim().length > 0) updateLogs = finalLog;
-		updateLogs += '\n⚠ App did not come back within 5 minutes — check PM2 logs.\n';
-		updateExitCode = -2;
+		});
+
+		updateExitCode = exitCode;
 		updateRunning = false;
 		updateRestarting = false;
 	}

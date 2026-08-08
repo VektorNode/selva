@@ -21,7 +21,7 @@
 		"directory": "packages/providers/local"
 	},
 	"engines": {
-		"node": ">=22.0.0"
+		"node": ">=24.0.0"
 	},
 	"type": "module",
 	"main": "./dist/index.js",

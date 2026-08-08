@@ -44,7 +44,7 @@ authoritative for the full folder layout.
 
 ## Requirements
 
-- Node.js >= 22.0.0
+- Node.js >= 24.0.0
 - .NET SDK 7.0+
 - Rhino 8 or 9 (Rhino 7 is not supported)
 - Rhino.Compute server (the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support)
