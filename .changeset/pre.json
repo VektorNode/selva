@@ -32,6 +32,7 @@
     "de-rhino-compute-core",
     "drop-deprecated-compute",
     "edges-config-passthrough",
+    "node-24-floor",
     "plugin-ui-visualization-package-move",
     "release-flow-hardening",
     "rhino-vocabulary-rename-plugin-ui",
