@@ -2,8 +2,8 @@
 // Node engine, boot persistence. Yellow warnings don't fail, red failures exit 1.
 //
 // Read-only by default. `--fix` applies the repairs attached to individual
-// checks, each behind its own confirmation — and only those needing no root and
-// no runtime restart. See `applyFixes`.
+// checks, each behind its own confirmation — only fixes needing no root and
+// no runtime restart exist. See applyFixes.
 
 import {
 	existsSync,
@@ -105,15 +105,9 @@ export async function runDoctor(argv = []) {
 	}
 }
 
-/**
- * Apply the repairs attached to failing checks, each behind its own
- * confirmation. Returns the updated failure count.
- *
- * Nothing here needs root: anything privileged (the systemd unit) or that would
- * restart this process (a Node upgrade) stays a printed instruction, because a
- * fixer that dies halfway through its own runtime leaves the operator with no
- * obvious path back.
- */
+// Anything privileged (the systemd unit) or that would restart this process
+// (a Node upgrade) stays a printed instruction instead of a fixer — one that
+// dies halfway through its own runtime leaves the operator with no way back.
 async function applyFixes(resolved, failures) {
 	const repairs = resolved.filter((c) => c.fix && c.severity !== 'green');
 	if (repairs.length === 0) {
@@ -183,8 +177,7 @@ async function checkSupabase(env) {
 		return red(`SUPABASE_URL="${env.SUPABASE_URL}" is not a valid URL`);
 	}
 
-	// Ping the Supabase health endpoint. Soft-fail to yellow on network
-	// errors — operators may be offline at install time.
+	// Network errors go yellow, not red — operators may be offline at install time.
 	try {
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), 4000);
@@ -199,11 +192,10 @@ async function checkSupabase(env) {
 	}
 }
 
-// App↔DB schema handshake (audit O3). Expected head = newest migration shipped
-// by the installed @selvajs/supabase-provider; actual = what the database
-// reports via the selva.migration_head() RPC. Red on skew — the app degrades
-// /api/health to 503 at boot in the same state, so catching it here saves a
-// confusing deploy.
+// Compares the newest migration shipped by @selvajs/supabase-provider against
+// what the database reports via selva.migration_head(). Red on skew — the app
+// degrades /api/health to 503 at boot in the same state, so catching it here
+// saves a confusing deploy.
 async function checkSupabaseMigrations(dir, env) {
 	if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
 		return yellow('Migration-head check skipped — Supabase env incomplete');
@@ -264,6 +256,7 @@ async function checkSupabaseMigrations(dir, env) {
 				`Database reports no applied migrations (expected head ${expected}). Sync + run: npx supabase db push`
 			);
 		}
+		// String comparison — relies on both heads being fixed-width, zero-padded timestamps.
 		if (actual < expected) {
 			return red(
 				`Database migration head ${actual} is behind the installed provider (${expected}). Sync + run: npx supabase db push`
@@ -271,7 +264,6 @@ async function checkSupabaseMigrations(dir, env) {
 		}
 		return green(`Database migration head ${actual} matches the installed provider`);
 	} catch (err) {
-		// Soft-fail on network errors, same as checkSupabase.
 		return yellow(`Migration-head check skipped (${err.message ?? err})`);
 	}
 }
@@ -295,7 +287,7 @@ function majorOf(version) {
 	return m ? Number(m[1]) : null;
 }
 
-// CLI and runtime release together (fixed group); major skew = stale CLI pin.
+// CLI and runtime release as a fixed group; major-version skew means a stale CLI pin.
 function checkCliRuntimeAlignment(dir) {
 	const here = dirname(fileURLToPath(import.meta.url));
 	const cliVersion = readPackageVersion(join(here, '..', '..', 'package.json'));
@@ -303,7 +295,7 @@ function checkCliRuntimeAlignment(dir) {
 		join(dir, 'node_modules', '@selvajs', 'selva', 'package.json')
 	);
 
-	// Runtime missing is already reported red by checkPackage; stay quiet here.
+	// checkPackage already reports missing runtime as red; stay quiet here.
 	if (!runtimeVersion) return yellow('CLI/runtime version check skipped (runtime not installed)');
 	if (!cliVersion) return yellow('CLI/runtime version check skipped (could not read CLI version)');
 
@@ -324,16 +316,10 @@ function checkCliRuntimeAlignment(dir) {
 	);
 }
 
-// Verify VM reboot will resurrect app: dump.pm2 saved, systemd unit installed, no stray global pm2.
-/**
- * Does this host's Node satisfy the installed runtime's `engines.node`?
- *
- * npm only enforces engines under `engine-strict=true`, which no deployment
- * sets, so a mismatched install succeeds silently and `/api/health` still
- * returns 200 — routes using newer APIs throw only under real traffic
- * (issue #176). Deliberately NOT auto-fixable: upgrading Node is
- * distro-specific and would restart the process running this check.
- */
+// npm only enforces engines.node under engine-strict=true, which no deployment
+// sets, so a mismatched install succeeds silently and /api/health still returns
+// 200 — routes using newer APIs throw only under real traffic. Not auto-fixable:
+// upgrading Node is distro-specific and would restart the process running this check.
 function checkNodeEngine(dir) {
 	let required;
 	try {
@@ -363,12 +349,10 @@ function checkNodeEngine(dir) {
 	);
 }
 
-/**
- * `selva migrate` parks the old node_modules aside so a failed install can be
- * rolled back, and removes it on either outcome. One surviving here means the
- * migration was killed mid-flight — worth saying, because it is a full copy of
- * the dependency tree and the deployment may be running on the wrong one.
- */
+// `selva migrate` parks the old node_modules aside so a failed install can be
+// rolled back, and removes it on either outcome. One surviving here means the
+// migration was killed mid-flight — worth flagging since it's a full copy of
+// the dependency tree and the deployment may be running on the wrong one.
 function checkMigrationLeftovers(dir) {
 	const stash = join(dir, NODE_MODULES_STASH);
 	if (!existsSync(stash)) return green('no interrupted migration left behind');
@@ -403,19 +387,18 @@ function checkLayoutDrift(dir) {
 	);
 }
 
-// Must match HeaderAuthProvider.DEFAULT_HEADERS (duplicated to avoid loading runtime).
-// Smoke test in providers/header-auth pins them; divergence surfaces in CI.
+// Duplicated from HeaderAuthProvider.DEFAULT_HEADERS to avoid loading the runtime here.
+// A test in providers/header-auth pins both sides, so drift surfaces in CI.
 const DEFAULT_HEADER_NAMES = {
 	upn: 'SELVA-UserPrincipalName',
 	email: 'SELVA-Email',
 	displayName: 'SELVA-DisplayName'
 };
 
-// Header-auth checks (read-only; runtime invariants like spoofing can't be verified).
+// Static config only — runtime invariants like spoofing protection can't be checked from here.
 function checkHeaderAuth(dir, env, dataProvider) {
 	const out = [];
 
-	// Allowlist file location.
 	const allowlistDir = env.HEADER_AUTH_DATA_DIR ?? env.DATA_PATH;
 	if (!allowlistDir) {
 		out.push(red('HEADER_AUTH_DATA_DIR (or DATA_PATH) unset — provider will fail to start'));
@@ -425,21 +408,21 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		if (existsSync(allowlistPath)) {
 			out.push(green(`header-allowlist.json present (${allowlistDir}/header-allowlist.json)`));
 		} else {
-			// Provider creates lazily, but missing file locks everyone out.
+			// The provider creates this file lazily, but a missing file locks everyone out
+			// until one exists — worth a warning even though nothing is technically broken.
 			out.push(
 				yellow(
 					`header-allowlist.json not found at ${allowlistDir}/ — no users will be allowed in until one is added`
 				)
 			);
 
-			// Check writability only if explicitly set (DATA_PATH checked separately).
+			// DATA_PATH's own writability is checked separately (checkDataPath).
 			if (env.HEADER_AUTH_DATA_DIR) {
 				out.push(checkDirWritable(allowlistAbsDir, `HEADER_AUTH_DATA_DIR=${allowlistDir}`));
 			}
 		}
 	}
 
-	// HOST binding (loopback recommended for header-auth).
 	const host = env.HOST ?? '0.0.0.0';
 	if (host === '127.0.0.1' || host === 'localhost') {
 		out.push(green(`HOST=${host} (loopback-only)`));
@@ -452,12 +435,11 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		);
 	}
 
-	// 3. ORIGIN — header-auth implies a reverse proxy, so ORIGIN is required.
+	// header-auth always sits behind a reverse proxy, so ORIGIN is required.
 	if (!env.ORIGIN) {
 		out.push(red('ORIGIN unset — required for header-auth (always behind a proxy)'));
 	}
 
-	// Non-local data provider: HEADER_AUTH_DATA_DIR must be explicit (no DATA_PATH fallback).
 	if (dataProvider !== 'local' && !env.HEADER_AUTH_DATA_DIR) {
 		out.push(
 			red(
@@ -467,10 +449,10 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		);
 	}
 
-	// 5. Bootstrap admin email. Without it, the first proxy-authenticated
-	// visitor's UPN is rejected (not in allowlist) and the operator has to
-	// hand-write JSON to claim admin. With it, the first matching visit is
-	// auto-allowlisted and granted instance_admin in one step.
+	// Without this, the first proxy-authenticated visitor's UPN is rejected
+	// (not in the allowlist) and the operator has to hand-write JSON to claim
+	// admin. With it, the first matching visit auto-allowlists and grants
+	// instance_admin in one step.
 	if (!env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL) {
 		out.push(
 			red(
@@ -482,7 +464,6 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		out.push(green(`BOOTSTRAP_INSTANCE_ADMIN_EMAIL=${env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL}`));
 	}
 
-	// Resolved header names (print for diffing against proxy config; partial override = typo risk).
 	const resolved = {
 		upn: env.HEADER_AUTH_UPN_HEADER || DEFAULT_HEADER_NAMES.upn,
 		email: env.HEADER_AUTH_EMAIL_HEADER || DEFAULT_HEADER_NAMES.email,

@@ -67,7 +67,7 @@ function printHelp() {
 			'  stop                    pm2 stop selva-compute',
 			'  restart                 pm2 restart selva-compute --update-env',
 			'  logs                    pm2 logs selva-compute',
-			'  update                  npm update @selvajs/selva + restart',
+			'  update                  npm update @selvajs/cli + @selvajs/selva, then restart',
 			'  migrate                 Bring package.json onto the current layout',
 			'  keys rotate <hmac|at-rest>   Rotate a secret in .env (destructive)',
 			'',

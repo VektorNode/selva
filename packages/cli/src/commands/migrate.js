@@ -1,5 +1,5 @@
-// Migrate deployment to current layout: rewrite package.json (drop legacy
-// provider packages), remove stale selva.config.js, update ecosystem.config.cjs.
+// Migrates a deployment to the current layout: rewrites package.json (drops legacy
+// provider packages), removes stale selva.config.js, updates ecosystem.config.cjs.
 // Idempotent; mirrors update's lifecycle (stop/mutate/start with rollback on failure).
 
 import { existsSync, readFileSync, writeFileSync, copyFileSync, rmSync, renameSync } from 'node:fs';
@@ -17,25 +17,20 @@ import {
 } from '../deployment-package.js';
 import { APP_NAME, runPm2 } from './pm2.js';
 
-/**
- * Where `migrate` parks the old node_modules while npm installs the new one.
- * Left behind only if the process is killed mid-migration — `detectDrift`
- * reports it, because a stray copy of the dependency tree is both confusing and
- * large enough to matter on a small VM.
- */
+// Where migrate parks the old node_modules while npm installs the new one.
+// Left behind only if the process is killed mid-migration; `selva doctor`
+// flags a surviving stash as an interrupted migration.
 export const NODE_MODULES_STASH = 'node_modules.selva-migrate-bak';
 
-/**
- * @param {object} [deps] Seams for tests. The rollback path destroys and
- *   restores a real dependency tree, so it has to be exercised against a real
- *   directory — but not against a real npm or a real pm2 daemon.
- */
+// `deps` are seams for tests: the rollback path destroys and restores a real
+// dependency tree, so it has to run against a real directory — but not against
+// a real npm or pm2 daemon.
 export async function runMigrate(
 	_argv,
 	{
 		dir: injectedDir,
-		// --prefer-online bypasses the stale-packument trap: npm can otherwise
-		// resolve a cached packument that predates the release being migrated to.
+		// --prefer-online: npm can otherwise resolve a cached packument that
+		// predates the release being migrated to.
 		install = (cwd) => execSync('npm install --prefer-online', { cwd, stdio: 'pipe' }),
 		confirm = (message) => p.confirm({ message, initialValue: true }),
 		pm2 = runPm2
@@ -56,8 +51,6 @@ export async function runMigrate(
 	const target = buildTargetPackageJson(before);
 	const pkgDiff = diffPackageJson(before, target);
 
-	// Side-files: selva.config.js (now unused) and ecosystem.config.cjs
-	// (must point at @selvajs/selva, not @selvajs/runtime).
 	const configPath = join(dir, 'selva.config.js');
 	const hasStaleConfig = existsSync(configPath);
 
@@ -65,9 +58,9 @@ export async function runMigrate(
 	const ecoHasStaleRuntime =
 		existsSync(ecoPath) && readFileSync(ecoPath, 'utf8').includes('@selvajs/runtime');
 
-	// Deprecated env keys. The server reads the old names for one more minor
-	// version, so this is a warning today and a silent fallback to defaults once
-	// that shim goes — rewriting now is what keeps a tuned value tuned.
+	// The server drops its read-old-name shim after one minor version, so
+	// rewriting now is what keeps a tuned value tuned instead of silently
+	// reverting to defaults later.
 	const envPath = join(dir, '.env');
 	const envBefore = existsSync(envPath) ? readFileSync(envPath, 'utf8') : null;
 	const envRename = envBefore
@@ -106,9 +99,10 @@ export async function runMigrate(
 		return;
 	}
 
-	// Stop pm2 before npm rewrites (SvelteKit lazy-loads chunks; see update command).
+	// Stop pm2 before npm rewrites — SvelteKit lazy-loads chunks, so a rewrite
+	// under a running server serves a broken page (same reason `update` stops first).
 	// A legacy deployment may predate the local-pm2 layout, so a missing binary
-	// is not fatal here — there is nothing running for us to stop.
+	// isn't fatal here: there's nothing running for us to stop.
 	try {
 		const stopStatus = pm2(dir, ['stop', APP_NAME], { inherit: false });
 		if (stopStatus !== 0) {
@@ -118,7 +112,6 @@ export async function runMigrate(
 		p.log.warn('No deployment-local pm2 to stop — continuing.');
 	}
 
-	// Back up for rollback on npm-install failure.
 	const bakPath = pkgPath + '.bak';
 	copyFileSync(pkgPath, bakPath);
 	writeFileSync(pkgPath, JSON.stringify(target, null, 2) + '\n', 'utf8');
@@ -130,7 +123,7 @@ export async function runMigrate(
 
 	if (ecoHasStaleRuntime) {
 		copyFileSync(ecoPath, ecoPath + '.bak');
-		// Rewrite @selvajs/runtime → @selvajs/selva only (preserve customizations).
+		// Text substitution, not regeneration, so any operator customizations to the file survive.
 		const ecoContent = readFileSync(ecoPath, 'utf8').replace(
 			/@selvajs\/runtime/g,
 			'@selvajs/selva'
@@ -143,11 +136,11 @@ export async function runMigrate(
 		writeFileSync(envPath, envRename.text, 'utf8');
 	}
 
-	// A clean install is required — a legacy lockfile pins the old package set
-	// across a major bump. But node_modules is also where pm2 lives, and the
-	// rollback below has to restart the app, so deleting it outright leaves a
-	// failed migration with no way back up. Rename instead: atomic, keeps the
-	// .bin symlinks intact, and restorable until the install succeeds.
+	// A legacy lockfile pins the old package set across a major bump, so this needs
+	// a clean install. But node_modules is also where pm2 lives, and rollback has to
+	// restart the app — deleting it outright would leave a failed migration with no
+	// way back up. Rename instead: atomic, keeps .bin symlinks intact, restorable
+	// until the install succeeds.
 	const nodeModules = join(dir, 'node_modules');
 	const nodeModulesBak = join(dir, NODE_MODULES_STASH);
 	const lockPath = join(dir, 'package-lock.json');
@@ -176,8 +169,8 @@ export async function runMigrate(
 			copyFileSync(envPath + '.bak', envPath);
 		}
 
-		// Restore the dependency tree the app was running on. A half-installed
-		// node_modules from the failed attempt is worse than the old one.
+		// A half-installed node_modules from the failed attempt is worse than the old
+		// one, so clear it before restoring the stash.
 		rmSync(nodeModules, { recursive: true, force: true });
 		if (existsSync(nodeModulesBak)) renameSync(nodeModulesBak, nodeModules);
 		if (lockBak !== null) writeFileSync(lockPath, lockBak, 'utf8');
@@ -187,6 +180,10 @@ export async function runMigrate(
 		process.exit(1);
 	}
 
+	// Migration itself already succeeded at this point, so a failed pm2 start is reported
+	// but doesn't exit non-zero or trigger rollback — the on-disk state is fine, only the
+	// running process isn't. Contrast restartAfterRollback, which does exit 1: that path
+	// runs after a rollback, where a failed restart leaves nothing serving traffic at all.
 	let status;
 	try {
 		status = pm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
@@ -212,14 +209,9 @@ export async function runMigrate(
 	}
 }
 
-/**
- * Bring the app back up after a failed migration.
- *
- * Never throws: the migration is already aborting, and an exception here would
- * replace the rollback's diagnosis with a stack trace. A failure to restart is
- * the operator's problem to act on, so it must be stated, not swallowed — the
- * old code returned a bare 1 and printed nothing.
- */
+// Never throws: the migration is already aborting, and an exception here would
+// replace the rollback's diagnosis with a stack trace. A failure to restart is
+// the operator's problem to act on, so it gets logged, not swallowed.
 function restartAfterRollback(dir, pm2 = runPm2) {
 	try {
 		const status = pm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
@@ -276,9 +268,9 @@ function diffPackageJson(before, after) {
 		}
 	}
 
-	// Anything outside the canonical set is discarded by the rewrite.
-	// devDependencies and description used to vanish without appearing here, so
-	// the operator confirmed a change they were never shown.
+	// Anything outside the canonical set is discarded by the rewrite — show it here
+	// too, or the operator confirms a change (e.g. losing devDependencies) they
+	// never saw.
 	for (const key of Object.keys(before).sort()) {
 		if (CANONICAL_FIELDS.has(key)) continue;
 		lines.push(`${pc.red('-')} ${key} ${pc.dim(summarize(before[key]))}`);

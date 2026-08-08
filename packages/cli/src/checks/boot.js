@@ -136,7 +136,6 @@ function checkStrayGlobalPm2(dir, env) {
 	];
 }
 
-// Scan PATH for a stray pm2 binary (read-only).
 export function findGlobalPm2(dir, env = systemEnv) {
 	const localBin = resolve(dir, 'node_modules', '.bin');
 	const dirs = (env.env().PATH ?? '').split(delimiter).filter(Boolean);

@@ -24,11 +24,7 @@ export function checkSecret(value, label) {
 	return green(label);
 }
 
-/**
- * The three provider slots, lowercased and defaulted the same way the runtime
- * defaults them. Returned alongside the checks because the caller decides which
- * provider-specific checks to run from it.
- */
+// Lowercased and defaulted the same way create-selva-providers.ts defaults them.
 export function resolveProviders(env) {
 	return {
 		auth: (env.SELVA_AUTH_PROVIDER ?? 'local').toLowerCase(),
@@ -69,13 +65,9 @@ export function checkOrigin(env) {
 	return green(`ORIGIN=${env.ORIGIN}`);
 }
 
-/**
- * Report env vars that were renamed or replaced.
- *
- * A rename is auto-fixable (`selva migrate` rewrites the key). A replacement
- * encodes a value in the new name, so migrate leaves it alone rather than
- * guessing — it is reported here and nowhere else.
- */
+// A rename is auto-fixable (`selva migrate` rewrites the key). A replacement
+// encodes a value in the new name, so migrate leaves it alone rather than
+// guessing — it's reported here and nowhere else.
 export function checkDeprecatedEnv(env) {
 	const checks = [];
 

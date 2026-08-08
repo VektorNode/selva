@@ -1,6 +1,5 @@
-// Scaffold a fresh deployment: write .env (merged from template + prompts),
-// ecosystem.config.cjs, package.json, and bootstrap node_modules. Runtime
-// templates are the source of truth; providers are env-driven.
+// Scaffolds a fresh deployment: package.json, node_modules, .env (merged from
+// template + prompts), and ecosystem.config.cjs.
 
 import { writeFileSync, existsSync, mkdirSync, readFileSync, cpSync } from 'node:fs';
 import { resolve, join, basename, dirname } from 'node:path';
@@ -22,12 +21,10 @@ import { satisfiesNodeRange } from '../node-range.js';
 export async function runCreate(argv) {
 	const { dir: rawDir, force, skipInstall, yes } = parseArgs(argv);
 
-	// Scaffolding under too old a Node produces a deployment that installs
-	// cleanly and passes its health check, then fails only under real traffic —
-	// npm treats an engine mismatch as a warning unless engine-strict is set,
-	// which no deployment sets (issue #176). Refuse at the one moment the
-	// operator is still choosing their environment. The floor comes from this
-	// CLI's own engines.node, so a bump can't leave a stale copy behind.
+	// Scaffolding under too old a Node installs and passes the health check,
+	// then fails only under real traffic — npm treats an engine mismatch as a
+	// warning, not an error, unless engine-strict is set, which no deployment
+	// sets. Refuse now, while the operator is still choosing their environment.
 	const required = requiredNodeRange();
 	if (required && satisfiesNodeRange(process.versions.node, required) === false) {
 		console.error(
@@ -50,19 +47,18 @@ export async function runCreate(argv) {
 	}
 	mkdirSync(targetDir, { recursive: true });
 
-	// --yes or CI=1 skips prompts (unattended bootstrap).
 	const nonInteractive = yes || envBool(process.env.CI);
 	const values = nonInteractive
 		? collectConfigFromEnv(process.env)
 		: await collectConfig({ defaults: {}, mode: 'create' });
 
-	// Generate fresh secrets (stable across restarts; init refuses to regen).
 	values.SELVA_HMAC_KEY = generateKey();
 	values.SELVA_AT_REST_KEY = generateKey();
 
 	const deployName = basename(targetDir);
 
-	// Write package.json, then install (need templates from @selvajs/selva).
+	// package.json first: npm install needs it, and the runtime templates below
+	// only exist once @selvajs/selva is installed into node_modules.
 	const pkgJson = JSON.stringify(buildDeploymentPackageJson({ name: deployName }), null, 2);
 	writeFileSync(join(targetDir, 'package.json'), pkgJson + '\n', 'utf8');
 
@@ -74,7 +70,6 @@ export async function runCreate(argv) {
 		);
 	}
 
-	// Copy templates from installed runtime.
 	const envTemplatePath = runtimeTemplatePath(targetDir, '.env.example');
 	const ecosystemTemplatePath = runtimeTemplatePath(targetDir, 'ecosystem.config.cjs');
 	if (skipInstall || !existsSync(envTemplatePath)) {
@@ -110,21 +105,17 @@ export async function runCreate(argv) {
 	);
 }
 
-// Stream npm output with live progress; on failure, show tail for debugging.
-// Cache-bust hint: surface broken versions like @selvajs/selva@0.10.2.
 function runNpmInstall(cwd) {
 	return new Promise((resolveP, rejectP) => {
 		const s = p.spinner();
 		s.start('Installing dependencies (this can take a minute)');
 
-		// Keep last 80 lines for failure output.
 		const tail = [];
 		const remember = (line) => {
 			tail.push(line);
 			if (tail.length > 80) tail.shift();
 		};
 
-		// Extract progress milestones (reify: lines, package count).
 		const updateProgress = (line) => {
 			const trimmed = line.trim();
 			if (!trimmed) return;
@@ -140,7 +131,7 @@ function runNpmInstall(cwd) {
 			if (/^npm (WARN|error|notice)/.test(trimmed)) return;
 		};
 
-		// Spawn with --loglevel=info for reify: progress; pipe stdout/stderr for live updates.
+		// --loglevel=info is what makes npm print the reify: lines updateProgress matches on.
 		const child = spawn('npm', ['install', '--loglevel=info'], {
 			cwd,
 			stdio: ['ignore', 'pipe', 'pipe'],
@@ -184,8 +175,8 @@ function runNpmInstall(cwd) {
 			}
 			s.stop(pc.red(`npm install failed (exit ${code})`));
 
-			// Show what npm actually said. Without this the operator has to
-			// dig through ~/.npm/_logs/*-debug-0.log to find a single line.
+			// Without this the operator has to dig through ~/.npm/_logs/*-debug-0.log
+			// to find out what actually went wrong.
 			console.error('');
 			console.error(pc.dim('── last lines of npm output ──'));
 			for (const line of tail) console.error(line);

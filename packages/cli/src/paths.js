@@ -65,9 +65,8 @@ export function readEnvTemplate(dir) {
 	return '';
 }
 
-// A deployment directory must contain an .env and an ecosystem.config.cjs.
-// Anything else (selva.config.js, node_modules) is "should be there" but the
-// CLI doesn't require it — `selva init` is allowed to fix a partial install.
+// Either .env or ecosystem.config.cjs is enough — selva.config.js and
+// node_modules are expected too, but init should still fix a partial install.
 export function isDeploymentDir(dir) {
 	return existsSync(join(dir, '.env')) || existsSync(join(dir, 'ecosystem.config.cjs'));
 }

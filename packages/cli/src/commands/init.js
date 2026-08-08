@@ -1,11 +1,6 @@
-// `selva init` — reconfigure an existing deployment.
-//
-// Differences from `create`:
-//   • Reads current .env values; uses them as prompt defaults.
-//   • Never regenerates SELVA_HMAC_KEY / SELVA_AT_REST_KEY if they're set.
-//     Rotating those invalidates sessions and at-rest encryption — that's
-//     `selva keys rotate`'s job, not init's.
-//   • Doesn't touch package.json or run npm install.
+// `selva init` — reconfigures an existing deployment. Unlike `create`, it reads
+// the current .env as prompt defaults and never touches package.json or runs
+// npm install.
 
 import { join } from 'node:path';
 import * as p from '@clack/prompts';
@@ -23,10 +18,10 @@ export async function runInit() {
 	const current = readEnvFile(envPath);
 	const values = await collectConfig({ defaults: current, mode: 'init' });
 
-	// Preserve secrets. The only safe time to generate them is at install
-	// time (no sessions to invalidate, no encrypted data to lose). If the
-	// existing .env doesn't have them — which can happen if a previous
-	// scaffold bailed mid-flight — generate now and warn.
+	// Never regenerate an existing key: rotating SELVA_HMAC_KEY or
+	// SELVA_AT_REST_KEY invalidates sessions and at-rest encryption — that's
+	// `selva keys rotate`'s job, not init's. Missing keys (a scaffold that
+	// bailed mid-flight) are the one case it's safe to generate here.
 	if (
 		current.SELVA_HMAC_KEY &&
 		current.SELVA_HMAC_KEY !== 'replace-this-with-a-random-32-byte-hex-key'

@@ -90,7 +90,6 @@ export const CANONICAL_FIELDS = new Set([
 ]);
 
 export function sanitizePackageName(name) {
-	// npm package names: lowercase, no spaces, limited punctuation.
 	return (
 		String(name ?? '')
 			.toLowerCase()

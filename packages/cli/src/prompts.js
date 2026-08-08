@@ -18,9 +18,7 @@ export function collectConfigFromEnv(env = process.env) {
 		'local',
 		'SELVA_AUTH_PROVIDER'
 	);
-	// Default data/storage to auth — matches the prompt's "use same provider
-	// for all three" default. Header-auth has no data layer, so it falls
-	// through to local unless explicitly overridden.
+	// Header-auth has no data layer, so it falls through to local unless overridden.
 	const dataDefault = auth === 'header' ? 'local' : auth;
 	const data = pick(
 		env.SELVA_DATA_PROVIDER,
@@ -72,7 +70,6 @@ export function collectConfigFromEnv(env = process.env) {
 			values.HEADER_AUTH_DISPLAY_NAME_HEADER = env.HEADER_AUTH_DISPLAY_NAME_HEADER;
 	}
 
-	// ── Bootstrap admin ──────────────────────────────────────────────────
 	const adminRequired = auth === 'header' || tenancy === 'multi';
 	const adminEmail = env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL || '';
 	if (adminRequired && !adminEmail) {
@@ -127,14 +124,10 @@ function requireEnv(env, name) {
 	return v;
 }
 
-// Run full interactive prompt sequence; return env vars. Caller decides merge vs fresh.
-// `defaults` pre-populates prompts (cheap re-run).
 export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	const isInit = mode === 'init';
 
 	p.intro(pc.bgCyan(pc.black(isInit ? ' selva init ' : ' Selva — new deployment ')));
-
-	// Brand prompts (SELVA_BRAND_NAME / COPYRIGHT_NAME / TAGLINE / DESCRIPTION)
 
 	const tenancy = await p.select({
 		message: 'Tenancy mode',
@@ -169,7 +162,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	});
 	cancelOn(auth);
 
-	// Header-auth: auth-only; user must pick separate data/storage backend.
 	let data;
 	let storage;
 	if (auth === 'header') {
@@ -197,7 +189,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		cancelOn(storageChoice);
 		storage = storageChoice;
 	} else {
-		// Operators usually want same backend for all three; ask once, default the others.
 		const mixProviders = await p.confirm({
 			message: `Use ${pc.cyan(auth)} for data and storage too?`,
 			initialValue: pickSameProviderDefault(defaults, auth)
@@ -281,7 +272,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	}
 
 	if (auth === 'header') {
-		// HEADER_AUTH_DATA_DIR: ask only if data provider isn't local (fallback available).
 		if (data !== 'local') {
 			const dataDir = await p.text({
 				message: 'HEADER_AUTH_DATA_DIR — directory for header-allowlist.json',
@@ -330,7 +320,7 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 			providerValues.HEADER_AUTH_DISPLAY_NAME_HEADER = stringValue(display);
 		}
 
-		// Header-auth: default to loopback (not enforced; Docker networks may override).
+		// Not enforced — a Docker network can still route to the container on another host.
 		const bindLoopback = await p.confirm({
 			message: 'Bind the app to 127.0.0.1 only? (recommended for header-auth)',
 			initialValue: !defaults.HOST || defaults.HOST === '127.0.0.1' || defaults.HOST === 'localhost'
@@ -339,7 +329,6 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		providerValues.HOST = bindLoopback ? '127.0.0.1' : stringValue(defaults.HOST);
 	}
 
-	// Bootstrap admin (checked only while no admin exists; safe to leave set).
 	if (auth === 'header') {
 		p.note(
 			[
@@ -494,10 +483,11 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 	return values;
 }
 
-// Init: default to "same provider" only if current .env already shows that.
 function pickSameProviderDefault(defaults, auth) {
 	const data = defaults.SELVA_DATA_PROVIDER ?? auth;
 	const storage = defaults.SELVA_STORAGE_PROVIDER ?? auth;
+	// No existing defaults means a fresh `create`, not a re-prompted `init` — default to
+	// "same provider for all three" since there's nothing yet to disagree with auth.
 	if (!defaults.SELVA_DATA_PROVIDER && !defaults.SELVA_STORAGE_PROVIDER) return true;
 	return data === auth && storage === auth;
 }

@@ -2,13 +2,10 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
-/**
- * Old env name → its replacement, for keys renamed without changing meaning.
- * The server still reads each old name for one minor version and warns at boot
- * (`readRenamed` in `@selvajs/server` `resolveComputeLimits`); `selva doctor`
- * reports them and `selva migrate` rewrites them. Keep in sync with that list,
- * and drop an entry when the server stops reading it.
- */
+// Old env name → its replacement, for keys renamed without changing meaning.
+// The server still reads each old name for one minor version and warns at
+// boot; keep this in sync with the server's list and drop an entry once the
+// server stops reading it.
 export const RENAMED_ENV_VARS = {
 	COMPUTE_DEFINITION_BYTE_CACHE_MB: 'COMPUTE_DEFINITION_CACHE_MB',
 	COMPUTE_RESPONSE_CACHE_MB: 'COMPUTE_SOLVE_CACHE_MB',
@@ -16,16 +13,12 @@ export const RENAMED_ENV_VARS = {
 	MAX_SOLVE_DURATION_MS: 'COMPUTE_SOLVE_DEADLINE_MS'
 };
 
-/**
- * Deprecated vars whose replacement changes the VALUE too, so they can't be
- * rewritten by renaming a key. `selva doctor` reports these; migrate leaves
- * them alone rather than guessing.
- */
+// Deprecated vars whose replacement changes the VALUE too, so a simple key
+// rename can't migrate them — `selva migrate` leaves these alone rather than guessing.
 export const REPLACED_ENV_VARS = {
 	SELVA_FLAG_COMPUTE_DEBUG_VERBOSE: 'SELVA_FLAG_COMPUTE_DEBUG=verbose'
 };
 
-// Parse a .env file into { key: value }. Preserves nothing else.
 export function parseEnv(text) {
 	const out = {};
 	for (const rawLine of text.split(/\r?\n/)) {
@@ -51,7 +44,6 @@ export function readEnvFile(path) {
 	return parseEnv(readFileSync(path, 'utf8'));
 }
 
-// Merge values into template: preserve structure, rewrite in-place, append new keys.
 export function mergeEnv(template, values) {
 	const seen = new Set();
 	const lines = template.split(/\r?\n/);
@@ -92,7 +84,6 @@ export function mergeEnv(template, values) {
 		out.push(...appended);
 	}
 
-	// Ensure single trailing newline (shell append mishap guard).
 	while (out.length > 0 && out[out.length - 1] === '') out.pop();
 	return out.join('\n') + '\n';
 }
@@ -102,17 +93,15 @@ export function writeEnvFile(path, template, values) {
 }
 
 /**
- * Rewrite deprecated keys to their current names, in place. `renames` maps old
- * name → new name. Only the key is touched — the value, comments, ordering and
- * spacing survive, so an operator's tuned file stays recognisably theirs.
+ * Rewrite deprecated keys to their current names, in place. Only the key is
+ * touched — value, comments, ordering, and spacing survive.
  *
  * A key already present under its new name is left alone and its old line is
- * dropped: the server resolves the same way (new name wins), so keeping both
- * would preserve a line that does nothing.
+ * dropped: the server resolves new-name-wins, so keeping both would preserve
+ * a line that does nothing.
  *
- * Returns `{ text, changes }` where `changes` is `[oldName, newName, 'renamed'
- * | 'dropped']` per line acted on; an empty array means the file was already
- * current and nothing should be written.
+ * Returns `{ text, changes }`, `changes` being `[oldName, newName, 'renamed'
+ * | 'dropped']` per line acted on. Empty means the file was already current.
  */
 export function renameEnvKeys(text, renames) {
 	const present = new Set(Object.keys(parseEnv(text)));
