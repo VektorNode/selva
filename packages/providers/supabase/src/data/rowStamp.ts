@@ -2,38 +2,22 @@ import type { RequestContext } from '@selvajs/platform';
 import { auditSoftDelete } from '@selvajs/platform';
 
 /**
- * Row-level (snake_case) audit-stamp helpers for Supabase stores.
+ * Translates platform's camelCase audit fields (`updatedAt`/`updatedBy`) to
+ * the snake_case columns every Supabase row uses.
  *
- * Platform's `auditUpdate` / `auditSoftDelete` emit camelCase *domain* fields
- * (`updatedAt` / `updatedBy`), but Postgres rows are snake_case, so every store
- * hand-translated them. These helpers own that translation once. Row-column
- * naming is a provider concern, so they live here rather than in platform.
+ * `updated_by` is written only when `ctx.userId` is set. On system contexts
+ * `auditUpdate`/`auditSoftDelete` fall back to `''`, and the column FKs
+ * `auth.users(id)` — writing `''` violates the FK — so it's omitted instead,
+ * leaving the existing value untouched.
  *
- * Two deliberate rules, matched to how the engine's stores already write rows:
- *  - `updated_by` is written ONLY when `ctx.userId` is set. On system contexts
- *    it's the empty string, and the column FKs `auth.users(id)` with
- *    `ON DELETE SET NULL` — writing `''` would violate the FK, so it's omitted
- *    and the existing value is left untouched.
- *  - Plain updates DON'T stamp `updated_at`: a per-table `updated_at` trigger
- *    already sets it. Only the soft-delete stamp writes `updated_at` explicitly,
- *    so it matches `deleted_at` (a single timestamp for the deletion event).
+ * Plain updates don't stamp `updated_at`: a per-table trigger already sets
+ * it. Only soft-delete sets `updated_at` explicitly, to match `deleted_at`.
  */
 
-/**
- * Stamp for a plain UPDATE: `{ updated_by }` when the context carries a user,
- * `{}` otherwise (the DB trigger handles `updated_at`). Spread into the row:
- * `const row = { ...patch, ...stampUpdate(ctx) }`.
- */
 export function stampUpdate(ctx: RequestContext): { updated_by?: string } {
 	return ctx.userId ? { updated_by: ctx.userId } : {};
 }
 
-/**
- * Stamp for a soft-delete: `{ deleted_at, updated_at, updated_by? }`. `updated_at`
- * is set explicitly to equal `deleted_at`; `updated_by` follows the same
- * omit-when-empty rule as {@link stampUpdate}. `fallbackActor` defaults to
- * `ctx.userId` (matching the engine stores' `auditSoftDelete(ctx, ctx.userId)`).
- */
 export function stampSoftDelete(
 	ctx: RequestContext,
 	fallbackActor: string | null | undefined = ctx.userId

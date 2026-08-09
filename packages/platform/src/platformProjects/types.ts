@@ -6,16 +6,13 @@ export type PlatformProjectGranteeType = 'org' | 'user';
  *
  * - `granteeType: 'org'`  → applies to all members of that org
  * - `granteeType: 'user'` → applies to that specific user regardless of org
- * - `canSolve: false`     → schema fetch / view only; submit-solve is blocked
- * - `canSolve: true`      → view + solve
- *
- * Grants are hard-deleted on revocation — no soft-delete.
  */
 export interface PlatformProjectGrant {
 	id: string;
 	projectId: string;
 	granteeType: PlatformProjectGranteeType;
 	granteeId: string;
+	/** false = view/schema only; true = view + solve. */
 	canSolve: boolean;
 	createdBy: string;
 	createdAt: string;

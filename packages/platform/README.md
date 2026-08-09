@@ -1,6 +1,6 @@
 # @selvajs/platform
 
-Pure TypeScript interfaces that define Selva's contract with its backends. No runtime dependencies on a specific database, storage, or auth service — every concrete adapter (local filesystem, Supabase, Azure, ...) lives in its own package and implements these interfaces.
+Pure TypeScript interfaces defining Selva's contract with its backends — no runtime dependency on a specific database, storage, or auth service. Concrete adapters (local filesystem, Supabase, Azure, ...) live in their own packages and implement these interfaces.
 
 This README is the contract. Read it before writing an adapter.
 
@@ -8,20 +8,21 @@ This README is the contract. Read it before writing an adapter.
 
 ## Interfaces at a glance
 
-| Interface                  | Purpose                                                                           | Scoped by `RequestContext`?                                          |
-| -------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `IAuthProvider`            | Verify tokens, manage users, issue sessions. Optional `passwordAuth?` capability. | No — the auth provider produces the identity that fills the context. |
-| `IPlatformPermissionStore` | Per-user platform permissions; owns the sole-`instance_admin` invariant.          | Yes — every method.                                                  |
-| `IUserProfileStore`        | Per-user profile (display name, starred definitions, recent runs).                | Yes — adapters scope by `ctx.userId`.                                |
-| `IOrgStore`                | Orgs and org memberships.                                                         | Yes — every method.                                                  |
-| `IProjectStore`            | Projects and project memberships.                                                 | Yes — every method.                                                  |
-| `IDefinitionStore`         | Definition metadata records + version history.                                    | Yes — every method.                                                  |
-| `IShareLinkStore`          | Per-definition anonymous-access tokens.                                           | Yes — every method.                                                  |
-| `IInviteStore`             | Pending org-membership invitations.                                               | Yes — every method.                                                  |
-| `IComputeServerStore`      | Global + per-org compute-server config.                                           | No — not tenant-scoped.                                              |
-| `IStorageProvider`         | Path-based blob storage. Authorization is the caller's responsibility.            | No — callers pass already-authorized paths.                          |
+| Interface                    | Purpose                                                                           | Scoped by `RequestContext`?                                          |
+| ---------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `IAuthProvider`              | Verify tokens, manage users, issue sessions. Optional `passwordAuth?` capability. | No — the auth provider produces the identity that fills the context. |
+| `IPlatformPermissionStore`   | Per-user platform permissions; owns the sole-`instance_admin` invariant.          | Yes — every method.                                                  |
+| `IUserProfileStore`          | Per-user profile (display name, starred definitions, recent runs).                | Yes — adapters scope by `ctx.userId`.                                |
+| `IOrgStore`                  | Orgs and org memberships.                                                         | Yes — every method.                                                  |
+| `IProjectStore`              | Projects and project memberships.                                                 | Yes — every method.                                                  |
+| `IPlatformProjectGrantStore` | Instance-admin-managed grants onto `platform`-visibility projects.                | Yes — every method.                                                  |
+| `IDefinitionStore`           | Definition metadata records + version history.                                    | Yes — every method.                                                  |
+| `IShareLinkStore`            | Per-definition anonymous-access tokens.                                           | Yes — every method.                                                  |
+| `IInviteStore`               | Pending org-membership invitations.                                               | Yes — every method.                                                  |
+| `IComputeServerStore`        | Global + per-org compute-server config.                                           | No — not tenant-scoped.                                              |
+| `IStorageProvider`           | Path-based blob storage. Authorization is the caller's responsibility.            | No — callers pass already-authorized paths.                          |
 
-`IDataProvider` composes every store: `{ orgs, projects, definitions, computeServer, invites, shareLinks, userProfile, permissions }`. An adapter typically implements one class per store and aggregates them.
+`IDataProvider` composes every store, plus optional `auditQuery` / `events` hooks and lifecycle methods `ensureUser` and `onUserDeleted`. An adapter typically implements one class per store and aggregates them.
 
 ---
 
@@ -38,15 +39,15 @@ This README is the contract. Read it before writing an adapter.
 
 ## Transaction ordering rules
 
-Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`IStorageProvider`). They have no shared transaction. The consumer's orchestration layer (`DefinitionService` in `@selvajs/selva`) composes them with fixed ordering so partial failure is recoverable.
+Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`IStorageProvider`) with no shared transaction. `DefinitionService` (`@selvajs/server/definitions`) composes them with fixed ordering so partial failure is recoverable.
 
-**Create — metadata-first with `pending` → `ready`:**
+**Create — metadata-first, `pending` → `draft`:**
 
 1. Write the record with `status: 'pending'`.
 2. Upload the blob.
-3. Flip `status` to `'ready'`.
+3. `attachInitialVersion` flips `status` to `'draft'`.
 
-List queries filter `'pending'` by default (`ListOptions.includePending` opts in). If step 2 fails, the record stays `'pending'` and is invisible to consumers.
+List queries filter `'pending'` and `'archived'` by default (`DefinitionListOptions.includePending` / `includeArchived` opt in). If step 2 fails, the record stays `'pending'` and is invisible to consumers.
 
 **Delete — blob-first:**
 
@@ -54,10 +55,6 @@ List queries filter `'pending'` by default (`ListOptions.includePending` opts in
 2. `data.delete(guid)`.
 
 If step 2 fails, a retry re-deletes blobs (no-op) and succeeds.
-
-**Update-file — best-effort, retry-safe:**
-
-Archive current → append history → write new → prune history. These are four separate writes, so a crash can leave the sequence half-done. That is survivable because re-running the same update from the start lands on the same end state — each step either has already happened or still needs to, and repeating one is harmless.
 
 ---
 
@@ -69,19 +66,19 @@ import type {
 	DefinitionRecord,
 	DefinitionRecordPatch,
 	RequestContext,
-	ListOptions,
+	DefinitionListOptions,
 	Page
 } from '@selvajs/platform';
 
 export class MyDefinitionStore implements IDefinitionStore {
-	async list(ctx: RequestContext, opts?: ListOptions): Promise<Page<DefinitionRecord>> {
+	async list(ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>> {
 		// Filter by ctx.actingOrgId; exclude status='pending' unless opts.includePending.
 	}
 	// ... etc
 }
 ```
 
-Wire it into a `SelvaConfig` via `defineConfig({ auth, data, storage })`. `data` is an `IDataProvider` that composes every store (orgs, projects, definitions, invites, share-links, compute server, user profile, platform permissions).
+Wire it into a `SelvaConfig` via `defineConfig({ auth, data, storage })`. `data` is an `IDataProvider` composing every store.
 
 ---
 
@@ -99,7 +96,7 @@ runDefinitionStoreConformance({
 });
 ```
 
-The suites cover `ctx` scoping, `pending` filtering, `includePending` opt-in, history pruning, and `ProviderError` shapes. They do not cover performance or concurrency.
+The suites cover `ctx` scoping, `pending` filtering, `includePending` opt-in, and `ProviderError` shapes. They do not cover performance or concurrency.
 
 ---
 
@@ -111,7 +108,7 @@ Throw `ProviderError` for user-facing failures (`new ProviderError('...', 404)`)
 
 ## Data privacy
 
-User identity, credentials, and personal data are owned by the auth provider. Selva stores session tokens that carry no information themselves, plus user IDs and authorization metadata. What a deployment holds and who is responsible for it: [Providers](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/providers/overview.md) and [Security & Limits](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/concepts/security-and-limits.md).
+Identity and credentials belong to whichever `IAuthProvider` is configured — for Supabase that's a separate service; for the local provider, Selva itself is the auth provider and holds credentials on disk. This package's own stores hold only opaque session data, user IDs, and authorization metadata. Details: [Providers](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/providers/overview.md) and [Security & Limits](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/concepts/security-and-limits.md).
 
 ---
 

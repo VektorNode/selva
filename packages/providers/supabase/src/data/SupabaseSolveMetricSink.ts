@@ -38,20 +38,19 @@ const DEFAULT_FLUSH_INTERVAL_MS = 2000;
 const DEFAULT_MAX_BUFFER_SIZE = 10_000;
 
 /**
- * Persists solves' timings to `selva.solve_metrics`. Writes use the
- * service-role client so RLS does not gate the telemetry — the sink runs as a
- * system process attached to the compute route, not the requesting user.
+ * Persists solve timings to `selva.solve_metrics`. Writes go through the
+ * service-role client — the sink is a system process attached to the compute
+ * route, not the requesting user, so RLS doesn't apply.
  *
- * Rows are buffered and written in batches: slider scrubbing produces solves
- * far faster than they are worth individual round-trips, and this Postgres also
- * serves auth. A batch goes out when the buffer reaches `maxBatchSize` or when
- * `flushIntervalMs` elapses with anything buffered, whichever comes first.
+ * Rows are buffered and batch-written: slider scrubbing fires solves far
+ * faster than they're worth individual round-trips against a Postgres that
+ * also serves auth. A batch flushes at `maxBatchSize` rows or `flushIntervalMs`
+ * elapsed, whichever comes first.
  *
- * Per the `ISolveMetricSink` contract, `record` MUST NOT throw. It sits on the
- * hot path of every solve and the response has already been produced by the
- * time we're here, so it only buffers; a failed flush is logged and swallowed.
- * Buffering means metrics are lost on an unclean shutdown — call `close()` to
- * drain deliberately.
+ * `record` must never throw — it runs on the hot path after the solve
+ * response is already sent, so it only buffers; a failed flush is logged and
+ * swallowed. That means an unclean shutdown loses buffered metrics; call
+ * `close()` to drain deliberately.
  */
 export class SupabaseSolveMetricSink implements ISolveMetricSink {
 	private buffer: MetricRow[] = [];
@@ -126,8 +125,8 @@ export class SupabaseSolveMetricSink implements ISolveMetricSink {
 	}
 
 	/**
-	 * Stops the timer, drains the buffer, and rejects further records. Call on
-	 * shutdown so the last partial batch is not lost.
+	 * Stops the timer, drains the buffer, and makes further `record` calls no-ops.
+	 * Call on shutdown so the last partial batch isn't lost.
 	 */
 	async close(): Promise<void> {
 		this.closed = true;

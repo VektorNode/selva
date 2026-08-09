@@ -7,7 +7,7 @@ import type { RecentRun, UserProfile } from './types.js';
  * providers (Entra, Supabase Auth) don't have to model fields they can't
  * persist.
  *
- * Adapters MUST scope by `ctx`: a caller cannot read or modify another
+ * Adapters must scope by `ctx`: a caller cannot read or modify another
  * user's profile via the `userId` argument. SQL adapters delegate to RLS;
  * document-store adapters check `ctx.userId === userId` (or
  * `instance_admin` for admin tooling). Pass `SYSTEM_CONTEXT` for trusted

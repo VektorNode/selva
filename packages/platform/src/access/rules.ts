@@ -10,7 +10,7 @@ import type { PlatformProjectGrant } from '../platformProjects/types.js';
  * adapters. Mutating store methods MUST re-enforce the same predicate
  * independently (RLS in SQL, code in local/JSON).
  *
- * `instance_admin` bypass is NOT baked into rule bodies — wrap calls with
+ * `instance_admin` bypass is not baked into rule bodies — wrap calls with
  * `withAdminBypass` at the call site.
  */
 
@@ -43,23 +43,20 @@ export interface ProjectAccessInput {
 	 * admins — so the feature can be hidden silently without deleting data.
 	 */
 	enablePlatformProjects: boolean;
-	/**
-	 * Grants for `platform`-visibility projects. Pass an empty array for
-	 * non-platform projects — the rule only consults this for `platform`.
-	 */
+	/** Grants for `platform`-visibility projects; empty for non-platform ones. */
 	platformGrants: readonly PlatformProjectGrant[];
-	/** `ctx.actingOrgId` — used to match org grants on platform projects. */
+	/** `ctx.actingOrgId` — matches org grants on platform projects. */
 	actingOrgId: string | null;
-	/** `ctx.userId` — used to match user grants on platform projects. */
+	/** `ctx.userId` — matches user grants on platform projects. */
 	userId: string;
 }
 
 /**
- * Authenticated-user view rule. Anonymous access is delivered via share-link
- * tokens — the route resolves a valid token before this rule runs.
+ * Authenticated-user view rule. Anonymous access goes through share-link
+ * tokens instead — the route resolves a valid token before this runs.
  *
- * For `platform` projects: `instance_admin` always passes; otherwise any
- * grant (view-only or canSolve) satisfies view access.
+ * Platform projects: `instance_admin` always passes; otherwise any grant
+ * (view-only or canSolve) satisfies view access.
  */
 export function canView(input: ProjectAccessInput): boolean {
 	const {
@@ -92,11 +89,11 @@ export function canView(input: ProjectAccessInput): boolean {
 }
 
 /**
- * For non-platform projects: same as `canView` today — kept distinct for
- * future cost gating.
+ * Non-platform projects: same as `canView` — kept as a separate function so
+ * cost gating can diverge from view access later.
  *
- * For `platform` projects: `instance_admin` always passes; a view-only grant
- * satisfies `canView` but NOT `canSolve` — the grant must have `canSolve=true`.
+ * Platform projects: `instance_admin` always passes; a view-only grant
+ * satisfies `canView` but not `canSolve` — the grant needs `canSolve: true`.
  */
 export function canSolve(input: ProjectAccessInput): boolean {
 	const {
@@ -211,11 +208,11 @@ export interface ReclaimAccessInput {
 }
 
 /**
- * Org leadership escape hatch. Reclaim adds the actor as co-owner; it does
- * NOT demote the existing owner. Tenancy must match.
+ * Org leadership escape hatch: adds the actor as co-owner without demoting
+ * the existing owner. Tenancy must match.
  *
- * Platform projects cannot be reclaimed — `instance_admin` always has
- * management access to them without needing the Reclaim mechanism.
+ * Platform projects can't be reclaimed — `instance_admin` already has
+ * management access to them.
  */
 export function canReclaim(input: ReclaimAccessInput): boolean {
 	const { project, orgMember, actingOrgId } = input;
@@ -234,11 +231,11 @@ export interface CreateProjectAccessInput {
 }
 
 /**
- * Owner/admin can always create. A `member` needs `manage_projects` org
+ * Owner/admin can always create; a `member` needs `manage_projects` org
  * permission. Tenancy is enforced.
  *
- * Platform projects (`visibility='platform'`) are created via the admin API
- * and gated on `instance_admin` — this rule is not consulted for them.
+ * Platform projects (`visibility: 'platform'`) go through the admin API,
+ * gated on `instance_admin` — this rule isn't consulted for them.
  */
 export function canCreateProject(input: CreateProjectAccessInput): boolean {
 	const { orgMember, orgPermissions, actingOrgId, targetOrgId } = input;
@@ -250,14 +247,11 @@ export function canCreateProject(input: CreateProjectAccessInput): boolean {
 }
 
 /**
- * Pre-flight check for project-owner removal. Pure function over already-
- * loaded membership rows so route handlers can call it after `canManage`.
+ * Pre-flight check for project-owner removal, run after `canManage`.
  *
  * - `ok` — proceed
- * - `sole_owner` — last owner; route surfaces 409 + suggests reclaim
+ * - `sole_owner` — last owner; route surfaces 409 and suggests reclaim
  * - `needs_confirm` — owner-on-owner removal without `?confirm=true`
- *
- * Non-owner targets always return `ok`.
  */
 export type OwnerRemovalCheck = 'ok' | 'sole_owner' | 'needs_confirm';
 

@@ -6,15 +6,11 @@
  * only non-sensitive routing/identity fields are surfaced here.
  */
 export interface ErrorContext {
-	/** HTTP method, when the error happened inside a request. */
 	method?: string;
-	/** Route pathname (never the query string — it can carry share tokens). */
+	/** Never the query string — it can carry share tokens. */
 	route?: string;
-	/** Acting user id, when known. */
 	userId?: string;
-	/** Org the user was acting as, when known. */
 	orgId?: string;
-	/** Non-sensitive tags for grouping/search in the backend. */
 	tags?: Record<string, string>;
 }
 
@@ -28,9 +24,9 @@ export interface ErrorContext {
  */
 export interface IErrorReporter {
 	/**
-	 * Report an unexpected error. `error` is whatever was thrown/rejected —
-	 * often an `Error`, but adapters occasionally reject with a plain object,
-	 * so implementations must render defensively.
+	 * `error` is whatever was thrown/rejected — often an `Error`, but adapters
+	 * occasionally reject with a plain object, so implementations must render
+	 * defensively.
 	 */
 	capture(error: unknown, context?: ErrorContext): void;
 }

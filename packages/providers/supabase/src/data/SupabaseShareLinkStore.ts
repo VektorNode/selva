@@ -16,16 +16,11 @@ const SHARE_LINK_COLUMNS =
 	'id, definition_guid, channel, token_hash, name, created_by, created_at, expires_at, revoked_at, allow_solve, max_solves, solve_count';
 
 /**
- * Spec §7 — share-link store backed by Postgres.
+ * Share-link store backed by Postgres.
  *
- * Token resolution (`getByTokenHash`) and atomic increment use the
- * SECURITY DEFINER `try_increment_share_link_solve_count` RPC + service-
- * role client to bypass RLS — the token IS the credential, not the
- * authenticated user identity.
- *
- * `tryIncrementSolveCount` returns a single number on success or null when
- * the cap is hit. The RPC enforces "increment iff under cap and live" in
- * one statement, so even concurrent solves can't overshoot the cap.
+ * `getByTokenHash` and `tryIncrementSolveCount` go through the service-role
+ * client and a SECURITY DEFINER RPC, bypassing RLS: the token itself is the
+ * credential, not the authenticated user's identity.
  */
 export class SupabaseShareLinkStore implements IShareLinkStore {
 	private readonly events: IEventSink;
@@ -82,9 +77,8 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 	}
 
 	async getByTokenHash(_ctx: RequestContext, tokenHash: string): Promise<ShareLink | null> {
-		// Service-role: token resolution must work for anonymous requests too.
-		// RLS would scope the query down to "links the current user can see"
-		// — exactly the wrong semantic for token-credentialed access.
+		// Service-role: RLS would scope this to "links the current user can see",
+		// but an anonymous caller resolving a token has no user to scope to.
 		const { data, error } = await this.clients.serviceClient
 			.from('share_links')
 			.select(`${SHARE_LINK_COLUMNS}, definitions!inner(deleted_at)`)
@@ -97,9 +91,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
-		// Idempotent: succeeds whether or not the row exists / is already
-		// revoked. The `is null` predicate on revoked_at means a re-revoke
-		// is a no-op (no row updated).
+		// `.is('revoked_at', null)` makes a re-revoke a no-op instead of an error.
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('share_links')
@@ -111,9 +103,8 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 	}
 
 	async tryIncrementSolveCount(_ctx: RequestContext, id: string): Promise<number | null> {
-		// SECURITY DEFINER RPC — bypasses RLS. Atomic check-and-increment.
-		// Returns NULL when the link is missing/revoked/expired/capped; the
-		// row update is the only way to get a numeric return.
+		// Atomic check-and-increment in one RPC call: returns null if the link is
+		// missing/revoked/expired/capped, so concurrent solves can't overshoot max_solves.
 		const { data, error } = await this.clients.serviceClient.rpc(
 			'try_increment_share_link_solve_count',
 			{ link_id: id }

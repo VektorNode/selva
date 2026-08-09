@@ -12,7 +12,10 @@
 
 import { existsSync, readFileSync, accessSync, constants } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join, resolve, dirname, delimiter } from 'node:path';
+// These checks only ever run on a Linux host (see the platform gate below), so
+// every path here is POSIX. Using the platform-default `node:path` would build
+// backslash paths and split PATH on `;` when the tests run on Windows.
+import { posix as path } from 'node:path';
 import { homedir } from 'node:os';
 import { green, red, yellow, fixable } from './result.js';
 
@@ -22,10 +25,10 @@ export const systemEnv = {
 	env: () => process.env,
 	homedir,
 	exists: existsSync,
-	readFile: (path) => readFileSync(path, 'utf8'),
-	isWritable: (path) => {
+	readFile: (target) => readFileSync(target, 'utf8'),
+	isWritable: (target) => {
 		try {
-			accessSync(path, constants.W_OK);
+			accessSync(target, constants.W_OK);
 			return true;
 		} catch {
 			return false;
@@ -50,15 +53,15 @@ export function checkBootPersistence(dir, env = systemEnv) {
 // dump.pm2 is what `pm2 resurrect` replays. Without it the unit starts pm2 and
 // pm2 starts nothing.
 function checkSavedProcessList(dir, env) {
-	const pm2Home = env.env().PM2_HOME ?? join(env.homedir(), '.pm2');
-	if (env.exists(join(pm2Home, 'dump.pm2'))) {
+	const pm2Home = env.env().PM2_HOME ?? path.join(env.homedir(), '.pm2');
+	if (env.exists(path.join(pm2Home, 'dump.pm2'))) {
 		return green('pm2 process list saved (dump.pm2 present)');
 	}
 	return yellow(
 		'pm2 process list not saved — run `npx pm2 save` so a reboot can ' +
 			'resurrect the app (nothing to restore without it)',
 		fixable('run `pm2 save` to persist the current process list', () => {
-			const bin = join(dir, 'node_modules', '.bin', 'pm2');
+			const bin = path.join(dir, 'node_modules', '.bin', 'pm2');
 			if (!env.exists(bin)) return red('pm2 not installed in this deployment');
 			const r = env.run(bin, ['save'], { cwd: dir });
 			return (r.status ?? 1) === 0
@@ -89,7 +92,7 @@ function checkSystemdUnit(dir, env) {
 		return [yellow(`pm2 systemd unit present but unreadable (${unitPath})`)];
 	}
 
-	const localPm2 = join(dir, 'node_modules', 'pm2', 'bin', 'pm2');
+	const localPm2 = path.join(dir, 'node_modules', 'pm2', 'bin', 'pm2');
 	const execStart = /^ExecStart=(.+)$/m.exec(unit)?.[1] ?? '';
 	if (execStart.includes(localPm2)) {
 		return [green('pm2 systemd boot unit installed (uses deployment-local pm2)')];
@@ -102,7 +105,7 @@ function checkSystemdUnit(dir, env) {
 				`expected:  ${localPm2} resurrect\n     ` +
 				`Reboots will resurrect via the wrong pm2 (version skew). Re-run startup ` +
 				`with the local binary:\n     ` +
-				`sudo env PATH=$PATH:${join(dir, 'node_modules', '.bin')} ${localPm2} ` +
+				`sudo env PATH=$PATH:${path.join(dir, 'node_modules', '.bin')} ${localPm2} ` +
 				`startup systemd -u $USER --hp $HOME`
 		)
 	];
@@ -116,14 +119,14 @@ function checkStrayGlobalPm2(dir, env) {
 	// Only offer the removal when we could actually perform it. A global
 	// install under /usr is root-owned; attempting it would half-fail and
 	// leave the operator worse informed than a printed instruction.
-	const writable = env.isWritable(dirname(globalPm2));
+	const writable = env.isWritable(path.dirname(globalPm2));
 
 	return [
 		yellow(
 			`a pm2 outside this deployment is on PATH (${globalPm2}) — it can fork a ` +
 				`mismatched daemon and trigger skew. Prefer \`npm run\` wrappers / \`npx pm2\` ` +
 				`from this directory; consider \`npm uninstall -g pm2\`.` +
-				(writable ? '' : `\n     (${dirname(globalPm2)} is not writable — needs sudo)`),
+				(writable ? '' : `\n     (${path.dirname(globalPm2)} is not writable — needs sudo)`),
 			writable
 				? fixable(`uninstall the global pm2 at ${globalPm2}`, () => {
 						const r = env.run('npm', ['uninstall', '-g', 'pm2'], {});
@@ -137,11 +140,11 @@ function checkStrayGlobalPm2(dir, env) {
 }
 
 export function findGlobalPm2(dir, env = systemEnv) {
-	const localBin = resolve(dir, 'node_modules', '.bin');
-	const dirs = (env.env().PATH ?? '').split(delimiter).filter(Boolean);
+	const localBin = path.resolve(dir, 'node_modules', '.bin');
+	const dirs = (env.env().PATH ?? '').split(path.delimiter).filter(Boolean);
 	for (const d of dirs) {
-		if (resolve(d) === localBin) continue;
-		const candidate = join(d, 'pm2');
+		if (path.resolve(d) === localBin) continue;
+		const candidate = path.join(d, 'pm2');
 		if (env.exists(candidate)) return candidate;
 	}
 	return null;

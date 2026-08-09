@@ -14,10 +14,8 @@ export interface IInviteStore {
 	create(ctx: RequestContext, invite: Invite): Promise<void>;
 
 	/**
-	 * Lookup by HMAC hash of the raw token. Caller hashes the inbound token
-	 * (e.g. via `packages/selva/src/lib/server/invites/token.server.ts`) and
-	 * passes the digest here. Returns null for unknown, expired, or
-	 * consumed invites.
+	 * Caller hashes the inbound raw token and passes the digest here. Returns
+	 * null for unknown, expired, or consumed invites.
 	 */
 	getByTokenHash(ctx: RequestContext, tokenHash: string): Promise<Invite | null>;
 
@@ -29,10 +27,6 @@ export interface IInviteStore {
 	/** No-op if already consumed or missing. */
 	revoke(ctx: RequestContext, id: string): Promise<void>;
 
-	/**
-	 * Hard-delete every invite belonging to an org. Called from `deleteOrg`
-	 * cascade — pending invites to a deleted org are unredeemable, so leaving
-	 * them behind only creates orphans.
-	 */
+	/** Called from the `deleteOrg` cascade — invites to a deleted org are unredeemable orphans otherwise. */
 	deleteByOrg(ctx: RequestContext, orgId: string): Promise<void>;
 }

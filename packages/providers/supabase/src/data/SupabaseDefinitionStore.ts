@@ -31,23 +31,17 @@ const DEFINITION_VERSION_COLUMNS =
 	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at';
 /**
  * `getVersion`'s projection — the list columns plus the `schema` JSONB. Spelled
- * out rather than interpolated: supabase-js infers the row type from the literal
- * column string, and a template literal degrades it to `string`.
+ * out rather than built with a template literal: supabase-js infers the row
+ * type from the literal column string, and a template literal degrades it to
+ * `string`.
  */
 const DEFINITION_VERSION_COLUMNS_WITH_SCHEMA =
 	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at, schema';
 
 /**
- * Definition metadata + version store backed by Postgres. Spec §6 versioning:
- * `definitions` carries the parent record and the `live`/`draft` channel
- * pointers; `definition_versions` carries the immutable per-upload rows.
- *
- * Deletion protection (§6) is enforced by FK constraints — `live_version_id`
- * and `draft_version_id` are ON DELETE RESTRICT. Trying to delete a
- * referenced version raises 23503 which `mapPostgrestError` turns into a 409.
- *
- * `incrementSolveCount` uses a SQL function for atomic UPDATE — no
- * read-modify-write race like the local provider has.
+ * Definition metadata + version store backed by Postgres. `definitions` carries
+ * the parent record and the `live`/`draft` channel pointers; `definition_versions`
+ * carries the immutable per-upload rows.
  */
 export class SupabaseDefinitionStore implements IDefinitionStore {
 	private readonly events: IEventSink;
@@ -90,10 +84,8 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		const range = toRange(opts);
 		const direction = opts?.orderDir ?? 'desc';
 
-		// The public path embeds `project` to filter on its visibility/org; the
-		// non-public path selects the definition columns alone. Pick the select
-		// string up front so there's a single `.select()` call and the builder
-		// keeps one type across both branches.
+		// Picked up front so there's a single `.select()` call — calling it twice
+		// (once per branch) would give the builder two different inferred types.
 		const selectColumns = filter?.publicOnly
 			? `${DEFINITION_COLUMNS}, project:projects!inner(visibility, org_id)`
 			: DEFINITION_COLUMNS;
@@ -135,9 +127,9 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 
 		const { data, error, count } = await query;
 		if (error) throw mapPostgrestError(error);
-		// `data` is typed against the dynamic select string, which the PostgREST
-		// parser can't resolve to a row shape; the definition columns are all
-		// present regardless, so map through the known `DefinitionRow`.
+		// `data`'s type comes from the dynamic select string, which PostgREST
+		// can't resolve to a row shape — the columns are all present regardless,
+		// so cast through the known `DefinitionRow`.
 		const items = ((data ?? []) as unknown as DefinitionRow[]).map(rowToRecord);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
@@ -185,9 +177,9 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	}
 
 	async delete(ctx: RequestContext, guid: string): Promise<void> {
-		// Soft-delete (matches the local provider and spec §9). A retention
-		// sweep running as service-role hard-deletes later, which cascades
-		// versions + share_links via FK.
+		// Soft-delete, matching the local provider. A retention sweep running
+		// as service-role hard-deletes later, which cascades versions +
+		// share_links via FK.
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('definitions')
@@ -203,10 +195,9 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	}
 
 	async deleteByProject(ctx: RequestContext, projectId: string): Promise<void> {
-		// Cascade from `deleteProject` — soft-delete every live definition in the
-		// project in one statement. `select('guid')` returns the affected rows so
-		// we can emit a `definition.deleted` per record (parity with the local
-		// provider and the single-`delete` path above).
+		// Cascade from `deleteProject`. `select('guid')` returns the affected rows
+		// so we can emit a `definition.deleted` per record, matching the local
+		// provider and the single-`delete` path above.
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('definitions')
@@ -231,8 +222,8 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 
 	async reserveNextVersionNumber(ctx: RequestContext, guid: string): Promise<number> {
 		// Atomic reserve-and-increment in one SQL function — no read-modify-write
-		// race. Returns the reserved number; raises no_data_found (mapped to 404)
-		// when the definition is missing or soft-deleted.
+		// race. Raises no_data_found (mapped to 404) when the definition is
+		// missing or soft-deleted.
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.rpc('reserve_next_version_number', { g: guid });
@@ -244,7 +235,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	}
 
 	// ============================================================================
-	// Versions (spec §6)
+	// Versions
 	// ============================================================================
 
 	async createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void> {
@@ -300,9 +291,9 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	}
 
 	async deleteVersion(ctx: RequestContext, versionId: string): Promise<void> {
-		// FK enforcement at the DB layer: live_version_id / draft_version_id
-		// are ON DELETE RESTRICT. If the version is referenced by either
-		// channel, Postgres raises 23503 → mapPostgrestError → ProviderError(409).
+		// live_version_id / draft_version_id are ON DELETE RESTRICT — if the
+		// version is referenced by either channel, Postgres raises 23503 →
+		// mapPostgrestError → ProviderError(409).
 		const { error } = await this.clients
 			.forRequest(ctx)
 			.from('definition_versions')
@@ -322,8 +313,8 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		versionId: string
 	): Promise<void> {
 		await this.repointChannel(ctx, definitionId, versionId, 'live_version_id');
-		// Only `live` advancement is the published-event trigger. Draft
-		// repointing is the editor's working pointer, not a publication signal.
+		// Only `live` advancement fires `definition.published`. Draft repointing
+		// is the editor's working pointer, not a publication signal.
 		await this.events.emit({
 			type: 'definition.published',
 			definitionId,
@@ -346,9 +337,9 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		versionId: string
 	): Promise<void> {
 		const client = this.clients.forRequest(ctx);
-		// Validate the version belongs to this definition before repointing —
-		// matches `repointChannel` so the bootstrap surface enforces the same
-		// invariant.
+		// Duplicates repointChannel's ownership check rather than calling it,
+		// so the bootstrap path enforces the same invariant independently of
+		// the two-channel repoint logic.
 		const { data: version, error: vError } = await client
 			.from('definition_versions')
 			.select('id, definition_guid')
@@ -378,7 +369,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		if (!data || data.length === 0) {
 			throw new ProviderError(`Definition '${definitionId}' not found`, 404);
 		}
-		// No `definition.published` event — see interface doc.
+		// No `definition.published` event: this is a bootstrap, not a publish.
 	}
 
 	private async repointChannel(
@@ -388,7 +379,6 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		column: 'live_version_id' | 'draft_version_id'
 	): Promise<void> {
 		const client = this.clients.forRequest(ctx);
-		// Validate the version belongs to this definition before repointing.
 		const { data: version, error: vError } = await client
 			.from('definition_versions')
 			.select('id, definition_guid')

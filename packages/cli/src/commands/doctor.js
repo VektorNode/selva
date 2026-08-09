@@ -23,6 +23,7 @@ import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 import { satisfiesNodeRange } from '../node-range.js';
 import { green, yellow, red, fixable } from '../checks/result.js';
 import { checkBootPersistence } from '../checks/boot.js';
+import { checkRuntimeEnvironment } from '../checks/runtime.js';
 import {
 	checkDeprecatedEnv,
 	checkOrigin,
@@ -73,6 +74,7 @@ export async function runDoctor(argv = []) {
 	checks.push(checkPackage(dir, '@selvajs/selva'));
 	checks.push(checkNodeEngine(dir));
 	checks.push(checkCliRuntimeAlignment(dir));
+	checks.push(...checkRuntimeEnvironment(dir));
 	checks.push(...checkBootPersistence(dir));
 	checks.push(checkOrigin(env));
 	checks.push(...checkDeprecatedEnv(env));

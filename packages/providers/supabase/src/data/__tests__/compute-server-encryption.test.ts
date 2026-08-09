@@ -1,12 +1,12 @@
 /**
  * CI-runnable (no live stack) unit tests for at-rest encryption of
- * `compute_servers.api_key`. Uses a minimal fake of the Supabase query builder
- * that records `insert` payloads and serves canned `select` rows, so we can
+ * `compute_servers.api_key`. A minimal fake of the Supabase query builder
+ * records `insert` payloads and serves canned `select` rows, so the tests
  * assert the exact bytes that would reach the DB without a real Postgres.
  *
- * The security property under test: a plaintext apiKey handed to the store is
- * NEVER written verbatim — the DB only ever sees an `enc:v1:` envelope — and it
- * round-trips back to plaintext on read.
+ * Security property under test: a plaintext apiKey handed to the store is
+ * NEVER written verbatim — the DB only ever sees an `enc:v1:` envelope — and
+ * it round-trips back to plaintext on read.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -21,12 +21,10 @@ const KEY = randomBytes(32);
 
 /**
  * Records every `insert` payload and returns canned rows for each table's
- * `select`. Only the fragments the store actually chains are implemented; the
- * builder is thenable so `await client.from(...).select(...)` resolves.
+ * `select`. Only the fragments the store actually chains are implemented.
  */
 function fakeBundle(selectRows: Record<string, unknown[]> = {}) {
 	const inserted: Record<string, unknown[]> = {};
-	/** Per-table column string of the last `select` — lets tests assert projections. */
 	const selected: Record<string, string> = {};
 
 	function builder(table: string) {
@@ -37,8 +35,8 @@ function fakeBundle(selectRows: Record<string, unknown[]> = {}) {
 				if (typeof columns === 'string') selected[table] = columns;
 				return {
 					...chain,
-					// `.eq(col, val)` filters the canned rows so single-row reads
-					// (`getServerApiKey`) resolve the row they asked for.
+					// Filters canned rows so single-row reads (getServerApiKey)
+					// resolve the row they asked for.
 					eq: (column: string, value: unknown) => {
 						const matched = rows.filter((r) => (r as Record<string, unknown>)[column] === value);
 						return {
@@ -95,12 +93,10 @@ describe('SupabaseComputeServerStore — apiKey encryption at rest', () => {
 		expect(rows).toHaveLength(1);
 		expect(rows[0].api_key).not.toBe('super-secret-key');
 		expect(isEncryptedSecret(rows[0].api_key)).toBe(true);
-		// And it's genuinely our plaintext under the envelope.
 		expect(decryptSecret(rows[0].api_key, KEY)).toBe('super-secret-key');
 	});
 
 	it('decrypts apiKey on read — callers see plaintext', async () => {
-		// Seed the "DB" with an already-encrypted row.
 		const { encryptSecret } = await import('@selvajs/platform/computeServer');
 		const envelope = encryptSecret('round-trip-key', KEY);
 		const { bundle } = fakeBundle({
@@ -125,7 +121,7 @@ describe('SupabaseComputeServerStore — apiKey encryption at rest', () => {
 		expect(config.servers[0].apiKey).toBe('round-trip-key');
 	});
 
-	it('getConfig omits apiKey by default, and never selects the column (audit 4b)', async () => {
+	it('getConfig omits apiKey by default, and never selects the column', async () => {
 		const { encryptSecret } = await import('@selvajs/platform/computeServer');
 		const envelope = encryptSecret('round-trip-key', KEY);
 		const { bundle, selected } = fakeBundle({
@@ -150,8 +146,7 @@ describe('SupabaseComputeServerStore — apiKey encryption at rest', () => {
 		expect(config.servers[0].apiKey).toBeUndefined();
 		// Presence is still reported — from the generated column, not the secret.
 		expect(config.servers[0].hasApiKey).toBe(true);
-		// The point of the fix: the ciphertext never leaves Postgres. Split on
-		// commas so the `has_api_key` column doesn't satisfy a substring match.
+		// Split on commas so `has_api_key` doesn't satisfy a substring match on `api_key`.
 		const columns = selected['compute_servers'].split(',').map((c) => c.trim());
 		expect(columns).not.toContain('api_key');
 		expect(columns).toContain('has_api_key');
@@ -183,7 +178,7 @@ describe('SupabaseComputeServerStore — apiKey encryption at rest', () => {
 
 	it('throws rather than persist plaintext when no key is configured', async () => {
 		const { bundle } = fakeBundle();
-		const store = new SupabaseComputeServerStore(bundle); // no key
+		const store = new SupabaseComputeServerStore(bundle);
 
 		await expect(
 			store.savePlatformServers(
@@ -219,7 +214,7 @@ describe('SupabaseComputeServerStore — apiKey encryption at rest', () => {
 
 	it('verifySecrets reports key_mismatch when the at-rest key rotated', async () => {
 		const { encryptSecret } = await import('@selvajs/platform/computeServer');
-		const envelope = encryptSecret('secret', randomBytes(32)); // different key
+		const envelope = encryptSecret('secret', randomBytes(32));
 		const { bundle } = fakeBundle({
 			compute_servers: [{ id: 's1', label: 'prod', api_key: envelope }]
 		});
