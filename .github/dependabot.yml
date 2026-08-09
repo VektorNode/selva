@@ -23,6 +23,14 @@ updates:
       # Drop this once those ship TS 7 support; catalog pin is the other half.
       - dependency-name: 'typescript'
         update-types: ['version-update:semver-major']
+      # The pm2 devDependency in packages/cli IS the pin every scaffolded
+      # deployment inherits (deployment-package.js reads it). An auto-merged
+      # bump would silently change what operators install and flag pin drift
+      # across the whole fleet — pm2 bumps are deliberate releases with a
+      # documented daemon-upgrade procedure, never dependency chores. It sits
+      # in the manifest anyway so the dependency graph feeds Dependabot
+      # ALERTS (advisories), which ignores here don't suppress.
+      - dependency-name: 'pm2'
 
   # '/' only covers .github/workflows/. Composite actions live outside that
   # scope and silently lag behind (pnpm/setup-node sat at v4 while every

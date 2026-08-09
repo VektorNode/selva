@@ -9,15 +9,11 @@ import { ProviderError, hasPermission } from '@selvajs/platform';
 import type { ClientBundle } from '../data/client.js';
 
 /**
- * User profile backed by `public.user_profiles` (one row per `auth.users.id`).
- * The row is auto-seeded by the `handle_new_auth_user` trigger on signup, so
- * the store never inserts — only reads/updates.
- *
- * Uses the service-role client throughout (RLS on `user_profiles` is
- * coarse-grained — server-side flows like the hooks.server.ts profile load
- * need access regardless of the caller's identity). The `assertCanAccess`
- * check enforces "you can only see/modify your own profile" at the app layer
- * to match the `IUserProfileStore` contract.
+ * Backed by `public.user_profiles` (one row per `auth.users.id`), auto-seeded
+ * by the `handle_new_auth_user` trigger on signup — this store never inserts,
+ * only reads/updates. Service-role throughout since RLS here is too coarse
+ * for server-side flows like the hooks.server.ts profile load; `assertCanAccess`
+ * enforces "own profile only" at the app layer instead.
  */
 const MAX_RECENT_RUNS = 20;
 
@@ -40,8 +36,7 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 	}
 
 	async getProfiles(_ctx: RequestContext, userIds: readonly string[]): Promise<UserProfile[]> {
-		// Batch read serves display-name lookups across the UI; scoping to one
-		// user defeats the purpose. No assertCanAccess.
+		// No assertCanAccess: this serves display-name lookups across other users.
 		if (userIds.length === 0) return [];
 		const { data, error } = await this.client()
 			.from('user_profiles')
@@ -76,9 +71,8 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 		definitionId: string
 	): Promise<UserManagementResult> {
 		assertCanAccess(ctx, userId);
-		// Read-modify-write is fine for the local scale here; if concurrent
-		// starring ever becomes a hotspot, a SECURITY DEFINER RPC using
-		// `array_append` + `array_distinct` closes the race.
+		// Read-modify-write races under concurrent starring; a SECURITY DEFINER
+		// RPC using array_append + array_distinct would close it if that matters.
 		const existing = await this.getProfile(ctx, userId);
 		if (!existing) return 'not_found';
 		if (existing.starredDefinitions.includes(definitionId)) return 'ok';
@@ -122,7 +116,6 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 		const existing = await this.getProfile(ctx, userId);
 		if (!existing) return 'not_found';
 
-		// Prepend newest, de-dupe by definitionId, cap at MAX_RECENT_RUNS.
 		const filtered = existing.recentRuns.filter((r) => r.definitionId !== run.definitionId);
 		const next = [run, ...filtered].slice(0, MAX_RECENT_RUNS);
 

@@ -5,15 +5,15 @@ import { ALL_ORG_PERMISSIONS } from './organizations/schemas.js';
 import { ProviderError } from './errors.js';
 
 /**
- * Per-request identity + scope passed to every data provider call. Built
- * once per HTTP request from the authenticated session.
+ * Per-request identity + scope passed to every data provider call, built once
+ * per HTTP request from the authenticated session.
  *
  * `actingOrgId` is the org the user is currently acting as — NOT "an org the
  * user is a member of." Tenancy checks compare it to the resource's `orgId`.
  *
- * `instance_admin` implies every other permission, everywhere — encoded by
- * `hasPermission`. `system: true` is a trusted server-internal call;
- * adapters with RLS treat it as fully authorized.
+ * `instance_admin` implies every other permission everywhere, via `hasPermission`.
+ * `system: true` marks a trusted server-internal call; adapters with RLS treat it
+ * as fully authorized.
  */
 export interface RequestContext {
 	/** Empty string for system contexts. */
@@ -25,17 +25,11 @@ export interface RequestContext {
 	orgPermissions: OrgPermission[];
 	/** Never derive from a user session. */
 	system?: true;
-	/**
-	 * Opaque adapter payload. The Supabase adapter passes the user JWT through
-	 * for RLS; local ignores it.
-	 */
+	/** Opaque adapter payload — the Supabase adapter passes the user JWT through for RLS; local ignores it. */
 	adapterContext?: unknown;
 }
 
-/**
- * For server-internal operations outside any HTTP request (bootstrap,
- * janitors, migrations). Treated as fully authorized.
- */
+/** For server-internal operations outside any HTTP request (bootstrap, janitors, migrations). */
 export const SYSTEM_CONTEXT: RequestContext = {
 	userId: '',
 	platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
@@ -44,8 +38,8 @@ export const SYSTEM_CONTEXT: RequestContext = {
 };
 
 /**
- * Does NOT cross-check `ctx.actingOrgId` — the caller builds a context scoped
- * to the org they're acting on. An org permission against a ctx without
+ * Does not cross-check `ctx.actingOrgId` — the caller must build a context scoped
+ * to the org it's acting on. An org permission against a context without
  * `actingOrgId` returns false unless `instance_admin` or `system`.
  */
 export function hasPermission(
@@ -67,10 +61,9 @@ function isPlatformPermission(p: string): p is PlatformPermission {
 }
 
 /**
- * Return the org the caller is acting as, or throw `ProviderError(403)` when
- * the context has none. Stores that scope every row to an acting org repeat
- * this guard; centralizing it keeps the failure a single, consistent 403
- * rather than a `null` that leaks into a query as `org_id = undefined`.
+ * Returns the org the caller is acting as, or throws `ProviderError(403)`.
+ * Centralizes this guard so every store that scopes rows to an acting org fails
+ * the same consistent way, instead of leaking `org_id = undefined` into a query.
  */
 export function requireActingOrg(ctx: RequestContext): string {
 	if (!ctx.actingOrgId) {

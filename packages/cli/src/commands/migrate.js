@@ -13,7 +13,8 @@ import {
 	buildDeploymentPackageJson,
 	CANONICAL_FIELDS,
 	DEPENDENCIES,
-	LEGACY_DEPENDENCIES
+	LEGACY_DEPENDENCIES,
+	OVERRIDES
 } from '../deployment-package.js';
 import { APP_NAME, runPm2 } from './pm2.js';
 
@@ -191,6 +192,16 @@ export async function runMigrate(
 		status = 1;
 		p.log.error(`Could not invoke pm2: ${err instanceof Error ? err.message : err}`);
 	}
+	// A pin change means the just-installed pm2 CLI and the still-running
+	// daemon are now different versions. That's the repairable skew direction
+	// (daemon older), but it stays skewed until the operator acts — say so
+	// here, once, instead of letting doctor nag forever. Deliberately NOT
+	// automated: `pm2 update` recycles the daemon, and doing that unattended
+	// inside a migration converts a mid-flight failure into an outage (see
+	// plans/fixes/host-prerequisites-and-pm2-audit.md).
+	const pm2Notice = buildPm2UpgradeNotice(before.dependencies?.pm2, target.dependencies.pm2);
+	if (pm2Notice) p.log.warn(pm2Notice);
+
 	const backupHints = ['package.json.bak'];
 	if (hasStaleConfig) backupHints.push('selva.config.js.bak');
 	if (ecoHasStaleRuntime) backupHints.push('ecosystem.config.cjs.bak');
@@ -255,6 +266,19 @@ function diffPackageJson(before, after) {
 		else if (a !== b) lines.push(`${pc.yellow('~')} ${name} ${pc.dim(a + ' → ' + b)}`);
 	}
 
+	// Without this section, an overrides-only change reads as "already on the
+	// current layout" and the security shim never reaches existing deployments.
+	const beforeOverrides = before.overrides ?? {};
+	const afterOverrides = after.overrides ?? {};
+	const allOverrides = new Set([...Object.keys(beforeOverrides), ...Object.keys(afterOverrides)]);
+	for (const name of [...allOverrides].sort()) {
+		const a = beforeOverrides[name];
+		const b = afterOverrides[name];
+		if (a && !b) lines.push(`${pc.red('-')} overrides.${name} ${pc.dim(a)}`);
+		else if (!a && b) lines.push(`${pc.green('+')} overrides.${name} ${pc.dim(b)}`);
+		else if (a !== b) lines.push(`${pc.yellow('~')} overrides.${name} ${pc.dim(a + ' → ' + b)}`);
+	}
+
 	const beforeScripts = before.scripts ?? {};
 	const afterScripts = after.scripts ?? {};
 	const allScripts = new Set([...Object.keys(beforeScripts), ...Object.keys(afterScripts)]);
@@ -299,6 +323,23 @@ export function detectDrift(pkgJson, dir) {
 		if (!deps[name]) reasons.push(`${name} is missing`);
 	}
 
+	// pm2 is the one dependency pinned exactly, so a version difference is drift
+	// rather than an operator preference. Presence alone was checked above and
+	// isn't enough: a deployment scaffolded against an older CLI keeps its old
+	// pm2 forever, which is how the pin reached a two-major gap unnoticed.
+	if (deps.pm2 && deps.pm2 !== DEPENDENCIES.pm2) {
+		reasons.push(`pm2 is pinned to ${deps.pm2} (current scaffold pins ${DEPENDENCIES.pm2})`);
+	}
+
+	// Overrides are security shims for vulnerable transitive deps — a
+	// deployment without them installs the vulnerable version on its next
+	// `npm install`, silently.
+	for (const [name, version] of Object.entries(OVERRIDES)) {
+		if (pkgJson?.overrides?.[name] !== version) {
+			reasons.push(`overrides.${name} is missing or outdated (security shim, expects ${version})`);
+		}
+	}
+
 	if (dir) {
 		const configPath = join(dir, 'selva.config.js');
 		if (existsSync(configPath)) {
@@ -318,6 +359,22 @@ export function detectDrift(pkgJson, dir) {
 	}
 
 	return reasons;
+}
+
+// Null when the pin didn't change. Exported for its test — the wording is the
+// operator's only pointer to finish the upgrade.
+export function buildPm2UpgradeNotice(beforeVersion, afterVersion) {
+	if (!beforeVersion || beforeVersion === afterVersion) return null;
+	return [
+		`pm2 was upgraded ${beforeVersion} → ${afterVersion}, but the running pm2 daemon is`,
+		`still the old version. Finish the upgrade (brief restart of managed processes):`,
+		``,
+		`  npx pm2 update`,
+		`  npx pm2 save`,
+		``,
+		`If doctor reports a pm2 outside this deployment (global or apt install), follow`,
+		`the full procedure in the docs instead: self-hosting → deployment → prerequisites.`
+	].join('\n');
 }
 
 export { buildTargetPackageJson, diffPackageJson };

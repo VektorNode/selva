@@ -2,34 +2,27 @@ import type { RequestContext } from '../context.js';
 import type { PlatformProjectGrant } from './types.js';
 
 /**
- * Grants for `platform`-visibility projects. Enables `instance_admin` to
- * grant orgs or individual users view-only or view+solve access without
- * creating project membership rows.
+ * Grants for `platform`-visibility projects. Lets `instance_admin` grant orgs
+ * or individual users view-only or view+solve access without creating
+ * project membership rows.
  *
  * All deletes are hard-deletes — grants have no downstream references and
  * revocation is immediate.
  */
 export interface IPlatformProjectGrantStore {
 	listByProject(ctx: RequestContext, projectId: string): Promise<PlatformProjectGrant[]>;
-	/**
-	 * Grants for many projects in a single query. Keys are the requested
-	 * `projectIds`; a project with no grants maps to an empty array.
-	 */
+	/** Keys are the requested `projectIds`; a project with no grants maps to an empty array. */
 	listByProjects(
 		ctx: RequestContext,
 		projectIds: readonly string[]
 	): Promise<Map<string, PlatformProjectGrant[]>>;
 	create(ctx: RequestContext, grant: PlatformProjectGrant): Promise<void>;
 	delete(ctx: RequestContext, id: string): Promise<void>;
-	/**
-	 * Cascade hook: drop every grant for a project. Called by `deleteProject`.
-	 * No-op when none exist.
-	 */
+	/** Cascade hook called by `deleteProject`. */
 	deleteByProject(ctx: RequestContext, projectId: string): Promise<void>;
 	/**
-	 * Cascade hook: drop every org grant whose `granteeId === orgId`. Called by
-	 * `deleteOrg`. User grants are identity-scoped and remain. No-op when none
-	 * exist.
+	 * Cascade hook called by `deleteOrg`: drops every org grant whose
+	 * `granteeId === orgId`. User grants are identity-scoped and remain.
 	 */
 	deleteByGranteeOrg(ctx: RequestContext, orgId: string): Promise<void>;
 }

@@ -1,12 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RequestContext } from '@selvajs/platform';
 
-// `createClient` is the seam this test watches: the RLS dispatch is entirely a
-// question of WHICH key each returned client was built with. Mock it to a spy
-// that records (key, options) and hands back a distinguishable stub, so the
-// test never needs a live Supabase stack — it asserts on the dispatch, not on
-// query behavior. (A real client would also transitively load realtime-js,
-// which throws without native WebSocket on older Node — another reason to mock.)
+// RLS dispatch is entirely a question of WHICH key each returned client was
+// built with, so mock `createClient` to a spy that records (key, options) and
+// hands back a distinguishable stub — no live Supabase stack needed, and no
+// realtime-js load (which throws without native WebSocket on older Node).
 vi.mock('@supabase/supabase-js', () => ({
 	createClient: vi.fn((_url: string, key: string, options: unknown) => ({
 		__key: key,
@@ -42,12 +40,11 @@ function build() {
 }
 
 /**
- * Fail-closed dispatch (audit S2). A previous version fell back to service-role
- * when the session token was absent — a fail-OPEN footgun where any synthetic
- * ctx (share-token resolve, background job, a hand-built context) silently
- * bypassed RLS. The contract is now inverted: you opt INTO service-role with
- * `system: true`, and every other shape gets a non-service (RLS-active) client.
- * These tests pin that so the fail-open default cannot creep back in unnoticed.
+ * A previous version fell back to service-role when the session token was
+ * absent — a fail-OPEN footgun where any synthetic ctx (share-token resolve,
+ * background job, hand-built context) silently bypassed RLS. Contract now: you
+ * opt INTO service-role with `system: true`; every other shape gets an
+ * RLS-active client. These tests pin that so the fail-open default can't creep back.
  */
 describe('buildClientBundle.forRequest — fail-closed RLS dispatch (audit S2)', () => {
 	beforeEach(() => {
@@ -60,7 +57,6 @@ describe('buildClientBundle.forRequest — fail-closed RLS dispatch (audit S2)',
 	});
 
 	it('uses the anon key when no session token is present (the fail-closed default)', () => {
-		// This is the regression: absent token must NOT escalate to service-role.
 		const client = build().forRequest(ctx({}));
 		expect(keyOf(client)).toBe(ANON_KEY);
 		expect(keyOf(client)).not.toBe(SERVICE_ROLE_KEY);
@@ -72,7 +68,6 @@ describe('buildClientBundle.forRequest — fail-closed RLS dispatch (audit S2)',
 	});
 
 	it('treats an empty-string session token as absent (anon, not service-role)', () => {
-		// extractSessionToken requires length > 0; an empty token is untrusted.
 		expect(keyOf(build().forRequest(ctx({ sessionToken: '' })))).toBe(ANON_KEY);
 	});
 
@@ -83,8 +78,8 @@ describe('buildClientBundle.forRequest — fail-closed RLS dispatch (audit S2)',
 	it('builds a user-scoped client (anon key + Bearer token) when a token IS present', () => {
 		const bundle = build();
 		const client = bundle.forRequest(ctx({ sessionToken: 'jwt-abc' }));
-		// User-scoped runs under the anon key too — RLS + auth.uid() from the JWT,
-		// NOT the service role. The token rides in an Authorization header.
+		// User-scoped still runs under the anon key — RLS + auth.uid() come from
+		// the JWT in the Authorization header, not from the key.
 		expect(keyOf(client)).toBe(ANON_KEY);
 		const opts = createClientMock.mock.calls.at(-1)?.[2] as {
 			global?: { headers?: Record<string, string> };
@@ -94,8 +89,8 @@ describe('buildClientBundle.forRequest — fail-closed RLS dispatch (audit S2)',
 
 	it('never passes the service-role key for any non-system context shape', () => {
 		const bundle = build();
-		// Building a bundle eagerly constructs its own service-role client (exposed as
-		// `serviceClient`); clear that construction so we observe only forRequest dispatch.
+		// Building a bundle eagerly constructs its own service-role client
+		// (`serviceClient`); clear that call so only forRequest dispatch remains.
 		createClientMock.mockClear();
 		for (const adapterContext of [
 			{},
@@ -112,8 +107,8 @@ describe('buildClientBundle.forRequest — fail-closed RLS dispatch (audit S2)',
 	});
 
 	it('system dispatch ignores the session token entirely', () => {
-		// A JWT in the adapterContext must not downgrade a system context, and its
-		// absence must not be required for one — system is the sole service-role gate.
+		// system is the sole service-role gate: a JWT present must not downgrade it,
+		// and a JWT absent must not be required for it.
 		expect(keyOf(build().forRequest(ctx({ sessionToken: 'jwt-abc' }, true)))).toBe(
 			SERVICE_ROLE_KEY
 		);

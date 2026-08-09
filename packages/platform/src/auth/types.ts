@@ -23,10 +23,7 @@ export interface AuthUser {
  */
 export type UserManagementResult = 'ok' | 'not_found' | 'not_supported' | 'last_admin';
 
-/**
- * - `success` — credentials valid; includes session token the provider minted.
- * - `failed` — credentials invalid, user disabled, or rate-limited.
- */
+/** `success` includes the session token the provider minted. */
 export type LoginResult =
 	| { kind: 'success'; user: AuthUser; sessionToken: string }
 	| { kind: 'failed'; reason?: 'invalid_credentials' | 'disabled' | 'rate_limited' };

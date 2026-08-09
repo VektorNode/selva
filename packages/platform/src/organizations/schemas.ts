@@ -2,16 +2,12 @@ import { z } from 'zod';
 
 /**
  * Top-level path segments a tenant slug must never equal, so a slug can never
- * shadow (or be shadowed by) a route (audit D4). Two forces meet here:
- *  - Reserved multi-org namespace: `/o/{slug}/` is the decided shape for
- *    per-org URLs (see ADR 0006). `o` is reserved even though the length gate
- *    below already makes a 1-char slug impossible — belt-and-suspenders, and it
- *    documents intent for anyone relaxing the length rule later.
- *  - Existing flat top-level routes: reserving these keeps a future move to
- *    `/o/{slug}/…` (or any flat tenant route) collision-free from day one,
- *    before any external link is minted against a slug.
- * Lowercase; the slug is lowercased/matched case-insensitively so `Admin` can't
- * slip through. Keep in sync with the route tree's top-level directories.
+ * shadow (or be shadowed by) a route. `/o/{slug}/` is the planned shape for
+ * per-org URLs, so `o` is reserved even though the length gate below already
+ * makes a 1-char slug impossible — that keeps a future move to `/o/{slug}/…`
+ * collision-free before any external link is minted against a slug.
+ * Lowercase; matching is case-insensitive so `Admin` can't slip through. Keep
+ * in sync with the route tree's top-level directories.
  */
 export const RESERVED_SLUGS: readonly string[] = [
 	'o',
@@ -30,11 +26,9 @@ export const RESERVED_SLUGS: readonly string[] = [
 const RESERVED_SLUG_SET = new Set(RESERVED_SLUGS);
 
 /**
- * Coerce an arbitrary name into a slug candidate: lowercase, non-alphanumeric
- * runs collapsed to single hyphens, trimmed of edge hyphens, capped at 63 chars.
- * Produces the shape `SlugSchema` validates — but does not itself guarantee
- * validity (a name of all-symbols yields `''`, and reserved words pass through);
- * run the result through `SlugSchema` where a valid slug is required.
+ * Coerces an arbitrary name into a slug candidate. Does not guarantee a valid
+ * slug — an all-symbols name yields `''`, and reserved words pass through
+ * untouched — run the result through `SlugSchema` where validity matters.
  */
 export function slugify(name: string): string {
 	return name
@@ -61,10 +55,7 @@ export const SlugSchema = z
 export const OrgRoleSchema = z.enum(['owner', 'admin', 'member']);
 export type OrgRole = z.infer<typeof OrgRoleSchema>;
 
-/**
- * Kinds of org-scoped branding asset. Adding a new kind is a single entry here
- * — the storage path, upload route, store, and UI are all generic over it.
- */
+/** Kinds of org-scoped branding asset. Adding a kind is a single entry here — path, upload route, store, and UI are all generic over it. */
 export const OrgAssetKindSchema = z.enum(['logo', 'favicon']);
 export type OrgAssetKind = z.infer<typeof OrgAssetKindSchema>;
 

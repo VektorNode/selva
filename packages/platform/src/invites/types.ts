@@ -15,25 +15,18 @@ import type { OrgRole, OrgPermission } from '../organizations/schemas.js';
  */
 export interface Invite {
 	id: string;
-	/**
-	 * `HMAC-SHA256(SELVA_HMAC_KEY, rawToken)` — base64url. The raw token
-	 * never crosses the store boundary; the route layer hashes inbound tokens
-	 * before lookup.
-	 */
+	/** `HMAC-SHA256(SELVA_HMAC_KEY, rawToken)`, base64url. The raw token never crosses the store boundary. */
 	tokenHash: string;
-	/** Lowercase email the invite was issued for. */
+	/** Lowercase. */
 	email: string;
 	orgId: string;
 	orgRole: OrgRole;
-	/**
-	 * Permissions to grant on accept. May be empty — adapters may seed from
-	 * `DEFAULT_ORG_PERMISSIONS` in that case.
-	 */
+	/** May be empty — adapters may seed from `DEFAULT_ORG_PERMISSIONS` in that case. */
 	orgPermissions: OrgPermission[];
 	invitedBy: string;
 	createdAt: string;
 	expiresAt: string;
-	/** Set when consumed. Consumed invites are not re-usable. */
+	/** Set when consumed; consumed invites are not re-usable. */
 	acceptedAt?: string;
 	acceptedByUserId?: string;
 }

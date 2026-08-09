@@ -10,7 +10,7 @@ import type { ShareLink } from './types.js';
  * Reads filter `revokedAt IS NULL` defensively.
  */
 export interface IShareLinkStore {
-	/** Insert a new link. Caller has already hashed the raw token. */
+	/** Caller has already hashed the raw token. */
 	create(ctx: RequestContext, link: ShareLink): Promise<void>;
 	/** Newest first by `createdAt`. Excludes revoked links. */
 	listByDefinition(
@@ -19,17 +19,14 @@ export interface IShareLinkStore {
 		opts?: ListOptions
 	): Promise<Page<ShareLink>>;
 	getById(ctx: RequestContext, id: string): Promise<ShareLink | null>;
-	/**
-	 * Lookup by HMAC hash. Returns null when the link doesn't exist OR is
-	 * revoked OR its parent definition is soft-deleted.
-	 */
+	/** Returns null when the link doesn't exist, is revoked, or its parent definition is soft-deleted. */
 	getByTokenHash(ctx: RequestContext, tokenHash: string): Promise<ShareLink | null>;
 	/** Soft-delete (set `revokedAt`). Idempotent. */
 	revoke(ctx: RequestContext, id: string): Promise<void>;
 	/**
-	 * Atomic check-and-increment. Returns the new `solveCount`, or null when
-	 * the cap was reached. MUST be a single statement — read-then-write races
-	 * under load. `null` maxSolves means uncapped.
+	 * Atomic check-and-increment; must be a single statement, since
+	 * read-then-write races under load. Returns the new `solveCount`, or
+	 * null when the cap was reached. `null` maxSolves means uncapped.
 	 */
 	tryIncrementSolveCount(ctx: RequestContext, id: string): Promise<number | null>;
 }

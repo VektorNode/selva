@@ -8,17 +8,15 @@ import { ProviderError, hasPermission, ALL_PLATFORM_PERMISSIONS } from '@selvajs
 import type { ClientBundle } from '../data/client.js';
 
 /**
- * Supabase-backed platform-permission store. Reads and writes
- * `public.user_profiles.platform_permissions` (auto-seeded by the
- * `handle_new_auth_user` trigger). Service-role throughout — the store's own
- * `assertAdmin` / `assertCanRead` enforce the auth boundary at the app level
- * since RLS on `user_profiles` is coarse-grained for cross-user reads.
+ * Reads and writes `public.user_profiles.platform_permissions` (auto-seeded
+ * by the `handle_new_auth_user` trigger). Service-role throughout — RLS on
+ * `user_profiles` is too coarse for cross-user reads, so `assertAdmin` /
+ * `assertCanRead` enforce the auth boundary here instead.
  *
- * Disabled-user state is sourced from `auth.users.user_metadata.disabled` and
- * mirrored into `user_profiles.disabled` by the `sync_auth_user_disabled`
- * trigger, so the invariant counters exclude disabled admins in a single
- * indexed query (matches `Permissions.md §10` "enabled instance_admin"
- * semantics) instead of cross-referencing the auth admin API per candidate.
+ * `user_profiles.disabled` mirrors `auth.users.user_metadata.disabled` via
+ * the `sync_auth_user_disabled` trigger, so admin-count queries can exclude
+ * disabled admins with a single indexed query instead of cross-referencing
+ * the auth admin API per candidate.
  */
 export class SupabasePlatformPermissionStore implements IPlatformPermissionStore {
 	constructor(private readonly clients: ClientBundle) {}
@@ -62,9 +60,6 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		permissions: readonly PlatformPermission[]
 	): Promise<UserManagementResult> {
 		assertAdmin(ctx);
-		// 1. Confirm the target exists in the auth backend (the FK + trigger
-		//    means the user_profiles row should exist post-signup; if not,
-		//    treat as not_found rather than auto-creating).
 		const { data: existing, error: fetchError } = await this.client()
 			.from('user_profiles')
 			.select('platform_permissions')
@@ -73,7 +68,7 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		if (fetchError) throw mapError(fetchError);
 		if (!existing) return 'not_found';
 
-		// 2. §2 invariant: refuse if dropping the last instance_admin.
+		// Refuse to drop the last enabled instance_admin.
 		const wasAdmin = (existing.platform_permissions ?? []).includes('instance_admin');
 		const willBeAdmin = permissions.includes('instance_admin');
 		if (wasAdmin && !willBeAdmin) {
@@ -81,7 +76,6 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 			if (others === 0) return 'last_admin';
 		}
 
-		// 3. Apply.
 		const { error } = await this.client()
 			.from('user_profiles')
 			.update({ platform_permissions: [...permissions] })

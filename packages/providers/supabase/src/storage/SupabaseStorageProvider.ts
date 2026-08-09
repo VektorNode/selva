@@ -4,40 +4,26 @@ import { transcodeImageIfNeeded, classifyAssetPath } from '@selvajs/platform/sto
 import type { IStorageProvider } from '@selvajs/platform/storage';
 
 /**
- * Storage backend for Selva on Supabase Storage.
- *
- * Uses two buckets:
- *   - {publicBucket} (public): org branding, archive thumbnails, anything
- *     CDN-safe. `getPublicUrl` returns the direct CDN URL.
- *   - {privateBucket} (private): .gh / .ghx source files plus every asset
- *     class that isn't `public` (definition covers, org private files).
- *     `getPublicUrl` returns the authenticated proxy URL
- *     (`${privateUrlPrefix}/{path}`) — the consuming app must have a route at
- *     that prefix that authenticates the request and streams the bytes via
- *     `get()`.
- *
- * Routing is derived from the extension and `classifyAssetPath`, so callers
- * building paths via `definitionPaths` never have to think about buckets.
+ * Storage backend for Selva on Supabase Storage. Routes each path to one of
+ * two buckets: `publicBucket` (CDN-readable, `getPublicUrl` returns the
+ * direct CDN URL) or `privateBucket` (`getPublicUrl` returns
+ * `${privateUrlPrefix}/{path}` — the consuming app must route that prefix
+ * through an auth check and `get()`).
  */
 export interface SupabaseStorageProviderConfig {
 	/** Supabase project URL (e.g. http://127.0.0.1:54321 for local stack). */
 	supabaseUrl: string;
 	/**
-	 * Service-role key. Required because the provider runs server-side and
-	 * must bypass RLS for server-internal actions (admin uploads, janitor
-	 * cleanup). The provider is never used directly from the browser.
+	 * Service-role key. The provider runs server-side and must bypass RLS
+	 * for server-internal actions (admin uploads, janitor cleanup) — never
+	 * used from the browser.
 	 */
 	serviceRoleKey: string;
 	/** Bucket for CDN-readable objects. Default: "selva-public". */
 	publicBucket?: string;
 	/** Bucket for authenticated-only objects. Default: "selva-private". */
 	privateBucket?: string;
-	/**
-	 * URL prefix the app exposes for authenticated file downloads. Used by
-	 * `getPublicUrl` for private-bucket paths. Default: "/api/files".
-	 * The matching SvelteKit route is expected to call `get()` and stream
-	 * bytes back after an auth check.
-	 */
+	/** URL prefix for authenticated file downloads, used by `getPublicUrl`. Default: "/api/files". */
 	privateUrlPrefix?: string;
 }
 
@@ -68,20 +54,15 @@ export class SupabaseStorageProvider implements IStorageProvider {
 		});
 		this.publicBucket = config.publicBucket ?? 'selva-public';
 		this.privateBucket = config.privateBucket ?? 'selva-private';
-		// Direct CDN URL format: {supabaseUrl}/storage/v1/object/public/{bucket}/{path}
 		this.publicBaseUrl = `${config.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${this.publicBucket}`;
 		this.privateUrlPrefix = (config.privateUrlPrefix ?? '/api/files').replace(/\/$/, '');
 	}
 
 	/**
-	 * Route a storage path to a bucket. A path is private when either:
-	 *   - it's a `.gh`/`.ghx` source file — confidentiality by extension, so a
-	 *     path-scheme rename can't silently move sources into the public bucket;
-	 *   - it classifies as a non-`public` asset class (`classifyAssetPath`) —
-	 *     e.g. `orgs/{id}/private/*` pricing sheets are members-only and must
-	 *     never land in the CDN-readable bucket. Definition covers classify as
-	 *     `project`-visible and are private for the same reason.
-	 * Everything else (branding, archives, thumbnails) is public.
+	 * `.gh`/`.ghx` source files are always private, regardless of what
+	 * `classifyAssetPath` says — confidentiality by extension means a
+	 * path-scheme rename can't silently move sources into the public bucket.
+	 * Everything else routes by asset class.
 	 */
 	private bucketFor(storagePath: string): string {
 		if (/\.(gh|ghx)$/i.test(storagePath)) return this.privateBucket;
@@ -94,8 +75,7 @@ export class SupabaseStorageProvider implements IStorageProvider {
 		const bucket = this.bucketFor(storagePath);
 		const { data, error } = await this.client.storage.from(bucket).download(storagePath);
 		if (error) {
-			// storage-js surfaces 404 as an error with message "Object not found".
-			// Normalize any "not found" to null — we don't have a stable status code.
+			// storage-js has no stable status code for 404 — match the message instead.
 			const msg = (error as { message?: string }).message ?? '';
 			if (/not found/i.test(msg) || /no such key/i.test(msg)) return null;
 			throw error;
@@ -105,16 +85,13 @@ export class SupabaseStorageProvider implements IStorageProvider {
 	}
 
 	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<void> {
-		// Normalize images through the shared helper so this provider produces
-		// the same bytes / extensions as LocalStorageProvider for the same input.
 		const transcoded = await transcodeImageIfNeeded(data, contentType, storagePath);
 		const bucket = this.bucketFor(transcoded.path);
 		const { error } = await this.client.storage
 			.from(bucket)
 			.upload(transcoded.path, transcoded.data, {
 				contentType: transcoded.contentType,
-				// Objects are content-addressed (GUID/hash prefixes) and effectively
-				// immutable, so let CDN/browser cache them for a year.
+				// Objects are content-addressed and immutable — cache for a year.
 				cacheControl: '31536000',
 				upsert: true
 			});
@@ -124,13 +101,11 @@ export class SupabaseStorageProvider implements IStorageProvider {
 	async delete(storagePath: string): Promise<void> {
 		const bucket = this.bucketFor(storagePath);
 		const { error } = await this.client.storage.from(bucket).remove([storagePath]);
-		// remove() does not error for missing paths — it just returns an empty array.
 		if (error) throw error;
 	}
 
 	async deletePrefix(prefix: string): Promise<void> {
-		// Hit both buckets: a definition's GUID prefix may have files in each.
-		// Scoped by the trailing slash in the prefix, so siblings aren't touched.
+		// A definition's GUID prefix may have files in either bucket.
 		await Promise.all([
 			this.deletePrefixInBucket(this.publicBucket, prefix),
 			this.deletePrefixInBucket(this.privateBucket, prefix)
@@ -141,7 +116,7 @@ export class SupabaseStorageProvider implements IStorageProvider {
 		const normalized = prefix.replace(/\/+$/, '');
 		const keys = await this.listAllKeys(bucket, normalized);
 		if (keys.length === 0) return;
-		// `remove` accepts up to 1000 paths; batch just in case.
+		// remove() caps out at 1000 paths per call.
 		for (let i = 0; i < keys.length; i += 1000) {
 			const slice = keys.slice(i, i + 1000);
 			const { error } = await this.client.storage.from(bucket).remove(slice);
@@ -149,10 +124,7 @@ export class SupabaseStorageProvider implements IStorageProvider {
 		}
 	}
 
-	/**
-	 * Recursively list every key under a prefix. `storage-js`'s `list` API
-	 * only returns the immediate children of a "folder", so we DFS.
-	 */
+	/** storage-js's `list` only returns immediate children of a "folder", so DFS to get everything under `prefix`. */
 	private async listAllKeys(bucket: string, prefix: string): Promise<string[]> {
 		const out: string[] = [];
 		const stack: string[] = [prefix];
@@ -165,7 +137,7 @@ export class SupabaseStorageProvider implements IStorageProvider {
 			if (error) throw error;
 			for (const entry of data ?? []) {
 				const full = dir ? `${dir}/${entry.name}` : entry.name;
-				// Folder entries have `id === null` in storage-js.
+				// storage-js marks folder entries with id === null.
 				if (entry.id === null) {
 					stack.push(full);
 				} else {
@@ -180,7 +152,6 @@ export class SupabaseStorageProvider implements IStorageProvider {
 		if (this.bucketFor(storagePath) === this.publicBucket) {
 			return `${this.publicBaseUrl}/${storagePath}`;
 		}
-		// Private files: the app's authenticated proxy route. See `privateUrlPrefix`.
 		return `${this.privateUrlPrefix}/${storagePath}`;
 	}
 }

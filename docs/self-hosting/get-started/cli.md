@@ -72,6 +72,8 @@ Run these from the deployment directory.
 
 It checks the deployment without starting it, and exits non-zero on any failure, so it works in a CI job or a health script too. It covers required files, secret key format, provider and tenancy values, whether `DATA_PATH` is writable, whether `@selvajs/selva` is actually installed, `ORIGIN` validity, Node version, CLI/runtime version alignment, boot persistence, scaffold drift, provider-specific config, and deprecated env var names.
 
+It also validates the host tooling itself: that `npm` is present and not a distro-split version several majors behind Node, that only one Node installation is in play, that pm2 is installed locally at the pinned version, and that the running pm2 daemon matches it. Each failure prints the command that fixes it.
+
 `--fix` repairs what it safely can, asking before each change.
 
 ### `restart` vs. `pm2 restart`
@@ -95,11 +97,40 @@ Rotating one doesn't affect the other, which is the point of keeping them separa
 [Secrets](../concepts/security-and-limits.md#secrets) covers why, and exactly what an HMAC
 rotation does and doesn't break.
 
+## What the host provides, and what Selva brings
+
+| Tool         | Comes from                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------- |
+| Node.js, npm | **The host.** Distro packages, NodeSource, nvm — whatever you already use. Selva ships no Node runtime. |
+| pm2          | **The deployment.** Pinned in the scaffold's `package.json`, installed into `node_modules/`.            |
+
+Use your normal system packages for Node and npm; nothing is duplicated there. pm2 is the one deliberate exception, and the reason is below.
+
 ## About pm2
 
 Selva runs the app under [pm2](https://pm2.keymetrics.io), a process manager that restarts it if it crashes and brings it back after a reboot.
 
-**Don't install pm2 globally.** The deployment ships its own pinned copy in `node_modules/.bin/`, which is what `npx pm2` resolves to from inside the directory. Two different pm2 versions talking to the same background daemon causes version-skew warnings and hung restarts, and the `selva` commands refuse to fall back to a global one for exactly that reason.
+**Don't install pm2 globally, and don't install it from your distro's package manager.** The deployment ships its own pinned copy in `node_modules/.bin/`, which is what `npx pm2` resolves to from inside the directory. Two different pm2 versions talking to the same background daemon causes version-skew warnings and hung restarts, and the `selva` commands refuse to fall back to a global one for exactly that reason. The version is pinned exactly rather than caret-ranged so two deployments installed a week apart can't resolve differently and then fight over one daemon.
+
+`selva doctor` reports a global or distro pm2 on `PATH`, so if you're unsure what a server has, run it before changing anything.
+
+When a Selva release changes the pinned pm2 version, the running daemon has to be replaced once by hand — see [Upgrading pm2](../deployment/prerequisites.md#upgrading-pm2).
+
+### Removing a global or distro pm2
+
+If `doctor` reports one, from the deployment directory (the app goes down briefly):
+
+```bash
+npx pm2 kill                                    # stop the running daemon
+sudo npm uninstall -g pm2                       # or: sudo apt remove pm2
+npm install                                     # ensure the local pinned pm2 is present
+npm start                                       # local pm2 forks a fresh daemon
+npx pm2 save
+npx pm2 startup systemd -u $USER --hp $HOME     # re-run; paste the printed sudo line
+npx pm2 save
+```
+
+Re-run `npm run doctor` afterwards to confirm the daemon and the systemd unit both point at the local pm2.
 
 To survive reboots:
 

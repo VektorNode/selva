@@ -1,9 +1,7 @@
 /**
  * Shared test helpers for Supabase data conformance tests.
  *
- * Every suite starts with a fully wiped DB so tests are isolated. We use the
- * service-role client for both — seeding users in `auth.users` and wiping
- * every relevant table.
+ * Every suite starts with a fully wiped DB so tests are isolated.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -22,11 +20,9 @@ export function readEnv(): TestContext | null {
 	const anonKey = process.env.SUPABASE_ANON_KEY;
 	const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 	if (!url || !anonKey || !serviceRoleKey) return null;
-	// `.env.test` is checked in with local-Supabase defaults so contributors can
-	// `npx supabase start` and run the suite. But `createClient` transitively
-	// loads `@supabase/realtime-js`, which on Node < 22 throws at construction
-	// without a native WebSocket. Swallow that so the suite cleanly skips
-	// instead of crashing test collection.
+	// `createClient` transitively loads `@supabase/realtime-js`, which on
+	// Node < 22 throws at construction without a native WebSocket. Swallow
+	// that so the suite skips cleanly instead of crashing test collection.
 	let adminClient: SelvaSchemaClient;
 	try {
 		adminClient = createClient(url, serviceRoleKey, {
@@ -43,10 +39,9 @@ export function readEnv(): TestContext | null {
 }
 
 /**
- * Reset every data table this adapter owns. Leaves Supabase-managed tables
- * (`auth.users`, etc.) alone except via `deleteAllAuthUsers` below.
+ * Reset every data table this adapter owns.
  *
- * Order-sensitive because some FKs don't cascade: we go bottom up from
+ * Order-sensitive because some FKs don't cascade: go bottom up from
  * dependents to parents.
  */
 export async function resetAllData(ctx: TestContext): Promise<void> {
@@ -55,7 +50,7 @@ export async function resetAllData(ctx: TestContext): Promise<void> {
 	await truncate(ctx, 'invites');
 	// Versions FK to definitions ON DELETE CASCADE, but `definitions` can't
 	// be wiped while live/draft pointers reference versions (ON DELETE
-	// RESTRICT, spec §6). Null the pointers, drop versions, then drop defs.
+	// RESTRICT). Null the pointers, drop versions, then drop defs.
 	await ctx.adminClient
 		.from('definitions')
 		.update({ live_version_id: null, draft_version_id: null })
@@ -63,7 +58,6 @@ export async function resetAllData(ctx: TestContext): Promise<void> {
 	await truncate(ctx, 'definition_versions');
 	await truncate(ctx, 'definitions');
 	await truncate(ctx, 'project_members');
-	// compute defaults have a platform_default sibling — reset all three.
 	await truncate(ctx, 'compute_server_org_defaults');
 	await truncate(ctx, 'compute_server_shares');
 	await resetComputePlatformDefault(ctx);
@@ -118,11 +112,7 @@ async function deleteAllAuthUsers(ctx: TestContext): Promise<void> {
  * with a *suggested* id (for adapters that honor it); we ignore it and return
  * GoTrue's real id.
  *
- * The instance_admin grant is what makes RLS open up for the conformance
- * tests: every policy in the schema accepts `is_instance_admin()` as a
- * universal pass, mirroring the `instance_admin` default in `makeCtx`.
- *
- * The session token is what makes RLS *see* the user at all. Without it, the
+ * The session token is what makes RLS *see* the user at all — without it the
  * Supabase client falls back to the anon role and every write fails.
  */
 export async function seedUser(
@@ -149,8 +139,8 @@ async function seedUserCore(
 	_suggestedId: string,
 	opts: { promoteToInstanceAdmin: boolean }
 ): Promise<{ userId: string; sessionToken: string }> {
-	// Unique email per seed so repeated calls don't collide. GoTrue requires
-	// an email even for password-less users.
+	// GoTrue requires an email even for password-less users; unique per seed
+	// so repeated calls don't collide.
 	const email = `conformance-${crypto.randomUUID()}@conformance.test`;
 	const password = 'conformance-test-password-1234';
 	const { data, error } = await ctx.adminClient.auth.admin.createUser({
@@ -163,8 +153,7 @@ async function seedUserCore(
 
 	if (opts.promoteToInstanceAdmin) {
 		// Trigger auto-created the user_profiles row; promote to instance_admin
-		// so every RLS policy treats this user as fully authorized. Mirrors the
-		// `instance_admin` default in `makeCtx`.
+		// so every RLS policy treats this user as fully authorized.
 		const { error: promoteError } = await ctx.adminClient
 			.from('user_profiles')
 			.update({ platform_permissions: ['instance_admin'] })
@@ -172,9 +161,8 @@ async function seedUserCore(
 		if (promoteError) throw promoteError;
 	}
 
-	// Sign in to get an access token. The conformance suite stuffs this into
-	// `adapterContext.sessionToken` and our client.ts uses it to scope the
-	// request to this user instead of falling back to anon.
+	// The conformance suite stuffs this token into `adapterContext.sessionToken`;
+	// client.ts uses it to scope the request to this user instead of anon.
 	const signInClient = createClient(ctx.url, ctx.anonKey, {
 		auth: { persistSession: false, autoRefreshToken: false }
 	});

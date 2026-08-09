@@ -10,11 +10,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
+import { posix as path } from 'node:path';
 import { checkBootPersistence, findGlobalPm2 } from '../checks/boot.js';
 
 const DIR = '/srv/deploy';
-const LOCAL_PM2 = join(DIR, 'node_modules', 'pm2', 'bin', 'pm2');
+const LOCAL_PM2 = path.join(DIR, 'node_modules', 'pm2', 'bin', 'pm2');
 const UNIT = '/etc/systemd/system/pm2-selva.service';
 const DUMP = '/home/selva/.pm2/dump.pm2';
 
@@ -25,14 +25,14 @@ const DUMP = '/home/selva/.pm2/dump.pm2';
 function fakeEnv({
 	files = [DUMP, UNIT],
 	unit = `ExecStart=${LOCAL_PM2} resurrect`,
-	path = '',
+	PATH = '',
 	writable = true,
 	run = () => ({ status: 0 })
 } = {}) {
 	const present = new Set(files);
 	return {
 		platform: () => 'linux',
-		env: () => ({ USER: 'selva', PATH: path }),
+		env: () => ({ USER: 'selva', PATH }),
 		homedir: () => '/home/selva',
 		exists: (p) => present.has(p),
 		readFile: () => {
@@ -88,7 +88,7 @@ test('PM2_HOME overrides where the dump is looked for', () => {
 
 test('the pm2 save repair reports a non-zero exit as a failure', () => {
 	const env = fakeEnv({
-		files: [UNIT, join(DIR, 'node_modules', '.bin', 'pm2')],
+		files: [UNIT, path.join(DIR, 'node_modules', '.bin', 'pm2')],
 		run: () => ({ status: 1, stderr: 'daemon not running' })
 	});
 	const result = checkBootPersistence(DIR, env)[0].fix.run();
@@ -152,7 +152,7 @@ test('with no USER the unit path cannot be derived, so it reports not-installed'
 // ── Stray global pm2 ────────────────────────────────────────────────────
 
 test('a global pm2 on PATH is reported as a skew risk', () => {
-	const env = fakeEnv({ path: '/usr/local/bin', files: [DUMP, UNIT, '/usr/local/bin/pm2'] });
+	const env = fakeEnv({ PATH: '/usr/local/bin', files: [DUMP, UNIT, '/usr/local/bin/pm2'] });
 	const checks = checkBootPersistence(DIR, env);
 	assert.equal(checks.length, 3);
 	assert.equal(checks[2].severity, 'yellow');
@@ -161,14 +161,14 @@ test('a global pm2 on PATH is reported as a skew risk', () => {
 
 test('removal is only offered where it would actually succeed', () => {
 	const files = [DUMP, UNIT, '/usr/local/bin/pm2'];
-	const writable = checkBootPersistence(DIR, fakeEnv({ path: '/usr/local/bin', files }));
+	const writable = checkBootPersistence(DIR, fakeEnv({ PATH: '/usr/local/bin', files }));
 	assert.ok(writable[2].fix, 'a writable dir can be repaired');
 
 	// Root-owned: attempting it would half-fail and leave the operator worse
 	// informed than a printed instruction.
 	const rootOwned = checkBootPersistence(
 		DIR,
-		fakeEnv({ path: '/usr/local/bin', files, writable: false })
+		fakeEnv({ PATH: '/usr/local/bin', files, writable: false })
 	);
 	assert.equal(rootOwned[2].fix, undefined);
 	assert.match(rootOwned[2].line, /needs sudo/);
@@ -177,8 +177,8 @@ test('removal is only offered where it would actually succeed', () => {
 test("the deployment's own pm2 is not mistaken for a global one", () => {
 	// node_modules/.bin is on PATH inside an npm script — flagging it would
 	// fire on every healthy deployment.
-	const localBin = join(DIR, 'node_modules', '.bin');
-	const env = fakeEnv({ path: localBin, files: [DUMP, UNIT, join(localBin, 'pm2')] });
+	const localBin = path.join(DIR, 'node_modules', '.bin');
+	const env = fakeEnv({ PATH: localBin, files: [DUMP, UNIT, path.join(localBin, 'pm2')] });
 	assert.equal(checkBootPersistence(DIR, env).length, 2, 'no stray-pm2 warning');
 });
 
@@ -193,5 +193,5 @@ test('findGlobalPm2 scans every PATH entry and returns the first hit', () => {
 
 test('findGlobalPm2 returns null when PATH is empty or has no pm2', () => {
 	assert.equal(findGlobalPm2(DIR, { ...fakeEnv(), env: () => ({ PATH: '' }) }), null);
-	assert.equal(findGlobalPm2(DIR, { ...fakeEnv({ path: '/usr/bin' }) }), null);
+	assert.equal(findGlobalPm2(DIR, { ...fakeEnv({ PATH: '/usr/bin' }) }), null);
 });

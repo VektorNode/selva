@@ -6,27 +6,17 @@ import type { ISolveMetricSink } from './metrics/interface.js';
 import type { IBindingResolver } from './bindings/interface.js';
 
 /**
- * - `single`: one org per deployment. Setup creates it; `ctx.actingOrgId`
- *   resolves to that org for every authenticated user.
- * - `multi`: orgs are first-class. Setup creates only a platform admin; orgs
- *   are created by users. `ctx.actingOrgId` resolves per-request.
+ * `single`: one org per deployment, created at setup; `ctx.actingOrgId` resolves to it for
+ * every user. `multi`: orgs are first-class, created by users; `ctx.actingOrgId` resolves
+ * per-request.
  */
 export type TenancyMode = 'single' | 'multi';
 
-/**
- * White-label branding. All fields optional; the selva app applies sensible
- * "Selva" defaults for anything omitted. Use this to rebrand the instance
- * (header name, footer copyright, landing-page copy, page titles) without
- * forking the UI.
- */
+/** White-label branding. Omitted fields fall back to "Selva" defaults in the selva app. */
 export interface SelvaBranding {
-	/** Product name shown in header, footer, page titles. Default: "Selva". */
 	name?: string;
-	/** Footer copyright owner. Default: same as `name`. */
 	copyrightName?: string;
-	/** Landing-page tagline under the product name. */
 	tagline?: string;
-	/** Meta description for SEO / social previews. */
 	description?: string;
 }
 
@@ -39,17 +29,14 @@ export interface SelvaFlags {
 	/** Authenticated users may create new orgs. */
 	ALLOW_ORG_CREATION?: boolean;
 	/**
-	 * Per-definition share links — anonymous external access via tokenized URLs.
-	 * When off, share-link admin routes reject mint/list/revoke and the
-	 * token-resolution path stops honouring any existing tokens.
+	 * Anonymous external access via tokenized URLs. When off, share-link admin
+	 * routes reject mint/list/revoke and existing tokens stop resolving.
 	 */
 	ENABLE_SHARING?: boolean;
 	/**
-	 * Platform projects — projects owned by instance admins and granted to orgs
-	 * or individual users without normal membership. When off, the
-	 * `/admin/projects` surface 404s, platform-visibility projects are hidden
-	 * from every list, and access rules treat them as inaccessible. Existing
-	 * data is preserved; flipping back on restores access.
+	 * Projects owned by instance admins, granted to orgs or users without normal
+	 * membership. When off, `/admin/projects` 404s and platform-visibility
+	 * projects are hidden and inaccessible; data survives the toggle either way.
 	 */
 	ENABLE_PLATFORM_PROJECTS?: boolean;
 }
@@ -59,39 +46,29 @@ export interface SelvaConfig {
 	flags?: SelvaFlags;
 	branding?: SelvaBranding;
 	auth: IAuthProvider;
-	/**
-	 * Orgs, projects, members, definitions, compute config, user profiles,
-	 * and platform permissions. All database-layer concerns live here.
-	 */
+	/** Orgs, projects, members, definitions, compute config, user profiles, platform permissions. */
 	data: IDataProvider;
 	/** Blob storage — .gh/.ghx files, archived versions, images. */
 	storage: IStorageProvider;
-	/** Optional. Defaults to `NoopEventSink`. */
+	/** Defaults to `NoopEventSink`. */
 	events?: IEventSink;
-	/**
-	 * Optional. Records per-solve timing (wall time of the Rhino.Compute solve
-	 * call). Defaults to `NoopSolveMetricSink`, which discards every metric.
-	 * Supply a real sink to persist or aggregate solve durations.
-	 */
+	/** Records per-solve wall time. Defaults to `NoopSolveMetricSink`, which discards every metric. */
 	solveMetrics?: ISolveMetricSink;
 	/**
-	 * Optional. Resolves values for inputs marked as `source.kind === 'server'`
-	 * in the schema. Defaults to `NoopBindingResolver`, which returns nothing
-	 * — combined with the schema's `onMissing: 'fail'` default, that causes
-	 * any solve involving a server-resolved input to error loudly until a real
-	 * resolver is configured. Hosts that want server-resolved inputs must supply one.
+	 * Resolves values for inputs marked `source.kind === 'server'`. Defaults to
+	 * `NoopBindingResolver`, which resolves nothing — hosts that use server-resolved
+	 * inputs must supply a real resolver.
 	 */
 	bindingResolver?: IBindingResolver;
 }
 
 export type SelvaConfigFactory = (env: Record<string, string | undefined>) => SelvaConfig;
 
-/** Safe accessor — omitted flags resolve to false. */
 export function isFlagEnabled(config: SelvaConfig, flag: keyof SelvaFlags): boolean {
 	return Boolean(config.flags?.[flag]);
 }
 
-/** For TypeScript inference / IDE autocomplete only, Vite-style. */
+/** Identity function for type inference and IDE autocomplete. */
 export function defineConfig(
 	config: SelvaConfig | SelvaConfigFactory
 ): SelvaConfig | SelvaConfigFactory {

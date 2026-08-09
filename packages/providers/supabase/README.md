@@ -2,7 +2,7 @@
 
 Supabase (Auth + Postgres + Storage) implementation of the `@selvajs/platform` interfaces.
 
-Runs the Selva backend against **either** a managed Supabase project (production) or a local Supabase CLI stack in Docker (development). Same code — different `SUPABASE_URL` and keys.
+Runs against **either** a managed Supabase project (production) or a local Supabase CLI stack in Docker (development) — same code, different `SUPABASE_URL` and keys.
 
 ---
 
@@ -10,7 +10,7 @@ Runs the Selva backend against **either** a managed Supabase project (production
 
 - [Quick start](#quick-start)
 - [Environment variables](#environment-variables)
-- [Wiring into `selva.config.ts`](#wiring-into-selvaconfigts)
+- [Switching to the Supabase provider](#switching-to-the-supabase-provider)
 - [Applying the schema](#applying-the-schema)
 - [Development — local Supabase stack](#development--local-supabase-stack)
 - [Production — hosted Supabase project](#production--hosted-supabase-project)
@@ -25,16 +25,16 @@ Runs the Selva backend against **either** a managed Supabase project (production
 2. Provision Supabase — either local (`npx supabase start`) or hosted (supabase.com).
 3. Apply the migrations from `packages/providers/supabase/supabase/migrations/` (the local CLI does this automatically on `db reset`).
 4. Copy the three env vars into your selva app `.env` (see below).
-5. Edit [`selva.config.ts`](../../../selva.config.ts) at the repo root to swap the local provider for the Supabase provider.
+5. Set `SELVA_AUTH_PROVIDER=supabase`, `SELVA_DATA_PROVIDER=supabase`, `SELVA_STORAGE_PROVIDER=supabase` in the same `.env`.
 6. `pnpm dev` — the selva app now reads and writes from Supabase.
 
 ---
 
 ## Environment variables
 
-All env vars are documented in [`packages/selva/.env.example`](../../selva/.env.example) — copy that file to `.env` and edit it. The Supabase provider needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; the optional bucket / private-URL / signup overrides are also listed there.
+All env vars are documented in [`packages/selva/.env.example`](../../selva/.env.example) — copy that file to `.env` and edit it. This provider needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; the optional bucket / private-URL / signup overrides are also listed there.
 
-Both `SELVA_*` keys are still required under this provider, for narrower jobs than under the local provider:
+Both `SELVA_*` keys are still required, but for narrower jobs than under the local provider:
 
 - `SELVA_HMAC_KEY` — **not** used for sessions here (those are Supabase JWTs), but still hashes share-link and invite tokens before they're stored.
 - `SELVA_AT_REST_KEY` — encrypts `compute_servers.api_key` before it reaches the database. `SupabaseDataProvider` refuses to construct without it.
@@ -60,28 +60,19 @@ Rhino.Compute URL + API key are configured in `/admin/compute` and persisted in 
 
 ---
 
-## Wiring into `selva.config.ts`
+## Switching to the Supabase provider
 
-The repo's [`selva.config.ts`](../../selva.config.ts) is the single DI point — it picks which provider backs every interface. Switch between providers by changing imports:
+The selva app picks a provider per interface from env vars, via `createSelvaProviders` (`packages/server/src/providers/create-selva-providers.ts`) and the registry in `packages/selva/src/lib/server/providers.server.ts`:
 
-```ts
-import { defineConfig } from '@selvajs/platform';
-import * as supa from '@selvajs/supabase-provider';
-
-export default defineConfig((env) => ({
-	tenancy: 'single' as const,
-	flags: {
-		ALLOW_CROSS_ORG_PUBLIC: false,
-		ALLOW_ORG_COMPUTE_OVERRIDE: false,
-		ALLOW_ORG_CREATION: false
-	},
-	auth: supa.SupabaseAuthProvider.fromEnv(env),
-	data: supa.SupabaseDataProvider.fromEnv(env),
-	storage: supa.SupabaseStorageProvider.fromEnv(env)
-}));
+```
+SELVA_AUTH_PROVIDER=supabase      # local | supabase | header (default: local)
+SELVA_DATA_PROVIDER=supabase      # local | supabase          (default: local)
+SELVA_STORAGE_PROVIDER=supabase   # local | supabase          (default: local)
 ```
 
-To switch back to the local provider, swap the import and the three provider lines. See the commented example in [`selva.config.ts`](../../selva.config.ts).
+To switch back to the local provider, remove the three vars (or set them to `local`) and restart.
+
+For a provider not bundled in the app, point `SELVA_CONFIG_PATH` at an external `selva.config.js`, loaded dynamically at boot in place of the env-driven wiring. It must be an actual `.js` file — there's no TS compiler at runtime.
 
 ---
 
@@ -91,12 +82,12 @@ To switch back to the local provider, swap the import and the three provider lin
 
 The `supabase/migrations/` directory holds timestamp-prefixed files, applied in filename order:
 
-| File                                                 | What it installs                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `20260425155514_selva_initial.sql`                   | Everything: `user_profiles` (+ auto-seed trigger), `orgs` / `org_members` / `projects` / `project_members` (+ RLS helpers), `definitions` / `definition_versions` (+ deletion-protection FKs and the atomic `increment_run_count` RPC), `invites` (+ `get_invite_by_token` RPC), `compute_servers` (+ per-org/instance defaults, spec §3 BYO compute), `share_links` (+ `try_increment_share_link_solve_count` RPC, spec §7), and the `selva-public` / `selva-private` storage policies. |
-| `20260529202220_selva_definition_version_schema.sql` | Adds `definition_versions.schema` + `schema_extracted_at` (cached compute-extracted UI schema) and the previously-missing `change_note` column. All `add column if not exists`, so it's safe to re-run.                                                                                                                                                                                                                                                                                  |
+| File                                                 | What it installs                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `20260425155514_selva_initial.sql`                   | The `selva` schema itself, plus `user_profiles` (+ auto-seed trigger), `orgs` / `org_members` / `projects` / `project_members` (+ RLS helpers), `definitions` / `definition_versions` (+ deletion-protection FKs and the atomic `increment_run_count` RPC), `invites` (+ `get_invite_by_token` RPC), `compute_servers` (+ per-org/instance defaults), `share_links` (+ `try_increment_share_link_solve_count` RPC), and the `selva-public` / `selva-private` storage policies. |
+| `20260529202220_selva_definition_version_schema.sql` | Adds `definition_versions.schema` + `schema_extracted_at` (cached compute-extracted UI schema) and the `change_note` column. All `add column if not exists`, safe to re-run.                                                                                                                                                                                                                                                                                                   |
 
-These two are only the foundation — the directory ships further timestamp-prefixed migrations on top (solve metrics, org assets, definition status/audit, erasure functions, …). The table above is not the full list; `supabase/migrations/` in filename order is authoritative.
+These two are only the foundation — `supabase/migrations/` ships further timestamp-prefixed files on top (solve metrics, org assets, definition status/audit, erasure functions, …). Filename order in that directory is authoritative, not this table.
 
 Future schema changes go in new timestamp-prefixed files: `<UTCtimestamp>_selva_<name>.sql` (e.g. `date -u +%Y%m%d%H%M%S` for the prefix). The `_selva_` infix and timestamp prefix let a consuming app's own migrations interleave by time without ever colliding with Selva's — see [Consuming migrations in an external app](#consuming-migrations-in-an-external-app).
 
@@ -119,7 +110,7 @@ npx supabase db diff
 npx supabase db push
 ```
 
-Alternatively you can copy each `.sql` file into Supabase Dashboard → **SQL Editor** and run them in order. The CLI path is strongly preferred: it tracks which migrations already ran, so re-running it is safe, and the files stay under version control.
+You can also copy each `.sql` file into Supabase Dashboard → **SQL Editor** and run them in order, but prefer the CLI: it tracks which migrations already ran, so re-running it is safe.
 
 ### Exposing the `selva` schema to PostgREST
 
@@ -138,9 +129,9 @@ No backfill step is required for the schema-caching migration: existing definiti
 
 #### Migrated from the old `000N_` filenames?
 
-Earlier releases shipped `0001_initial.sql` / `0002_definition_version_schema.sql`. These were renamed to timestamp-prefixed names (`20260425155514_selva_initial.sql`, `20260529202220_selva_definition_version_schema.sql`) so they slot into a consuming app's migration timeline without collisions. The **file contents are unchanged** — only the names.
+Earlier releases shipped `0001_initial.sql` / `0002_definition_version_schema.sql`, since renamed to `20260425155514_selva_initial.sql` / `20260529202220_selva_definition_version_schema.sql` (contents unchanged, only the names, so the files slot into a consuming app's migration timeline without collisions).
 
-To a database that already applied the `000N_` versions, the renamed files look like brand-new migrations. Both are idempotent (`create or replace`, `add column if not exists`), so a stray re-run is a harmless no-op, but you'd end up with duplicate history rows. To reconcile cleanly:
+To a database that already applied the `000N_` versions, the renamed files look like brand-new migrations. Both are idempotent (`create or replace`, `add column if not exists`), so a stray re-run is a harmless no-op, but you'd end up with duplicate history rows. To reconcile:
 
 - **Local dev stack:** just `npx supabase db reset` — applies the renamed files from scratch.
 - **Hosted project with the old versions applied:** tell the CLI the new versions are already present so it doesn't re-run them:
@@ -198,7 +189,7 @@ SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
 
 Rhino.Compute server URL + API key are registered in `/admin/compute` after first boot.
 
-Switch `selva.config.ts` to Supabase (snippet above), then:
+Set the three `SELVA_*_PROVIDER=supabase` env vars (above), then:
 
 ```bash
 pnpm dev
@@ -235,7 +226,7 @@ Studio is a full admin UI at `http://127.0.0.1:54323`. Use it to inspect tables,
    SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
    ```
    After deploying, register your Rhino.Compute server URL (+ optional API key) via `/admin/compute`.
-6. Deploy the selva app with `selva.config.ts` wired to `@selvajs/supabase-provider`.
+6. Deploy the selva app with the three `SELVA_*_PROVIDER=supabase` env vars set.
 7. Bootstrap the first user:
    - Open `/setup` once — creates the first admin with `instance_admin`.
    - Or manually: Dashboard → **Authentication** → **Add user**, then in the SQL Editor: `UPDATE selva.user_profiles SET platform_permissions = ARRAY['instance_admin']::text[] WHERE user_id = '<uuid>';`
@@ -311,10 +302,6 @@ Helper SQL functions (`selva.is_instance_admin`, `selva.is_org_member`, `selva.v
 ### Atomic improvements over the local provider
 
 - **`incrementRunCount`** uses a SQL function (`UPDATE … SET run_count = run_count + 1`) — atomic. The local provider does read-modify-write and can lose bumps under concurrent solves.
-
-### Findings
-
-Every abstraction-pressure point hit during implementation is logged in [FINDINGS.md](./FINDINGS.md). Short version: six items, none requiring platform contract changes beyond the Phase 0 set.
 
 ---
 

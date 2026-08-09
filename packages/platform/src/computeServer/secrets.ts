@@ -9,16 +9,15 @@ const PREFIX = 'enc:v1:';
  * AES-256-GCM envelope for at-rest secrets (e.g. compute API keys).
  *
  * Wire format: `enc:v1:<base64(iv|tag|ciphertext)>`. The version prefix lets
- * us migrate to a new algorithm later without ambiguity. Plaintext never sits
- * at rest — on disk (local provider) or in the DB (Supabase provider).
+ * a future migration to a new algorithm tell old and new envelopes apart.
  *
- * Security model: defends against backup leaks, accidental file/DB sharing,
- * and read-only storage access. An attacker with both the stored ciphertext
- * *and* the master key (`SELVA_AT_REST_KEY` env var, process memory) can still
- * decrypt — this is encryption at rest, not a secret manager.
+ * Defends against backup leaks, accidental file/DB sharing, and read-only
+ * storage access — not against an attacker who also has the master key
+ * (`SELVA_AT_REST_KEY` env var, process memory). This is encryption at rest,
+ * not a secret manager.
  *
- * Provider-agnostic: pure `node:crypto`, no fs or DB coupling, so both the
- * local and Supabase compute-server stores share this one implementation.
+ * Pure `node:crypto`, no fs or DB coupling, so the local and Supabase
+ * compute-server stores share this one implementation.
  */
 
 export function isEncryptedSecret(value: string): boolean {
@@ -56,10 +55,10 @@ export function decryptSecret(envelope: string, key: Buffer): string {
 }
 
 /**
- * Decode a `SELVA_AT_REST_KEY` env var into a 32-byte buffer. Accepts either
- * 64-char hex or base64 (with or without padding). Throws on anything else
- * so misconfiguration fails loudly at boot rather than silently producing
- * an undecryptable value.
+ * Decodes a `SELVA_AT_REST_KEY` env var into a 32-byte buffer (64-char hex or
+ * base64, with or without padding). Throws on anything else so a
+ * misconfigured key fails loudly at boot instead of silently producing
+ * ciphertext nothing can decrypt.
  */
 export function decodeSecretKey(raw: string): Buffer {
 	if (/^[0-9a-fA-F]{64}$/.test(raw)) return Buffer.from(raw, 'hex');
@@ -74,15 +73,12 @@ export function decodeSecretKey(raw: string): Buffer {
 /**
  * Result of a compute-server store's `verifySecrets()`. One `failures` entry
  * per server whose `apiKey` couldn't be loaded:
- *  - `plaintext_on_disk` — the field exists but isn't an `enc:v1:` envelope.
- *    Either a hand-edit, a legacy row from before encryption, or a migration
+ *  - `plaintext_on_disk` — the field exists but isn't an `enc:v1:` envelope:
+ *    a hand-edit, a legacy row from before encryption, or a migration
  *    regression. Security-relevant.
- *  - `key_mismatch`      — envelope is valid but GCM auth-tag verification
- *    fails under the current `SELVA_AT_REST_KEY`. The key was rotated or the
- *    data came from another deployment.
- *
- * Storage-agnostic (`plaintext_on_disk` reads "plaintext at rest" for both the
- * file- and DB-backed stores) so boot health can treat every provider alike.
+ *  - `key_mismatch` — envelope is valid but GCM auth-tag verification fails
+ *    under the current `SELVA_AT_REST_KEY`: the key was rotated, or the data
+ *    came from another deployment.
  */
 export type SecretVerificationFailureReason = 'key_mismatch' | 'plaintext_on_disk';
 
