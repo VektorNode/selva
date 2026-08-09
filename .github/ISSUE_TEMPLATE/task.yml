@@ -1,20 +1,20 @@
-name: Feature Request
-description: Suggest a feature or improvement
-type: Feature
+name: Task
+description: Maintenance, refactor, test coverage, or tooling work
+type: Task
 labels: ['needs-triage']
 body:
   - type: textarea
-    id: feature-description
+    id: what
     attributes:
-      label: What should it do?
+      label: What needs doing?
     validations:
       required: true
 
   - type: textarea
-    id: motivation
+    id: why
     attributes:
-      label: What problem does it solve?
-      description: The use case or pain point behind the request.
+      label: Why now?
+      description: What is worse if this is left alone.
     validations:
       required: true
 
@@ -22,7 +22,6 @@ body:
     id: area
     attributes:
       label: Which part of Selva?
-      description: Best guess is fine — a maintainer will confirm.
       options:
         - Not sure
         - Grasshopper plugin (C#)
@@ -34,12 +33,3 @@ body:
         - Build, CI, deployment
     validations:
       required: true
-
-  - type: dropdown
-    id: contribution
-    attributes:
-      label: Want to help build it?
-      options:
-        - 'No'
-        - 'I can test it'
-        - 'I can implement it'

@@ -1,8 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Documentation
-    url: https://github.com/VektorNode/selva/blob/main/CLAUDE.md
-    about: Read the project documentation before submitting an issue
-  - name: Question or Discussion
+  - name: Question or discussion
     url: https://github.com/VektorNode/selva/discussions
-    about: Ask questions or discuss ideas in GitHub Discussions
+    about: Ask questions or float ideas before filing an issue
+  - name: Documentation
+    url: https://github.com/VektorNode/selva/blob/main/docs/README.md
+    about: Setup, self-hosting, and architecture guides
+  - name: Security vulnerability
+    url: https://github.com/VektorNode/selva/blob/main/SECURITY.md
+    about: Report privately — do not open a public issue
