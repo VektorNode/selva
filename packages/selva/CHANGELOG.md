@@ -1,5 +1,7 @@
 # @selvajs/selva
 
+## 4.8.0-beta.11
+
 ## 4.8.0-beta.10
 
 ### Minor Changes

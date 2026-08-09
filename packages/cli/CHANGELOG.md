@@ -1,5 +1,41 @@
 # @selvajs/cli
 
+## 4.8.0-beta.11
+
+### Minor Changes
+
+- 9891a04: `selva doctor` now validates the host tooling, not just the deployment.
+
+  New checks cover the split operators keep tripping over — Node and npm come from the host, pm2 comes from the deployment:
+
+  - **npm** missing from `PATH` (Debian's `nodejs` package doesn't always include it) or a distro-split version several majors behind Node.
+  - **Two Node installations in play** — the shell resolves one, doctor runs under another, and pm2 may have launched the app with a third. `engines.node` passes against a version production never executes. The check names the version manager (nvm, fnm, volta, distro, snap) rather than just printing a path.
+  - **pm2 not installed locally**, installed at a version other than the exact pin, or declared in `package.json` as a range that will drift on the next `npm install`.
+  - **pm2 daemon skew** — reported as three distinct states: no daemon running (fine), a matching daemon, or a foreign daemon. The daemon-is-newer case is red and deliberately never suggests `pm2 update`, which would downgrade the daemon and drop its process table.
+
+  Each failure prints the command that resolves it.
+
+  The scaffolded deployment `package.json` now carries an npm `overrides` block forcing js-yaml `^4.3.1` — pm2 pins 4.3.0, which carries known quadratic-complexity DoS advisories whose fix pm2 hasn't adopted yet. New deployments get it at scaffold time; existing ones are flagged as drift by `doctor` and pick it up via `selva migrate`. Temporary shim: remove once pm2's own js-yaml dependency reaches >= 4.3.1.
+
+- 9891a04: pm2 upgraded from 5.4.3 to 7.0.3.
+
+  Why: pm2 7 fixes a ReDoS in pm2 itself (GHSA-x5gf-qvw8-r2rm) plus two command-injection issues, and internalizes ~7 external dependencies (smaller advisory surface). Combined with the js-yaml override, a scaffolded deployment now audits with **zero known vulnerabilities**. Every contract Selva relies on was verified unchanged against the 7.0.3 tarball: skew-warning text, `jlist` output shape, `dump.pm2` path, all `ecosystem.config.cjs` options, and the systemd `ExecStart` path.
+
+  New deployments get 7.0.3 automatically. **Existing deployments need a one-time step**, because the pm2 CLI and its background daemon must be the same version:
+
+  ```bash
+  cd /path/to/deployment
+  npm run doctor      # see what applies to your server
+  selva migrate       # rewrites package.json (pm2 7 + js-yaml override), reinstalls, restarts
+  npx pm2 update      # replace the still-running old daemon with the new version
+  npx pm2 save
+  npm run doctor      # everything should be green
+  ```
+
+  If `doctor` reports a pm2 **outside** the deployment (an old `npm install -g pm2` or a vendor .deb), follow the full procedure in the docs instead (self-hosting → deployment → prerequisites, "Upgrading pm2"): it removes the foreign install and re-points the systemd boot unit at the deployment-local pm2. Skipping that leaves a reboot loop where the old daemon resurrects and the version-skew warning returns.
+
+  Downtime is a brief restart of managed processes during `pm2 update`.
+
 ## 4.8.0-beta.10
 
 ### Minor Changes
