@@ -1,5 +1,17 @@
 # @selvajs/selva
 
+## 4.8.0-beta.12
+
+### Patch Changes
+
+- 12fa352: Fix the admin update banner spinning on "PM2 is restarting the app" after an update that already succeeded.
+
+  The runner finished, the log showed `[DONE] Update complete`, and the new process was serving — but the banner stayed up until the 5-minute deadline and then reported "App did not come back", turning a clean update into a false failure.
+
+  - **Adds `/api/health/ready`, a real readiness probe.** The restart wait had been polling `/api/admin/system/health`, which is a _diagnostic_: it re-runs live integrity checks on every request, including a ping of the default Rhino.Compute server. So it reported non-ok whenever an unrelated dependency was down, and could take ~10s doing it — neither acceptable in a probe something waits on. The new route does the smallest thing that proves real request handling: one read through the data provider, the same call the auth hook makes on every gated request. It touches nothing external, because an unreachable compute server does not make the app unready. Public and unauthenticated (the poller runs it across a restart, when no session exists) and safe to be — the body carries a boolean and a fixed reason string, never provider data. Both probes are exact-match entries in the auth allowlist, so routes added under `/api/health/` later still inherit deny-by-default.
+  - **The restart wait no longer requires the readiness probe to go green.** `pollForRestart` only accepted an outcome when the probe returned 200, so a probe that could never succeed meant a finished update could never be confirmed. Readiness is now an accelerator for the premature-online race it was added to close, not a gate: the loop also finishes on the runner's own terminal marker in the log, which is the authority on whether the update completed. A rollback still reports as a rollback; the marker carries the verdict, so the fallback can't flatten every outcome into success.
+  - **A degraded (503) `/api/health` counts as reachable.** `/api/health` returns 503 with `status: "degraded"` when a boot check failed, and the poll treated any non-2xx as unreachable — so a degraded-but-serving instance stalled the wait, contradicting the rule the surrounding code already stated, that degraded must not block "online".
+
 ## 4.8.0-beta.11
 
 ## 4.8.0-beta.10
