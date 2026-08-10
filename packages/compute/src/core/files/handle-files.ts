@@ -131,6 +131,10 @@ const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 			return;
 		}
 
+		// GH-authored, not interpreted here — passed through so a consumer that
+		// stores files rather than zipping them keeps the authoring context.
+		const metadata = readField<Record<string, string>>(item, 'metadata');
+
 		if (isBase64Flag(readField<unknown>(item, 'isBase64Encoded'))) {
 			// `decodeBase64ToBinary` already returns a correctly-bounded view;
 			// re-wrapping `.buffer` would discard its byteOffset/byteLength and
@@ -139,7 +143,9 @@ const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 				processedFiles.push({
 					fileName,
 					content: decodeBase64ToBinary(data),
-					path: filePath
+					path: filePath,
+					subFolder,
+					...(metadata ? { metadata } : {})
 				});
 			} catch (err) {
 				getLogger().warn(`Skipping file "${filePath}": base64 decode failed.`, err);
@@ -148,7 +154,9 @@ const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 			processedFiles.push({
 				fileName,
 				content: data,
-				path: filePath
+				path: filePath,
+				subFolder,
+				...(metadata ? { metadata } : {})
 			});
 		}
 	});
@@ -196,7 +204,9 @@ const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> 
 				return {
 					fileName: safeName,
 					content: new Uint8Array(arrayBuffer),
-					path: subFolder !== '' ? `${subFolder}/${safeName}` : safeName
+					path: subFolder !== '' ? `${subFolder}/${safeName}` : safeName,
+					// No `metadata`: an external URL carries no GH authoring context.
+					subFolder
 				} as ProcessedFile;
 			} catch (error) {
 				getLogger().error(`Error fetching additional file from URL: ${file.filePath}`, error);

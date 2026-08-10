@@ -88,11 +88,30 @@ export interface DefinitionLoaderDeps {
 	logger?: ILogger;
 }
 
+export interface DefinitionLoadOptions {
+	/**
+	 * Skip the `getIO` round-trip that merges compute default *values* into the
+	 * schema, when the cached schema on the version row is usable.
+	 *
+	 * A caller that reads only schema STRUCTURE (input ids, `source.key`, widget
+	 * types — anything persisted at upload) does not need defaults, and paying a
+	 * multi-second compute connect per definition to fetch them dominates a page
+	 * that resolves several. With this set, a fresh cached schema returns without
+	 * touching compute at all; a missing or stale-format cache still falls back to
+	 * the full path, so the result is always a valid schema.
+	 *
+	 * Leave unset (the default) for anything that RENDERS a form — a form without
+	 * compute defaults shows the wrong initial values.
+	 */
+	skipComputeDefaults?: boolean;
+}
+
 export type DefinitionLoader = (
 	ctx: RequestContext,
 	record: DefinitionRecord,
 	channel: DefinitionChannel,
-	explicitVersionId?: string | null
+	explicitVersionId?: string | null,
+	options?: DefinitionLoadOptions
 ) => Promise<LoadedDefinition>;
 
 /**
@@ -118,7 +137,7 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 		logger = new NoopLogger()
 	} = deps;
 
-	return async function loadDefinitionForRender(ctx, record, channel, explicitVersionId) {
+	return async function loadDefinitionForRender(ctx, record, channel, explicitVersionId, options) {
 		const versionId =
 			explicitVersionId ?? (channel === 'draft' ? record.draftVersionId : record.liveVersionId);
 		if (!versionId)
@@ -152,6 +171,17 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 				'No compute server configured for this definition',
 				err
 			);
+		}
+
+		// Structure-only callers stop here: a fresh cached schema is everything they
+		// need, and returning before `getClient` is the point — the connect is the
+		// multi-second cost, not the `getIO` call it carries. A missing or
+		// stale-format cache falls through to the full path below.
+		if (options?.skipComputeDefaults) {
+			const cachedSchema = version.schema as UISchema | undefined;
+			if (cachedSchema && cachedSchema.schemaVersion === UI_SCHEMA_VERSION) {
+				return { version, definitionSource, computeServer, schema: cachedSchema };
+			}
 		}
 
 		// Only the client is used here (getIO); the entry's solve scheduler rides

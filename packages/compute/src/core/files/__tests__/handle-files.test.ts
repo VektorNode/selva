@@ -233,6 +233,77 @@ describe('extractFilesFromComputeResponse — wire-shape leniency (issue 95)', (
 	});
 });
 
+describe('extractFilesFromComputeResponse — GH-owned pass-through', () => {
+	it('carries subFolder separately from the fused archive path', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'nested/dir', fileName: 'a', fileType: '.json' })
+		]);
+		expect(file.path).toBe('nested/dir/a.json');
+		expect(file.subFolder).toBe('nested/dir');
+	});
+
+	it('reports an empty subFolder for a root-level file', async () => {
+		const [file] = await extractFilesFromComputeResponse([fd({ subFolder: '' })]);
+		expect(file.subFolder).toBe('');
+	});
+
+	it('reports the SANITIZED subFolder, matching the path', async () => {
+		const [file] = await extractFilesFromComputeResponse([fd({ subFolder: '../../etc' })]);
+		expect(file.subFolder).toBe('etc');
+		expect(file.path).toBe('etc/model.txt');
+	});
+
+	it('passes GH metadata through verbatim', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ metadata: { Material: 'alu_1.0', Thickness: '1.0' } })
+		]);
+		expect(file.metadata).toEqual({ Material: 'alu_1.0', Thickness: '1.0' });
+	});
+
+	it('omits metadata when the source item carries none', async () => {
+		const [file] = await extractFilesFromComputeResponse([fd()]);
+		expect(file.metadata).toBeUndefined();
+	});
+
+	it('reads metadata from a PascalCase payload (mcneel-branch server)', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			{
+				FileName: 'model',
+				Data: 'plain',
+				FileType: '.txt',
+				IsBase64Encoded: false,
+				SubFolder: 'out',
+				Metadata: { Material: 'alu_1.0' }
+			} as unknown as FileData
+		]);
+		expect(file.metadata).toEqual({ Material: 'alu_1.0' });
+		expect(file.subFolder).toBe('out');
+	});
+
+	it('preserves both fields when a duplicate path is renamed', async () => {
+		const files = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'out', metadata: { slot: 'first' } }),
+			fd({ subFolder: 'out', metadata: { slot: 'second' } })
+		]);
+		expect(files[1].path).toBe('out/model-2.txt');
+		expect(files[1].subFolder).toBe('out');
+		expect(files[1].metadata).toEqual({ slot: 'second' });
+	});
+
+	it('carries subFolder on base64 items too', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({
+				data: base64ByteArray(new Uint8Array([1, 2])),
+				isBase64Encoded: true,
+				subFolder: 'bin',
+				metadata: { kind: 'binary' }
+			})
+		]);
+		expect(file.subFolder).toBe('bin');
+		expect(file.metadata).toEqual({ kind: 'binary' });
+	});
+});
+
 describe('extractFilesFromComputeResponse — decode-failure skip branch', () => {
 	it('skips an undecodable base64 item and keeps the rest of the batch', async () => {
 		const files = await extractFilesFromComputeResponse([

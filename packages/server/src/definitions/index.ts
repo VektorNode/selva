@@ -21,5 +21,6 @@ export {
 	type DefinitionLoader,
 	type DefinitionLoaderDeps,
 	type DefinitionLoadErrorKind,
+	type DefinitionLoadOptions,
 	type LoadedDefinition
 } from './load-for-render.js';

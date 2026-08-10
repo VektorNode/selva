@@ -145,6 +145,89 @@ describe('schema cache staleness (ADR 0005)', () => {
 	});
 });
 
+describe('skipComputeDefaults', () => {
+	it('returns the cached schema without connecting to compute at all', async () => {
+		const cached = uiSchema(UI_SCHEMA_VERSION, [{ id: 'a' }]);
+		const { deps, mocks, getIO } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: cached }));
+
+		const result = await createDefinitionLoader(deps)(ctx, record, 'live', null, {
+			skipComputeDefaults: true
+		});
+
+		// The connect is the cost this option exists to avoid — not just getIO.
+		expect(mocks.getClient).not.toHaveBeenCalled();
+		expect(getIO).not.toHaveBeenCalled();
+		expect(mocks.fetchSchema).not.toHaveBeenCalled();
+		expect(result.schema).toBe(cached);
+	});
+
+	it('still returns version/source/server so the shape matches the full path', async () => {
+		const cached = uiSchema(UI_SCHEMA_VERSION, [{ id: 'a' }]);
+		const { deps, mocks } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: cached }));
+
+		const result = await createDefinitionLoader(deps)(ctx, record, 'live', null, {
+			skipComputeDefaults: true
+		});
+
+		expect(result.version.id).toBe('v-live');
+		expect(result.computeServer).toBe(computeServer);
+		expect(result.definitionSource).toEqual(new Uint8Array([1, 2, 3]));
+	});
+
+	it('leaves defaults UNMERGED — the caller opted out of them', async () => {
+		const cached = uiSchema(UI_SCHEMA_VERSION, [{ id: 'a' }]);
+		const { deps, mocks } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: cached }));
+
+		const result = await createDefinitionLoader(deps)(ctx, record, 'live', null, {
+			skipComputeDefaults: true
+		});
+
+		// The full path would have merged getIO's `default: 42` onto input 'a'.
+		expect(result.schema.inputs[0]).not.toHaveProperty('default');
+	});
+
+	it('falls back to the full path when the version has no cached schema', async () => {
+		const { deps, mocks, getIO } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: undefined }));
+
+		const result = await createDefinitionLoader(deps)(ctx, record, 'live', null, {
+			skipComputeDefaults: true
+		});
+
+		expect(mocks.fetchSchema).toHaveBeenCalled();
+		expect(getIO).toHaveBeenCalled();
+		expect(result.schema.inputs[0]).toMatchObject({ default: 42 });
+	});
+
+	it('falls back to the full path when the cached schema format is stale', async () => {
+		const { deps, mocks } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(
+			version({ schema: uiSchema('0.0.1', [{ id: 'a' }]) })
+		);
+
+		await createDefinitionLoader(deps)(ctx, record, 'live', null, {
+			skipComputeDefaults: true
+		});
+
+		expect(mocks.fetchSchema).toHaveBeenCalled();
+	});
+
+	it('does not change behavior when the option is omitted', async () => {
+		const cached = uiSchema(UI_SCHEMA_VERSION, [{ id: 'a' }]);
+		const { deps, mocks, getIO } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: cached }));
+
+		const result = await createDefinitionLoader(deps)(ctx, record, 'live');
+
+		expect(mocks.getClient).toHaveBeenCalled();
+		expect(getIO).toHaveBeenCalled();
+		expect(result.schema.inputs[0]).toMatchObject({ default: 42 });
+	});
+});
+
 describe('version resolution', () => {
 	it('resolves the draft pointer for the draft channel', async () => {
 		const { deps, mocks } = makeDeps();

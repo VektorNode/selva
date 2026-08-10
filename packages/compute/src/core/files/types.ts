@@ -29,6 +29,21 @@ export type ProcessedFile = {
 	content: Uint8Array | string;
 	/** File path for archive organization (e.g., "subfolder/model.3dm") */
 	path: string;
+	/**
+	 * The sanitized `subFolder` this file came from, separately from `path`.
+	 *
+	 * `path` fuses folder and name for the archive, and a consumer that stores files
+	 * itself (rather than zipping them) otherwise has to re-split it — which is
+	 * ambiguous once a duplicate path has been renamed. `''` means archive root;
+	 * absent means the producer did not record one (hand-built `ProcessedFile`s).
+	 */
+	subFolder?: string;
+	/**
+	 * Grasshopper-authored metadata carried through from {@link FileData}. Absent when
+	 * the source item had none, or for files fetched via {@link FileBaseInfo} (an
+	 * external URL has no GH metadata).
+	 */
+	metadata?: Record<string, string>;
 };
 
 /**
