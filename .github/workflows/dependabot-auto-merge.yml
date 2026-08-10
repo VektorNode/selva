@@ -14,9 +14,70 @@ permissions:
   checks: read
 
 jobs:
+  # Dependabot cannot write a correct lockfile for a pnpm catalog. It bumps the
+  # entry in pnpm-workspace.yaml and updates the lockfile's resolved versions,
+  # but records the importer's *specifier* as the literal version (`8.2.0`)
+  # where the manifest says `catalog:`. Every workspace job then dies in
+  # `pnpm install --frozen-lockfile` on a mismatch nothing in the PR can fix.
+  #
+  # Repair it on the branch rather than in each consumer: regenerating only in
+  # the runner would leave the broken lockfile to be merged to main (PR #174).
+  # Ignoring catalog deps isn't an option either — they are most of the
+  # toolchain, and the ignore would silently stop their updates.
+  lockfile:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+    steps:
+      # pull_request_target checks out the BASE by default, which would
+      # regenerate a lockfile for a tree without Dependabot's bumps in it.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Regenerate lockfile if Dependabot left it stale
+        run: |
+          # --ignore-scripts: this workflow is pull_request_target, so it runs
+          # with write access to the repo. Resolving the lockfile needs no
+          # lifecycle scripts, and running a bumped dependency's install hook
+          # under that token is not a trade worth making.
+          pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
+
+          # A manifest change here would mean the install did something beyond
+          # reconciling the lockfile — bail rather than commit it unreviewed.
+          if ! git diff --quiet -- ':!pnpm-lock.yaml'; then
+            echo "::error::Install touched files other than pnpm-lock.yaml:"
+            git diff --stat -- ':!pnpm-lock.yaml'
+            exit 1
+          fi
+
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "Lockfile already consistent — nothing to repair."
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pnpm-lock.yaml
+          git commit -m 'chore: regenerate lockfile for pnpm catalog specifiers'
+          git push
+          echo "::notice::Regenerated pnpm-lock.yaml — Dependabot left catalog specifiers stale."
+
   dependabot-auto-merge:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
+    # The push above re-triggers CI on the new head. Gating on this job keeps
+    # the wait below from concluding against the pre-repair commit's checks.
+    needs: lockfile
     steps:
       - id: metadata
         uses: dependabot/fetch-metadata@v3
@@ -24,14 +85,28 @@ jobs:
       # `gh pr checks --watch` can't be used: this job's own check run appears
       # in the PR's checks and would make --watch wait on itself forever. Poll
       # instead, excluding our own workflow from the set.
+      #
+      # REQUIRED_CHECKS must be named explicitly, and every one of them must
+      # pass. Waiting for "whatever registers" is what merged PR #174 with no CI
+      # at all: Dependabot PRs run under a restricted token, `Test` never
+      # registered a check run, the empty set outlasted the grace window, and
+      # `pending == 0` was read as success — "All 0 check(s) concluded without
+      # failure." An absent check is now indistinguishable from a failing one.
       - name: Wait for CI checks
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Names as they appear in the checks list (the job's name, not the
+          # workflow's): `test` and `dotnet` from test.yml, `e2e` from e2e.yml.
+          # A rename here without a rename there = a merge that times out,
+          # which is the safe direction.
+          REQUIRED_CHECKS: 'test,dotnet,e2e'
         run: |
           deadline=$(( $(date +%s) + 45 * 60 ))
-          grace_until=$(( $(date +%s) + 3 * 60 ))
+          required=$(echo "$REQUIRED_CHECKS" | tr ',' '\n' | sed '/^$/d')
+          echo "Required checks:"; echo "$required" | sed 's/^/  · /'
+
           while :; do
             # `|| true`: gh exits non-zero while checks are pending; drive off JSON.
             others=$(gh pr checks "$PR_URL" --json name,bucket 2>/dev/null || echo '[]')
@@ -43,20 +118,27 @@ jobs:
               exit 1
             fi
 
-            count=$(echo "$others" | jq 'length')
-            pending=$(echo "$others" | jq '[.[] | select(.bucket == "pending")] | length')
+            # Every required check must be present AND passing. Missing ones are
+            # reported as "waiting", so the job times out rather than merging.
+            missing=$(
+              while IFS= read -r name; do
+                echo "$others" | jq -e --arg n "$name" \
+                  'any(.[]; .name == $n and .bucket == "pass")' >/dev/null || echo "$name"
+              done <<< "$required"
+            )
 
-            # An empty set inside the grace window means CI hasn't registered
-            # its check runs yet — concluding now would skip the gate entirely.
-            if [ "$count" -eq 0 ] && [ "$(date +%s)" -lt "$grace_until" ]; then
-              echo "no checks registered yet…"
-            elif [ "$pending" -eq 0 ]; then
-              echo "All $count check(s) concluded without failure."
+            if [ -z "$missing" ]; then
+              echo "All required checks passed."
               exit 0
             fi
 
+            echo "waiting on: $(echo "$missing" | tr '\n' ' ')"
+
             if [ "$(date +%s)" -ge "$deadline" ]; then
-              echo "::error::Timed out after 45m waiting for checks."
+              echo "::error::Timed out after 45m. Required checks never passed:"
+              echo "$missing" | sed 's/^/  ✗ /'
+              echo "::error::If a required check no longer runs on Dependabot PRs, fix the"
+              echo "::error::trigger or update REQUIRED_CHECKS — do not merge past this."
               exit 1
             fi
             sleep 30

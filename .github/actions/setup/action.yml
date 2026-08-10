@@ -27,6 +27,13 @@ runs:
         node-version: ${{ inputs.node-version }}
         cache: pnpm
 
+    # Frozen deliberately: a lockfile that disagrees with a manifest is a real
+    # error, and CI is where it has to surface.
+    #
+    # Dependabot PRs are repaired before this runs — see the lockfile job in
+    # dependabot-auto-merge.yml. It commits the regenerated lockfile to the PR
+    # branch, so by the time this step executes the tree is consistent and the
+    # frozen install is as strict here as anywhere else.
     - name: Install dependencies
       shell: bash
       run: pnpm install --frozen-lockfile
