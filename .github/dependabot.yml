@@ -35,6 +35,10 @@ updates:
   # '/' only covers .github/workflows/. Composite actions live outside that
   # scope and silently lag behind (pnpm/setup-node sat at v4 while every
   # workflow moved to v6/v7) unless their directory is listed explicitly.
+  #
+  # This ecosystem tracks `uses:` versions only. The npm pinned inside a `run:`
+  # line — release.yml's `npm install -g npm@x.y.z`, which uploads to the
+  # registry — is invisible to it and has to be bumped by hand.
   - package-ecosystem: 'github-actions'
     directories:
       - '/'

@@ -4,6 +4,7 @@
 // exactly the field where a silent difference costs the most.
 
 import { readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -51,12 +52,45 @@ const SCRIPTS = {
  * Packages a deployment carries. Providers are bundled into `@selvajs/selva`;
  * the CLI is a dependency so `npm run start` resolves the `selva` bin locally
  * instead of relying on a global install.
+ *
+ * The `latest` entries are what `create` resolves at scaffold time, never what
+ * gets written: `resolveSelvaPins` turns them into concrete versions. A stored
+ * `"latest"` re-resolves on every `npm install`, so the deployment follows the
+ * dist-tag forever and can change under the operator with no migrate at all.
  */
 const DEPENDENCIES = {
 	'@selvajs/cli': 'latest',
 	'@selvajs/selva': 'latest',
 	pm2: PM2_VERSION
 };
+
+/** The `@selvajs/*` packages whose pin belongs to the operator, not the scaffold. */
+export const SELVA_PACKAGES = ['@selvajs/cli', '@selvajs/selva'];
+
+/**
+ * True for a pin that names no version — a dist-tag (`latest`, `beta`) or the
+ * empty-ish values npm also accepts (`*`, `""`). These are the pins that move
+ * on their own, which is what makes them unfit to store.
+ */
+export function isFloatingPin(pin) {
+	if (typeof pin !== 'string') return true;
+	const trimmed = pin.trim();
+	if (trimmed === '' || trimmed === '*' || trimmed === 'x') return true;
+	// A range still names versions; only a bare tag has no digits at all.
+	return !/\d/.test(trimmed);
+}
+
+/**
+ * True for a pin on a prerelease line (`^4.8.0-beta.11`).
+ *
+ * These are preserved across a migration. An operator on a beta channel chose
+ * it, and npm's `latest` tag points at the newest *stable* release — so
+ * resolving their pin through `latest` is a downgrade that reads as an upgrade
+ * in the confirmation diff.
+ */
+export function isPrereleasePin(pin) {
+	return typeof pin === 'string' && /\d+\.\d+\.\d+-/.test(pin);
+}
 
 /**
  * npm `overrides` forced onto every deployment — security patches for
@@ -100,19 +134,96 @@ export const LEGACY_DEPENDENCIES = {
  * deliberately, and dropping it removes a guard whose absence shows up only
  * under real traffic (issue #176). Everything else a migration discards is
  * listed by `diffPackageJson` before the operator confirms.
+ *
+ * `dependencies` is the second exception, for the same reason: a version pin is
+ * an operator choice too. `migrate` passes the resolved `@selvajs/*` pins in
+ * here; a fresh scaffold passes none and inherits the defaults.
  */
-export function buildDeploymentPackageJson({ name, version = '0.1.0', engines }) {
+export function buildDeploymentPackageJson({ name, version = '0.1.0', engines, dependencies }) {
 	const pkg = {
 		name: sanitizePackageName(name),
 		version,
 		private: true,
 		type: 'module',
 		scripts: { ...SCRIPTS },
-		dependencies: { ...DEPENDENCIES },
+		dependencies: { ...DEPENDENCIES, ...dependencies },
 		overrides: { ...OVERRIDES }
 	};
 	if (engines && typeof engines === 'object') pkg.engines = { ...engines };
 	return pkg;
+}
+
+/**
+ * Ask npm what a dist-tag currently points at. Kept beside the pin logic it
+ * serves, and injected rather than called directly so tests never hit the
+ * network.
+ */
+export function npmDistTagVersion(name, tag) {
+	const out = execSync(`npm view ${name}@${tag} version`, {
+		encoding: 'utf8',
+		stdio: ['ignore', 'pipe', 'pipe']
+	});
+	const version = String(out).trim().split('\n').pop()?.trim();
+	if (!version || !/^\d+\.\d+\.\d+/.test(version)) {
+		throw new Error(`npm view returned no usable version for ${name}@${tag}`);
+	}
+	return version;
+}
+
+/**
+ * Decide the `@selvajs/*` pins a migration should write.
+ *
+ * Two rules, both aimed at the same failure: a migration silently moving a
+ * deployment to a version the operator didn't ask for.
+ *
+ *   - A prerelease pin is kept as-is. `latest` means newest stable, so
+ *     resolving a beta pin through it walks the deployment backwards.
+ *   - Anything else resolves to a concrete version via `resolveVersion`, so
+ *     `"latest"` never reaches disk and the diff can show what it resolved to.
+ *
+ * `resolveVersion` hits the network. When it fails — offline, registry down, a
+ * package with no such tag — the existing pin is kept and the reason returned,
+ * so migrate can report it rather than inventing a version or aborting a
+ * migration whose other half (layout, overrides, env renames) is still valid.
+ */
+export function resolveSelvaPins(currentDeps, resolveVersion) {
+	const pins = {};
+	const notes = [];
+
+	for (const name of SELVA_PACKAGES) {
+		const current = currentDeps?.[name];
+
+		if (isPrereleasePin(current)) {
+			pins[name] = current;
+			notes.push({ name, kind: 'prerelease', pin: current });
+			continue;
+		}
+
+		let resolved = null;
+		try {
+			resolved = resolveVersion(name, 'latest');
+		} catch (err) {
+			notes.push({ name, kind: 'unresolved', pin: current, reason: err?.message ?? String(err) });
+		}
+
+		if (resolved) {
+			pins[name] = `^${resolved}`;
+			continue;
+		}
+
+		// Nothing resolvable and nothing worth keeping — fall back to the tag so
+		// the install still succeeds. Rare: offline *and* a floating pin.
+		if (isFloatingPin(current)) {
+			pins[name] = DEPENDENCIES[name];
+			if (!notes.some((n) => n.name === name)) {
+				notes.push({ name, kind: 'unresolved', pin: current, reason: 'no version returned' });
+			}
+		} else {
+			pins[name] = current;
+		}
+	}
+
+	return { pins, notes };
 }
 
 /**

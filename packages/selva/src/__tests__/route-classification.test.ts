@@ -21,6 +21,10 @@ describe('isPublicRoute', () => {
 		['/auth/supabase/start'],
 		['/auth/supabase/callback'],
 		['/api/health'],
+		// The post-update poller hits readiness across a restart, when no session
+		// is guaranteed. Both probes are exact-match entries — neither inherits
+		// public status from the other.
+		['/api/health/ready'],
 		// The blob proxy is self-gating: it must pass the hook so it can apply
 		// per-asset-class auth itself (public branding for guests, 401 for
 		// org/project assets without a session).
@@ -67,6 +71,14 @@ describe('isPublicRoute', () => {
 		// /login-other-thing must not be admitted by accident.
 		expect(isPublicRoute('/login-other')).toBe(false);
 		expect(isPublicRoute('/setupX')).toBe(false);
+	});
+
+	it('does not admit health-probe siblings via prefix match', () => {
+		// Both probes are exact-match entries in the public API allowlist. A route
+		// added under /api/health/ later must inherit "gated", not public.
+		expect(isPublicRoute('/api/healthz')).toBe(false);
+		expect(isPublicRoute('/api/health/ready/detail')).toBe(false);
+		expect(isPublicRoute('/api/health/secrets')).toBe(false);
 	});
 });
 

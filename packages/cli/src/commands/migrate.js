@@ -13,8 +13,12 @@ import {
 	buildDeploymentPackageJson,
 	CANONICAL_FIELDS,
 	DEPENDENCIES,
+	isFloatingPin,
 	LEGACY_DEPENDENCIES,
-	OVERRIDES
+	npmDistTagVersion,
+	OVERRIDES,
+	resolveSelvaPins,
+	SELVA_PACKAGES
 } from '../deployment-package.js';
 import { APP_NAME, runPm2 } from './pm2.js';
 
@@ -34,7 +38,8 @@ export async function runMigrate(
 		// predates the release being migrated to.
 		install = (cwd) => execSync('npm install --prefer-online', { cwd, stdio: 'pipe' }),
 		confirm = (message) => p.confirm({ message, initialValue: true }),
-		pm2 = runPm2
+		pm2 = runPm2,
+		resolveVersion = npmDistTagVersion
 	} = {}
 ) {
 	const dir = injectedDir ?? resolveDeploymentDir();
@@ -49,7 +54,7 @@ export async function runMigrate(
 	}
 
 	const before = JSON.parse(readFileSync(pkgPath, 'utf8'));
-	const target = buildTargetPackageJson(before);
+	const { pkg: target, notes: pinNotes } = buildTargetPackageJson(before, resolveVersion);
 	const pkgDiff = diffPackageJson(before, target);
 
 	const configPath = join(dir, 'selva.config.js');
@@ -93,6 +98,23 @@ export async function runMigrate(
 	p.log.info('Changes to apply:');
 	for (const line of pkgDiff) console.log('  ' + line);
 	for (const line of sideFileChanges) console.log('  ' + line);
+
+	// The diff shows the pin that will be written; these explain why it is that
+	// pin. A preserved beta and a pin that couldn't be resolved both look like
+	// "no change" in the diff, and the second one is a stale pin, not a stable one.
+	for (const note of pinNotes) {
+		if (note.kind === 'prerelease') {
+			p.log.info(
+				`${note.name} stays on ${note.pin} — a prerelease pin is kept, since \`latest\` ` +
+					`means newest stable and would move this deployment backwards.`
+			);
+		} else {
+			p.log.warn(
+				`Could not resolve the current version of ${note.name} (${note.reason}). ` +
+					`Keeping ${JSON.stringify(note.pin ?? null)}; re-run migrate when the registry is reachable.`
+			);
+		}
+	}
 
 	const confirmed = await confirm('Apply these changes, reinstall, and restart?');
 	if (p.isCancel(confirmed) || !confirmed) {
@@ -242,12 +264,15 @@ function restartAfterRollback(dir, pm2 = runPm2) {
 	}
 }
 
-function buildTargetPackageJson(current) {
-	return buildDeploymentPackageJson({
+function buildTargetPackageJson(current, resolveVersion = npmDistTagVersion) {
+	const { pins, notes } = resolveSelvaPins(current.dependencies, resolveVersion);
+	const pkg = buildDeploymentPackageJson({
 		name: current.name ?? 'selva-deployment',
 		version: current.version ?? '0.1.0',
-		engines: current.engines
+		engines: current.engines,
+		dependencies: pins
 	});
+	return { pkg, notes };
 }
 
 // Format package.json diff for confirmation prompt (concise, not full diff).
@@ -331,6 +356,20 @@ export function detectDrift(pkgJson, dir) {
 		reasons.push(`pm2 is pinned to ${deps.pm2} (current scaffold pins ${DEPENDENCIES.pm2})`);
 	}
 
+	// A stored dist-tag re-resolves on every `npm install`, so the deployment
+	// follows the tag instead of a version an operator chose. Worse on a
+	// prerelease line, where `latest` points at the older stable release and the
+	// "upgrade" is a downgrade. Migrate wrote these before it learned to resolve
+	// tags, so existing deployments carry one and nothing else reports it.
+	for (const name of SELVA_PACKAGES) {
+		if (deps[name] && isFloatingPin(deps[name])) {
+			reasons.push(
+				`${name} is pinned to the floating tag ${JSON.stringify(deps[name])} ` +
+					`(re-resolves on every install; migrate writes a concrete version)`
+			);
+		}
+	}
+
 	// Overrides are security shims for vulnerable transitive deps — a
 	// deployment without them installs the vulnerable version on its next
 	// `npm install`, silently.
@@ -370,7 +409,13 @@ export function buildPm2UpgradeNotice(beforeVersion, afterVersion) {
 		`still the old version. Finish the upgrade (brief restart of managed processes):`,
 		``,
 		`  npx pm2 update`,
+		`  npx pm2 list          # ${APP_NAME} must be listed and 'online' before the next step`,
 		`  npx pm2 save`,
+		``,
+		`Do not run \`pm2 save\` until the list looks right. \`pm2 update\` empties the`,
+		`process table before restoring it, so saving a failed restore overwrites`,
+		`~/.pm2/dump.pm2 — the only record of what to bring back. If the list is empty,`,
+		`recover with \`npx pm2 resurrect\`, or \`npx pm2 start ecosystem.config.cjs\`.`,
 		``,
 		`If doctor reports a pm2 outside this deployment (global or apt install), follow`,
 		`the full procedure in the docs instead: self-hosting → deployment → prerequisites.`

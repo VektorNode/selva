@@ -168,10 +168,11 @@ describe('pollForRestart — termination branches', () => {
 		expect(await pollForRestart(OLD_ID, h.deps)).toEqual({ exitCode: 0 });
 	});
 
-	it('does not accept a fresh instanceId that is not yet warm', async () => {
+	it('does not accept a fresh instanceId that is neither warm nor finished', async () => {
 		// /api/health flips to the new process a beat before real routes serve
 		// through the proxy. Accepting on instanceId alone is the premature-online
-		// race that left an immediate reload hitting a 502.
+		// race that left an immediate reload hitting a 502. With no terminal marker
+		// in the log either, there is still nothing to report.
 		const h = harness({
 			health: async () => healthy(NEW_ID),
 			log: async () => '[STEP] Booting\n',
@@ -179,6 +180,62 @@ describe('pollForRestart — termination branches', () => {
 		});
 
 		expect(await pollForRestart(OLD_ID, h.deps)).toEqual({ exitCode: -2 });
+	});
+
+	it('finishes on the runner verdict when readiness never goes green', async () => {
+		// The hang this fixes: the readiness route re-runs live integrity checks,
+		// so it reports false whenever an unrelated dependency is down (an
+		// unreachable compute server) and can outrun the caller's probe timeout on
+		// a slow host. The update itself succeeded — [DONE] is in the log and a
+		// fresh process is serving — so requiring readiness left the banner
+		// spinning until the deadline turned a success into a false failure.
+		const h = harness({
+			health: async () => healthy(NEW_ID),
+			log: async () => DONE_LOG,
+			ready: async () => false
+		});
+
+		const verdict = await pollForRestart(OLD_ID, h.deps);
+		expect(verdict).toEqual({ exitCode: 0 });
+		expect(h.elapsed()).toBeLessThan(RESTART_DEADLINE_MS);
+	});
+
+	it('still reports a rollback correctly when readiness never goes green', async () => {
+		// The log-marker fallback must not flatten every outcome to success.
+		const h = harness({
+			health: async () => healthy(NEW_ID),
+			log: async () => ROLLBACK_LOG,
+			ready: async () => false
+		});
+
+		expect(await pollForRestart(OLD_ID, h.deps)).toEqual({ exitCode: 5 });
+	});
+
+	it('resolves the no-restart path when readiness never goes green', async () => {
+		// "Already up to date" never restarts, so the instanceId is stable AND the
+		// readiness probe may be failing for unrelated reasons. The marker decides.
+		const h = harness({
+			health: async () => healthy(OLD_ID),
+			log: async () => '[INFO] Already on the beta channel version (4.8.0-beta.11)\n[DONE]\n',
+			ready: async () => false
+		});
+
+		const verdict = await pollForRestart(OLD_ID, h.deps);
+		expect(verdict).toEqual({ exitCode: 0 });
+		expect(h.elapsed()).toBeLessThan(RESTART_DEADLINE_MS);
+	});
+
+	it('accepts a degraded (503) health body as a reachable process', async () => {
+		// The caller maps a 503 `degraded` body to a real RestartHealth rather than
+		// null — the process is up and answering, which is all this loop asks. A
+		// degraded-but-serving instance must not stall the restart wait.
+		const h = harness({
+			health: async () => ({ status: 'degraded', instanceId: NEW_ID }),
+			log: async () => DONE_LOG,
+			ready: async () => false
+		});
+
+		expect(await pollForRestart(OLD_ID, h.deps)).toEqual({ exitCode: 0 });
 	});
 
 	it('reports a rollback as 5 even though a fresh process is serving', async () => {

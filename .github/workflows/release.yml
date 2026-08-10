@@ -140,9 +140,15 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       # Required for OIDC — without it publishes fall back to anonymous and 404.
+      # Trusted publishing needs >= 11.5.1; Node 24 bundles 11.x already, but the
+      # bundled patch moves with the runner image, so pin it here.
+      #
+      # Exact, not a range: this is the version that uploads to the registry, and
+      # `@latest` silently adopted each new major the morning it shipped. Bump it
+      # deliberately — a broken publish is discovered after the tag exists.
       - name: Upgrade npm for OIDC publishing
         if: steps.check.outputs.should_run == 'true'
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.19.0
 
       - name: Install dependencies
         if: steps.check.outputs.should_run == 'true'

@@ -177,32 +177,36 @@
 	// "PM2 is restarting…" and only a manual reload shows the real state.
 	const PROBE_TIMEOUT_MS = 4000;
 
+	// A 503 here means "up but degraded" (see /api/health) — the process is
+	// answering, which is all this probe is asked to establish. Treating it as
+	// unreachable stalls the restart wait on an instance that is genuinely back.
 	async function fetchHealth(): Promise<RestartHealth | null> {
 		try {
 			const res = await fetch('/api/health', {
 				cache: 'no-store',
 				signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
 			});
-			if (!res.ok) return null;
+			if (!res.ok && res.status !== 503) return null;
 			return (await res.json()) as RestartHealth;
 		} catch {
 			return null;
 		}
 	}
 
-	// Probe the *heavier* readiness endpoint (`/api/admin/system/health`), not
-	// just /api/health. The lightweight /api/health answers the instant the Node
-	// process boots — before the app can necessarily serve real routes through
-	// the proxy — so keying "online" on it alone races: the UI said "back online"
-	// while a health-check click moments later 502'd. The admin health route
-	// exercises the provider stores / config the way a real request does, so a
-	// 200 here means the app is genuinely warm. We gate on HTTP reachability
-	// only: this route returns 200 even when its *verdict* is "degraded" (e.g. an
-	// unreachable compute server), and degraded-but-up must not block "online".
-	// Returns true only on a real 200; false on any non-2xx or transport error.
+	// Probe readiness, not just liveness. /api/health answers the instant the Node
+	// process boots — before the app can necessarily serve real routes through the
+	// proxy — so keying "online" on it alone races: the UI said "back online"
+	// while a health-check click moments later 502'd. `/api/health/ready` does one
+	// provider read, the same one the auth hook makes on every gated request, so a
+	// 200 means a real request would succeed.
+	//
+	// Deliberately NOT `/api/admin/system/health`: that route pings the compute
+	// server, so it reports non-ok whenever an unrelated dependency is down and
+	// can outlast any sane probe timeout. Using it here meant a finished update
+	// could never be confirmed on a deployment whose compute server was down.
 	async function isReadinessProbeWarm(): Promise<boolean> {
 		try {
-			const res = await fetch('/api/admin/system/health', {
+			const res = await fetch('/api/health/ready', {
 				cache: 'no-store',
 				signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
 			});

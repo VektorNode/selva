@@ -140,12 +140,24 @@ sudo nano /etc/caddy/Caddyfile
 
 ```caddyfile
 [your-domain] {
+    encode gzip
+
+    # Strip spoofable identity headers at site scope, before any route runs.
+    request_header -SELVA-UserPrincipalName
+    request_header -SELVA-Email
+    request_header -SELVA-DisplayName
+    request_header -X-Auth-Request-User
+    request_header -X-Auth-Request-Email
+    request_header -X-Auth-Request-Preferred-Username
+
+    # oauth2-proxy's own endpoints bypass forward_auth.
     handle /oauth2/* {
         reverse_proxy 127.0.0.1:4180 {
             header_up X-Real-IP {remote_host}
         }
     }
 
+    # Everything else: authenticate, map identity onto SELVA-*, proxy to Selva.
     handle {
         forward_auth 127.0.0.1:4180 {
             uri /oauth2/auth
@@ -158,22 +170,24 @@ sudo nano /etc/caddy/Caddyfile
             }
         }
 
-        request_header -SELVA-UserPrincipalName
-        request_header -SELVA-Email
-        request_header -SELVA-DisplayName
-
         request_header SELVA-UserPrincipalName {http.request.header.X-Auth-Request-Preferred-Username}
         request_header SELVA-Email             {http.request.header.X-Auth-Request-Email}
-        request_header SELVA-DisplayName        {http.request.header.X-Auth-Request-User}
 
         reverse_proxy 127.0.0.1:3000
     }
 }
 ```
 
-The `request_header -SELVA-*` lines strip inbound copies first, which is **essential** to prevent header spoofing. The `handle_response @bad` block redirects 401s to the Entra login page; without it you get a bare unauthorized response. Use `header Location ...` + `respond 302`, not `redirect`, which is not valid inside `handle_response`.
+The `request_header -` lines strip inbound copies, which is **essential** to prevent header spoofing. Two things about their placement:
 
-The two-step header dance (copy `X-Auth-Request-*` out of forward_auth, then set `SELVA-*` from them) is specific to oauth2-proxy, which emits its own header names and can't be told to emit Selva's. The README's Caddyfile copies `SELVA-*` straight through because it assumes a helper that sets them directly. Both are correct; match whichever your helper actually emits.
+- **Site scope, not inside `handle`.** At site scope they cover every route including `/oauth2/*`, and they run before either `handle` block. Inside a `handle`, Caddy runs `request_header` in its own fixed directive order rather than the order you wrote — so a strip line sitting below `forward_auth` in the file does not reliably strip before it. Hoisting them removes the question.
+- **Strip both families.** `SELVA-*` because that is what the provider reads, and `X-Auth-Request-*` because `copy_headers` forwards a client-supplied copy when oauth2-proxy doesn't set its own.
+
+The `handle_response @bad` block redirects 401s to the Entra login page; without it you get a bare unauthorized response. Use `header Location ...` + `respond 302`, not `redirect`, which is not valid inside `handle_response`.
+
+The two-step header dance (copy `X-Auth-Request-*` out of forward_auth, then set `SELVA-*` from them) is specific to oauth2-proxy, which emits its own header names and can't be told to emit Selva's. The README's Caddyfile copies `SELVA-*` straight through because it assumes a helper that sets them directly. Both are correct; match whichever your helper actually emits — and note the two styles need opposite `.env` settings, covered in Part 6.
+
+No `SELVA-DisplayName` mapping is shown because oauth2-proxy has no display-name header. `X-Auth-Request-User` is Entra's subject identifier — an opaque OID, not a human name — so mapping it here would materialize GUIDs as display names. Leave it unmapped and the UI falls back to the email/UPN. To get real names, have oauth2-proxy emit the `name` claim as a custom header, add it to `copy_headers` **and** the strip list, and map it here.
 
 ```bash
 sudo caddy validate --config /etc/caddy/Caddyfile
@@ -193,6 +207,8 @@ BOOTSTRAP_INSTANCE_ADMIN_EMAIL=admin@corp.com
 
 `HOST=127.0.0.1` is non-negotiable. Port 3000 must not be open in the firewall.
 
+No `HEADER_AUTH_*_HEADER` vars appear here on purpose: Part 5's Caddyfile renames the headers onto `SELVA-*`, so the provider's defaults already match and overriding them would break login. If you adapt that Caddyfile to forward `X-Auth-Request-*` unchanged instead, you must override all three — see [Header names must match what reaches Selva](https://github.com/VektorNode/selva/blob/main/packages/providers/header-auth/README.md#header-names-must-match-what-reaches-selva) in the README.
+
 ```bash
 cd ~/selva
 npm run doctor   # also prints resolved header names; diff vs the Caddyfile
@@ -208,22 +224,11 @@ sudo journalctl -u oauth2-proxy -f   # in one window
 cd ~/selva && npm run logs            # in another
 ```
 
-Run the provider README's self-test now. The two negative checks are what prove the proxy is the boundary, and a successful login proves neither of them. Run these **from a machine outside your network**; from the host itself the first one hits loopback and passes even when the firewall is wide open.
+Run the [provider README's self-test](https://github.com/VektorNode/selva/blob/main/packages/providers/header-auth/README.md#verification-run-after-every-deployment-change) now — the direct-hit and spoofed-header checks are what prove the proxy is the boundary, and a successful login proves neither of them. Run both **from a machine outside your network**; from the host itself the direct hit reaches loopback and passes even with the firewall wide open.
 
-```bash
-# 1. Direct hit must fail. If this succeeds, network isolation is broken.
-curl -v http://<server-public-ip>:3000/admin
+For this setup the browser flow should go: Caddy gets 401 → redirects to Microsoft login → you authenticate → `/oauth2/callback` → Caddy injects `SELVA-*` headers → Selva loads → bootstrap admin auto-allowlisted.
 
-# 2. Spoofed header must fail. If this logs you in, the proxy isn't stripping.
-curl -v -H "SELVA-UserPrincipalName: attacker@example.com" \
-  https://[your-domain]/admin
-```
-
-Expect connection refused or a firewall 403 on the first, and a redirect to Microsoft login on the second, not an authenticated page.
-
-Then open `https://[your-domain]` in a browser. Expected flow: Caddy gets 401 → redirects to Microsoft login → you authenticate → `/oauth2/callback` → Caddy injects `SELVA-*` headers → Selva loads → bootstrap admin auto-allowlisted.
-
-Re-run all three after any change to the Caddyfile, oauth2-proxy config, or firewall.
+Re-run the self-test after any change to the Caddyfile, oauth2-proxy config, or firewall.
 
 ### Troubleshooting
 

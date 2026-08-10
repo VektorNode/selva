@@ -112,7 +112,9 @@ function checkNodeProvenance(env) {
 		?.trim();
 
 	if (!onPath) {
-		return yellow(`Node v${process.versions.node} at ${running} (${source}) — not resolvable on PATH`);
+		return yellow(
+			`Node v${process.versions.node} at ${running} (${source}) — not resolvable on PATH`
+		);
 	}
 
 	if (env.realpath(onPath) === running) {

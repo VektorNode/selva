@@ -173,10 +173,11 @@ const routeClassifier = createRouteClassifier({
 	// the shape of the API and reads no tenant data, and gating it would hide it
 	// from the people who need it most — callers deciding whether to integrate.
 	publicPrefixes: ['/auth/', '/logout', '/docs/'],
-	// Endpoints that must answer without a session — currently just the
-	// load-balancer health probe. Anything added here must be safe to expose
-	// to anonymous callers.
-	publicApis: ['/api/health'],
+	// Endpoints that must answer without a session — the load-balancer liveness
+	// probe and the readiness probe the post-update poller waits on across a
+	// restart (no session is guaranteed at that moment). Anything added here
+	// must be safe to expose to anonymous callers.
+	publicApis: ['/api/health', '/api/health/ready'],
 	// The blob proxy is *self-gating*: `/api/files/[...path]` classifies every
 	// path against the asset-class registry and applies per-class auth itself —
 	// public branding (logo/favicon) serves to anyone, while org/project assets
@@ -241,9 +242,11 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		return applyResponseHeaders(await resolve(event), pathname, requestId);
 	}
 
-	// `/api/health` is a load-balancer probe — must answer without auth or
-	// first-run gating. Short-circuit before any of the gates below run.
-	if (pathname === '/api/health') {
+	// Probes must answer without auth or first-run gating. Short-circuit before
+	// any of the gates below run — a fresh deployment with no users yet is still
+	// live and ready, and answering the first-run 503 here would tell a load
+	// balancer (or the post-update poller) the opposite.
+	if (pathname === '/api/health' || pathname === '/api/health/ready') {
 		return applyResponseHeaders(await resolve(event), pathname, requestId);
 	}
 

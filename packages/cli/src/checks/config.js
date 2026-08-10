@@ -65,6 +65,106 @@ export function checkOrigin(env) {
 	return green(`ORIGIN=${env.ORIGIN}`);
 }
 
+// Duplicated from HeaderAuthProvider.DEFAULT_HEADERS to avoid loading the runtime here.
+// A test in providers/header-auth pins both sides, so drift surfaces in CI.
+export const DEFAULT_HEADER_NAMES = {
+	upn: 'SELVA-UserPrincipalName',
+	email: 'SELVA-Email',
+	displayName: 'SELVA-DisplayName'
+};
+
+// oauth2-proxy's `set_xauthrequest` names. Two proxy styles are documented and
+// both are correct, but they need opposite env config:
+//
+//   rewrite      — Caddy maps X-Auth-Request-* onto SELVA-* before proxying.
+//                  Selva sees SELVA-*, so the overrides must be UNSET.
+//   copy-through — Caddy forwards X-Auth-Request-* unchanged.
+//                  Selva sees those names, so all three must be overridden.
+//
+// Mixing them is the failure this check exists to catch: a name Selva reads but
+// the proxy never sends yields `null` from identifyFromHeaders (for the UPN, a
+// total login failure) with nothing in the logs pointing at the env var.
+const OAUTH2_PROXY_HEADERS = new Set([
+	'x-auth-request-user',
+	'x-auth-request-email',
+	'x-auth-request-preferred-username'
+]);
+
+/**
+ * Reports the header names the provider will actually read, and flags the
+ * combinations that can't match any documented proxy config.
+ *
+ * Deliberately not a "did you override all three" count: with the rewrite
+ * style, zero overrides is the correct answer, so counting alone would push
+ * operators toward breaking a working deployment.
+ */
+export function checkHeaderNames(env) {
+	const resolved = {
+		upn: env.HEADER_AUTH_UPN_HEADER || DEFAULT_HEADER_NAMES.upn,
+		email: env.HEADER_AUTH_EMAIL_HEADER || DEFAULT_HEADER_NAMES.email,
+		displayName: env.HEADER_AUTH_DISPLAY_NAME_HEADER || DEFAULT_HEADER_NAMES.displayName
+	};
+	const list = `UPN=${resolved.upn}, Email=${resolved.email}, DisplayName=${resolved.displayName}`;
+
+	const oauth2 = Object.values(resolved).filter((h) =>
+		OAUTH2_PROXY_HEADERS.has(h.toLowerCase())
+	).length;
+	const defaults = Object.entries(resolved).filter(
+		([slot, name]) => name === DEFAULT_HEADER_NAMES[slot]
+	).length;
+
+	if (oauth2 === 0) {
+		return defaults === 3
+			? green(`header names (bundled defaults): ${list}`)
+			: green(`header names (custom): ${list}`);
+	}
+
+	// Some X-Auth-Request-*, some SELVA-* defaults — neither proxy style emits
+	// that mix, so whichever slots are still on a default are being read from a
+	// header nothing sets.
+	if (defaults > 0) {
+		const stale = Object.entries(resolved)
+			.filter(([slot, name]) => name === DEFAULT_HEADER_NAMES[slot])
+			.map(([slot, name]) => `${slot}=${name}`)
+			.join(', ');
+		return yellow(
+			`header names mix oauth2-proxy and bundled-default names: ${list} — ` +
+				`${stale} will never arrive if your proxy forwards X-Auth-Request-* unchanged. ` +
+				`Either override all three with the X-Auth-Request-* names, or map them to SELVA-* ` +
+				`in the proxy and unset all three overrides.`
+		);
+	}
+
+	return green(`header names (oauth2-proxy pass-through): ${list}`);
+}
+
+// Below this, an annotated .env is just a slightly chatty config file; above it
+// the operator is scrolling past screens of prose that no command can correct.
+const COMMENT_LINE_BUDGET = 40;
+
+/**
+ * Flags a `.env` still carrying the shipped documentation block.
+ *
+ * The block is a snapshot of the release the deployment was installed at.
+ * `migrate` rewrites keys but never prose, so those comments keep describing
+ * vars the code has since renamed or retired — confidently wrong instructions
+ * sitting in the file an operator reaches for first. Nothing breaks, which is
+ * why this is yellow, and why it needs saying at all.
+ */
+export function checkEnvDocumentation(commentLines, fix) {
+	if (commentLines <= COMMENT_LINE_BUDGET) {
+		return green('.env is values-only');
+	}
+	return yellow(
+		`.env carries ~${commentLines} lines of shipped documentation. Comments are ` +
+			`never updated by \`selva migrate\`, so they still describe the release this ` +
+			`deployment was installed at — including variables the code no longer reads. ` +
+			`Strip them (values and your own inline notes are kept, .env.bak written):\n     ` +
+			`selva doctor --fix`,
+		fix
+	);
+}
+
 // A rename is auto-fixable (`selva migrate` rewrites the key). A replacement
 // encodes a value in the new name, so migrate leaves it alone rather than
 // guessing — it's reported here and nowhere else.

@@ -8,6 +8,8 @@
 import {
 	existsSync,
 	readFileSync,
+	writeFileSync,
+	copyFileSync,
 	readdirSync,
 	accessSync,
 	constants,
@@ -18,7 +20,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { readEnvFile } from '../env.js';
+import { readEnvFile, parseEnv, countEnvCommentLines, stripEnvComments } from '../env.js';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 import { satisfiesNodeRange } from '../node-range.js';
 import { green, yellow, red, fixable } from '../checks/result.js';
@@ -26,6 +28,8 @@ import { checkBootPersistence } from '../checks/boot.js';
 import { checkRuntimeEnvironment } from '../checks/runtime.js';
 import {
 	checkDeprecatedEnv,
+	checkEnvDocumentation,
+	checkHeaderNames,
 	checkOrigin,
 	checkProviders,
 	checkSecret,
@@ -78,6 +82,7 @@ export async function runDoctor(argv = []) {
 	checks.push(...checkBootPersistence(dir));
 	checks.push(checkOrigin(env));
 	checks.push(...checkDeprecatedEnv(env));
+	checks.push(checkEnvDocs(dir));
 
 	// ── Render ─────────────────────────────────────────────────────────
 	const resolved = await Promise.all(checks);
@@ -372,6 +377,58 @@ function checkMigrationLeftovers(dir) {
 	);
 }
 
+// Reads the raw file rather than the parsed env: the finding IS the comments,
+// which parseEnv discards. The repair is attached here (not in checks/config.js)
+// to keep that module filesystem-free.
+function checkEnvDocs(dir) {
+	const envPath = join(dir, '.env');
+	if (!existsSync(envPath)) return green('.env documentation check skipped (no .env)');
+
+	let text;
+	try {
+		text = readFileSync(envPath, 'utf8');
+	} catch (err) {
+		return yellow(`.env unreadable (${err instanceof Error ? err.message : err})`);
+	}
+
+	return checkEnvDocumentation(
+		countEnvCommentLines(text),
+		fixable('strip the shipped documentation from .env (backup: .env.bak)', () => {
+			try {
+				// Re-read at repair time: doctor may have run minutes ago in --fix's
+				// confirmation loop, and rewriting from a stale snapshot would silently
+				// revert an edit made in between.
+				const current = readFileSync(envPath, 'utf8');
+				const { text: strippedText, removed } = stripEnvComments(current);
+				// A rewrite that changes which settings are live is a bug, not a
+				// cleanup — refuse rather than hand back a subtly different deployment.
+				const before = parseEnv(current);
+				const after = parseEnv(strippedText);
+				const drift = diffEnvKeys(before, after);
+				if (drift) return red(`refused to strip .env — ${drift}`);
+
+				copyFileSync(envPath, envPath + '.bak');
+				writeFileSync(envPath, strippedText, 'utf8');
+				return green(`stripped ${removed} comment lines from .env (backup: .env.bak)`);
+			} catch (err) {
+				return red(`could not rewrite .env: ${err instanceof Error ? err.message : err}`);
+			}
+		})
+	);
+}
+
+// Names the first discrepancy between two parsed envs, or null when identical.
+function diffEnvKeys(before, after) {
+	for (const key of Object.keys(before)) {
+		if (!(key in after)) return `${key} would be lost`;
+		if (before[key] !== after[key]) return `${key} would change value`;
+	}
+	for (const key of Object.keys(after)) {
+		if (!(key in before)) return `${key} would be added`;
+	}
+	return null;
+}
+
 function checkLayoutDrift(dir) {
 	const pkgPath = join(dir, 'package.json');
 	if (!existsSync(pkgPath)) return yellow('package.json missing — cannot check layout');
@@ -388,14 +445,6 @@ function checkLayoutDrift(dir) {
 			reasons.map((r) => '· ' + r).join('\n     ')
 	);
 }
-
-// Duplicated from HeaderAuthProvider.DEFAULT_HEADERS to avoid loading the runtime here.
-// A test in providers/header-auth pins both sides, so drift surfaces in CI.
-const DEFAULT_HEADER_NAMES = {
-	upn: 'SELVA-UserPrincipalName',
-	email: 'SELVA-Email',
-	displayName: 'SELVA-DisplayName'
-};
 
 // Static config only — runtime invariants like spoofing protection can't be checked from here.
 function checkHeaderAuth(dir, env, dataProvider) {
@@ -466,29 +515,7 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		out.push(green(`BOOTSTRAP_INSTANCE_ADMIN_EMAIL=${env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL}`));
 	}
 
-	const resolved = {
-		upn: env.HEADER_AUTH_UPN_HEADER || DEFAULT_HEADER_NAMES.upn,
-		email: env.HEADER_AUTH_EMAIL_HEADER || DEFAULT_HEADER_NAMES.email,
-		displayName: env.HEADER_AUTH_DISPLAY_NAME_HEADER || DEFAULT_HEADER_NAMES.displayName
-	};
-	const overrides = [
-		Boolean(env.HEADER_AUTH_UPN_HEADER),
-		Boolean(env.HEADER_AUTH_EMAIL_HEADER),
-		Boolean(env.HEADER_AUTH_DISPLAY_NAME_HEADER)
-	].filter(Boolean).length;
-	const headerList = `UPN=${resolved.upn}, Email=${resolved.email}, DisplayName=${resolved.displayName}`;
-	if (overrides === 0) {
-		out.push(green(`header names (bundled defaults): ${headerList}`));
-	} else if (overrides === 3) {
-		out.push(green(`header names (all overridden): ${headerList}`));
-	} else {
-		out.push(
-			yellow(
-				`header names partially overridden (${overrides}/3 set): ${headerList} — ` +
-					`a partial override is usually a typo. Set all three or none.`
-			)
-		);
-	}
+	out.push(checkHeaderNames(env));
 
 	return out;
 }

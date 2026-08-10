@@ -42,7 +42,11 @@ export async function runInit() {
 		p.log.warn('SELVA_AT_REST_KEY was missing — generated a fresh one.');
 	}
 
-	writeEnvFile(envPath, readEnvTemplate(dir), values);
+	// A values-only rewrite drops anything it isn't handed, and the prompts cover
+	// only the vars they ask about — every tuned knob the operator set by hand
+	// (BODY_SIZE_LIMIT, COMPUTE_*, LOG_LEVEL, …) lives outside that set. Carry
+	// the existing file forward and let the prompt answers win on top.
+	writeEnvFile(envPath, readEnvTemplate(dir), { ...current, ...values });
 
 	p.outro(
 		[

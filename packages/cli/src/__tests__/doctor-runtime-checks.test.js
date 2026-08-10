@@ -11,11 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import {
-	checkRuntimeEnvironment,
-	describeNodeSource,
-	compareVersions
-} from '../checks/runtime.js';
+import { checkRuntimeEnvironment, describeNodeSource, compareVersions } from '../checks/runtime.js';
 import { PM2_VERSION } from '../deployment-package.js';
 
 const DIR = '/srv/deploy';
@@ -94,7 +90,10 @@ test('a missing npm is a failure that names the Debian cause', () => {
 });
 
 test('npm that exits zero with unparseable output is still treated as missing', () => {
-	const checks = checkRuntimeEnvironment(DIR, fakeEnv({ npm: { status: 0, stdout: 'not-a-version' } }));
+	const checks = checkRuntimeEnvironment(
+		DIR,
+		fakeEnv({ npm: { status: 0, stdout: 'not-a-version' } })
+	);
 	assert.equal(checks[0].severity, 'red');
 });
 
@@ -212,8 +211,7 @@ test('a newer daemon is red and never suggests `pm2 update`', () => {
 	// repaired forward.
 	const ping = {
 		status: 0,
-		stderr:
-			'pm2 is out-of-date\nIn memory PM2 version: 6.0.14\nLocal PM2 version: 5.4.3\n'
+		stderr: 'pm2 is out-of-date\nIn memory PM2 version: 6.0.14\nLocal PM2 version: 5.4.3\n'
 	};
 	const checks = checkRuntimeEnvironment(DIR, fakeEnv({ ping }));
 	const daemon = find(checks, /is NEWER than/);

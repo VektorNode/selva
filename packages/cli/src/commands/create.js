@@ -15,7 +15,11 @@ import {
 	runtimeTemplatePath,
 	scaffoldVersion
 } from '../paths.js';
-import { buildDeploymentPackageJson } from '../deployment-package.js';
+import {
+	buildDeploymentPackageJson,
+	npmDistTagVersion,
+	resolveSelvaPins
+} from '../deployment-package.js';
 import { satisfiesNodeRange } from '../node-range.js';
 
 export async function runCreate(argv) {
@@ -57,9 +61,19 @@ export async function runCreate(argv) {
 
 	const deployName = basename(targetDir);
 
+	// Resolve the dist-tags to concrete versions before writing. A stored
+	// `"latest"` re-resolves on every later `npm install`, so the deployment
+	// would follow the tag instead of the version it was scaffolded against —
+	// and `selva doctor` reports a floating pin as drift.
+	const { pins } = resolveSelvaPins({}, npmDistTagVersion);
+
 	// package.json first: npm install needs it, and the runtime templates below
 	// only exist once @selvajs/selva is installed into node_modules.
-	const pkgJson = JSON.stringify(buildDeploymentPackageJson({ name: deployName }), null, 2);
+	const pkgJson = JSON.stringify(
+		buildDeploymentPackageJson({ name: deployName, dependencies: pins }),
+		null,
+		2
+	);
 	writeFileSync(join(targetDir, 'package.json'), pkgJson + '\n', 'utf8');
 
 	if (!skipInstall) {

@@ -32,7 +32,11 @@ export interface RestartHealth {
  * the expected case, not an error.
  */
 export interface RestartProbes {
-	/** /api/health — null when unreachable, non-2xx, or still booting. */
+	/**
+	 * /api/health — null when unreachable or still booting. A 503 `degraded`
+	 * body still counts as reachable: the process is up and answering, which is
+	 * what this probe is for.
+	 */
 	health(): Promise<RestartHealth | null>;
 	/** The tee'd update log file — null when the fetch failed. */
 	log(): Promise<string | null>;
@@ -96,13 +100,16 @@ export function exitCodeFromLog(log: string): number | null {
  * gone and a fresh one is answering. That works in every deployment shape (npm
  * has no git commit) and even when the new build is the same version.
  *
- * "Reachable" is deliberately not treated as "ready". `health()` resolves null
- * for a 503 or a refused connection, and a bare 200 from the OLD process carries
- * the OLD instanceId. Even a fresh instanceId isn't enough alone: /api/health
- * answers the instant the process boots, a beat before real routes serve through
- * the proxy, so we additionally require the heavier readiness probe. That
- * pairing is what prevents a premature "online" verdict leaving an immediate
- * reload on a 502.
+ * A fresh instanceId alone is not treated as done: /api/health answers the
+ * instant the process boots, a beat before real routes serve through the proxy,
+ * so a premature "online" verdict left an immediate reload hitting a 502. The
+ * heavier readiness probe closes that gap — but only as an *accelerator*, never
+ * as a requirement. It re-runs live integrity checks per request, so it reports
+ * false whenever an unrelated dependency is down and can outrun the caller's
+ * probe timeout on a slow host. So the loop finishes on either signal: readiness
+ * going green, or the runner writing its own terminal marker to the log.
+ * Requiring both is what hung a *successful* update on "PM2 is restarting…"
+ * until the deadline turned it into a false failure.
  */
 export async function pollForRestart(
 	previousInstanceId: string | null | undefined,
@@ -135,23 +142,36 @@ export async function pollForRestart(
 		}
 
 		const logVerdict = exitCodeFromLog(logs);
+		const freshInstance = !!health?.instanceId && health.instanceId !== previousInstanceId;
 
 		// Trust the runner's logged verdict over a bare assumption of success — a
 		// rollback also brings up a fresh process but must not read as a clean
 		// update.
-		const newProcessUp = !!health?.instanceId && health.instanceId !== previousInstanceId && ready;
-		if (newProcessUp) {
+		if (freshInstance && ready) {
 			return { exitCode: logVerdict ?? 0 };
+		}
+
+		// A fresh process is answering AND the runner wrote its terminal marker,
+		// but the heavy readiness route hasn't gone green. Readiness is a
+		// *quality* signal, not a liveness one: it re-runs live integrity checks
+		// on every request, so it stays false whenever an unrelated dependency is
+		// down (an unreachable compute server is the common one) and it can
+		// outrun the caller's probe timeout on a slow host. Requiring it here is
+		// what left a finished update spinning on "PM2 is restarting…" until the
+		// 5-minute deadline reported a false failure. The runner's own marker is
+		// the authority on whether the update finished; report it.
+		if (freshInstance && logVerdict !== null) {
+			return { exitCode: logVerdict };
 		}
 
 		// No-restart terminal: the runner reached a verdict WITHOUT bringing up a
 		// new process — the pre-flight "already up to date" path exits before `pm2
 		// stop`, and an early failure aborts while the old process still serves. In
-		// both cases the instanceId never changes, so `newProcessUp` can never fire;
-		// keying on it alone would wait out the full deadline and report a false
-		// failure. When the app is reachable+warm on the SAME instanceId and the log
-		// carries a terminal marker, that marker IS the outcome.
-		if (logVerdict !== null && health && ready && health.instanceId === previousInstanceId) {
+		// both cases the instanceId never changes, so the fresh-instance branches
+		// can never fire; keying on them alone would wait out the full deadline and
+		// report a false failure. When the app is reachable on the SAME instanceId
+		// and the log carries a terminal marker, that marker IS the outcome.
+		if (logVerdict !== null && health && health.instanceId === previousInstanceId) {
 			return { exitCode: logVerdict };
 		}
 
@@ -159,7 +179,7 @@ export async function pollForRestart(
 		// build with no fingerprint): we can't tell the new process from the old one
 		// by id, so hold out for the runner's own terminal marker rather than
 		// latching onto the still-running old process.
-		if (!previousInstanceId && health && ready && logVerdict !== null) {
+		if (!previousInstanceId && health && logVerdict !== null) {
 			return { exitCode: logVerdict };
 		}
 

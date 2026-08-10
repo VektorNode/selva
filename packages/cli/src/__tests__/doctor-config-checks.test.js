@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	checkDeprecatedEnv,
+	checkHeaderNames,
 	checkOrigin,
 	checkProviders,
 	checkTenancy,
@@ -61,6 +62,55 @@ test('an unknown tenancy is a failure', () => {
 	const r = checkTenancy({ SELVA_TENANCY: 'many' });
 	assert.equal(r.severity, 'red');
 	assert.match(r.line, /expected single\|multi/);
+});
+
+// ── Header-auth header names ────────────────────────────────────────────
+
+test('the bundled defaults pass — the rewrite-style proxy sets SELVA-* itself', () => {
+	const r = checkHeaderNames({});
+	assert.equal(r.severity, 'green');
+	assert.match(r.line, /bundled defaults/);
+});
+
+test('all three overridden to oauth2-proxy names passes', () => {
+	// Copy-through style: Caddy forwards X-Auth-Request-* unchanged.
+	const r = checkHeaderNames({
+		HEADER_AUTH_UPN_HEADER: 'X-Auth-Request-Preferred-Username',
+		HEADER_AUTH_EMAIL_HEADER: 'X-Auth-Request-Email',
+		HEADER_AUTH_DISPLAY_NAME_HEADER: 'X-Auth-Request-User'
+	});
+	assert.equal(r.severity, 'green');
+	assert.match(r.line, /pass-through/);
+});
+
+test('oauth2-proxy names mixed with a leftover default warns and names the stale slot', () => {
+	// The real-world trap: UPN and Email overridden, DisplayName left on the
+	// default, so displayName silently never materializes.
+	const r = checkHeaderNames({
+		HEADER_AUTH_UPN_HEADER: 'X-Auth-Request-Preferred-Username',
+		HEADER_AUTH_EMAIL_HEADER: 'X-Auth-Request-Email'
+	});
+	assert.equal(r.severity, 'yellow');
+	assert.match(r.line, /displayName=SELVA-DisplayName/);
+	assert.doesNotMatch(r.line, /Set all three or none/);
+});
+
+test('a UPN left on the default while the rest are oauth2-proxy names warns', () => {
+	// Worst case — the UPN is the allowlist key, so nobody can log in at all.
+	const r = checkHeaderNames({
+		HEADER_AUTH_EMAIL_HEADER: 'X-Auth-Request-Email',
+		HEADER_AUTH_DISPLAY_NAME_HEADER: 'X-Auth-Request-User'
+	});
+	assert.equal(r.severity, 'yellow');
+	assert.match(r.line, /upn=SELVA-UserPrincipalName/);
+});
+
+test('non-oauth2-proxy custom names are accepted without a nag', () => {
+	// Authelia/Pomerium/etc. use their own names; doctor has no list to check
+	// them against, and a partial count would flag a working deployment.
+	const r = checkHeaderNames({ HEADER_AUTH_UPN_HEADER: 'Remote-User' });
+	assert.equal(r.severity, 'green');
+	assert.match(r.line, /custom/);
 });
 
 // ── ORIGIN ──────────────────────────────────────────────────────────────
