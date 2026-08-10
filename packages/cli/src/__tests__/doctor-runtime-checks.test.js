@@ -18,7 +18,9 @@ const DIR = '/srv/deploy';
 const PM2_PKG = join(DIR, 'node_modules', 'pm2', 'package.json');
 const PM2_BIN = join(DIR, 'node_modules', '.bin', 'pm2');
 const PM2_PID = join('/home/selva', '.pm2', 'pm2.pid');
-const LOGROTATE = join('/home/selva', '.pm2', 'node_modules', 'pm2-logrotate');
+// pm2 keeps installed modules in `$PM2_HOME/modules`, not `node_modules` —
+// verified against a real `pm2 install pm2-logrotate` on a live deployment.
+const LOGROTATE = join('/home/selva', '.pm2', 'modules', 'pm2-logrotate');
 const DEPLOY_PKG = join(DIR, 'package.json');
 const NODE = '/usr/bin/node';
 
@@ -307,6 +309,23 @@ test('the repair installs the module and applies the weekly settings', () => {
 	assert.equal(settings['pm2-logrotate:rotateInterval'], '0 0 * * 0');
 	assert.equal(settings['pm2-logrotate:retain'], '8');
 	assert.equal(settings['pm2-logrotate:compress'], 'true');
+});
+
+test('the path the repair creates is the path the check looks for', () => {
+	// These were allowed to disagree: the check probed `$PM2_HOME/node_modules`
+	// while `pm2 install` writes `$PM2_HOME/modules`, so a successful repair
+	// still reported "not installed" and --fix re-offered it every single run.
+	const pm2Home = join('/home/selva', '.pm2');
+	assert.equal(
+		LOGROTATE,
+		join(pm2Home, 'modules', 'pm2-logrotate'),
+		'pm2 installs modules into $PM2_HOME/modules'
+	);
+
+	// With that path present the check must be green — no repair on offer.
+	const after = find(checkRuntimeEnvironment(DIR, fakeEnv()), /logrotate/);
+	assert.equal(after.severity, 'green');
+	assert.equal(after.fix, undefined, 'a satisfied check must not still offer its repair');
 });
 
 test('a failed install reports rather than claiming success', () => {

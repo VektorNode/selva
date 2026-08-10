@@ -280,13 +280,18 @@ function checkPm2Daemon(dir, env) {
 //
 // Detected from the filesystem, never by running `pm2 ls`: an invocation with
 // no live daemon spawns one as a side effect, which doctor must not do (see
-// checkPm2Daemon). Installed modules live in `$PM2_HOME/node_modules`.
+// checkPm2Daemon).
+//
+// `$PM2_HOME/modules/<name>`, NOT `node_modules/` — pm2 keeps installed modules
+// in their own tree. Checking the wrong path made this report "not installed"
+// straight after a successful install, so `--fix` offered the same repair every
+// run.
 function checkPm2LogRotation(dir, env) {
 	const bin = join(dir, 'node_modules', '.bin', env.platform() === 'win32' ? 'pm2.cmd' : 'pm2');
 	if (!env.exists(bin)) return [];
 
 	const pm2Home = env.env().PM2_HOME ?? join(env.homedir(), '.pm2');
-	if (env.exists(join(pm2Home, 'node_modules', 'pm2-logrotate'))) {
+	if (env.exists(join(pm2Home, 'modules', 'pm2-logrotate'))) {
 		return [green('pm2-logrotate installed — pm2 logs are rotated')];
 	}
 
