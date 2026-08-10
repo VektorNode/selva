@@ -19,8 +19,11 @@ import {
 	SELVA_PACKAGES
 } from '../deployment-package.js';
 import {
+	backupPathFor,
+	backupStamp,
 	buildTargetPackageJson,
 	buildPm2UpgradeNotice,
+	classifyBackups,
 	detectDrift,
 	diffPackageJson
 } from '../commands/migrate.js';
@@ -260,6 +263,67 @@ test('pin classification', () => {
 	assert.ok(isPrereleasePin('4.8.0-rc.1'));
 	assert.ok(!isPrereleasePin('^4.7.3'));
 	assert.ok(!isPrereleasePin('latest'));
+});
+
+// ── Migration backups (#184) ────────────────────────────────────────────
+
+test('a backup stamp is a filename on every platform', () => {
+	// Colons are illegal in Windows filenames.
+	const stamp = backupStamp(new Date('2026-08-10T05:43:12.884Z'));
+	assert.equal(stamp, '2026-08-10T05-43-12');
+	assert.ok(!stamp.includes(':'));
+	assert.match(backupPathFor('/srv/d/.env', stamp), /\.env\.2026-08-10T05-43-12\.bak$/);
+});
+
+test('only migrate-written backups are recognised', () => {
+	// An operator's own `notes.bak` or a hand-made `package.json.bak` must never
+	// be picked up as ours and offered for deletion.
+	const now = new Date('2026-08-10T00:00:00Z');
+	const { keep, aged } = classifyBackups(
+		['notes.bak', 'package.json.bak', '.env.bak', 'config.backup'],
+		now
+	);
+	assert.deepEqual(keep, []);
+	assert.deepEqual(aged, []);
+});
+
+test('the newest backup set is kept however old it is', () => {
+	// A deployment that migrates once a year would otherwise have its only copy
+	// of the pre-migration config deleted on age alone.
+	const now = new Date('2026-08-10T00:00:00Z');
+	const { keep, aged } = classifyBackups(
+		['package.json.2024-01-01T00-00-00.bak', '.env.2024-01-01T00-00-00.bak'],
+		now
+	);
+	assert.deepEqual(aged, [], 'nothing to delete when only one set exists');
+	assert.equal(keep.length, 2);
+});
+
+test('superseded sets past the age cutoff are offered for deletion', () => {
+	const now = new Date('2026-08-10T00:00:00Z');
+	const { keep, aged, newest } = classifyBackups(
+		[
+			'package.json.2026-01-05T10-00-00.bak', // old, superseded → aged
+			'.env.2026-01-05T10-00-00.bak', // old, superseded → aged
+			'package.json.2026-08-01T10-00-00.bak', // recent → keep
+			'package.json.2026-08-09T10-00-00.bak' // newest → keep
+		],
+		now
+	);
+	assert.equal(newest, '2026-08-09T10-00-00');
+	assert.deepEqual(aged.sort(), [
+		'.env.2026-01-05T10-00-00.bak',
+		'package.json.2026-01-05T10-00-00.bak'
+	]);
+	assert.equal(keep.length, 2);
+});
+
+test('a whole migration set shares one stamp, so generations stay grouped', () => {
+	const stamp = backupStamp(new Date('2026-08-10T05:43:12Z'));
+	const names = ['package.json', '.env', 'ecosystem.config.cjs'].map((f) => `${f}.${stamp}.bak`);
+	const { keep, newest } = classifyBackups(names, new Date('2026-08-10T06:00:00Z'));
+	assert.equal(newest, stamp);
+	assert.equal(keep.length, 3, 'one migration is one generation, kept or dropped together');
 });
 
 // ── What a migration discards ───────────────────────────────────────────

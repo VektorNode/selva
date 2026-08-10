@@ -12,10 +12,18 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import {
+	mkdtempSync,
+	mkdirSync,
+	writeFileSync,
+	readFileSync,
+	readdirSync,
+	existsSync,
+	rmSync
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runMigrate, NODE_MODULES_STASH } from '../commands/migrate.js';
+import { runMigrate, BACKUP_PATTERN, NODE_MODULES_STASH } from '../commands/migrate.js';
 import { pm2Bin } from '../commands/pm2.js';
 
 // A deployment on the OLD layout, so migrate always finds something to do.
@@ -46,6 +54,16 @@ function legacyDeployment() {
 
 const approve = async () => true;
 
+// Migrate resolves dist-tags through `npm view`; stub it so tests stay offline.
+const resolveVersion = () => '4.7.3';
+
+/** Backups migrate wrote for `base`, oldest first (stamps sort chronologically). */
+function backupsIn(dir, base) {
+	return readdirSync(dir)
+		.filter((n) => n.startsWith(base + '.') && BACKUP_PATTERN.test(n))
+		.sort();
+}
+
 test('a failed install restores the dependency tree and restarts the app', async (t) => {
 	const dir = legacyDeployment();
 	t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -73,7 +91,8 @@ test('a failed install restores the dependency tree and restarts the app', async
 			pm2: (_dir, args) => {
 				pm2Calls.push(args.join(' '));
 				return 0;
-			}
+			},
+			resolveVersion
 		}),
 		/process\.exit/
 	);
@@ -110,7 +129,8 @@ test('a successful migration rewrites the layout and leaves no stash', async (t)
 		confirm: approve,
 		// A real npm would recreate node_modules; migrate must not depend on it.
 		install: () => {},
-		pm2: () => 0
+		pm2: () => 0,
+		resolveVersion
 	});
 
 	const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
@@ -119,7 +139,54 @@ test('a successful migration rewrites the layout and leaves no stash', async (t)
 	assert.equal(pkg.scripts.start, 'selva start');
 
 	assert.equal(existsSync(join(dir, NODE_MODULES_STASH)), false, 'stash cleaned up on success');
-	assert.ok(existsSync(join(dir, 'package.json.bak')), 'a rollback copy is left for the operator');
+	assert.equal(
+		backupsIn(dir, 'package.json').length,
+		1,
+		'a rollback copy is left for the operator'
+	);
+});
+
+test('a second migration does not overwrite the first migration backup (#184)', async (t) => {
+	// Each run backs up the CURRENT file, so a fixed `package.json.bak` meant the
+	// second migration's copy held post-first-migration state — and the original
+	// pre-migration config was gone from disk entirely.
+	const dir = legacyDeployment();
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+	const run = () =>
+		runMigrate(undefined, {
+			dir,
+			confirm: approve,
+			install: () => {},
+			pm2: () => 0,
+			resolveVersion
+		});
+
+	await run();
+	const first = backupsIn(dir, 'package.json');
+	assert.equal(first.length, 1);
+	const original = readFileSync(join(dir, first[0]), 'utf8');
+	assert.match(original, /@selvajs\/runtime/, 'the first backup holds the pre-migration config');
+
+	// Re-introduce drift so the second run has something to do — an already-current
+	// deployment hits the idempotence guard and never writes a backup at all.
+	const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+	pkg.dependencies['@selvajs/platform'] = '1.0.0';
+	writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg), 'utf8');
+
+	// Stamps have one-second resolution, so a same-second second run would reuse
+	// the filename. Real migrations are minutes apart; the wait keeps the test
+	// honest about what it is asserting.
+	await new Promise((r) => setTimeout(r, 1100));
+	await run();
+
+	const both = backupsIn(dir, 'package.json');
+	assert.equal(both.length, 2, 'each migration keeps its own backup');
+	assert.equal(
+		readFileSync(join(dir, both[0]), 'utf8'),
+		original,
+		'the original pre-migration config is still recoverable'
+	);
 });
 
 test('declining the confirmation changes nothing on disk', async (t) => {
@@ -131,7 +198,8 @@ test('declining the confirmation changes nothing on disk', async (t) => {
 		dir,
 		confirm: async () => false,
 		install: () => assert.fail('install must not run when the operator declines'),
-		pm2: () => assert.fail('pm2 must not run when the operator declines')
+		pm2: () => assert.fail('pm2 must not run when the operator declines'),
+		resolveVersion
 	});
 
 	assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), before);

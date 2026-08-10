@@ -160,7 +160,7 @@ export function checkEnvDocumentation(commentLines, fix) {
 			`never updated by \`selva migrate\`, so they still describe the release this ` +
 			`deployment was installed at — including variables the code no longer reads. ` +
 			`Strip them (values and your own inline notes are kept, .env.bak written):\n     ` +
-			`selva doctor --fix`,
+			`npx selva doctor --fix`,
 		fix
 	);
 }

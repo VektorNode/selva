@@ -182,7 +182,7 @@ test('doctor flags a .env still carrying the shipped documentation', () => {
 	const result = checkEnvDocumentation(470);
 	assert.equal(result.severity, 'yellow');
 	assert.match(result.line, /470/);
-	assert.match(result.line, /selva doctor --fix/);
+	assert.match(result.line, /npx selva doctor --fix/);
 });
 
 test('the real 4.6-era template is over the budget and strips cleanly', () => {

@@ -18,6 +18,7 @@ const DIR = '/srv/deploy';
 const PM2_PKG = join(DIR, 'node_modules', 'pm2', 'package.json');
 const PM2_BIN = join(DIR, 'node_modules', '.bin', 'pm2');
 const PM2_PID = join('/home/selva', '.pm2', 'pm2.pid');
+const LOGROTATE = join('/home/selva', '.pm2', 'node_modules', 'pm2-logrotate');
 const DEPLOY_PKG = join(DIR, 'package.json');
 const NODE = '/usr/bin/node';
 
@@ -29,7 +30,7 @@ function fakeEnv({
 	npm = { status: 0, stdout: '10.9.2\n' },
 	nodePath = NODE,
 	whichNode = NODE,
-	files = [PM2_PKG, PM2_BIN, PM2_PID, DEPLOY_PKG],
+	files = [PM2_PKG, PM2_BIN, PM2_PID, DEPLOY_PKG, LOGROTATE],
 	pm2Version = PM2_VERSION,
 	declaredPm2 = PM2_VERSION,
 	daemonAlive = true,
@@ -72,10 +73,11 @@ const find = (checks, re) => checks.find((c) => re.test(c.line));
 
 test('a correctly provisioned host passes every runtime check', () => {
 	const checks = checkRuntimeEnvironment(DIR, fakeEnv());
-	assert.deepEqual(severities(checks), ['green', 'green', 'green', 'green']);
+	assert.deepEqual(severities(checks), ['green', 'green', 'green', 'green', 'green']);
 	assert.match(lines(checks), /npm 10\.9\.2 on PATH/);
 	assert.match(lines(checks), /matches the pinned version/);
 	assert.match(lines(checks), /daemon responds and matches/);
+	assert.match(lines(checks), /pm2-logrotate installed/);
 });
 
 // ── npm ─────────────────────────────────────────────────────────────────
@@ -253,6 +255,88 @@ test('the daemon check is skipped when the deployment has no pm2 binary', () => 
 	// failure about the daemon would just be noise.
 	const checks = checkRuntimeEnvironment(DIR, fakeEnv({ files: [DEPLOY_PKG] }));
 	assert.equal(find(checks, /pm2 daemon/), undefined);
+});
+
+// ── pm2 log rotation ────────────────────────────────────────────────────
+
+test('a missing pm2-logrotate warns and names the disk consequence', () => {
+	const checks = checkRuntimeEnvironment(
+		DIR,
+		fakeEnv({ files: [PM2_PKG, PM2_BIN, PM2_PID, DEPLOY_PKG] })
+	);
+	const rotate = find(checks, /logrotate/);
+	assert.equal(rotate.severity, 'yellow');
+	assert.match(rotate.line, /grow without bound/);
+	assert.ok(rotate.fix, 'a repair should be offered');
+});
+
+test('detecting log rotation never invokes pm2', () => {
+	// An invocation with no live daemon spawns one as a side effect, which is
+	// exactly what doctor must not do — same rule as the daemon check.
+	const invoked = [];
+	const env = fakeEnv({ files: [PM2_PKG, PM2_BIN, DEPLOY_PKG], daemonAlive: false });
+	const spy = {
+		...env,
+		run: (cmd, args, opts) => (invoked.push([cmd, args]), env.run(cmd, args, opts))
+	};
+	checkRuntimeEnvironment(DIR, spy);
+	assert.ok(
+		!invoked.some(([cmd, args]) => cmd.includes('pm2') && args?.[0] !== 'ping'),
+		`pm2 must not be invoked to detect logrotate, got: ${JSON.stringify(invoked)}`
+	);
+});
+
+test('the repair installs the module and applies the weekly settings', () => {
+	const calls = [];
+	const env = fakeEnv({ files: [PM2_PKG, PM2_BIN, PM2_PID, DEPLOY_PKG] });
+	const spy = {
+		...env,
+		run: (cmd, args, opts) => {
+			if (args?.[0] === 'install' || args?.[0] === 'set') {
+				calls.push(args);
+				return { status: 0, stdout: '' };
+			}
+			return env.run(cmd, args, opts);
+		}
+	};
+	const result = find(checkRuntimeEnvironment(DIR, spy), /logrotate/).fix.run();
+
+	assert.equal(result.severity, 'green');
+	assert.deepEqual(calls[0], ['install', 'pm2-logrotate']);
+	const settings = Object.fromEntries(calls.slice(1).map(([, k, v]) => [k, v]));
+	assert.equal(settings['pm2-logrotate:rotateInterval'], '0 0 * * 0');
+	assert.equal(settings['pm2-logrotate:retain'], '8');
+	assert.equal(settings['pm2-logrotate:compress'], 'true');
+});
+
+test('a failed install reports rather than claiming success', () => {
+	const env = fakeEnv({ files: [PM2_PKG, PM2_BIN, PM2_PID, DEPLOY_PKG] });
+	const spy = {
+		...env,
+		run: (cmd, args, opts) =>
+			args?.[0] === 'install'
+				? { status: 1, stderr: 'network unreachable' }
+				: env.run(cmd, args, opts)
+	};
+	const result = find(checkRuntimeEnvironment(DIR, spy), /logrotate/).fix.run();
+	assert.equal(result.severity, 'red');
+	assert.match(result.line, /network unreachable/);
+});
+
+test('a failed setting leaves rotation on at pm2 defaults rather than failing', () => {
+	// Rotation at the wrong interval still beats unbounded growth.
+	const env = fakeEnv({ files: [PM2_PKG, PM2_BIN, PM2_PID, DEPLOY_PKG] });
+	const spy = {
+		...env,
+		run: (cmd, args, opts) => {
+			if (args?.[0] === 'install') return { status: 0, stdout: '' };
+			if (args?.[0] === 'set') return { status: 1, stderr: 'nope' };
+			return env.run(cmd, args, opts);
+		}
+	};
+	const result = find(checkRuntimeEnvironment(DIR, spy), /logrotate/).fix.run();
+	assert.equal(result.severity, 'yellow');
+	assert.match(result.line, /installed, but could not set/);
 });
 
 // ── Version comparison ──────────────────────────────────────────────────

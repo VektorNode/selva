@@ -36,7 +36,7 @@ import {
 	checkTenancy,
 	resolveProviders
 } from '../checks/config.js';
-import { detectDrift, NODE_MODULES_STASH } from './migrate.js';
+import { BACKUP_AGE_DAYS, classifyBackups, detectDrift, NODE_MODULES_STASH } from './migrate.js';
 
 export async function runDoctor(argv = []) {
 	const fix = argv.includes('--fix');
@@ -52,6 +52,7 @@ export async function runDoctor(argv = []) {
 	checks.push(checkFile(join(dir, 'ecosystem.config.cjs'), 'ecosystem.config.cjs present'));
 	checks.push(checkLayoutDrift(dir));
 	checks.push(checkMigrationLeftovers(dir));
+	checks.push(checkAgedBackups(dir));
 	checks.push(checkSecret(env.SELVA_HMAC_KEY, 'SELVA_HMAC_KEY is a 32-byte hex string'));
 	checks.push(checkSecret(env.SELVA_AT_REST_KEY, 'SELVA_AT_REST_KEY is a 32-byte hex string'));
 
@@ -99,7 +100,7 @@ export async function runDoctor(argv = []) {
 		if (repairable > 0) {
 			p.log.info(
 				`${repairable} issue${repairable === 1 ? '' : 's'} can be repaired automatically — ` +
-					`re-run with \`selva doctor --fix\`.`
+					`re-run with \`npx selva doctor --fix\`.`
 			);
 		}
 	}
@@ -373,6 +374,42 @@ function checkMigrationLeftovers(dir) {
 			} catch (err) {
 				return red(`could not remove ${stash}: ${err instanceof Error ? err.message : err}`);
 			}
+		})
+	);
+}
+
+// Migration backups are timestamped so a later migration can't overwrite an
+// earlier one's (#184), which means they accumulate. Deleting them silently
+// would throw away the operator's only copy of a pre-migration config, so this
+// reports and lets `--fix` opt in. `classifyBackups` always keeps the newest
+// run, so the escape hatch is never emptied — only superseded generations go.
+function checkAgedBackups(dir) {
+	let names;
+	try {
+		names = readdirSync(dir);
+	} catch {
+		return green('no aged migration backups');
+	}
+
+	const { aged } = classifyBackups(names);
+	if (aged.length === 0) return green('no aged migration backups');
+
+	const shown = aged.slice(0, 3).join(', ');
+	const more = aged.length > 3 ? `, +${aged.length - 3} more` : '';
+	return yellow(
+		`${aged.length} migration backup${aged.length === 1 ? '' : 's'} older than ` +
+			`${BACKUP_AGE_DAYS} days (${shown}${more}). The newest set is kept either way.`,
+		fixable(`delete ${aged.length} aged migration backup${aged.length === 1 ? '' : 's'}`, () => {
+			const failed = [];
+			for (const name of aged) {
+				try {
+					rmSync(join(dir, name), { force: true });
+				} catch (err) {
+					failed.push(`${name} (${err instanceof Error ? err.message : err})`);
+				}
+			}
+			if (failed.length > 0) return red(`could not remove: ${failed.join(', ')}`);
+			return green(`removed ${aged.length} aged backup${aged.length === 1 ? '' : 's'}`);
 		})
 	);
 }

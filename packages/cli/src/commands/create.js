@@ -215,11 +215,37 @@ function runNpmInstall(cwd) {
 	});
 }
 
+// `npx @selvajs/cli` resolves to the `cli` bin — the scaffolder — while every
+// operate command lives on the sibling `selva` bin. So `npx @selvajs/cli doctor
+// --fix` lands here, where "doctor" is just a directory name and `--fix` an
+// unknown flag. Name the bin split rather than letting the operator conclude
+// their CLI is too old for a flag it has shipped for releases.
+const OPERATE_COMMANDS = new Set([
+	'doctor',
+	'start',
+	'stop',
+	'restart',
+	'logs',
+	'update',
+	'migrate',
+	'keys',
+	'init'
+]);
+
 function parseArgs(argv) {
 	let dir;
 	let force = false;
 	let skipInstall = false;
 	let yes = false;
+
+	if (OPERATE_COMMANDS.has(argv[0])) {
+		throw new Error(
+			`\`${argv[0]}\` is an operate command, but \`npx @selvajs/cli\` runs the scaffolder.\n` +
+				`  Run it through the deployment's own CLI instead:\n` +
+				`    npx selva ${argv.join(' ')}`
+		);
+	}
+
 	for (const arg of argv) {
 		if (arg === '--force') force = true;
 		else if (arg === '--skip-install') skipInstall = true;

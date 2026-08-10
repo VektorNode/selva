@@ -15,7 +15,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { green, red, yellow } from './result.js';
+import { fixable, green, red, yellow } from './result.js';
 import { PM2_VERSION } from '../deployment-package.js';
 
 /** The real OS. Tests pass a stand-in with the same shape. */
@@ -56,7 +56,8 @@ export function checkRuntimeEnvironment(dir, env = runtimeEnv) {
 		checkNpm(env),
 		checkNodeProvenance(env),
 		...checkPm2Install(dir, env),
-		...checkPm2Daemon(dir, env)
+		...checkPm2Daemon(dir, env),
+		...checkPm2LogRotation(dir, env)
 	];
 }
 
@@ -268,6 +269,81 @@ function checkPm2Daemon(dir, env) {
 				'Resync it — this briefly restarts managed processes: npx pm2 update'
 		)
 	];
+}
+
+// ── pm2 log rotation ────────────────────────────────────────────────────
+
+// pm2 appends to `$PM2_HOME/logs/*.log` forever. Nothing in a default install
+// truncates them, and the app writes a line per solve — so the only bound is
+// the disk. It fails late and all at once: the partition fills, and pm2 and the
+// app go down together on a box that looked healthy the day before.
+//
+// Detected from the filesystem, never by running `pm2 ls`: an invocation with
+// no live daemon spawns one as a side effect, which doctor must not do (see
+// checkPm2Daemon). Installed modules live in `$PM2_HOME/node_modules`.
+function checkPm2LogRotation(dir, env) {
+	const bin = join(dir, 'node_modules', '.bin', env.platform() === 'win32' ? 'pm2.cmd' : 'pm2');
+	if (!env.exists(bin)) return [];
+
+	const pm2Home = env.env().PM2_HOME ?? join(env.homedir(), '.pm2');
+	if (env.exists(join(pm2Home, 'node_modules', 'pm2-logrotate'))) {
+		return [green('pm2-logrotate installed — pm2 logs are rotated')];
+	}
+
+	return [
+		yellow(
+			'pm2-logrotate is not installed — pm2 logs grow without bound and are only\n     ' +
+				'capped by free disk. Install it (takes effect immediately, no restart):\n     ' +
+				'npx pm2 install pm2-logrotate\n     ' +
+				`npx pm2 set pm2-logrotate:rotateInterval "${LOGROTATE_SETTINGS.rotateInterval}"\n     ` +
+				`npx pm2 set pm2-logrotate:retain ${LOGROTATE_SETTINGS.retain}\n     ` +
+				`npx pm2 set pm2-logrotate:compress ${LOGROTATE_SETTINGS.compress}`,
+			fixable('install pm2-logrotate (weekly rotation, 8 kept, compressed)', () =>
+				installLogRotate(bin, dir, env)
+			)
+		)
+	];
+}
+
+/**
+ * Weekly on Sunday 00:00, keeping 8 — about two months of history, compressed.
+ *
+ * Weekly rather than pm2's daily default: a Selva deployment writes a line per
+ * solve, so daily files are mostly idle days, and two months of them is a lot
+ * of near-empty archives to page through when tracing an incident.
+ */
+const LOGROTATE_SETTINGS = {
+	rotateInterval: '0 0 * * 0',
+	retain: 8,
+	compress: true
+};
+
+// `pm2 install` needs no root and doesn't restart managed processes, which is
+// what makes it eligible as a doctor fixer at all. The settings are applied
+// after: failing to set one leaves rotation on at pm2's defaults, which still
+// beats unbounded growth, so a failed `set` is reported, not fatal.
+function installLogRotate(bin, dir, env) {
+	const install = env.run(bin, ['install', 'pm2-logrotate'], { cwd: dir });
+	if ((install.status ?? 1) !== 0) {
+		const detail = String(install.stderr ?? install.stdout ?? '')
+			.trim()
+			.split('\n')
+			.pop();
+		return red(`\`pm2 install pm2-logrotate\` failed${detail ? `: ${detail}` : ''}`);
+	}
+
+	const failed = [];
+	for (const [key, value] of Object.entries(LOGROTATE_SETTINGS)) {
+		const set = env.run(bin, ['set', `pm2-logrotate:${key}`, String(value)], { cwd: dir });
+		if ((set.status ?? 1) !== 0) failed.push(key);
+	}
+	if (failed.length > 0) {
+		return yellow(
+			`pm2-logrotate installed, but could not set: ${failed.join(', ')}. ` +
+				`Rotation is active at pm2's defaults; set them by hand with \`npx pm2 set\`.`
+		);
+	}
+	return green('pm2-logrotate installed — weekly rotation, 8 kept, compressed');
 }
 
 function parseSkew(output) {

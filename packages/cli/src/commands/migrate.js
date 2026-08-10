@@ -27,6 +27,74 @@ import { APP_NAME, runPm2 } from './pm2.js';
 // flags a surviving stash as an interrupted migration.
 export const NODE_MODULES_STASH = 'node_modules.selva-migrate-bak';
 
+// Matches the backups migrate writes: `.env.2026-08-10T05-43-12.bak`. Anchored
+// at both ends so an operator's own `notes.bak` is never picked up as ours.
+export const BACKUP_PATTERN = /\.(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})\.bak$/;
+
+/**
+ * Colons are illegal in Windows filenames, so this is ISO with `:` swapped for
+ * `-` and the fractional seconds dropped: 2026-08-10T05-43-12.
+ */
+export function backupStamp(now = new Date()) {
+	return now
+		.toISOString()
+		.replace(/\.\d+Z$/, '')
+		.replace(/:/g, '-');
+}
+
+/**
+ * A migration used to write `package.json.bak` at a fixed path, so the second
+ * substantive migration overwrote the first's copy — and since each run backs
+ * up the *current* file, that left the operator's original config recoverable
+ * from nowhere (#184). One stamp per run keeps a whole migration's backups
+ * together and makes them sortable.
+ *
+ * Not auto-pruned here: deleting an operator's only copy of their old config is
+ * worse than a few small files accumulating. `selva doctor` reports aged ones
+ * with a `--fix`, which keeps the decision theirs.
+ */
+export function backupPathFor(filePath, stamp) {
+	return `${filePath}.${stamp}.bak`;
+}
+
+// Old enough that the migration which wrote it is long settled.
+export const BACKUP_AGE_DAYS = 30;
+
+/**
+ * Split migration backups into what to keep and what `doctor --fix` may delete.
+ *
+ * The newest run's backups are always kept, however old they are — on a
+ * deployment that migrates once a year, age alone would delete the only copy of
+ * the pre-migration config, which is the whole point of keeping them. So the
+ * rule is: keep the newest stamp, offer to delete stamps older than
+ * `BACKUP_AGE_DAYS`.
+ *
+ * `names` are basenames; the stamp is read from the filename rather than mtime,
+ * which a copy or restore would reset.
+ */
+export function classifyBackups(names, now = new Date(), maxAgeDays = BACKUP_AGE_DAYS) {
+	const found = [];
+	for (const name of names) {
+		const m = BACKUP_PATTERN.exec(name);
+		if (m) found.push({ name, stamp: m[1] });
+	}
+	if (found.length === 0) return { keep: [], aged: [], newest: null };
+
+	// Stamps are fixed-width and zero-padded, so lexical order is chronological.
+	const newest = found.reduce((a, b) => (b.stamp > a.stamp ? b : a)).stamp;
+	const cutoff = now.getTime() - maxAgeDays * 24 * 60 * 60 * 1000;
+
+	const keep = [];
+	const aged = [];
+	for (const entry of found) {
+		// `2026-08-10T05-43-12` → parseable by restoring the colons.
+		const at = Date.parse(entry.stamp.replace(/T(\d{2})-(\d{2})-(\d{2})$/, 'T$1:$2:$3') + 'Z');
+		if (entry.stamp === newest || !Number.isFinite(at) || at >= cutoff) keep.push(entry.name);
+		else aged.push(entry.name);
+	}
+	return { keep, aged, newest };
+}
+
 // `deps` are seams for tests: the rollback path destroys and restores a real
 // dependency tree, so it has to run against a real directory — but not against
 // a real npm or pm2 daemon.
@@ -135,17 +203,24 @@ export async function runMigrate(
 		p.log.warn('No deployment-local pm2 to stop — continuing.');
 	}
 
-	const bakPath = pkgPath + '.bak';
+	// One stamp for the whole run, so a migration's backups sort together and a
+	// later migration cannot overwrite this one's (#184).
+	const stamp = backupStamp();
+	const bakPath = backupPathFor(pkgPath, stamp);
+	const configBak = backupPathFor(configPath, stamp);
+	const ecoBak = backupPathFor(ecoPath, stamp);
+	const envBak = backupPathFor(envPath, stamp);
+
 	copyFileSync(pkgPath, bakPath);
 	writeFileSync(pkgPath, JSON.stringify(target, null, 2) + '\n', 'utf8');
 
 	if (hasStaleConfig) {
-		copyFileSync(configPath, configPath + '.bak');
+		copyFileSync(configPath, configBak);
 		rmSync(configPath, { force: true });
 	}
 
 	if (ecoHasStaleRuntime) {
-		copyFileSync(ecoPath, ecoPath + '.bak');
+		copyFileSync(ecoPath, ecoBak);
 		// Text substitution, not regeneration, so any operator customizations to the file survive.
 		const ecoContent = readFileSync(ecoPath, 'utf8').replace(
 			/@selvajs\/runtime/g,
@@ -155,7 +230,7 @@ export async function runMigrate(
 	}
 
 	if (envRename.changes.length > 0) {
-		copyFileSync(envPath, envPath + '.bak');
+		copyFileSync(envPath, envBak);
 		writeFileSync(envPath, envRename.text, 'utf8');
 	}
 
@@ -182,14 +257,14 @@ export async function runMigrate(
 	} catch (err) {
 		s.stop(pc.red('npm install failed — rolling back'));
 		copyFileSync(bakPath, pkgPath);
-		if (hasStaleConfig && existsSync(configPath + '.bak')) {
-			copyFileSync(configPath + '.bak', configPath);
+		if (hasStaleConfig && existsSync(configBak)) {
+			copyFileSync(configBak, configPath);
 		}
-		if (ecoHasStaleRuntime && existsSync(ecoPath + '.bak')) {
-			copyFileSync(ecoPath + '.bak', ecoPath);
+		if (ecoHasStaleRuntime && existsSync(ecoBak)) {
+			copyFileSync(ecoBak, ecoPath);
 		}
-		if (envRename.changes.length > 0 && existsSync(envPath + '.bak')) {
-			copyFileSync(envPath + '.bak', envPath);
+		if (envRename.changes.length > 0 && existsSync(envBak)) {
+			copyFileSync(envBak, envPath);
 		}
 
 		// A half-installed node_modules from the failed attempt is worse than the old
@@ -224,10 +299,10 @@ export async function runMigrate(
 	const pm2Notice = buildPm2UpgradeNotice(before.dependencies?.pm2, target.dependencies.pm2);
 	if (pm2Notice) p.log.warn(pm2Notice);
 
-	const backupHints = ['package.json.bak'];
-	if (hasStaleConfig) backupHints.push('selva.config.js.bak');
-	if (ecoHasStaleRuntime) backupHints.push('ecosystem.config.cjs.bak');
-	if (envRename.changes.length > 0) backupHints.push('.env.bak');
+	const backupHints = [`package.json.${stamp}.bak`];
+	if (hasStaleConfig) backupHints.push(`selva.config.js.${stamp}.bak`);
+	if (ecoHasStaleRuntime) backupHints.push(`ecosystem.config.cjs.${stamp}.bak`);
+	if (envRename.changes.length > 0) backupHints.push(`.env.${stamp}.bak`);
 
 	if (status === 0) {
 		p.outro(
