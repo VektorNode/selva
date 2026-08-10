@@ -34,6 +34,7 @@
     "drop-deprecated-compute",
     "edges-config-passthrough",
     "env-values-only",
+    "migrate-backups-and-logrotate",
     "migrate-preserves-version-pins",
     "node-24-floor",
     "plugin-ui-visualization-package-move",
