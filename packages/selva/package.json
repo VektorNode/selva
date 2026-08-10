@@ -46,7 +46,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"@supabase/supabase-js": "^2.111.0",
+		"@supabase/supabase-js": "^2.112.2",
 		"@sveltejs/kit": "catalog:",
 		"bits-ui": "^2.18.0",
 		"clsx": "catalog:",
@@ -55,7 +55,7 @@
 		"rhino3dm": "8.32.1",
 		"sharp": "^0.35.3",
 		"tailwind-merge": "catalog:",
-		"tailwind-variants": "^3.3.0",
+		"tailwind-variants": "^3.3.1",
 		"three": "catalog:",
 		"zod": "^4.3.6"
 	},

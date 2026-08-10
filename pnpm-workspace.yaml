@@ -6,14 +6,14 @@ catalogs:
   default:
     '@floating-ui/dom': ^1.8.0
     '@iconify/svelte': ^5.2.1
-    '@lucide/svelte': ^1.28.0
+    '@lucide/svelte': ^1.30.0
     '@playwright/test': ^1.62.1
     '@sveltejs/adapter-auto': ^7.0.1
     '@sveltejs/kit': 2.70.1
     '@sveltejs/vite-plugin-svelte': ^7.2.0
     '@tailwindcss/vite': ^4.3.3
     '@types/node': ^26.1.2
-    '@types/three': ^0.185.1
+    '@types/three': ^0.185.4
     bits-ui: ^2.15.4
     clsx: ^2.1.1
     eslint: ^10.8.0
@@ -21,7 +21,7 @@ catalogs:
     prettier: ^3.9.6
     rimraf: ^6.0.1
     svelte: 5.56.8
-    svelte-check: ^4.7.4
+    svelte-check: ^4.7.5
     svelte-sonner: ^1.1.1
     tailwind-merge: ^3.5.0
     tailwind-variants: 3.2.2
@@ -33,9 +33,9 @@ catalogs:
     # restructured compiler host. Tilde so a caret can't walk into the next
     # major on its own — see the matching ignore in .github/dependabot.yml.
     typescript: ~6.0.3
-    vite: ^8.2.0
+    vite: ^8.2.1
     vitest: ^4.1.10
-    ws: ^8.21.1
+    ws: ^8.21.3
     '@types/ws': ^8.5.13
 
 onlyBuiltDependencies:

@@ -37,8 +37,8 @@
 		"bits-ui": "^2.18.0",
 		"mode-watcher": "catalog:",
 		"rhino3dm": "8.32.1",
-		"svelte-dnd-action": "^0.9.76",
-		"tailwind-variants": "^3.3.0",
+		"svelte-dnd-action": "^0.9.78",
+		"tailwind-variants": "^3.3.1",
 		"three": "catalog:",
 		"zod": "^4.3.6"
 	}
