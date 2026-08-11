@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { OutputLayoutItem } from '@selvajs/schemas';
-	import type { FileData } from '@selvajs/compute/core';
+	import { subFolderSegments, type FileData } from '@selvajs/compute/core';
 	import ChartOutput from './ChartOutput.svelte';
 	import ImageOutput from './ImageOutput.svelte';
 	import {
@@ -66,7 +66,7 @@
 		const root = new SvelteMap<string, TreeNode>();
 		for (let i = 0; i < files.length; i++) {
 			const file = files[i];
-			const parts = (file.subFolder || '').split('/').filter(Boolean);
+			const parts = subFolderSegments(file.subFolder);
 			let current = root;
 			for (const part of parts) {
 				if (!current.has(part)) {
@@ -98,7 +98,7 @@
 	const fileTree = $derived(hasSubFolders ? buildTree(filesArray) : null);
 
 	function fullPath(f: FileData): string {
-		const folder = (f.subFolder || '').replace(/^\/+|\/+$/g, '');
+		const folder = subFolderSegments(f.subFolder).join('/');
 		const name = `${f.fileName}${f.fileType ?? ''}`;
 		return folder ? `${folder}/${name}` : name;
 	}

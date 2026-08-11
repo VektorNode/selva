@@ -12,8 +12,14 @@ import type { FileData } from './types';
  * together; distinct roots produce separate archives.
  */
 
-/** Split into folder segments; `/`, `\` and `::` all separate. */
-const segmentsOf = (subFolder: string | undefined): string[] =>
+/**
+ * Split a `Sub Folder` value into folder segments; `/`, `\` and `::` all separate.
+ *
+ * Exported because anything rendering a folder tree has to agree with the archive on where the
+ * boundaries are — splitting on `/` alone leaves `Main::Panels` as one literal segment and shows
+ * a folder named after the separator.
+ */
+export const subFolderSegments = (subFolder: string | undefined): string[] =>
 	(subFolder ?? '')
 		.replace(/::/g, '/')
 		.replace(/\\/g, '/')
@@ -23,14 +29,14 @@ const segmentsOf = (subFolder: string | undefined): string[] =>
 
 /** First `Sub Folder` segment, or `''` when the file sits at the top level. */
 export const rootOf = (file: Pick<FileData, 'subFolder'>): string =>
-	segmentsOf(file.subFolder)[0] ?? '';
+	subFolderSegments(file.subFolder)[0] ?? '';
 
 /**
  * Everything below the root, as a `/`-joined path. The root names the archive, so repeating it
  * inside would nest it twice.
  */
 export const pathBelowRoot = (file: Pick<FileData, 'subFolder'>): string =>
-	segmentsOf(file.subFolder).slice(1).join('/');
+	subFolderSegments(file.subFolder).slice(1).join('/');
 
 /**
  * Group files by their `Sub Folder` root, preserving encounter order.

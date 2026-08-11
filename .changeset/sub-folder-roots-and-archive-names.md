@@ -62,6 +62,13 @@ produced a literal folder named `ROOT::Panels`. Neither did what anyone typing i
 no definition can have depended on the old behaviour. `/` and `\` are now accepted as separators
 too, and `.`, `..` and drive-letter segments are dropped on both paths.
 
+**The output widget's folder tree split on `/` only.** A `::` value rendered as one folder named
+after the separator — `Main::Panels` and `Main::Frames` showed as two sibling folders rather than
+one `Main` with two children, disagreeing with the archive the download actually produced. The
+tree and its duplicate-name check now use the same segmentation as the archive
+(`subFolderSegments`, exported from `@selvajs/compute/core` so a host rendering its own tree can
+agree with it).
+
 **File `metadata` reached cloud consumers but never local ones.** The WebSocket collector built its
 payload by hand and omitted the field, so the same definition returned metadata through
 Rhino.Compute and dropped it through the plugin's local server.
@@ -78,6 +85,8 @@ New on `@selvajs/compute/core`:
   `fallbackName` names the archive for files with no root.
 - `groupFilesByRoot(files)` — just the grouping, no DOM. For consumers that write files themselves
   rather than zipping them; `downloadFileData` is browser-only and throws in Node, this is not.
+- `subFolderSegments(subFolder)` — the folder segments of one value. For rendering a tree that
+  matches the archive.
 
 `downloadFileData` is unchanged and still exported.
 
