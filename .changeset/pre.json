@@ -55,6 +55,7 @@
     "solve-result-host-seam",
     "solve-result-source-values",
     "solve-server-half",
+    "sub-folder-roots-and-archive-names",
     "supabase-org-assets-not-null",
     "unified-test-setup",
     "update-restart-banner-hang",
