@@ -91,7 +91,7 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
             "File ending of the geometry",
             GH_ParamAccess.item, DefaultFileEnding);
         pManager.AddTextParameter("Sub Folder", "Folder",
-            "Optional subfolder path for storage",
+            "Optional subfolder for this file. Use :: to nest, like Rhino layers (ROOT::Panels). Files sharing a root land in the same folder; different roots produce separate top-level folders in the download.",
             GH_ParamAccess.item, "");
         pManager.AddTextParameter("Metadata", "M",
             "Optional metadata as \"key=value\" lines (e.g. author=felix). Applied to every exported file for downstream tagging/indexing.",

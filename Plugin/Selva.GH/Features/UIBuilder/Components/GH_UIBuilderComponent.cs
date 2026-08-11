@@ -155,6 +155,23 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return;
         }
 
+        // Re-emitted every solve: runtime messages are cleared at the start of each one, so a
+        // single warning at placement time would vanish on the next solve.
+        if (_isRedundantPlacement)
+        {
+            if (HasOtherBridge(document))
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    "Another UI Bridge is already on this canvas. Each one runs its own server, " +
+                    "session and schema, so the web UI may connect to the other component. Use a " +
+                    "single UI Bridge per definition unless you intend two independent UIs.");
+            }
+            else
+            {
+                _isRedundantPlacement = false;
+            }
+        }
+
         var transition = _service.StateManager.ProcessEnableInput(enable);
 
         if (transition.EnableFalling)
@@ -470,6 +487,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     [ThreadStatic] private static bool _autoWireSuppressed;
 
     /// <summary>
+    ///     Set when this component was dropped onto a canvas that already had a UI Bridge. Each one
+    ///     runs its own WebSocket server, session and schema, so a second is usually a mistake —
+    ///     but a legitimate one, so it warns rather than refuses. Deliberately not persisted: it
+    ///     describes the placement, and on reload every bridge is equally "already there".
+    /// </summary>
+    private bool _isRedundantPlacement;
+
+    /// <summary>
     ///     Also how a scripted build places a bare UI Bridge — without it, placement adds a Boolean
     ///     Toggle and a Context Bake alongside.
     ///
@@ -506,6 +531,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return;
         }
 
+        // Only the bridge just dropped on the canvas carries the warning — the one already running
+        // is working fine and shouldn't start complaining because a second appeared.
+        _isRedundantPlacement = HasOtherBridge(document);
+
         try
         {
             WireDefaultNeighbors(document);
@@ -514,6 +543,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         {
             Logger.Warn($"Auto-wire on placement failed: {ex.Message}");
         }
+    }
+
+    private bool HasOtherBridge(GH_Document document)
+    {
+        return document.Objects.Any(o => o is GH_UIBuilderComponent && o.InstanceGuid != InstanceGuid);
     }
 
     /// <summary>False on file load, paste, or when the user has already wired/loaded state.</summary>

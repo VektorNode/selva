@@ -81,6 +81,12 @@ Component traps:
 - **Toggling `Enable` starts the WebSocket server** on 8765 and opens the web UI. Set it back to
   `false` and re-solve when done, or the server outlives the graph.
 - **Context Bake's input is named `Content`, nicknamed `Schema`.** Wire it by index `0`.
+- **Params only exist for the schema if a real component carries them.** `SchemaSynchronizer.ValidateSchema`
+  resolves every `id`/`paramId` against `GH_Document.FindObject` and silently purges what it can't
+  find — a schema of invented Guids validates down to `inputs=0, outputs=0`, keeping only its name.
+  Inputs need a real upstream object (a slider, a getter component); **outputs are only discovered
+  through Context Bake / Context Print** — a bare output Guid is never picked up. Place the
+  components first, then build the schema from their live `InstanceGuid`s.
 
 ## Fixtures
 

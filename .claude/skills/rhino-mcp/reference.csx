@@ -167,7 +167,13 @@ Console.WriteLine("objects=" + doc.ObjectCount); // 1, not 3
 //   - items key on paramId (not inputId) and need BOTH type + widgetType
 //   - paramType values are lowercase: "number", not "Number" (Newtonsoft binds
 //     enums case-insensitively, so the wrong casing deserializes silently)
+//   - SchemaOutput keys on "type" (text|number|file|chart|dynamicValueList), NOT
+//     "paramType" — and there is no "generic" output type
 // Get either wrong and the JSON still parses — the item is just dropped.
+//
+// The Guids below are placeholders. ValidateSchema purges any id it cannot resolve
+// against the document, so substitute the real InstanceGuids of placed components —
+// outputs resolve only through Context Bake / Context Print.
 
 using System;
 using System.Linq;
@@ -188,7 +194,7 @@ var json = @"{
  {""id"":""11111111-0000-0000-0000-000000000001"",""nickname"":""Width"",""paramType"":""number"",""default"":3.5},
  {""id"":""11111111-0000-0000-0000-000000000002"",""nickname"":""Label"",""paramType"":""text"",""default"":""hello""}
 ],
-""outputs"":[{""id"":""22222222-0000-0000-0000-000000000001"",""nickname"":""Result"",""paramType"":""generic""}],
+""outputs"":[{""id"":""22222222-0000-0000-0000-000000000001"",""nickname"":""Result"",""type"":""text""}],
 ""layout"":{""type"":""tabbed"",""gap"":16,""tabs"":[
  {""id"":""tab-1"",""label"":""Main"",""groups"":[
    {""id"":""grp-1"",""label"":""Dimensions"",""items"":[

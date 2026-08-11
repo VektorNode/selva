@@ -1,4 +1,4 @@
-import { downloadFileData, type FileData } from '@selvajs/compute/core';
+import { downloadFileDataByRoot, type FileData } from '@selvajs/compute/core';
 import { SvelteMap } from 'svelte/reactivity';
 import { APP_DEFAULTS } from '../constants';
 
@@ -53,12 +53,14 @@ export async function downloadFiles(
 			return;
 		}
 
+		// A lone file is saved as itself rather than zipped — the one case that needs the DOM
+		// directly. Everything else, including the per-root archive split, belongs to compute.
 		if (filesArray.length === 1) {
 			saveSingleFile(filesArray[0]);
 			return;
 		}
 
-		await downloadFileData(filesArray, fileName);
+		await downloadFileDataByRoot(filesArray, fileName);
 	} catch (error) {
 		console.error('[FileDownload] Error downloading files:', error);
 		throw error;

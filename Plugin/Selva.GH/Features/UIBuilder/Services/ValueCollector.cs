@@ -647,13 +647,18 @@ public class ValueCollector
                     return null;
                 }
 
+                // subFolder is normalized here rather than on the client so both output paths
+                // agree on what "ROOT::Panels" means. metadata rides along: FileData carries it
+                // and the client reads it, but this hand-built payload used to drop it, so it
+                // reached cloud consumers and never local ones.
                 return new
                 {
                     fileName = fileData.FileName ?? "",
                     fileType = fileData.FileType ?? "",
                     data = fileData.Data ?? "",
                     isBase64Encoded = fileData.IsBase64Encoded,
-                    subFolder = fileData.SubFolder ?? ""
+                    subFolder = SubFolderPath.ToArchivePath(fileData.SubFolder),
+                    metadata = fileData.Metadata ?? new Dictionary<string, string>()
                 };
             }
 

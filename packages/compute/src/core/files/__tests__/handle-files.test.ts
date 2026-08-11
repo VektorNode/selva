@@ -84,6 +84,37 @@ describe('extractFilesFromComputeResponse — archive path sanitization', () => 
 		expect(file.path).toBe('Windows/a.txt');
 	});
 
+	// The plugin normalizes `::` before it reaches the wire; this covers payloads from an older
+	// one, which would otherwise land in a literal folder named "ROOT::Panels".
+	it('treats "::" in subFolder as a separator', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'ROOT::Panels', fileName: 'a', fileType: '.3dm' })
+		]);
+		expect(file.path).toBe('ROOT/Panels/a.3dm');
+	});
+
+	it('nests arbitrarily deep through "::"', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'ROOT::First::Second', fileName: 'a', fileType: '.3dm' })
+		]);
+		expect(file.path).toBe('ROOT/First/Second/a.3dm');
+	});
+
+	it('keeps distinct roots separate', async () => {
+		const files = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'ROOT::Sub', fileName: 'a', fileType: '.3dm' }),
+			fd({ subFolder: 'OTHERROOT::Sub', fileName: 'b', fileType: '.3dm' })
+		]);
+		expect(files.map((f) => f.path)).toEqual(['ROOT/Sub/a.3dm', 'OTHERROOT/Sub/b.3dm']);
+	});
+
+	it('still strips traversal written with "::"', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'ROOT::..::..', fileName: 'evil', fileType: '.txt' })
+		]);
+		expect(file.path).toBe('ROOT/evil.txt');
+	});
+
 	it('keeps legitimate nested subFolders intact', async () => {
 		const [file] = await extractFilesFromComputeResponse([
 			fd({ subFolder: 'nested/dir', fileName: 'a', fileType: '.json' })

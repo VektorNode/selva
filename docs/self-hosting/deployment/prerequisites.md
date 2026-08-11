@@ -12,7 +12,7 @@ Applies to any host that can run a long-lived Node process: a Linux VM on any cl
 ## What you need
 
 - **Node.js 24+** with `npm` on `PATH`. Use your host's normal packages — Selva ships no Node runtime of its own. Note that Debian's `nodejs` package doesn't always pull in `npm`; install both.
-- **No global pm2.** Selva brings its own pinned copy per deployment, and a second one on the host fights it over a shared daemon. See [About pm2](../get-started/cli.md#about-pm2).
+- **No global pm2.** Selva brings its own pinned copy per deployment, and a global one fights it over a shared daemon. Other pm2-managed apps on the same box are fine as long as they use a different OS user or `PM2_HOME` — see [About pm2](../get-started/cli.md#about-pm2) and [Running other Node apps on the same server](../get-started/cli.md#running-other-node-apps-on-the-same-server).
 - **Shell access** (SSH or your host's terminal) to run `npx` commands.
 - **Selva must not be reachable from the public internet directly.** It should bind `127.0.0.1` only and sit behind a reverse proxy. Don't open the app's port (default 3000) in any firewall. See [Reverse proxy](./reverse-proxy.md) once you're ready to expose it.
 

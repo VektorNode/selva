@@ -39,7 +39,13 @@ const schema = require(resolve(repoRoot, 'packages/schemas/ui-schema.json'));
 // validateSchema:false — ui-schema.json carries a "//_COMMENT" string key in
 // definitions that ajv rejects as a meta-schema violation. Harmless for codegen
 // and for validating instances.
-const validate = new Ajv({ allErrors: true, validateSchema: false }).compile(schema);
+const ajv = new Ajv({ allErrors: true, validateSchema: false });
+
+// ui-schema.json uses "guid" (the NJsonSchema/.NET spelling). ajv 6 only knows
+// "uuid", so without this every payload dies at compile time, not validation.
+ajv.addFormat('guid', /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/);
+
+const validate = ajv.compile(schema);
 
 const files = process.argv.slice(2);
 if (files.length === 0) {

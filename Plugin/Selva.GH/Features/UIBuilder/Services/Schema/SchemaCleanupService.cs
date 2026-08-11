@@ -61,7 +61,8 @@ public class SchemaCleanupService
             document?.Modified();
 
             addMessage?.Invoke(GH_RuntimeMessageLevel.Remark,
-                $"Cleaned up {removedIds.Count} deleted parameter(s)");
+                $"Cleaned up {removedIds.Count} deleted parameter(s). Their web UI widgets are set " +
+                "aside and come back if you undo the deletion; saving from the editor discards them.");
         }
         catch (Exception ex)
         {

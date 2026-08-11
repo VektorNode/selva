@@ -4,6 +4,7 @@ import { decodeBase64ToBinary } from '@/core/utils/encoding';
 import { readField } from '@/core/utils/read-field';
 
 import { FileBaseInfo, FileData, ProcessedFile } from './types';
+import { groupFilesByRoot, pathBelowRoot, toArchiveName } from './sub-folder';
 
 /** Extracts and processes files from compute response data without downloading them. */
 export const extractFilesFromComputeResponse = async (
@@ -65,13 +66,59 @@ export const downloadFileData = async (
 };
 
 /**
+ * Download files as one archive per `Sub Folder` root.
+ *
+ * `ROOT::Panels` and `OTHERROOT::Panels` produce `ROOT.zip` and `OTHERROOT.zip`, each containing
+ * `Panels/…` — the root names the archive instead of nesting inside it. Files with no root fall
+ * back to `fallbackName`, so a definition that never sets `Sub Folder` downloads exactly as before.
+ *
+ * Archives are saved one at a time: browsers discard concurrent downloads issued in the same tick,
+ * and these are user-initiated saves rather than a throughput-bound batch. Note that saving more
+ * than one file per gesture may prompt for permission.
+ *
+ * @param downloadableFiles - `FileData` items from the compute response.
+ * @param fallbackName - Archive name for files with no `Sub Folder` root.
+ * @param additionalFiles - Extra files to package; they carry no root and join the fallback archive.
+ */
+export const downloadFileDataByRoot = async (
+	downloadableFiles: FileData[],
+	fallbackName: string,
+	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
+): Promise<void> => {
+	const groups = groupFilesByRoot(downloadableFiles);
+
+	// Extras alone still deserve an archive; without this they'd be dropped for having no root.
+	if (groups.length === 0) {
+		await downloadFileData([], fallbackName, additionalFiles);
+		return;
+	}
+
+	// Extras belong to the definition rather than to any one root, so they ride with the rootless
+	// archive — or with the first one when every file is rooted, rather than being dropped.
+	const extrasRoot = (groups.find((group) => group.root === '') ?? groups[0]).root;
+
+	for (const { root, files } of groups) {
+		await downloadFileData(
+			root === '' ? files : files.map((file) => ({ ...file, subFolder: pathBelowRoot(file) })),
+			root === '' ? fallbackName : toArchiveName(root),
+			root === extrasRoot ? additionalFiles : null
+		);
+	}
+};
+
+/**
  * Reduce a server-controlled path field to safe relative segments for use inside the zip
  * (zip-slip defense): backslashes normalize to `/`, and empty, `.`, `..`, and drive-letter
  * segments are dropped so no entry can escape the extraction directory via traversal or an
  * absolute path. Returns '' when nothing safe remains.
+ *
+ * `::` nests, matching the `Sub Folder` input's Rhino-layer syntax. The plugin already
+ * normalizes it, so this is for payloads from an older one — without it those land in a
+ * literal folder named `ROOT::Panels`.
  */
 const sanitizeArchivePath = (raw: string): string =>
 	raw
+		.replace(/::/g, '/')
 		.replace(/\\/g, '/')
 		.split('/')
 		.map((segment) => segment.trim())

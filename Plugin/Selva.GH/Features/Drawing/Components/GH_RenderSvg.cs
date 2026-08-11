@@ -44,7 +44,7 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
         pManager.AddBooleanParameter("Auto Fit", "AF", "Auto-fit viewBox to content with a 10mm margin. When false, the document's page size is used.", GH_ParamAccess.item, false);
         pManager.AddColourParameter("Background", "BG", "Background color (leave unconnected for transparent)", GH_ParamAccess.item);
         pManager.AddBooleanParameter("Embed Fonts", "EF", "Embed bundled Inter as a @font-face data URI", GH_ParamAccess.item, false);
-        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item, "");
+        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder for this file. Use :: to nest, like Rhino layers (ROOT::Panels). Files sharing a root land in the same folder; different roots produce separate top-level folders in the download.", GH_ParamAccess.item, "");
 
         pManager[1].Optional = true;
         pManager[2].Optional = true;

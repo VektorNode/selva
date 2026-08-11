@@ -112,6 +112,8 @@ Selva runs the app under [pm2](https://pm2.keymetrics.io), a process manager tha
 
 **Don't install pm2 globally, and don't install it from your distro's package manager.** The deployment ships its own pinned copy in `node_modules/.bin/`, which is what `npx pm2` resolves to from inside the directory. Two different pm2 versions talking to the same background daemon causes version-skew warnings and hung restarts, and the `selva` commands refuse to fall back to a global one for exactly that reason. The version is pinned exactly rather than caret-ranged so two deployments installed a week apart can't resolve differently and then fight over one daemon.
 
+That rules out a global pm2, not other pm2-managed apps — see [below](#running-other-node-apps-on-the-same-server).
+
 `selva doctor` reports a global or distro pm2 on `PATH`, so if you're unsure what a server has, run it before changing anything.
 
 When a Selva release changes the pinned pm2 version, the running daemon has to be replaced once by hand — see [Upgrading pm2](../deployment/prerequisites.md#upgrading-pm2).
@@ -145,6 +147,17 @@ The `startup` command prints a `sudo env PATH=…` line for you to paste. **Chec
 ```bash
 grep -E 'ExecStart|ExecStop' /etc/systemd/system/pm2-$USER.service
 ```
+
+## Running other Node apps on the same server
+
+Fine, as long as the other app doesn't share Selva's pm2 daemon. pm2 picks its daemon from `$PM2_HOME` (default `~/.pm2`), so it's per-user, not per-machine. Isolate it either way:
+
+- **A separate OS user** — different home, different `~/.pm2`, nothing to coordinate.
+- **A separate `PM2_HOME`** — `export PM2_HOME=/srv/otherapp/.pm2`, set in every context that runs pm2 for that app (shell, systemd unit, cron). Miss one and it silently rejoins Selva's daemon.
+
+Each `PM2_HOME` needs its own `pm2 startup` unit and `pm2 save`; one unit won't resurrect both.
+
+What doesn't work is `npm install -g pm2` for the other app: a global pm2 usually outranks the deployment's pin and wins the daemon, and `selva start` then refuses, because `pm2 update` would downgrade the daemon and drop its process table — taking the other app down with Selva.
 
 ## Troubleshooting
 

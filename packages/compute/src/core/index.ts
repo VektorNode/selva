@@ -62,5 +62,12 @@ export type { DefinitionRef, SolveDefinition } from './definition-ref';
 export { validateServerUrl, DEFAULT_BLOCKED_HOST } from './server/validate-server-url';
 export type { ValidateServerUrlOptions } from './server/validate-server-url';
 
-export { extractFilesFromComputeResponse, downloadFileData } from './files/handle-files';
+export {
+	extractFilesFromComputeResponse,
+	downloadFileData,
+	downloadFileDataByRoot
+} from './files/handle-files';
+// rootOf/pathBelowRoot/toArchiveName stay internal: they're the grouping's mechanics, and
+// groupFilesByRoot is the whole convention a consumer needs.
+export { groupFilesByRoot } from './files/sub-folder';
 export type { ProcessedFile, FileData, FileBaseInfo } from './files/types';

@@ -55,7 +55,7 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
             GH_ParamAccess.item);
         pManager.AddTextParameter("File Name", "FN", "Optional name for the exported file", GH_ParamAccess.item);
         pManager.AddTextParameter("Format", "F", "File format extension: .3dm (default) or .stp", GH_ParamAccess.item);
-        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item,
+        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder for this file. Use :: to nest, like Rhino layers (ROOT::Panels). Files sharing a root land in the same folder; different roots produce separate top-level folders in the download.", GH_ParamAccess.item,
             "");
         pManager.AddTextParameter("Metadata", "M",
             "Optional metadata as \"key=value\" lines (e.g. author=felix). Rides along with the file for downstream tagging/indexing.",

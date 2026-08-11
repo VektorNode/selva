@@ -21,6 +21,26 @@ namespace Selva.GH.Features.UIBuilder.Services.Schema;
 /// </summary>
 public class SchemaSynchronizer
 {
+    private readonly LayoutTombstoneStore _layoutTombstones = new LayoutTombstoneStore();
+
+    /// <summary>
+    ///     Drops layout tombstones for parameters the incoming layout does not place. A save from
+    ///     the editor is authoritative, so a widget the user deliberately removed must not spring
+    ///     back the next time its parameter is rediscovered.
+    /// </summary>
+    public void AcceptLayoutAsAuthoritative(UISchema schema)
+    {
+        if (schema == null)
+        {
+            return;
+        }
+
+        _layoutTombstones.ForgetAllExcept(
+            new HashSet<Guid>(GetAllLayoutItems(schema.Layout)
+                .Where(i => i.Type != "linebreak")
+                .Select(i => i.ParamId)));
+    }
+
     #region Static Configuration
 
     /// <summary>
@@ -706,6 +726,7 @@ public class SchemaSynchronizer
         removedIds = PurgeStaleReferences(schema, existingIds);
         MergeDiscoveredInputs(schema, document);
         MergeDiscoveredPrintOutputs(schema, document);
+        RestoreTombstonedLayout(schema);
 
         // dynamicValueList layout items must mirror into schema.Outputs so every consumer reads
         // one canonical place — this is the funnel every save/connect passes through.
@@ -738,9 +759,15 @@ public class SchemaSynchronizer
         return existing;
     }
 
-    private static List<Guid> PurgeStaleReferences(UISchema schema, HashSet<Guid> existingIds)
+    private List<Guid> PurgeStaleReferences(UISchema schema, HashSet<Guid> existingIds)
     {
         var removed = new List<Guid>();
+
+        // Captured before the removals below, so an undone deletion can put each parameter back
+        // at the index it held rather than appended at the end.
+        var paramIndices = new Dictionary<Guid, int>();
+        for (var i = 0; i < schema.Inputs.Count; i++) paramIndices[schema.Inputs[i].Id] = i;
+        for (var i = 0; i < schema.Outputs.Count; i++) paramIndices[schema.Outputs[i].Id] = i;
 
         removed.AddRange(schema.Inputs.Where(i => !existingIds.Contains(i.Id)).Select(i => i.Id));
         removed.AddRange(schema.Outputs.Where(o => !existingIds.Contains(o.Id)).Select(o => o.Id));
@@ -749,40 +776,27 @@ public class SchemaSynchronizer
         schema.Inputs.RemoveAll(i => removedSet.Contains(i.Id));
         schema.Outputs.RemoveAll(o => removedSet.Contains(o.Id));
 
-        PurgeStaleLayoutItems(schema.Layout, existingIds);
+        // Tombstones the items instead of dropping them, and leaves emptied groups and tabs in
+        // place, so undoing the deletion can put the widgets back where they were.
+        _layoutTombstones.CaptureAndRemove(schema.Layout, existingIds, paramIndices);
 
         return removed;
     }
 
     /// <summary>
-    ///     Removes layout items whose parameters no longer exist, then cleans up empty groups and tabs.
-    ///     Matches on the concrete layout types because RemoveAll needs a reference to the actual
-    ///     group/tab list, not an interface view.
+    ///     Re-places layout items for parameters that came back — an undone deletion. Runs after
+    ///     the merge steps, which re-add the parameter itself but know nothing about layout.
     /// </summary>
-    private static void PurgeStaleLayoutItems(LayoutConfigBase layout, HashSet<Guid> existingIds)
+    private void RestoreTombstonedLayout(UISchema schema)
     {
-        if (layout is TabbedLayoutConfig tabbed && tabbed.Tabs != null)
+        if (_layoutTombstones.Count == 0)
         {
-            foreach (var tab in tabbed.Tabs)
-            {
-                foreach (var group in tab.Groups)
-                {
-                    group.Items.RemoveAll(item => item.Type != "linebreak" && !existingIds.Contains(item.ParamId));
-                }
-
-                tab.Groups.RemoveAll(g => g.Items.Count == 0);
-            }
-
-            tabbed.Tabs.RemoveAll(t => t.Groups.Count == 0);
+            return;
         }
-        else if (layout is FlatLayoutConfig flat && flat.Groups != null)
-        {
-            foreach (var group in flat.Groups)
-            {
-                group.Items.RemoveAll(item => item.Type != "linebreak" && !existingIds.Contains(item.ParamId));
-            }
 
-            flat.Groups.RemoveAll(g => g.Items.Count == 0);
+        foreach (var id in schema.Inputs.Select(i => i.Id).Concat(schema.Outputs.Select(o => o.Id)).ToList())
+        {
+            _layoutTombstones.TryRestore(schema, id);
         }
     }
 

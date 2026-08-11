@@ -252,8 +252,8 @@ export function handleMetadataUpdated(
 	});
 
 	// Patching canonical changes its content — its hash is now stale until the server
-	// re-broadcasts. Clear the hash so a save attempt before the next schemaUpdated will be
-	// safe-rejected rather than racing.
+	// re-broadcasts. Clear the hash so a save attempt before the next schemaUpdated is rejected
+	// (SchemaSaveGuard treats a missing base hash as unjudgeable) rather than racing.
 	if (canonicalResult.updated > 0) {
 		state.canonicalHash = null;
 	}

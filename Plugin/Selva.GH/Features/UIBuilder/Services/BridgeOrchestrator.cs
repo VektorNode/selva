@@ -214,7 +214,11 @@ public class BridgeOrchestrator : IDisposable
                     return;
                 }
 
-                schema = CreateDefaultSchema(document); // wired but nothing saved yet
+                // The Context Bake only holds a schema while a solve's volatile data is alive.
+                // After a cleared or expired solve it is empty even though the component still
+                // holds the real schema — fall back to that before inventing a blank one, or the
+                // editor opens on an empty canvas over a definition that still exists.
+                schema = _getSchema() ?? CreateDefaultSchema(document);
             }
 
             var validatedSchema = _schemaSynchronizer.ValidateSchema(schema, document);
@@ -271,16 +275,21 @@ public class BridgeOrchestrator : IDisposable
             // The UI sends the hash of the canonical it forked from. A mismatch means its draft
             // is stale; reply with the fresh canonical instead of overwriting GH-side changes.
             var currentSchema = _getSchema();
-            if (currentSchema != null && !string.IsNullOrEmpty(request.BaseSchemaHash))
+            var verdict = SchemaSaveGuard.Evaluate(currentSchema, schema, request.BaseSchemaHash);
+            if (verdict != SchemaSaveVerdict.Accept)
             {
-                var currentHash = SchemaHash.Compute(currentSchema);
-                if (!string.Equals(currentHash, request.BaseSchemaHash, StringComparison.Ordinal))
+                _ = _webSocketTransport.BroadcastSchemaSaveRejected(currentSchema);
+                _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, verdict switch
                 {
-                    _ = _webSocketTransport.BroadcastSchemaSaveRejected(currentSchema);
-                    _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                        "Schema save rejected: definition changed in Grasshopper since you started editing.");
-                    return;
-                }
+                    SchemaSaveVerdict.RejectEmptyOverwrite =>
+                        "Schema save rejected: the editor sent an empty schema while this component " +
+                        "still holds one. Re-solve the definition so the editor loads it, then retry.",
+                    SchemaSaveVerdict.RejectMissingBase =>
+                        "Schema save rejected: the editor sent no base revision, so it cannot be " +
+                        "checked against the stored schema. Reload the editor and retry.",
+                    _ => "Schema save rejected: definition changed in Grasshopper since you started editing."
+                });
+                return;
             }
 
             schema.ProjectFileName = document.Properties.ProjectFileName;
@@ -288,6 +297,10 @@ public class BridgeOrchestrator : IDisposable
             schema.PluginVersion = _pluginVersion.ToString();
 
             SanitizeSchema(schema);
+
+            // Before validating: the editor's layout is the user's intent, so a widget missing
+            // from it stays missing rather than being restored from a tombstone.
+            _schemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
 
             var validatedSchema = _schemaSynchronizer.ValidateSchema(schema, document);
 #if DEBUG
