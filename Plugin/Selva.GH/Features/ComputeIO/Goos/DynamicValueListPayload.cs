@@ -55,7 +55,11 @@ public sealed class DynamicValueListPayload
 
     public string ToComputeJson()
     {
-        return ToJObject().ToString(Formatting.None);
+        // Not JToken.ToString(Formatting.None): that overload's signature names a Newtonsoft type,
+        // so it fails to resolve (MissingMethodException) when another Grasshopper plugin has
+        // already loaded a different Newtonsoft.Json into the process. SerializeObject(object)
+        // binds against any of them and defaults to Formatting.None.
+        return JsonConvert.SerializeObject(ToJObject());
     }
 
     /// <summary>

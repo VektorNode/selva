@@ -161,6 +161,58 @@ describe('generated runner script', () => {
 		// The abort must leave the app running — it exits before `pm2 stop`.
 		expect(script.slice(skew, stop)).toContain('exit 8');
 	});
+
+	// A production update went dark on exactly this: `pm2 stop` returns before the
+	// process dies, so npm and the restart both ran inside the kill_timeout drain
+	// window, where the table entry has a name and an id but no live pid. `pm2
+	// start` resolved the name, converted to a restart, found no process, and
+	// pm2's table printer crashed on `undefined.pm2_env`. The EXIT trap ran the
+	// same command and failed identically.
+	it('waits for the drain to finish before npm rewrites build/', () => {
+		const script = runner();
+		const stop = script.indexOf('Stopping selva-compute');
+		const npm = script.indexOf('Updating @selvajs/* packages');
+		const wait = script.indexOf('wait_until_stopped', stop);
+		expect(wait).toBeGreaterThan(stop);
+		expect(wait).toBeLessThan(npm);
+	});
+
+	it('treats only a settled entry as safe to act on', () => {
+		expect(runner()).toContain('if [ "$STATUS" != "stopping" ]; then');
+	});
+
+	it('drops a stale process entry when start fails, instead of retrying it', () => {
+		const script = runner();
+		const start = script.slice(script.indexOf('start_app() {'));
+		expect(start).toContain('"$PM2" delete selva-compute');
+	});
+
+	// The EXIT trap is the last thing standing between a failed update and a dark
+	// site. Restarting a still-draining entry is what failed in production, so the
+	// trap has to settle it first and be able to drop a stale entry.
+	it('recovers through the delete-and-retry path, not a bare start', () => {
+		const script = runner();
+		const trap = script.slice(script.indexOf('on_exit() {'), script.indexOf('trap on_exit EXIT'));
+		expect(trap).toContain('wait_until_stopped');
+		expect(trap).toContain('start_app');
+		expect(trap).not.toContain('"$PM2" start "$ECOSYSTEM" --update-env');
+	});
+
+	// The runner is re-launched via `setsid bash` from a tempfile and inherits
+	// whatever PATH the spawning process had. A cron- or shell-triggered update
+	// has no node_modules/.bin on PATH, and a bare `pm2` there fails with
+	// "command not found" — including inside the EXIT trap.
+	it('resolves pm2 explicitly rather than trusting inherited PATH', () => {
+		const script = runner();
+		expect(script).toContain('PM2="$(dirname "$ECOSYSTEM")/node_modules/.bin/pm2"');
+		// Only command positions count. The script also prints `pm2 ...` inside
+		// recovery advice aimed at a human, and those strings are not invocations.
+		const invocations = script
+			.split('\n')
+			.map((l) => l.replace(/#.*$/, '').trim())
+			.filter((l) => /^(?:if\s+!?\s*)?pm2\s/.test(l));
+		expect(invocations).toEqual([]);
+	});
 });
 
 describe('runner log lines → deriveOutcome (the drift-prone seam)', () => {

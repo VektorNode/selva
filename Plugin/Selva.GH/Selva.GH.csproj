@@ -31,7 +31,17 @@
 		<PackageReference Include="Grasshopper" VersionOverride="9.0.25266.10145-wip" Condition="'$(TargetFramework)' == 'net9.0'" ExcludeAssets="runtime"/>
 		<PackageReference Include="Grasshopper" Condition="'$(TargetFramework)' == 'net7.0'" ExcludeAssets="runtime"/>
 		<PackageReference Include="Grasshopper" Condition="'$(TargetFramework)' == 'net48'" ExcludeAssets="runtime"/>
-		<PackageReference Include="Newtonsoft.Json"/>
+		<!--
+			Release: PrivateAssets="all" keeps Newtonsoft.Json out of the .gha's output as a
+			sibling DLL — it's merged and internalized into Selva.dll by the target below.
+			GeneratePathProperty exposes $(PkgNewtonsoft_Json) so that target can find it.
+			Debug: a plain reference, so the DLL sits next to the .gha and the AssemblyResolve
+			hook (net48) or the ALC (net7/9) can find it; the merge is Release-only.
+		-->
+		<PackageReference Include="Newtonsoft.Json" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
+		<PackageReference Include="Newtonsoft.Json" Condition="'$(Configuration)' != 'Release'"/>
+		<!-- Provides the <ILRepack> MSBuild task used by the Release merge target below. -->
+		<PackageReference Include="ILRepack.Lib.MSBuild.Task" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
 		<PackageReference Include="System.Drawing.Common" Condition="'$(TargetFramework)' != 'net48'"/>
 		<PackageReference Include="System.Net.Http" Condition="'$(TargetFramework)' == 'net48'"/>
 		<PackageReference Include="System.Resources.Extensions"/>
@@ -52,6 +62,78 @@
 	<ItemGroup>
 		<Folder Include="Features/"/>
 	</ItemGroup>
+
+	<!--
+		Release-only ILRepack: merge Newtonsoft.Json + Selva.Schema into Selva.dll and
+		internalize them.
+
+		Rhino, Rhino.Compute and other Grasshopper plugins (jSwan, Hops, …) each bring their
+		own Newtonsoft. All 13.x builds stamp assembly version 13.0.0.0, so the CLR treats
+		them as one identity and whichever loads first wins process-wide. Calls whose
+		signature names a Newtonsoft type then fail to resolve against the winner —
+		JToken.ToString(Formatting) threw MissingMethodException under Rhino.Compute 8.9
+		while plain JObject.Parse in the same solve worked. Internalized types live in this
+		assembly under their original namespaces but are invisible to other plugins, so the
+		identity match never fires and Selva always runs its own 13.0.4.
+
+		Selva.Schema is merged in the same pass, not separately: its public API hands JObject
+		and JsonSerializerSettings to this assembly (SchemaMigrator.MigrateJson,
+		SchemaSerializationSettings.Settings). Internalizing Newtonsoft into each of them
+		separately would give the two assemblies incompatible copies of those types.
+
+		Debug builds skip the merge — the DLLs ship as siblings and iteration stays fast.
+	-->
+	<!--
+		TargetFramework != '' skips the outer dispatch pass of a multi-targeted build, which
+		runs Build once with no TFM set — there OutputPath is the bare bin\Release\ (empty)
+		and $(PkgNewtonsoft_Json) is undefined, so the copies fail. The real merges happen in
+		the three per-TFM inner builds.
+	-->
+	<Target Name="ILRepackMergeNewtonsoft"
+	        AfterTargets="Build"
+	        Condition="'$(Configuration)' == 'Release' AND '$(TargetFramework)' != ''">
+		<PropertyGroup>
+			<_RepackOutDir>$([System.IO.Path]::GetFullPath('$(OutputPath)'))</_RepackOutDir>
+			<_RepackStageDir>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)ilrepack-stage'))\</_RepackStageDir>
+			<_RepackOutput>$(_RepackOutDir)$(AssemblyName)$(TargetExt)</_RepackOutput>
+			<!-- Newtonsoft ships net45 for net48 and netstandard2.0 for the .NET Core targets. -->
+			<_NewtonsoftLibDir Condition="'$(TargetFramework)' == 'net48'">net45</_NewtonsoftLibDir>
+			<_NewtonsoftLibDir Condition="'$(TargetFramework)' != 'net48'">netstandard2.0</_NewtonsoftLibDir>
+		</PropertyGroup>
+
+		<!--
+			Stage only what we want merged: anything in the stage dir is both an input and a
+			search target, so nothing from the wider NuGet cache leaks into the merge.
+		-->
+		<ItemGroup>
+			<_RepackToStage Include="$(_RepackOutDir)$(AssemblyName)$(TargetExt)" />
+			<_RepackToStage Include="$(_RepackOutDir)Selva.Schema.dll" />
+			<_RepackToStage Include="$(PkgNewtonsoft_Json)\lib\$(_NewtonsoftLibDir)\Newtonsoft.Json.dll" />
+		</ItemGroup>
+
+		<RemoveDir Directories="$(_RepackStageDir)" />
+		<MakeDir Directories="$(_RepackStageDir)" />
+		<Copy SourceFiles="@(_RepackToStage)" DestinationFolder="$(_RepackStageDir)" />
+
+		<ItemGroup>
+			<_RepackInputPrimary Include="$(_RepackStageDir)$(AssemblyName)$(TargetExt)" />
+			<_RepackInputMerge Include="$(_RepackStageDir)Selva.Schema.dll" />
+			<_RepackInputMerge Include="$(_RepackStageDir)Newtonsoft.Json.dll" />
+			<!-- Stage dir first; fall back to bin/ for sibling reference assemblies (Grasshopper, RhinoCommon, …). -->
+			<_RepackSearchDirs Include="$(_RepackStageDir);$(_RepackOutDir)" />
+		</ItemGroup>
+
+		<ILRepack
+			Parallel="true"
+			Internalize="true"
+			InputAssemblies="@(_RepackInputPrimary);@(_RepackInputMerge)"
+			LibraryPath="@(_RepackSearchDirs)"
+			TargetKind="Dll"
+			OutputFile="$(_RepackOutput)" />
+
+		<!-- Merged in; leaving them beside the .gha would reintroduce the sibling load. -->
+		<Delete Files="$(_RepackOutDir)Selva.Schema.dll;$(_RepackOutDir)Newtonsoft.Json.dll" />
+	</Target>
 
 	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
 		<None Update="Resources\manifest-rh9.yml">

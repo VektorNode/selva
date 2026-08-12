@@ -133,23 +133,88 @@ BEFORE=${before}
 ECOSYSTEM=${ecosystem}
 TAG=${distTag}
 
+# Resolve the deployment-local pm2 explicitly instead of trusting PATH.
+# The runner is re-launched via \`setsid bash\` from a tempfile, so it inherits
+# whatever environment the spawning process had. When the update is triggered
+# from the admin UI that happens to include node_modules/.bin; from cron or a
+# bare shell it does not, and every pm2 call below — including the EXIT trap's
+# last-resort restart — fails with "command not found" and the app stays dark.
+PM2="$(dirname "$ECOSYSTEM")/node_modules/.bin/pm2"
+[ -x "$PM2" ] || PM2=pm2
+
+# Waits for selva-compute to leave the transitional 'stopping' state.
+#
+# \`pm2 stop\` sends SIGINT and returns without waiting for the process to die.
+# The SvelteKit node adapter then drains in-flight requests before exiting, and
+# PM2 only escalates to SIGKILL after kill_timeout (10s in the scaffolded
+# ecosystem). For that whole window the process table entry has a name and an
+# id but no live pid — \`pm2 start\` resolves the name, converts to a restart,
+# finds nothing to restart, and pm2's own table printer crashes on
+# \`undefined.pm2_env\`. Polling here keeps the rest of the script out of that
+# window entirely.
+#
+# The drain reliably takes the full timeout when the update was triggered from
+# the admin UI: that page is fed by an SSE stream this very process serves, and
+# an open SSE stream never completes on its own.
+# Prints exactly one word. Callers compare it against 'online' / 'stopping', so
+# a probe that emits two tokens on failure (the inline catch AND a shell
+# fallback both firing) would silently never match either. Node's catch is the
+# single failure path; fd 0 rather than /dev/stdin because the latter isn't a
+# readable pipe everywhere.
+app_status() {
+  "$PM2" jlist 2>/dev/null | node -e "
+    try {
+      const list = JSON.parse(require('fs').readFileSync(0,'utf8'));
+      const app = list.find(p => p.name === 'selva-compute');
+      process.stdout.write(app ? app.pm2_env.status : 'missing');
+    } catch { process.stdout.write('error'); }
+  " 2>/dev/null
+}
+
+wait_until_stopped() {
+  for i in $(seq 1 20); do
+    STATUS=$(app_status)
+    if [ "$STATUS" != "stopping" ]; then
+      return 0
+    fi
+    echo "[INFO] selva-compute still draining (attempt $i/20) — waiting for SIGKILL escalation"
+    sleep 1
+  done
+  echo "[WARN] selva-compute stuck in 'stopping' after 20s — continuing anyway"
+  return 1
+}
+
+# \`pm2 start <ecosystem>\` converts to a restart-by-id when an entry of the same
+# name is already in the table. If that entry is stale the restart fails and no
+# amount of retrying the same command helps — the name has to be dropped first
+# so the start registers a fresh process. Deleting a stopped entry is safe: the
+# ecosystem file is the source of truth for how to bring it back.
+start_app() {
+  if "$PM2" start "$ECOSYSTEM" --update-env; then
+    return 0
+  fi
+  echo "[WARN] pm2 start failed — dropping the stale process entry and retrying"
+  "$PM2" delete selva-compute >/dev/null 2>&1 || true
+  "$PM2" start "$ECOSYSTEM" --update-env
+}
+
 # Last-resort safety net. If the script exits with the app NOT online for
 # any reason (crash, kill -9, network blip, npm hang past timeout), try to
 # bring it back from ecosystem.config.cjs before exiting. Leaving the app
 # down is the worst possible outcome of an update.
 on_exit() {
   CODE=$?
-  STATUS=$(pm2 jlist 2>/dev/null | node -e "
-    try {
-      const list = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-      const app = list.find(p => p.name === 'selva-compute');
-      process.stdout.write(app ? app.pm2_env.status : 'missing');
-    } catch { process.stdout.write('error'); }
-  " 2>/dev/null || echo "error")
+  STATUS=$(app_status)
+  # A 'stopping' entry is mid-drain, not down. Restarting it now hits the same
+  # dead-id window that brought us here; wait for the entry to settle first.
+  if [ "$STATUS" = "stopping" ]; then
+    wait_until_stopped
+    STATUS=$(app_status)
+  fi
   if [ "$STATUS" != "online" ]; then
     echo "[RECOVER] selva-compute is '$STATUS' — starting from ecosystem.config.cjs"
-    pm2 start "$ECOSYSTEM" --update-env >/dev/null 2>&1 || \\
-      echo "[RECOVER] pm2 start failed — manual intervention required: cd $(dirname "$ECOSYSTEM") && pm2 start ecosystem.config.cjs"
+    start_app >/dev/null 2>&1 || \\
+      echo "[RECOVER] pm2 start failed — manual intervention required: cd $(dirname "$ECOSYSTEM") && ./node_modules/.bin/pm2 delete selva-compute; ./node_modules/.bin/pm2 start ecosystem.config.cjs"
   fi
   # Terminal marker: the restarted app's outcome reconciler greps this to turn
   # the run into an audit event (selfUpdate.server.ts). Keep the format stable.
@@ -227,7 +292,7 @@ fi
 # dump. Doing it before we touch anything keeps the rest of the script
 # talking to a coherent daemon.
 echo "[STEP] Checking PM2 daemon/CLI version sync"
-PING_OUT=$(pm2 ping 2>&1)
+PING_OUT=$("$PM2" ping 2>&1)
 if echo "$PING_OUT" | grep -q "out-of-date"; then
   # pm2 prints both versions alongside the warning. Which is newer decides
   # whether \`pm2 update\` can help — see the direction check below.
@@ -267,7 +332,7 @@ if echo "$PING_OUT" | grep -q "out-of-date"; then
   fi
 
   echo "[STEP] PM2 daemon is out-of-date — running 'pm2 update' to resync"
-  if ! pm2 update; then
+  if ! "$PM2" update; then
     echo "[FATAL] pm2 update failed — aborting before stopping the running app"
     exit 1
   fi
@@ -288,9 +353,13 @@ fi
 # IS the SSE server. From here on, the user sees output via the log-file
 # polling fallback in the admin UI, not over SSE.
 echo "[STEP] Stopping selva-compute"
-if ! pm2 stop selva-compute; then
+if ! "$PM2" stop selva-compute; then
   echo "[WARN] pm2 stop failed — selva-compute may not be running yet. Continuing."
 fi
+
+# pm2 stop returns before the process is actually gone. Everything below —
+# npm rewriting build/, then the restart — must happen outside the drain window.
+wait_until_stopped
 
 # ---------------------------------------------------------------------------
 # 4. Run npm update.
@@ -319,7 +388,7 @@ fi
 # requires selva-compute to already be in pm2's in-memory process list, which
 # a \`pm2 update\` (step 2) isn't guaranteed to preserve.
 echo "[STEP] Starting selva-compute with new build"
-if ! pm2 start "$ECOSYSTEM" --update-env; then
+if ! start_app; then
   echo "[FATAL] pm2 start failed — investigate with \\\`pm2 logs selva-compute\\\`"
   exit 2
 fi
@@ -371,7 +440,8 @@ if [ -z "$BEFORE" ]; then
 fi
 
 echo "[STEP] Rolling back @selvajs/selva to $BEFORE"
-pm2 stop selva-compute >/dev/null 2>&1 || true
+"$PM2" stop selva-compute >/dev/null 2>&1 || true
+wait_until_stopped >/dev/null 2>&1
 # Restore @selvajs/cli alongside the runtime: the forward step installs both at
 # the channel tag, so reverting only the runtime leaves a version pair that was
 # never released together.
@@ -380,7 +450,7 @@ if ! npm install --save "@selvajs/cli@$BEFORE" "@selvajs/selva@$BEFORE"; then
   exit 4
 fi
 
-pm2 start "$ECOSYSTEM" --update-env || true
+start_app || true
 sleep 3
 ROLLBACK_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:$PORT/api/health" 2>/dev/null || echo "000")
 if [ "$ROLLBACK_CODE" = "200" ]; then
