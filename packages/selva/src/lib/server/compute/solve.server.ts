@@ -9,9 +9,9 @@
  * by accident. Adding a token lookup here would silently give it one.
  *
  * What lives here: rate limiting, definition/version resolution, access checks,
- * compute-server routing, schema backfill, the engine call, metric recording and
- * the debug breakdown. What stays in a route: parsing its own body shape and
- * deciding who the caller is.
+ * compute-server routing, schema backfill, the engine call, metric recording, the
+ * debug breakdown. What stays in a route: parsing its own body shape and deciding
+ * who the caller is.
  */
 
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
@@ -59,9 +59,8 @@ export interface SolveParams {
 	versionId: string | null;
 	request: Request;
 	/**
-	 * The route's `locals`, for the access guards (which read `locals.ctx`) and
-	 * the logger. Typed loosely because two route trees with different generated
-	 * `$types` both call this.
+	 * Typed loosely because two route trees with different generated `$types`
+	 * both call this.
 	 */
 	locals: App.Locals;
 	/** `performance.now()` at the very start of the request, before body parse. */
@@ -120,9 +119,9 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	let localDefinitionRef: ByteCacheRef | null = null;
 	// BRIDGE: remove ~2026-09 — lazy schema backfill for pre-cached versions.
 	let localVersionForBackfill: { id: string; hasSchema: boolean } | null = null;
-	// BYO compute routing per org (spec §3); null for remote definitions.
+	// BYO compute routing per org; null for remote definitions.
 	let solveOrgId: string | null = null;
-	// Per-definition compute pin (spec §3 step 1).
+	// Per-definition compute pin.
 	let definitionPin: string | null = null;
 	// Solve-metric attribution; null for remote-URL solves.
 	let metricDefinitionId: string | null = null;
@@ -131,10 +130,10 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	const isLocal = definitionUrl.startsWith('local:');
 	const guid = isLocal ? definitionUrl.substring(6) : null;
 
-	// One row per solve attempt — including attempts rejected before the solve
+	// One row per solve attempt, including attempts rejected before the solve
 	// runs. Reads the attribution `let`s at call time so each record captures
 	// whatever has resolved so far (definition/version are null pre-resolution).
-	// Fire-and-forget; the sink never throws (ISolveMetricSink contract).
+	// Fire-and-forget: the sink never throws (ISolveMetricSink contract).
 	const recordMetric = (
 		failureKind: SolveFailureKind,
 		extra: { durationMs?: number; errorCount?: number; warningCount?: number } = {}
@@ -239,8 +238,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		// unavoidable upload), and the byte cache serves a warm entry without
 		// touching storage. Keyed on the immutable version id — NEVER the fileKey,
 		// which a delete-latest-then-reupload can reuse for different content. A
-		// missing blob now surfaces at solve time (compute_error → 500) rather than
-		// as an upfront 404, since we no longer eagerly read it here.
+		// missing blob surfaces at solve time (compute_error → 500), not as an
+		// upfront 404, since it's no longer read eagerly here.
 		localDefinitionRef = engine.definitionRef(version.id, async () => {
 			const bytes = await storage.get(version.fileKey);
 			if (!bytes) throw new Error(`Version blob missing: ${version.fileKey}`);
@@ -270,7 +269,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// the "load" phase; the tree build + solve are measured inside the pipeline.
 	const defLoadMs = performance.now() - loadStart;
 
-	// Atomic check-and-increment (spec §7); run before solve to avoid wasting compute.
+	// Atomic check-and-increment; runs before solve to avoid wasting compute.
 	if (sharedAccess) {
 		const next = await providers.data.shareLinks.tryIncrementSolveCount(
 			solveCtx,
@@ -290,8 +289,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	if (localVersionForBackfill && !localVersionForBackfill.hasSchema && localDefinitionRef) {
 		const versionId = localVersionForBackfill.id;
 		try {
-			// Schema extraction needs real bytes — materialize through the byte
-			// cache (warms the entry the upcoming solve's `load()` would hit).
+			// Materialize through the byte cache — warms the entry the upcoming
+			// solve's `load()` would hit anyway.
 			const bytes = await localDefinitionRef.load();
 			const schema = await fetchSchemaFromCompute(bytes, serverConfig);
 			await providers.data.definitions.setVersionSchema(solveCtx, versionId, schema);
@@ -307,15 +306,15 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		mark('schemaBackfill');
 	}
 
-	// Hand off to the engine: warm-client lookup (stamping `definitionGuid` as the
-	// ADR 0004 D2 affinity header when present), input-tree build, single-flight
-	// coalescing (R4 — a hot-key burst hits compute once, for EVERY solve not just
-	// cacheable ones), the abort/hasWaiters dance (R3 — a coalesced solve must not
-	// follow one caller's disconnect and 499 every waiter), the pipeline call, and
-	// per-caller Accept-Encoding re-keying (audit C5) all live in `SolveEngine.solve`
-	// now. Remote-URL solves have no version id, so the URL stands in as their
-	// coalesce-key identity (`definitionKey`); local solves carry that identity on
-	// `localDefinitionRef.key` already, so `definitionKey` is unused there.
+	// Hand off to the engine: warm-client lookup (stamping `definitionGuid` as an
+	// affinity header when present), input-tree build, single-flight coalescing (a
+	// hot-key burst hits compute once, for every solve, not just cacheable ones),
+	// the abort/hasWaiters dance (a coalesced solve must not follow one caller's
+	// disconnect and 499 every waiter), the pipeline call, and per-caller
+	// Accept-Encoding re-keying all live in `SolveEngine.solve`. Remote-URL solves
+	// have no version id, so the URL stands in as their coalesce-key identity
+	// (`definitionKey`); local solves carry that identity on `localDefinitionRef.key`
+	// already, so `definitionKey` is unused there.
 	const outcome = await engine.solve({
 		server: serverConfig,
 		definitionSource,
@@ -348,9 +347,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			warningCount: outcome.warningCount
 		});
 		// Bump the definition's display counter ("N runs"). Local definitions only —
-		// remote URLs have no record. Best-effort: the solve already succeeded and
-		// was returned, so a failed counter write must not turn into a request
-		// error. Share-link cap counting is separate (above).
+		// remote URLs have no record. Best-effort: the solve already succeeded, so a
+		// failed counter write must not turn into a request error.
 		if (metricDefinitionId) {
 			providers.data.definitions.incrementSolveCount(solveCtx, metricDefinitionId).catch((err) =>
 				locals.log.warn('solveCount increment failed', {
@@ -364,16 +362,15 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		if (COMPUTE_DEBUG) logDebugBreakdown(locals, request, outcome, defLoadMs, prepMarks);
 	}
 
-	// `toWebResponse` builds the Response itself (incl. `Retry-After` on a rejected `shed`,
-	// which `apiError` cannot set) and still throws `compute_error` through to
-	// the caller's outer catch.
+	// `toWebResponse` builds the Response itself (incl. `Retry-After` on a rejected
+	// `shed`, which `apiError` cannot set) and still throws `compute_error` through
+	// to the caller's outer catch.
 	return engine.toWebResponse(outcome);
 }
 
 /**
- * Map a thrown solve failure to an HTTP error. Both solve routes share it so
- * they cannot drift on which failures read as "compute is down" (503) versus a
- * server bug (500).
+ * Both solve routes share this so they cannot drift on which failures read as
+ * "compute is down" (503) versus a server bug (500).
  */
 export function mapSolveError(err: unknown, locals: App.Locals): never {
 	if (isHttpError(err)) throw err;
@@ -400,8 +397,7 @@ export function mapSolveError(err: unknown, locals: App.Locals): never {
 /**
  * DEBUG (SELVA_FLAG_COMPUTE_DEBUG): the server-side overhead the solve metric's
  * `durationMs` doesn't capture. `load` = auth + DB + definition fetch; `tree` =
- * input tree build; `serialize` = JSON.stringify of the result. The solve itself
- * is timed separately (see the solve metric's durationMs and [Compute/selva-cache]).
+ * input tree build; `serialize` = JSON.stringify of the result.
  */
 function logDebugBreakdown(
 	locals: App.Locals,

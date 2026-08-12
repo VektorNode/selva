@@ -1,8 +1,6 @@
-// File-type constraints for the selva app HTTP API layer.
-// These are independent of whichever provider is configured.
-//
-// Size caps are centralized in `computeLimits.ts` — re-exported here so
-// existing import sites keep working while there's only one place to change.
+// File-type constraints for the selva app HTTP API layer, independent of
+// whichever provider is configured. Size caps live in `computeLimits.ts` and
+// are re-exported here so there's one place to change them.
 export {
 	GH_EXTENSIONS,
 	COVER_IMAGE_EXTENSIONS as IMAGE_EXTENSIONS,

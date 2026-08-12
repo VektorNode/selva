@@ -1,17 +1,13 @@
 /**
- * The shared shape of a v1 route handler.
+ * The shared shape of a v1 route handler: validate the path, parse the body,
+ * do the work, serialize. Before these helpers existed, every handler spelled
+ * all four out, and the boilerplate had already drifted — path params were
+ * validated two different ways, and list endpoints hand-rolled pagination
+ * clamps that disagreed with each other.
  *
- * Every handler in this tree does the same four things — validate the path,
- * parse the body, do the work, serialize — and before these helpers existed
- * each one spelled all four out. That is 2000 lines across 27 files in which
- * the interesting part is a few lines deep, and where the boilerplate had
- * already drifted: path params were validated two different ways, and four
- * list endpoints hand-rolled a pagination clamp that disagreed with the shared
- * one they were documented as using.
- *
- * The rule these helpers exist to enforce: **a route handler parses, guards,
- * delegates and serializes — nothing else.** Anything two endpoints must agree
- * on lives here or in `@selvajs/server`, never copied into both.
+ * The rule these helpers enforce: **a route handler parses, guards, delegates
+ * and serializes — nothing else.** Anything two endpoints must agree on lives
+ * here or in `@selvajs/server`, never copied into both.
  */
 
 import { json } from '@sveltejs/kit';
@@ -24,16 +20,12 @@ import { apiError, ApiErrorCode, handleApiError, throwZodError } from '../../api
 // ============================================================================
 
 /**
- * The authenticated caller, or 401.
- *
- * Routes used to write `if (!locals.ctx) apiError(401, …)` and then reach for
- * `locals.ctx!` further down — thirteen checks and eleven non-null assertions
- * for one fact. Returning the narrowed pair means the assertion disappears: if
- * you have the result, the context exists.
+ * The authenticated caller, or 401. Returns the narrowed pair so callers don't
+ * need `locals.ctx!` — if you have the result, the context exists.
  *
  * Guards in `access.server.ts` do their own 401 as a side effect of checking a
- * permission. This is for the handlers that need an identity without one — the
- * `/me` routes, and reads whose authorization is a visibility filter.
+ * permission. This is for handlers that need an identity without a permission
+ * check — the `/me` routes, and reads whose authorization is a visibility filter.
  */
 export function requireCaller(locals: App.Locals): {
 	ctx: NonNullable<App.Locals['ctx']>;
@@ -53,12 +45,11 @@ export function requireCaller(locals: App.Locals): {
  * Read required path params, 400ing on any that is missing or blank.
  *
  * SvelteKit types every param as `string`, but a route can be reached with an
- * empty segment, so the non-null assertion handlers used to write was a lie the
- * type system endorsed. Returning a narrowed record means the caller gets real
- * strings without asserting.
+ * empty segment — this catches that instead of letting a stale non-null
+ * assertion paper over it.
  *
- * This does **not** validate format — a guid-shaped param still goes through
- * `GuidSchema` where the route cares. It replaces the `if (!id) apiError(...)`
+ * Does **not** validate format — a guid-shaped param still goes through
+ * `GuidSchema` where the route cares. Replaces the `if (!id) apiError(...)`
  * preamble, not the schema check.
  */
 export function requireParams<K extends string>(
@@ -91,7 +82,7 @@ export function requireParams<K extends string>(
  * Read a path param through a Zod schema, 400ing on a bad value.
  *
  * The format-checking counterpart to `requireParams` — for guids, enum-shaped
- * segments, and anything else where "present" is not the same as "valid".
+ * segments, anything where "present" isn't the same as "valid".
  */
 export function parseParam<T>(value: string | undefined, schema: ZodType<T>, name: string): T {
 	const parsed = schema.safeParse(value);
@@ -106,14 +97,12 @@ export function parseParam<T>(value: string | undefined, schema: ZodType<T>, nam
 // ============================================================================
 
 /**
- * Parse and validate a JSON body.
+ * Parse and validate a JSON body. A malformed body becomes `null` rather than
+ * throwing, so it fails the schema as a validation error — broken JSON gets a
+ * 400 naming the problem, not a 500 from `request.json()`.
  *
- * A malformed body becomes `null` rather than throwing, so it fails the schema
- * and reports as a validation error — a client sending broken JSON should see
- * a 400 naming the problem, not a 500 from `request.json()`.
- *
- * `missingAs` covers the endpoints whose fields are all optional: passing `{}`
- * lets an empty request body mean "no changes" instead of a validation failure.
+ * `missingAs` covers endpoints whose fields are all optional: passing `{}` lets
+ * an empty body mean "no changes" instead of a validation failure.
  */
 export async function parseBody<T>(
 	request: Request,
@@ -132,16 +121,12 @@ export async function parseBody<T>(
 
 /**
  * Pull a required file out of a multipart body and check its size and, where
- * given, its extension.
+ * given, its extension. Caps themselves stay in `admin-config`; this only
+ * applies them.
  *
- * The extension allowlist and the size cap were written out at five call sites,
- * each formatting the same "Max size: N MB" message — one of the places where
- * two endpoints must agree and nothing made them. The caps themselves stay in
- * `admin-config`; this only applies them.
- *
- * The size check is a second line of defence, not the first: `requireMaxBodySize`
- * rejects an oversized request before it is buffered. This catches a file that
- * is individually too large inside a request that is not.
+ * A second line of defence, not the first: `requireMaxBodySize` rejects an
+ * oversized request before it's buffered. This catches a file that's
+ * individually too large inside a request that isn't.
  */
 export function requireUpload(
 	form: FormData,
@@ -224,18 +209,14 @@ export function noContent(): Response {
  *
  * **This is what keeps a secret from reaching a client by accident.** Several
  * responses are store records with a credential removed — `tokenHash` on a
- * share link or invite, `apiKey` on an org compute server — and until now the
- * removal was a destructuring line a future edit could drop. Adding a field to
- * the store type would then publish it, silently, with nothing failing.
- *
- * Parsing through a schema inverts that: the response carries what the schema
- * names and nothing else, so a new field on the stored type is invisible until
- * someone adds it here deliberately.
+ * share link or invite, `apiKey` on an org compute server. Parsing through a
+ * schema means the response carries only what the schema names, so a new field
+ * on the stored type is invisible until someone adds it here deliberately. See
+ * `responses.ts`.
  */
 export function shaped<T>(schema: ZodType<T>, payload: unknown, status = 200): Response {
-	// A response that fails its own schema is a bug in this app, not bad input
-	// from a caller — let it surface as a 500 rather than shipping a half-valid
-	// body a client would have to guess at.
+	// A response failing its own schema is a bug in this app, not bad caller
+	// input — let it surface as a 500 rather than ship a half-valid body.
 	return json(schema.parse(payload), { status });
 }
 
@@ -255,12 +236,11 @@ export function shapedCollection<T>(
  * Wrap a handler so an unhandled error becomes a structured API error.
  *
  * Every route used to end in the same `try { … } catch (err) { handleApiError(
- * err, '…') }` — 59 of them. The wrapper hoists it, which is not only less to
- * read: a handler that forgot the try/catch surfaced a raw 500 with a provider
- * message in it, and nothing flagged the omission.
+ * err, '…') }`. A handler that forgot it surfaced a raw 500 with a provider
+ * message in it, with nothing flagging the omission.
  *
- * `fallback` is the message used when the error carries none of its own; it is
- * required because "something went wrong" tells a caller nothing.
+ * `fallback` is required — the message used when the error carries none of its
+ * own, and "something went wrong" tells a caller nothing.
  */
 export function apiRoute<E extends RequestEvent>(
 	fallback: string,

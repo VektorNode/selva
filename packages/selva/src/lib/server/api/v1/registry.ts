@@ -1,16 +1,15 @@
 /**
  * The v1 contract as data: one entry per method+path, naming its body validator,
- * its response shape, and whether it is public or internal.
+ * response shape, and whether it's public or internal.
  *
- * Both the OpenAPI generator and the conformance test read this file, which is
- * what makes drift detectable in both directions — the test walks
- * `routes/api/v1/**` and this table and fails if either side has an entry the
- * other doesn't. A route added without a registry entry is undocumented; a
+ * Both the OpenAPI generator and the conformance test read this file. The test
+ * walks `routes/api/v1/**` against this table and fails if either side has an
+ * entry the other doesn't — a route with no registry entry is undocumented, a
  * registry entry with no route is a spec promising something that 404s.
  *
- * The request schemas are Zod values imported from `./bodies.ts`, not
- * transcriptions of them, so a renamed field changes the spec on the next
- * generate rather than silently disagreeing with the validator.
+ * Request schemas are Zod values imported from `./bodies.ts`, not transcribed,
+ * so a renamed field changes the spec on the next generate instead of silently
+ * disagreeing with the validator.
  */
 
 import type { ZodType } from 'zod';
@@ -28,11 +27,10 @@ import {
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
 /**
- * How a successful response is shaped. `collection` is the paginated
- * `{ items, nextCursor? }` envelope and implies the `limit`/`cursor` query
- * params; the conformance test keys its pagination assertion off this, so
- * mislabelling a list endpoint as `object` is how an unpaginated collection
- * would ship.
+ * `collection` is the paginated `{ items, nextCursor? }` envelope and implies
+ * the `limit`/`cursor` query params. The conformance test keys its pagination
+ * assertion off this — mislabelling a list endpoint as `object` is how an
+ * unpaginated collection ships.
  */
 export type ResponseKind = 'collection' | 'object' | 'empty' | 'binary';
 
@@ -406,9 +404,9 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	// Compute
 	// ==========================================================================
 	//
-	// `/compute` is internal: it accepts a remote `definitionUrl` and the
-	// anonymous share-token flow, neither of which is part of the public
-	// contract. Public callers solve through `/definitions/{guid}/solve`.
+	// Internal: accepts a remote `definitionUrl` and the anonymous share-token
+	// flow, neither part of the public contract. Public callers solve through
+	// `/definitions/{guid}/solve`.
 	{
 		method: 'POST',
 		path: '/compute',

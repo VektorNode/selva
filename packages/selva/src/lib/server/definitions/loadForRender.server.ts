@@ -1,9 +1,8 @@
-// App binding for the definition render loader, moved to
-// `@selvajs/server/definitions` (embeddable-server-layer K4). The package owns
-// the loading pipeline (version resolution, blob fetch, schema staleness check
-// per ADR 0005, default merging); this file is the composition root that wires
-// the app's providers, compute-server resolution, and warm-client cache into
-// it. Access gating stays with the calling route, as before.
+// App binding for the definition render loader in `@selvajs/server/definitions`.
+// The package owns the loading pipeline (version resolution, blob fetch,
+// schema staleness check, default merging); this file wires in the app's
+// providers, compute-server resolution, and warm-client cache. Access gating
+// stays with the calling route.
 
 import {
 	createDefinitionLoader,

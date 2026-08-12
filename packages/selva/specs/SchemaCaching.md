@@ -106,8 +106,8 @@ on `!response.ok` and on zero schemas — that _is_ the validation gate.
 
 ### 4. Solve-time lazy backfill (TEMPORARY BRIDGE)
 
-- [api/compute/+server.ts](../src/routes/api/compute/+server.ts), after
-  `serverConfig` is resolved (~line 342), for **local** definitions only: if
+- [lib/server/compute/solve.server.ts](../src/lib/server/compute/solve.server.ts),
+  after `serverConfig` is resolved, for **local** definitions only: if
   `version.schema` is missing, extract from the already-loaded
   `definitionSource` and write back via `setVersionSchema`.
 - Best-effort: never block or fail the solve on backfill error — log only.

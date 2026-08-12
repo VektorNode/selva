@@ -1,17 +1,17 @@
 /**
  * Response schemas for the v1 payloads that must not carry a stored secret.
  *
- * Three store types hold a credential next to the fields a client legitimately
- * reads: `ShareLink.tokenHash` and `Invite.tokenHash` are HMACs of a token, and
+ * Three store types hold a credential next to fields a client legitimately
+ * reads: `ShareLink.tokenHash` and `Invite.tokenHash` are HMACs of a token,
  * `ComputeServerCommon.apiKey` is a live Rhino.Compute key. Handlers used to
- * remove them by destructuring — `const { tokenHash: _omit, ...rest } = invite`
- * — which works exactly until someone adds a field to the stored type or edits
- * the line away. Nothing fails at build time when that happens; the credential
- * simply starts appearing in a response.
+ * strip them by destructuring — `const { tokenHash: _omit, ...rest } = invite`
+ * — which works until someone adds a field to the stored type or edits the line
+ * away. Nothing fails at build time; the credential just starts appearing in a
+ * response.
  *
- * Parsing through these schemas inverts the default. The response carries what
- * the schema names, so a new field on the stored type is invisible to clients
- * until it is added here on purpose. Use them via `shaped`/`shapedCollection`
+ * Parsing through these schemas inverts the default: the response carries only
+ * what the schema names, so a new field on the stored type is invisible to
+ * clients until added here on purpose. Use them via `shaped`/`shapedCollection`
  * in `./route.ts`.
  *
  * These describe **responses**, not stored records — where the two differ (an

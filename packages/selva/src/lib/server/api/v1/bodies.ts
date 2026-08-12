@@ -1,17 +1,14 @@
 /**
  * Request-body validators for the v1 routes that take JSON.
  *
- * They live here rather than beside their handlers so the OpenAPI generator can
- * import them. A `+server.ts` imports `./$types`, which only resolves inside a
- * SvelteKit build — a spec script cannot load one. With the validators inline,
- * "the spec is derived from Zod" would have meant hand-transcribing them, which
- * is exactly the shape drift the spec is supposed to prevent: a renamed field
- * would validate one way and document another, and nothing would fail.
+ * They live here, not beside their handlers, so the OpenAPI generator can import
+ * them: a `+server.ts` imports `./$types`, which only resolves inside a
+ * SvelteKit build, and a spec script can't load one.
  *
  * **A JSON body accepted by a v1 route belongs in this file.** Adding one inline
  * is invisible to the generator, so the endpoint documents an empty body.
- * Multipart handlers are the exception — their fields are described in the spec
- * directly, since `FormData` has no Zod schema to derive from.
+ * Multipart handlers are the exception — `FormData` has no Zod schema to derive
+ * from, so their fields are described in the spec directly.
  */
 
 import { z } from 'zod';
@@ -34,11 +31,7 @@ export const SolveBodySchema = z.object({
 	values: z.record(z.string(), z.unknown()).default({}),
 	channel: z.enum(['live', 'draft']).default('live'),
 	versionId: z.string().optional(),
-	/**
-	 * Accepted only when it names this same definition. A caller pasting a body
-	 * from `/api/v1/compute` should get a clear 400, not a silent solve of a
-	 * different definition than the URL names.
-	 */
+	/** Must name this same definition, or the route 400s instead of solving a different one. */
 	definitionUrl: z.string().optional()
 });
 
@@ -73,10 +66,7 @@ export const UpdateProjectMemberBodySchema = z.object({ role: ProjectRoleSchema 
 // Orgs
 // ============================================================================
 
-/**
- * Invites accept a flat `permissions[]` from the UI; platform-scope entries are
- * dropped downstream, since an invite only grants org rights.
- */
+/** Platform-scope entries are dropped downstream — an invite only grants org rights. */
 const FlatPermissionSchema = z.union([PlatformPermissionSchema, OrgPermissionSchema]);
 
 export const CreateInviteBodySchema = z.object({
@@ -86,13 +76,10 @@ export const CreateInviteBodySchema = z.object({
 });
 
 /**
- * Replacement set for an org's own compute servers.
- *
- * `apiKey` is tri-state and the distinction is load-bearing: **omitted** keeps
- * the stored key, **null** clears it, and a string replaces it. `.optional()`
- * plus `.nullable()` — not `.nullish()` — because the two must stay
- * distinguishable after parsing; collapsing them would silently wipe a stored
- * credential on any request that left the field out.
+ * `apiKey` is tri-state: **omitted** keeps the stored key, **null** clears it, a
+ * string replaces it. `.optional().nullable()` — not `.nullish()` — because the
+ * two must stay distinguishable after parsing, or a request that just omits the
+ * field would silently wipe the stored credential.
  */
 const IncomingComputeServerSchema = z.object({
 	id: z.string().min(1),
@@ -105,11 +92,7 @@ const IncomingComputeServerSchema = z.object({
 
 export const OrgComputePatchBodySchema = z.object({
 	servers: z.array(IncomingComputeServerSchema),
-	/**
-	 * The org's default selection. May name any server visible to the org — a
-	 * shared platform server, the global default, or one of its own. `null`
-	 * clears the override; omitting it leaves the current one untouched.
-	 */
+	/** May name any server visible to the org. `null` clears the override; omitted leaves it untouched. */
 	defaultServerId: z.string().nullable().optional()
 });
 

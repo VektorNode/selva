@@ -22,35 +22,32 @@ export function readRuntimeVersion(dir: string): string | undefined {
 	}
 }
 
-// Quote a single argv element for safe embedding in a bash single-quoted
-// string. Wraps in single quotes and escapes any embedded single quotes
-// using the standard `'\''` trick. We pass user-controlled values (plan.cwd
-// is from process.cwd(), npm package names are hardcoded) but defensive
-// quoting is cheap.
+// Wraps in single quotes and escapes embedded single quotes with the
+// standard `'\''` trick. No caller currently passes untrusted input
+// (plan.cwd is from process.cwd(), npm package names are hardcoded), but
+// defensive quoting is cheap.
 export function shellQuote(s: string): string {
 	return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-// Wrap the actual update commands in a tiny "launcher" that daemonizes them.
+// Wraps the actual update commands in a tiny "launcher" that daemonizes them.
 //
-// THE PROBLEM this solves: `pm2 stop selva-compute` (which the runner has to
-// call) uses tree-kill. It walks /proc parent-child relationships starting
-// from selva-compute's PID and SIGKILLs every descendant. Node's
+// THE PROBLEM: `pm2 stop selva-compute` (which the runner has to call) uses
+// tree-kill, which walks /proc parent-child relationships from
+// selva-compute's PID and SIGKILLs every descendant. Node's
 // `{ detached: true }` + `child.unref()` puts the spawned bash in a new
-// session/process group, but does NOT change the parent-child relationship
-// — so tree-kill still finds it and kills it. Result: bash dies mid-update,
-// the app never gets restarted, site stays down until someone SSHes in.
+// session/process group but does NOT change the parent-child relationship —
+// so tree-kill still finds and kills it, and the app never restarts.
 //
-// THE FIX: write the actual update commands to a tempfile and launch them
-// via `setsid bash ... &`, then have the launcher exit. The runner's PPID
-// becomes 1 (init) the moment the launcher exits, so it's no longer a
-// descendant of selva-compute and tree-kill can't reach it.
+// THE FIX: write the update commands to a tempfile and launch them via
+// `setsid bash ... &`, then have the launcher exit. The runner's PPID becomes
+// 1 (init) the moment the launcher exits, so it's no longer a descendant of
+// selva-compute and tree-kill can't reach it.
 //
-// Output handling:
-//   - The launcher's prelude lines are echoed via tee into UPDATE_LOG_PATH
-//     AND through stdout (visible to SSE while the connection is still up).
-//   - The runner appends its output directly to the same log file.
-//   - The frontend tolerates the SSE blackout by polling the log file.
+// Output: the launcher's prelude lines are echoed via tee into
+// UPDATE_LOG_PATH and through stdout (visible to SSE while the connection is
+// still up); the runner appends its output to the same log file; the
+// frontend tolerates the SSE blackout by polling the log file.
 export function buildLauncher(
 	runnerScript: string,
 	logPath: string,
@@ -92,9 +89,8 @@ exit 0
 
 // Bash script the daemonized runner executes. Flow:
 //
-//   1. pre-flight    — query the registry; if we're already on latest, exit
-//                      clean WITHOUT touching the running app. Saves a
-//                      pointless downtime cycle.
+//   1. pre-flight    — query the registry; if already on latest, exit clean
+//                      WITHOUT touching the running app.
 //   2. pm2 sync      — `pm2 update` if the daemon and CLI versions drifted.
 //   3. pm2 stop      — stop selva-compute before npm overwrites build/, so
 //                      in-flight requests can't hit ERR_MODULE_NOT_FOUND
@@ -139,9 +135,8 @@ TAG=${distTag}
 
 # Last-resort safety net. If the script exits with the app NOT online for
 # any reason (crash, kill -9, network blip, npm hang past timeout), try to
-# bring it back from ecosystem.config.cjs before we go. The whole point of
-# this script is to update the app; leaving it down is the worst possible
-# outcome.
+# bring it back from ecosystem.config.cjs before exiting. Leaving the app
+# down is the worst possible outcome of an update.
 on_exit() {
   CODE=$?
   STATUS=$(pm2 jlist 2>/dev/null | node -e "
@@ -165,11 +160,11 @@ trap on_exit EXIT
 # A killed runner must not look like a finished one.
 #
 # \`$?\` inside an EXIT trap reports the last completed command, NOT the signal.
-# When systemd SIGTERMs the whole cgroup (issue #118) the EXIT trap still runs
-# and records \`code=0\` — so deriveOutcome takes the exit-0 success branch and
-# the operator is told "Updated X → Y. The app is back online." while npm never
-# ran and the deployment is unchanged. Catching the signal makes the recorded
-# code truthful; 143/130 are the conventional 128+signal values.
+# When systemd SIGTERMs the whole cgroup, the EXIT trap still runs and records
+# \`code=0\` — so deriveOutcome takes the exit-0 success branch and tells the
+# operator "Updated X → Y. The app is back online." while npm never ran and
+# the deployment is unchanged. Catching the signal makes the recorded code
+# truthful; 143/130 are the conventional 128+signal values.
 on_signal() {
   SIG=$1
   echo "[FATAL] KILLED: runner received SIG$SIG before finishing."
@@ -185,9 +180,8 @@ trap 'on_signal HUP 129' HUP
 # ---------------------------------------------------------------------------
 # 1. Pre-flight: skip the whole cycle if there's nothing to install.
 # ---------------------------------------------------------------------------
-# Without this, clicking "Update" on an already-current instance triggered
-# a full stop/install/start cycle and a downtime window for no reason. Now
-# we just check the registry first.
+# Without this, clicking "Update" on an already-current instance triggers a
+# full stop/install/start cycle and a downtime window for no reason.
 echo "[STEP] Checking npm registry for the '$TAG' channel version"
 LATEST=$(npm view "@selvajs/selva@$TAG" version --silent 2>/dev/null || echo "")
 if [ -z "$LATEST" ]; then
@@ -205,11 +199,11 @@ fi
 # ---------------------------------------------------------------------------
 # 1b. Node engine pre-flight — BEFORE any downtime.
 # ---------------------------------------------------------------------------
-# npm only treats an engine mismatch as fatal under engine-strict=true, which no
-# deployment sets. So a release requiring a newer Node installs "successfully",
-# pm2 starts, and /api/health returns 200 (it touches nothing Node-version
-# specific) — a false green that skips rollback entirely. Warn here so a
-# CLI-driven run sees it too; the admin UI blocks earlier (issue #176).
+# npm only treats an engine mismatch as fatal under engine-strict=true, which
+# no deployment sets. So a release requiring a newer Node installs
+# "successfully", pm2 starts, and /api/health returns 200 (it touches nothing
+# Node-version specific) — a false green that skips rollback entirely. Warn
+# here so a CLI-driven run sees it too; the admin UI blocks earlier.
 REQUIRED_NODE=$(npm view "@selvajs/selva@$TAG" engines.node --silent 2>/dev/null | tr -d '"' | tr -d "'")
 RUNNING_NODE=$(node -p 'process.versions.node' 2>/dev/null)
 if [ -n "$REQUIRED_NODE" ] && [ -n "$RUNNING_NODE" ]; then
@@ -236,7 +230,7 @@ echo "[STEP] Checking PM2 daemon/CLI version sync"
 PING_OUT=$(pm2 ping 2>&1)
 if echo "$PING_OUT" | grep -q "out-of-date"; then
   # pm2 prints both versions alongside the warning. Which is newer decides
-  # whether \`pm2 update\` can help — see the direction check below (issue #118).
+  # whether \`pm2 update\` can help — see the direction check below.
   DAEMON_V=$(echo "$PING_OUT" | sed -e 's/\\x1b\\[[0-9;]*m//g' \\
     | grep -i "In memory PM2 version" | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+' | head -1)
   LOCAL_V=$(echo "$PING_OUT" | sed -e 's/\\x1b\\[[0-9;]*m//g' \\
@@ -262,7 +256,7 @@ if echo "$PING_OUT" | grep -q "out-of-date"; then
   # unit's main process die and, with the default KillMode=control-group,
   # SIGTERMs everything in the cgroup — including this runner. setsid escapes
   # PM2's tree-kill but NOT the cgroup, so there is no way to survive it from
-  # here; refuse the resync instead of being killed by it (issue #118).
+  # here; refuse the resync instead of being killed by it.
   if grep -qs 'pm2.*\\.service' /proc/self/cgroup 2>/dev/null; then
     echo "[FATAL] SYSTEMD_PM2: this deployment's PM2 is supervised by systemd, and the daemon"
     echo "[FATAL] needs a resync. Running 'pm2 update' here would restart the systemd unit and"
@@ -284,8 +278,8 @@ fi
 # 3. Stop selva-compute BEFORE npm rewrites build/.
 # ---------------------------------------------------------------------------
 # SvelteKit's node adapter lazy-imports chunks from build/server/chunks/ on
-# every request. Letting npm rewrite build/ while the old process is still
-# serving traffic = in-flight requests hit ERR_MODULE_NOT_FOUND for chunks
+# every request. Letting npm rewrite build/ while the old process still
+# serves traffic means in-flight requests hit ERR_MODULE_NOT_FOUND for chunks
 # whose hash just changed under their feet. Stopping first is a brief
 # downtime window (~1-2s longer than restart-in-place) for a much smaller
 # blast radius.
@@ -321,9 +315,9 @@ fi
 # ---------------------------------------------------------------------------
 # 5. Start selva-compute with the new build.
 # ---------------------------------------------------------------------------
-# Start from ecosystem.config.cjs, NOT \`pm2 start selva-compute\` — the
-# latter requires selva-compute to already be in pm2's in-memory process
-# list. After a \`pm2 update\` (step 2) that's not guaranteed.
+# Start from ecosystem.config.cjs, NOT \`pm2 start selva-compute\` — the latter
+# requires selva-compute to already be in pm2's in-memory process list, which
+# a \`pm2 update\` (step 2) isn't guaranteed to preserve.
 echo "[STEP] Starting selva-compute with new build"
 if ! pm2 start "$ECOSYSTEM" --update-env; then
   echo "[FATAL] pm2 start failed — investigate with \\\`pm2 logs selva-compute\\\`"
@@ -402,25 +396,24 @@ exit 6
 
 // Selva self-updates as a CLI-scaffolded npm deployment: the deployment dir
 // holds a package.json that depends on @selvajs/selva, and update means
-// `npm update @selvajs/*` + pm2 restart. Deployment-dir detection (cwd-upward
-// probe, `INSTALL_DIR` override) lives in `selfUpdate.server.ts`, shared with
-// the outcome reconciler and the log path.
+// `npm install @selvajs/*@<tag>` + pm2 restart. Deployment-dir detection
+// (cwd-upward probe, `INSTALL_DIR` override) lives in `selfUpdate.server.ts`,
+// shared with the outcome reconciler and the log path.
 export type UpdatePlan = { cwd: string; args: string[] };
 
 // All @selvajs/* packages move together — fixing a provider-only bug without
 // bumping the runtime is a supported flow.
 //
-// We `npm install` the packages pinned to the channel's dist-tag rather than
-// `npm update`, because `update` only ever moves FORWARD within the installed
+// `npm install` pins to the channel's dist-tag rather than using `npm
+// update`, because `update` only ever moves FORWARD within the installed
 // semver range — it can't switch dist-tags or DOWNGRADE. Pinning to @latest /
 // @beta makes one command serve every transition: forward stable bumps,
 // beta→newer-beta, and the revert case (beta→stable lands on an older version).
 //
 // --save persists the resolved version into package.json so the next plain
 // install is reproducible; --prefer-online forces npm to revalidate cached
-// packuments against the registry. Without it, npm's packument cache (5+ min
-// TTL) can silently no-op right after publish. See docs/Hotfix-CLI-Runtime.md
-// "stale-packument-cache trap".
+// packuments against the registry — without it, npm's packument cache (5+
+// min TTL) can silently no-op right after publish.
 export function npmInstallArgs(channel: ReleaseChannel): string[] {
 	const tag = channelTag(channel);
 	return ['install', '--save', '--prefer-online', `@selvajs/cli@${tag}`, `@selvajs/selva@${tag}`];

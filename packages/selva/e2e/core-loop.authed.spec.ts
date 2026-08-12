@@ -2,21 +2,19 @@ import { expect, test, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { meshCountForInput, startFakeCompute, type FakeCompute } from './helpers/fake-compute';
 
-// The product's core loop, end to end in a real browser:
+// The product's core loop, end to end in a real browser: authed admin → register
+// compute server → upload a .gh through the real dialog (schema-extraction gate
+// included) → open /library/{guid} → solve → binary SLVA geometry decoded by the
+// shipping JS parser → three.js render → slider change re-solves and the geometry
+// tracks the input.
 //
-//   authed admin → register compute server → upload a .gh through the real dialog
-//   (schema-extraction gate included) → open /library/{guid} → solve → binary SLVA
-//   geometry decoded by the shipping JS parser → three.js render → slider change
-//   re-solves and the geometry demonstrably tracks the input.
-//
-// By default compute is faked at the HTTP transport seam (helpers/fake-compute.ts),
+// Compute is faked by default at the HTTP transport seam (helpers/fake-compute.ts)
 // so the suite is hermetic and CI-able. Point E2E_COMPUTE_URL (+ E2E_COMPUTE_KEY)
-// at a live Rhino.Compute (VektorNode fork) to run the same flow for real — the
-// fixture .gh is a genuine UI Builder definition, so the schema gate passes there too.
+// at a live Rhino.Compute (VektorNode fork) to run the same flow for real.
 //
 // "Rendered" is asserted through the page's own per-solve telemetry line
-// (`[Compute/browser] … mesh=<ms>ms (<count>)`), which reports how many meshes the
-// binary parser produced, plus a visible, non-zero-sized viewer canvas.
+// (`[Compute/browser] … mesh=<ms>ms (<count>)`) plus a visible, non-zero-sized
+// viewer canvas.
 
 const GH_FIXTURE = fileURLToPath(new URL('./fixtures/bench-display.gh', import.meta.url));
 
@@ -88,8 +86,9 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	const { guid } = (await uploaded.json()) as { guid: string };
 	expect(guid).toBeTruthy();
 
-	// -- Open the app page; first solve (auto, or via Calculate for manual-solve
-	//    schemas — the real bench definition ships instanceSolve: false) --------
+	// -- Open the app page; first solve is automatic under the fake
+	//    (bench-schema.json ships instanceSolve: true), manual against a live
+	//    server whose schema sets it false --------
 	const meshCounts = collectMeshCounts(page);
 	const firstSolve = page.waitForResponse((r) => isSolveResponse(r.url(), r.request().method()), {
 		timeout: 180_000
@@ -123,12 +122,12 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	const countSlider = page.getByRole('slider').first();
 	await countSlider.focus();
 	await countSlider.press('End');
-	// Manual-solve schemas (instanceSolve: false — the real bench definition) arm a
-	// "Calculate" button on change instead of auto-solving; press it when it appears.
+	// A live compute server may ship a manual-solve schema even though the fake's
+	// bench-schema.json auto-solves; press Calculate if it appears.
 	await page
 		.getByRole('button', { name: /^calculate$/i })
 		.click({ timeout: 10_000 })
-		.catch(() => {}); // auto-solve schemas: the change already dispatched the solve
+		.catch(() => {});
 	const resolved = await nextSolve;
 	expect(resolved.status(), await resolved.text().catch(() => '')).toBe(200);
 

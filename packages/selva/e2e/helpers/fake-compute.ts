@@ -1,21 +1,20 @@
 import { createServer, type Server } from 'node:http';
 import * as fs from 'node:fs';
 
-// A hermetic stand-in for Rhino.Compute, faked at the HTTP transport seam —
-// the same three endpoints the server stack actually calls:
+// A hermetic stand-in for Rhino.Compute, faked at the HTTP transport seam — the
+// same endpoints the server stack actually calls:
 //
-//   GET  /                    — liveness probe (GrasshopperClient.create gates on 2xx)
+//   GET  /                    — liveness probe
 //   POST /grasshopper/schema  — multipart upload gate; returns the bench UISchema fixture
-//   POST /io                  — definition IO (page-load path merges its defaults into
-//                               the schema); replays a response captured from a live
+//   POST /io                  — definition IO; replays a response captured from a live
 //                               VektorNode Rhino.Compute for the same bench definition
 //   POST /grasshopper         — solve; returns a DisplayBatch whose mesh count is a
 //                               function of the `Count` input, so a test can prove an
 //                               input change flowed browser → server → "compute" → render
 //
 // The DisplayBatch's `compressedData` is a genuine SLVA v3 blob (float32 vertices,
-// uint32 indices) built by `encodeSlvaBlob` below, so the response exercises the real
-// binary-geometry parser in the browser — the exact drift surface the E2E exists for.
+// uint32 indices) built by `buildDisplayBatch` below, so the response exercises the
+// real binary-geometry parser in the browser.
 
 const SCHEMA_FIXTURE = JSON.parse(
 	fs.readFileSync(new URL('../fixtures/bench-schema.json', import.meta.url), 'utf8')
@@ -51,10 +50,8 @@ function readCountInput(body: FakeSolveRequest): number | null {
 	return Number.isFinite(n) ? n : null;
 }
 
-/**
- * Encodes `meshCount` disjoint triangles as an SLVA v3 blob — one material and one
- * MaterialGroup per mesh so the count survives the viewer's merge-by-material pass.
- */
+// Encodes meshCount disjoint triangles as an SLVA v3 blob — one material and one
+// MaterialGroup per mesh so the count survives the viewer's merge-by-material pass.
 function buildDisplayBatch(meshCount: number) {
 	const materials = [];
 	const groups = [];
@@ -162,14 +159,14 @@ export async function startFakeCompute(): Promise<FakeCompute> {
 		}
 
 		if (req.method === 'POST' && path === '/grasshopper/schema') {
-			await readBody(req); // multipart .gh bytes — irrelevant to the fake
+			await readBody(req);
 			res.writeHead(200, { 'Content-Type': 'application/json' });
 			res.end(JSON.stringify([{ fileName: 'definition.gh', schemas: [SCHEMA_FIXTURE] }]));
 			return;
 		}
 
 		if (req.method === 'POST' && path === '/io') {
-			await readBody(req); // {algo} — the fake always answers for the bench definition
+			await readBody(req);
 			res.writeHead(200, { 'Content-Type': 'application/json' });
 			res.end(JSON.stringify(IO_FIXTURE));
 			return;

@@ -2,12 +2,12 @@
 // Update availability check
 // ============================================================================
 //
-// Queries the npm registry for the published "latest" @selvajs/selva and
-// compares it to the version installed in the deployment, so the admin System
-// page can show an "update available" badge. Pure-ish: the registry fetch is
-// injected so it's testable, and every failure path degrades to "no update
-// available" rather than throwing — the admin page must never break because
-// npm is slow or unreachable.
+// Queries the npm registry for the published @selvajs/selva version on the
+// deployment's channel and compares it to the installed version, so the
+// admin System page can show an "update available" badge. The registry fetch
+// is injected so it's testable, and every failure path degrades to "no
+// update available" rather than throwing — the admin page must never break
+// because npm is slow or unreachable.
 
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -24,10 +24,9 @@ export { isNewer };
  *
  * `compatible: null` means we couldn't tell (registry down, no engines field,
  * unparseable range) — the UI must treat that as "proceed", not as a block.
- * npm only enforces engines with `engine-strict=true`, which no deployment sets,
- * so a mismatch installs cleanly and `/api/health` still returns 200 (it doesn't
- * touch any Node-22-only path). Nothing downstream catches it — hence the
- * pre-flight (issue #176).
+ * npm only enforces engines with `engine-strict=true`, which no deployment
+ * sets, so a mismatch installs cleanly and `/api/health` still returns 200
+ * (it exercises no Node-version-specific path) — hence this pre-flight.
  */
 export interface NodeCompatibility {
 	compatible: boolean | null;
@@ -50,9 +49,8 @@ export interface UpdateAvailability {
 	nodeCompatibility: NodeCompatibility;
 }
 
-// Read the installed @selvajs/selva version from the deployment's
-// node_modules. Probes cwd upward (and an explicit INSTALL_DIR) the same way
-// the update runner detects the deployment dir.
+// Probes cwd upward (and an explicit INSTALL_DIR) the same way the update
+// runner detects the deployment dir.
 export function readInstalledVersion(): string | null {
 	const dirs: string[] = [];
 	if (env.INSTALL_DIR) dirs.push(env.INSTALL_DIR);
@@ -76,13 +74,10 @@ export function readInstalledVersion(): string | null {
 	return null;
 }
 
-// Ask the npm registry for the published @selvajs/selva version on a channel's
-// dist-tag (defaults to `latest` / stable). Uses the lightweight per-tag
-// endpoint and a short timeout so a slow registry can't hang the caller.
-// Returns null on any failure.
 /**
- * The registry's per-tag manifest carries `engines` alongside `version`, so the
- * Node pre-flight costs no extra request.
+ * The registry's per-tag manifest carries `engines` alongside `version`, so
+ * the Node pre-flight costs no extra request. Uses a short timeout so a slow
+ * registry can't hang the caller; returns nulls on any failure.
  */
 export interface PublishedManifest {
 	version: string | null;
@@ -127,10 +122,10 @@ export async function checkForUpdate(
 ): Promise<UpdateAvailability> {
 	const current = readInstalledVersion();
 	const { version: latest, enginesNode } = await fetchLatestManifest(fetchImpl, channel);
-	// Any difference between installed and the channel's published version is an
-	// actionable change: a forward update (stable→newer, beta→newer beta) OR a
-	// revert (beta→stable lands on an OLDER stable version, but switching channel
-	// is exactly what the operator asked for). Same version ⇒ nothing to do.
+	// Any difference between installed and the channel's published version is
+	// actionable: a forward update (stable→newer, beta→newer beta) OR a revert
+	// (beta→stable lands on an OLDER stable version, but switching channel is
+	// exactly what the operator asked for). Same version means nothing to do.
 	const updateAvailable = !!(current && latest && latest !== current);
 	return {
 		channel,

@@ -8,8 +8,8 @@
  * selection — but the field validation and the apiKey merge below must behave
  * identically in both, so they live here rather than in either handler.
  *
- * The apiKey merge is the reason this file exists: a divergence between the two
- * copies silently clears or leaks a stored credential, and nothing fails at
+ * The apiKey merge is why this file exists: if the two copies disagree, a
+ * stored credential silently gets cleared or leaked, and nothing fails at
  * build time.
  */
 
@@ -30,7 +30,7 @@ export interface IncomingServerBase {
 }
 
 /**
- * Validate the scope-independent fields of every submitted server. Throws the
+ * Validates the scope-independent fields of every submitted server. Throws the
  * first failure as a 400; scope-specific fields (`sharedWith`, `ownerOrgId`)
  * are the caller's business.
  */
@@ -53,17 +53,12 @@ export function validateIncomingServers(servers: readonly IncomingServerBase[]):
 }
 
 /**
- * Resolve the key to persist for one server.
- *
  * The UI never receives stored keys — it sends back `hasApiKey` and omits the
  * field for servers the operator didn't touch. So "omitted" cannot mean "clear":
  * it has to preserve, or every save through the settings form would wipe the
- * keys of every server the operator left alone. Clearing is therefore explicit
- * (`null`), and an empty string is treated as "not provided" because that is
- * what an untouched password input submits.
- *
- * @param submitted the `apiKey` field as it arrived
- * @param storedKey the key currently persisted for this server id, if any
+ * keys of every server the operator left alone. Clearing is explicit (`null`);
+ * an empty string is treated as "not provided" since that's what an untouched
+ * password input submits.
  */
 export function resolveApiKey(
 	submitted: string | null | undefined,
@@ -74,7 +69,7 @@ export function resolveApiKey(
 }
 
 /**
- * Build the id → stored-key lookup the merge reads. The caller passes only the
+ * Builds the id → stored-key lookup the merge reads. The caller passes only the
  * servers in its own scope, so one scope's write can never resolve a key from
  * another's rows.
  */

@@ -3,13 +3,12 @@
  *
  * Request schemas come from `z.toJSONSchema` over the actual validators, so a
  * renamed body field changes the spec on the next generate rather than leaving
- * the yaml quietly describing a field that no longer exists. Zod 4 emits JSON
- * Schema natively — that is why there is no `zod-openapi` dependency here.
+ * the yaml describing a field that no longer exists. Zod 4 emits JSON Schema
+ * natively, so there's no `zod-openapi` dependency here.
  *
- * Response schemas are *not* derived: the handlers build their payloads from
- * store records with no Zod validator on the way out, so there is nothing to
- * derive from. They are described structurally instead (the pagination
- * envelope, the error envelope), and individual resource bodies are left open.
+ * Response schemas are *not* derived — handlers build payloads from store
+ * records with no Zod validator on the way out. They're described structurally
+ * instead (pagination envelope, error envelope), and resource bodies stay open.
  * Claiming more precision than exists would be worse than claiming less.
  */
 
@@ -33,15 +32,13 @@ const ERROR_DESCRIPTIONS: Record<number, string> = {
 };
 
 function requestBodySchema(schema: ZodType): Json {
-	// `io: 'input'` describes what a client may send: fields with defaults are
-	// optional on the way in, which is the opposite of the output view.
+	// io: 'input' — fields with defaults are optional on the way in, unlike the output view.
 	const json = z.toJSONSchema(schema, { io: 'input', target: 'draft-2020-12' }) as Record<
 		string,
 		Json
 	>;
-	// A nested OpenAPI schema object inherits its dialect from the document; a
-	// `$schema` key here is what makes some validators treat the subtree as a
-	// separate document.
+	// A nested schema inherits its dialect from the document; a $schema key here
+	// makes some validators treat the subtree as a separate document.
 	delete json.$schema;
 	return json;
 }
@@ -194,13 +191,12 @@ function cap(s: string): string {
 export const API_BASE_PATH = '/api/v1';
 
 /**
- * `info.version` describes the API, not the npm package — the two move
- * independently and deliberately. `/api/v1` is additive-only, so every release
- * publishes the same contract; embedding the package version made the committed
- * spec drift on every `chore: version` bump, a failing conformance check that
- * said nothing about the API.
+ * `info.version` describes the API, not the npm package — they move
+ * independently on purpose. `/api/v1` is additive-only, so every release
+ * publishes the same contract; embedding the package version made the spec
+ * drift on every `chore: version` bump, failing conformance for no API reason.
  *
- * Derived from the base path so the major can't contradict the prefix it is
+ * Derived from the base path so the major can't contradict the prefix it's
  * served under: shipping `/api/v2` moves both at once, or neither.
  */
 export const API_VERSION = `${/v(\d+)$/.exec(API_BASE_PATH)?.[1] ?? '1'}.0.0`;
@@ -319,9 +315,9 @@ export function buildOpenApiDocument(version: string = API_VERSION): Json {
 // YAML serialization
 // ============================================================================
 //
-// A whole YAML library would be a dependency added to emit one file whose value
-// types are known and narrow: strings, numbers, booleans, arrays and plain
-// objects. Nothing here needs anchors, tags or multi-document streams.
+// A full YAML library is overkill for one file with narrow, known value types
+// (strings, numbers, booleans, arrays, plain objects) and no anchors, tags, or
+// multi-document streams.
 
 function needsQuoting(s: string): boolean {
 	return (

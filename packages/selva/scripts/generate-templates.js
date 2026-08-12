@@ -1,12 +1,7 @@
 #!/usr/bin/env node
 /**
- * Post-build: emit templates/ files shipped with @selvajs/selva.
- *
- * Outputs:
- *   templates/ecosystem.config.cjs     — PM2 process file
- *   templates/.env.example             — copied from packages/selva/.env.example
- *
- * Templates are scaffolding-time artifacts; @selvajs/cli reads them out of
+ * Post-build: emit templates/ecosystem.config.cjs and templates/.env.example,
+ * shipped with @selvajs/selva. @selvajs/cli reads them out of
  * node_modules/@selvajs/selva/templates/ after install.
  */
 
@@ -33,8 +28,8 @@ const dim = (msg) => log(`${COLORS.DIM}${msg}${COLORS.RESET}`);
 
 mkdirSync(templatesDir, { recursive: true });
 
-// Sweep stale artifacts from earlier template shapes (selva.config.example.js
-// is no longer emitted — deployments are env-only).
+// selva.config.example.js is no longer emitted (deployments are env-only) —
+// remove it if an earlier build left it behind.
 rmSync(join(templatesDir, 'selva.config.example.js'), { force: true });
 
 // ============================================================================

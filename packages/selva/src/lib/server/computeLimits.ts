@@ -1,49 +1,42 @@
 /**
- * App-side binding for the compute limits. The knobs, defaults, and env
- * parsing now live in `@selvajs/server` (`resolveComputeLimits`) so a consuming
- * app can reuse them; this module is the thin adapter that reads SvelteKit's
- * dynamic private env ONCE and re-exports the resolved values as the named
- * constants the rest of the app already imports.
+ * Thin adapter over `@selvajs/server`'s `resolveComputeLimits`: reads SvelteKit's
+ * dynamic private env once and re-exports the resolved values as named constants.
  *
- * Why `$env/dynamic/private` and not bare `process.env`: in `vite dev` Vite
+ * Uses `$env/dynamic/private`, not bare `process.env`: under `vite dev`, Vite
  * loads `.env` into this module but does NOT mirror it into `process.env`, so a
- * raw `process.env[name]` is undefined in dev and every knob silently fell back
+ * raw `process.env[name]` is undefined in dev and every knob silently falls back
  * to its default regardless of `.env`.
  *
- * Client-side counterparts (the in-flight compute throttle and the slider
- * debounce on inputs) are bundled into the client, so they cannot read env — see
- * `async-throttle.ts` in `@selvajs/solve/client` and the input components.
+ * Client-side counterparts (in-flight compute throttle, slider debounce) are
+ * bundled into the client and can't read env — see `async-throttle.ts` in
+ * `@selvajs/solve/client` and the input components.
  */
 
 import { env } from '$env/dynamic/private';
 import { resolveComputeLimits } from '@selvajs/server/compute';
-// Limits resolve at module scope (before the pino swap), so the forwarding
-// logger is required here — a captured one would pin the boot placeholder.
+// Limits resolve at module scope, before the pino swap — a captured logger
+// would pin the boot placeholder, so this needs the forwarding one.
 import { lazyLogger } from '$lib/server/providers.server';
 
 // The logger surfaces malformed env values (e.g. a non-numeric
-// COMPUTE_RATE_LIMIT_MAX silently falling back to its default) — without it
-// those warnings would go nowhere.
+// COMPUTE_RATE_LIMIT_MAX silently falling back to its default).
 const limits = resolveComputeLimits(env, lazyLogger);
 
 /** The whole resolved object — passed wholesale to `SolveEngine` (`engine.server.ts`). */
 export const computeLimits = limits;
 
-// How long one solve may run — single source of truth, shared with the browser so
-// the client's AbortController matches the server's deadline rather than guessing.
-// See `@selvajs/server` `ComputeLimits.solveDeadlineMs` for the full rationale
-// (SolveScheduler AbortSignal propagation, reverse-proxy/platform caveat).
+// How long one solve may run — shared with the browser so the client's
+// AbortController matches the server's deadline rather than guessing.
 export const SOLVE_DEADLINE_MS = limits.solveDeadlineMs;
 
 // Per-key compute rate limit (see computeRateLimit.server.ts).
 export const RATE_LIMIT_WINDOW_MS = limits.rateLimitWindowMs;
 export const RATE_LIMIT_MAX_REQUESTS = limits.rateLimitMaxRequests;
 
-// Upload + payload caps. Defaults live in `@selvajs/server` (`resolveComputeLimits`),
-// which documents the sizing of each; override per-deployment via the *_BYTES env
-// vars. NOTE: the Rhino.Compute server caps at RHINO_COMPUTE_MAX_REQUEST_SIZE
-// (default 50 MB), so raising MAX_DEFINITION_FILE_SIZE past that only defers the
-// 413 to compute — raise it there too.
+// Upload + payload caps; override per-deployment via the *_BYTES env vars.
+// The Rhino.Compute server caps at RHINO_COMPUTE_MAX_REQUEST_SIZE (default
+// 50 MB), so raising MAX_DEFINITION_FILE_SIZE past that only defers the 413
+// to compute — raise it there too.
 export const MAX_DEFINITION_FILE_SIZE = limits.maxDefinitionFileSize;
 export const MAX_IMAGE_FILE_SIZE = limits.maxImageFileSize;
 
@@ -68,14 +61,12 @@ export const COMPUTE_REUSE_DEFINITION_CACHE = limits.computeReuseDefinitionCache
 export const COMPUTE_SERVER_CACHESOLVE = limits.computeServerCachesolve;
 export const COMPUTE_CACHE_ERRORED_SOLVES = limits.computeCacheErroredSolves;
 
-// Backpressure (audit B7): queue-depth cap and queue-wait deadline. Both 0 =
-// unbounded/off (nothing is rejected). See ComputeLimits for tuning guidance.
+// Backpressure: queue-depth cap and queue-wait deadline. Both 0 = unbounded/off.
 export const COMPUTE_MAX_QUEUE_DEPTH = limits.computeMaxQueueDepth;
 export const COMPUTE_QUEUE_WAIT_MS = limits.computeQueueWaitMs;
 
 // Definition cache — .gh bytes keyed on immutable version id. 0 disables.
 export const COMPUTE_DEFINITION_CACHE_BYTES = limits.computeDefinitionCacheBytes;
 
-// Solve cache — results, PER warm client (so the worst case is ×16; see
-// ComputeLimits.computeSolveCacheBytes). 0 disables.
+// Solve cache — results, PER warm client (so the worst case is ×16). 0 disables.
 export const COMPUTE_SOLVE_CACHE_BYTES = limits.computeSolveCacheBytes;

@@ -1,8 +1,6 @@
 /**
- * App-side binding for the remote-definition fetcher. The fetch itself — SSRF
- * guard, size cap, deadline, TTL cache — lives in `@selvajs/server`
- * (`createRemoteDefinitionFetcher`); this module owns the single app-wide
- * instance, wired with the env-derived limits and the real clock.
+ * App-wide instance of the remote-definition fetcher (SSRF guard, size cap,
+ * deadline, TTL cache all live in `@selvajs/server`'s `createRemoteDefinitionFetcher`).
  */
 
 import { createRemoteDefinitionFetcher } from '@selvajs/server/compute';
@@ -11,9 +9,8 @@ import {
 	REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
 	REMOTE_DEFINITION_CACHE_TTL_MS
 } from '$lib/server/computeLimits';
-// The fetcher is built once at module scope while the root logger is still
-// being swapped in, so it takes the forwarding logger rather than a captured
-// snapshot — see its definition for why.
+// Built at module scope while the root logger is still being swapped in, so this
+// takes the forwarding logger rather than a snapshot that would pin the boot placeholder.
 import { lazyLogger } from '$lib/server/providers.server';
 
 const fetcher = createRemoteDefinitionFetcher({

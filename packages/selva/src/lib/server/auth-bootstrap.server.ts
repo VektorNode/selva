@@ -32,12 +32,11 @@ import { slugify } from '@selvajs/platform';
  *   3. Single-tenant org seed — create the default Organization + Project
  *      owned by the new admin, mirroring what `/setup` does for password
  *      auth. Without this, org-scoped permissions (manage_projects,
- *      manage_definitions) silently drop on the floor because
- *      `actingOrgId` resolves to undefined.
+ *      manage_definitions) silently drop because `actingOrgId` resolves to
+ *      undefined.
  *
- * Returns nothing — failures throw. Cookie/redirect are the caller's job
- * since they vary by capability (OAuth has refresh tokens, magic-link does
- * sometimes, SAML doesn't).
+ * Cookie/redirect are the caller's job since they vary by capability (OAuth
+ * has refresh tokens, magic-link does sometimes, SAML doesn't).
  */
 export async function bootstrapUserSession(user: AuthUser): Promise<void> {
 	await getDataProvider().ensureUser(SYSTEM_CONTEXT, user.id);
@@ -53,17 +52,16 @@ export async function bootstrapUserSession(user: AuthUser): Promise<void> {
 	}
 
 	// Self-heal: deployments that skipped /setup (header-auth, OAuth callback)
-	// were left without a default org until 2026-05 — `actingOrgId` resolved
-	// to undefined and org-scoped permissions silently dropped. We seed the
-	// org if it's missing. After it exists this is a single cheap listOrgs
-	// read per request and an early-return.
+	// can be left without a default org, dropping org-scoped permissions
+	// silently. Seed it if missing; once it exists this is a single cheap
+	// listOrgs read per request and an early-return.
 	if (tenancy !== 'single') return;
 	const orgs = getOrganizationProvider();
 	const existing = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
 	if (existing.items.length > 0) return;
 
-	// Only the instance admin gets to own the freshly-created org. We just
-	// granted it above (skip the read) or we re-check for the self-heal path.
+	// Only the instance admin owns the freshly-created org. Skip the read if
+	// we just granted it above; otherwise re-check for the self-heal path.
 	if (!grantedAdminHere) {
 		const userPerms = await perms.getFor(SYSTEM_CONTEXT, user.id);
 		if (!userPerms.includes('instance_admin')) return;
@@ -72,13 +70,10 @@ export async function bootstrapUserSession(user: AuthUser): Promise<void> {
 }
 
 /**
- * Single-tenant deployments must have exactly one org for `actingOrgId` to
- * resolve. The `/setup` form creates it from user input; flows that skip
- * setup (header-auth, OAuth callback, future SAML) need the same seed or
- * org-scoped permissions can't be persisted.
- *
- * No-op outside single-tenant mode and once any org exists. Picks a slug
- * derived from the admin's email/displayName so the URL looks like the
+ * Seeds the single default Organization + Project that `actingOrgId` needs
+ * to resolve, for flows that skip `/setup` (header-auth, OAuth callback,
+ * future SAML). No-op outside single-tenant mode and once any org exists.
+ * Slug derives from the admin's email/displayName so the URL looks like the
  * deployment rather than a UUID; falls back to `default` for anonymous
  * UPN-only sign-ins.
  */
@@ -126,9 +121,8 @@ async function ensureSingleTenantDefaultOrg(user: AuthUser): Promise<void> {
 }
 
 /**
- * Decide whether the signing-in user qualifies for the first-admin grant
- * (Permissions.md §2). Pure — no I/O — so the policy is testable in
- * isolation.
+ * Whether the signing-in user qualifies for the first-admin grant. Pure — no
+ * I/O — so the policy is testable in isolation.
  *
  * - `tenancy='single'` + no env var → first signer wins (fine for
  *   self-hosted fresh installs).
@@ -136,9 +130,8 @@ async function ensureSingleTenantDefaultOrg(user: AuthUser): Promise<void> {
  * - `tenancy='multi'` → env var REQUIRED; the named user must match the
  *   signer. Without it, the first random signup would become Selva staff.
  *
- * The env var also doubles as the break-glass recovery path
- * (Permissions.md §2) when admin is lost to backup restores or migration
- * drift.
+ * The env var also doubles as the break-glass recovery path when admin is
+ * lost to backup restores or migration drift.
  */
 export function shouldBootstrapAdmin(
 	user: AuthUser,
@@ -153,14 +146,12 @@ export function shouldBootstrapAdmin(
 }
 
 /**
- * Header-auth-specific variant of the bootstrap policy. Used by
+ * Header-auth variant of `shouldBootstrapAdmin`, used by
  * `wireHeaderAuthBootstrap` to decide whether an unrecognized UPN arriving
- * through the proxy should be auto-allowlisted as the first admin.
- *
- * Same logic as `shouldBootstrapAdmin` but operates on the raw UPN/email
- * before any allowlist row exists. For Entra deployments UPN ≈ email; if
- * they differ, the proxy is expected to forward both and we prefer email
- * when present.
+ * through the proxy should be auto-allowlisted as the first admin. Operates
+ * on the raw UPN/email before any allowlist row exists. For Entra
+ * deployments UPN ≈ email; if they differ, the proxy forwards both and we
+ * prefer email when present.
  */
 function shouldBootstrapUpn(
 	upn: string,
@@ -176,7 +167,7 @@ function shouldBootstrapUpn(
 }
 
 /**
- * Wire a bootstrap-allowlist policy onto the auth provider if it supports
+ * Wires a bootstrap-allowlist policy onto the auth provider if it supports
  * header-auth-style first-admin bootstrapping. Idempotent — safe to call on
  * every startup; the provider holds the policy until process exit.
  *
@@ -187,10 +178,8 @@ function shouldBootstrapUpn(
  * `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is auto-allowlisted, and the immediately
  * following `bootstrapUserSession` call grants instance_admin.
  *
- * The policy is gated by `hasInstanceAdmin` — once any admin exists, the
- * policy returns false and the strict allowlist-only behavior resumes.
- * Single-tenant deployments with no env var get the "first signer wins"
- * shape, matching the password/OAuth bootstrap policy.
+ * Gated by `hasInstanceAdmin` — once any admin exists, the policy returns
+ * false and strict allowlist-only behavior resumes.
  */
 export function wireHeaderAuthBootstrap(): void {
 	const auth = getAuthProvider() as unknown as {
@@ -199,16 +188,16 @@ export function wireHeaderAuthBootstrap(): void {
 			policy: ((p: { upn: string; email: string | undefined }) => boolean | Promise<boolean>) | null
 		) => void;
 	};
-	// Non-proxy providers (Local, Supabase) bootstrap admin through
-	// /setup or the OAuth callback — `wireHeaderAuthBootstrap` is a no-op
-	// for them. Without this guard the warning below misfires for every
-	// LocalAuthProvider deployment that sets BOOTSTRAP_INSTANCE_ADMIN_EMAIL.
+	// Non-proxy providers (Local, Supabase) bootstrap admin through /setup or
+	// the OAuth callback — this is a no-op for them. Without this guard the
+	// warning below misfires for every LocalAuthProvider deployment that sets
+	// BOOTSTRAP_INSTANCE_ADMIN_EMAIL.
 	if (!auth.proxyAuth) return;
 
 	if (typeof auth.setBootstrapAllowlistPolicy !== 'function') {
-		// A stale @selvajs/header-auth-provider build (pre-0.11) doesn't expose
-		// this hook. Without a warning the operator sees `user:null` indefinitely
-		// and has no signal that they need to upgrade or hand-seed the allowlist.
+		// A stale @selvajs/header-auth-provider build doesn't expose this hook.
+		// Without a warning the operator sees `user:null` indefinitely with no
+		// signal to upgrade or hand-seed the allowlist.
 		if (env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL?.trim()) {
 			getLogger().warn(
 				'BOOTSTRAP_INSTANCE_ADMIN_EMAIL is set but the installed @selvajs/header-auth-provider ' +

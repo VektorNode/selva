@@ -2,10 +2,10 @@ import { env } from '$env/dynamic/private';
 import { createTokenCodec, type TokenCodec } from '@selvajs/server/tokens';
 
 /**
- * Spec §7 share-link token primitives — thin binding over
- * `@selvajs/server/tokens` (`createTokenCodec`), which owns the two-part
- * design (per-link random secret, instance-wide HMAC secret hashing tokens at
- * rest) and enforces the ≥32-char secret minimum.
+ * Share-link token primitives — thin binding over `@selvajs/server/tokens`
+ * (`createTokenCodec`), which owns the two-part design (per-link random
+ * secret, instance-wide HMAC secret hashing tokens at rest) and enforces the
+ * ≥32-char secret minimum.
  *
  * ## Format
  *   raw    = `share_<base64url(32 random bytes)>`

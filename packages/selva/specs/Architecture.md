@@ -1,8 +1,6 @@
 # Selva — Architecture Spec
 
-> **Purpose.** Internal reference for checking code against intended design. When a route, store, or rule looks suspicious, this is the document you verify against. Companion to [Access Control](./Permissions.md), which owns _who can do what_; this document owns _what exists and how it fits together_.
->
-> **Audience.** Selva contributors. Not aimed at integrators or evaluators.
+> **Purpose.** Internal reference for checking code against intended design. When a route, store, or rule looks suspicious, verify against this doc. Companion to [Access Control](./Permissions.md), which owns _who can do what_; this document owns _what exists and how it fits together_.
 >
 > **Last reconciled with code:** 2026-04-28.
 
@@ -326,21 +324,18 @@ Workflow: edit `ui-schema.json` → run `pnpm generate` → both sides see the n
 
 ## 10. Data privacy posture
 
-Selva minimizes the personal data it holds, but it holds some, and **the operator is the data controller** — not the auth provider. See [CLAUDE.md](../../../CLAUDE.md#data-privacy--compliance) for the authoritative inventory of what is stored; the summary:
-
-- Under the **Supabase** provider, credentials and identity live in Supabase `auth.users`, and Selva keeps authorization data, display names, invite emails, audit-event payloads, and solve telemetry.
-- Under the **local** provider, Selva _is_ the auth provider: `auth-users.json` holds emails and PBKDF2 password hashes on the deployment's own disk.
-
-The provider abstraction moves where _credentials_ live; it does not move Selva out of the compliance surface. Erasure is currently incomplete (audit item P1) — `onUserDeleted` does not scrub `audit_events` or invites, and `solve_metrics` is intentionally not FK-cascaded.
+Selva minimizes the personal data it holds, but it holds some, and **the operator is the data controller** — not the auth provider. See [CLAUDE.md](../../../CLAUDE.md#data-privacy) for the authoritative inventory of what is stored and current erasure coverage. The provider abstraction moves where _credentials_ live (Supabase `auth.users` vs. the local provider's own `auth-users.json`); it does not move Selva out of the compliance surface.
 
 ---
 
 ## 11. What this spec deliberately does not cover
 
 - **Access control rules** — see [Permissions.md](./Permissions.md). It is the authority on `canView`/`canEdit`/`canSolve`/etc.
-- **The Grasshopper plugin internals** (component anatomy, schema-link protocol, embedded HTTP server). Out of scope here; would belong in a `Plugin/ARCHITECTURE.md`.
-- **Frontend component architecture** (Svelte stores, theming, shared UI library). Out of scope; lives in `@selvajs/ui`.
+- **The Grasshopper plugin internals** (component anatomy, schema-link protocol, embedded HTTP server, `Plugin/Selva.GH`). Lives in the .NET workspace; would deserve its own `Plugin/ARCHITECTURE.md`.
+- **Frontend component architecture** (Svelte stores, theming, the `@selvajs/ui` library).
 - **Rhino.Compute server topology** (single instance vs pool vs ours-vs-theirs). See `docs/RhinoCompute.md`.
+- **`@selvajs/plugin-ui`** — designer's local schema editor, embedded as a website inside the Grasshopper plugin. Hosted and maintained by Selva internally; not a deployable product.
+- **`@selvajs/compute`** (external npm package) — author's helper library for working with Rhino.Compute and Three.js. A dependency Selva uses, not a Selva component.
 
 ---
 
@@ -358,14 +353,3 @@ Things the architecture supports today but no code path exercises yet. These are
 | **Audit-log viewer UI**                   | `SupabaseEventSink` already persists every domain event to `public.audit_events`; operator-facing browser UI not built | Operators need to read the trail without opening the DB     |
 
 > Pre-release: trimming any of these from code is free. There is no installed base to maintain compatibility with.
-
----
-
-## 13. Out of scope for this spec
-
-For grounding — these exist but live outside this document:
-
-- **`@selvajs/plugin-ui`** — designer's local schema editor, embedded as a website inside the Grasshopper plugin. Hosted and maintained by Selva internally; not a deployable product.
-- **`@selvajs/compute`** (external npm package) — author's helper library for working with Rhino.Compute and Three.js. A dependency Selva uses, not a Selva component.
-- **Plugin internals** (`Plugin/Selva.GH`) — components, schema-link WebSocket protocol, embedded HTTP server. Lives in the .NET workspace; would deserve its own `Plugin/ARCHITECTURE.md`.
-- **Frontend component architecture** — Svelte stores, theming, the `@selvajs/ui` library.

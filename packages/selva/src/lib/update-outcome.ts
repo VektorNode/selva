@@ -3,9 +3,9 @@
 // ============================================================================
 //
 // The update runner (admin/api/system/update/+server.ts) emits structured log
-// lines and a small set of meaningful exit codes. The UI MUST NOT collapse
-// those into a vague "succeeded / failed" — an operator has to be able to tell,
-// at a glance and unambiguously:
+// lines and a small set of meaningful exit codes. The UI must not collapse
+// those into a vague "succeeded / failed" — an operator has to be able to
+// tell, at a glance:
 //
 //   • whether anything actually changed (and from which version to which),
 //   • whether the app is UP or DOWN right now,
@@ -14,9 +14,9 @@
 //   • the exact next action when something is wrong.
 //
 // `deriveOutcome` is a pure function of (exitCode, logs) so it's testable in
-// isolation and can never silently mislead. Severity ranking — anything that
-// leaves the app DOWN is `critical`; a safe rollback is `warning`, not an
-// error, because the site is still serving.
+// isolation. Severity ranking: anything that leaves the app DOWN is
+// `critical`; a safe rollback is `warning`, not an error, because the site is
+// still serving.
 
 export type OutcomeSeverity = 'success' | 'info' | 'warning' | 'critical' | 'pending';
 
@@ -43,7 +43,6 @@ function firstMatch(logs: string, re: RegExp): string | undefined {
 	return m ? m[1] : undefined;
 }
 
-/** Extract the before/after runtime versions the runner prints, if present. */
 function parseVersions(logs: string): { from?: string; to?: string } {
 	// The pre-flight transition line, printed BEFORE npm runs — the only source
 	// of a target version when the update fails early or is a no-op:
@@ -136,10 +135,10 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 		};
 	}
 
-	// Killed mid-run (128+signal). Nothing was installed, and whether the app came
-	// back depends on how far the EXIT trap got before it died too. Rank with the
-	// criticals: an unattended half-update is worse than a clean failure, and this
-	// used to report as a green success (issue #118).
+	// Killed mid-run (128+signal). Nothing was installed, and whether the app
+	// came back depends on how far the EXIT trap got before it died too. Rank
+	// with the criticals: an unattended half-update is worse than a clean
+	// failure.
 	if (exitCode === 143 || exitCode === 130 || exitCode === 129 || has(logs, 'KILLED')) {
 		return {
 			severity: 'critical',
@@ -155,10 +154,8 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 	}
 
 	// --- Warning: update did not fully succeed, but the app IS up. ------------
-	// Aborted at the pm2 skew check, before anything was stopped. Nothing was
-	// installed and the app never went down (issue #118).
-	// Aborted at the systemd guard, before `pm2 update` could recycle the daemon
-	// and take this runner down with it (issue #118).
+	// Aborted at the systemd guard, before `pm2 update` could recycle the
+	// daemon and take this runner down with it.
 	if (exitCode === 9 || has(logs, 'SYSTEMD_PM2')) {
 		return {
 			severity: 'warning',
@@ -173,6 +170,8 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 			to
 		};
 	}
+	// Aborted at the pm2 skew check, before anything was stopped — nothing was
+	// installed and the app never went down.
 	if (exitCode === 8 || has(logs, 'PM2_SKEW')) {
 		const daemon = firstMatch(logs, /daemon \(v(\d+\.\d+\.\d+)\)/);
 		const local = firstMatch(logs, /deployment's pm2 \(v(\d+\.\d+\.\d+)\)/);

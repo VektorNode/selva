@@ -39,11 +39,10 @@ const SCAN_LIMIT = 200;
 
 /**
  * The caller's accessible project set plus the membership rows it was derived
- * from. The rows come back so a caller needing a second rule (`canEdit` on the
- * projects page) can evaluate it with no further I/O.
+ * from, so a caller needing a second rule (`canEdit` on the projects page)
+ * can evaluate it with no further I/O.
  */
 export interface AccessibleProjectSet {
-	/** Projects passing `canView` for this caller. */
 	projects: Project[];
 	/** Every project the scan saw, keyed by id — for name lookups on rows. */
 	allById: Map<string, Project>;
@@ -55,9 +54,8 @@ export interface AccessibleProjectSet {
 
 /**
  * Resolve the caller's accessible project set in a constant number of queries.
- *
- * Grants are fetched only for `platform`-visibility projects — `canView`
- * short-circuits before reading them for every other visibility.
+ * Platform grants are fetched only for `platform`-visibility projects —
+ * `canView` short-circuits before reading them for every other visibility.
  */
 export async function resolveAccessibleProjects(
 	ctx: RequestContext
@@ -104,13 +102,11 @@ export async function resolveAccessibleProjects(
 }
 
 export interface ListVisibleDefinitionsResult extends Page<DefinitionRecord> {
-	/** Projects the caller can view — for resolving `projectId` to a name. */
+	/** For resolving a definition's `projectId` to a name. */
 	projects: Project[];
 }
 
 /**
- * List definitions the caller can view, paginated correctly.
- *
  * `opts.projectId` narrows to one project; a caller who cannot view it gets an
  * empty page rather than a 403, so this never reveals that a project exists.
  */
