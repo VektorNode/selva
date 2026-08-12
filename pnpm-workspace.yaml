@@ -6,14 +6,14 @@ catalogs:
   default:
     '@floating-ui/dom': ^1.8.0
     '@iconify/svelte': ^5.2.1
-    '@lucide/svelte': ^1.27.0
-    '@playwright/test': ^1.62.0
+    '@lucide/svelte': ^1.30.0
+    '@playwright/test': ^1.62.1
     '@sveltejs/adapter-auto': ^7.0.1
     '@sveltejs/kit': 2.70.1
     '@sveltejs/vite-plugin-svelte': ^7.2.0
     '@tailwindcss/vite': ^4.3.3
     '@types/node': ^26.1.2
-    '@types/three': ^0.185.1
+    '@types/three': ^0.185.4
     bits-ui: ^2.18.0
     clsx: ^2.1.1
     eslint: ^10.8.0
@@ -22,10 +22,10 @@ catalogs:
     rimraf: ^6.0.1
     sharp: ^0.35.3
     svelte: 5.56.8
-    svelte-check: ^4.7.4
+    svelte-check: ^4.7.5
     svelte-sonner: ^1.1.1
     tailwind-merge: ^3.5.0
-    tailwind-variants: ^3.3.0
+    tailwind-variants: ^3.3.1
     tailwindcss: ^4.3.3
     three: ^0.185.1
     tsdown: ^0.22.14
@@ -34,9 +34,9 @@ catalogs:
     # at ^6. Tilde so a caret can't walk into the next major on its own — see
     # the matching ignore in .github/dependabot.yml.
     typescript: ~6.0.3
-    vite: ^8.1.5
+    vite: ^8.2.1
     vitest: ^4.1.10
-    ws: ^8.21.1
+    ws: ^8.21.3
     '@types/ws': ^8.5.13
     zod: ^4.3.6
 

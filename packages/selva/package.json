@@ -47,7 +47,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"@supabase/supabase-js": "^2.111.0",
+		"@supabase/supabase-js": "^2.112.2",
 		"@sveltejs/kit": "catalog:",
 		"bits-ui": "catalog:",
 		"clsx": "catalog:",
