@@ -1,5 +1,3 @@
-// UI Primitives - Reusable design system components
-
 // shadcn-svelte components
 export {
 	Button,

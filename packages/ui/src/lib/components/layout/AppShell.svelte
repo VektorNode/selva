@@ -4,7 +4,6 @@
 	import PageFooter from './PageFooter.svelte';
 
 	interface AppShellProps {
-		// Header
 		showHeader?: boolean;
 		homeUrl?: string;
 		title?: string | null;
@@ -17,21 +16,19 @@
 		subnav?: Snippet;
 		headerClass?: string;
 		/**
-		 * Bring-your-own header. When provided, this renders inside the sticky
-		 * header bar instead of the built-in PageHeader. The bar keeps the
+		 * Replaces the built-in PageHeader inside the sticky header bar. The bar keeps the
 		 * standard `--header-h` height so the fixed-mode layout math is unaffected.
 		 */
 		header?: Snippet;
 
-		// Body layout
-		// 'fixed'  — full viewport, header + body + footer; body owns its own scroll. For app-like pages (builder, preview, library/[guid]).
-		// 'scroll' — sticky header, body fills `100vh - --header-h` and scrolls. For dashboard-style pages.
+		// 'fixed'  — viewport-locked, no page scroll; body owns its own scroll. For app-like
+		//            pages (builder, preview, library/[guid]).
+		// 'scroll' — normal page flow, footer sticks to the bottom. For dashboard-style pages.
 		mode?: 'fixed' | 'scroll';
 
-		// Optional left rail. When present, body becomes flex row: sidenav | main.
+		// When present, body becomes a flex row: sidenav | main.
 		sidenav?: Snippet;
 
-		// Footer (only rendered when `showFooter`)
 		showFooter?: boolean;
 		errors?: string[];
 		warnings?: string[];
@@ -39,7 +36,6 @@
 		footerText?: string;
 		footerChildren?: Snippet;
 
-		// Body content
 		class?: string;
 		bodyClass?: string;
 		children: Snippet;
@@ -70,12 +66,8 @@
 		children
 	}: AppShellProps = $props();
 
-	// Default the footer's copyright owner to the header's brand name when the
-	// caller didn't specify one.
 	const _copyright = $derived(copyrightName ?? brandName);
 
-	// fixed: viewport-locked, no page scroll — body owns its own scroll internally.
-	// scroll: normal page flow, footer sticks to bottom via sticky positioning.
 	const rootClass = $derived(
 		_mode === 'fixed'
 			? `flex flex-col h-screen overflow-hidden bg-background ${className}`

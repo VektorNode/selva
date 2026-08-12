@@ -1,4 +1,3 @@
-// Layout Components - Page structure and organization
 export { default as AppShell } from './AppShell.svelte';
 export { default as PageHeader } from './PageHeader.svelte';
 export { default as PageContent } from './PageContent.svelte';

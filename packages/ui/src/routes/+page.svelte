@@ -9,7 +9,7 @@
 
 	let schema = $state(exampleSchema as UISchema);
 
-	// Meshes state - starts with fallback cube
+	// The cube stands in until the async parse of the example batch resolves.
 	let meshes = $state([cubeMesh]);
 
 	const dummyErrors = [

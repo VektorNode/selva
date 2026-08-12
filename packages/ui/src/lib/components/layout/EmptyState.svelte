@@ -2,16 +2,15 @@
 	import type { Component, Snippet } from 'svelte';
 
 	interface Props {
-		// Optional icon component (e.g. lucide). Renders at h-8 w-8 above the title.
+		// Renders at h-8 w-8 above the title.
 		icon?: Component<{ class?: string }>;
 		title: string;
 		description?: string;
 		// Vertical breathing room. Most pages want `lg`; tighter contexts (drawer, nested card) use `sm`.
 		size?: 'sm' | 'md' | 'lg';
 		class?: string;
-		// Free-form description (overrides plain `description`). Use when you need rich content like <code>.
+		// Overrides `description`. Use when the text needs rich content like <code>.
 		body?: Snippet;
-		// Buttons / links rendered below.
 		actions?: Snippet;
 	}
 

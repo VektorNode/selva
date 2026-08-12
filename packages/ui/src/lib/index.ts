@@ -1,31 +1,28 @@
-// Layout components (page chrome: shell, header, footer, nav)
+// The in-monorepo barrel: everything public.ts publishes, plus the design system,
+// page chrome, contexts and utils that never ship to npm. Reached via the
+// "selva-source" export condition.
+
 export * from './components/layout';
 
-// Compute app (schema + viewer + solve controls composed into a runnable app)
 export { default as AppLayout } from './components/compute/AppLayout.svelte';
 export { default as ComputeApp } from './components/compute/ComputeApp.svelte';
 
-// Error screen
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 
 // Design-system primitives (shadcn-svelte + custom)
 export * from './components/primitives';
 export { default as StateDisplay } from './components/primitives/StateDisplay.svelte';
 
-// 3D viewer
 export { default as Viewer } from './components/viewer/Viewer.svelte';
 
-// Utilities
 export * from './schema/defaults';
 export * from './schema/dynamic-value-list';
 export * from './schema/traversal';
 export * from './compute/solving.svelte';
 
-// Solve Session seam. The session itself now lives in `@selvajs/solve/client`
-// (framework-free); `useSolveSession` is this package's Svelte binding, which republishes
-// the session's subscribe() notifications as rune state so its getters read reactively in
-// markup. Re-exported so transports outside this package — e.g. plugin-ui's WebSocket
-// driver — can satisfy SolveDriver and drive a session. See CONTEXT.md.
+// Solve Session seam. Re-exported so transports outside this package — e.g.
+// plugin-ui's WebSocket driver — can satisfy SolveDriver and drive a session.
+// See CONTEXT.md.
 export { useSolveSession } from './compute/useSolveSession.svelte';
 export {
 	createSolveSession,
@@ -36,7 +33,7 @@ export {
 	type SolveReporter
 } from '@selvajs/solve/client';
 
-// External-input transit storage (used by routes that wire pre-step producers)
+// Pre-step producer transit storage
 export {
 	writeExternalValue,
 	readExternalValue,
@@ -46,12 +43,10 @@ export {
 	type ExternalInput
 } from '@selvajs/solve/client';
 
-// Contexts & Composables
 export * from './contexts/footerContext.svelte';
 export * from './contexts/clientSlotContext.svelte';
 export * from './composables/useFooterItem.svelte';
 
-// Utils (cn function)
 export * from './utils';
 export { randomId } from './utils/randomId';
 

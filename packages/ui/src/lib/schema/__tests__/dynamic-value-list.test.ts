@@ -5,8 +5,8 @@ import type { UISchema } from '@selvajs/schemas';
 import { buildDynamicValueListOptions } from '../dynamic-value-list';
 
 // The collector keys `values` by the ContextBake GUID. A dynamicValueList output can live in
-// schema.outputs[] OR only in the layout (a routing sink). These pin that BOTH are honoured —
-// the layout-only case is the bug where the C# collector sent the payload but the UI threw it away.
+// schema.outputs[] OR only in the layout (a routing sink). These pin that both are honoured —
+// in the layout-only case the C# collector sent the payload and the UI threw it away.
 
 const BAKE = 'bake-guid';
 const TARGET = 'target-input-guid';

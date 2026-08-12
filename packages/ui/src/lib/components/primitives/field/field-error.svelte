@@ -15,13 +15,11 @@
 	} = $props();
 
 	const hasContent = $derived.by(() => {
-		// has slotted error
 		if (children) return true;
 
-		// no errors
 		if (!errors || errors.length === 0) return false;
 
-		// has an error but no message
+		// A lone error with no message renders an empty alert box — suppress it.
 		if (errors.length === 1 && !errors[0]?.message) {
 			return false;
 		}

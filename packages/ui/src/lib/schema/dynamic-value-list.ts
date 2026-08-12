@@ -41,12 +41,11 @@ function coercePayload(value: unknown): DynamicValueListPayload | null {
 }
 
 // Memoizes string-payload coercion. In compute mode the payload arrives as a JSON
-// string — potentially several MB for a large options list — and the options map is
-// derived from `values` (TabLayout), so it recomputes on EVERY value change. Without
-// memoization each keystroke/output-merge re-parses megabytes and allocates a fresh
-// options object, whose new identity re-renders the entire dropdown subtree; with a
-// 6.4 MB payload this was measured driving a tab out of memory. Map keys use
-// SameValueZero, so an identical response string from a later solve also hits.
+// string — several MB for a large options list — and the options map is derived from
+// `values` (TabLayout), so it recomputes on EVERY value change. Unmemoized, each
+// keystroke re-parses megabytes and allocates a fresh options object whose new
+// identity re-renders the whole dropdown subtree; a 6.4 MB payload drove a tab OOM.
+// Map keys use SameValueZero, so an identical string from a later solve also hits.
 const coerceCache = new Map<string, DynamicValueListPayload | null>();
 const COERCE_CACHE_MAX = 8;
 
@@ -62,10 +61,9 @@ function coercePayloadMemo(value: unknown): DynamicValueListPayload | null {
 	}
 	const parseStart = performance.now();
 	const parsed = coercePayload(value);
-	// Diagnostic: an expensive parse should happen ONCE per distinct solve result.
-	// If this line storms in the console, payload memoization is being defeated
-	// (e.g. payload strings differing per recompute) — the pre-memoization churn
-	// pattern that could OOM a tab.
+	// An expensive parse should happen ONCE per distinct solve result. If this line
+	// storms the console, memoization is being defeated (payload strings differing
+	// per recompute) — the churn pattern that could OOM a tab.
 	if (value.length > 256 * 1024) {
 		const optionCount = parsed?.options ? Object.keys(parsed.options).length : 0;
 		console.info(
@@ -90,11 +88,11 @@ interface DynamicValueListSource {
 /**
  * Every dynamicValueList output reference in the schema.
  *
- * Canonical location is `schema.outputs[]` — the plugin's SchemaSynchronizer enforces that every
- * dynamicValueList layout item is mirrored there (see CanonicalizeDynamicValueListOutputs). We ALSO
- * scan the layout purely as back-compat defense for schemas persisted by an older plugin that lacked
- * that invariant; for current schemas the layout pass finds nothing new.
- * Deduped by id, outputs[] winning so the canonical record's targetInputId takes precedence.
+ * Canonical location is `schema.outputs[]` — the plugin's SchemaSynchronizer mirrors every
+ * dynamicValueList layout item there (`CanonicalizeDynamicValueListOutputs`). The layout scan is
+ * back-compat defense for schemas persisted by an older plugin that lacked that invariant; on
+ * current schemas it finds nothing new. Deduped by id, `outputs[]` winning so the canonical
+ * record's targetInputId takes precedence.
  */
 function collectDynamicValueListSources(schema: UISchema): DynamicValueListSource[] {
 	const byId = new Map<string, DynamicValueListSource>();

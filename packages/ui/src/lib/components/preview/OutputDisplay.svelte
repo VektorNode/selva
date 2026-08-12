@@ -23,7 +23,6 @@
 
 	let { item, value, displayName }: Props = $props();
 
-	// --- text/number state ---
 	let copied = $state(false);
 	let copyTimeout: ReturnType<typeof setTimeout>;
 
@@ -47,7 +46,6 @@
 		}
 	}
 
-	// --- file state ---
 	let downloading = $state(false);
 	let downloadError = $state<string | null>(null);
 
@@ -57,7 +55,6 @@
 	const fileCount = $derived(filesArray.length);
 	const totalSize = $derived(filesArray.reduce((sum, f) => sum + getBase64FileSize(f.data), 0));
 
-	// --- folder tree ---
 	type TreeNode =
 		| { type: 'file'; file: FileData }
 		| { type: 'folder'; name: string; children: SvelteMap<string, TreeNode> };

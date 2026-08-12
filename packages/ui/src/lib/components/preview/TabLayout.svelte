@@ -36,7 +36,6 @@
 	// Computed value list options keyed by the target input id, derived from solved outputs.
 	const dynamicOptions = $derived(buildDynamicValueListOptions(schema, values));
 
-	// Tab selection
 	$effect(() => {
 		if (requestedTabId && visibleTabs.some((t) => t.id === requestedTabId)) {
 			activeTabId = requestedTabId;
@@ -45,7 +44,7 @@
 		}
 	});
 
-	// Collapsed group initialisation — only sets groups that haven't been seen yet
+	// Seed each group's collapsed state once; re-seeding would discard the user's own toggles.
 	$effect(() => {
 		if (schema.layout.type !== 'tabbed') return;
 		const initial: Record<string, boolean> = {};
@@ -57,7 +56,8 @@
 		if (Object.keys(initial).length > 0) Object.assign(collapsedGroups, initial);
 	});
 
-	// Apply default values when visibility conditions hide or disable an item
+	// A hidden or disabled input still solves, so reset it to its default — otherwise the
+	// value the user last set while it was visible keeps feeding the definition.
 	$effect(() => {
 		if (schema.layout.type !== 'tabbed') return;
 		const updates: Record<string, unknown> = {};

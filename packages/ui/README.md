@@ -5,10 +5,9 @@ everything an external host app needs to embed a Grasshopper-driven app, drive s
 pre-step producers.
 
 The design system (`Button`, `Card`, `Dialog`, `AppShell`, …) lives here too, but is **internal to
-the monorepo** — it is reachable from the full barrel via the `@selvajs/source` export condition and
-never ships to npm. [`src/lib/public.ts`](./src/lib/public.ts) is the authoritative list of what a
-published consumer can import; promote a primitive there explicitly rather than assuming it is
-available.
+the monorepo** — reachable from the full barrel via the `selva-source` export condition, and never
+published. [`src/lib/public.ts`](./src/lib/public.ts) is the authoritative list of what a published
+consumer can import.
 
 ## Installation
 
@@ -47,9 +46,8 @@ To drive a solve session yourself rather than letting `ComputeApp` own it:
 import { useSolveSession } from '@selvajs/ui';
 ```
 
-The session itself lives in `@selvajs/solve/client` and is framework-free. Inside a Svelte
-component always use `useSolveSession` — the raw `createSolveSession` factory returns correct
-values that never re-render.
+Inside a Svelte component always use `useSolveSession` — the raw `createSolveSession` factory
+returns correct values that never re-render. See [CONTEXT.md](./CONTEXT.md).
 
 ## Styles
 

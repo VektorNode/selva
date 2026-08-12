@@ -7,7 +7,7 @@ import {
 	type DisplayBatch
 } from '@selvajs/visualization/parse';
 
-// Create a fallback cube mesh for sync use cases
+// Synchronous stand-in for callers that can't await `getParsedMeshes`.
 export const cubeMesh = new THREE.Mesh(
 	new THREE.BoxGeometry(1, 1, 1, 4, 4, 4),
 	new THREE.MeshStandardMaterial({ color: 0x4a00d9, metalness: 0.3, roughness: 0.4 })
@@ -21,8 +21,8 @@ cubeMesh.userData = {
 
 cubeMesh.name = 'cube_mesh';
 
-// Parse the example batch into renderable THREE objects, mirroring the real solve driver:
-// `parseMeshBatchObject` builds the meshes; `parseDisplayItems` builds the points/curves.
+// Mirrors the real solve driver: `parseMeshBatchObject` builds the meshes,
+// `parseDisplayItems` builds the points/curves.
 export async function getParsedMeshes() {
 	// JSON imports widen `kind` to `string`; the batch's runtime shape matches DisplayBatch.
 	const batch = meshData as unknown as DisplayBatch;
@@ -41,7 +41,6 @@ export async function getParsedMeshes() {
 }
 
 // Paste fig.to_json() output directly as a template literal — no cleanup needed.
-
 const contourPlot = `{"data":[{"z":[[10,10.625,12.5,15.625,20],[5.625,6.25,8.125,11.25,15.625],[2.5,3.125,5.0,8.125,12.5],[0.625,1.25,3.125,6.25,10.625],[0,0.625,2.5,5.625,10]],"type":"contour","colorscale":"Viridis","contours":{"coloring":"heatmap"},"showscale":true}],"layout":{"title":{"text":"Basic Contour Plot"}}}`;
 
 export const dummyOutputValues: Record<string, unknown> = {

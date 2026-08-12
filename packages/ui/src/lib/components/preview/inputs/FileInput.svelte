@@ -21,7 +21,6 @@
 		onChange
 	}: Props = $props();
 
-	// Resolve which modes are actually available
 	let effectiveModes = $derived(
 		allowedInputModes && allowedInputModes.length > 0
 			? allowedInputModes
@@ -29,7 +28,6 @@
 	);
 	let showToggle = $derived(effectiveModes.length > 1);
 
-	// Active mode: default to defaultInputMode if allowed, otherwise first allowed mode
 	let activeMode = $state<'upload' | 'url'>('upload');
 	$effect(() => {
 		const preferred = defaultInputMode ?? 'upload';
@@ -44,7 +42,7 @@
 	let urlError = $state<{ message: string; isCors: boolean; hint?: string } | null>(null);
 	let urlSuccess = $state('');
 
-	// Parse existing value if it's JSON
+	// The committed value is a JSON envelope; rebuild the display state from it.
 	$effect(() => {
 		if (value) {
 			try {
@@ -79,8 +77,7 @@
 	}
 
 	function isCorsError(error: unknown): boolean {
-		// CORS errors surface as a generic TypeError with no useful status code
-		// because the browser blocks the response entirely
+		// The browser blocks the response entirely, so this is all we get — no status code.
 		if (error instanceof TypeError && error.message === 'Failed to fetch') return true;
 		return false;
 	}
@@ -158,9 +155,8 @@
 						return '';
 					}
 				})();
-				// We can't distinguish CORS blocks from non-CORS network errors (404, DNS fail, etc.)
-				// because the browser hides all of them behind the same opaque TypeError.
-				// Give a message that covers both cases.
+				// The opaque TypeError hides CORS blocks and plain network failures (404, DNS)
+				// alike, so the message has to cover both.
 				let hint =
 					'Check that the URL is correct and the file is publicly accessible. If the server requires login, download the file and use the Upload option instead.';
 				if (host.includes('sharepoint.com') || host.includes('onedrive.com')) {
@@ -201,10 +197,11 @@
 			return;
 		}
 
-		// Guard the upload size client-side. The file is base64-embedded into the
-		// compute request body, so an oversize file would otherwise be rejected
-		// server-side with an opaque 413 (see COMPUTE_REQUEST_MAX_BYTES). The URL
-		// import path has the same check; keep the two in sync.
+		// The file is base64-embedded into the compute request body, so without a
+		// client-side cap an oversize file comes back as an opaque 413. This cap is
+		// currently LOOSER than the server's COMPUTE_REQUEST_MAX_BYTES (see the TEMP
+		// note in constants.ts) — some files pass here and still 413. The URL import
+		// path applies the same cap.
 		if (file.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) {
 			alert(
 				`File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB (max ${APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB}MB).`

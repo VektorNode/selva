@@ -5,7 +5,6 @@ import {
 	FOOTER_CONTEXT_KEY
 } from '$lib/contexts/footerContext.svelte';
 
-/** Config for a footer-item registration; generic over the component's props. */
 export type FooterItemConfig<P extends Record<string, unknown> = Record<string, unknown>> = Omit<
 	FooterItem<P>,
 	'position' | 'priority'
@@ -15,9 +14,9 @@ export type FooterItemConfig<P extends Record<string, unknown> = Record<string, 
 /**
  * Register a footer item for the lifetime of the calling component.
  *
- * Registration is deferred to onMount (client-side only) to avoid SSR context errors;
- * it's unregistered on destroy. A no-op when no footer context is present (e.g. a
- * component rendered outside the root layout) or no component is supplied.
+ * Registration waits for onMount so it never runs during SSR, where reading the context
+ * throws. A no-op when no footer context is present (a component rendered outside the root
+ * layout) or no component is supplied.
  */
 export function useFooterItem<P extends Record<string, unknown>>(config: FooterItemConfig<P>) {
 	onMount(() => {

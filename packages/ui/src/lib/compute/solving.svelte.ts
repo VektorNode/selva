@@ -2,13 +2,13 @@ import { untrack } from 'svelte';
 import { APP_DEFAULTS } from '../constants';
 
 /**
- * Creates an adaptive solving indicator that measures actual solve durations
- * and adjusts its visibility delay accordingly.
+ * Adaptive solving indicator: measures solve durations and adjusts its
+ * visibility delay from the running average.
  *
- * - Fast solves (<200ms avg): indicator never shown (avoids flicker)
- * - Slow solves (>600ms avg): indicator shown immediately
- * - In between: indicator shown after a proportional delay
- * - First solve: shows immediately (no history yet)
+ * - Average under FAST_THRESHOLD_MS: never shown, so quick solves don't flicker
+ * - Average over SLOW_THRESHOLD_MS: shown immediately
+ * - Between the two: shown after a proportional slice of ANIMATION_DELAY
+ * - First solve: shown immediately, there is no history yet
  */
 export function createSolvingIndicator(isSolving: () => boolean): { readonly show: boolean } {
 	const { FAST_THRESHOLD_MS, SLOW_THRESHOLD_MS, HISTORY_SIZE, ANIMATION_DELAY } =

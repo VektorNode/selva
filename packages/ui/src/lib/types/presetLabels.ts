@@ -1,7 +1,6 @@
 /**
- * Overridable UI strings for the parameter-preset manager (Save/Load flow) and
- * footer copyright text. All optional — unset keys fall back to the English
- * defaults in `DEFAULT_PRESET_LABELS`. Pass a partial object to localize.
+ * Overridable UI strings for the parameter-preset manager. Pass a partial object to localize;
+ * unset keys fall back to `DEFAULT_PRESET_LABELS`.
  */
 export interface PresetLabels {
 	// Toolbar buttons

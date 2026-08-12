@@ -46,12 +46,7 @@
 		showFullscreenButton?: boolean;
 		showSceneManager?: boolean;
 		showToolsMenu?: boolean;
-		/** Expose the grid show/hide toggle in the tools menu. Grid starts hidden. */
 		showGridToggle?: boolean;
-		/**
-		 * Expose the "Display" submenu (render style picker + edges toggle) in the tools menu.
-		 * Defaults on. Starts on the 'technical' style with edges hidden.
-		 */
 		showDisplayMenu?: boolean;
 		enableMeshClick?: boolean;
 		backgroundColor?: string;
@@ -64,26 +59,18 @@
 		isBlurred?: boolean;
 		drawerOpen?: boolean;
 		viewerConfig?: ViewerConfig;
-		/**
-		 * Branding logo URL. When set, shown as a small watermark in the viewer's
-		 * bottom-right corner. Omitted/empty renders nothing.
-		 */
+		/** Shown as a watermark in the bottom-right corner. */
 		logoUrl?: string;
 		/**
 		 * Hands the live three.js viewer to the host once the canvas is up, for apps drawing their
-		 * own content — `addUserGeometry` (survives solves), `tools.register` (claim clicks before
-		 * selection), `labelLayer`, `cameraController`.
-		 *
-		 * Return a cleanup function to tear down what you added; it runs before the viewer disposes.
-		 * Anything added outside a solve needs `viewer.invalidate()` to repaint — the render loop is
-		 * on-demand.
+		 * own content. Return a cleanup function to tear down what you added; it runs before the
+		 * viewer disposes. Anything added outside a solve needs `viewer.invalidate()` to repaint —
+		 * the render loop is on-demand.
 		 */
 		onViewerReady?: (viewer: ThreeViewer) => void | (() => void);
 		/**
-		 * UI language for the viewer's own chrome (tools menu, panels, dialogs).
-		 * When set, the viewer provides it to its subtree. When omitted, the viewer
-		 * reads the nearest locale context (set by the host app), defaulting to
-		 * English. Does not translate Grasshopper-sourced names/metadata.
+		 * UI language for the viewer's own chrome. Omitted, the viewer reads the nearest locale
+		 * context. Does not translate Grasshopper-sourced names/metadata.
 		 */
 		lang?: Locale;
 	}
@@ -113,13 +100,10 @@
 
 	const config = $derived({ ...defaultViewerConfig, ...viewerConfig });
 
-	// Read any host-provided locale before we (maybe) override it for our subtree.
+	// Read the host's locale before overriding it for our subtree.
 	const hostLocale = getLocaleContext();
 
-	// Resolution order: explicit `lang` prop → host locale context → default.
-	// Provide the resolved value to our subtree so the scene manager and metadata
-	// dialog read the same locale. The getter is re-read reactively, so switching
-	// the `lang` prop (or the host's locale) updates the chrome live.
+	// A getter, not a value: it is re-read reactively, so changing `lang` updates the chrome live.
 	setLocaleContext(() => lang ?? hostLocale.locale);
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);
@@ -142,10 +126,8 @@
 	let hideButton = $state(false);
 	let sceneManagerOpen = $state(false);
 
-	// The scene outliner lives here rather than inside <SceneManager> because that component is
-	// mounted only while its panel is open. Hidden objects must stay hidden when the panel is
-	// closed — and must be re-hidden after each solve, which nothing would do if the state
-	// unmounted with the panel.
+	// The outliner lives here, not in <SceneManager>: that component mounts only while its panel is
+	// open, and hidden objects must stay hidden — and be re-hidden after each solve — while it is closed.
 	const hiddenObjects = new SvelteSet<string>();
 	const selectedObjects = new SvelteSet<string>();
 	const collapsedLayers = new SvelteSet<string>();
@@ -153,15 +135,12 @@
 	let projection: CameraProjection = $state('perspective');
 	let measureActive = $state(false);
 	let gridVisible = $state(false);
-	// Render style + edge overlays. 'technical' is the default look; edges (crease lines) start off —
-	// both are user-switchable via the Display submenu.
 	let renderStyle: Look = $state('technical');
 	let edgesVisible = $state(false);
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
 
-	// Render-style options for the Display submenu, derived from the library's LOOKS array — adding or
-	// renaming a look in @selvajs/compute updates this automatically. Label is the value capitalized.
+	// Derived from LOOKS so adding a look in @selvajs/visualization shows up here with no edit.
 	const STYLE_OPTIONS: { look: Look; label: string }[] = LOOKS.map((look) => ({
 		look,
 		label: look.charAt(0).toUpperCase() + look.slice(1)
@@ -192,16 +171,13 @@
 	onMount(() => {
 		if (!canvas) return;
 
-		// Only options that differ from the library defaults. Seed the initial render style (also the
-		// library default, but stated explicitly since it's user-switchable via the Display menu) and
-		// switch off the sun/shadows the technical look doesn't need — flat ambient + HDR image-based
-		// lighting (baseHDR loads by default) carry it. Grid/measure/click are the tools this viewer uses.
+		// Only what differs from the library defaults. The sun and shadows are off because the
+		// technical look doesn't need them — flat ambient plus the HDR environment carry it.
 		const opts: ThreeInitializerOptions = {
 			look: renderStyle,
 			lighting: { enableSunlight: false },
 			render: { enableShadows: false },
 			environment: { backgroundColor: config.backgroundColor },
-			// Build the grid so it can be toggled at runtime, but start hidden (off by default).
 			grid: { enabled: config.showToolsMenu && config.showGridToggle },
 			measure: { enabled: config.showToolsMenu },
 			events: {
@@ -237,8 +213,7 @@
 
 		const renderer = init.renderer;
 
-		// Untracked: the host's setup runs once against this canvas, and reading `meshes` or config
-		// inside it must not re-run onMount's teardown.
+		// Untracked so the host reading `meshes` or config inside its setup can't re-run onMount's teardown.
 		const hostCleanup = untrack(() => onViewerReady?.(init));
 
 		return () => {
@@ -280,9 +255,8 @@
 		setLook(look);
 	}
 
-	// Add/remove crease-edge overlays on the current scene content. applyEdges is idempotent per mesh
-	// (and attaches large meshes' overlays async, off the main thread); clearEdges is its inverse —
-	// it also cancels in-flight attaches and stands down the screen-space fallback for capped meshes.
+	// `applyEdges` is idempotent per mesh, so the repeated calls after each solve add no duplicate
+	// overlays; `clearEdges` is its inverse.
 	function applyEdgeState() {
 		if (!scene) return;
 		if (edgesVisible) applyEdges?.(scene);
@@ -297,18 +271,18 @@
 	$effect(() => {
 		if (scene && camera && controls) {
 			updateScene(scene, meshes, camera, controls, viewerInitialized);
-			// updateScene clears and re-adds all content each solve, so the previous solve's edge
-			// overlays are gone — re-attach them if edges are currently shown. Read the flag untracked:
-			// toggling edges is handled directly by toggleEdges(), so it must not re-trigger a full solve.
+			// Untracked because toggleEdges() already handles the toggle directly — reading
+			// `edgesVisible` tracked here would re-trigger a full solve.
 			untrack(() => {
+				// updateScene discarded the previous solve's overlays along with its content.
 				if (edgesVisible) applyEdges?.(scene!);
-				// Rescale the grid to the new content's extent so cells and fade match the part size.
+				// Rescale the grid so cells and fade match the new content's extent.
 				updateGridScale?.();
-				// The rebuild above also un-hid everything the user had hidden. Re-hide it: the outliner
-				// keys that state on Grasshopper identity, not on the instances just discarded.
+				// The rebuild un-hid everything; the outliner keys hidden state on Grasshopper
+				// identity, not on the instances just discarded, so it can re-hide it.
 				outliner?.applyTo();
 				sceneVersion++;
-				// New solve content — repaint now rather than on the render loop's safety interval.
+				// Repaint now rather than on the render loop's safety interval.
 				invalidate?.();
 			});
 
@@ -373,8 +347,8 @@
 		<!-- `defaultSize` must sum to 100 across the live panes. Panes register a frame before the
 		     group recomputes its layout, so a sum of 115 renders one frame at the raw flex-grow ratio
 		     and is then renormalized — and if the recompute short-circuits on an equal layout, the
-		     scene pane keeps a sliver of its intended width. Hence 85 + 15, and the explicit
-		     id/order so a conditionally-rendered pane keeps its slot. -->
+		     scene pane keeps a sliver of its intended width. Hence 85 + 15, and the explicit id/order
+		     so a conditionally-rendered pane keeps its slot. -->
 		<Resizable.Pane id="viewport" order={1} defaultSize={sceneManagerOpen ? 85 : 100} minSize={40}>
 			<div class="relative h-full w-full" style="touch-action: none;">
 				<canvas class="block h-full w-full" bind:this={canvas}></canvas>
@@ -392,9 +366,8 @@
 				{/if}
 
 				{#if logoUrl}
-					<!-- Branding watermark, bottom-right. Matches the tools menu's
-					     bottom offset so it clears the mobile drawer handle, and is
-					     non-interactive so it never intercepts canvas drags. -->
+					<!-- Bottom offset matches the tools menu so it clears the mobile drawer handle.
+					     Always pointer-events:none so it never intercepts canvas drags. -->
 					<div
 						class="right-4 {isFullscreen ? 'bottom-4' : 'bottom-16 sm:bottom-4'} absolute z-20"
 						style={hideButton
@@ -434,7 +407,6 @@
 									align="start"
 									class="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 min-w-44 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
 								>
-									<!-- Camera -->
 									<DropdownMenu.Item class={itemClass} onSelect={toggleProjection}>
 										{#if projection === 'perspective'}
 											<Square class="h-4 w-4" />
@@ -482,7 +454,6 @@
 												sideOffset={4}
 												class="min-w-40 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
 											>
-												<!-- Render style: single-choice, current one checked. -->
 												{#each STYLE_OPTIONS as { look, label } (look)}
 													<DropdownMenu.Item
 														closeOnSelect={false}
@@ -498,7 +469,6 @@
 
 												<DropdownMenu.Separator class="my-1 h-px bg-border" />
 
-												<!-- Edges overlay toggle. -->
 												<DropdownMenu.Item
 													closeOnSelect={false}
 													class="{itemClass} {edgesVisible ? 'text-primary' : ''}"
@@ -540,7 +510,6 @@
 										</DropdownMenu.Item>
 									{/if}
 
-									<!-- Scene tools -->
 									{#if config.showSceneManager || config.showScreenshotButton || config.showFullscreenButton}
 										<DropdownMenu.Separator class="my-1 h-px bg-border" />
 									{/if}
@@ -585,7 +554,6 @@
 			</div>
 		</Resizable.Pane>
 
-		<!-- Scene Manager Pane -->
 		{#if sceneManagerOpen && scene && outliner}
 			<Resizable.Handle withHandle />
 			<Resizable.Pane id="scene-manager" order={2} defaultSize={15} minSize={8} maxSize={30}>
@@ -618,7 +586,6 @@
 		border-radius: 0 !important;
 	}
 
-	/* Blur overlay animation */
 	.blur-overlay {
 		pointer-events: none;
 	}

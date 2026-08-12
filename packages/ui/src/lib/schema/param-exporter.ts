@@ -107,11 +107,9 @@ export function validateSavedState(
 }
 
 /**
- * The subset of a preset's parameters that can safely be applied to the current schema:
- * every param that still exists as an input. A param that no longer exists is dropped
- * (it's the same condition `validateSavedState` flags as an error), so this derives its
- * own "loadable" rule from the schema rather than re-reading validation issues — no
- * coupling to how sentinel ids are encoded.
+ * Params the current schema no longer has are dropped. That's the same condition
+ * `validateSavedState` flags as an error, but the rule is re-derived from the schema here
+ * rather than read back off the issue list — nothing couples to how sentinel ids are encoded.
  */
 export function extractLoadableValues(
 	savedState: ParameterPreset,
@@ -127,23 +125,18 @@ export function extractLoadableValues(
 	return values;
 }
 
-/** The full outcome of loading a preset: what to apply, plus the diagnostics to surface. */
 export interface PresetLoadResult {
-	/** Values safe to apply now (params that still exist). */
+	/** Safe to apply now — the params that still exist in the schema. */
 	values: Record<string, unknown>;
-	/** All validation issues (errors + warnings) for the load dialog. */
+	/** Errors and warnings both, for the load dialog. */
 	issues: ValidationIssueMessage[];
 	/** No issues at all — load silently. */
 	isValid: boolean;
-	/** No blocking errors — load is allowed (warnings are fine). */
+	/** No errors — warnings alone still allow the load. */
 	canLoad: boolean;
 }
 
-/**
- * Single entry point for applying a preset: validates against the current schema and, in
- * the same pass, computes the loadable values. Callers get one object instead of
- * threading a validation result back into a separate extraction step.
- */
+/** Validates and computes the loadable values in one pass, so callers thread one object. */
 export function loadPreset(savedState: ParameterPreset, currentSchema: UISchema): PresetLoadResult {
 	const validation = validateSavedState(savedState, currentSchema);
 	return {
@@ -161,8 +154,8 @@ export function exportStateAsJson(savedState: ParameterPreset): void {
 
 	const link = document.createElement('a');
 	link.href = URL.createObjectURL(blob);
-	// .slvp = Selva parameter preset. Import accepts legacy .sps files too — the content is
-	// identical JSON, only the writer's extension changed.
+	// .slvp = Selva parameter preset. Import still accepts the pre-rename .sps — same JSON,
+	// only the writer's extension changed.
 	link.download = `${safeName}_${date}.slvp`;
 	link.click();
 	URL.revokeObjectURL(link.href);

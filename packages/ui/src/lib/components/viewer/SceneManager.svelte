@@ -14,9 +14,9 @@
 
 	interface Props {
 		/**
-		 * Owned by `Viewer.svelte`, not built here: this panel unmounts when it is closed, and
-		 * hidden objects have to stay hidden — and keep being re-hidden after each solve — while it
-		 * is. Its state is backed by SvelteSets, so mutating one re-renders this list.
+		 * Owned by `Viewer.svelte`, never built here: this panel unmounts when it closes, and hidden
+		 * objects must stay hidden — and be re-hidden after each solve — while it is. Backed by
+		 * SvelteSets, so mutating one re-renders this list.
 		 */
 		outliner: SceneOutliner;
 		sceneVersion?: number;
@@ -24,24 +24,20 @@
 
 	let { outliner, sceneVersion = 0 }: Props = $props();
 
-	// All list logic (content filtering, layer grouping, search, visibility, selection) lives in
-	// @selvajs/visualization/scene. This component only renders it and forwards clicks.
 	// Derived, not destructured: the prop is reassignable, and these must follow it.
 	const hidden = $derived(outliner.visibility.hidden);
 	const selected = $derived(outliner.selection.selected);
 	const collapsed = $derived(outliner.collapsed);
 
-	// Mirrored into runes because the outliner holds them as plain fields, not sets. Both start
-	// fresh: the search box and the shift-anchor are panel state, so reopening the panel clears
-	// them, while hiding and collapse persist in the outliner that outlives it.
+	// Mirrored into runes because the outliner holds these as plain fields, not sets. Both are panel
+	// state, so reopening clears them — unlike hiding and collapse, which the outliner outlives.
 	let searchQuery = $state('');
 	let anchor = $state<string | null>(null);
 
 	$effect(() => outliner.onAnchorChange((next) => (anchor = next)));
 
 	// `scene.children` is a plain array the render layer mutates in place, so a solve bumping
-	// `sceneVersion` is the only signal that content changed. Both derivations below read it, which
-	// is what makes one walk per solve serve every template site that needs the list.
+	// `sceneVersion` is the only signal that content changed — hence the `void` reads below.
 	const sceneObjects = $derived.by(() => {
 		void sceneVersion;
 		return outliner.objects();
@@ -54,12 +50,9 @@
 		return outliner.layerGroups();
 	});
 
-	// Hidden state is keyed by Grasshopper identity, not by uuid, so ask the outliner rather than
-	// looking the object up in the set directly. Touching `hidden` registers the reactive read that
-	// re-renders this row when the eye is clicked.
-	// `SvelteSet.has()` is itself the reactive read, so go through the set rather than calling
-	// `visibility.isHidden` — that reads the set through a plain reference inside the outliner and
-	// would not re-render this row.
+	// `SvelteSet.has()` is the reactive read, so go through the set rather than calling
+	// `visibility.isHidden` — that reaches the set through a plain reference inside the outliner
+	// and returns a correct value that never re-renders this row.
 	const isObjectHidden = (object: THREE.Object3D) => hidden.has(getTrackingKey(object));
 
 	// Same reason: count through the reactive set so the layer's tri-state eye tracks its objects.
@@ -165,7 +158,6 @@
 							onkeydown={(e) =>
 								e.key === 'Enter' && selectObject(object.uuid, e as unknown as MouseEvent)}
 						>
-							<!-- Object visibility toggle -->
 							<button
 								class="rounded p-1 shrink-0 transition-colors hover:bg-muted"
 								onclick={(e) => {
@@ -182,7 +174,6 @@
 								{/if}
 							</button>
 
-							<!-- Object name -->
 							<span
 								class="min-w-0 text-xs flex-1 truncate {isHidden
 									? 'text-muted-foreground line-through'
@@ -191,7 +182,6 @@
 								{getObjectLabel(object)}
 							</span>
 
-							<!-- Type badge -->
 							<span
 								class="rounded px-1 py-0.5 font-medium shrink-0 bg-muted text-[9px] text-muted-foreground/70"
 							>
@@ -203,7 +193,6 @@
 			{/if}
 		{/each}
 
-		<!-- Empty state -->
 		{#if sceneObjects.length === 0}
 			<div class="py-12 flex flex-col items-center justify-center text-center">
 				<EyeOff class="mb-2 h-5 w-5 text-muted-foreground/30" />

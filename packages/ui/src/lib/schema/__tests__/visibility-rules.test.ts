@@ -25,8 +25,8 @@ function rule(partial: {
 describe('evaluateRule — operator edge cases', () => {
 	it('between requires exactly two values and is inclusive', () => {
 		const r = rule({ operator: 'between', paramId: 'x', values: [10, 20] });
-		expect(evaluateRule(r, { x: 10 })).toBe(true); // lower bound inclusive
-		expect(evaluateRule(r, { x: 20 })).toBe(true); // upper bound inclusive
+		expect(evaluateRule(r, { x: 10 })).toBe(true);
+		expect(evaluateRule(r, { x: 20 })).toBe(true);
 		expect(evaluateRule(r, { x: 21 })).toBe(false);
 		// Wrong arity must fail closed, not throw or pass.
 		expect(evaluateRule(rule({ operator: 'between', paramId: 'x', values: [10] }), { x: 15 })).toBe(
@@ -40,7 +40,6 @@ describe('evaluateRule — operator edge cases', () => {
 	});
 
 	it('contains / containsAny coerce scalars and arrays through toStringArray', () => {
-		// scalar value is treated as a single-element array
 		expect(evaluateRule(rule({ operator: 'contains', paramId: 'x', value: '5' }), { x: 5 })).toBe(
 			true
 		);

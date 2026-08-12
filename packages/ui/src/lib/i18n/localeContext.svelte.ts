@@ -1,14 +1,8 @@
 import { getContext, setContext } from 'svelte';
 import { type Locale, type ViewerMessages, messagesFor, DEFAULT_LOCALE } from './messages';
 
-// ============================================================================
-// Viewer locale context
-// ============================================================================
-//
-// Carries the current UI locale down to the viewer and its panels without
-// threading a `lang` prop through every layer. The value is a getter so the
-// host can back it with reactive state — flip the language and the viewer
-// re-renders live.
+// Carries the UI locale down to the viewer and its panels without threading a
+// `lang` prop through every layer.
 //
 // Resolution order for any consuming component:
 //   explicit `lang` prop  →  nearest locale context  →  English default
@@ -16,21 +10,19 @@ import { type Locale, type ViewerMessages, messagesFor, DEFAULT_LOCALE } from '.
 // Two ways to provide it:
 //   - Standalone: <Viewer lang="de" /> — Viewer provides the context itself.
 //   - In an app: call setLocaleContext(() => app.locale) once at the root; the
-//     viewer (and anything else) reads it. selva later wires its Paraglide
-//     locale in here.
+//     viewer (and anything else) reads it.
 
 const LOCALE_CONTEXT_KEY = Symbol('viewer-locale-context');
 
 export interface LocaleContext {
-	/** Current locale. Called reactively — return reactive state to enable live switching. */
 	readonly locale: Locale;
-	/** Resolved message catalog for the current locale. */
 	readonly messages: ViewerMessages;
 }
 
 /**
- * Provide the locale to descendants. Pass a getter so a reactive source (a
- * `$state`, a store, the app's Paraglide locale) keeps consumers in sync.
+ * Provide the locale to descendants. Pass a getter, not a value: it is re-read on every
+ * consumer render, so a reactive source (a `$state`, the app's Paraglide locale) switches
+ * the language live.
  */
 export function setLocaleContext(getLocale: () => Locale | undefined): void {
 	const ctx: LocaleContext = {
@@ -45,9 +37,8 @@ export function setLocaleContext(getLocale: () => Locale | undefined): void {
 }
 
 /**
- * Read the locale context. Falls back to an English-only context when no
- * provider exists (e.g. a primitive used in isolation), so consumers never
- * need a null check.
+ * Falls back to an English-only context when no provider exists (a primitive used in
+ * isolation), so consumers never need a null check.
  */
 export function getLocaleContext(): LocaleContext {
 	return (

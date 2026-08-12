@@ -24,7 +24,7 @@
 		onSaveState?: (state: ParameterPreset) => void | Promise<void>;
 		/** When set, the Load dialog lists these states instead of showing a file input. */
 		onListStates?: () => ParameterPreset[] | Promise<ParameterPreset[]>;
-		/** Partial overrides for UI strings (e.g. for localization). */
+		/** Overrides merged over `DEFAULT_PRESET_LABELS`. */
 		labels?: Partial<PresetLabels>;
 	}
 
@@ -42,21 +42,18 @@
 
 	const t = $derived({ ...DEFAULT_PRESET_LABELS, ...labels });
 
-	// Save dialog state
 	let showExportDialog = $state(false);
 	let exportName = $state('');
 	let exportDescription = $state('');
 	let exportAuthor = $state('');
 	let exportTags = $state('');
 
-	// Import/validation state
 	let showValidationDialog = $state(false);
 	let showLoadDialog = $state(false);
 	let loadResult = $state<PresetLoadResult | null>(null);
 	let loadingPresetName = $state('');
 	let fileInputRef = $state<HTMLInputElement | null>(null);
 
-	// Listed states (when onListStates is provided)
 	let listedStates = $state<ParameterPreset[]>([]);
 	let isLoadingList = $state(false);
 	let listError = $state('');
@@ -90,8 +87,8 @@
 		showExportDialog = false;
 	}
 
-	// Load a preset in one pass, then either apply it directly (no issues) or open the
-	// validation dialog (any errors or warnings). Shared by every load path.
+	// Shared by every load path: applies clean presets directly, routes any errors or
+	// warnings through the validation dialog.
 	function tryLoad(preset: ParameterPreset) {
 		const result = loadPreset(preset, schema);
 		if (result.isValid) {
@@ -114,7 +111,7 @@
 			alert(t.loadImportError + (error as Error).message);
 		}
 
-		// Reset input
+		// Reset so re-picking the same file fires `change` again.
 		input.value = '';
 	}
 
@@ -298,7 +295,6 @@
 
 		{#if loadResult}
 			<div class="gap-4 py-4 grid">
-				<!-- Summary Alert -->
 				{#if loadResult.isValid}
 					<Card.Root class="p-4 border-success/30 bg-success/5">
 						<div class="gap-3 flex items-start">
@@ -341,7 +337,6 @@
 					</Card.Root>
 				{/if}
 
-				<!-- Issues List -->
 				{#if !loadResult.isValid}
 					<div class="space-y-2">
 						<h4 class="text-sm font-medium">{t.validationIssuesHeading}</h4>
