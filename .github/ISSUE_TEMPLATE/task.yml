@@ -2,6 +2,7 @@ name: Task
 description: Maintenance, refactor, test coverage, or tooling work
 type: Task
 labels: ['needs-triage']
+projects: ['VektorNode/2']
 body:
   - type: textarea
     id: what

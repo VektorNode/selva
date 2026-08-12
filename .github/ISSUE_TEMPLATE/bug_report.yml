@@ -2,6 +2,7 @@ name: Bug Report
 description: Something is broken
 type: Bug
 labels: ['needs-triage']
+projects: ['VektorNode/2']
 body:
   - type: markdown
     attributes:
@@ -11,18 +12,10 @@ body:
     id: what-happened
     attributes:
       label: What happened?
-      description: What you expected, and what you got instead.
-    validations:
-      required: true
-
-  - type: textarea
-    id: reproduction
-    attributes:
-      label: Steps to reproduce
+      description: What you expected, what you got instead, and how to get there.
       placeholder: |
-        1. Open Grasshopper
-        2. Add a UIBuilder component
-        3. ...
+        Opened Grasshopper, added a UIBuilder component, linked a slider.
+        Expected the slider in the web UI; the panel stayed empty.
     validations:
       required: true
 
@@ -30,7 +23,7 @@ body:
     id: area
     attributes:
       label: Where does it happen?
-      description: Best guess is fine — a maintainer will confirm.
+      description: Optional — leave it on "Not sure" if you'd be guessing.
       options:
         - Not sure
         - Grasshopper plugin (C#)
@@ -40,8 +33,6 @@ body:
         - Solving / Rhino.Compute
         - Auth, projects, permissions
         - Build, CI, deployment
-    validations:
-      required: true
 
   - type: textarea
     id: environment

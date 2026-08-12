@@ -2,6 +2,7 @@ name: Feature Request
 description: Suggest a feature or improvement
 type: Feature
 labels: ['needs-triage']
+projects: ['VektorNode/2']
 body:
   - type: textarea
     id: feature-description
@@ -32,14 +33,3 @@ body:
         - Solving / Rhino.Compute
         - Auth, projects, permissions
         - Build, CI, deployment
-    validations:
-      required: true
-
-  - type: dropdown
-    id: contribution
-    attributes:
-      label: Want to help build it?
-      options:
-        - 'No'
-        - 'I can test it'
-        - 'I can implement it'

@@ -2,6 +2,7 @@ name: Verification
 description: Check a claim we have only reasoned about, never measured
 type: Verification
 labels: ['needs-triage']
+projects: ['VektorNode/2']
 body:
   - type: markdown
     attributes:
