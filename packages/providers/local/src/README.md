@@ -1,10 +1,10 @@
 # local-provider
 
-Filesystem implementation of `@selvajs/platform` interfaces. Each subfolder implements one provider (auth, data, storage, organizations, projects, definitions, computeServer).
+Filesystem implementation of `@selvajs/platform` interfaces. Each subfolder implements one provider (auth, data, storage, permissions, userProfile).
 
-## fsJson.ts
+## data/fsJson.ts
 
-Shared helpers used by every JSON-backed store in this package.
+Shared read/atomic-write helpers used by every JSON-backed store in this package.
 
 ### `readJsonFile<T>(filePath, fallback)`
 
@@ -16,7 +16,7 @@ const { users } = await readJsonFile<UsersFile>(path, { users: [] });
 
 ### `writeJsonFile<T>(filePath, data)`
 
-Atomic write: ensures the parent directory exists, writes to `<path>.tmp`, then renames into place. The rename is atomic on POSIX, so a crash mid-write leaves either the old file or the new one — never a half-written JSON blob.
+Writes to `<path>.<uuid>.tmp`, then renames into place. Each writer gets its own temp file — a shared fixed name broke concurrent writers, since the first rename moved it out from under the rest. The rename is atomic on POSIX, so a crash mid-write leaves either the old file or the new one, never a half-written JSON blob.
 
 ```ts
 await writeJsonFile(path, { users: [...] });
@@ -33,5 +33,5 @@ All stores follow a read-modify-write pattern on small JSON files. Centralizing 
 ### Caveats
 
 - Not safe across **processes** — no file locking. Fine for a single dev server; don't point two processes at the same data dir.
-- In-process concurrent writes on the same file can still race. Stores that need serialization wrap calls in their own mutex.
+- In-process concurrent writes to the same file still race at the read-modify-write level; last write wins. Stores that need serialization wrap calls in their own mutex.
 - Each write rewrites the whole file. Fine for config-scale data (users, orgs, projects); not for high-churn or large datasets.

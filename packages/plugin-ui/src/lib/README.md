@@ -7,7 +7,6 @@ Quick reference for what lives where. The repo-wide rules are in [STRUCTURE.md](
 | `components/<feature>/` | Svelte components for a feature (e.g. `components/builder/` holds the schema designer UI).                                       |
 | `features/<feature>/`   | Pure TypeScript logic for the same feature — operations, config, types. **No Svelte.** UI imports from logic, never the reverse. |
 | `composables/`          | Reactive helpers (`.svelte.ts` files using runes).                                                                               |
-| `stores/`               | Global reactive state that isn't tied to a single feature.                                                                       |
 | `websocket/`            | Builder-specific WebSocket bridge to the Grasshopper plugin.                                                                     |
 | `utils/`                | Generic helpers (no domain assumptions).                                                                                         |
 | `app.config.ts`         | App-level constants (port, dev URLs, etc.).                                                                                      |

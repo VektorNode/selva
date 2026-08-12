@@ -44,13 +44,11 @@ function isLive<T extends { deletedAt?: string | null }>(row: T): boolean {
 
 /**
  * Shared by LocalOrgStore and LocalProjectStore — one instance so all
- * reads/writes go through one cache and one atomic write path. The store
- * starts empty; orgs are created explicitly via `createOrg`.
+ * reads/writes go through one cache and one atomic write path.
  *
- * Concurrent first-callers share a single in-flight read promise so they
- * end up with the same cached object reference. Mutations after that point
- * stack on the shared object, and `writeJsonFile`'s temp+rename keeps the
- * on-disk view atomic.
+ * Concurrent first-callers share a single in-flight read promise, so they
+ * end up with the same cached object reference; `writeJsonFile`'s
+ * temp+rename keeps the on-disk view atomic.
  */
 export class LocalOrgStoreLoader {
 	readonly storePath: string;
@@ -85,12 +83,9 @@ export class LocalOrgStoreLoader {
 export interface LocalOrgStoreOptions {
 	loader: LocalOrgStoreLoader;
 	/**
-	 * Sibling stores wired in for the `deleteOrg` cascade. The local provider
-	 * splits invites, compute config, and platform-project grants into
-	 * separate JSON files that the loader can't reach — so they're injected
-	 * here. Required, not optional: an unwired cascade silently leaks
-	 * operational data, exactly the footgun the cascade fix was meant to
-	 * remove.
+	 * Sibling stores for the `deleteOrg` cascade — invites, compute config, and
+	 * grants live in separate JSON files the loader can't reach. Required, not
+	 * optional: an unwired cascade silently leaks operational data.
 	 */
 	invites: IInviteStore;
 	computeServer: IComputeServerStore;
@@ -189,7 +184,6 @@ export class LocalOrgStore implements IOrgStore {
 		const idx = store.orgs.findIndex((o) => o.id === id && isLive(o));
 		if (idx === -1) throw new ProviderError(`Org '${id}' not found`, 404);
 		const stamp = auditSoftDelete(ctx, store.orgs[idx].updatedBy ?? store.orgs[idx].ownerId);
-		// Cascade soft-delete into members, projects, and project members.
 		store.orgs[idx] = { ...store.orgs[idx], ...stamp };
 		store.orgMembers = store.orgMembers.map((m) =>
 			m.orgId === id && isLive(m) ? { ...m, ...stamp } : m
@@ -204,14 +198,11 @@ export class LocalOrgStore implements IOrgStore {
 			orgProjectIds.has(m.projectId) && isLive(m) ? { ...m, ...stamp } : m
 		);
 		await this.loader.write(store);
-		// Cascade into hard-delete-only sibling stores. Pending invites and
-		// org compute config are operational, not user data — no audit trail
-		// to preserve, and leaving them behind only creates orphans.
+		// Invites and compute config are operational, not user data, so they
+		// hard-delete rather than soft-delete — no audit trail to preserve.
 		await this.invites.deleteByOrg(ctx, id);
 		await this.computeServer.deleteByOrg(ctx, id);
-		// Drop grants for projects we just soft-deleted, plus any grant where
-		// this org is the grantee. User grants survive — they're identity-
-		// scoped, not org-scoped.
+		// User grants survive — they're identity-scoped, not org-scoped.
 		for (const projectId of orgProjectIds) {
 			await this.grants.deleteByProject(ctx, projectId);
 		}
@@ -257,15 +248,14 @@ export class LocalOrgStore implements IOrgStore {
 		_ctx: RequestContext,
 		userId: string
 	): Promise<{ org: Organization; member: OrgMember } | null> {
-		// Single pass over org_members for this user (filesystem JSON, so the
-		// file IS the index). Pick the first live membership; ordering follows
-		// insertion order in the JSON file, stable across reads.
+		// Picks the first live membership; ordering follows insertion order in
+		// the JSON file, stable across reads.
 		const store = await this.loader.get();
 		const member = store.orgMembers.find((m) => m.userId === userId && isLive(m));
 		if (!member) return null;
 		const org = store.orgs.find((o) => o.id === member.orgId);
-		// A membership pointing at a soft-deleted org is treated as gone — same
-		// invariant the SQL adapter gets via FK + RLS on `orgs.deleted_at`.
+		// A membership pointing at a soft-deleted org counts as gone, same as the
+		// SQL adapter gets via FK + RLS on `orgs.deleted_at`.
 		if (!org || !isLive(org)) return null;
 		return { org, member };
 	}
@@ -303,8 +293,8 @@ export class LocalOrgStore implements IOrgStore {
 		const m = store.orgMembers.find((m) => m.orgId === orgId && m.userId === userId && isLive(m));
 		if (!m) throw new ProviderError(`Org member '${userId}' not found`, 404);
 		m.role = role;
-		// Role change re-seeds the permission defaults. To preserve a custom
-		// OrgPermission set, call updateOrgMemberPermissions after the role change.
+		// Resets permissions to the role's defaults. To keep a custom set, call
+		// updateOrgMemberPermissions after this.
 		m.permissions = [...DEFAULT_ORG_PERMISSIONS[role]];
 		Object.assign(m, auditUpdate(ctx, m.updatedBy));
 		await this.loader.write(store);
@@ -345,9 +335,8 @@ export class LocalOrgStore implements IOrgStore {
 		const stamp = auditSoftDelete(ctx, m.updatedBy);
 		Object.assign(m, stamp);
 
-		// §9: losing org membership ends every project membership scoped to
-		// that tenant. Cascading here keeps the "members ⊂ org members"
-		// invariant true by construction so reads don't need to re-check it.
+		// Losing org membership ends every project membership in that org, so
+		// "members ⊂ org members" stays true without reads having to re-check it.
 		const projectIdsInOrg = new Set(
 			store.projects.filter((p) => p.orgId === orgId).map((p) => p.id)
 		);

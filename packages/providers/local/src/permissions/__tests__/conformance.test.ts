@@ -27,9 +27,8 @@ describe('LocalPlatformPermissionStore', () => {
 			return {
 				store,
 				seedUser: async () => {
-					// Mirrors `IDataProvider.ensureUser` — produces a user the data
-					// layer knows about, regardless of which auth provider would
-					// hand out the ID in production.
+					// Mirrors IDataProvider.ensureUser: makes the data layer aware of
+					// a user id without going through any real auth provider.
 					const id = randomUUID();
 					await userData.ensure(id);
 					return id;

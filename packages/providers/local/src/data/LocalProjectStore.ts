@@ -28,9 +28,9 @@ function isLive<T extends { deletedAt?: string | null }>(row: T): boolean {
 export interface LocalProjectStoreOptions {
 	loader: LocalOrgStoreLoader;
 	/**
-	 * Sibling store wired in for the `deleteProject` cascade. Grants live in
-	 * a separate JSON file the loader can't reach. Required, not optional —
-	 * an unwired cascade leaks grants on platform projects after deletion.
+	 * Sibling store for the `deleteProject` cascade — grants live in a separate
+	 * JSON file the loader can't reach. Required, not optional: an unwired
+	 * cascade leaks grants on platform projects after deletion.
 	 */
 	grants: IPlatformProjectGrantStore;
 	events?: IEventSink;
@@ -49,12 +49,11 @@ export class LocalProjectStore implements IProjectStore {
 	}
 
 	/**
-	 * Wire the definition store used by the `deleteProject` cascade. Injected
-	 * via a setter rather than the constructor because the composition root
-	 * builds the project store before the definition store (the definition
-	 * store's `setProjectProvider` already depends on this one). Unwired, the
-	 * cascade is skipped — an unwired project store leaks live definitions of a
-	 * deleted project into the library/public listings.
+	 * Wires the definition store for the `deleteProject` cascade. A setter, not
+	 * a constructor param, because the composition root builds this store
+	 * before the definition store (whose `setProjectProvider` depends on this
+	 * one). Unwired, deleted projects keep leaking their definitions into the
+	 * library/public listings.
 	 */
 	setDefinitionProvider(definitions: IDefinitionStore): void {
 		this.definitions = definitions;
@@ -190,14 +189,11 @@ export class LocalProjectStore implements IProjectStore {
 			m.projectId === id && isLive(m) ? { ...m, ...stamp } : m
 		);
 		await this.loader.write(store);
-		// Cascade to definitions — a deleted project must not keep serving its
-		// definitions (they surface in the library/public listings keyed on the
-		// definition row, independent of the project). Definitions live in a
-		// separate JSON file the loader can't reach, so this goes through the
-		// injected store. Supabase does the equivalent in `deleteProject`.
+		// A deleted project must stop serving its definitions — they surface in
+		// library/public listings keyed on the definition row, independent of
+		// the project. Supabase does the same cascade.
 		await this.definitions?.deleteByProject(ctx, id);
-		// Hard-delete grants — they have no soft-delete column and a deleted
-		// project should never resolve grants again.
+		// Grants have no soft-delete column, so this hard-deletes them.
 		await this.grants.deleteByProject(ctx, id);
 		await this.events.emit({ type: 'project.deleted', projectId: id, actorId: actorFrom(ctx) });
 	}
@@ -214,7 +210,6 @@ export class LocalProjectStore implements IProjectStore {
 		const now = new Date().toISOString();
 		store.projects[idx] = { ...store.projects[idx], deletedAt: null, updatedAt: now };
 
-		// Reactivate the owner's project_members row.
 		const ownerId = store.projects[idx].ownerId;
 		const pmIdx = store.projectMembers.findIndex(
 			(m) => m.projectId === store.projects[idx].id && m.userId === ownerId && !isLive(m)

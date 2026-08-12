@@ -13,7 +13,7 @@ For production-scale or multi-instance deployments, use [`@selvajs/supabase-prov
 - [When to use this provider](#when-to-use-this-provider)
 - [Environment variables](#environment-variables)
 - [On-disk layout](#on-disk-layout)
-- [Wiring into `selva.config.ts`](#wiring-into-selvaconfigts)
+- [Switching providers](#switching-providers)
 - [Architecture notes](#architecture-notes)
 
 ---
@@ -75,30 +75,11 @@ All JSON files are written atomically (temp file + rename) so a crash mid-write 
 
 ---
 
-## Wiring into `selva.config.ts`
+## Switching providers
 
-This is the default config in [`selva.config.ts`](../../../selva.config.ts) at the repo root:
+Local is the default: the selva app picks each provider from `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER`, all defaulting to `local` when unset. `LocalDataProvider.fromEnv(env)` wires every store — orgs, projects, definitions, share-links, invites, compute server, user profile, platform permissions.
 
-```ts
-import { defineConfig } from '@selvajs/platform';
-import * as local from '@selvajs/local-provider';
-
-export default defineConfig((env) => ({
-	tenancy: 'single' as const,
-	flags: {
-		ALLOW_CROSS_ORG_PUBLIC: false,
-		ALLOW_ORG_COMPUTE_OVERRIDE: false,
-		ALLOW_ORG_CREATION: false
-	},
-	auth: local.LocalAuthProvider.fromEnv(env),
-	data: local.LocalDataProvider.fromEnv(env),
-	storage: local.LocalStorageProvider.fromEnv(env)
-}));
-```
-
-`LocalDataProvider` internally wires every store — orgs, projects, definitions, share-links, invites, compute server, user profile, platform permissions.
-
-To switch to Supabase, see [`@selvajs/supabase-provider`](../supabase/README.md#wiring-into-selvaconfigts).
+To switch to Supabase, see [`@selvajs/supabase-provider`](../supabase/README.md#switching-to-the-supabase-provider).
 
 ---
 
@@ -108,11 +89,11 @@ To switch to Supabase, see [`@selvajs/supabase-provider`](../supabase/README.md#
 
 `LocalAuthProvider` issues HMAC-signed session tokens (no JWT library; see [`auth/`](src/auth/)). Tokens carry `{ userId, expiresAt }` and are verified on every request.
 
-Users live in `users.json` with `PBKDF2-SHA256` password hashes and platform permissions. The first admin is bootstrapped through the in-app setup page on a fresh install.
+Users live in `auth-users.json` with `PBKDF2-SHA256` password hashes. Platform permissions live separately in `user-data.json`. The first admin is bootstrapped through the in-app setup page on a fresh install.
 
 ### Data
 
-Each store (`LocalOrgStore`, `LocalProjectStore`, `LocalDefinitionStore`, `LocalInviteStore`, `LocalComputeServerStore`) reads its JSON file fully into memory on each call, mutates, and writes back. Fine at config-scale; not for high-churn data.
+Each store (`LocalOrgStore`, `LocalProjectStore`, `LocalDefinitionStore`, `LocalInviteStore`, `LocalComputeServerStore`, `LocalShareLinkStore`, `LocalPlatformProjectGrantStore`) reads its JSON file fully into memory on each call, mutates, and writes back. Fine at config-scale; not for high-churn data.
 
 Access control is enforced **in the app process** by inspecting `RequestContext.adapterContext`. There is no database underneath to enforce it a second time, so these checks are the only thing standing between a caller and someone else's data. Tests for them live alongside each store.
 
@@ -122,4 +103,4 @@ Access control is enforced **in the app process** by inspecting `RequestContext.
 
 ### Shared helpers
 
-`src/fsJson.ts` centralizes the read/atomic-write pattern every store uses. See [src/README.md](src/README.md) for details on the helper API.
+`src/data/fsJson.ts` centralizes the read/atomic-write pattern every store uses. See [src/README.md](src/README.md) for details on the helper API.

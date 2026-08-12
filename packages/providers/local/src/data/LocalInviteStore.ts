@@ -14,18 +14,15 @@ import { readJsonFile, writeJsonFile } from './fsJson.js';
 interface InvitesFile {
 	invites: Invite[];
 }
-// Fresh object per call — `readJsonFile` returns its fallback BY REFERENCE on a
-// missing file, and `create` mutates the loaded object (`.push`). A shared
-// module-level constant would leak those mutations into subsequent "empty"
-// reads (cross-request data bleed). Same hazard the sibling stores guard against.
+// Factory, not a shared constant: `readJsonFile` returns its fallback by
+// reference on a missing file, and `create` mutates it via `.push`. A shared
+// object would leak those mutations across requests.
 const empty = (): InvitesFile => ({ invites: [] });
 
 /**
- * Filesystem-backed invite store. No per-call scoping by ctx.userId — the
- * route layer gates admin actions. `getByTokenHash` is the sole unauthenticated
- * read and is scoped by the hashed token (caller hashes the raw URL token
- * before lookup); it hides expired and already-accepted invites so a reused
- * link surfaces a clean error.
+ * No per-call scoping by ctx.userId — the route layer gates admin actions.
+ * `getByTokenHash` is the sole unauthenticated read; it hides expired and
+ * already-accepted invites so a reused link surfaces a clean error.
  */
 export class LocalInviteStore implements IInviteStore {
 	private readonly filePath: string;

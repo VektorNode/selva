@@ -16,7 +16,7 @@ describe('LocalInviteStore', () => {
 		await fs.rm(tempDir, { recursive: true, force: true });
 	});
 
-	// Local provider has no FK constraints so the default scope ids are fine.
+	// No FK constraints to satisfy here, unlike Supabase's createScope — default scope ids are fine.
 	runInviteStoreConformance({
 		name: 'LocalInviteStore',
 		createStore: () => new LocalInviteStore(tempDir)

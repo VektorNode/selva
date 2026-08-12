@@ -27,8 +27,8 @@ describe('LocalAuthProvider — auth-users.json mode', () => {
 				hmacSecret: TEST_SECRET,
 				usersFilePath: path.join(tempDir, 'auth-users.json')
 			});
-			// Idempotent seed — the conformance suite calls createProvider per test,
-			// but a single test may invoke it more than once.
+			// Skip re-creating the admin if a prior call in this test already did —
+			// createProvider can run more than once per test.
 			const existing = await provider.passwordAuth.verifyLogin(ADMIN_EMAIL, ADMIN_PASSWORD);
 			if (existing.kind !== 'success') {
 				await provider.passwordAuth.createUserWithPassword(ADMIN_EMAIL, ADMIN_PASSWORD);

@@ -1,11 +1,10 @@
 /**
- * §3a: `user-data.json` is accessed through three views (data provider's
- * ensureUser/deleteUser, the permission store, the profile store). Each now
- * reads/writes through a load-once write-through cache, so `LocalDataProvider`
- * MUST inject ONE shared `LocalUserDataStore` into all three — otherwise a write
- * via one view would be invisible to another's cache.
- *
- * These tests pin that coherence end-to-end through the assembled provider.
+ * `user-data.json` is accessed through three views (ensureUser/onUserDeleted,
+ * the permission store, the profile store), each reading/writing through a
+ * load-once write-through cache. `LocalDataProvider` must inject ONE shared
+ * `LocalUserDataStore` into all three — otherwise a write via one view would
+ * be invisible to another's cache. These tests pin that coherence end-to-end
+ * through the assembled provider.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -20,7 +19,7 @@ let env: Record<string, string>;
 
 beforeEach(async () => {
 	dir = await fs.mkdtemp(path.join(os.tmpdir(), 'selva-userdata-'));
-	// 32-byte key so LocalComputeServerStore.fromEnv (via the provider) is happy.
+	// SELVA_AT_REST_KEY must decode to 32 bytes (hex or base64) for LocalComputeServerStore.fromEnv.
 	env = { DATA_PATH: dir, SELVA_AT_REST_KEY: 'a'.repeat(64) };
 });
 
@@ -34,10 +33,9 @@ describe('LocalDataProvider — shared user-data cache (§3a)', () => {
 		const userId = 'user-1';
 		await provider.ensureUser(SYSTEM_CONTEXT, userId);
 
-		// Write through the permission store...
 		await provider.permissions.set(SYSTEM_CONTEXT, userId, ['instance_admin']);
 
-		// ...read back through BOTH the permission store and the profile store.
+		// Read back through BOTH the permission store and the profile store.
 		expect(await provider.permissions.getFor(SYSTEM_CONTEXT, userId)).toEqual(['instance_admin']);
 		const profile = await provider.userProfile.getProfile(SYSTEM_CONTEXT, userId);
 		expect(profile).not.toBeNull();
@@ -59,7 +57,7 @@ describe('LocalDataProvider — shared user-data cache (§3a)', () => {
 		await p1.ensureUser(SYSTEM_CONTEXT, userId);
 		await p1.permissions.set(SYSTEM_CONTEXT, userId, ['manage_compute']);
 
-		// A brand-new provider (cold cache) must read the persisted state from disk.
+		// Fresh provider, cold cache — must read the persisted state from disk.
 		const p2 = LocalDataProvider.fromEnv(env);
 		expect(await p2.permissions.getFor(SYSTEM_CONTEXT, userId)).toEqual(['manage_compute']);
 	});

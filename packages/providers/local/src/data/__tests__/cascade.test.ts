@@ -44,8 +44,7 @@ describe('Cross-store cascade', () => {
 		orgs = new LocalOrgStore({ loader, invites, computeServer, grants });
 		projects = new LocalProjectStore({ loader, grants });
 		definitions = new LocalDefinitionStore(tempDir);
-		// Mirror LocalDataProvider wiring: the definition cascade in deleteProject
-		// runs through the injected store.
+		// Mirrors LocalDataProvider wiring: deleteProject's cascade runs through this injected store.
 		definitions.setProjectProvider(projects);
 		projects.setDefinitionProvider(definitions);
 	});
@@ -260,9 +259,8 @@ describe('Cross-store cascade', () => {
 	});
 
 	it('deleteProject soft-deletes the project’s definitions (they must not keep serving)', async () => {
-		// Regression: LocalProjectStore.deleteProject used to stamp only the
-		// project + members, leaving live definitions that kept surfacing in the
-		// library/public listings (keyed on the definition row, not the project).
+		// Regression: deleteProject used to stamp only the project + members, leaving
+		// live definitions that still surfaced in library/public listings.
 		const ownerId = randomUUID();
 		const orgId = randomUUID();
 		const projectId = randomUUID();
@@ -342,9 +340,8 @@ describe('Cross-store cascade', () => {
 	});
 
 	it('LocalDataProvider wires the deleteProject → definitions cascade end-to-end', async () => {
-		// Proves the production composition root (not just the hand-wired test
-		// stores above) invokes the cascade — the wiring is the thing that
-		// regressed, so assert it through fromEnv.
+		// Goes through fromEnv (the real composition root), not the hand-wired
+		// stores above — the wiring itself is what regressed before.
 		const ownerId = randomUUID();
 		const orgId = randomUUID();
 		const projectId = randomUUID();
@@ -405,10 +402,9 @@ describe('Cross-store cascade', () => {
 	});
 
 	it('share-link getByTokenHash returns null when parent definition is soft-deleted (§7)', async () => {
-		// §7: token resolution MUST fail closed when its parent definition is
-		// soft-deleted. Supabase enforces this via JOIN; the local store gets
-		// the same behavior by injecting a definition provider through the
-		// LocalDataProvider wiring (see LocalShareLinkStore.setDefinitionProvider).
+		// Token resolution must fail closed when its parent definition is soft-deleted.
+		// Supabase enforces this via JOIN; the local store gets the same behavior by
+		// injecting a definition provider (see LocalShareLinkStore.setDefinitionProvider).
 		const ownerId = randomUUID();
 		const orgId = randomUUID();
 		const projectId = randomUUID();

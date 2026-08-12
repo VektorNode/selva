@@ -14,11 +14,11 @@ import { verifyPasswordHash, createLocalAuthUserStore } from './users.js';
 import type { LocalAuthUserStore, StoredAuthUser } from './users.js';
 import { paginate } from '../data/pagination.js';
 
-const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
+const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 
-// Session HMAC secret strength floor. Mirrors `MIN_TOKEN_SECRET_LENGTH` (share/invite
-// tokens) and the 32-byte `SELVA_AT_REST_KEY` rule so a weak session secret can't reach
-// prod. Kept local — the local provider has no `@selvajs/server` dependency.
+// Mirrors `MIN_TOKEN_SECRET_LENGTH` (share/invite tokens) and the 32-byte
+// `SELVA_AT_REST_KEY` rule so a weak session secret can't reach prod. Duplicated
+// rather than imported — the local provider has no `@selvajs/server` dependency.
 const MIN_HMAC_SECRET_LENGTH = 32;
 
 function toAuthUser(
@@ -36,12 +36,7 @@ function toAuthUser(
 export interface LocalAuthProviderConfig {
 	/** HMAC signing secret. Pass from env (SELVA_HMAC_KEY). */
 	hmacSecret: string;
-	/**
-	 * Absolute path to auth-users.json — identity-only storage. Per-user app
-	 * state (permissions, profile, starred defs, recent runs) lives in
-	 * `user-data.json`, owned by `LocalDataProvider`. The two files key on
-	 * the same user ID and are written independently.
-	 */
+	/** Absolute path to auth-users.json. Omit for stateless (no-DATA_PATH) mode. */
 	usersFilePath?: string;
 }
 
@@ -71,8 +66,8 @@ class LocalPasswordAuth implements IPasswordAuth {
 				500
 			);
 		}
-		// Identity-only — platform permissions and the user-data row are seeded
-		// separately via `IDataProvider.ensureUser` + `IPlatformPermissionStore.set`.
+		// Permissions and the user-data row are seeded separately, via
+		// `IDataProvider.ensureUser` + `IPlatformPermissionStore.set`.
 		return toAuthUser(await this.users.createUser(email, password));
 	}
 
@@ -101,10 +96,9 @@ export class LocalAuthProvider implements IAuthProvider {
 
 	/**
 	 * The underlying identity store, or undefined in stateless (no-DATA_PATH)
-	 * mode. Exposed so callers that need direct seed/read access (tests,
-	 * advanced wiring) share THIS provider's store — and thus its load-once
-	 * write-through cache — instead of constructing a second store on the same
-	 * file, which would run a divergent cache. §3a.
+	 * mode. Exposed so callers needing direct seed/read access (tests, advanced
+	 * wiring) share this provider's store — and its cache — instead of
+	 * constructing a second store on the same file, which would diverge from it.
 	 */
 	get userStore(): LocalAuthUserStore | undefined {
 		return this.users;
@@ -126,15 +120,12 @@ export class LocalAuthProvider implements IAuthProvider {
 	}
 
 	/**
-	 * Verify an HMAC session token and return the live user record.
-	 *
-	 * Runs on EVERY authenticated request, so it stays read-only: one
-	 * `findById` (a cached `auth-users.json` read), no writes. `lastLoginAt` is
-	 * stamped at actual login time in `verifyLogin` — it is a login concern, not
-	 * a per-request activity clock, and the only consumers use it as a
-	 * has-ever-signed-in flag (invited vs. active in the admin/team lists). The
-	 * previous per-request `touchLastLogin` here cost a second full file
-	 * read+parse just to decide (usually) not to write.
+	 * Runs on every authenticated request, so it stays read-only: one cached
+	 * `findById`, no writes. `lastLoginAt` is stamped at login time in
+	 * `verifyLogin`, not here — the only consumers treat it as a
+	 * has-ever-signed-in flag (invited vs. active in admin/team lists), not a
+	 * per-request activity clock, so a write on every request would cost a
+	 * full file read+parse just to usually decide not to write.
 	 */
 	async verifyToken(token: string): Promise<AuthUser | null> {
 		const { valid, userId } = verifyHmacToken(token, this.hmacSecret);
@@ -163,10 +154,10 @@ export class LocalAuthProvider implements IAuthProvider {
 	}
 
 	async deleteUser(id: string): Promise<UserManagementResult> {
-		// Identity-only delete. The §2 sole-`instance_admin` invariant is
-		// enforced by the caller via `IPlatformPermissionStore.countInstanceAdminsExcluding`
-		// before this method is called. The caller is also responsible for
-		// removing the user-data row via `LocalDataProvider`'s cascade hook.
+		// Identity-only delete. The caller enforces the sole-instance_admin
+		// invariant via `IPlatformPermissionStore.countInstanceAdminsExcluding`
+		// before calling this, and removes the user-data row via
+		// `LocalDataProvider`'s cascade hook.
 		if (!this.users) return 'not_supported';
 		const target = await this.users.findById(id);
 		if (!target) return 'not_found';
@@ -180,8 +171,7 @@ export class LocalAuthProvider implements IAuthProvider {
 	}
 
 	async disableUser(id: string): Promise<UserManagementResult> {
-		// Identity-only disable. The §2 sole-`instance_admin` invariant is
-		// enforced by the caller, same as `deleteUser`.
+		// Identity-only disable. Same sole-instance_admin invariant as `deleteUser`, enforced by the caller.
 		if (!this.users) return 'not_supported';
 		const target = await this.users.findById(id);
 		if (!target) return 'not_found';

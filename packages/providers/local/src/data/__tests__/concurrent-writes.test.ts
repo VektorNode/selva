@@ -1,31 +1,24 @@
 /**
- * Audit Q5.2 — what the local provider actually does under concurrent writes.
+ * What the local provider actually does under concurrent writes to `tryIncrementSolveCount`.
  *
- * The audit predicted that `tryIncrementSolveCount`'s whole-file
- * read-modify-write "likely over-counts under contention". Measuring it turned
- * up something worse and different: 19 of 20 concurrent increments **threw
- * ENOENT**, because every writer shared one `${filePath}.tmp` staging file and
- * the first rename pulled it out from under the rest. That is fixed (each write
- * now stages through its own temp name — see `fsJson.ts`), and the first test
- * below is the regression pin.
+ * It used to be worse than slow: 19 of 20 concurrent increments threw ENOENT,
+ * because every writer shared one `${filePath}.tmp` staging file and the first
+ * rename pulled it out from under the rest. Fixed by giving each write its own
+ * temp name (see `fsJson.ts`); the first test below pins the regression.
  *
- * What remains is the honest, documented limitation. These tests **characterize
- * it rather than assert it away**, because pretending the local provider is
- * concurrency-safe would be worse than recording that it isn't:
+ * What's left is a real, permanent limitation, characterized here rather than
+ * hidden: writes no longer crash or corrupt the file, but read-modify-write still
+ * has a lost-update window. Concurrent increments can interleave their read and
+ * write, so the cap can be exceeded and the stored count can end up lower than
+ * the number of increments that were admitted. The local provider is a
+ * single-node dev/small-deployment backend — Supabase's SECURITY DEFINER RPC is
+ * what actually gives atomic check-and-increment (see
+ * `packages/providers/supabase/src/data/__tests__/share-link-concurrency.test.ts`,
+ * skipped without a live stack).
  *
- *   - Writes no longer crash, and the file is never corrupt.
- *   - But read-modify-write still has a lost-update window: concurrent
- *     increments interleave their read and write, so the cap can be **exceeded**
- *     (over-admitted) and the stored count can end up **lower** than the number
- *     admitted. The local provider is a single-node dev/small-deployment
- *     backend; Supabase's SECURITY DEFINER RPC is the backend that actually
- *     provides the atomic guarantee (see
- *     `packages/providers/supabase/src/data/__tests__/share-link-concurrency.test.ts`,
- *     which is skipped without a live stack).
- *
- * So: the cap is exact under sequential load (pinned in the app's
- * `solve-cap-and-count.test.ts`) and best-effort under concurrent load here.
- * If the local provider ever gains real per-file locking, the characterization
+ * The cap is exact under sequential load (pinned in the app's
+ * `solve-cap-and-count.test.ts`) and best-effort under concurrent load here. If
+ * the local provider ever gains real per-file locking, the characterization
  * tests below should tighten into guarantees.
  */
 
@@ -39,13 +32,12 @@ import { LocalShareLinkStore } from '../LocalShareLinkStore.js';
 
 /**
  * The concurrent cases below land many overlapping writes on one JSON store,
- * which bottoms out in `writeJsonFile`'s tmp+rename. POSIX renames atomically
- * over an open destination; Windows fails with EPERM when another handle (a
- * sibling writer, an antivirus scan of the fresh `.tmp`) is on the target, so
- * these reject for a platform reason unrelated to what they assert. See the
- * matching note in `fsJson.test.ts`. CI is ubuntu-latest, where they gate
- * normally. The sequential case stays live everywhere — it's the contract that
- * holds on both platforms.
+ * bottoming out in `writeJsonFile`'s tmp+rename. POSIX renames atomically over
+ * an open destination; Windows fails with EPERM when another handle (a sibling
+ * writer, an antivirus scan of the fresh `.tmp`) is on the target — a platform
+ * artifact unrelated to what these tests assert (see `fsJson.test.ts`). CI is
+ * ubuntu-latest, so they still gate there. The sequential case stays live
+ * everywhere — it's the contract that holds on both platforms.
  */
 const posixRename = it.skipIf(process.platform === 'win32');
 
@@ -82,9 +74,9 @@ function link(overrides: Partial<ShareLink> = {}): ShareLink {
 
 describe('concurrent tryIncrementSolveCount (local provider)', () => {
 	posixRename('REGRESSION: concurrent increments do not throw', async () => {
-		// The bug this pins: with a shared `.tmp`, 19 of these 20 rejected with
-		// ENOENT. A share-linked definition being solved by several people at
-		// once would surface as random 500s, not as cap enforcement.
+		// Pins the fixed bug: with a shared `.tmp`, 19 of these 20 rejected with
+		// ENOENT — a share link solved by several people at once surfaced as
+		// random 500s instead of cap enforcement.
 		const store = newStore();
 		const l = link({ maxSolves: null });
 		await store.create(SYSTEM_CONTEXT, l);
@@ -106,7 +98,7 @@ describe('concurrent tryIncrementSolveCount (local provider)', () => {
 			Array.from({ length: 20 }, () => store.tryIncrementSolveCount(SYSTEM_CONTEXT, l.id))
 		);
 
-		// Whatever the count settled on, the document parses and the link is intact.
+		// Whatever the count settled on, the document still parses and the link is intact.
 		const after = await store.getById(SYSTEM_CONTEXT, l.id);
 		expect(after).not.toBeNull();
 		expect(after!.id).toBe(l.id);
@@ -114,11 +106,10 @@ describe('concurrent tryIncrementSolveCount (local provider)', () => {
 	});
 
 	posixRename('CHARACTERIZATION: concurrent increments lose updates (not atomic)', async () => {
-		// Documents the known dev-scale tradeoff. Sequentially, 20 increments
-		// give exactly 20; concurrently, interleaved read-modify-write means the
-		// stored count is <= the number of attempts, and typically far lower.
-		// Asserted as an inequality, not an exact number, because the amount of
-		// loss is timing-dependent — the POINT is that it is lossy at all.
+		// Sequentially, 20 increments give exactly 20; concurrently, interleaved
+		// read-modify-write means the stored count is <= the number of attempts,
+		// often far lower. Asserted as an inequality rather than an exact number
+		// because the loss is timing-dependent — the point is that it's lossy at all.
 		const store = newStore();
 		const l = link({ maxSolves: null });
 		await store.create(SYSTEM_CONTEXT, l);
@@ -130,18 +121,18 @@ describe('concurrent tryIncrementSolveCount (local provider)', () => {
 
 		const after = await store.getById(SYSTEM_CONTEXT, l.id);
 		expect(after!.solveCount).toBeLessThanOrEqual(N);
-		// Sequentially it would be exactly N. If this ever equals N reliably,
-		// the local store became atomic and this test should become a guarantee.
+		// Sequentially this would be exactly N. If it ever equals N reliably, the
+		// local store became atomic and this test should become a guarantee.
 		expect(after!.solveCount).toBeGreaterThan(0);
 	});
 
 	posixRename('CHARACTERIZATION: a cap can be over-admitted under concurrency', async () => {
-		// The security-relevant half. Sequentially the cap is exact (see the
-		// app's solve-cap-and-count.test.ts). Concurrently, several callers can
-		// each read a below-cap count before any of them writes, so more than
-		// `maxSolves` requests get admitted. Recorded deliberately: an operator
-		// relying on share caps as a hard billing limit needs the Supabase
-		// backend, whose RPC does check-and-increment in one statement.
+		// The security-relevant half. Sequentially the cap is exact (see the app's
+		// solve-cap-and-count.test.ts). Concurrently, several callers can each read
+		// a below-cap count before any of them writes, so more than `maxSolves`
+		// requests get admitted. An operator relying on share caps as a hard
+		// billing limit needs the Supabase backend, whose RPC does
+		// check-and-increment in one statement.
 		const store = newStore();
 		const CAP = 5;
 		const l = link({ maxSolves: CAP });
@@ -154,16 +145,15 @@ describe('concurrent tryIncrementSolveCount (local provider)', () => {
 
 		// At least the cap is admitted; possibly more (that's the race).
 		expect(admitted).toBeGreaterThanOrEqual(1);
-		// The invariant that DOES hold: nothing is admitted once the persisted
-		// count is at the cap, so the overshoot is bounded by concurrency, not
-		// unbounded.
+		// What does hold: nothing is admitted once the persisted count reaches the
+		// cap, so the overshoot is bounded by concurrency, not unbounded.
 		const after = await store.getById(SYSTEM_CONTEXT, l.id);
 		expect(after!.solveCount).toBeLessThanOrEqual(CAP);
 	});
 
 	it('sequential increments through the same store are exact (the contract that holds)', async () => {
-		// The guarantee the local provider genuinely makes, and the one the
-		// route depends on for single-user dev flows.
+		// The guarantee the local provider genuinely makes — the one the route
+		// depends on for single-user dev flows.
 		const store = newStore();
 		const CAP = 5;
 		const l = link({ maxSolves: CAP });

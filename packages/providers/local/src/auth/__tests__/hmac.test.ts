@@ -1,16 +1,11 @@
 /**
- * Audit Q5.4 — direct tests for the session-token HMAC.
- *
  * `hmac.ts` is the local provider's entire session-auth mechanism: whoever can
- * forge a token here is any user they name. Until now it was covered only
- * indirectly, by three cases in the auth conformance suite (round-trip, garbage
- * string, empty string) — none of which exercise a *hostile* token. Every test
- * below is an attack the verifier must refuse, plus the boundary conditions
- * (`lastIndexOf` parsing, the `timingSafeEqual` length guard) that an innocent
- * refactor could silently break.
+ * forge a token here is any user they name. Each test below is an attack
+ * `verifyHmacToken` must refuse, plus the boundary conditions (`lastIndexOf`
+ * parsing, the `timingSafeEqual` length guard) an innocent refactor could break.
  *
- * The bar: `verifyHmacToken` must return `{ valid: false }` — never throw, and
- * never return a userId — for every input that isn't a token this secret signed.
+ * The bar: return `{ valid: false }` — never throw, never return a userId —
+ * for every input that isn't a token this secret signed.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -36,24 +31,22 @@ describe('signHmacToken / verifyHmacToken — happy path', () => {
 		const token = signHmacToken(SECRET, 'user-123');
 		const parts = token.split('.');
 		expect(parts).toHaveLength(2);
-		// Payload is base64url — never the raw userId on the wire.
+		// userId is base64url-encoded, not sent raw on the wire.
 		expect(token).not.toContain('user-123');
 		expect(Buffer.from(parts[0], 'base64url').toString()).toMatch(/^user-123:\d+$/);
 	});
 
 	it('round-trips a userId containing a colon', () => {
-		// Parsing splits on the LAST colon (`decoded.lastIndexOf(':')`), so a
-		// colon inside the userId must not truncate it — an email-shaped or
-		// namespaced id (`ns:user`) has to survive intact or it would verify as
-		// a DIFFERENT user.
+		// Parsing splits on the LAST colon, so a colon inside the userId (e.g. a
+		// namespaced id like `ns:user`) must survive intact, not get truncated
+		// into a different user.
 		const token = signHmacToken(SECRET, 'tenant:user-123');
 		expect(verifyHmacToken(token, SECRET)).toEqual({ userId: 'tenant:user-123', valid: true });
 	});
 
 	it('round-trips a userId containing a dot', () => {
-		// The signature split is also `lastIndexOf('.')`, and base64url never
-		// emits '.', so a dotted userId is safe — pinned because switching to
-		// `split('.')` or `indexOf` would break exactly this case.
+		// Signature split is also lastIndexOf('.'); base64url never emits '.', so
+		// a dotted userId (email) is safe. Pins against a switch to split('.').
 		const token = signHmacToken(SECRET, 'first.last@example.com');
 		expect(verifyHmacToken(token, SECRET)).toEqual({
 			userId: 'first.last@example.com',
@@ -64,8 +57,6 @@ describe('signHmacToken / verifyHmacToken — happy path', () => {
 
 describe('verifyHmacToken — forged and tampered tokens are refused', () => {
 	it('refuses a token signed with a different secret', () => {
-		// The core property: possession of a well-formed token is worthless
-		// without the signing key.
 		const token = signHmacToken(OTHER_SECRET, 'user-123');
 		expect(verifyHmacToken(token, SECRET)).toEqual({ userId: '', valid: false });
 	});
@@ -87,8 +78,8 @@ describe('verifyHmacToken — forged and tampered tokens are refused', () => {
 		const dot = token.lastIndexOf('.');
 		const payload = token.slice(0, dot);
 		const sig = token.slice(dot + 1);
-		// Flip the first character to something else of the same length — this
-		// keeps the length guard satisfied so `timingSafeEqual` is what rejects.
+		// Same length as the original sig, so it's timingSafeEqual that rejects
+		// this, not the length guard.
 		const flipped = (sig[0] === 'A' ? 'B' : 'A') + sig.slice(1);
 
 		expect(verifyHmacToken(`${payload}.${flipped}`, SECRET)).toEqual({ userId: '', valid: false });
@@ -105,9 +96,8 @@ describe('verifyHmacToken — forged and tampered tokens are refused', () => {
 	});
 
 	it('refuses a signature of the wrong length without throwing', () => {
-		// `timingSafeEqual` THROWS on length mismatch — the explicit length guard
-		// before it is load-bearing. A truncated signature must be a clean
-		// refusal, not a 500.
+		// timingSafeEqual throws on length mismatch — the length guard before it
+		// must catch this, or a short signature crashes instead of failing clean.
 		const token = signHmacToken(SECRET, 'user-123');
 		const dot = token.lastIndexOf('.');
 		const payload = token.slice(0, dot);

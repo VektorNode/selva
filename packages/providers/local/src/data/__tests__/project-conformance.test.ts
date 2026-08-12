@@ -36,7 +36,6 @@ describe('LocalProjectStore', () => {
 			);
 			const orgs = new LocalOrgStore({ loader, invites, computeServer, grants });
 			const store = new LocalProjectStore({ loader, grants });
-			// Explicitly create the host org for the project tests.
 			const ownerId = randomUUID();
 			const orgId = randomUUID();
 			const now = new Date().toISOString();
