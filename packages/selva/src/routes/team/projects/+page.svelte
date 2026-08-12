@@ -39,7 +39,7 @@
 	async function createProject() {
 		creating = true;
 		try {
-			const res = await fetch('/api/projects', {
+			const res = await fetch('/api/v1/projects', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -69,7 +69,7 @@
 	async function deleteProject(project: ProjectRow) {
 		deletingId = project.id;
 		try {
-			const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' });
+			const res = await fetch(`/api/v1/projects/${project.id}`, { method: 'DELETE' });
 			if (res.ok) {
 				toast.success(`Deleted "${project.name}"`);
 				await invalidateAll();

@@ -27,9 +27,8 @@ interface DefinitionsConfig {
 	definitionVersions: Record<string, DefinitionVersion>;
 }
 
-/** Always return a fresh object — `readJsonFile` returns its fallback by
- * reference when the file is missing, so a shared singleton would let one
- * read pollute the next. */
+// `readJsonFile` returns its fallback by reference when the file is missing,
+// so a shared singleton here would let one read's mutations pollute the next.
 const empty = (): DefinitionsConfig => ({ definitions: {}, definitionVersions: {} });
 
 export class LocalDefinitionStore implements IDefinitionStore {
@@ -37,15 +36,12 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	private readonly events: IEventSink;
 	private projectProvider?: IProjectStore;
 
-	// Load-once write-through cache — same idiom as `LocalOrgStoreLoader` and the
-	// auth/user-data stores. `definitions-config.json` is the largest and
-	// fastest-growing local doc, re-read on every get/list/getVersion/listVersions,
-	// including the unauthenticated share-link solve path (via the injected
-	// definition provider in `LocalShareLinkStore`). Sole-writer in single-process
-	// local mode → the in-memory copy is authoritative; every mutation reads the
-	// cached object, mutates it, and `writeConfig` persists via temp+rename. This
-	// store is constructed once per provider (and the share-link store gets the
-	// SAME instance injected), so there's exactly one cache over the file. §3b.
+	// Load-once write-through cache, same idiom as `LocalOrgStoreLoader`. This
+	// store is constructed exactly once per provider and the share-link store
+	// gets that same instance injected (see LocalDataProvider.fromEnv), so
+	// there's exactly one cache over `definitions-config.json` — the in-memory
+	// copy is authoritative and every mutation reads it, mutates it, and
+	// persists via `writeConfig`'s temp+rename.
 	private cache: DefinitionsConfig | null = null;
 	private loading: Promise<DefinitionsConfig> | null = null;
 
@@ -107,7 +103,11 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		records: DefinitionRecord[],
 		opts?: DefinitionListOptions
 	): DefinitionRecord[] {
-		const filtered = records.filter((r) => r?.displayName && this.live(r));
+		let filtered = records.filter((r) => r?.displayName && this.live(r));
+		if (opts?.projectIds) {
+			const allowedProjects = new Set(opts.projectIds);
+			filtered = filtered.filter((r) => allowedProjects.has(r.projectId));
+		}
 		if (opts?.statuses?.length) {
 			const allowed = new Set(opts.statuses);
 			return filtered.filter((r) => allowed.has(r.status));
@@ -143,9 +143,8 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		opts?: DefinitionListOptions & { orgId?: string }
 	): Promise<Page<DefinitionRecord>> {
 		if (!this.projectProvider) {
-			// Pre-wiring fallback: behave as if the default project is public, which
-			// matches the local bootstrap. Once setProjectProvider is called this
-			// branch stops executing.
+			// Before setProjectProvider is called, behave as if the default
+			// project is public — matches the local bootstrap. Dead code after wiring.
 			return this.list(ctx, opts);
 		}
 
@@ -282,10 +281,10 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		const config = await this.readConfig();
 		const existing = config.definitions[guid];
 		if (!this.live(existing)) throw new ProviderError(`Definition '${guid}' not found`, 404);
-		// The whole read-modify-write is serialized by the config lock, so the
-		// read + increment is atomic against concurrent uploads. Never reads the
-		// version list — the counter alone advances, so a deleted latest version's
-		// number is never handed out again.
+		// No `await` between the read and the increment, so nothing can interleave
+		// on Node's single thread — concurrent uploads can't race this. Never reads
+		// the version list once `nextVersionNumber` exists: the counter alone
+		// advances, so a deleted latest version's number is never handed out again.
 		const current = existing.nextVersionNumber ?? this.highestVersionNumber(config, guid) + 1;
 		existing.nextVersionNumber = current + 1;
 		existing.updatedAt = new Date().toISOString();
@@ -310,7 +309,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	}
 
 	// ============================================================================
-	// Versions (spec §6)
+	// Versions
 	// ============================================================================
 
 	async createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void> {
@@ -369,8 +368,8 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		const version = config.definitionVersions[versionId];
 		if (!version) return;
 		const parent = config.definitions[version.definitionId];
-		// §6 deletion protection — cannot delete a version while it's serving
-		// either channel. Caller must repoint live/draft first.
+		// Cannot delete a version while it's serving live or draft — caller must
+		// repoint first.
 		if (parent && (parent.liveVersionId === versionId || parent.draftVersionId === versionId)) {
 			throw new ProviderError(
 				`Version '${versionId}' is referenced by liveVersionId or draftVersionId`,

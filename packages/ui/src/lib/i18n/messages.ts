@@ -2,14 +2,9 @@
 // Viewer message catalog (library-owned strings)
 // ============================================================================
 //
-// These are the strings @selvajs/ui renders itself in the 3D viewer and its
-// panels — tool menu, view presets, scene manager, metadata dialog. They are
-// NOT the strings that come from a Grasshopper definition (mesh/layer/metadata
-// names): those live in the user's .gh file and can't be translated here.
-//
-// The library ships English + German. A host app can switch locale at runtime
-// via the locale context (see ./localeContext.svelte.ts) — e.g. selva feeds its
-// own Paraglide locale in. With no provider, components fall back to English.
+// Only the strings @selvajs/ui renders itself. Names coming from a Grasshopper
+// definition — meshes, layers, metadata keys — live in the user's .gh file and
+// cannot be translated here.
 
 export type Locale = 'en' | 'de';
 
@@ -22,9 +17,7 @@ export interface ViewerMessages {
 	views: string;
 	measure: string;
 	grid: string;
-	/** "Display" submenu label — groups render style + edges. */
 	display: string;
-	/** Edges show/hide toggle label. */
 	edges: string;
 	sceneManager: string;
 	screenshot: string;

@@ -10,10 +10,10 @@ const PUBLIC_BUCKET = process.env.SUPABASE_PUBLIC_BUCKET ?? 'selva-public';
 const PRIVATE_BUCKET = process.env.SUPABASE_PRIVATE_BUCKET ?? 'selva-private';
 
 // The conformance suite hits a live Supabase stack. If creds aren't present
-// (e.g. in CI without Docker, or a clean clone pre-`supabase start`), skip
-// the suite with a single explanatory test so the run surfaces the reason.
-// `createClient` transitively loads `@supabase/realtime-js`, which on Node < 22
-// throws at construction without native WebSocket — treat that as "no stack"
+// (e.g. CI without Docker, or a clean clone pre-`supabase start`), skip with
+// a single explanatory test so the run surfaces the reason. `createClient`
+// transitively loads `@supabase/realtime-js`, which on Node < 22 throws at
+// construction without native WebSocket — treat that as "no stack" too,
 // rather than crashing the suite during collection.
 function tryBuildAdminClient(): ReturnType<typeof createClient> | null {
 	if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return null;
@@ -38,9 +38,10 @@ if (_adminClient === null) {
 	const adminClient = _adminClient;
 
 	/**
-	 * Delete every object under a prefix in a bucket. The conformance suite
-	 * assumes fresh state per test; Supabase Storage is shared across runs,
-	 * so we reset both buckets before each test.
+	 * Deletes every object under a prefix in a bucket. Supabase Storage
+	 * persists across test runs, unlike an in-memory fake, so both buckets
+	 * need resetting before each test to give the conformance suite the
+	 * fresh state it assumes.
 	 */
 	async function emptyBucket(bucket: string): Promise<void> {
 		const keys: string[] = [];
@@ -82,10 +83,10 @@ if (_adminClient === null) {
 		});
 
 		// ============================================================================
-		// Bucket routing — Supabase-specific (the conformance suite is provider-
-		// agnostic and can't see which bucket a file lands in). Without these tests
-		// a regex regression in `bucketFor` could silently move .gh source files
-		// into the public/CDN bucket.
+		// Bucket routing — Supabase-specific; the conformance suite is provider-
+		// agnostic and can't see which bucket a file lands in. Without these tests a
+		// regex regression in `bucketFor` could silently move .gh source files into
+		// the public/CDN bucket.
 		// ============================================================================
 		describe('bucket routing', () => {
 			const storage = new SupabaseStorageProvider({
@@ -117,13 +118,12 @@ if (_adminClient === null) {
 				expect(await existsInBucket(PUBLIC_BUCKET, path)).toBe(false);
 			});
 
-			it('cover images land in the public bucket', async () => {
+			it('cover images land in the private bucket', async () => {
 				const guid = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 				const path = definitionPaths.image(guid);
-				// Real 1×1 transparent PNG. The provider runs every image through
-				// transcodeImageIfNeeded → sharp, so a hand-crafted byte stub
-				// would fail the decode. Routing (the test's actual concern) is
-				// independent of which format the input arrives in.
+				// Real 1×1 transparent PNG — the provider decodes every image via
+				// transcodeImageIfNeeded → sharp, so a hand-crafted byte stub would
+				// fail the decode before routing is even exercised.
 				const tinyPng = Uint8Array.from([
 					137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8,
 					6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 9, 112, 72, 89, 115, 0, 0, 3, 232, 0, 0, 3, 232, 1,
@@ -131,8 +131,10 @@ if (_adminClient === null) {
 					0, 1, 165, 246, 69, 64, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130
 				]);
 				await storage.put(path, tinyPng, 'image/png');
-				expect(await existsInBucket(PUBLIC_BUCKET, path)).toBe(true);
-				expect(await existsInBucket(PRIVATE_BUCKET, path)).toBe(false);
+				// Covers classify as `definition-cover` (visibility: 'project'), so
+				// they're auth-gated through the proxy, not CDN-readable.
+				expect(await existsInBucket(PRIVATE_BUCKET, path)).toBe(true);
+				expect(await existsInBucket(PUBLIC_BUCKET, path)).toBe(false);
 			});
 
 			it('getPublicUrl returns the proxy prefix for private files', () => {

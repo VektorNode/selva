@@ -22,8 +22,6 @@ public sealed class GroupElement : DrawElement, IEnumerable<DrawElement>
 
 	// Marks a group as a viewport-only overlay (e.g. Grid cell dividers): the Rhino preview
 	// draws its BoundsOverride as a dotted box, while SVG/PDF renderers skip it entirely.
-	// Lets layout primitives ship authoring guides through the resolved tree without those
-	// guides ever reaching the exported output.
 	public bool PreviewOnly { get; init; }
 
 	public override void Accept(IElementVisitor visitor)

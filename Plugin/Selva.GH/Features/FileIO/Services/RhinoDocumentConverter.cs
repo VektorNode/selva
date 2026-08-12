@@ -10,7 +10,6 @@ namespace Selva.GH.Features.FileIO.Services;
 
 public class RhinoDocumentConverter : IDisposable
 {
-    // Constants for Rhino version validation
     private const int MinRhinoVersion = 2;
     private const int MaxRhinoVersion = 8;
     private const int DefaultRhinoVersion = 7;
@@ -53,9 +52,6 @@ public class RhinoDocumentConverter : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    ///     Synchronous version - Converts a RhinoDoc to Base64 encoded string
-    /// </summary>
     public string DocToBase64(RhinoDoc doc, string fileExtension)
     {
         ValidateInputs(doc, fileExtension);
@@ -99,9 +95,6 @@ public class RhinoDocumentConverter : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Synchronous version - Converts a RhinoDoc to Base64 encoded .3dm file
-    /// </summary>
     public string DocToRhinoFile(RhinoDoc doc, int version = DefaultRhinoVersion)
     {
         if (doc == null)
@@ -196,7 +189,7 @@ public class RhinoDocumentConverter : IDisposable
                     using (var stream = fileInfo.Open(FileMode.Open, FileAccess.Write))
                     using (var rng = RandomNumberGenerator.Create())
                     {
-                        var buffer = new byte[AppConfig.FileIO.FileCopyBufferSizeBytes]; // 1MB chunks
+                        var buffer = new byte[AppConfig.FileIO.FileCopyBufferSizeBytes];
                         for (long i = 0; i < fileInfo.Length; i += buffer.Length)
                         {
                             rng.GetBytes(buffer);

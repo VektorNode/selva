@@ -12,10 +12,8 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// One DrawingView per branch of the input tree. Each branch's elements are grouped at
-// their world coordinates and treated as a single view. Length pins the longest side of
-// the geometry to N document units (0 = fit to whatever Page/container the view ends up in).
-// Geometry coordinates pass through raw; only Length/Padding are unit-interpreted.
+// One DrawingView per branch of the input tree; only Length/Padding are unit-interpreted,
+// geometry coordinates pass through raw.
 public class GH_DrawingView : GH_Component
 {
     public GH_DrawingView()
@@ -69,8 +67,7 @@ public class GH_DrawingView : GH_Component
         DA.GetData(3, ref scaleCaption);
         DA.GetData(4, ref unitsIndex);
 
-        // Length/Padding are authored in the chosen unit (Auto = Rhino doc unit); the model is in
-        // mm. Convert once here. Geometry coordinates are untouched — they flow through raw.
+        // Model is in mm; Length/Padding are authored in the chosen unit, so convert once here.
         var mmPerUnit = DrawingUnits.MmPerUnit(unitsIndex);
         length = length > 0 ? length * mmPerUnit : length;
         padding *= mmPerUnit;
@@ -102,8 +99,7 @@ public class GH_DrawingView : GH_Component
                 AutoScaleCaption = scaleCaption,
             });
 
-            // Scale is determinable at solve time only when Length pins it; auto-fit views
-            // resolve their scale on the page, so report empty there.
+            // Auto-fit views only resolve their scale once placed on a page.
             if (length > 0)
             {
                 var b = geometry.ComputeBounds();

@@ -3,6 +3,7 @@
 	import type { ActionButton } from '../../types/actionButton';
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { ChevronUp } from '@lucide/svelte';
+	import type { ThreeViewer } from '@selvajs/visualization/render';
 	import Viewer, { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import CalculateButton from '../primitives/CalculateButton.svelte';
 	import SolvingIndicator from '../primitives/SolvingIndicator.svelte';
@@ -37,8 +38,8 @@
 		onListStates?: () => ParameterPreset[] | Promise<ParameterPreset[]>;
 		presetLabels?: Partial<PresetLabels>;
 		viewerConfig?: ViewerConfig;
-		/** Branding logo URL shown as a watermark in the viewer's bottom-right corner. */
 		logoUrl?: string;
+		onViewerReady?: (viewer: ThreeViewer) => void | (() => void);
 	}
 
 	let {
@@ -60,7 +61,8 @@
 		onListStates,
 		presetLabels,
 		viewerConfig = {},
-		logoUrl
+		logoUrl,
+		onViewerReady
 	}: Props = $props();
 
 	const hasViewer = $derived(
@@ -75,7 +77,7 @@
 	const hasLeftPanel = $derived(leftTabs.length > 0);
 	const hasRightPanel = $derived(rightTabs.length > 0);
 	const hasSidebar = $derived(hasViewer || hasRightPanel);
-	// Two-panel mode: left + right, no viewer — both panels grow to fill full width
+	// Left + right, no viewer — both panes grow to fill the full width.
 	const isTwoPanelMode = $derived(!hasViewer && hasLeftPanel && hasRightPanel);
 
 	let isMobile = $state(false);
@@ -189,6 +191,7 @@
 					isBlurred={drawerOpen}
 					{drawerOpen}
 					{logoUrl}
+					{onViewerReady}
 					viewerConfig={{
 						...viewerConfig,
 						backgroundColor: schema?.viewerOptions?.backgroundColor,
@@ -293,7 +296,7 @@
 		</div>
 	{:else}
 		<div class="min-h-0 flex h-full flex-1">
-			<!-- Left collapsed strip (outside PaneGroup so it has fixed width) -->
+			<!-- Outside PaneGroup so the strip keeps a fixed width. -->
 			{#if leftCollapsed && hasSidebar && hasLeftPanel}
 				<CollapsedPanelStrip
 					side="left"
@@ -312,7 +315,6 @@
 				autoSaveId="selva-layout-{layoutKey}"
 				class="min-h-0 flex-1"
 			>
-				<!-- Left pane -->
 				{#if hasLeftPanel}
 					<Resizable.Pane
 						bind:this={leftPaneRef}
@@ -344,7 +346,6 @@
 					/>
 				{/if}
 
-				<!-- Viewer pane -->
 				{#if hasViewer}
 					<Resizable.Pane order={2} minSize={20} class="min-h-0 mx-1 flex flex-col">
 						<Viewer
@@ -352,6 +353,7 @@
 							bind:isFullscreen={isViewerFullscreen}
 							{isSolving}
 							{logoUrl}
+							{onViewerReady}
 							viewerConfig={{
 								backgroundColor: schema?.viewerOptions?.backgroundColor
 							}}
@@ -359,7 +361,6 @@
 					</Resizable.Pane>
 				{/if}
 
-				<!-- Right pane -->
 				{#if hasRightPanel}
 					<Resizable.Handle
 						withHandle
@@ -392,7 +393,6 @@
 				{/if}
 			</Resizable.PaneGroup>
 
-			<!-- Right collapsed strip -->
 			{#if rightCollapsed && hasRightPanel}
 				<CollapsedPanelStrip
 					side="right"

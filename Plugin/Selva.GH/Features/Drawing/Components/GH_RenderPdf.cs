@@ -12,12 +12,9 @@ using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Renders to PDF and emits a FileDataGoo so the result flows into the same download /
-// context-bake pipeline as the other file producers (GeometryToFile, CreateFile). Accepts
-// either a Document (multi-page) or loose drawing elements (wrapped in a single page) —
-// the same inputs as Render SVG, so switching formats doesn't require restructuring the
-// graph. The PDF bytes are base64-encoded into FileData.Data; the Selva UI decodes and
-// serves the download. PdfSharpCore handles multi-page natively.
+// Emits a FileDataGoo, same as GeometryToFile/CreateFile, so PDF output flows through the
+// same download / context-bake pipeline. Accepts a Document (multi-page) or loose drawing
+// elements (wrapped into a single page) — same inputs as Render SVG.
 public class GH_RenderPdf : GH_Component, ISelvaFileOutput
 {
     public GH_RenderPdf()
@@ -43,7 +40,7 @@ public class GH_RenderPdf : GH_Component, ISelvaFileOutput
         pManager.AddGenericParameter("Document", "Doc", "A Document for paginated multi-page output. You can also wire pages, drawing views, or loose drawings directly — they're wrapped into a single page.", GH_ParamAccess.list);
         pManager.AddTextParameter("Name", "N", "Output file name without extension", GH_ParamAccess.item, "drawing");
         pManager.AddBooleanParameter("Auto Fit", "AF", "Auto-fit page to content with a 10mm margin. When false, the document's page size is used.", GH_ParamAccess.item, false);
-        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item, "");
+        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder for this file. Use :: to nest, like Rhino layers (ROOT::Panels). Files sharing a root land in the same folder; different roots produce separate top-level folders in the download.", GH_ParamAccess.item, "");
 
         pManager[1].Optional = true;
         pManager[2].Optional = true;

@@ -1,71 +1,60 @@
 name: Bug Report
-description: Report a bug or unexpected behavior
-title: '[Bug]: '
-labels: ['bug']
+description: Something is broken
+type: Bug
+labels: ['needs-triage']
 body:
   - type: markdown
     attributes:
-      value: |
-        Thanks for taking the time to report a bug! Please check the [documentation](https://github.com/VektorNode/selva/blob/main/CLAUDE.md) first to ensure this is not expected behavior. Note: Rhino 7 is not supported.
+      value: 'Rhino 7 is not supported. For questions, use [Discussions](https://github.com/VektorNode/selva/discussions).'
 
   - type: textarea
     id: what-happened
     attributes:
       label: What happened?
-      description: Describe the bug you encountered
-      placeholder: A clear and concise description of what the bug is
-    validations:
-      required: true
-
-  - type: dropdown
-    id: severity
-    attributes:
-      label: Severity
-      options:
-        - Low
-        - Normal
-        - High
-        - Critical
-    validations:
-      required: true
-
-  - type: checkboxes
-    id: affected-areas
-    attributes:
-      label: Affected Components
-      options:
-        - label: Plugin UI (@selvajs/plugin-ui)
-        - label: Cloud App (@selvajs/selva)
-        - label: Grasshopper Plugin (C#)
-        - label: Core / Compute
-        - label: Other
-
-  - type: textarea
-    id: environment
-    attributes:
-      label: Environment
-      description: What is your operating system, Node version, and Rhino version?
-      placeholder: |
-        OS: Windows 11
-        Node: 20.6.0
-        Rhino: 8.4
+      description: What you expected, and what you got instead.
     validations:
       required: true
 
   - type: textarea
     id: reproduction
     attributes:
-      label: Steps to Reproduce
+      label: Steps to reproduce
       placeholder: |
         1. Open Grasshopper
-        2. Add UIBuilderComponent
+        2. Add a UIBuilder component
         3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      description: Best guess is fine — a maintainer will confirm.
+      options:
+        - Not sure
+        - Grasshopper plugin (C#)
+        - Schema builder / plugin UI
+        - Cloud app
+        - 3D viewer
+        - Solving / Rhino.Compute
+        - Auth, projects, permissions
+        - Build, CI, deployment
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Versions
+      description: Selva, Rhino, and OS. Node version too, if the cloud app is involved.
+      placeholder: 'Selva 0.9.2, Rhino 8.4, Windows 11'
     validations:
       required: true
 
   - type: textarea
     id: logs
     attributes:
-      label: Error Messages / Logs
-      description: Include any error messages, browser console output, or Grasshopper component messages
+      label: Errors or logs
+      description: Browser console, Grasshopper component messages, server output. Screenshots welcome.
       render: shell

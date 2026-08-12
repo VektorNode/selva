@@ -11,7 +11,6 @@ public class ConstraintsRule : IValidationRule
 {
     public IEnumerable<ValidationIssue> Validate(UISchema schema)
     {
-        // Validate that at least one input or output exists
         if ((schema.Inputs == null || !schema.Inputs.Any()) &&
             (schema.Outputs == null || !schema.Outputs.Any()))
         {
@@ -21,7 +20,6 @@ public class ConstraintsRule : IValidationRule
                 "Schema should define at least one input or output parameter");
         }
 
-        // Validate dates
         if (schema.Created == default)
         {
             yield return ValidationIssue.Info(

@@ -3,16 +3,13 @@ import type { PlatformPermission, RecentRun } from '@selvajs/platform';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
 /**
- * Per-user state owned by the data layer, keyed by the auth provider's user
- * ID. Mirrors `public.user_profiles` in the Supabase schema. **Never holds
- * identity** (email, password hash, createdAt) — those live with the auth
- * provider, which may be anything from `LocalAuthProvider` to an external
- * IdP like Eterna ID.
+ * Per-user state keyed by the auth provider's user ID. Mirrors
+ * `public.user_profiles` in the Supabase schema. **Never holds identity**
+ * (email, password hash, createdAt) — that lives with the auth provider.
  *
- * The local equivalent of Supabase's `handle_new_auth_user` trigger lives in
- * `hooks.server.ts`, which calls `IDataProvider.ensureUser` once per
- * authenticated request. After that call, every read here is guaranteed to
- * find a row.
+ * `hooks.server.ts` calls `IDataProvider.ensureUser` once per authenticated
+ * request (the local equivalent of Supabase's `handle_new_auth_user`
+ * trigger), so every read here after that is guaranteed to find a row.
  */
 export interface StoredUserData {
 	userId: string;
@@ -40,10 +37,7 @@ function emptyRow(userId: string): StoredUserData {
 }
 
 export interface LocalUserDataStore {
-	/**
-	 * Idempotent. Adds an empty row if missing; no-op if present. Safe to call
-	 * on every authed request.
-	 */
+	/** Idempotent: adds an empty row if missing, no-op if present. */
 	ensure(userId: string): Promise<void>;
 	findById(userId: string): Promise<StoredUserData | null>;
 	listAll(): Promise<StoredUserData[]>;
@@ -56,13 +50,12 @@ export interface LocalUserDataStore {
 }
 
 export function createLocalUserDataStore(filePath: string): LocalUserDataStore {
-	// Load-once, write-through cache — same pattern as `LocalOrgStoreLoader` /
-	// the auth-users store. `user-data.json` is read ~4× per authenticated
-	// request (ensureUser, getProfile, getFor + the hook bootstrap). The provider
-	// is the sole writer in single-process local mode, so the in-memory copy is
-	// authoritative. MUST be a single shared instance across the profile,
-	// permission, and data-provider views (LocalDataProvider injects one) — see
-	// those constructors. §3a.
+	// Load-once, write-through cache, same pattern as `LocalOrgStoreLoader`.
+	// The provider is the sole writer in single-process local mode, so the
+	// in-memory copy is authoritative — but only if every consumer shares one
+	// instance. LocalDataProvider injects a single instance across the
+	// profile, permission, and data-provider views; don't call this factory
+	// more than once per process.
 	let cache: UserDataFile | null = null;
 	let loading: Promise<UserDataFile> | null = null;
 

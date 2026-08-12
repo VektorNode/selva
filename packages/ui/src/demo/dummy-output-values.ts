@@ -1,30 +1,13 @@
 import * as THREE from 'three';
-import type { RhinoModule } from 'rhino3dm';
-import rhinoWasmUrl from 'rhino3dm/rhino3dm.wasm?url';
 import chart from './dummy-surface-chart.json';
 import meshData from './example-mesh.json';
 import {
 	parseMeshBatchObject,
 	parseDisplayItems,
 	type DisplayBatch
-} from '@selvajs/compute/visualization';
+} from '@selvajs/visualization/parse';
 
-// rhino3dm decodes curve display items. Load it once, lazily — points and meshes need nothing.
-// Mirrors the production websocket-solve-driver loader (Vite URL asset so the WASM resolves).
-let rhinoPromise: Promise<RhinoModule> | null = null;
-function getRhino(): Promise<RhinoModule> {
-	if (!rhinoPromise) {
-		rhinoPromise = import('rhino3dm').then((m) => {
-			const init = m.default as (opts?: {
-				locateFile?: (path: string) => string;
-			}) => Promise<RhinoModule>;
-			return init({ locateFile: () => rhinoWasmUrl });
-		});
-	}
-	return rhinoPromise;
-}
-
-// Create a fallback cube mesh for sync use cases
+// Synchronous stand-in for callers that can't await `getParsedMeshes`.
 export const cubeMesh = new THREE.Mesh(
 	new THREE.BoxGeometry(1, 1, 1, 4, 4, 4),
 	new THREE.MeshStandardMaterial({ color: 0x4a00d9, metalness: 0.3, roughness: 0.4 })
@@ -38,31 +21,26 @@ cubeMesh.userData = {
 
 cubeMesh.name = 'cube_mesh';
 
-// Parse the example batch into renderable THREE objects, mirroring the real solve driver:
-// `parseMeshBatchObject` builds the meshes; `parseDisplayItems` builds the points/curves.
-// Curves need rhino3dm (lazy-loaded); points and meshes don't.
+// Mirrors the real solve driver: `parseMeshBatchObject` builds the meshes,
+// `parseDisplayItems` builds the points/curves.
 export async function getParsedMeshes() {
 	// JSON imports widen `kind` to `string`; the batch's runtime shape matches DisplayBatch.
 	const batch = meshData as unknown as DisplayBatch;
 
 	const objects: THREE.Object3D[] = await parseMeshBatchObject(batch, {
 		mergeByMaterial: false,
-		applyTransforms: true,
 		debug: false
 	});
 
 	const items = batch.items;
 	if (items?.length) {
-		const needsRhino = items.some((it) => it.kind === 'curve');
-		const rhino = needsRhino ? await getRhino() : undefined;
-		objects.push(...parseDisplayItems(items, { rhino, applyTransforms: true }));
+		objects.push(...parseDisplayItems(items));
 	}
 
 	return objects;
 }
 
 // Paste fig.to_json() output directly as a template literal — no cleanup needed.
-
 const contourPlot = `{"data":[{"z":[[10,10.625,12.5,15.625,20],[5.625,6.25,8.125,11.25,15.625],[2.5,3.125,5.0,8.125,12.5],[0.625,1.25,3.125,6.25,10.625],[0,0.625,2.5,5.625,10]],"type":"contour","colorscale":"Viridis","contours":{"coloring":"heatmap"},"showscale":true}],"layout":{"title":{"text":"Basic Contour Plot"}}}`;
 
 export const dummyOutputValues: Record<string, unknown> = {

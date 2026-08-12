@@ -49,7 +49,7 @@
 		}
 		savingSettings = true;
 		try {
-			const res = await fetch(`/admin/api/projects/${data.project.id}`, {
+			const res = await fetch(`/api/admin/projects/${data.project.id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -74,7 +74,7 @@
 		if (!confirm(`Delete “${data.project.name}”? This cannot be undone.`)) return;
 		deleting = true;
 		try {
-			const res = await fetch(`/admin/api/projects/${data.project.id}`, { method: 'DELETE' });
+			const res = await fetch(`/api/admin/projects/${data.project.id}`, { method: 'DELETE' });
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
 				throw new Error(body.message ?? `HTTP ${res.status}`);
@@ -125,7 +125,7 @@
 		}
 		addingGrant = true;
 		try {
-			const res = await fetch(`/admin/api/projects/${data.project.id}/grants`, {
+			const res = await fetch(`/api/admin/projects/${data.project.id}/grants`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ granteeType, granteeId, canSolve: canSolveNew })
@@ -149,7 +149,7 @@
 	async function revokeGrant(grantId: string) {
 		revokingId = grantId;
 		try {
-			const res = await fetch(`/admin/api/projects/${data.project.id}/grants/${grantId}`, {
+			const res = await fetch(`/api/admin/projects/${data.project.id}/grants/${grantId}`, {
 				method: 'DELETE'
 			});
 			if (!res.ok) {

@@ -1,13 +1,8 @@
 const scriptLoaders = new Map<string, Promise<void>>();
 
 /**
- * Load an external script from a CDN with automatic deduplication.
- * All calls to load the same script will share a single promise,
- * preventing duplicate script tags and race conditions.
- *
- * @param src The script URL
- * @param options Script attributes (crossOrigin, async, etc.)
- * @returns Promise that resolves when script is loaded
+ * Appends a `<script>` for `src` and resolves on load. Concurrent calls for the same URL share
+ * one promise, so a script never gets a second tag. A failed load is evicted so a retry can run.
  */
 export function loadScript(
 	src: string,

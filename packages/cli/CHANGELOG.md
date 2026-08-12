@@ -1,5 +1,197 @@
 # @selvajs/cli
 
+## 4.8.0-beta.14
+
+### Patch Changes
+
+- 5231010: Fix the pm2-logrotate check reporting "not installed" after a successful install
+
+  The check probed `$PM2_HOME/node_modules/pm2-logrotate`, but `pm2 install`
+  writes to `$PM2_HOME/modules/pm2-logrotate`. So `selva doctor --fix` installed
+  the module, reported success, and the very next `selva doctor` warned it was
+  missing again — offering the same repair on every run.
+
+  The install itself always worked (settings included), so a deployment that ran
+  the repair on 4.8.0-beta.13 already has weekly rotation; only the verification
+  was wrong. Its test used the same incorrect path as the check, so the two
+  agreed with each other rather than with pm2 — the layout is now pinned against
+  what a real `pm2 install` produces, plus an assertion that a satisfied check
+  stops offering its repair.
+
+## 4.8.0-beta.13
+
+### Patch Changes
+
+- 3c8ddf8: Timestamped migration backups, plus a pm2 log rotation check
+
+  `selva migrate` wrote its backups to fixed paths (`package.json.bak`,
+  `.env.bak`, …), so a second substantive migration overwrote the first's copies.
+  Because each run backs up the _current_ file, the operator's original
+  pre-migration config was then recoverable from nowhere (#184).
+
+  - Backups are now stamped per run — `package.json.2026-08-10T05-43-12.bak` —
+    so one migration can never clobber another's. A whole run shares one stamp,
+    keeping each generation grouped.
+  - `selva doctor` reports backups older than 30 days and `--fix` deletes them.
+    The newest set is always kept regardless of age, so the manual escape hatch
+    is never emptied — only superseded generations go.
+
+  Separately, `selva doctor` now reports a missing `pm2-logrotate`. pm2 appends
+  to its logs forever and nothing in a default install truncates them, so the
+  only bound is free disk — the partition fills and pm2 and the app go down
+  together. `--fix` installs the module and configures weekly rotation, 8 files
+  retained, compressed. Detection reads `$PM2_HOME`; it never shells out to pm2,
+  which would spawn a daemon as a side effect.
+
+## 4.8.0-beta.12
+
+### Minor Changes
+
+- 12fa352: Scaffold a values-only `.env`, and let `selva doctor --fix` strip an existing one.
+
+  The annotated `.env` is useful while you decide what to set and useless once it
+  is on a server: `migrate` rewrites keys but never prose, so a deployment keeps
+  documenting the release it was installed at — describing variables the code has
+  since renamed or retired. A 4.6-era file is ~470 lines of instructions, most of
+  them now wrong, wrapped around ~14 real settings.
+
+  `create` and `init` now write values only, under a header pointing at the
+  runtime template (`node_modules/@selvajs/selva/templates/.env.example`), which
+  is refreshed on every update and stays authoritative. The template itself is
+  unchanged and still ships annotated.
+
+  `selva doctor` reports a `.env` still carrying the shipped documentation and
+  offers to strip it under `--fix`. Comments an operator wrote directly above a
+  setting are kept; the repair refuses if any setting would change value, and
+  writes `.env.bak` first.
+
+### Patch Changes
+
+- 12fa352: Stop `selva migrate` from downgrading deployments on a prerelease pin
+
+  `migrate` rewrote `package.json` onto the canonical scaffold, which pinned both
+  `@selvajs/*` packages to the `latest` dist-tag. npm's `latest` is the newest
+  _stable_ release, so a deployment on `^4.8.0-beta.11` migrated to 4.7.3 — a
+  downgrade the confirmation diff showed as `^4.8.0-beta.11 → latest`, which
+  reads as an upgrade. `selva doctor` then reported `✓ CLI aligned with runtime`,
+  because both had moved together and it only compares those two against each
+  other.
+
+  - A prerelease pin is now preserved across a migration, and the reason is
+    reported before the operator confirms.
+  - Dist-tags resolve to concrete versions at migrate and create time, so
+    `"latest"` never reaches disk. A stored tag re-resolved on every later
+    `npm install`, letting a deployment follow the tag with no migrate at all.
+  - When the registry is unreachable, the existing pin is kept and reported
+    rather than replaced.
+  - `selva doctor` reports a floating pin as drift, so deployments migrated
+    before this fix are told.
+
+  Also fixes the post-migration pm2 guidance, which said to run `pm2 update`
+  followed by `pm2 save`. `pm2 update` empties the process table before restoring
+  it; when the restore fails, that `pm2 save` overwrites `~/.pm2/dump.pm2` — the
+  only record of what to bring back. The notice now puts a `pm2 list`
+  verification between the two and points at `pm2 resurrect` for recovery.
+
+## 4.8.0-beta.11
+
+### Minor Changes
+
+- 9891a04: `selva doctor` now validates the host tooling, not just the deployment.
+
+  New checks cover the split operators keep tripping over — Node and npm come from the host, pm2 comes from the deployment:
+
+  - **npm** missing from `PATH` (Debian's `nodejs` package doesn't always include it) or a distro-split version several majors behind Node.
+  - **Two Node installations in play** — the shell resolves one, doctor runs under another, and pm2 may have launched the app with a third. `engines.node` passes against a version production never executes. The check names the version manager (nvm, fnm, volta, distro, snap) rather than just printing a path.
+  - **pm2 not installed locally**, installed at a version other than the exact pin, or declared in `package.json` as a range that will drift on the next `npm install`.
+  - **pm2 daemon skew** — reported as three distinct states: no daemon running (fine), a matching daemon, or a foreign daemon. The daemon-is-newer case is red and deliberately never suggests `pm2 update`, which would downgrade the daemon and drop its process table.
+
+  Each failure prints the command that resolves it.
+
+  The scaffolded deployment `package.json` now carries an npm `overrides` block forcing js-yaml `^4.3.1` — pm2 pins 4.3.0, which carries known quadratic-complexity DoS advisories whose fix pm2 hasn't adopted yet. New deployments get it at scaffold time; existing ones are flagged as drift by `doctor` and pick it up via `selva migrate`. Temporary shim: remove once pm2's own js-yaml dependency reaches >= 4.3.1.
+
+- 9891a04: pm2 upgraded from 5.4.3 to 7.0.3.
+
+  Why: pm2 7 fixes a ReDoS in pm2 itself (GHSA-x5gf-qvw8-r2rm) plus two command-injection issues, and internalizes ~7 external dependencies (smaller advisory surface). Combined with the js-yaml override, a scaffolded deployment now audits with **zero known vulnerabilities**. Every contract Selva relies on was verified unchanged against the 7.0.3 tarball: skew-warning text, `jlist` output shape, `dump.pm2` path, all `ecosystem.config.cjs` options, and the systemd `ExecStart` path.
+
+  New deployments get 7.0.3 automatically. **Existing deployments need a one-time step**, because the pm2 CLI and its background daemon must be the same version:
+
+  ```bash
+  cd /path/to/deployment
+  npm run doctor      # see what applies to your server
+  selva migrate       # rewrites package.json (pm2 7 + js-yaml override), reinstalls, restarts
+  npx pm2 update      # replace the still-running old daemon with the new version
+  npx pm2 save
+  npm run doctor      # everything should be green
+  ```
+
+  If `doctor` reports a pm2 **outside** the deployment (an old `npm install -g pm2` or a vendor .deb), follow the full procedure in the docs instead (self-hosting → deployment → prerequisites, "Upgrading pm2"): it removes the foreign install and re-points the systemd boot unit at the deployment-local pm2. Skipping that leaves a reboot loop where the old daemon resurrects and the version-skew warning returns.
+
+  Downtime is a brief restart of managed processes during `pm2 update`.
+
+## 4.8.0-beta.10
+
+### Minor Changes
+
+- 39db6f5: The supported Node floor moves from 22 to 24.
+
+  Node 24 ("Krypton") is the active LTS; Node 22 leaves maintenance in April 2027. Every package's
+  `engines.node` is now `>=24.0.0`, and CI builds and tests on 24 instead of 22.
+
+  **This is visible to operators before it is visible to anyone else.** `@selvajs/cli` derives its
+  floor from its own `engines.node` rather than a literal, so `selva doctor` and the create-time
+  guard follow the bump automatically: a deployment running Node 22 that passed `doctor` yesterday is
+  reported as out of range today. Nothing about the deployment changed — the floor moved under it.
+  Upgrade the host's runtime before taking this version of the CLI.
+
+  The admin UI's update check reports the same thing from the other direction: it compares the
+  running Node against the `engines.node` of the release it fetched from npm, so it starts flagging a
+  Node 22 host as soon as a `>=24` version is published, with no client-side change at all.
+
+  No source change was needed. The Node builtins in use are long-stable (`fs`, `path`, `crypto`,
+  `url`, `os`, `net`, `zlib`), there are no experimental APIs or `--experimental` flags in the tree,
+  and every dependency's own engine range already admitted 24.
+
+## 4.8.0-beta.9
+
+### Patch Changes
+
+- 544906b: `selva migrate` now shows every field it discards, and keeps `engines`.
+
+  The rewrite replaces a deployment's `package.json` wholesale, which is deliberate — the directory is generated output. But the confirmation prompt only diffed `dependencies` and `scripts`, so `devDependencies`, `description`, and any other top-level field the operator had added disappeared without ever being shown. The diff now lists them, so a confirmed migration has no unadvertised losses. `selva doctor` was quiet about them too: `detectDrift` reported "layout is current" on a deployment `migrate` would strip.
+
+  `engines` is now carried over rather than dropped. npm only enforces it under `engine-strict`, so an operator who pinned a Node floor did it deliberately — and removing it takes away a guard whose absence surfaces only under real traffic (the failure mode behind issue #176).
+
+- 43bb98d: Fix `selva migrate` leaving a deployment down when `npm install` fails, and `selva keys rotate` crashing on a deployment with no `.env`.
+
+  - **A failed migration can now recover.** `migrate` needs a clean install (a legacy lockfile pins the old package set across a major bump), so it deleted `node_modules` before running `npm install`. But `node_modules` is also where the deployment's pm2 lives, and the rollback has to restart the app — so when an install failed, the restart resolved no pm2, `spawnSync` set `error`, and the helper returned a bare `1` with nothing printed. The operator was left with a stopped app, no dependency tree, and no indication why. The old tree is now renamed aside rather than deleted (atomic, keeps the `.bin` symlinks intact) and restored along with `package-lock.json` if the install fails, so pm2 resolves again and the app comes back. A restart that still fails is now reported instead of swallowed.
+  - **`migrate` no longer falls back to a global pm2.** It carried a private pm2 resolver that silently used whatever `pm2` was on `PATH` when the local one was missing — the version-skew source `pm2.js` exists to prevent, and which it refuses with an explicit error. Both now use the same strict resolver; the two call sites where a missing pm2 is legitimate (a legacy deployment has nothing to stop) handle it explicitly.
+  - **`selva doctor` reports an interrupted migration.** A killed `migrate` leaves the stashed dependency tree behind; doctor now flags it and `--fix` removes it.
+  - **`selva keys rotate` no longer crashes without an `.env`.** It read the file unconditionally when the runtime templates were absent, throwing a raw `ENOENT` on a deployment that has `ecosystem.config.cjs` but no `.env` — a state the CLI otherwise treats as valid and `selva init` already handled.
+  - **`create` and `migrate` can no longer disagree about the deployment `package.json`.** They built it separately and had already drifted: `create` pinned pm2 exactly to avoid daemon skew while `migrate` rewrote it to a caret range. Both now use one builder. `.selva-version` also records the real CLI version instead of a hardcoded `0.1.0` that had been stale since the marker was introduced.
+
+## 4.8.0-beta.8
+
+### Patch Changes
+
+- 0e2c428: Clean up published tarballs. The monorepo-internal `source` export condition is renamed to `selva-source` so it can never collide with a consumer resolving the common `source` condition; published packages no longer ship raw `src/` TypeScript or compiled test files. Publish-time manifest rewriting is gone — the committed package.json is what ships, gated by `publint --strict` and a tarball contents check.
+
+## 4.8.0-beta.7
+
+## 4.8.0-beta.6
+
+## 4.8.0-beta.5
+
+## 4.8.0-beta.4
+
+## 4.8.0-beta.3
+
+## 4.8.0-beta.2
+
+## 4.7.4-beta.1
+
+## 4.7.4-beta.0
+
 ## 4.7.3
 
 ## 4.7.2

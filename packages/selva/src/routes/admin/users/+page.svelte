@@ -2,6 +2,7 @@
 	import { Button, Card, EmptyState, Input, toast, SectionHeader } from '@selvajs/ui';
 	import { Plus, Trash2, ShieldCheck, Mail, Copy, X } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import type { Invite, OrgPermission, OrgRole, PlatformPermission } from '@selvajs/platform';
 	import {
 		ALL_ORG_PERMISSIONS,
@@ -108,7 +109,7 @@
 	async function addUser() {
 		adding = true;
 		try {
-			const res = await fetch('/admin/api/users', {
+			const res = await fetch('/api/admin/users', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -138,7 +139,7 @@
 	async function updatePermissions(id: string, permissions: FlatPermission[]) {
 		updatingId = id;
 		try {
-			const res = await fetch(`/admin/api/users/${id}`, {
+			const res = await fetch(`/api/admin/users/${id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ permissions })
@@ -169,7 +170,7 @@
 	async function createInvite() {
 		creatingInvite = true;
 		try {
-			const res = await fetch('/api/invites', {
+			const res = await fetch(`/api/v1/orgs/${page.data.ctx?.orgId}/invites`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -202,7 +203,9 @@
 		if (!confirm(`Revoke invite for "${email}"?`)) return;
 		revokingId = id;
 		try {
-			const res = await fetch(`/api/invites/${id}`, { method: 'DELETE' });
+			const res = await fetch(`/api/v1/orgs/${page.data.ctx?.orgId}/invites/${id}`, {
+				method: 'DELETE'
+			});
 			if (res.ok) {
 				toast.success('Invite revoked');
 				await invalidateAll();
@@ -220,7 +223,7 @@
 		if (!confirm(`Delete user "${email}"? This cannot be undone.`)) return;
 		deletingId = id;
 		try {
-			const res = await fetch(`/admin/api/users/${id}`, { method: 'DELETE' });
+			const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
 			if (res.ok) {
 				toast.success(`User "${email}" deleted`);
 				await invalidateAll();

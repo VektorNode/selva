@@ -1,13 +1,12 @@
-// Data model for the /architecture page — the end-to-end solve flow and every
-// cache on it. Facts are sourced from the code (file references on each entry);
-// when the architecture changes, update the entry AND its file reference.
+// Data model for the /architecture page — the solve cycle as it actually runs
+// in code. Every entry carries the file(s) it was read from; when the code
+// changes, update the entry AND its file reference.
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export type Mode = 'cloud' | 'local';
-export type Provider = 'localfs' | 'supabase';
 
 /** Which process a step runs in — drives the spine dot color + band label. */
 export type Layer = 'browser' | 'selva-server' | 'compute-client' | 'rhino' | 'grasshopper';
@@ -22,26 +21,22 @@ export interface LayerInfo {
 	chip: string;
 }
 
-export interface CacheRef {
-	/** id into CACHES */
-	id: string;
-	/** How this step uses the cache, one short clause. */
-	note: string;
-}
-
-/** One discrete backend call a step makes (a DB read, storage fetch, etc.). */
-export interface CallRef {
-	/** e.g. "definitions.get" */
-	name: string;
-	/** what kind of call — drives the tag color. */
-	kind: 'db' | 'storage' | 'network';
-	/** where it goes, in plain words: "Postgres row", "Supabase storage", … */
-	target: string;
-	/** cache status of THIS call. `uncached` = hits the backend every solve. */
-	cached: 'uncached' | 'cached';
-	/** one short clause on what it fetches. */
-	note: string;
-}
+/**
+ * One piece of expanded content. `prose` carries the explanation; the others exist
+ * because some behaviour is far cheaper to show than to describe — an eviction
+ * order, a debounce window, a shape.
+ *
+ * `demo` names a component in `architecture/demos/`, resolved through the registry
+ * in `DetailBlocks.svelte`. The name must exist there or the block renders nothing.
+ */
+export type DetailBlock =
+	| { kind: 'prose'; text: string }
+	| { kind: 'facts'; rows: [string, string][] }
+	| { kind: 'code'; lang: string; text: string }
+	| { kind: 'mapping'; from: string; to: string; rows: [string, string][] }
+	| { kind: 'warning'; title: string; text: string }
+	| { kind: 'demo'; component: string; caption?: string }
+	| { kind: 'pipeline'; stages: { label: string; sub: string; terminal?: boolean }[] };
 
 export interface FlowStep {
 	id: string;
@@ -49,36 +44,20 @@ export interface FlowStep {
 	title: string;
 	/** One-line plain-language summary, always visible. */
 	oneliner: string;
-	/** Expanded plain-language explanation (2–5 sentences). */
-	detail: string;
+	/** Expanded content, rendered in order. */
+	detail: DetailBlock[];
 	/** Repo-relative file reference(s). */
 	files: string[];
-	/** Caches that act at this step. */
-	caches?: CacheRef[];
-	/** The discrete backend calls this step makes, in order (e.g. the 4 DB/blob reads). */
-	calls?: CallRef[];
-	/** A known optimization gap at this step (code-verified), surfaced as a callout. */
-	gap?: string;
-	/** Amber "flow control" badges — valves, not memory. */
+	/**
+	 * Amber badges for a limiter that decides IF/WHEN work runs but stores no
+	 * result — debounce, throttle, rate limit, queue.
+	 */
 	gates?: string[];
-	/** Provider-dependent detail override (cloud mode only). */
-	variants?: Partial<Record<Provider, { oneliner?: string; detail?: string; files?: string[] }>>;
-}
-
-export interface CacheEntry {
-	id: string;
-	name: string;
-	layer: Layer | 'rhino-shared';
-	/** What it remembers: key → value in plain words. */
-	what: string;
-	keyedBy: string;
-	policy: string;
-	invalidation: string;
-	/** Per-process in-memory vs shared. */
-	scope: 'per-tab' | 'per-process' | 'db-shared' | 'vm-shared';
-	/** Ultra-short lifetime tag for the on-diagram chip, e.g. "5 min", "16 servers", "permanent". */
-	lifetime: string;
-	files: string[];
+	/**
+	 * Violet badges for a cache consulted at this step: `label` names it, `hit`
+	 * says what a hit skips. Only where the code actually reads or writes one.
+	 */
+	caches?: { label: string; hit: string }[];
 }
 
 // ============================================================================
@@ -96,14 +75,14 @@ export const LAYERS: Record<Layer, LayerInfo> = {
 	'selva-server': {
 		id: 'selva-server',
 		label: 'Selva server',
-		sub: 'SvelteKit app + @selvajs/server',
+		sub: 'SvelteKit route + @selvajs/solve',
 		dot: 'bg-emerald-500',
 		chip: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
 	},
 	'compute-client': {
 		id: 'compute-client',
 		label: 'Compute client',
-		sub: '@selvajs/compute — runs inside the Selva server process',
+		sub: '@selvajs/compute — in the Selva server process',
 		dot: 'bg-cyan-500',
 		chip: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
 	},
@@ -124,456 +103,699 @@ export const LAYERS: Record<Layer, LayerInfo> = {
 };
 
 // ============================================================================
-// Caches (the inventory table + the chips on the flow)
-// ============================================================================
-
-export const CACHES: CacheEntry[] = [
-	{
-		id: 'client-memo',
-		name: 'Client solve memo',
-		layer: 'browser',
-		what: 'Stable hash of the solve input values → the finished solve result, sitting in front of the request/response driver. Dragging a slider back to a value already solved this session returns instantly — no request leaves the browser at all.',
-		keyedBy: 'a stable, key-sorted serialization of the input values',
-		policy:
-			'LRU, max 16 entries, no TTL. Only completed solves are stored, so a hit is always a full result.',
-		invalidation: 'clear() when the active definition changes; LRU age-out otherwise.',
-		scope: 'per-tab',
-		lifetime: '16 entries (LRU)',
-		files: [
-			'packages/ui/src/lib/compute/solveMemo.ts:42',
-			'packages/ui/src/lib/compute/createSolveSession.svelte.ts:195'
-		]
-	},
-	{
-		id: 'texture',
-		name: 'Texture cache',
-		layer: 'browser',
-		what: 'Texture key → decoded THREE.Texture, plus an in-flight map so concurrent loads of the same key share one download.',
-		keyedBy: 'texture URL (content-hashed; long data-URIs are FNV-1a hashed)',
-		policy:
-			'LRU, max 64 entries, no TTL — safe because content-hashed keys never change meaning; an evicted texture is disposed.',
-		invalidation:
-			'LRU eviction; clearTextureCache() on viewer teardown bumps a generation guard so a load resolving after a clear is discarded.',
-		scope: 'per-tab',
-		lifetime: '64 entries (LRU)',
-		files: ['packages/compute/src/features/visualization/webdisplay/texture-cache.ts:12']
-	},
-	{
-		id: 'dvl',
-		name: 'Value-list parse cache',
-		layer: 'browser',
-		what: 'Solved dynamic value-list payload string → parsed options, so a multi-MB option list isn’t re-parsed on every keystroke.',
-		keyedBy: 'the raw payload JSON string (only strings ≥ 1 KB)',
-		policy: 'LRU, max 8 entries, no TTL.',
-		invalidation: 'LRU age-out only; lives for the page lifetime.',
-		scope: 'per-tab',
-		lifetime: '8 entries (LRU)',
-		files: [
-			'packages/ui/src/lib/schema/dynamic-value-list.ts:50',
-			'packages/ui/src/lib/schema/dynamic-value-list.ts:51'
-		]
-	},
-	{
-		id: 'warm-client',
-		name: 'Warm-client LRU',
-		layer: 'selva-server',
-		what: 'Compute-server id → a ready GrasshopperClient + SolveScheduler, so solves skip the connect/handshake. Shared by the solve route AND the definition-viewer render path.',
-		keyedBy: 'server id (never the URL — ADR 0004)',
-		policy: 'LRU, max 16 servers; evicted entry’s scheduler is disposed.',
-		invalidation:
-			'Explicit evict(id) when a server’s URL/key is rotated in admin — keyed on id, a stale entry would otherwise survive.',
-		scope: 'per-process',
-		lifetime: '16 servers (LRU)',
-		files: [
-			'packages/server/src/compute/client-cache.ts:146',
-			'packages/selva/src/lib/server/compute/clientCache.server.ts:39'
-		]
-	},
-	{
-		id: 'def-bytes',
-		name: 'Definition-byte cache',
-		layer: 'selva-server',
-		what: 'Version id → the .gh bytes, read lazily. The solve no longer eagerly pulls the blob off storage — the scheduler asks for bytes only when an upload is unavoidable, and a warm entry then serves them without touching storage. A pointer-known re-solve moves ZERO definition bytes.',
-		keyedBy:
-			'the immutable version id (never the fileKey — a delete-then-reupload can reuse a fileKey for different content)',
-		policy:
-			'LRU by total byte budget (default 256 MB, env COMPUTE_DEFINITION_BYTE_CACHE_MB; 0 disables). No TTL — version ids are immutable. An entry larger than the whole budget is served but never retained.',
-		invalidation: 'Byte-budget LRU only; nothing ever goes stale.',
-		scope: 'per-process',
-		lifetime: '256 MB budget',
-		files: [
-			'packages/server/src/compute/definition-byte-cache.ts:93',
-			'packages/selva/src/lib/server/compute/definitionByteCache.server.ts:19'
-		]
-	},
-	{
-		id: 'remote-def',
-		name: 'Remote-definition cache',
-		layer: 'selva-server',
-		what: 'Remote definition URL → the fetched .gh bytes, so repeat solves of a URL-referenced definition skip the download (and its SSRF checks are behind the same door).',
-		keyedBy: 'the definition URL',
-		policy:
-			'TTL (5 min default, env DEFINITION_CACHE_TTL_MS); max 50 entries, oldest 10 evicted in a batch.',
-		invalidation: 'TTL expiry only.',
-		scope: 'per-process',
-		lifetime: '5 min TTL',
-		files: ['packages/server/src/compute/remote-definition.ts:97']
-	},
-	{
-		id: 'l2-solve',
-		name: 'Durable solve cache (L2)',
-		layer: 'selva-server',
-		what: 'Full solve request → the finished, gzipped solve response, held in the Selva server. A hit returns the stored envelope without building a tree, calling compute, or re-serializing. OFF by default — an operator opts in with SOLVE_CACHE_PROVIDER=memory and a quota. Only live-channel, non-explicit-version local solves are eligible.',
-		keyedBy:
-			'(orgId, definitionId, versionId, inputKey) — org first for cross-tenant defense, version keys the keyspace to immutable bytes, plus the compute-server id (two servers can yield different geometry)',
-		policy:
-			'Two-dimensional eviction: a per-definition entry-count quota (default 0 = off, env SOLVE_CACHE_DEFAULT_MAX_ENTRIES) so one slider-heavy definition only churns its own entries, plus a global byte backstop (default 512 MB, env SOLVE_CACHE_MAX_TOTAL_MB). No TTL.',
-		invalidation:
-			'Count-quota + byte-backstop LRU; a publish is a fresh version keyspace so there is nothing to invalidate — old entries just age out.',
-		scope: 'per-process',
-		lifetime: 'quota + 512 MB',
-		files: [
-			'packages/server/src/compute/memory-solve-cache.ts:71',
-			'packages/selva/src/lib/server/compute/solveCache.server.ts'
-		]
-	},
-	{
-		id: 'schema',
-		name: 'Version schema cache',
-		layer: 'selva-server',
-		what: 'Definition version → its extracted UI schema, stored on the version row at upload time. Removes one of the two compute calls a page render used to make.',
-		keyedBy: 'the version (its .gh bytes are immutable)',
-		policy: 'Permanent — a version’s bytes never change, so its schema never expires.',
-		invalidation:
-			'Re-extracted on render if the stored schema version is stale (ADR 0005 — the stored schema is a disposable cache). A lazy backfill fills pre-cache versions on their next solve — bridge until ~2026-09.',
-		scope: 'db-shared',
-		lifetime: 'permanent',
-		files: [
-			'packages/server/src/definitions/definition-service.ts:121',
-			'packages/server/src/definitions/load-for-render.ts:162'
-		]
-	},
-	{
-		id: 'sched-response',
-		name: 'Solve response cache',
-		layer: 'compute-client',
-		what: 'Hash of (definition + input tree) → the full solve response. An identical re-solve is answered from memory — Rhino.Compute is never contacted.',
-		keyedBy: 'stable hash of the .gh bytes + the exact input values',
-		policy: 'LRU, max 20 entries, TTL 5 min (Selva’s override of the library default 50 / no TTL).',
-		invalidation: 'TTL + LRU; dies with its warm client when that is evicted.',
-		scope: 'per-process',
-		lifetime: '5 min TTL · 20 entries',
-		files: [
-			'packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:239',
-			'packages/server/src/compute/client-cache.ts:229'
-		]
-	},
-	{
-		id: 'pointer-map',
-		name: 'Definition pointer map',
-		layer: 'compute-client',
-		what: 'Hash of the .gh → the md5 cache key Rhino.Compute returned for it, so later solves send a tiny pointer instead of re-uploading a multi-MB definition.',
-		keyedBy: 'hash of the definition bytes',
-		policy: 'Bounded map, max 100, LRU-ish refresh on hit.',
-		invalidation:
-			'On a server-side miss the solve transparently re-uploads once and learns the fresh key; dropped when the server stops returning one.',
-		scope: 'per-process',
-		lifetime: '100 entries (LRU)',
-		files: ['packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:245']
-	},
-	{
-		id: 'vm-def',
-		name: 'Server definition cache',
-		layer: 'rhino-shared',
-		what: 'The uploaded .gh, parsed and held on the compute VM under an md5 key — the target the pointer map points at. A hit skips upload AND parse (decode ≈ 0 ms).',
-		keyedBy: 'md5 of the definition',
-		policy: 'Owned by Rhino.Compute; evicts on its own schedule.',
-		invalidation:
-			'The VM GCs independently; cache/purge does NOT clear it. A stale pointer just triggers one re-upload.',
-		scope: 'vm-shared',
-		lifetime: 'VM-managed',
-		files: ['packages/compute/src/features/grasshopper/solve.ts:175 (miss → re-upload)']
-	},
-	{
-		id: 'vm-solve',
-		name: 'Server solve-result cache (cachesolve)',
-		layer: 'rhino-shared',
-		what: 'Identical request (definition + inputs) → the finished solve result, held on the compute VM. Survives Selva restarts and is shared by every Selva instance hitting that server. Errored solves are never cached unless cacheerroredsolves is opted in.',
-		keyedBy: 'the full solve request',
-		policy: 'Owned by Rhino.Compute; enabled per-request by the cachesolve flag Selva sends.',
-		invalidation:
-			'POST cache/purge (per child process — a multi-child fleet needs repeated purges).',
-		scope: 'vm-shared',
-		lifetime: 'VM-managed · survives restarts',
-		files: [
-			'packages/compute/src/features/grasshopper/solve.ts:299 (cachesolve flag)',
-			'packages/compute/src/core/server/compute-server-stats.ts:318 (purge)'
-		]
-	}
-];
-
-// ============================================================================
-// Flow controls — valves, not memory
-// ============================================================================
-
-export interface FlowControl {
-	name: string;
-	where: string;
-	what: string;
-	files: string[];
-}
-
-export const FLOW_CONTROLS: FlowControl[] = [
-	{
-		name: 'Input debounce',
-		where: 'Browser',
-		what: 'A slider fires after 150 ms of rest, typed input after 400 ms — keystrokes never become requests.',
-		files: ['packages/ui/src/lib/components/preview/inputs/NumberInput.svelte:27']
-	},
-	{
-		name: 'Solve throttle',
-		where: 'Browser',
-		what: 'One request in flight at a time; a newer value overwrites the single waiting slot ("latest wins") and stale in-flight requests are aborted. Stores no results.',
-		files: ['packages/ui/src/lib/compute/computeThrottle.svelte.ts:27']
-	},
-	{
-		name: 'Rate limiter',
-		where: 'Selva server',
-		what: 'Fixed-window counter per user or share link (default 120 requests / 100 s) → 429 with Retry-After. Counts requests, remembers nothing about results.',
-		files: ['packages/server/src/compute/rate-limit.ts']
-	},
-	{
-		name: 'Single-flight coalescer',
-		where: 'Selva server',
-		what: 'Concurrent identical live solves (same org + version + inputs) collapse into one pipeline run; every waiter is served that one result. A hot-key burst hits compute once. The shared run uses a non-aborting signal, so one caller disconnecting can’t cancel the solve for the others.',
-		files: ['packages/server/src/compute/solve-cache-single-flight.ts']
-	},
-	{
-		name: 'Scheduler queue',
-		where: 'Compute client',
-		what: 'Cloud solves run in queue mode: FIFO, one at a time per compute server, each runs to completion. (The plugin preview uses latest-wins instead.)',
-		files: ['packages/server/src/compute/client-cache.ts:229']
-	}
-];
-
-// ============================================================================
 // Cloud-mode flow
 // ============================================================================
+
+// The debounce belongs to the input widgets, which both modes share — so both
+// flows open with the same blocks rather than two descriptions that can drift.
+// Everything after the debounce differs, and stays in the per-mode step.
+const INPUT_DEBOUNCE: DetailBlock[] = [
+	{
+		kind: 'prose',
+		text: 'The input component waits before committing a change: 150 ms after the last slider move, 400 ms after the last keystroke. So dragging a slider across its range produces one solve at the end, not one per frame.'
+	},
+	{
+		kind: 'demo',
+		component: 'DebounceDemo',
+		caption: 'Drag the slider. Every move is a tick; only the last one survives the window.'
+	},
+	{
+		kind: 'prose',
+		text: 'Leaving the field commits straight away, skipping the wait. If the schema sets `instanceSolve: false`, the value is just marked pending and nothing below happens until the user presses Calculate.'
+	}
+];
+
+const INPUT_WIDGET_FILE = 'packages/ui/src/lib/components/preview/inputs/NumberInput.svelte';
 
 export const CLOUD_STEPS: FlowStep[] = [
 	{
 		id: 'b-input',
 		layer: 'browser',
-		title: 'A slider moves',
-		oneliner: 'Debounce holds fire until the hand rests — 150 ms for sliders, 400 ms for typing.',
-		detail:
-			'Every input change lands in the solve session’s value map, but nothing is sent yet. The debounce collapses a slider scrub into one final value, so dragging from 10 to 50 costs one solve, not forty.',
-		files: ['packages/ui/src/lib/components/preview/inputs/NumberInput.svelte:47'],
-		gates: ['debounce 150/400 ms']
+		title: 'An input changes',
+		oneliner: 'Debounced before it becomes a solve — 150 ms for a slider drag, 400 ms for typing.',
+		detail: INPUT_DEBOUNCE,
+		files: [INPUT_WIDGET_FILE, 'packages/solve/src/client/solve-session-core.ts'],
+		gates: ['debounce 150 / 400 ms']
 	},
 	{
 		id: 'b-throttle',
 		layer: 'browser',
-		title: 'The solve throttle decides',
+		title: 'Throttle: one solve at a time',
 		oneliner:
-			'One request in flight, latest values win — and a client memo answers a repeat value without touching the network.',
-		detail:
-			'If a solve is already running, the new values go into a single pending slot, overwriting whatever was waiting there. When the in-flight solve settles, the pending values fire — so the server only ever sees the newest state, and a slow solve can’t pile up requests behind it. Before firing, a small client-side memo (LRU 16, keyed on a stable hash of the input values) is consulted: dragging a slider back to a value already solved this session returns instantly, with no request leaving the browser at all.',
-		files: [
-			'packages/ui/src/lib/compute/computeThrottle.svelte.ts:27',
-			'packages/ui/src/lib/compute/createSolveSession.svelte.ts:195'
+			'One solve runs at a time; a newer value replaces the single waiting slot and the old one is dropped.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'If nothing is running, the values solve immediately. If a run is in flight, they go into a single pending slot instead — a newer trigger overwrites whatever was waiting, so intermediate values are dropped rather than queued. The pending values run when the current solve finishes.'
+			},
+			{
+				kind: 'demo',
+				component: 'ThrottleDemo',
+				caption:
+					'Fire several values while one is running — the slot holds one, and it is always the newest.'
+			},
+			{
+				kind: 'prose',
+				text: 'Starting a new run cancels the previous one outright, so the browser stops waiting on an answer nobody needs. Its deadline is the same 100 s the server allows: the page passes the server’s value down and the client has no default of its own, so there is one deadline in the system rather than a client copy that can drift.'
+			}
 		],
-		gates: ['1 in flight · latest wins'],
-		caches: [{ id: 'client-memo', note: 'repeat value → instant, no network' }]
+		files: [
+			'packages/solve/src/client/async-throttle.ts',
+			'packages/ui/src/lib/components/compute/ComputeApp.svelte'
+		],
+		gates: ['one solve at a time · newest value wins']
+	},
+	{
+		id: 'b-memo',
+		layer: 'browser',
+		title: 'Check what the tab already solved',
+		oneliner:
+			'Inside the run, before the request: inputs already solved this session are replayed from memory.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'Each entry is one whole solve result — the output values plus the meshes the viewer draws — held in memory in the tab, not on disk. It is gone on reload.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['Holds', '16 entries; the one unused longest is dropped first'],
+					['Keyed on', 'the input values, object keys sorted at every level'],
+					['Lifetime', 'the browser tab — never written to disk'],
+					['A hit skips', 'the entire request; nothing leaves the browser'],
+					['Cleared when', 'the definition changes']
+				]
+			},
+			{
+				kind: 'demo',
+				component: 'LruDemo',
+				caption: 'Solve some values, then repeat one. Watch what falls off the end.'
+			},
+			{
+				kind: 'prose',
+				text: 'Sorting the keys means two inputs that differ only in ordering land on the same entry. The lookup sits inside the throttled run, not in front of it, so only values that survive latest-wins are ever looked up — a scrub does not produce a hit per frame.'
+			},
+			{
+				kind: 'prose',
+				text: 'Only successful solves are stored. Entries are cloned on the way in and out, so the viewer disposing a mesh cannot corrupt the cached copy.'
+			}
+		],
+		files: [
+			'packages/solve/src/client/drivers/request-response.ts',
+			'packages/solve/src/client/solve-memo.ts'
+		],
+		caches: [{ label: 'In the tab · 16 entries', hit: 'no request leaves the browser' }]
 	},
 	{
 		id: 'b-post',
 		layer: 'browser',
 		title: 'POST /api/compute',
-		oneliner: 'The browser sends { inputs, values, definitionUrl } and advertises gzip.',
-		detail:
-			'A plain fetch with the definition reference (local:<guid> for stored definitions, an https URL for remote ones), the input parameter list, and the current values. The response handler maps 401 → login redirect, 429 → cooldown, 503 → “compute unavailable”.',
-		files: ['packages/selva/src/routes/library/[guid]/+page.svelte:85']
+		oneliner:
+			'Sends the input specs, the values, and a reference to the definition rather than the file.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'The body carries the input specs, the values, and a definition reference. For a library definition that reference is the string `local:<guid>` — a pointer the server resolves, not a downloadable link. A version id or `channel: draft` rides along when the page is running a specific version.'
+			},
+			{
+				kind: 'code',
+				lang: 'json',
+				text: '{\n  "inputs": [ { "id": "radius", "paramType": "number" } ],\n  "values": { "radius": 12.5 },\n  "definitionUrl": "local:9f3c…",\n  "channel": "draft"\n}'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['401 or /login redirect', 'session expired'],
+					['429', 'client-side cooldown short-circuits later solves'],
+					['503', 'compute offline']
+				]
+			}
+		],
+		files: ['packages/selva/src/routes/library/[guid]/+page.svelte']
 	},
 	{
 		id: 's-gates',
 		layer: 'selva-server',
-		title: 'Gates: size, identity, rate',
+		title: 'Body cap, identity, rate limit',
 		oneliner:
-			'Body-size cap → share-token or login → rate limit. Rejected requests never touch the database.',
-		detail:
-			'The body cap rejects oversized payloads before buffering. A share-link token resolves to a synthetic identity; otherwise the session must be logged in. The rate limiter (fixed window per user/link) runs before any DB read, so throttled callers can’t burn database quota.',
-		files: ['packages/selva/src/routes/api/compute/+server.ts:54'],
-		gates: ['rate limit 120/100 s'],
-		variants: {
-			localfs: {
-				detail:
-					'The body cap rejects oversized payloads before buffering. Identity is an HMAC-signed session cookie checked by the local auth provider — no external service. The rate limiter (fixed window per user/link) runs before any file read.'
+			'Three doors before the work starts: too big, who are you, and how often are you asking.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'Three doors, cheapest first, so a request that will be turned away costs as little as possible.'
 			},
-			supabase: {
-				detail:
-					'The body cap rejects oversized payloads before buffering. Identity is a Supabase session JWT; a share-link token resolves to a synthetic identity instead. The rate limiter (fixed window per user/link) runs before any DB read, so throttled callers can’t burn Postgres quota.'
+			{
+				kind: 'facts',
+				rows: [
+					['1 · Too big?', 'over 210 MB, refused before the body is read'],
+					['2 · Who is asking?', 'a share-link token, or a logged-in session'],
+					['3 · Too often?', '120 per 100 s, then 429 with Retry-After']
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'A share-link token rides in the URL or an Authorization header, never the body, and works for one definition and one channel; a view-only link is refused here. Everyone else needs a session, and asking for a specific version rather than the published one requires an editor. The rate limiter runs before any real work, so a throttled caller costs one counter check.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['COMPUTE_REQUEST_MAX_BYTES', 'body cap, default 210 MB'],
+					['COMPUTE_RATE_LIMIT_MAX', 'requests per window, default 120'],
+					['COMPUTE_RATE_LIMIT_WINDOW_MS', 'window length ms, default 100000']
+				]
 			}
-		}
+		],
+		files: [
+			'packages/selva/src/routes/api/compute/+server.ts',
+			'packages/server/src/compute/limits.ts'
+		],
+		gates: ['rate limit 120 / 100 s']
 	},
 	{
 		id: 's-load',
 		layer: 'selva-server',
-		title: 'Load the definition',
-		oneliner:
-			'Three uncached DB reads for the rows — but the .gh blob is now read LAZILY through the definition-byte cache, not on every solve.',
-		detail:
-			'For a stored definition (local:guid) three rows are read in order: the definition record, its project (for the org + compute-server pin), and the live/draft version row. A permission check runs between the project read and the version read. These three rows still hit Postgres/disk on every solve. The .gh blob is different now: instead of an eager storage.get, the route hands the scheduler a byte-cache reference (keyed on the immutable version id) whose bytes are materialized ONLY when an upload is unavoidable — and even then a warm entry serves them without touching storage. A pointer-known re-solve moves zero definition bytes. This closed what used to be an optimization gap: the blob was re-read on every solve; now it isn’t. (The remote-definition cache still only guards the separate remote-URL branch. The version-schema cache saves a compute schema-extraction call on upload/render, not this fetch.)',
-		files: ['packages/selva/src/routes/api/compute/+server.ts:198'],
-		calls: [
+		title: 'Resolve the definition',
+		oneliner: 'Four quick lookups turn the id into a solvable job. The file itself never moves.',
+		detail: [
 			{
-				name: 'definitions.get',
-				kind: 'db',
-				target: 'Postgres row (RLS)',
-				cached: 'uncached',
-				note: 'the definition record'
+				kind: 'prose',
+				text: 'All the browser sent was an id — `local:9f3c…`. The server has to turn that into something it can actually solve.'
 			},
 			{
-				name: 'projects.getProject',
-				kind: 'db',
-				target: 'Postgres row (RLS)',
-				cached: 'uncached',
-				note: 'org + compute-server pin'
+				kind: 'facts',
+				rows: [
+					['Does it exist?', 'and which project owns it'],
+					['Which machine solves it?', 'this project may pin its own compute server'],
+					['Are you allowed?', 'viewing a draft is not the same as solving one'],
+					['Which version?', 'the published one, unless you asked for another']
+				]
 			},
 			{
-				name: 'definitions.getVersion',
-				kind: 'db',
-				target: 'Postgres row (RLS)',
-				cached: 'uncached',
-				note: 'the live/draft version row'
-			},
-			{
-				name: 'definitionRef.load()',
-				kind: 'storage',
-				target: 'Supabase storage',
-				cached: 'cached',
-				note: 'the version’s .gh bytes — lazy, byte-cached, skipped on a pointer-known re-solve'
+				kind: 'prose',
+				text: 'Four answers, four quick lookups — and none of them the Grasshopper file, which never moves. The server passes down instructions for fetching it, and most of the time they go unused: Rhino usually still has the file from an earlier solve and only needs to be told which one.'
 			}
 		],
-		caches: [{ id: 'def-bytes', note: 'version id → .gh bytes; lazy, skipped on a pointer solve' }],
-		variants: {
-			localfs: {
-				oneliner:
-					'Three uncached JSON-file reads for the rows — the .gh blob is read lazily through the definition-byte cache, not on every solve.',
-				detail:
-					'With the local provider every store is a JSON file with atomic writes, and blobs live on disk next to them — same interfaces, same three row reads, just no database. The .gh blob is not read eagerly: the route hands the scheduler a byte-cache reference (keyed on the immutable version id) whose bytes load only when an upload is unavoidable, served warm without touching disk on a repeat. (The remote-definition cache only guards the separate remote-URL branch; the version-schema cache saves a compute call on upload, not this fetch.)',
-				files: ['packages/providers/local/src/storage/LocalStorageProvider.ts:42']
+		files: ['packages/selva/src/routes/api/compute/+server.ts', 'packages/platform/src/']
+	},
+	{
+		id: 's-server',
+		layer: 'selva-server',
+		title: 'Pick the compute server, get a warm client',
+		oneliner: 'Which Rhino machine solves this — and its connection is usually already open.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'A deployment can have several Rhino machines. The most specific setting wins:'
 			},
-			supabase: {
-				oneliner:
-					'Three uncached Postgres row reads under RLS — the .gh blob is read lazily through the definition-byte cache, not on every solve.',
-				detail:
-					'Each request gets one of three Supabase clients, fail-closed: a system context gets the service-role client (bypasses RLS), a session token gets a JWT-header client (queries run as that user, RLS enforced), anything else gets the anon client — memoized per request. The three rows are fetched fresh every solve. The .gh blob is not: the route hands the scheduler a byte-cache reference (keyed on the immutable version id) that loads bytes only on an unavoidable upload and serves warm entries without touching storage. (The remote-definition cache only guards the separate remote-URL branch; the version-schema cache saves a compute call on upload, not this fetch.)',
-				files: ['packages/providers/supabase/src/storage/SupabaseStorageProvider.ts:92']
+			{
+				kind: 'facts',
+				rows: [
+					['This definition has a server pinned', 'use it'],
+					['Otherwise, the org has one set', 'use that'],
+					['Otherwise', 'the deployment-wide default']
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'Talking to a Rhino machine costs a connection and a handshake, so Selva keeps up to 16 of them open and reuses whichever matches. If several requests arrive for the same machine before it is ready, they wait on one connection rather than each opening their own.'
+			},
+			{
+				kind: 'prose',
+				text: 'The open connection is filed under the server id, not its address. So changing a machine’s URL or key does not swap the live connection — that entry has to be dropped before the new settings take effect.'
 			}
-		}
+		],
+		files: [
+			'packages/selva/src/routes/api/compute/+server.ts',
+			'packages/solve/src/server/client-cache.ts'
+		],
+		caches: [{ label: 'Warm client · 16 servers', hit: 'no reconnect or handshake' }]
 	},
 	{
-		id: 's-resolve',
-		layer: 'selva-server',
-		title: 'Pick the compute server',
-		oneliner: 'Definition pin → org default → global default. Narrowest wins.',
-		detail:
-			'A definition can pin a specific Rhino.Compute server; otherwise its org’s default applies, then the global default. Only servers visible to the org count. No visible server at all → 503 with “ask an admin” guidance.',
-		files: ['packages/platform/src/computeServer/utils.ts:66']
-	},
-	{
-		id: 's-warm',
-		layer: 'selva-server',
-		title: 'Grab the warm client',
-		oneliner: 'The per-server LRU hands back a ready client — no handshake, no reconnect.',
-		detail:
-			'The first solve against a compute server creates a GrasshopperClient (one liveness probe) plus a queue-mode SolveScheduler, and caches the pair under the server’s id. Every later solve — and every definition-page render — reuses it. Rotating a server’s URL or key in admin explicitly evicts its entry.',
-		files: ['packages/server/src/compute/client-cache.ts:239'],
-		caches: [{ id: 'warm-client', note: 'server id → ready client + scheduler' }]
-	},
-	{
-		id: 'p-tree',
+		id: 's-tree',
 		layer: 'selva-server',
 		title: 'Build the input tree',
-		oneliner: 'Values + parameter specs become the Grasshopper data tree for the wire.',
-		detail:
-			'Each input is normalized (number ranges, value lists, files, colors) and assembled into the tree structure Grasshopper expects. This is pure computation inside the solve pipeline — the transport-agnostic core extracted to @selvajs/server.',
-		files: ['packages/server/src/compute/solve-pipeline.ts:145']
+		oneliner: 'The values are translated into the typed tree Grasshopper actually reads.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'Rhino is a .NET application, but Selva does not name the .NET type on the way in. It sends a bare value addressed to a named parameter, and lets Rhino infer the type from that parameter. Types only appear on the way back: Rhino tags every output with the .NET type it produced.'
+			},
+			{
+				kind: 'mapping',
+				from: 'the browser sent',
+				to: 'goes on the wire as',
+				rows: [
+					['radius: 12.5', '{ "ParamName": "radius", "InnerTree": { "{0}": [{ "data": 12.5 }] } }'],
+					[
+						'style: "ribbed"',
+						'{ "ParamName": "style", "InnerTree": { "{0}": [{ "data": "ribbed" }] } }'
+					]
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'Each value is wrapped as its parameter name plus a tree of branches. Grasshopper is built around trees, so even a single value travels as a one-item branch. A value with no type is dropped — there is no parameter for it to land in.'
+			},
+			{
+				kind: 'prose',
+				text: 'One side effect matters: that tree doubles as a fingerprint. Same slider, same value, same tree — which is how the next step spots two people asking for the identical thing.'
+			}
+		],
+		files: [
+			'packages/selva/src/routes/api/compute/+server.ts',
+			'packages/solve/src/server/solve-pipeline.ts'
+		]
+	},
+	{
+		id: 's-singleflight',
+		layer: 'selva-server',
+		title: 'Identical solves share one run',
+		oneliner: 'Identical solves arriving together run once and share the one result.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'Two requests count as the same if they name the same definition version, the same compute server, and the same input tree — so inputs that differ only in ordering still collapse together. The first to arrive does the work; everyone after it waits on that run instead of starting their own.'
+			},
+			{
+				kind: 'prose',
+				text: 'There is no window to configure. The window is however long the solve takes — a few milliseconds for a light definition, up to the 100-second deadline for a heavy one. Arrive while it runs and you ride along; arrive just after it finishes and you start a fresh solve. So a slow definition absorbs far more traffic into one run than a fast one.'
+			},
+			{
+				kind: 'demo',
+				component: 'SingleFlightDemo',
+				caption: 'Send several identical solves at once — one runs, the rest ride along.'
+			},
+			{
+				kind: 'prose',
+				text: 'The key is released as soon as the solve settles. Nothing is kept, so this joins up work already running but never answers a later request — that is what separates it from a cache. Joining also changes cancellation: a solo run aborts if its caller disconnects, but once anyone has joined, one caller leaving cannot cancel the shared work.'
+			}
+		],
+		files: [
+			'packages/selva/src/routes/api/compute/+server.ts',
+			'packages/solve/src/server/solve-cache-single-flight.ts'
+		],
+		gates: ['duplicates share one run']
 	},
 	{
 		id: 'c-cache',
 		layer: 'compute-client',
-		title: 'Response cache check',
-		oneliner:
-			'Two in-memory response caches short-circuit here: the durable L2 (if enabled) and the scheduler’s 5-minute response cache.',
-		detail:
-			'First, for an eligible live-channel solve, the pipeline consults the durable L2 cache (keyed on org + version + inputs); a hit returns the stored gzipped envelope without building a tree or calling compute — l2_cache;dur=1. If L2 is off or misses, the scheduler hashes the definition bytes together with the exact input tree; a hit there returns the stored response instantly as selva_cache;dur=1. Both are what make “wiggle a slider back to where it was” free server-side. The L2 is off by default — an operator opts in with SOLVE_CACHE_PROVIDER.',
-		files: [
-			'packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:412',
-			'packages/server/src/compute/solve-pipeline.ts:160'
+		title: 'Scheduler result cache',
+		oneliner: 'A hash of definition + input tree; a hit returns instantly without touching Rhino.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'This definition, these inputs — has it been solved before? The answer decides everything that follows.'
+			},
+			{
+				kind: 'mapping',
+				from: 'answer',
+				to: 'what it costs',
+				rows: [
+					['seen it before', '0 ms — Rhino is never called'],
+					['never seen it', 'a full solve, queued and run']
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'A hit is not "fast", it is free: the stored answer is handed back and the request ends there. The browser can tell which happened, because the response carries a timing header that says whether the answer was stored or freshly solved.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['Holds', 'finished solve results'],
+					['Full at', '256 MB, then the one unused longest is dropped'],
+					['Expires', 'never, on any timer'],
+					['Lives in', 'the Selva server, one per compute machine'],
+					['Turn it off', 'set the budget to 0']
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'The cache can expire entries on a timer, but ships with that off, deliberately. The same definition with the same inputs always produces the same geometry, and neither can change underneath a stored result — so expiring one would just pay for a solve whose answer is already in hand. Running out of memory is the only reason an entry leaves.'
+			},
+			{
+				kind: 'warning',
+				title: 'Unless the definition is not repeatable',
+				text: 'A definition that reads the clock, fetches a live URL, or picks a random number answers differently each run. Store one of those and the result is not just stale but wrong, and nothing here notices. The budget is deployment-wide, so the only lever is turning the cache off entirely.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['COMPUTE_SOLVE_CACHE_MB', 'budget in MB, default 256, PER warm client'],
+					['COMPUTE_SERVER_CACHESOLVE', 'also ask Rhino.Compute to cache, default true'],
+					['COMPUTE_CACHE_ERRORED_SOLVES', 'also cache Grasshopper-error results, default false']
+				]
+			}
 		],
-		caches: [
-			{ id: 'l2-solve', note: 'durable HIT = stored envelope, no solve (if enabled)' },
-			{ id: 'sched-response', note: 'HIT = instant response, no compute call' }
-		]
+		files: [
+			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts',
+			'packages/solve/src/server/client-cache.ts'
+		],
+		caches: [{ label: 'Solve cache · 256 MB', hit: 'Rhino is never called' }]
+	},
+	{
+		id: 'c-queue',
+		layer: 'compute-client',
+		title: 'Scheduler queue',
+		oneliner:
+			'As many solves running at once as the machine has workers; the rest wait their turn.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'A Rhino machine runs a pool of worker processes — four by default. Selva keeps that many solves in flight and no more. The next one is not dropped and does not fail; it waits here in the Selva server until a worker frees up.'
+			},
+			{
+				kind: 'prose',
+				text: 'The two numbers have to agree, and nothing forces them to. The machine hands out workers in strict rotation and never says "busy", so if Selva sends more than the pool has, the extras double up on a worker and everything slows down. So Selva asks the machine how many workers it has rather than assuming — once on connect, then again after any solve if the last answer is over five minutes old. The check never blocks a solve, so a resized pool takes effect on the next one.'
+			},
+			{
+				kind: 'demo',
+				component: 'QueueDemo',
+				caption:
+					'Send eight, then change the worker count mid-flight. Selva keeps sending its old number until the next solve finishes and it re-reads — that lag is the amber state.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['In flight at once', 'the machine’s worker count, always auto-read, never hardcoded'],
+					['To change it', 'resize --childcount on the compute server — Selva just follows'],
+					['A solve may take', 'up to 100 s, then it is given up on'],
+					['Queue length', 'unlimited by default — nothing is turned away'],
+					['If an operator caps it', 'over-capacity requests are refused up front, told to retry']
+				]
+			},
+			{
+				kind: 'facts',
+				rows: [
+					[
+						'Worker count',
+						'auto-detected from the server, re-probed periodically; falls back to 1 if unreadable'
+					],
+					['COMPUTE_MAX_QUEUE_DEPTH', 'max solves waiting, default 0 = unbounded'],
+					['COMPUTE_QUEUE_WAIT_MS', 'max wait before rejecting, default 0 = no deadline'],
+					['COMPUTE_SOLVE_DEADLINE_MS', 'per-solve deadline, default 100000']
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'This is the opposite of the throttle back in the browser. There a newer value replaces a waiting one and the old value is thrown away, because nobody is waiting on it. Here every request has someone waiting for an answer, so none can be discarded — a burst costs time instead of losing work.'
+			}
+		],
+		files: [
+			'packages/solve/src/server/client-cache.ts',
+			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts',
+			'packages/server/src/compute/limits.ts'
+		],
+		gates: ['queue · one per worker']
 	},
 	{
 		id: 'c-pointer',
 		layer: 'compute-client',
-		title: 'Upload or point?',
-		oneliner:
-			'A known definition is sent as a tiny md5 pointer instead of re-uploading megabytes of .gh.',
-		detail:
-			'The first solve uploads the definition; Rhino.Compute answers with a cache key. The pointer map remembers it, and every later solve sends just the key. If the server has meanwhile dropped the definition, the solve fails with definition_not_cached and the client transparently re-uploads once — visible as def_reupload;dur=1.',
-		files: ['packages/compute/src/features/grasshopper/scheduler/solve-scheduler.ts:699'],
-		caches: [{ id: 'pointer-map', note: 'definition hash → server-side md5 key' }]
-	},
-	{
-		id: 'c-http',
-		layer: 'compute-client',
-		title: 'HTTP POST /grasshopper',
-		oneliner:
-			'The actual network hop: auth header, request id, definition-affinity header, retry with backoff.',
-		detail:
-			'One POST to the Rhino.Compute proxy with RhinoComputeKey auth, an X-Request-ID, and X-Selva-Definition carrying the definition guid (routing/telemetry metadata for a future server pool). Transient failures (429/502/503/504) retry with exponential backoff and jitter; the browser’s abort signal rides along, so closing the tab cancels the solve upstream.',
-		files: ['packages/compute/src/core/compute-fetch/compute-fetch.ts:484']
+		title: 'Pointer or upload',
+		oneliner: 'A definition Rhino already holds is sent as a short id instead of the whole file.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'The first time gear.gh is solved, the whole file rides along, and Rhino.Compute hands back a short id for it. Selva writes that id down — up to 100 definitions, oldest dropped first — and every solve after that sends the id instead of the file.'
+			},
+			{
+				kind: 'code',
+				lang: 'json',
+				text: '// Selva has the id on file — send it, not the .gh bytes\n{ "pointer": "md5:7ab3…", "values": [ … ] }\n\n// no id on file yet — send the whole definition\n{ "algo": "<base64 .gh bytes>", "values": [ … ] }'
+			},
+			{
+				kind: 'prose',
+				text: 'Selva having the id written down does not mean Rhino.Compute still recognises it. If that machine restarts it forgets which id points to which file, so a solve sent with a dead id comes back rejected — not silently wrong. Selva reads that rejection as "resend the file", does so once, and writes down the fresh id it gets back. The user sees one slightly slower solve, no error.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['COMPUTE_REUSE_DEFINITION_CACHE', 'send pointer instead of bytes, default true'],
+					['COMPUTE_DEFINITION_CACHE_MB', 'definition-bytes budget in MB, default 256']
+				]
+			}
+		],
+		files: [
+			'packages/compute/src/grasshopper/scheduler/solve-scheduler.ts',
+			'packages/compute/src/grasshopper/solve.ts'
+		],
+		caches: [
+			{ label: 'Pointer map · 100 entries', hit: 'no .gh bytes uploaded' },
+			{ label: 'Definition bytes · 256 MB', hit: 'upload without re-reading storage' }
+		]
 	},
 	{
 		id: 'r-solve',
 		layer: 'rhino',
 		title: 'Rhino.Compute solves',
 		oneliner:
-			'Two VM-side caches first: the parsed definition (decode) and the finished result (cachesolve).',
-		detail:
-			'The VM keeps uploaded definitions parsed in memory — a pointer hit means decode ≈ 0 ms. With cachesolve on (Selva’s default), an identical request returns the stored result without re-running Grasshopper at all — solve ≈ 0 ms. Both survive Selva restarts and are shared by every client of that server. Otherwise headless Grasshopper actually solves.',
-		files: ['packages/compute/src/features/grasshopper/solve.ts:299'],
+			'Headless Grasshopper runs the definition — with its own definition and result caches.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'One POST to /grasshopper carrying the pointer (or the definition itself) and the input tree. Retries are off by default, so a compute server that is briefly unreachable fails the solve rather than being tried again.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['VM definition cache', 'already-parsed definition → decode ≈ 0'],
+					['VM cachesolve', 'identical request → solve ≈ 0, sent on by default'],
+					['Errored solves', 'excluded from the VM cache by default'],
+					['Shared by', 'every Selva instance pointed at that server'],
+					['Survives', 'a Selva restart — these live on the VM']
+				]
+			}
+		],
+		files: [
+			'packages/compute/src/grasshopper/solve.ts',
+			'packages/compute/src/core/compute-fetch/retry.ts',
+			'packages/server/src/compute/limits.ts'
+		],
 		caches: [
-			{ id: 'vm-def', note: 'parsed .gh held under its md5 key' },
-			{ id: 'vm-solve', note: 'identical request → stored result' }
+			{ label: 'VM definition cache', hit: 'no parse (decode ≈ 0)' },
+			{ label: 'VM cachesolve', hit: 'no re-solve (solve ≈ 0)' }
 		]
 	},
 	{
 		id: 'p-out',
 		layer: 'selva-server',
-		title: 'Package the response',
-		oneliner: 'Size-guard → gzip → Server-Timing header that names where every millisecond went.',
-		detail:
-			'The result is serialized once (an oversized file output becomes a clean 413 instead of a crash), gzipped when the browser accepts it, and stamped with Server-Timing: load/tree/solve/serialize/gzip plus rhino_decode/rhino_solve/rhino_encode from the VM and the cache verdicts selva_cache and def_reupload. Open devtools → Network → Timing and you can read exactly which caches hit.',
-		files: ['packages/server/src/compute/solve-pipeline.ts:140']
+		title: 'Serialize, compress, return',
+		oneliner: 'JSON, gzip above 1 KB, and a Server-Timing header describing every phase.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'The result becomes JSON, gzipped if it is over 1 KB and the browser accepts it. A result over 300 MB is refused with a clean 413 instead of crashing the server.'
+			},
+			{
+				kind: 'prose',
+				text: 'Every step above leaves a timestamp, and they all ride back on one response header — so the browser can show a full breakdown without a separate request:'
+			},
+			{
+				kind: 'code',
+				lang: 'http',
+				text: 'Server-Timing: load;dur=0, tree;dur=2, solve;dur=0,\n  serialize;dur=14, gzip;dur=6, total;dur=23,\n  selva_cache;desc=1, def_bytes;desc=skipped'
+			},
+			{
+				kind: 'prose',
+				text: 'One edge case: requests coalesced into one solve share a single compressed result, so any caller that did not ask for gzip gets it decompressed again just for them.'
+			}
+		],
+		files: ['packages/solve/src/server/solve-pipeline.ts']
+	},
+	{
+		id: 'b-decode',
+		layer: 'browser',
+		title: 'The page reads the response',
+		oneliner:
+			'The library page — not a package — decodes the JSON and matches outputs to the schema.',
+		detail: [
+			{
+				kind: 'pipeline',
+				stages: [
+					{ label: 'The page', sub: 'decodes JSON, matches outputs' },
+					{ label: '@selvajs/visualization', sub: 'response → three.js meshes' },
+					{ label: '@selvajs/ui', sub: 'owns the scene, draws it', terminal: true }
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'This part is just the page: parse the JSON body, then find a value for each output the schema defines. No package owns this step — it is what the library route does with a solve result once it has one.'
+			},
+			{
+				kind: 'mapping',
+				from: 'the schema defines',
+				to: 'found in the response by',
+				rows: [
+					['output "area", id 3f2a', 'byId 3f2a'],
+					['output "area", id missing', "byName 'area' (its Grasshopper nickname)"]
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'Id wins whenever Compute returns one; the nickname is a fallback for a stock Rhino.Compute server that omits it. The page also compares its own clock against the Server-Timing header, so it can show network time separately from server time.'
+			}
+		],
+		files: ['packages/selva/src/routes/library/[guid]/+page.svelte']
 	},
 	{
 		id: 'b-render',
 		layer: 'browser',
-		title: 'Render',
-		oneliner: 'Parse JSON, extract meshes, hand them to the three.js viewer.',
-		detail:
-			'The browser splits its own round-trip timing (ttfb/download/parse) against the Server-Timing header to attribute latency. Meshes go to the WebDisplay viewer; textures load through the texture cache so a re-render never re-decodes an image, and huge value-list payloads parse once through their own small LRU.',
-		files: ['packages/selva/src/routes/library/[guid]/+page.svelte:142'],
-		caches: [
-			{ id: 'client-memo', note: 'this result is memoized for a value re-visit' },
-			{ id: 'texture', note: 'decoded textures reused across solves' },
-			{ id: 'dvl', note: 'multi-MB option lists parsed once' }
+		title: '@selvajs/visualization turns it into geometry',
+		oneliner:
+			'Meshes straight out of a binary blob into three.js — no other package is involved yet.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'The page hands the raw solve response to this package and gets back three.js meshes. The browser never has to understand Rhino geometry: meshes arrive as raw bytes in a format built for this, and curves arrive already converted to plain points. Nothing Rhino-specific ships to the frontend.'
+			},
+			{
+				kind: 'prose',
+				text: 'Meshes, curves, and points are scaled by the model-unit factor so they share one coordinate frame, and textures are fetched and GPU-decoded as materials reference them. What this package does not do is put anything on screen. That is the next step.'
+			}
+		],
+		files: [
+			'packages/visualization/src/parse/webdisplay/webdisplay-parser.ts',
+			'packages/visualization/src/parse/webdisplay/batch-parser.ts'
+		]
+	},
+	{
+		id: 'b-viewer',
+		layer: 'browser',
+		title: '@selvajs/ui draws it',
+		oneliner:
+			'The Svelte viewer owns the solve session and the scene. The two packages before it only hand back data.',
+		detail: [
+			{
+				kind: 'prose',
+				text: "Everything so far — the page, the compute client, the visualization package — only produces data: JSON, meshes, timings. Nothing has appeared on screen yet. That is this package's job. Viewer.svelte holds the three.js scene, and useSolveSession calls the earlier steps and feeds their result in."
+			},
+			{
+				kind: 'prose',
+				text: 'After each solve the viewer builds a list of what is in the scene and applies it. That list is what the sidebar panel reads to show visibility and layers; the panel never talks to the scene directly, only to what the viewer already worked out.'
+			}
+		],
+		files: [
+			'packages/ui/src/lib/components/viewer/Viewer.svelte',
+			'packages/ui/src/lib/compute/useSolveSession.svelte.ts'
+		]
+	}
+];
+
+// ============================================================================
+// Configuration — every compute env var, resolved in `resolveComputeLimits`
+// (packages/server/src/compute/limits.ts). Grouped by what they tune, in the
+// order a solve actually meets them.
+// ============================================================================
+
+export interface EnvVarGroup {
+	title: string;
+	vars: { name: string; default: string; text: string }[];
+}
+
+export const ENV_VAR_GROUPS: EnvVarGroup[] = [
+	{
+		title: 'Doors before the work starts',
+		vars: [
+			{
+				name: 'COMPUTE_REQUEST_MAX_BYTES',
+				default: '210 MB',
+				text: 'JSON request body cap for /api/compute (inputs + values, not the .gh file). Must stay under adapter-node’s global BODY_SIZE_LIMIT or that rejects first.'
+			},
+			{
+				name: 'COMPUTE_RESPONSE_MAX_BYTES',
+				default: '300 MB',
+				text: 'JSON response cap. Above this the result is refused with a clear error instead of crashing — there is a hard ceiling on how large a single text response the server can build.'
+			},
+			{
+				name: 'COMPUTE_RATE_LIMIT_MAX',
+				default: '120',
+				text: 'Requests allowed per window on /api/compute before a 429 with Retry-After.'
+			},
+			{
+				name: 'COMPUTE_RATE_LIMIT_WINDOW_MS',
+				default: '100000',
+				text: 'Length of the fixed rate-limit window, in ms.'
+			},
+			{
+				name: 'MAX_DEFINITION_FILE_SIZE_BYTES',
+				default: '50 MB',
+				text: 'Largest .gh definition accepted on upload, and the largest fetched from a remote URL — the same number for both, so a URL can’t smuggle a bigger file past the upload cap. Matches Rhino.Compute’s own request-size default.'
+			},
+			{
+				name: 'MAX_IMAGE_FILE_SIZE_BYTES',
+				default: '10 MB',
+				text: 'Largest image upload accepted for an image-typed input.'
+			},
+			{
+				name: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
+				default: '30000',
+				text: 'Deadline for fetching a remote .gh URL, so a server that trickles bytes forever cannot tie up the fetch indefinitely.'
+			},
+			{
+				name: 'REMOTE_DEFINITION_CACHE_TTL_MS',
+				default: '300000',
+				text: 'How long a remote .gh’s bytes stay cached before being fetched again. Only the remote path expires on a timer; the version-id-keyed cache below never does, because that key can’t go stale.'
+			}
+		]
+	},
+	{
+		title: 'How many solves run at once',
+		vars: [
+			{
+				name: 'COMPUTE_MAX_QUEUE_DEPTH',
+				default: '0 (unbounded)',
+				text: 'How many solves may wait in the queue once the in-flight cap is full. A solve arriving to a full queue is rejected right away (503 + Retry-After) instead of piling up. Size it to roughly 2–3× the concurrency cap. The in-flight cap is not an env var: Selva reads the compute server’s worker count, re-probes as the pool resizes, and falls back to 1 if it can’t read it. Change it with --childcount on the compute server.'
+			},
+			{
+				name: 'COMPUTE_QUEUE_WAIT_MS',
+				default: '0 (no deadline)',
+				text: 'Longest a solve may sit queued before it’s rejected rather than run stale. Tune it close to COMPUTE_SOLVE_DEADLINE_MS.'
+			},
+			{
+				name: 'COMPUTE_SOLVE_DEADLINE_MS',
+				default: '100000',
+				text: 'Longest one solve may run before it’s aborted. The deadline is passed into the upstream Compute call, so it cancels the work rather than only timing out client-side. A reverse proxy or serverless platform can still cap it lower.'
+			}
+		]
+	},
+	{
+		title: 'What gets cached, and how big',
+		vars: [
+			{
+				name: 'COMPUTE_DEFINITION_CACHE_MB',
+				default: '256',
+				text: 'Byte budget for the in-process cache of .gh bytes, keyed on immutable version id. A warm entry skips the storage read entirely. 0 disables it.'
+			},
+			{
+				name: 'COMPUTE_SOLVE_CACHE_MB',
+				default: '256',
+				text: 'Byte budget for the solve-result cache — but PER warm compute-client. Up to 16 servers are kept warm, so the real ceiling is this × 16. 0 disables it.'
+			},
+			{
+				name: 'COMPUTE_REUSE_DEFINITION_CACHE',
+				default: 'true',
+				text: 'Send a short pointer instead of re-uploading the .gh bytes each solve. Only safe against a compute server that says so when it no longer holds the definition the pointer names, instead of silently returning empty geometry — the VektorNode fork does. Leave it off for a standard rhino.compute.'
+			},
+			{
+				name: 'COMPUTE_SERVER_CACHESOLVE',
+				default: 'true',
+				text: 'Ask Rhino.Compute itself to cache solve results keyed on the full request, so an identical repeat skips solving. Server-wide — survives Selva restarts.'
+			},
+			{
+				name: 'COMPUTE_CACHE_ERRORED_SOLVES',
+				default: 'false',
+				text: 'Also cache solves that reported a Grasshopper error. Right for definitions that error by design (guarded Python, pruned branches) but still return valid geometry. Off by default, because most errors aren’t that.'
+			}
+		]
+	},
+	{
+		title: 'Diagnostics',
+		vars: [
+			{
+				name: 'SELVA_FLAG_COMPUTE_DEBUG',
+				default: 'off',
+				text: 'Three-way, not a boolean: off, on (concise cache/timing logs for every step above), or verbose (also dumps full request/response payloads, including the geometry itself — never enable on a deployment holding real data).'
+			}
 		]
 	}
 ];
@@ -586,110 +808,104 @@ export const LOCAL_STEPS: FlowStep[] = [
 	{
 		id: 'l-input',
 		layer: 'browser',
-		title: 'A slider moves',
-		oneliner: 'Value updates batch in a 50 ms window and queue while Grasshopper is mid-solve.',
-		detail:
-			'The plugin preview UI collects value changes for 50 ms and sends them as one update. If Grasshopper is still solving, updates keep queueing — when the solve finishes, only the latest state is applied. The same client-side solve memo (LRU 16) the cloud path uses sits in front of the driver here too: a value already solved this session is served from memory without touching the socket.',
-		files: [
-			'packages/plugin-ui/src/lib/websocket/websocket.svelte.ts:337',
-			'packages/ui/src/lib/compute/createSolveSession.svelte.ts:195'
+		title: 'An input changes',
+		oneliner:
+			'Debounced the same way cloud mode does, then batched in a 50 ms window — while Grasshopper is solving only the latest is kept.',
+		detail: [
+			...INPUT_DEBOUNCE,
+			{
+				kind: 'prose',
+				text: 'From here the paths diverge: values are merged into a batch and flushed 50 ms after the last one. If Grasshopper is mid-solve the batch waits in a single pending slot that a newer update overwrites, and flushes when the solve finishes.'
+			},
+			{
+				kind: 'prose',
+				text: 'Nothing is remembered on this path and nothing is held back — a repeated value is sent to Grasshopper again rather than replayed from memory.'
+			}
 		],
-		gates: ['50 ms batch · latest wins'],
-		caches: [{ id: 'client-memo', note: 'repeat value → served from memory, no socket send' }]
+		files: [INPUT_WIDGET_FILE, 'packages/plugin-ui/src/lib/websocket/websocket.svelte.ts'],
+		gates: ['debounce 150 / 400 ms', '50 ms batch · newest value wins']
 	},
 	{
 		id: 'l-ws',
 		layer: 'browser',
-		title: 'WebSocket to localhost:8765',
-		oneliner: 'One socket straight into the Grasshopper plugin — no HTTP, no auth, no database.',
-		detail:
-			'The browser connects to ws://localhost:8765, served by the C# WebSocketServer inside the Selva plugin (it falls back to a free port if 8765 is taken). This is a push transport: there is no request/response pairing and cancel is a no-op — newer values simply supersede.',
+		title: 'Over the WebSocket',
+		oneliner: 'One socket to the plugin — no HTTP, no auth, no database, no compute server.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'The browser sends the values over the socket the C# plugin serves on loopback — port 8765 by default, or a free one the OS picks if that is taken, passed to the page as a `wsPort` param. File metadata objects are stripped from the values first, since Grasshopper already holds the file.'
+			},
+			{
+				kind: 'prose',
+				text: 'This is a push transport: no request/response pairing and no cancel — a newer value simply supersedes. The plugin handles messages off the receive loop but strictly in arrival order, each chained onto the previous one, so two rapid updates cannot race and let the older value win.'
+			}
+		],
 		files: [
-			'packages/plugin-ui/src/lib/websocket/websocket.svelte.ts:220',
-			'Plugin/Selva.GH/Features/UIBuilder/Services/Communication/WebSocketServer.cs:51'
-		]
+			'packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts',
+			'Plugin/Selva.GH/Features/UIBuilder/Services/Communication/WebSocketTransport.cs'
+		],
+		gates: ['strict arrival order']
 	},
 	{
 		id: 'l-solve',
 		layer: 'grasshopper',
-		title: 'Grasshopper solves the live document',
-		oneliner: 'The definition is already open in Rhino — no upload, no parse, no compute server.',
-		detail:
-			'The plugin writes the values into the linked parameters and Grasshopper re-solves the open document in-process. Everything the cloud path does to move the definition to a machine that can solve it simply doesn’t exist here.',
-		files: ['Plugin/Selva.GH/Features/UIBuilder/']
+		title: 'Grasshopper re-solves',
+		oneliner: 'The definition is already open in Rhino — nothing is uploaded or parsed.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'The plugin coalesces once more before solving. If a solve is already running or scheduled, the incoming values merge into a pending buffer instead of starting a competing solve, and that buffer drains on a fresh tick once the current solve ends. Otherwise the values are written into the linked parameters and the document is scheduled to re-solve in-process.'
+			},
+			{
+				kind: 'prose',
+				text: 'Everything the cloud path does to move a definition onto a machine that can solve it — resolving records, byte references, pointers, uploads — has no equivalent here. The definition is already open.'
+			}
+		],
+		files: ['Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs'],
+		gates: ['merge while busy · newest value wins']
 	},
 	{
 		id: 'l-push',
 		layer: 'grasshopper',
 		title: 'Results push back',
-		oneliner:
-			'A JSON outputs envelope followed by binary mesh frames, streamed over the same socket.',
-		detail:
-			'Outputs arrive as one JSON message plus trailing binary frames carrying the meshes in the SLVA wire format — no base64 inflation. The UI parses the batches and reports them into the same solve session the cloud path uses.',
-		files: ['packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts:111']
+		oneliner: 'A JSON summary of the outputs, then the meshes as separate binary messages.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'The summary says how many mesh messages to expect; those follow as separate socket messages carrying raw bytes, so nothing has to be encoded as text first.'
+			},
+			{
+				kind: 'facts',
+				rows: [
+					['Frame count absent', 'no mesh payload — the scene is left alone'],
+					['Frame count zero', 'clear the scene'],
+					['Frame count n', 'collect n frames, then parse'],
+					['A mesh arrives early', 'held until its summary shows up, at most 64 waiting'],
+					['Old results still parsing', 'dropped once a newer set of results arrives']
+				]
+			},
+			{
+				kind: 'prose',
+				text: 'Curves ride the JSON summary, already converted to plain line segments by the plugin, so the browser draws lines straight from their points — nothing here has to understand Rhino geometry.'
+			}
+		],
+		files: ['packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts']
 	},
 	{
 		id: 'l-render',
 		layer: 'browser',
-		title: 'Render',
-		oneliner: 'Same viewer, same browser-side caches as cloud mode.',
-		detail:
-			'The mesh batches land in the same WebDisplay viewer. The texture cache and value-list parse cache work identically — they belong to the viewer, not the transport.',
-		files: ['packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts:133'],
-		caches: [
-			{ id: 'client-memo', note: 'this result is memoized for a value re-visit' },
-			{ id: 'texture', note: 'decoded textures reused across solves' },
-			{ id: 'dvl', note: 'multi-MB option lists parsed once' }
+		title: 'Parse and render',
+		oneliner:
+			'Frames are parsed, scaled to model units, and handed to the same viewer as cloud mode.',
+		detail: [
+			{
+				kind: 'prose',
+				text: 'Parsed meshes and display items are scaled by the document’s unit factor so both share one coordinate frame, then handed to the solve session. From here on the viewer is the same code the cloud path renders into.'
+			}
+		],
+		files: [
+			'packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts',
+			'packages/visualization/src/parse/webdisplay/apply-texture.ts'
 		]
-	}
-];
-
-// ============================================================================
-// Server-Timing legend — how to SEE the caches per request
-// ============================================================================
-
-export interface TimingEntry {
-	metric: string;
-	meaning: string;
-}
-
-export const SERVER_TIMING: TimingEntry[] = [
-	{ metric: 'load', meaning: 'auth + DB reads + definition fetch, before the solve' },
-	{ metric: 'tree', meaning: 'building the Grasshopper input tree' },
-	{ metric: 'solve', meaning: 'the full solve wall time as the Selva server saw it' },
-	{
-		metric: 'rhino_decode / rhino_solve / rhino_encode',
-		meaning: 'time ON the compute VM (≈0 decode = definition cache hit; ≈0 solve = cachesolve hit)'
-	},
-	{
-		metric: 'compute_link',
-		meaning: 'solve minus rhino_* — network + queue between Selva and the VM'
-	},
-	{
-		metric: 'l2_cache;dur=1',
-		meaning:
-			'served from the durable L2 solve cache — no tree build, no compute (dur=0 = consulted then solved; absent = not eligible)'
-	},
-	{
-		metric: 'selva_cache;dur=1',
-		meaning: 'served from the scheduler’s in-process response cache — compute never called'
-	},
-	{
-		metric: 'def_bytes;desc=skipped|hit|miss',
-		meaning:
-			'byte-cache verdict — skipped = pointer solve moved no .gh bytes; hit = warm byte cache; miss = read from storage'
-	},
-	{
-		metric: 'def_reupload;dur=1',
-		meaning: 'the pointer was stale; the .gh was re-uploaded this solve'
-	},
-	{
-		metric: 'serialize / gzip / total',
-		meaning: 'packaging the response; total = server wall time, so browser ttfb − total ≈ network'
-	},
-	{
-		metric: 'p_*',
-		meaning:
-			'prep sub-phases (body parse, share token, DB reads, blob…) — names the step a load spike hides in'
 	}
 ];

@@ -1,5 +1,558 @@
 # @selvajs/selva
 
+## 4.8.0-beta.14
+
+## 4.8.0-beta.13
+
+## 4.8.0-beta.12
+
+### Patch Changes
+
+- 12fa352: Fix the admin update banner spinning on "PM2 is restarting the app" after an update that already succeeded.
+
+  The runner finished, the log showed `[DONE] Update complete`, and the new process was serving — but the banner stayed up until the 5-minute deadline and then reported "App did not come back", turning a clean update into a false failure.
+
+  - **Adds `/api/health/ready`, a real readiness probe.** The restart wait had been polling `/api/admin/system/health`, which is a _diagnostic_: it re-runs live integrity checks on every request, including a ping of the default Rhino.Compute server. So it reported non-ok whenever an unrelated dependency was down, and could take ~10s doing it — neither acceptable in a probe something waits on. The new route does the smallest thing that proves real request handling: one read through the data provider, the same call the auth hook makes on every gated request. It touches nothing external, because an unreachable compute server does not make the app unready. Public and unauthenticated (the poller runs it across a restart, when no session exists) and safe to be — the body carries a boolean and a fixed reason string, never provider data. Both probes are exact-match entries in the auth allowlist, so routes added under `/api/health/` later still inherit deny-by-default.
+  - **The restart wait no longer requires the readiness probe to go green.** `pollForRestart` only accepted an outcome when the probe returned 200, so a probe that could never succeed meant a finished update could never be confirmed. Readiness is now an accelerator for the premature-online race it was added to close, not a gate: the loop also finishes on the runner's own terminal marker in the log, which is the authority on whether the update completed. A rollback still reports as a rollback; the marker carries the verdict, so the fallback can't flatten every outcome into success.
+  - **A degraded (503) `/api/health` counts as reachable.** `/api/health` returns 503 with `status: "degraded"` when a boot check failed, and the poll treated any non-2xx as unreachable — so a degraded-but-serving instance stalled the wait, contradicting the rule the surrounding code already stated, that degraded must not block "online".
+
+## 4.8.0-beta.11
+
+## 4.8.0-beta.10
+
+### Minor Changes
+
+- 39db6f5: The supported Node floor moves from 22 to 24.
+
+  Node 24 ("Krypton") is the active LTS; Node 22 leaves maintenance in April 2027. Every package's
+  `engines.node` is now `>=24.0.0`, and CI builds and tests on 24 instead of 22.
+
+  **This is visible to operators before it is visible to anyone else.** `@selvajs/cli` derives its
+  floor from its own `engines.node` rather than a literal, so `selva doctor` and the create-time
+  guard follow the bump automatically: a deployment running Node 22 that passed `doctor` yesterday is
+  reported as out of range today. Nothing about the deployment changed — the floor moved under it.
+  Upgrade the host's runtime before taking this version of the CLI.
+
+  The admin UI's update check reports the same thing from the other direction: it compares the
+  running Node against the `engines.node` of the release it fetched from npm, so it starts flagging a
+  Node 22 host as soon as a `>=24` version is published, with no client-side change at all.
+
+  No source change was needed. The Node builtins in use are long-stable (`fs`, `path`, `crypto`,
+  `url`, `os`, `net`, `zlib`), there are no experimental APIs or `--experimental` flags in the tree,
+  and every dependency's own engine range already admitted 24.
+
+## 4.8.0-beta.9
+
+## 4.8.0-beta.8
+
+## 4.8.0-beta.7
+
+### Patch Changes
+
+- 28944ae: Fixed two bugs:
+
+  - `POST /api/v1/compute/schema` reimplemented compute's fetch/error-mapping logic instead of
+    reusing it. Extracted the shared part into `postSchemaFormData` (new export of
+    `@selvajs/server/definitions`), used by both the single-file `fetchSchemaFromCompute` and the
+    multi-file schema-preview route.
+  - The admin health check's compute-reachability probe hit `/healthcheck`, a route the
+    rhino.compute proxy doesn't have, so it always reported the default server as unreachable. It
+    now reuses `ComputeServerStats.isServerOnline()` from `@selvajs/compute`, which probes the
+    correct liveness root (`GET /`).
+
+## 4.8.0-beta.6
+
+### Patch Changes
+
+- 5292563: **Public vocabulary stops promising Rhino.** Coordinated pre-1.0 major — no deprecation shims, no
+  aliases left behind. Every reference across the workspace was updated in the same commit.
+
+  ```diff
+  -import { fetchRhinoCompute, RhinoComputeError } from '@selvajs/compute/core';
+  +import { fetchCompute, ComputeError } from '@selvajs/compute/core';
+  ```
+
+  ```diff
+  -import type { GrasshopperParamType, GrasshopperInputStructure } from '@selvajs/schemas';
+  +import type { ParamType, InputStructure } from '@selvajs/schemas';
+  ```
+
+  Both renamed schema types were already backend-agnostic in value (`ParamType` is
+  `number|integer|boolean|text|valueList|dynamicValueList|file|color|generic`; `InputStructure` is
+  just arity — `item|list|tree`). Only the names were Rhino-flavored. The rename does not touch wire
+  data: `paramType` still serializes as its lowercase string value, never the type name. Regenerated
+  via `pnpm generate` — the C# plugin types regenerate too (`Plugin/Selva.Schema/Models/UISchema.Generated.cs`),
+  so this needs a plugin rebuild.
+
+  **`@selvajs/compute`'s root barrel is gone** — subpaths only, matching `@selvajs/solve` (no root
+  export) and `@selvajs/visualization` (root deliberately empty):
+
+  ```diff
+  -import { GrasshopperClient } from '@selvajs/compute';
+  +import { GrasshopperClient } from '@selvajs/compute/grasshopper';
+  ```
+
+  **Env var renamed:** `MAX_GH_FILE_SIZE_BYTES` → `MAX_DEFINITION_FILE_SIZE_BYTES`. No dual-read —
+  operators update `.env` on upgrade. Everything else in `.env.example` was already neutral
+  (`COMPUTE_*`).
+
+  Also reworded the Rhino-flavored doc strings in `ui-schema.json` that described backend-agnostic
+  fields (e.g. a parameter identifier documented as "Grasshopper instance GUID" when the field
+  itself is just a bare string, backend-specific by convention rather than by type).
+
+## 4.8.0-beta.5
+
+### Patch Changes
+
+- 9f60b66: The definition viewer no longer loads the rhino3dm WASM module, and the dependency is gone from the
+  app entirely.
+
+  Curves now arrive pre-tessellated from the plugin, so the 2.5 MB module is never fetched — the
+  viewer's first paint gets faster on every solve that renders geometry.
+
+  **A definition solved by an outdated Display component now fails instead of rendering.** Curves
+  from a pre-tessellation plugin carry no `points`, and the viewer surfaces an error naming the item
+  rather than drawing a scene silently missing its curves. The fix is to open the definition in
+  Grasshopper, run Solution → Upgrade obsolete components, and re-save.
+
+- 9f60b66: **Every deprecated symbol in `@selvajs/compute` is gone.** Nothing is left as a stub — this is a
+  coordinated pre-1.0 major, so there is nothing to ease.
+
+  **`camelcaseKeys` and `toCamelCase` are removed from `@selvajs/compute/core`.** They were
+  deprecated in favour of `readField`, which now takes their export slot alongside `hasField`:
+
+  ```diff
+  -import { camelcaseKeys } from '@selvajs/compute/core';
+  -const { schemas } = camelcaseKeys(entry) as { schemas?: UISchema[] };
+  +import { readField } from '@selvajs/compute/core';
+  +const schemas = readField<UISchema[]>(entry, 'schemas');
+  ```
+
+  Blanket key-rewriting was the wrong tool for wire payloads: it corrupted user-authored keys
+  (value-list labels, `Display3d` → `display3d`) while the actual problem — server branches
+  disagreeing on casing for a handful of known fields — is what `readField` solves per-field.
+
+  **If you were unwrapping compute's schema endpoint with it, you had the bug described below.**
+  Use the new `readSchemaResults` instead of hand-rolling the unwrap:
+
+  ```diff
+  -const results = camelcaseKeys(Array.isArray(raw) ? raw : [raw]) as { schemas?: UISchema[] }[];
+  +import { readSchemaResults } from '@selvajs/compute/grasshopper';
+  +const results = readSchemaResults<UISchema>(raw);
+  ```
+
+  **`ComputeConfig.suppressClientSideWarning` is removed.** Use `suppressBrowserWarning`, which it
+  has been an alias for.
+
+  **New: `readSchemaResults` on `@selvajs/compute/grasshopper`** — the one correct way to unwrap
+  `/grasshopper/schema`'s `[{ FileName, Schemas }]` body.
+
+  It exists because everyone who hand-rolled that unwrap got it wrong the same way. The wrapper's
+  casing varies by server branch (mcneel `FileName`/`Schemas`, our fork `fileName`/`schemas`), so a
+  fixed-key read yields `undefined` against half of them — and the endpoint answers 200 either way,
+  so the failure surfaces as "this definition has no schemas". Reaching for `camelcaseKeys` looked
+  like the fix but passed the response **array** to a shallow key-rewriter, which returns arrays
+  untouched: same `undefined`, now with a comment claiming it was handled.
+
+  That was live in this repo: every upload through `/api/v1/compute/schema` 422'd with "No schemas
+  found in definition". Fixed here, and `@selvajs/server/definitions` re-exports the helper typed to
+  `UISchema` so the app layer keeps its concrete type.
+
+  `readSchemaResults<TSchema>(raw)` returns `SchemaEndpointResult<TSchema>[]` — `{ schemas?, error? }`
+  per file. `TSchema` is pass-through; the helper reads only the two wrapper keys and never looks
+  inside a schema, so `@selvajs/compute` still doesn't depend on `@selvajs/schemas`. Pass your own
+  schema type, or omit it for `unknown`.
+
+  Also removed the unused legacy test builders (`createMockGrasshopperInput` and friends,
+  `createMockThreeGeometry`) from the package's test helpers.
+
+## 4.8.0-beta.4
+
+### Patch Changes
+
+- 2cc44d3: Fix the library app page solving against a route that no longer exists.
+
+  The `/api/v1` restructure moved `POST /api/compute` to `POST /api/v1/compute`, but
+  `routes/library/[guid]/+page.svelte` still pointed at the old path. Every solve on a
+  published definition failed with a 404 whose body was SvelteKit's HTML error page, so the
+  client reported `non-JSON error body (HTTP 404)` rather than a usable message.
+
+  The path escaped the rename because it is passed as an `endpoint` string to
+  `createComputeFetchSolveFn` instead of appearing as a literal `fetch('/api/...')` call —
+  worth knowing before the next route move, since a grep for fetch sites will miss it again.
+
+  The definition-upload assertion in the `core-loop` E2E had the same stale path
+  (`/api/definitions`). It waited on a response that could never arrive, so a broken upload
+  would surface as a timeout instead of a failed assertion.
+
+  Comment-only corrections to paths the restructure invalidated: the three limit fields in
+  `@selvajs/server`'s `compute/limits.ts` (`/api/compute` → `/api/v1/compute`), the
+  `orgDefaults` pointer in `/api/admin/compute` (`/api/org/compute` →
+  `/api/v1/orgs/[orgId]/compute`), and the PATCH reference in the team-members page.
+
+## 4.8.0-beta.3
+
+### Minor Changes
+
+- 3485634: The v1 API gets a definition-addressed solve, a generated OpenAPI contract that a test keeps
+  honest, and one shared shape for every handler in the tree.
+
+  ## `POST /api/v1/definitions/{guid}/solve`
+
+  The flagship action, and what the CLI's `solve` command maps to. It shares the whole solve core
+  with `POST /api/v1/compute`, which was extracted into `$lib/server/compute/solve.server.ts`.
+
+  The core takes a `SolveAccess` discriminated union (`user` | `share`), and the definition-addressed
+  route can only construct `user` — so it cannot inherit the anonymous share-token branch, even if
+  someone later edits the core. Share-token resolution stays in `/api/v1/compute`'s handler.
+
+  An unreachable definition returns **404, not 403**. A guid is guessable, so `requireCanSolve`'s 403
+  on this path would tell a caller whether a definition they cannot see exists. `/api/v1/compute`
+  keeps its 403 — its callers navigated to the definition rather than probing an id.
+
+  ## Idempotency
+
+  The endpoint accepts an optional `Idempotency-Key`. A repeat within the TTL replays the first
+  response instead of solving again, and the replay carries `Idempotency-Replayed: true`.
+
+  **The store holds a promise, reserved before the solve starts.** The common case is a client
+  retrying while the first solve is still running, so the second request joins the first rather than
+  starting a second one. A rejected reservation is dropped, so a failed solve stays retryable instead
+  of replaying an error for the whole TTL. The key is namespaced by caller — `Idempotency-Key` is
+  client-chosen, so two tenants can pick the same string.
+
+  This absorbs retries; it is not a result cache. The TTL is a fixed 5 minutes, and the store is
+  **per-process** — correct for a single-instance deployment, useless the day a second one runs.
+
+  New in `@selvajs/server/compute`: `createIdempotencyStore`, `DEFAULT_IDEMPOTENCY_MAX_KEYS`, and the
+  `IdempotencyStore` / `IdempotencyStoreConfig` / `IdempotencyOutcome` types. Bounded and timer-free
+  (amortized sweep plus a hard cap, driven by the call path) so the module has no lifecycle its
+  callers lack.
+
+  ## The contract is generated and enforced
+
+  `packages/selva/openapi/v1.yaml` describes every v1 endpoint — auth schemes, pagination, the full
+  `ApiErrorCode` enum, `x-internal` tags. Regenerate with `pnpm openapi:generate`; `pnpm test` fails
+  when the committed file drifts from the code.
+
+  **Request schemas are derived from the actual Zod validators** via `z.toJSONSchema` (Zod 4 emits
+  JSON Schema natively, so there is no `zod-openapi` dependency), which meant moving them somewhere a
+  generator can import: `$lib/server/api/v1/bodies.ts`. Hand-transcribing them would have reproduced
+  exactly the shape drift the spec exists to catch. Response schemas are deliberately **not** derived
+  — handlers build payloads from store records with no validator on the way out, so the envelopes are
+  described precisely and individual resource bodies left open rather than claiming precision that
+  does not exist.
+
+  A conformance test enforces the contract rather than its existence: method+path parity in both
+  directions, no bare `error(...)` anywhere in the tree, every collection paginating through the
+  shared parser, no documented 403 without a 404 on a guessable-id route, and a platform-permission
+  guard on every `/api/admin/**` handler. That last one matters because the `/admin` layout guard
+  never ran for endpoints — "all admin routes guard themselves" held only by review until now. The
+  assertions were verified by breaking them: a bare `error()`, a removed admin guard, and an
+  unregistered route each failed the suite by name.
+
+  `/docs/api` renders the public subset, filtered in the load function rather than the markup so
+  internal endpoints never reach the page payload. The spec itself is served at
+  `/docs/api/openapi.yaml`. Both are public — an API reference behind a login is hidden from the
+  people deciding whether to integrate.
+
+  ## Every handler has the same shape
+
+  The route tree was 2070 lines in which the interesting part sat a few lines deep, and the
+  boilerplate had already drifted: path params were validated two ways (18 via `GuidSchema`, 13 via a
+  manual `if (!id)`), the `try { … } catch (handleApiError) }` tail appeared 59 times, and five upload
+  handlers each formatted their own "Max size: N MB".
+
+  Shared helpers now carry it — `apiRoute`, `requireCaller`, `requireParams`, `parseParam`,
+  `parseBody`, `requireUpload`, `formText`, `collection`, `created`, `noContent`, `shaped`. The tree
+  is 1825 lines with none of those patterns left.
+
+  Two of those cleanups were correctness fixes:
+
+  **Four list endpoints ignored documented query params.** Share links, versions, invites and project
+  members each hand-rolled the pagination clamp, and all four had drifted from `parseListOptions`:
+  they hardcoded the default limit, dropped `Math.trunc` (so `limit=5.9` reached the store), and
+  silently ignored the `orderBy`/`orderDir` the spec documents them as accepting. They now honour
+  both. A conformance assertion rejects an inline clamp on any endpoint the registry calls a
+  collection, so a fifth copy cannot be written.
+
+  **Secret stripping is structural rather than conventional.** `ShareLink.tokenHash`,
+  `Invite.tokenHash` and `OrgComputeServer.apiKey` were removed by destructuring, which holds until
+  someone edits the line away or adds a field to the stored type — neither fails a build, and the
+  result is a credential in a response. Those payloads now parse through explicit response schemas, so
+  a new field on a stored record is invisible to clients until it is added deliberately.
+
+  `PATCH /api/v1/orgs/{orgId}/compute` was the last handler validating its body by hand; it is now a
+  Zod schema, so the spec derives that body too. Its `apiKey` stays `.nullable().optional()` and
+  deliberately not `.nullish()` — omitted keeps the stored key, `null` clears it, a string replaces
+  it, and collapsing the first two would wipe a live Rhino.Compute credential on any save that left
+  the field out.
+
+  `/docs/` joins the public route prefixes in `hooks.server.ts`.
+
+## 4.8.0-beta.2
+
+### Minor Changes
+
+- b9c9d6a: One name, one value, for how long a solve may run. The deadline is now sourced
+  from the server and carried unchanged to the browser's `AbortController`, rather
+  than each layer keeping its own answer under its own name.
+
+  **Fixed — the client could abort a solve the server would have finished.** The
+  throttle defaulted to `60_000` while the server's deadline was `100_000`, so any
+  host that embedded `<ComputeApp>` without passing a timeout aborted at 60 s a
+  solve the server was still happily running. The user saw a failure for work that
+  succeeded. `@selvajs/solve` can't read env, so the fix is to require the value
+  rather than guess it — there is no client-side default left to drift.
+
+  **Breaking — the per-solve deadline is now required:**
+
+  - `createAsyncThrottle`: `options.timeout` → **`options.runDeadlineMs`**, required,
+    and the options bag itself is no longer optional. The name says what elapses;
+    the throttle is generic, so its field is named after a run, not a solve.
+  - `createRequestResponseDriver`: `options.timeout` → **`options.solveDeadlineMs`**,
+    required.
+  - `ComputeApp`: `solveTimeoutMs?` → **`solveDeadlineMs`**, required. Pass the value
+    the server enforces; omitting it is now a type error rather than a silent 60 s.
+  - `ComputeLimits.maxSolveDurationMs` → **`solveDeadlineMs`**.
+
+  **Renamed — `MAX_SOLVE_DURATION_MS` → `COMPUTE_SOLVE_DEADLINE_MS`.** It joins the
+  `COMPUTE_*` namespace every other compute knob already uses, and says what it
+  bounds — one solve — instead of a vague "duration". The old name still works for
+  one minor version and warns at boot, so no deployment breaks on upgrade.
+
+  **`selva migrate` now rewrites deprecated env keys in your `.env`**, so a tuned
+  value survives the shim being dropped later instead of silently reverting to a
+  default. Only the key changes — value, comments, ordering and spacing are left
+  byte-identical, a commented-out old name is ignored, and the old line is dropped
+  outright when the new name is already set. `.env.bak` is written alongside the
+  existing backups and restored if the migration rolls back.
+
+  `selva doctor` reports the same deprecations without changing anything, covering
+  this rename plus the four that were previously silent
+  (`COMPUTE_DEFINITION_BYTE_CACHE_MB`, `COMPUTE_RESPONSE_CACHE_MB`,
+  `DEFINITION_CACHE_TTL_MS`, `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE`). The last of those
+  is reported but not auto-fixed: its replacement encodes a value
+  (`SELVA_FLAG_COMPUTE_DEBUG=verbose`), so migrate won't guess at it.
+
+  Migration: run `selva migrate` to rewrite the env var, and pass `solveDeadlineMs`
+  wherever you mount `ComputeApp` or build a driver.
+
+## 4.7.4-beta.1
+
+### Patch Changes
+
+- 105275c: `@selvajs/solve/server` gains `SolveEngine`, a facade over the four primitives a consumer previously
+  had to hand-assemble (`createClientCache`, `createDefinitionByteCache`, `createSolveCacheSingleFlight`,
+  `runSolvePipeline`) plus the coalesce-key/abort/outcome-mapping glue every app route rewrote by hand.
+
+  ```ts
+  import { SolveEngine } from '@selvajs/solve/server';
+
+  const engine = new SolveEngine({ limits }); // the 11-field subset of ComputeLimits it needs
+
+  const outcome = await engine.solve({ server, definitionSource, inputs, values, signal });
+  return engine.toWebResponse(outcome); // or toResponse() for a framework-agnostic {status,headers,body}
+  ```
+
+  `engine.solve()` accepts raw bytes, a string, a `DefinitionRef`, an already-built `ByteCacheRef` (from
+  `engine.definitionRef()`, for a caller that needs the bytes before solving — e.g. schema extraction), or
+  a `{ versionId, load }` pair that builds and caches the ref internally. `engine.stats()` aggregates
+  client-cache, definition-byte-cache, and coalescing counters in one call.
+
+  `@selvajs/solve/client` gains `createComputeFetchSolveFn`, a ready-made `SolveFn` for a
+  `/api/compute`-shaped endpoint: 429 cooldown, session-expiry/redirect detection, non-JSON-response
+  guarding, and abort handling at every await point, so a new consumer doesn't have to re-derive them.
+  Mesh decoding stays a caller-supplied `meshes: { loadRhino, extract }` hook — the package never imports
+  a renderer. Debug console telemetry defaults off; pass `debug: true` to enable it.
+
+  `@selvajs/solve`'s TypeScript target moved ES2020 → ES2022 (matching `@selvajs/server`), enabling
+  `Error(message, { cause })`.
+
+  ## `@selvajs/selva`
+
+  Migrated to the new facade: `clientCache.server.ts` + `definitionByteCache.server.ts` +
+  `solveCache.server.ts` collapse into one `engine.server.ts` constructing a single app-wide
+  `SolveEngine`; `/api/compute`'s hand-written coalesce/abort/outcome-mapping block is replaced by
+  `engine.solve()` + `engine.toResponse()` (app policy — auth, DB reads, share tokens, rate limiting,
+  metric recording — stays in the route, unchanged); the library page's `onSolve` closure is replaced by
+  `createComputeFetchSolveFn(...)`. No public behavior change.
+
+## 4.7.4-beta.0
+
+### Patch Changes
+
+- 49cac15: The solve core moves out of `@selvajs/server/compute` into `@selvajs/solve/server`, so the whole
+  "input change → solve result" chain has one owner on both sides of the wire.
+
+  ## Breaking — `@selvajs/server`
+
+  **1. The solve core moved and is NOT re-exported.** Update the import path:
+
+  ```diff
+  -import { runSolvePipeline, createClientCache } from '@selvajs/server/compute';
+  +import { runSolvePipeline, createClientCache } from '@selvajs/solve/server';
+  ```
+
+  Affected: `runSolvePipeline`, `adaptEnvelopeToEncoding`, `COMPUTE_CONTRACT_VERSION`,
+  `COMPUTE_VERSION_HEADER`, `transformInputParameter`, `createClientCache`, `serverIdentity`,
+  `createDefinitionByteCache`, `createMemorySolveResultCache`, `deriveSolveCacheInputKey`,
+  `encodeSolveCacheEntry`, `decodeSolveCacheEntry`, `gunzipEntryBody`, `createSolveCacheSingleFlight`,
+  and their types (`SolveOutcome`, `SolveEnvelope`, `SolvePipelineArgs`, `SolvePipelineCacheHook`,
+  `SolvePhaseMetrics`, `PipelineInput`, `CachedClient`, `ByteCacheRef`, `ByteCacheStats`,
+  `SolveCacheConfigSubset`, …). Add `@selvajs/solve` as a dependency.
+
+  **2. The root export is gone.** `import … from '@selvajs/server'` no longer resolves; use a subpath:
+
+  ```diff
+  -import { resolveComputeLimits } from '@selvajs/server';
+  +import { resolveComputeLimits } from '@selvajs/server/compute';
+  ```
+
+  The root barrel re-exported all nine subpaths into a single 41-symbol namespace, which hid which
+  slice a consumer actually depended on. Nothing in this repo imported it.
+
+  ## What each package owns now
+
+  `@selvajs/server/compute` is **10 exports it owns**: `resolveComputeLimits`,
+  `createComputeRateLimiter`, the SSRF guard (`isSafeRemoteDefinitionUrl` /
+  `assertSafeRemoteDefinitionUrl`), `createRemoteDefinitionFetcher`, and their helpers/types. That is
+  HTTP request policy — admission control and URL safety — which is a different job from running a
+  solve. `@selvajs/server` no longer depends on `@selvajs/solve` at all.
+
+  A compatibility shim was considered and rejected: it left `/compute` at 24 exports of which 14 were
+  borrowed, so the package's surface no longer described what the package did — the exact problem this
+  extraction exists to fix.
+
+  ## `@selvajs/solve` — new `./server` sub-path
+
+  Alongside `./client` and `./shared`, and still deliberately **no root barrel**. Also newly exported:
+  `ByteRefOutcome` and `SolveCacheSingleFlightOptions`, which existed but were never public.
+
+  The client/server boundary is enforced three ways: no root barrel, eslint `no-restricted-imports` on
+  `src/client/**`, and a bundle test that checks the shipped `dist/client.js` for server modules,
+  `process.env` reads and `node:*` imports.
+
+- 7751bd0: Extract parsing and rendering into a new `@selvajs/visualization` package.
+
+  `@selvajs/compute` was doing two unrelated jobs: talking to Rhino.Compute, and turning the response
+  into Three.js objects. The second job is now its own package with documented layer boundaries
+  (`session → scene → render → parse → shared`, depending downward only), so a consumer can build
+  their own viewer over it.
+
+  This lands all five layers — `shared/`, `parse/`, `render/`, `scene/` and `session/`.
+  **`@selvajs/compute` no longer depends on `three` in any form** (peer dep and dev deps both gone);
+  it is now pure solve/data, and `@selvajs/ui` keeps only the Svelte shells plus the design system.
+
+  **Fixed — hiding an object in the viewer now survives a solve.**
+
+  Hiding a mesh in the scene manager and then changing an input brought it straight back: a solve
+  discards all scene content and rebuilds it, and hidden state was keyed on the per-instance
+  `THREE.Object3D.uuid`, which does not survive that. It is now keyed on the object's Grasshopper
+  identity (`sourceComponentId` + `originalIndex`, or a display item's `id`, falling back to
+  name+layer for content from older plugin versions), so it survives any number of solves. Hiding is
+  also remembered when a definition edit stops producing that geometry — if it comes back, it comes
+  back hidden.
+
+  **New in `@selvajs/visualization` — `@selvajs/visualization/scene`:**
+
+  The viewer's object list is no longer trapped in a Svelte component. `createSceneOutliner` answers
+  the questions any presentation of a scene has to answer — which children are content rather than
+  cameras/lights/grid, how they group by layer, what is hidden, what is selected — with no DOM:
+
+  ```ts
+  import { createSceneOutliner } from '@selvajs/visualization/scene';
+
+  const outliner = createSceneOutliner(scene);
+  outliner.searchQuery = 'wall';
+  outliner.layerGroups(); // Map<layerName, Object3D[]>, search-filtered
+  outliner.toggleObject(mesh); // follows a multi-selection
+  outliner.select(uuid, { shiftKey, toggleKey });
+  ```
+
+  It **reads** the scene and toggles `.visible`; `updateScene` remains the sole owner of scene
+  contents. Its mutable state is injectable, so a Svelte host passes `SvelteSet`s and gets reactivity
+  without any subscribe/emit machinery:
+
+  ```ts
+  createSceneOutliner(scene, { sets: { hidden, selected, collapsed } });
+  ```
+
+  Hosts driving their own viewer must call `outliner.applyTo()` after each solve to re-apply hidden
+  state to the rebuilt content — `<Viewer>` does this for you.
+
+  `getSceneObjects`, `groupByLayer`, `filterLayerGroups`, `isSceneContent` and the visibility/selection
+  state machines are exported individually for consumers that want the parts, not the composition.
+
+  **New in `@selvajs/ui` — `useSolveSession`:**
+
+  The Solve Session moved to `@selvajs/visualization/session` and is now framework-free: its state
+  reads through plain getters plus a `subscribe()` seam, so it can drive a headless solve with no
+  Svelte in the picture. In a component, use the new binding instead of the raw factory — it
+  subscribes once and republishes as rune state, which is what keeps `session.values`/`meshes` live
+  in markup:
+
+  ```ts
+  import { useSolveSession } from '@selvajs/ui';
+
+  const driver = createRequestResponseDriver(onSolve, () => session, {
+  	// `isSolving` lives on the driver, which the session can't observe — republish it.
+  	onChange: () => session.notify()
+  });
+  const session = useSolveSession({ schema, scopeKey, driver });
+  ```
+
+  Calling `createSolveSession` directly in a component still compiles and returns correct values, but
+  nothing re-renders. `@selvajs/ui` re-exports it (plus `SolveDriver`, `SolveReporter`, `SolveFn`,
+  `SolveResult` and the `external/storage` helpers) from its new home, so existing imports from
+  `@selvajs/ui` and `@selvajs/ui/external` keep working unchanged.
+
+  **Breaking — `@selvajs/compute`:**
+
+  - **`@selvajs/compute/visualization` is removed entirely.** Everything it exported now lives in
+    `@selvajs/visualization`:
+
+    | Was                                                                                                                                                                                                   | Now                                                                         |
+    | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+    | `initThree`, `updateScene`, camera, grid, gizmo, edges, labels, measure, render pipeline, materials, up-axis helpers                                                                                  | `@selvajs/visualization/render`                                             |
+    | `getThreeMeshesFromComputeResponse`, `parseMeshBatch{,Object,Blob}`, `parseBinaryMeshBatch`, `parseDisplayItems`, texture cache, wire-format constants (`BINARY_MESH_MAGIC`, `FLAG_*`, `UV_FORMAT_*`) | `@selvajs/visualization/parse`                                              |
+    | `LOOKS`, `Look`, `parseColor`, `applyOffset`, `computeCombinedBoundingBox`                                                                                                                            | `@selvajs/visualization/shared` (also re-exported from `/render`)           |
+    | `createSolveSession`, `createRequestResponseDriver`, `SolveDriver`, `SolveReporter`, `SolveFn`, `SolveResult`, `createComputeThrottle`, `createSolveMemo`, the `external/storage` helpers             | `@selvajs/visualization/session` (all still re-exported from `@selvajs/ui`) |
+
+  - `GrasshopperResponseProcessor.extractMeshesFromResponse()` is **removed**. It coupled the solve
+    client to a renderer, which the new layering forbids. Its `response` and `debug` fields are now
+    public, so call the parser directly:
+
+    ```ts
+    import { getThreeMeshesFromComputeResponse } from '@selvajs/visualization/parse';
+
+    const meshes = await getThreeMeshesFromComputeResponse(processor.response, { rhino });
+    ```
+
+  - `initThree` no longer reaches into the texture cache itself — `render/` must not import `parse/`.
+    To keep color maps sharp at grazing angles, wire the new `onMaxAnisotropy` option:
+
+    ```ts
+    import { setTextureAnisotropy } from '@selvajs/visualization/parse';
+
+    initThree(canvas, { onMaxAnisotropy: setTextureAnisotropy });
+    ```
+
+    Omitted, textures keep three's default anisotropy of 1 — sharpness regresses, nothing breaks.
+
+  - `decodeBase64ToBinary` is now exported from the package root (the binary mesh parser needs it, and
+    its forgiving-base64 normalization plus Node pool-slab copy are too subtle to duplicate).
+
+  **Also in this change:** the five largest files were split along the seams they already had, with no
+  behavior change. `three-initializer` 1743→407 (`scene-setup/*`, 14 files — the `ThreeViewer` handle,
+  the postprocessing pipeline and the runtime appearance setters each became their own module),
+  `edges` 874→233 (`edges/{options,extraction,cache,overlay}.ts`), `batch-parser` 1007→466
+  (`batch/{metadata,materials,merge,assembly-worker}.ts`), `binary-parser` 713→329
+  (`binary/{header,geometry,textures}.ts`), `display-items-parser` 440→77
+  (`items/{curves,points,appearance}.ts`), the session's driver split out into
+  `session/drivers/{driver,request-response}.ts`, and `SceneManager.svelte` 319→234 (its logic now in
+  `scene/`). 425 tests pass.
+
 ## 4.7.3
 
 ### Patch Changes

@@ -1,4 +1,3 @@
-// Builder Route Components - Schema builder specific components
 export { default as SchemaInfoPanel } from './SchemaInfoPanel.svelte';
 export { default as AvailableItemList } from './AvailableItemList.svelte';
 export { default as BuilderGroupItem } from './BuilderGroupItem.svelte';

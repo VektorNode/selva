@@ -1,6 +1,6 @@
-// Thin wrappers around PM2 commands: always pass --update-env (ignore edits),
-// resolve to deployment-local pm2 (avoid daemon version skew with global install),
-// and resync daemon before state changes.
+// Thin wrappers around PM2 commands: resolve to the deployment-local pm2, resync
+// the daemon before state changes, and pass --update-env on restart so edits to
+// .env actually take effect.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -9,10 +9,9 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 
-const APP_NAME = 'selva-compute';
+export const APP_NAME = 'selva-compute';
 
-// Resolve to deployment-local pm2 (no global fallback; prevents version skew).
-function pm2Bin(dir) {
+export function pm2Bin(dir) {
 	const local = join(dir, 'node_modules', '.bin', process.platform === 'win32' ? 'pm2.cmd' : 'pm2');
 	if (!existsSync(local)) {
 		throw new Error(
@@ -25,7 +24,32 @@ function pm2Bin(dir) {
 	return local;
 }
 
-// Check for daemon/CLI version mismatch; run `pm2 update` if stale.
+// Parses the two versions pm2 prints alongside its out-of-date warning:
+//   In memory PM2 version: 6.0.14
+//   Local PM2 version: 5.4.3
+// Returns nulls when the shape doesn't match, so callers fall back to resyncing.
+export function parsePm2Skew(output) {
+	// eslint-disable-next-line no-control-regex -- pm2 colourises via chalk on a TTY
+	const clean = output.replace(/\[[0-9;]*m/g, '');
+	const daemon = /In memory PM2 version:\s*v?(\d+\.\d+\.\d+)/i.exec(clean);
+	const local = /Local PM2 version:\s*v?(\d+\.\d+\.\d+)/i.exec(clean);
+	return { daemon: daemon?.[1] ?? null, local: local?.[1] ?? null };
+}
+
+// True when the running daemon is newer than the deployment-local pm2 — i.e. a
+// foreign global pm2 owns it. `pm2 update` can't fix that direction: it would
+// downgrade the daemon and hand it a dump from a newer version, dropping the
+// process table so selva-compute never gets re-registered.
+export function daemonOutranksCli(daemon, local) {
+	if (!daemon || !local) return false;
+	const [a, b] = [daemon.split('.').map(Number), local.split('.').map(Number)];
+	for (let i = 0; i < 3; i++) {
+		if (a[i] > b[i]) return true;
+		if (a[i] < b[i]) return false;
+	}
+	return false;
+}
+
 function ensurePm2InSync(dir) {
 	const bin = pm2Bin(dir);
 	const probe = spawnSync(bin, ['ping'], {
@@ -35,6 +59,16 @@ function ensurePm2InSync(dir) {
 	});
 	const output = (probe.stdout ?? '') + (probe.stderr ?? '');
 	if (!/out-of-date/i.test(output)) return;
+
+	const { daemon, local } = parsePm2Skew(output);
+	if (daemonOutranksCli(daemon, local)) {
+		throw new Error(
+			`The running PM2 daemon (v${daemon}) is NEWER than this deployment's pm2 (v${local}), ` +
+				`so a global pm2 owns it. Running \`pm2 update\` would downgrade the daemon and drop ` +
+				`its process table, leaving ${APP_NAME} unregistered. Resolve the conflict first: ` +
+				`\`which -a pm2\`, \`pm2 -v\`, \`pm2 ping\`.`
+		);
+	}
 
 	p.log.warn(
 		'PM2 in-memory daemon is a different version than the deployment-local pm2 — ' +
@@ -53,8 +87,10 @@ function ensurePm2InSync(dir) {
 	}
 }
 
-function runPm2(dir, args, { inherit = true } = {}) {
-	const bin = pm2Bin(dir);
+// `bin` lets a caller pass an already-resolved pm2 path instead of resolving
+// fresh from `dir` — needed when node_modules won't exist at call time (e.g.
+// `selva migrate` wipes it mid-flight and passes the binary it stashed first).
+export function runPm2(dir, args, { inherit = true, bin = pm2Bin(dir) } = {}) {
 	const result = spawnSync(bin, args, {
 		cwd: dir,
 		stdio: inherit ? 'inherit' : 'pipe',

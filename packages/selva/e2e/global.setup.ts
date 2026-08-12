@@ -6,18 +6,15 @@ import { ADMIN } from '../playwright.config';
 // Provisions the admin session that authed specs reuse. Runs as its own
 // Playwright project (no storageState) before the `authed` project.
 //
-// The flow is idempotent across server reuse:
-//   • Fresh DATA_PATH → `/setup` renders the create-admin form; we fill it,
-//     submit, and land on /admin with a session cookie.
-//   • Server already has an admin (e.g. `reuseExistingServer` locally) →
-//     `/setup` redirects to `/login`; we sign in with the same credentials.
-// Either way we end authenticated, then persist storageState.
+// Idempotent across server reuse: a fresh DATA_PATH lands on the create-admin
+// form at /setup; a server that already has an admin (e.g. `reuseExistingServer`
+// locally) redirects /setup to /login instead, so we sign in with the same
+// credentials. Either way we end authenticated, then persist storageState.
 
 setup('authenticate as admin', async ({ page }) => {
 	await page.goto('/setup');
 
 	if (new URL(page.url()).pathname === '/setup') {
-		// Fresh instance — create the admin.
 		await page.getByLabel('Company name').fill(ADMIN.company);
 		await page.getByLabel('Display name').fill(ADMIN.displayName);
 		await page.getByLabel('Email').fill(ADMIN.email);
@@ -25,15 +22,14 @@ setup('authenticate as admin', async ({ page }) => {
 		await page.getByLabel('Confirm Password').fill(ADMIN.password);
 		await page.getByRole('button', { name: /create account/i }).click();
 	} else {
-		// Admin already exists — sign in instead.
 		await page.goto('/login');
 		await page.getByLabel('Email').fill(ADMIN.email);
 		await page.getByLabel('Password', { exact: true }).fill(ADMIN.password);
 		await page.getByRole('button', { name: /sign in with password/i }).click();
 	}
 
-	// Success leaves the auth page: setup → /admin, login → /library. Either
-	// way we're authenticated; confirm by reaching /admin directly.
+	// setup redirects to /admin, login redirects to /library — either way we're
+	// authenticated; confirm by reaching /admin directly.
 	await page.waitForURL((url) => !/\/(setup|login)$/.test(url.pathname));
 	await page.goto('/admin');
 	await expect(page).toHaveURL(/\/admin$/);

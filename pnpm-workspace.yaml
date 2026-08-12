@@ -9,43 +9,55 @@ catalogs:
     '@lucide/svelte': ^1.30.0
     '@playwright/test': ^1.62.1
     '@sveltejs/adapter-auto': ^7.0.1
-    '@sveltejs/kit': 2.70.1
+    '@sveltejs/kit': 2.70.2
     '@sveltejs/vite-plugin-svelte': ^7.2.0
     '@tailwindcss/vite': ^4.3.3
     '@types/node': ^26.1.2
     '@types/three': ^0.185.4
-    bits-ui: ^2.15.4
+    bits-ui: ^2.18.0
     clsx: ^2.1.1
     eslint: ^10.8.0
     mode-watcher: ^1.1.0
     prettier: ^3.9.6
     rimraf: ^6.0.1
+    sharp: ^0.35.3
     svelte: 5.56.8
     svelte-check: ^4.7.5
     svelte-sonner: ^1.1.1
     tailwind-merge: ^3.5.0
-    tailwind-variants: 3.2.2
+    tailwind-variants: ^3.3.1
     tailwindcss: ^4.3.3
     three: ^0.185.1
+    tsdown: ^0.22.14
     tw-animate-css: ^1.4.0
     # Held at 6.x: svelte-check and svelte2tsx both cap their `typescript` peer
-    # at ^6, and tsup's dts step (rollup-plugin-dts) crashes on TS 7's
-    # restructured compiler host. Tilde so a caret can't walk into the next
-    # major on its own — see the matching ignore in .github/dependabot.yml.
+    # at ^6. Tilde so a caret can't walk into the next major on its own — see
+    # the matching ignore in .github/dependabot.yml.
     typescript: ~6.0.3
     vite: ^8.2.1
     vitest: ^4.1.10
     ws: ^8.21.3
     '@types/ws': ^8.5.13
+    zod: ^4.3.6
 
-onlyBuiltDependencies:
-  - esbuild
-  - '@tailwindcss/oxide'
-  - supabase
+overrides:
+  cookie@<0.7.0: ^0.7.2
+  brace-expansion@>=3.0.0 <5.0.8: ^5.0.8
+  nanoid@<3.3.17: ^3.3.17
 
-ignoredBuiltDependencies:
-  - protobufjs
+peerDependencyRules:
+  allowedVersions:
+    '@sveltejs/kit': 2.70.2
 
 preferWorkspacePackages: true
 
 shared-workspace-lockfile: true
+
+allowBuilds:
+  esbuild: true
+  '@tailwindcss/oxide': true
+  supabase: true
+  protobufjs: false
+  # firebase-tools' optional native regex engine. Unbuilt it falls back to
+  # JS RegExp, which is all the hosting deploy path uses.
+  re2: false

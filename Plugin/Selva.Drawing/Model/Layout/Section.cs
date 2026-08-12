@@ -2,14 +2,10 @@ using Selva.Drawing.Model.Elements;
 
 namespace Selva.Drawing.Model.Layout;
 
-// A Section is an unrendered description that flows into a Document. It carries the content
-// to lay out plus optional per-section overrides for paper, margins, and chrome. It does not
-// know its page numbers — the Document drives pagination and global token resolution so
-// `{page}` / `{pages}` reflect counts across the whole document, not the section.
-//
-// Any field left null falls back to the Document-level default. Section-level header / footer
-// override the Document-level chrome for that section's pages only; the rest of the document
-// keeps its own header/footer.
+// An unrendered description that flows into a Document: content plus optional per-section
+// overrides for paper, margins, and chrome. A Section doesn't know its page numbers — the
+// Document drives pagination and token resolution so `{page}` / `{pages}` count across the
+// whole document, not the section. Any field left null falls back to the Document-level default.
 public sealed class Section
 {
 	public DrawElement Content { get; init; }

@@ -8,12 +8,8 @@ using Xunit.Abstractions;
 
 namespace Selva.Tests;
 
-/// <summary>
-///     Compares the new <see cref="BinaryGeometryWriter"/> output against the old
-///     <c>gzip(float32 + int32)</c> format on synthetic meshes that approximate real WebDisplay
-///     payloads. Benchmarks are <see cref="Fact"/>(Skip = ...) so they don't slow CI; run them
-///     manually when validating performance changes.
-/// </summary>
+// Compares BinaryGeometryWriter output against the old gzip(float32 + int32) format on synthetic
+// meshes approximating real WebDisplay payloads. Run manually when validating performance changes.
 public class BinaryGeometryWriterBenchmarks
 {
     private readonly ITestOutputHelper _output;
@@ -38,7 +34,6 @@ public class BinaryGeometryWriterBenchmarks
     [Fact]
     public void Compare_HeavyMesh()
     {
-        // Approximates the "50MB payload class" referenced in the plan: 1M+ vertices.
         Run("Heavy (1.5M vertices, 4.5M indices)", vertexCount: 1_500_000, indexCount: 4_500_000, bboxSize: 100f);
     }
 
@@ -46,13 +41,11 @@ public class BinaryGeometryWriterBenchmarks
     {
         var (vertices, indices) = GenerateMesh(vertexCount, indexCount, bboxSize);
 
-        // ---- Old format: gzip(float32 vertices + int32 indices) ----
         var oldSw = Stopwatch.StartNew();
         var oldBytes = WriteOldFormat(vertices, indices);
         oldSw.Stop();
         var oldBase64Len = Base64Length(oldBytes.Length);
 
-        // ---- New format: binary writer (int16 quantized or float32 fallback) ----
         var newSw = Stopwatch.StartNew();
         byte[] newBytes;
         BinaryGeometryWriter.WriteResult result;
@@ -77,20 +70,15 @@ public class BinaryGeometryWriterBenchmarks
         _output.WriteLine($"Wire (post-base64)  : {wireRatio * 100:F1}% of old   ({wireSavings * 100:F1}% smaller)");
         _output.WriteLine("");
 
-        // Sanity floor — whatever the input shape, we should never be larger than the gzip path
-        // by more than 10% (and for any non-trivial mesh, should be smaller).
+        // Sanity floor: never more than 10% larger than the gzip path, regardless of input shape.
         Assert.True(newBytes.Length < oldBytes.Length * 1.1,
             $"New format unexpectedly larger than old: new={newBytes.Length:N0}, old={oldBytes.Length:N0}");
     }
 
-    /// <summary>
-    ///     Generates a synthetic mesh whose vertex distribution stresses the quantization path:
-    ///     uniformly distributed in a cube of size <paramref name="bboxSize"/>. Indices are dense
-    ///     triangle fans referencing the generated vertices.
-    /// </summary>
+    /// <summary>Synthetic mesh, vertices uniformly distributed in a cube of side <paramref name="bboxSize"/>.</summary>
     private static (float[] vertices, int[] indices) GenerateMesh(int vertexCount, int indexCount, float bboxSize)
     {
-        var rng = new Random(42); // deterministic for repeatable benchmarks
+        var rng = new Random(42); // fixed seed: benchmark runs must be repeatable
         var vertices = new float[vertexCount * 3];
         for (var i = 0; i < vertices.Length; i++)
         {
@@ -106,10 +94,7 @@ public class BinaryGeometryWriterBenchmarks
         return (vertices, indices);
     }
 
-    /// <summary>
-    ///     Replicates the deleted <c>CompressionHelper.CompressGeometryData</c> exactly so the
-    ///     benchmark compares apples to apples.
-    /// </summary>
+    /// <summary>Replicates the old <c>CompressionHelper.CompressGeometryData</c> format exactly.</summary>
     private static byte[] WriteOldFormat(float[] vertices, int[] faces)
     {
         using var outputStream = new MemoryStream();
@@ -154,9 +139,6 @@ public class BinaryGeometryWriterBenchmarks
         }
     }
 
-    /// <summary>
-    ///     Length of standard base64 encoding for a binary payload of <paramref name="byteCount"/>
-    ///     bytes (4 chars per 3 input bytes, padded to a multiple of 4).
-    /// </summary>
+    /// <summary>Standard base64 length: 4 chars per 3 input bytes, rounded up.</summary>
     private static int Base64Length(int byteCount) => ((byteCount + 2) / 3) * 4;
 }

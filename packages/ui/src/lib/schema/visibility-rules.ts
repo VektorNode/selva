@@ -84,19 +84,15 @@ export function evaluateVisibility(
 	return actionFn(met, defaultValue);
 }
 
-/**
- * Stable key for a layout item: `paramId` for inputs/outputs, `id` for linebreaks.
- * Mirrors the key the renderers use in their `{#each}` blocks.
- */
+/** Must stay identical to the key the renderers use in their `{#each}` blocks. */
 export function itemKey(item: LayoutItem): string {
 	return item.type === 'linebreak' ? item.id : item.paramId;
 }
 
 /**
- * Evaluates every item's visibility once against the current values, keyed by itemKey.
- * Callers that touch the same items more than once per render (column layout + cell
- * render, plus the default-value sweep) read from this single map instead of
- * re-evaluating per access — one source of truth for "what's visible right now".
+ * Evaluates each item once per render. Callers that touch the same item several times
+ * (column layout, then cell render, then the default-value sweep) read this map instead of
+ * re-evaluating, so they can't disagree about what's visible mid-render.
  */
 export function buildVisibilityMap(
 	items: LayoutItem[],

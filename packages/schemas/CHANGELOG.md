@@ -1,5 +1,98 @@
 # Schema Changelog
 
+## 5.0.0-beta.3
+
+### Minor Changes
+
+- 39db6f5: The supported Node floor moves from 22 to 24.
+
+  Node 24 ("Krypton") is the active LTS; Node 22 leaves maintenance in April 2027. Every package's
+  `engines.node` is now `>=24.0.0`, and CI builds and tests on 24 instead of 22.
+
+  **This is visible to operators before it is visible to anyone else.** `@selvajs/cli` derives its
+  floor from its own `engines.node` rather than a literal, so `selva doctor` and the create-time
+  guard follow the bump automatically: a deployment running Node 22 that passed `doctor` yesterday is
+  reported as out of range today. Nothing about the deployment changed — the floor moved under it.
+  Upgrade the host's runtime before taking this version of the CLI.
+
+  The admin UI's update check reports the same thing from the other direction: it compares the
+  running Node against the `engines.node` of the release it fetched from npm, so it starts flagging a
+  Node 22 host as soon as a `>=24` version is published, with no client-side change at all.
+
+  No source change was needed. The Node builtins in use are long-stable (`fs`, `path`, `crypto`,
+  `url`, `os`, `net`, `zlib`), there are no experimental APIs or `--experimental` flags in the tree,
+  and every dependency's own engine range already admitted 24.
+
+## 5.0.0-beta.2
+
+### Minor Changes
+
+- 0629321: Harden the schemas package (schema format v2.13.0 → v2.14.0, no data transform).
+
+  - **The schemaVersion guard now actually works.** The old canonicalisation used `JSON.stringify`'s array-replacer form, which filters keys at every nesting level — every definition serialised as `{}`, so property-level schema edits never triggered the "bump schemaVersion" error. The guard now lives in one shared module (`scripts/lib/version-guard.js`, previously copy-pasted into both generators), deep-sorts and compares real content, ignores doc-only edits (descriptions, section comments), and runs against the PR base branch in CI via `SCHEMA_GUARD_BASE_REF` — previously it could never fire in CI at all.
+  - **GUID fields are explicit.** C# `System.Guid` mapping now comes from `format: "guid"` in the schema, not from sniffing description text for the word "GUID" (a doc rewording could silently change a C# type). Generated C# is byte-identical.
+  - **Type guards and aliases are derived from the LayoutItem union** instead of hand-maintained lists in the generator — a new variant gets its guard and alias membership for free. Output-widget guards are now complete and consistently named `is<Widget>OutputWidget`; the lone previous output guard `isImageWidget` (unused) is renamed `isImageOutputWidget`. `STRING_ALIAS_TYPES` in the C# generator is likewise derived.
+  - **Section-comment keys in ui-schema.json are unique.** Seven duplicate `"//_COMMENT"` keys meant JSON.parse silently kept only the last; a schema-integrity test now enforces uniqueness, resolvable `$ref`s, and union discriminators.
+  - The package now has its own vitest suite (traversal, defaults, version guard, schema integrity), `sideEffects: false`, and JSON subpath exports (`@selvajs/schemas/ui-schema.json`, `@selvajs/schemas/preset-schema.json`). The redundant `generate:all` alias is gone — use `pnpm generate`.
+
+### Patch Changes
+
+- a011c5e: Unify the vitest setup across the workspace behind `@selvajs/config/vitest`.
+
+  Packaging fix: `@selvajs/compute`, `@selvajs/solve`, `@selvajs/visualization`
+  and `@selvajs/schemas` had no test-file exclusion in `files`, so a change of
+  build tool would have shipped tests to npm. All publishable packages now carry
+  the same exclusion.
+
+  `@selvajs/platform`'s test suite was never wired to a runner and had never
+  executed; it now runs with the rest.
+
+## 5.0.0-beta.1
+
+### Patch Changes
+
+- 0e2c428: Clean up published tarballs. The monorepo-internal `source` export condition is renamed to `selva-source` so it can never collide with a consumer resolving the common `source` condition; published packages no longer ship raw `src/` TypeScript or compiled test files. Publish-time manifest rewriting is gone — the committed package.json is what ships, gated by `publint --strict` and a tarball contents check.
+
+## 5.0.0-beta.0
+
+### Major Changes
+
+- 5292563: **Public vocabulary stops promising Rhino.** Coordinated pre-1.0 major — no deprecation shims, no
+  aliases left behind. Every reference across the workspace was updated in the same commit.
+
+  ```diff
+  -import { fetchRhinoCompute, RhinoComputeError } from '@selvajs/compute/core';
+  +import { fetchCompute, ComputeError } from '@selvajs/compute/core';
+  ```
+
+  ```diff
+  -import type { GrasshopperParamType, GrasshopperInputStructure } from '@selvajs/schemas';
+  +import type { ParamType, InputStructure } from '@selvajs/schemas';
+  ```
+
+  Both renamed schema types were already backend-agnostic in value (`ParamType` is
+  `number|integer|boolean|text|valueList|dynamicValueList|file|color|generic`; `InputStructure` is
+  just arity — `item|list|tree`). Only the names were Rhino-flavored. The rename does not touch wire
+  data: `paramType` still serializes as its lowercase string value, never the type name. Regenerated
+  via `pnpm generate` — the C# plugin types regenerate too (`Plugin/Selva.Schema/Models/UISchema.Generated.cs`),
+  so this needs a plugin rebuild.
+
+  **`@selvajs/compute`'s root barrel is gone** — subpaths only, matching `@selvajs/solve` (no root
+  export) and `@selvajs/visualization` (root deliberately empty):
+
+  ```diff
+  -import { GrasshopperClient } from '@selvajs/compute';
+  +import { GrasshopperClient } from '@selvajs/compute/grasshopper';
+  ```
+
+  **Env var renamed:** `MAX_GH_FILE_SIZE_BYTES` → `MAX_DEFINITION_FILE_SIZE_BYTES`. No dual-read —
+  operators update `.env` on upgrade. Everything else in `.env.example` was already neutral
+  (`COMPUTE_*`).
+
+  Also reworded the Rhino-flavored doc strings in `ui-schema.json` that described backend-agnostic
+  fields (e.g. a parameter identifier documented as "Grasshopper instance GUID" when the field
+  itself is just a bare string, backend-specific by convention rather than by type).
+
 ## 4.7.0
 
 ### Minor Changes

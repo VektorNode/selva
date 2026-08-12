@@ -6,9 +6,6 @@ namespace Selva.Drawing.Model.Layout;
 // at both Section and Document scope:
 //   - On a Section: null fields inherit the Document's value.
 //   - On a Document: null fields fall back to the built-in defaults (A4, 10mm, Left, ...).
-//
-// Decoupled from Section/Document so the GH layer can expose layout knobs as one opt-in
-// component instead of mirroring 13 inputs on every Page and Document node.
 public sealed class LayoutOverride
 {
     public PaperSize? PaperSize { get; init; }

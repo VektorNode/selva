@@ -2,20 +2,14 @@ import { ALL_ORG_ASSET_KINDS } from '../organizations/schemas.js';
 import { COVER_IMAGE_EXTENSIONS } from '../definitions/types.js';
 
 /**
- * How a stored asset is allowed to be read. This is a property of the asset
- * *class* (its path prefix), never of the individual file — so a logo and a
- * pricing sheet differ only in which class they belong to, and adding a new
- * asset type is one entry in {@link ASSET_CLASSES} rather than a new route.
+ * How a stored asset is allowed to be read. A property of the asset *class*
+ * (its path prefix), never of the individual file — a new asset type is one
+ * entry in {@link ASSET_CLASSES} rather than a new route.
  *
- * - `public`  — anyone, including logged-out visitors. Served with no auth via
- *   a CDN/public bucket (Supabase) or a shape-gated proxy branch (local). Used
- *   for branding (logo, favicon) that appears on viewer headers and login pages.
- * - `org`     — members of the owning org only. The route resolves the orgId
- *   from the path and runs an org-membership check. Used for org-private docs
- *   (e.g. pricing sheets) once they exist.
- * - `project` — members of the owning project only. The route resolves the
- *   definition guid → its project and runs the project-view check. Used for
- *   definition cover images and other per-definition blobs.
+ * - `public`  — anyone, including logged-out visitors (branding: logo, favicon).
+ * - `org`     — members of the owning org only; route resolves orgId from the path.
+ * - `project` — members of the owning project only; route resolves the
+ *   definition guid to its project (cover images, per-definition blobs).
  */
 export type AssetVisibility = 'public' | 'org' | 'project';
 
@@ -43,29 +37,25 @@ export interface AssetMatch {
 	readonly scopeId: string | null;
 }
 
-// Org branding kinds (logo, favicon, …) are the public set. Built from the
-// schema enum so adding a kind there extends this pattern automatically.
+// Built from the schema enum so a new branding kind extends this pattern automatically.
 const BRANDING_KINDS = ALL_ORG_ASSET_KINDS.join('|');
 
-// Cover extensions are derived from the canonical `COVER_IMAGE_EXTENSIONS`
-// (definitions/types.ts) — strip the leading dot and escape so adding a new
-// cover format there propagates here instead of silently 404ing legit covers.
+// Derived from COVER_IMAGE_EXTENSIONS so a new cover format propagates here
+// instead of silently 404ing legit covers.
 const COVER_EXTS = COVER_IMAGE_EXTENSIONS.map((ext) =>
 	ext.replace(/^\./, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 ).join('|');
 
-// Reusable segment alphabets. `SAFE_SEGMENT` mirrors the `assertSafeKey`
-// alphabet in the path helpers (traversal/empty segments are rejected
-// separately by `hasUnsafeSegment`); `GUID` is the canonical definition guid
-// shape — kept in sync with `UUID_REGEX` in definitions/schemas.ts.
+// SAFE_SEGMENT mirrors the assertSafeKey alphabet in the path helpers
+// (traversal/empty segments are rejected separately by hasUnsafeSegment);
+// GUID is kept in sync with UUID_REGEX in definitions/schemas.ts.
 const SAFE_SEGMENT = String.raw`[A-Za-z0-9._-]+`;
 const GUID = String.raw`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`;
 
 /**
- * The closed registry of servable asset classes. Order matters only for
- * readability — patterns are mutually exclusive by prefix. Anything that
- * matches no class is unservable (the route 404s), which keeps the proxy
- * default-deny: a new blob type is opt-in by adding an entry here.
+ * The closed registry of servable asset classes. Patterns are mutually
+ * exclusive by prefix, order doesn't matter. Anything matching no class is
+ * unservable (the route 404s) — default-deny, so a new blob type is opt-in.
  */
 export const ASSET_CLASSES: readonly AssetClass[] = [
 	{
@@ -91,14 +81,12 @@ export const ASSET_CLASSES: readonly AssetClass[] = [
 ];
 
 /**
- * Reject any path that contains a traversal, empty, or backslash segment
- * *before* it can match a class. The class patterns use a permissive segment
- * alphabet (`[A-Za-z0-9._-]+`) so dotted ids and filenames work, but that
- * alphabet also admits a bare `.` or `..` *as a whole segment* — which would
- * let `orgs/../branding/logo.webp` classify as public branding with `..`
- * captured as the orgId. This mirrors `assertSafeKey` in the path builders:
- * the registry is the read-side gate, those are the write-side gate, and both
- * forbid the same segments so a path that can't be *written* can't be *read*.
+ * Rejects traversal, empty, or backslash segments before a path can match a
+ * class. The permissive segment alphabet (`[A-Za-z0-9._-]+`) admits a bare
+ * `.` or `..` as a whole segment, which would otherwise let
+ * `orgs/../branding/logo.webp` classify as public branding with `..`
+ * captured as the orgId. Mirrors `assertSafeKey` on the write side, so a path
+ * that can't be written can't be read either.
  */
 function hasUnsafeSegment(storagePath: string): boolean {
 	if (storagePath.includes('\\')) return true;
@@ -109,14 +97,13 @@ function hasUnsafeSegment(storagePath: string): boolean {
 }
 
 /**
- * Classify a storage path into its asset class and scope id, or null when no
- * class matches (or the path is unsafe). Callers — `getPublicUrl` (to pick CDN
- * vs proxy) and the serving route (to pick the auth check) — consult this so
- * URL generation and authorization never drift apart.
+ * Classifies a storage path into its asset class and scope id, or null when
+ * no class matches (or the path is unsafe). `getPublicUrl` and the serving
+ * route both consult this so URL generation and authorization never drift
+ * apart.
  *
- * For `org-branding` the orgId is captured as group 1 but the class is public,
- * so `scopeId` is reported as the captured id only when the class actually
- * authorizes against it (`scope !== 'none'`); public classes report null.
+ * `scopeId` is null for `scope: 'none'` classes even when the pattern
+ * captures an id (e.g. `org-branding` captures orgId but is public).
  */
 export function classifyAssetPath(storagePath: string): AssetMatch | null {
 	if (hasUnsafeSegment(storagePath)) return null;

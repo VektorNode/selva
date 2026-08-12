@@ -3,12 +3,9 @@ using Newtonsoft.Json;
 namespace Selva.GH.Features.Display.Services;
 
 /// <summary>
-///     Shared helper for embedding a <see cref="DisplayBatch" />'s envelope inside the binary mesh
-///     blob's metadata header. The blob carries a self-contained copy of the batch (materials,
-///     groups, ids) WITHOUT its own binary payload, so the format stays transport-agnostic and the
-///     client decoder never branches on transport. Both <see cref="MeshBatchProcessor" /> (initial
-///     encode) and <see cref="DisplayBatchTransformer" /> (re-encode after a transform) use this so
-///     the envelope is produced identically in both places.
+///     Serializes a <see cref="DisplayBatch" /> for the binary mesh blob's metadata header, with the
+///     binary payload stripped out (materials/groups/ids only). Used by both <see cref="MeshBatchProcessor" />
+///     and <see cref="DisplayBatchTransformer" /> so the envelope is produced identically either way.
 /// </summary>
 public static class MeshBatchSerialization
 {

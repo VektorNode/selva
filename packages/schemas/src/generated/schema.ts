@@ -1,11 +1,11 @@
 /* eslint-disable */
 /**
- * This file was automatically generated from schemas/ui-schema.json.
- * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file,
- * and run `npm run generate:ts` in the schemas directory to regenerate this file.
+ * This file was automatically generated from packages/schemas/ui-schema.json.
+ * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file
+ * and run `pnpm generate` at the repo root to regenerate it.
  */
 
-export type GrasshopperParamType =
+export type ParamType =
 	| 'number'
 	| 'integer'
 	| 'boolean'
@@ -107,7 +107,7 @@ export type LayoutItem =
 	| OutputDynamicValueListLayoutItem
 	| LineBreakLayoutItem;
 export type LayoutConfig = TabbedLayoutConfig | FlatLayoutConfig;
-export type GrasshopperInputStructure = 'item' | 'list' | 'tree';
+export type InputStructure = 'item' | 'list' | 'tree';
 
 /**
  * Schema definitions for Selva UI configuration
@@ -223,7 +223,7 @@ export interface DropdownWidgetConfig {
 	};
 	required?: boolean;
 	/**
-	 * How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected Grasshopper parameter.
+	 * How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter.
 	 */
 	displayAs?: 'dropdown' | 'checklist';
 }
@@ -245,7 +245,7 @@ export interface DynamicValueListWidgetConfig {
 }
 export interface DynamicValueListOutputConfig {
 	/**
-	 * The Grasshopper instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+	 * The backend parameter's GUID (paramId) of the DynamicValueList input that this output's computed options populate.
 	 */
 	targetInputId: string;
 }
@@ -278,7 +278,7 @@ export interface LayoutItemBase {
 	 */
 	id: string;
 	/**
-	 * References the Grasshopper component InstanceGuid (Data Source)
+	 * References the backend parameter's GUID (Data Source)
 	 */
 	paramId: string;
 	displayName?: string;
@@ -373,7 +373,7 @@ export interface DiscoveredInput {
 	name: string;
 	nickname: string;
 	description: string;
-	type: GrasshopperParamType;
+	type: ParamType;
 	default?: unknown;
 	minimum?: number;
 	maximum?: number;
@@ -432,21 +432,21 @@ export interface DiscoveredParameters {
 }
 export interface SchemaInput {
 	/**
-	 * Grasshopper parameter instance GUID
+	 * Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)
 	 */
 	id: string;
 	nickname: string;
-	paramType: GrasshopperParamType;
+	paramType: ParamType;
 	description?: string;
 	default?: unknown;
 	/**
-	 * Grasshopper data access mode: 'item' = Item Access, 'list' = List Access, 'tree' = Tree Access. Defaults to 'item'.
+	 * Data access mode: 'item' = single value, 'list' = flat list, 'tree' = branching data tree. Defaults to 'item'.
 	 */
 	inputStructure?: 'item' | 'list' | 'tree';
 }
 export interface SchemaOutput {
 	/**
-	 * Grasshopper parameter instance GUID
+	 * Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)
 	 */
 	id: string;
 	nickname: string;
@@ -591,34 +591,34 @@ export const ACCEPTED_FILE_FORMATS = [
 ] as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.12.0';
+export const UI_SCHEMA_VERSION = '2.14.0';
 
 // ============================================================================
-// TYPE GUARDS
+// TYPE ALIASES AND GUARDS (derived from the LayoutItem union)
 // ============================================================================
 
-export function isInputLayoutItem(
-	item: LayoutItem
-): item is
+export type InputLayoutItem =
 	| InputNumberLayoutItem
 	| InputTextLayoutItem
 	| InputDropdownLayoutItem
 	| InputDynamicValueListLayoutItem
 	| InputCheckboxLayoutItem
 	| InputFileLayoutItem
-	| InputColorLayoutItem {
-	return item.type === 'input';
-}
-
-export function isOutputLayoutItem(
-	item: LayoutItem
-): item is
+	| InputColorLayoutItem;
+export type OutputLayoutItem =
 	| OutputTextLayoutItem
 	| OutputNumberLayoutItem
 	| OutputFileLayoutItem
 	| OutputChartLayoutItem
 	| OutputImageLayoutItem
-	| OutputDynamicValueListLayoutItem {
+	| OutputDynamicValueListLayoutItem;
+export type SupportedTypes = string | number | boolean | string[];
+
+export function isInputLayoutItem(item: LayoutItem): item is InputLayoutItem {
+	return item.type === 'input';
+}
+
+export function isOutputLayoutItem(item: LayoutItem): item is OutputLayoutItem {
 	return item.type === 'output';
 }
 
@@ -656,24 +656,28 @@ export function isColorWidget(item: LayoutItem): item is InputColorLayoutItem {
 	return item.type === 'input' && item.widgetType === 'color';
 }
 
-export function isImageWidget(item: LayoutItem): item is OutputImageLayoutItem {
+export function isTextOutputWidget(item: LayoutItem): item is OutputTextLayoutItem {
+	return item.type === 'output' && item.widgetType === 'text';
+}
+
+export function isNumberOutputWidget(item: LayoutItem): item is OutputNumberLayoutItem {
+	return item.type === 'output' && item.widgetType === 'number';
+}
+
+export function isFileOutputWidget(item: LayoutItem): item is OutputFileLayoutItem {
+	return item.type === 'output' && item.widgetType === 'file';
+}
+
+export function isChartOutputWidget(item: LayoutItem): item is OutputChartLayoutItem {
+	return item.type === 'output' && item.widgetType === 'chart';
+}
+
+export function isImageOutputWidget(item: LayoutItem): item is OutputImageLayoutItem {
 	return item.type === 'output' && item.widgetType === 'image';
 }
 
-// Helper type aliases
-export type InputLayoutItem =
-	| InputNumberLayoutItem
-	| InputTextLayoutItem
-	| InputDropdownLayoutItem
-	| InputDynamicValueListLayoutItem
-	| InputCheckboxLayoutItem
-	| InputFileLayoutItem
-	| InputColorLayoutItem;
-export type OutputLayoutItem =
-	| OutputTextLayoutItem
-	| OutputNumberLayoutItem
-	| OutputFileLayoutItem
-	| OutputChartLayoutItem
-	| OutputImageLayoutItem
-	| OutputDynamicValueListLayoutItem;
-export type SupportedTypes = string | number | boolean | string[];
+export function isDynamicValueListOutputWidget(
+	item: LayoutItem
+): item is OutputDynamicValueListLayoutItem {
+	return item.type === 'output' && item.widgetType === 'dynamicValueList';
+}

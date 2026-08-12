@@ -10,15 +10,11 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services.Schema;
 
 /// <summary>
-///     Handles cleanup operations when parameters are deleted from the schema
-///     Ensures transactional cleanup across multiple systems
+///     Cleans up value-applicator cache, embedded values, and web UI state when parameters
+///     are deleted from the schema, so no system is left holding a stale param id.
 /// </summary>
 public class SchemaCleanupService
 {
-    /// <summary>
-    ///     Perform transactional cleanup of deleted parameters
-    ///     Updates all related state atomically
-    /// </summary>
     public void CleanupDeletedParameters(
         List<Guid> removedIds,
         UISchema schema,
@@ -35,12 +31,9 @@ public class SchemaCleanupService
 
         try
         {
-            // Transaction steps:
-            // 1. Remove from value applicator cache (thread-safe)
             var valuesToRemove = removedIds.Select(id => id.ToString()).ToList();
             valueApplicator?.RemoveValues(valuesToRemove);
 
-            // 2. Remove from embedded values
             if (embeddedValues != null)
             {
                 foreach (var key in valuesToRemove)
@@ -49,10 +42,8 @@ public class SchemaCleanupService
                 }
             }
 
-            // 3. Schema is already updated by caller (ValidateSchemaAndTrackChanges)
-            // This is the commit point - schema changes are persisted
-
-            // 4. Broadcast to web UI (fire-and-forget)
+            // Schema itself was already updated by the caller (ValidateSchemaAndTrackChanges);
+            // this is just the fan-out to the other systems that cache a copy of param ids.
             var broadcastTask = webSocketTransport?.BroadcastSchemaUpdate(schema, removedIds);
             if (broadcastTask != null)
             {
@@ -67,11 +58,11 @@ public class SchemaCleanupService
                 });
             }
 
-            // 5. Mark document as modified so changes persist on save
             document?.Modified();
 
             addMessage?.Invoke(GH_RuntimeMessageLevel.Remark,
-                $"Cleaned up {removedIds.Count} deleted parameter(s)");
+                $"Cleaned up {removedIds.Count} deleted parameter(s). Their web UI widgets are set " +
+                "aside and come back if you undo the deletion; saving from the editor discards them.");
         }
         catch (Exception ex)
         {

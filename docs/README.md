@@ -1,69 +1,69 @@
 # Documentation
 
-## Getting Started
+Docs are grouped by who reads them. Pick the folder that matches what you're
+doing; each one is a complete path through its own subject.
 
-- **[what-is-selva.md](what-is-selva.md)** — What Selva is and who it's for
-- **[getting-started/overview.md](./getting-started/overview.md)** — Deployment-first path via the CLI scaffold
-- **[getting-started/build-your-own-app.md](./getting-started/build-your-own-app.md)** — Using the published packages in your own app
-- **[QuickStart.md](QuickStart.md)** — Local dev setup from the repo
-- **[CLI.md](CLI.md)** — `npx @selvajs/cli` and the `selva` operator commands
-- **[Turborepo.md](Turborepo.md)** — Task orchestration across the monorepo
-- **[Testing.md](Testing.md)** — Vitest and Playwright
+Most of what's here also appears on the [Selva docs site](https://selva.dev/docs),
+which builds its nav from the folder layout plus each file's `published: true`
+frontmatter (see [`packages/website/src/lib/docs.ts`](../packages/website/src/lib/docs.ts)).
+Check the site for what's currently public.
 
-## Backend Providers
+## Start here
 
-- **[providers.md](providers.md)** — Provider model overview (auth / data / storage slots)
-- **[providers/local.md](./providers/local.md)** / **[@selvajs/local-provider](../packages/providers/local/README.md)** — Filesystem + JSON + HMAC. Default. Single-instance.
-- **[providers/supabase.md](./providers/supabase.md)** / **[@selvajs/supabase-provider](../packages/providers/supabase/README.md)** — Supabase Auth + Postgres + Storage. Multi-instance, RLS.
-- **[providers/header-auth-entra.md](./providers/header-auth-entra.md)** / **[@selvajs/header-auth-provider](../packages/providers/header-auth/README.md)** — Trusts identity headers from a reverse proxy (Caddy, oauth2-proxy, Entra, etc.).
-- **[providers/writing-a-provider.md](./providers/writing-a-provider.md)** — Implementing the platform interfaces yourself
+- **[what-is-selva.md](./what-is-selva.md)** — the problem Selva solves and the two halves that make it work
+- **[architecture.md](./architecture.md)** — how the plugin, app, Rhino.Compute, and providers fit together
 
-## Plugin
+Both are audience-neutral; read one, then branch.
 
-- **[plugin/overview.md](./plugin/overview.md)** — The five feature areas ([ui-builder](./plugin/ui-builder.md), [display](./plugin/display.md), [file-io](./plugin/file-io.md), [compute-io](./plugin/compute-io.md), [drawing](./plugin/drawing.md))
+## [self-hosting/](./self-hosting/) — run the Selva app
 
-## Deployment
+For operators deploying and running `@selvajs/selva`. Covers getting a first
+deployment live (`get-started/`), putting it on a server behind a proxy
+(`deployment/`), choosing an auth/data/storage backend (`providers/`), and the
+behaviour you need to understand to run it well — permissions, caching, limits,
+scaling (`concepts/`).
 
-- **[GCE-Linux.md](./deployment/GCE-Linux.md)** — Linux VM deploy behind Caddy
-- **[Entra.md](./deployment/Entra.md)** — Entra SSO via oauth2-proxy + Caddy
-- **[Caddyfile.example](./deployment/Caddyfile.example)** — Reference Caddy config
-- **[RhinoCompute.md](./RhinoCompute.md)** — Set up the Rhino.Compute server
-- **[Caching.md](./Caching.md)** — The three solve caches, their settings, and costs
+## [packages/](./packages/) — build on `@selvajs/*`
 
-## Concepts & Operations
+For developers embedding Selva's pieces in their own product rather than
+deploying the standalone app. Each package's own README is authoritative for its
+API; these pages cover how the packages fit together. The
+[packages page](https://selva.dev/packages) on the site lists every package with
+links to its README and npm entry.
 
-- **[permissions.md](permissions.md)** — Platform / org / project scopes, invites, share links
-- **[admin.md](admin.md)** — The `/admin` operator area, section by section
-- **[security-and-limits.md](security-and-limits.md)** — Rate limits, size/queue caps, SSRF guard, secrets, cookies
+## [contributing/](./contributing/) — work on this repo
 
-## Architecture
+Repo-only notes, never published: how the monorepo builds and caches
+(`turborepo.md`), how tests are laid out (`testing.md`), and how npm packages and
+the Grasshopper plugin get released (`publishing.md`).
 
-- **[architecture.md](architecture.md)** — System shape: plugin, web app, Rhino.Compute, schema codegen
-- **[Scaling.md](./Scaling.md)** — Current limits of the compute/data path and the staged scaling roadmap
-- **[ADR 0001 — Pre-Step Producers](./adr/0001-pre-step-producers.md)**
-- **[ADR 0002 — Grasshopper Bridge Seam](./adr/0002-grasshopper-bridge-seam.md)**
-- **[ADR 0003 — Large File Output Streaming](./adr/0003-large-file-output-streaming.md)**
-- **[ADR 0004 — Compute Server Identity and LB Affinity](./adr/0004-compute-server-identity-and-lb-affinity.md)**
-- **[ADR 0005 — UISchema Version and Disposable Schema Cache](./adr/0005-uischema-version-and-disposable-schema-cache.md)**
-- **[ADR 0006 — Multi-org URL Shape and Reserved Slugs](./adr/0006-multi-org-url-shape-and-reserved-slugs.md)**
+## [adr/](./adr/) — architecture decision records
+
+Why things are the way they are. Excluded from the website glob — internal
+records, not pages.
+
+- [0001: Pre-Step Producers](./adr/0001-pre-step-producers.md)
+- [0002: Grasshopper Bridge Seam](./adr/0002-grasshopper-bridge-seam.md)
+- [0003: Large File Output Streaming](./adr/0003-large-file-output-streaming.md)
+- [0004: Compute Server Identity and LB Affinity](./adr/0004-compute-server-identity-and-lb-affinity.md)
+- [0005: UISchema Version and Disposable Schema Cache](./adr/0005-uischema-version-and-disposable-schema-cache.md)
+- [0006: Multi-org URL Shape and Reserved Slugs](./adr/0006-multi-org-url-shape-and-reserved-slugs.md)
+- [0007: Credential Recovery & Self-Change Belong on `IAuthProvider`](./adr/0007-auth-credential-recovery-and-change-gap.md)
+
+## Conventions
+
+Every doc that can reach the site lives at `audience/group/doc.md` — the folder
+decides its sidebar group, so there is no `group:` frontmatter to drift out of
+sync with the path. `contributing/` is exempt: it never reaches the site.
+
+A published doc's path is its public URL. Moving one after release needs a
+`REDIRECTS` entry in `docs.ts`, or the old link breaks.
+`packages/website/tests/docs-structure.test.ts` enforces the layout and checks
+every relative link, so both failures show up as a red test rather than a wrong
+sidebar or a dead link.
 
 ## Plans
 
-See **[plans/README.md](./plans/README.md)** for the authoritative status + implementation order.
-
-- **[Data Access Efficiency Audit](./plans/data-access-efficiency-audit.md)** — Pre-scale audit of the compute/data path with open efficiency items
-- **[API v1 Redesign](./plans/api-redesign-plan.md)** — One versioned `/api/v1` surface for both browser and token-based clients
-- **[Token-based API Auth](./plans/token-plan.md)** — Personal access tokens (PATs) + managed public API; MCP designed-but-deferred
-- **[Pre-solved Bundle + Prewarm](./plans/presolve-bundle.md)** — Ship a pre-solved definition bundle and prewarm the solve caches (F1)
-- **[Visualization Package](./plans/visualization-package.md)** — Extract a headless `@selvajs/visualization` (parse + scene + render + session)
-- **[Compute Package Cleanup](./plans/compute-package-cleanup.md)** — Rhino.Compute-focused `@selvajs/compute` with smaller files + cleaner API (follows visualization-package)
-- **[Plugin Compat Gate](./plans/plugin-compat-gate.md)** — Plugin/app compatibility gating
-- **[Edge Overlay — open residue](./plans/edge-overlay-open.md)** — Remaining edge-rendering items (full plan archived)
-- **[Display Pipeline — open residue](./plans/display-pipeline-open.md)** — Remaining display-pipeline items (full audit archived)
-- **[Verify slider-drag solve path](./plans/verify-slider-drag-solve-path.md)** — Trace of the slider-drag solve path
-
-Completed/superseded plans are archived under [`./plans/archive/`](./plans/archive/).
-
-## Release Management
-
-- **[Publishing.md](./Publishing.md)** — npm releases (Changesets) and Grasshopper plugin (Yak)
+See **[plans/README.md](../plans/README.md)**, the authoritative status and
+implementation order for in-progress and archived work. Not duplicated here since
+it drifts fast; that file is the source of truth.

@@ -1,0 +1,35 @@
+name: Task
+description: Maintenance, refactor, test coverage, or tooling work
+type: Task
+labels: ['needs-triage']
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs doing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why now?
+      description: What is worse if this is left alone.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Selva?
+      options:
+        - Not sure
+        - Grasshopper plugin (C#)
+        - Schema builder / plugin UI
+        - Cloud app
+        - 3D viewer
+        - Solving / Rhino.Compute
+        - Auth, projects, permissions
+        - Build, CI, deployment
+    validations:
+      required: true

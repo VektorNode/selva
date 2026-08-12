@@ -1,10 +1,10 @@
 /**
- * Pins the §1c contract: `verifyToken` runs on every authenticated request, so
- * it must be READ-ONLY — it never rewrites `auth-users.json`. `lastLoginAt` is
- * a login-time concern, stamped by `verifyLogin`, and its only consumers treat
- * it as a has-ever-signed-in flag (admin/team "invited" vs "active" labels).
+ * `verifyToken` runs on every authenticated request, so it must stay
+ * READ-ONLY — never rewrite `auth-users.json`. `lastLoginAt` is a login-time
+ * concern stamped by `verifyLogin`; its only consumers treat it as a
+ * has-ever-signed-in flag (admin/team "invited" vs "active" labels).
  *
- * Regression guard for a per-request write creeping back into `verifyToken`.
+ * Regression guard against a per-request write creeping back into `verifyToken`.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';

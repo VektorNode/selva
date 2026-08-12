@@ -24,15 +24,13 @@
 
 	export interface EditPatch {
 		displayName: string;
-		description?: string;
-		category?: string;
-		tags?: string[];
+		description?: string | null;
+		category?: string | null;
+		tags?: string[] | null;
 		coverImage?: string;
 		status: DefinitionStatus;
 		projectId?: string;
 		computeServerId: string | null;
-		/** L2 solve-cache quota: null = inherit global default, 0 = off, N = cap. */
-		solveCacheLimit: number | null;
 	}
 
 	interface Props {
@@ -86,12 +84,6 @@
 	let projectId = $state(record.projectId);
 	/* svelte-ignore state_referenced_locally */
 	let computeServerId = $state<string | null>(record.computeServerId ?? null);
-	// Empty string = inherit the global default (persisted as null); a number = the
-	// per-definition quota (0 disables). Kept as a string so "blank" is distinct from 0.
-	/* svelte-ignore state_referenced_locally */
-	let solveCacheLimit = $state<string>(
-		record.solveCacheLimit === undefined ? '' : String(record.solveCacheLimit)
-	);
 	/* svelte-ignore state_referenced_locally */
 	let status = $state<DefinitionStatus>(record.status as DefinitionStatus);
 	let userImageMode = $state<'url' | 'upload' | undefined>(undefined);
@@ -126,8 +118,10 @@
 		pendingProjectId = null;
 	}
 
+	// An uploaded cover is stored as the storage provider's public URL
+	// (`/api/files/…`); anything else was typed in as an external URL.
 	const imageMode = $derived<'url' | 'upload'>(
-		userImageMode ?? (record.coverImage?.startsWith('/api/definitions/') ? 'upload' : 'url')
+		userImageMode ?? (record.coverImage?.startsWith('/api/files/') ? 'upload' : 'url')
 	);
 
 	const statusItems: FilterableDropdownItem[] = [
@@ -158,7 +152,7 @@
 		const formData = new FormData();
 		formData.append('image', imageInput.files[0]);
 		try {
-			const res = await fetch(`/api/definitions/${record.guid}/image`, {
+			const res = await fetch(`/api/v1/definitions/${record.guid}/image`, {
 				method: 'POST',
 				body: formData
 			});
@@ -179,23 +173,15 @@
 	}
 
 	function save() {
-		// Blank → inherit (null); a valid non-negative integer → the quota; anything
-		// else (NaN, negative) → inherit rather than persisting garbage.
-		const parsedCacheLimit = solveCacheLimit.trim() === '' ? null : Number(solveCacheLimit);
-		const nextCacheLimit =
-			parsedCacheLimit !== null && Number.isInteger(parsedCacheLimit) && parsedCacheLimit >= 0
-				? parsedCacheLimit
-				: null;
 		onSave(record.guid, {
 			displayName,
-			description: description || undefined,
-			category: category || undefined,
-			tags: tags.length ? tags : undefined,
+			description: description || null,
+			category: category || null,
+			tags: tags.length ? tags : null,
 			coverImage: coverImageUrl || undefined,
 			status,
 			projectId: projectId || undefined,
-			computeServerId,
-			solveCacheLimit: nextCacheLimit
+			computeServerId
 		});
 	}
 </script>
@@ -234,7 +220,12 @@
 		</Tabs.List>
 
 		<Tabs.Content value="versions" class="mt-4 flex-1 overflow-y-auto px-6 py-5">
-			<VersionsSection definitionGuid={record.guid} {onOpenRunner} />
+			<VersionsSection
+				definitionGuid={record.guid}
+				liveVersionId={record.liveVersionId}
+				draftVersionId={record.draftVersionId}
+				{onOpenRunner}
+			/>
 		</Tabs.Content>
 
 		<Tabs.Content value="details" class="mt-4 flex-1 space-y-5 overflow-y-auto px-6 py-5">
@@ -351,21 +342,6 @@
 					{/if}
 				</div>
 			{/if}
-
-			<div class="space-y-1.5">
-				<Label for="edit-cache">Solve cache limit</Label>
-				<Input
-					id="edit-cache"
-					type="number"
-					min={0}
-					bind:value={solveCacheLimit}
-					placeholder="Inherit default"
-				/>
-				<p class="text-muted-foreground text-xs">
-					Cached solves kept for this definition. Leave blank to inherit the server default;
-					<span class="font-medium">0</span> disables caching (use for random / time-based definitions).
-				</p>
-			</div>
 		</Tabs.Content>
 
 		{#if enableSharing}

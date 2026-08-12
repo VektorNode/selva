@@ -11,9 +11,9 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Phase 7 layout component: a vertical or horizontal stack of drawing elements with
-// uniform spacing and a single cross-axis alignment. Outputs a layout element that the
-// renderer resolves into positioned primitives at render time.
+// Stacks drawing elements vertically or horizontally with uniform spacing and one
+// cross-axis alignment. Outputs a layout element the renderer resolves into positioned
+// primitives at render time.
 public class GH_Stack : GH_Component
 {
     public GH_Stack()

@@ -124,13 +124,12 @@
 		isTabDragging = false;
 		const items = e.detail.items;
 
-		// Source-only: a tab was dragged out into another zone. No reorder.
+		// A tab was dragged out into another zone — this zone stays source-only, no reorder.
 		if (e.detail.info?.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) {
 			localTabs = [...(tabs as ZoneTab[])];
 			return;
 		}
 
-		// Pure tab reorder.
 		const committed = items.filter((it) => !it.isDndShadowItem) as TabConfig[];
 		const oldIds = tabs.map((t) => t.id);
 		const newIds = committed.map((t) => t.id);
@@ -152,15 +151,13 @@
 		}
 	}
 
-	// Hover-to-mark-pending during a group drag. svelte-dnd-action's dragged
-	// clone sits over the cursor and absorbs pointer events, so onpointerenter
-	// on each tab never fires. Instead, listen globally to pointermove and use
-	// elementsFromPoint (which returns the stack including elements under the
-	// dragged clone) to find the tab the user is hovering. We do NOT call
-	// onTabChange here — switching the active tab mid-drag swaps DOM in the
-	// destination's dndzone and terminates the drag. Instead, surface the
-	// hovered tab id to the parent, which commits the cross-tab move on
-	// finalize.
+	// svelte-dnd-action's dragged clone sits over the cursor and absorbs pointer
+	// events, so onpointerenter on a tab never fires during a group drag. Instead,
+	// track pointermove globally and use elementsFromPoint (which sees through the
+	// clone) to find the hovered tab. Never call onTabChange here — switching the
+	// active tab mid-drag swaps DOM in the destination's dndzone and kills the
+	// drag. Surface the hovered id to the parent instead; it commits the
+	// cross-tab move on finalize.
 	let pendingTargetTabId: string | null = $state(null);
 	let tabRefs = $state<Record<string, HTMLElement>>({});
 

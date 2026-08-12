@@ -1,6 +1,6 @@
 import type {
 	DiscoveredInput,
-	GrasshopperParamType,
+	ParamType,
 	NumberWidgetConfig,
 	TextWidgetConfig,
 	DropdownWidgetConfig,
@@ -65,7 +65,7 @@ export type OutputWidgetConfig =
 export type WidgetConfig = InputWidgetConfig | OutputWidgetConfig;
 
 export function mapParamTypeToWidgetType(
-	paramType: GrasshopperParamType | 'chart' | 'file',
+	paramType: ParamType | 'chart' | 'file',
 	category: 'input' | 'output'
 ): WidgetType {
 	if (category === 'output') {

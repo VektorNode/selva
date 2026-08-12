@@ -4,55 +4,52 @@ import { randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
  * HMAC token codec — the primitive behind capability-URL tokens (share links,
  * invites, and anything shaped like them).
  *
- * ## Two-part design
- *
- * Each minted token involves TWO secrets:
- *
- *   1. **Per-token secret** — generated in `mintRawToken()` from 32 random
- *      bytes, returned to the caller exactly once at mint time. Different
- *      every token. This is what end-users carry in `?token=…`.
- *
- *   2. **Instance-wide HMAC secret** (`config.secret`) — used to hash tokens
- *      for storage. The store sees only `HMAC-SHA256(secret, token)`. A
- *      DB-only leak therefore can't be replayed: the attacker would need the
- *      secret too, and it lives in env, not the database.
- *
  * ## Format
- *   raw    = `<prefix><base64url(32 random bytes)>`
- *   hash   = base64url( HMAC-SHA256(secret, raw) )
+ *   raw  = `<prefix><base64url(32 random bytes)>`
+ *   hash = base64url( HMAC-SHA256(secret, raw) )
  *
- * The resolution path hashes the supplied token with the same secret and looks
- * up by exact match against the stored hash.
+ * ## Two secrets per token
  *
- * Rotating the secret invalidates every token minted under it — give each
- * token family (each prefix) its own secret so they rotate independently.
+ *   1. **Per-token entropy** — the 32 random bytes in `mintRawToken()`, handed
+ *      back exactly once at mint time and never stored. This is what end-users
+ *      carry in `?token=…`.
+ *
+ *   2. **Instance-wide HMAC secret** (`config.secret`) — hashes tokens for
+ *      storage, so the store holds only `HMAC-SHA256(secret, raw)`. A DB-only
+ *      leak can't be replayed: the attacker also needs the secret, and it lives
+ *      in env, not the database.
+ *
+ * Resolution hashes the supplied token with the same secret and looks up an
+ * exact match against the stored hash.
+ *
+ * Rotating the secret invalidates every token minted under it — give each token
+ * family (each prefix) its own secret so they rotate independently.
  */
 
 /**
- * Minimum accepted secret length. Matches the "random ≥32-byte string"
- * guidance everywhere these secrets are documented; enforced here so a
- * short dev secret can't reach production silently (presence-only checks
- * let a 4-char secret through).
+ * Minimum accepted secret length, matching the "random ≥32-byte string"
+ * guidance these secrets are documented under. Enforced here because a
+ * presence-only check lets a 4-char dev secret reach production silently.
  */
 export const MIN_TOKEN_SECRET_LENGTH = 32;
 
 export interface TokenCodecConfig {
 	/** Token-family marker prepended to every raw token, e.g. `share_`. */
 	prefix: string;
-	/** Instance-wide HMAC secret. Must be at least 32 characters. */
+	/** Instance-wide HMAC secret; one per token family so they rotate apart. */
 	secret: string;
 }
 
 export interface TokenCodec {
-	/** Mint: generate a fresh raw token. Show to the caller exactly once. */
+	/** Fresh raw token. Never persisted — show it to the user exactly once. */
 	mintRawToken(): string;
-	/** Hash a raw token to its store-side representation. */
+	/** Raw token to the hash stored in its place. */
 	hashToken(raw: string): string;
-	/** Constant-time equality for two stored hashes. */
+	/** Constant-time compare, so a mismatch leaks no position information. */
 	hashesEqual(a: string, b: string): boolean;
-	/** Recognize this codec's token format on inbound requests. */
+	/** Prefix check — recognizes this family's tokens on inbound requests. */
 	looksLikeToken(value: string): boolean;
-	/** The configured prefix, for callers that build URLs or error copy. */
+	/** For callers building URLs or error copy. */
 	readonly prefix: string;
 }
 

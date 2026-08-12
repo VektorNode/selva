@@ -1,9 +1,10 @@
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 import { decodeBase64ToBinary } from '@/core/utils/encoding';
 import { readField } from '@/core/utils/read-field';
 
 import { FileBaseInfo, FileData, ProcessedFile } from './types';
+import { groupFilesByRoot, pathBelowRoot, toArchiveName } from './sub-folder';
 
 /** Extracts and processes files from compute response data without downloading them. */
 export const extractFilesFromComputeResponse = async (
@@ -13,7 +14,7 @@ export const extractFilesFromComputeResponse = async (
 	try {
 		return await processFiles(downloadableFiles, additionalFiles);
 	} catch (err) {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			'Failed to extract files from compute response',
 			ErrorCodes.INVALID_STATE,
 			{
@@ -32,7 +33,7 @@ export const downloadFileData = async (
 ): Promise<void> => {
 	// Check if we're in a browser environment
 	if (typeof document === 'undefined' || typeof Blob === 'undefined') {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			'File download functionality is only available in browser environments. This function requires the DOM API (document, Blob).',
 			ErrorCodes.BROWSER_ONLY,
 			{
@@ -49,11 +50,11 @@ export const downloadFileData = async (
 		const processedFiles = await processFiles(downloadableFiles, additionalFiles);
 		await createAndDownloadZip(processedFiles, fileFoldername);
 	} catch (err) {
-		// Re-throw if it's already a RhinoComputeError
-		if (err instanceof RhinoComputeError) {
+		// Re-throw if it's already a ComputeError
+		if (err instanceof ComputeError) {
 			throw err;
 		}
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			'Failed to download files from compute response',
 			ErrorCodes.INVALID_STATE,
 			{
@@ -65,13 +66,59 @@ export const downloadFileData = async (
 };
 
 /**
+ * Download files as one archive per `Sub Folder` root.
+ *
+ * `ROOT::Panels` and `OTHERROOT::Panels` produce `ROOT.zip` and `OTHERROOT.zip`, each containing
+ * `Panels/…` — the root names the archive instead of nesting inside it. Files with no root fall
+ * back to `fallbackName`, so a definition that never sets `Sub Folder` downloads exactly as before.
+ *
+ * Archives are saved one at a time: browsers discard concurrent downloads issued in the same tick,
+ * and these are user-initiated saves rather than a throughput-bound batch. Note that saving more
+ * than one file per gesture may prompt for permission.
+ *
+ * @param downloadableFiles - `FileData` items from the compute response.
+ * @param fallbackName - Archive name for files with no `Sub Folder` root.
+ * @param additionalFiles - Extra files to package; they carry no root and join the fallback archive.
+ */
+export const downloadFileDataByRoot = async (
+	downloadableFiles: FileData[],
+	fallbackName: string,
+	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
+): Promise<void> => {
+	const groups = groupFilesByRoot(downloadableFiles);
+
+	// Extras alone still deserve an archive; without this they'd be dropped for having no root.
+	if (groups.length === 0) {
+		await downloadFileData([], fallbackName, additionalFiles);
+		return;
+	}
+
+	// Extras belong to the definition rather than to any one root, so they ride with the rootless
+	// archive — or with the first one when every file is rooted, rather than being dropped.
+	const extrasRoot = (groups.find((group) => group.root === '') ?? groups[0]).root;
+
+	for (const { root, files } of groups) {
+		await downloadFileData(
+			root === '' ? files : files.map((file) => ({ ...file, subFolder: pathBelowRoot(file) })),
+			root === '' ? fallbackName : toArchiveName(root),
+			root === extrasRoot ? additionalFiles : null
+		);
+	}
+};
+
+/**
  * Reduce a server-controlled path field to safe relative segments for use inside the zip
  * (zip-slip defense): backslashes normalize to `/`, and empty, `.`, `..`, and drive-letter
  * segments are dropped so no entry can escape the extraction directory via traversal or an
  * absolute path. Returns '' when nothing safe remains.
+ *
+ * `::` nests, matching the `Sub Folder` input's Rhino-layer syntax. The plugin already
+ * normalizes it, so this is for payloads from an older one — without it those land in a
+ * literal folder named `ROOT::Panels`.
  */
 const sanitizeArchivePath = (raw: string): string =>
 	raw
+		.replace(/::/g, '/')
 		.replace(/\\/g, '/')
 		.split('/')
 		.map((segment) => segment.trim())
@@ -131,6 +178,10 @@ const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 			return;
 		}
 
+		// GH-authored, not interpreted here — passed through so a consumer that
+		// stores files rather than zipping them keeps the authoring context.
+		const metadata = readField<Record<string, string>>(item, 'metadata');
+
 		if (isBase64Flag(readField<unknown>(item, 'isBase64Encoded'))) {
 			// `decodeBase64ToBinary` already returns a correctly-bounded view;
 			// re-wrapping `.buffer` would discard its byteOffset/byteLength and
@@ -139,7 +190,9 @@ const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 				processedFiles.push({
 					fileName,
 					content: decodeBase64ToBinary(data),
-					path: filePath
+					path: filePath,
+					subFolder,
+					...(metadata ? { metadata } : {})
 				});
 			} catch (err) {
 				getLogger().warn(`Skipping file "${filePath}": base64 decode failed.`, err);
@@ -148,7 +201,9 @@ const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 			processedFiles.push({
 				fileName,
 				content: data,
-				path: filePath
+				path: filePath,
+				subFolder,
+				...(metadata ? { metadata } : {})
 			});
 		}
 	});
@@ -196,7 +251,9 @@ const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> 
 				return {
 					fileName: safeName,
 					content: new Uint8Array(arrayBuffer),
-					path: subFolder !== '' ? `${subFolder}/${safeName}` : safeName
+					path: subFolder !== '' ? `${subFolder}/${safeName}` : safeName,
+					// No `metadata`: an external URL carries no GH authoring context.
+					subFolder
 				} as ProcessedFile;
 			} catch (error) {
 				getLogger().error(`Error fetching additional file from URL: ${file.filePath}`, error);
@@ -290,7 +347,7 @@ function uniqueArchivePath(path: string, taken: ReadonlySet<string>): string {
 /** Saves a Blob object as a file in the user's browser. */
 function saveFile(blob: Blob, filename: string) {
 	if (typeof document === 'undefined') {
-		throw new RhinoComputeError(
+		throw new ComputeError(
 			'saveFile requires a browser environment with DOM API access.',
 			ErrorCodes.BROWSER_ONLY,
 			{

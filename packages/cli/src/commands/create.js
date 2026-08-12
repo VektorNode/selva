@@ -1,21 +1,45 @@
-// Scaffold a fresh deployment: write .env (merged from template + prompts),
-// ecosystem.config.cjs, package.json, and bootstrap node_modules. Runtime
-// templates are the source of truth; providers are env-driven.
+// Scaffolds a fresh deployment: package.json, node_modules, .env (merged from
+// template + prompts), and ecosystem.config.cjs.
 
 import { writeFileSync, existsSync, mkdirSync, readFileSync, cpSync } from 'node:fs';
-import { resolve, join, basename } from 'node:path';
+import { resolve, join, basename, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { collectConfig, collectConfigFromEnv } from '../prompts.js';
 import { generateKey } from '../secrets.js';
 import { writeEnvFile } from '../env.js';
-import { isEmptyOrMissing } from '../paths.js';
-
-const CLI_VERSION = '0.1.0';
+import {
+	isEmptyOrMissing,
+	requiredNodeRange,
+	runtimeTemplatePath,
+	scaffoldVersion
+} from '../paths.js';
+import {
+	buildDeploymentPackageJson,
+	npmDistTagVersion,
+	resolveSelvaPins
+} from '../deployment-package.js';
+import { satisfiesNodeRange } from '../node-range.js';
 
 export async function runCreate(argv) {
 	const { dir: rawDir, force, skipInstall, yes } = parseArgs(argv);
+
+	// Scaffolding under too old a Node installs and passes the health check,
+	// then fails only under real traffic — npm treats an engine mismatch as a
+	// warning, not an error, unless engine-strict is set, which no deployment
+	// sets. Refuse now, while the operator is still choosing their environment.
+	const required = requiredNodeRange();
+	if (required && satisfiesNodeRange(process.versions.node, required) === false) {
+		console.error(
+			`${pc.red('✗')} Selva requires Node ${required}, but this shell runs ` +
+				`v${process.versions.node}.\n` +
+				`  A deployment scaffolded here would install and start, then fail once real\n` +
+				`  requests hit newer Node APIs. Upgrade Node first (nvm, fnm, or your package\n` +
+				`  manager), then re-run this command.`
+		);
+		process.exit(1);
+	}
 
 	const targetDir = resolve(rawDir);
 	if (!isEmptyOrMissing(targetDir) && !force) {
@@ -27,20 +51,29 @@ export async function runCreate(argv) {
 	}
 	mkdirSync(targetDir, { recursive: true });
 
-	// --yes or CI=1 skips prompts (unattended bootstrap).
 	const nonInteractive = yes || envBool(process.env.CI);
 	const values = nonInteractive
 		? collectConfigFromEnv(process.env)
 		: await collectConfig({ defaults: {}, mode: 'create' });
 
-	// Generate fresh secrets (stable across restarts; init refuses to regen).
 	values.SELVA_HMAC_KEY = generateKey();
 	values.SELVA_AT_REST_KEY = generateKey();
 
 	const deployName = basename(targetDir);
 
-	// Write package.json, then install (need templates from @selvajs/selva).
-	const pkgJson = buildPackageJson(deployName, values);
+	// Resolve the dist-tags to concrete versions before writing. A stored
+	// `"latest"` re-resolves on every later `npm install`, so the deployment
+	// would follow the tag instead of the version it was scaffolded against —
+	// and `selva doctor` reports a floating pin as drift.
+	const { pins } = resolveSelvaPins({}, npmDistTagVersion);
+
+	// package.json first: npm install needs it, and the runtime templates below
+	// only exist once @selvajs/selva is installed into node_modules.
+	const pkgJson = JSON.stringify(
+		buildDeploymentPackageJson({ name: deployName, dependencies: pins }),
+		null,
+		2
+	);
 	writeFileSync(join(targetDir, 'package.json'), pkgJson + '\n', 'utf8');
 
 	if (!skipInstall) {
@@ -51,24 +84,23 @@ export async function runCreate(argv) {
 		);
 	}
 
-	// Copy templates from installed runtime.
-	const runtimeTemplates = join(targetDir, 'node_modules', '@selvajs', 'selva', 'templates');
-	if (skipInstall || !existsSync(runtimeTemplates)) {
+	const envTemplatePath = runtimeTemplatePath(targetDir, '.env.example');
+	const ecosystemTemplatePath = runtimeTemplatePath(targetDir, 'ecosystem.config.cjs');
+	if (skipInstall || !existsSync(envTemplatePath)) {
 		p.log.warn(
-			`Couldn't read runtime templates from ${runtimeTemplates}. ` +
+			`Couldn't read runtime templates from ${dirname(envTemplatePath)}. ` +
 				`Run \`npm install\`, then \`selva init\` to finish setup.`
 		);
-		writeFileSync(join(targetDir, '.selva-version'), CLI_VERSION + '\n', 'utf8');
+		writeFileSync(join(targetDir, '.selva-version'), scaffoldVersion() + '\n', 'utf8');
 		p.outro(`Partial scaffold at ${pc.cyan(targetDir)}.`);
 		return;
 	}
 
-	const envTemplate = readFileSync(join(runtimeTemplates, '.env.example'), 'utf8');
-	writeEnvFile(join(targetDir, '.env'), envTemplate, values);
+	writeEnvFile(join(targetDir, '.env'), readFileSync(envTemplatePath, 'utf8'), values);
 
-	cpSync(join(runtimeTemplates, 'ecosystem.config.cjs'), join(targetDir, 'ecosystem.config.cjs'));
+	cpSync(ecosystemTemplatePath, join(targetDir, 'ecosystem.config.cjs'));
 
-	writeFileSync(join(targetDir, '.selva-version'), CLI_VERSION + '\n', 'utf8');
+	writeFileSync(join(targetDir, '.selva-version'), scaffoldVersion() + '\n', 'utf8');
 	writeGitignore(targetDir);
 
 	p.outro(
@@ -87,21 +119,17 @@ export async function runCreate(argv) {
 	);
 }
 
-// Stream npm output with live progress; on failure, show tail for debugging.
-// Cache-bust hint: surface broken versions like @selvajs/selva@0.10.2.
 function runNpmInstall(cwd) {
 	return new Promise((resolveP, rejectP) => {
 		const s = p.spinner();
 		s.start('Installing dependencies (this can take a minute)');
 
-		// Keep last 80 lines for failure output.
 		const tail = [];
 		const remember = (line) => {
 			tail.push(line);
 			if (tail.length > 80) tail.shift();
 		};
 
-		// Extract progress milestones (reify: lines, package count).
 		const updateProgress = (line) => {
 			const trimmed = line.trim();
 			if (!trimmed) return;
@@ -117,7 +145,7 @@ function runNpmInstall(cwd) {
 			if (/^npm (WARN|error|notice)/.test(trimmed)) return;
 		};
 
-		// Spawn with --loglevel=info for reify: progress; pipe stdout/stderr for live updates.
+		// --loglevel=info is what makes npm print the reify: lines updateProgress matches on.
 		const child = spawn('npm', ['install', '--loglevel=info'], {
 			cwd,
 			stdio: ['ignore', 'pipe', 'pipe'],
@@ -161,8 +189,8 @@ function runNpmInstall(cwd) {
 			}
 			s.stop(pc.red(`npm install failed (exit ${code})`));
 
-			// Show what npm actually said. Without this the operator has to
-			// dig through ~/.npm/_logs/*-debug-0.log to find a single line.
+			// Without this the operator has to dig through ~/.npm/_logs/*-debug-0.log
+			// to find out what actually went wrong.
 			console.error('');
 			console.error(pc.dim('── last lines of npm output ──'));
 			for (const line of tail) console.error(line);
@@ -173,7 +201,7 @@ function runNpmInstall(cwd) {
 				console.error(
 					pc.yellow(
 						'npm resolved @selvajs/selva@0.10.2 — that version is broken (unresolved\n' +
-							"workspace:* / catalog: specs) and has been unpublished. Your local npm\n" +
+							'workspace:* / catalog: specs) and has been unpublished. Your local npm\n' +
 							'cache is stale. Clear it and retry:\n\n' +
 							'  npm cache clean --force\n' +
 							'  rm -rf node_modules package-lock.json\n' +
@@ -187,11 +215,37 @@ function runNpmInstall(cwd) {
 	});
 }
 
+// `npx @selvajs/cli` resolves to the `cli` bin — the scaffolder — while every
+// operate command lives on the sibling `selva` bin. So `npx @selvajs/cli doctor
+// --fix` lands here, where "doctor" is just a directory name and `--fix` an
+// unknown flag. Name the bin split rather than letting the operator conclude
+// their CLI is too old for a flag it has shipped for releases.
+const OPERATE_COMMANDS = new Set([
+	'doctor',
+	'start',
+	'stop',
+	'restart',
+	'logs',
+	'update',
+	'migrate',
+	'keys',
+	'init'
+]);
+
 function parseArgs(argv) {
 	let dir;
 	let force = false;
 	let skipInstall = false;
 	let yes = false;
+
+	if (OPERATE_COMMANDS.has(argv[0])) {
+		throw new Error(
+			`\`${argv[0]}\` is an operate command, but \`npx @selvajs/cli\` runs the scaffolder.\n` +
+				`  Run it through the deployment's own CLI instead:\n` +
+				`    npx selva ${argv.join(' ')}`
+		);
+	}
+
 	for (const arg of argv) {
 		if (arg === '--force') force = true;
 		else if (arg === '--skip-install') skipInstall = true;
@@ -205,9 +259,7 @@ function parseArgs(argv) {
 		}
 	}
 	if (!dir) {
-		throw new Error(
-			'Usage: npx @selvajs/cli <directory> [--force] [--skip-install] [--yes]'
-		);
+		throw new Error('Usage: npx @selvajs/cli <directory> [--force] [--skip-install] [--yes]');
 	}
 	return { dir, force, skipInstall, yes };
 }
@@ -215,44 +267,6 @@ function parseArgs(argv) {
 function envBool(v) {
 	if (!v) return false;
 	return ['1', 'true', 'yes'].includes(String(v).toLowerCase());
-}
-
-// Depends on @selvajs/selva (prebuilt) + @selvajs/cli (operator tool).
-// @selvajs/cli links the `selva` bin; without it, only global CLI works.
-function buildPackageJson(name /*, values */) {
-	const deps = {
-		'@selvajs/cli': 'latest',
-		'@selvajs/selva': 'latest',
-		// Deployment-local pm2 (pinned exact to prevent daemon version skew).
-		pm2: '5.4.3'
-	};
-
-	const pkg = {
-		name: sanitizePackageName(name),
-		version: '0.1.0',
-		private: true,
-		type: 'module',
-		scripts: {
-			start: 'selva start',
-			stop: 'selva stop',
-			restart: 'selva restart',
-			logs: 'selva logs',
-			doctor: 'selva doctor',
-			update: 'selva update'
-		},
-		dependencies: deps
-	};
-	return JSON.stringify(pkg, null, 2);
-}
-
-function sanitizePackageName(name) {
-	// npm package names: lowercase, no spaces, limited punctuation.
-	return (
-		name
-			.toLowerCase()
-			.replace(/[^a-z0-9._-]+/g, '-')
-			.replace(/^[-._]+|[-._]+$/g, '') || 'selva-deployment'
-	);
 }
 
 function writeGitignore(dir) {

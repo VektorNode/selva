@@ -30,12 +30,10 @@ export type {
 } from '@selvajs/platform';
 
 /**
- * On-disk file shape. Single document holding *all* servers (platform +
- * org-private), the global `defaultServerId`, and the per-org
- * `orgDefaults` map. Spec §3.
- *
- * `apiKey` on disk is always an `enc:v1:<…>` envelope (AES-256-GCM); the
- * store decrypts on read so callers see plaintext.
+ * On-disk shape of compute.config.json: all servers (platform + org-private)
+ * in one array, the global `defaultServerId`, and the per-org `orgDefaults`
+ * map. `apiKey` is always stored as an `enc:v1:<…>` envelope (AES-256-GCM);
+ * the store decrypts on read so callers see plaintext.
  */
 interface OnDiskShape {
 	servers: ComputeServerConfig[];
@@ -43,19 +41,15 @@ interface OnDiskShape {
 	orgDefaults?: Record<string, string>;
 }
 
-// Fresh object per call — `readJsonFile` returns its fallback BY REFERENCE on a
-// missing file, so a shared module-level constant would let its `servers` /
-// `orgDefaults` references escape (via `readAll`) and risk cross-request bleed
-// if any caller mutated them in place. Matches the sibling stores' `empty()`.
+// `readJsonFile` returns its fallback BY REFERENCE when the file is missing,
+// so a shared module-level constant would let mutations bleed across calls.
 const empty = (): OnDiskShape => ({ servers: [], orgDefaults: {} });
 
 /**
- * Reads/writes compute.config.json. The file is re-read on every read call
- * so changes take effect without a restart.
- *
- * Mutation methods are scope-targeted (`savePlatformServers`,
- * `saveOrgServers`, `setOrgDefault`) — each preserves rows in the other
- * scopes untouched.
+ * Reads/writes compute.config.json, re-read on every call so edits take
+ * effect without a restart. Mutation methods are scope-targeted
+ * (`savePlatformServers`, `saveOrgServers`, `setOrgDefault`) — each leaves
+ * rows in the other scopes untouched.
  */
 export class LocalComputeServerStore implements IComputeServerStore {
 	static fromEnv(
@@ -76,10 +70,6 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		);
 	}
 
-	/**
-	 * `logger` is optional and defaults to `NoopLogger` — library code stays
-	 * silent unless the app wires a real logger in.
-	 */
 	private readonly logger: ILogger;
 
 	constructor(
@@ -100,19 +90,16 @@ export class LocalComputeServerStore implements IComputeServerStore {
 	}
 
 	/**
-	 * Per-row tolerant decrypt. A row whose ciphertext can't be authenticated
-	 * under the current `SELVA_AT_REST_KEY` is returned with `apiKey: undefined`
-	 * and a warning logged once. The page that loaded the config keeps
-	 * rendering; solves against that server will fail later when Rhino.Compute
-	 * rejects the missing key.
+	 * Tolerant per-row decrypt: a row that fails to authenticate under the
+	 * current `SELVA_AT_REST_KEY` comes back with `apiKey: undefined` and a
+	 * logged warning, rather than failing the whole read — the page keeps
+	 * rendering, and a solve against that server fails later when
+	 * Rhino.Compute rejects the missing key. `verifySecrets()` is the strict
+	 * counterpart for boot time.
 	 *
-	 * Boot-time `verifySecrets()` is the strict counterpart — call that from
-	 * the app entrypoint to refuse to start when this state is detected.
-	 *
-	 * Plaintext-on-disk is still hard-fail. That state is never produced by
-	 * the store itself (every write goes through `encryptApiKeys`), so seeing
-	 * it means someone hand-edited the file with a real secret in plaintext —
-	 * which is a security issue we should surface loudly, not paper over.
+	 * Plaintext-on-disk still hard-fails: the store never writes plaintext
+	 * (every write goes through `encryptApiKeys`), so seeing it means someone
+	 * hand-edited the file with a real secret exposed — surface that loudly.
 	 */
 	private decryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {
 		return servers.map((s) => {
@@ -129,8 +116,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 				this.logger.warn(
 					'Could not decrypt apiKey: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
 						'This server is returned without an apiKey and solves against it will fail. ' +
-						'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY. ' +
-						'See docs/Troubleshooting.md',
+						'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY.',
 					{
 						component: 'selva',
 						serverLabel: s.label,
@@ -144,13 +130,11 @@ export class LocalComputeServerStore implements IComputeServerStore {
 	}
 
 	/**
-	 * Boot-time integrity check. Reads every server row and attempts to
-	 * decrypt each encrypted `apiKey`. Returns a structured report — does NOT
-	 * throw. The caller decides what to do (refuse boot, log + degrade, etc.).
-	 *
-	 * Use this from app startup (`hooks.server.ts`) so a key mismatch fails
-	 * loudly at deploy time instead of as a blank page when a user first hits
-	 * a route that loads compute config.
+	 * Boot-time integrity check: attempts to decrypt every server's `apiKey`
+	 * and returns a report instead of throwing — the caller decides what to do
+	 * (refuse boot, log and degrade, etc). Call from `hooks.server.ts` so a key
+	 * mismatch fails loudly at deploy time, not as a blank page when a user
+	 * first hits a route that loads compute config.
 	 */
 	async verifySecrets(): Promise<SecretVerificationReport> {
 		const all = await this.readAll();
@@ -280,11 +264,8 @@ export class LocalComputeServerStore implements IComputeServerStore {
 
 	async deleteByOrg(_ctx: RequestContext, orgId: string): Promise<void> {
 		const all = await this.readAll();
-
-		// Drop org-private rows owned by this org.
 		const remaining = all.servers.filter((s) => !(isOrgServer(s) && s.ownerOrgId === orgId));
 
-		// Strip this org from any platform server's `sharedWith` allowlist.
 		const cleaned: ComputeServerConfig[] = remaining.map((s) => {
 			if (!isPlatformServer(s)) return s;
 			if (s.sharedWith === 'all') return s;

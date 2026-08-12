@@ -8,9 +8,6 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Phase 7 layout component: paragraph layout. Wraps text using real font metrics for line
-// breaking. Width unset (or 0) means "fill the available width from the parent layout"
-// (Page, Frame, Stack, Grid cell). Hard newlines force paragraph breaks.
 public class GH_TextFlow : GH_Component
 {
     public GH_TextFlow()

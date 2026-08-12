@@ -36,11 +36,17 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 	const state = $state<PreviewState>(createInitialPreviewState());
 	const { manager: notification, getMessage: getNotification } = createNotificationManager();
 
-	// The Solve Session and its driver are built on the first initialData (once a schema and
-	// scope key exist). Until then the route is in `loading` and never reads values/meshes.
 	let session: SolveSession | null = null;
 	let driver: PreviewSolveDriver | null = null;
 	let initialized = false;
+	let unsubscribeSession: (() => void) | null = null;
+
+	// The Solve Session is framework-free, so its getters are inert on their own. This counter
+	// is bumped on every session notification and read by the getters below — that's what makes
+	// `values`/`displayMeshes` re-render. useSolveSession does the same via $effect at init, but
+	// this session is built lazily on the first initialData, so the subscription is wired by
+	// hand instead.
+	let sessionVersion = $state(0);
 
 	const reporter: SolveReporter = {
 		report: (result) => session?.report(result),
@@ -50,15 +56,18 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		}
 	};
 
-	// Lazily builds the Solve Session + driver the first time the core reaches for it (which is
-	// from inside handleInitialData's loadValues, once state.schema is set). Before that the
-	// route is in `loading` and never reads values/meshes, so a build-on-demand getter keeps
-	// the pure handlers total without a no-op stand-in.
+	// Built lazily on the first initialData (from inside handleInitialData's loadValues, once
+	// state.schema is set) rather than at init — before that the route is `loading` and never
+	// reads values/meshes, so a build-on-demand getter keeps the pure handlers total without a
+	// no-op stand-in.
 	function getOrBuildSession(): SolveSession {
 		if (!session) {
 			const schema = state.schema!; // set by the core before it touches the session
 			driver = schemaSource.makeSolveDriver(getSessionId(), () => reporter);
 			session = createSolveSession({ schema, scopeKey: getSessionId(), driver });
+			unsubscribeSession = session.subscribe(() => {
+				sessionVersion += 1;
+			});
 		}
 		return session;
 	}
@@ -154,6 +163,8 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		schemaSource.off('parametersAdded', onParametersAdded);
 		driver?.dispose();
 		driver = null;
+		unsubscribeSession?.();
+		unsubscribeSession = null;
 		session = null;
 	}
 
@@ -161,18 +172,25 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		get state() {
 			return state;
 		},
+		// `void sessionVersion` registers the reactive dependency on the session's subscribe()
+		// notifications — without it these getters read correct values but never re-render.
 		/** Values map (inputs + reported outputs). Empty until the session is built. */
 		get values() {
+			void sessionVersion;
 			return session?.values ?? EMPTY_VALUES;
 		},
 		/** Display meshes from the latest solve. Empty until the session is built. */
 		get displayMeshes() {
+			void sessionVersion;
 			return session?.meshes ?? EMPTY_MESHES;
 		},
 		get isSolving() {
+			// No sessionVersion read here: the WebSocket driver's isSolving is backed by the
+			// socket store's own $state, so it is already reactive on its own.
 			return driver?.isSolving ?? false;
 		},
 		get hasPendingChanges() {
+			void sessionVersion;
 			return session?.hasPendingChanges ?? false;
 		},
 		get connected() {

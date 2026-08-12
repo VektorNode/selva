@@ -7,14 +7,13 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Import.Svg;
 
-// Resolved presentation state inherited down the SVG tree. Only the properties the model can
-// represent are tracked (fill, stroke, widths, opacities, fill-rule). Values are read from
-// both presentation attributes (fill="...") and the inline style="..." attribute, with the
-// style attribute taking precedence per CSS.
+// Resolved presentation state inherited down the SVG tree. Tracks only the properties the
+// model can represent (fill, stroke, widths, opacities, fill-rule). Reads both presentation
+// attributes (fill="...") and the inline style="..." attribute; style wins, per CSS.
 internal sealed class SvgStyle
 {
-    // null = not specified at this level → inherit. For fill, SVG's initial value is black;
-    // we resolve that only at ToFill() time so an explicit fill="none" can win over default.
+    // null = not specified at this level, inherit. Fill's default (black) is applied in
+    // ToFill(), not here, so an explicit fill="none" can still win over it.
     public string Fill { get; private set; }
     public string Stroke { get; private set; }
     public double? StrokeWidth { get; private set; }
@@ -46,14 +45,13 @@ internal sealed class SvgStyle
 
     public Fill ToFill()
     {
-        // SVG default fill is black. Explicit "none" → no fill.
         var raw = Fill;
         if (raw != null && raw.Trim().Equals("none", StringComparison.OrdinalIgnoreCase)) return null;
 
         Color color;
         if (raw == null)
         {
-            color = Color.Black; // initial value
+            color = Color.Black;
         }
         else if (!SvgColorParser.TryParse(raw, out color))
         {
@@ -71,7 +69,6 @@ internal sealed class SvgStyle
 
     public Stroke ToStroke()
     {
-        // No stroke unless explicitly set to a paintable color.
         if (Stroke == null) return null;
         if (Stroke.Trim().Equals("none", StringComparison.OrdinalIgnoreCase)) return null;
         if (!SvgColorParser.TryParse(Stroke, out var color)) return null;
@@ -104,7 +101,7 @@ internal sealed class SvgStyle
     private static double? ParseNullableNum(string s)
     {
         if (string.IsNullOrWhiteSpace(s)) return null;
-        // Strip a trailing unit (px, etc.); percentages aren't supported for these props.
+        // Strips a trailing unit (px, etc.); percentages aren't supported here.
         var num = new string(s.TakeWhile(c => char.IsDigit(c) || c == '.' || c == '-' || c == '+').ToArray());
         return double.TryParse(num, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : (double?)null;
     }

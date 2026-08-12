@@ -3,11 +3,9 @@
 // sync-migrations — copy this package's Supabase migrations into a consuming
 // app's supabase/migrations/ directory.
 //
-// Migrations ship with deterministic timestamp-prefixed filenames
-// (<UTCtimestamp>_selva_<name>.sql) so they slot into a consuming app's own
-// migration timeline without colliding, and so every machine/CI produces a
-// byte-identical migration history. We copy verbatim — no rename at copy time,
-// which is what keeps the history stable.
+// Files copy verbatim, never renamed: the timestamp-prefixed filename is the
+// migration's identity in the consuming app's history table, so renaming at
+// copy time would make every machine/CI produce a different history.
 //
 // Usage:
 //   npx @selvajs/supabase-provider sync-migrations [--dir <path>] [--force]
@@ -22,7 +20,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-// dist/cli/ -> package root is two levels up; migrations ship alongside src/dist.
+// Runs from dist/cli/ — package root is two levels up.
 const packageRoot = resolve(here, '..', '..');
 const sourceDir = join(packageRoot, 'supabase', 'migrations');
 

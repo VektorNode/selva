@@ -9,13 +9,13 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Bundles optional layout overrides (paper, margins, chrome) into a single value that plugs
-// into a Document or Page Override input. On a Document the override sets the defaults; on
-// a Page it overrides those defaults for that section's pages only.
+// Bundles optional layout overrides (paper, margins, chrome) into a value that plugs into a
+// Document or Page Override input. On a Document it sets the defaults; on a Page it overrides
+// those defaults for that section's pages only.
 //
-// Every input is optional. Leave a field at its inherit sentinel (-1 for ints/doubles, no
-// connection for chrome elements) and the consumer falls back to its own default — built-in
-// defaults at Document scope, or the Document's value at Page scope.
+// Every input is optional: leave a field at its inherit sentinel (-1 for ints/doubles, no
+// connection for chrome elements) and it falls back to the Document's default, or the built-in
+// default at Document scope.
 public class GH_LayoutOverride : GH_Component
 {
     public GH_LayoutOverride()
@@ -176,7 +176,6 @@ public class GH_LayoutOverride : GH_Component
         DA.SetData(0, ov);
     }
 
-    // -1 = inherit (null), 0 = no reservation, >0 = explicit height (converted to mm).
     private static double? ResolveBandHeight(double input, double mmPerUnit)
     {
         if (input < 0) return null;

@@ -45,7 +45,6 @@
 
 	const selected = new SvelteSet<string>();
 
-	// Default all groups to selected when the dialog opens or the list changes
 	$effect(() => {
 		if (!open) return;
 		selected.clear();

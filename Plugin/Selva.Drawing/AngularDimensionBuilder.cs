@@ -4,9 +4,8 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing;
 
-// Pure builder. Phase 3 reduced this to a thin factory that packs inputs into a
-// DimensionElement; the renderer derives radius/arc/labels from the geometry. Returns
-// null if the two arms are collinear or one of them is degenerate.
+// Packs inputs into a DimensionElement; the renderer derives radius/arc/labels from
+// the geometry. Returns null if the two arms are collinear or one is degenerate.
 public static class AngularDimensionBuilder
 {
     public static DimensionElement Build(
@@ -19,8 +18,6 @@ public static class AngularDimensionBuilder
     {
         if (style == null) throw new ArgumentNullException(nameof(style));
 
-        // Reject degenerate arms or collinear-same-direction inputs early so callers can
-        // report a warning. The renderer also tolerates these but produces no output.
         var dax = ax - vx; var day = ay - vy;
         var dbx = bx - vx; var dby = by - vy;
         if (dax * dax + day * day < 1e-18) return null;
@@ -34,9 +31,8 @@ public static class AngularDimensionBuilder
         var cross = uax * uby - uay * ubx;
         if (Math.Abs(Math.Atan2(cross, dot)) < 1e-6) return null;
 
-        // Reflex flag is not yet on DimensionElement (Phase 3 left it out — typical use is
-        // small-angle). When reflex is requested but unsupported, callers can flip A/B
-        // themselves to get the same effect for now.
+        // DimensionElement has no reflex flag, so this parameter is ignored. Callers
+        // needing the reflex angle should swap A and B instead.
         _ = reflex;
 
         return new DimensionElement

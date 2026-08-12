@@ -10,19 +10,17 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Model.Layout;
 
-// The invariant the 2026-07-27 audit existed to establish: RESOLVED CONTENT NEVER EXCEEDS THE
-// CONTENT RECT IT WAS GIVEN.
+// The invariant: RESOLVED CONTENT NEVER EXCEEDS THE CONTENT RECT IT WAS GIVEN.
 //
-// Every defect in that audit was a specific breach of this one rule — a budget divided by the
-// wrong denominator, a zero read as "unbounded", a cost added after the fit, a measurement taken
-// against the wrong box. Pinning the individual shapes that failed does not stop the next
+// Past bugs were each a specific breach of this rule — a budget divided by the wrong
+// denominator, a zero read as "unbounded", a cost added after the fit, a measurement taken
+// against the wrong box. Pinning the individual shapes that failed doesn't stop the next
 // container inheriting the same class of bug, so this asserts the rule across a cross-product
-// instead: every container, at several nesting depths, at reduction and enlargement scales,
-// captioned and not.
+// instead: every container, at several nesting depths, at reduction scales, captioned and not.
 //
-// A failure here means some container reported a box larger than the room it was handed. Read
-// the theory data in the failure message to see which combination broke, then reproduce that one
-// case directly — the matrix locates the breach, it does not explain it.
+// A failure means some container reported a box larger than the room it was handed. Read the
+// theory data in the failure message to see which combination broke, then reproduce that case
+// directly — the matrix locates the breach, it doesn't explain it.
 public class ContentRectInvariantTests
 {
 	// A4 portrait content rect at 10mm margins, i.e. what a page actually offers.
@@ -45,8 +43,8 @@ public class ContentRectInvariantTests
 		// tracks that sum past the page are the author's arithmetic, and clamping them would
 		// silently discard a declared size. Absolute tracks beside a flexible one ARE covered —
 		// every grid case below puts an Absolute(150) column next to the parameterised track,
-		// which is exactly the shape where a ceiling that ignored committed tracks let the
-		// flexible neighbour measure against room that was already spent.
+		// the shape where a ceiling that ignored committed tracks let the flexible neighbour
+		// measure against room already spent.
 		foreach (var container in new[]
 		{
 			"stack-vertical", "stack-horizontal",
@@ -80,8 +78,8 @@ public class ContentRectInvariantTests
 	}
 
 	// Same cross-product, but through pagination: a document that fits must not be split, and
-	// no emitted page may exceed the rect either. This is where TrySplit and Resolve have to
-	// agree — they are two loops over the same budget and were never compared.
+	// no emitted page may exceed the rect. TrySplit and Resolve are two loops over the same
+	// budget and must agree.
 	[Theory]
 	[MemberData(nameof(Cases))]
 	public void Paginated_pages_never_exceed_the_content_rect(
@@ -204,10 +202,9 @@ public class ContentRectInvariantTests
 		for (var i = 0; i < 60; i++) yield return $"word{i}";
 	}
 
-	// One track of the parameterised kind beside a wide Absolute one. The Absolute column is the
-	// point: a ceiling that ignores committed tracks lets its neighbour measure against room
-	// that was already spent, which is how [Absolute(150), Auto] produced a 245mm grid on a
-	// 190mm sheet.
+	// One track of the parameterised kind beside a wide Absolute one — a ceiling that ignores
+	// committed tracks lets its neighbour measure against room already spent, which is how
+	// [Absolute(150), Auto] produced a 245mm grid on a 190mm sheet.
 	private static Grid Grid2x2(GridLength track, double viewScale, bool captioned) => new Grid
 	{
 		Columns = new List<GridLength> { GridLength.Absolute(150), track },

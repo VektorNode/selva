@@ -5,11 +5,7 @@ export interface RecentRun {
 	timestamp: string;
 }
 
-/**
- * Mutable per-user profile state. Owned by `IUserProfileStore` so OIDC
- * providers (Supabase Auth, Entra, Firebase) don't have to model fields they
- * can't persist — identity from the IdP, profile state from your DB.
- */
+/** Mutable per-user profile state, owned by `IUserProfileStore`. */
 export interface UserProfile {
 	userId: string;
 	displayName?: string;

@@ -36,7 +36,6 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
     protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.ColorInput);
     public bool TreeAccess { get; set; }
 
-    // IGH_ContextualParameter properties
     public string Prompt { get; set; } = "Select a color";
     public int AtLeast { get; set; } = 1;
     public int AtMost { get; set; } = 1;
@@ -90,9 +89,7 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
         return _contextualColor != null;
     }
 
-    /// <summary>
-    ///     Assigns contextual data as a tree - called by Rhino.Compute via reflection.
-    /// </summary>
+    /// <summary>Called by Rhino.Compute via reflection when the input is tree-access.</summary>
     public void AssignContextualDataTree(DataTree<GH_String> data)
     {
         _contextualColor = null;
@@ -135,9 +132,6 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
         _isFromContextual = false;
     }
 
-    /// <summary>
-    ///     Returns contextual JSON for web UI schema discovery.
-    /// </summary>
     public JObject GetContextualJson()
     {
         return new JObject
@@ -170,14 +164,9 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
             return;
         }
 
-        // Fallback: collect from wired sources normally
         base.CollectVolatileData_FromSources();
     }
 
-    /// <summary>
-    ///     Extracts a GH_Colour from various input types.
-    ///     Accepts hex strings like "#FF5733" or GH_Colour directly.
-    /// </summary>
     private static GH_Colour ExtractColor(object item)
     {
         return item switch
@@ -191,9 +180,6 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
         };
     }
 
-    /// <summary>
-    ///     Parses a hex color string (e.g. "#FF5733") into a GH_Colour.
-    /// </summary>
     private static GH_Colour ParseHexToColor(string hex)
     {
         if (string.IsNullOrWhiteSpace(hex))

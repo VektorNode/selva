@@ -10,10 +10,10 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Model.Layout;
 
-// Stage 3 regressions from the 2026-07-27 layout audit: how Stack and Grid divide a budget
-// between children/tracks. Both had the same shape of bug — a measurement pass that guessed at
-// each child's share up front, using a divisor that counted things which would go on to take no
-// space at all. The result was that unrelated content changed the size of a drawing.
+// How Stack and Grid divide a budget between children/tracks. Both had the same shape of
+// bug — a measurement pass that guessed at each child's share up front, using a divisor that
+// counted things which would go on to take no space at all — so unrelated content changed
+// the size of a drawing.
 public class BudgetAllocationTests
 {
 	// ========================================================================================
@@ -28,8 +28,9 @@ public class BudgetAllocationTests
 	public void Empty_siblings_do_not_shrink_the_view_beside_them(int emptyCount)
 	{
 		// ShareOf divided the budget by the number of children still to be measured, counting
-		// ones that occupy nothing. A conditionally-empty branch (an empty nested Stack, a blank
-		// TextFlow) silently rescaled every view on the sheet: 100mm alone, 16.7mm beside five.
+		// ones that occupy nothing. A conditionally-empty branch (an empty nested Stack, a
+		// blank TextFlow) silently rescaled every view on the sheet: 100mm alone, 16.7mm
+		// beside five.
 		var children = new List<DrawElement> { new DrawingView { Geometry = Geometry(100, 100) } };
 		for (var i = 0; i < emptyCount; i++) children.Add(EmptyStack());
 
@@ -43,7 +44,7 @@ public class BudgetAllocationTests
 	public void Empty_siblings_cost_nothing_even_with_no_spacing()
 	{
 		// Isolates the ShareOf divisor from the spacing reserve: with Spacing=0 the spacing
-		// reserve cannot be responsible, and the defect still showed 100/6.
+		// reserve can't be responsible, and the defect still showed 100/6.
 		var children = new List<DrawElement> { new DrawingView { Geometry = Geometry(100, 100) } };
 		for (var i = 0; i < 5; i++) children.Add(EmptyStack());
 
@@ -60,8 +61,8 @@ public class BudgetAllocationTests
 	[Fact]
 	public void Adding_a_caption_below_a_view_does_not_halve_the_view()
 	{
-		// The most common drafting layout there is. The view used to drop from 190mm to 143mm
-		// purely because a second child existed, leaving ~48% of the sheet blank.
+		// The view used to drop from 190mm to 143mm purely because a second child existed,
+		// leaving ~48% of the sheet blank.
 		var page = new LayoutContext(new BoundingBox(0, 0, 190, 277));
 		var alone = new Stack { Children = new DrawElement[] { new DrawingView { Geometry = Geometry(100, 100) } } };
 		var captioned = new Stack
@@ -89,9 +90,9 @@ public class BudgetAllocationTests
 	public void Split_honours_the_budget_it_was_given_not_the_context_it_was_handed(double contextHeight)
 	{
 		// The context was built once from the whole available height and never narrowed, so a
-		// nested stack sized against the entire page while the parent had only `remaining` left
-		// — and the parent accepted the returned FitsHeight unchecked. TrySplit(30) came back
-		// claiming FitsHeight=100.
+		// nested stack sized against the entire page while the parent had only `remaining`
+		// left — and the parent accepted the returned FitsHeight unchecked. TrySplit(30) came
+		// back claiming FitsHeight=100.
 		var stack = new Stack
 		{
 			Children = new DrawElement[] { new DrawingView { Geometry = Geometry(100, 100) } },
@@ -110,8 +111,8 @@ public class BudgetAllocationTests
 	[Fact]
 	public void An_auto_column_beside_an_absolute_one_stays_on_the_sheet()
 	{
-		// available / trackCount never subtracted the Absolute tracks that would consume the
-		// space, so the Auto neighbour measured against room that was never available.
+		// available / trackCount never subtracted the Absolute tracks, so the Auto neighbour
+		// measured against room that was never available.
 		var grid = new Grid
 		{
 			Columns = new List<GridLength> { GridLength.Absolute(150), GridLength.Auto },
@@ -132,8 +133,8 @@ public class BudgetAllocationTests
 	public void Two_auto_columns_do_not_each_claim_the_whole_budget()
 	{
 		// The naive "budget - known" fix reintroduces an older bug: each unknown track measures
-		// against the full remainder and 2 Auto columns sum to 380 on a 190 budget. The ceiling
-		// must divide among the UNKNOWN tracks, not hand each of them everything.
+		// against the full remainder and 2 Auto columns sum to 380 on a 190 budget. The
+		// ceiling must divide among the unknown tracks, not hand each of them everything.
 		var grid = new Grid
 		{
 			Columns = new List<GridLength> { GridLength.Auto, GridLength.Auto },
@@ -160,8 +161,8 @@ public class BudgetAllocationTests
 	public void Auto_columns_hug_their_content_regardless_of_the_budget(double budget)
 	{
 		// Any width-filling child reported the ceiling it was measured against as its natural
-		// width, and the track became equal to it — making Auto byte-identical to Star. Two
-		// "Qty" cells (about 10mm of ink) sized to whatever the page offered.
+		// width, making Auto byte-identical to Star. Two "Qty" cells (about 10mm of ink)
+		// sized to whatever the page offered.
 		var grid = new Grid
 		{
 			Columns = new List<GridLength> { GridLength.Auto, GridLength.Auto },
@@ -182,8 +183,8 @@ public class BudgetAllocationTests
 	[Fact]
 	public void TextFlow_reports_the_width_it_occupies_not_the_width_it_may_wrap_within()
 	{
-		// Root cause of the Auto-column inflation: Resolve pinned the bounds width to the wrap
-		// box, so "Qty" (about 5mm of ink) reported 190mm inside a page-width context.
+		// Resolve pinned the bounds width to the wrap box, so "Qty" (about 5mm of ink)
+		// reported 190mm inside a page-width context.
 		var flow = Note("Qty");
 
 		var unconstrained = flow.Resolve(new LayoutContext(BoundingBox.Empty)).ComputeBounds();
@@ -207,8 +208,8 @@ public class BudgetAllocationTests
 	public void Centred_text_is_still_centred_within_its_wrap_box()
 	{
 		// The anchor arithmetic deliberately uses the wrap box, not the ink width: "centred"
-		// means centred in the box the author asked to wrap within. Reporting ink width as the
-		// bounds must not disturb that.
+		// means centred in the box the author asked to wrap within. Reporting ink width as
+		// the bounds must not disturb that.
 		var centred = new TextFlow
 		{
 			Text = "SHORT",
@@ -261,7 +262,6 @@ public class BudgetAllocationTests
 		Stroke = new Stroke { Width = 0.5 },
 	};
 
-	// Height of the first resolved DrawingView, found by the scale metadata it stamps.
 	private static double ViewHeight(DrawElement element)
 	{
 		var found = -1.0;

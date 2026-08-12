@@ -8,11 +8,11 @@ const PAGE_LIMIT = 200;
 const MAX_PAGES = 100;
 
 /**
- * Drain every membership page for an org. The admin user surfaces merge
- * per-user org permissions into their rows; a truncated member list would
- * render those users as permissionless, and the permission-toggle UI builds
- * its PATCH payload from the displayed state — so truncation here could
- * silently wipe a user's org permissions on the next edit.
+ * Drain every membership page for an org. The admin users pages merge
+ * per-user org permissions into these rows; a truncated list would render
+ * those users as permissionless, and the permission-toggle UI builds its
+ * PATCH payload from the displayed state — so truncation here could silently
+ * wipe a user's org permissions on the next edit.
  */
 export async function listAllOrgMembers(orgs: IOrgStore, orgId: string): Promise<OrgMember[]> {
 	const members: OrgMember[] = [];

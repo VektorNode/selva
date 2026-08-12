@@ -6,10 +6,7 @@ using Selva.GH.Features.FileIO.Services;
 
 namespace Selva.GH.Features.FileIO.Goos;
 
-/// <summary>
-///     Custom IGH_Goo type for file input data.
-///     Wraps FileInputData for Grasshopper data flow.
-/// </summary>
+/// <summary>Wraps FileInputData (path, URL, or base64) for Grasshopper data flow.</summary>
 [Guid("A3B5C7D9-2E4F-4A8B-9C1D-3F5E7A9B2C4D")]
 public class FileInputGoo : GH_Goo<FileInputData>
 {
@@ -68,21 +65,18 @@ public class FileInputGoo : GH_Goo<FileInputData>
             return false;
         }
 
-        // Cast from string (assume it's a path)
         if (source is string str)
         {
             Value = FileInputData.FromPath(str);
             return true;
         }
 
-        // Cast from GH_String
         if (source is GH_String ghString)
         {
             Value = FileInputData.FromPath(ghString.Value);
             return true;
         }
 
-        // Cast from FileInputData
         if (source is FileInputData fileData)
         {
             Value = fileData;
@@ -94,14 +88,12 @@ public class FileInputGoo : GH_Goo<FileInputData>
 
     public override bool CastTo<Q>(ref Q target)
     {
-        // Cast to string (return the file path/URL/base64)
         if (typeof(Q).IsAssignableFrom(typeof(string)))
         {
             target = (Q)(object)(Value?.File ?? string.Empty);
             return true;
         }
 
-        // Cast to GH_String
         if (typeof(Q).IsAssignableFrom(typeof(GH_String)))
         {
             target = (Q)(object)new GH_String(Value?.File ?? string.Empty);
@@ -112,18 +104,14 @@ public class FileInputGoo : GH_Goo<FileInputData>
     }
 
     /// <summary>
-    ///     Serializes to JSON string for web transmission.
-    ///     NOTE: when Type is "base64" this embeds the full file payload in the output string.
-    ///     Do not pass base64 Goos to downstream panels or persist them in the .gh file.
+    ///     When Type is "base64" this embeds the full file payload in the output string —
+    ///     don't pass base64 Goos to downstream panels or persist them in the .gh file.
     /// </summary>
     public string ToJson()
     {
         return JsonConvert.SerializeObject(Value, SecureSettings);
     }
 
-    /// <summary>
-    ///     Deserializes from JSON string.
-    /// </summary>
     public static FileInputGoo FromJson(string json)
     {
         try
@@ -137,9 +125,6 @@ public class FileInputGoo : GH_Goo<FileInputData>
         }
     }
 
-    /// <summary>
-    ///     Serialize to GH_IO for Rhino.Compute compatibility.
-    /// </summary>
     public override bool Write(GH_IWriter writer)
     {
         if (Value == null)
@@ -153,9 +138,6 @@ public class FileInputGoo : GH_Goo<FileInputData>
         return true;
     }
 
-    /// <summary>
-    ///     Deserialize from GH_IO for Rhino.Compute compatibility.
-    /// </summary>
     public override bool Read(GH_IReader reader)
     {
         Value = new FileInputData

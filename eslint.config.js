@@ -24,7 +24,6 @@ export default [
 			'obj',
 			'**/Generated/**',
 			'**/generated/**',
-			'packages/schemas/scripts/generate-*.js',
 			'**/*.d.ts',
 			'Plugin/Selva.GH/EmbeddedAssets/web',
 			// Config files at package root — not in any tsconfig include, and
@@ -38,33 +37,16 @@ export default [
 			// candidate tsconfig roots (repo root + compute) and error under
 			// typescript-eslint 8.64+. It's linted by its own `lint` script,
 			// invoked from the root `lint` command (see package.json).
-			'packages/compute/**'
+			'packages/compute/**',
+			// @selvajs/visualization — same story as compute: own tsconfig +
+			// eslint.config.mjs, linted by its own `lint` script from the root command.
+			'packages/visualization/**'
 		]
 	},
 	{
 		files: ['scripts/**/*.{js,ts}'],
 		rules: {
 			'no-console': 'off'
-		}
-	},
-	{
-		// @selvajs/supabase-provider's tsconfig deliberately EXCLUDES tests from the
-		// build (they must not emit into the published `dist`). But that also drops
-		// them out of eslint 10's typed `projectService`, which then errors on every
-		// test file with "not found by the project service". Every other package
-		// includes tests in its tsconfig and lints fine; this package can't without
-		// polluting its npm output. So disable typed parsing for these files only —
-		// they still get every non-type-aware rule.
-		files: [
-			'packages/providers/supabase/src/**/__tests__/**/*.ts',
-			'packages/providers/supabase/src/**/*.{test,spec}.ts'
-		],
-		languageOptions: {
-			parserOptions: {
-				projectService: false,
-				project: null,
-				program: null
-			}
 		}
 	},
 	{

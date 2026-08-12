@@ -60,9 +60,7 @@
 <footer
 	class="px-4 gap-4 text-xs h-7 flex shrink-0 items-center justify-between border-t border-border bg-background text-muted-foreground select-none"
 >
-	<!-- Left section: Status items + custom context items -->
 	<div class="gap-4 flex items-center">
-		<!-- Custom left items from context -->
 		{#each leftItems as item (item.id)}
 			<FooterItemRenderer {item} />
 		{/each}
@@ -103,9 +101,7 @@
 		{/if}
 	</div>
 
-	<!-- Right section: Custom items + Copyright -->
 	<div class="gap-4 ml-auto flex items-center">
-		<!-- Custom right items from context -->
 		{#each rightItems as item (item.id)}
 			<FooterItemRenderer {item} />
 		{/each}

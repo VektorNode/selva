@@ -2,10 +2,9 @@ using System;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Tessellation/join tolerance for converting Rhino geometry to drawing paths, derived from
-// the document's absolute tolerance so the facet density tracks the model's units instead
-// of assuming millimetres. Clamped: pathological doc settings shouldn't produce millions of
-// segments or visibly faceted curves.
+// Tessellation tolerance derived from the document's absolute tolerance, so facet density
+// tracks the model's units instead of assuming millimetres. Clamped so a pathological doc
+// setting can't blow up segment counts or produce visibly faceted curves.
 public static class DrawingTolerance
 {
     public static double FromActiveDoc()

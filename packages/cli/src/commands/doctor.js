@@ -1,24 +1,49 @@
 // Validate deployment without starting it: files, secrets, layout, providers,
-// boot persistence. Read-only; yellow warnings don't fail, red failures exit 1.
+// Node engine, boot persistence. Yellow warnings don't fail, red failures exit 1.
+//
+// Read-only by default. `--fix` applies the repairs attached to individual
+// checks, each behind its own confirmation — only fixes needing no root and
+// no runtime restart exist. See applyFixes.
 
-import { existsSync, readFileSync, readdirSync, accessSync, constants, statSync } from 'node:fs';
-import { join, resolve, dirname, delimiter } from 'node:path';
+import {
+	existsSync,
+	readFileSync,
+	writeFileSync,
+	copyFileSync,
+	readdirSync,
+	accessSync,
+	constants,
+	statSync,
+	rmSync
+} from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { readEnvFile } from '../env.js';
+import { readEnvFile, parseEnv, countEnvCommentLines, stripEnvComments } from '../env.js';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
-import { detectDrift } from './migrate.js';
+import { satisfiesNodeRange } from '../node-range.js';
+import { green, yellow, red, fixable } from '../checks/result.js';
+import { checkBootPersistence } from '../checks/boot.js';
+import { checkRuntimeEnvironment } from '../checks/runtime.js';
+import {
+	checkDeprecatedEnv,
+	checkEnvDocumentation,
+	checkHeaderNames,
+	checkOrigin,
+	checkProviders,
+	checkSecret,
+	checkTenancy,
+	resolveProviders
+} from '../checks/config.js';
+import { BACKUP_AGE_DAYS, classifyBackups, detectDrift, NODE_MODULES_STASH } from './migrate.js';
 
-const HEX_64 = /^[0-9a-f]{64}$/i;
-const PLACEHOLDER = 'replace-this-with-a-random-32-byte-hex-key';
-
-export async function runDoctor() {
+export async function runDoctor(argv = []) {
+	const fix = argv.includes('--fix');
 	const dir = resolveDeploymentDir();
 	requireDeploymentDir(dir);
 
-	p.intro(pc.bgCyan(pc.black(' selva doctor ')));
+	p.intro(pc.bgCyan(pc.black(fix ? ' selva doctor --fix ' : ' selva doctor ')));
 
 	const checks = [];
 	const env = readEnvFile(join(dir, '.env'));
@@ -26,28 +51,13 @@ export async function runDoctor() {
 	checks.push(checkFile(join(dir, '.env'), '.env present'));
 	checks.push(checkFile(join(dir, 'ecosystem.config.cjs'), 'ecosystem.config.cjs present'));
 	checks.push(checkLayoutDrift(dir));
+	checks.push(checkMigrationLeftovers(dir));
+	checks.push(checkAgedBackups(dir));
 	checks.push(checkSecret(env.SELVA_HMAC_KEY, 'SELVA_HMAC_KEY is a 32-byte hex string'));
 	checks.push(checkSecret(env.SELVA_AT_REST_KEY, 'SELVA_AT_REST_KEY is a 32-byte hex string'));
 
-	// Header-auth: auth only; data/storage must be local or supabase.
-	const providers = {
-		auth: (env.SELVA_AUTH_PROVIDER ?? 'local').toLowerCase(),
-		data: (env.SELVA_DATA_PROVIDER ?? 'local').toLowerCase(),
-		storage: (env.SELVA_STORAGE_PROVIDER ?? 'local').toLowerCase()
-	};
-
-	const validForAuth = new Set(['local', 'supabase', 'header']);
-	const validForData = new Set(['local', 'supabase']);
-
-	if (!validForAuth.has(providers.auth)) {
-		checks.push(red(`SELVA_AUTH_PROVIDER="${providers.auth}" — expected local|supabase|header`));
-	}
-	if (!validForData.has(providers.data)) {
-		checks.push(red(`SELVA_DATA_PROVIDER="${providers.data}" — expected local|supabase`));
-	}
-	if (!validForData.has(providers.storage)) {
-		checks.push(red(`SELVA_STORAGE_PROVIDER="${providers.storage}" — expected local|supabase`));
-	}
+	const providers = resolveProviders(env);
+	checks.push(...checkProviders(providers));
 
 	const used = new Set(Object.values(providers));
 
@@ -64,32 +74,35 @@ export async function runDoctor() {
 		checks.push(...checkHeaderAuth(dir, env, providers.data));
 	}
 
-	const tenancy = (env.SELVA_TENANCY ?? 'single').toLowerCase();
-	if (tenancy !== 'single' && tenancy !== 'multi') {
-		checks.push(red(`SELVA_TENANCY="${tenancy}" — expected single|multi`));
-	} else {
-		checks.push(green(`SELVA_TENANCY=${tenancy}`));
-	}
+	checks.push(checkTenancy(env));
 
 	checks.push(checkPackage(dir, '@selvajs/selva'));
+	checks.push(checkNodeEngine(dir));
 	checks.push(checkCliRuntimeAlignment(dir));
+	checks.push(...checkRuntimeEnvironment(dir));
 	checks.push(...checkBootPersistence(dir));
-	if (env.ORIGIN) {
-		try {
-			new URL(env.ORIGIN);
-			checks.push(green(`ORIGIN=${env.ORIGIN}`));
-		} catch {
-			checks.push(red(`ORIGIN="${env.ORIGIN}" is not a valid URL`));
-		}
-	} else {
-		checks.push(yellow('ORIGIN unset — required behind a reverse proxy'));
-	}
+	checks.push(checkOrigin(env));
+	checks.push(...checkDeprecatedEnv(env));
+	checks.push(checkEnvDocs(dir));
 
 	// ── Render ─────────────────────────────────────────────────────────
+	const resolved = await Promise.all(checks);
 	let failures = 0;
-	for (const c of await Promise.all(checks)) {
+	for (const c of resolved) {
 		console.log('  ' + c.line);
 		if (c.severity === 'red') failures += 1;
+	}
+
+	if (fix) {
+		failures = await applyFixes(resolved, failures);
+	} else {
+		const repairable = resolved.filter((c) => c.fix).length;
+		if (repairable > 0) {
+			p.log.info(
+				`${repairable} issue${repairable === 1 ? '' : 's'} can be repaired automatically — ` +
+					`re-run with \`npx selva doctor --fix\`.`
+			);
+		}
 	}
 
 	if (failures === 0) {
@@ -100,25 +113,42 @@ export async function runDoctor() {
 	}
 }
 
-function green(text) {
-	return { severity: 'green', line: `${pc.green('✓')} ${text}` };
-}
-function yellow(text) {
-	return { severity: 'yellow', line: `${pc.yellow('!')} ${text}` };
-}
-function red(text) {
-	return { severity: 'red', line: `${pc.red('✗')} ${text}` };
+// Anything privileged (the systemd unit) or that would restart this process
+// (a Node upgrade) stays a printed instruction instead of a fixer — one that
+// dies halfway through its own runtime leaves the operator with no way back.
+async function applyFixes(resolved, failures) {
+	const repairs = resolved.filter((c) => c.fix && c.severity !== 'green');
+	if (repairs.length === 0) {
+		p.log.info('Nothing to repair automatically.');
+		return failures;
+	}
+
+	console.log('');
+	p.log.step(`${repairs.length} repair${repairs.length === 1 ? '' : 's'} available`);
+
+	for (const check of repairs) {
+		const approved = await p.confirm({
+			message: check.fix.label,
+			initialValue: false
+		});
+		if (p.isCancel(approved) || !approved) {
+			p.log.info('Skipped.');
+			continue;
+		}
+		let result;
+		try {
+			result = await check.fix.run();
+		} catch (err) {
+			result = red(`repair threw: ${err instanceof Error ? err.message : String(err)}`);
+		}
+		console.log('  ' + result.line);
+		if (result.severity === 'green' && check.severity === 'red') failures -= 1;
+	}
+	return failures;
 }
 
 function checkFile(path, label) {
 	return existsSync(path) ? green(label) : red(`${label} (missing: ${path})`);
-}
-
-function checkSecret(value, label) {
-	if (!value) return red(`${label} — unset`);
-	if (value === PLACEHOLDER) return red(`${label} — still the placeholder`);
-	if (!HEX_64.test(value)) return red(`${label} — not 64 hex chars`);
-	return green(label);
 }
 
 function checkDataPath(dir, dataPath) {
@@ -155,8 +185,7 @@ async function checkSupabase(env) {
 		return red(`SUPABASE_URL="${env.SUPABASE_URL}" is not a valid URL`);
 	}
 
-	// Ping the Supabase health endpoint. Soft-fail to yellow on network
-	// errors — operators may be offline at install time.
+	// Network errors go yellow, not red — operators may be offline at install time.
 	try {
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), 4000);
@@ -171,11 +200,10 @@ async function checkSupabase(env) {
 	}
 }
 
-// App↔DB schema handshake (audit O3). Expected head = newest migration shipped
-// by the installed @selvajs/supabase-provider; actual = what the database
-// reports via the selva.migration_head() RPC. Red on skew — the app degrades
-// /api/health to 503 at boot in the same state, so catching it here saves a
-// confusing deploy.
+// Compares the newest migration shipped by @selvajs/supabase-provider against
+// what the database reports via selva.migration_head(). Red on skew — the app
+// degrades /api/health to 503 at boot in the same state, so catching it here
+// saves a confusing deploy.
 async function checkSupabaseMigrations(dir, env) {
 	if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
 		return yellow('Migration-head check skipped — Supabase env incomplete');
@@ -236,6 +264,7 @@ async function checkSupabaseMigrations(dir, env) {
 				`Database reports no applied migrations (expected head ${expected}). Sync + run: npx supabase db push`
 			);
 		}
+		// String comparison — relies on both heads being fixed-width, zero-padded timestamps.
 		if (actual < expected) {
 			return red(
 				`Database migration head ${actual} is behind the installed provider (${expected}). Sync + run: npx supabase db push`
@@ -243,7 +272,6 @@ async function checkSupabaseMigrations(dir, env) {
 		}
 		return green(`Database migration head ${actual} matches the installed provider`);
 	} catch (err) {
-		// Soft-fail on network errors, same as checkSupabase.
 		return yellow(`Migration-head check skipped (${err.message ?? err})`);
 	}
 }
@@ -267,7 +295,7 @@ function majorOf(version) {
 	return m ? Number(m[1]) : null;
 }
 
-// CLI and runtime release together (fixed group); major skew = stale CLI pin.
+// CLI and runtime release as a fixed group; major-version skew means a stale CLI pin.
 function checkCliRuntimeAlignment(dir) {
 	const here = dirname(fileURLToPath(import.meta.url));
 	const cliVersion = readPackageVersion(join(here, '..', '..', 'package.json'));
@@ -275,7 +303,7 @@ function checkCliRuntimeAlignment(dir) {
 		join(dir, 'node_modules', '@selvajs', 'selva', 'package.json')
 	);
 
-	// Runtime missing is already reported red by checkPackage; stay quiet here.
+	// checkPackage already reports missing runtime as red; stay quiet here.
 	if (!runtimeVersion) return yellow('CLI/runtime version check skipped (runtime not installed)');
 	if (!cliVersion) return yellow('CLI/runtime version check skipped (could not read CLI version)');
 
@@ -296,93 +324,144 @@ function checkCliRuntimeAlignment(dir) {
 	);
 }
 
-// Verify VM reboot will resurrect app: dump.pm2 saved, systemd unit installed, no stray global pm2.
-function checkBootPersistence(dir) {
-	// pm2's boot integration is Linux/systemd-specific. On macOS it's launchd
-	// (different unit path) and on Windows pm2 boot persistence isn't a thing —
-	// stay silent rather than emit misleading checks.
-	if (process.platform !== 'linux') return [];
-
-	const out = [];
-
-	// dump.pm2 (what pm2 startup resurrects).
-	const pm2Home = process.env.PM2_HOME ?? join(homedir(), '.pm2');
-	const dumpPath = join(pm2Home, 'dump.pm2');
-	if (existsSync(dumpPath)) {
-		out.push(green('pm2 process list saved (dump.pm2 present)'));
-	} else {
-		out.push(
-			yellow(
-				'pm2 process list not saved — run `npx pm2 save` so a reboot can ' +
-					'resurrect the app (nothing to restore without it)'
-			)
+// npm only enforces engines.node under engine-strict=true, which no deployment
+// sets, so a mismatched install succeeds silently and /api/health still returns
+// 200 — routes using newer APIs throw only under real traffic. Not auto-fixable:
+// upgrading Node is distro-specific and would restart the process running this check.
+function checkNodeEngine(dir) {
+	let required;
+	try {
+		const pkg = JSON.parse(
+			readFileSync(join(dir, 'node_modules', '@selvajs', 'selva', 'package.json'), 'utf8')
 		);
+		required = pkg.engines?.node;
+	} catch {
+		return yellow('@selvajs/selva engines.node — package.json unreadable, skipped');
+	}
+	if (typeof required !== 'string') {
+		return yellow('@selvajs/selva declares no engines.node — cannot verify this host');
 	}
 
-	// systemd unit: present and pointing at deployment-local pm2.
-	const user = process.env.USER ?? process.env.LOGNAME;
-	const unitPath = user
-		? `/etc/systemd/system/pm2-${user}.service`
-		: null;
-
-	if (unitPath && existsSync(unitPath)) {
-		const localPm2 = join(dir, 'node_modules', 'pm2', 'bin', 'pm2');
-		let unit = '';
-		try {
-			unit = readFileSync(unitPath, 'utf8');
-		} catch {
-			out.push(yellow(`pm2 systemd unit present but unreadable (${unitPath})`));
-			return out;
-		}
-		const execStart = /^ExecStart=(.+)$/m.exec(unit)?.[1] ?? '';
-		if (execStart.includes(localPm2)) {
-			out.push(green('pm2 systemd boot unit installed (uses deployment-local pm2)'));
-		} else {
-			out.push(
-				red(
-					`pm2 systemd boot unit points at a different pm2 than this deployment's.\n     ` +
-						`ExecStart: ${execStart || '(not found)'}\n     ` +
-						`expected:  ${localPm2} resurrect\n     ` +
-						`Reboots will resurrect via the wrong pm2 (version skew). Re-run startup ` +
-						`with the local binary:\n     ` +
-						`sudo env PATH=$PATH:${join(dir, 'node_modules', '.bin')} ${localPm2} ` +
-						`startup systemd -u $USER --hp $HOME`
-				)
-			);
-		}
-	} else {
-		out.push(
-			yellow(
-				'pm2 systemd boot unit not installed — the app will NOT restart after a ' +
-					'reboot. Run `npx pm2 startup systemd -u $USER --hp $HOME` and paste the ' +
-					'printed command (point it at this deployment’s pm2).'
-			)
-		);
+	const running = process.versions.node;
+	const ok = satisfiesNodeRange(running, required);
+	if (ok === null) {
+		return yellow(`engines.node "${required}" not understood — verify Node v${running} manually`);
 	}
+	if (ok) return green(`Node v${running} satisfies engines.node ${required}`);
 
-	// Warn if global pm2 is on PATH (root cause of version skew).
-	const globalPm2 = findGlobalPm2(dir);
-	if (globalPm2) {
-		out.push(
-			yellow(
-				`a pm2 outside this deployment is on PATH (${globalPm2}) — it can fork a ` +
-					`mismatched daemon and trigger skew. Prefer \`npm run\` wrappers / \`npx pm2\` ` +
-					`from this directory; consider \`npm uninstall -g pm2\`.`
-			)
-		);
-	}
-
-	return out;
+	return red(
+		`Node v${running} does NOT satisfy @selvajs/selva's engines.node ${required}.\n     ` +
+			`npm installs it anyway and the health check still passes, so this fails only\n     ` +
+			`under real traffic. Upgrade Node on this host (nvm/fnm or your package manager),\n     ` +
+			`then: npm rebuild && npm run restart`
+	);
 }
 
-// Scan PATH for stray pm2 binary (read-only).
-function findGlobalPm2(dir) {
-	const localBin = resolve(dir, 'node_modules', '.bin');
-	const dirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
-	for (const d of dirs) {
-		if (resolve(d) === localBin) continue;
-		const candidate = join(d, 'pm2');
-		if (existsSync(candidate)) return candidate;
+// `selva migrate` parks the old node_modules aside so a failed install can be
+// rolled back, and removes it on either outcome. One surviving here means the
+// migration was killed mid-flight — worth flagging since it's a full copy of
+// the dependency tree and the deployment may be running on the wrong one.
+function checkMigrationLeftovers(dir) {
+	const stash = join(dir, NODE_MODULES_STASH);
+	if (!existsSync(stash)) return green('no interrupted migration left behind');
+	return yellow(
+		`${NODE_MODULES_STASH} exists — a \`selva migrate\` was interrupted. If the app ` +
+			`is healthy, delete it: rm -rf ${stash}`,
+		fixable(`delete the leftover ${NODE_MODULES_STASH}`, () => {
+			try {
+				rmSync(stash, { recursive: true, force: true });
+				return green(`removed ${NODE_MODULES_STASH}`);
+			} catch (err) {
+				return red(`could not remove ${stash}: ${err instanceof Error ? err.message : err}`);
+			}
+		})
+	);
+}
+
+// Migration backups are timestamped so a later migration can't overwrite an
+// earlier one's (#184), which means they accumulate. Deleting them silently
+// would throw away the operator's only copy of a pre-migration config, so this
+// reports and lets `--fix` opt in. `classifyBackups` always keeps the newest
+// run, so the escape hatch is never emptied — only superseded generations go.
+function checkAgedBackups(dir) {
+	let names;
+	try {
+		names = readdirSync(dir);
+	} catch {
+		return green('no aged migration backups');
+	}
+
+	const { aged } = classifyBackups(names);
+	if (aged.length === 0) return green('no aged migration backups');
+
+	const shown = aged.slice(0, 3).join(', ');
+	const more = aged.length > 3 ? `, +${aged.length - 3} more` : '';
+	return yellow(
+		`${aged.length} migration backup${aged.length === 1 ? '' : 's'} older than ` +
+			`${BACKUP_AGE_DAYS} days (${shown}${more}). The newest set is kept either way.`,
+		fixable(`delete ${aged.length} aged migration backup${aged.length === 1 ? '' : 's'}`, () => {
+			const failed = [];
+			for (const name of aged) {
+				try {
+					rmSync(join(dir, name), { force: true });
+				} catch (err) {
+					failed.push(`${name} (${err instanceof Error ? err.message : err})`);
+				}
+			}
+			if (failed.length > 0) return red(`could not remove: ${failed.join(', ')}`);
+			return green(`removed ${aged.length} aged backup${aged.length === 1 ? '' : 's'}`);
+		})
+	);
+}
+
+// Reads the raw file rather than the parsed env: the finding IS the comments,
+// which parseEnv discards. The repair is attached here (not in checks/config.js)
+// to keep that module filesystem-free.
+function checkEnvDocs(dir) {
+	const envPath = join(dir, '.env');
+	if (!existsSync(envPath)) return green('.env documentation check skipped (no .env)');
+
+	let text;
+	try {
+		text = readFileSync(envPath, 'utf8');
+	} catch (err) {
+		return yellow(`.env unreadable (${err instanceof Error ? err.message : err})`);
+	}
+
+	return checkEnvDocumentation(
+		countEnvCommentLines(text),
+		fixable('strip the shipped documentation from .env (backup: .env.bak)', () => {
+			try {
+				// Re-read at repair time: doctor may have run minutes ago in --fix's
+				// confirmation loop, and rewriting from a stale snapshot would silently
+				// revert an edit made in between.
+				const current = readFileSync(envPath, 'utf8');
+				const { text: strippedText, removed } = stripEnvComments(current);
+				// A rewrite that changes which settings are live is a bug, not a
+				// cleanup — refuse rather than hand back a subtly different deployment.
+				const before = parseEnv(current);
+				const after = parseEnv(strippedText);
+				const drift = diffEnvKeys(before, after);
+				if (drift) return red(`refused to strip .env — ${drift}`);
+
+				copyFileSync(envPath, envPath + '.bak');
+				writeFileSync(envPath, strippedText, 'utf8');
+				return green(`stripped ${removed} comment lines from .env (backup: .env.bak)`);
+			} catch (err) {
+				return red(`could not rewrite .env: ${err instanceof Error ? err.message : err}`);
+			}
+		})
+	);
+}
+
+// Names the first discrepancy between two parsed envs, or null when identical.
+function diffEnvKeys(before, after) {
+	for (const key of Object.keys(before)) {
+		if (!(key in after)) return `${key} would be lost`;
+		if (before[key] !== after[key]) return `${key} would change value`;
+	}
+	for (const key of Object.keys(after)) {
+		if (!(key in before)) return `${key} would be added`;
 	}
 	return null;
 }
@@ -404,19 +483,10 @@ function checkLayoutDrift(dir) {
 	);
 }
 
-// Must match HeaderAuthProvider.DEFAULT_HEADERS (duplicated to avoid loading runtime).
-// Smoke test in providers/header-auth pins them; divergence surfaces in CI.
-const DEFAULT_HEADER_NAMES = {
-	upn: 'SELVA-UserPrincipalName',
-	email: 'SELVA-Email',
-	displayName: 'SELVA-DisplayName'
-};
-
-// Header-auth checks (read-only; runtime invariants like spoofing can't be verified).
+// Static config only — runtime invariants like spoofing protection can't be checked from here.
 function checkHeaderAuth(dir, env, dataProvider) {
 	const out = [];
 
-	// Allowlist file location.
 	const allowlistDir = env.HEADER_AUTH_DATA_DIR ?? env.DATA_PATH;
 	if (!allowlistDir) {
 		out.push(red('HEADER_AUTH_DATA_DIR (or DATA_PATH) unset — provider will fail to start'));
@@ -426,21 +496,21 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		if (existsSync(allowlistPath)) {
 			out.push(green(`header-allowlist.json present (${allowlistDir}/header-allowlist.json)`));
 		} else {
-			// Provider creates lazily, but missing file locks everyone out.
+			// The provider creates this file lazily, but a missing file locks everyone out
+			// until one exists — worth a warning even though nothing is technically broken.
 			out.push(
 				yellow(
 					`header-allowlist.json not found at ${allowlistDir}/ — no users will be allowed in until one is added`
 				)
 			);
 
-			// Check writability only if explicitly set (DATA_PATH checked separately).
+			// DATA_PATH's own writability is checked separately (checkDataPath).
 			if (env.HEADER_AUTH_DATA_DIR) {
 				out.push(checkDirWritable(allowlistAbsDir, `HEADER_AUTH_DATA_DIR=${allowlistDir}`));
 			}
 		}
 	}
 
-	// HOST binding (loopback recommended for header-auth).
 	const host = env.HOST ?? '0.0.0.0';
 	if (host === '127.0.0.1' || host === 'localhost') {
 		out.push(green(`HOST=${host} (loopback-only)`));
@@ -453,12 +523,11 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		);
 	}
 
-	// 3. ORIGIN — header-auth implies a reverse proxy, so ORIGIN is required.
+	// header-auth always sits behind a reverse proxy, so ORIGIN is required.
 	if (!env.ORIGIN) {
 		out.push(red('ORIGIN unset — required for header-auth (always behind a proxy)'));
 	}
 
-	// Non-local data provider: HEADER_AUTH_DATA_DIR must be explicit (no DATA_PATH fallback).
 	if (dataProvider !== 'local' && !env.HEADER_AUTH_DATA_DIR) {
 		out.push(
 			red(
@@ -468,10 +537,10 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		);
 	}
 
-	// 5. Bootstrap admin email. Without it, the first proxy-authenticated
-	// visitor's UPN is rejected (not in allowlist) and the operator has to
-	// hand-write JSON to claim admin. With it, the first matching visit is
-	// auto-allowlisted and granted instance_admin in one step.
+	// Without this, the first proxy-authenticated visitor's UPN is rejected
+	// (not in the allowlist) and the operator has to hand-write JSON to claim
+	// admin. With it, the first matching visit auto-allowlists and grants
+	// instance_admin in one step.
 	if (!env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL) {
 		out.push(
 			red(
@@ -483,31 +552,7 @@ function checkHeaderAuth(dir, env, dataProvider) {
 		out.push(green(`BOOTSTRAP_INSTANCE_ADMIN_EMAIL=${env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL}`));
 	}
 
-	// Resolved header names (print for diffing against proxy config; partial override = typo risk).
-	const resolved = {
-		upn: env.HEADER_AUTH_UPN_HEADER || DEFAULT_HEADER_NAMES.upn,
-		email: env.HEADER_AUTH_EMAIL_HEADER || DEFAULT_HEADER_NAMES.email,
-		displayName: env.HEADER_AUTH_DISPLAY_NAME_HEADER || DEFAULT_HEADER_NAMES.displayName
-	};
-	const overrides = [
-		Boolean(env.HEADER_AUTH_UPN_HEADER),
-		Boolean(env.HEADER_AUTH_EMAIL_HEADER),
-		Boolean(env.HEADER_AUTH_DISPLAY_NAME_HEADER)
-	].filter(Boolean).length;
-	const headerList =
-		`UPN=${resolved.upn}, Email=${resolved.email}, DisplayName=${resolved.displayName}`;
-	if (overrides === 0) {
-		out.push(green(`header names (bundled defaults): ${headerList}`));
-	} else if (overrides === 3) {
-		out.push(green(`header names (all overridden): ${headerList}`));
-	} else {
-		out.push(
-			yellow(
-				`header names partially overridden (${overrides}/3 set): ${headerList} — ` +
-					`a partial override is usually a typo. Set all three or none.`
-			)
-		);
-	}
+	out.push(checkHeaderNames(env));
 
 	return out;
 }

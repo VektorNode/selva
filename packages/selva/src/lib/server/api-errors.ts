@@ -9,11 +9,9 @@ import { ComputeServerUnconfiguredError } from './compute/resolve.server';
 // ============================================================================
 //
 // Every error this app raises is a SvelteKit `error(status, body)` whose body
-// is the typed `App.Error`: `{ message, code, fields? }`. The `code` is a
-// stable, machine-readable string so consumers (the web UI and any external
-// CLI/SDK) can branch on the failure class without parsing the human message.
-// SvelteKit serializes thrown `error()` bodies to JSON for non-HTML `Accept`
-// headers, so this shape is exactly what API clients receive.
+// is the typed `App.Error`: `{ message, code, fields? }`. `code` is a stable,
+// machine-readable string so consumers (the web UI, any external CLI/SDK) can
+// branch on the failure class without parsing the human message.
 
 /** Stable, machine-readable error codes. Append-only — never renumber/rename. */
 export const ApiErrorCode = {
@@ -31,9 +29,9 @@ export const ApiErrorCode = {
 export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];
 
 /**
- * Raise a structured API error. Thin wrapper over SvelteKit's `error()` that
- * forces the `{ message, code }` envelope. Use this instead of
- * `error(status, 'message string')` so every error carries a code.
+ * Thin wrapper over SvelteKit's `error()` that forces the `{ message, code }`
+ * envelope. Use instead of `error(status, 'message string')` so every error
+ * carries a code.
  */
 export function apiError(
 	status: number,
@@ -84,17 +82,14 @@ function friendlyConstraintMessage(raw: string): string | null {
 }
 
 /**
- * Normalize any error raised inside an API handler to a structured SvelteKit
+ * Normalizes any error raised inside an API handler to a structured SvelteKit
  * HTTP error. Re-throws errors already raised via `apiError`/`error`, maps
  * ProviderError to its statusCode, and falls back to a 500 INTERNAL with the
  * provided message.
  */
 export function handleApiError(err: unknown, fallback: string): never {
-	// Already a SvelteKit HTTP error (raised via apiError or error()): pass through.
 	if (isHttpError(err)) throw err;
-	// Schema extraction is the upload validation gate (specs/SchemaCaching.md):
-	// compute unreachable → 503; no valid Schema output, or a schema format
-	// newer than this app supports ('unsupported') → 422.
+	// Compute unreachable → 503; invalid/newer-than-supported schema → 422.
 	if (err instanceof SchemaExtractionError) {
 		if (err.kind === 'unreachable') {
 			apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, err.message);
@@ -114,15 +109,15 @@ export function handleApiError(err: unknown, fallback: string): never {
 }
 
 /**
- * Throw a 400 VALIDATION_FAILED from a Zod error. The top-level `message` is
- * the first issue (human-friendly), and `fields` maps every issue's dotted
- * path to its message for machine consumption.
+ * Throws a 400 VALIDATION_FAILED from a Zod error. The top-level `message` is
+ * the first issue (human-friendly); `fields` maps every issue's dotted path
+ * to its message for machine consumption.
  */
 export function throwZodError(err: ZodError): never {
 	const fields: Record<string, string> = {};
 	for (const issue of err.issues) {
 		const key = issue.path.length ? issue.path.join('.') : '_';
-		// Keep the first message per field; later issues on the same path are
+		// First message per field wins; later issues on the same path are
 		// usually redundant refinements.
 		if (!(key in fields)) fields[key] = issue.message;
 	}

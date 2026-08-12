@@ -8,18 +8,15 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Model.Drawings;
 
-// Phase 8 composite: numbered notes block. Each note is a paragraph of text rendered with
-// real font measurement; the block stacks them top-to-bottom with a configurable gap.
-//
-// Auto-numbering: each note gets a "1." prefix (or per-note custom marker) inside a fixed-
-// width gutter so multi-line notes wrap with a clean hanging indent.
+// Numbered notes block. Each note gets a "1." prefix (or a custom marker) in a fixed-width
+// gutter, so multi-line notes wrap with a hanging indent.
 public sealed class NotesBlock : LayoutElement
 {
 	public string Title { get; init; }
 	public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();
 
-	// Optional explicit markers (e.g. "A.", "B."). When null, auto-numbering "1.", "2.", ...
-	// is used. Length must match Notes when supplied; mismatched arrays fall back to auto.
+	// Explicit markers (e.g. "A.", "B."); must match Notes in length or falls back to
+	// auto-numbering "1.", "2.", ...
 	public IReadOnlyList<string> Markers { get; init; }
 
 	public double Width { get; init; } = 90;
@@ -74,9 +71,9 @@ public sealed class NotesBlock : LayoutElement
 			return new GroupElement { Id = Id, CssClass = CssClass, Metadata = Metadata };
 		}
 
-		// Title gets its own gap (TitleSpacing) to the notes, which use NoteSpacing between
-		// each other. Nesting the notes in an inner stack keeps both gaps exact — a spacer
-		// child would pick up the outer spacing on both sides and inflate the title gap.
+		// Notes nest in their own stack so NoteSpacing (between notes) and TitleSpacing
+		// (title to notes) stay independent — a spacer child would apply the outer
+		// spacing on both sides and inflate the title gap.
 		var notesStack = new Stack
 		{
 			Orientation = StackOrientation.Vertical,

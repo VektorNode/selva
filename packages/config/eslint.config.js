@@ -8,9 +8,9 @@ import ts from 'typescript-eslint';
 export const config = [
 	js.configs.recommended,
 	...ts.configs.recommended,
-	...svelte.configs['flat/recommended'],
+	...svelte.configs.recommended,
 	prettier,
-	...svelte.configs['flat/prettier'],
+	...svelte.configs.prettier,
 	{
 		languageOptions: {
 			globals: {
@@ -94,6 +94,16 @@ export const createConfig = (tsconfigRootDir) => [
 				tsconfigRootDir,
 				extraFileExtensions: ['.svelte']
 			}
+		},
+		// The two type-aware rules that catch real bugs (dropped awaits, promises
+		// passed where sync callbacks are expected), cherry-picked instead of all
+		// of `recommendedTypeChecked` — the rest is dominated by `no-unsafe-*`
+		// noise cascading from existing `any`s. Typed rules need the project
+		// service, so they live here, not in the base config (compute and
+		// visualization lint untyped).
+		rules: {
+			'@typescript-eslint/no-floating-promises': 'warn',
+			'@typescript-eslint/no-misused-promises': 'warn'
 		}
 	},
 	{

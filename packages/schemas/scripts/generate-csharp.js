@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { checkSchemaVersionBumped } from './lib/version-guard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,72 +12,25 @@ const schemaPath = path.join(packageRoot, 'ui-schema.json');
 const outputPath = path.join(repoRoot, 'Plugin/Selva.Schema/Models/UISchema.Generated.cs');
 
 const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
-const definitions = schema.definitions;
 
-// ============================================================================
-// VERSION GUARD
-// Compares definitions against the last committed version.
-// Errors if definitions changed but schemaVersion was not bumped.
-// ============================================================================
-checkSchemaVersionBumped();
+checkSchemaVersionBumped({
+  workingSchema: schema,
+  repoRoot,
+  schemaRepoPath: 'packages/schemas/ui-schema.json',
+});
 
-function checkSchemaVersionBumped() {
-  // Canonicalise definitions for comparison: strip comment keys and the
-  // schemaVersion default (which is the field being bumped) so we don't
-  // false-positive on the version bump itself.
-  function canonicalise(schemaObj) {
-    const defs = { ...schemaObj.definitions };
-    // Strip comment pseudo-keys
-    for (const key of Object.keys(defs)) {
-      if (key.startsWith('//_')) delete defs[key];
-    }
-    // Exclude the schemaVersion default from the comparison so bumping the
-    // version alone does not count as a definitions change.
-    if (defs.UISchema?.properties?.schemaVersion) {
-      defs.UISchema = JSON.parse(JSON.stringify(defs.UISchema));
-      delete defs.UISchema.properties.schemaVersion.default;
-    }
-    return JSON.stringify(defs, Object.keys(defs).sort());
-  }
+// Drop the '//_'-prefixed section-comment entries before generation.
+const definitions = Object.fromEntries(
+  Object.entries(schema.definitions).filter(([key]) => !key.startsWith('//_'))
+);
 
-  let committedSchemaStr;
-  try {
-    committedSchemaStr = execSync('git show HEAD:packages/schemas/ui-schema.json', {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-  } catch {
-    // Not a git repo or no commits yet — skip the check
-    return;
-  }
-
-  const committedSchema = JSON.parse(committedSchemaStr);
-  const committedVersion = committedSchema.definitions?.UISchema?.properties?.schemaVersion?.default ?? '0.0.0';
-  const workingVersion = schema.definitions?.UISchema?.properties?.schemaVersion?.default ?? '0.0.0';
-
-  const committedDefs = canonicalise(committedSchema);
-  const workingDefs = canonicalise(schema);
-
-  if (committedDefs !== workingDefs && committedVersion === workingVersion) {
-    console.error('');
-    console.error('  ERROR: Schema definitions changed but schemaVersion was not bumped.');
-    console.error(`  Current version: ${workingVersion}`);
-    console.error('');
-    console.error('  Update "schemaVersion" default in UISchema (e.g. 2.3.0 → 2.4.0),');
-    console.error('  add a migration entry in SchemaMigrator.cs, and update packages/schemas/CHANGELOG.md.');
-    console.error('');
-    process.exit(1);
-  }
-
-  if (committedDefs !== workingDefs) {
-    console.log(`  Version bumped: ${committedVersion} → ${workingVersion}`);
-  }
-}
-
-// String-enum types that are represented as plain 'string' in C# for compatibility.
-// Add new string-enum definition names here when they are introduced in the schema.
-const STRING_ALIAS_TYPES = new Set(['GrasshopperParamType', 'GrasshopperInputStructure']);
+// Top-level string enums are represented as plain 'string' in C# for
+// compatibility (the wire value is the lowercase string, never an enum ordinal).
+const STRING_ALIAS_TYPES = new Set(
+  Object.entries(definitions)
+    .filter(([, def]) => def.type === 'string' && Array.isArray(def.enum))
+    .map(([name]) => name)
+);
 
 // Helper to resolve properties from allOf inheritance
 function resolveDefinition(def) {
@@ -145,10 +98,7 @@ function jsonTypeToCSharp(prop, propName, required) {
   switch (prop.type) {
     case 'string':
       if (prop.format === 'date-time') return 'DateTime';
-      // Check for GUID descriptions (Grasshopper uses GUIDs extensively)
-      if (prop.description && prop.description.toLowerCase().includes('guid')) {
-        return 'Guid';
-      }
+      if (prop.format === 'guid') return 'Guid';
       return 'string';
     case 'number':
       return required ? 'double' : 'double?';
@@ -156,9 +106,10 @@ function jsonTypeToCSharp(prop, propName, required) {
       return required ? 'int' : 'int?';
     case 'boolean':
       return required ? 'bool' : 'bool?';
-    case 'array':
+    case 'array': {
       const itemType = jsonTypeToCSharp(prop.items, propName, true);
       return `List<${itemType}>`;
+    }
     case 'object':
       if (prop.additionalProperties) {
         return 'Dictionary<string, object>';
@@ -309,22 +260,6 @@ function detectDiscriminatedUnions() {
 
 const discriminatedUnions = detectDiscriminatedUnions();
 
-// Generate enum from string enum definition
-function generateEnum(name, def) {
-  if (!def.enum) return '';
-
-  const values = def.enum.map((val) => `${val}`).join(',\n');
-  const description = def.description
-    ? `\n/// <summary>\n/// ${def.description}\n/// </summary>`
-    : '';
-
-  return `${description}
-    public enum ${name}
-    {
-${values}
-    }`;
-}
-
 // Generate the C# file
 let output = `// <auto-generated>
 // This file was automatically generated from schemas/ui-schema.json.
@@ -372,8 +307,12 @@ output += `// ==================================================================
     // ============================================================================
 
     // String-enum types are represented as 'string' in C# for compatibility
-    // GrasshopperParamType valid values: ${definitions.GrasshopperParamType?.enum?.map((v) => `"${v}"`).join(', ') || 'N/A'}
-    // GrasshopperInputStructure valid values: ${definitions.GrasshopperInputStructure?.enum?.map((v) => `"${v}"`).join(', ') || 'N/A'}
+${[...STRING_ALIAS_TYPES]
+  .map(
+    (name) =>
+      `    // ${name} valid values: ${definitions[name].enum.map((v) => `"${v}"`).join(', ')}`
+  )
+  .join('\n')}
 
 `;
 
@@ -456,12 +395,7 @@ const regularClasses = Object.entries(definitions)
       !allUnionVariants.has(name) &&
       !unionBaseClasses.includes(name)
   )
-  .map(([name, def]) => {
-    if (def.enum) {
-      return generateEnum(name, def);
-    }
-    return generateClass(name, def);
-  })
+  .map(([name, def]) => generateClass(name, def))
   .filter((cls) => cls);
 
 // Group classes by section
@@ -772,7 +706,7 @@ if (!fs.existsSync(outputDir)) {
 }
 
 fs.writeFileSync(outputPath, output);
-console.log(`Generated C# types at: ${outputPath}`);
+console.info(`Generated C# types at: ${outputPath}`);
 
 // Update SchemaVersion.cs from the schemaVersion default in the JSON schema
 const schemaVersionDefault = schema.definitions?.UISchema?.properties?.schemaVersion?.default;
@@ -803,5 +737,5 @@ public static class SchemaVersion
 }
 `;
   fs.writeFileSync(schemaVersionPath, schemaVersionContent);
-  console.log(`Updated SchemaVersion.cs to ${schemaVersionDefault} at: ${schemaVersionPath}`);
+  console.info(`Updated SchemaVersion.cs to ${schemaVersionDefault} at: ${schemaVersionPath}`);
 }

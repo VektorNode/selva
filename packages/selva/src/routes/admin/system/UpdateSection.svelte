@@ -10,6 +10,12 @@
 	} from '@lucide/svelte';
 	import { deriveOutcome, type OutcomeSeverity } from '$lib/update-outcome';
 
+	interface NodeCompatibility {
+		compatible: boolean | null;
+		required: string | null;
+		running: string;
+	}
+
 	interface Props {
 		currentVersion?: string;
 		latestVersion?: string | null;
@@ -19,6 +25,7 @@
 		isRestarting?: boolean;
 		logs?: string;
 		exitCode?: number | null;
+		nodeCompatibility?: NodeCompatibility;
 		onRun?: () => void;
 	}
 
@@ -31,8 +38,24 @@
 		isRestarting = false,
 		logs = '',
 		exitCode = null,
+		nodeCompatibility = { compatible: null, required: null, running: '' },
 		onRun
 	}: Props = $props();
+
+	// Only a definite `false` blocks. `null` means we couldn't determine the
+	// requirement (registry down, no engines field, unparseable range) — never
+	// strand an operator behind a check that couldn't run (issue #176).
+	const nodeBlocked = $derived(nodeCompatibility.compatible === false);
+
+	// Typed override: the operator retypes the target version to proceed anyway.
+	// A mismatched update will NOT self-roll-back — the health probe passes
+	// regardless — so this needs more friction than a second click.
+	let overrideInput = $state('');
+	let overrideArmed = $state(false);
+	const overrideSatisfied = $derived(
+		overrideArmed && !!latestVersion && overrideInput.trim() === latestVersion
+	);
+	const runDisabled = $derived(isRunning || (nodeBlocked && !overrideSatisfied));
 
 	const channelLabel = $derived(channel === 'beta' ? 'beta' : 'stable');
 
@@ -140,7 +163,53 @@
 				>).
 			</p>
 		{/if}
-		<Button onclick={handleRunClick} disabled={isRunning} variant="destructive">
+		{#if nodeBlocked}
+			<div
+				class="border-destructive/40 bg-destructive/10 space-y-3 rounded-md border px-3 py-3 text-sm"
+				role="alert"
+			>
+				<div class="text-destructive flex items-start gap-2">
+					<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" />
+					<div class="space-y-1">
+						<p class="font-medium">Update blocked — this release needs a newer Node</p>
+						<p class="text-muted-foreground text-xs">
+							<span class="font-mono">v{latestVersion}</span> requires Node
+							<span class="font-mono">{nodeCompatibility.required}</span>, but this host runs
+							<span class="font-mono">v{nodeCompatibility.running}</span>. npm installs it anyway
+							and the health check still passes, so a failed update would
+							<span class="font-medium">not</span> roll back automatically. Upgrade Node on the server
+							first.
+						</p>
+					</div>
+				</div>
+
+				{#if !overrideArmed}
+					<button
+						type="button"
+						class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+						onclick={() => (overrideArmed = true)}
+					>
+						Override anyway (advanced)
+					</button>
+				{:else}
+					<div class="space-y-2">
+						<label class="text-muted-foreground block text-xs" for="node-override">
+							Type <span class="text-foreground font-mono">{latestVersion}</span> to confirm you accept
+							a deployment that may fail under real traffic:
+						</label>
+						<input
+							id="node-override"
+							class="border-input bg-background w-full rounded-md border px-2 py-1 font-mono text-xs"
+							bind:value={overrideInput}
+							placeholder={latestVersion ?? ''}
+							autocomplete="off"
+							spellcheck="false"
+						/>
+					</div>
+				{/if}
+			</div>
+		{/if}
+		<Button onclick={handleRunClick} disabled={runDisabled} variant="destructive">
 			{buttonLabel()}
 		</Button>
 		{#if isRestarting && exitCode === null}
@@ -188,7 +257,16 @@
 <AlertDialog.Root open={showRunConfirm} onOpenChange={(o) => (showRunConfirm = o)}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>Run Update?</AlertDialog.Title>
+			<AlertDialog.Title>
+				{nodeBlocked ? 'Run Update despite the Node mismatch?' : 'Run Update?'}
+			</AlertDialog.Title>
+			{#if nodeBlocked}
+				<AlertDialog.Description class="text-destructive">
+					This release requires Node {nodeCompatibility.required} and the host runs v{nodeCompatibility.running}.
+					The health check will pass regardless, so this update will not roll itself back if routes
+					start failing.
+				</AlertDialog.Description>
+			{/if}
 			<AlertDialog.Description>
 				This will update @selvajs/* to the latest {channelLabel} release and restart the application.
 				The service will be temporarily unavailable.

@@ -4,9 +4,8 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing;
 
-// Pure builder. Phase 3 reduced this to a thin factory that packs inputs into a
-// DimensionElement; the renderer (or PDF renderer) generates the actual lines/arrows/text
-// from that semantic record. Returns null if the two endpoints coincide.
+// Packs inputs into a DimensionElement; the SVG/PDF renderers draw the actual
+// lines/arrows/text from it. Returns null if the two endpoints coincide.
 public static class LinearDimensionBuilder
 {
     public static DimensionElement Build(

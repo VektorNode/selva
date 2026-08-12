@@ -59,14 +59,22 @@ Thumbs.db
 ehthumbs.db
 
 # Claude Code & agent config (personal/local)
-.claude/
+.claude/*
 .agents/
 skills-lock.json
+
+# ...except project skills, which are shared tooling and belong in the repo.
+# Git never descends into an excluded directory, so each level must be
+# re-included before the leaf negation can match.
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/rhino-mcp/
 
 # Local environment & config files
 .env
 .env.local
 *.local.json
+fixtures/meshes/local/
 
 # Local provider data directory (user-specific runtime data)
 # Holds users.json, orgs/projects/definitions JSON, compute.config.json,
@@ -105,6 +113,8 @@ coverage/
 Plugin/Selva.GH/bin/
 Plugin/Selva.GH/obj/
 Plugin/Selva.GH/*.lscache
+!fixtures/**/*.gh
+!fixtures/**/*.ghx
 
 # Definitions config files (production, not checked in)
 definitions-config.json

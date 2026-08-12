@@ -27,7 +27,7 @@ import {
 	getPlatformProjectGrantStore,
 	flag
 } from './providers.server.js';
-import { handleApiError } from './api-errors.js';
+import { handleApiError, apiError, ApiErrorCode } from './api-errors.js';
 
 export const throwProviderError = handleApiError;
 
@@ -86,11 +86,29 @@ export const assertManageProjects = (locals: Locals) =>
 export const requireInstanceAdmin = (locals: Locals) => requirePermission(locals, 'instance_admin');
 
 /**
- * Gate for routes that may be reached by any platform-class permission holder
- * (e.g. the `/admin` shell — `instance_admin`, `manage_compute`,
- * `manage_instance_users`, or `manage_updates` all qualify). Org-scope
- * permissions never admit entry: org admins do not belong on platform-scoped
- * surfaces.
+ * Tenancy gate for `/api/v1/orgs/{orgId}/…`. The URL id is never trusted alone
+ * — the acting context decides which tenant a request applies to, so a
+ * mismatch is 403 rather than a silent read of the caller's own org.
+ */
+export function requireActingOrg(
+	locals: Locals,
+	orgId: string | undefined
+): { ctx: RequestContext; orgId: string } {
+	const ctx = locals.ctx;
+	if (!ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+	if (!orgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing org ID');
+	if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
+	if (ctx.actingOrgId !== orgId) {
+		apiError(403, ApiErrorCode.FORBIDDEN, 'Acting org does not match the target org.');
+	}
+	return { ctx, orgId };
+}
+
+/**
+ * Gate for routes reachable by any platform-class permission holder (e.g. the
+ * `/admin` shell — `instance_admin`, `manage_compute`, `manage_instance_users`,
+ * or `manage_updates` all qualify). Org-scope permissions never admit entry:
+ * org admins do not belong on platform-scoped surfaces.
  *
  * Throws 403 — use in API routes.
  */
@@ -115,10 +133,10 @@ export function assertAnyPlatformPermission(locals: Locals): AuthUser {
  * settings). `instance_admin` bypasses these so platform staff can administer
  * the instance without being a member of every org.
  *
- * NOT used for content access (view, solve, edit definitions). See §2 of
- * Permissions.md: `instance_admin` follows the same `canView`/`canEdit` rules
- * as any other user for content — keeping blast radius small and ensuring
- * any content escalation goes through Reclaim, leaving an audit trail.
+ * NOT used for content access (view, solve, edit definitions):
+ * `instance_admin` follows the same `canView`/`canEdit` rules as any other
+ * user there, keeping blast radius small and forcing content escalation
+ * through Reclaim, which leaves an audit trail.
  */
 async function managementBypassOrRun(
 	ctx: RequestContext,
@@ -128,11 +146,9 @@ async function managementBypassOrRun(
 	return await check();
 }
 
-/**
- * Content-scope check — NO `instance_admin` bypass. `canView`, `canSolve`,
- * `canEdit`, and `canEditDefinition` run as-is regardless of platform role.
- * If platform staff need to access content, they use Reclaim first.
- */
+// Content-scope check — NO `instance_admin` bypass. `canView`, `canSolve`,
+// `canEdit`, and `canEditDefinition` run as-is regardless of platform role;
+// platform staff use Reclaim first if they need content access.
 async function contentCheck(check: () => Promise<boolean>): Promise<boolean> {
 	return await check();
 }
@@ -172,10 +188,10 @@ export async function requireCanEdit(locals: Locals, projectId: string): Promise
 }
 
 /**
- * Gate creation of a *new* definition. Container projects require project
+ * Gates creation of a *new* definition. Container projects require project
  * owner/editor (canEdit). Commons projects (`autoJoinOnUpload=true`) accept
  * any authenticated user — the handler stamps `ownerId = user.id` so the
- * uploader becomes the definition owner.
+ * uploader becomes the owner.
  */
 export async function requireCanCreateDefinition(
 	locals: Locals,
@@ -196,9 +212,8 @@ export async function requireCanCreateDefinition(
 /**
  * Org-content gate — the caller must be a member of `orgId`. Used by the
  * file-serving proxy for org-private assets (e.g. pricing sheets under
- * `orgs/{id}/private/*`). Org membership is the only rule; this runs through
- * `contentCheck` (no `instance_admin` management bypass), matching the
- * content-scope policy of `requireCanViewProject` — platform staff use Reclaim
+ * `orgs/{id}/private/*`). Org membership is the only rule; runs through
+ * `contentCheck` (no `instance_admin` bypass) — platform staff use Reclaim
  * if they need access without membership.
  *
  * Throws 401 unauthenticated, 403 when not a member.
@@ -214,9 +229,9 @@ export async function requireCanViewOrg(locals: Locals, orgId: string): Promise<
 }
 
 /**
- * Project members must be members of the project's parent org (§4). Enforced
- * at the rule layer, not as a DB constraint, to leave room for cross-org
- * guests later without a schema migration.
+ * Project members must belong to the project's parent org. Enforced at the
+ * rule layer, not as a DB constraint, to leave room for cross-org guests
+ * later without a schema migration.
  */
 export async function requireTargetIsOrgMember(
 	locals: Locals,
@@ -231,7 +246,7 @@ export async function requireTargetIsOrgMember(
 }
 
 /**
- * §5 `canReclaim` — org owner/admin escape hatch. Returns the project so the
+ * `canReclaim` — org owner/admin escape hatch. Returns the project so the
  * handler can use its `orgId` without re-fetching.
  */
 export async function requireCanReclaim(
@@ -255,7 +270,7 @@ export async function requireCanReclaim(
 }
 
 /**
- * §5 `canCreateProject` — owner/admin always; member needs `manage_projects`.
+ * `canCreateProject` — owner/admin always; member needs `manage_projects`.
  * Tenancy is enforced via `actingOrgId`.
  */
 export async function requireCanCreateProject(
@@ -299,11 +314,8 @@ export async function requireCanManageMembers(
 	return user;
 }
 
-/**
- * Owner-only gate for project settings. Centralized so PATCH /api/projects/[id]
- * matches the rest of the access layer (one place loads the entities + calls
- * the rule).
- */
+// Owner-only gate for project settings, centralized so PATCH
+// /api/projects/[id] matches the rest of the access layer.
 export async function requireCanEditProjectSettings(
 	locals: Locals,
 	projectId: string
@@ -331,13 +343,13 @@ export async function requireCanViewProject(locals: Locals, projectId: string): 
  * Solve gating. Today `canSolve === canView` for non-platform projects, but
  * the rule lives in its own function so future cost-gating (quotas, rate
  * limits) lands without touching view semantics. `viewer` project role
- * passes. Platform projects narrow to grants with `canSolve=true`.
+ * passes; platform projects narrow to grants with `canSolve=true`.
  */
 export async function requireCanSolve(
 	locals: Locals,
 	projectId: string,
-	// Pass the already-loaded project (e.g. the solve endpoint loads it to read
-	// orgId/pin) to skip a redundant `getProject` inside the gate.
+	// Callers that already loaded the project (e.g. the solve endpoint, which
+	// reads orgId/pin off it) pass it to skip a redundant `getProject` here.
 	preloadedProject?: Project
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
@@ -351,13 +363,13 @@ export async function requireCanSolve(
 
 /**
  * Loads the record and gates editing. Returns the record AND the project it
- * loads for the gate, so callers skip a re-fetch of either (§2b).
+ * loads for the gate, so callers skip a re-fetch of either.
  */
 export async function requireEditableDefinition(locals: Locals, guid: string) {
 	const { ctx } = requireAuthed(locals);
 	const record = await getDefinitionMeta().get(ctx, guid);
 	if (!record) throw error(404, 'Definition not found');
-	// Load project + member once up front; `project` is returned for reuse (§2b).
+	// Load project + member once up front; `project` is returned for reuse.
 	const [project, member] = await Promise.all([
 		getProjectProvider().getProject(ctx, record.projectId),
 		getProjectProvider().getProjectMember(ctx, record.projectId, ctx.userId)

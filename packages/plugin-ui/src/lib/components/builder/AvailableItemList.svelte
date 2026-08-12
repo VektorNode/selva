@@ -1,10 +1,5 @@
 <script lang="ts">
-	import type {
-		DiscoveredInput,
-		DiscoveredOutput,
-		GrasshopperParamType,
-		TabConfig
-	} from '@selvajs/schemas';
+	import type { DiscoveredInput, DiscoveredOutput, ParamType, TabConfig } from '@selvajs/schemas';
 	import { StateDisplay, Input, Badge, Select, Collapsible } from '@selvajs/ui';
 	import DraggableItem from './DraggableItem.svelte';
 	import { Search, X, ChevronDown } from '@lucide/svelte';
@@ -39,7 +34,7 @@
 	}: AvailableItemListProps = $props();
 
 	let searchQuery = $state('');
-	const selectedTypes = new SvelteSet<GrasshopperParamType | string>();
+	const selectedTypes = new SvelteSet<ParamType | string>();
 
 	const sessionId = $derived(getSessionIdFromUrl());
 
@@ -133,10 +128,10 @@
 
 	const headerCount = $derived(baseItems.length);
 
-	// Per-cluster local mirror so dndzone can mutate visually without
-	// touching the upstream catalog. Source zones are read-only — once a
-	// drop completes, `placedSet` recomputes and `clusters` re-derives,
-	// overriding any in-flight mutation.
+	// Per-cluster local mirror so dndzone can mutate visually without touching
+	// the upstream catalog. Source zones are read-only: once a drop completes,
+	// `placedSet` recomputes and `clusters` re-derives, overriding any in-flight
+	// mutation.
 	let localClusterItems = $state<Record<string, GroupedItem[]>>({});
 	let isDragging = $state(false);
 
@@ -158,9 +153,8 @@
 
 	function handleClusterFinalize(key: string, e: CustomEvent<{ items: GroupedItem[] }>) {
 		isDragging = false;
-		// Source is read-only: discard dndzone's mutated items and resync from
-		// the current cluster (the destination's commit will have updated
-		// placedSet, which re-derives the cluster).
+		// Discard dndzone's mutated items and resync from the current cluster —
+		// the destination's commit will have updated placedSet already.
 		const current = clusters.find((c) => c.key === key);
 		localClusterItems = {
 			...localClusterItems,

@@ -12,11 +12,9 @@
 		"strict": true,
 		"moduleResolution": "bundler",
 		// NOTE: vitest reads workspace-package source directly via the
-		// `"source"` export condition (see vitest.config.ts). `tsc` here
-		// continues to read dist because `customConditions: ["source"]` would
-		// also opt third-party deps into their source (e.g. @internationalized/date
-		// via bits-ui), tripping `verbatimModuleSyntax` errors from
-		// .svelte-kit/tsconfig.json. Run `pnpm build` (turbo will only
+		// `"selva-source"` export condition (see vitest.config.ts). `tsc` here
+		// continues to read dist so each package's type errors surface in its
+		// own build, not re-attributed here. Run `pnpm build` (turbo will only
 		// rebuild what changed) before `pnpm type-check` if you've edited a
 		// platform rule and need it reflected in type errors.
 		//

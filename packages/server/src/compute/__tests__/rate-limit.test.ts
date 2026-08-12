@@ -58,8 +58,8 @@ describe('createComputeRateLimiter', () => {
 	});
 
 	it('does not pre-increment a fresh bucket past the cap', () => {
-		// Regression guard: an off-by-one in the "no entry yet" branch could
-		// initialize at count=1 but treat the FIRST call as already capped.
+		// Regression guard: an off-by-one in the "no entry yet" branch would
+		// initialize at count=1 and treat the FIRST call as already capped.
 		expect(limiter.check('user:fresh').allowed).toBe(true);
 	});
 
@@ -67,18 +67,17 @@ describe('createComputeRateLimiter', () => {
 		const other = createComputeRateLimiter({ windowMs: WINDOW_MS, maxPerWindow: MAX_PER_WINDOW });
 		for (let i = 0; i < MAX_PER_WINDOW; i++) limiter.check('user:alice');
 		expect(limiter.check('user:alice').allowed).toBe(false);
-		// A different limiter instance is unaffected.
 		expect(other.check('user:alice').allowed).toBe(true);
 	});
 
-	// The bucket Map is process-local and long-lived: without these it grows with
-	// every distinct key ever seen (each user, share link, login IP — forever).
+	// The bucket Map is process-local and long-lived: unswept it grows with every
+	// distinct key ever seen (each user, share link, login IP — forever).
 	describe('bucket eviction', () => {
 		it('sweeps expired buckets once a sweep interval has passed', () => {
 			for (let i = 0; i < 50; i++) limiter.check(`user:${i}`);
 			expect(limiter.size()).toBe(50);
 
-			// Buckets are now expired, but nothing revisits them on their own.
+			// Expired, but nothing revisits a bucket on its own.
 			vi.advanceTimersByTime(WINDOW_MS + 1);
 			expect(limiter.size()).toBe(50);
 
@@ -123,7 +122,7 @@ describe('createComputeRateLimiter', () => {
 			for (let i = 0; i < MAX_PER_WINDOW; i++) capped.check('user:newest');
 
 			expect(capped.size()).toBeLessThanOrEqual(2);
-			// The freshest bucket keeps its state; the oldest was forgiven.
+			// Newest survived with its spent budget intact; the oldest was forgiven.
 			expect(capped.peek('user:newest').allowed).toBe(false);
 		});
 
@@ -133,7 +132,7 @@ describe('createComputeRateLimiter', () => {
 
 			limiter.peek('ip:observer');
 
-			// The 50 dead buckets are gone, and peek added none of its own.
+			// Dead buckets gone, and peek added none of its own — hence 0, not 1.
 			expect(limiter.size()).toBe(0);
 		});
 
@@ -149,7 +148,6 @@ describe('createComputeRateLimiter', () => {
 	describe('peek / clear', () => {
 		it('peek never increments the counter', () => {
 			for (let i = 0; i < 1000; i++) expect(limiter.peek('ip:1.2.3.4').allowed).toBe(true);
-			// Full budget still available after all those peeks.
 			for (let i = 0; i < MAX_PER_WINDOW; i++) {
 				expect(limiter.check('ip:1.2.3.4').allowed).toBe(true);
 			}

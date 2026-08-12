@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Selva.GH.Features.Display.Services;
 
@@ -73,30 +74,19 @@ public static class BinaryGeometryWriter
 
     public const uint FlagFloat32 = 0x1;
 
-    /// <summary>
-    ///     Bit 1 of the flags word: when set, indices are uint16 instead of uint32. Used when the
-    ///     batch's total vertex count fits in 16 bits (≤ 65535), which halves the index payload —
-    ///     usually the largest part of the blob for unwelded brep meshes.
-    /// </summary>
+    /// <summary>Bit 1: indices are uint16 instead of uint32 (halves the index payload).</summary>
     public const uint FlagUint16Indices = 0x2;
 
     /// <summary>
-    ///     Bit 2 of the flags word: when set, int16 vertices and the index stream are delta+zigzag
-    ///     filtered (see the class remarks). Always set by the v3 writer; the flag exists so decoders
-    ///     handle pre-v3 blobs (persisted .gh params, DMF files) through the same read path.
+    ///     Bit 2: vertices/indices are delta+zigzag filtered. Always set by the v3 writer; exists so
+    ///     decoders handle pre-v3 blobs (persisted .gh params, mesh files) through the same read path.
     /// </summary>
     public const uint FlagDeltaEncoded = 0x4;
 
-    /// <summary>
-    ///     Bit 3 of the flags word: a UV chunk follows the index block (see the class remarks).
-    ///     Absent flag = absent chunk = byte-identical blob to a UV-less write.
-    /// </summary>
+    /// <summary>Bit 3: a UV chunk follows the index block.</summary>
     public const uint FlagHasUvs = 0x8;
 
-    /// <summary>
-    ///     Bit 4 of the flags word: a vertex-color chunk follows the index block (after the UV
-    ///     chunk when both are present). Absent flag = absent chunk.
-    /// </summary>
+    /// <summary>Bit 4: a vertex-color chunk follows the index block (after UVs, if both present).</summary>
     public const uint FlagHasVertexColors = 0x10;
 
     /// <summary>uvFormat value: uint16 quantized UVs (origin/scale reconstruct the range).</summary>
@@ -372,6 +362,12 @@ public static class BinaryGeometryWriter
         };
     }
 
+    /// <summary>
+    ///     Vertex-component count above which the bbox pass is split across threads. Below it the
+    ///     partitioning overhead outweighs a single linear scan.
+    /// </summary>
+    private const int ParallelBoundsMinComponents = 200_000;
+
     private static void ComputeBounds(
         float[] vertices,
         out double minX, out double minY, out double minZ,
@@ -384,11 +380,95 @@ public static class BinaryGeometryWriter
             return;
         }
 
-        minX = maxX = vertices[0];
-        minY = maxY = vertices[1];
-        minZ = maxZ = vertices[2];
+        if (vertices.Length >= ParallelBoundsMinComponents)
+        {
+            ComputeBoundsParallel(vertices, out minX, out minY, out minZ, out maxX, out maxY, out maxZ);
+            return;
+        }
 
-        for (var i = 3; i < vertices.Length; i += 3)
+        ComputeBoundsRange(vertices, 0, vertices.Length / 3,
+            out minX, out minY, out minZ, out maxX, out maxY, out maxZ);
+    }
+
+    /// <summary>
+    ///     Same result as the serial scan, computed as a partitioned min/max reduction. Exact
+    ///     (min/max are associative and the inputs are floats widened to double, so there is no
+    ///     summation drift), which matters: the bbox becomes the quantization origin/scale, and a
+    ///     partition-order-dependent bbox would make blob bytes non-deterministic.
+    /// </summary>
+    private static void ComputeBoundsParallel(
+        float[] vertices,
+        out double minX, out double minY, out double minZ,
+        out double maxX, out double maxY, out double maxZ)
+    {
+        var vertexCount = vertices.Length / 3;
+        var partitions = Math.Min(Environment.ProcessorCount, Math.Max(1, vertexCount / 32_768));
+        if (partitions < 2)
+        {
+            ComputeBoundsRange(vertices, 0, vertexCount,
+                out minX, out minY, out minZ, out maxX, out maxY, out maxZ);
+            return;
+        }
+
+        var perPartition = (vertexCount + partitions - 1) / partitions;
+        var results = new double[partitions * 6];
+
+        Parallel.For(0, partitions, p =>
+        {
+            var start = p * perPartition;
+            var end = Math.Min(start + perPartition, vertexCount);
+            if (start >= end)
+            {
+                // Empty tail partition: seed with values that lose every comparison in the merge.
+                results[p * 6] = results[p * 6 + 1] = results[p * 6 + 2] = double.PositiveInfinity;
+                results[p * 6 + 3] = results[p * 6 + 4] = results[p * 6 + 5] = double.NegativeInfinity;
+                return;
+            }
+
+            ComputeBoundsRange(vertices, start, end,
+                out var pMinX, out var pMinY, out var pMinZ,
+                out var pMaxX, out var pMaxY, out var pMaxZ);
+
+            results[p * 6] = pMinX;
+            results[p * 6 + 1] = pMinY;
+            results[p * 6 + 2] = pMinZ;
+            results[p * 6 + 3] = pMaxX;
+            results[p * 6 + 4] = pMaxY;
+            results[p * 6 + 5] = pMaxZ;
+        });
+
+        minX = results[0];
+        minY = results[1];
+        minZ = results[2];
+        maxX = results[3];
+        maxY = results[4];
+        maxZ = results[5];
+
+        for (var p = 1; p < partitions; p++)
+        {
+            var o = p * 6;
+            if (results[o] < minX) minX = results[o];
+            if (results[o + 1] < minY) minY = results[o + 1];
+            if (results[o + 2] < minZ) minZ = results[o + 2];
+            if (results[o + 3] > maxX) maxX = results[o + 3];
+            if (results[o + 4] > maxY) maxY = results[o + 4];
+            if (results[o + 5] > maxZ) maxZ = results[o + 5];
+        }
+    }
+
+    /// <summary>Scans vertices in [<paramref name="startVertex" />, <paramref name="endVertex" />).</summary>
+    private static void ComputeBoundsRange(
+        float[] vertices, int startVertex, int endVertex,
+        out double minX, out double minY, out double minZ,
+        out double maxX, out double maxY, out double maxZ)
+    {
+        var i = startVertex * 3;
+        minX = maxX = vertices[i];
+        minY = maxY = vertices[i + 1];
+        minZ = maxZ = vertices[i + 2];
+
+        var end = endVertex * 3;
+        for (i += 3; i < end; i += 3)
         {
             var x = vertices[i];
             var y = vertices[i + 1];

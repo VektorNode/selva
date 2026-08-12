@@ -4,9 +4,7 @@ using Selva.GH.Config;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
-/// <summary>
-///     Manages session ID generation, validation, and tracking for WebSocket communication.
-/// </summary>
+/// <summary>Generates and validates the session ID used to pair a WebSocket connection to this document.</summary>
 public class SessionManager
 {
     public string CurrentSessionId { get; private set; }
@@ -37,10 +35,7 @@ public class SessionManager
         CurrentSessionId = null;
     }
 
-    /// <summary>
-    ///     Generates a cryptographically secure session ID.
-    ///     Uses URL-safe base64 encoding (replaces + and / with - and _).
-    /// </summary>
+    /// <summary>Builds a URL-safe base64 session ID (+ and / replaced with - and _) of the given length.</summary>
     private static string GenerateSessionId(int length)
     {
         if (length <= 0)

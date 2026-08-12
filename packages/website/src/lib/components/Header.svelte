@@ -15,7 +15,7 @@
 <header
 	class="border-border bg-background/80 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 border-b backdrop-blur"
 >
-	<div class="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
+	<div class="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
 		<a href="/" class="flex shrink-0 items-center gap-2 text-lg font-bold tracking-tight">
 			<img src={logo} alt="" class="h-7 w-7" />
 			Selva

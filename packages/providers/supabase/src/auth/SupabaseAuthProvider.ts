@@ -15,73 +15,45 @@ import type {
 } from '@selvajs/platform';
 
 /**
- * Auth backed by Supabase Auth (GoTrue).
- *
- * Identity + session lifecycle are fully delegated:
- *  - `verifyLogin` wraps `auth.signInWithPassword` — returns the access_token
- *    straight from Supabase as the session token.
- *  - `verifyToken` calls `auth.getUser(token)` against an anon client scoped
- *    to that bearer; GoTrue validates the JWT for us.
- *  - User management uses `auth.admin.*` with the service-role client.
- *
- * Identity-only — platform permissions live on `IPlatformPermissionStore`
- * (`SupabasePlatformPermissionStore` reads `user_profiles.platform_permissions`)
- * and profile state on `IUserProfileStore`.
+ * Auth backed by Supabase Auth (GoTrue). Identity-only — platform permissions
+ * live on `IPlatformPermissionStore`, profile state on `IUserProfileStore`.
  */
 export interface SupabaseAuthProviderConfig {
 	supabaseUrl: string;
 	anonKey: string;
 	serviceRoleKey: string;
-	/**
-	 * Whether self-service signup is allowed via `passwordAuth.registerUser`.
-	 * Default false — production deployments start with invite-only.
-	 */
+	/** Allow self-service signup via `passwordAuth.registerUser`. Default false. */
 	enableSelfSignup?: boolean;
 	/**
-	 * OAuth providers enabled in the Supabase dashboard (lowercased:
-	 * "google", "github", …). Surfaced via `oauth.listProviders()` so the
-	 * driving layer doesn't read provider-specific env vars itself. Defaults
-	 * to an empty list.
+	 * OAuth providers enabled in the Supabase dashboard (lowercased: "google",
+	 * "github", …), surfaced via `oauth.listProviders()`. Default empty.
 	 */
 	oauthProviders?: readonly string[];
 	/**
 	 * Allow `emailLink.sendMagicLink` to create new users on first request.
-	 * Default true — matches Supabase's `signInWithOtp` default and gives
-	 * fresh installs a working signup path. Set false for invite-only
-	 * deployments; `sendMagicLink` for an unknown email returns
-	 * `{ ok: false, reason: 'signup_disabled' }`.
+	 * Default true, matching Supabase's `signInWithOtp` default. Set false for
+	 * invite-only deployments; `sendMagicLink` for an unknown email then
+	 * returns `{ ok: false, reason: 'signup_disabled' }`.
 	 */
 	allowEmailLinkSignup?: boolean;
 	/**
-	 * How `verifyToken` validates session JWTs (see the method for the full
-	 * rationale):
-	 *  - `'hybrid'` (default): verify the JWT LOCALLY via `getClaims()` on every
-	 *    request (no network call when the project uses asymmetric signing keys —
-	 *    the modern default), and additionally re-check against GoTrue at most
-	 *    once per `revalidateMs` per session to catch server-side sign-outs and
-	 *    `disabled` flips. Bounds revocation latency to `revalidateMs`.
-	 *  - `'strict'`: call `getUser()` on every request (the pre-1b behavior).
-	 *    Instant revocation, one network round-trip per request. For operators
-	 *    who don't accept any revocation lag.
+	 * How `verifyToken` validates session JWTs — see that method for the
+	 * rationale. `'hybrid'` (default) verifies locally and rechecks GoTrue
+	 * periodically; `'strict'` calls GoTrue on every request.
 	 */
 	tokenVerification?: 'hybrid' | 'strict';
-	/**
-	 * Recheck window for `'hybrid'` verification, in ms. A verified session is
-	 * re-validated against GoTrue at most once per this interval. Default 60s.
-	 */
+	/** Recheck window for `'hybrid'` verification, in ms. Default 60s. */
 	revalidateMs?: number;
 	/**
 	 * Sink for best-effort failures the provider swallows rather than throwing
-	 * (currently `touchLastLogin`). Defaults to `NoopLogger` — pass one to make
-	 * those failures visible. Only identifiers are ever logged, never payloads.
+	 * (currently `touchLastLogin`). Defaults to `NoopLogger`. Only identifiers
+	 * are ever logged, never payloads.
 	 */
 	logger?: ILogger;
 }
 
-/** Default hybrid recheck window — see `revalidateMs`. */
 const DEFAULT_REVALIDATE_MS = 60_000;
 
-/** Parse a positive integer env var, or undefined if unset/invalid. */
 function parsePositiveInt(raw: string | undefined): number | undefined {
 	if (!raw) return undefined;
 	const n = Number.parseInt(raw, 10);
@@ -97,11 +69,10 @@ export class SupabaseAuthProvider implements IAuthProvider {
 
 	private readonly admin: SupabaseClient;
 	/**
-	 * Service-role client pinned to the engine schema (`selva`). Engine tables
-	 * live there, not in `public` — `this.admin` is deliberately left unpinned
-	 * because it exists to drive `auth.admin.*` (GoTrue's own REST surface,
-	 * which the PostgREST schema setting does not affect). Any table read or
-	 * write from this provider MUST go through this client instead.
+	 * Service-role client pinned to the `selva` schema. `this.admin` stays
+	 * unpinned because it only drives `auth.admin.*` (GoTrue's own REST
+	 * surface, unaffected by the PostgREST schema setting) — any table read
+	 * or write must go through `db` instead.
 	 */
 	private readonly db: SelvaSchemaClient;
 	private readonly anon: SupabaseClient;
@@ -112,11 +83,10 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	private readonly logger: ILogger;
 
 	/**
-	 * Last time a given session was re-validated against GoTrue (epoch ms),
-	 * keyed by the JWT `session_id`. Bounds the hybrid recheck to once per
-	 * `revalidateMs` per session. Swept lazily (see `verifyToken`) so a burst of
-	 * distinct sessions can't leak memory. Per-process; multi-instance drift is
-	 * harmless (each instance rechecks on its own schedule).
+	 * Last GoTrue recheck per session (epoch ms), keyed by JWT `session_id`.
+	 * Swept lazily in `markRevalidated` so session churn can't leak memory.
+	 * Per-process — multi-instance drift is harmless, each instance rechecks
+	 * on its own schedule.
 	 */
 	private readonly lastRevalidatedAt = new Map<string, number>();
 
@@ -168,9 +138,6 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			.split(',')
 			.map((p) => p.trim().toLowerCase())
 			.filter((p) => p.length > 0);
-		// Local JWT verification is the default (fast; requires asymmetric signing
-		// keys to skip the network — the Supabase default since 2025). Set
-		// SUPABASE_TOKEN_VERIFICATION=strict to force a getUser() per request.
 		const tokenVerification = env.SUPABASE_TOKEN_VERIFICATION === 'strict' ? 'strict' : 'hybrid';
 		const revalidateMs = parsePositiveInt(env.SUPABASE_REVALIDATE_MS);
 		return new SupabaseAuthProvider({
@@ -179,8 +146,6 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			serviceRoleKey,
 			enableSelfSignup: env.SUPABASE_ENABLE_SELF_SIGNUP === 'true',
 			oauthProviders,
-			// Default true; set SUPABASE_ALLOW_EMAIL_LINK_SIGNUP=false to lock down
-			// to invite-only and reject magic-link signups for new addresses.
 			allowEmailLinkSignup: env.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP !== 'false',
 			tokenVerification,
 			...(revalidateMs !== undefined ? { revalidateMs } : {}),
@@ -190,26 +155,21 @@ export class SupabaseAuthProvider implements IAuthProvider {
 
 	/**
 	 * Verify a session JWT and return the user, or null if invalid/disabled.
-	 * Runs on EVERY authenticated request, so the fast path avoids a network
+	 * Runs on every authenticated request, so the fast path avoids a network
 	 * round-trip.
 	 *
-	 * `'hybrid'` (default):
-	 *  1. `getClaims(token)` verifies the JWT. With asymmetric signing keys (the
-	 *     modern Supabase default) this is LOCAL — the SDK verifies against the
-	 *     cached JWKS via Web Crypto, no call to GoTrue. With a legacy symmetric
-	 *     HS256 secret the SDK transparently falls back to a network verify, so
-	 *     this is correct for both project types without us detecting the scheme
-	 *     or hand-rolling JWKS handling (which the Supabase docs warn against —
-	 *     it breaks under key rotation).
-	 *  2. Local verification can't see a server-side sign-out or a `disabled`
-	 *     flip that happened AFTER the token was issued (the claims are a
-	 *     snapshot). So we additionally re-check against GoTrue via `getUser`,
-	 *     but at most once per `revalidateMs` per session — bounding revocation
-	 *     latency to that window while eliminating ~all per-request network
-	 *     calls under steady load.
+	 * `'hybrid'` (default): `getClaims(token)` verifies the JWT locally with
+	 * asymmetric signing keys (the modern Supabase default — the SDK checks
+	 * against the cached JWKS via Web Crypto, no GoTrue call), and falls back
+	 * to a network verify for legacy symmetric HS256 projects. Either way, a
+	 * local check can't see a server-side sign-out or `disabled` flip that
+	 * happened after the token was issued — the claims are a snapshot — so we
+	 * also re-check against GoTrue via `getUser`, at most once per
+	 * `revalidateMs` per session, bounding revocation latency to that window
+	 * while skipping the network call on most requests.
 	 *
-	 * `'strict'`: `getUser` on every request — instant revocation, one round
-	 * trip per request. The pre-1b behavior, for operators who accept no lag.
+	 * `'strict'`: `getUser` on every request. Instant revocation, one round
+	 * trip per request.
 	 */
 	async verifyToken(token: string): Promise<AuthUser | null> {
 		if (!token) return null;
@@ -218,20 +178,15 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			return this.verifyViaGetUser(token);
 		}
 
-		// --- hybrid: local verify first ---
 		const claims = await this.getClaimsOrNull(token);
 		if (!claims) return null;
-		// `disabled` as of token issue. A flip AFTER issue is caught by the
-		// periodic recheck below.
 		if ((claims.user_metadata as { disabled?: boolean } | undefined)?.disabled === true) {
 			return null;
 		}
 
-		// Periodic recheck: catch sign-out / disabled since the token was issued.
 		const sessionId = typeof claims.session_id === 'string' ? claims.session_id : claims.sub;
 		if (this.shouldRevalidate(sessionId)) {
 			const fresh = await this.verifyViaGetUser(token);
-			// getUser rejected it (signed out, disabled, revoked) → deny now.
 			if (!fresh) {
 				this.lastRevalidatedAt.delete(sessionId);
 				return null;
@@ -240,7 +195,6 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			return fresh;
 		}
 
-		// Build the user from claims — no network call on this path.
 		return {
 			id: claims.sub,
 			email: typeof claims.email === 'string' ? claims.email : undefined,
@@ -294,8 +248,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	}
 
 	async listUsers(opts?: ListOptions): Promise<Page<AuthUser> | null> {
-		// GoTrue's admin.listUsers uses its own pagination (page/perPage).
-		// Translate our cursor (offset) into page number.
+		// GoTrue paginates by page number, not offset — translate our cursor.
 		const perPage = opts?.limit ?? 50;
 		const page = opts?.cursor ? parseInt(opts.cursor, 10) : 1;
 		const { data, error } = await this.admin.auth.admin.listUsers({
@@ -306,15 +259,12 @@ export class SupabaseAuthProvider implements IAuthProvider {
 
 		const users = data.users;
 		const hydrated = users.map((u) => this.hydrate(u));
-		// If the page was full, assume there may be more.
 		const nextCursor = users.length >= perPage ? String(page + 1) : undefined;
 		return { items: hydrated, nextCursor };
 	}
 
 	async createUser(email: string): Promise<AuthUser> {
-		// Allowlist variant: create without a password. The user receives a
-		// magic-link / OIDC handoff from the consuming app. Identity-only;
-		// platform permissions are granted via IPlatformPermissionStore.
+		// No password — the user signs in via magic link or OAuth.
 		const { data, error } = await this.admin.auth.admin.createUser({
 			email,
 			email_confirm: true
@@ -325,12 +275,11 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	}
 
 	async deleteUser(id: string): Promise<UserManagementResult> {
-		// Identity-only delete. The §2 sole-`instance_admin` invariant lives
-		// on IPlatformPermissionStore; callers consult it before calling here.
+		// Identity-only: the sole-instance_admin invariant lives on
+		// IPlatformPermissionStore, which callers must consult before this.
 		const { error } = await this.admin.auth.admin.deleteUser(id);
 		if (error) {
-			// 404-shaped errors from GoTrue surface as { status: 404 } or a
-			// specific message. Normalize to 'not_found' rather than throwing.
+			// GoTrue's 404 shows up as either a status code or a message string.
 			const e = error as unknown as { status?: number; message?: string };
 			if (e.status === 404 || /not.?found/i.test(e.message ?? '')) return 'not_found';
 			throw error;
@@ -359,23 +308,21 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	}
 
 	async touchLastLogin(id: string): Promise<void> {
-		// 60-second debounce, done in a single UPDATE: the WHERE clause skips the
-		// write when the stamp is recent, so a login storm from one user costs one
-		// no-op round-trip instead of a select + conditional update. Matches the
-		// local provider's debounce window.
+		// Debounced in a single UPDATE: the WHERE clause skips the write when the
+		// stamp is recent, so a login storm from one user costs one no-op
+		// round-trip instead of a select + conditional update.
 		const cutoff = new Date(Date.now() - 60_000).toISOString();
-		// `this.db`, not `this.admin` — `user_profiles` lives in the `selva`
-		// schema. An unpinned client resolves it against `public`, where the
-		// table does not exist, and PostgREST's relation-not-found error was
-		// being swallowed by the unchecked await: the stamp never landed.
+		// Must use `this.db`, not `this.admin` — `user_profiles` lives in `selva`,
+		// and an unpinned client resolves against `public`, where the table
+		// doesn't exist. That relation-not-found error previously went to an
+		// unchecked await and the stamp silently never landed.
 		const { error } = await this.db
 			.from('user_profiles')
 			.update({ last_login_at: new Date().toISOString() })
 			.eq('user_id', id)
 			.or(`last_login_at.is.null,last_login_at.lt.${cutoff}`);
-		// Best-effort per the interface contract — a failed stamp MUST NOT block
-		// auth, so this never throws. But it is no longer invisible: a schema or
-		// permission regression here would otherwise stay silent forever.
+		// Never throws — a failed stamp must not block auth — but it's logged
+		// now instead of swallowed, so a regression here doesn't stay invisible.
 		if (error) {
 			this.logger.warn('touchLastLogin failed', {
 				userId: id,
@@ -385,17 +332,10 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		}
 	}
 
-	// OAuth lives on `this.oauth` (typed `IOAuthAuth`); see `SupabaseOAuthAuth`
-	// below. Mirrors the `passwordAuth` capability split.
-
 	// ============================================================================
 	// Internals
 	// ============================================================================
-	/**
-	 * Sign in via GoTrue. Returns the access token string and the hydrated
-	 * user. Called by `SupabasePasswordAuth.verifyLogin` — kept on the
-	 * provider class so it has access to the hydrate helper without plumbing.
-	 */
+	/** Kept on the provider class so it can call `hydrate` without plumbing it through. */
 	private async signIn(
 		email: string,
 		password: string
@@ -406,11 +346,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		return { user: this.hydrate(data.user), sessionToken: data.session.access_token };
 	}
 
-	/**
-	 * Map a GoTrue `User` to our identity-only `AuthUser`. Platform permissions
-	 * live on `IPlatformPermissionStore` and profile fields (displayName,
-	 * starred, recentRuns) on `IUserProfileStore` — neither is in AuthUser.
-	 */
+	/** Map a GoTrue `User` to our identity-only `AuthUser`. */
 	private hydrate(user: User): AuthUser {
 		return {
 			id: user.id,
@@ -422,11 +358,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		};
 	}
 
-	/**
-	 * Expose the anon URL + key so other code (e.g. the same process's
-	 * storage provider or per-request client factories) can build user-scoped
-	 * clients without requiring a second config read.
-	 */
+	/** Lets other code (storage provider, per-request client factories) build user-scoped clients without a second config read. */
 	getAnonClientConfig(): { supabaseUrl: string; anonKey: string } {
 		return { supabaseUrl: this.supabaseUrl, anonKey: this.anonKey };
 	}
@@ -451,8 +383,6 @@ class SupabasePasswordAuth implements IPasswordAuth {
 	}
 
 	async createUserWithPassword(email: string, password: string): Promise<AuthUser> {
-		// Identity-only — platform permissions are granted separately via
-		// IPlatformPermissionStore.set after creation.
 		const { data, error } = await this.admin.auth.admin.createUser({
 			email,
 			password,
@@ -472,9 +402,8 @@ class SupabasePasswordAuth implements IPasswordAuth {
 }
 
 /**
- * Supabase-backed `IOAuthAuth`. Thin wrappers over GoTrue's `signInWithOAuth`
- * / `exchangeCodeForSession` / `refreshSession` — the failure-shape mapping
- * (return null vs throw) is the only logic.
+ * Supabase-backed `IOAuthAuth`. Thin wrapper over GoTrue's `signInWithOAuth`
+ * / `exchangeCodeForSession` — mapping failures to null vs throw is the only logic.
  */
 class SupabaseOAuthAuth implements IOAuthAuth {
 	constructor(
@@ -525,11 +454,9 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 }
 
 /**
- * Supabase-backed `ISessionRefresh`. Owns session lifecycle independently of
- * OAuth: `refreshSession` swaps an expiring pair (anon client — a refresh
- * token authenticates itself), `revokeSession` signs the session out
- * server-side via GoTrue's admin API (service-role — revoking someone else's
- * session is privileged).
+ * Supabase-backed `ISessionRefresh`. `refreshSession` uses the anon client —
+ * a refresh token authenticates itself. `revokeSession` uses the service-role
+ * client — revoking someone else's session is privileged.
  */
 class SupabaseSessionRefresh implements ISessionRefresh {
 	constructor(
@@ -544,11 +471,11 @@ class SupabaseSessionRefresh implements ISessionRefresh {
 	} | null> {
 		const { data, error } = await this.anon.auth.refreshSession({ refresh_token: refreshToken });
 		if (error || !data.session) return null;
-		// Refresh runs AFTER verifyToken has already failed, so it is the last
-		// gate on an expired-access-token request. Without this check a disabled
-		// user mints fresh access tokens indefinitely — `verifyToken`'s
-		// `revalidateMs` bound never applies, because that path was skipped.
-		// GoTrue returns the user alongside the session, so this costs nothing.
+		// Refresh runs after verifyToken has already failed, so it's the last gate
+		// on an expired-access-token request. Without this check, a disabled user
+		// could mint fresh access tokens forever — verifyToken's revalidateMs
+		// bound never gets a chance to apply. GoTrue returns the user alongside
+		// the session, so the check is free.
 		if (data.user?.user_metadata?.disabled === true) return null;
 		return {
 			sessionToken: data.session.access_token,
@@ -557,34 +484,31 @@ class SupabaseSessionRefresh implements ISessionRefresh {
 	}
 
 	async revokeSession(token: string): Promise<boolean> {
-		// `'global'` — sign out every session for this user, not just the one
-		// this JWT names. Logout on a shared machine should not leave a sibling
-		// session alive, and a token reaching us at all may already be leaked.
+		// 'global': sign out every session for this user, not just the one this
+		// JWT names. Logout on a shared machine shouldn't leave a sibling session
+		// alive, and a token that reached us at all may already be leaked.
 		const { error } = await this.admin.auth.admin.signOut(token, 'global');
 		if (!error) return true;
-		// A token GoTrue no longer recognises (already signed out, expired,
-		// malformed) is the desired end state, not a failure — report success
-		// so the caller doesn't log noise on every double-logout.
+		// A token GoTrue no longer recognizes (already signed out, expired,
+		// malformed) is the desired end state, not a failure — report success so
+		// the caller doesn't log noise on every double-logout.
 		const e = error as unknown as { status?: number; message?: string };
 		if (e.status === 401 || e.status === 403 || e.status === 404) return true;
 		// Anything else (5xx, network, misconfigured service-role key) means the
-		// session may still be live. Never throw: the contract is that a failed
-		// revoke MUST NOT stop the user from logging out.
+		// session may still be live. Never throw — a failed revoke must not
+		// block the user from logging out.
 		this.logger.warn('revokeSession failed', { status: e.status, message: e.message });
 		return false;
 	}
 }
 
 /**
- * Supabase-backed `IEmailLinkAuth`. Wraps GoTrue's `signInWithOtp` (send the
- * link) and `verifyOtp` with `type: 'magiclink' | 'email' | 'signup'`
- * (verify on click).
+ * Supabase-backed `IEmailLinkAuth`. Wraps GoTrue's `signInWithOtp` (send)
+ * and `verifyOtp` (verify on click).
  *
- * Token shape: Supabase emails the user `{callbackUrl}?token_hash=…&type=…`.
- * `verifyMagicLink` accepts either the full URL or just the raw `token_hash`
- * — adapters MAY support either to give the route layer flexibility. The
- * `type` query param decides which OTP variant `verifyOtp` runs (signup vs
- * magic-link returning user vs invite acceptance), so we pass it through.
+ * Supabase emails the user `{callbackUrl}?token_hash=…&type=…`. The `type`
+ * param picks which OTP variant `verifyOtp` runs (signup vs returning-user
+ * magic link vs invite acceptance), so we pass it through unchanged.
  */
 class SupabaseEmailLinkAuth implements IEmailLinkAuth {
 	constructor(
@@ -608,9 +532,8 @@ class SupabaseEmailLinkAuth implements IEmailLinkAuth {
 		});
 		if (!error) return { ok: true };
 
-		// Map GoTrue's classified errors to our coarse reasons. Anything we
-		// don't recognize we throw — the route returns 500 and we get a stack
-		// trace, instead of swallowing a real bug as "rate limited".
+		// Anything we don't recognize, throw — the route returns 500 with a
+		// stack trace instead of us swallowing a real bug as "rate limited".
 		const status = (error as { status?: number }).status;
 		const code = (error as { code?: string }).code;
 		const message = error.message ?? '';
@@ -665,10 +588,8 @@ function parseCallbackParams(
 ): { tokenHash: string; type: 'magiclink' | 'email' | 'signup' | 'invite' | 'recovery' } | null {
 	let search: URLSearchParams;
 	try {
-		// Full URL path
 		search = new URL(raw).searchParams;
 	} catch {
-		// Query-string-only path — treat as bare params.
 		search = new URLSearchParams(raw.startsWith('?') ? raw.slice(1) : raw);
 	}
 	const tokenHash = search.get('token_hash');

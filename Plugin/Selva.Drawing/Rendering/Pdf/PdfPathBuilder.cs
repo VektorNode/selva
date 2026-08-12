@@ -5,15 +5,10 @@ using Selva.Drawing.Model.Geometry;
 
 namespace Selva.Drawing.Rendering.Pdf;
 
-// Converts a typed model Path into a PdfSharpCore XGraphicsPath. Mirrors what
-// SvgPathBuilder does for SVG, but expressed in PdfSharpCore primitives: each LineTo
-// becomes an AddLine(prev, to), each CubicTo becomes AddBezier(prev, c1, c2, to),
-// and ArcTo is flattened to one or more cubics via the W3C SVG arc-to-cubic algorithm
-// because XGraphicsPath.AddArc takes a different (centre/start/sweep) parameterisation
-// than our SVG-style ArcTo (radii/large-arc/sweep flags).
-//
-// Subpaths: a MoveTo after the first segment becomes StartFigure() so PdfSharpCore
-// treats it as a new disjoint sub-path (matters for fill rules with holes).
+// Converts a typed model Path into a PdfSharpCore XGraphicsPath, mirroring SvgPathBuilder.
+// ArcTo is flattened to cubics via the W3C SVG arc-to-cubic algorithm because
+// XGraphicsPath.AddArc takes a different (centre/start/sweep) parameterisation than our
+// SVG-style ArcTo (radii/large-arc/sweep flags).
 public static class PdfPathBuilder
 {
 	public static XGraphicsPath Build(Path path)
@@ -31,6 +26,8 @@ public static class PdfPathBuilder
 			switch (seg)
 			{
 				case PathSegment.MoveTo m:
+					// A MoveTo after the first segment starts a new disjoint sub-path
+					// (matters for fill rules with holes).
 					if (firstMoveSeen) xpath.StartFigure();
 					current = m.To;
 					subpathStart = m.To;
@@ -70,12 +67,11 @@ public static class PdfPathBuilder
 		return xpath;
 	}
 
-	// Splits a Path into one XGraphicsPath per subpath (i.e. per MoveTo). Stroking via a
-	// single XGraphicsPath with multiple StartFigure() boundaries lets PdfSharpCore /
-	// underlying GDI silently merge disjoint figures into one connected polyline, which
-	// shows up as diagonal lines crossing through cells when rendering tables with grid
-	// dividers. Drawing each subpath as its own XGraphicsPath sidesteps that entirely.
-	// Used by stroke-only paths; fills still need a single path for correct hole semantics.
+	// Splits a Path into one XGraphicsPath per subpath (per MoveTo). A single XGraphicsPath
+	// with multiple StartFigure() boundaries lets PdfSharpCore/GDI silently merge disjoint
+	// figures into one connected polyline — shows up as diagonal lines crossing through
+	// cells when rendering tables with grid dividers. Stroke-only paths use this; fills
+	// still need a single path for correct hole semantics.
 	public static IReadOnlyList<XGraphicsPath> BuildSubpaths(Path path)
 	{
 		var result = new List<XGraphicsPath>();
@@ -133,9 +129,8 @@ public static class PdfPathBuilder
 		return result;
 	}
 
-	// W3C SVG 1.1 implementation notes, F.6.5: convert an SVG-style elliptical arc to
-	// centre-parameterised form, then split into <=π/2 sweeps and approximate each piece
-	// with a cubic Bezier. ~12 lines of trig per piece — battle-tested algorithm.
+	// W3C SVG 1.1 implementation notes, F.6.5: converts an SVG-style elliptical arc to
+	// centre-parameterised form, then splits into <=π/2 sweeps approximated by cubic Beziers.
 	private static void EmitSvgArcAsCubics(XGraphicsPath xpath, Point2D from, PathSegment.ArcTo arc)
 	{
 		var x1 = from.X; var y1 = from.Y;
@@ -143,7 +138,7 @@ public static class PdfPathBuilder
 		var rx = Math.Abs(arc.RadiusX);
 		var ry = Math.Abs(arc.RadiusY);
 
-		// Degenerate: zero radius or coincident endpoints — fall back to a straight line.
+		// Zero radius or coincident endpoints: fall back to a straight line.
 		if (rx < 1e-12 || ry < 1e-12 || (Math.Abs(x1 - x2) < 1e-12 && Math.Abs(y1 - y2) < 1e-12))
 		{
 			xpath.AddLine(x1, y1, x2, y2);
@@ -154,14 +149,14 @@ public static class PdfPathBuilder
 		var cosPhi = Math.Cos(phi);
 		var sinPhi = Math.Sin(phi);
 
-		// Step 1: compute (x1', y1') — the coordinate of the midpoint of the line between
-		// endpoints rotated to align the ellipse axes with the coordinate axes.
+		// Step 1: (x1', y1') = midpoint between endpoints, rotated to align the ellipse
+		// axes with the coordinate axes.
 		var dx = (x1 - x2) / 2.0;
 		var dy = (y1 - y2) / 2.0;
 		var x1p = cosPhi * dx + sinPhi * dy;
 		var y1p = -sinPhi * dx + cosPhi * dy;
 
-		// Step 2: scale up radii if they're too small to span the chord. F.6.6.2 in the spec.
+		// Step 2: scale up radii if they're too small to span the chord.
 		var lambda = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
 		if (lambda > 1)
 		{
@@ -169,7 +164,7 @@ public static class PdfPathBuilder
 			rx *= s; ry *= s;
 		}
 
-		// Step 3: compute (cx', cy').
+		// Step 3: (cx', cy') in the scaled/rotated space.
 		var rxSq = rx * rx;
 		var rySq = ry * ry;
 		var x1pSq = x1p * x1p;
@@ -180,19 +175,18 @@ public static class PdfPathBuilder
 		var denom = rxSq * y1pSq + rySq * x1pSq;
 		var coef = denom < 1e-30 ? 0 : Math.Sqrt(num / denom);
 
-		// SVG flag convention: ArcTo.SweepClockwise here means the SVG sweep-flag is 1
-		// (sweep angle increases). LargeArc and Sweep determine the centre selection sign.
-		// We track the same flags the SVG renderer emits.
+		// ArcTo.SweepClockwise mirrors the SVG sweep-flag (1 = sweep angle increases);
+		// LargeArc and Sweep together pick the centre selection sign.
 		if (arc.LargeArc == arc.SweepClockwise) coef = -coef;
 
 		var cxp = coef * (rx * y1p / ry);
 		var cyp = coef * -(ry * x1p / rx);
 
-		// Step 4: rotate back and translate to absolute centre.
+		// Step 4: rotate back, translate to absolute centre.
 		var cx = cosPhi * cxp - sinPhi * cyp + (x1 + x2) / 2.0;
 		var cy = sinPhi * cxp + cosPhi * cyp + (y1 + y2) / 2.0;
 
-		// Step 5: compute start angle and sweep delta in the rotated/scaled space.
+		// Step 5: start angle and sweep delta in the rotated/scaled space.
 		var startVx = (x1p - cxp) / rx;
 		var startVy = (y1p - cyp) / ry;
 		var endVx = (-x1p - cxp) / rx;
@@ -204,8 +198,8 @@ public static class PdfPathBuilder
 		if (!arc.SweepClockwise && deltaTheta > 0) deltaTheta -= 2 * Math.PI;
 		else if (arc.SweepClockwise && deltaTheta < 0) deltaTheta += 2 * Math.PI;
 
-		// Step 6: split into pieces of <= π/2 and approximate each with a cubic Bezier
-		// using the alpha = (4/3) tan(Δθ/4) tangent-length formula.
+		// Step 6: split into pieces of <= π/2, each a cubic Bezier via the
+		// alpha = (4/3) tan(Δθ/4) tangent-length formula.
 		var segments = (int)Math.Ceiling(Math.Abs(deltaTheta) / (Math.PI / 2.0));
 		if (segments < 1) segments = 1;
 		var delta = deltaTheta / segments;
@@ -223,7 +217,6 @@ public static class PdfPathBuilder
 			var cosTheta2 = Math.Cos(theta2);
 			var sinTheta2 = Math.Sin(theta2);
 
-			// Endpoint of this cubic in the rotated/scaled space → un-scale → un-rotate.
 			var ex = cosTheta2;
 			var ey = sinTheta2;
 			var endLocalX = rx * ex;
@@ -231,7 +224,6 @@ public static class PdfPathBuilder
 			var endX = cosPhi * endLocalX - sinPhi * endLocalY + cx;
 			var endY = sinPhi * endLocalX + cosPhi * endLocalY + cy;
 
-			// Tangents at start and end give the cubic control points.
 			var c1LocalX = rx * (cosTheta1 - t * sinTheta1);
 			var c1LocalY = ry * (sinTheta1 + t * cosTheta1);
 			var c2LocalX = rx * (cosTheta2 + t * sinTheta2);

@@ -10,19 +10,13 @@ using Selva.GH.Features.Display.Services;
 namespace Selva.GH.Features.Display.Goos;
 
 /// <summary>
-///     Grasshopper Goo wrapper for WebDisplay data to prevent double JSON encoding.
+///     Grasshopper Goo wrapper for a <see cref="DisplayBatch" />.
 ///
 ///     Derives from <see cref="GH_GeometricGoo{T}" /> (not plain <see cref="GH_Goo{T}" />) so the
 ///     dedicated <c>Param_WebDisplay</c> can derive from <c>GH_PersistentGeometryParam</c> and get
 ///     Grasshopper's native param preview — a plain persistent param's IGH_PreviewObject draw methods
-///     are never invoked by GH. Implements <see cref="IGH_PreviewData" /> to actually draw; the
-///     drawable geometry is reconstructed from the encoded batch (the Goo carries only the quantized
-///     blob + JSON items) and cached on first draw.
-///
-///     The batch is baked display data, not live Rhino geometry, but the geometric-goo
-///     transform/morph operations still relocate it: <see cref="DisplayBatchTransformer" /> decodes
-///     the blob, moves the vertices and curve/point items, and re-encodes a new batch, so
-///     Move/Rotate/Scale/Orient behave as expected on a Web Display wire.
+///     are never invoked by GH. Implements <see cref="IGH_PreviewData" /> to draw; the drawable
+///     geometry is reconstructed from the encoded batch and cached on first draw.
 /// </summary>
 public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGoo, IGH_PreviewData
 {
@@ -194,7 +188,42 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
         var json = reader.GetString("WebDisplayJson");
         Value = JsonConvert.DeserializeObject<DisplayBatch>(json);
+        BackfillCurvePoints(Value);
         return true;
+    }
+
+    /// <summary>
+    ///     Tessellates curve items saved before the plugin did it server-side. Those carry NURBS
+    ///     <c>Json</c> but no <c>Points</c>, and the web renders only from <c>Points</c> — without
+    ///     this, reopening such a definition solves fine in Rhino and then fails in the viewer.
+    ///     Rebuilding here is free: the NURBS is already in hand.
+    ///
+    ///     TRANSITIONAL — delete once no definition in circulation predates tessellated curves.
+    ///     Re-saving a definition through any current plugin build makes its batch self-sufficient,
+    ///     so this only serves <c>.gh</c> files not opened since the upgrade. Removing it early is
+    ///     not silent: such a file starts failing in the viewer with an upgrade message instead.
+    ///     Delete this method, both call sites, and the <c>untessellated</c> warning in
+    ///     <c>WebSocketTransport</c> together.
+    /// </summary>
+    internal static void BackfillCurvePoints(DisplayBatch batch)
+    {
+        if (batch?.Items == null)
+        {
+            return;
+        }
+
+        foreach (var item in batch.Items)
+        {
+            if (item?.Kind != "curve" || item.Points != null || string.IsNullOrEmpty(item.Json))
+            {
+                continue;
+            }
+
+            if (GeometryBase.FromJSON(item.Json) is Curve curve)
+            {
+                item.Points = CurveTessellator.Tessellate(curve);
+            }
+        }
     }
 
     public override bool CastFrom(object source)
@@ -210,6 +239,7 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
             try
             {
                 Value = JsonConvert.DeserializeObject<DisplayBatch>(ghString.Value);
+                BackfillCurvePoints(Value);
                 return true;
             }
             catch
@@ -290,8 +320,8 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
     public override object ScriptVariable()
     {
-        // Return the JSON string directly for script access
-        // This prevents double-encoding when accessed via GHPython or file I/O
+        // Returns the JSON string directly, not a re-wrapped object — otherwise GHPython/file I/O
+        // would serialize it a second time on top.
         return JsonConvert.SerializeObject(Value);
     }
 

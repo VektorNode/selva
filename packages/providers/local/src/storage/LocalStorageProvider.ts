@@ -4,10 +4,9 @@ import { transcodeImageIfNeeded } from '@selvajs/platform/storage';
 import type { IStorageProvider } from '@selvajs/platform/storage';
 
 /**
- * Filesystem implementation of IStorageProvider.
- * Files are stored under DATA_PATH/{path}.
- * Images are auto-transcoded to WebP on put() via the shared platform helper
- * (`transcodeImageIfNeeded`) — the same helper the Supabase adapter uses,
+ * Filesystem implementation of `IStorageProvider`. Files live under
+ * `DATA_PATH/{path}`. `put()` transcodes images to WebP via the shared
+ * `transcodeImageIfNeeded` helper — the same one the Supabase adapter uses,
  * so both providers produce identical bytes for the same upload.
  */
 export class LocalStorageProvider implements IStorageProvider {
@@ -25,10 +24,10 @@ export class LocalStorageProvider implements IStorageProvider {
 	}
 
 	/**
-	 * Resolve a caller-provided path under basePath, rejecting anything that
-	 * would escape the root. Last line of defense against traversal — while
-	 * platform-side helpers (definitionPaths) also assert safe keys, this
-	 * adapter is reached by any IStorageProvider caller.
+	 * Resolves a caller-provided path under basePath; rejects anything that
+	 * would escape the root. Last line of defense against traversal — this
+	 * adapter is reached by any `IStorageProvider` caller, not just ones that
+	 * already validated the key.
 	 */
 	private resolvePath(storagePath: string): string {
 		const base = path.resolve(this.basePath);
@@ -50,9 +49,7 @@ export class LocalStorageProvider implements IStorageProvider {
 	}
 
 	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<void> {
-		// Normalize images through the shared transcoder — rewrites `.png` → `.webp`,
-		// caps dimensions, and re-encodes at the platform's canonical quality.
-		// Non-images pass through untouched.
+		// Rewrites images to .webp; non-images pass through untouched.
 		const transcoded = await transcodeImageIfNeeded(data, contentType, storagePath);
 		const fullPath = this.resolvePath(transcoded.path);
 		await fs.mkdir(path.dirname(fullPath), { recursive: true });
@@ -73,10 +70,8 @@ export class LocalStorageProvider implements IStorageProvider {
 	}
 
 	getPublicUrl(storagePath: string): string {
-		// Local has no CDN, so every asset — public branding and members-only
-		// blobs alike — is served through the `/api/files` proxy. The proxy
-		// route classifies the path (`classifyAssetPath`) and applies the right
-		// auth per visibility, so the URL shape is uniform here by design.
+		// No CDN locally — every asset goes through the `/api/files` proxy, which
+		// classifies the path (`classifyAssetPath`) and applies auth per visibility.
 		return `${this.publicUrlBase}/${storagePath}`;
 	}
 }

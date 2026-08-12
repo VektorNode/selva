@@ -7,14 +7,14 @@
 
 	interface Props {
 		definitionGuid: string;
+		liveVersionId: string | null;
+		draftVersionId: string | null;
 		onOpenRunner: (guid: string, channel?: 'live' | 'draft', versionId?: string) => void;
 	}
 
-	let { definitionGuid, onOpenRunner }: Props = $props();
+	let { definitionGuid, liveVersionId, draftVersionId, onOpenRunner }: Props = $props();
 
 	let versions = $state<DefinitionVersion[]>([]);
-	let liveVersionId = $state<string | null>(null);
-	let draftVersionId = $state<string | null>(null);
 	let loading = $state(true);
 
 	let showUploadDialog = $state(false);
@@ -32,16 +32,10 @@
 	async function loadVersions() {
 		loading = true;
 		try {
-			const res = await fetch(`/api/definitions/${definitionGuid}/versions`);
+			const res = await fetch(`/api/v1/definitions/${definitionGuid}/versions`);
 			if (!res.ok) throw new Error(`${res.status}`);
-			const data = (await res.json()) as {
-				versions: DefinitionVersion[];
-				liveVersionId: string | null;
-				draftVersionId: string | null;
-			};
-			versions = data.versions;
-			liveVersionId = data.liveVersionId;
-			draftVersionId = data.draftVersionId;
+			const data = (await res.json()) as { items: DefinitionVersion[] };
+			versions = data.items;
 		} catch {
 			toast.error('Failed to load versions');
 		} finally {
@@ -73,7 +67,7 @@
 		publishing = true;
 		try {
 			const body = target ? { versionId: target.id } : {};
-			const res = await fetch(`/api/definitions/${definitionGuid}/publish`, {
+			const res = await fetch(`/api/v1/definitions/${definitionGuid}/publish`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(body)
@@ -99,7 +93,7 @@
 	async function deleteVersion(version: DefinitionVersion) {
 		deletingId = version.id;
 		try {
-			const res = await fetch(`/api/definitions/${definitionGuid}/versions/${version.id}`, {
+			const res = await fetch(`/api/v1/definitions/${definitionGuid}/versions/${version.id}`, {
 				method: 'DELETE'
 			});
 			if (!res.ok) {

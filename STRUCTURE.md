@@ -17,21 +17,27 @@ selva/
 │
 ├── packages/                       # TypeScript / Svelte workspace
 │   ├── schemas/                    # ui-schema.json + TS/C# code generators
-│   ├── compute/                    # @selvajs/compute — Rhino.Compute client, data-tree + Three.js helpers
+│   ├── compute/                    # @selvajs/compute — Rhino.Compute client + data-tree helpers (no three)
+│   ├── visualization/              # @selvajs/visualization — headless viewer core (scene/render/parse/shared)
+│   ├── solve/                      # @selvajs/solve — the solve flow, both sides of the wire (client/server/shared)
 │   ├── platform/                   # Provider interfaces (auth, data, storage, ...)
 │   ├── providers/
 │   │   ├── local/                  # Filesystem-backed provider (@selvajs/local-provider)
 │   │   ├── supabase/               # Supabase provider (@selvajs/supabase-provider)
 │   │   └── header-auth/            # Forward-auth provider (@selvajs/header-auth-provider)
-│   ├── server/                     # @selvajs/server — transport-agnostic solve/compute server building blocks
+│   ├── server/                     # @selvajs/server — server building blocks: limits, rate limit, SSRF guard, definitions
 │   ├── ui/                         # Shared Svelte components, theme, primitives
 │   ├── plugin-ui/                  # Plugin UI — schema designer + preview, embedded into Selva.gha
 │   ├── selva/                      # @selvajs/selva — deployable Selva app (cloud mode)
 │   ├── website/                    # @selvajs/website — docs/marketing site
 │   ├── cli/                        # @selvajs/cli — scaffold and operate a Selva deployment
-│   └── config/                     # Shared ESLint/Vite/Prettier config
+│   └── config/                     # Shared ESLint/Vite/Vitest/Prettier config
 │
-├── docs/                           # Project documentation
+├── docs/                           # Project documentation, grouped by audience
+│   ├── self-hosting/               # Operators: deploy and run the Selva app
+│   ├── packages/                   # Developers building on @selvajs/*
+│   ├── contributing/               # Repo-only: build, test, release
+│   └── adr/                        # Architecture decision records
 ├── infra/                          # Terraform, deployment configs
 ├── scripts/                        # Build and setup scripts
 └── .github/                        # Issue templates, workflows
@@ -52,6 +58,27 @@ selva/
 
 Rhino 8 loads `net48` + `net7.0`; Rhino 9 loads `net9.0`. Rhino 7 is not supported.
 
+### NuGet versions live in one file
+
+`Plugin/Directory.Packages.props` declares every version; csprojs carry bare
+`<PackageReference Include="..."/>` with no `Version`. Adding a package means adding a
+`<PackageVersion>` there first — a reference without one fails the build rather than resolving to
+something arbitrary.
+
+This is central package management, adopted because a split version is invisible until restore: a
+bump once landed in `Selva.Drawing` alone and left `Selva.GH`/`Selva.Rhino` behind, and the solution
+stopped restoring entirely with NU1605. One declaration per package makes that unrepresentable.
+
+Two packages are deliberately held back, each with the reason inline in the props file, and both are
+in `dependabot.yml`'s ignore list so the bump is not re-proposed weekly:
+
+- **`System.Drawing.Common`** — 8.0.0. On `net7.0`, 10.x duplicates types already in the framework's
+  `System.Drawing.Primitives`, so every `ColorTranslator` use fails with CS0433. Gated on dropping
+  Rhino 8.
+- **`Grasshopper`** — the Rhino 8 SDK by default, with `VersionOverride` on the `net9.0` references
+  for the Rhino 9 `-wip` line. This is the one package with a legitimate per-TFM split; use
+  `VersionOverride` on the reference rather than a second `<PackageVersion>` entry.
+
 ### Naming rules
 
 | Kind                     | Pattern                                      | Example                                             |
@@ -66,6 +93,8 @@ Rhino 8 loads `net48` + `net7.0`; Rhino 9 loads `net9.0`. Rhino 7 is not support
 
 **No snake_case in C# class or filenames.** `GH_Block_To_File` should be `GH_BlockToFile`.
 
+**Exception — `IGH_ContextualParameter` types.** `GetValueListParameter` and `GetDynamicValueListParameter` (`Features/ComputeIO/Components/`) are `IGH_Param` subclasses but skip the `Param_PascalCase` pattern and live in `Components/` rather than `Params/`. This isn't cosmetic: `Param_*` types (`Param_FileData`, `Param_ThreeMaterial`, ...) derive from `GH_PersistentParam<T>` and are standalone canvas nodes a user drops and wires. `IGH_ContextualParameter` types derive from plain `GH_Param<T>` and are never placed as a node — Grasshopper injects them into another component's context menu instead. Naming and placing them like a wire-able param would misrepresent what they are, so don't use this as precedent for a regular `Param_*` type — the exception applies only to `IGH_ContextualParameter`.
+
 ### Folder layout per Grasshopper feature
 
 ```
@@ -79,11 +108,15 @@ Selva.GH/Features/<FeatureName>/
 
 Goos and Params live in their own folders, **not in `Components/` or `Services/`**.
 
+A feature folder may also have a small growth area beyond this base layout — e.g. `Preview/` (Display) or `Helpers/` (UIBuilder) alongside `Services/` — subject to the same "[folder earns its keep](#when-does-a-folder-earn-its-keep)" rule below. `Goos/` may also hold non-Goo support types that exist only to serialize a Goo's payload (e.g. a JSON converter or a plain DTO record) — these stay next to the Goo they support rather than moving to `Services/`.
+
 ### Changing a component's parameters (obsolete + upgrader)
 
 **Adding or removing an input/output param on a released component requires a new `ComponentGuid`.** Grasshopper stores wire connections in the `.ghx` by parameter _index_, not by name. Keeping the same GUID while the param list shifts silently rewires saved definitions to the wrong inputs — this happened once already and is recorded in [Plugin/CHANGELOG.md](./Plugin/CHANGELOG.md) under 0.11.2.
 
-Cosmetic edits (description, nickname, default value, `SolveInstance` behaviour) do **not** need this — only changes to the number or order of params.
+Cosmetic edits (description, nickname, default value, `SolveInstance` behaviour) do **not** need this — only changes to the number, order, type, or access of params.
+
+**CI enforces this.** `scripts/check-component-signatures.mjs --check` compares every live component's param signature against the committed snapshot ([Plugin/Selva.GH/component-signatures.json](./Plugin/Selva.GH/component-signatures.json)) and fails on a structural change to an existing GUID. After following the procedure below (or adding a new component), bless the new state with `node scripts/check-component-signatures.mjs --update`.
 
 The procedure:
 
@@ -104,7 +137,7 @@ The procedure:
 
    Grasshopper discovers `IGH_UpgradeObject` types by assembly scan; there is no registration list to edit. Comment each `MapInput` with the param name — the indices are otherwise unreadable.
 
-4. **Chain, don't rewrite.** Each upgrader hops one GUID. Old upgraders stay forever so a v0.6 file can walk 0.6 → 0.9 → 0.14 → 0.16. See `GH_WebDisplayUpgrader.cs` for a five-link chain.
+4. **Chain, don't rewrite.** Each upgrader hops one GUID. Old upgraders stay forever so a v0.6 file can walk 0.6 → 0.9 → 0.14 → 0.16. See `GH_WebDisplayUpgrader.cs` for a four-hop chain.
 5. **Record both** in `Plugin/CHANGELOG.md` under **Upgraders** and **Obsolete components**.
 
 ### When does a folder earn its keep?
@@ -115,6 +148,17 @@ The procedure:
 One-file folders are a code smell. If `State/` has one file and the file moves to `Services/`, delete `State/`.
 
 ## TypeScript / Svelte conventions
+
+### A word used throughout: seam
+
+Package READMEs and the ADRs talk about a **seam**. It means a deliberate joint where one
+implementation can be swapped for another without the code around it changing — an interface plus
+the injection point that fills it. `SolveDriver` is the transport seam: the session calls it and
+never learns whether the answer came over HTTP or a WebSocket. The logger seam lets a host supply
+its own logger instead of the default.
+
+A seam is a design commitment, not an accident. Adding or moving one changes what a package
+promises, so it belongs in review.
 
 ### Per-package `src/lib/` shape
 
@@ -140,6 +184,8 @@ This is the shared vocabulary. Not every package uses every folder, but when a f
 
 Domain-specific helpers go in their domain folder (`lib/compute/`, `lib/schema/`, etc.). `utils/` is for truly generic helpers with no domain assumptions (debounce, color, file-download).
 
+A domain folder named after the domain itself (`lib/compute/`, `lib/schema/`) is equivalent to a `features/<name>/` folder — both hold pure TS for one concern. Prefer `features/<name>/` for new domains; an existing top-level domain folder isn't required to move under `features/` on its own.
+
 ### Routes (`selva/src/routes/<route>/`)
 
 - `_components/` (underscore prefix — SvelteKit ignores these as routes) holds **route-private** components.
@@ -152,16 +198,75 @@ The plugin (C#) and UI (TS) are two implementations of one contract over WebSock
 
 - **One source of truth per shape.** `ui-schema.json` generates both stacks (CI fails on drift). For non-generated wire shapes, use a single Rhino-free payload type shared by both paths; a `*ContractTests` test asserts they match.
 - **One canonical location per concept.** Outputs live in `schema.Outputs`, canonicalized by `SchemaOutputCanonicalizer` at the boundary. Readers never tolerate "either/or".
-- **Keep decisions out of Rhino types.** Pull pure logic into Rhino-free classes in `Selva.Tests` (see `OutputPayloadBuilder`, `SchemaOutputCanonicalizer`); leave only unwrap/IO in GH-typed shells.
+- **Keep decisions out of Rhino types.** Pull pure logic into Rhino-free classes (see `OutputPayloadBuilder`, `SchemaOutputCanonicalizer` in `Selva.GH/Features/UIBuilder/Services/`, exercised by `*ContractTests`/`*CanonicalizerTests` in `Selva.Tests`); leave only unwrap/IO in GH-typed shells.
 
 ### Adding a new output type
 
-1. **Schema** — add to `ui-schema.json`, run `cd packages/schemas && pnpm run generate:all`.
+1. **Schema** — add to `ui-schema.json`, run `pnpm generate` at the repo root.
 2. **C# Goo** — `*Goo : ISelvaSerializableGoo` with a Rhino-free payload type for the wire shape.
 3. **C# collect** — branch in `OutputPayloadBuilder` + golden row in `OutputPayloadContractTests`. Don't add a new extractor in `ValueCollector`.
 4. **C# canonicalize** — if it can appear in layout, mirror into `schema.Outputs` in `SchemaOutputCanonicalizer` + invariant test.
 5. **TS** — handle the new payload in the UI consumer + a vitest.
 6. `dotnet test` and `pnpm test` must both be green.
+
+## File formats Selva owns
+
+Every format has three names with different lifetimes. The **magic bytes** are the identity of
+files already on users' disks — frozen forever. The **extension** is what writers emit; renaming
+it is cheap (readers detect by magic) but readers must accept retired extensions forever. The
+**human name** in UI and docs can change freely.
+
+| Format           | Extension            | Magic            | Spec                                                |
+| ---------------- | -------------------- | ---------------- | --------------------------------------------------- |
+| Mesh batch blob  | wire-only            | `SLVA` / `SLVZ`* | `BinaryGeometryWriter.cs` header / `SLVA-FORMAT.md` |
+| Selva mesh file  | `.slvm` (was `.dmf`) | `DMF1`           | `DmfFile.cs` header — JSON sidecar + SLVA/SLVZ blob |
+| Parameter preset | `.slvp` (was `.sps`) | none (JSON)      | `packages/schemas/preset-schema.json`               |
+
+\* `SLVZ` is `SLVA` in an optional DEFLATE container; decoders sniff which by the leading magic.
+
+Naming rule for new formats: human name **"Selva _thing_ file"**, extension **`slv` + one
+mnemonic letter**, magic four ASCII bytes. Retired extensions (`.dmf`, `.sps`) stay accepted on
+every read path; only writers moved to the `slv*` names. Cross-stack golden fixtures for these
+formats live in `packages/schemas/fixtures/` (see "Where fixtures live").
+
+## Where TypeScript tests live
+
+Unit tests go in a `__tests__/` folder beside the code, named `*.test.ts`
+(`src/compute/rate-limit.ts` → `src/compute/__tests__/rate-limit.test.ts`).
+`*.spec.ts` is reserved for Playwright specs under `e2e/`. Cross-suite fixtures
+and setup files go in a package-level `tests/`.
+
+### Where fixtures live
+
+A fixture goes in a `fixtures/` directory at the narrowest scope all its
+consumers share:
+
+- **One suite** → `__tests__/fixtures/` beside the test that reads it.
+- **Several suites in one package** → `tests/fixtures/` (data) or
+  `tests/helpers/` (code that builds test data).
+- **Both stacks (TS + C#)** → `packages/schemas/fixtures/`. This is the only
+  cross-stack location — `Selva.Tests` resolves it from the repo root, so it
+  must stay outside `src/`. These are contract artifacts with an update
+  procedure (see the schemas README), not test-private data.
+- **Playwright** → `packages/selva/e2e/fixtures/`. Binary `.gh` files there
+  need the `.gitignore` negation — the blanket `*.gh` rule swallows them
+  otherwise.
+
+Don't promote a fixture to a wider scope speculatively; move it when a second
+consumer appears. Code that constructs test data is a helper, not a data
+fixture — colocate it (`__tests__/fixtures.ts`) or put it in `tests/helpers/`.
+Assets for `examples/` demos aren't fixtures in this sense and stay under
+`examples/`.
+
+The repo-root `fixtures/` is for local development aids no test reads —
+Grasshopper definitions for manual plugin testing and their rhino-mcp
+regeneration recipes. If a test starts reading one of these files, it becomes
+a test fixture: move it to the scope its consumers share.
+
+Every package's `vitest.config.ts` starts from `createVitestConfig()` in
+`@selvajs/config/vitest` and overrides only what it can justify.
+[docs/contributing/testing.md](./docs/contributing/testing.md) covers the base
+config, the provider conformance kits, and why `@selvajs/cli` is exempt.
 
 ## Filename casing
 
@@ -183,3 +288,4 @@ The plugin (C#) and UI (TS) are two implementations of one contract over WebSock
 - `CONTRIBUTING.md` is for human contributors.
 - `STRUCTURE.md` (this file) is the source of truth for layout/naming.
 - Project-internal docs (developer notes, architecture deep-dives) go in `docs/`. Keep `examples/` for runnable artifacts only.
+- `docs/` is grouped by audience, and any doc that can reach the website lives at `audience/group/doc.md` — the folder decides its sidebar group, so there is no `group:` frontmatter to drift. `docs/contributing/` is exempt: it never gets published. See [docs/README.md](./docs/README.md).

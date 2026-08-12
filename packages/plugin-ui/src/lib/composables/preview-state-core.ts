@@ -1,14 +1,8 @@
-// Pure, framework-free transition logic for the preview's schema/notification state
-// (mirrors builder-state-core.ts and the Solve Session split in @selvajs/ui). No runes, no
-// socket. The VALUES + SOLVE LOOP do NOT live here — those belong to a SolveSession
-// (createSolveSession) driven by the SchemaSource's WebSocket SolveDriver. This core owns
-// only what's left: the schema, loading/error flags, sync-needed flag, model units, and the
-// push-event handlers that feed schema/values changes into the session.
-//
-// The previous usePreviewState carried an `isRemoteUpdate` echo-guard and a 500ms initial-
-// solve seed timeout. Both dissolve under the session: reported outputs land via
-// session.report() (which never re-dispatches a solve), and session.loadValues() handles the
-// initial dispatch per instanceSolve.
+// Pure, framework-free transition logic for the preview's schema/notification state. No
+// runes, no socket. Values and the solve loop do not live here — see usePreviewState.svelte.ts
+// for the session that owns them. This core owns the schema, loading/error flags, the
+// sync-needed flag, and the push-event handlers that feed schema/value changes into the
+// session (loadValues, session.values mutation).
 
 import type { UISchema } from '@selvajs/schemas';
 import { ensureSchemaLayoutDefaults } from '$lib/utils/schema-defaults';
@@ -131,7 +125,6 @@ export function handleSchemaUpdated(
 	if (message.sessionId !== deps.sessionId) return;
 	const removedCount = message.removedIds?.length || 0;
 	if (removedCount > 0) {
-		// Prune removed params from the session's live values in place.
 		message.removedIds!.forEach((id) => delete deps.session.values[id]);
 	}
 	state.schema = ensureSchemaLayoutDefaults(message.schema);
@@ -160,7 +153,6 @@ export function handleParametersAdded(
 	deps.notify.show('New parameters detected - click Sync to add them to your UI');
 }
 
-/** User asked to sync: clear the flag and ask the source to re-send initial data. */
 export function clearSyncNeeded(state: PreviewState): void {
 	state.syncNeeded = false;
 }

@@ -35,7 +35,7 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
             GH_ParamAccess.item, ".txt");
         pManager.AddBooleanParameter("Is Base64", "B64", "Set to true if Data is already base64-encoded",
             GH_ParamAccess.item, false);
-        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item,
+        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder for this file. Use :: to nest, like Rhino layers (ROOT::Panels). Files sharing a root land in the same folder; different roots produce separate top-level folders in the download.", GH_ParamAccess.item,
             "");
         pManager.AddTextParameter("Metadata", "M",
             "Optional metadata as \"key=value\" lines (e.g. author=felix). Rides along with the file for downstream tagging/indexing.",
@@ -69,8 +69,6 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
         var metadataLines = new List<string>();
         DA.GetDataList(5, metadataLines);
 
-
-        // Ensure extension starts with a dot
         if (!string.IsNullOrEmpty(extension) && !extension.StartsWith("."))
         {
             extension = "." + extension;

@@ -118,13 +118,14 @@ public class GH_BakeFiles : GH_Component
 
     private string BuildFilePath(string basePath, FileData fileData)
     {
-        var subFolder = !string.IsNullOrEmpty(fileData.SubFolder)
-            ? fileData.SubFolder
-            : "";
+        // Segment-wise, not a raw Combine: "ROOT::Panels" is illegal as a single Windows directory
+        // name and threw IOException here before, and a raw value could otherwise carry ".." out
+        // of the export root.
+        var segments = SubFolderPath.Split(fileData.SubFolder);
 
-        var fullDirectory = string.IsNullOrEmpty(subFolder)
+        var fullDirectory = segments.Count == 0
             ? basePath
-            : Path.Combine(basePath, subFolder);
+            : Path.Combine(new[] { basePath }.Concat(segments).ToArray());
 
         if (!Directory.Exists(fullDirectory))
         {

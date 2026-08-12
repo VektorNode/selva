@@ -36,7 +36,7 @@
 		running = true;
 		error = null;
 		try {
-			const res = await fetch('/admin/api/system/health', { cache: 'no-store' });
+			const res = await fetch('/api/admin/system/health', { cache: 'no-store' });
 			if (!res.ok) {
 				error = `Health check request failed (HTTP ${res.status}).`;
 				report = null;

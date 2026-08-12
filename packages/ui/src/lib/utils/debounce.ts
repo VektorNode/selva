@@ -1,14 +1,4 @@
-/**
- * Debounce utility - delays function execution until after a specified wait time
- * has elapsed since the last time it was invoked.
- *
- * Use for text inputs, search boxes, etc. where you want to wait for the user
- * to finish typing before executing.
- *
- * @param func The function to debounce
- * @param wait The delay in milliseconds
- * @returns A debounced version of the function with a cancel method
- */
+/** Runs `func` once `wait` ms have passed with no further calls. `cancel()` drops a pending call. */
 export function debounce<T extends (...args: any[]) => any>(
 	func: T,
 	wait: number

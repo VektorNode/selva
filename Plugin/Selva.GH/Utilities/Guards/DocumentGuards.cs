@@ -3,14 +3,8 @@ using Selva.Schema.Models;
 
 namespace Selva.GH.Utilities.Guards;
 
-/// <summary>
-///     Provides guard methods for common null checks and validations
-/// </summary>
 public static class DocumentGuards
 {
-    /// <summary>
-    ///     Check if document is valid
-    /// </summary>
     public static bool IsValid(GH_Document document, out string error)
     {
         if (document == null)
@@ -23,9 +17,6 @@ public static class DocumentGuards
         return true;
     }
 
-    /// <summary>
-    ///     Check if schema exists
-    /// </summary>
     public static bool HasSchema(UISchema schema, out string error)
     {
         if (schema == null)
@@ -38,9 +29,6 @@ public static class DocumentGuards
         return true;
     }
 
-    /// <summary>
-    ///     Check if document and schema are valid
-    /// </summary>
     public static bool DocumentAndSchemaValid(GH_Document document, UISchema schema, out string error)
     {
         if (!IsValid(document, out error))

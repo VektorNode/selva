@@ -78,7 +78,7 @@ public class TitleBlockTests
 		};
 		var block = TitleBlock.Iso7200(values);
 		Assert.Equal(4, block.Rows.Count);
-		// First row's first cell is the blank logo cell: a fixed-span field with no label/value.
+		// Row 0, cell 0 is the blank logo cell: fixed-span, no label/value.
 		Assert.Equal("", block.Rows[0][0].Label ?? "");
 		Assert.Equal("", block.Rows[0][0].Value ?? "");
 		Assert.Equal(TitleBlock.LogoColumnSpan, block.Rows[0][0].Span, 6);
@@ -106,7 +106,6 @@ public class TitleBlockTests
 	[Fact]
 	public void Auto_width_stretches_to_a_narrow_band()
 	{
-		// A4 content width (~190mm) → stretch to fill the band.
 		var block = new TitleBlock
 		{
 			Size = new BoundingBox(0, 0, 180, 40),
@@ -120,7 +119,7 @@ public class TitleBlockTests
 	[Fact]
 	public void Auto_width_stretches_to_a_wide_band_up_to_the_cap()
 	{
-		// A3-landscape content (~400mm), below the 420mm cap → tracks the band, no snap to 180.
+		// Below the cap, width tracks the band exactly — no snap back to the fixed Size.
 		var block = new TitleBlock
 		{
 			Size = new BoundingBox(0, 0, 180, 40),
@@ -134,7 +133,7 @@ public class TitleBlockTests
 	[Fact]
 	public void Auto_width_is_capped_on_very_wide_bands()
 	{
-		// A1/A0-scale band far past the cap → clamps to MaxAutoWidth, not the full band width.
+		// Band far past the cap → clamps to MaxAutoWidth, not the full band width.
 		var block = new TitleBlock
 		{
 			Size = new BoundingBox(0, 0, 180, 40),
@@ -180,16 +179,15 @@ public class TitleBlockTests
 		// 4 rows over 40mm → 10mm row; logo fitted into (10 − 3) = 7mm tall, aspect 2:1 → 14mm wide.
 		Assert.Equal(7, placed.Height, 6);
 		Assert.Equal(14, placed.Width, 6);
-		// Top-left: y sits near the top of the block, x near the left edge.
-		Assert.True(placed.Position.X >= 0 && placed.Position.X < 5);
+		Assert.True(placed.Position.X >= 0 && placed.Position.X < 5); // near left edge
 		Assert.True(placed.Position.Y > 40 - 12); // within the top row band
 	}
 
 	[Fact]
 	public void Wide_logo_is_clamped_to_its_cell_width()
 	{
-		// A very wide logo (aspect 10:1) would, height-bound, be 70mm wide on a 7mm row — far past
-		// the ~36mm logo cell. It must shrink to fit the cell, not bleed into owner/project.
+		// Aspect 10:1: height-bound would give 70mm on a 7mm row, far past the ~36mm logo
+		// cell. Must shrink to fit the cell instead of bleeding into owner/project.
 		var logo = new ImageElement { Data = new byte[] { 1 }, Format = ImageFormat.Png, Width = 100, Height = 10 };
 		var block = new TitleBlock
 		{
@@ -201,8 +199,7 @@ public class TitleBlockTests
 		Assert.NotNull(placed);
 		// Logo cell = 0.2 × 180 = 36mm, minus inset (2 × 1.5) = 33mm box.
 		Assert.True(placed.Width <= 33 + 1e-6, $"expected width <= 33, got {placed.Width}");
-		// Aspect preserved at 10:1.
-		Assert.Equal(placed.Width / 10.0, placed.Height, 6);
+		Assert.Equal(placed.Width / 10.0, placed.Height, 6); // aspect preserved
 	}
 
 	[Fact]
@@ -251,7 +248,6 @@ public class TitleBlockTests
 			},
 		};
 		var resolved = (GroupElement)block.Resolve(new LayoutContext(BoundingBox.Empty));
-		// Last child should be the border PathElement.
-		Assert.IsType<PathElement>(resolved.Children[resolved.Children.Count - 1]);
+		Assert.IsType<PathElement>(resolved.Children[resolved.Children.Count - 1]); // border is the last child
 	}
 }

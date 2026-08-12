@@ -22,13 +22,9 @@ import type { SyncChange } from '$lib/websocket/websocket.svelte';
 
 /** A SolveDriver stand-in that records solves and exposes its reporter for the test to use. */
 export interface FakeSolveDriver extends PreviewSolveDriver {
-	/** Values passed to each solve(), in order. */
 	readonly solves: Record<string, unknown>[];
-	/** Number of cancel() calls. */
 	readonly cancelCount: number;
-	/** Whether dispose() has been called. */
 	readonly disposed: boolean;
-	/** Flip the reported in-flight state. */
 	setSolving(value: boolean): void;
 	/** The reporter the source handed the session — the test reports results through it. */
 	readonly reporter: SolveReporter;
@@ -46,11 +42,8 @@ export interface FakeSource extends SchemaSource {
 	emit<E extends SchemaSourceEvent>(event: E, message: SchemaSourceEvents[E]): void;
 	/** Saves issued via save(), in order. The last entry's `resolve` settles its promise. */
 	readonly saves: RecordedSave[];
-	/** sessionIds passed to requestInitialData(), in order. */
 	readonly initialDataRequests: string[];
-	/** Sync-preview requests, in order. */
 	readonly syncPreviewRequests: { sessionId: string; draft: UISchema }[];
-	/** applySyncChanges calls, in order. */
 	readonly appliedSyncChanges: { sessionId: string; changes: SyncChange[] }[];
 	/** Flip connection state to exercise the disconnected path. */
 	setConnected(value: boolean): void;

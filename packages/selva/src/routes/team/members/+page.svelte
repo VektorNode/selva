@@ -21,7 +21,7 @@
 
 	// Per spec §3: only `owner` can change roles; `owner`/`admin` can grant
 	// `manage_definitions`/`manage_projects` to a `member`. Server-side
-	// `/api/orgs/[orgId]/members/[userId]` PATCH is the load-bearing check.
+	// `/api/v1/orgs/[orgId]/members/[userId]` PATCH is the load-bearing check.
 	const isOwner = $derived(data.actorRole === 'owner');
 	const isOwnerOrAdmin = $derived(data.actorRole === 'owner' || data.actorRole === 'admin');
 	const ownerCount = $derived(data.members.filter((m) => m.role === 'owner').length);
@@ -35,7 +35,7 @@
 		if (!data.orgId) return;
 		savingId = userId;
 		try {
-			const res = await fetch(`/api/orgs/${data.orgId}/members/${userId}`, {
+			const res = await fetch(`/api/v1/orgs/${data.orgId}/members/${userId}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(patch)
@@ -107,7 +107,7 @@
 	async function createInvite() {
 		creatingInvite = true;
 		try {
-			const res = await fetch('/api/invites', {
+			const res = await fetch(`/api/v1/orgs/${data.orgId}/invites`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -140,7 +140,7 @@
 		if (!confirm(`Revoke invite for "${email}"?`)) return;
 		revokingId = id;
 		try {
-			const res = await fetch(`/api/invites/${id}`, { method: 'DELETE' });
+			const res = await fetch(`/api/v1/orgs/${data.orgId}/invites/${id}`, { method: 'DELETE' });
 			if (res.ok) {
 				toast.success('Invite revoked');
 				await invalidateAll();

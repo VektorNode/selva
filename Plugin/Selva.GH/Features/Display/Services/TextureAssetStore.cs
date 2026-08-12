@@ -9,16 +9,13 @@ namespace Selva.GH.Features.Display.Services;
 ///     Process-wide content-addressed registry for material texture bytes, served over HTTP at
 ///     <c>/assets/{hash}</c> by <see cref="LocalWebServer" />.
 ///
-///     Textures are registered by <c>GH_ThreeMaterial</c> (bitmap input or local file path) and
-///     referenced from <see cref="ThreeMaterial.Map" /> by an immutable, hash-keyed URL. Because
-///     the URL is derived from the content, the browser caches each texture forever and re-solves
-///     never re-ship image bytes — only the tiny URL string travels with the material.
+///     <c>GH_ThreeMaterial</c> registers bytes and gets back a hash-keyed URL for <see cref="ThreeMaterial.Map" />;
+///     since the URL is derived from content, the browser caches it forever and re-solves only ship
+///     the URL string, never the image bytes again.
 ///
-///     The registry is static so ANY LocalWebServer instance in the process can serve it. The
-///     UIBuilder's embedded server only runs in production (and is per-component), so a dedicated
-///     server is started lazily on first registration — in dev mode that is the only HTTP server
-///     in the plugin. Entries live for the Rhino session; re-registering the same bytes is a no-op
-///     (same hash).
+///     Static so any <see cref="LocalWebServer" /> in the process can serve it. The UIBuilder's
+///     embedded server is production-only and per-component, so a dedicated server starts lazily on
+///     first registration — in dev mode that's the only HTTP server in the plugin.
 /// </summary>
 public static class TextureAssetStore
 {
@@ -34,10 +31,7 @@ public static class TextureAssetStore
     private static readonly object ServerLock = new object();
     private static LocalWebServer _server;
 
-    /// <summary>
-    ///     Registers texture bytes and returns the absolute asset URL
-    ///     (<c>http://localhost:{port}/assets/{hash}</c>), starting the asset server on first use.
-    /// </summary>
+    /// <summary>Registers texture bytes, starting the asset server on first use, and returns the asset URL.</summary>
     public static string Register(byte[] bytes, string mime)
     {
         if (bytes == null || bytes.Length == 0)

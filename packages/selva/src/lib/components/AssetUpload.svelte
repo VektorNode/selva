@@ -21,7 +21,7 @@
 	// Mirror the server cap (MAX_IMAGE_FILE_SIZE default 10 MB) for instant feedback.
 	const MAX_BYTES = 10 * 1024 * 1024;
 
-	const endpoint = $derived(`/admin/api/orgs/${orgId}/assets/${kind}`);
+	const endpoint = $derived(`/api/v1/orgs/${orgId}/assets/${kind}`);
 
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let busy = $state(false);

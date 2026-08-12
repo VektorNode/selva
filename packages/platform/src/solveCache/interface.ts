@@ -1,70 +1,68 @@
 import type { RequestContext } from '../context.js';
 
 /**
- * Durable L2 solve-result cache (H1). The scheduler's in-process `Map` is L1 —
- * 20 entries, 5-min TTL, per app instance. This is the shared, longer-lived
- * layer keyed on `(orgId, definitionId, versionId, inputKey)` where `inputKey`
- * is a wide (SHA-256) hash of the transformed input tree plus the solve-affecting
- * config subset (H2/R8). A hit skips compute entirely.
+ * Shared solve-result cache seam, keyed on `(orgId, definitionId, versionId,
+ * inputKey)` where `inputKey` is a wide (SHA-256) hash of the transformed input
+ * tree plus the solve-affecting config subset. A hit skips compute entirely.
  *
- * Design contract (decided 2026-07-11):
+ * Design contract:
  *
- * - **Async from day one.** The memory backend returns promises too, so no call
- *   site changes shape when a network store (Redis) arrives later.
- * - **Entries are opaque bytes** — the pre-gzipped response envelope (R6) plus a
- *   small metadata header. The backend never inspects them; memory stores the
- *   same buffer Redis would, so a hit stays near-CPU-free in either backend and
- *   there is no serialization drift between impls.
+ * - **Async from day one.** The in-memory backend returns promises too, so a
+ *   network store (Redis) drops in later without any call site changing shape.
+ * - **Entries are opaque bytes** — the pre-gzipped response envelope plus a
+ *   small metadata header. The backend never inspects them, so a hit stays
+ *   near-CPU-free in either backend and there's no serialization drift between
+ *   implementations.
  * - **Best-effort.** `get` may miss at any time (restart, eviction, network
- *   blip); `set` may silently drop. Correctness NEVER depends on cache presence —
- *   this is what makes backends interchangeable and what makes the
- *   no-TTL/versionId keying safe under any eviction policy.
+ *   blip); `set` may silently drop. Correctness never depends on cache presence
+ *   — this is what makes the no-TTL/versionId keying safe under any eviction
+ *   policy.
  * - **Per-definition quota, passed at write time.** `set` carries
- *   `maxEntriesForDefinition` so the backend holds no policy, only data. Eviction
- *   is LRU *within* the definition: a slider-heavy definition churns only its own
- *   entries, not everyone else's.
- * - **Version keying = no invalidation.** Publishing mints a new `versionId` →
- *   fresh keyspace; rollback re-hits old entries; there is nothing to invalidate.
+ *   `maxEntriesForDefinition` so the backend holds no policy, only data.
+ *   Eviction is LRU *within* the definition: a slider-heavy definition churns
+ *   only its own entries, not everyone else's.
+ * - **Version keying means no invalidation.** Publishing mints a new
+ *   `versionId` → fresh keyspace; rollback re-hits old entries; there's
+ *   nothing to invalidate.
  */
 
 /** The parts that address a cached solve. All four are folded into the stored key. */
 export interface SolveCacheKey {
 	/**
-	 * Owning org (defense-in-depth against cross-tenant reads). Null for
-	 * remote-URL solves that have no org — those are not cached (the app passes
-	 * the cache hook only for org-scoped live-channel solves).
+	 * Owning org (defense-in-depth against cross-tenant reads). Always a real
+	 * org, never null — the app only builds a `SolveCacheKey` for org-scoped
+	 * live-channel solves; remote-URL solves (no org) never reach this path.
 	 */
 	orgId: string;
 	/** The definition guid — the quota scope. */
 	definitionId: string;
-	/** The immutable version id — no TTL needed, so entries never go stale. */
+	/** The immutable version id. */
 	versionId: string;
-	/**
-	 * Wide hash of the transformed input tree + solve-affecting config subset
-	 * (SHA-256 hex; see the pipeline's key builder). This is the only part that
-	 * varies per solve of a given version.
-	 */
+	/** SHA-256 hex hash of the transformed input tree + solve-affecting config subset. */
 	inputKey: string;
 }
 
 /** Options for a write; carries the per-definition quota so the backend stays stateless. */
 export interface SolveCacheSetOptions {
 	/**
-	 * Max cached entries this definition may retain. The backend evicts
-	 * LRU-within-definition down to this count on write. A definition's quota is
-	 * `solveCacheLimit` (absent → the global default); the app never calls `set`
-	 * when the resolved quota is `0` (caching off), so this is always `>= 1`.
+	 * Max cached entries this definition may retain (`solveCacheLimit` on the
+	 * definition record). Always `>= 1` — callers must not call `set` when the
+	 * resolved quota is `0` (caching off).
 	 */
 	maxEntriesForDefinition: number;
 }
 
 /**
- * Durable solve-result cache. The solve pipeline talks only to this interface;
- * the backend (memory today, Redis later) is a config change, not a redesign.
+ * Durable solve-result cache — the seam a shared backend mounts on.
  *
- * Implementations MUST NOT throw — both methods are best-effort on the hot path
- * of every live solve. A backend failure resolves as a miss (`get`) or a silent
- * drop (`set`); it never becomes a request error.
+ * No implementation ships today: the app runs on `adapter-node`, one
+ * long-lived process, where in-process caching already works. Run N instances
+ * behind a proxy and the in-process hit rate divides by N — that's when Redis
+ * mounts here.
+ *
+ * Implementations must not throw — both methods sit on the hot path of every
+ * live solve. A backend failure resolves as a miss (`get`) or a silent drop
+ * (`set`); it never becomes a request error.
  */
 export interface ISolveResultCache {
 	/**
@@ -85,9 +83,9 @@ export interface ISolveResultCache {
 }
 
 /**
- * Default `ISolveResultCache` — never stores, always misses. Used when
- * `SOLVE_CACHE_PROVIDER=off` (or unset). Swap in the memory backend
- * (`@selvajs/server`) or a shared store to enable the durable L2.
+ * Default `ISolveResultCache` — never stores, always misses. The only
+ * implementation that ships today; a shared backend replaces it when horizontal
+ * scaling makes in-process caching insufficient.
  */
 export class NoopSolveResultCache implements ISolveResultCache {
 	async get(_ctx: RequestContext, _key: SolveCacheKey): Promise<Uint8Array | null> {

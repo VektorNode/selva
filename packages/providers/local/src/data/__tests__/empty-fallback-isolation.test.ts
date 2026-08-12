@@ -1,10 +1,9 @@
 /**
- * §3c regression: `readJsonFile` returns its fallback BY REFERENCE on a missing
- * file. A store that used a shared module-level `EMPTY` constant as that
- * fallback AND mutated the loaded object (`LocalInviteStore.create` does
- * `.push`) would pollute the shared constant — so the NEXT store to read a
- * missing file would see the first store's data (cross-request/cross-instance
- * bleed). These tests pin that the fallback is a fresh object each time.
+ * `readJsonFile` returns its fallback by reference on a missing file. A store
+ * using a shared module-level `EMPTY` constant as that fallback, and mutating
+ * the loaded object (`LocalInviteStore.create` does `.push`), would pollute the
+ * shared constant — so the next store to read a missing file would see the
+ * first store's data. These tests pin that the fallback is a fresh object each time.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -44,13 +43,13 @@ function invite(id: string, orgId = 'org-1'): Invite {
 
 describe('LocalInviteStore — empty-fallback isolation (§3c)', () => {
 	it('a fresh store on a different empty dir does not see another store’s invite', async () => {
-		// Store A: file does not exist yet → create() loads the empty fallback and
-		// pushes into it, then writes A's own file.
+		// A's file doesn't exist yet, so create() loads the empty fallback, pushes
+		// into it, and writes A's own file.
 		const storeA = new LocalInviteStore(dirA);
 		await storeA.create(SYSTEM_CONTEXT, invite('a1'));
 
-		// Store B: brand-new empty dir, file also does not exist → must read as EMPTY.
-		// If the fallback were a shared mutable constant, A's push would show up here.
+		// B is a separate empty dir with no file either — if the fallback were a
+		// shared mutable constant, A's push would show up here.
 		const storeB = new LocalInviteStore(dirB);
 		const page = await storeB.listByOrg(SYSTEM_CONTEXT, 'org-1');
 		expect(page.items).toEqual([]);
@@ -59,8 +58,8 @@ describe('LocalInviteStore — empty-fallback isolation (§3c)', () => {
 	it('a second missing-file read on the same store is still empty after a create+delete cycle', async () => {
 		const store = new LocalInviteStore(dirA);
 		await store.create(SYSTEM_CONTEXT, invite('a1'));
-		// A separate store instance on the SAME dir sees exactly the one invite —
-		// not a doubled/leaked list.
+		// A separate instance on the same dir sees exactly the one invite — not a
+		// doubled or leaked list.
 		const same = new LocalInviteStore(dirA);
 		const page = await same.listByOrg(SYSTEM_CONTEXT, 'org-1');
 		expect(page.items.map((i) => i.id)).toEqual(['a1']);

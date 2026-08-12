@@ -17,14 +17,8 @@ using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
-/// <summary>
-///     Handles collection and extraction of values from Grasshopper parameters and components
-/// </summary>
 public class ValueCollector
 {
-    /// <summary>
-    ///     Collect current input values from all parameters in the schema
-    /// </summary>
     public Dictionary<string, object> CollectInputValues(GH_Document document, UISchema schema,
         Action<GH_RuntimeMessageLevel, string> addMessage = null)
     {
@@ -65,9 +59,6 @@ public class ValueCollector
         return currentValues;
     }
 
-    /// <summary>
-    ///     Collect output values from all output components in the schema
-    /// </summary>
     public Dictionary<string, object> CollectOutputValues(GH_Document document, UISchema schema,
         Action<GH_RuntimeMessageLevel, string> addMessage = null)
     {
@@ -112,9 +103,6 @@ public class ValueCollector
         return outputValues;
     }
 
-    /// <summary>
-    ///     Collect file outputs from components that output FileData
-    /// </summary>
     public Dictionary<string, object> CollectFileOutputs(GH_Document document, UISchema schema,
         Action<GH_RuntimeMessageLevel, string> addMessage = null)
     {
@@ -159,12 +147,9 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///     Collect display data from ContextBakeComponent inputs.
-    ///     Returns an array of DisplayBatch objects (as JSON-serializable objects).
-    ///     This mirrors Rhino.Compute behavior where baking is explicit.
-    ///
-    ///     When <paramref name="bakeIds" /> is provided, only those components are visited
-    ///     (O(k) FindObject lookups instead of O(n) full-document scan).
+    ///     Collects display data from ContextBake inputs, mirroring Rhino.Compute's explicit baking.
+    ///     When <paramref name="bakeIds" /> is given, only those components are visited instead of
+    ///     scanning the whole document.
     /// </summary>
     public List<object> CollectDisplayData(GH_Document document,
         IReadOnlyCollection<Guid> bakeIds = null,
@@ -179,8 +164,6 @@ public class ValueCollector
 
         var contextBakeCount = 0;
 
-        // Fast path: caller pre-tracks ContextBake instance ids (e.g. via DocumentEventManager.OnObjectsAdded).
-        // Skip the full document walk.
         IEnumerable<IGH_DocumentObject> candidates;
         if (bakeIds != null && bakeIds.Count > 0)
         {
@@ -200,7 +183,6 @@ public class ValueCollector
             candidates = document.Objects;
         }
 
-        // Find all ContextBakeComponents and extract their input data
         foreach (var docObject in candidates)
         {
             if (!(docObject is IGH_Component component))
@@ -222,7 +204,6 @@ public class ValueCollector
                 if (displayData != null)
                 {
                     Debug.WriteLine($"[ValueCollector] Found display data from ContextBake '{component.NickName}'");
-                    // If displayData is a list, flatten it into displayDataList
                     if (displayData is List<object> dataList)
                     {
                         displayDataList.AddRange(dataList);
@@ -253,8 +234,7 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///     Extract display data from a ContextBakeComponent's input parameters.
-    ///     Flattens all WebDisplayGoo objects from all inputs into a single list.
+    ///     Flattens all WebDisplayGoo objects from a ContextBake's inputs into a single list.
     /// </summary>
     private object ExtractDisplayDataFromContextBake(IGH_Component component,
         Action<GH_RuntimeMessageLevel, string> addMessage)
@@ -302,13 +282,9 @@ public class ValueCollector
             return null;
         }
 
-        // Always return as list when multiple, single object when one
         return displayBatches.Count == 1 ? displayBatches[0] : displayBatches;
     }
 
-    /// <summary>
-    ///     Check if component is a ContextBakeComponent
-    /// </summary>
     private static bool IsContextBakeComponent(IGH_Component component)
     {
         if (component == null)
@@ -320,9 +296,6 @@ public class ValueCollector
         return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
     }
 
-    /// <summary>
-    ///     Extract value from a parameter, handling ValueList parameters specially
-    /// </summary>
     private object ExtractParameterValue(IGH_Param ghParam, SchemaInput input)
     {
         if (ghParam is GetValueListParameter valueListParam)
@@ -330,16 +303,16 @@ public class ValueCollector
             return ExtractValueListValue(valueListParam);
         }
 
-        // 1) The param's own volatile data — populated after solve for both wired and
-        //    persistent-data-backed params. This is the most reliable source.
+        // The param's own volatile data is populated after solve for both wired and
+        // persistent-data-backed params — the most reliable source, so try it first.
         var fromOwnVolatile = ExtractDataFromVolatileData(ghParam.VolatileData);
         if (fromOwnVolatile != null)
         {
             return fromOwnVolatile;
         }
 
-        // 2) Wired source (e.g. a Boolean Toggle upstream) — falls back when this param's
-        //    own volatile data is empty (pre-solve, or non-collecting context params).
+        // Falls back to the wired source (e.g. a Boolean Toggle upstream) when this
+        // param's own volatile data is empty — pre-solve, or non-collecting context params.
         if (ghParam.SourceCount == 1)
         {
             var fromSource = ExtractDataFromVolatileData(ghParam.Sources[0].VolatileData);
@@ -385,9 +358,6 @@ public class ValueCollector
         return false;
     }
 
-    /// <summary>
-    ///     Extract value from ValueList parameter
-    /// </summary>
     private object ExtractValueListValue(GetValueListParameter valueListParam)
     {
         var valueData = valueListParam.VolatileData;
@@ -405,8 +375,8 @@ public class ValueCollector
             }
         }
 
-        // VolatileData is only populated during a solution, so it is empty right after
-        // document load. The connected value list's selection is available immediately.
+        // VolatileData only fills in during a solve, so it's empty right after document
+        // load — but the connected value list's selection is available immediately.
         var selected = valueListParam.SelectedItems;
         if (selected.Count > 1)
         {
@@ -417,9 +387,6 @@ public class ValueCollector
         return string.IsNullOrEmpty(defaultValue) ? null : defaultValue;
     }
 
-    /// <summary>
-    ///     Extract output value from a component's input parameters
-    /// </summary>
     private object ExtractComponentOutput(IGH_Component component)
     {
         var inputParam = component.Params.Input.FirstOrDefault();
@@ -431,30 +398,21 @@ public class ValueCollector
         return null;
     }
 
-    /// <summary>
-    ///     Extract the routing payload { targetInputId, options } from the DynamicValueListGoo wired into
-    ///     a ContextBake's first input. Delegates the payload shape to <see cref="OutputPayloadBuilder" />
-    ///     (the unit-tested contract) — this method only walks Rhino's volatile data and unwraps.
-    /// </summary>
     private object ExtractDynamicValueListOutput(IGH_Component component)
     {
         return BuildFirstInputPayload(component);
     }
 
-    /// <summary>
-    ///     Extract a PlotlyFigure JSON string from the first input of a ContextBake component.
-    ///     Delegates classification + payload to <see cref="OutputPayloadBuilder" />.
-    /// </summary>
     private object ExtractChartOutput(IGH_Component component)
     {
         return BuildFirstInputPayload(component);
     }
 
     /// <summary>
-    ///     Walk the first input's volatile data, project each goo into a Rhino-free <see cref="GooView" />,
-    ///     and ask <see cref="OutputPayloadBuilder" /> for the payload. The first recognized goo wins.
-    ///     All ContextBake-wired output types (dynamicValueList / chart / file) flow through here, so
-    ///     their wire shape is decided in one unit-tested place.
+    ///     Walks the first input's volatile data, projects each goo into a Rhino-free <see cref="GooView" />,
+    ///     and asks <see cref="OutputPayloadBuilder" /> to classify and build the payload. All ContextBake-wired
+    ///     output types (dynamicValueList / chart / file) go through here, so the wire shape for each is
+    ///     decided in one unit-tested place instead of three.
     /// </summary>
     private object BuildFirstInputPayload(IGH_Component component)
     {
@@ -465,8 +423,7 @@ public class ValueCollector
             return null;
         }
 
-        // Project every goo into the Rhino-free view, then let the tested classifier decide. The outcome
-        // is logged once — so a null payload says *why* (empty / unknown type) instead of vanishing.
+        // Logged so a null payload says why (empty / unknown type) instead of silently vanishing.
         var views = inputParam.VolatileData.AllData(true).Select(ProjectGoo);
         var outcome = OutputPayloadBuilder.Classify(views);
 
@@ -476,8 +433,8 @@ public class ValueCollector
     }
 
     /// <summary>
-    ///     Reduce a (possibly GH_ObjectWrapper-wrapped) goo to the Rhino-free facts the payload decision
-    ///     needs. This is the only place that touches Rhino goo types for ContextBake outputs.
+    ///     Reduces a goo to the Rhino-free facts <see cref="OutputPayloadBuilder" /> needs. The only place
+    ///     that touches Rhino goo types for ContextBake outputs.
     /// </summary>
     private GooView ProjectGoo(IGH_Goo goo)
     {
@@ -486,8 +443,8 @@ public class ValueCollector
             return null;
         }
 
-        // Custom goo arrives wrapped in GH_ObjectWrapper on a generic ContextBake input — unwrap it
-        // before the type checks, or the match silently fails.
+        // Custom goo arrives wrapped in GH_ObjectWrapper on a generic ContextBake input — unwrap
+        // before the type checks below, or the match silently fails.
         var inner = goo is GH_ObjectWrapper wrapper ? wrapper.Value as IGH_Goo ?? goo : goo;
 
         if (inner is DynamicValueListGoo dvl)
@@ -509,9 +466,6 @@ public class ValueCollector
         return new GooView { TypeName = inner?.TypeName };
     }
 
-    /// <summary>
-    ///     Extract data from IGH_Structure (handles single values and lists)
-    /// </summary>
     private object ExtractDataFromVolatileData(IGH_Structure volatileData)
     {
         if (volatileData == null || volatileData.IsEmpty)
@@ -533,9 +487,6 @@ public class ValueCollector
         return null;
     }
 
-    /// <summary>
-    ///     Extract FileData from all inputs of a component
-    /// </summary>
     private List<object> ExtractFileDataFromComponent(IGH_Component component,
         Action<GH_RuntimeMessageLevel, string> addMessage)
     {
@@ -574,11 +525,6 @@ public class ValueCollector
         return fileDataList;
     }
 
-    /// <summary>
-    ///     Extract WebDisplayGoo data from a component's output parameters.
-    ///     Returns the DisplayBatch object only if the output is wired into a ContextBakeComponent,
-    ///     mirroring the Rhino.Compute behaviour where baking is explicit.
-    /// </summary>
     private object ExtractWebDisplayDataFromComponent(IGH_Component component,
         Action<GH_RuntimeMessageLevel, string> addMessage)
     {
@@ -615,9 +561,6 @@ public class ValueCollector
         return null;
     }
 
-    /// <summary>
-    ///     Extract value from IGH_Goo wrapper
-    /// </summary>
     private object ExtractValue(IGH_Goo data)
     {
         if (data is GH_String ghString)
@@ -640,7 +583,7 @@ public class ValueCollector
             return ghBoolean.Value;
         }
 
-        // Handle FileInputGoo - return metadata only (not the full base64 file content!)
+        // FileInputGoo: return metadata only, never the full base64 file content.
         if (data?.GetType().FullName?.IndexOf("FileInputGoo", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             try
@@ -652,7 +595,6 @@ public class ValueCollector
                     var fileInputData = valueProperty.GetValue(data);
                     if (fileInputData != null)
                     {
-                        // Get the Type, FileEnding properties
                         var fileInputDataType = fileInputData.GetType();
                         var typeProperty = fileInputDataType.GetProperty("Type");
                         var fileEndingProperty = fileInputDataType.GetProperty("FileEnding");
@@ -662,15 +604,13 @@ public class ValueCollector
                         var fileEnding = fileEndingProperty?.GetValue(fileInputData)?.ToString() ?? "";
                         var fileContent = fileProperty?.GetValue(fileInputData)?.ToString() ?? "";
 
-                        // Return metadata only - include a truncated preview of the file content
-                        // This allows the frontend to know the file is set without re-sending the entire file
                         var metadata = new
                         {
                             type = fileType,
                             fileEnding,
                             file = fileContent.Length > 100 ? fileContent.Substring(0, 100) + "..." : fileContent,
                             _fileSize = fileContent.Length,
-                            _isMetadata = true // Flag to indicate this is metadata only
+                            _isMetadata = true
                         };
 
                         return metadata;
@@ -679,7 +619,6 @@ public class ValueCollector
             }
             catch (Exception)
             {
-                // Fall through to default behavior
             }
         }
 
@@ -691,9 +630,6 @@ public class ValueCollector
         return data?.ToString() ?? "";
     }
 
-    /// <summary>
-    ///     Extract FileData object from FileDataGoo using direct casting
-    /// </summary>
     private object ExtractFileDataFromGoo(IGH_Goo gooObj)
     {
         if (gooObj == null)
@@ -711,13 +647,18 @@ public class ValueCollector
                     return null;
                 }
 
+                // subFolder is normalized here rather than on the client so both output paths
+                // agree on what "ROOT::Panels" means. metadata rides along: FileData carries it
+                // and the client reads it, but this hand-built payload used to drop it, so it
+                // reached cloud consumers and never local ones.
                 return new
                 {
                     fileName = fileData.FileName ?? "",
                     fileType = fileData.FileType ?? "",
                     data = fileData.Data ?? "",
                     isBase64Encoded = fileData.IsBase64Encoded,
-                    subFolder = fileData.SubFolder ?? ""
+                    subFolder = SubFolderPath.ToArchivePath(fileData.SubFolder),
+                    metadata = fileData.Metadata ?? new Dictionary<string, string>()
                 };
             }
 

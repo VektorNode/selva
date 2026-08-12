@@ -1,0 +1,26 @@
+{
+	"type": "schemaSaveRejected",
+	"sessionId": "session-fixture",
+	"schema": {
+		"id": "schema-1",
+		"name": "Sample Schema",
+		"description": null,
+		"projectFileName": null,
+		"documentId": "00000000-0000-0000-0000-000000000000",
+		"pluginVersion": null,
+		"tags": [],
+		"category": null,
+		"author": null,
+		"organization": null,
+		"schemaVersion": "2.0.0",
+		"minPluginVersion": null,
+		"created": "2026-01-15T12:00:00Z",
+		"lastModified": "2026-01-15T12:00:00Z",
+		"instanceSolve": true,
+		"inputs": [],
+		"outputs": [],
+		"layout": null
+	},
+	"schemaHash": "hash-1",
+	"reason": "Schema changed in Grasshopper since you started editing."
+}

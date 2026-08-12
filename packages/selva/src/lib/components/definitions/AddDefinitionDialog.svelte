@@ -144,7 +144,7 @@
 					? { projectId: selectedProjectId, computeServerId: selectedComputeServerId }
 					: { projectId: selectedProjectId }
 			).toString();
-			const response = await fetch(`/api/compute/schema?${params}`, {
+			const response = await fetch(`/api/v1/compute/schema?${params}`, {
 				method: 'POST',
 				body: formData
 			});

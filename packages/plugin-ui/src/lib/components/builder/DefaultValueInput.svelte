@@ -1,10 +1,10 @@
 <script lang="ts">
-	import type { GrasshopperParamType, DiscoveredInput } from '@selvajs/schemas';
+	import type { ParamType, DiscoveredInput } from '@selvajs/schemas';
 	import { Input, Select, Switch } from '@selvajs/ui';
 	import { validateDefaultValue } from '$lib/utils/validation';
 
 	interface DefaultValueInputProps {
-		paramType?: GrasshopperParamType;
+		paramType?: ParamType;
 		paramConstraints?: DiscoveredInput;
 		value: unknown;
 		options?: Record<string, string | undefined>;

@@ -17,9 +17,6 @@ export interface SchemaValidationResult {
 	canLoad: boolean;
 }
 
-/**
- * Validate an imported schema against the current document
- */
 export function validateImportedSchema(
 	importedSchema: UISchema,
 	currentDocumentId: string,
@@ -27,7 +24,6 @@ export function validateImportedSchema(
 ): SchemaValidationResult {
 	const issues: ValidationIssueMessage[] = [];
 
-	// Check if documentId exists in imported schema
 	if (!importedSchema.documentId) {
 		issues.push({
 			paramId: '__document__',
@@ -36,7 +32,7 @@ export function validateImportedSchema(
 				'Imported schema has no document ID. This may be from an older version or different workflow.'
 		});
 	}
-	// Check document ID match (warning only - schema can still be imported if inputs are compatible)
+	// Warning only - schema can still be imported if inputs are compatible.
 	else if (importedSchema.documentId !== currentDocumentId) {
 		issues.push({
 			paramId: '__document__',
@@ -51,7 +47,6 @@ export function validateImportedSchema(
 		});
 	}
 
-	// Check project file name match (warning only)
 	if (
 		currentProjectFileName &&
 		importedSchema.projectFileName &&
@@ -68,7 +63,6 @@ export function validateImportedSchema(
 		});
 	}
 
-	// Validate schema structure
 	if (!importedSchema.id) {
 		issues.push({
 			paramId: '__schema__',
@@ -113,7 +107,6 @@ export function validateImportedSchema(
 		});
 	}
 
-	// Check for plugin version compatibility
 	if (importedSchema.minPluginVersion) {
 		issues.push({
 			paramId: '__plugin__',
@@ -126,7 +119,6 @@ export function validateImportedSchema(
 		});
 	}
 
-	// Can load if no errors (warnings are ok)
 	const hasErrors = issues.some((i) => i.severity === 'error');
 	const canLoad = !hasErrors;
 
@@ -137,9 +129,6 @@ export function validateImportedSchema(
 	};
 }
 
-/**
- * Export schema as .sls (Selva Layout State) file
- */
 export function exportSchemaAsFile(schema: UISchema, exportedBy?: string): void {
 	const exportedSchema: ExportedSchema = {
 		metadata: {
@@ -171,7 +160,6 @@ export function exportSchemaAsFile(schema: UISchema, exportedBy?: string): void 
  * Import schema from .sls (Selva Layout State) file
  */
 export async function importSchemaFromFile(file: File): Promise<ExportedSchema> {
-	// Validate file extension
 	if (!file.name.endsWith('.sls')) {
 		throw new Error('Invalid file type. Expected .sls (Selva Layout State) file.');
 	}
@@ -185,7 +173,6 @@ export async function importSchemaFromFile(file: File): Promise<ExportedSchema> 
 		throw new Error('Invalid JSON format in schema file');
 	}
 
-	// Basic structure validation
 	if (!parsed.metadata || !parsed.schema) {
 		throw new Error('Invalid schema file format. Missing metadata or schema.');
 	}
@@ -212,10 +199,6 @@ export async function importSchemaFromFile(file: File): Promise<ExportedSchema> 
 	return parsed;
 }
 
-/**
- * Prepare imported schema for loading
- * Updates timestamps and generates new ID if needed
- */
 export function prepareImportedSchema(
 	importedSchema: UISchema,
 	options: {

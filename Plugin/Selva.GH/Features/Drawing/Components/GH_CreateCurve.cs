@@ -58,8 +58,6 @@ public class GH_CreateCurve : GH_Component
     {
         Curve curve = null;
         PathStyle style = null;
-        // Chord tolerance for tessellation, in model units — a fixed 0.01 gave meter-based
-        // documents 100× coarser relative facets than mm-based ones.
         var tolerance = DrawingTolerance.FromActiveDoc();
 
         if (!DA.GetData(0, ref curve) || curve == null) return;

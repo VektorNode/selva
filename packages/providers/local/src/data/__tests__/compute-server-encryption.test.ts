@@ -88,10 +88,9 @@ describe('LocalComputeServerStore — apiKey encryption at rest', () => {
 	});
 
 	it('getConfig with the wrong key returns the server with apiKey omitted (does not throw)', async () => {
-		// Per-row tolerance: a key mismatch on `getConfig` must not blank out
-		// the entire compute-config response, because every page that reads
-		// it (e.g. /projects) would otherwise 500. Strict detection is the
-		// job of `verifySecrets` at boot.
+		// A key mismatch must not blank out the whole compute-config response —
+		// every page that reads it (e.g. /projects) would 500. Strict detection
+		// is `verifySecrets`'s job at boot, not this read path's.
 		const writer = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
 		await writer.savePlatformServers(
 			SYSTEM_CONTEXT,
@@ -176,7 +175,6 @@ describe('LocalComputeServerStore — apiKey encryption at rest', () => {
 	});
 
 	it('refuses to read a legacy plaintext apiKey from disk', async () => {
-		// Simulate a hand-edited or legacy file with a plaintext apiKey.
 		await fs.mkdir(path.dirname(configPath), { recursive: true });
 		await fs.writeFile(
 			configPath,

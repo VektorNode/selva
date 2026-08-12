@@ -119,7 +119,6 @@ export function createLayoutItem(
 	const fullOutput =
 		itemType === 'output' ? availableOutputs.find((o) => o.id === paramId) : undefined;
 
-	// Get description from discovered parameters
 	const description =
 		itemType === 'input' ? (fullParam?.description ?? '') : (fullOutput?.description ?? '');
 
@@ -456,7 +455,6 @@ export function batchSetNumberWidgetType(
 
 	for (const group of getGroups(schema)) {
 		for (const item of group.items) {
-			// Only process input number widgets
 			if (item.type === 'input' && item.widgetType === 'number') {
 				if (item.config && 'renderAsSlider' in item.config) {
 					item.config.renderAsSlider = renderAsSlider;

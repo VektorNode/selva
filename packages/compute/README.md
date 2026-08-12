@@ -5,8 +5,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/@selvajs/compute.svg)](https://www.npmjs.com/package/@selvajs/compute)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue.svg)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
-[![GitHub Repository](https://img.shields.io/badge/GitHub-VektorNode/selva--compute-blue?logo=github)](https://github.com/VektorNode/selva-compute)
+[![Node.js](https://img.shields.io/badge/Node.js-22+-green.svg)](https://nodejs.org/)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-VektorNode/selva-blue?logo=github)](https://github.com/VektorNode/selva)
 
 </div>
 
@@ -14,15 +14,13 @@
 
 An intermediate-level TypeScript framework for building web applications with Rhino Compute and Grasshopper.
 
-`@selvajs/compute` simplifies the process of communicating with Rhino Compute, handling Grasshopper definitions, and visualizing results in the browser with Three.js.
+`@selvajs/compute` simplifies the process of communicating with Rhino Compute and handling Grasshopper definitions. It is pure solve/data — it has no rendering layer and no `three` dependency. To turn a solve response into Three.js objects, use [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization).
 
 ## Installation
 
 ```bash
-npm install @selvajs/compute three
+npm install @selvajs/compute
 ```
-
-_(Note: `three` is a peer dependency if you use the visualization features)_
 
 ## Why this project exists
 
@@ -30,9 +28,8 @@ _(Note: `three` is a peer dependency if you use the visualization features)_
 
 - **Type-safe API** — Full TypeScript with structured error codes and rich error context.
 - **High-level client** — `GrasshopperClient` for one-off solves, `client.createScheduler()` for any UI that fires solves frequently.
-- **Robust transport** — Configurable timeout, caller-supplied `AbortSignal`, exponential-backoff retries on transient errors, and `Retry-After` honored on 429.
+- **Robust transport** — Configurable timeout, caller-supplied `AbortSignal`, and retries on errors that look temporary, waiting longer before each attempt. A server asking to be left alone with `Retry-After` is obeyed.
 - **Slider-friendly** — `latest-wins` scheduling aborts stale solves when newer values arrive. Optional response cache makes repeated inputs instant.
-- **Ready-to-use visualization** — Integrated Three.js setup with `initThree()` and configurable rendering options.
 
 Whether you're building a simple solver, a slider-driven configurator, or a long-running job submission flow, `@selvajs/compute` handles the plumbing so you can focus on your Grasshopper definitions.
 
@@ -49,7 +46,11 @@ handles cancellation, retries, loading state, and (optionally) a response cache
 — things every real app needs and shouldn't have to rebuild.
 
 ```ts
-import { GrasshopperClient, TreeBuilder, GrasshopperResponseProcessor } from '@selvajs/compute';
+import {
+	GrasshopperClient,
+	TreeBuilder,
+	GrasshopperResponseProcessor
+} from '@selvajs/compute/grasshopper';
 
 const client = await GrasshopperClient.create({
 	serverUrl: 'http://localhost:6500',
@@ -142,8 +143,7 @@ and expose a status endpoint to the browser.
 
 ### Core Requirements
 
-- **Node.js** >= 20
-- **three** >= 0.179.0 (required for visualization features)
+- **Node.js** >= 22
 
 ### Rhino Compute Compatibility
 
@@ -217,11 +217,6 @@ scheduler.solve(def, tree).catch((err) => {
 	showError(err);
 });
 ```
-
-### "Failed to load three.js visualization module"
-
-The dynamic import of the visualization layer threw. Make sure `three` is
-installed (`npm install three`) — it's a peer dependency, not a direct one.
 
 ## Acknowledgement
 

@@ -19,12 +19,10 @@ using Fill = Selva.Drawing.Model.Style.Fill;
 
 namespace Selva.Drawing.RhinoInterop;
 
-// Walks a Selva.Drawing element tree and renders the document into a Rhino viewport.
-// Lives in the RhinoInterop assembly (not Selva.Drawing) so the model layer stays free of RhinoCommon.
-// Aims to mirror SvgRenderer's visual output: closed paths fill, strokes honor color and
-// dashes, elliptical arcs are tessellated via SVG's center-parameterization, and hatches
-// emit Lines/CrossHatch/Dots patterns. Images still show a placeholder rectangle and text
-// metrics will not match a browser exactly (Rhino's display fonts differ from SVG glyphs).
+// Renders a Selva.Drawing element tree into a Rhino viewport, mirroring SvgRenderer's output.
+// Lives in RhinoInterop (not Selva.Drawing) so the model layer stays free of RhinoCommon.
+// Known gaps: images show a placeholder rectangle, and text metrics won't match a browser
+// exactly since Rhino's display fonts differ from SVG glyphs.
 public sealed class RhinoViewportVisitor : IElementVisitor
 {
     private static readonly Color StrokeFallback = Color.FromArgb(40, 40, 40);
@@ -54,10 +52,9 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         if (element == null) return;
         var saved = _current;
         if (!element.Transform.IsIdentity) _current = _current.Multiply(element.Transform);
-        // BoundsOverride is set by layout primitives (Grid, Frame, Table, TitleBlock, etc.)
-        // when the resolved group's outer extent is wider than the union of its children.
-        // Drawing those rects in the viewport gives a "show your layout" overlay for free —
-        // SVG/PDF renderers don't run this visitor, so the final output is unaffected.
+        // BoundsOverride comes from layout primitives (Grid, Frame, Table, TitleBlock) when the
+        // resolved group's outer extent is wider than the union of its children. Only this
+        // preview draws it — SVG/PDF output is unaffected.
         if (element.BoundsOverride.HasValue)
             DrawDottedBox(element.BoundsOverride.Value, LayoutBoundsColor);
         foreach (var child in element.Children) child?.Accept(this);
@@ -70,12 +67,10 @@ public sealed class RhinoViewportVisitor : IElementVisitor
 
         var subpaths = TessellateSubpaths(element.Path);
 
-        // Fill closed subpaths first so strokes draw on top (matches SVG paint order).
-        // Closed-path fills go through the cached-Brep route (DrawBrepShaded — Rhino's
-        // GPU-shaded fill, handles concave shapes + holes natively). Falls back to the
-        // tessellate-and-ear-clip mesh path only if Brep construction returns nothing.
-        // Hatch patterns replace the flat fill (matching SVG/PDF), drawn as line/dot
-        // overlays clipped to the subpaths.
+        // Fill before stroke so strokes draw on top (SVG paint order). Fills prefer the
+        // cached-Brep route (GPU-shaded, handles concave shapes + holes) and only fall back
+        // to ear-clipping if Brep construction returns nothing. A hatch pattern replaces the
+        // flat fill entirely.
         if (element.Fill != null)
         {
             var fillColor = ApplyOpacity(ToSystemColor(element.Fill.Color, FillOutlineFallback), element.Fill.Opacity);
@@ -118,9 +113,6 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         var size = style?.FontSize ?? 2.5;
         if (size <= 0) return;
 
-        // Background mirrors the SVG/PDF output: derived from FontMetrics so the preview
-        // matches what gets exported. The heuristic for unbundled families (e.g. "Arial")
-        // won't perfectly match Rhino's display glyphs, but it's faithful to the output.
         if (element.Background.HasValue)
             DrawTextBackground(element);
 
@@ -130,31 +122,24 @@ public sealed class RhinoViewportVisitor : IElementVisitor
             plane.Rotate(element.RotationDegrees * Math.PI / 180.0, Vector3d.ZAxis, pos);
 
         // Draw3dText(string, color, plane, size, font) centers the run on the plane origin,
-        // ignoring our anchors. Build a Text3d so HorizontalAlignment / VerticalAlignment
-        // are respected and the glyph run sits on the actual Position.
+        // ignoring anchors — build a Text3d instead so HorizontalAlignment/VerticalAlignment
+        // are respected and the run sits on the actual Position.
         var fontFace = ResolveFontFace(style?.FontFamily);
-        // Two corrections turn the model FontSize into a Rhino-world Text3d height:
-        //   1. capRatio (~0.7): Rhino sizes by cap-height while SVG/PDF size by em.
-        //   2. transformScale: DrawingView pre-multiplies FontSize by 1/effectiveScale so
-        //      that the SVG/PDF group transform cancels it back to paper-space mm. Rhino's
-        //      Text3d ignores the parent transform — apply the scale here so preview text
-        //      ends up at the same visible size as the exported output.
+        // transformScale undoes DrawingView's 1/effectiveScale pre-multiply on FontSize (that
+        // pre-multiply exists so the SVG/PDF group transform cancels it back to paper-space mm).
+        // Text3d ignores the parent transform, so apply the scale here instead.
         var capRatio = CapHeightToEmRatio(style);
         var transformScale = UniformScale(_current);
         var t3d = new Rhino.Display.Text3d(text, plane, size * capRatio * transformScale) { FontFace = fontFace };
         t3d.HorizontalAlignment = ToRhinoHAlign(style?.HorizontalAnchor ?? Selva.Drawing.Model.Style.TextAnchor.Left);
         t3d.VerticalAlignment = ToRhinoVAlign(style?.VerticalAnchor ?? Selva.Drawing.Model.Style.VerticalAnchor.Baseline);
-        // Honor the style's color like SVG/PDF do — a hardcoded preview color made colored
-        // text look wrong until export.
         var textColor = style != null ? ToSystemColor(style.Color, TextColor) : TextColor;
         _display.Draw3dText(t3d, textColor);
         t3d.Dispose();
     }
 
-    // Ratio of cap-height to em for the resolved font. Rhino's Text3d sizes by cap-height
-    // while SVG/PDF size by em — without this correction, preview glyphs come out ~1.4×
-    // bigger than the exported output. Uses bundled font metrics when available, falls
-    // back to the heuristic 0.7 for unbundled families.
+    // Rhino's Text3d sizes by cap-height, SVG/PDF size by em — without this ratio, preview
+    // glyphs come out ~1.4x too big. Uses bundled font metrics when available, else 0.7.
     private static double CapHeightToEmRatio(Selva.Drawing.Model.Style.TextStyle? style)
     {
         const double fallback = 0.7;
@@ -164,9 +149,9 @@ public sealed class RhinoViewportVisitor : IElementVisitor
         return measured.CapHeight / style.FontSize;
     }
 
-    // The first family in a CSS-style stack ("Inter, Helvetica, sans-serif" → "Inter").
-    // Matches FontMetrics.ExtractFirstFamily, which is what the SVG/PDF renderers measure
-    // against — so the preview's glyph metrics line up with the background rect we draw.
+    // First family in a CSS-style stack ("Inter, Helvetica, sans-serif" -> "Inter"). Matches
+    // FontMetrics.ExtractFirstFamily so the preview's glyph metrics line up with the
+    // background rect drawn from those same metrics.
     private static string ResolveFontFace(string? fontFamily)
     {
         if (fontFamily == null || fontFamily.Length == 0) return "Inter";
@@ -192,14 +177,12 @@ public sealed class RhinoViewportVisitor : IElementVisitor
             case Selva.Drawing.Model.Style.VerticalAnchor.Top: return Rhino.DocObjects.TextVerticalAlignment.Top;
             case Selva.Drawing.Model.Style.VerticalAnchor.Middle: return Rhino.DocObjects.TextVerticalAlignment.Middle;
             case Selva.Drawing.Model.Style.VerticalAnchor.Bottom: return Rhino.DocObjects.TextVerticalAlignment.BottomOfBoundingBox;
-            // Baseline maps closest to Rhino's "Bottom" (baseline of bottom line of text).
-            default: return Rhino.DocObjects.TextVerticalAlignment.Bottom;
+            default: return Rhino.DocObjects.TextVerticalAlignment.Bottom; // Baseline -> Rhino's Bottom
         }
     }
 
-    // Filled background behind a TextElement. Mirrors SvgRenderer.AppendTextBackgroundRect
-    // so the preview shows what the SVG/PDF will export. Rhino's DisplayPipeline has no
-    // rounded-rect helper, so corner radius is ignored in preview — final output honors it.
+    // Mirrors SvgRenderer.AppendTextBackgroundRect. DisplayPipeline has no rounded-rect
+    // helper, so corner radius is ignored here — final SVG/PDF output still honors it.
     private void DrawTextBackground(TextElement element)
     {
         if (element.Background is not { } background) return;
@@ -775,17 +758,14 @@ public sealed class RhinoViewportVisitor : IElementVisitor
     // Brep-based fill (preferred path — concave + holes via Rhino's planar Brep)
     // ============================================================================
 
-    // Cache: a model Path → the planar Breps it produces. Built once per unique Path
-    // instance, reused across every viewport redraw. ConditionalWeakTable lets the entry
-    // be GC'd when the Path is no longer referenced (component cleared, document closed).
-    // Empty array = "we tried and got nothing" (signals "fall back to mesh path"); null is
-    // never stored.
+    // Model Path -> planar Breps, built once per unique Path instance and reused across
+    // redraws. ConditionalWeakTable lets entries GC once the Path is no longer referenced.
+    // Empty array = "tried, got nothing" (fall back to mesh path); null is never stored.
     private static readonly ConditionalWeakTable<DrawPath, Brep[]> _brepCache =
         new ConditionalWeakTable<DrawPath, Brep[]>();
 
-    // DisplayMaterial wraps unmanaged display resources — constructing one per filled path
-    // per redraw leaked them at viewport refresh rate. Cached per ARGB value for the
-    // process lifetime; the working set is tiny (one entry per distinct fill color).
+    // DisplayMaterial wraps unmanaged resources; building one per filled path per redraw
+    // leaked at viewport refresh rate. Cached per ARGB value for process lifetime instead.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, DisplayMaterial> _materialCache =
         new System.Collections.Concurrent.ConcurrentDictionary<int, DisplayMaterial>();
 
@@ -873,9 +853,8 @@ public sealed class RhinoViewportVisitor : IElementVisitor
     // we don't get authoritative winding info from the source curves.
     private static Mesh? TriangulateRings(List<List<Point3d>> rings, FillRule rule)
     {
-        _ = rule; // Both rules currently use the same depth-parity hole classification;
-                  // the parameter stays so callers can pass intent and a future refinement
-                  // can branch here without changing call sites.
+        _ = rule; // Both rules use the same depth-parity hole classification for now; kept
+                  // as a parameter so a future refinement can branch without new call sites.
         var n = rings.Count;
         if (n == 1) return TriangulatePolygon(rings[0], null);
 

@@ -1,16 +1,13 @@
 import type {
 	VisibilityRule,
 	DiscoveredInput,
-	GrasshopperParamType,
+	ParamType,
 	UISchema,
 	SchemaInput,
 	SchemaOutput,
 	LayoutItem
 } from '@selvajs/schemas';
 
-/**
- * Validates a visibility rule value against parameter constraints
- */
 export function validateRuleValue(
 	rule: VisibilityRule,
 	paramInfo?: DiscoveredInput
@@ -100,10 +97,9 @@ export function validateRuleValue(
 		return null;
 	}
 
-	// Validate single value operators (which use rule.value)
+	// Remaining operators use rule.value (single value).
 	if (!rule.value) return null;
 
-	// Number validation
 	if (paramInfo.type === 'number' || paramInfo.type === 'integer') {
 		const numValue = Number(rule.value);
 
@@ -124,7 +120,6 @@ export function validateRuleValue(
 		}
 	}
 
-	// Value list validation
 	if (paramInfo.type === 'valueList' && paramInfo.options) {
 		const validValues = Object.values(paramInfo.options);
 		if (!validValues.includes(String(rule.value))) {
@@ -132,7 +127,6 @@ export function validateRuleValue(
 		}
 	}
 
-	// Boolean validation
 	if (paramInfo.type === 'boolean') {
 		const boolValue = String(rule.value).toLowerCase();
 		if (boolValue !== 'true' && boolValue !== 'false') {
@@ -143,13 +137,9 @@ export function validateRuleValue(
 	return null;
 }
 
-/**
- * Validates a default value against parameter constraints
- */
 export function validateDefaultValue(value: unknown, paramInfo?: DiscoveredInput): string | null {
 	if (!paramInfo || value === undefined || value === null) return null;
 
-	// Number validation
 	if (paramInfo.type === 'number' || paramInfo.type === 'integer') {
 		const numValue = Number(value);
 
@@ -170,7 +160,6 @@ export function validateDefaultValue(value: unknown, paramInfo?: DiscoveredInput
 		}
 	}
 
-	// Value list validation
 	if (paramInfo.type === 'valueList' && paramInfo.options) {
 		const validValues = Object.values(paramInfo.options);
 		if (!validValues.includes(String(value))) {
@@ -178,7 +167,6 @@ export function validateDefaultValue(value: unknown, paramInfo?: DiscoveredInput
 		}
 	}
 
-	// Boolean validation
 	if (paramInfo.type === 'boolean') {
 		if (typeof value !== 'boolean') {
 			return 'Default value must be true or false';
@@ -194,10 +182,9 @@ export interface DynamicValueListIssue {
 }
 
 /**
- * Validate that every dynamic value list output targets an existing dynamic value list input.
- *
- * Reads the targetInputId from the output's layout-item config (the builder's source of truth),
- * falling back to the schema output's targetInputId. Returns one issue per misconfigured output.
+ * Reads targetInputId from the output's layout-item config (the builder's source of truth),
+ * falling back to the schema output's targetInputId. Returns one issue per output whose
+ * target is missing or no longer a dynamic value list input.
  */
 export function validateDynamicValueListOutputs(schema: UISchema): DynamicValueListIssue[] {
 	const issues: DynamicValueListIssue[] = [];
@@ -210,7 +197,6 @@ export function validateDynamicValueListOutputs(schema: UISchema): DynamicValueL
 
 	const dynamicOutputs = schema.outputs.filter((o: SchemaOutput) => o.type === 'dynamicValueList');
 
-	// targetInputId set per output via the layout-item config (preferred) or the schema output.
 	const layoutTargets = new Map<string, string | undefined>();
 	const groups =
 		schema.layout.type === 'tabbed'
@@ -242,12 +228,7 @@ export function validateDynamicValueListOutputs(schema: UISchema): DynamicValueL
 	return issues;
 }
 
-/**
- * Returns appropriate operators based on parameter type
- */
-export function getOperatorsForType(
-	paramType?: GrasshopperParamType
-): { value: string; label: string }[] {
+export function getOperatorsForType(paramType?: ParamType): { value: string; label: string }[] {
 	const baseOperators = [
 		{ value: 'equals', label: 'equals' },
 		{ value: 'notEquals', label: 'not equals' }
@@ -289,7 +270,7 @@ export function getOperatorsForType(
 		return baseOperators;
 	}
 
-	// Default: all operators for generic types
+	// Fallback for unrecognized/generic types: offer every operator.
 	return [
 		...baseOperators,
 		{ value: 'greaterThan', label: '>' },

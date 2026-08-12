@@ -3,43 +3,31 @@
  * in the schema. The host (selva app or a fork) supplies an implementation;
  * the platform stays domain-agnostic.
  *
- * Keys are opaque strings. The host defines the namespace
- * (e.g. 'capture.geometry', 'parcel.boundary') and the resolver interprets it
- * however it likes — typically as an address into the host's own domain store.
- *
- * Status: preliminary. The interface is expected to refine once we wire a
- * real binding end-to-end (see docs/upstream-binding-prep PR plan). Current
- * shape is the minimum needed to slot a host implementation behind
- * `SelvaConfig.bindingResolver`.
+ * Keys are opaque strings namespaced by the host (e.g. 'capture.geometry',
+ * 'parcel.boundary') and interpreted however it likes — typically as an
+ * address into the host's own domain store.
  */
 
 import type { RequestContext } from '../context.js';
 
 export interface IBindingResolver {
 	/**
-	 * Resolve a batch of bound keys in one call.
+	 * Resolves a batch of bound keys in one call.
 	 *
-	 *   - `keys` is what the schema author wrote (`source.key`) — opaque to the
-	 *     platform, interpreted by the resolver. The author writes keys at
-	 *     design time, so the key should describe WHAT attribute to read, not
-	 *     WHICH entity to read it from.
-	 *   - `scope` is set by the calling route at solve time — opaque to the
-	 *     platform, supplies the "which entity" anchor that varies per
-	 *     request (capture id, parcel id, custom struct). Optional because
-	 *     not every host needs it.
+	 * `keys` is what the schema author wrote (`source.key`) — describes WHAT
+	 * attribute to read, not WHICH entity. `scope` is set by the calling
+	 * route at solve time and supplies the "which entity" anchor that varies
+	 * per request (capture id, parcel id, custom struct); optional because
+	 * not every host needs it.
 	 *
-	 * Implementations should return ONLY the keys they successfully
-	 * resolved — absent entries in the returned map signal "missing" to the
-	 * caller, who then decides what to do (e.g. error the solve, or fall back
-	 * to the input's `default`).
+	 * Return only the keys that resolved successfully — an absent entry
+	 * signals "missing" to the caller, which then errors the solve or falls
+	 * back to the input's `default`. Throw only for resolver-wide failures
+	 * (DB unreachable, configuration error); a missing individual key is not
+	 * an error condition.
 	 *
-	 * Do not throw for individual missing keys. Throw only for resolver-wide
-	 * failures (DB unreachable, configuration error). Per-key "not found" is
-	 * normal and is signalled by omitting the entry.
-	 *
-	 * Batching is intentional: a single solve often binds multiple inputs
-	 * from one domain object, and the resolver should be able to do that
-	 * with a single DB round-trip.
+	 * Batched because a single solve often binds multiple inputs from one
+	 * domain object, and the resolver should do that in one DB round-trip.
 	 */
 	resolve(
 		ctx: RequestContext,
@@ -49,10 +37,9 @@ export interface IBindingResolver {
 }
 
 /**
- * Default resolver used when the host hasn't configured one. Returns an
- * empty map for any request, which makes every bound input fail at solve
- * time — a loud signal that a resolver needs to be wired up. Drop-in replace
- * via `SelvaConfig.bindingResolver` once the host has a real implementation.
+ * Default resolver for when the host hasn't configured one. Returns an
+ * empty map for any request, so every bound input fails at solve time —
+ * a loud signal that a resolver needs wiring up.
  */
 export class NoopBindingResolver implements IBindingResolver {
 	async resolve(): Promise<Map<string, unknown>> {

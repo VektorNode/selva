@@ -19,9 +19,6 @@ using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
-/// <summary>
-///     Handles applying values from web UI to Grasshopper parameters
-/// </summary>
 public class ValueApplicator
 {
     private const int MAX_STRING_LENGTH = AppConfig.ValueLimits.MaxStringLength;
@@ -59,16 +56,12 @@ public class ValueApplicator
 
     private ConcurrentDictionary<string, object> _lastAppliedValues = new ConcurrentDictionary<string, object>();
 
-    /// <summary>
-    ///     Apply values from web UI to Grasshopper parameters and schedule a solution
-    ///     Uses the ScheduleSolution pattern for clean, predictable behavior
-    /// </summary>
     /// <returns>Number of parameters updated</returns>
     public int ApplyValuesAndSchedule(GH_Document document, UISchema schema, Dictionary<string, object> values,
         Action<GH_RuntimeMessageLevel, string> addMessage)
     {
         var updateCount = 0;
-        var pendingExpirations = new HashSet<IGH_ActiveObject>(); // Local snapshot, HashSet dedupes
+        var pendingExpirations = new HashSet<IGH_ActiveObject>();
 
         foreach (var input in schema.Inputs)
         {
@@ -76,13 +69,12 @@ public class ValueApplicator
             {
                 var inputKey = input.Id.ToString();
 
-                // Check if value exists in payload FIRST (filters before expensive FindObject)
+                // Check the payload before the expensive FindObject lookup.
                 if (!values.TryGetValue(inputKey, out var value))
                 {
                     continue;
                 }
 
-                // Only lookup parameter if we have a value to apply
                 var paramObject = document.FindObject(input.Id, false);
                 if (paramObject == null)
                 {
@@ -93,22 +85,21 @@ public class ValueApplicator
 
                 // Skip dedup for file and dynamicValueList params:
                 //  - file: the same file can be re-submitted after the user clears the GH
-                //    parameter (ClearContextualData doesn't touch _lastAppliedValues, so
-                //    HasValueChanged would wrongly return false).
-                //  - dynamicValueList: its options are recomputed every solve, so the same
-                //    string value can map to a different option (or be re-sent unchanged when the
-                //    UI reconciles a vanished selection). Deduping would skip the re-apply and the
-                //    downstream output would freeze on the previous solve's value.
+                //    parameter. ClearContextualData doesn't touch _lastAppliedValues, so
+                //    HasValueChanged would wrongly say nothing changed.
+                //  - dynamicValueList: options are recomputed every solve, so the same string
+                //    value can map to a different option, or get re-sent unchanged when the UI
+                //    reconciles a vanished selection. Deduping here would skip the re-apply and
+                //    freeze the output on the previous solve's value.
                 var skipDedup = input.ParamType == "file" || input.ParamType == "dynamicValueList";
                 if (!skipDedup && !HasValueChanged(inputKey, value))
                 {
                     continue;
                 }
 
-                // Validate value before applying (security check)
                 if (!ValidateValue(input, value, addMessage))
                 {
-                    continue; // Skip invalid values
+                    continue;
                 }
 
                 if (paramObject is IGH_ContextualParameter contextParam)
@@ -129,7 +120,6 @@ public class ValueApplicator
                 }
                 else if (input.ParamType == "file")
                 {
-                    // Handle file parameters that aren't contextual (e.g., regular input parameters)
                     var success = ApplyToFileParameter(paramObject, value, addMessage, pendingExpirations);
                     if (success)
                     {
@@ -150,10 +140,9 @@ public class ValueApplicator
             }
         }
 
-        // Schedule expiration with local snapshot (thread-safe)
         if (pendingExpirations.Count > 0)
         {
-            var toExpire = pendingExpirations; // Capture for closure
+            var toExpire = pendingExpirations;
             document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
             {
                 foreach (var obj in toExpire)
@@ -166,9 +155,6 @@ public class ValueApplicator
         return updateCount;
     }
 
-    /// <summary>
-    ///     Check if value has changed since last application
-    /// </summary>
     public bool HasValueChanged(string key, object newValue)
     {
         if (_lastAppliedValues.TryGetValue(key, out var lastValue))
@@ -179,9 +165,6 @@ public class ValueApplicator
         return true;
     }
 
-    /// <summary>
-    ///     Get or create cached reflection results for a given type
-    /// </summary>
     private ReflectionCache GetOrCreateCache(Type ghType)
     {
         return _reflectionCache.GetOrAdd(ghType, type =>
@@ -200,26 +183,16 @@ public class ValueApplicator
         });
     }
 
-    /// <summary>
-    ///     Get the last applied values dictionary
-    /// </summary>
     public Dictionary<string, object> GetLastAppliedValues()
     {
         return new Dictionary<string, object>(_lastAppliedValues);
     }
 
-    /// <summary>
-    ///     Set the last applied values (used when loading from embedded data)
-    /// </summary>
     public void SetLastAppliedValues(Dictionary<string, object> values)
     {
         _lastAppliedValues = new ConcurrentDictionary<string, object>(values);
     }
 
-    /// <summary>
-    ///     Remove specific values by keys (thread-safe)
-    ///     Used when parameters are deleted from the document
-    /// </summary>
     public void RemoveValues(IEnumerable<string> keys)
     {
         if (keys == null)
@@ -233,29 +206,23 @@ public class ValueApplicator
         }
     }
 
-    /// <summary>
-    ///     Clear all tracked values
-    /// </summary>
     public void Clear()
     {
         _lastAppliedValues.Clear();
     }
 
-    /// <summary>
-    ///     Validate input value against security constraints
-    ///     Note: Parameter range constraints (min/max) are enforced at UI level and not redundantly checked here
-    /// </summary>
+    // Min/max range constraints are enforced at the UI level; this only guards against
+    // oversized strings and unusable numeric values.
     private bool ValidateValue(SchemaInput input, object value,
         Action<GH_RuntimeMessageLevel, string> addMessage)
     {
         if (value == null)
         {
-            return true; // null is acceptable
+            return true;
         }
 
         try
         {
-            // Validate string length (excluding file input data which has separate limits)
             if (value is string strValue && input.ParamType != "file")
             {
                 if (strValue.Length > MAX_STRING_LENGTH)
@@ -266,7 +233,6 @@ public class ValueApplicator
                 }
             }
 
-            // Validate numeric type conversions (paramType enum values are lowercase)
             if (input.ParamType == "number" || input.ParamType == "integer")
             {
                 double numValue;
@@ -281,7 +247,6 @@ public class ValueApplicator
                     return false;
                 }
 
-                // Sanity check for extremely large numbers (potential DoS/overflow)
                 if (double.IsInfinity(numValue) || double.IsNaN(numValue))
                 {
                     addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
@@ -290,7 +255,6 @@ public class ValueApplicator
                 }
             }
 
-            // Validate integer conversion
             if (input.ParamType == "integer")
             {
                 try
@@ -315,24 +279,18 @@ public class ValueApplicator
         }
     }
 
-    /// <summary>
-    ///     Apply a value to a contextual parameter using reflection and type handlers
-    ///     Uses cached reflection to eliminate overhead
-    /// </summary>
     private bool ApplyToContextualParameter(IGH_ContextualParameter contextParam, string paramTypeName,
         object value, Action<GH_RuntimeMessageLevel, string> addMessage, HashSet<IGH_ActiveObject> pendingExpirations)
     {
         try
         {
-            // Static and dynamic value lists share the same selection-by-name flow. An empty value
-            // is a benign no-op for both (an unchecked checklist, or a dynamic list before its first
-            // solve has produced options), not an error.
+            // Static and dynamic value lists share the same selection-by-name flow.
             if (paramTypeName == "valueList" || paramTypeName == "dynamicValueList")
             {
                 return ApplyToValueList(contextParam, value, addMessage, pendingExpirations);
             }
 
-            // Special handling for file parameters - don't use AssignContextualDataTree
+            // File params go through ApplyToFileParameter — AssignContextualDataTree can't carry a FileInputGoo.
             if (paramTypeName == "file")
             {
                 return ApplyToFileParameter(contextParam, value, addMessage, pendingExpirations);
@@ -379,10 +337,6 @@ public class ValueApplicator
         return false;
     }
 
-    /// <summary>
-    ///     Apply a value to a ValueList parameter by selecting the item by name
-    ///     Also adds the connected GH_ValueList to pending expirations
-    /// </summary>
     private bool ApplyToValueList(IGH_ContextualParameter contextParam, object value,
         Action<GH_RuntimeMessageLevel, string> addMessage, HashSet<IGH_ActiveObject> pendingExpirations)
     {
@@ -416,7 +370,6 @@ public class ValueApplicator
                 return true;
             }
 
-            // Try to use the simple SelectItemByName method
             var selectMethod = contextParam.GetType().GetMethod("SelectItemByName");
             if (selectMethod != null)
             {
@@ -445,8 +398,8 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///     If the value is a multi-select payload (JArray, IEnumerable of strings, etc.) return it as
-    ///     a List&lt;string&gt;; otherwise return null so the single-value path handles it.
+    ///     Returns a multi-select payload (JArray, IEnumerable of strings, etc.) as a List&lt;string&gt;,
+    ///     or null if it's a single value so the caller falls back to the single-value path.
     /// </summary>
     private static List<string> ExtractMultiValues(object value)
     {
@@ -498,9 +451,8 @@ public class ValueApplicator
     }
 
     /// <summary>
-    ///     Apply a file value to a regular (non-contextual) parameter
-    ///     Handles parameters like File_Selector or generic input parameters
-    ///     File value can be: JSON string, JObject, or FileInputData instance
+    ///     Applies a file value to a regular (non-contextual) parameter, e.g. File_Selector.
+    ///     Value can be a JSON string, JObject, dictionary, or FileInputData instance.
     /// </summary>
     private bool ApplyToFileParameter(object paramObject, object value,
         Action<GH_RuntimeMessageLevel, string> addMessage, HashSet<IGH_ActiveObject> pendingExpirations)
@@ -513,42 +465,33 @@ public class ValueApplicator
                 return false;
             }
 
-            // Deserialize the file data - handle multiple formats
             FileInputData fileData = null;
 
             try
             {
-                // Try to handle different input formats
                 if (value is FileInputData existingData)
                 {
-                    // Already deserialized
                     fileData = existingData;
                 }
                 else if (value is JObject jObject)
                 {
-                    // Convert JObject to FileInputData
                     fileData = jObject.ToObject<FileInputData>();
                 }
                 else if (value is Dictionary<string, object> dict)
                 {
-                    // Convert dictionary to FileInputData
                     fileData = JsonConvert.DeserializeObject<FileInputData>(
                         JsonConvert.SerializeObject(dict));
                 }
                 else
                 {
-                    // Try to parse as string
                     var strValue = value?.ToString() ?? "";
 
-                    // Check if it looks like a JSON object (starts with {)
                     if (strValue.TrimStart().StartsWith("{"))
                     {
-                        // Parse as JSON
                         fileData = JsonConvert.DeserializeObject<FileInputData>(strValue);
                     }
                     else if (strValue.StartsWith("http://") || strValue.StartsWith("https://"))
                     {
-                        // It's a URL - auto-create FileInputData
                         fileData = FileInputData.FromUrl(strValue);
                     }
                     else if (!string.IsNullOrEmpty(strValue))
@@ -577,10 +520,9 @@ public class ValueApplicator
                 return false;
             }
 
-            // Create a FileInputGoo and add it to the parameter's VolatileData
             var fileGoo = new FileInputGoo(fileData);
 
-            // Try AssignContextualData first — works for both IGH_Param and GH_Component contextual params
+            // AssignContextualData works for both IGH_Param and GH_Component contextual params.
             if (paramObject is IGH_ContextualParameter)
             {
                 var assignContextualDataMethod = paramObject.GetType().GetMethod("AssignContextualData",
@@ -606,11 +548,10 @@ public class ValueApplicator
                 }
             }
 
-            // Fallback: Try standard data tree methods
+            // Fall back to the standard data tree methods, tried in order.
             var dataTree = new DataTree<FileInputGoo>();
             dataTree.Add(fileGoo, new GH_Path(0));
 
-            // Attempt 1: AddVolatileDataTree with IGH_DataTree
             var addVolatileMethod = param.GetType().GetMethod("AddVolatileDataTree",
                 new[] { typeof(IGH_DataTree) });
             if (addVolatileMethod != null)
@@ -632,7 +573,6 @@ public class ValueApplicator
                 }
             }
 
-            // Attempt 2: AddVolatileData with IGH_Goo
             param.ClearData();
             var addMethod = param.GetType().GetMethod("AddVolatileData",
                 new[] { typeof(IGH_Goo) });
@@ -667,9 +607,6 @@ public class ValueApplicator
         }
     }
 
-    /// <summary>
-    ///     Cache for reflection results per type - eliminates overhead per parameter update
-    /// </summary>
     private class ReflectionCache
     {
         public MethodInfo AddMethod;

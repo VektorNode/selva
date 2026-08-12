@@ -33,7 +33,8 @@ function project(visibility: ProjectVisibility): Project {
 	};
 }
 
-// Row identity is all the builder consumes — it passes rows through opaquely.
+// The builder passes rows through opaquely, so only identity matters — these
+// three are deliberately not full valid rows.
 const MEMBER = {
 	projectId: 'proj-1',
 	userId: 'user-1',
@@ -135,7 +136,8 @@ describe('buildProjectAccessInput — per-visibility row fetching', () => {
 		expect(input.orgPermissions).toEqual(CTX.orgPermissions);
 		expect(input.platformPermissions).toEqual(CTX.platformPermissions);
 		expect(input.allowCrossOrgPublic).toBe(true);
-		expect(input.member).toBeNull(); // override beat the fetched row
+		// makeDeps still returns MEMBER — the explicit override is what nulls it.
+		expect(input.member).toBeNull();
 	});
 
 	it('reads flags per call, not at builder creation', async () => {

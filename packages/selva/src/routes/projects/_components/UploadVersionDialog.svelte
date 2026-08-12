@@ -40,7 +40,7 @@
 		formData.append('file', fileInput.files[0]);
 		if (changeNote.trim()) formData.append('changeNote', changeNote.trim());
 		try {
-			const res = await fetch(`/api/definitions/${definitionGuid}`, {
+			const res = await fetch(`/api/v1/definitions/${definitionGuid}/versions`, {
 				method: 'POST',
 				body: formData
 			});

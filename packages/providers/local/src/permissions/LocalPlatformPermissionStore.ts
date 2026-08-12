@@ -9,30 +9,20 @@ import { ProviderError, hasPermission } from '@selvajs/platform';
 import { createLocalUserDataStore, type LocalUserDataStore } from '../data/userData.js';
 
 /**
- * Filesystem-backed platform-permission store. Reads and writes the
- * `platformPermissions` field on `user-data.json` — a data-layer file owned
- * by `LocalDataProvider`, distinct from `auth-users.json` which the
- * `LocalAuthProvider` owns. This split lets the local data layer pair with
- * any auth provider (local, Supabase, Entra, Eterna, …): the data layer only
- * cares about the user ID, never about how identity is stored.
+ * Filesystem-backed platform-permission store. Reads/writes the
+ * `platformPermissions` field on `user-data.json`, owned by
+ * `LocalDataProvider` and separate from `auth-users.json` (owned by
+ * `LocalAuthProvider`) — the data layer only ever keys by user ID, never by
+ * how identity is stored, so it pairs with any auth provider.
  *
- * The "user is known to the data layer" precondition is established by
- * `IDataProvider.ensureUser`, called from `hooks.server.ts` on every authed
- * request — the local equivalent of the Supabase `handle_new_auth_user`
- * trigger. After that call, `set` finds a row and `getFor` reads it; before
- * it, `set` returns `not_found` (matching the conformance contract).
+ * Rows are seeded by `IDataProvider.ensureUser` (called per authed request
+ * from `hooks.server.ts`); before that call `set` returns `not_found`.
  *
- * Enforces:
- *   - The §2 sole-`instance_admin` invariant on `set` (refuses to drop the
- *     last admin)
- *   - Authorization on read/write (`assertCanRead` / `assertCanWrite`)
- *
- * "Disabled" state lives on the auth provider's user record. The local
- * provider's permission store can't see across that boundary, so the
- * invariant counters here treat every row in `user-data.json` as enabled.
- * Code that disables a user is expected to also drop their `instance_admin`
- * grant via `set` (the §2 invariant kicks in there) before the auth-side
- * disable lands — see `LocalAuthProvider.disableUser`.
+ * `set` enforces the §2 sole-`instance_admin` invariant (refuses to drop the
+ * last admin). It has no visibility into "disabled" state, which lives on
+ * the auth provider's record — every row here counts as enabled, so
+ * `LocalAuthProvider.disableUser` is expected to drop the user's
+ * `instance_admin` grant via `set` first.
  */
 export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 	private readonly data: LocalUserDataStore;
@@ -43,10 +33,10 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 	}
 
 	/**
-	 * Accepts a file path (constructs its own store) OR a shared
-	 * `LocalUserDataStore`. `LocalDataProvider` injects one shared store so the
-	 * permission, profile, and data-provider views of `user-data.json` share a
-	 * single load-once write-through cache (§3a).
+	 * Accepts a file path (constructs its own store) or a shared
+	 * `LocalUserDataStore` — `LocalDataProvider` injects one shared store so
+	 * the permission, profile, and data-provider views of `user-data.json`
+	 * share a single load-once write-through cache (§3a).
 	 */
 	constructor(userData: string | LocalUserDataStore) {
 		this.data = typeof userData === 'string' ? createLocalUserDataStore(userData) : userData;
@@ -96,8 +86,7 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 	}
 
 	async hasInstanceAdmin(_ctx: RequestContext): Promise<boolean> {
-		// First-run + invariant check — always allowed (read-only existence
-		// probe). The route layer decides what to do with the answer.
+		// Read-only existence probe, always allowed — used for first-run checks.
 		const all = await this.data.listAll();
 		return all.some((u) => u.platformPermissions.includes('instance_admin'));
 	}

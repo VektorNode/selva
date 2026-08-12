@@ -6,12 +6,8 @@ using Selva.Schema.Models;
 
 namespace Selva.Tests;
 
-/// <summary>
-///     The schema invariant that prevents the class of bug where a dynamicValueList output lives only
-///     in the layout and is silently dropped by consumers scanning schema.Outputs. After
-///     canonicalization, every layout DynVL is mirrored into Outputs — so collector and UI read one
-///     place. These pin the invariant; the plugin enforces it in SchemaSynchronizer's validate funnel.
-/// </summary>
+// Pins the invariant that every layout dynamicValueList output gets mirrored into
+// schema.Outputs, so consumers scanning Outputs alone never miss one silently.
 public class SchemaOutputCanonicalizerTests
 {
     private static readonly Guid Bake = Guid.Parse("bc55cef0-0000-0000-0000-000000000001");
@@ -142,10 +138,6 @@ public class SchemaOutputCanonicalizerTests
         Assert.IsType<OutputDynamicValueListLayoutItem>(items[0]);
     }
 
-    // The qualifying bake-output set is the single source of truth that the post-solve add/remove
-    // sync, the scope filter, and ClassifyBakeOutputType must all honour. dynamicValueList being a
-    // member is exactly what stops the post-solve pass from stripping it every solve. Pinning the set
-    // makes adding/removing a bake output type a visible, intentional diff — not a silent half-wire.
     [Fact]
     public void BakeOutputTypes_PinsTheSupportedSet()
     {
@@ -157,8 +149,8 @@ public class SchemaOutputCanonicalizerTests
     [Fact]
     public void BakeOutputTypes_IncludesDynamicValueList()
     {
-        // Regression guard: the canonicalizer writes dynamicValueList outputs; the post-solve sync's
-        // qualifying set MUST contain it or they get removed every solve.
+        // Regression guard: without dynamicValueList here, the post-solve sync strips
+        // those outputs every solve.
         Assert.Contains("dynamicValueList", SchemaOutputCanonicalizer.BakeOutputTypes);
     }
 }

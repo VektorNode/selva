@@ -20,7 +20,7 @@ import {
 	detectBase64Payload,
 	BASE64_DETECT_MIN_LENGTH
 } from '../encoding';
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes } from '@/core/errors';
 
 const originalBuffer = (globalThis as any).Buffer;
 
@@ -53,20 +53,20 @@ describe('string base64 helpers', () => {
 
 describe('decodeBase64ToBinary error paths', () => {
 	it('throws ENCODING_ERROR on characters outside the alphabet', () => {
-		expect(() => decodeBase64ToBinary('not base64!!!')).toThrowError(RhinoComputeError);
+		expect(() => decodeBase64ToBinary('not base64!!!')).toThrowError(ComputeError);
 		try {
 			decodeBase64ToBinary('####');
 		} catch (error) {
-			expect((error as RhinoComputeError).code).toBe(ErrorCodes.ENCODING_ERROR);
+			expect((error as ComputeError).code).toBe(ErrorCodes.ENCODING_ERROR);
 		}
 	});
 
 	it('throws ENCODING_ERROR on an impossible length (len % 4 === 1 after normalization)', () => {
-		expect(() => decodeBase64ToBinary('AAAAA')).toThrowError(RhinoComputeError);
+		expect(() => decodeBase64ToBinary('AAAAA')).toThrowError(ComputeError);
 	});
 
 	it('throws ENCODING_ERROR on misplaced padding', () => {
-		expect(() => decodeBase64ToBinary('AB=AAAAA')).toThrowError(RhinoComputeError);
+		expect(() => decodeBase64ToBinary('AB=AAAAA')).toThrowError(ComputeError);
 	});
 
 	it('throws the SAME error on the browser (atob) path as on the Node path', () => {
@@ -75,8 +75,8 @@ describe('decodeBase64ToBinary error paths', () => {
 			decodeBase64ToBinary('####');
 			expect.unreachable('should have thrown');
 		} catch (error) {
-			expect(error).toBeInstanceOf(RhinoComputeError);
-			expect((error as RhinoComputeError).code).toBe(ErrorCodes.ENCODING_ERROR);
+			expect(error).toBeInstanceOf(ComputeError);
+			expect((error as ComputeError).code).toBe(ErrorCodes.ENCODING_ERROR);
 		}
 	});
 

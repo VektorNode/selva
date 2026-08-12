@@ -2,11 +2,7 @@ import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { resolveComputeLimits, readPositiveInt, readNonNegativeInt } from '../limits.js';
 import { NoopLogger, type ILogger } from '@selvajs/platform';
 
-/**
- * Fake logger — the env readers take an injected `ILogger` (defaulting to
- * `NoopLogger`), so the diagnostics are captured by passing this in rather than
- * by spying on `console`.
- */
+/** The env readers take an injected `ILogger`, so there is nothing to spy on. */
 function fakeLogger(): ILogger & { warn: Mock<ILogger['warn']> } {
 	const logger = new NoopLogger() as ILogger & { warn: Mock<ILogger['warn']> };
 	logger.warn = vi.fn<ILogger['warn']>();
@@ -18,8 +14,8 @@ const MB = 1024 * 1024;
 /**
  * The release-gate half of these tests exists because a "TEMP (dev)" raise of the
  * upload/request caps to 300 MB once survived all the way to a release branch —
- * the only thing tracking it was a code comment nobody re-read (audit B3). Bare
- * numbers can't defend themselves, so the invariants that make them correct are
+ * the only thing tracking it was a code comment nobody re-read. Bare numbers
+ * can't defend themselves, so the invariants that make them correct are
  * asserted here instead.
  */
 describe('resolveComputeLimits', () => {
@@ -29,53 +25,143 @@ describe('resolveComputeLimits', () => {
 
 	describe('defaults (release gate — see audit B3)', () => {
 		it('caps .gh uploads at 50 MB, matching Rhino.Compute RHINO_COMPUTE_MAX_REQUEST_SIZE', () => {
-			// Above this, compute 413s regardless — accepting more only defers the failure.
-			expect(resolveComputeLimits({}).maxGhFileSize).toBe(50 * MB);
+			// Above this, compute 413s regardless — accepting more defers the failure.
+			expect(resolveComputeLimits({}).maxDefinitionFileSize).toBe(50 * MB);
 		});
 
 		it('caps the /api/compute request body at 210 MB, matching the shipped BODY_SIZE_LIMIT', () => {
-			// .env.example ships BODY_SIZE_LIMIT=210M; a larger cap here is dead
-			// config — adapter-node's global backstop rejects first.
+			// A larger cap here is dead config — adapter-node's global backstop
+			// rejects first.
 			expect(resolveComputeLimits({}).computeRequestMaxBytes).toBe(210 * MB);
 		});
 
 		it('caps the /api/compute response at 300 MB (intentional, not a dev leftover)', () => {
-			// Sized above any legitimate inline payload, below V8's ~512 MB string
-			// wall. Not bounded by BODY_SIZE_LIMIT, which only covers inbound bodies.
+			// Above any legitimate inline payload, below V8's ~512 MB string wall.
+			// Not bounded by BODY_SIZE_LIMIT, which only covers inbound bodies.
 			expect(resolveComputeLimits({}).computeResponseMaxBytes).toBe(300 * MB);
 		});
 
-		it('byte-budgets the per-client L1 response cache at 256 MB, with 0 = off (audit C2)', () => {
-			expect(resolveComputeLimits({}).computeResponseCacheBytes).toBe(256 * MB);
+		it('byte-budgets the per-client solve cache at 256 MB, with 0 = off (audit C2)', () => {
+			expect(resolveComputeLimits({}).computeSolveCacheBytes).toBe(256 * MB);
+			expect(resolveComputeLimits({ COMPUTE_SOLVE_CACHE_MB: '0' }).computeSolveCacheBytes).toBe(0);
+		});
+
+		it('byte-budgets the definition cache at 256 MB, with 0 = off', () => {
+			expect(resolveComputeLimits({}).computeDefinitionCacheBytes).toBe(256 * MB);
 			expect(
-				resolveComputeLimits({ COMPUTE_RESPONSE_CACHE_MB: '0' }).computeResponseCacheBytes
+				resolveComputeLimits({ COMPUTE_DEFINITION_CACHE_MB: '0' }).computeDefinitionCacheBytes
 			).toBe(0);
+		});
+
+		// A var that silently stops being read looks identical to one that works,
+		// so the old names need asserting, not just documenting.
+		describe('renamed cache vars (2026-07)', () => {
+			it('honours each old name when the new one is unset', () => {
+				expect(
+					resolveComputeLimits({ COMPUTE_DEFINITION_BYTE_CACHE_MB: '8' })
+						.computeDefinitionCacheBytes
+				).toBe(8 * MB);
+				expect(
+					resolveComputeLimits({ COMPUTE_RESPONSE_CACHE_MB: '8' }).computeSolveCacheBytes
+				).toBe(8 * MB);
+				expect(
+					resolveComputeLimits({ DEFINITION_CACHE_TTL_MS: '1234' }).remoteDefinitionCacheTtlMs
+				).toBe(1234);
+			});
+
+			it('honours `0` from an old name (a disable, not an absent value)', () => {
+				expect(
+					resolveComputeLimits({ COMPUTE_RESPONSE_CACHE_MB: '0' }).computeSolveCacheBytes
+				).toBe(0);
+			});
+
+			it('prefers the new name when both are set', () => {
+				expect(
+					resolveComputeLimits({
+						COMPUTE_SOLVE_CACHE_MB: '4',
+						COMPUTE_RESPONSE_CACHE_MB: '99'
+					}).computeSolveCacheBytes
+				).toBe(4 * MB);
+			});
+
+			it('warns when falling back to an old name', () => {
+				const warnings: string[] = [];
+				const logger = {
+					debug: () => {},
+					info: () => {},
+					warn: (msg: string) => warnings.push(msg),
+					error: () => {}
+				};
+				resolveComputeLimits({ COMPUTE_RESPONSE_CACHE_MB: '8' }, logger as never);
+				expect(warnings.some((w) => w.includes('Deprecated env var'))).toBe(true);
+			});
+
+			it('stays silent when only new names are used', () => {
+				const warnings: string[] = [];
+				const logger = {
+					debug: () => {},
+					info: () => {},
+					warn: (msg: string) => warnings.push(msg),
+					error: () => {}
+				};
+				resolveComputeLimits({ COMPUTE_SOLVE_CACHE_MB: '8' }, logger as never);
+				expect(warnings).toEqual([]);
+			});
+		});
+
+		describe('renamed solve deadline (2026-08)', () => {
+			it('honours the old name when the new one is unset', () => {
+				expect(resolveComputeLimits({ MAX_SOLVE_DURATION_MS: '45000' }).solveDeadlineMs).toBe(
+					45_000
+				);
+			});
+
+			it('prefers the new name when both are set', () => {
+				expect(
+					resolveComputeLimits({
+						COMPUTE_SOLVE_DEADLINE_MS: '30000',
+						MAX_SOLVE_DURATION_MS: '99000'
+					}).solveDeadlineMs
+				).toBe(30_000);
+			});
+
+			it('warns when falling back to the old name', () => {
+				const warnings: string[] = [];
+				const logger = {
+					debug: () => {},
+					info: () => {},
+					warn: (msg: string) => warnings.push(msg),
+					error: () => {}
+				};
+				resolveComputeLimits({ MAX_SOLVE_DURATION_MS: '45000' }, logger as never);
+				expect(warnings.some((w) => w.includes('Deprecated env var'))).toBe(true);
+			});
 		});
 
 		it('keeps every payload cap under V8 single-string wall (~512 MB)', () => {
 			const limits = resolveComputeLimits({});
-			// A `file` output is base64-embedded and JSON.stringify'd into one string;
-			// past the wall that's a RangeError, which is the crash the caps prevent.
+			// A `file` output is base64-embedded and JSON.stringify'd into ONE string;
+			// past the wall that's a RangeError — the crash these caps prevent.
 			expect(limits.computeResponseMaxBytes).toBeLessThan(512 * MB);
 			expect(limits.computeRequestMaxBytes).toBeLessThan(512 * MB);
 		});
 	});
 
 	describe('cross-limit invariants', () => {
-		it('tracks remoteDefinitionMaxBytes to maxGhFileSize so a URL cannot smuggle a larger file', () => {
+		it('tracks remoteDefinitionMaxBytes to maxDefinitionFileSize so a URL cannot smuggle a larger file', () => {
 			expect(resolveComputeLimits({}).remoteDefinitionMaxBytes).toBe(
-				resolveComputeLimits({}).maxGhFileSize
+				resolveComputeLimits({}).maxDefinitionFileSize
 			);
 		});
 
-		it('keeps the lockstep when maxGhFileSize is overridden', () => {
-			const limits = resolveComputeLimits({ MAX_GH_FILE_SIZE_BYTES: String(12 * MB) });
-			expect(limits.maxGhFileSize).toBe(12 * MB);
+		it('keeps the lockstep when maxDefinitionFileSize is overridden', () => {
+			const limits = resolveComputeLimits({ MAX_DEFINITION_FILE_SIZE_BYTES: String(12 * MB) });
+			expect(limits.maxDefinitionFileSize).toBe(12 * MB);
 			expect(limits.remoteDefinitionMaxBytes).toBe(12 * MB);
 		});
 
 		it('sizes the request cap to clear a base64-inflated max upload', () => {
-			// base64 inflates ~4/3. The binding case is a 150 MB raw `file` widget
+			// base64 inflates ~4/3, so the binding case is a 150 MB raw `file` widget
 			// input (~200 MB on the wire) plus JSON envelope slack.
 			const limits = resolveComputeLimits({});
 			expect(limits.computeRequestMaxBytes).toBeGreaterThan(150 * MB * (4 / 3));
@@ -85,11 +171,11 @@ describe('resolveComputeLimits', () => {
 	describe('env overrides', () => {
 		it('honors explicit byte overrides', () => {
 			const limits = resolveComputeLimits({
-				MAX_GH_FILE_SIZE_BYTES: String(1 * MB),
+				MAX_DEFINITION_FILE_SIZE_BYTES: String(1 * MB),
 				COMPUTE_REQUEST_MAX_BYTES: String(2 * MB),
 				COMPUTE_RESPONSE_MAX_BYTES: String(3 * MB)
 			});
-			expect(limits.maxGhFileSize).toBe(1 * MB);
+			expect(limits.maxDefinitionFileSize).toBe(1 * MB);
 			expect(limits.computeRequestMaxBytes).toBe(2 * MB);
 			expect(limits.computeResponseMaxBytes).toBe(3 * MB);
 		});
@@ -123,7 +209,7 @@ describe('readPositiveInt', () => {
 		const logger = fakeLogger();
 		expect(readPositiveInt({ X: raw }, 'X', 7, logger)).toBe(7);
 		expect(logger.warn).toHaveBeenCalledOnce();
-		// The variable data belongs in fields, not interpolated into the message.
+		// Asserted on the fields, not the message: variable data belongs in fields.
 		expect(logger.warn.mock.calls[0][1]).toMatchObject({ envVar: 'X', value: raw, fallback: 7 });
 	});
 

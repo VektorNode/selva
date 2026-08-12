@@ -119,8 +119,8 @@
 				}))
 			};
 
-			const res = await fetch('/api/org/compute', {
-				method: 'PUT',
+			const res = await fetch(`/api/v1/orgs/${page.data.ctx?.orgId}/compute`, {
+				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload)
 			});

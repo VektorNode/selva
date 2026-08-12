@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 // Smoke: /builder loads a schema from the WebSocket stub and renders the editor. Proves the
 // route boots, GrasshopperSource connects to :8765, requestInitialData round-trips, and the
-// builder paints — no live Grasshopper.
+// builder paints — without a live Grasshopper.
 
 const SESSION = 'e2e-session';
 

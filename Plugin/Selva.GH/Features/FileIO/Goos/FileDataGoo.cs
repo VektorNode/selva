@@ -38,7 +38,6 @@ public class FileDataGoo : IGH_Goo, ISelvaSerializableGoo
             return new FileDataGoo();
         }
 
-        // Deep copy via JSON serialization
         var json = JsonConvert.SerializeObject(Value);
         var copy = JsonConvert.DeserializeObject<FileData>(json);
         return new FileDataGoo(copy);
@@ -77,8 +76,7 @@ public class FileDataGoo : IGH_Goo, ISelvaSerializableGoo
         return Value;
     }
 
-    // ISelvaSerializableGoo — Rhino.Compute returns this payload. FileData is a plain DTO, so default
-    // settings match how the Goo serializes everywhere else (Write/Duplicate).
+    // Default JSON settings are fine here — FileData is a plain DTO, no polymorphism to guard against.
     public string ToComputeJson()
     {
         return JsonConvert.SerializeObject(Value);

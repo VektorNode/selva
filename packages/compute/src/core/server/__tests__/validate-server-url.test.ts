@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 
 import { validateServerUrl } from '../validate-server-url';
-import { RhinoComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes } from '@/core/errors';
 
 const expectInvalidConfig = (fn: () => unknown) => {
 	try {
 		fn();
 	} catch (err) {
-		expect(err).toBeInstanceOf(RhinoComputeError);
-		expect((err as RhinoComputeError).code).toBe(ErrorCodes.INVALID_CONFIG);
+		expect(err).toBeInstanceOf(ComputeError);
+		expect((err as ComputeError).code).toBe(ErrorCodes.INVALID_CONFIG);
 		return;
 	}
 	throw new Error('expected validateServerUrl to throw');
@@ -51,6 +51,29 @@ describe('validateServerUrl', () => {
 		expectInvalidConfig(() => validateServerUrl('https://COMPUTE.RHINO3D.COM'));
 		expectInvalidConfig(() => validateServerUrl('https://compute.rhino3d.com./'));
 		expectInvalidConfig(() => validateServerUrl('http://compute.rhino3d.com.:80/path'));
+	});
+
+	// The blocked host is a backend's shared public endpoint, not a property of
+	// the transport — a non-Rhino backend names its own (or none).
+	it('blocks a caller-supplied host list instead of the Rhino default', () => {
+		expectInvalidConfig(() =>
+			validateServerUrl('https://api.example.com', { blockedHosts: ['api.example.com'] })
+		);
+		expect(
+			validateServerUrl('https://compute.rhino3d.com', { blockedHosts: ['api.example.com'] })
+		).toBe('https://compute.rhino3d.com');
+	});
+
+	it('blocks nothing when given an empty host list', () => {
+		expect(validateServerUrl('https://compute.rhino3d.com/', { blockedHosts: [] })).toBe(
+			'https://compute.rhino3d.com'
+		);
+	});
+
+	it('normalizes caller-supplied hosts the same way as the parsed hostname', () => {
+		expectInvalidConfig(() =>
+			validateServerUrl('https://api.example.com.', { blockedHosts: ['API.Example.com'] })
+		);
 	});
 
 	// Issue 112: URL schemes are case-insensitive per RFC 3986.

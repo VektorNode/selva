@@ -18,14 +18,13 @@ public class BlobCompressorTests
 
         var result = BlobCompressor.Compress(blob);
 
-        // Below the threshold: returned as-is, no container.
         Assert.Same(blob, result);
     }
 
     [Fact]
     public void Compress_WrapsCompressibleBlobWithMagicAndRoundtrips()
     {
-        // Highly compressible: 64 KB of a repeating pattern (mirrors quantized geometry coherency).
+        // 64 KB repeating pattern, mirroring the byte coherency of quantized geometry.
         var blob = new byte[64 * 1024];
         for (var i = 0; i < blob.Length; i++)
         {
@@ -45,8 +44,8 @@ public class BlobCompressorTests
     [Fact]
     public void Compress_ReturnsOriginalWhenCompressionDoesNotHelp()
     {
-        // Incompressible random data above the threshold: deflate can't beat it, so the original
-        // (uncompressed SLVA) bytes come back, recognizable by NOT having the SLVZ magic.
+        // Random data above the threshold: deflate can't beat it, so the uncompressed bytes come
+        // back (no SLVZ magic).
         var blob = new byte[64 * 1024];
         new Random(42).NextBytes(blob);
 

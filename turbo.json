@@ -1,7 +1,13 @@
 {
 	"$schema": "https://turborepo.com/schema.json",
 	"ui": "stream",
-	"globalDependencies": ["pnpm-workspace.yaml", "pnpm-lock.yaml", "tsconfig.base.json"],
+	"globalDependencies": [
+		"pnpm-workspace.yaml",
+		"pnpm-lock.yaml",
+		"tsconfig.base.json",
+		"tsconfig.node.json",
+		"docs/**"
+	],
 	"tasks": {
 		"generate": {
 			"outputs": [
@@ -9,7 +15,8 @@
 				"../../Plugin/Selva.Schema/Models/UISchema.Generated.cs",
 				"../../Plugin/Selva.Schema/Constants/SchemaVersion.cs"
 			],
-			"inputs": ["ui-schema.json", "preset-schema.json", "scripts/generate-*.js"]
+			"inputs": ["ui-schema.json", "preset-schema.json", "scripts/**"],
+			"env": ["SCHEMA_GUARD_BASE_REF"]
 		},
 		"build": {
 			"dependsOn": ["^build"],
@@ -21,7 +28,8 @@
 				"tsconfig.json",
 				"svelte.config.js",
 				"vite.config.ts",
-				"vite.config.js"
+				"vite.config.js",
+				"tsdown.config.ts"
 			],
 			"env": ["ADAPTER", "NODE_ENV", "SELVA_HMAC_KEY", "SELVA_AT_REST_KEY", "DATA_PATH"]
 		},
@@ -38,7 +46,7 @@
 		"test": {
 			"dependsOn": ["^build"],
 			"outputs": [],
-			"inputs": ["src/**", "vitest.config.ts", ".env.test"]
+			"inputs": ["src/**", "tests/**", "vitest.config.ts", ".env.test"]
 		},
 		"test:e2e": {
 			"dependsOn": ["build"],

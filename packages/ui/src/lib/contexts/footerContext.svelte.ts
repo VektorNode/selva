@@ -2,19 +2,17 @@ import { getContext, setContext, type Component } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 
 /**
- * A footer item registered by a descendant of the root layout. `component` + `position`
- * are fixed at registration; the renderer re-invokes `getProps` reactively, so return
- * reactive state from it (e.g. `() => ({ status: myState.status })`) to keep the footer
- * in sync.
- *
- * Generic over the component's props `P` so registration is type-checked at the call
- * site. The store holds a heterogeneous mix of items, so its map widens `P` to
+ * Generic over the component's props `P` so registration is type-checked at the call site.
+ * The store holds a heterogeneous mix of items, so its map widens `P` to
  * `Record<string, unknown>` at the boundary.
  */
 export interface FooterItem<P extends Record<string, unknown> = Record<string, unknown>> {
 	id: string;
 	component: Component<P>;
-	/** Called on every render — return reactive state to keep footer in sync. */
+	/**
+	 * Re-invoked on every render. Return reactive state — `() => ({ status: s.status })` —
+	 * or the footer never updates.
+	 */
 	getProps: () => P;
 	position: 'left' | 'right';
 	priority: number;

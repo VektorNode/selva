@@ -3,32 +3,30 @@ import { isIP } from 'node:net';
 import { NoopLogger, type ILogger } from '@selvajs/platform';
 
 /**
- * SSRF guard for `loadRemoteDefinition`. Without it an authenticated user could
- * submit `http://169.254.169.254/...` (cloud metadata) or any intranet endpoint
- * and the server would fetch it on their behalf.
+ * SSRF guard for the remote-definition fetch. Without it an authenticated user
+ * could submit `http://169.254.169.254/...` (cloud metadata) or any intranet
+ * endpoint and the server would fetch it on their behalf.
  *
  * Two layers:
  *
- *   1. `isSafeRemoteDefinitionUrl` — synchronous literal pre-filter. Rejects
- *      protocol, hostname literals, and every IP *encoding* that maps to a
- *      blocked address (dotted-decimal, integer, octal, hex, short-form,
- *      IPv4-mapped IPv6). Fast and DNS-free; safe to call anywhere.
+ *   1. `isSafeRemoteDefinitionUrl` — synchronous, DNS-free literal filter.
+ *      Rejects the protocol, hostname literals, and every IP *encoding* that
+ *      maps to a blocked address: dotted-decimal, integer, octal, hex,
+ *      short-form, IPv4-mapped IPv6.
+ *   2. `assertSafeRemoteDefinitionUrl` — resolves the hostname and re-checks the
+ *      *resolved* IP, catching a public name that points at a private one.
  *
- *   2. `assertSafeRemoteDefinitionUrl` — resolves the hostname via DNS and
- *      re-checks the *resolved* IP. This is the real defense: it catches a
- *      public name that resolves to a private IP, which the literal filter
- *      can't see. Still not bulletproof against rebinding (the IP can change
- *      between this lookup and fetch's own); for that the caller would have to
- *      connect to the resolved IP directly. Connecting by IP is a larger change
- *      — this closes the practical bypasses (literal encodings + a DNS record
- *      that points inward) which is what an attacker actually reaches for.
+ * Neither is bulletproof against DNS rebinding — the IP can change between our
+ * lookup and fetch's own. Closing that needs the caller to connect to the
+ * resolved IP directly, a much larger change; these two layers close the
+ * bypasses an attacker actually reaches for (literal encodings, and a public
+ * name whose record points inward).
  */
 
 /**
  * True when `ip` (a normalized IPv4 or IPv6 literal from `isIP`/`dns.lookup`)
  * is loopback, private, link-local, or otherwise must-not-fetch. IPv4-mapped
- * IPv6 (`::ffff:a.b.c.d`) is unwrapped to its embedded IPv4 first so the v4
- * rules apply.
+ * IPv6 (`::ffff:a.b.c.d`) is unwrapped first so the v4 rules apply.
  */
 function isBlockedIp(ip: string): boolean {
 	let addr = ip.toLowerCase();
@@ -71,9 +69,10 @@ function isBlockedIp(ip: string): boolean {
 /**
  * Parse a bare-IPv4 hostname in any encoding browsers/glibc accept — integer
  * (`2130706433`), octal (`0177.0.0.1`), hex (`0x7f000001`), and short forms
- * (`127.1`) — into a canonical dotted-decimal string. Returns null when the
- * host is not a numeric IPv4 literal (i.e. it's a real name or already-valid
- * dotted-quad, which callers handle separately).
+ * (`127.1`) — into canonical dotted-decimal. An already-valid dotted-quad comes
+ * back unchanged. Returns null only when the host is not a numeric IPv4 literal
+ * at all, i.e. it's a real name — which is what callers use to decide whether
+ * DNS resolution is needed.
  */
 function canonicalizeNumericIpv4(host: string): string | null {
 	// Already a clean dotted-quad — let isIP handle it directly.
@@ -124,10 +123,10 @@ function canonicalizeNumericIpv4(host: string): string | null {
 }
 
 /**
- * Synchronous literal pre-filter. Rejects bad schemes, loopback hostnames, and
- * any IP literal (in any encoding) that resolves to a blocked address. Does NOT
+ * Synchronous literal pre-filter: rejects bad schemes, loopback hostnames, and
+ * any IP literal (in any encoding) that maps to a blocked address. Does NOT
  * perform DNS — a public *name* that points at a private IP passes here and is
- * caught by `assertSafeRemoteDefinitionUrl`.
+ * caught only by `assertSafeRemoteDefinitionUrl`.
  */
 export function isSafeRemoteDefinitionUrl(raw: string): boolean {
 	let parsed: URL;
@@ -161,16 +160,15 @@ export function isSafeRemoteDefinitionUrl(raw: string): boolean {
 /**
  * Full SSRF check: literal pre-filter, then resolve every A/AAAA record and
  * reject if *any* resolved IP is blocked. Returns the original URL on success
- * so callers can `await assertSafeRemoteDefinitionUrl(url)` inline. Throws on
- * any rejection.
+ * so callers can `await assertSafeRemoteDefinitionUrl(url)` inline.
+ *
+ * Every rejection throws the same generic message so the caller gets no oracle;
+ * which host was blocked and by which layer is logged server-side instead.
  */
 export async function assertSafeRemoteDefinitionUrl(
 	raw: string,
 	logger: ILogger = new NoopLogger()
 ): Promise<string> {
-	// Security-relevant event: the thrown message is deliberately generic (no
-	// oracle for the caller), so log the specifics server-side instead — which
-	// host was blocked and by which layer.
 	if (!isSafeRemoteDefinitionUrl(raw)) {
 		logger.warn('Blocked remote definition URL', {
 			component: 'Compute/ssrf',

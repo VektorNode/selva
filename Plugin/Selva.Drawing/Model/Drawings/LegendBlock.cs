@@ -7,20 +7,15 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Model.Drawings;
 
-// Phase 8 composite: one entry of a legend — a swatch (small drawing element such as a
-// hatch tile, line sample, or symbol) paired with a text description.
+// One legend entry: a swatch (hatch tile, line sample, symbol) paired with a description.
 public sealed class LegendEntry
 {
-	// Drawing element shown in the swatch column. Its bounds determine the swatch's
-	// natural size; the LegendBlock centres the swatch in its cell.
 	public DrawElement Swatch { get; init; }
 	public string Description { get; init; }
 }
 
-// Phase 8 composite: a small two-column legend block. Column 1 is a fixed-width swatch
-// cell; column 2 is the description (free-flowing text wrapped to the column width).
-//
-// Optional Title sits above the table and uses TitleStyle.
+// Two-column legend: fixed-width swatch cell + free-flowing description text. Optional
+// Title sits above the table and uses TitleStyle.
 public sealed class LegendBlock : LayoutElement
 {
 	public string Title { get; init; }
@@ -67,7 +62,6 @@ public sealed class LegendBlock : LayoutElement
 
 		if (string.IsNullOrEmpty(Title))
 		{
-			// No title: emit the table at Origin directly.
 			var resolvedTable = ((LayoutElement)new Table
 			{
 				Origin = Origin,
@@ -88,8 +82,7 @@ public sealed class LegendBlock : LayoutElement
 			};
 		}
 
-		// With a title: stack title + table vertically. Top-down stacking matches reading
-		// order in Y-up world coords.
+		// Top-down stack matches reading order in Y-up world coords.
 		var stack = new Stack
 		{
 			Origin = Origin,

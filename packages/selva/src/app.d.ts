@@ -4,48 +4,23 @@ declare global {
 	namespace App {
 		interface Error {
 			message: string;
-			/**
-			 * Stable machine-readable error code (e.g. `VALIDATION_FAILED`,
-			 * `NOT_FOUND`). Present on every error this app raises via
-			 * `api-errors.ts`; consumers (UI + external CLI) can branch on it
-			 * without parsing `message`. See `ApiErrorCode` in api-errors.ts.
-			 */
+			/** Machine-readable code, e.g. `VALIDATION_FAILED`, `NOT_FOUND`. See `ApiErrorCode` in api-errors.ts. */
 			code?: string;
-			/**
-			 * Per-field validation messages, keyed by dotted field path. Only
-			 * present on `VALIDATION_FAILED` errors raised from Zod parsing.
-			 */
+			/** Per-field validation messages, keyed by dotted field path. Only set on `VALIDATION_FAILED`. */
 			fields?: Record<string, string>;
 			details?: string;
 		}
 		interface Locals {
-			/** Authenticated user identity, set by hooks.server.ts for protected routes */
+			/** Set by hooks.server.ts for protected routes. */
 			user?: import('@selvajs/platform').AuthUser;
-			/**
-			 * Profile state (displayName, starred, recentRuns) for `user`. Loaded
-			 * by hooks.server.ts alongside `user`; never from an OIDC IdP directly.
-			 * Always present when `user` is present — falls back to `emptyProfile`.
-			 */
+			/** Falls back to `emptyProfile` when `user` has none yet. */
 			profile?: import('@selvajs/platform').UserProfile;
-			/**
-			 * Per-request identity + scope for data provider calls.
-			 * Set by hooks.server.ts whenever a user is authenticated.
-			 */
+			/** Per-request identity + scope for data provider calls; set once `user` is authenticated. */
 			ctx?: import('@selvajs/platform').RequestContext;
-			/** Resolved provider instances, attached on every request by hooks.server.ts */
 			providers: import('@selvajs/platform').SelvaConfig;
-			/**
-			 * Request-scoped logger. Every record it writes carries `requestId`,
-			 * `method` and `route`, so a route handler logs without knowing
-			 * correlation exists. Attached on every request by hooks.server.ts —
-			 * prefer it over the root `getLogger()` inside handlers.
-			 */
+			/** Carries `requestId`/`method`/`route` on every record. Prefer this over the root `getLogger()` in handlers. */
 			log: import('@selvajs/platform').ILogger;
-			/**
-			 * Correlation id for this request — the proxy's `X-Request-Id` when it
-			 * sent one, else generated. Echoed back on the response so a
-			 * user-reported request can be traced to its logs.
-			 */
+			/** The proxy's `X-Request-Id` when sent, else generated. Echoed on the response for log correlation. */
 			requestId: string;
 		}
 		// interface PageData {}

@@ -8,7 +8,6 @@ public class ServerFilePathTests
 {
     private static readonly char Sep = Path.DirectorySeparatorChar;
 
-    // A base directory that is absolute on whichever OS the test runs on.
     private static string BaseDir =>
         Sep == '\\' ? @"C:\srv\selva\data" : "/srv/selva/data";
 
@@ -23,7 +22,6 @@ public class ServerFilePathTests
         var resolved = ServerFilePath.Resolve(BaseDir, relative);
 
         var expected = Path.GetFullPath(Path.Combine(BaseDir, "geometry", "bracket.3dm"));
-        // Single-segment case resolves directly under base.
         if (!relative.Contains("geometry"))
         {
             expected = Path.GetFullPath(Path.Combine(BaseDir, "bracket.3dm"));
@@ -75,7 +73,7 @@ public class ServerFilePathTests
     [Fact]
     public void Resolve_allows_dotdot_that_stays_within_base()
     {
-        // data/sub/../bracket.3dm collapses to data/bracket.3dm — still inside base.
+        // sub/../bracket.3dm collapses to bracket.3dm — still inside base.
         var resolved = ServerFilePath.Resolve(BaseDir, "sub/../bracket.3dm");
         Assert.Equal(Path.GetFullPath(Path.Combine(BaseDir, "bracket.3dm")), resolved);
     }

@@ -5,9 +5,7 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.RhinoInterop;
 
-// Rhino-dependent: converts Rhino curves to typed model Paths. Phase 3 replaced the
-// SVG-string output with model Path emission so the same curve drives both SVG and PDF
-// renderers via the unified Document Model.
+// Converts Rhino curves to model Paths, so the same curve can drive both SVG and PDF renderers.
 public static class CurveConverter
 {
     public static Path ToPath(Curve curve, double chordTol = 0.01, double kinkTol = 0.01)
@@ -57,17 +55,15 @@ public static class CurveConverter
     {
         var arc = arcCurve.Arc;
 
-        // Arc.AngleDomain.Length is always positive in RhinoCommon — the arc's world
-        // orientation lives in its plane: normal toward +Z sweeps CCW in world XY, toward
-        // −Z sweeps CW (typical for trims, fillets, and reversed curves). Ignoring the
-        // normal made every arc bow to the CCW side regardless of its real direction.
-        // World-CCW maps to SVG sweep=1 once the root Y-flip is applied; SweepClockwise
-        // mirrors SVG's sweep flag.
+        // Arc.AngleDomain.Length is always positive in RhinoCommon, so direction comes from
+        // the plane normal instead: +Z sweeps CCW in world XY, −Z sweeps CW (trims, fillets,
+        // and reversed curves commonly go this way). Without this every arc bowed CCW
+        // regardless of its real direction. World-CCW maps to SVG sweep=1 after the root Y-flip.
         var sweepClockwise = arc.Plane.Normal.Z >= 0;
 
-        // Full circle: emit two half-arcs (a single SVG-style A-segment can't cover 360°).
-        // The sweep flag carries the curve's authored direction so winding stays faithful
-        // for NonZero fills (hole circles are typically wound opposite to the outer).
+        // Full circle: a single SVG A-segment can't cover 360°, so emit two half-arcs.
+        // Carrying the curve's authored sweep through both keeps NonZero-fill winding correct
+        // (hole circles are usually wound opposite the outer one).
         if (Math.Abs(arc.AngleDomain.Length - 2 * Math.PI) < 1e-10)
         {
             var c = arc.Center;

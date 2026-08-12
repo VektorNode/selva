@@ -1,9 +1,6 @@
 /**
- * Thrown by providers to signal an expected failure that the API layer
- * should forward with a specific status. Unknown errors should propagate as
- * plain `Error` and become 500s.
- *
- * Conventional values: 400, 401, 403, 404, 409, 422, 429, 500.
+ * Thrown by providers to signal an expected failure the API layer forwards with
+ * a specific status. Unknown errors should propagate as plain `Error` and become 500s.
  */
 export class ProviderError extends Error {
 	readonly statusCode: number;

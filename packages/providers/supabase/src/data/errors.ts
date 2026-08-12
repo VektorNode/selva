@@ -1,21 +1,14 @@
 import { ProviderError } from '@selvajs/platform';
 
 /**
- * Canonical PostgREST/Postgres error translation shared by every Supabase
- * store. Replaces the six near-identical private `mapError` copies that had
- * drifted into two variants (a "full" one preserving `details`/`hint`, and a
- * slimmer message-only one) and none of which handled `PGRST116`.
+ * PostgREST/Postgres error translation shared by every Supabase store.
  *
- * Mapping:
- *  - `PGRST116` (single-row selector matched zero rows) → 404. PostgREST
- *    raises this when `.single()` finds nothing; treating it as "not found"
- *    is almost always what a store's caller wants.
- *  - `23505` (unique violation) / `23503` (foreign-key violation) → 409.
- *  - Anything else → a plain `Error` (500 downstream via `api-errors`), with
- *    `details`/`hint`/`code` preserved on the error object for logs.
+ * `PGRST116` (the code `.single()` raises when a selector matches zero rows)
+ * maps to 404 — that's almost always what a store's caller wants. Unique and
+ * FK violations map to 409. Anything else becomes a plain `Error` (500
+ * downstream via `api-errors`), with `details`/`hint`/`code` preserved on the
+ * error object for logs.
  */
-
-/** The subset of a `PostgrestError` this mapper inspects. */
 interface PostgrestErrorShape {
 	code?: string;
 	message?: string;

@@ -24,7 +24,7 @@ Restart Rhino after installation. Rhino 7 is not supported.
 
 1. Add contextual parameters to your Grasshopper definition (e.g., Context Number Slider)
 2. Add the **UI Builder** component from the Selva tab
-3. Set **Enable** to `true` - browser opens automatically
+3. Set **Enable** to `true` — browser opens automatically
 4. Design your UI in the builder, then switch to preview mode
 
 ## Building from Source

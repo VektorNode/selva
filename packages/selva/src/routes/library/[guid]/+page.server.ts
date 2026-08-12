@@ -9,7 +9,7 @@ import {
 } from '$lib/server/providers.server';
 import { requireCanSolve } from '$lib/server/access.server';
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
-import { MAX_SOLVE_DURATION_MS } from '$lib/server/computeLimits';
+import { SOLVE_DEADLINE_MS } from '$lib/server/computeLimits';
 import {
 	loadDefinitionForRender,
 	DefinitionLoadError
@@ -80,7 +80,7 @@ export const load = (async ({ params, locals, request, url }) => {
 			shareToken,
 			// Same deadline the server enforces on /api/compute, so the client's
 			// AbortController matches the server's Promise.race.
-			solveTimeoutMs: MAX_SOLVE_DURATION_MS
+			solveDeadlineMs: SOLVE_DEADLINE_MS
 		};
 	} catch (err) {
 		// Let HttpError (from error() calls) bubble up.

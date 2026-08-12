@@ -2,9 +2,8 @@ import type { RequestContext } from '../context.js';
 
 /**
  * Why a solve did not produce a usable result. `ok` means the solve completed
- * (it may still carry Grasshopper runtime errors — see `errorCount`). The
- * failure kinds mirror the distinct branches the compute route already
- * distinguishes, so the recorded reason matches the HTTP status the client saw.
+ * (it may still carry Grasshopper runtime errors — see `errorCount`). Each
+ * kind mirrors an HTTP status the compute route already distinguishes.
  */
 export type SolveFailureKind =
 	/** Solve completed; the response was returned to the client. */
@@ -20,8 +19,8 @@ export type SolveFailureKind =
 	/** Result exceeded the response size limit (HTTP 413). */
 	| 'too_large'
 	/**
-	 * Shed by scheduler backpressure — the per-server queue was full, or the solve
-	 * sat queued past its wait deadline, so it was rejected before executing
+	 * Rejected by scheduler backpressure — the per-server queue was full, or the
+	 * solve sat queued past its wait deadline, so it never executed
 	 * (HTTP 503 + Retry-After). Distinct from `compute_error`: no compute ran.
 	 */
 	| 'shed'
@@ -29,64 +28,50 @@ export type SolveFailureKind =
 	| 'compute_error';
 
 /**
- * One solve's timing and outcome, recorded once per solve attempt — including
+ * One solve's timing and outcome, recorded once per attempt — including
  * attempts rejected before `scheduler.solve()` runs (rate limit, share cap).
- *
- * `durationMs` is wall time around the Rhino.Compute solve call only — it
- * excludes definition loading, auth, schema work, and result serialization. It
- * is 0 for attempts rejected before the solve started.
  */
 export interface SolveMetric {
 	/** Definition the solve ran against. `local:<guid>` or a remote URL. */
 	definitionUrl: string;
-	/**
-	 * Local definition id (the `local:` guid), or null for remote-URL solves.
-	 * Stored alongside `definitionUrl` so timings join to the definition record.
-	 */
+	/** Local definition id (the `local:` guid), or null for remote-URL solves. */
 	definitionId: string | null;
-	/**
-	 * The exact version solved, or null for remote-URL solves (and for local
-	 * attempts rejected before the version resolved). Lets you compare timings
-	 * across versions of the same definition.
-	 */
+	/** Exact version solved, or null for remote-URL solves and attempts rejected before the version resolved. */
 	versionId: string | null;
 	/** Channel solved, mirroring the compute request. */
 	channel: 'live' | 'draft';
 	/** Org whose compute pool served the solve, or null for remote definitions. */
 	orgId: string | null;
-	/** Wall-clock duration of `scheduler.solve()` in milliseconds. 0 if never started. */
+	/**
+	 * Wall time around the Rhino.Compute solve call only — excludes definition
+	 * loading, auth, schema work, and result serialization. 0 if never started.
+	 */
 	durationMs: number;
 	/** Whether the solve completed and returned a result. */
 	ok: boolean;
 	/** Why the solve did not return a result; `'ok'` when it did. */
 	failureKind: SolveFailureKind;
 	/**
-	 * Count of Grasshopper runtime errors in the solve response. A solve can be
-	 * `ok` yet still report component-level errors — this is distinct from
-	 * `failureKind`. 0 when the solve never returned a response.
+	 * Grasshopper runtime errors in the solve response. A solve can be `ok`
+	 * yet still report component-level errors. 0 when no response returned.
 	 */
 	errorCount: number;
-	/** Count of Grasshopper runtime warnings in the solve response. */
+	/** Grasshopper runtime warnings in the solve response. */
 	warningCount: number;
 }
 
 /**
- * Sink for per-solve timing telemetry. Called once per solve attempt from the
- * compute route, AFTER the solve resolves or rejects.
+ * Sink for per-solve timing telemetry, called once per attempt after the
+ * solve resolves or rejects.
  *
  * MUST NOT throw — recording is best-effort and sits on the hot path of every
- * solve. Implementations catch and log their own failures; the only side
- * effect visible to the caller is a fulfilled promise. MAY be fire-and-forget.
+ * solve. Implementations catch and log their own failures.
  */
 export interface ISolveMetricSink {
 	record(ctx: RequestContext, metric: SolveMetric): Promise<void>;
 }
 
-/**
- * Default `ISolveMetricSink` — discards every metric. Used when
- * `SelvaConfig.solveMetrics` is omitted. Swap in a real sink to persist or
- * aggregate solve timings.
- */
+/** Default `ISolveMetricSink` — discards every metric. Used when `SelvaConfig.solveMetrics` is omitted. */
 export class NoopSolveMetricSink implements ISolveMetricSink {
 	async record(_ctx: RequestContext, _metric: SolveMetric): Promise<void> {}
 }

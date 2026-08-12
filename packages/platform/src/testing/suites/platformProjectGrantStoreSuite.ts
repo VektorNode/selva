@@ -71,6 +71,27 @@ export function runPlatformProjectGrantStoreConformance(
 			expect(got[0].projectId).toBe(p1);
 		});
 
+		it('listByProjects groups grants by project and keys every requested id', async () => {
+			const store = await createStore();
+			const p1 = await seed();
+			const p2 = await seed();
+			const p3 = await seed();
+			await store.create(SYSTEM_CONTEXT, grant({ projectId: p1 }));
+			await store.create(SYSTEM_CONTEXT, grant({ projectId: p1, granteeType: 'user' }));
+			await store.create(SYSTEM_CONTEXT, grant({ projectId: p2 }));
+
+			const got = await store.listByProjects(SYSTEM_CONTEXT, [p1, p2, p3]);
+			expect(got.get(p1)).toHaveLength(2);
+			expect(got.get(p2)).toHaveLength(1);
+			// A project with no grants maps to an empty array, never undefined.
+			expect(got.get(p3)).toEqual([]);
+		});
+
+		it('listByProjects returns an empty map for no ids', async () => {
+			const store = await createStore();
+			expect((await store.listByProjects(SYSTEM_CONTEXT, [])).size).toBe(0);
+		});
+
 		it('create rejects duplicate (projectId, granteeType, granteeId)', async () => {
 			const store = await createStore();
 			const projectId = await seed();

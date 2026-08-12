@@ -7,8 +7,8 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Model.Layout;
 
-// Phase 7: layout-pass behaviour. The renderer surface is unchanged — every LayoutElement
-// must be resolved into primitive elements before it reaches a visitor.
+// Every LayoutElement must be resolved into primitive elements before it reaches a visitor;
+// the renderer surface itself is unchanged.
 public class LayoutPassTests
 {
 	[Fact]

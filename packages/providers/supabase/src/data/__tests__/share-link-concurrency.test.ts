@@ -1,6 +1,4 @@
 /**
- * Audit Q4/Q5 — the concurrent-solve guarantee for share-link caps.
- *
  * `tryIncrementSolveCount` is the load-bearing race-sensitive method: the
  * `/api/compute` endpoint calls it BEFORE solving and turns a `null` return
  * (cap hit) into HTTP 429. Under concurrent solves against one capped link, the
@@ -9,14 +7,13 @@
  * `try_increment_share_link_solve_count` RPC, which does the check-and-increment
  * in a single statement.
  *
- * This lives in the Supabase suite (not the shared conformance suite or the app
- * route tests) because it is the ONLY backend that actually provides the
+ * This lives in the Supabase suite, not the shared conformance suite or the app
+ * route tests, because Supabase is the only backend that actually provides the
  * guarantee: the local provider's whole-file read-modify-write is a documented
- * dev-scale tradeoff and is not concurrency-safe. Skipped without a live stack,
- * matching the other conformance tests here.
+ * dev-scale tradeoff and is not concurrency-safe.
  *
  * Complements the sequential cap/count tests at
- * `packages/selva/src/routes/api/compute/__tests__/solve-cap-and-count.test.ts`.
+ * `packages/selva/src/routes/api/v1/compute/__tests__/solve-cap-and-count.test.ts`.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -33,7 +30,7 @@ if (!envCtx) {
 } else {
 	const ctx: RequestContext = { userId: '', system: true } as RequestContext;
 
-	/** Seed org → project → definition → share link, all via service-role. */
+	/** Seed org, project, definition, and share link via service-role. */
 	async function seedCappedLink(maxSolves: number): Promise<{ linkId: string }> {
 		const { userId: ownerId } = await seedUser(envCtx!, '');
 		const admin = envCtx!.adminClient;
@@ -109,14 +106,11 @@ if (!envCtx) {
 
 			const admitted = outcomes.filter((n): n is number => n !== null);
 			const refused = outcomes.filter((n) => n === null);
-			// Exactly CAP admitted — the atomic RPC never lets a concurrent burst
-			// overshoot the cap.
 			expect(admitted).toHaveLength(CAP);
 			expect(refused).toHaveLength(ATTEMPTS - CAP);
 			// Each admitted solve got a distinct slot 1..CAP — no lost update.
 			expect([...admitted].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
 
-			// The persisted count settles at exactly the cap.
 			const finalLink = await store.getById(ctx, linkId);
 			expect(finalLink?.solveCount).toBe(CAP);
 		});

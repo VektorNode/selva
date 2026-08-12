@@ -11,9 +11,9 @@ using Selva.Drawing.Rendering.Svg;
 
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
-// Phase 9: a TextElement with a Hyperlink URL produces a clickable link annotation in the
-// rendered PDF and an <a href> wrapper in the SVG. Both renderers see the same field; the
-// model stays format-agnostic.
+// A TextElement with a Hyperlink URL produces a clickable link annotation in the rendered
+// PDF and an <a href> wrapper in the SVG. Both renderers read the same field; the model
+// stays format-agnostic.
 public class PdfHyperlinkTests
 {
 	private static Document BuildDocWithLink(string url)
@@ -49,7 +49,6 @@ public class PdfHyperlinkTests
 		Assert.NotNull(annots);
 		Assert.True(annots.Elements.Count >= 1, "Expected at least one annotation entry");
 
-		// The annotation is a /Link with a /URI action pointing at our URL.
 		var first = annots.Elements[0];
 		var dict = first is PdfReference reference ? reference.Value as PdfDictionary : first as PdfDictionary;
 		Assert.NotNull(dict);

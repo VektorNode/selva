@@ -3,9 +3,6 @@ using System.Linq;
 
 namespace Selva.Schema.Services.Validation;
 
-/// <summary>
-///     Result of schema validation
-/// </summary>
 public class ValidationResult
 {
     public bool IsValid { get; set; }

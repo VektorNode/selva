@@ -13,13 +13,12 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
-///     Embedded HTTP server that serves static web assets from assembly resources.
-///     Used in production to serve the web UI without external dependencies.
+///     Embedded HTTP server that serves static web assets from assembly resources, so the
+///     production build has no external dependency for the web UI.
 ///
-///     Built on raw <see cref="TcpListener" /> rather than <c>HttpListener</c> because
-///     HttpListener depends on the Windows-only Http.sys driver and throws
-///     PlatformNotSupportedException on macOS and Linux. Only GET and HEAD are
-///     implemented — the embedded UI never needs anything else.
+///     Built on raw <see cref="TcpListener" /> rather than <c>HttpListener</c>: HttpListener
+///     depends on the Windows-only Http.sys driver and throws PlatformNotSupportedException on
+///     macOS and Linux. Only GET and HEAD are implemented — the embedded UI never needs anything else.
 /// </summary>
 public class LocalWebServer : IDisposable
 {
@@ -83,7 +82,7 @@ public class LocalWebServer : IDisposable
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///     Start the HTTP server. If port was 0 the OS assigns a free port.
+    ///     Starts the server. Port 0 means the OS assigns a free port.
     /// </summary>
     public void Start()
     {
@@ -118,7 +117,7 @@ public class LocalWebServer : IDisposable
             }
             catch (Exception ex)
             {
-                // Clean up the listener we just created so Stop() has nothing to do.
+                // Clean up so Stop() has nothing to do.
                 try { _tcpListener.Stop(); } catch { /* ignore */ }
                 _tcpListener = null;
                 throw new InvalidOperationException(
@@ -127,9 +126,6 @@ public class LocalWebServer : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Stop the HTTP server and wait for the accept loop to exit.
-    /// </summary>
     public void Stop()
     {
         if (!IsRunning)
@@ -144,8 +140,8 @@ public class LocalWebServer : IDisposable
                 return;
             }
 
-            // Signal the accept loop first, then stop the listener so
-            // AcceptTcpClientAsync() throws and the loop exits cleanly.
+            // Cancel first, then stop the listener, so AcceptTcpClientAsync() throws
+            // and the accept loop exits instead of looping on a dead listener.
             _cancellationTokenSource?.Cancel();
 
             try
@@ -223,7 +219,6 @@ public class LocalWebServer : IDisposable
                     return;
                 }
 
-                // Only GET and HEAD are meaningful for a static asset server.
                 if (request.Method != "GET" && request.Method != "HEAD")
                 {
                     var allow = new Dictionary<string, string> { { "Allow", "GET, HEAD" } };
@@ -233,7 +228,6 @@ public class LocalWebServer : IDisposable
                     return;
                 }
 
-                // Strip the query string and leading slash before resource lookup.
                 var path = request.Target;
                 var queryStart = path.IndexOf('?');
                 if (queryStart >= 0)
@@ -247,10 +241,10 @@ public class LocalWebServer : IDisposable
                     path = "index.html";
                 }
 
-                // Content-addressed texture assets (see TextureAssetStore). Served with CORS —
-                // the UI origin (Vite :5173 in dev, the embedded UI server in production) is
-                // always cross-origin to this server, and WebGL requires CORS-clean images.
-                // Hash-keyed URLs are immutable, so the browser may cache them forever.
+                // Content-addressed texture assets from TextureAssetStore. CORS is wide open because
+                // the UI origin (Vite :5173 in dev, this server in production) is always cross-origin
+                // to whichever server the browser loaded from, and WebGL needs CORS-clean images.
+                // Hash-keyed URLs are immutable, so the browser can cache them forever.
                 if (path.StartsWith("assets/", StringComparison.Ordinal))
                 {
                     var hash = path.Substring("assets/".Length);
@@ -337,8 +331,7 @@ public class LocalWebServer : IDisposable
         }
         catch (Exception ex) when (IsClientDisconnect(ex))
         {
-            // Browser closed the socket mid-response (reload, navigation, prefetch
-            // cancel). Routine and out of our control — log only in debug builds.
+            // Browser closed the socket mid-response (reload/navigation/prefetch cancel) — routine, not a fault.
             Logger.Log($"Client disconnected during HTTP request: {ex.Message}");
         }
         catch (Exception ex)
@@ -348,8 +341,8 @@ public class LocalWebServer : IDisposable
     }
 
     /// <summary>
-    ///     True when an exception is a client-side disconnect (socket aborted or reset,
-    ///     or the request was canceled) rather than a genuine server fault.
+    ///     True for a client-side disconnect (socket aborted/reset, or request canceled)
+    ///     rather than a genuine server fault.
     /// </summary>
     private static bool IsClientDisconnect(Exception ex)
     {
@@ -369,8 +362,8 @@ public class LocalWebServer : IDisposable
     }
 
     /// <summary>
-    ///     Writes a full HTTP response: status line, headers, optional body.
-    ///     <paramref name="extraHeaders" /> lets callers add response-specific headers (e.g. Allow on 405).
+    ///     Writes status line, headers, and optional body. <paramref name="extraHeaders" /> lets
+    ///     callers add response-specific headers (e.g. Allow on 405).
     /// </summary>
     private static async Task WriteResponseAsync(
         Stream stream,
@@ -438,7 +431,7 @@ public class LocalWebServer : IDisposable
     }
 
     /// <summary>
-    ///     Ask the OS for a free port by binding to port 0 — no TOCTOU race.
+    ///     Binds to port 0 so the OS assigns a free port — avoids a check-then-bind race.
     /// </summary>
     private static int FindAvailablePort()
     {

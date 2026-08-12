@@ -22,14 +22,10 @@ const PROJECT_MEMBER_COLUMNS =
 	'project_id, user_id, role, joined_at, updated_at, updated_by, deleted_at';
 
 /**
- * Project + project-membership store backed by Postgres. Visibility semantics
- * (public / org / private) are enforced by the `visible_project()` helper in
- * RLS. Access predicates (canEdit / canManage / canView etc.) live as pure
- * functions in `@selvajs/platform/access`; the route layer composes them with
- * pre-loaded entities. See `packages/selva/src/lib/server/access.server.ts`.
- *
- * `createProject` atomically seeds the creator as the project `owner` in
- * `project_members` so subsequent user-scoped reads can see it.
+ * Project + project-membership store backed by Postgres. Visibility (public /
+ * org / private) is enforced by the `visible_project()` RLS helper. Access
+ * predicates (canEdit / canManage / canView) live in `@selvajs/platform/access`;
+ * the route layer composes them with pre-loaded entities.
  */
 export class SupabaseProjectStore implements IProjectStore {
 	private readonly events: IEventSink;
@@ -95,9 +91,8 @@ export class SupabaseProjectStore implements IProjectStore {
 		const { error } = await client.from('projects').insert(projectToRow(project));
 		if (error) throw mapPostgrestError(error);
 
-		// Seed owner membership so user-scoped reads see the project post-create.
-		// Upsert so a stale soft-deleted row from a prior project with the same id
-		// is reactivated rather than blocking creation.
+		// Upsert: a stale soft-deleted row from a prior project with this id
+		// gets reactivated instead of blocking creation.
 		const { error: memberError } = await client.from('project_members').upsert(
 			{
 				project_id: project.id,
@@ -145,9 +140,8 @@ export class SupabaseProjectStore implements IProjectStore {
 	}
 
 	async deleteProject(ctx: RequestContext, id: string): Promise<void> {
-		// §9 soft-delete with cascade. Mirrors LocalProjectStore: project →
-		// project_members, definitions. FK CASCADE doesn't fire on soft-delete,
-		// so the cascade is in app code.
+		// Soft-delete cascades in app code, not via FK: project → project_members,
+		// definitions. FK CASCADE only fires on a real DELETE.
 		const client = this.clients.forRequest(ctx);
 		const stampRow = stampSoftDelete(ctx);
 
@@ -167,12 +161,9 @@ export class SupabaseProjectStore implements IProjectStore {
 			.is('deleted_at', null);
 		if (pmErr) throw mapPostgrestError(pmErr);
 
-		// Cascade to definitions. `select('guid')` returns the tombstoned rows so
-		// we emit one `definition.deleted` per record — parity with the single
-		// `delete` path and with `SupabaseDefinitionStore.deleteByProject` /
-		// `LocalProjectStore.deleteProject`. (Kept inline rather than delegating to
-		// the definition store to avoid a cross-store constructor dependency; the
-		// behavior must stay identical to `deleteByProject`.)
+		// Cascades to definitions inline instead of delegating to the definition
+		// store, to avoid a cross-store constructor dependency. Must stay in sync
+		// with SupabaseDefinitionStore.deleteByProject.
 		const { data: deletedDefs, error: defErr } = await client
 			.from('definitions')
 			.update(stampRow)
@@ -198,9 +189,8 @@ export class SupabaseProjectStore implements IProjectStore {
 	): Promise<Project | null> {
 		const client = this.clients.forRequest(ctx);
 
-		// Clear the tombstone. The WHERE deleted_at IS NOT NULL ensures we never
-		// accidentally clobber a live row, and the unique constraint means there
-		// can be at most one tombstone per (org_id, slug) at any time.
+		// `.not('deleted_at', 'is', null)` guards against clobbering a live row;
+		// the unique constraint on (org_id, slug) means at most one tombstone exists.
 		const { data, error } = await client
 			.from('projects')
 			.update({ deleted_at: null })
@@ -212,7 +202,7 @@ export class SupabaseProjectStore implements IProjectStore {
 		if (error) throw mapPostgrestError(error);
 		if (!data) return null;
 
-		// Reactivate the owner's project_members row (deleteProject cascades to it).
+		// deleteProject cascades the soft-delete to project_members; undo it here too.
 		const { error: pmErr } = await client
 			.from('project_members')
 			.update({ deleted_at: null })
@@ -270,9 +260,28 @@ export class SupabaseProjectStore implements IProjectStore {
 		return data ? rowToProjectMember(data) : null;
 	}
 
+	async getProjectMembersFor(
+		ctx: RequestContext,
+		projectIds: readonly string[],
+		userId: string
+	): Promise<Map<string, ProjectMember | null>> {
+		const result = new Map<string, ProjectMember | null>(projectIds.map((id) => [id, null]));
+		if (projectIds.length === 0) return result;
+
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('project_members')
+			.select(PROJECT_MEMBER_COLUMNS)
+			.in('project_id', [...projectIds])
+			.eq('user_id', userId)
+			.is('deleted_at', null);
+		if (error) throw mapPostgrestError(error);
+		for (const row of data ?? []) result.set(row.project_id, rowToProjectMember(row));
+		return result;
+	}
+
 	async addProjectMember(ctx: RequestContext, member: ProjectMember): Promise<void> {
-		// Upsert reactivates a prior soft-deleted row instead of throwing
-		// duplicate-key. Mirrors LocalProjectStore.addProjectMember.
+		// Upsert reactivates a prior soft-deleted row instead of throwing duplicate-key.
 		const row: Record<string, unknown> = {
 			...projectMemberToRow(member),
 			deleted_at: null,
@@ -340,12 +349,9 @@ export class SupabaseProjectStore implements IProjectStore {
 // Row ↔ domain mappers
 // ============================================================================
 //
-// Audit columns (`created_by` / `updated_by`) FK to `auth.users(id)` with
-// `ON DELETE SET NULL`; they can legitimately become NULL when the user is
-// deleted (spec §8). Mappers fall back to `owner_id` so the domain type
-// stays non-nullable. Also true for ProjectMember audit columns below.
-// that haven't applied the latest migration — the mapper falls back to
-// owner_id / user_id / joined_at in those cases.
+// `created_by` / `updated_by` FK to `auth.users(id)` ON DELETE SET NULL, so they
+// go NULL when that user is deleted. Mappers fall back to owner_id (Project) or
+// user_id / joined_at (ProjectMember) to keep the domain type non-nullable.
 
 interface ProjectRow {
 	id: string;

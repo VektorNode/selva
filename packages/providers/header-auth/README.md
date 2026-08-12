@@ -62,8 +62,12 @@ self-test in the Verification section after every deployment change.
                   └───────────────────────────────────┘
 ```
 
-Admin pre-allowlists a UPN (no password collected). On the user's first
-visit through the proxy, the provider matches the UPN against the allowlist,
+The identity here is a **UPN** — user principal name, the `user@domain` string
+Entra uses to name an account. It usually looks like an email address and is
+often the same string, but it is the directory's own identifier, not a mailbox.
+
+An admin adds a UPN to the allowlist ahead of time; no password is collected. On
+the user's first visit through the proxy, the provider matches the UPN against the allowlist,
 fills in `email` / `displayName` from the matching headers, and the user is
 authenticated. On subsequent visits the same lookup runs — no session
 cookie, no token, no state in the browser beyond what the proxy already has.
@@ -104,6 +108,27 @@ export default defineConfig((env) => ({
 
 ² Required for `SELVA_TENANCY=multi`. Optional for `SELVA_TENANCY=single`: leave it unset to get "first proxy-authed visitor wins" (fine for self-hosted fresh installs); set it to lock the bootstrap to a specific UPN/email.
 
+### Header names must match what reaches Selva
+
+The three `HEADER_AUTH_*_HEADER` vars name the headers the provider reads off the
+incoming request. That is not necessarily what your IdP helper emits, because the
+proxy sits in between and may rename them. Two shapes, needing opposite config:
+
+| Proxy does                                                       | Selva receives | Set the three vars? |
+| ---------------------------------------------------------------- | -------------- | ------------------- |
+| Sets `SELVA-*` itself, or renames onto `SELVA-*`                 | `SELVA-*`      | No — defaults match |
+| Forwards the helper's own names (`X-Auth-Request-*`, `Remote-*`) | those names    | Yes — all three     |
+
+Set all three or none. A partial override leaves the remaining slots reading a
+header nothing sends, and the two failure modes are very different: a stale
+DisplayName only means display names never populate, but a stale UPN means
+`identifyFromHeaders` returns `null` and **nobody can log in** — with nothing in
+the logs pointing at the env var.
+
+An unset var falls back to its default rather than disabling the lookup, so there
+is no way to switch a slot off. `selva doctor` prints the resolved names and flags
+a mismatched mix; diff its output against your proxy config.
+
 ---
 
 ## Caddyfile example (Microsoft Entra ID via `forward_auth`)
@@ -118,13 +143,23 @@ IdP plugin.
 app.example.com {
     encode gzip
 
-    # 1. Strip any inbound copies of the trusted headers BEFORE forward_auth
-    #    runs. Without this, a browser can send its own `SELVA-*` headers
-    #    and the auth helper's copies are appended — `Headers.get()` returns
-    #    them joined with `, ` (e.g. "attacker@x.com, real@y.com"), which
-    #    won't match any allowlisted UPN. So the practical failure mode is
-    #    "no one can log in" rather than "anyone can spoof", but you do NOT
-    #    want to rely on that — strip the headers and keep the trust path clean.
+    # 1. Strip any inbound copies of the trusted headers. Without this, a
+    #    browser can send its own `SELVA-*` headers and the auth helper's
+    #    copies are appended — `Headers.get()` returns them joined with `, `
+    #    (e.g. "attacker@x.com, real@y.com"), which won't match any
+    #    allowlisted UPN. So the practical failure mode is "no one can log in"
+    #    rather than "anyone can spoof", but you do NOT want to rely on that —
+    #    strip the headers and keep the trust path clean.
+    #
+    #    Keep these at site scope, above any `handle`. Inside a `handle`,
+    #    Caddy runs `request_header` in its own fixed directive order rather
+    #    than the order written, so a strip line below `forward_auth` does not
+    #    reliably run before it.
+    #
+    #    If your helper emits its own header names and you forward them
+    #    unchanged (oauth2-proxy's `X-Auth-Request-*`, Authelia's `Remote-*`),
+    #    strip those too — `copy_headers` forwards a client-supplied copy when
+    #    the helper doesn't set its own.
     request_header -SELVA-UserPrincipalName
     request_header -SELVA-Email
     request_header -SELVA-DisplayName

@@ -30,10 +30,6 @@ public class SchemaValidatorTests
         return new Guid($"aaaaaaaa-0000-0000-0000-{n:D12}");
     }
 
-    /// <summary>
-    ///     Returns a minimal valid schema.  Use the configure action to tweak specific
-    ///     fields so each test only changes what it needs to.
-    /// </summary>
     private static UISchema ValidSchema(Action<UISchema>? configure = null)
     {
         var id = Id(1);
@@ -228,7 +224,6 @@ public class SchemaValidatorTests
     {
         var result = _validator.Validate(ValidSchema(s =>
         {
-            // Add a second input that has no matching layout item
             s.Inputs.Add(new SchemaInput { Id = Id(2), Nickname = "Orphan", ParamType = "number" });
         }));
 

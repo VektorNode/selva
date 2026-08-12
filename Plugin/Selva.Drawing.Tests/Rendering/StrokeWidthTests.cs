@@ -18,13 +18,11 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Rendering;
 
-// Stroke.Width = 0 means "no stroke": the path is not stroked in either renderer.
-//
-// The bug behind these: a zero width used to reach the PDF as the literal `0 w` operator,
-// which the spec defines as "thinnest line the *output device* can render" — so the same file
-// printed at a different weight on every printer, viewer, and DPI. The SVG renderer meanwhile
-// dropped the stroke attribute entirely. Suppressing the stroke on both sides removes the
-// device dependency and makes the two renderers agree.
+// Stroke.Width = 0 means "no stroke" in both renderers. The PDF spec defines the literal
+// `0 w` operator as "thinnest line the output device can render", so a naive zero-width
+// stroke would print at a different weight on every printer, viewer, and DPI. Suppressing
+// the stroke instead of emitting `0 w` keeps the two renderers device-independent and in
+// agreement with each other.
 public class StrokeWidthTests
 {
 	private static readonly Path Line =
@@ -200,9 +198,8 @@ public class StrokeWidthTests
 			precision: 6);
 	}
 
-	// An unstyled path (no Stroke, no Fill) used to be 0.25 mm in PDF but 1.0 mm in SVG,
-	// because only the PDF renderer named a width — SVG omitted the attribute and inherited
-	// the spec default of 1.0. Same input, 4x different output.
+	// An unstyled path used to render 0.25mm in PDF but 1.0mm in SVG: only the PDF renderer
+	// named a width, so SVG omitted the attribute and inherited the spec default of 1.0mm.
 	[Fact]
 	public void Unstyled_path_has_the_same_width_in_both_renderers()
 	{

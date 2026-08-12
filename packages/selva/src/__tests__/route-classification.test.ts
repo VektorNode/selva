@@ -21,6 +21,10 @@ describe('isPublicRoute', () => {
 		['/auth/supabase/start'],
 		['/auth/supabase/callback'],
 		['/api/health'],
+		// The post-update poller hits readiness across a restart, when no session
+		// is guaranteed. Both probes are exact-match entries — neither inherits
+		// public status from the other.
+		['/api/health/ready'],
 		// The blob proxy is self-gating: it must pass the hook so it can apply
 		// per-asset-class auth itself (public branding for guests, 401 for
 		// org/project assets without a session).
@@ -38,12 +42,12 @@ describe('isPublicRoute', () => {
 		['/admin'],
 		['/admin/users'],
 		// Authenticated APIs (every /api/* except /api/health).
-		['/api/projects'],
-		['/api/definitions'],
-		['/api/compute'],
-		['/api/invites'],
-		['/admin/api/users'],
-		['/admin/api/orgs'],
+		['/api/v1/projects'],
+		['/api/v1/definitions'],
+		['/api/v1/compute'],
+		['/api/v1/orgs/org-1/invites'],
+		['/api/admin/users'],
+		['/api/admin/orgs'],
 		// Unknown future routes inherit "gated".
 		['/billing'],
 		['/billing/invoice/123'],
@@ -56,7 +60,7 @@ describe('isPublicRoute', () => {
 	it('treats /api/files as self-gating, not other /api routes', () => {
 		expect(isSelfGatingApiRoute('/api/files/orgs/abc/branding/logo.webp')).toBe(true);
 		expect(isSelfGatingApiRoute('/api/files/anything')).toBe(true);
-		expect(isSelfGatingApiRoute('/api/projects')).toBe(false);
+		expect(isSelfGatingApiRoute('/api/v1/projects')).toBe(false);
 		expect(isSelfGatingApiRoute('/api/health')).toBe(false);
 		// `/api/filesX` must not be admitted by a loose prefix.
 		expect(isSelfGatingApiRoute('/api/filesX/y')).toBe(false);
@@ -67,6 +71,14 @@ describe('isPublicRoute', () => {
 		// /login-other-thing must not be admitted by accident.
 		expect(isPublicRoute('/login-other')).toBe(false);
 		expect(isPublicRoute('/setupX')).toBe(false);
+	});
+
+	it('does not admit health-probe siblings via prefix match', () => {
+		// Both probes are exact-match entries in the public API allowlist. A route
+		// added under /api/health/ later must inherit "gated", not public.
+		expect(isPublicRoute('/api/healthz')).toBe(false);
+		expect(isPublicRoute('/api/health/ready/detail')).toBe(false);
+		expect(isPublicRoute('/api/health/secrets')).toBe(false);
 	});
 });
 

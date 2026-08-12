@@ -1,0 +1,479 @@
+/**
+ * Tests for `createClientCache` — the per-server warm-client LRU.
+ *
+ * `@selvajs/compute`'s `GrasshopperClient.create` does a real network preflight,
+ * so we mock the module: `create` records the config it was called with and
+ * returns a fake client whose `createScheduler` returns a disposable stub. That
+ * lets us assert the cache's own behavior (id-keying, LRU eviction, evict,
+ * disposeAll, the `X-Selva-Definition` header) without a live compute server.
+ */
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// --- Mock @selvajs/compute -------------------------------------------------
+//
+// Loose records, not the real config types: the cache passes values through untouched, and
+// pinning the upstream shapes here would just couple these tests to `@selvajs/compute`.
+// `unknown` rather than `any` so the few assertions that index into these need a cast —
+// `prop()` below does it in one place instead of the type opting out everywhere.
+type Recorded = Record<string, unknown>;
+
+/** Read a recorded property. The cast is the point of `Recorded` being `unknown`-valued. */
+function prop<T = unknown>(record: Recorded | undefined, key: string): T {
+	return record?.[key] as T;
+}
+
+const createdConfigs: Recorded[] = [];
+const createdSchedulerOptions: Recorded[] = [];
+const disposedSchedulers: { disposed: boolean }[] = [];
+
+// Child count the mocked server reports from `/activechildren`. `null` stands in
+// for a server that cannot answer (stock McNeel build, network blip).
+let activeChildren: number | null = null;
+
+vi.mock('@selvajs/compute/grasshopper', () => {
+	class GrasshopperClient {
+		static async create(config: Recorded) {
+			createdConfigs.push(config);
+			return new GrasshopperClient(config);
+		}
+		constructor(public config: Recorded) {}
+		serverStats = {
+			getActiveChildren: async () => activeChildren
+		};
+		createScheduler(options: Recorded) {
+			createdSchedulerOptions.push(options);
+			const scheduler = {
+				disposed: false,
+				// Mirrors the real scheduler's mutable cap so tests can assert what a
+				// post-solve probe actually applied, not just what was passed at build.
+				maxConcurrent: options.maxConcurrent as number,
+				// Each scheduler owns its own solve cache; `solveCacheStats()` sums
+				// them, so tests set distinct numbers per client to prove the sum.
+				stats: { entries: 0, bytes: 0, hits: 0, misses: 0, evictions: 0 },
+				cacheStats() {
+					return this.stats;
+				},
+				setMaxConcurrent(n: number) {
+					this.maxConcurrent = n;
+				},
+				/** Drive the cache's `onSettle` hook the way a finished solve would. */
+				settle(result: Recorded) {
+					(options.onSettle as (c: Recorded, r: Recorded) => void)?.({}, result);
+				},
+				dispose() {
+					this.disposed = true;
+					disposedSchedulers.push(this);
+				}
+			};
+			return scheduler;
+		}
+	}
+	return { GrasshopperClient };
+});
+
+vi.mock('@selvajs/compute/core', () => ({ enableDebugLogging: vi.fn() }));
+
+import { createClientCache, serverIdentity } from '../client-cache.js';
+
+function baseConfig() {
+	return {
+		solveDeadlineMs: 30_000,
+		maxQueueDepth: 0,
+		queueWaitMs: 0,
+		cachesolve: true,
+		cacheerroredsolves: false,
+		reuseServerDefinitionCache: true,
+		responseCacheMaxBytes: 256 * 1024 * 1024,
+		debug: false as boolean | 'verbose'
+	};
+}
+
+const server = (id: string, over: Partial<{ serverUrl: string; apiKey: string }> = {}) => ({
+	id,
+	serverUrl: over.serverUrl ?? `http://compute-${id}:6500`,
+	apiKey: over.apiKey ?? `key-${id}`
+});
+
+beforeEach(() => {
+	createdConfigs.length = 0;
+	createdSchedulerOptions.length = 0;
+	disposedSchedulers.length = 0;
+	activeChildren = null;
+});
+
+describe('createClientCache — concurrency vs. the server child count', () => {
+	it('always adopts the server child count, never an operator-supplied cap', async () => {
+		activeChildren = 8;
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('a'));
+		expect(createdSchedulerOptions[0].maxConcurrent).toBe(8);
+	});
+
+	it('falls back to 1 when the server cannot report a count', async () => {
+		activeChildren = null;
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('a'));
+		expect(createdSchedulerOptions[0].maxConcurrent).toBe(1);
+	});
+
+	it('falls back to 1 on a nonsense (0) count rather than serializing on a guess', async () => {
+		activeChildren = 0;
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('a'));
+		expect(createdSchedulerOptions[0].maxConcurrent).toBe(1);
+	});
+
+	it('picks up a pool that grew after connect, once the probe window has passed', async () => {
+		vi.useFakeTimers();
+		try {
+			activeChildren = 2;
+			const cache = createClientCache(baseConfig());
+			const entry = (await cache.getClient(server('a'))) as unknown as {
+				scheduler: { maxConcurrent: number; settle(r: Recorded): void };
+			};
+			expect(entry.scheduler.maxConcurrent).toBe(2);
+
+			// An operator adds workers; nothing tells us until the next probe.
+			activeChildren = 8;
+			vi.advanceTimersByTime(6 * 60 * 1000);
+			entry.scheduler.settle({ status: 'success', fromCache: false, durationMs: 1 });
+			await vi.waitFor(() => expect(entry.scheduler.maxConcurrent).toBe(8));
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('picks up a server that recovers after an earlier failed probe, on the next window', async () => {
+		vi.useFakeTimers();
+		try {
+			activeChildren = null;
+			const cache = createClientCache(baseConfig());
+			const entry = (await cache.getClient(server('a'))) as unknown as {
+				scheduler: { maxConcurrent: number; settle(r: Recorded): void };
+			};
+			expect(entry.scheduler.maxConcurrent).toBe(1);
+
+			activeChildren = 6;
+			vi.advanceTimersByTime(6 * 60 * 1000);
+			entry.scheduler.settle({ status: 'success', fromCache: false, durationMs: 1 });
+			await vi.waitFor(() => expect(entry.scheduler.maxConcurrent).toBe(6));
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('does not re-probe on every solve', async () => {
+		let probes = 0;
+		activeChildren = 4;
+		const cache = createClientCache(baseConfig());
+		const entry = (await cache.getClient(server('a'))) as unknown as {
+			client: { serverStats: { getActiveChildren: () => Promise<number | null> } };
+			scheduler: { settle(r: Recorded): void };
+		};
+		entry.client.serverStats.getActiveChildren = async () => {
+			probes += 1;
+			return activeChildren;
+		};
+
+		for (let i = 0; i < 5; i++) {
+			entry.scheduler.settle({ status: 'success', fromCache: false, durationMs: 1 });
+		}
+		expect(probes).toBe(0);
+	});
+
+	it('spends no probe on a cache hit, which never reached the server', async () => {
+		vi.useFakeTimers();
+		try {
+			activeChildren = 2;
+			const cache = createClientCache(baseConfig());
+			const entry = (await cache.getClient(server('a'))) as unknown as {
+				scheduler: { maxConcurrent: number; settle(r: Recorded): void };
+			};
+
+			activeChildren = 8;
+			vi.advanceTimersByTime(6 * 60 * 1000);
+			entry.scheduler.settle({ status: 'success', fromCache: true, durationMs: 0 });
+			await Promise.resolve();
+			expect(entry.scheduler.maxConcurrent).toBe(2);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+});
+
+describe('createClientCache — keying', () => {
+	it('keys on id: two calls for the same id build one client', async () => {
+		const cache = createClientCache(baseConfig());
+		const a = await cache.getClient(server('s1'));
+		const b = await cache.getClient(server('s1'));
+		expect(a).toBe(b);
+		expect(createdConfigs).toHaveLength(1);
+	});
+
+	it('reuses the entry even when the URL/apiKey rotate under the same id', async () => {
+		// Identity is the id, so a rotated URL is the SAME entry (stale until
+		// evicted), not a new client.
+		const cache = createClientCache(baseConfig());
+		const a = await cache.getClient(server('s1', { serverUrl: 'http://old:6500' }));
+		const b = await cache.getClient(server('s1', { serverUrl: 'http://new:6500' }));
+		expect(a).toBe(b);
+		expect(createdConfigs).toHaveLength(1);
+		// It kept the ORIGINAL connection details — proving eviction is required.
+		expect(createdConfigs[0].serverUrl).toBe('http://old:6500');
+	});
+
+	it('builds distinct clients for distinct ids', async () => {
+		const cache = createClientCache(baseConfig());
+		const a = await cache.getClient(server('s1'));
+		const b = await cache.getClient(server('s2'));
+		expect(a).not.toBe(b);
+		expect(createdConfigs).toHaveLength(2);
+	});
+
+	it('coalesces concurrent builds for the same id into one client', async () => {
+		// Two requests racing on a cold key must share ONE build — without
+		// coalescing both handshake and the loser's client is overwritten in the
+		// map without ever being disposed.
+		const cache = createClientCache(baseConfig());
+		const [a, b] = await Promise.all([
+			cache.getClient(server('s1')),
+			cache.getClient(server('s1'))
+		]);
+		expect(a).toBe(b);
+		expect(createdConfigs).toHaveLength(1);
+	});
+});
+
+describe('createClientCache — LRU eviction', () => {
+	it('evicts the least-recently-used entry past capacity and disposes its scheduler', async () => {
+		const cache = createClientCache({ ...baseConfig(), maxWarmComputeServers: 2 });
+		const s1 = await cache.getClient(server('s1'));
+		await cache.getClient(server('s2'));
+		// Touch s1 so s2 becomes the LRU.
+		await cache.getClient(server('s1'));
+		await cache.getClient(server('s3')); // over capacity → evict s2
+
+		expect(disposedSchedulers).toHaveLength(1);
+		// s1 still warm (same entry, no rebuild); s2 rebuilt on next access.
+		expect(await cache.getClient(server('s1'))).toBe(s1);
+		expect(createdConfigs.filter((c) => prop<string>(c, 'serverUrl').includes('s2'))).toHaveLength(
+			1
+		);
+		await cache.getClient(server('s2'));
+		expect(createdConfigs.filter((c) => prop<string>(c, 'serverUrl').includes('s2'))).toHaveLength(
+			2
+		);
+	});
+});
+
+describe('createClientCache — explicit invalidation', () => {
+	it('evict(id) disposes the scheduler and forces a rebuild (config-write hook)', async () => {
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('s1'));
+		cache.evict('s1');
+		expect(disposedSchedulers).toHaveLength(1);
+		await cache.getClient(server('s1'));
+		expect(createdConfigs).toHaveLength(2);
+	});
+
+	it('evict accepts a ServerIdentity', async () => {
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('s1'));
+		cache.evict(serverIdentity({ id: 's1' }));
+		expect(disposedSchedulers).toHaveLength(1);
+	});
+
+	it('evict on an unknown id is a no-op', async () => {
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('s1'));
+		cache.evict('nope');
+		expect(disposedSchedulers).toHaveLength(0);
+	});
+
+	it('disposeAll disposes every warm scheduler and clears the cache', async () => {
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('s1'));
+		await cache.getClient(server('s2'));
+		cache.disposeAll();
+		expect(disposedSchedulers).toHaveLength(2);
+		// Next access rebuilds.
+		await cache.getClient(server('s1'));
+		expect(createdConfigs).toHaveLength(3);
+	});
+});
+
+describe('createClientCache — X-Selva-Definition (ADR 0004 D2)', () => {
+	it('stamps the definition guid on the client headers when provided', async () => {
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('s1'), { definitionGuid: 'guid-123' });
+		expect(createdConfigs[0].headers).toEqual({ 'X-Selva-Definition': 'guid-123' });
+	});
+
+	it('omits the header entirely when no guid is given', async () => {
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('s1'));
+		expect(createdConfigs[0].headers).toBeUndefined();
+	});
+});
+
+describe('createClientCache — scheduler concurrency (audit B6)', () => {
+	it('forwards the probed child count as the scheduler maxConcurrent in queue mode', async () => {
+		activeChildren = 7;
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('s1'));
+		expect(createdSchedulerOptions).toHaveLength(1);
+		// Queue mode with NO maxConcurrent defaults to 1 in the scheduler,
+		// serializing every solve on the server — the option must always be set.
+		expect(createdSchedulerOptions[0].mode).toBe('queue');
+		expect(createdSchedulerOptions[0].maxConcurrent).toBe(7);
+	});
+});
+
+describe('createClientCache — scheduler backpressure (audit B7)', () => {
+	it('forwards non-zero queue bounds to the scheduler', async () => {
+		const cache = createClientCache({ ...baseConfig(), maxQueueDepth: 12, queueWaitMs: 90_000 });
+		await cache.getClient(server('s1'));
+		expect(createdSchedulerOptions[0].maxQueueDepth).toBe(12);
+		expect(createdSchedulerOptions[0].queueWaitMs).toBe(90_000);
+	});
+
+	it('maps a 0 (disabled) queue bound to undefined so the scheduler stays unbounded', async () => {
+		// The scheduler treats undefined as unbounded/no-deadline; passing 0 would
+		// reject EVERY queued solve. Our `0 = off` convention must become undefined.
+		const cache = createClientCache({ ...baseConfig(), maxQueueDepth: 0, queueWaitMs: 0 });
+		await cache.getClient(server('s1'));
+		expect(createdSchedulerOptions[0].maxQueueDepth).toBeUndefined();
+		expect(createdSchedulerOptions[0].queueWaitMs).toBeUndefined();
+	});
+});
+
+describe('createClientCache — L1 response cache byte budget (audit C2)', () => {
+	it('forwards responseCacheMaxBytes as the scheduler cache maxBytes', async () => {
+		const cache = createClientCache({ ...baseConfig(), responseCacheMaxBytes: 64 * 1024 * 1024 });
+		await cache.getClient(server('s1'));
+		expect(createdSchedulerOptions[0].cache).toEqual({ maxBytes: 64 * 1024 * 1024 });
+	});
+
+	it('sets no TTL and no entry cap, so the byte budget is the only eviction pressure', async () => {
+		const cache = createClientCache({ ...baseConfig(), responseCacheMaxBytes: 64 * 1024 * 1024 });
+		await cache.getClient(server('s1'));
+		const opts = createdSchedulerOptions[0].cache as Record<string, unknown>;
+		expect(opts.ttlMs).toBeUndefined();
+		expect(opts.maxEntries).toBeUndefined();
+	});
+
+	it('disables the L1 response cache entirely when the budget is 0', async () => {
+		const cache = createClientCache({ ...baseConfig(), responseCacheMaxBytes: 0 });
+		await cache.getClient(server('s1'));
+		expect(createdSchedulerOptions[0].cache).toBe(false);
+	});
+});
+
+describe('createClientCache — per-request telemetry sequence counters', () => {
+	it('onServerTiming bumps rhinoTiming.seq on every write', async () => {
+		const cache = createClientCache(baseConfig());
+		const entry = await cache.getClient(server('s1'));
+		expect(entry.rhinoTiming).toEqual({ last: null, seq: 0 });
+		prop<(t: Record<string, number>) => void>(
+			createdConfigs[0],
+			'onServerTiming'
+		)({ decode: 5, solve: 100, encode: 3 });
+		expect(entry.rhinoTiming.seq).toBe(1);
+		expect(entry.rhinoTiming.last).toEqual({ decode: 5, solve: 100, encode: 3 });
+		prop<(t: Record<string, number>) => void>(
+			createdConfigs[0],
+			'onServerTiming'
+		)({ decode: 1, solve: 2, encode: 3 });
+		expect(entry.rhinoTiming.seq).toBe(2);
+		expect(entry.rhinoTiming.last).toEqual({ decode: 1, solve: 2, encode: 3 });
+	});
+
+	it('onSettle bumps solveMeta.seq on every settle but writes last only on success', async () => {
+		const cache = createClientCache(baseConfig());
+		const entry = await cache.getClient(server('s1'));
+		const onSettle = prop<(key: Record<string, unknown>, outcome: Record<string, unknown>) => void>(
+			createdSchedulerOptions[0],
+			'onSettle'
+		);
+		expect(entry.solveMeta).toEqual({ last: null, seq: 0 });
+
+		onSettle(
+			{ key: 'k' },
+			{
+				status: 'success',
+				fromCache: false,
+				definitionReuploaded: false,
+				durationMs: 10,
+				response: {}
+			}
+		);
+		expect(entry.solveMeta.seq).toBe(1);
+		expect(entry.solveMeta.last).toEqual({ fromCache: false, definitionReuploaded: false });
+
+		// An error settle must still count toward seq (the attribution guard in
+		// the pipeline needs to see ALL concurrent activity) without clobbering last.
+		onSettle({ key: 'k' }, { status: 'error', error: new Error('x'), durationMs: 5 });
+		expect(entry.solveMeta.seq).toBe(2);
+		expect(entry.solveMeta.last).toEqual({ fromCache: false, definitionReuploaded: false });
+
+		onSettle({ key: 'k' }, { status: 'success', fromCache: true, durationMs: 0, response: {} });
+		expect(entry.solveMeta.seq).toBe(3);
+		expect(entry.solveMeta.last).toEqual({ fromCache: true, definitionReuploaded: undefined });
+	});
+});
+
+// Each warm client owns a separate solve cache, so an operator-facing hit rate
+// has to sum them — one server's numbers wouldn't describe the deployment.
+describe('createClientCache — solveCacheStats', () => {
+	/** Reach the mock scheduler's mutable stats for a warm client. */
+	function statsOf(entry: { scheduler: unknown }) {
+		return (entry.scheduler as { stats: Record<string, number> }).stats;
+	}
+
+	it('reports zeroes and no warm clients before anything is cached', () => {
+		const cache = createClientCache(baseConfig());
+		expect(cache.solveCacheStats()).toEqual({
+			warmClients: 0,
+			entries: 0,
+			bytes: 0,
+			hits: 0,
+			misses: 0,
+			evictions: 0
+		});
+	});
+
+	it('sums counters across every warm client', async () => {
+		const cache = createClientCache(baseConfig());
+		const a = await cache.getClient(server('a'));
+		const b = await cache.getClient(server('b'));
+
+		Object.assign(statsOf(a), { entries: 2, bytes: 100, hits: 7, misses: 3, evictions: 1 });
+		Object.assign(statsOf(b), { entries: 5, bytes: 250, hits: 1, misses: 9, evictions: 4 });
+
+		expect(cache.solveCacheStats()).toEqual({
+			warmClients: 2,
+			entries: 7,
+			bytes: 350,
+			hits: 8,
+			misses: 12,
+			evictions: 5
+		});
+	});
+
+	it('drops an evicted client’s numbers — the totals describe live caches only', async () => {
+		const cache = createClientCache(baseConfig());
+		const a = await cache.getClient(server('a'));
+		Object.assign(statsOf(a), { entries: 2, bytes: 100, hits: 7, misses: 3, evictions: 1 });
+		expect(cache.solveCacheStats().hits).toBe(7);
+
+		cache.evict('a');
+		expect(cache.solveCacheStats()).toMatchObject({ warmClients: 0, hits: 0 });
+	});
+});
+
+describe('serverIdentity', () => {
+	it('derives identity from the id', () => {
+		expect(serverIdentity({ id: 'abc' })).toBe('abc');
+	});
+});

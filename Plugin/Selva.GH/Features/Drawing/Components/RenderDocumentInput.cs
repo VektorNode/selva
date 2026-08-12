@@ -6,9 +6,8 @@ using ModelBoundingBox = Selva.Drawing.Model.Geometry.BoundingBox;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Shared input handling for the render components: a single Document passes through,
-// anything else is treated as loose DrawElements and wrapped into a one-page document.
-// Keeping this in one place means Render SVG and Render PDF accept the same graphs.
+// A single Document input passes through; anything else is treated as loose DrawElements
+// and wrapped into a one-page document.
 public static class RenderDocumentInput
 {
     public static bool TryBuildDocument(List<IGH_Goo> inputs, string title,
@@ -72,8 +71,8 @@ public static class RenderDocumentInput
     }
 
     // Loose elements keep their world coordinates; without Auto Fit the output window is the
-    // default page rect, so geometry living at model coordinates renders cropped or blank
-    // with no other signal. Returns a warning string, or null when the content fits.
+    // default page rect, so geometry at model coordinates renders cropped or blank with no
+    // other signal.
     public static string LoosePageFitWarning(Document doc)
     {
         if (doc?.Pages == null || doc.Pages.Count == 0) return null;

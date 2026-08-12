@@ -46,7 +46,7 @@
 		currentValue = undefined
 	}: BuilderGroupItemProps = $props();
 
-	// For chart outputs: parse the live Plotly JSON to show the detected chart type
+	// Parses the live Plotly JSON to show the detected chart type for chart outputs.
 	const detectedChartType = $derived.by(() => {
 		if (item.type !== 'output' || item.widgetType !== 'chart') return null;
 		if (!currentValue || typeof currentValue !== 'string') return null;
@@ -61,9 +61,8 @@
 	let typeLabel = $derived(paramInfo?.type ?? item.widgetType);
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
 
-	// Estimated step count of the underlying GH slider. Above ~1000 steps the
-	// browser slider widget becomes noticeably laggy on drag (each tick fires a
-	// re-render and a debounced WS round-trip).
+	// Above this many steps, the slider widget gets noticeably laggy on drag —
+	// each tick fires a re-render and a debounced WS round-trip.
 	const SLIDER_STEPS_WARNING_THRESHOLD = 3000;
 	const sliderStepCount = $derived.by(() => {
 		if (!isNumberInput || !paramInfo) return 0;
@@ -97,11 +96,10 @@
 		item.type === 'output' && item.widgetType === 'dynamicValueList'
 	);
 	let fileInputConfig = $derived(isFileInput ? (item.config as FileInputWidgetConfig) : null);
-	// Formats offered as toggleable checkboxes are scoped to what the parameter accepts:
-	// image extensions for a Get Image input, geometry for a Get File input. The parameter's
-	// declared set (from discovery) is the source of truth; fall back to the geometry default
-	// only when none was declared (e.g. a hand-added file input with no GH source). Any format
-	// already selected in the config is unioned in so a manual edit never hides its own value.
+	// Scoped to what the parameter accepts (image extensions vs geometry formats), falling back
+	// to the geometry default only when discovery declared nothing (e.g. a hand-added file input
+	// with no GH source). Formats already selected in the config are unioned in so a manual edit
+	// never hides its own value.
 	let availableFileFormats = $derived.by<string[]>(() => {
 		const declared =
 			paramInfo?.acceptedFormats && paramInfo.acceptedFormats.length > 0
@@ -115,14 +113,12 @@
 	let dynamicValueListOutputConfig = $derived(
 		isDynamicValueListOutput ? (item.config as DynamicValueListOutputConfig) : null
 	);
-	// Dynamic value list inputs this output can target.
 	let dynamicValueListInputs = $derived(
 		availableInputs.filter((p) => p.type === 'dynamicValueList')
 	);
 	let showAdvanced = $state(false);
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((item.visibilityCondition?.rules?.length ?? 0) > 0);
-	// Advanced section only for widget-specific options
 	let hasAdvancedOptions = $derived(
 		isNumberInput ||
 			isFileInput ||
@@ -215,10 +211,8 @@
 
 		const index = config.allowedInputModes.indexOf(mode);
 		if (index > -1) {
-			// Don't allow removing the last mode
 			if (config.allowedInputModes.length <= 1) return;
 			config.allowedInputModes.splice(index, 1);
-			// If we just removed the default mode, update defaultInputMode
 			if (config.defaultInputMode === mode) {
 				config.defaultInputMode = config.allowedInputModes[0];
 			}
@@ -229,13 +223,7 @@
 
 	let isInput = $derived(item.type === 'input');
 
-	// Where this input's value comes from (InputSource.kind). Absent source = 'user'.
-	//   user   → the person fills it in the form (normal control).
-	//   client → an app in the browser fills it before the form runs; `key` names
-	//            which producer (e.g. 'line-app') so the host pre-routes to it.
-	//   server → resolved server-side at solve time from host data; `key` names
-	//            what to fetch (e.g. 'capture.geometry') for the IBindingResolver.
-	// One opaque `key` either way; `kind` says how the host reads it.
+	// Absent source = 'user'. See InputSource in the schema for what 'client'/'server' + key mean.
 	let sourceKind = $derived((item as { source?: InputSource }).source?.kind ?? 'user');
 
 	function setSourceKind(kind: 'user' | 'client' | 'server') {
@@ -245,7 +233,7 @@
 			target.source = undefined;
 			return;
 		}
-		// Preserve any already-typed key and client presentation when switching.
+		// Preserve an already-typed key/presentation when switching kind.
 		const prevKey = target.source?.key;
 		const prevClient = target.source?.client;
 		target.source = {
@@ -253,13 +241,11 @@
 			...(prevKey ? { key: prevKey } : {}),
 			...(kind === 'client' && prevClient ? { client: prevClient } : {})
 		};
-		// Externally-supplied inputs are typically hidden from the end user.
-		// Default to hidden the first time it leaves 'user'; author can override.
+		// Externally-supplied inputs default to hidden the first time they leave
+		// 'user'; the author can still flip visible back on.
 		if (target.visible !== false) target.visible = false;
 	}
 
-	// Client presentation: 'hidden' (default) or 'slot' (host renders a custom
-	// element in the input's place). 'slot' requires the cell to be visible.
 	let clientPresentation = $derived(
 		(item as { source?: InputSource }).source?.client?.presentation ?? 'hidden'
 	);
@@ -293,7 +279,6 @@
 			config.acceptedFormats.push(format);
 		}
 
-		// Ensure at least one format is selected
 		if (config.acceptedFormats.length === 0) {
 			config.acceptedFormats = [format];
 		}

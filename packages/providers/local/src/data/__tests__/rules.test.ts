@@ -188,8 +188,7 @@ describe('canView', () => {
 		).toBe(false);
 	});
 
-	// `private` means private from everyone without project membership —
-	// including org leadership. Reclaim is the explicit escalation path.
+	// private means private from org leadership too; reclaim is the escalation path.
 	it('private + org owner (no project membership): still denied', () => {
 		expect(
 			canView(
@@ -390,7 +389,6 @@ describe('canEdit', () => {
 				})
 			)
 		).toBe(true);
-		// A project member role on a platform project is meaningless — only admin grants edit.
 		expect(
 			canEdit(
 				accessInput({
@@ -479,9 +477,8 @@ describe('canChangeVisibilityToPublic', () => {
 	});
 
 	it('cross-org-public flag does NOT gate the flip — only canView post-flip', () => {
-		// Permissions.md §5 (canChangeVisibilityToPublic): with the flag off,
-		// public still flips; the meaning of public narrows to within-org. The
-		// flag belongs in canView, not here.
+		// With the flag off, public still flips; the meaning of public narrows
+		// to within-org. The flag belongs in canView, not here.
 		expect(canChangeVisibilityToPublic({ orgMember: orgMember('owner') })).toBe(true);
 	});
 });
@@ -502,7 +499,6 @@ describe('canEditDefinition', () => {
 				})
 			)
 		).toBe(true);
-		// Uploader who isn't a project member: denied on a container project.
 		expect(
 			canEditDefinition(
 				defAccessInput({
@@ -608,7 +604,7 @@ describe('withAdminBypass', () => {
 });
 
 // ============================================================================
-// checkOwnerRemoval (Permissions.md §5, §10)
+// checkOwnerRemoval
 // ============================================================================
 describe('checkOwnerRemoval', () => {
 	it('returns ok for non-owner targets regardless of confirmation', () => {
@@ -669,9 +665,8 @@ describe('checkOwnerRemoval', () => {
 	});
 
 	it('zero owners (corrupt state) reports sole_owner', () => {
-		// Defensive: if the caller somehow asks to remove an owner from a project
-		// with no owner rows in the page, treat it as sole_owner so we never let
-		// the project end up with zero owners.
+		// Defensive: no owner rows in the page still reports sole_owner, so a
+		// corrupt/incomplete member list can't be used to remove the last owner.
 		expect(
 			checkOwnerRemoval({
 				target: { role: 'owner' },

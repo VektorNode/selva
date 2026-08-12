@@ -9,10 +9,8 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Rendering;
 
-// One-off harness used during the Phase 3 migration to capture renderer output as
-// snapshot files. Re-run by setting SELVA_GENERATE_SNAPSHOTS=1; otherwise it's a no-op
-// so test runs stay clean. Lives in the test project so it has access to the renderer
-// without polluting production code.
+// Regenerates the pinned snapshot files. No-op unless SELVA_GENERATE_SNAPSHOTS=1, so
+// normal test runs don't overwrite the snapshots they're checking against.
 public class SnapshotGenerator
 {
 	private static readonly string SnapshotDir = System.IO.Path.Combine(
@@ -45,9 +43,8 @@ public class SnapshotGenerator
 	}
 }
 
-// Centralized scenes — each method builds the same Document the parity test asserts,
-// and returns the rendered SVG. Used both by the snapshot harness above and by the
-// parity tests so the two stay in sync.
+// Shared by SnapshotGenerator and SvgRendererSnapshotTests so both build the same
+// Document per scene.
 internal static class SvgScenes
 {
 	private static SvgRenderer Renderer() => new SvgRenderer(new SvgRenderOptions
@@ -190,8 +187,7 @@ internal static class SvgScenes
 
 	public static string LinearDimensionBreakLine()
 	{
-		// BreakLine placement uses FontMetrics (Phase 4) to compute the gap. Pinned scene
-		// guards against regressions in dimension text-gap calculation.
+		// Pinned to catch regressions in the FontMetrics-based text-gap calculation.
 		return Render(new DrawElement[]
 		{
 			new DimensionElement
@@ -215,9 +211,8 @@ internal static class SvgScenes
 
 	public static string SymbolDedupe()
 	{
-		// One SymbolDefinition, three instances at different positions. Pinned snapshot
-		// proves the renderer emits a single <symbol> in <defs> and three <use> refs
-		// (rather than three inline copies of the children).
+		// One SymbolDefinition, three instances — pins that the renderer emits a single
+		// <symbol> and three <use> refs instead of three inline copies.
 		var triangle = new Path.Builder()
 			.MoveTo(0, 0).LineTo(5, 0).LineTo(2.5, 4).Close().Build();
 		var def = new SymbolDefinition

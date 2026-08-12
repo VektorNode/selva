@@ -106,10 +106,8 @@
 		}
 
 		if (foreignIndices.length > 0 && onParameterDrop) {
-			// Process each foreign item as a positioned drop.
 			for (const idx of foreignIndices) {
 				const foreign = items[idx];
-				// Find the nearest neighbour LayoutItem to anchor the drop.
 				let targetItem: LayoutItem | undefined;
 				let dropPosition: 'before' | 'after' | undefined;
 				// Prefer the next neighbour (drop before it). Fall back to previous.
@@ -141,14 +139,12 @@
 				};
 				onParameterDrop(new CustomEvent('parameterdrop', { detail }));
 			}
-			// Resync local from group.items — onParameterDrop will have mutated it.
-			// (The $effect won't fire mid-handler because isItemDragging flipped to false,
-			// but localItems was just set from e.detail; we explicitly resync here.)
+			// Resync local from group.items — the $effect won't fire mid-handler
+			// (isItemDragging already flipped false), so resync explicitly here.
 			localItems = [...(group.items as ZoneItem[])];
 			return;
 		}
 
-		// All items are LayoutItems — pure reorder.
 		const committed = items as LayoutItem[];
 		localItems = committed as ZoneItem[];
 		onFinalize(committed);

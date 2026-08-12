@@ -5,8 +5,8 @@ import type { DefinitionRecord, DefinitionRecordPatch, DefinitionVersion } from 
 
 /**
  * Definition metadata + version store. Blob contents live in `IStorageProvider`;
- * this interface tracks the parent record plus immutable version rows and the
- * `live` / `draft` channel pointers.
+ * this tracks the parent record, immutable version rows, and the `live`/`draft`
+ * channel pointers.
  */
 export interface IDefinitionStore {
 	// Definitions
@@ -17,9 +17,8 @@ export interface IDefinitionStore {
 		opts?: DefinitionListOptions
 	): Promise<Page<DefinitionRecord>>;
 	/**
-	 * List definitions whose parent project has `visibility === 'public'`.
-	 * Pass `orgId` to restrict to one org; omit for cross-org listing within
-	 * whatever tenant boundary the adapter already enforces.
+	 * Lists definitions whose parent project has `visibility === 'public'`.
+	 * Pass `orgId` to restrict to one org; omit for cross-org listing.
 	 */
 	listPublic(
 		ctx: RequestContext,
@@ -31,11 +30,10 @@ export interface IDefinitionStore {
 	delete(ctx: RequestContext, guid: string): Promise<void>;
 
 	/**
-	 * Cascade hook: soft-delete every live definition in a project. Called by
-	 * `IProjectStore.deleteProject` — a deleted project must never keep serving
-	 * its definitions (they surface in the library/public listings independent
-	 * of the project row). No-op when the project has none. Mirrors the
-	 * `deleteByProject` cascade hooks on `IPlatformProjectGrantStore`.
+	 * Cascade hook: soft-deletes every live definition in a project. Called by
+	 * `IProjectStore.deleteProject` — definitions surface in library/public
+	 * listings independent of the project row, so a deleted project must not
+	 * keep serving them. No-op when the project has none.
 	 */
 	deleteByProject(ctx: RequestContext, projectId: string): Promise<void>;
 
@@ -43,22 +41,20 @@ export interface IDefinitionStore {
 	incrementSolveCount(ctx: RequestContext, guid: string): Promise<void>;
 
 	/**
-	 * Atomically reserve the next `versionNumber` for a new version: returns the
-	 * current `nextVersionNumber` and advances the counter by 1 in a single
-	 * operation (so concurrent uploads never collide on a number/fileKey). The
-	 * counter is monotonic and NEVER decremented — deleting the latest version
-	 * does not free its number, so a delete-then-reupload mints a fresh number and
-	 * fresh `fileKey` instead of overwriting the deleted blob's key. Throws if the
-	 * definition doesn't exist.
+	 * Atomically returns the current `nextVersionNumber` and advances the counter
+	 * by 1, so concurrent uploads never collide on a number/fileKey. Never
+	 * decremented — deleting the latest version doesn't free its number, so a
+	 * delete-then-reupload mints a fresh `fileKey` instead of reusing the deleted
+	 * blob's key. Throws if the definition doesn't exist.
 	 */
 	reserveNextVersionNumber(ctx: RequestContext, guid: string): Promise<number>;
 
 	// Versions (immutable rows)
 	createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void>;
 	/**
-	 * Newest first by `versionNumber`. Listed rows carry metadata only — `schema`
-	 * is always `undefined` here regardless of what is stored, because it is a
-	 * large blob no list caller needs. Use `getVersion` when you need the schema.
+	 * Newest first by `versionNumber`. `schema` is always `undefined` on listed
+	 * rows regardless of what's stored — it's a large blob no list caller needs.
+	 * Use `getVersion` for the schema.
 	 */
 	listVersions(
 		ctx: RequestContext,
@@ -69,10 +65,9 @@ export interface IDefinitionStore {
 	getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null>;
 
 	/**
-	 * Set the cached compute-extracted schema on a version row. Used by the
-	 * upload path (writes the schema validated up-front) and the temporary
-	 * solve-time backfill bridge (see selva/specs/SchemaCaching.md). No-op if
-	 * the version doesn't exist.
+	 * Sets the cached compute-extracted schema on a version row. Used by the
+	 * upload path and the solve-time backfill bridge for pre-existing versions.
+	 * No-op if the version doesn't exist.
 	 */
 	setVersionSchema(ctx: RequestContext, versionId: string, schema: UISchema): Promise<void>;
 	/**
@@ -88,16 +83,14 @@ export interface IDefinitionStore {
 	/**
 	 * Atomic `'pending'` → `'draft'` bootstrap. Sets BOTH `liveVersionId` and
 	 * `draftVersionId` to `versionId` and flips `status` to `'draft'` in a
-	 * single update — used by the create flow so a mid-flight failure can't
-	 * leave the record half-promoted (status='draft' with a null channel
-	 * pointer, or status='pending' with channels set).
+	 * single update, so a mid-flight failure can't leave the record
+	 * half-promoted (draft status with a null channel pointer, or pending
+	 * status with channels set).
 	 *
 	 * Validates that `versionId` belongs to `definitionId` (404 if not).
 	 *
-	 * Does NOT emit `definition.published`. The bootstrap is covered by the
-	 * parent's `definition.created` + `definition_version.created` pair;
-	 * `definition.published` is reserved for explicit publish ops via
-	 * `setLiveVersion`.
+	 * Does NOT emit `definition.published` — that event is reserved for
+	 * explicit publish via `setLiveVersion`.
 	 */
 	attachInitialVersion(ctx: RequestContext, definitionId: string, versionId: string): Promise<void>;
 }

@@ -19,13 +19,35 @@ named after a concept, it should be the concept named here.
 - **IO** — the inputs and outputs a definition declares. `getIO` fetches them.
 - **Input param** — one declared input of a definition, parsed into a typed
   shape (`NumericInputType`, `TextInputType`, …). The union is `InputParam`.
-- **Transport** — the HTTP layer talking to Rhino Compute (`fetchRhinoCompute`).
+- **Transport** — the HTTP layer talking to a compute server (`fetchCompute`).
   Owns retries, backoff, timeout/abort composition, and HTTP→error-code mapping.
   Response-type-agnostic: it takes an endpoint string and a `ComputeConfig` and
-  returns a caller-supplied response type (`fetchRhinoCompute<R>`). It does not
+  returns a caller-supplied response type (`fetchCompute<R>`). It does not
   know which response a given endpoint produces — each endpoint caller names its
   own response type. This keeps the dependency arrow pointing feature → core, so
   a second endpoint family can be added without `core` importing any feature.
+
+  **`core/` is backend-agnostic — it names no Rhino concept.** Everything
+  backend-specific arrives from the caller through three seams, and adding a
+  fourth belongs here rather than inlined in core:
+
+  - `ComputeConfig.apiKeyHeader` — the auth header's NAME (default
+    `RhinoComputeKey`). Note the key still merges over `config.headers`, so a
+    caller can't clobber whichever header actually carries it.
+  - `ComputeConfig.serverErrorCodes` — this backend's machine wire codes → our
+    `ErrorCodes`, outranking the status-based mapping. Grasshopper's table is
+    `GRASSHOPPER_SERVER_ERROR_CODES` in `grasshopper/solve.ts`, applied at both
+    GH fetch sites via `withGrasshopperErrorCodes`.
+  - `validateServerUrl(url, { blockedHosts })` — the shared public endpoint a
+    caller must not point at. Defaults to `compute.rhino3d.com`.
+
+  `ComputeServerStats` is NOT transport: it probes rhino.compute's control plane
+  (`/activechildren`, `/plugins/gh/installed`, `/idlespan`), so it ships from
+  `/grasshopper`. Conversely `DefinitionRef`/`SolveDefinition` are pure
+  bytes-or-lazy-byte-ref with nothing Grasshopper in them, and sit in the solve
+  port's own signature — so they live in `/core`, and a second backend's author
+  never has to import them from the Grasshopper subpath.
+
 - **Scheduler** — orchestrates solves over time (latest-wins / queue / parallel),
   with cancellation, retries, caching, and an observable state surface.
 - **Server definition-cache reuse** — a large (base64/binary) definition is
@@ -44,10 +66,10 @@ definition`) the `solveByCacheKey` primitive transparently falls back to a full
 - **Decoder** — turns a typed value (system type or Rhino geometry) into a JS
   value. Rhino geometry decoding uses a registry (`registerDecoder`).
 - **Mesh batch** — the binary (SLVA) payload carrying display meshes; parsed by
-  the webdisplay layer into three.js meshes. Three entry points decode it —
-  `parseMeshBatch` (JSON envelope), `parseMeshBatchObject` (parsed `MeshBatch`),
-  `parseMeshBatchBlob` (raw binary frame) — and all share the one public options
-  type `MeshBatchParsingOptions` (`mergeByMaterial` / `applyTransforms` / `debug`).
+  the webdisplay layer into three.js meshes. Two entry points decode it —
+  `parseMeshBatchObject` (parsed `MeshBatch`) and `parseMeshBatchBlob` (raw binary
+  frame) — and both share the one public options type `MeshBatchParsingOptions`
+  (`mergeByMaterial` / `applyTransforms` / `debug`).
   Telemetry timings and the envelope `fallback` merge are private to the build
   step (`BuildOptions`), never on a caller-facing surface.
 
@@ -173,21 +195,23 @@ definition`) the `solveByCacheKey` primitive transparently falls back to a full
 
 ## Display-pipeline performance
 
-The concepts (these outlive whatever plan doc introduced them):
+Paths below are in `@selvajs/visualization` (`packages/visualization/src/`), not
+this package. The concepts (these outlive whatever plan doc introduced them):
 
-- **Geometry cache** (`webdisplay/geometry-cache.ts`) — cross-solve
-  `BufferGeometry` reuse keyed by a content fingerprint of the wire windows a
-  geometry is built from. The viewer rebuilds the scene every solve, so only
-  content identity survives; `clearScene` skips cache-owned geometries and the
-  cache disposes on LRU eviction (256 MB budget).
+- **No cross-solve caching.** The viewer rebuilds the scene every solve and the
+  scene owns every geometry and texture it holds, so `clearScene` disposes them
+  unconditionally. Geometry, texture and edge-segment caches were removed once
+  measurement showed they were unproven and cost more maintenance than they
+  saved; add one back only with a benchmark to justify it.
 - **Assembly worker** (`webdisplay/mesh-assembly.ts`) — delta-decode +
   dequantize + merge + vertex normals as a single zero-capture pure function,
-  run in a blob-URL Worker for batches ≥ 50k triangles. Its cache keys are
-  pinned byte-identical to the sync path's (`mesh-assembly.test.ts`).
-- **Edge segment cache / edge worker** (`threejs/edge-extract.ts`, `edges.ts`)
-  — same pattern for crease-edge extraction, plus triangle/segment caps and a
-  screen-space fallback pass (`threejs/edge-detection-pass.ts`).
-- **On-demand render loop** (`threejs/three-initializer.ts`) — draws only on
+  run in a blob-URL Worker for batches ≥ 50k triangles. Buffer equivalence with
+  the sync path is pinned by `mesh-assembly.test.ts`.
+- **Edge worker** (`render/edge-extract.ts`, `render/edges.ts`) — crease-edge
+  extraction offloaded to a worker, with an in-flight map so meshes with
+  identical content share one round-trip, plus triangle/segment caps and a
+  screen-space fallback pass (`render/edge-detection-pass.ts`).
+- **On-demand render loop** (`render/scene-setup/init-three.ts`) — draws only on
   invalidate()/camera motion/pointer input, with a 500 ms safety repaint;
   `render.onDemand: false` restores the continuous loop.
 

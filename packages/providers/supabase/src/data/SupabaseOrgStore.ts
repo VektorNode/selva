@@ -31,10 +31,6 @@ const ORG_MEMBER_COLUMNS =
  * Org + org-membership store backed by Postgres. The queries rely on RLS
  * for per-user visibility; the service-role client bypasses those policies
  * for admin paths (setup, janitor, tests).
- *
- * `createOrg` atomically seeds the creator as `owner` with every
- * `OrgPermission` — otherwise under user-scoped RLS the creator would
- * immediately lose visibility of their own org.
  */
 export class SupabaseOrgStore implements IOrgStore {
 	private readonly events: IEventSink;
@@ -90,11 +86,10 @@ export class SupabaseOrgStore implements IOrgStore {
 		const { error } = await client.from('orgs').insert(orgToRow(org));
 		if (error) throw mapPostgrestError(error);
 
-		// Seed owner membership so user-scoped queries can see the org post-create.
-		// Service-role bypasses RLS, but the same code path runs for user-scoped
-		// callers — the membership row is what makes them visible to themselves.
-		// Upsert so a stale soft-deleted row from a prior org with the same id
-		// is reactivated rather than blocking creation.
+		// Seed owner membership: under user-scoped RLS the creator can't see an
+		// org they're not a member of, even one they just created. Upsert so a
+		// stale soft-deleted row from a prior org with the same id is reactivated
+		// rather than blocking creation.
 		const { error: memberError } = await client.from('org_members').upsert(
 			{
 				org_id: org.id,
@@ -118,7 +113,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		const row: Record<string, unknown> = {};
 		if (patch.name !== undefined) row.name = patch.name;
 		if (patch.slug !== undefined) row.slug = patch.slug;
-		// Callers pass the full merged map; store it wholesale (JSONB column).
+		// Callers pass the full merged map — store it as-is (JSONB column, no partial merge).
 		if (patch.assets !== undefined) row.assets = patch.assets;
 		if (Object.keys(row).length === 0) return;
 		// `updated_at` is set by the trg_orgs_updated_at trigger; `stampUpdate`
@@ -138,13 +133,12 @@ export class SupabaseOrgStore implements IOrgStore {
 	}
 
 	async deleteOrg(ctx: RequestContext, id: string): Promise<void> {
-		// §9 soft-delete with cascade. Mirrors LocalOrgStore: org → org_members,
+		// Soft-delete with cascade, mirroring LocalOrgStore: org → org_members,
 		// projects → project_members, definitions. Hard delete is reserved for
 		// the background janitor; user-facing deletes preserve the audit trail.
 		const client = this.clients.forRequest(ctx);
 		const stampRow = stampSoftDelete(ctx);
 
-		// Org itself.
 		const { error: orgErr, data: orgData } = await client
 			.from('orgs')
 			.update(stampRow)
@@ -154,7 +148,6 @@ export class SupabaseOrgStore implements IOrgStore {
 		if (orgErr) throw mapPostgrestError(orgErr);
 		if (!orgData || orgData.length === 0) throw new ProviderError(`Org '${id}' not found`, 404);
 
-		// Cascade: org_members.
 		const { error: omErr } = await client
 			.from('org_members')
 			.update(stampRow)
@@ -162,9 +155,8 @@ export class SupabaseOrgStore implements IOrgStore {
 			.is('deleted_at', null);
 		if (omErr) throw mapPostgrestError(omErr);
 
-		// Cascade: projects in this org. Fetch IDs first so we can cascade to
-		// project_members and definitions in app code (Postgres FK CASCADE only
-		// fires on hard DELETE, which we're not doing here).
+		// Fetch project IDs first so app code can cascade to project_members and
+		// definitions — Postgres FK CASCADE only fires on hard DELETE, and this is a soft one.
 		const { data: orgProjects, error: projFetchErr } = await client
 			.from('projects')
 			.select('id')
@@ -196,10 +188,10 @@ export class SupabaseOrgStore implements IOrgStore {
 			if (defErr) throw mapPostgrestError(defErr);
 		}
 
-		// Hard-delete tables that have no `deleted_at` column. SQL CASCADE on
-		// the org FK only fires for hard org deletes; we soft-delete, so we
-		// clean these up here. Pending invites to a dead org are unredeemable;
-		// stale compute config is operational state with no audit need.
+		// These tables have no `deleted_at` column, and the org soft-delete above
+		// doesn't trigger their FK CASCADE, so clean them up explicitly. Pending
+		// invites to a dead org are unredeemable; stale compute config is
+		// operational state with no audit need.
 		const { error: invErr } = await client.from('invites').delete().eq('org_id', id);
 		if (invErr) throw mapPostgrestError(invErr);
 
@@ -259,6 +251,26 @@ export class SupabaseOrgStore implements IOrgStore {
 			.maybeSingle();
 		if (error) throw mapPostgrestError(error);
 		return data ? rowToOrgMember(data) : null;
+	}
+
+	async getOrgMembersFor(
+		ctx: RequestContext,
+		orgIds: readonly string[],
+		userId: string
+	): Promise<Map<string, OrgMember | null>> {
+		const result = new Map<string, OrgMember | null>(orgIds.map((id) => [id, null]));
+		if (orgIds.length === 0) return result;
+
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('org_members')
+			.select(ORG_MEMBER_COLUMNS)
+			.in('org_id', [...orgIds])
+			.eq('user_id', userId)
+			.is('deleted_at', null);
+		if (error) throw mapPostgrestError(error);
+		for (const row of data ?? []) result.set(row.org_id, rowToOrgMember(row));
+		return result;
 	}
 
 	async findUserMembership(
@@ -321,7 +333,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		userId: string,
 		role: OrgRole
 	): Promise<void> {
-		// Role change re-seeds default permissions. Matches LocalOrgStore.
+		// Matches LocalOrgStore: changing role re-seeds default permissions for that role.
 		const row: Record<string, unknown> = {
 			role,
 			permissions: [...DEFAULT_ORG_PERMISSIONS[role]],
@@ -353,9 +365,8 @@ export class SupabaseOrgStore implements IOrgStore {
 		userId: string,
 		permissions: readonly OrgPermission[]
 	): Promise<void> {
-		// Replace permissions only. Matches LocalOrgStore.updateOrgMemberPermissions —
-		// distinct from role change so callers can grant a finer-grained set without
-		// re-seeding defaults from the role.
+		// Distinct from updateOrgMemberRole so callers can grant a finer-grained
+		// set without re-seeding defaults from the role. Matches LocalOrgStore.
 		const row: Record<string, unknown> = { permissions: [...permissions], ...stampUpdate(ctx) };
 		const { data, error } = await this.clients
 			.forRequest(ctx)
@@ -378,11 +389,10 @@ export class SupabaseOrgStore implements IOrgStore {
 	}
 
 	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {
-		// §9 cascade — losing org membership ends every project membership scoped
-		// to that tenant. Soft-delete the org_member row, then cascade-soft-delete
-		// the user's project_members for any project in this org. Run the project
-		// cascade BEFORE the org_member update so RLS policies that gate
-		// project_members on org_member existence still pass for the duration.
+		// Losing org membership ends every project membership scoped to that
+		// tenant. Run the project_members cascade BEFORE the org_member update —
+		// RLS policies gate project_members writes on org_member existence, so
+		// reversing the order would fail partway through under user-scoped RLS.
 		const client = this.clients.forRequest(ctx);
 		const stampRow = stampSoftDelete(ctx);
 
@@ -426,9 +436,9 @@ export class SupabaseOrgStore implements IOrgStore {
 //
 // Audit columns (`created_by` / `updated_by`) FK to `auth.users(id)` with
 // `ON DELETE SET NULL`, so they can legitimately become NULL when the
-// referenced user is deleted (spec §8). Mappers fall back to `owner_id` /
-// `user_id` so the domain type stays non-nullable; UIs that care about
-// creator-vs-owner attribution should render "Deleted user" at that layer.
+// referenced user is deleted. Mappers fall back to `owner_id` / `user_id` so
+// the domain type stays non-nullable; UIs that care about creator-vs-owner
+// attribution should render "Deleted user" at that layer.
 
 interface OrgRow {
 	id: string;
@@ -475,7 +485,9 @@ function orgToRow(org: Organization): OrgRow {
 		name: org.name,
 		slug: org.slug,
 		owner_id: org.ownerId,
-		assets: org.assets ?? null,
+		// `assets` is `not null default '{}'` — an explicit null defeats the
+		// default and violates the constraint.
+		assets: org.assets ?? {},
 		created_by: org.createdBy,
 		updated_by: org.updatedBy,
 		created_at: org.createdAt,

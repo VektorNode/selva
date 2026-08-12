@@ -25,18 +25,18 @@ export interface LocalShareLinkStoreOptions {
 }
 
 /**
- * Spec §7 — share-link store backed by share-links.json.
- *
- * `tryIncrementSolveCount` is the load-bearing race-sensitive method; in
- * the local provider we read-modify-write under a single fs round-trip,
- * which is acceptable at single-node scale. Postgres adapters use a true
- * atomic UPDATE.
+ * `tryIncrementSolveCount` is race-sensitive: this store does a plain
+ * read-modify-write, fine at single-node scale. Postgres adapters use a true
+ * atomic UPDATE instead.
  */
 export class LocalShareLinkStore implements IShareLinkStore {
 	private definitionProvider?: IDefinitionStore;
 	private readonly events: IEventSink;
 	private readonly configFilePath: string;
 
+	// Callers must still call `setDefinitionProvider` before token resolution,
+	// or the soft-delete cascade check silently no-ops. LocalDataProvider wires
+	// this when it builds the store.
 	static fromEnv(env: Record<string, string | undefined>): LocalShareLinkStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		return new LocalShareLinkStore({
@@ -50,11 +50,10 @@ export class LocalShareLinkStore implements IShareLinkStore {
 	}
 
 	/**
-	 * Wire the definition store so token resolution can check the parent
-	 * definition's `deletedAt` (Permissions.md §7 cascade contract). Mirrors
-	 * Supabase, which performs the equivalent JOIN. Optional: when unset, the
-	 * store falls back to the local-only revoke check; the route layer in
-	 * the selva app does the parent lookup as a safety net either way.
+	 * Wires the definition store so token resolution can check the parent
+	 * definition's `deletedAt`, mirroring the JOIN Supabase does. Optional: if
+	 * unset, this falls back to the local-only revoke check, and the selva
+	 * app's route layer does the parent lookup as a safety net either way.
 	 */
 	setDefinitionProvider(definitions: IDefinitionStore): void {
 		this.definitionProvider = definitions;
@@ -68,8 +67,11 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		await writeJsonFile(this.configFilePath, data);
 	}
 
+	// Revoked or expired counts as dead — match what Supabase filters in SQL,
+	// or the same link reads live locally and dead there.
 	private isLive(l: ShareLink | undefined | null): l is ShareLink {
-		return Boolean(l && l.revokedAt == null);
+		if (!l || l.revokedAt != null) return false;
+		return l.expiresAt == null || Date.parse(l.expiresAt) > Date.now();
 	}
 
 	async create(ctx: RequestContext, link: ShareLink): Promise<void> {
@@ -108,8 +110,8 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		const all = await this.readAll();
 		const found = Object.values(all.links).find((l) => l.tokenHash === tokenHash);
 		if (!this.isLive(found)) return null;
-		// §7: token resolution MUST NOT see links whose parent definition is
-		// soft-deleted. Supabase enforces this via JOIN; here we look up.
+		// Token resolution must not see links whose parent definition is
+		// soft-deleted — Supabase enforces this via JOIN, here via lookup.
 		if (this.definitionProvider) {
 			const parent = await this.definitionProvider.get(SYSTEM_CONTEXT, found.definitionId);
 			if (!parent) return null;

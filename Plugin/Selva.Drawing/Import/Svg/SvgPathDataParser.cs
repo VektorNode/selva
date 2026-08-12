@@ -11,8 +11,7 @@ namespace Selva.Drawing.Import.Svg;
 //
 // Supports the full command set: M/m L/l H/h V/v C/c S/s Q/q T/t A/a Z/z, in
 // both absolute (upper) and relative (lower) forms, with implicit repeated
-// command arguments (e.g. "M 0 0 1 1 2 2" = one moveto then two linetos). The
-// model's segment kinds map 1:1 to SVG; quadratics elevate to cubics and the
+// command arguments (e.g. "M 0 0 1 1 2 2" = one moveto then two linetos).
 // S/T smooth shorthands reflect the previous control point.
 internal static class SvgPathDataParser
 {
@@ -23,12 +22,11 @@ internal static class SvgPathDataParser
         var tokens = new PathTokenizer(d);
         var builder = new Path.Builder();
 
-        var current = Point2D.Zero;       // current point
+        var current = Point2D.Zero;
         var subpathStart = Point2D.Zero;  // for Z
         var hasCurrent = false;
 
-        // Last control point of the previous C/S (cubic) or Q/T (quadratic), in absolute
-        // coords — used to reflect for S/T smooth commands. Tracked per-family.
+        // Previous C/S vs. Q/T control point, tracked separately, used to reflect for S/T.
         Point2D? lastCubicControl = null;
         Point2D? lastQuadControl = null;
 
@@ -59,7 +57,7 @@ internal static class SvgPathDataParser
                     subpathStart = p;
                     hasCurrent = true;
                     lastCubicControl = lastQuadControl = null;
-                    // Subsequent implicit pairs after a moveto are linetos (per SVG spec).
+                    // Implicit pairs after a moveto are linetos.
                     command = abs ? 'L' : 'l';
                     break;
                 }
@@ -179,10 +177,9 @@ internal static class SvgPathDataParser
         return new Point2D(2 * current.X - lc.X, 2 * current.Y - lc.Y);
     }
 
-    // Tokenizes path data: whitespace and commas are separators; command letters and numbers
-    // (including signs, decimals, and exponents) are tokens. Flags (0/1) in arc commands are
-    // single digits, possibly not separated from following numbers ("...0 1 25,25" or
-    // "...0125,25") — ReadFlag handles that.
+    // Whitespace and commas separate tokens; command letters and numbers (signs, decimals,
+    // exponents) are tokens. Arc flags (0/1) can run into the next number with no separator
+    // ("...0125,25") — ReadFlag handles that.
     private sealed class PathTokenizer
     {
         private readonly string _s;

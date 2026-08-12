@@ -22,7 +22,6 @@
 	let selectedKeys = $state<Record<string, boolean>>({});
 	let expandedSections = $state({ fromGH: true, toGH: true });
 
-	// Clear selections when dialog closes or syncDiff changes
 	$effect(() => {
 		if (!open || !syncDiff) {
 			selectedKeys = {};
@@ -145,7 +144,6 @@
 					<div>No differences found. Your schema is in sync with Grasshopper!</div>
 				</div>
 			{:else}
-				<!-- Grasshopper → Schema changes -->
 				{#if (syncDiff.fromGH?.length ?? 0) > 0}
 					<div class="w-full rounded-lg border-2 border-blue-500 bg-blue-50 p-4 dark:bg-blue-950">
 						<button
@@ -244,7 +242,6 @@
 					</div>
 				{/if}
 
-				<!-- Schema → Grasshopper changes -->
 				{#if (syncDiff.toGH?.length ?? 0) > 0}
 					<div class="rounded-lg border-2 border-green-500 bg-green-50 p-4 dark:bg-green-950">
 						<button

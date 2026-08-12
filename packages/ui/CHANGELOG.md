@@ -1,5 +1,437 @@
 # @selvajs/ui
 
+## 6.0.0-beta.8
+
+### Minor Changes
+
+- f8560f1: **`Sub Folder` now names the download archive, so one output can produce several zips.** This
+  changes what existing definitions download, without any authoring change — read the migration note
+  below before releasing.
+
+  The `Sub Folder` input on the Grasshopper file components (`Geometry To File`, `Data To File`,
+  `Block To File`, `File From Path`, `Render PDF`, `Render SVG`) gains `::` as a nesting separator,
+  matching Rhino's layer syntax. The **first segment is the root**, and it names the archive instead
+  of becoming a folder inside it:
+
+  | `Sub Folder`          | Downloads as                          |
+  | --------------------- | ------------------------------------- |
+  | _(empty)_             | `<widget>.zip` → `model.3dm`          |
+  | `Panels`              | `Panels.zip` → `model.3dm`            |
+  | `ROOT::Panels`        | `ROOT.zip` → `Panels/model.3dm`       |
+  | `ROOT::First::Second` | `ROOT.zip` → `First/Second/model.3dm` |
+
+  Files sharing a root travel in one archive; **distinct roots produce separate archives.** Two
+  components writing `ROOT::Panels` and `OTHERROOT::Panels` into the same Context Bake now download as
+  `ROOT.zip` and `OTHERROOT.zip`. This is the point of the change — it makes grouping authorable from
+  the file components, which is the only place a Hops Context Bake leaves you any control.
+
+  Roots are matched literally, so `ROOT` and `Root` are two different archives. Folder names are
+  case-sensitive on Linux and macOS, and silently merging them would be its own surprise.
+
+  ## Migration
+
+  **A definition whose files use two or more distinct `Sub Folder` values now downloads as several
+  zips instead of one.** Nothing is lost — the same files with the same relative structure — but the
+  count of downloaded archives changes, their names change, and one folder level moves out of the
+  archive into its name:
+
+  ```diff
+    # Sub Folder = "Panels" on one component, "Frames" on another
+  - files.zip
+  -   Panels/a.3dm
+  -   Frames/b.3dm
+  + Panels.zip
+  +   a.3dm
+  + Frames.zip
+  +   b.3dm
+  ```
+
+  To keep a single archive, give those components a shared root: `Group::Panels` and `Group::Frames`
+  download as one `Group.zip` containing `Panels/a.3dm` and `Frames/b.3dm`.
+
+  Definitions that leave `Sub Folder` empty are unaffected — still one flat archive named after the
+  output widget.
+
+  Browsers may prompt before saving more than one file per click ("Allow this site to download
+  multiple files?"). That is inherent to producing several archives from one gesture.
+
+  ## Fixes
+
+  **`::` used to fail outright.** Baking to disk passed the raw value to `Directory.CreateDirectory`,
+  which throws `IOException` on Windows because `:` is illegal in a directory name; the web path
+  produced a literal folder named `ROOT::Panels`. Neither did what anyone typing it would expect, so
+  no definition can have depended on the old behaviour. `/` and `\` are now accepted as separators
+  too, and `.`, `..` and drive-letter segments are dropped on both paths.
+
+  **File `metadata` reached cloud consumers but never local ones.** The WebSocket collector built its
+  payload by hand and omitted the field, so the same definition returned metadata through
+  Rhino.Compute and dropped it through the plugin's local server.
+
+  **`additionalFiles` were dropped when every file had a root.** They attached only to the rootless
+  archive, which does not exist in that case. They now ride with the first archive, and extras with no
+  files at all still produce one.
+
+  ## API
+
+  New on `@selvajs/compute/core`:
+
+  - `downloadFileDataByRoot(files, fallbackName, additionalFiles?)` — the per-root archive split.
+    `fallbackName` names the archive for files with no root.
+  - `groupFilesByRoot(files)` — just the grouping, no DOM. For consumers that write files themselves
+    rather than zipping them; `downloadFileData` is browser-only and throws in Node, this is not.
+
+  `downloadFileData` is unchanged and still exported.
+
+  `@selvajs/ui`'s `downloadFiles` keeps its signature — its second argument is now the fallback name
+  used only when files carry no root. The grouping logic it briefly owned moved into
+  `@selvajs/compute`, where the `Sub Folder` convention already lived; a copy in the UI package would
+  have been a third place to keep in sync with the plugin and the archive sanitizer.
+
+## 6.0.0-beta.7
+
+### Minor Changes
+
+- 39db6f5: The supported Node floor moves from 22 to 24.
+
+  Node 24 ("Krypton") is the active LTS; Node 22 leaves maintenance in April 2027. Every package's
+  `engines.node` is now `>=24.0.0`, and CI builds and tests on 24 instead of 22.
+
+  **This is visible to operators before it is visible to anyone else.** `@selvajs/cli` derives its
+  floor from its own `engines.node` rather than a literal, so `selva doctor` and the create-time
+  guard follow the bump automatically: a deployment running Node 22 that passed `doctor` yesterday is
+  reported as out of range today. Nothing about the deployment changed — the floor moved under it.
+  Upgrade the host's runtime before taking this version of the CLI.
+
+  The admin UI's update check reports the same thing from the other direction: it compares the
+  running Node against the `engines.node` of the release it fetched from npm, so it starts flagging a
+  Node 22 host as soon as a `>=24` version is published, with no client-side change at all.
+
+  No source change was needed. The Node builtins in use are long-stable (`fs`, `path`, `crypto`,
+  `url`, `os`, `net`, `zlib`), there are no experimental APIs or `--experimental` flags in the tree,
+  and every dependency's own engine range already admitted 24.
+
+## 6.0.0-beta.6
+
+### Minor Changes
+
+- d747039: `onViewerReady` on `<Viewer>` and `<ComputeApp>` hands the live three.js viewer to the host, so an
+  app can draw into the same scene the solve renders into — a point cloud, draft lines, annotations —
+  and register pointer tools. Return a cleanup function to tear down what you added. Previously the
+  viewer handle died inside `onMount` and nothing could reach it.
+
+  `ComputeApp`'s `onReady` also gains `getSession()`, so a host can drive solves from its own state
+  (`setValue`/`solve`) and react to results, rather than only pushing values in through `loadValues`.
+
+  The viewer-app types (`ThreeViewer`, `PointerTool`, `ToolRegistry`, `LabelLayer`, …) and the scene
+  ownership helpers are re-exported from the public entrypoint so hosts can annotate without adding a
+  direct `@selvajs/visualization` dependency.
+
+## 6.0.0-beta.5
+
+### Patch Changes
+
+- a011c5e: Unify the vitest setup across the workspace behind `@selvajs/config/vitest`.
+
+  Packaging fix: `@selvajs/compute`, `@selvajs/solve`, `@selvajs/visualization`
+  and `@selvajs/schemas` had no test-file exclusion in `files`, so a change of
+  build tool would have shipped tests to npm. All publishable packages now carry
+  the same exclusion.
+
+  `@selvajs/platform`'s test suite was never wired to a runner and had never
+  executed; it now runs with the rest.
+
+## 6.0.0-beta.4
+
+### Patch Changes
+
+- 0e2c428: Clean up published tarballs. The monorepo-internal `source` export condition is renamed to `selva-source` so it can never collide with a consumer resolving the common `source` condition; published packages no longer ship raw `src/` TypeScript or compiled test files. Publish-time manifest rewriting is gone — the committed package.json is what ships, gated by `publint --strict` and a tarball contents check.
+
+## 6.0.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies [5292563]
+  - @selvajs/schemas@5.0.0-beta.0
+
+## 6.0.0-beta.2
+
+### Patch Changes
+
+- 9f60b66: Drop the `rhino3dm` dependency. Curves now arrive pre-tessellated from the plugin, so the demo's
+  lazy WASM loader is gone and nothing in this package needs it. No public API change — the loader
+  lived in `src/demo/`, which is not exported.
+
+  The demo fixture's curve items carried openNURBS blobs that only rhino3dm could decode; they now
+  carry `points` baked with the same tessellation, so the demo renders identically.
+
+## 6.0.0-beta.1
+
+### Major Changes
+
+- b9c9d6a: One name, one value, for how long a solve may run. The deadline is now sourced
+  from the server and carried unchanged to the browser's `AbortController`, rather
+  than each layer keeping its own answer under its own name.
+
+  **Fixed — the client could abort a solve the server would have finished.** The
+  throttle defaulted to `60_000` while the server's deadline was `100_000`, so any
+  host that embedded `<ComputeApp>` without passing a timeout aborted at 60 s a
+  solve the server was still happily running. The user saw a failure for work that
+  succeeded. `@selvajs/solve` can't read env, so the fix is to require the value
+  rather than guess it — there is no client-side default left to drift.
+
+  **Breaking — the per-solve deadline is now required:**
+
+  - `createAsyncThrottle`: `options.timeout` → **`options.runDeadlineMs`**, required,
+    and the options bag itself is no longer optional. The name says what elapses;
+    the throttle is generic, so its field is named after a run, not a solve.
+  - `createRequestResponseDriver`: `options.timeout` → **`options.solveDeadlineMs`**,
+    required.
+  - `ComputeApp`: `solveTimeoutMs?` → **`solveDeadlineMs`**, required. Pass the value
+    the server enforces; omitting it is now a type error rather than a silent 60 s.
+  - `ComputeLimits.maxSolveDurationMs` → **`solveDeadlineMs`**.
+
+  **Renamed — `MAX_SOLVE_DURATION_MS` → `COMPUTE_SOLVE_DEADLINE_MS`.** It joins the
+  `COMPUTE_*` namespace every other compute knob already uses, and says what it
+  bounds — one solve — instead of a vague "duration". The old name still works for
+  one minor version and warns at boot, so no deployment breaks on upgrade.
+
+  **`selva migrate` now rewrites deprecated env keys in your `.env`**, so a tuned
+  value survives the shim being dropped later instead of silently reverting to a
+  default. Only the key changes — value, comments, ordering and spacing are left
+  byte-identical, a commented-out old name is ignored, and the old line is dropped
+  outright when the new name is already set. `.env.bak` is written alongside the
+  existing backups and restored if the migration rolls back.
+
+  `selva doctor` reports the same deprecations without changing anything, covering
+  this rename plus the four that were previously silent
+  (`COMPUTE_DEFINITION_BYTE_CACHE_MB`, `COMPUTE_RESPONSE_CACHE_MB`,
+  `DEFINITION_CACHE_TTL_MS`, `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE`). The last of those
+  is reported but not auto-fixed: its replacement encodes a value
+  (`SELVA_FLAG_COMPUTE_DEBUG=verbose`), so migrate won't guess at it.
+
+  Migration: run `selva migrate` to rewrite the env var, and pass `solveDeadlineMs`
+  wherever you mount `ComputeApp` or build a driver.
+
+### Minor Changes
+
+- b9c9d6a: Make the reported `SolveResult` reachable from a `ComputeApp` host, so a commit path can pair the
+  artifact it persists with the inputs that produced it.
+
+  `source` and `values` travel correctly through the request/response driver's memo, but stopped at the
+  session: `applySolveResult` merged `outputs` and discarded the rest, and `ComputeApp`'s only outbound
+  seam was `onReady({ loadValues })`. So a host wanting the pair had to capture it inside its own
+  `SolveFn` — which a memo hit never calls. Solve A, solve B, scrub back to A: the memo serves A, the
+  viewer shows A, and the host commits B's geometry.
+
+  `SolveSession` now exposes `lastResult: RetainedSolveResult | null` — the last reported result minus
+  its meshes — and `ComputeApp` hands out `getLastResult()` alongside `loadValues`. Because the session
+  fills it in `report()`, a memo hit populates it exactly like a fresh solve.
+
+  Meshes are dropped from the retained slice rather than kept: they are GPU-backed and the viewer
+  disposes what it renders on the next scene update, so retaining them would hand out disposed
+  instances with no policy governing them. Live meshes stay on `session.meshes`. `rebuild()` nulls
+  `lastResult` for the same reason it clears the driver memo; `reportError` deliberately leaves it, as
+  the viewer still shows the geometry that produced it.
+
+  `values` remains driver-supplied and absent on push transports (the plugin's WebSocket driver cannot
+  attribute an unsolicited frame to a request) — documented on `SolveDriver` and `SolveResult`.
+
+### Patch Changes
+
+- b9c9d6a: Fix a type error in `Viewer.svelte`: its `onMeshMetadataClicked` handler declared its parameter as
+  `Record<string, string>`, but the callback receives a Three.js object's `userData`, typed
+  `Record<string, unknown>`. Callback parameters are checked contravariantly, so the narrower
+  annotation failed to assign and `svelte-check` errored on the package.
+
+  The handler now takes `Record<string, unknown>` and coerces the object name with `String(… ?? '')`
+  before falling back to the localized placeholder. Nothing downstream changes shape —
+  `hasUsefulMetadata`, `selectedMeshMetadata` and `MeshMetadataDialog` all already accept
+  `Record<string, any>`.
+
+- Updated dependencies [b9c9d6a]
+- Updated dependencies [b9c9d6a]
+  - @selvajs/solve@1.0.0-beta.5
+
+## 6.0.0-beta.0
+
+### Minor Changes
+
+- 8b2c168: The solve session moves out of `@selvajs/visualization` into `@selvajs/solve/client`.
+
+  `@selvajs/visualization` is now **mesh conversion + viewer, and nothing else**. The session was a
+  schema-driven form state machine that typed meshes as `unknown` and never inspected one — its
+  presence was why the package couldn't be described in a sentence. With it gone the package also
+  drops its last Selva dependency (`@selvajs/schemas`), so every sub-path needs only `three`,
+  `rhino3dm` and `fflate`.
+
+  **Breaking — `@selvajs/visualization`:**
+
+  - **The `/session` sub-path export is removed.** Import from `@selvajs/solve/client` instead
+    (`createSolveSession`, `createRequestResponseDriver`, `SolveDriver`, `SolveReporter`,
+    `createSolveMemo`, `stableInputKey`, the external-input storage helpers, the pure
+    `solve-session-core` transitions). `SolveFn`/`SolveResult` come from `@selvajs/solve/shared`.
+  - The root barrel no longer re-exports any of the above.
+  - `@selvajs/ui` re-exports all of it unchanged, so hosts importing from `@selvajs/ui` or
+    `@selvajs/ui/public` need no edit.
+
+  **Renamed — `createComputeThrottle` → `createAsyncThrottle`** (`isComputing` → `isRunning`). It is
+  generic over `T`, takes any `(values, signal) => Promise<void>`, and mentions neither Rhino.Compute
+  nor HTTP nor geometry — plugin-ui drives it over a WebSocket. The old name said "compute" only
+  because of where the file happened to live.
+
+  **Mesh ownership is now injected, not assumed.** `SolveResult<TMesh>` is opaque and the result memo
+  no longer imports `three`; the clone/dispose rules are a `MeshPolicy` passed in. The three.js
+  implementation is `meshPolicy`, newly exported from `@selvajs/visualization/parse`:
+
+  ```ts
+  import { meshPolicy } from '@selvajs/visualization/parse';
+  const driver = createRequestResponseDriver(onSolve, () => session, { meshPolicy });
+  ```
+
+  `ComputeApp` wires this for you. A custom driver must pass it, or a memo hit will serve geometry the
+  viewer already disposed. `createSolveMemo(max)` accordingly becomes
+  `createSolveMemo({ max, meshPolicy })`.
+
+  **Fixed while extracting it:** the memo's mesh clone copied `geometry.userData` **by reference**, so
+  a cloned geometry shared the cross-solve geometry cache's ownership flag. `clearScene` skips flagged
+  geometries (the cache disposes those itself), which meant nothing ever freed the memo's clones. The
+  clone now copies `userData` before dropping the flag, and `releaseSceneObjects` refuses to dispose
+  genuinely cache-owned geometry.
+
+- 7751bd0: Extract parsing and rendering into a new `@selvajs/visualization` package.
+
+  `@selvajs/compute` was doing two unrelated jobs: talking to Rhino.Compute, and turning the response
+  into Three.js objects. The second job is now its own package with documented layer boundaries
+  (`session → scene → render → parse → shared`, depending downward only), so a consumer can build
+  their own viewer over it.
+
+  This lands all five layers — `shared/`, `parse/`, `render/`, `scene/` and `session/`.
+  **`@selvajs/compute` no longer depends on `three` in any form** (peer dep and dev deps both gone);
+  it is now pure solve/data, and `@selvajs/ui` keeps only the Svelte shells plus the design system.
+
+  **Fixed — hiding an object in the viewer now survives a solve.**
+
+  Hiding a mesh in the scene manager and then changing an input brought it straight back: a solve
+  discards all scene content and rebuilds it, and hidden state was keyed on the per-instance
+  `THREE.Object3D.uuid`, which does not survive that. It is now keyed on the object's Grasshopper
+  identity (`sourceComponentId` + `originalIndex`, or a display item's `id`, falling back to
+  name+layer for content from older plugin versions), so it survives any number of solves. Hiding is
+  also remembered when a definition edit stops producing that geometry — if it comes back, it comes
+  back hidden.
+
+  **New in `@selvajs/visualization` — `@selvajs/visualization/scene`:**
+
+  The viewer's object list is no longer trapped in a Svelte component. `createSceneOutliner` answers
+  the questions any presentation of a scene has to answer — which children are content rather than
+  cameras/lights/grid, how they group by layer, what is hidden, what is selected — with no DOM:
+
+  ```ts
+  import { createSceneOutliner } from '@selvajs/visualization/scene';
+
+  const outliner = createSceneOutliner(scene);
+  outliner.searchQuery = 'wall';
+  outliner.layerGroups(); // Map<layerName, Object3D[]>, search-filtered
+  outliner.toggleObject(mesh); // follows a multi-selection
+  outliner.select(uuid, { shiftKey, toggleKey });
+  ```
+
+  It **reads** the scene and toggles `.visible`; `updateScene` remains the sole owner of scene
+  contents. Its mutable state is injectable, so a Svelte host passes `SvelteSet`s and gets reactivity
+  without any subscribe/emit machinery:
+
+  ```ts
+  createSceneOutliner(scene, { sets: { hidden, selected, collapsed } });
+  ```
+
+  Hosts driving their own viewer must call `outliner.applyTo()` after each solve to re-apply hidden
+  state to the rebuilt content — `<Viewer>` does this for you.
+
+  `getSceneObjects`, `groupByLayer`, `filterLayerGroups`, `isSceneContent` and the visibility/selection
+  state machines are exported individually for consumers that want the parts, not the composition.
+
+  **New in `@selvajs/ui` — `useSolveSession`:**
+
+  The Solve Session moved to `@selvajs/visualization/session` and is now framework-free: its state
+  reads through plain getters plus a `subscribe()` seam, so it can drive a headless solve with no
+  Svelte in the picture. In a component, use the new binding instead of the raw factory — it
+  subscribes once and republishes as rune state, which is what keeps `session.values`/`meshes` live
+  in markup:
+
+  ```ts
+  import { useSolveSession } from '@selvajs/ui';
+
+  const driver = createRequestResponseDriver(onSolve, () => session, {
+  	// `isSolving` lives on the driver, which the session can't observe — republish it.
+  	onChange: () => session.notify()
+  });
+  const session = useSolveSession({ schema, scopeKey, driver });
+  ```
+
+  Calling `createSolveSession` directly in a component still compiles and returns correct values, but
+  nothing re-renders. `@selvajs/ui` re-exports it (plus `SolveDriver`, `SolveReporter`, `SolveFn`,
+  `SolveResult` and the `external/storage` helpers) from its new home, so existing imports from
+  `@selvajs/ui` and `@selvajs/ui/external` keep working unchanged.
+
+  **Breaking — `@selvajs/compute`:**
+
+  - **`@selvajs/compute/visualization` is removed entirely.** Everything it exported now lives in
+    `@selvajs/visualization`:
+
+    | Was                                                                                                                                                                                                   | Now                                                                         |
+    | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+    | `initThree`, `updateScene`, camera, grid, gizmo, edges, labels, measure, render pipeline, materials, up-axis helpers                                                                                  | `@selvajs/visualization/render`                                             |
+    | `getThreeMeshesFromComputeResponse`, `parseMeshBatch{,Object,Blob}`, `parseBinaryMeshBatch`, `parseDisplayItems`, texture cache, wire-format constants (`BINARY_MESH_MAGIC`, `FLAG_*`, `UV_FORMAT_*`) | `@selvajs/visualization/parse`                                              |
+    | `LOOKS`, `Look`, `parseColor`, `applyOffset`, `computeCombinedBoundingBox`                                                                                                                            | `@selvajs/visualization/shared` (also re-exported from `/render`)           |
+    | `createSolveSession`, `createRequestResponseDriver`, `SolveDriver`, `SolveReporter`, `SolveFn`, `SolveResult`, `createComputeThrottle`, `createSolveMemo`, the `external/storage` helpers             | `@selvajs/visualization/session` (all still re-exported from `@selvajs/ui`) |
+
+  - `GrasshopperResponseProcessor.extractMeshesFromResponse()` is **removed**. It coupled the solve
+    client to a renderer, which the new layering forbids. Its `response` and `debug` fields are now
+    public, so call the parser directly:
+
+    ```ts
+    import { getThreeMeshesFromComputeResponse } from '@selvajs/visualization/parse';
+
+    const meshes = await getThreeMeshesFromComputeResponse(processor.response, { rhino });
+    ```
+
+  - `initThree` no longer reaches into the texture cache itself — `render/` must not import `parse/`.
+    To keep color maps sharp at grazing angles, wire the new `onMaxAnisotropy` option:
+
+    ```ts
+    import { setTextureAnisotropy } from '@selvajs/visualization/parse';
+
+    initThree(canvas, { onMaxAnisotropy: setTextureAnisotropy });
+    ```
+
+    Omitted, textures keep three's default anisotropy of 1 — sharpness regresses, nothing breaks.
+
+  - `decodeBase64ToBinary` is now exported from the package root (the binary mesh parser needs it, and
+    its forgiving-base64 normalization plus Node pool-slab copy are too subtle to duplicate).
+
+  **Also in this change:** the five largest files were split along the seams they already had, with no
+  behavior change. `three-initializer` 1743→407 (`scene-setup/*`, 14 files — the `ThreeViewer` handle,
+  the postprocessing pipeline and the runtime appearance setters each became their own module),
+  `edges` 874→233 (`edges/{options,extraction,cache,overlay}.ts`), `batch-parser` 1007→466
+  (`batch/{metadata,materials,merge,assembly-worker}.ts`), `binary-parser` 713→329
+  (`binary/{header,geometry,textures}.ts`), `display-items-parser` 440→77
+  (`items/{curves,points,appearance}.ts`), the session's driver split out into
+  `session/drivers/{driver,request-response}.ts`, and `SceneManager.svelte` 319→234 (its logic now in
+  `scene/`). 425 tests pass.
+
+### Patch Changes
+
+- Updated dependencies [53da168]
+- Updated dependencies [46327d9]
+- Updated dependencies [8b2c168]
+- Updated dependencies [49cac15]
+- Updated dependencies [46327d9]
+- Updated dependencies [49cac15]
+- Updated dependencies [7751bd0]
+- Updated dependencies [e3c4832]
+  - @selvajs/compute@4.0.0-beta.0
+  - @selvajs/visualization@1.0.0-beta.0
+  - @selvajs/solve@0.2.0-beta.0
+
 ## 5.0.1
 
 ### Patch Changes

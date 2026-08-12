@@ -11,10 +11,8 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Rendering.Svg;
 
-// Walks a Document and emits SVG. Phase 2 target: byte-identical output to the legacy
-// SvgDocument.Build for the equivalent inputs (curves -> PathElement, surfaces -> filled
-// PathElement, text -> TextElement, dimensions -> DimensionElement). Multi-page docs
-// render only their first page here; multi-page output is Phase 6.
+// Walks a Document and emits SVG. Render() renders only the first page; RenderAll()
+// covers multi-page documents.
 public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 {
 	private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -24,9 +22,8 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	private bool _hasDimensions;
 	// Unique arrow sizes collected per page: key = rounded mm value, value = marker id.
 	private Dictionary<double, string> _dimArrowMarkers;
-	// Phase 10a: collected once per page so <symbol> defs and <use> refs both see the
-	// same set. Key is SymbolDefinition.Id; null/empty Ids fall through to inline
-	// expansion (same as pre-Phase-10 behaviour).
+	// Collected once per page so <symbol> defs and <use> refs both see the same set.
+	// Key is SymbolDefinition.Id; null/empty Ids fall through to inline expansion.
 	private Dictionary<string, SymbolDefinition> _symbolDefs;
 	// Hatch patterns collected per page: key = stable pattern id string, value = Fill snapshot.
 	private Dictionary<string, Fill> _hatchPatternDefs;
@@ -45,10 +42,8 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		return RenderPage(document, document.Pages[0]);
 	}
 
-	// Phase 6: per-page render. SVG has no native multi-page concept, so the convention here
-	// is "one file per page" (Decision #3 in the architecture plan). Callers wanting to
-	// persist multiple pages write each entry to its own file. The legacy single-page
-	// Render(...) stays put for back-compat.
+	// SVG has no native multi-page concept: the convention here is one file per page.
+	// Callers wanting to persist multiple pages write each entry to its own file.
 	public IReadOnlyList<string> RenderAll(Document document)
 	{
 		if (document == null) throw new ArgumentNullException(nameof(document));
@@ -63,9 +58,9 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	{
 		if (page == null) throw new ArgumentNullException(nameof(page));
 
-		// Phase 7: resolve any LayoutElements (Stack/Grid/Frame/TextFlow/Table) into
-		// primitive elements before walking the visitor. The renderer only ever sees
-		// PathElement / TextElement / ... after this — keeps the visitor surface narrow.
+		// Resolve LayoutElements (Stack/Grid/Frame/TextFlow/Table) into primitive elements
+		// before walking the visitor, so the visitor only ever sees PathElement / TextElement
+		// / etc.
 		page = LayoutPass.ResolvePage(page);
 
 		_dimArrowMarkers = CollectDimArrowMarkers(page.Content);
@@ -80,8 +75,8 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		double minX, minY, width, height;
 		if (_options.AutoFitToContent)
 		{
-			// Legacy SVG viewBox lives in post-Y-flip coordinates: world Y range becomes
-			// -maxY..-minY. The Y-flip group inside reverts that for content drawing.
+			// viewBox is in post-Y-flip coordinates: world Y range becomes -maxY..-minY.
+			// The Y-flip group below reverts that for content drawing.
 			minX = bounds.MinX - _options.Padding;
 			minY = -bounds.MaxY - _options.Padding;
 			width = bounds.Width + _options.Padding * 2;
@@ -119,10 +114,9 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			_sb.Append("<rect width='100%' height='100%' fill='")
 				.Append(Escape(_options.BackgroundColor)).Append("' />\n");
 
-		// Single root Y-flip — everything else uses Rhino-world coordinates.
-		// font-family is set here so all <text> descendants inherit it. The stack may
-		// contain "Quoted Names" — encode them as &quot; so the single-quoted attr stays
-		// valid.
+		// Single root Y-flip — everything else uses Rhino-world coordinates. font-family
+		// is set here so all <text> descendants inherit it; a "Quoted Name" in the stack
+		// is encoded as &quot; so the single-quoted attr stays valid.
 		_sb.Append("<g transform='matrix(1 0 0 -1 0 0)' font-family='")
 			.Append(Escape(_options.FontFamily ?? SvgRenderOptions.DefaultFontFamily).Replace("\"", "&quot;"))
 			.Append("'>\n");
@@ -147,11 +141,10 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 	private static bool HasPaperSize(Page page) => page.Size.WidthMm > 0 && page.Size.HeightMm > 0;
 
-	// Measures bounds the same way the legacy SvgDocument did — raw geometry bounds for
-	// paths/text, precise endpoint+midpoint sampling for dimensions. Distinct from
-	// DrawElement.ComputeBounds, which conservatively inflates by stroke and approximates
-	// dim arrows via padding; that's the right answer for layout but produces a viewBox
-	// that doesn't byte-match the legacy output.
+	// Raw geometry bounds for paths/text, precise endpoint+midpoint sampling for dimensions.
+	// Distinct from DrawElement.ComputeBounds, which conservatively inflates by stroke and
+	// approximates dim arrows via padding — the right answer for layout, but a wider viewBox
+	// than we want here.
 	private static BoundingBox MeasureForViewBox(DrawElement element)
 	{
 		var b = BoundingBox.Empty;
@@ -280,9 +273,9 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 		if (_hasDimensions)
 		{
-			// One arrow marker per unique arrowSize (markerUnits=userSpaceOnUse so size
-			// is in mm, independent of stroke-width). markerWidth/Height = arrowSize so
-			// the triangle matches TextSize x ArrowSizeFactor exactly.
+			// One arrow marker per unique arrowSize. markerUnits=userSpaceOnUse keeps size
+			// in mm, independent of stroke-width; markerWidth/Height = arrowSize so the
+			// triangle matches TextSize x ArrowSizeFactor exactly.
 			foreach (var kvp in _dimArrowMarkers)
 			{
 				var sz = F(kvp.Key);
@@ -321,8 +314,8 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	private void AppendSymbolDefs()
 	{
 		// Emit each unique SymbolDefinition once. Children render through the visitor with
-		// the standard Y-up world coords; a <use> instance later applies its own
-		// translate/transform without disturbing the symbol's local coord system.
+		// standard Y-up world coords; a <use> instance applies its own translate/transform
+		// without disturbing the symbol's local coord system.
 		foreach (var kvp in _symbolDefs)
 		{
 			var def = kvp.Value;
@@ -362,9 +355,8 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			var transform = angle != 0.0
 				? $" patternTransform='rotate({F(angle)})'"
 				: "";
-			// One resolved width for every line in the tile, matching the pen
-			// PdfRenderer.DrawHatchedFill builds. Floored so a very small PatternScale cannot
-			// collapse the generated pattern to an invisible width.
+			// Matches the pen width PdfRenderer.DrawHatchedFill builds. Floored so a very
+			// small PatternScale can't collapse the pattern to an invisible width.
 			var patternLineWidth = fill.PatternLineWidthMm > 0
 				? fill.PatternLineWidthMm
 				: Stroke.HatchPatternWidthMm * scale;
@@ -422,9 +414,8 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		}
 	}
 
-	// Walks the page element tree and collects every unique hatch Fill into a keyed dict.
-	// Key encodes pattern + color + scale + angle so two fills that differ only in color
-	// get distinct <pattern> elements.
+	// Walks the page element tree and collects every unique hatch Fill into a keyed dict,
+	// keyed by HatchPatternId.
 	private static Dictionary<string, Fill> CollectHatchPatterns(DrawElement element)
 	{
 		var result = new Dictionary<string, Fill>(StringComparer.Ordinal);
@@ -503,7 +494,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	public void Visit(GroupElement element)
 	{
 		if (element == null) return;
-		if (element.PreviewOnly) return; // viewport-only overlay (e.g. Grid cell dividers)
+		if (element.PreviewOnly) return; // viewport-only overlay, e.g. Grid cell dividers
 
 		var hasTransform = !element.Transform.IsIdentity;
 		if (hasTransform)
@@ -531,7 +522,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		SvgPathBuilder.AppendTo(_sb, element.Path);
 		_sb.Append('\'');
 
-		// Legacy emitted fill-rule only on filled surfaces, not on stroked-only curves.
+		// fill-rule only matters on filled surfaces, not on stroked-only curves.
 		if (element.Fill != null)
 		{
 			var fillRule = element.Fill.Rule;
@@ -552,9 +543,8 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		var hasLink = !string.IsNullOrEmpty(element.Hyperlink);
 		var hasBackground = element.Background.HasValue;
 
-		// Phase 9: clickable hyperlink wraps the text in an <a> element. SVG renderers in
-		// browsers treat <a> as a generic clickable container; PDF/SVG export tools turn it
-		// into a /Link annotation.
+		// Clickable hyperlink wraps the text in an <a> element. Browsers treat <a> as a
+		// generic clickable container; PDF/SVG export tools turn it into a /Link annotation.
 		if (hasLink)
 		{
 			_sb.Append("  <a href='").Append(Escape(element.Hyperlink)).Append("'>\n");
@@ -673,8 +663,9 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 	public void Visit(TextBlockElement element)
 	{
-		// Phase 2 doesn't ship layout; render as a single-line TextElement at the box's
-		// top-left so the visitor is complete. Phase 7's TextFlow replaces this.
+		// No multi-line layout here: render as a single-line TextElement at the box's
+		// top-left. Multi-line text goes through TextFlow, which LayoutPass resolves to
+		// primitives before the visitor ever sees it.
 		if (element == null) return;
 		var style = element.Style ?? new TextStyle();
 		var t = new TextElement
@@ -695,9 +686,9 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		if (element.Width <= 0 || element.Height <= 0) return;
 
 		// Image lives in Y-up world space spanning [Position.Y, Position.Y + Height]. The
-		// root Y-flip would render the bitmap mirrored vertically, so we counter-flip the
-		// same way Visit(TextElement) does: translate to the image's top edge in world
-		// space, then scale(1 -1) so the local box draws top-left at (0,0) upright.
+		// root Y-flip would mirror the bitmap vertically, so counter-flip the same way
+		// Visit(TextElement) does: translate to the image's top edge, then scale(1 -1) so
+		// the local box draws top-left at (0,0) upright.
 		var topY = element.Position.Y + element.Height;
 		var transform = "translate(" + F(element.Position.X) + " " + F(topY) + ") scale(1 -1)";
 
@@ -917,9 +908,9 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	{
 		if (element?.Definition == null) return;
 
-		// Phase 10a: when the definition has an Id we collected during the pre-pass,
-		// emit <use href="#id"> referencing the shared <symbol>. Anonymous definitions
-		// (no Id) fall back to inline expansion — same semantics as before.
+		// When the definition has an Id collected during the pre-pass, emit
+		// <use href="#id"> referencing the shared <symbol>. Anonymous definitions
+		// (no Id) fall back to inline expansion.
 		var def = element.Definition;
 		var hasId = !string.IsNullOrEmpty(def.Id) && _symbolDefs != null && _symbolDefs.ContainsKey(def.Id);
 		if (hasId)
@@ -1114,8 +1105,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		var absSmall = Math.Abs(smallTheta);
 		if (absSmall < 1e-6) return;
 
-		// DimensionElement doesn't yet carry a "reflex" flag — Phase 3 may add one. For
-		// now small-angle (non-reflex) matches the typical builder use.
+		// DimensionElement doesn't carry a "reflex" flag, so we always take the small angle.
 		var theta = smallTheta;
 		var absTheta = Math.Abs(theta);
 		var sweepCcw = theta > 0;
@@ -1139,11 +1129,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		}
 		bisX /= bisLen; bisY /= bisLen;
 
-		// No vector-effect='non-scaling-stroke' here: DimensionStyle.StrokeWidth has ALREADY been
-		// counter-scaled by DrawingView (dimension linework is paper-space, like its text), so the
-		// attribute would cancel the view transform a second time and the two compensations stack.
-		// At 1:50 that emitted 12.5 mm bars where the PDF renderer — which has no equivalent and
-		// simply lets the counter-scaled width ride the transform — correctly drew 0.25 mm.
+		// No vector-effect='non-scaling-stroke' here — same reason as AppendLinearDimensionBody.
 		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none'";
 		var arrowMarkerId = DimArrowMarkerId(style);
 
@@ -1313,12 +1299,9 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		}
 		else if (stroke == null && defaultFillNone && fill == null)
 		{
-			// Legacy: a null PathStyleData emitted "fill='none' stroke='black'". Replicate
-			// for parity by overriding the earlier fill='none' write when both are null.
-			// Both fill and stroke being null is the path through the (fill==null) branch
-			// above, so we already wrote " fill='none'"; just append the default stroke.
-			// The width must be explicit: omitting it inherits SVG's 1.0 mm default, which
-			// made an unstyled curve 4x heavier here than the same curve in the PDF.
+			// Both null: an unstyled path still needs a visible stroke, so default to black.
+			// Width must be explicit — omitting it inherits SVG's 1.0mm default, 4x heavier
+			// than the same curve drawn by the PDF renderer.
 			_sb.Append(" stroke='black'");
 			_sb.Append(" stroke-width='").Append(F(Stroke.UnstyledPathWidthMm)).Append('\'');
 		}

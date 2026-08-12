@@ -6,13 +6,12 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Model.Layout;
 
-// Phase 7: a bordered/filled rectangle around a single child, with optional padding. The
-// child's own bounding box determines the inner rect; the frame's outer rect grows by
-// (Padding + Border.Width / 2) so the stroke sits centred on the rectangle edge.
+// A bordered/filled rectangle around a single child, with optional padding. The child's
+// bounding box determines the inner rect; the outer rect grows by (Padding + Border.Width / 2)
+// so the stroke sits centred on the edge.
 //
-// When Size is set explicitly, the frame uses that size and centres the child inside the
-// padded inner rect — useful for fixed-size title-block cells where the content might be
-// smaller than the cell.
+// With Size set explicitly, the frame uses that size and centres the child inside the padded
+// inner rect — for fixed-size title-block cells where the content may be smaller than the cell.
 public sealed class Frame : LayoutElement
 {
 	public DrawElement Child { get; init; }
@@ -37,9 +36,9 @@ public sealed class Frame : LayoutElement
 		}
 		else
 		{
-			// The parent may constrain only one axis (a vertical Stack provides width but an
-			// unbounded height). Forward each axis independently; a degenerate (≤0) inner
-			// size falls back to unconstrained on that axis so children use natural sizing.
+			// A parent may constrain only one axis (e.g. a vertical Stack gives width but
+			// unbounded height); forward each axis independently. A degenerate (≤0) inner size
+			// falls back to unconstrained so children use natural sizing.
 			innerWidth = InnerSpan(parent.AvailableWidth, Padding.Left + Padding.Right);
 			innerHeight = InnerSpan(parent.AvailableHeight, Padding.Top + Padding.Bottom);
 			if (double.IsPositiveInfinity(innerWidth) && double.IsPositiveInfinity(innerHeight))
@@ -57,21 +56,15 @@ public sealed class Frame : LayoutElement
 
 	public override DrawElement Resolve(LayoutContext context)
 	{
-		// Build the child's available rect so flexible children (auto-width TextFlow,
-		// star-sized Grids) can fill the frame's interior. When Size is set we know the
-		// inner rect exactly; otherwise we forward whatever the parent gave us, minus
-		// padding — the child still gets a useful constraint when the frame itself is
-		// flexible.
 		var childContext = BuildChildContext(context);
 
 		var resolvedChild = Child is LayoutElement nested
 			? nested.Resolve(childContext)
 			: Child;
 
-		// Measure the subtree that will actually render. Measuring the unresolved child
-		// instead would use its context-blind natural bounds, which diverge from the
-		// constrained resolve above (auto-fit views, star grids) — the frame then sizes
-		// around a different box than the one it draws.
+		// Measure the resolved subtree, not the raw child: an unresolved auto-fit view or star
+		// grid reports context-blind natural bounds that diverge from the constrained resolve
+		// above, and the frame would size around a different box than the one it draws.
 		var childBounds = resolvedChild?.ComputeBounds() ?? BoundingBox.Empty;
 
 		double width, height;
@@ -118,8 +111,6 @@ public sealed class Frame : LayoutElement
 
 		if (resolvedChild != null && !childBounds.IsEmpty)
 		{
-			// Centre the child inside the padded inner rect so frames with fixed Size show
-			// the child centred even when it's smaller than the cell.
 			var innerLeft = minX + Padding.Left;
 			var innerBottom = minY + Padding.Bottom;
 			var innerWidth = Math.Max(0, width - Padding.Left - Padding.Right);
@@ -146,9 +137,8 @@ public sealed class Frame : LayoutElement
 			children.Add(resolvedChild);
 		}
 
-		// Pin the frame's outer extent — borders inflate path bounds by the half-stroke
-		// width, but the frame's geometric size is exactly (width, height). Pinning here
-		// also ensures borderless frames still report their padded outer rect.
+		// Pin the outer extent: a border inflates path bounds by the half-stroke width, but the
+		// frame's geometric size is exactly (width, height).
 		return new GroupElement
 		{
 			Id = Id,

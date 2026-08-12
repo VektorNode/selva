@@ -36,10 +36,10 @@ public class ThreeMaterialGoo : IGH_Goo
             return new ThreeMaterialGoo();
         }
 
-        // Grasshopper duplicates goos liberally during solves and data-tree ops, so this must be
-        // cheap. ThreeMaterial is a flat bag of value types + one string — a memberwise copy is a
-        // faithful deep copy (the previous Newtonsoft serialize+parse round-trip paid reflection
-        // per duplication for the same result).
+        // Grasshopper duplicates goos liberally during solves and tree ops, so this must be cheap.
+        // ThreeMaterial is a flat bag of value types + one string, so a memberwise copy is already a
+        // faithful deep copy — no need for the Newtonsoft serialize/parse round-trip that used to do
+        // the same job via reflection.
         var copy = new ThreeMaterial
         {
             Color = Value.Color,

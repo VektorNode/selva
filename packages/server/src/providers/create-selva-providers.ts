@@ -1,23 +1,21 @@
-// Configurable provider wiring (K5) — the reusable core of the app's
-// composition root, extracted so any app built on the engine gets the same
-// env-driven provider selection, `selva.config.js` override hook, and lazy
-// instantiation without copying it.
+// Configurable provider wiring — the reusable core of an app's composition
+// root.
 //
-// The provider IMPLEMENTATIONS are not bundled: the caller passes a
+// Provider IMPLEMENTATIONS are not bundled: the caller passes a
 // `ProviderRegistry` mapping choice names (the `SELVA_*_PROVIDER` env values)
-// to `fromEnv`-style factories. That keeps this package free of dependencies
-// on `@selvajs/local-provider` / `@selvajs/supabase-provider` — a consuming
-// app registers exactly the providers it ships.
+// to `fromEnv`-style factories. That keeps this package free of dependencies on
+// `@selvajs/local-provider` / `@selvajs/supabase-provider` — a consuming app
+// registers exactly the providers it ships.
 //
-// Two wiring modes (unchanged from the app):
+// Two wiring modes:
 //
-//   Default — providers are picked from env vars (SELVA_AUTH_PROVIDER etc.)
-//   via the registry. New deployments need only a .env file.
+//   Default — providers picked from env vars (SELVA_AUTH_PROVIDER etc.) via the
+//   registry. New deployments need only a .env file.
 //
-//   Override — pass `configPath` (e.g. env.SELVA_CONFIG_PATH) pointing at an
-//   external `selva.config.js` (absolute or CWD-relative). It is loaded
-//   dynamically at boot and replaces the env-driven wiring entirely. The path
-//   must resolve to an actual `.js` file — there's no TS compiler at runtime.
+//   Override — `configPath` points at an external `selva.config.js` (absolute
+//   or CWD-relative), loaded dynamically at boot, replacing the env-driven
+//   wiring entirely. It must be an actual `.js` file — there's no TS compiler
+//   at runtime.
 
 import { pathToFileURL } from 'node:url';
 import { resolve as resolvePath } from 'node:path';
@@ -38,11 +36,7 @@ import { readBool, type EnvRecord } from '../compute/limits.js';
 
 export type ProviderFactory<T> = (env: EnvRecord) => T;
 
-/**
- * The provider implementations available to this deployment, keyed by the
- * (lowercase) choice name used in `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER`
- * / `SELVA_STORAGE_PROVIDER`.
- */
+/** Keyed by the lowercased `SELVA_{AUTH,DATA,STORAGE}_PROVIDER` value. */
 export interface ProviderRegistry {
 	auth: Record<string, ProviderFactory<IAuthProvider>>;
 	data: Record<string, ProviderFactory<IDataProvider>>;
@@ -54,42 +48,40 @@ export interface CreateSelvaProvidersOptions {
 	/** Fallback choice per slot when the env var is unset. Default: `'local'`. */
 	defaults?: Partial<Record<'auth' | 'data' | 'storage', string>>;
 	/**
-	 * Path to an external `selva.config.js` override (absolute or CWD-relative).
-	 * Pass `env.SELVA_CONFIG_PATH` through; when set, the module's default
-	 * export (a `SelvaConfig` or factory) replaces the env-driven wiring.
+	 * Override module (absolute or CWD-relative); its default export is a
+	 * `SelvaConfig` or a factory.
 	 */
 	configPath?: string;
 	/**
-	 * Boot-summary sink, called once on first `resolve()`. Kept for callers that
-	 * want the rendered one-line string. Default: none — the summary goes to
-	 * `logger` instead, so this library never writes to stdout unbidden.
+	 * Boot-summary sink, called once on first `resolve()` — for callers that want
+	 * the rendered string. Default: none, and the summary goes to `logger`
+	 * instead, so this library never writes to stdout unbidden.
 	 */
 	onBoot?: (summary: string) => void;
 	/**
-	 * Structured logger. Receives the boot summary as fields on first `resolve()`
-	 * when `onBoot` is not supplied. Defaults to `NoopLogger`.
+	 * Receives the boot summary as fields when `onBoot` is unset. Defaults to
+	 * `NoopLogger`.
 	 */
 	logger?: ILogger;
 }
 
 export interface SelvaProviderRuntime {
 	/**
-	 * Memoized provider wiring. The first call instantiates providers from env
-	 * (and may throw if required secrets are missing); subsequent calls return
-	 * the cached config. Never call at build time — provider `fromEnv`
-	 * factories validate required secrets.
+	 * Memoized wiring. The first call instantiates providers from env and throws
+	 * if a required secret is missing — never call it at build time.
 	 */
 	resolve(): SelvaConfig;
+	/** Defaults to `'single'` when the config omits it. */
 	tenancy(): TenancyMode;
-	/** Resolved branding — every field defaulted so the UI never null-checks. */
+	/** Every field defaulted, so the UI never null-checks. */
 	branding(): Required<SelvaBranding>;
-	/** Safe flag accessor — omitted flags resolve to false. */
+	/** Omitted flags resolve to false. */
 	flag(name: keyof SelvaFlags): boolean;
-	/** Per-solve timing sink; `NoopSolveMetricSink` when the config omits one. */
+	/** `NoopSolveMetricSink` when the config omits one. */
 	solveMetricSink(): ISolveMetricSink;
 }
 
-// Every SelvaFlags key, mapped from `SELVA_FLAG_<KEY>`. The `satisfies` +
+// Every SelvaFlags key, read from `SELVA_FLAG_<KEY>`. The `satisfies` plus the
 // exhaustiveness check below make adding a platform flag without listing it
 // here a compile error.
 const FLAG_KEYS = [
@@ -128,10 +120,10 @@ function pickTenancy(env: EnvRecord): TenancyMode {
 }
 
 /**
- * Per-solve metric sink. Supabase's data provider carries a `solveMetrics`
- * sink built from its own client bundle — reuse it so timings persist
- * automatically. Backends without a metrics table leave it undefined, which
- * falls back to `NoopSolveMetricSink` in `solveMetricSink()`.
+ * Supabase's data provider carries a `solveMetrics` sink built from its own
+ * client bundle — reuse it so timings persist without a second client. Backends
+ * with no metrics table return undefined, and `solveMetricSink()` falls back to
+ * `NoopSolveMetricSink`.
  */
 function pickSolveMetrics(data: IDataProvider): ISolveMetricSink | undefined {
 	const candidate = (data as { solveMetrics?: unknown }).solveMetrics;
@@ -176,9 +168,8 @@ async function loadConfigSource(
 			`Config override path ${options.configPath} resolved to ${abs} which does not exist.`
 		);
 	}
-	// Dynamic specifier — a bundler must not pre-resolve this at build time,
-	// hence @vite-ignore. pathToFileURL keeps Windows absolute paths valid as
-	// ESM specifiers.
+	// @vite-ignore: a bundler must not pre-resolve this specifier at build time.
+	// pathToFileURL keeps Windows absolute paths valid as ESM specifiers.
 	const mod = (await import(/* @vite-ignore */ pathToFileURL(abs).href)) as {
 		default: SelvaConfig | SelvaConfigFactory;
 	};
@@ -186,13 +177,11 @@ async function loadConfigSource(
 }
 
 /**
- * Build the provider runtime. Loading the *config source* (default factory,
- * or the `configPath` override module) happens here and is cheap and
- * secret-free — a factory is just a function. The factory is NOT invoked:
- * that runs the registry's `fromEnv` factories, which validate required
- * secrets, and doing it at import/build time would make merely building the
- * app require a full runtime env. Provider instantiation is deferred to the
- * first `resolve()`.
+ * Loading the config source (default factory, or the `configPath` module) is
+ * cheap and secret-free. The factory is deliberately NOT invoked here: that
+ * runs the registry's `fromEnv` factories, which validate required secrets, so
+ * calling it at import time would make merely building the app require a full
+ * runtime env. Providers are instantiated on the first `resolve()`.
  */
 export async function createSelvaProviders(
 	env: EnvRecord,
@@ -208,10 +197,9 @@ export async function createSelvaProviders(
 		if (config) return config;
 		config = typeof raw === 'function' ? raw(env) : raw;
 
-		// One-line boot summary so operators can confirm at a glance what got
-		// wired without grepping env vars or reading the config file. Provider
-		// names come from the IAuthProvider.name field; data/storage adapters
-		// don't expose a name, so we infer from the constructor.
+		// Boot summary so operators can confirm what got wired without grepping
+		// env vars. Auth exposes a `name` field; data/storage adapters don't, so
+		// their names come from the constructor.
 		const wiring = {
 			component: 'selva',
 			auth: config.auth.name,

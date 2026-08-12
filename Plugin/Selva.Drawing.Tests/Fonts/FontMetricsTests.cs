@@ -17,7 +17,6 @@ public class FontMetricsTests
 	public void Unknown_family_falls_back_to_heuristic()
 	{
 		Assert.False(FontMetrics.IsBundled("ThisFontDoesNotExist"));
-		// Heuristic still produces a sensible measurement.
 		var m = FontMetrics.Measure("Hello", "ThisFontDoesNotExist", 10);
 		Assert.True(m.Width > 0);
 		Assert.True(m.Ascent > 0);
@@ -42,14 +41,12 @@ public class FontMetricsTests
 	[Theory]
 	[InlineData("i", "W")]
 	[InlineData("l", "M")]
-	[InlineData("1", "8")] // tabular figures in Inter — equal width, but skinny vs round
+	[InlineData("1", "8")]
 	public void Different_glyphs_have_different_advances(string narrow, string wide)
 	{
-		// In a real font the wider glyph in each pair should have a larger advance.
 		var n = FontMetrics.Measure(narrow, "Inter", 10);
 		var w = FontMetrics.Measure(wide, "Inter", 10);
-		// Inter ships tabular figures by default — '1' and '8' may be equal. Skip the
-		// equality assertion for the digit pair if so.
+		// Inter's tabular figures are equal-width, so '1' and '8' may tie — only check >= for that pair.
 		if (narrow == "1" && wide == "8")
 			Assert.True(w.Width >= n.Width);
 		else
@@ -59,7 +56,6 @@ public class FontMetricsTests
 	[Fact]
 	public void Real_font_width_diverges_from_heuristic_for_wide_glyphs()
 	{
-		// "WWWWW" should measure noticeably wider than 0.55 × 5 × size in any real font.
 		const double size = 10;
 		var measured = FontMetrics.Measure("WWWWW", "Inter", size);
 		var heuristic = 5 * size * 0.55;
@@ -70,8 +66,6 @@ public class FontMetricsTests
 	[Fact]
 	public void Bold_face_is_distinct_from_regular()
 	{
-		// Different cmap/hmtx tables — at minimum the advances should not be byte-equal
-		// for a representative string.
 		var regular = FontMetrics.Measure("HELLO", "Inter", 10, FontWeight.Normal);
 		var bold = FontMetrics.Measure("HELLO", "Inter", 10, FontWeight.Bold);
 		Assert.NotEqual(regular.Width, bold.Width);
@@ -80,7 +74,6 @@ public class FontMetricsTests
 	[Fact]
 	public void Font_family_stack_resolves_to_first_family()
 	{
-		// CSS-style stack — first family wins. "Inter, Helvetica" → Inter.
 		var stack = FontMetrics.Measure("Hello", "Inter, Helvetica, sans-serif", 10);
 		var direct = FontMetrics.Measure("Hello", "Inter", 10);
 		Assert.Equal(direct.Width, stack.Width);
@@ -89,8 +82,7 @@ public class FontMetricsTests
 	[Fact]
 	public void Italic_falls_back_to_regular_face()
 	{
-		// We don't ship Inter Italic yet — should resolve to the regular face rather than
-		// throwing or returning the heuristic.
+		// No Inter Italic shipped yet - resolves to the regular face instead of throwing or using the heuristic.
 		var italic = FontMetrics.Measure("Hello", "Inter", 10, FontWeight.Normal, FontStyle.Italic);
 		var regular = FontMetrics.Measure("Hello", "Inter", 10, FontWeight.Normal, FontStyle.Normal);
 		Assert.Equal(regular.Width, italic.Width);

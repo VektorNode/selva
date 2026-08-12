@@ -1,0 +1,9 @@
+{
+	"permissions": {
+		"allow": [
+			"Read(//d/Coding/selva/packages/builder-app/**)",
+			"Read(//d/Coding/selva/scripts/**)",
+			"Read(//d/Coding/selva/packages/ui/src/lib/components/**)"
+		]
+	}
+}

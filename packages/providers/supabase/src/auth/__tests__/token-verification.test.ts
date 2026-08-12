@@ -1,7 +1,7 @@
 /**
- * CI-runnable (no live stack) tests for §1b hybrid token verification. Stubs
- * the internal anon client's `getClaims` (local JWT verify) and `getUser`
- * (network GoTrue verify) so we can assert the network-call behavior directly.
+ * CI-runnable (no live stack) tests for hybrid token verification. Stubs the
+ * internal anon client's `getClaims` (local JWT verify) and `getUser`
+ * (network GoTrue verify) to assert the network-call behavior directly.
  *
  * Contract:
  *  - hybrid (default): verify locally via getClaims on every request; hit
@@ -70,7 +70,7 @@ describe('SupabaseAuthProvider — hybrid token verification', () => {
 		stub.getClaims.mockResolvedValue(okClaims());
 		stub.getUser.mockResolvedValue(okUser());
 
-		// First call: local verify + one recheck (never seen this session).
+		// First call for this session: local verify + one recheck.
 		const a = await provider.verifyToken('tok');
 		expect(a?.id).toBe('user-1');
 		expect(stub.getClaims).toHaveBeenCalledTimes(1);
@@ -80,7 +80,7 @@ describe('SupabaseAuthProvider — hybrid token verification', () => {
 		await provider.verifyToken('tok');
 		await provider.verifyToken('tok');
 		expect(stub.getClaims).toHaveBeenCalledTimes(3);
-		expect(stub.getUser).toHaveBeenCalledTimes(1); // still just the first
+		expect(stub.getUser).toHaveBeenCalledTimes(1);
 	});
 
 	it('denies immediately when the periodic getUser recheck rejects (signed out / revoked)', async () => {

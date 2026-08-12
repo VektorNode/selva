@@ -22,7 +22,7 @@
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -180,14 +180,20 @@ function readChangesetFixedGroups() {
 // Entry
 // ============================================================================
 
-const mode = process.argv[2];
-const packages = readWorkspacePackages().sort((a, b) => a.name.localeCompare(b.name));
+export { readWorkspacePackages };
 
-if (mode === '--list') {
-	list(packages);
-} else if (mode === '--check') {
-	check(packages);
-} else {
-	console.error('Usage: node scripts/publishable-packages.mjs --list | --check');
-	process.exit(2);
+// Only run the CLI when invoked directly — verify-pack.mjs imports
+// readWorkspacePackages from here.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+	const mode = process.argv[2];
+	const packages = readWorkspacePackages().sort((a, b) => a.name.localeCompare(b.name));
+
+	if (mode === '--list') {
+		list(packages);
+	} else if (mode === '--check') {
+		check(packages);
+	} else {
+		console.error('Usage: node scripts/publishable-packages.mjs --list | --check');
+		process.exit(2);
+	}
 }

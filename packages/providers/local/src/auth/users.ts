@@ -6,22 +6,22 @@ import { readJsonFile, writeJsonFile } from '../data/fsJson.js';
 /**
  * Identity-only on-disk shape. Per-user app state (permissions, profile,
  * starred definitions, recent runs) lives in `user-data.json`, owned by
- * `LocalDataProvider`. This split lets `LocalAuthProvider` be paired with any
- * data provider, and any auth provider be paired with `LocalDataProvider`,
- * without one stepping on the other.
+ * `LocalDataProvider`. The split lets `LocalAuthProvider` pair with any data
+ * provider, and any auth provider pair with `LocalDataProvider`, without one
+ * stepping on the other.
  */
 export interface StoredAuthUser {
 	id: string;
 	email: string;
 	/**
-	 * "pbkdf2:sha256:<iterations>:<salt>:<hash>" — all binary values base64url encoded.
+	 * "pbkdf2:sha256:<iterations>:<salt>:<hash>", binary values base64url encoded.
 	 * Null for OAuth-only users (allowlisted email, no password stored).
 	 */
 	passwordHash: string | null;
 	createdAt: string; // ISO 8601
-	/** ISO 8601 — most recent successful credential login or token verification. */
+	/** ISO 8601, most recent successful login. */
 	lastLoginAt?: string;
-	/** When true, the provider MUST refuse to authenticate this user. */
+	/** True means the provider refuses to authenticate this user. */
 	disabled?: boolean;
 }
 
@@ -87,14 +87,13 @@ export interface LocalAuthUserStore {
 }
 
 export function createLocalAuthUserStore(usersFilePath: string): LocalAuthUserStore {
-	// Load-once, write-through cache — same pattern as `LocalOrgStoreLoader`.
-	// `auth-users.json` is read ~4× per authenticated request (verifyToken →
-	// findById, plus the hook's bootstrap reads); reading + parsing the whole
-	// file each time is the §3a hot-path cost. The provider is the sole writer
-	// in single-process local mode, so the in-memory copy is authoritative:
-	// every mutation updates the cached object AND persists via temp+rename.
-	// Concurrent first-callers share one in-flight load so they converge on the
-	// same object reference (writes must stack on one array).
+	// Load-once, write-through cache, same pattern as `LocalOrgStoreLoader`:
+	// reading and parsing the whole file on every call is the hot-path cost,
+	// since `auth-users.json` is read on every authenticated request. The
+	// provider is the sole writer in single-process local mode, so the
+	// in-memory copy stays authoritative — every mutation updates the cache and
+	// persists via temp+rename. Concurrent first callers share one in-flight
+	// load so writes stack on the same array.
 	let cache: AuthUsersFile | null = null;
 	let loading: Promise<AuthUsersFile> | null = null;
 

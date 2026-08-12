@@ -1,22 +1,16 @@
 /**
- * Audit Q5.4 — direct tests for the local provider's JSON persistence primitive.
- *
  * Every local store (`auth-users.json`, `compute.config.json`, the definitions
  * doc, …) reads and writes through these two functions, so their edge cases are
- * everyone's edge cases. They were previously covered only obliquely — via
- * `empty-fallback-isolation.test.ts`, which exercises the aliasing hazard through
- * `LocalInviteStore` rather than naming it.
+ * everyone's edge cases.
  *
  * Two properties carry real weight:
  *   - **`writeJsonFile` is crash-safe.** It writes a sibling `.tmp` and renames.
  *     `rename` is atomic within a filesystem, so a crash leaves either the old
- *     file or the new one — never a half-written doc. Losing this would corrupt
- *     the whole store on an ill-timed kill.
- *   - **`readJsonFile` swallows only ENOENT.** A missing file is a legitimate
- *     empty state; any other error (permissions, a directory in the way, corrupt
- *     JSON) must propagate rather than masquerade as "empty" — silently
- *     returning the fallback there would present a live store as blank and
- *     invite the next write to overwrite real data.
+ *     file or the new one — never a half-written doc.
+ *   - **`readJsonFile` swallows only ENOENT.** Any other error (permissions, a
+ *     directory in the way, corrupt JSON) must propagate rather than
+ *     masquerade as "empty" — returning the fallback there would present a
+ *     live store as blank and invite the next write to overwrite real data.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -27,15 +21,13 @@ import { readJsonFile, writeJsonFile } from '../fsJson.js';
 
 /**
  * The two rename-under-contention tests below assert POSIX semantics: `rename`
- * atomically replaces the destination even while a reader holds it open. Windows
- * refuses instead — the rename fails with EPERM if any other handle is on the
- * target, and an antivirus/indexer touching the fresh `.tmp` is enough to trip
- * it. That's a platform difference in the assertion, not a defect in
- * `writeJsonFile`, whose per-writer UUID temp is correct on both.
- *
- * CI runs ubuntu-latest, so the real coverage still gates every PR. Skipping
- * keeps a local `pnpm test` on Windows trustworthy rather than permanently red
- * — noise you learn to ignore is how a genuine regression slips through.
+ * atomically replaces the destination even while a reader holds it open.
+ * Windows refuses instead — EPERM if any other handle is on the target, and an
+ * antivirus/indexer touching the fresh `.tmp` is enough to trip it. That's a
+ * platform difference in the assertion, not a defect in `writeJsonFile`,
+ * whose per-writer UUID temp is correct on both. CI runs ubuntu-latest, so
+ * skipping here doesn't lose coverage — it just keeps local Windows runs
+ * from going permanently red.
  */
 const posixRename = it.skipIf(process.platform === 'win32');
 
@@ -67,10 +59,8 @@ describe('readJsonFile', () => {
 	});
 
 	it('returns the fallback BY REFERENCE — callers must not share one instance', async () => {
-		// This is the aliasing hazard the local stores guard against with a
-		// fresh `empty()` per call. Pinned here at the source so the behavior is
-		// documented where it originates, not just where it bites: a mutated
-		// fallback would leak across reads, and across stores.
+		// Local stores guard against this by passing a fresh `empty()` per call —
+		// a shared fallback would leak mutations across reads, and across stores.
 		const fallback = { servers: [] as string[] };
 		const first = await readJsonFile(path.join(dir, 'nope.json'), fallback);
 		first.servers.push('mutated');
@@ -81,8 +71,6 @@ describe('readJsonFile', () => {
 	});
 
 	it('propagates malformed JSON instead of hiding it as empty', async () => {
-		// A truncated/corrupt doc is NOT an empty store. Returning the fallback
-		// would present live data as blank — and the next write would flatten it.
 		await fs.writeFile(file, '{"servers": [', 'utf-8');
 		await expect(readJsonFile(file, { servers: [] })).rejects.toThrow();
 	});
@@ -90,7 +78,7 @@ describe('readJsonFile', () => {
 	it('propagates a non-ENOENT fs error (directory where a file is expected)', async () => {
 		const asDir = path.join(dir, 'imadir.json');
 		await fs.mkdir(asDir);
-		// EISDIR (or EPERM on some platforms) — must not be swallowed as "missing".
+		// EISDIR (or EPERM on some platforms), not ENOENT — must not be swallowed as "missing".
 		await expect(readJsonFile(asDir, { fallback: true })).rejects.toThrow();
 	});
 });
@@ -110,19 +98,15 @@ describe('writeJsonFile', () => {
 
 	it('leaves no .tmp file behind on success', async () => {
 		await writeJsonFile(file, { ok: true });
-		// The temp file is renamed, not copied — a leftover would accumulate one
-		// stray file per write, and hint the rename never happened.
 		expect(await fs.readdir(dir)).toEqual(['doc.json']);
 	});
 
 	posixRename(
 		'never exposes a partially-written target, even for a payload far past one page',
 		async () => {
-			// The crash-safety claim in one property: at NO point during a write does
-			// `doc.json` hold anything but a complete, parseable document. A direct
-			// `writeFile` to the target would break this for any payload large enough
-			// to be flushed in chunks; tmp+rename holds regardless of size because
-			// rename is atomic within a filesystem.
+			// A direct writeFile to the target could expose a partial write for a
+			// payload large enough to be flushed in chunks; tmp+rename holds
+			// regardless of size because rename is atomic within a filesystem.
 			await writeJsonFile(file, { generation: 1, blob: 'x'.repeat(2_000_000) });
 
 			// Race a reader against the writer. Every observation must be a valid
@@ -130,13 +114,12 @@ describe('writeJsonFile', () => {
 			const write = writeJsonFile(file, { generation: 2, blob: 'y'.repeat(2_000_000) });
 			const seen: number[] = [];
 			for (let i = 0; i < 40; i++) {
-				// Reads that lose the race to the rename see ENOENT-free old content;
-				// a parse failure here would mean a torn file.
 				const doc = await readJsonFile<{ generation: number } | null>(file, null);
 				if (doc) seen.push(doc.generation);
 			}
 			await write;
 
+			// Never a torn/unparseable read, and generation 1 or 2 only — no mix.
 			expect(seen.length).toBeGreaterThan(0);
 			expect(seen.every((g) => g === 1 || g === 2)).toBe(true);
 			expect(await readJsonFile<{ generation: number }>(file, { generation: 0 })).toMatchObject({
@@ -152,20 +135,17 @@ describe('writeJsonFile', () => {
 	});
 
 	posixRename('survives concurrent writes to the same target (no shared temp file)', async () => {
-		// REGRESSION (audit Q5.2): the temp file used to be a fixed
-		// `${filePath}.tmp`, shared by every concurrent writer. The first rename
-		// moved it away and every other writer then died with ENOENT renaming a
-		// file that no longer existed — so overlapping writes didn't merely
-		// race, they THREW. 19 of 20 concurrent share-link solve increments
-		// failed this way. Each writer now uses its own temp name.
+		// REGRESSION: the temp file used to be a fixed `${filePath}.tmp`, shared
+		// by every concurrent writer. The first rename moved it away and every
+		// other writer then died with ENOENT renaming a file that no longer
+		// existed — overlapping writes didn't just race, they threw. Each writer
+		// now uses its own temp name.
 		const writes = Array.from({ length: 20 }, (_, i) => writeJsonFile(file, { writer: i }));
 		const settled = await Promise.allSettled(writes);
 
 		expect(settled.filter((r) => r.status === 'rejected')).toEqual([]);
-		// Last write wins, and the result is always a complete document.
 		const final = await readJsonFile<{ writer: number }>(file, { writer: -1 });
 		expect(final.writer).toBeGreaterThanOrEqual(0);
-		// No temp files survive the storm.
 		expect(await fs.readdir(dir)).toEqual(['doc.json']);
 	});
 });

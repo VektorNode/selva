@@ -184,6 +184,40 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 			expect(got).toBeNull();
 		});
 
+		it('getProjectMembersFor resolves many projects for one user in one call', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p1 = project(orgId, ownerId, { name: 'Bulk Members A' });
+			const p2 = project(orgId, ownerId, { name: 'Bulk Members B' });
+			await store.createProject(ctx(ownerId), p1);
+			await store.createProject(ctx(ownerId), p2);
+			const u2 = await seed();
+			await store.addProjectMember(ctx(ownerId), member(p1.id, u2, 'editor'));
+
+			const got = await store.getProjectMembersFor(ctx(ownerId), [p1.id, p2.id], u2);
+			expect(got.get(p1.id)?.role).toBe('editor');
+			// Present as an explicit null, not absent — callers distinguish
+			// "checked, not a member" from "never asked".
+			expect(got.has(p2.id)).toBe(true);
+			expect(got.get(p2.id)).toBeNull();
+		});
+
+		it('getProjectMembersFor omits soft-deleted memberships', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p = project(orgId, ownerId);
+			await store.createProject(ctx(ownerId), p);
+			const u2 = await seed();
+			await store.addProjectMember(ctx(ownerId), member(p.id, u2, 'editor'));
+			await store.removeProjectMember(ctx(ownerId), p.id, u2);
+
+			const got = await store.getProjectMembersFor(ctx(ownerId), [p.id], u2);
+			expect(got.get(p.id)).toBeNull();
+		});
+
+		it('getProjectMembersFor returns an empty map for no ids', async () => {
+			const { store, ownerId } = await createStore();
+			expect((await store.getProjectMembersFor(ctx(ownerId), [], ownerId)).size).toBe(0);
+		});
+
 		it('updateProjectMemberRole changes role', async () => {
 			const { store, orgId, ownerId } = await createStore();
 			const p = project(orgId, ownerId);

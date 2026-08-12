@@ -6,12 +6,12 @@ using Selva.Drawing.Model.Elements;
 
 namespace Selva.Drawing.Model.Layout;
 
-// Phase 8: substitutes header/footer tokens. Built-ins are evaluated per page so that
-// {page} reflects the current page. {pages} requires the total page count, so the resolver
-// is constructed once per page once both numbers are known.
+// Substitutes header/footer tokens. Built-ins are evaluated per page so {page} reflects the
+// current page; {pages} needs the total count, so construct one resolver per page once both
+// numbers are known.
 //
 // Pattern: {name} or {name:argument}. Letters only in the name; argument runs to the next
-// `}`. Unknown tokens pass through unchanged so legitimate braces in user text aren't lost.
+// `}`. Unknown tokens pass through unchanged so legitimate braces in user text survive.
 public sealed class TokenResolver
 {
 	private static readonly Regex Pattern = new Regex(
@@ -41,8 +41,8 @@ public sealed class TokenResolver
 		_section = section ?? string.Empty;
 		_userTokens = userTokens;
 		_now = now ?? DateTime.Now;
-		// Drives localized {date} month/day names (e.g. de-DE → "Juni", "Dienstag"). Numeric
-		// formats like dd.MM.yyyy are culture-independent. Defaults to invariant (English).
+		// Drives localized {date} month/day names (e.g. de-DE → "Juni", "Dienstag"); numeric
+		// formats like dd.MM.yyyy don't vary by culture.
 		_culture = culture ?? CultureInfo.InvariantCulture;
 	}
 
@@ -52,10 +52,9 @@ public sealed class TokenResolver
 		return Pattern.Replace(input, Substitute);
 	}
 
-	// Walks a resolved DrawElement subtree and returns a clone where every TextElement /
-	// TextBlockElement has its Text run through Resolve. Containers (GroupElement) are
-	// rebuilt recursively. Other primitives pass through unchanged because they don't carry
-	// user-visible strings.
+	// Walks a resolved DrawElement subtree, returning a clone where every TextElement /
+	// TextBlockElement / TextFlow has its Text run through Resolve. GroupElement rebuilds
+	// recursively; other primitives pass through (no user-visible strings).
 	public DrawElement ResolveTree(DrawElement element)
 	{
 		if (element == null) return null;
@@ -95,11 +94,9 @@ public sealed class TokenResolver
 				}
 			case TextFlow f:
 				{
-					// TextFlow is a LayoutElement, so it carries its text before line breaking
-					// has happened. Chrome substitutes tokens before resolving layout — that is
-					// the whole point, so the substituted value is what gets wrapped and measured
-					// — which means the walk has to reach unresolved flows, not just the
-					// TextElements they eventually produce.
+					// TextFlow carries text before line-breaking, so tokens must substitute
+					// here — before layout — so the substituted value is what gets wrapped
+					// and measured, not just the TextElements it eventually produces.
 					var resolved = Resolve(f.Text);
 					if (ReferenceEquals(resolved, f.Text)) return f;
 					return new TextFlow

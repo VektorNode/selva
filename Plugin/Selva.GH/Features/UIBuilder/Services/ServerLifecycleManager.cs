@@ -9,13 +9,12 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
-///     Manages the lifecycle of LocalWebServer and WebSocketServer.
-///     Handles server startup, shutdown, and concurrent access prevention.
+///     Manages LocalWebServer and WebSocketServer startup/shutdown, serializing concurrent access.
 ///
-///     Concurrency model: start and stop transitions are serialized by <see cref="_transitionGate" />,
-///     and <see cref="_desiredRunning" /> records the latest caller intent. Both are needed — the gate
-///     alone can't order a delayed stop (disconnect-notify grace period) against a newer start, and
-///     "if (IsRunning) Stop()" check-then-act let a stop overlapping a start no-op entirely, orphaning
+///     Concurrency model: <see cref="_transitionGate" /> serializes start/stop transitions;
+///     <see cref="_desiredRunning" /> records the latest caller intent. Both are needed — the gate alone
+///     can't order a delayed stop (disconnect-notify grace period) against a newer start, and a plain
+///     "if (IsRunning) Stop()" check-then-act lets a stop overlapping a start no-op entirely, orphaning
 ///     servers on a disabled component.
 /// </summary>
 public class ServerLifecycleManager : IDisposable
@@ -170,10 +169,7 @@ public class ServerLifecycleManager : IDisposable
         await StopServersAsync();
     }
 
-    /// <summary>
-    ///     Stops both servers. Callers must hold <see cref="_transitionGate" /> (or be on the
-    ///     Dispose / in-flight-start paths, which are documented exceptions).
-    /// </summary>
+    /// <summary>Stops both servers. Callers must hold <see cref="_transitionGate" />, except Dispose and the in-flight-start rollback above.</summary>
     private void StopCore()
     {
         try
@@ -203,9 +199,6 @@ public class ServerLifecycleManager : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Check if embedded web assets are available in the assembly
-    /// </summary>
     private static bool HasEmbeddedWebAssets()
     {
         var assembly = Assembly.GetExecutingAssembly();

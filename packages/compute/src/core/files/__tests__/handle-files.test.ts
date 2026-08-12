@@ -84,6 +84,37 @@ describe('extractFilesFromComputeResponse — archive path sanitization', () => 
 		expect(file.path).toBe('Windows/a.txt');
 	});
 
+	// The plugin normalizes `::` before it reaches the wire; this covers payloads from an older
+	// one, which would otherwise land in a literal folder named "ROOT::Panels".
+	it('treats "::" in subFolder as a separator', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'ROOT::Panels', fileName: 'a', fileType: '.3dm' })
+		]);
+		expect(file.path).toBe('ROOT/Panels/a.3dm');
+	});
+
+	it('nests arbitrarily deep through "::"', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'ROOT::First::Second', fileName: 'a', fileType: '.3dm' })
+		]);
+		expect(file.path).toBe('ROOT/First/Second/a.3dm');
+	});
+
+	it('keeps distinct roots separate', async () => {
+		const files = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'ROOT::Sub', fileName: 'a', fileType: '.3dm' }),
+			fd({ subFolder: 'OTHERROOT::Sub', fileName: 'b', fileType: '.3dm' })
+		]);
+		expect(files.map((f) => f.path)).toEqual(['ROOT/Sub/a.3dm', 'OTHERROOT/Sub/b.3dm']);
+	});
+
+	it('still strips traversal written with "::"', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'ROOT::..::..', fileName: 'evil', fileType: '.txt' })
+		]);
+		expect(file.path).toBe('ROOT/evil.txt');
+	});
+
 	it('keeps legitimate nested subFolders intact', async () => {
 		const [file] = await extractFilesFromComputeResponse([
 			fd({ subFolder: 'nested/dir', fileName: 'a', fileType: '.json' })
@@ -230,6 +261,77 @@ describe('extractFilesFromComputeResponse — wire-shape leniency (issue 95)', (
 		]);
 		expect(files).toHaveLength(1);
 		expect(files[0].content).toBe('kept');
+	});
+});
+
+describe('extractFilesFromComputeResponse — GH-owned pass-through', () => {
+	it('carries subFolder separately from the fused archive path', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'nested/dir', fileName: 'a', fileType: '.json' })
+		]);
+		expect(file.path).toBe('nested/dir/a.json');
+		expect(file.subFolder).toBe('nested/dir');
+	});
+
+	it('reports an empty subFolder for a root-level file', async () => {
+		const [file] = await extractFilesFromComputeResponse([fd({ subFolder: '' })]);
+		expect(file.subFolder).toBe('');
+	});
+
+	it('reports the SANITIZED subFolder, matching the path', async () => {
+		const [file] = await extractFilesFromComputeResponse([fd({ subFolder: '../../etc' })]);
+		expect(file.subFolder).toBe('etc');
+		expect(file.path).toBe('etc/model.txt');
+	});
+
+	it('passes GH metadata through verbatim', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ metadata: { Material: 'alu_1.0', Thickness: '1.0' } })
+		]);
+		expect(file.metadata).toEqual({ Material: 'alu_1.0', Thickness: '1.0' });
+	});
+
+	it('omits metadata when the source item carries none', async () => {
+		const [file] = await extractFilesFromComputeResponse([fd()]);
+		expect(file.metadata).toBeUndefined();
+	});
+
+	it('reads metadata from a PascalCase payload (mcneel-branch server)', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			{
+				FileName: 'model',
+				Data: 'plain',
+				FileType: '.txt',
+				IsBase64Encoded: false,
+				SubFolder: 'out',
+				Metadata: { Material: 'alu_1.0' }
+			} as unknown as FileData
+		]);
+		expect(file.metadata).toEqual({ Material: 'alu_1.0' });
+		expect(file.subFolder).toBe('out');
+	});
+
+	it('preserves both fields when a duplicate path is renamed', async () => {
+		const files = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'out', metadata: { slot: 'first' } }),
+			fd({ subFolder: 'out', metadata: { slot: 'second' } })
+		]);
+		expect(files[1].path).toBe('out/model-2.txt');
+		expect(files[1].subFolder).toBe('out');
+		expect(files[1].metadata).toEqual({ slot: 'second' });
+	});
+
+	it('carries subFolder on base64 items too', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({
+				data: base64ByteArray(new Uint8Array([1, 2])),
+				isBase64Encoded: true,
+				subFolder: 'bin',
+				metadata: { kind: 'binary' }
+			})
+		]);
+		expect(file.subFolder).toBe('bin');
+		expect(file.metadata).toEqual({ kind: 'binary' });
 	});
 });
 

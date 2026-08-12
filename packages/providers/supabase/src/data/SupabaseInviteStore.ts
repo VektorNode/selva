@@ -16,12 +16,12 @@ const INVITE_COLUMNS =
 	'id, token_hash, email, org_id, org_role, org_permissions, invited_by, created_at, expires_at, accepted_at, accepted_by_user_id';
 
 /**
- * Invite store. `getByTokenHash` routes through a SECURITY DEFINER RPC so
- * unauthenticated / just-signed-up callers can validate and consume the
- * invite without RLS blocking them. The raw token is hashed at the route
- * layer (the selva app's `invites/token.server.ts`); the store sees only the
- * HMAC digest. Other operations (create, list, revoke) go through the normal
- * REST API with RLS enforcing `manage_org_members`.
+ * Invite store. `getByTokenHash` routes through a SECURITY DEFINER RPC so an
+ * unauthenticated caller (still validating an invite link) can resolve it
+ * without RLS blocking them. The raw token is hashed at the route layer
+ * (`invites/token.server.ts` in the selva app); this store only ever sees the
+ * HMAC digest. Other operations go through the normal REST API, with RLS
+ * enforcing `manage_org_members`.
  */
 export class SupabaseInviteStore implements IInviteStore {
 	constructor(
@@ -45,16 +45,14 @@ export class SupabaseInviteStore implements IInviteStore {
 	}
 
 	async getByTokenHash(ctx: RequestContext, tokenHash: string): Promise<Invite | null> {
-		// Use the SECURITY DEFINER RPC so the token itself is the capability —
-		// unauthenticated callers visiting /accept-invite can resolve it. The
-		// caller has already hashed the raw URL token; the RPC just looks up
-		// the row by digest.
+		// SECURITY DEFINER RPC: the token itself is the capability, so an
+		// unauthenticated caller on /accept-invite can still resolve it.
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.rpc('get_invite_by_token_hash', { h: tokenHash });
 		if (error) throw mapPostgrestError(error);
-		// rpc returns the matching row (or null). PostgREST may wrap it in
-		// an array depending on the signature — normalize both shapes.
+		// PostgREST may wrap a scalar-returning RPC result in an array depending
+		// on the function signature — normalize both shapes.
 		const row = Array.isArray(data) ? data[0] : data;
 		return row ? rowToInvite(row as InviteRow) : null;
 	}
@@ -74,8 +72,7 @@ export class SupabaseInviteStore implements IInviteStore {
 	}
 
 	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<void> {
-		// Direct UPDATE — the caller is authenticated (they just signed up).
-		// `markAccepted` is idempotent so we don't error if no row matches.
+		// Idempotent: `.is('accepted_at', null)` means a second call just no-ops.
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('invites')

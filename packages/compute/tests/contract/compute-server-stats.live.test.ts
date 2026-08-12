@@ -24,7 +24,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import ComputeServerStats from '../../src/core/server/compute-server-stats';
+import ComputeServerStats from '../../src/grasshopper/server/compute-server-stats';
 
 const LIVE_URL = process.env.COMPUTE_LIVE_URL;
 const LIVE_KEY = process.env.COMPUTE_LIVE_KEY;

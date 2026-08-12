@@ -15,8 +15,7 @@
  *     fallback round-trip via `requestInitialData`. No error surfaced.
  *
  * Both classes of bug are caught at the dispatcher boundary by the schemas here.
- * See `docs/development/schema-source-of-truth-plan.md` (Follow-up: wire-contract
- * validation) for the design rationale.
+ * See `docs/adr/0002-grasshopper-bridge-seam.md` for the design rationale.
  */
 
 import { z } from 'zod';
@@ -190,6 +189,9 @@ const schemasByType = {
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 export type ValidatedMessageType = keyof typeof schemasByType;
+
+/** Every message type with a validator — the wire-fixtures test derives its completeness check from this. */
+export const validatedMessageTypes = Object.keys(schemasByType) as ValidatedMessageType[];
 
 export type ValidationResult =
 	{ ok: true; message: unknown } | { ok: false; type: string; error: z.ZodError; payload: unknown };

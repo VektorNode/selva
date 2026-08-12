@@ -3,13 +3,10 @@ using System.Collections.Generic;
 
 namespace Selva.Drawing.Model.Layout;
 
-// A reusable bundle of document-wide field values — the "header file" / project-parameter set
-// shared across Grasshopper definitions. Resolves into DocumentLayout.Tokens so any header,
-// footer, title block, or body text can reference {project}, {client}, {rev}, … and have it
-// substituted at render time. Define it once (a Document Info component) and wire the same
-// value into every Document for unified output across files.
+// Document-wide token values (e.g. {project}, {client}, {rev}) resolved into
+// DocumentLayout.Tokens, so header/footer/title-block text can reference them.
 //
-// Keys are case-folded to match the TokenResolver, which lower-cases token names before lookup.
+// Keys are case-folded to match TokenResolver, which lower-cases token names before lookup.
 public sealed class DocumentInfo
 {
 	public IReadOnlyDictionary<string, string> Tokens { get; }
@@ -19,8 +16,7 @@ public sealed class DocumentInfo
 		Tokens = tokens ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 	}
 
-	// Build from paired key/value lists, lower-casing keys so {Project} and {project} both
-	// resolve. Later entries win on duplicate keys. Empty/blank keys are skipped.
+	// Later entries win on duplicate keys; empty/blank keys are skipped.
 	public static DocumentInfo FromPairs(IReadOnlyList<string> keys, IReadOnlyList<string> values)
 	{
 		var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

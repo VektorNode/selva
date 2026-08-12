@@ -6,9 +6,6 @@ using Selva.GH.Utilities.Guards;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
-/// <summary>
-///     Manages component lifecycle state with robust solving state tracking
-/// </summary>
 public class ComponentStateManager
 {
     private const int STATE_CHANGE_DEBOUNCE_MS = 100;
@@ -61,14 +58,8 @@ public class ComponentStateManager
     /// </summary>
     public bool IsBusy => IsSolving || _solveScheduled;
 
-    /// <summary>
-    ///     Check if running in headless mode (no Rhino UI)
-    /// </summary>
     public bool IsHeadlessMode => _isHeadless();
 
-    /// <summary>
-    ///     Process enable input and detect state transitions
-    /// </summary>
     public StateTransition ProcessEnableInput(bool enable)
     {
         var enableRising = enable && !_lastEnable;
@@ -85,10 +76,7 @@ public class ComponentStateManager
         };
     }
 
-    /// <summary>
-    ///     Set solving state (called during solution start/end)
-    ///     Returns true if state actually changed and should be broadcast
-    /// </summary>
+    /// <summary>Returns true if state actually changed and should be broadcast.</summary>
     public bool SetSolving(bool isSolving)
     {
         // A solve ended: report whether a real solve ran since the last end so callers can collect
@@ -181,9 +169,6 @@ public class ComponentStateManager
         return pending;
     }
 
-    /// <summary>
-    ///     Reset all state (called when component is disabled or cleaned up)
-    /// </summary>
     public void Reset()
     {
         IsSolving = false;
@@ -195,9 +180,6 @@ public class ComponentStateManager
     }
 }
 
-/// <summary>
-///     Information about state transitions after processing enable input
-/// </summary>
 public class StateTransition
 {
     public bool EnableRising { get; set; }

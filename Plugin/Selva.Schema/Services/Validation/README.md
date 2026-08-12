@@ -1,7 +1,6 @@
-# Modernized Validation System
+# Validation System
 
-This validation system uses a **rules-based approach** for validating UI schemas. Instead of having all validation logic
-in one monolithic class, each validation concern is encapsulated in its own rule class.
+Rule-based validation for UI schemas: each concern (structure, parameters, layout, ...) is its own rule class instead of one monolithic validator.
 
 ## Architecture
 
@@ -91,24 +90,4 @@ var validator = new SchemaValidator();
 validator.RemoveRule<VersioningRule>(); // Remove versioning validation
 ```
 
-## Benefits
-
-1. **Easy to Extend** - Add new validation rules without modifying existing code
-2. **Easy to Test** - Each rule can be tested independently
-3. **Easy to Maintain** - Validation logic is organized by concern
-4. **Flexible** - Mix and match rules as needed for different scenarios
-5. **Simple** - Each rule does one thing and does it well
-
-## Migration from Old Validator
-
-The new validator is backwards compatible. Simply update your using statements:
-
-```csharp
-// Old
-using Selva.Schema.Models;
-
-// New
-using Selva.Schema.Services.Validation;
-```
-
-The API remains the same, so no code changes are needed.
+Each rule can be added, removed, or tested independently — new validation logic doesn't touch existing rules.

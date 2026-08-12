@@ -26,8 +26,8 @@ namespace Selva.Schema.Models
     // ============================================================================
 
     // String-enum types are represented as 'string' in C# for compatibility
-    // GrasshopperParamType valid values: "number", "integer", "boolean", "text", "valueList", "dynamicValueList", "file", "color", "generic"
-    // GrasshopperInputStructure valid values: "item", "list", "tree"
+    // ParamType valid values: "number", "integer", "boolean", "text", "valueList", "dynamicValueList", "file", "color", "generic"
+    // InputStructure valid values: "item", "list", "tree"
 
 // ============================================================================
     // UISchema
@@ -204,7 +204,7 @@ namespace Selva.Schema.Models
         public bool? Required { get; set; }
 
 /// <summary>
-/// How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected Grasshopper parameter.
+/// How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter.
 /// </summary>
         [JsonProperty("displayAs", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string DisplayAs { get; set; } = "dropdown";
@@ -444,7 +444,7 @@ namespace Selva.Schema.Models
     {
 
 /// <summary>
-/// The Grasshopper instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+/// The backend parameter's GUID (paramId) of the DynamicValueList input that this output's computed options populate.
 /// </summary>
         [JsonProperty("targetInputId")]
         [JsonConverter(typeof(TolerantGuidConverter))]
@@ -575,7 +575,7 @@ namespace Selva.Schema.Models
     {
 
 /// <summary>
-/// Grasshopper parameter instance GUID
+/// Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)
 /// </summary>
         [JsonProperty("id")]
         [JsonConverter(typeof(TolerantGuidConverter))]
@@ -594,7 +594,7 @@ namespace Selva.Schema.Models
         public object Default { get; set; }
 
 /// <summary>
-/// Grasshopper data access mode: 'item' = Item Access, 'list' = List Access, 'tree' = Tree Access. Defaults to 'item'.
+/// Data access mode: 'item' = single value, 'list' = flat list, 'tree' = branching data tree. Defaults to 'item'.
 /// </summary>
         [JsonProperty("inputStructure", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string InputStructure { get; set; } = "item";
@@ -604,7 +604,7 @@ namespace Selva.Schema.Models
     {
 
 /// <summary>
-/// Grasshopper parameter instance GUID
+/// Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)
 /// </summary>
         [JsonProperty("id")]
         [JsonConverter(typeof(TolerantGuidConverter))]
@@ -746,7 +746,7 @@ namespace Selva.Schema.Models
         public string Id { get; set; }
 
 /// <summary>
-/// References the Grasshopper component InstanceGuid (Data Source)
+/// References the backend parameter's GUID (Data Source)
 /// </summary>
         [JsonProperty("paramId")]
         [JsonConverter(typeof(TolerantGuidConverter))]

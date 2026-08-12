@@ -5,11 +5,9 @@ using System.Text;
 
 namespace Selva.Drawing.Fonts;
 
-// Minimal TrueType/OpenType parser. Reads only the tables we need for layout-aware text
+// Minimal TrueType/OpenType parser. Reads only the tables needed for layout metrics
 // (cmap format 4 & 12 → char→glyph index, hmtx → glyph advance widths, head → unitsPerEm,
-// hhea → ascender/descender/lineGap, maxp → numGlyphs). No glyph rendering, no kerning,
-// no shaping — Phase 4's job is unblocking dimension text gaps and TextElement bounds,
-// not WYSIWYG layout.
+// hhea → ascender/descender/lineGap, maxp → numGlyphs). No glyph rendering, kerning, or shaping.
 internal sealed class TrueTypeFont
 {
 	public int UnitsPerEm { get; }
@@ -38,8 +36,7 @@ internal sealed class TrueTypeFont
 		_missingGlyphAdvance = missingGlyphAdvance;
 	}
 
-	// Returns the unscaled advance (in font units) for the given codepoint. Falls back to
-	// the .notdef glyph's advance when the codepoint isn't in the cmap.
+	// Unscaled advance in font units; falls back to the .notdef glyph's advance if the codepoint isn't in the cmap.
 	public int GetAdvance(int codepoint)
 	{
 		if (_cmap.TryGetValue(codepoint, out var gid) && gid >= 0 && gid < _glyphAdvances.Length)
@@ -47,9 +44,8 @@ internal sealed class TrueTypeFont
 		return _missingGlyphAdvance;
 	}
 
-	// Sums glyph advances across the string (treating it as a sequence of UTF-32
-	// codepoints — handles surrogate pairs). Returns advance in font units; caller scales
-	// by fontSize / UnitsPerEm.
+	// Sums glyph advances across the string as UTF-32 codepoints (handles surrogate pairs).
+	// Advance is in font units; caller scales by fontSize / UnitsPerEm.
 	public int MeasureAdvance(string text)
 	{
 		if (string.IsNullOrEmpty(text)) return 0;

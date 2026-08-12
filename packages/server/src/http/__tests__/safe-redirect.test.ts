@@ -2,11 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { safeRedirectTarget } from '../redirect.js';
 
 /**
- * `safeRedirectTarget` is the post-login redirect validator. The point of
- * the function is to reject *exactly* the values that would otherwise
- * smuggle an external host into a `redirect(303, …)` call:
- * protocol-relative URLs (`//evil.com`) and back-slash variants some
- * browsers normalize as a path separator. Each row below is one such case.
+ * Each rejection row is a value that would otherwise smuggle an external host
+ * into a post-login `redirect(303, …)` — including the back-slash variants some
+ * browsers normalize into a path separator.
  */
 describe('safeRedirectTarget', () => {
 	it.each([
@@ -39,9 +37,8 @@ describe('safeRedirectTarget', () => {
 	});
 
 	it('passes through arbitrary non-string types as fallback', () => {
-		// safeRedirectTarget's signature is `string | null | undefined`, but
-		// some call sites get `unknown` from FormData — make sure we don't
-		// throw on a stray non-string.
+		// The signature says `string | null | undefined`, but call sites hand it
+		// `unknown` straight from FormData — hence the cast and the runtime guard.
 		expect(safeRedirectTarget(42 as unknown as string, '/fallback')).toBe('/fallback');
 	});
 });

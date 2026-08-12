@@ -44,7 +44,7 @@ export interface WsOutputsMessage extends WsSessionMessage {
 	 * no binary frame — they ride the envelope directly and the driver tessellates them. Absent on
 	 * mesh-only solves.
 	 */
-	displayItems?: import('@selvajs/compute/visualization').DisplayItem[];
+	displayItems?: import('@selvajs/visualization/parse').DisplayItem[];
 }
 
 export interface WsSchemaUpdatedMessage extends WsSessionMessage {

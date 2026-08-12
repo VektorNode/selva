@@ -68,7 +68,7 @@
 				maxSolves: capEnabled ? cap : null,
 				...(expiresEnabled && expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {})
 			};
-			const res = await fetch(`/api/definitions/${definitionGuid}/share-links`, {
+			const res = await fetch(`/api/v1/definitions/${definitionGuid}/share-links`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(body)

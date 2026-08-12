@@ -9,12 +9,10 @@ namespace Selva.Tests;
 
 /// <summary>
 ///     Golden contract for ContextBake-wired outputs. Every Selva output type has a row here pinning
-///     (a) how it is classified and (b) the exact payload the WebSocket collector broadcasts. Adding a
-///     new output type without adding a row leaves <see cref="OutputPayloadBuilder" /> branch coverage
-///     gaps that these tests are meant to catch.
-///
-///     These run with no Grasshopper runtime — they exercise the pure decision layer the Rhino-typed
-///     ValueCollector now delegates to, which is exactly the layer that kept silently dropping data.
+///     how it's classified and the exact payload the WebSocket collector broadcasts. Adding a new
+///     output type without adding a row leaves <see cref="OutputPayloadBuilder" /> branch coverage
+///     gaps uncaught. Runs with no Grasshopper runtime — exercises the pure decision layer the
+///     Rhino-typed ValueCollector delegates to.
 /// </summary>
 public class OutputPayloadContractTests
 {
@@ -93,7 +91,7 @@ public class OutputPayloadContractTests
 
         var built = OutputPayloadBuilder.Build(new GooView { DynamicValueList = payload });
 
-        // Round-trip through JSON so the assertion is on the serialized wire shape, not C# identity.
+        // Assert on the serialized wire shape, not C# object identity.
         var json = JObject.FromObject(built);
         Assert.Equal(target.ToString(), (string)json["targetInputId"]);
         Assert.Equal("0", (string)json["options"]["Sphere"]);
@@ -114,9 +112,8 @@ public class OutputPayloadContractTests
     [Fact]
     public void DynamicValueList_LocalCollectorAndComputeJsonAgree()
     {
-        // The whole point of the single-payload refactor: the local WebSocket path and the
-        // Rhino.Compute path must emit byte-identical shapes. ToComputeJson() is the compute path;
-        // ToCollectorPayload() (serialized) is the local path. They must match.
+        // The local WebSocket path (ToCollectorPayload) and the Rhino.Compute path (ToComputeJson)
+        // must emit byte-identical shapes.
         var payload = new DynamicValueListPayload(
             Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
             new Dictionary<string, string> { ["X"] = "10", ["Y"] = "20" });
@@ -184,8 +181,8 @@ public class OutputPayloadContractTests
     [Fact]
     public void Classify_GooPresentButNoSelvaType_IsUnknownAndKeepsTypeName()
     {
-        // The exact live-bug signature: a goo IS on the bake input, but it's not a Selva output
-        // (unwrap miss, or an upstream TypeName rename). The outcome names the culprit.
+        // A goo is on the bake input but isn't a recognized Selva output (unwrap miss, or an
+        // upstream TypeName rename) — the outcome names the culprit instead of going silent.
         var outcome = OutputPayloadBuilder.Classify(new[]
         {
             new GooView { TypeName = "Number" }
@@ -219,7 +216,6 @@ public class OutputPayloadContractTests
 
     // -------------------------------------------------------------------------
     // Cross-stack golden fixture — the SAME json file vitest loads on the TS side.
-    // If this and the TS test stop agreeing, the wire contract has drifted.
     // -------------------------------------------------------------------------
 
     [Fact]
@@ -229,8 +225,6 @@ public class OutputPayloadContractTests
             FindRepoRoot(), "packages", "schemas", "fixtures", "dynamic-value-list-payload.json");
         var fixture = JObject.Parse(File.ReadAllText(fixturePath));
 
-        // Parse the fixture as the C# payload, re-serialize, and assert the meaningful fields survive
-        // byte-identical — i.e. the C# type understands exactly the shape the TS side ships.
         var payload = DynamicValueListPayload.FromJson(fixture.ToString());
         var reSerialized = JObject.Parse(payload.ToComputeJson());
 
@@ -254,7 +248,7 @@ public class OutputPayloadContractTests
     [Fact]
     public void Classify_ToString_IsHumanReadablePerOutcome()
     {
-        // The string is what lands in Rhino's log; pin it so the live signal stays legible.
+        // This string lands in Rhino's log — pin it so the live signal stays legible.
         Assert.Equal("Empty", OutputPayloadBuilder.Classify(new GooView[0]).ToString());
 
         Assert.Equal("UnknownType('Number')",

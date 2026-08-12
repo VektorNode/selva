@@ -23,9 +23,9 @@ export interface BootHealth {
 	checkedAt: string;
 	atRestSecrets: SecretVerificationReport | null;
 	/**
-	 * App↔DB schema handshake (audit O3) — null when the data provider doesn't
-	 * implement it (local provider: schema and app ship together). A not-ok
-	 * report degrades `/api/health` to 503, which also makes the self-update
+	 * App↔DB schema handshake — null when the data provider doesn't implement
+	 * it (local provider: schema and app ship together). A not-ok report
+	 * degrades `/api/health` to 503, which also makes the self-update
 	 * runner's health probe roll back an update whose migrations weren't
 	 * applied, instead of leaving a skewed app serving PGRST errors.
 	 */
@@ -86,7 +86,7 @@ async function run(): Promise<BootHealth> {
 		try {
 			schemaVersion = await data.verifySchemaVersion();
 		} catch (err) {
-			// The contract says it must not throw; treat a throw as a failed check.
+			// verifySchemaVersion must not throw by contract; treat a throw as failure.
 			getLogger().error('verifySchemaVersion threw — treating as failure', {
 				component: 'boot',
 				err: renderThrown(err)
@@ -117,13 +117,11 @@ async function run(): Promise<BootHealth> {
 }
 
 /**
- * Returns the cached boot health report. Runs the underlying checks at most
- * once — subsequent callers receive the same result. Safe to call from many
- * routes concurrently; in-flight callers share a single promise.
- *
- * The report does NOT auto-refresh after an operator fixes the underlying
- * issue. Restart the process to re-run the boot check. (Conscious choice:
- * boot health represents the state at boot, by definition.)
+ * Runs the underlying checks at most once — subsequent callers receive the
+ * same result; in-flight callers share a single promise. Does NOT auto-refresh
+ * after an operator fixes the underlying issue — restart the process to
+ * re-run the boot check. That's deliberate: boot health represents the state
+ * at boot, by definition.
  */
 export function getBootHealth(): Promise<BootHealth> {
 	if (cached) return Promise.resolve(cached);
@@ -136,11 +134,7 @@ export function getBootHealth(): Promise<BootHealth> {
 	return inflight;
 }
 
-/**
- * Synchronous accessor — returns null until the first `getBootHealth()` call
- * has resolved. Health endpoint awaits `getBootHealth()` directly; this
- * accessor exists for places where awaiting is awkward.
- */
+/** Synchronous accessor — null until the first `getBootHealth()` call resolves. */
 export function getBootHealthSync(): BootHealth | null {
 	return cached;
 }

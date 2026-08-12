@@ -10,6 +10,7 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
+		port: 5174,
 		fs: {
 			allow: [repoRoot]
 		}

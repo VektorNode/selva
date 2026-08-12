@@ -4,10 +4,7 @@ using Selva.Schema.Models;
 
 namespace Selva.Tests;
 
-/// <summary>
-///     Tests for ComponentMessageFormatter — the status text shown on the UI Builder component's
-///     Info output and canvas. Pure string formatting over a UISchema and a few flags.
-/// </summary>
+/// <summary>Tests for the UI Builder component's Info/canvas status text.</summary>
 public class ComponentMessageFormatterTests
 {
     private const string Session = "sess-123";

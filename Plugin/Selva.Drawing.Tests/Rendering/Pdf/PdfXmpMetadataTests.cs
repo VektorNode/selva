@@ -34,16 +34,11 @@ public class PdfXmpMetadataTests
 		Assert.Contains("<?xpacket end=\"w\"?>", packet);
 		Assert.Contains("xmlns:dc=\"http://purl.org/dc/elements/1.1/\"", packet);
 		Assert.Contains("Bracket assembly", packet);
-		// Authors live in dc:creator/rdf:Seq.
 		Assert.Contains("<dc:creator><rdf:Seq><rdf:li>Felix", packet);
-		// Keywords appear in dc:subject/rdf:Bag.
 		Assert.Contains("<dc:subject><rdf:Bag>", packet);
 		Assert.Contains("<rdf:li>bracket</rdf:li>", packet);
-		// xmp:CreatorTool maps DocumentMetadata.Creator.
 		Assert.Contains("<xmp:CreatorTool>Selva</xmp:CreatorTool>", packet);
-		// pdf:Producer maps DocumentMetadata.Producer.
 		Assert.Contains("<pdf:Producer>Selva.Drawing</pdf:Producer>", packet);
-		// Date in ISO 8601 with Z suffix.
 		Assert.Contains("<xmp:CreateDate>2026-04-30T12:00:00Z</xmp:CreateDate>", packet);
 	}
 

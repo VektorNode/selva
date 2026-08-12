@@ -1,13 +1,11 @@
 import type { ErrorContext, IErrorReporter } from '@selvajs/platform';
 
 /**
- * `IErrorReporter` backed by Sentry (`@sentry/node`). Constructed only when
- * the consuming app has a DSN configured. Deployments that don't configure a
- * DSN never load `@sentry/node`, so it stays an OPTIONAL peer dependency: the
- * base install ships without it and the no-op path needs no package at all.
- *
- * `@sentry/node` is imported dynamically and its surface is narrowed to the
- * two calls we use — a hard static import would make the package mandatory.
+ * `IErrorReporter` backed by Sentry, constructed only when the consuming app has
+ * a DSN configured. `@sentry/node` is an OPTIONAL peer dependency: a deployment
+ * without a DSN never loads it, so the surface below is narrowed to the two
+ * calls used here and the import stays dynamic — a static one would make the
+ * package mandatory.
  */
 interface SentryLike {
 	init(options: {
@@ -30,9 +28,8 @@ export class SentryErrorReporter implements IErrorReporter {
 	private constructor(private readonly sentry: SentryLike) {}
 
 	/**
-	 * Initialize Sentry and return a reporter, or `null` if `@sentry/node` is
-	 * not installed (optional dependency absent). Never throws — a broken
-	 * error-tracker must not take down boot.
+	 * Initialize Sentry and return a reporter, or `null` when `@sentry/node`
+	 * won't load. Never throws — a broken error-tracker must not take down boot.
 	 */
 	static async create(opts: {
 		dsn: string;
@@ -40,13 +37,10 @@ export class SentryErrorReporter implements IErrorReporter {
 		release?: string;
 	}): Promise<SentryErrorReporter | null> {
 		try {
-			// Dynamic so the package stays optional. `@vite-ignore` keeps the
-			// bundler from trying to resolve it at build time when it's absent.
-			// `@ts-ignore` (not `@ts-expect-error`) because whether the module
-			// resolves at type-check time depends on the environment — it's a real
-			// dep in some installs, absent in others — so we can't assert the error
-			// is always present. The `as unknown as` cast narrows whatever loads to
-			// the two calls we use.
+			// `@vite-ignore` stops the bundler resolving an absent package at build
+			// time. `@ts-ignore` rather than `@ts-expect-error` because the module
+			// is a real dep in some installs and missing in others, so we can't
+			// assert the error is always there for `expect-error` to consume.
 			// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 			// @ts-ignore -- optional dependency, may be absent at type-check time
 			const sentry = (await import(/* @vite-ignore */ '@sentry/node')) as unknown as SentryLike;
@@ -54,8 +48,8 @@ export class SentryErrorReporter implements IErrorReporter {
 				dsn: opts.dsn,
 				environment: opts.environment,
 				release: opts.release,
-				// Error tracking only — no performance tracing by default. Flip
-				// this up later if you want transactions/spans.
+				// 0 = error tracking only, no performance tracing. Raise it to
+				// sample transactions/spans.
 				tracesSampleRate: 0
 			});
 			return new SentryErrorReporter(sentry);
@@ -80,8 +74,8 @@ export class SentryErrorReporter implements IErrorReporter {
 				user: context?.userId ? { id: context.userId } : undefined
 			});
 		} catch (err) {
-			// Reporting is best-effort and sits on the error path — a second
-			// failure here would mask the first. Swallow after logging.
+			// Best-effort, and this sits on the error path — letting a second
+			// failure escape would mask the first.
 			console.error('[ErrorReporter] Failed to capture error:', err);
 		}
 	}

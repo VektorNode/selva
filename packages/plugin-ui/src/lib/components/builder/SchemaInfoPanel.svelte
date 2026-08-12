@@ -75,9 +75,8 @@
 	}
 
 	function handleImportConfirm(importedSchema: UISchema) {
-		// Rebind the imported schema's parameter ids onto the live canvas by nickname.
-		// Without this, the imported ids (from the source document) don't resolve on save
-		// and the plugin purges every input/output as stale.
+		// Rebind by nickname onto the live canvas — the imported ids are from the source
+		// document and won't resolve on save, so the plugin would purge every input/output as stale.
 		const { schema: remapped, unmatched } = remapImportedSchema(
 			importedSchema,
 			liveInputs,
@@ -189,7 +188,6 @@
 						automatic updates.
 					</p>
 
-					<!-- Import/Export Section -->
 					<div class="mt-4 flex flex-col gap-2 border-t pt-4">
 						<Label class="text-sm font-semibold">Schema Management</Label>
 						<div class="flex gap-2">
@@ -213,7 +211,6 @@
 	</Card.Root>
 </Collapsible.Root>
 
-<!-- Hidden file input -->
 <input
 	type="file"
 	accept=".sls"
@@ -222,7 +219,6 @@
 	class="hidden"
 />
 
-<!-- Import validation dialog -->
 {#if showImportDialog && pendingImport}
 	<SchemaImportDialog
 		importedSchema={pendingImport}

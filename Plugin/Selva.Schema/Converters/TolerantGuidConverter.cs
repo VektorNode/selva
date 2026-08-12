@@ -4,10 +4,10 @@ using Newtonsoft.Json;
 namespace Selva.Schema.Models;
 
 /// <summary>
-///     Reads a <see cref="Guid" /> from JSON, tolerating the empty string and null that the web UI
-///     emits for an unset GUID field (e.g. a dynamic value list output before its target input is
-///     picked). Both map to <see cref="Guid.Empty" /> instead of throwing. Writing is unchanged.
-///     Applied by the schema generator to every GUID-typed property.
+///     Reads a <see cref="Guid" /> from JSON, mapping the empty string and null to
+///     <see cref="Guid.Empty" /> instead of throwing — the web UI sends these for an unset GUID
+///     field (e.g. a dynamic value list output before its target input is picked). Writing is
+///     unchanged. Applied by the schema generator to every GUID-typed property.
 /// </summary>
 public class TolerantGuidConverter : JsonConverter<Guid>
 {

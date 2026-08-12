@@ -9,10 +9,9 @@ using System.Threading.Tasks;
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
-///     Minimal HTTP/1.1 request reader for our embedded servers. Reads the request
-///     line and headers, leaving any body on the stream for the caller. We do not
-///     implement keep-alive, chunked transfer, or multipart — the embedded servers
-///     only need to handle simple GET/HEAD/WebSocket-upgrade requests from the local UI.
+///     Minimal HTTP/1.1 request reader for the embedded servers. Reads the request line and
+///     headers, leaves the body on the stream for the caller. No keep-alive, chunked transfer,
+///     or multipart — only simple GET/HEAD/WebSocket-upgrade requests from the local UI.
 /// </summary>
 internal sealed class HttpRequest
 {
@@ -20,10 +19,7 @@ internal sealed class HttpRequest
     public string Target { get; }
     public string HttpVersion { get; }
 
-    /// <summary>
-    ///     Headers, keyed case-insensitively per RFC 7230. Repeated header names are
-    ///     joined with ", " in arrival order (RFC 7230 §3.2.2).
-    /// </summary>
+    /// <summary>Case-insensitive per RFC 7230; repeated names join with ", " in arrival order.</summary>
     public IReadOnlyDictionary<string, string> Headers { get; }
 
     public HttpRequest(string method, string target, string httpVersion, IReadOnlyDictionary<string, string> headers)
@@ -42,7 +38,7 @@ internal sealed class HttpRequest
 
 internal static class HttpRequestParser
 {
-    // Bound the request size so a misbehaving client can't make us read forever.
+    // Bounds request size so a misbehaving client can't make us read forever.
     private const int MaxRequestLineBytes = 8 * 1024;
     private const int MaxHeaderBytes = 16 * 1024;
     private const int MaxHeaderCount = 100;
@@ -82,8 +78,7 @@ internal static class HttpRequestParser
             var name = line.Substring(0, colon).Trim();
             var value = line.Substring(colon + 1).Trim();
 
-            // RFC 7230 §3.2.2: combine repeats with ", ". Order is preserved because we
-            // iterate the stream in order; later values append to earlier ones.
+            // RFC 7230 §3.2.2: combine repeated headers with ", ", arrival order preserved.
             if (headers.TryGetValue(name, out var existing))
             {
                 headers[name] = existing + ", " + value;
@@ -99,7 +94,7 @@ internal static class HttpRequestParser
 
     internal static (string method, string target, string version) ParseRequestLine(string line)
     {
-        // Spec: METHOD SP TARGET SP HTTP-VERSION. Exactly two SPs, no leading/trailing whitespace.
+        // METHOD SP TARGET SP HTTP-VERSION — exactly two spaces, no leading/trailing whitespace.
         var firstSp = line.IndexOf(' ');
         var lastSp = line.LastIndexOf(' ');
         if (firstSp <= 0 || lastSp <= firstSp)
@@ -119,10 +114,7 @@ internal static class HttpRequestParser
         return (method, target, version);
     }
 
-    /// <summary>
-    ///     Reads a single CRLF-terminated line. Returns null on EOF. The returned string
-    ///     does not include the trailing CRLF.
-    /// </summary>
+    /// <summary>Reads one CRLF-terminated line, without the CRLF. Null on EOF.</summary>
     private static async Task<string?> ReadLineAsync(Stream stream, int maxBytes, CancellationToken cancellationToken)
     {
         var buffer = new byte[1];
@@ -152,7 +144,7 @@ internal static class HttpRequestParser
                     return sb.ToString();
                 }
 
-                // Bare CR is illegal in HTTP — treat as malformed.
+                // Bare CR (not followed by LF) is illegal in HTTP.
                 throw new InvalidDataException("Malformed HTTP line: CR not followed by LF.");
             }
 

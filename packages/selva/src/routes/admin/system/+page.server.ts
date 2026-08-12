@@ -5,16 +5,18 @@ import { checkForUpdate } from '$lib/server/updateCheck.server';
 import { readChannel, writeChannel } from '$lib/server/releaseChannel.server';
 import { requirePermission } from '$lib/server/access.server';
 import {
-	MAX_SOLVE_DURATION_MS,
+	SOLVE_DEADLINE_MS,
 	RATE_LIMIT_WINDOW_MS,
 	RATE_LIMIT_MAX_REQUESTS,
-	MAX_GH_FILE_SIZE,
+	MAX_DEFINITION_FILE_SIZE,
 	MAX_IMAGE_FILE_SIZE,
 	COMPUTE_REQUEST_MAX_BYTES,
 	COMPUTE_RESPONSE_MAX_BYTES,
 	REMOTE_DEFINITION_MAX_BYTES,
 	REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
-	DEFINITION_CACHE_TTL_MS
+	REMOTE_DEFINITION_CACHE_TTL_MS,
+	COMPUTE_DEFINITION_CACHE_BYTES,
+	COMPUTE_SOLVE_CACHE_BYTES
 } from '$lib/server/computeLimits';
 import pkg from '../../../../package.json';
 import type { Actions, PageServerLoad } from './$types';
@@ -48,16 +50,18 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 	// truth — each value here reflects the env override or its default). Surfaced
 	// read-only so operators can see what's enforced without reading the .env.
 	const limits = {
-		MAX_SOLVE_DURATION_MS,
+		SOLVE_DEADLINE_MS,
 		RATE_LIMIT_WINDOW_MS,
 		RATE_LIMIT_MAX_REQUESTS,
-		MAX_GH_FILE_SIZE,
+		MAX_DEFINITION_FILE_SIZE,
 		MAX_IMAGE_FILE_SIZE,
 		COMPUTE_REQUEST_MAX_BYTES,
 		COMPUTE_RESPONSE_MAX_BYTES,
 		REMOTE_DEFINITION_MAX_BYTES,
 		REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
-		DEFINITION_CACHE_TTL_MS
+		REMOTE_DEFINITION_CACHE_TTL_MS,
+		COMPUTE_DEFINITION_CACHE_BYTES,
+		COMPUTE_SOLVE_CACHE_BYTES
 	};
 
 	// The persisted release channel drives which dist-tag the update check (and
@@ -69,7 +73,17 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 	// npm round-trip for everyone else.
 	const update = canManageUpdates
 		? await checkForUpdate(fetch, channel)
-		: { channel, current: null, latest: null, updateAvailable: false };
+		: {
+				channel,
+				current: null,
+				latest: null,
+				updateAvailable: false,
+				nodeCompatibility: {
+					compatible: null,
+					required: null,
+					running: process.versions.node
+				}
+			};
 
 	return {
 		canManageUpdates,

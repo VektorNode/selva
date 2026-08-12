@@ -6,11 +6,6 @@ using Selva.GH.Properties;
 
 namespace Selva.GH.Features.Display.Params;
 
-/// <summary>
-///     Dedicated Grasshopper parameter for <see cref="ThreeMaterialGoo" />.
-///     Provides proper type safety, type-name display, and wire compatibility
-///     when connecting the T-Material output to other components.
-/// </summary>
 public class Param_ThreeMaterial : GH_Param<ThreeMaterialGoo>
 {
     public Param_ThreeMaterial()

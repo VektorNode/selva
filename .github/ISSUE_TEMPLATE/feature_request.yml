@@ -1,63 +1,45 @@
 name: Feature Request
-description: Suggest a new feature or enhancement
-title: '[Feature]: '
-labels: ['enhancement']
+description: Suggest a feature or improvement
+type: Feature
+labels: ['needs-triage']
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Thanks for suggesting a feature!
-
   - type: textarea
     id: feature-description
     attributes:
-      label: Feature Description
-      description: What feature would you like to see?
-      placeholder: A clear and concise description of the feature
+      label: What should it do?
     validations:
       required: true
 
   - type: textarea
     id: motivation
     attributes:
-      label: Why is this needed?
-      description: What problem does this solve, or what does it make possible?
-      placeholder: The use case or pain point behind the request
+      label: What problem does it solve?
+      description: The use case or pain point behind the request.
     validations:
       required: true
 
-  - type: checkboxes
-    id: affected-areas
-    attributes:
-      label: Affected Components
-      options:
-        - label: Plugin UI (@selvajs/plugin-ui)
-        - label: Cloud App (@selvajs/selva)
-        - label: Shared UI (@selvajs/ui)
-        - label: Grasshopper Plugin (C#)
-        - label: Schema (@selvajs/schemas)
-        - label: Core / Compute
-        - label: Communication (WebSocket/HTTP)
-        - label: Other
-
   - type: dropdown
-    id: priority
+    id: area
     attributes:
-      label: Priority
-      description: How important is this to you?
+      label: Which part of Selva?
+      description: Best guess is fine — a maintainer will confirm.
       options:
-        - Nice to have
-        - Normal
-        - High
-        - Critical / blocking
+        - Not sure
+        - Grasshopper plugin (C#)
+        - Schema builder / plugin UI
+        - Cloud app
+        - 3D viewer
+        - Solving / Rhino.Compute
+        - Auth, projects, permissions
+        - Build, CI, deployment
     validations:
       required: true
 
   - type: dropdown
     id: contribution
     attributes:
-      label: Would you be willing to contribute this feature?
+      label: Want to help build it?
       options:
         - 'No'
-        - 'No, but I can test it'
-        - 'Yes, I can help implement it'
+        - 'I can test it'
+        - 'I can implement it'

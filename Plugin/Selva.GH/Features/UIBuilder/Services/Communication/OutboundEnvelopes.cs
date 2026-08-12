@@ -12,36 +12,23 @@ namespace Selva.GH.Features.UIBuilder.Services.Communication;
 ///     transport state (solving-state dedup, binary frames, the live <see cref="WebSocketServer" />
 ///     all stay in <see cref="WebSocketTransport" />).
 ///
-///     This exists so the wire-outbound contract is unit-testable. The two rules that historically
-///     drifted and broke the UI silently — both now enforced by tests in OutboundEnvelopesTests:
-///     <list type="bullet">
-///         <item>
-///             <see cref="ParametersAdded" /> is FLAT (`availableParams` at the top level), because
-///             the TS `WsParametersAddedMessage` reads it there. Wrapping it under `data:` made the
-///             field undefined and forced a silent fallback round-trip.
-///         </item>
-///         <item>
-///             <see cref="MetadataUpdated" />'s `changedParams` is a FLAT array keyed by parameter
-///             id (inputs and outputs mixed). Sending the nested <see cref="DiscoveredParameters" />
-///             object instead made the UI call `.forEach` on a non-array and throw.
-///         </item>
-///     </list>
-///     The generic <see cref="Wrapped" /> envelope (`{ type, sessionId, data }`) is the opposite
-///     convention — only for messages whose TS type reads `msg.data.&lt;field&gt;`.
+///     Two envelopes are FLAT rather than wrapped, matching what their TS message types read at
+///     the top level instead of under `data:` — wrapping either broke the UI silently in the past:
+///     <see cref="ParametersAdded" />'s `availableParams`, and <see cref="MetadataUpdated" />'s
+///     `changedParams` (a flat array keyed by parameter id, inputs and outputs mixed — the UI calls
+///     `.forEach` on it, which throws on the nested <see cref="DiscoveredParameters" /> shape).
+///     The generic <see cref="Wrapped" /> envelope (`{ type, sessionId, data }`) is for the rest,
+///     whose TS type reads `msg.data.&lt;field&gt;`.
 /// </summary>
 public static class OutboundEnvelopes
 {
     /// <summary>
-    ///     Generic envelope `{ type, sessionId, data }`. Use ONLY for messages whose TS type reads
-    ///     fields under `msg.data.*`. Never for messages that read fields at the top level.
+    ///     Generic envelope `{ type, sessionId, data }`. Only for messages whose TS type reads
+    ///     fields under `msg.data.*` — never for messages that read fields at the top level.
     /// </summary>
     public static object Wrapped(string sessionId, string messageType, object data) =>
         new { type = messageType, sessionId, data };
 
-    /// <summary>
-    ///     `parametersAdded` — FLAT: `availableParams` sits at the top level, matching
-    ///     `WsParametersAddedMessage`.
-    /// </summary>
     public static object ParametersAdded(string sessionId, DiscoveredParameters availableParams) =>
         new { type = "parametersAdded", sessionId, availableParams };
 
@@ -106,12 +93,10 @@ public static class OutboundEnvelopes
         };
 
     /// <summary>
-    ///     The `outputs` JSON envelope (the binary mesh frames that follow are sent separately by the
-    ///     transport). `binaryBatchCount` tells the client how many binary frames to collect.
-    ///     `displayItems` carries the non-mesh display items (curves, points; later labels/icons)
-    ///     as JSON — unlike meshes these have no binary form, so they ride the envelope directly and
-    ///     the client tessellates them. Omitted (null) when there are none, so a mesh-only solve is
-    ///     byte-for-byte as before.
+    ///     The `outputs` JSON envelope; binary mesh frames follow separately from the transport.
+    ///     `binaryBatchCount` tells the client how many to collect. `displayItems` carries non-mesh
+    ///     items (curves, points) as JSON, since they have no binary form; null when there are none,
+    ///     so a mesh-only solve stays byte-for-byte identical to before displayItems existed.
     /// </summary>
     public static object Outputs(string sessionId, Dictionary<string, object> outputs,
         Dictionary<string, object> fileOutputs, int binaryBatchCount, string modelUnits,
@@ -128,11 +113,10 @@ public static class OutboundEnvelopes
         };
 
     /// <summary>
-    ///     `metadataUpdated` — flattens a <see cref="DiscoveredParameters" /> into the FLAT array the
-    ///     UI expects (inputs + outputs mixed, keyed by id). Returns null when there is nothing to
-    ///     report, so the transport can skip the broadcast. Entries are dictionaries so absent
-    ///     optional fields are simply not emitted — the UI's `!== undefined` checks require missing
-    ///     keys, not explicit nulls.
+    ///     Flattens <see cref="DiscoveredParameters" /> into the array the UI expects (inputs and
+    ///     outputs mixed, keyed by id). Null when there's nothing to report, so the transport can
+    ///     skip the broadcast. Entries are dictionaries so an absent optional field is omitted
+    ///     entirely — the UI's `!== undefined` checks need a missing key, not an explicit null.
     /// </summary>
     public static object MetadataUpdated(string sessionId, DiscoveredParameters changedParams)
     {

@@ -37,15 +37,41 @@ jobs:
       - name: Check publish invariants
         run: node scripts/publishable-packages.mjs --check
 
+      # Released Grasshopper components bind wires by parameter index — a
+      # changed param list on an existing GUID silently rewires saved
+      # definitions. Structural changes must go through the OBSOLETE +
+      # upgrader procedure (STRUCTURE.md) with a new GUID.
+      - name: Check component signatures
+        run: node scripts/check-component-signatures.mjs --check
+
+      # Mixed or misnamed changesets only fail in `changeset version`, i.e. in
+      # the release job after the test gate has already passed.
+      - name: Validate changeset contents
+        run: node scripts/validate-changesets.mjs
+
+      # Releases are changeset-driven: a publishable-package change without a
+      # changeset never ships. `pnpm changeset --empty` is the opt-out.
+      - name: Check changesets
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          node scripts/check-changesets.mjs --base FETCH_HEAD
+
       # --prod excludes devDeps, so this gates only what actually ships.
       - name: Audit production dependencies
         run: pnpm audit --prod --audit-level moderate
 
       # ui-schema.json is the source of truth; the generated TS/C# is derived.
-      # The generators only error when someone runs them locally — this is the
-      # CI backstop.
+      # This is the CI backstop for both generator guarantees: stale committed
+      # output, and (on PRs) a definitions change without a schemaVersion bump.
+      # The bump guard compares against the PR base — in CI the working tree
+      # always matches HEAD, so its default HEAD comparison can never fire.
       - name: Verify generated code is up to date
         run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --depth=1 origin "${{ github.base_ref }}"
+            export SCHEMA_GUARD_BASE_REF=FETCH_HEAD
+          fi
           pnpm generate
           if ! git diff --exit-code -- \
             packages/schemas/src/generated \

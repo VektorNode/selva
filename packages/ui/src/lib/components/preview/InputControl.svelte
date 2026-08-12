@@ -34,9 +34,9 @@
 		value?: SupportedTypes;
 		displayName?: string;
 		/**
-		 * Commit a value. `forceSolve` requests a solve even in manual-solve mode — used for
-		 * system-initiated reconciliation (e.g. pruning a vanished dynamic-list selection) where
-		 * leaving the previous output on screen would misrepresent the now-changed input.
+		 * `forceSolve` solves even in manual-solve mode. Used for system-initiated changes
+		 * (e.g. pruning a vanished dynamic-list selection), where leaving the previous output
+		 * on screen would misrepresent the input that now sits above it.
 		 */
 		onChange: (paramId: string, value: SupportedTypes, forceSolve?: boolean) => void;
 		disabled?: boolean;
@@ -56,9 +56,8 @@
 	const inputId = $derived(`input-${item.paramId}`);
 	const label = $derived(displayName || item.displayName || item.paramId);
 
-	// Client-sourced input set to render a host element in its place. The 'hidden'
-	// presentation never reaches here (visible:false filters it out upstream), so a
-	// client slot source means presentation === 'slot'.
+	// The 'hidden' presentation never reaches here — visible:false filters it out
+	// upstream — so a client-sourced input here always means presentation === 'slot'.
 	const isClientSlot = $derived.by(() => {
 		const source = (item as { source?: { kind?: string; client?: { presentation?: string } } })
 			.source;
@@ -66,7 +65,7 @@
 	});
 	const clientSlot = getClientSlot();
 
-	// Number range hint — shown next to label for sliders, under the input for plain number fields.
+	// Min/max hint rendered next to the label. `hideRange` lets the author suppress it.
 	const numberRangeHint = $derived.by(() => {
 		if (!isNumberWidget(item)) return null;
 		const cfg = item.config;
@@ -81,8 +80,8 @@
 
 	const showRangeInLabel = $derived(isNumberWidget(item) && numberRangeHint !== null);
 
-	// Dynamic value list: computed options (from the last solve) take precedence over the
-	// author's seed list. Empty until the first solve produces options, unless a default is set.
+	// Options from the last solve win over the author's seed list, so the control is empty
+	// until the first solve unless defaultOptions is set.
 	const dynamicListConfig = $derived(
 		isDynamicValueListWidget(item)
 			? (item.config as DynamicValueListWidgetConfig | undefined)
@@ -109,22 +108,22 @@
 			(dynamicListConfig?.emptyBehavior ?? 'hide') === 'hide'
 	);
 
-	// When a dynamic value list recomputes, a previously-selected value may no longer be an
-	// available option. Prune the stale selection so the control shows a valid option instead
-	// of rendering the orphaned raw value as its own label. This is a system-initiated change
-	// (the user didn't pick the new option), so force a solve — otherwise manual-solve schemas
-	// would keep the prior output on screen, making it look like the auto-picked option produced it.
+	// When a dynamic value list recomputes, the selected value may no longer be an option.
+	// Prune it so the control shows a valid option instead of rendering the orphaned raw
+	// value as its own label. The user didn't pick this, so force a solve — otherwise a
+	// manual-solve schema keeps the prior output on screen, making it look like the
+	// auto-picked option produced it.
 	//
-	// INVARIANT: a dynamic value list must never dispatch an empty/null value to solve. There
-	// is always at least one option, and an empty selection reaches the definition as null/""
-	// — which throws NREs in downstream geometry components (e.g. Bounding Rectangle) and nulls
-	// every output beyond them. So every terminal state below resolves to a valid option; there
-	// is deliberately no "user cleared it, stay empty" path.
+	// INVARIANT: a dynamic value list must never dispatch an empty/null value to solve. An
+	// empty selection reaches the definition as null/"", which throws NREs in downstream
+	// geometry components (e.g. Bounding Rectangle) and nulls every output beyond them.
+	// There is always at least one option, so every terminal state below resolves to one;
+	// there is deliberately no "user cleared it, stay empty" path.
 	//
-	// LOOP BREAKER: a definition whose computed options DEPEND on the selection can oscillate —
-	// auto-pick A → solve → new options exclude A → auto-pick B → solve → … Each cycle force-
-	// solves and re-parses/re-renders the (possibly multi-MB) options, which FREEZES the tab
-	// (each solve result blocks the main thread; the loop never yields). Bound consecutive
+	// LOOP BREAKER: a definition whose computed options DEPEND on the selection can oscillate
+	// — auto-pick A → solve → new options exclude A → auto-pick B → solve → … Each cycle
+	// force-solves and re-parses the (possibly multi-MB) options, freezing the tab: every
+	// solve result blocks the main thread and the loop never yields. Bound consecutive
 	// system-initiated picks; any real user commit resets the budget.
 	const MAX_CONSECUTIVE_AUTO_PICKS = 3;
 	let autoPickCount = 0;
@@ -133,11 +132,11 @@
 		if (!isDynamicValueListWidget(item) || !dynamicListHasOptions) return;
 		const validValues = new Set(Object.values(dynamicListOptions));
 		const firstOption = Object.values(dynamicListOptions)[0];
-		// Already valid → stable; refill the auto-pick budget and stop.
 		const isValid = Array.isArray(value)
 			? value.length > 0 && value.every((v) => typeof v === 'string' && validValues.has(v))
 			: typeof value === 'string' && value !== '' && validValues.has(value);
 		if (isValid) {
+			// Settled on a valid option — refill the budget.
 			autoPickCount = 0;
 			return;
 		}
@@ -151,21 +150,21 @@
 		}
 		if (Array.isArray(value)) {
 			const pruned = value.filter((v) => typeof v === 'string' && validValues.has(v));
-			// Empty (never selected or fully pruned) always falls back to the first option —
-			// a checklist that solves empty produces the same null cascade as a single value.
+			// Empty — never selected or fully pruned — falls back to the first option: a
+			// checklist that solves empty produces the same null cascade as a single value.
 			if (pruned.length !== value.length || value.length === 0) {
 				autoPickCount++;
 				onChange(item.paramId, pruned.length > 0 ? pruned : [firstOption], true);
 			}
 		} else if (typeof value !== 'string' || value === '' || !validValues.has(value)) {
-			// Never-selected or stale single value — fall back to the first option.
+			// Same fallback for a single value: never-selected and stale both resolve, never clear.
 			autoPickCount++;
 			onChange(item.paramId, firstOption, true);
 		}
 	});
 
 	function commit(newValue: SupportedTypes) {
-		// A real user pick re-arms the system fallback (see autoPickCount above).
+		// A real user pick re-arms the auto-pick budget.
 		autoPickCount = 0;
 		value = newValue;
 		onChange(item.paramId, newValue);

@@ -1,23 +1,18 @@
-name: Verification / TODO
-description: Empirically verify a behavior or claim that is currently only reasoned about
-title: '[Verify]: '
-labels: ['verification']
+name: Verification
+description: Check a claim we have only reasoned about, never measured
+type: Verification
+labels: ['needs-triage']
 body:
   - type: markdown
     attributes:
-      value: |
-        Use this for work whose output is **evidence**, not a code change: measuring a real
-        flow end-to-end, confirming a suspected problem is real before fixing it, or checking
-        that two settings tuned separately actually agree. If you already know something is
-        broken, file a Bug instead.
+      value: 'For work whose output is **evidence**, not a code change. If you already know something is broken, file a Bug.'
 
   - type: textarea
     id: claim
     attributes:
       label: What do we currently believe?
-      description: The claim to be tested, and where it came from (audit item, code reading, hunch)
-      placeholder: |
-        Reading the code suggests X. This has never been observed against a running system.
+      description: The claim to be tested, and where it came from.
+      placeholder: 'Reading the code suggests X. This has never been observed against a running system.'
     validations:
       required: true
 
@@ -25,11 +20,7 @@ body:
     id: how-to-verify
     attributes:
       label: How would we find out?
-      description: The concrete experiment — what to drive, what to watch, what to record
-      placeholder: |
-        1. Run the app against ...
-        2. Perform ... while capturing ...
-        3. Record ...
+      description: What to drive, what to watch, what to record.
     validations:
       required: true
 
@@ -37,32 +28,16 @@ body:
     id: outcomes
     attributes:
       label: What would each outcome mean?
-      description: What confirms the claim, what refutes it, and what follow-up work each implies
       placeholder: |
-        Confirmed → implies ...
-        Refuted → implies ...
+        Confirmed → ...
+        Refuted → ...
     validations:
       required: true
-
-  - type: checkboxes
-    id: affected-areas
-    attributes:
-      label: Affected Components
-      options:
-        - label: Plugin UI (@selvajs/plugin-ui)
-        - label: Cloud App (@selvajs/selva)
-        - label: Shared UI (@selvajs/ui)
-        - label: Grasshopper Plugin (C#)
-        - label: Schema (@selvajs/schemas)
-        - label: Core / Compute
-        - label: Communication (WebSocket/HTTP)
-        - label: Other
 
   - type: dropdown
     id: blocking
     attributes:
       label: Is other work blocked on this?
-      description: Verification usually exists to stop someone building on an unchecked assumption
       options:
         - 'No — informational'
         - 'Yes — a fix is waiting on the result'

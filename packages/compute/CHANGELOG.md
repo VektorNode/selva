@@ -1,5 +1,495 @@
 # @selvajs/compute
 
+## 4.0.0-beta.8
+
+### Major Changes
+
+- f8560f1: **`Sub Folder` now names the download archive, so one output can produce several zips.** This
+  changes what existing definitions download, without any authoring change — read the migration note
+  below before releasing.
+
+  The `Sub Folder` input on the Grasshopper file components (`Geometry To File`, `Data To File`,
+  `Block To File`, `File From Path`, `Render PDF`, `Render SVG`) gains `::` as a nesting separator,
+  matching Rhino's layer syntax. The **first segment is the root**, and it names the archive instead
+  of becoming a folder inside it:
+
+  | `Sub Folder`          | Downloads as                          |
+  | --------------------- | ------------------------------------- |
+  | _(empty)_             | `<widget>.zip` → `model.3dm`          |
+  | `Panels`              | `Panels.zip` → `model.3dm`            |
+  | `ROOT::Panels`        | `ROOT.zip` → `Panels/model.3dm`       |
+  | `ROOT::First::Second` | `ROOT.zip` → `First/Second/model.3dm` |
+
+  Files sharing a root travel in one archive; **distinct roots produce separate archives.** Two
+  components writing `ROOT::Panels` and `OTHERROOT::Panels` into the same Context Bake now download as
+  `ROOT.zip` and `OTHERROOT.zip`. This is the point of the change — it makes grouping authorable from
+  the file components, which is the only place a Hops Context Bake leaves you any control.
+
+  Roots are matched literally, so `ROOT` and `Root` are two different archives. Folder names are
+  case-sensitive on Linux and macOS, and silently merging them would be its own surprise.
+
+  ## Migration
+
+  **A definition whose files use two or more distinct `Sub Folder` values now downloads as several
+  zips instead of one.** Nothing is lost — the same files with the same relative structure — but the
+  count of downloaded archives changes, their names change, and one folder level moves out of the
+  archive into its name:
+
+  ```diff
+    # Sub Folder = "Panels" on one component, "Frames" on another
+  - files.zip
+  -   Panels/a.3dm
+  -   Frames/b.3dm
+  + Panels.zip
+  +   a.3dm
+  + Frames.zip
+  +   b.3dm
+  ```
+
+  To keep a single archive, give those components a shared root: `Group::Panels` and `Group::Frames`
+  download as one `Group.zip` containing `Panels/a.3dm` and `Frames/b.3dm`.
+
+  Definitions that leave `Sub Folder` empty are unaffected — still one flat archive named after the
+  output widget.
+
+  Browsers may prompt before saving more than one file per click ("Allow this site to download
+  multiple files?"). That is inherent to producing several archives from one gesture.
+
+  ## Fixes
+
+  **`::` used to fail outright.** Baking to disk passed the raw value to `Directory.CreateDirectory`,
+  which throws `IOException` on Windows because `:` is illegal in a directory name; the web path
+  produced a literal folder named `ROOT::Panels`. Neither did what anyone typing it would expect, so
+  no definition can have depended on the old behaviour. `/` and `\` are now accepted as separators
+  too, and `.`, `..` and drive-letter segments are dropped on both paths.
+
+  **File `metadata` reached cloud consumers but never local ones.** The WebSocket collector built its
+  payload by hand and omitted the field, so the same definition returned metadata through
+  Rhino.Compute and dropped it through the plugin's local server.
+
+  **`additionalFiles` were dropped when every file had a root.** They attached only to the rootless
+  archive, which does not exist in that case. They now ride with the first archive, and extras with no
+  files at all still produce one.
+
+  ## API
+
+  New on `@selvajs/compute/core`:
+
+  - `downloadFileDataByRoot(files, fallbackName, additionalFiles?)` — the per-root archive split.
+    `fallbackName` names the archive for files with no root.
+  - `groupFilesByRoot(files)` — just the grouping, no DOM. For consumers that write files themselves
+    rather than zipping them; `downloadFileData` is browser-only and throws in Node, this is not.
+
+  `downloadFileData` is unchanged and still exported.
+
+  `@selvajs/ui`'s `downloadFiles` keeps its signature — its second argument is now the fallback name
+  used only when files carry no root. The grouping logic it briefly owned moved into
+  `@selvajs/compute`, where the `Sub Folder` convention already lived; a copy in the UI package would
+  have been a third place to keep in sync with the plugin and the archive sanitizer.
+
+## 4.0.0-beta.7
+
+### Minor Changes
+
+- a886b85: `ProcessedFile` keeps the GH-owned `subFolder` and `metadata` that `FileData` carried.
+
+  `extractFilesFromComputeResponse` normalizes each `FileData` into a `ProcessedFile` shaped for an
+  archive: `subFolder` is fused into `path`, and `metadata` was dropped entirely. That is right for
+  the ZIP path — `downloadFileData` only needs a path per entry — but it loses data for the other
+  public entry point, whose whole purpose is handing files to a caller that stores them itself.
+
+  A consumer that persists files per output slot needs both fields back. Recovering them meant
+  pairing the returned `ProcessedFile[]` against the raw `FileData[]` **by index**, which reads as a
+  coincidence rather than a contract and is ambiguous the moment `processFiles` renames a duplicate
+  path (`out/model.txt` → `out/model-2.txt`): the rename is exactly when a caller would re-split
+  `path` to recover the folder, and exactly when that re-split is wrong.
+
+  Both fields are now carried through:
+
+  - **`subFolder`** — the sanitized folder, separately from `path`. `''` means archive root. It is the
+    same value that went into `path`, so zip-slip sanitization applies to both (`../../etc` reports
+    `etc`, matching the path).
+  - **`metadata`** — the Grasshopper-authored map, verbatim. Read case-insensitively via `readField`
+    like every other wire field, so PascalCase (mcneel branch) and camelCase (VektorNode fork)
+    payloads both decode. Inner keys are author-controlled and are never rewritten.
+
+  Both are optional on the type, so hand-built `ProcessedFile`s still typecheck. `metadata` is omitted
+  rather than set to `undefined` when the source item had none, and files fetched from a
+  `FileBaseInfo` URL get `subFolder` but never `metadata` — an external URL carries no GH authoring
+  context.
+
+  Additive: existing consumers read `fileName`/`content`/`path` and are unaffected.
+
+## 4.0.0-beta.6
+
+### Minor Changes
+
+- 39db6f5: The supported Node floor moves from 22 to 24.
+
+  Node 24 ("Krypton") is the active LTS; Node 22 leaves maintenance in April 2027. Every package's
+  `engines.node` is now `>=24.0.0`, and CI builds and tests on 24 instead of 22.
+
+  **This is visible to operators before it is visible to anyone else.** `@selvajs/cli` derives its
+  floor from its own `engines.node` rather than a literal, so `selva doctor` and the create-time
+  guard follow the bump automatically: a deployment running Node 22 that passed `doctor` yesterday is
+  reported as out of range today. Nothing about the deployment changed — the floor moved under it.
+  Upgrade the host's runtime before taking this version of the CLI.
+
+  The admin UI's update check reports the same thing from the other direction: it compares the
+  running Node against the `engines.node` of the release it fetched from npm, so it starts flagging a
+  Node 22 host as soon as a `>=24` version is published, with no client-side change at all.
+
+  No source change was needed. The Node builtins in use are long-stable (`fs`, `path`, `crypto`,
+  `url`, `os`, `net`, `zlib`), there are no experimental APIs or `--experimental` flags in the tree,
+  and every dependency's own engine range already admitted 24.
+
+## 4.0.0-beta.5
+
+### Patch Changes
+
+- a011c5e: Unify the vitest setup across the workspace behind `@selvajs/config/vitest`.
+
+  Packaging fix: `@selvajs/compute`, `@selvajs/solve`, `@selvajs/visualization`
+  and `@selvajs/schemas` had no test-file exclusion in `files`, so a change of
+  build tool would have shipped tests to npm. All publishable packages now carry
+  the same exclusion.
+
+  `@selvajs/platform`'s test suite was never wired to a runner and had never
+  executed; it now runs with the rest.
+
+## 4.0.0-beta.4
+
+### Patch Changes
+
+- 0e2c428: Clean up published tarballs. The monorepo-internal `source` export condition is renamed to `selva-source` so it can never collide with a consumer resolving the common `source` condition; published packages no longer ship raw `src/` TypeScript or compiled test files. Publish-time manifest rewriting is gone — the committed package.json is what ships, gated by `publint --strict` and a tarball contents check.
+
+## 4.0.0-beta.3
+
+### Major Changes
+
+- 5292563: **Public vocabulary stops promising Rhino.** Coordinated pre-1.0 major — no deprecation shims, no
+  aliases left behind. Every reference across the workspace was updated in the same commit.
+
+  ```diff
+  -import { fetchRhinoCompute, RhinoComputeError } from '@selvajs/compute/core';
+  +import { fetchCompute, ComputeError } from '@selvajs/compute/core';
+  ```
+
+  ```diff
+  -import type { GrasshopperParamType, GrasshopperInputStructure } from '@selvajs/schemas';
+  +import type { ParamType, InputStructure } from '@selvajs/schemas';
+  ```
+
+  Both renamed schema types were already backend-agnostic in value (`ParamType` is
+  `number|integer|boolean|text|valueList|dynamicValueList|file|color|generic`; `InputStructure` is
+  just arity — `item|list|tree`). Only the names were Rhino-flavored. The rename does not touch wire
+  data: `paramType` still serializes as its lowercase string value, never the type name. Regenerated
+  via `pnpm generate` — the C# plugin types regenerate too (`Plugin/Selva.Schema/Models/UISchema.Generated.cs`),
+  so this needs a plugin rebuild.
+
+  **`@selvajs/compute`'s root barrel is gone** — subpaths only, matching `@selvajs/solve` (no root
+  export) and `@selvajs/visualization` (root deliberately empty):
+
+  ```diff
+  -import { GrasshopperClient } from '@selvajs/compute';
+  +import { GrasshopperClient } from '@selvajs/compute/grasshopper';
+  ```
+
+  **Env var renamed:** `MAX_GH_FILE_SIZE_BYTES` → `MAX_DEFINITION_FILE_SIZE_BYTES`. No dual-read —
+  operators update `.env` on upgrade. Everything else in `.env.example` was already neutral
+  (`COMPUTE_*`).
+
+  Also reworded the Rhino-flavored doc strings in `ui-schema.json` that described backend-agnostic
+  fields (e.g. a parameter identifier documented as "Grasshopper instance GUID" when the field
+  itself is just a bare string, backend-specific by convention rather than by type).
+
+## 4.0.0-beta.2
+
+### Major Changes
+
+- 9f60b66: **`@selvajs/compute/core` is now backend-agnostic** — it names no Rhino concept, so a second
+  backend inherits its retry, backoff, abort-composition, `Retry-After` and status→code machinery
+  for free.
+
+  Two exports changed subpath:
+
+  ```diff
+  -import { ComputeServerStats } from '@selvajs/compute/core';
+  +import { ComputeServerStats } from '@selvajs/compute/grasshopper';
+  ```
+
+  `ComputeServerStats` is pure rhino.compute control plane (`/activechildren`,
+  `/plugins/gh/installed`, `/idlespan`), so `/core` was the wrong home. The inverse move:
+  `DefinitionRef`, `SolveDefinition` and `isDefinitionRef` are bytes-or-a-lazy-byte-ref with nothing
+  Grasshopper in them, and they sit in the solve port's own signature — they now export from
+  `/core` as well as `/grasshopper`, so a second backend's author isn't forced to import them from
+  the Grasshopper subpath. `RhinoModelUnit` moved from `/core` to `/grasshopper`.
+
+  The root `@selvajs/compute` entrypoint re-exports both subpaths, so importers from the root are
+  unaffected.
+
+  Three new seams carry what used to be hardcoded in core:
+
+  - **`ComputeConfig.apiKeyHeader`** — the auth header's name, defaulting to `RhinoComputeKey`. The
+    key still merges over `config.headers`, so a caller can't clobber whichever header carries it.
+  - **`ComputeConfig.serverErrorCodes`** — a backend's machine wire codes mapped to our
+    `ErrorCodes`, outranking the status-based mapping (type `ServerErrorCodeMap`). Core no longer
+    hardcodes `definition_not_cached`; the Grasshopper client supplies it on every request, so
+    `ErrorCodes.DEFINITION_NOT_CACHED` still surfaces exactly as before.
+  - **`validateServerUrl(url, { blockedHosts })`** — the shared public endpoint to reject, still
+    defaulting to `compute.rhino3d.com`. Now exported from `/core` alongside `DEFAULT_BLOCKED_HOST`
+    and the options type `ValidateServerUrlOptions`.
+
+  Nothing above changes behaviour for an existing caller: every new field is optional and defaults to
+  what core did before. Only the two subpath moves require an edit.
+
+- 9f60b66: **Every deprecated symbol in `@selvajs/compute` is gone.** Nothing is left as a stub — this is a
+  coordinated pre-1.0 major, so there is nothing to ease.
+
+  **`camelcaseKeys` and `toCamelCase` are removed from `@selvajs/compute/core`.** They were
+  deprecated in favour of `readField`, which now takes their export slot alongside `hasField`:
+
+  ```diff
+  -import { camelcaseKeys } from '@selvajs/compute/core';
+  -const { schemas } = camelcaseKeys(entry) as { schemas?: UISchema[] };
+  +import { readField } from '@selvajs/compute/core';
+  +const schemas = readField<UISchema[]>(entry, 'schemas');
+  ```
+
+  Blanket key-rewriting was the wrong tool for wire payloads: it corrupted user-authored keys
+  (value-list labels, `Display3d` → `display3d`) while the actual problem — server branches
+  disagreeing on casing for a handful of known fields — is what `readField` solves per-field.
+
+  **If you were unwrapping compute's schema endpoint with it, you had the bug described below.**
+  Use the new `readSchemaResults` instead of hand-rolling the unwrap:
+
+  ```diff
+  -const results = camelcaseKeys(Array.isArray(raw) ? raw : [raw]) as { schemas?: UISchema[] }[];
+  +import { readSchemaResults } from '@selvajs/compute/grasshopper';
+  +const results = readSchemaResults<UISchema>(raw);
+  ```
+
+  **`ComputeConfig.suppressClientSideWarning` is removed.** Use `suppressBrowserWarning`, which it
+  has been an alias for.
+
+  **New: `readSchemaResults` on `@selvajs/compute/grasshopper`** — the one correct way to unwrap
+  `/grasshopper/schema`'s `[{ FileName, Schemas }]` body.
+
+  It exists because everyone who hand-rolled that unwrap got it wrong the same way. The wrapper's
+  casing varies by server branch (mcneel `FileName`/`Schemas`, our fork `fileName`/`schemas`), so a
+  fixed-key read yields `undefined` against half of them — and the endpoint answers 200 either way,
+  so the failure surfaces as "this definition has no schemas". Reaching for `camelcaseKeys` looked
+  like the fix but passed the response **array** to a shallow key-rewriter, which returns arrays
+  untouched: same `undefined`, now with a comment claiming it was handled.
+
+  That was live in this repo: every upload through `/api/v1/compute/schema` 422'd with "No schemas
+  found in definition". Fixed here, and `@selvajs/server/definitions` re-exports the helper typed to
+  `UISchema` so the app layer keeps its concrete type.
+
+  `readSchemaResults<TSchema>(raw)` returns `SchemaEndpointResult<TSchema>[]` — `{ schemas?, error? }`
+  per file. `TSchema` is pass-through; the helper reads only the two wrapper keys and never looks
+  inside a schema, so `@selvajs/compute` still doesn't depend on `@selvajs/schemas`. Pass your own
+  schema type, or omit it for `unknown`.
+
+  Also removed the unused legacy test builders (`createMockGrasshopperInput` and friends,
+  `createMockThreeGeometry`) from the package's test helpers.
+
+## 4.0.0-beta.1
+
+### Major Changes
+
+- e4f83b2: Bound the scheduler's solve cache by bytes only. `CacheOptions.maxEntries` is
+  removed and `maxBytes` is now required, so `cache: true` is no longer valid —
+  enabling a cache always states a budget. A budget of `0` disables caching, the
+  same as `cache: false`.
+
+  Two bounds meant every caller had to reason about which one would bind first,
+  and omitting `maxEntries` silently fell back to a default of 50 that could cap
+  the cache far below its byte budget. Responses range from KB to hundreds of MB,
+  so memory is the constraint that actually matters.
+
+  Migration: `cache: true` → `cache: { maxBytes: <budget> }`; drop `maxEntries`.
+
+## 4.0.0-beta.0
+
+### Major Changes
+
+- 53da168: Prune the public API and unwrap the package's internal layout. Every removed symbol has a
+  same-package replacement — the changes below are import rewrites, not behaviour changes.
+
+  **`./grasshopper` no longer re-exports four `./core` symbols.** `ComputeConfig`, `RetryPolicy`,
+  `RhinoComputeError`, and `RhinoModelUnit` reached the subpath only because the old
+  `src/grasshopper.ts` barrel ended with a re-export from `./core`. Import them from the package root
+  or from `@selvajs/compute/core` instead:
+
+  ```diff
+  - import { RhinoComputeError, type ComputeConfig } from '@selvajs/compute/grasshopper';
+  + import { RhinoComputeError, type ComputeConfig } from '@selvajs/compute';
+  ```
+
+  **`getValues` and `getValue` are no longer exported as free functions.** Use the
+  `GrasshopperResponseProcessor` methods, which are exact wrappers — identical arguments minus the
+  leading `response`:
+
+  ```diff
+  - import { getValues, getValue } from '@selvajs/compute/grasshopper';
+  - const { values } = getValues(response);
+  - const schema = getValue(response, { byName: 'Schema' });
+  + import { GrasshopperResponseProcessor } from '@selvajs/compute';
+  + const processor = new GrasshopperResponseProcessor(response);
+  + const { values } = processor.getValues();
+  + const schema = processor.getValue({ byName: 'Schema' });
+  ```
+
+  **`processInputs` (plural) is removed.** It was a one-line `.map()` over `processInput`, which stays
+  public. Note the shape change — it took and returned an array:
+
+  ```diff
+  - import { processInputs } from '@selvajs/compute/grasshopper';
+  - const inputs = processInputs(rawInputs);
+  + import { processInput } from '@selvajs/compute';
+  + const inputs = rawInputs.map(processInput);
+  ```
+
+  `processInputsWithErrors`, which reported validation failures instead of logging them, is now
+  internal. It was never exported from a published entrypoint before this release.
+
+  **The README no longer documents a Three.js visualization layer.** That layer moved to
+  `@selvajs/visualization` in an earlier release, but the install line
+  (`npm install @selvajs/compute three`), the `three >= 0.179.0` requirement, and a troubleshooting
+  entry for a module that no longer exists all survived in the docs. `three` was never a dependency of
+  this package and installing it for `@selvajs/compute` alone was always unnecessary.
+
+  **Internal layout (no API impact).** `src/features/grasshopper/` collapsed to `src/grasshopper/`,
+  the duplicate outer barrel is gone, and four oversized modules were split along existing seams —
+  `compute-fetch.ts` (858 lines) into request/response/retry/signal/server-timing, `types.ts` into
+  `types/{inputs,schema,outputs}`, `input-type-parsers.ts` into transformers + numeric-rounding, and
+  the scheduler's public declarations into `scheduler/types.ts`. Deep imports into `src/` were never
+  supported; the three published entrypoints (`.`, `./grasshopper`, `./core`) are unchanged.
+
+  The `/grasshopper` subpath goes from 55 exported symbols to 50, verified by diffing the emitted
+  `dist/grasshopper.d.ts` before and after.
+
+- 7751bd0: Extract parsing and rendering into a new `@selvajs/visualization` package.
+
+  `@selvajs/compute` was doing two unrelated jobs: talking to Rhino.Compute, and turning the response
+  into Three.js objects. The second job is now its own package with documented layer boundaries
+  (`session → scene → render → parse → shared`, depending downward only), so a consumer can build
+  their own viewer over it.
+
+  This lands all five layers — `shared/`, `parse/`, `render/`, `scene/` and `session/`.
+  **`@selvajs/compute` no longer depends on `three` in any form** (peer dep and dev deps both gone);
+  it is now pure solve/data, and `@selvajs/ui` keeps only the Svelte shells plus the design system.
+
+  **Fixed — hiding an object in the viewer now survives a solve.**
+
+  Hiding a mesh in the scene manager and then changing an input brought it straight back: a solve
+  discards all scene content and rebuilds it, and hidden state was keyed on the per-instance
+  `THREE.Object3D.uuid`, which does not survive that. It is now keyed on the object's Grasshopper
+  identity (`sourceComponentId` + `originalIndex`, or a display item's `id`, falling back to
+  name+layer for content from older plugin versions), so it survives any number of solves. Hiding is
+  also remembered when a definition edit stops producing that geometry — if it comes back, it comes
+  back hidden.
+
+  **New in `@selvajs/visualization` — `@selvajs/visualization/scene`:**
+
+  The viewer's object list is no longer trapped in a Svelte component. `createSceneOutliner` answers
+  the questions any presentation of a scene has to answer — which children are content rather than
+  cameras/lights/grid, how they group by layer, what is hidden, what is selected — with no DOM:
+
+  ```ts
+  import { createSceneOutliner } from '@selvajs/visualization/scene';
+
+  const outliner = createSceneOutliner(scene);
+  outliner.searchQuery = 'wall';
+  outliner.layerGroups(); // Map<layerName, Object3D[]>, search-filtered
+  outliner.toggleObject(mesh); // follows a multi-selection
+  outliner.select(uuid, { shiftKey, toggleKey });
+  ```
+
+  It **reads** the scene and toggles `.visible`; `updateScene` remains the sole owner of scene
+  contents. Its mutable state is injectable, so a Svelte host passes `SvelteSet`s and gets reactivity
+  without any subscribe/emit machinery:
+
+  ```ts
+  createSceneOutliner(scene, { sets: { hidden, selected, collapsed } });
+  ```
+
+  Hosts driving their own viewer must call `outliner.applyTo()` after each solve to re-apply hidden
+  state to the rebuilt content — `<Viewer>` does this for you.
+
+  `getSceneObjects`, `groupByLayer`, `filterLayerGroups`, `isSceneContent` and the visibility/selection
+  state machines are exported individually for consumers that want the parts, not the composition.
+
+  **New in `@selvajs/ui` — `useSolveSession`:**
+
+  The Solve Session moved to `@selvajs/visualization/session` and is now framework-free: its state
+  reads through plain getters plus a `subscribe()` seam, so it can drive a headless solve with no
+  Svelte in the picture. In a component, use the new binding instead of the raw factory — it
+  subscribes once and republishes as rune state, which is what keeps `session.values`/`meshes` live
+  in markup:
+
+  ```ts
+  import { useSolveSession } from '@selvajs/ui';
+
+  const driver = createRequestResponseDriver(onSolve, () => session, {
+  	// `isSolving` lives on the driver, which the session can't observe — republish it.
+  	onChange: () => session.notify()
+  });
+  const session = useSolveSession({ schema, scopeKey, driver });
+  ```
+
+  Calling `createSolveSession` directly in a component still compiles and returns correct values, but
+  nothing re-renders. `@selvajs/ui` re-exports it (plus `SolveDriver`, `SolveReporter`, `SolveFn`,
+  `SolveResult` and the `external/storage` helpers) from its new home, so existing imports from
+  `@selvajs/ui` and `@selvajs/ui/external` keep working unchanged.
+
+  **Breaking — `@selvajs/compute`:**
+
+  - **`@selvajs/compute/visualization` is removed entirely.** Everything it exported now lives in
+    `@selvajs/visualization`:
+
+    | Was                                                                                                                                                                                                   | Now                                                                         |
+    | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+    | `initThree`, `updateScene`, camera, grid, gizmo, edges, labels, measure, render pipeline, materials, up-axis helpers                                                                                  | `@selvajs/visualization/render`                                             |
+    | `getThreeMeshesFromComputeResponse`, `parseMeshBatch{,Object,Blob}`, `parseBinaryMeshBatch`, `parseDisplayItems`, texture cache, wire-format constants (`BINARY_MESH_MAGIC`, `FLAG_*`, `UV_FORMAT_*`) | `@selvajs/visualization/parse`                                              |
+    | `LOOKS`, `Look`, `parseColor`, `applyOffset`, `computeCombinedBoundingBox`                                                                                                                            | `@selvajs/visualization/shared` (also re-exported from `/render`)           |
+    | `createSolveSession`, `createRequestResponseDriver`, `SolveDriver`, `SolveReporter`, `SolveFn`, `SolveResult`, `createComputeThrottle`, `createSolveMemo`, the `external/storage` helpers             | `@selvajs/visualization/session` (all still re-exported from `@selvajs/ui`) |
+
+  - `GrasshopperResponseProcessor.extractMeshesFromResponse()` is **removed**. It coupled the solve
+    client to a renderer, which the new layering forbids. Its `response` and `debug` fields are now
+    public, so call the parser directly:
+
+    ```ts
+    import { getThreeMeshesFromComputeResponse } from '@selvajs/visualization/parse';
+
+    const meshes = await getThreeMeshesFromComputeResponse(processor.response, { rhino });
+    ```
+
+  - `initThree` no longer reaches into the texture cache itself — `render/` must not import `parse/`.
+    To keep color maps sharp at grazing angles, wire the new `onMaxAnisotropy` option:
+
+    ```ts
+    import { setTextureAnisotropy } from '@selvajs/visualization/parse';
+
+    initThree(canvas, { onMaxAnisotropy: setTextureAnisotropy });
+    ```
+
+    Omitted, textures keep three's default anisotropy of 1 — sharpness regresses, nothing breaks.
+
+  - `decodeBase64ToBinary` is now exported from the package root (the binary mesh parser needs it, and
+    its forgiving-base64 normalization plus Node pool-slab copy are too subtle to duplicate).
+
+  **Also in this change:** the five largest files were split along the seams they already had, with no
+  behavior change. `three-initializer` 1743→407 (`scene-setup/*`, 14 files — the `ThreeViewer` handle,
+  the postprocessing pipeline and the runtime appearance setters each became their own module),
+  `edges` 874→233 (`edges/{options,extraction,cache,overlay}.ts`), `batch-parser` 1007→466
+  (`batch/{metadata,materials,merge,assembly-worker}.ts`), `binary-parser` 713→329
+  (`binary/{header,geometry,textures}.ts`), `display-items-parser` 440→77
+  (`items/{curves,points,appearance}.ts`), the session's driver split out into
+  `session/drivers/{driver,request-response}.ts`, and `SceneManager.svelte` 319→234 (its logic now in
+  `scene/`). 425 tests pass.
+
 ## 3.1.1
 
 ### Patch Changes

@@ -9,7 +9,7 @@ management, validation, and versioning.
 
 ## Dependencies
 
-- Newtonsoft.Json 13.0.3
+- Newtonsoft.Json (version pinned centrally in `Directory.Packages.props`)
 
 ## Architecture
 

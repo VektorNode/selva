@@ -1,21 +1,13 @@
 /**
  * Compute/solve server limits, resolved from an injected env map.
  *
- * This is the transport- and framework-agnostic core: it takes a plain
- * `Record<string, string | undefined>` (the caller passes SvelteKit's
- * `$env/dynamic/private`, `process.env`, or any config source) and returns a
- * fully-resolved `ComputeLimits` object. No ambient `$env` / `process.env`
- * read happens here, so the module is importable from any runtime and testable
- * without env plumbing.
- *
- * Every knob is env-overridable so deployments can tune without code changes;
- * the defaults are sized for typical interactive use (sliders + small uploads).
- * Centralizing them surfaces the tradeoffs (raise the rate cap → also consider
- * the body cap) at one glance.
+ * Env comes in as a parameter — nothing ambient is read — so this is importable
+ * from any runtime and testable without env plumbing. Defaults are sized for
+ * typical interactive use (sliders + small uploads).
  *
  * Client-side counterparts (the in-flight compute throttle and slider debounce)
- * live in `@selvajs/ui` and are bundled into the client, so they can't read
- * env — they carry their own defaults.
+ * are bundled into the client in `@selvajs/ui` and can't read env — they carry
+ * their own defaults.
  */
 
 import { NoopLogger, type ILogger } from '@selvajs/platform';
@@ -26,16 +18,12 @@ const MB = 1024 * 1024;
 export type EnvRecord = Record<string, string | undefined>;
 
 /**
- * Optional structured logger for the env-parsing diagnostics below. Defaults to
- * `NoopLogger`: this is library code, so an embedder that wires nothing gets
- * silence rather than unsolicited stdout writes. The app passes its real logger.
+ * Default logger for the env-parsing warnings below. This is library code, so an
+ * embedder that wires nothing gets silence rather than unsolicited stdout writes.
  */
 const noop = new NoopLogger();
 
-/**
- * Parse a positive integer env value. Returns `fallback` when absent, and warns
- * + falls back when present but not a finite positive number.
- */
+/** Parse a positive integer env value; absent, or present but not finite and positive, falls back. */
 export function readPositiveInt(
 	env: EnvRecord,
 	name: string,
@@ -57,12 +45,7 @@ export function readPositiveInt(
 	return Math.floor(parsed);
 }
 
-/**
- * Parse a non-negative integer env value — like {@link readPositiveInt} but `0`
- * is a valid value (used by knobs where `0` means "disable", e.g. a cache
- * budget). Returns `fallback` when absent, and warns + falls back when present
- * but not a finite non-negative number.
- */
+/** Like {@link readPositiveInt}, but `0` is valid — knobs where it means "disable". */
 export function readNonNegativeInt(
 	env: EnvRecord,
 	name: string,
@@ -85,8 +68,26 @@ export function readNonNegativeInt(
 }
 
 /**
- * Parse a boolean env flag. Accepts `true/1/yes/on` (case-insensitive) as true
- * and `false/0/no/off` as false; any other / absent value falls back.
+ * Fall back to a variable's previous name, warning when the old one is used.
+ * Setting both is not an error: the new name wins silently, which is what an
+ * operator mid-migration expects.
+ *
+ * A var that quietly stops being read looks exactly like one that is working —
+ * the failure only surfaces as a memory number nobody is watching.
+ */
+function readRenamed(env: EnvRecord, name: string, oldName: string, logger: ILogger): EnvRecord {
+	if (env[name] !== undefined || env[oldName] === undefined) return env;
+	logger.warn('Deprecated env var: rename it', {
+		component: 'selva',
+		envVar: oldName,
+		renamedTo: name
+	});
+	return { ...env, [name]: env[oldName] };
+}
+
+/**
+ * Parse a boolean env flag. Accepts `true/1/yes/on` and `false/0/no/off`
+ * (case-insensitive); any other spelling warns and falls back.
  */
 export function readBool(
 	env: EnvRecord,
@@ -111,60 +112,68 @@ export function readBool(
 /** Fully-resolved server-side compute limits. */
 export interface ComputeLimits {
 	/**
-	 * Longest the app waits for one solve. Enforced by the SolveScheduler
-	 * (`@selvajs/compute`), which propagates AbortSignal into the upstream
-	 * Compute call — a timeout actually cancels the work. Forwarded to the
-	 * client to drive the in-browser AbortController.
+	 * Longest the app waits for one solve. The SolveScheduler (`@selvajs/compute`)
+	 * propagates an AbortSignal into the upstream Compute call, so a timeout
+	 * actually cancels the work. Also forwarded to the client, where it drives the
+	 * in-browser AbortController.
 	 *
-	 * Caveat: bounds only the parts of the stack we own. A reverse proxy or
-	 * serverless platform cap may shoot the request sooner; bumping past those
-	 * caps produces 502s, not longer solves.
+	 * Bounds only the parts of the stack we own. A reverse proxy or serverless
+	 * platform cap may shoot the request sooner; raising this past those caps
+	 * produces 502s, not longer solves.
 	 */
-	maxSolveDurationMs: number;
-	/** Fixed-window cap on /api/compute: window length + max requests per window. */
+	solveDeadlineMs: number;
+	/** Fixed-window cap on /api/v1/compute: window length + max requests per window. */
 	rateLimitWindowMs: number;
 	rateLimitMaxRequests: number;
 	/**
-	 * Largest .gh definition accepted on upload AND the largest remote definition
-	 * fetched for compute — kept in lockstep so a remote URL can't smuggle a file
-	 * past the upload cap. Defaults to 50 MB to match Rhino.Compute's own
-	 * `RHINO_COMPUTE_MAX_REQUEST_SIZE` default: a larger file 413s at compute
+	 * Largest .gh definition accepted on upload. 50 MB matches Rhino.Compute's own
+	 * `RHINO_COMPUTE_MAX_REQUEST_SIZE` default — a larger file 413s at compute
 	 * regardless, so accepting it here only defers the failure.
 	 */
-	maxGhFileSize: number;
+	maxDefinitionFileSize: number;
+	/** Largest cover image accepted on upload. */
 	maxImageFileSize: number;
 	/**
-	 * /api/compute JSON *request* body cap (inputs + values, not the .gh). A
-	 * `file`-widget input embeds geometry as base64 in `values`; must stay <=
-	 * the adapter-node global BODY_SIZE_LIMIT or the global backstop rejects first.
-	 * Defaults to 210 MB: the client allows a 150 MB raw file, base64 inflates it
-	 * to ~200 MB on the wire, plus JSON envelope slack — and it matches the
-	 * `BODY_SIZE_LIMIT=210M` shipped in `.env.example`.
+	 * /api/v1/compute JSON *request* body cap (inputs + values, not the .gh). Must
+	 * stay <= adapter-node's global `BODY_SIZE_LIMIT` or that backstop rejects
+	 * first. 210 MB matches the `BODY_SIZE_LIMIT=210M` shipped in `.env.example`:
+	 * a `file` widget embeds geometry as base64 in `values`, so the client's
+	 * 150 MB raw file inflates to ~200 MB on the wire, plus JSON envelope slack.
 	 */
 	computeRequestMaxBytes: number;
 	/**
-	 * /api/compute JSON *response* cap. A `file`-typed output is base64-embedded
-	 * in the response; guards V8's ~512 MB single-string wall (a `JSON.stringify`
-	 * `RangeError`) and browser-tab OOM. Defensive backstop → clear 413 instead of
-	 * an opaque crash (real fix is out-of-band streaming, ADR 0003).
+	 * /api/v1/compute JSON *response* cap. A `file`-typed output is base64-embedded
+	 * in the response; this guards V8's ~512 MB single-string wall (a
+	 * `JSON.stringify` `RangeError`) and browser-tab OOM, turning an opaque crash
+	 * into a clear 413. The real fix is out-of-band streaming.
 	 *
-	 * 300 MB is intentional and NOT a dev leftover — sized above any legitimate
-	 * inline payload but below the V8 string wall. Unlike the request cap it is
-	 * not bounded by BODY_SIZE_LIMIT, which only applies to inbound bodies.
+	 * 300 MB is deliberate, not a dev leftover — above any legitimate inline
+	 * payload, below the V8 string wall. Unlike the request cap it is not bounded
+	 * by `BODY_SIZE_LIMIT`, which only covers inbound bodies.
 	 */
 	computeResponseMaxBytes: number;
-	/** Hard cap on fetching a remote definition — tracks `maxGhFileSize`. */
+	/**
+	 * Hard cap on fetching a remote definition. Tracks `maxDefinitionFileSize` so a
+	 * remote URL can't smuggle a file past the upload cap.
+	 */
 	remoteDefinitionMaxBytes: number;
 	/** Deadline on fetching a remote definition (slow-loris protection). */
 	remoteDefinitionFetchTimeoutMs: number;
-	/** In-process cache TTL for remote-fetched .gh bytes. */
-	definitionCacheTtlMs: number;
+	/**
+	 * TTL for the in-process cache of .gh bytes fetched from a REMOTE URL.
+	 *
+	 * Only the remote path is TTL'd, and the name says so deliberately: the other
+	 * definition cache is keyed on an immutable version id, where expiry could only
+	 * ever throw away valid work. A URL's owner can swap the file underneath us, so
+	 * that path needs a freshness bound and this is it.
+	 */
+	remoteDefinitionCacheTtlMs: number;
 	/**
 	 * Reuse the server's cached definition via a pointer instead of re-uploading
 	 * the binary each solve. SAFE only on a compute server that signals a
-	 * stale-pointer miss (VektorNode fork / a fork that throws) — a server that
-	 * returns an empty 200 would silently yield EMPTY geometry. Off for unknown
-	 * / standard rhino.compute.
+	 * stale-pointer miss (the VektorNode fork, or any fork that throws) — a server
+	 * that returns an empty 200 instead would silently yield EMPTY geometry. Off
+	 * for unknown / standard rhino.compute.
 	 */
 	computeReuseDefinitionCache: boolean;
 	/**
@@ -181,127 +190,103 @@ export interface ComputeLimits {
 	 */
 	computeCacheErroredSolves: boolean;
 	/**
-	 * Max in-flight solves this app instance sends to ONE compute server
-	 * (forwarded as the SolveScheduler's `maxConcurrent`; excess solves FIFO-queue).
-	 * Size it to the server's `compute.geometry` child count — Rhino.Compute
-	 * spawns N children per VM precisely to run N solves concurrently, and a
-	 * lower value idles that capacity while users queue (audit B6: the scheduler's
-	 * queue-mode default is 1, which serialized ALL solves per server). Multiple
-	 * app instances each apply their own cap.
-	 */
-	computeMaxConcurrentSolves: number;
-	/**
-	 * Backpressure — max solves allowed to WAIT in the per-server FIFO queue (i.e.
-	 * excluding the `computeMaxConcurrentSolves` already in flight). A solve that
-	 * arrives to a full queue is shed immediately (scheduler `QUEUE_FULL`, mapped
-	 * to HTTP 503 + `Retry-After`) instead of piling up unbounded. `0` = unbounded
-	 * (the pre-shedding default): the queue grows without limit, matching prior
-	 * behavior. Size it to roughly 2–3× `computeMaxConcurrentSolves` once the
-	 * Rhino pool's real capacity is known — shedding fast beats a hung request.
+	 * Backpressure — max solves allowed to WAIT in the per-server FIFO queue. This
+	 * excludes in-flight solves, which the scheduler caps at `maxConcurrent`,
+	 * auto-detected from the compute server's active child count. A solve arriving
+	 * at a full queue is rejected on the spot (scheduler `QUEUE_FULL` → HTTP 503 +
+	 * `Retry-After`) instead of piling up. `0` = unbounded, the default.
+	 *
+	 * Size it to roughly 2–3× the compute server's child count once you know the
+	 * Rhino pool's real capacity — rejecting fast beats a hung request.
 	 */
 	computeMaxQueueDepth: number;
 	/**
 	 * Backpressure — longest (ms) a solve may sit QUEUED before it starts
-	 * executing; still-waiting past this it's shed (scheduler `QUEUE_TIMEOUT` →
-	 * HTTP 503 + `Retry-After`) rather than burning compute on a stale request.
+	 * executing. Still waiting past this, it's rejected (scheduler `QUEUE_TIMEOUT`
+	 * → HTTP 503 + `Retry-After`) rather than burning compute on a stale request.
+	 * `0` = no queue deadline, the default.
+	 *
 	 * Bounds tail latency: the scheduler's `timeoutMs` clock starts at execution,
-	 * so without this a solve's total wait is unbounded and invisible. `0` = no
-	 * queue deadline (the default). A sensible tuned value is ≈ `maxSolveDurationMs`.
+	 * so without this a solve's total wait is unbounded and invisible. Tune it to
+	 * ≈ `solveDeadlineMs`.
 	 */
 	computeQueueWaitMs: number;
 	/**
-	 * Total-byte budget (bytes) for the in-process definition-byte cache keyed on
-	 * immutable version id. A warm entry lets a solve skip `storage.get` entirely,
-	 * and a pointer-known solve never loads bytes at all. `0` disables the cache
-	 * (every solve re-reads storage). Sized as a total-byte LRU because definitions
-	 * span KB→hundreds of MB; env value is MB, converted here.
+	 * **Definition cache** — total-byte budget for the in-process cache of .gh bytes
+	 * keyed on immutable version id. A warm entry lets a solve skip `storage.get`;
+	 * `0` disables it, so every solve re-reads storage. A byte LRU rather than an
+	 * entry count because definitions span KB→hundreds of MB. Env value is MB.
 	 */
-	computeDefinitionByteCacheBytes: number;
+	computeDefinitionCacheBytes: number;
 	/**
-	 * Total-byte budget (bytes) for EACH warm client's in-process solve-response
-	 * cache (the scheduler L1 — the `fromCache` layer in front of Rhino.Compute).
-	 * Responses range KB→100s of MB (`computeResponseMaxBytes` allows 300 MB), so
-	 * the L1's entry-count cap alone can't bound heap; this adds a byte LRU on
-	 * top. Applies PER warm client — worst-case heap is this × the number of
-	 * distinct compute servers kept warm (`maxCachedClients`, default 16), though
-	 * real deployments run 1–2 servers. `0` disables the L1 response cache
-	 * entirely (every solve goes to compute or the L2). Env value is MB.
+	 * **Solve cache** — total-byte budget for EACH warm client's in-process cache of
+	 * solve results (the `fromCache` layer in front of Rhino.Compute). `0` disables
+	 * it, so every solve goes to compute. Results span KB→100s of MB
+	 * (`computeResponseMaxBytes` allows 300 MB), so an entry count alone can't bound
+	 * heap; this adds a byte LRU on top. Env value is MB.
+	 *
+	 * **Per warm client, so the worst case multiplies.** Selva keeps up to
+	 * `maxWarmComputeServers` (default 16) compute servers warm, making the real
+	 * ceiling this × 16 — 4 GB at the default. Most deployments run 1–2 servers,
+	 * which is why the default is comfortable; a fan-out across many servers on a
+	 * small VPS is the case this knob exists for.
 	 */
-	computeResponseCacheBytes: number;
-	/**
-	 * Default per-definition entry quota for the durable L2 solve cache (H1), used
-	 * when a definition's `solveCacheLimit` is absent (inherit). A definition may
-	 * override this; `0` on the definition turns caching off for it. This global
-	 * default `0` means the L2 is effectively off until an operator sets a quota —
-	 * safe because the memory backend also ships only under
-	 * `SOLVE_CACHE_PROVIDER=memory`. Counts, not bytes: authors think in "how many
-	 * solves to remember"; the byte backstop below is the operator's memory guard.
-	 */
-	solveCacheDefaultMaxEntries: number;
-	/**
-	 * Global byte backstop (bytes) across ALL definitions' L2 entries, evicted
-	 * global-LRU regardless of per-definition counts. Entries range KB→100s of MB,
-	 * so a count quota alone can't bound memory. `0` disables the backstop (rely on
-	 * per-definition counts only — not recommended in the memory backend). Env value
-	 * is MB, converted here. On Redis this moves to `maxmemory allkeys-lru`.
-	 */
-	solveCacheMaxTotalBytes: number;
+	computeSolveCacheBytes: number;
 }
 
 /**
- * Resolve every server-side compute limit from an env map. Pure: the same env
- * always yields the same limits, and nothing is read ambiently. The app calls
- * this once at its composition root with `$env/dynamic/private`.
+ * Resolve every server-side compute limit from an env map. The app calls this
+ * once at its composition root with `$env/dynamic/private`.
  */
 export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): ComputeLimits {
-	const maxGhFileSize = readPositiveInt(env, 'MAX_GH_FILE_SIZE_BYTES', 50 * MB, logger);
+	// Deprecation shims, so each var says what it HOLDS and what it bounds — one
+	// solve — rather than a vague "duration". Drop one minor version on.
+	env = readRenamed(env, 'COMPUTE_DEFINITION_CACHE_MB', 'COMPUTE_DEFINITION_BYTE_CACHE_MB', logger);
+	env = readRenamed(env, 'COMPUTE_SOLVE_CACHE_MB', 'COMPUTE_RESPONSE_CACHE_MB', logger);
+	env = readRenamed(env, 'REMOTE_DEFINITION_CACHE_TTL_MS', 'DEFINITION_CACHE_TTL_MS', logger);
+	env = readRenamed(env, 'COMPUTE_SOLVE_DEADLINE_MS', 'MAX_SOLVE_DURATION_MS', logger);
+
+	// Clean-cut rename with no old-name dual-read: deliberate pre-1.0 breaking change.
+	const maxDefinitionFileSize = readPositiveInt(
+		env,
+		'MAX_DEFINITION_FILE_SIZE_BYTES',
+		50 * MB,
+		logger
+	);
 	return {
-		maxSolveDurationMs: readPositiveInt(env, 'MAX_SOLVE_DURATION_MS', 100_000, logger),
+		solveDeadlineMs: readPositiveInt(env, 'COMPUTE_SOLVE_DEADLINE_MS', 100_000, logger),
 		rateLimitWindowMs: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_WINDOW_MS', 100_000, logger),
 		rateLimitMaxRequests: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_MAX', 120, logger),
-		maxGhFileSize,
+		maxDefinitionFileSize,
 		maxImageFileSize: readPositiveInt(env, 'MAX_IMAGE_FILE_SIZE_BYTES', 10 * MB, logger),
 		computeRequestMaxBytes: readPositiveInt(env, 'COMPUTE_REQUEST_MAX_BYTES', 210 * MB, logger),
 		computeResponseMaxBytes: readPositiveInt(env, 'COMPUTE_RESPONSE_MAX_BYTES', 300 * MB, logger),
-		// Tracks the upload cap so a remote URL can't smuggle a larger file.
-		remoteDefinitionMaxBytes: maxGhFileSize,
+		remoteDefinitionMaxBytes: maxDefinitionFileSize,
 		remoteDefinitionFetchTimeoutMs: readPositiveInt(
 			env,
 			'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
 			30_000,
 			logger
 		),
-		definitionCacheTtlMs: readPositiveInt(env, 'DEFINITION_CACHE_TTL_MS', 5 * 60 * 1000, logger),
+		remoteDefinitionCacheTtlMs: readPositiveInt(
+			env,
+			'REMOTE_DEFINITION_CACHE_TTL_MS',
+			5 * 60 * 1000,
+			logger
+		),
 		computeReuseDefinitionCache: readBool(env, 'COMPUTE_REUSE_DEFINITION_CACHE', true, logger),
 		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true, logger),
 		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false, logger),
-		// 4 matches rhino.compute's default --childcount; tune to the actual VM.
-		computeMaxConcurrentSolves: readPositiveInt(env, 'COMPUTE_MAX_CONCURRENT', 4, logger),
-		// Both 0 (unbounded / no deadline) by default — nothing sheds until an
-		// operator who's measured their pool opts in. readNonNegativeInt so `0` is a
-		// valid "disabled" value, not treated as invalid.
+		// Both default to off — nothing is rejected until an operator who has measured
+		// their pool opts in. readNonNegativeInt throughout, so `0` reads as "disabled"
+		// rather than as an invalid value that falls back.
 		computeMaxQueueDepth: readNonNegativeInt(env, 'COMPUTE_MAX_QUEUE_DEPTH', 0, logger),
 		computeQueueWaitMs: readNonNegativeInt(env, 'COMPUTE_QUEUE_WAIT_MS', 0, logger),
-		// Env is MB; 0 disables. Default 256 MB holds a handful of typical
-		// definitions warm without pinning gigabytes. readNonNegativeInt so `0`
-		// (disable) is honored rather than treated as invalid.
-		computeDefinitionByteCacheBytes:
-			readNonNegativeInt(env, 'COMPUTE_DEFINITION_BYTE_CACHE_MB', 256, logger) * MB,
-		// Per-warm-client L1 response cache budget. Env is MB; 0 disables the L1.
-		// Default 256 MB: enough to keep a scrub session's recent responses warm
-		// without letting 20 × 300 MB worst-case entries pin gigabytes (audit C2).
-		computeResponseCacheBytes:
-			readNonNegativeInt(env, 'COMPUTE_RESPONSE_CACHE_MB', 256, logger) * MB,
-		// L2 durable solve cache (H1). Default per-definition quota 0 = inherit-to-off
-		// until an operator opts in; the memory backend also only mounts under
-		// SOLVE_CACHE_PROVIDER=memory, so nothing caches by accident. Byte backstop
-		// 512 MB caps total heap use across all definitions (env is MB).
-		solveCacheDefaultMaxEntries: readNonNegativeInt(
-			env,
-			'SOLVE_CACHE_DEFAULT_MAX_ENTRIES',
-			0,
-			logger
-		),
-		solveCacheMaxTotalBytes: readNonNegativeInt(env, 'SOLVE_CACHE_MAX_TOTAL_MB', 512, logger) * MB
+		// 256 MB holds a handful of typical definitions warm without pinning gigabytes.
+		computeDefinitionCacheBytes:
+			readNonNegativeInt(env, 'COMPUTE_DEFINITION_CACHE_MB', 256, logger) * MB,
+		// 256 MB keeps a scrub session's recent solves warm; PER warm client, so see
+		// the field doc for the ×16 worst case.
+		computeSolveCacheBytes: readNonNegativeInt(env, 'COMPUTE_SOLVE_CACHE_MB', 256, logger) * MB
 	};
 }

@@ -10,18 +10,16 @@ namespace Selva.GH.Features.UIBuilder.Services.Communication;
 /// <summary>
 ///     Parses and classifies a raw inbound WebSocket message into an <see cref="InboundMessage" />.
 ///     Pure logic over a JSON string — no sockets, no Rhino, no thread marshalling. The transport
-///     (<see cref="WebSocketTransport" />) owns the socket and the UI-thread hop; this owns the
-///     interpretation of bytes, which is the part that historically drifted from the TS wire
-///     contract and could only be checked on a live canvas. Now it's checked by unit tests.
+///     (<see cref="WebSocketTransport" />) owns the socket and the UI-thread hop; this owns
+///     interpreting the bytes, unit-tested instead of only checkable on a live canvas.
 /// </summary>
 public sealed class InboundMessageParser
 {
     private readonly JsonSerializer _serializer;
 
     /// <param name="serializer">
-    ///     The serializer used to bind nested payloads (`values`, `schema`, `changes`). The transport
-    ///     passes its secure serializer so binding rules match production exactly; tests pass an
-    ///     equivalent one.
+    ///     Binds nested payloads (`values`, `schema`, `changes`). The transport passes its secure
+    ///     serializer so binding rules match production; tests pass an equivalent one.
     /// </param>
     public InboundMessageParser(JsonSerializer serializer)
     {
@@ -29,9 +27,8 @@ public sealed class InboundMessageParser
     }
 
     /// <summary>
-    ///     Parse and classify a single inbound message. Never throws on bad input — malformed JSON,
-    ///     a missing `type`, a session mismatch, or a missing required field each map to a named
-    ///     <see cref="InboundKind" />.
+    ///     Never throws on bad input — malformed JSON, a missing `type`, a session mismatch, or a
+    ///     missing required field each map to a named <see cref="InboundKind" />.
     /// </summary>
     /// <param name="message">The raw text frame.</param>
     /// <param name="expectedSessionId">The session this transport is bound to.</param>

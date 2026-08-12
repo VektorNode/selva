@@ -48,8 +48,8 @@ public class PathTests
 	[Fact]
 	public void Cubic_bounds_capture_control_polygon_overshoot()
 	{
-		// Endpoints (0,0) -> (10,0) but control points pull the curve high above. The bbox
-		// must contain the curve's actual extremum, not just the endpoints.
+		// Endpoints are (0,0) and (10,0), but the control points pull the curve up to y=7.5.
+		// Bounds must capture that extremum, not just the endpoints.
 		var p = new Path.Builder()
 			.MoveTo(0, 0)
 			.CubicTo(new Point2D(0, 10), new Point2D(10, 10), new Point2D(10, 0))
@@ -59,7 +59,7 @@ public class PathTests
 		Assert.Equal(0, b.MinX);
 		Assert.Equal(0, b.MinY);
 		Assert.Equal(10, b.MaxX);
-		// Maximum of the cubic with control points at y=10 is 7.5 (3/4 * control height).
+		// Cubic with control points at y=10 peaks at y=7.5 (3/4 of control height).
 		Assert.Equal(7.5, Math.Round(b.MaxY, 6));
 	}
 
@@ -72,8 +72,7 @@ public class PathTests
 
 		var c = PathSegment.CubicTo.FromQuadratic(start, control, end);
 		Assert.Equal(end, c.To);
-		// Elevated control points sit 2/3 of the way from each endpoint towards the
-		// quadratic control point.
+		// Elevated control points sit 2/3 of the way from each endpoint to the quadratic control point.
 		Assert.Equal(new Point2D(start.X + 2.0 / 3 * (control.X - start.X), start.Y + 2.0 / 3 * (control.Y - start.Y)), c.Control1);
 		Assert.Equal(new Point2D(end.X + 2.0 / 3 * (control.X - end.X), end.Y + 2.0 / 3 * (control.Y - end.Y)), c.Control2);
 	}

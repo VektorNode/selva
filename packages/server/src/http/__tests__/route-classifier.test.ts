@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createRouteClassifier } from '../route-classifier.js';
 
-// Generic values — the consuming app's actual route policy is pinned by its
-// own test suite; these cover the classifier mechanics.
+// Invented routes, not Selva's real policy — that is pinned by the consuming
+// app's own suite. Changing these values breaks nothing downstream.
 const classifier = createRouteClassifier({
 	publicPages: ['/', '/login'],
 	publicPrefixes: ['/auth/', '/logout'],

@@ -6,10 +6,9 @@ using Newtonsoft.Json.Linq;
 namespace Selva.GH.Features.ComputeIO.Goos;
 
 /// <summary>
-///     Rhino/GH-free routing payload for a runtime-computed value list: a target input id plus the
-///     computed name -> value options. This is the single source of truth for the wire shape both the
-///     local WebSocket collector and the Rhino.Compute fork emit, so it can be unit-tested without a
-///     Grasshopper runtime. <see cref="DynamicValueListGoo" /> is a thin GH_Goo wrapper over this.
+///     Rhino/GH-free wire shape for a runtime-computed value list: a target input id plus the
+///     computed name -> value options. Single source of truth for both the local WebSocket collector
+///     and the Rhino.Compute fork; <see cref="DynamicValueListGoo" /> wraps this in a GH_Goo.
 /// </summary>
 public sealed class DynamicValueListPayload
 {
@@ -31,14 +30,10 @@ public sealed class DynamicValueListPayload
     /// </summary>
     public Guid TargetInputId { get; set; } = Guid.Empty;
 
-    /// <summary>
-    ///     Computed options (name -> value).
-    /// </summary>
     public Dictionary<string, string> Options { get; set; }
 
     /// <summary>
-    ///     The collector/client contract: { "targetInputId": "&lt;guid&gt;" | null, "options": { name: value } }.
-    ///     A single object shape so the local path and the compute path can never drift.
+    ///     Wire shape: { "targetInputId": "&lt;guid&gt;" | null, "options": { name: value } }.
     /// </summary>
     public JObject ToJObject()
     {
@@ -64,9 +59,7 @@ public sealed class DynamicValueListPayload
     }
 
     /// <summary>
-    ///     The shape the local collector hands to the WebSocket serializer (an anonymous-equivalent
-    ///     object with the same property names as <see cref="ToJObject" />). Kept here so the local
-    ///     path and the compute path provably agree.
+    ///     Same shape as <see cref="ToJObject" />, as a plain object for the WebSocket serializer.
     /// </summary>
     public object ToCollectorPayload()
     {

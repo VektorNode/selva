@@ -1,7 +1,6 @@
 /**
- * Self-update observability (audit O2): durable log/state paths for the update
- * runner, plus post-restart reconciliation of the update's outcome into the
- * audit event log.
+ * Durable log/state paths for the update runner, plus post-restart
+ * reconciliation of the update's outcome into the audit event log.
  *
  * The process that launches an update is killed mid-update (`pm2 stop
  * selva-compute` is a step of the update itself), so only the
@@ -27,10 +26,10 @@ import { getLogger } from './providers.server.js';
 // ============================================================================
 
 // Selva self-updates as a CLI-scaffolded npm deployment: the deployment dir
-// holds a package.json that depends on @selvajs/selva. We probe the cwd upward
-// for the installed package as proof we're in such a deployment; `INSTALL_DIR`
-// lets an operator pin the root explicitly (useful when the SvelteKit process
-// cwd isn't the install dir).
+// holds a package.json that depends on @selvajs/selva. Probing the cwd
+// upward for the installed package is proof we're in such a deployment;
+// `INSTALL_DIR` lets an operator pin the root explicitly (useful when the
+// SvelteKit process cwd isn't the install dir).
 export function isDeploymentDir(dir: string): boolean {
 	return existsSync(join(dir, 'node_modules', '@selvajs', 'selva', 'package.json'));
 }
@@ -49,9 +48,8 @@ export function findDeploymentDir(env: Record<string, string | undefined>): stri
 
 /**
  * Where the update runner mirrors all its output. Lives in the deployment dir
- * so it survives reboots (it used to be `/tmp/selva-update.log`, wiped on
- * reboot — audit O2); the `/tmp` fallback only applies outside a deployment
- * (dev), where no update can actually run.
+ * so it survives reboots; the `/tmp` fallback only applies outside a
+ * deployment (dev), where no update can actually run.
  */
 export function updateLogPath(deploymentDir: string | null): string {
 	return deploymentDir ? join(deploymentDir, 'selva-update.log') : '/tmp/selva-update.log';
@@ -104,9 +102,9 @@ export async function reconcileUpdateOutcome(deps: ReconcilerDeps): Promise<Reco
 	try {
 		logs = readFileSync(updateLogPath(deps.deploymentDir), 'utf8');
 	} catch {
-		// State without a log: the launcher truncates the log as its first act,
-		// so this is either the sub-second startup window or a manually deleted
-		// log. Treat as still running; the poll cap below resolves a stuck state.
+		// State without a log: the launcher truncates the log as its first act, so
+		// this is the sub-second startup window (or a manually deleted log).
+		// Treat as still running; the poll cap below resolves a stuck state.
 	}
 
 	const exitMatch = /\[EXIT\] code=(\d+)/.exec(logs);
@@ -128,8 +126,8 @@ export async function reconcileUpdateOutcome(deps: ReconcilerDeps): Promise<Reco
 	} else if (outcome.severity === 'success' || outcome.severity === 'info') {
 		event = { type: 'system.update.finished', ...base };
 	} else {
-		// Residual warnings (e.g. "no version change — stale npm cache"): the app
-		// is up but nothing was installed. Surface the title so the audit row is
+		// Residual warnings (e.g. stale npm cache, no version change): the app is
+		// up but nothing was installed. Surface the title so the audit row is
 		// self-explanatory.
 		event = { type: 'system.update.finished', ...base, detail: outcome.title };
 	}
@@ -153,16 +151,16 @@ export async function reconcileUpdateOutcome(deps: ReconcilerDeps): Promise<Reco
 // ============================================================================
 
 const POLL_MS = 15_000;
-// The runner is hard-capped at 15 minutes by the POST's group-kill; leave
-// headroom, then close the pending state as failed so it can't dangle forever.
+// The runner is hard-capped at 15 minutes by the POST's group-kill (80 * 15s
+// = 20min); leave headroom, then close the pending state as failed so it
+// can't dangle forever.
 const MAX_POLLS = 80;
 
 let reconcilerActive = false;
 
 /**
- * Idempotently start polling for a pending update's terminal state. Safe to
- * call on every boot and on every update POST — it exits immediately when no
- * state file exists and never runs twice concurrently.
+ * Idempotent: safe to call on every boot and on every update POST — exits
+ * immediately when no state file exists and never runs twice concurrently.
  */
 export function startUpdateOutcomeReconciler(deps: ReconcilerDeps): void {
 	if (reconcilerActive) return;

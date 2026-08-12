@@ -14,9 +14,8 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
-///     Payload from a UI save request: the draft schema plus the hash of the
-///     canonical it was forked from. The orchestrator rejects the save if the
-///     base hash no longer matches the current canonical.
+///     Draft schema plus the hash of the canonical it was forked from. The orchestrator
+///     rejects the save if the base hash no longer matches the current canonical.
 /// </summary>
 public class SchemaSaveRequest
 {
@@ -29,9 +28,7 @@ public class SchemaSaveRequest
 /// </summary>
 public class WebSocketTransport : IDisposable
 {
-    /// <summary>
-    ///     Secure JSON serializer — prevents type confusion attacks, created once and reused.
-    /// </summary>
+    // TypeNameHandling.None blocks type-confusion deserialization attacks.
     private static readonly JsonSerializerSettings SecureSerializerSettings = new JsonSerializerSettings
     {
         TypeNameHandling = TypeNameHandling.None,
@@ -45,22 +42,19 @@ public class WebSocketTransport : IDisposable
     private readonly int _port;
     private readonly string _sessionId;
 
-    // Pure parse/classify of inbound frames — unit-tested in InboundMessageParserTests. This
-    // transport keeps only the socket, the thread marshalling, and the event raising.
+    // Parsing/classifying inbound frames is pure (InboundMessageParser, unit-tested separately);
+    // this class owns only the socket, thread marshalling, and event raising.
     private readonly InboundMessageParser _inboundParser = new InboundMessageParser(SecureSerializer);
 
-    // All mutable state that can be touched from multiple threads is guarded by _stateLock.
+    // Guards all mutable state touched from multiple threads.
     private readonly object _stateLock = new object();
 
-    // Inbound messages are processed off the receive loop but strictly in arrival order:
-    // each message is chained onto the previous one's task. Without this, two rapid
-    // valueUpdates can race and the older value can win.
+    // Inbound messages run off the receive loop but chained strictly in arrival order —
+    // otherwise two rapid valueUpdates can race and the older value wins.
     private readonly object _dispatchLock = new object();
     private Task _dispatchChain = Task.CompletedTask;
 
     private bool _disposed;
-
-    // Interlocked is sufficient for a single int flag.
     private int _initialDataInFlight;
     private bool? _lastBroadcastedSolvingState;
     private int _suppressSolvingCyclesRemaining;
@@ -112,9 +106,6 @@ public class WebSocketTransport : IDisposable
         _disposed = true;
     }
 
-    /// <summary>
-    ///     Start the WebSocket server.
-    /// </summary>
     public async Task StartAsync(Action<string> logMessage)
     {
         if (_webSocketServer?.IsRunning == true)
@@ -147,9 +138,6 @@ public class WebSocketTransport : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Stop the WebSocket server and reset all session state.
-    /// </summary>
     public void Stop()
     {
         if (_webSocketServer == null)
@@ -184,9 +172,6 @@ public class WebSocketTransport : IDisposable
     // Suppression
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    ///     Suppress the next N solution cycles (used during schema saves).
-    /// </summary>
     public void SuppressSolvingCycles(int cycles)
     {
         lock (_stateLock)
@@ -202,21 +187,16 @@ public class WebSocketTransport : IDisposable
     // -------------------------------------------------------------------------
 
     /// <summary>
-    ///     Generic envelope: `{ type, sessionId, data: <payload> }`. The UI reads such messages via
-    ///     `msg.data.<field>` (see the `disconnecting` handler in websocket.svelte.ts).
-    ///     Do NOT use this for messages whose TS types expect fields at the top level (e.g.
-    ///     `availableParams` on `parametersAdded`) — those need a dedicated flat broadcaster.
+    ///     Generic envelope: `{ type, sessionId, data: &lt;payload&gt; }`; the UI reads it via
+    ///     `msg.data.&lt;field&gt;`. Don't use this for messages whose TS type expects fields at the
+    ///     top level (e.g. `availableParams` on `parametersAdded`) — use a flat broadcaster instead.
     /// </summary>
     public Task BroadcastMessage(string messageType, object data)
     {
         return BroadcastAsync(OutboundEnvelopes.Wrapped(_sessionId, messageType, data));
     }
 
-    /// <summary>
-    ///     Broadcast a notification that new parameters were discovered in the document.
-    ///     Flat envelope — `availableParams` sits at the top level of the message, matching the
-    ///     TS `WsParametersAddedMessage` contract used by the builder.
-    /// </summary>
+    // Flat envelope: availableParams sits at the top level, matching TS WsParametersAddedMessage.
     public Task BroadcastParametersAdded(DiscoveredParameters availableParams)
     {
         return BroadcastAsync(OutboundEnvelopes.ParametersAdded(_sessionId, availableParams));
@@ -231,13 +211,11 @@ public class WebSocketTransport : IDisposable
         var doc = RhinoDoc.ActiveDoc;
         var modelUnits = doc?.ModelUnitSystem.ToString() ?? "Meters";
 
-        // Extract binary blobs from DisplayBatch objects so they travel as binary WebSocket frames
-        // instead of base64-in-JSON. The SLVA blob contains embedded metadata (materials, groups,
-        // sourceComponentId), so no separate envelope is needed.
-        //
-        // Non-mesh display items (curves, points) have no binary form — they ride the JSON envelope
-        // directly as `displayItems`, flattened across all batches (each item already carries a
-        // component-derived id). The client tessellates them alongside the mesh frames.
+        // DisplayBatch blobs travel as binary WebSocket frames instead of base64-in-JSON; the SLVA
+        // blob already embeds materials/groups/sourceComponentId, so no separate envelope is needed.
+        // Non-mesh items (curves, points) have no binary form and ride the JSON envelope as
+        // `displayItems`, flattened across all batches. They arrive already tessellated, so the
+        // client builds lines straight from them alongside the mesh frames.
         var binaryBlobs = new List<byte[]>();
         var displayItems = new List<DisplayItem>();
         if (includeDisplayData && displayData != null)
@@ -259,16 +237,35 @@ public class WebSocketTransport : IDisposable
             }
         }
 
-        // JSON envelope: omit the raw displayData; include the binary-frame count and any non-mesh
-        // display items. `displayItems` is null when empty so mesh-only solves are unchanged.
+        // The web renders curves only from `Points`. Anything still lacking them came from a Display
+        // component too old to tessellate, and would throw in the viewer with no hint of which
+        // definition to fix — so name it here, where the log sits next to the canvas.
+        //
+        // TRANSITIONAL — goes with WebDisplayGoo.BackfillCurvePoints; see the removal note there.
+        var untessellated = 0;
+        foreach (var item in displayItems)
+        {
+            if (item?.Kind == "curve" && item.Points == null)
+            {
+                untessellated++;
+            }
+        }
+
+        if (untessellated > 0)
+        {
+            Logger.Warn(
+                $"[WebSocketTransport] {untessellated} curve(s) have no tessellated points and " +
+                "will fail to render. Upgrade the Display component in this definition " +
+                "(Grasshopper → Solution → Upgrade obsolete components) and re-save.");
+        }
+
+        // `displayItems` is null when empty so mesh-only solves stay unchanged on the wire.
         await BroadcastAsync(OutboundEnvelopes.Outputs(
             _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits,
             displayItems.Count > 0 ? displayItems : null));
 
-        // Send each binary blob as a separate binary WebSocket frame. WebSocket preserves message
-        // order (TCP), so these frames always arrive after the JSON envelope above.
-        // Capture the server field once: Stop() nulls it from a thread-pool thread, so re-reading
-        // it per iteration NREs mid-stream when the component is disabled during a solve.
+        // WebSocket preserves order, so these binary frames always arrive after the JSON envelope.
+        // Capture the server field once: Stop() can null it from another thread mid-loop.
         var server = _webSocketServer;
         if (server != null && server.IsRunning)
         {
@@ -311,21 +308,15 @@ public class WebSocketTransport : IDisposable
         return BroadcastAsync(OutboundEnvelopes.SchemaSaved(_sessionId, success, message));
     }
 
-    /// <summary>
-    ///     Reply to a save request whose <c>baseSchemaHash</c> no longer matches the
-    ///     current canonical. Carries the fresh canonical so the UI can replace its
-    ///     read-only mirror and surface a conflict banner.
-    /// </summary>
+    // Reply to a save whose baseSchemaHash no longer matches the canonical. Carries the fresh
+    // canonical so the UI can replace its read-only mirror and show a conflict banner.
     public Task BroadcastSchemaSaveRejected(UISchema currentSchema, string reason = null)
     {
         return BroadcastAsync(OutboundEnvelopes.SchemaSaveRejected(
             _sessionId, currentSchema, SchemaHash.Compute(currentSchema), reason));
     }
 
-    /// <summary>
-    ///     Broadcast solving state with deduplication and cycle-based suppression.
-    ///     Thread-safe: may be called from any thread.
-    /// </summary>
+    // Thread-safe; dedupes repeated states and honors cycle-based suppression.
     public Task BroadcastSolvingState(bool isSolving)
     {
         lock (_stateLock)
@@ -352,19 +343,15 @@ public class WebSocketTransport : IDisposable
                 return Task.CompletedTask;
             }
 
-            // Update state only after we've decided to broadcast.
+            // Update only after deciding to broadcast, not before.
             _lastBroadcastedSolvingState = isSolving;
         }
 
         return BroadcastAsync(OutboundEnvelopes.SolvingState(_sessionId, isSolving));
     }
 
-    /// <summary>
-    ///     Broadcast parameter metadata changes. Suppressed during schema saves. The flat-array
-    ///     wire shape (and why the nested DiscoveredParameters object breaks the UI) lives in
-    ///     <see cref="OutboundEnvelopes.MetadataUpdated" />, which returns null when there's nothing
-    ///     to send.
-    /// </summary>
+    // Suppressed during schema saves. Wire shape lives in OutboundEnvelopes.MetadataUpdated,
+    // which returns null when there's nothing to send.
     public Task BroadcastMetadataChanges(DiscoveredParameters changedParams)
     {
         lock (_stateLock)
@@ -404,20 +391,15 @@ public class WebSocketTransport : IDisposable
     // Private helpers
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    ///     Single broadcast entry point — serializes with secure settings and guards
-    ///     against a null/stopped server.
-    /// </summary>
     private Task BroadcastAsync(object payload)
     {
-        // Capture once — Stop() nulls the field from another thread between check and use.
+        // Capture once — Stop() can null the field from another thread between check and use.
         var server = _webSocketServer;
         if (server == null || !server.IsRunning)
         {
             return Task.CompletedTask;
         }
 
-        // Use the same secure settings for outbound messages for consistency.
         var json = JsonConvert.SerializeObject(payload, SecureSerializerSettings);
         return server.BroadcastAsync(json);
     }
@@ -447,8 +429,6 @@ public class WebSocketTransport : IDisposable
     {
         try
         {
-            // Parse/classify is pure (see InboundMessageParser); this method owns only the
-            // session-establish in-flight guard, the thread marshalling, and the event raising.
             var inbound = _inboundParser.Parse(message, _sessionId);
 
             switch (inbound.Kind)
@@ -523,10 +503,7 @@ public class WebSocketTransport : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Marshals a callback to Rhino's UI thread.
-    ///     RhinoApp.InvokeOnUiThread is always safe to call — no thread-ID check needed.
-    /// </summary>
+    // RhinoApp.InvokeOnUiThread is always safe to call — no thread-ID check needed.
     private static void MarshalToMainThread(Action callback)
     {
         try

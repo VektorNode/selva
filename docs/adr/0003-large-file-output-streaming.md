@@ -1,7 +1,7 @@
 # ADR 0003 — Large file outputs travel out-of-band, not inside the solve JSON
 
 > **Status: PROPOSED (2026-06-03).** A `file`-typed Grasshopper output (e.g. an exported
-> `.3dm`) is base64-embedded inside the `/api/compute` JSON response today. Real definitions
+> `.3dm`) is base64-embedded inside the `/api/v1/compute` JSON response today. Real definitions
 > produce 250+ MB exports. That single payload, base64-inflated and copied four-to-five times
 > across the serialize → transfer → parse → extract → download chain, both approaches the V8
 > string-length ceiling on the server and balloons browser-tab memory toward ~1 GB per solve.
@@ -11,8 +11,8 @@
 
 ## Problem
 
-The `/api/compute` response is one JSON object built by SvelteKit's `json()`
-([+server.ts:394](../../packages/selva/src/routes/api/compute/+server.ts#L394)) and consumed by
+The `/api/v1/compute` response is one JSON object built by SvelteKit's `json()`
+([+server.ts:394](../../packages/selva/src/routes/api/v1/compute/+server.ts#L394)) and consumed by
 `await res.json()` on the client
 ([+page.svelte:50](../../packages/selva/src/routes/library/[guid]/+page.svelte#L50)).
 
@@ -26,7 +26,7 @@ shape: an `Export .3dm file` output (`6283a395-…`) whose value is the full exp
 Base64 inflates raw bytes by ~4/3, so a 250 MB model is ~333 MB of string. That string is then
 duplicated at every hop:
 
-**Server** ([+server.ts:374-394](../../packages/selva/src/routes/api/compute/+server.ts#L374-L394)):
+**Server** ([+server.ts:374-394](../../packages/selva/src/routes/api/v1/compute/+server.ts#L374-L394)):
 
 1. `scheduler.solve()` holds the parsed result object (the base64 string lives in `values`).
 2. `json(result)` calls `JSON.stringify(result)` — a **second** full copy as one contiguous
@@ -50,7 +50,7 @@ single solve. The tab is the real ceiling; it is hit long before any server cap.
 
 ### Scope boundary
 
-- **In scope:** the cloud `/api/compute` path (`@selvajs/selva`), which is where the 250 MB
+- **In scope:** the cloud `/api/v1/compute` path (`@selvajs/selva`), which is where the 250 MB
   exports and the V8 stringify wall live.
 - **Out of scope (for now):** local plugin mode (`@selvajs/plugin-ui` over WebSocket). It does not
   go through `json()`/`res.json()` and the user is on `localhost`. The same reference shape can
@@ -74,12 +74,12 @@ which is replaced by a small descriptor:
 	"fileName": "hopper",
 	"fileType": ".3dm",
 	"sizeBytes": 261947392,
-	"url": "/api/compute/files/{solveId}/{outputId}", // getPublicUrl()
+	"url": "/api/v1/compute/files/{solveId}/{outputId}", // getPublicUrl()
 	"expiresAt": "2026-06-03T13:10:00Z"
 }
 ```
 
-### Server flow (`POST /api/compute`)
+### Server flow (`POST /api/v1/compute`)
 
 1. Solve as today.
 2. **Partition outputs by size.** For each `file` output leaf whose decoded size exceeds
@@ -106,7 +106,7 @@ which is replaced by a small descriptor:
 - `solveId` is a fresh server-generated UUID per solve (not the cache key — a cached solve still
   mints a fresh staging URL so TTLs don't collide).
 
-### New download endpoint `GET /api/compute/files/{solveId}/{outputId}`
+### New download endpoint `GET /api/v1/compute/files/{solveId}/{outputId}`
 
 Modeled directly on the existing authenticated blob proxy
 ([files/[...path]/+server.ts](../../packages/selva/src/routes/api/files/[...path]/+server.ts)):

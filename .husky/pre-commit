@@ -16,4 +16,22 @@ if ! command -v pnpm >/dev/null 2>&1; then
 	exit 1
 fi
 
-pnpm lint-staged
+# pnpm 11 runs an implicit install before any script when node_modules drifts
+# from the lockfile. In a hook there is no TTY, so if that install wants to
+# purge node_modules it aborts and takes the commit with it. Formatting staged
+# files doesn't need fresh deps — run lint-staged against what's on disk.
+pnpm --config.verify-deps-before-run=false lint-staged
+
+# A malformed changeset (mixing `ignore`d and publishable packages, naming a
+# package that doesn't exist) only surfaces when the release workflow runs
+# `changeset version` — one CI round-trip after the commit that caused it.
+# Same script CI runs, so local and CI can't disagree. Node directly rather
+# than through pnpm: it's dependency-free and needs no install.
+if git diff --cached --name-only --diff-filter=d \
+	| grep -E '^\.changeset/[^/]+\.md$' \
+	| grep -qv '^\.changeset/README\.md$'; then
+	if ! node scripts/validate-changesets.mjs; then
+		echo "pre-commit: fix the changeset above, or 'git commit --no-verify' to bypass." >&2
+		exit 1
+	fi
+fi

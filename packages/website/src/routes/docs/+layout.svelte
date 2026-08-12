@@ -59,7 +59,7 @@
 	});
 </script>
 
-<div class="mx-auto flex max-w-6xl gap-10 px-6 py-12">
+<div class="mx-auto flex max-w-7xl gap-10 px-6 py-12">
 	<!-- Sidebar -->
 	<aside class="hidden w-56 shrink-0 md:block">
 		<nav class="sticky top-24 space-y-6">
@@ -85,6 +85,10 @@
 					</ul>
 				</div>
 			{/each}
+
+			<p class="text-muted-foreground border-border border-t pt-4 text-xs leading-relaxed">
+				More docs — plugin, providers, deployment — arrive with the first release.
+			</p>
 		</nav>
 	</aside>
 

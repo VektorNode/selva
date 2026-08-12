@@ -16,11 +16,6 @@ public static class ImageInputResolver
 
     public static readonly string[] AcceptedFormats = { ".png", ".jpg", ".jpeg", ".webp", ".svg" };
 
-    /// <summary>
-    ///     Resolves image bytes + format from a FileInputData. Returns Success=false with a
-    ///     human-readable ErrorMessage on any failure (unsupported format, oversize, missing
-    ///     file, decode error).
-    /// </summary>
     public static (bool Success, byte[] Data, ImageFormat Format, string ErrorMessage) Resolve(FileInputData fileData)
     {
         if (fileData == null || string.IsNullOrEmpty(fileData.File))
@@ -31,7 +26,6 @@ public static class ImageInputResolver
         var ending = NormalizeExtension(fileData.FileEnding);
         if (ending == null && fileData.Type?.ToLowerInvariant() != "url")
         {
-            // For path mode the extension can be inferred from the path itself.
             ending = NormalizeExtension(Path.GetExtension(fileData.File));
         }
 
@@ -108,10 +102,8 @@ public static class ImageInputResolver
 
     private static (bool, byte[], ImageFormat, string) ResolveUrl(string url, string fileEnding)
     {
-        // DownloadUrlToTemp applies the SSRF guard, size cap, and extension allowlist
-        // (against AcceptedFileFormats). For images we additionally require an image
-        // extension; resolve it first so an unsupported format fails fast with a clear
-        // message rather than hitting the network.
+        // Resolve the image extension before downloading so an unsupported format
+        // fails fast instead of hitting the network first.
         var ending = NormalizeExtension(fileEnding);
         if (ending == null)
         {

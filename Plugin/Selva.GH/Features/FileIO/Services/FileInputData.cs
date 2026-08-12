@@ -5,32 +5,21 @@ using Newtonsoft.Json;
 namespace Selva.GH.Features.FileIO.Services;
 
 /// <summary>
-///     Represents file input data from web UI or local sources.
-///     Supports three input modes: local path, URL, or base64-encoded file data.
+///     File input from the web UI or a local source: a local path, a URL, or base64-encoded data.
 /// </summary>
 public class FileInputData
 {
-    /// <summary>
-    ///     Gets or sets the file data. Can be a local path, URL, or base64-encoded string.
-    /// </summary>
     [JsonProperty("file")]
     public string File { get; set; }
 
-    /// <summary>
-    ///     Gets or sets the input type: "path", "url", or "base64".
-    /// </summary>
+    /// <summary>"path", "url", or "base64".</summary>
     [JsonProperty("type")]
     public string Type { get; set; }
 
-    /// <summary>
-    ///     Gets or sets the file extension (e.g., ".step", ".3dm"). Required for base64 mode.
-    /// </summary>
+    /// <summary>File extension (e.g. ".step", ".3dm"); required for base64 mode.</summary>
     [JsonProperty("fileEnding")]
     public string FileEnding { get; set; }
 
-    /// <summary>
-    ///     Creates a FileInputData from a local file path (auto-detects extension).
-    /// </summary>
     public static FileInputData FromPath(string path)
     {
         return new FileInputData
@@ -41,9 +30,6 @@ public class FileInputData
         };
     }
 
-    /// <summary>
-    ///     Creates a FileInputData from a URL (auto-detects extension from URL).
-    /// </summary>
     public static FileInputData FromUrl(string url)
     {
         var extension = Path.GetExtension(new Uri(url).LocalPath);
@@ -55,9 +41,6 @@ public class FileInputData
         };
     }
 
-    /// <summary>
-    ///     Creates a FileInputData from base64-encoded data.
-    /// </summary>
     public static FileInputData FromBase64(string base64Data, string fileEnding)
     {
         return new FileInputData

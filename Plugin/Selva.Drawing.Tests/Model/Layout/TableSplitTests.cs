@@ -23,7 +23,6 @@ public class TableSplitTests
 	[Fact]
 	public void Splits_between_rows_with_no_header()
 	{
-		// 3 rows of 5mm, budget 12mm → first 2 fit (10mm), 1 spills.
 		var table = MakeTable(header: null, rowHeights: new[] { 5.0, 5.0, 5.0 });
 		var split = table.TrySplit(12, ContextWithHeight(12));
 		Assert.NotNull(split.Fits);
@@ -35,7 +34,6 @@ public class TableSplitTests
 	[Fact]
 	public void Header_repeats_on_overflow_table()
 	{
-		// 2mm header + 3 rows of 5mm. Budget 12mm: header(2) + 2 rows(10) = 12 fits, 1 spills.
 		// The overflow table must carry the same header so it repeats on the next page.
 		var table = MakeTable(header: 2.0, rowHeights: new[] { 5.0, 5.0, 5.0 });
 		var split = table.TrySplit(12, ContextWithHeight(12));
@@ -58,8 +56,8 @@ public class TableSplitTests
 	[Fact]
 	public void Returns_NothingFits_when_header_fits_but_no_row_does()
 	{
-		// Header(5) fits in 8mm but next row(6) doesn't. We avoid emitting a header-only page
-		// (no forward progress on data) and defer the whole table.
+		// Header alone fits but the first row doesn't: a header-only page makes no progress
+		// on data, so the whole table defers instead.
 		var table = MakeTable(header: 5.0, rowHeights: new[] { 6.0 });
 		var split = table.TrySplit(8, ContextWithHeight(8));
 		Assert.Null(split.Fits);
@@ -69,8 +67,6 @@ public class TableSplitTests
 	[Fact]
 	public void Pagination_emits_one_page_per_chunk_with_header_repeated()
 	{
-		// Page 20×10, no margins → content rect 10mm tall. Header 2mm + 5 rows of 4mm.
-		// Each page: header(2) + 2 rows(8) = 10. 5 rows → 2 + 2 + 1 = 3 pages.
 		var table = MakeTable(header: 2.0, rowHeights: new[] { 4.0, 4.0, 4.0, 4.0, 4.0 });
 		var paper = new PaperSize(20, 10, "T20x10");
 		var pages = PaginationPass.Paginate(table, paper, Margins.Zero);
@@ -80,9 +76,8 @@ public class TableSplitTests
 	[Fact]
 	public void Pagination_force_places_table_when_header_taller_than_page()
 	{
-		// Header alone is bigger than the whole page. Forward-progress guarantee force-places
-		// header + first row (oversize) per page rather than dumping the whole table on one
-		// page — so two data rows still produce two pages.
+		// Header alone is taller than the page. The forward-progress guarantee force-places
+		// header + one oversized row per page instead of dumping everything on one page.
 		var table = MakeTable(header: 15.0, rowHeights: new[] { 4.0, 4.0 });
 		var paper = new PaperSize(20, 10, "T20x10");
 		var pages = PaginationPass.Paginate(table, paper, Margins.Zero);
@@ -92,10 +87,9 @@ public class TableSplitTests
 	[Fact]
 	public void Row_with_wrapping_TextFlow_measures_at_resolved_column_width_so_split_matches_render()
 	{
-		// Star column with an auto-width TextFlow that wraps to multiple lines. Before the
-		// fix, MeasureRowHeights resolved the cell unconstrained → single-line height. The
-		// fits half then rendered with the real (narrow) column width and grew much taller,
-		// pushing trailing rows past the page edge.
+		// MeasureRowHeights used to resolve the cell unconstrained, giving a single-line
+		// height. Rendered at the real (narrow) column width the text wrapped and grew much
+		// taller, pushing trailing rows past the page edge.
 		const string longText =
 			"the quick brown fox jumps over the lazy dog and then jumps back again over the lazy dog";
 		var rows = new IReadOnlyList<TableCell>[]
@@ -113,12 +107,10 @@ public class TableSplitTests
 			DefaultCellStyle = new TextStyle { FontSize = 3.0 },
 		};
 
-		// Narrow column → text wraps to multiple lines per row.
 		var ctx = new LayoutContext(new BoundingBox(0, 0, 30, 200));
 
-		// Measure one row's natural wrapped height first, then pick a budget that fits ~2 rows
-		// but not all 3 — that way both Fits and Overflow are non-null and we can assert
-		// rendered height against budget.
+		// Measure one row's natural wrapped height, then pick a budget that fits ~2 rows but
+		// not all 3, so both Fits and Overflow come back non-null.
 		var oneRowTable = new Table
 		{
 			ColumnWidths = new[] { GridLength.Star() },
@@ -134,8 +126,6 @@ public class TableSplitTests
 		Assert.NotNull(split.Fits);
 		Assert.NotNull(split.Overflow);
 
-		// The fits half's actual rendered height must not exceed the budget — the bug let
-		// it overshoot because MeasureRowHeights underestimated row heights.
 		var fitsBounds = split.Fits.ComputeBounds();
 		Assert.True(fitsBounds.Height <= budget + 1e-6,
 			$"fits height {fitsBounds.Height} exceeded budget {budget} — TrySplit measured rows too small");
@@ -144,7 +134,7 @@ public class TableSplitTests
 	[Fact]
 	public void Split_fragments_keep_the_full_tables_column_widths()
 	{
-		// Auto column whose widest cell (30mm) sits in the rows that spill to the next page.
+		// The Auto column's widest cell (30mm) sits in the rows that spill to the next page.
 		// Both fragments must keep the full table's resolved widths — re-deriving per fragment
 		// made the column edge jump at the page break.
 		var rows = new IReadOnlyList<TableCell>[]
@@ -162,7 +152,6 @@ public class TableSplitTests
 			Border = null,
 		};
 
-		// Budget fits 2 of the 4 rows; context width 100 → auto col 30, star col 70.
 		var split = table.TrySplit(12, ContextWithHeight(12));
 		Assert.NotNull(split.Fits);
 		var overflow = Assert.IsType<Table>(split.Overflow);
@@ -172,8 +161,7 @@ public class TableSplitTests
 		Assert.Equal(GridLength.Kind.Absolute, overflow.ColumnWidths[1].Type);
 		Assert.Equal(70, overflow.ColumnWidths[1].Value, 6);
 
-		// The fits half rendered with the same pinned widths: its bounds span the full 100mm
-		// even though its own widest first-column cell is only 10mm.
+		// Pinned widths carry over even though the fits half's own widest cell is only 10mm.
 		Assert.Equal(100, split.Fits.ComputeBounds().Width, 6);
 	}
 

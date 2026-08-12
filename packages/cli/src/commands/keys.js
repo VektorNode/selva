@@ -1,12 +1,11 @@
 // Rotate SELVA_HMAC_KEY or SELVA_AT_REST_KEY; requires explicit confirm (blast radius in TARGETS).
 
-import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { readEnvFile, writeEnvFile } from '../env.js';
 import { generateKey } from '../secrets.js';
-import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
+import { readEnvTemplate, requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 
 const TARGETS = {
 	hmac: {
@@ -14,8 +13,7 @@ const TARGETS = {
 		warning: [
 			'This will:',
 			pc.red('  • log every signed-in user out (existing session cookies stop verifying)'),
-			pc.red('  • invalidate share-link and invite tokens that fell back to this key'),
-			pc.dim('    (only relevant when SHARE_LINK_SECRET / INVITE_TOKEN_SECRET are unset)')
+			pc.red('  • invalidate every share link and pending invite')
 		].join('\n')
 	},
 	'at-rest': {
@@ -58,19 +56,7 @@ export async function runKeysRotate(argv) {
 	const fresh = generateKey();
 	current[envVar] = fresh;
 
-	const templatePath = join(
-		dir,
-		'node_modules',
-		'@selvajs',
-		'selva',
-		'templates',
-		'.env.example'
-	);
-	const template = existsSync(templatePath)
-		? readFileSync(templatePath, 'utf8')
-		: readFileSync(envPath, 'utf8');
-
-	writeEnvFile(envPath, template, current);
+	writeEnvFile(envPath, readEnvTemplate(dir), current);
 
 	p.outro(
 		[

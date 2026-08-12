@@ -8,17 +8,12 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Model.Drawings;
 
-// Phase 8 composite: drawing title block. A bordered grid of named fields where each cell
-// carries a label (small caps) above a value (larger). Field placement is driven by an
-// ordered list of TitleBlockField rows — each row is a list of fields that share a row
-// height, with column widths derived from explicit Span values (in fraction-of-row units)
-// or distributed evenly when Span is 0.
-//
-// Standard helpers (`Standard()`, `Compact()`) produce conventional layouts so callers can
-// fill a few fields and get a complete block.
-// Localizable caption set for the title-block factories. Each property is the small-caps
-// label shown above a value cell. Defaults are English (ISO drafting convention); German()
-// supplies the equivalent DIN/ISO German captions. Callers can also build a custom set.
+// Drawing title block: a bordered grid of named fields, each cell a label (small caps)
+// above a value (larger). Rows of TitleBlockField drive placement — fields in a row share
+// its height; column widths come from Span (fraction of row width) or split evenly at
+// Span = 0.
+// Localizable caption set. English is the ISO drafting-convention default; German supplies
+// the DIN/ISO equivalents. Callers can also build a custom set.
 public sealed class TitleBlockLabels
 {
 	public string LegalOwner { get; init; } = "LEGAL OWNER";
@@ -59,54 +54,38 @@ public sealed class TitleBlockLabels
 
 public sealed class TitleBlockField
 {
-	// Short caption shown above the value, e.g. "PROJECT", "DRAWING NO".
 	public string Label { get; init; }
 	public string Value { get; init; }
 
-	// Relative width within the row. Fields with Span = 0 take an even share of the row's
-	// remaining width after explicit-span fields are subtracted.
+	// Fields with Span = 0 split whatever width remains after explicit-span fields.
 	public double Span { get; init; }
 
-	// Optional per-field overrides; null = inherit the block defaults.
 	public TextStyle LabelStyle { get; init; }
 	public TextStyle ValueStyle { get; init; }
 }
 
 public sealed class TitleBlock : LayoutElement
 {
-	// Each row is a list of fields; rows stack top-to-bottom in reading order. Empty
-	// (null) entries inside a row produce blank cells.
+	// Rows stack top-to-bottom; a null entry inside a row is a blank cell.
 	public IReadOnlyList<IReadOnlyList<TitleBlockField>> Rows { get; init; }
 		= Array.Empty<IReadOnlyList<TitleBlockField>>();
 
-	// Outer size. Defaults to 180×40mm — fits comfortably in an A3 corner. The renderer can
-	// pin the block to any corner via Origin.
+	// 180x40mm fits comfortably in an A3 corner.
 	public BoundingBox Size { get; init; } = new BoundingBox(0, 0, 180, 40);
 
-	// Width rule: when AutoWidth is set, Resolve stretches the block to the band's available
-	// width on every paper size — so the block always tracks the sheet — capped at MaxAutoWidth
-	// so it never grows absurdly wide on large formats (A1/A0). A degenerate/empty context (band
-	// width unknown yet, e.g. band-height measurement) falls back to Size.Width.
 	public bool AutoWidth { get; init; }
 
-	// Upper bound (mm) on the auto-stretched width. Beyond this the block stops growing and stays
-	// MaxAutoWidth wide, keeping the field cells readable on large sheets. 420mm ≈ A3's long edge.
+	// 420mm ≈ A3's long edge — beyond it the block stops growing.
 	public const double MaxAutoWidth = 420.0;
 
-	// Fixed fraction of the block width reserved for the logo column in the ISO 7200 layout. The
-	// owner / project cells split the rest. ~20% of a 180mm block ≈ 36mm — a comfortable logo
-	// strip that still leaves the bulk of the row for the two names.
+	// ~20% of a 180mm block ≈ 36mm — enough for a logo strip while leaving most of the
+	// row for the owner / project names.
 	public const double LogoColumnSpan = 0.2;
 
-	// Optional logo rendered in a dedicated cell. Placed top-left and aspect-preserved, fitted
-	// into the first row's logo column (row 0, column 0) so it never bleeds into the owner /
-	// project cells next to it. Null = no logo cell.
+	// Placed top-left, aspect-preserved, fitted into row 0's logo column. Null = no logo cell.
 	public ImageElement Logo { get; init; }
 
-	// Hard cap on the rendered logo box (mm). The logo is fitted into a box no wider than
-	// LogoMaxWidth and no taller than LogoMaxHeight (each ignored when <= 0), then aspect-
-	// preserved within it. The logo column width is an additional, automatic cap. Defaults
-	// leave the column as the only constraint.
+	// Each cap is ignored when <= 0; the logo column width is an additional automatic cap.
 	public double LogoMaxWidth { get; init; }
 	public double LogoMaxHeight { get; init; }
 
@@ -121,13 +100,11 @@ public sealed class TitleBlock : LayoutElement
 
 	public override DrawElement Resolve(LayoutContext context)
 	{
-		// Auto-width: stretch to the band, capped at MaxAutoWidth. Fixed Size.Width otherwise.
 		var totalWidth = ResolveWidth(context);
 		var totalHeight = Size.Height;
 
 		if (Rows == null || Rows.Count == 0)
 		{
-			// Empty block: just the outer rect.
 			return new Frame
 			{
 				Size = new BoundingBox(0, 0, totalWidth, totalHeight),
@@ -137,16 +114,12 @@ public sealed class TitleBlock : LayoutElement
 		}
 		var rowHeight = totalHeight / Rows.Count;
 
-		// Build the cell-content tree as a list of GridCells layered on top of a backing
-		// Frame for the outer border.
 		var gridCells = new List<GridCell>();
 		var rowTracks = new List<GridLength>();
 		var colTracks = new List<GridLength>();
 
-		// We translate each row into a sub-grid: every row gets its own ColumnWidth array,
-		// but Grid takes a single shared column track. So we instead emit one Grid per row
-		// inside a vertical Stack — this gives independent column counts per row, which
-		// real title blocks rely on.
+		// Grid takes one shared column track for all rows, but title-block rows need
+		// independent column counts — so each row gets its own Grid, stacked vertically.
 		var rowElements = new List<DrawElement>(Rows.Count);
 		for (var rIndex = 0; rIndex < Rows.Count; rIndex++)
 		{
@@ -183,8 +156,7 @@ public sealed class TitleBlock : LayoutElement
 			});
 		}
 
-		// Stack rows top-to-bottom. Vertical Stack's first child sits at the top in Y-up
-		// world, which matches the visual reading order.
+		// Vertical Stack's first child sits at the top in Y-up world, matching reading order.
 		var stack = new Stack
 		{
 			Children = rowElements,
@@ -194,7 +166,6 @@ public sealed class TitleBlock : LayoutElement
 			Origin = new Point2D(Origin.X, Origin.Y),
 		};
 
-		// Build inner grid lines + outer border as a separate path for crisp rendering.
 		var children = new List<DrawElement>();
 		children.Add(stack);
 
@@ -202,9 +173,8 @@ public sealed class TitleBlock : LayoutElement
 		if (Border != null)
 			children.Add(new PathElement { Path = borderPath, Stroke = Border });
 
-		// Logo overlays the top-left, fitted into the first row's logo cell (height + the cell's
-		// own width) with a small inset and aspect preserved. Drawn last so it sits over the field
-		// grid (the standard layout keeps the top-left cell blank for it).
+		// Drawn last so it layers over the field grid; the standard layouts leave the
+		// top-left cell blank for it.
 		if (Logo != null)
 			children.Add(PlaceLogo(Logo, rowHeight, LogoCellWidth(totalWidth)));
 
@@ -220,17 +190,14 @@ public sealed class TitleBlock : LayoutElement
 		};
 	}
 
-	// Auto-width: stretch to the band's available width on every paper size, capped at
-	// MaxAutoWidth so large formats don't get absurdly wide cells. A degenerate/empty context
-	// (no band known yet, e.g. band-height measurement) falls back to Size.Width.
+	// Falls back to Size.Width when the band's available width isn't known yet
+	// (e.g. during band-height measurement).
 	private double ResolveWidth(LayoutContext context)
 	{
 		if (!AutoWidth || !context.HasFiniteAvailableWidth) return Size.Width;
 		return Math.Min(context.AvailableWidth, MaxAutoWidth);
 	}
 
-	// Width of the logo cell — row 0, column 0 — under the resolved total width. This is the
-	// automatic width cap that keeps a wide logo from spilling into the owner / project cells.
 	private double LogoCellWidth(double totalWidth)
 	{
 		if (Rows == null || Rows.Count == 0) return totalWidth;
@@ -239,11 +206,8 @@ public sealed class TitleBlock : LayoutElement
 		return ResolveColumnWidths(firstRow, totalWidth)[0];
 	}
 
-	// Fit the logo into the top-left logo cell: a box one row tall and one logo-cell wide (each
-	// minus inset), pinned to the top-left corner, aspect preserved. The box is the tightest of
-	// the cell extent and the optional LogoMaxWidth / LogoMaxHeight caps; the logo is then scaled
-	// to fit inside it without overflowing into the neighbouring cells. Honours the image's
-	// intrinsic aspect when both Width and Height are set; otherwise assumes square.
+	// Fits the logo, aspect-preserved, into a box no bigger than the logo cell or the
+	// LogoMax* caps, whichever is tighter. Assumes square if the image has no intrinsic size.
 	private DrawElement PlaceLogo(ImageElement logo, double rowHeight, double cellWidth)
 	{
 		const double inset = 1.5;
@@ -265,7 +229,6 @@ public sealed class TitleBlock : LayoutElement
 			drawH = aspect > 0 ? drawW / aspect : boxHeight;
 		}
 
-		// Top-left of the block: y from (top − inset − drawH) up to (top − inset).
 		var x = Origin.X + inset;
 		var y = Origin.Y + Size.Height - inset - drawH;
 
@@ -284,7 +247,6 @@ public sealed class TitleBlock : LayoutElement
 		var labelStyle = field.LabelStyle ?? LabelStyle;
 		var valueStyle = field.ValueStyle ?? ValueStyle;
 
-		// Label sits at the top-left of the inner padded rect; value fills the rest.
 		var inner = new List<DrawElement>();
 
 		if (!string.IsNullOrEmpty(field.Label))
@@ -355,8 +317,8 @@ public sealed class TitleBlock : LayoutElement
 			}
 		}
 
-		// Treat explicit Spans as fractions of total width when they sum to <= 1, otherwise
-		// as proportional weights. Auto fields share whatever remains.
+		// Spans summing to <= 1 are fractions of total width; above that they're treated as
+		// proportional weights instead. Auto fields split whatever's left.
 		double explicitWidthTotal;
 		if (explicitTotal > 0 && explicitTotal <= 1.0)
 		{
@@ -364,8 +326,7 @@ public sealed class TitleBlock : LayoutElement
 		}
 		else
 		{
-			// Proportional: each explicit weight becomes (weight / explicitTotal) × allocated.
-			// If there are no auto fields, explicit fields fill 100%.
+			// No auto fields: explicit fields fill 100% instead of just their weight share.
 			explicitWidthTotal = autoCount == 0 ? totalWidth : Math.Min(explicitTotal, totalWidth);
 		}
 
@@ -396,10 +357,8 @@ public sealed class TitleBlock : LayoutElement
 		var x1 = Origin.X + totalWidth;
 		var y1 = Origin.Y + totalHeight;
 
-		// Outer rectangle.
 		b.MoveTo(x0, y0).LineTo(x1, y0).LineTo(x1, y1).LineTo(x0, y1).Close();
 
-		// Horizontal lines between rows.
 		var cursorY = y1;
 		for (var r = 0; r < Rows.Count - 1; r++)
 		{
@@ -407,7 +366,6 @@ public sealed class TitleBlock : LayoutElement
 			b.MoveTo(x0, cursorY).LineTo(x1, cursorY);
 		}
 
-		// Vertical lines per row, between columns.
 		cursorY = y1;
 		for (var rIndex = 0; rIndex < Rows.Count; rIndex++)
 		{
@@ -426,9 +384,8 @@ public sealed class TitleBlock : LayoutElement
 		return b.Build();
 	}
 
-	// Convenient builder: the drafting-spec staple — title at top spanning full width, then
-	// a project/drawing/scale/sheet row, then revision/date/author. Callers fill the values
-	// they care about; missing keys are rendered as blanks.
+	// Title spans full width, then project/drawing/scale/sheet, then revision/date/author.
+	// Missing keys render as blanks.
 	public static TitleBlock Standard(IReadOnlyDictionary<string, string> values, BoundingBox? size = null, TitleBlockLabels labels = null)
 	{
 		string V(string k) => values != null && values.TryGetValue(k, out var v) ? v : string.Empty;
@@ -453,10 +410,9 @@ public sealed class TitleBlock : LayoutElement
 		};
 	}
 
-	// ISO 7200 full title block (first sheet). Data fields follow the standard's mandatory and
-	// optional set: title, legal owner, drawing number, sheet n/N, revision, date of issue,
-	// created/approved by, scale. The top-left cell is left blank so a Logo can overlay it.
-	// Keys match GH_DocumentInfo / GH_TitleBlock token names; missing keys render blank.
+	// ISO 7200 full title block (first sheet): title, legal owner, drawing number, revision,
+	// date of issue, created/approved by, scale. Top-left cell is left blank so a Logo can
+	// overlay it. Keys match GH_DocumentInfo / GH_TitleBlock token names; missing keys render blank.
 	public static TitleBlock Iso7200(IReadOnlyDictionary<string, string> values, BoundingBox? size = null, TitleBlockLabels labels = null)
 	{
 		string V(string k) => values != null && values.TryGetValue(k, out var v) ? v : string.Empty;
@@ -467,10 +423,8 @@ public sealed class TitleBlock : LayoutElement
 			Size = size ?? new BoundingBox(0, 0, 180, 50),
 			Rows = new IReadOnlyList<TitleBlockField>[]
 			{
-				// Row 1: blank logo cell (top-left, fixed ~20% so a logo always has room) + legal
-				// owner / project. Owner and project are auto-width (Span = 0): they split the
-				// remaining ~80% and grow to fill it, so long names get the space — while the logo
-				// column stays a predictable fixed width regardless of name length.
+				// Owner/project are auto-width (Span = 0), so they split the ~80% left by the
+				// fixed logo column and grow with long names; the logo column stays predictable.
 				new[] { new TitleBlockField { Span = LogoColumnSpan },
 				        new TitleBlockField { Label = L.LegalOwner, Value = V("Owner") },
 				        new TitleBlockField { Label = L.Project, Value = V("Project") } },
@@ -486,9 +440,7 @@ public sealed class TitleBlock : LayoutElement
 		};
 	}
 
-	// ISO continuation-sheet strip: a single slim row carrying just enough to identify the sheet
-	// if printed and separated — drawing number, title, revision, sheet n/N. Used as the
-	// document-default footer on pages after the first.
+	// Slim footer strip for pages after the first: drawing number, title, revision, sheet.
 	public static TitleBlock Continuation(IReadOnlyDictionary<string, string> values, BoundingBox? size = null, TitleBlockLabels labels = null)
 	{
 		string V(string k) => values != null && values.TryGetValue(k, out var v) ? v : string.Empty;

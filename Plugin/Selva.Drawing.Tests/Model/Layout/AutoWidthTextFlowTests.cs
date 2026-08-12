@@ -7,8 +7,8 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Tests.Model.Layout;
 
-// Width = null → fill the parent's available width. Verifies each container forwards
-// LayoutContext correctly so users don't have to pre-compute wrapping widths.
+// Width = null fills the parent's available width. These tests check that every
+// container forwards LayoutContext down, so callers never have to pre-compute wrap widths.
 public class AutoWidthTextFlowTests
 {
 	private const string LongText =
@@ -19,7 +19,7 @@ public class AutoWidthTextFlowTests
 	{
 		var flow = new TextFlow { Text = LongText, Style = new TextStyle { FontSize = 3.0 } };
 		var resolved = (GroupElement)flow.Resolve(new LayoutContext(BoundingBox.Empty));
-		Assert.Single(resolved.Children); // one line — no wrapping when no parent constraint
+		Assert.Single(resolved.Children); // no parent constraint → no wrap
 	}
 
 	[Fact]
@@ -105,10 +105,9 @@ public class AutoWidthTextFlowTests
 	[Fact]
 	public void Stack_with_Stretch_makes_auto_width_TextFlow_wrap_to_parent_cross()
 	{
-		// Stretch alignment + a long auto-width TextFlow inside a vertical stack: the
-		// TextFlow should wrap to the parent's available width (60mm), not the natural
-		// width of the longest sibling. Verifying via wrap behaviour rather than measured
-		// glyph extent — text never fills every pixel of the wrap line.
+		// Under Stretch, the long TextFlow should wrap to the parent's 60mm cross-axis,
+		// not the natural width of the shorter sibling. Asserted via line count rather than
+		// measured width — a wrapped line never fills the full wrap width exactly.
 		var stack = new Stack
 		{
 			Orientation = StackOrientation.Vertical,
@@ -128,9 +127,7 @@ public class AutoWidthTextFlowTests
 	[Fact]
 	public void Stack_with_Start_alignment_does_not_force_parent_cross_on_children()
 	{
-		// Without Stretch, a single short child shouldn't be forced to the parent width
-		// — the stack reports the child's natural width and Start alignment leaves it
-		// alone.
+		// Start alignment should not force the child to the parent's width like Stretch does.
 		var stack = new Stack
 		{
 			Orientation = StackOrientation.Vertical,
@@ -152,12 +149,10 @@ public class AutoWidthTextFlowTests
 	{
 		var flow = new TextFlow { Text = LongText, Width = 1000, Style = new TextStyle { FontSize = 3.0 } };
 		var resolved = (GroupElement)flow.Resolve(new LayoutContext(new BoundingBox(0, 0, 20, 100)));
-		Assert.Single(resolved.Children); // explicit Width wins, fits on one line
+		Assert.Single(resolved.Children); // explicit Width wins over context
 	}
 
-	// Walk the resolved subtree and return the first GroupElement whose first child is a
-	// TextElement — that's a TextFlow's per-line group, possibly wrapped in translate
-	// groups by the parent layout.
+	// A TextFlow's per-line group is the first GroupElement whose first child is a TextElement.
 	private static GroupElement? FindFirstTextGroup(DrawElement element)
 		=> FindAllTextGroups(element).FirstOrDefault();
 

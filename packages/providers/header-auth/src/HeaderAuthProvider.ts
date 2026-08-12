@@ -296,7 +296,7 @@ export class HeaderAuthProvider implements IAuthProvider {
 	}
 
 	/**
-	 * Allowlist a UPN. Admin POST `/admin/api/users` with `{ email }`; the
+	 * Allowlist a UPN. Admin POST `/api/admin/users` with `{ email }`; the
 	 * email IS the UPN for M365 / Entra deployments where they match. For
 	 * other IdPs, document the UPN format in your README/onboarding.
 	 */

@@ -8,28 +8,23 @@ CLI for white-label Selva deployments.
 npx @selvajs/cli my-deployment
 ```
 
-Interactive scaffolder. Prompts for provider, tenancy, flags, brand name, admin email. Generates `SELVA_HMAC_KEY` + `SELVA_AT_REST_KEY`. Writes `.env`, `ecosystem.config.cjs`, `package.json`. Runs `npm install`.
+Prompts for provider, tenancy, flags, brand name, admin email; generates `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY`; writes `.env`, `ecosystem.config.cjs`, `package.json`; runs `npm install`. Refuses to overwrite a non-empty directory unless you pass `--force`.
 
 ## Operate an existing deployment
 
-After install, the package exposes a `selva` bin:
+Installing adds a `selva` bin, scoped to the deployment directory (needs `.env` or `ecosystem.config.cjs` in the cwd):
 
 ```bash
-selva init                  # reconfigure prompts; preserves existing secrets
-selva doctor                # validate env + providers + paths
+selva init                 # reconfigure prompts; keeps existing secrets
+selva doctor [--fix]       # validate env, providers, Node engine, boot persistence
+selva migrate              # bring package.json onto the current layout
 selva start | stop | restart | logs
-selva update                # npm update @selvajs/selva + pm2 restart
+selva update                 # update @selvajs/cli + @selvajs/selva, then restart
 selva keys rotate hmac      # rotate SELVA_HMAC_KEY (logs everyone out)
 selva keys rotate at-rest   # rotate SELVA_AT_REST_KEY (compute API key needs re-entry)
 ```
 
-All operator commands run inside the deployment directory (the one that contains `.env` and `ecosystem.config.cjs`).
-
-## Idempotency rules
-
-- `npx @selvajs/cli` refuses to overwrite a non-empty directory without `--force`.
-- `selva init` reads the current `.env`, lets the user edit, and **never** regenerates `SELVA_HMAC_KEY` / `SELVA_AT_REST_KEY` if they're already set.
-- A `.selva-version` marker is written so future CLI versions can migrate config schema cleanly.
+`selva init` never regenerates `SELVA_HMAC_KEY` or `SELVA_AT_REST_KEY` once they're set — rotating those is `keys rotate`'s job, since it invalidates sessions or encrypted data. A `.selva-version` marker records which CLI version scaffolded the directory, so a later `selva migrate` knows what layout it's upgrading from.
 
 ## Relationship to `@selvajs/selva`
 

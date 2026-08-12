@@ -15,10 +15,8 @@ using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Renders to SVG file(s). Accepts either a Document (one file per page) or loose drawing
-// elements / DrawingViews (wrapped in a single-page document and rendered as one file).
-// Multi-page documents produce "<name>-1.svg", "<name>-2.svg", ...; single-page produces
-// just "<name>.svg".
+// Accepts a Document (one file per page) or loose drawing elements / DrawingViews (wrapped
+// into a single-page document, rendered as one file).
 public class GH_RenderSvg : GH_Component, ISelvaFileOutput
 {
     public GH_RenderSvg()
@@ -46,7 +44,7 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
         pManager.AddBooleanParameter("Auto Fit", "AF", "Auto-fit viewBox to content with a 10mm margin. When false, the document's page size is used.", GH_ParamAccess.item, false);
         pManager.AddColourParameter("Background", "BG", "Background color (leave unconnected for transparent)", GH_ParamAccess.item);
         pManager.AddBooleanParameter("Embed Fonts", "EF", "Embed bundled Inter as a @font-face data URI", GH_ParamAccess.item, false);
-        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder path for storage", GH_ParamAccess.item, "");
+        pManager.AddTextParameter("Sub Folder", "Folder", "Optional subfolder for this file. Use :: to nest, like Rhino layers (ROOT::Panels). Files sharing a root land in the same folder; different roots produce separate top-level folders in the download.", GH_ParamAccess.item, "");
 
         pManager[1].Optional = true;
         pManager[2].Optional = true;
@@ -110,7 +108,6 @@ public class GH_RenderSvg : GH_Component, ISelvaFileOutput
             var results = new List<FileDataGoo>(rendered.Count);
             for (var i = 0; i < rendered.Count; i++)
             {
-                // Single page → "drawing.svg". Multi-page → "drawing-1.svg", "drawing-2.svg".
                 var fileName = rendered.Count == 1 ? baseName : $"{baseName}-{i + 1}";
                 results.Add(new FileDataGoo(new FileData
                 {

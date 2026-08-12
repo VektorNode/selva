@@ -7,9 +7,7 @@ using FontStyle = Selva.Drawing.Model.Style.FontStyle;
 
 namespace Selva.Drawing.Fonts;
 
-// Result of measuring a text run. Width is the sum of glyph advances; ascent/descent/
-// lineHeight are the font-level metrics scaled to the requested size. All values are in
-// the same units as the input font size (mm in our pipeline).
+// Result of measuring a text run, in the same units as the input font size (mm in this pipeline).
 public readonly struct MeasuredText
 {
 	public readonly double Width;
@@ -35,20 +33,17 @@ public readonly struct MeasuredText
 	public double LineHeight => Ascent + Math.Abs(Descent) + LineGap;
 }
 
-// Public facade for font metrics. Resolves a TextStyle (or family/weight/style triple) to
-// a bundled font and exposes glyph-accurate measurement. Falls back to the legacy
-// 0.55 × charCount heuristic when the requested family isn't bundled — that keeps existing
-// callers (e.g. user-supplied font stacks like "Arial") working without exceptions.
+// Resolves a TextStyle (or family/weight/style triple) to a bundled font and measures
+// text against its real glyph metrics. Falls back to a charCount heuristic for families
+// we don't bundle (e.g. user-supplied stacks like "Arial"), so callers never see an
+// exception for an unknown font.
 //
-// Today we ship Inter Regular + Inter Bold. Italic is mapped to Regular until we bundle
-// an italic face. New families/faces are wired in by adding entries to _bundled and
-// dropping a TTF into Fonts/Resources/.
+// Ships Inter Regular + Inter Bold; Italic maps to Regular until an italic face is added.
+// New families/faces: add an entry to _bundled and drop a TTF into Fonts/Resources/.
 public static class FontMetrics
 {
 	private const string ResourcePrefix = "Selva.Drawing.Fonts.Resources.";
 
-	// Heuristic fallback constants — kept identical to the Phase 1 TextElement bounds so
-	// behavior is unchanged for unknown families.
 	private const double HeuristicWidthFactor = 0.55;
 	private const double HeuristicAscentFactor = 0.8;
 	private const double HeuristicDescentFactor = -0.2;
@@ -90,8 +85,7 @@ public static class FontMetrics
 			xHeight: font.XHeight * scale);
 	}
 
-	// True when a given family/weight/style is backed by a bundled font. Useful for tests
-	// and renderers that want to know whether the heuristic is in play.
+	// True when a given family/weight/style is backed by a bundled font, false if it'll fall back to the heuristic.
 	public static bool IsBundled(string fontFamily, FontWeight weight = FontWeight.Normal,
 		FontStyle style = FontStyle.Normal)
 		=> ResolveFont(fontFamily, weight, style) != null;
@@ -104,7 +98,7 @@ public static class FontMetrics
 			if (string.Equals(family, primary, StringComparison.OrdinalIgnoreCase) && w == weight && s == style)
 				return Cache.GetOrAdd(resource, LoadFromResource);
 		}
-		// Same family, any face — fall back to the regular face if weight/style is missing.
+		// Same family, no matching weight/style — fall back to its regular face.
 		foreach (var (family, w, s, resource) in _bundled)
 		{
 			if (string.Equals(family, primary, StringComparison.OrdinalIgnoreCase)
@@ -114,8 +108,7 @@ public static class FontMetrics
 		return null;
 	}
 
-	// "Inter, Helvetica, sans-serif" → "Inter". TextStyle.FontFamily allows CSS-style
-	// stacks for SVG fallback; metrics measurement uses the first family.
+	// "Inter, Helvetica, sans-serif" → "Inter"; measurement only ever uses the first family in a CSS-style stack.
 	private static string ExtractFirstFamily(string fontFamily)
 	{
 		if (string.IsNullOrEmpty(fontFamily)) return string.Empty;

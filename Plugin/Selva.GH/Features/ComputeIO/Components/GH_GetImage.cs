@@ -19,10 +19,9 @@ using Selva.GH.Properties;
 namespace Selva.GH.Features.ComputeIO.Components;
 
 /// <summary>
-///     A contextual parameter that supplies an image (PNG/JPEG/WEBP/SVG) from the web UI as
-///     a FileInputGoo (path, URL, or base64). Unlike Get File this performs no Rhino import —
-///     it carries the raw image payload downstream, where Draw Image turns it into an
-///     ImageElement. Accepted formats come from ImageInputResolver.AcceptedFormats.
+///     A contextual parameter that supplies an image (PNG/JPEG/WEBP/SVG) from the web UI as a
+///     FileInputGoo (path, URL, or base64). Unlike Get File this does no Rhino import — it
+///     carries the raw image payload downstream, where Draw Image turns it into an ImageElement.
 /// </summary>
 public class GetImageParameter : GH_Param<FileInputGoo>, IGH_ContextualParameter
 {
@@ -114,7 +113,7 @@ public class GetImageParameter : GH_Param<FileInputGoo>, IGH_ContextualParameter
     }
 
     /// <summary>
-    ///     Assigns contextual data as a tree structure - called by Rhino.Compute via reflection.
+    ///     Assigns contextual data as a tree — called by Rhino.Compute via reflection.
     /// </summary>
     public void AssignContextualDataTree(DataTree<GH_String> data)
     {
@@ -162,9 +161,6 @@ public class GetImageParameter : GH_Param<FileInputGoo>, IGH_ContextualParameter
         _isFromContextual = false;
     }
 
-    /// <summary>
-    ///     Returns contextual JSON for web UI schema discovery.
-    /// </summary>
     public JObject GetContextualJson()
     {
         return new JObject
@@ -265,9 +261,6 @@ public class GetImageParameter : GH_Param<FileInputGoo>, IGH_ContextualParameter
         m_data.Append(new FileInputGoo(fileData), new GH_Path(0));
     }
 
-    /// <summary>
-    ///     Extracts FileInputData from various input types.
-    /// </summary>
     private static FileInputData ExtractFileInputData(object item)
     {
         return item switch
@@ -332,9 +325,6 @@ public class GetImageParameter : GH_Param<FileInputGoo>, IGH_ContextualParameter
         }
     }
 
-    /// <summary>
-    ///     Validates FileInputData for size, transport type, and image extension.
-    /// </summary>
     private static bool ValidateImageInputData(FileInputData fileData)
     {
         if (fileData == null || string.IsNullOrWhiteSpace(fileData.File))

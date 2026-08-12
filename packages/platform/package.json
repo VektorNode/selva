@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/platform",
-	"version": "0.16.0",
+	"version": "0.17.0-beta.3",
 	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
 	"license": "MIT",
 	"author": "VektorNode",
@@ -22,112 +22,115 @@
 		"directory": "packages/platform"
 	},
 	"engines": {
-		"node": ">=22.0.0"
+		"node": ">=24.0.0"
 	},
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
-			"source": "./src/index.ts",
+			"selva-source": "./src/index.ts",
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
 		"./auth": {
-			"source": "./src/auth/index.ts",
+			"selva-source": "./src/auth/index.ts",
 			"types": "./dist/auth/index.d.ts",
 			"import": "./dist/auth/index.js"
 		},
 		"./data": {
-			"source": "./src/data/index.ts",
+			"selva-source": "./src/data/index.ts",
 			"types": "./dist/data/index.d.ts",
 			"import": "./dist/data/index.js"
 		},
 		"./storage": {
-			"source": "./src/storage/index.ts",
+			"selva-source": "./src/storage/index.ts",
 			"types": "./dist/storage/index.d.ts",
 			"import": "./dist/storage/index.js"
 		},
 		"./permissions": {
-			"source": "./src/permissions/index.ts",
+			"selva-source": "./src/permissions/index.ts",
 			"types": "./dist/permissions/index.d.ts",
 			"import": "./dist/permissions/index.js"
 		},
 		"./userProfile": {
-			"source": "./src/userProfile/index.ts",
+			"selva-source": "./src/userProfile/index.ts",
 			"types": "./dist/userProfile/index.d.ts",
 			"import": "./dist/userProfile/index.js"
 		},
 		"./projects": {
-			"source": "./src/projects/index.ts",
+			"selva-source": "./src/projects/index.ts",
 			"types": "./dist/projects/index.d.ts",
 			"import": "./dist/projects/index.js"
 		},
 		"./platformProjects": {
-			"source": "./src/platformProjects/index.ts",
+			"selva-source": "./src/platformProjects/index.ts",
 			"types": "./dist/platformProjects/index.d.ts",
 			"import": "./dist/platformProjects/index.js"
 		},
 		"./organizations": {
-			"source": "./src/organizations/index.ts",
+			"selva-source": "./src/organizations/index.ts",
 			"types": "./dist/organizations/index.d.ts",
 			"import": "./dist/organizations/index.js"
 		},
 		"./invites": {
-			"source": "./src/invites/index.ts",
+			"selva-source": "./src/invites/index.ts",
 			"types": "./dist/invites/index.d.ts",
 			"import": "./dist/invites/index.js"
 		},
 		"./shareLinks": {
-			"source": "./src/shareLinks/index.ts",
+			"selva-source": "./src/shareLinks/index.ts",
 			"types": "./dist/shareLinks/index.d.ts",
 			"import": "./dist/shareLinks/index.js"
 		},
 		"./definitions": {
-			"source": "./src/definitions/index.ts",
+			"selva-source": "./src/definitions/index.ts",
 			"types": "./dist/definitions/index.d.ts",
 			"import": "./dist/definitions/index.js"
 		},
 		"./computeServer": {
-			"source": "./src/computeServer/index.ts",
+			"selva-source": "./src/computeServer/index.ts",
 			"types": "./dist/computeServer/index.d.ts",
 			"import": "./dist/computeServer/index.js"
 		},
 		"./access": {
-			"source": "./src/access/index.ts",
+			"selva-source": "./src/access/index.ts",
 			"types": "./dist/access/index.d.ts",
 			"import": "./dist/access/index.js"
 		},
 		"./events": {
-			"source": "./src/events/index.ts",
+			"selva-source": "./src/events/index.ts",
 			"types": "./dist/events/index.d.ts",
 			"import": "./dist/events/index.js"
 		},
 		"./utils": {
-			"source": "./src/utils/index.ts",
+			"selva-source": "./src/utils/index.ts",
 			"types": "./dist/utils/index.d.ts",
 			"import": "./dist/utils/index.js"
 		},
 		"./testing": {
-			"source": "./src/testing/index.ts",
+			"selva-source": "./src/testing/index.ts",
 			"types": "./dist/testing/index.d.ts",
 			"import": "./dist/testing/index.js"
 		}
 	},
 	"files": [
 		"dist",
-		"src"
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
 	],
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
-		"prepack": "node ../../scripts/prepack.js",
-		"postpack": "node ../../scripts/prepack.js --restore"
+		"prepack": "publint --strict",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@selvajs/schemas": "workspace:^",
-		"zod": "^4.3.6"
+		"zod": "catalog:"
 	},
 	"peerDependencies": {
 		"sharp": "^0.34.0 || ^0.35.0",
@@ -142,7 +145,8 @@
 		}
 	},
 	"devDependencies": {
-		"sharp": "^0.35.3",
+		"@selvajs/config": "workspace:*",
+		"sharp": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

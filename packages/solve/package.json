@@ -1,0 +1,100 @@
+{
+	"name": "@selvajs/solve",
+	"version": "1.0.0-beta.10",
+	"description": "One owner for the Selva solve flow — input change to solve result, on both sides of the wire, with no transport and no UI",
+	"author": "VektorNode",
+	"license": "MIT",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/solve"
+	},
+	"type": "module",
+	"keywords": [
+		"grasshopper",
+		"rhino",
+		"compute",
+		"solve",
+		"parametric",
+		"cache",
+		"pipeline"
+	],
+	"exports": {
+		"./client": {
+			"import": {
+				"types": "./dist/client.d.ts",
+				"default": "./dist/client.js"
+			},
+			"require": {
+				"types": "./dist/client.d.cts",
+				"default": "./dist/client.cjs"
+			}
+		},
+		"./server": {
+			"import": {
+				"types": "./dist/server.d.ts",
+				"default": "./dist/server.js"
+			},
+			"require": {
+				"types": "./dist/server.d.cts",
+				"default": "./dist/server.cjs"
+			}
+		},
+		"./shared": {
+			"import": {
+				"types": "./dist/shared.d.ts",
+				"default": "./dist/shared.js"
+			},
+			"require": {
+				"types": "./dist/shared.d.cts",
+				"default": "./dist/shared.cjs"
+			}
+		}
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
+	],
+	"sideEffects": false,
+	"scripts": {
+		"build": "pnpm type-check && tsdown",
+		"dev": "tsdown --watch",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"test": "vitest run",
+		"test:watch": "vitest watch",
+		"type-check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@selvajs/compute": "workspace:^",
+		"@selvajs/platform": "workspace:^",
+		"@selvajs/schemas": "workspace:*"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@selvajs/config": "workspace:*",
+		"@types/node": "catalog:",
+		"esbuild": "^0.28.1",
+		"eslint": "catalog:",
+		"eslint-config-prettier": "^10.1.8",
+		"globals": "^17.5.0",
+		"prettier": "catalog:",
+		"tsdown": "catalog:",
+		"typescript": "catalog:",
+		"vite": "catalog:",
+		"vitest": "catalog:"
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"publishConfig": {
+		"access": "public"
+	}
+}

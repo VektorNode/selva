@@ -1,11 +1,13 @@
 export type {
 	DefinitionFileExt,
+	DefinitionListItem,
 	DefinitionRecord,
 	DefinitionRecordPatch,
 	DefinitionStatus,
 	DefinitionVersion,
 	DefinitionChannel
 } from './types.js';
+export { toDefinitionListItem } from './types.js';
 export type { IDefinitionStore } from './interface.js';
 export type { UISchema } from '@selvajs/schemas';
 export {

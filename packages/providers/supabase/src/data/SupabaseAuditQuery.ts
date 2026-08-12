@@ -11,17 +11,15 @@ import type { ClientBundle } from './client.js';
 const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 100;
 
-// Cursor values are interpolated into PostgREST filter strings — both formats
-// must be validated before any string concatenation reaches the query.
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/;
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 /**
  * Read-side for `audit_events`. Always uses the service-role client — RLS
- * blocks all read access by design, so the route layer is the single trust
- * boundary (callers must gate on `instance_admin`).
+ * blocks all reads by design, so the route layer is the sole trust boundary
+ * and must gate callers on `instance_admin`.
  *
- * Pagination is keyset on `(occurred_at desc, id desc)`. The `id` tie-breaker
+ * Pagination is keyset on `(occurred_at desc, id desc)`; the `id` tie-breaker
  * prevents skipped rows when multiple events land in the same millisecond.
  */
 export class SupabaseAuditQuery implements IAuditQuery {
@@ -35,8 +33,7 @@ export class SupabaseAuditQuery implements IAuditQuery {
 			.select('id, type, actor_id, occurred_at, data')
 			.order('occurred_at', { ascending: false })
 			.order('id', { ascending: false })
-			// Fetch one extra row to detect "has next page" without a count query.
-			.limit(limit + 1);
+			.limit(limit + 1); // one extra row to detect "has more" without a count query
 
 		if (filters.types && filters.types.length > 0) {
 			q = q.in('type', [...filters.types]);
@@ -51,13 +48,10 @@ export class SupabaseAuditQuery implements IAuditQuery {
 			q = q.lte('occurred_at', filters.untilIso);
 		}
 		if (filters.cursor) {
-			// `(occurred_at, id) < (cursorTs, cursorId)` expressed for PostgREST:
-			// strictly older OR same timestamp with a strictly smaller id.
-			//
-			// Both values are interpolated into a `.or()` filter string. Validate
-			// shape before interpolation — without these guards a malformed cursor
-			// (or a hand-crafted URL by a route caller) could break out of the
-			// filter and combine with arbitrary PostgREST operators.
+			// Expresses `(occurred_at, id) < (cursorTs, cursorId)` as a PostgREST
+			// `.or()` string: strictly older, or same timestamp with a smaller id.
+			// Both values get interpolated into that string, so a malformed cursor
+			// could inject arbitrary PostgREST operators — validate shape first.
 			const ts = filters.cursor.occurredAt;
 			const id = filters.cursor.id;
 			if (!ISO_RE.test(ts) || !UUID_RE.test(id)) {

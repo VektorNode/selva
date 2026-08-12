@@ -3,27 +3,22 @@ import type { Snippet } from 'svelte';
 import type { SupportedTypes } from '@selvajs/schemas';
 
 // Carries the host app's slot renderer down to InputControl without threading a
-// prop through every layout layer (ComputeApp → AppLayout → TabLayout →
-// TabContent → Group → InputControl).
+// prop through every layout layer.
 //
 // An input with source.kind === 'client' and source.client.presentation === 'slot'
-// reserves its cell but renders nothing itself. Instead Selva invokes this snippet
-// so the host can render its own element (e.g. an "Edit JSON" button, or a custom
-// picker). Selva never interprets what the host renders. The host may COMMIT a value
-// back via `onValueChange`, which flows into the solve exactly like any built-in
-// widget's change.
+// reserves its cell but renders nothing itself. Selva invokes this snippet instead
+// so the host can render its own element (an "Edit JSON" button, a custom picker)
+// and never interprets what comes back.
 
 export interface ClientSlotArgs {
 	/** Grasshopper parameter instance GUID (LayoutItem.paramId / SchemaInput.id). */
 	inputId: string;
 	displayName: string;
-	/** The current value held for this input (e.g. the prefilled JSON), if any. */
 	value: unknown;
 	/**
-	 * Commit a value for this input. Identical channel to a built-in widget's change
-	 * — the value lands in the solve session and is sent to Compute on the next solve.
-	 * `forceSolve` requests a solve even in manual-solve mode (system reconciliation).
-	 * Lets a slot be an interactive control (a custom picker), not just a display cell.
+	 * Commit a value for this input — the same channel a built-in widget's change uses, so a
+	 * slot can be an interactive control rather than just a display cell. `forceSolve`
+	 * requests a solve even in manual-solve mode.
 	 */
 	onValueChange: (value: SupportedTypes, forceSolve?: boolean) => void;
 }

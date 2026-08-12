@@ -91,8 +91,8 @@
 		starBusyGuid = guid;
 		const isStarred = starredIds.has(guid);
 		try {
-			const res = await fetch(`/api/me/starred/${guid}`, {
-				method: isStarred ? 'DELETE' : 'POST'
+			const res = await fetch(`/api/v1/me/starred/${guid}`, {
+				method: isStarred ? 'DELETE' : 'PUT'
 			});
 			if (!res.ok) throw new Error(`${res.status}`);
 			await invalidateAll();

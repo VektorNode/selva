@@ -5,9 +5,9 @@ Foundational utilities and low-level clients that power the `@selvajs/compute` l
 ## Key Responsibilities
 
 - **Compute Communication**: Type-safe HTTP wrappers for the Rhino Compute API.
-- **Error Handling**: Specialized `RhinoComputeError` classes for precise debugging of API and network failures.
-- **Server Monitoring**: Utilities to fetch runtime stats and telemetry from Compute instances.
-- **Data Processing**: Utilities for base64 encoding/decoding and camelCase normalization of API responses.
+- **Error Handling**: Specialized `ComputeError` classes for precise debugging of API and network failures.
+- **Server URL Validation**: Normalizing and guarding a configured Compute endpoint.
+- **Data Processing**: Base64 encoding/decoding and case-insensitive field reads (`readField`/`hasField`) over API responses.
 
 ## Structure
 
@@ -15,8 +15,10 @@ Foundational utilities and low-level clients that power the `@selvajs/compute` l
 src/core/
 ├── compute-fetch/    # Low-level HTTP client logic
 ├── errors/           # Custom error types and factory
-├── server/           # Server health and stats monitoring
-├── utils/            # Encoding, logging, and string utilities
+├── files/            # File-output helpers
+├── server/           # Server URL validation
+├── utils/            # Encoding, logging, field reads
+├── definition-ref.ts # Definition reference resolution
 └── types.ts          # Core shared configuration types
 ```
 
@@ -26,21 +28,17 @@ The `core` module provides the building blocks for the rest of the library. Belo
 
 ### 1. Low-level API Requests
 
-Use `fetchRhinoCompute` for type-safe requests to arbitrary Rhino Compute endpoints.
+Use `fetchCompute` for type-safe requests to arbitrary Rhino Compute endpoints.
 
 ```typescript
-import { fetchRhinoCompute, RhinoComputeError } from '@selvajs/compute/core';
+import { fetchCompute, ComputeError } from '@selvajs/compute/core';
 
 async function performCustomJob(config) {
 	try {
-		const response = await fetchRhinoCompute(
-			'rhino/geometry/point/at',
-			{ x: 1, y: 0, z: 0 },
-			config
-		);
+		const response = await fetchCompute('rhino/geometry/point/at', { x: 1, y: 0, z: 0 }, config);
 		return response;
 	} catch (error) {
-		if (error instanceof RhinoComputeError) {
+		if (error instanceof ComputeError) {
 			// Handle specific error codes (e.g. AUTH_ERROR, COMPUTATION_ERROR)
 			console.error(`[${error.code}] ${error.message} (HTTP ${error.statusCode ?? 'n/a'})`);
 		}
@@ -48,28 +46,29 @@ async function performCustomJob(config) {
 }
 ```
 
-### 2. Server Monitoring
+### 2. Definition forms
 
-Use `ComputeServerStats` to check server health, get the version, or monitor active child processes.
+A solve takes bytes directly, or a `DefinitionRef` — a stable key plus a lazy
+`load()`, so a caller that already knows a definition's identity (e.g. a stored
+version's UUID) can schedule solves without materializing multi-MB bytes.
 
 ```typescript
-import { ComputeServerStats } from '@selvajs/compute/core';
-
-async function checkServer(url, apiKey) {
-	const stats = new ComputeServerStats(url, apiKey);
-
-	try {
-		if (await stats.isServerOnline()) {
-			const info = await stats.getServerStats();
-			// version is an object: { rhino, compute, git_sha }
-			console.log(`Compute Version: ${info.version?.compute}`);
-			// activeChildren is a count (number), absent if the read failed
-			console.log(`Active Children: ${info.activeChildren ?? 'unknown'}`);
-		}
-	} finally {
-		await stats.dispose(); // Always dispose to clear monitoring timeouts
-	}
-}
+import { isDefinitionRef, type SolveDefinition } from '@selvajs/compute/core';
 ```
+
+Read `DefinitionRef`'s immutability contract before constructing one: two
+different byte contents sharing a key poisons every cache built on it.
+
+### 3. Backend configuration
+
+`core/` knows nothing about Rhino. Three knobs carry what a backend needs:
+
+- `ComputeConfig.apiKeyHeader` — header name for `apiKey` (default `RhinoComputeKey`)
+- `ComputeConfig.serverErrorCodes` — this backend's wire codes → our `ErrorCodes`
+- `validateServerUrl(url, { blockedHosts })` — the shared public endpoint to reject
+
+`ComputeServerStats` used to live here. It probes rhino.compute's control plane
+(`/activechildren`, `/plugins/gh/installed`, `/idlespan`), so it now ships from
+`@selvajs/compute/grasshopper`.
 
 > **Note:** Higher-level features like the `GrasshopperClient` use these modules internally. Direct use is recommended for custom low-level API calls or dedicated monitoring services.

@@ -30,9 +30,7 @@ public class TableTests
 			Border = new Stroke { Width = 0.25 },
 		};
 		var resolved = (GroupElement)table.Resolve(new LayoutContext(BoundingBox.Empty));
-		// At minimum: the grid (1 child) + the border path (1 child) = 2.
-		Assert.True(resolved.Children.Count >= 2);
-		// Last child is the border path.
+		Assert.True(resolved.Children.Count >= 2); // grid + border path, at minimum
 		Assert.IsType<PathElement>(resolved.Children[resolved.Children.Count - 1]);
 	}
 
@@ -59,9 +57,8 @@ public class TableTests
 			Rows = new[] { new[] { Cell("body") } },
 			DefaultCellStyle = new TextStyle { FontSize = 3 },
 		};
-		// Resolution doesn't expose the style directly through public API, so we rely on
-		// the structural assertion that resolution succeeds without throwing — bold is
-		// applied internally inside the cell.
+		// No public API exposes the resolved style directly, so this only checks that
+		// resolution succeeds — bold is applied internally inside the cell.
 		var resolved = table.Resolve(new LayoutContext(BoundingBox.Empty));
 		Assert.NotNull(resolved);
 	}
@@ -69,9 +66,6 @@ public class TableTests
 	[Fact]
 	public void Five_by_four_bom_table_renders_to_pdf_and_svg()
 	{
-		// Phase 7 exit-criteria-shape demo: a 5-row × 4-column BOM-style table goes through
-		// the full pipeline. We don't assert exact bytes — just that both renderers produce
-		// non-empty output and the PDF reopens.
 		var table = new Table
 		{
 			ColumnWidths = new[]

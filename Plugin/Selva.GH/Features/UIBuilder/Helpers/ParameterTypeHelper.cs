@@ -10,15 +10,8 @@ using Selva.GH.Features.FileIO;
 
 namespace Selva.GH.Features.UIBuilder.Helpers;
 
-/// <summary>
-///     Helper class for parameter type checking
-///     Consolidates repeated type validation logic
-/// </summary>
 public static class ParameterTypeHelper
 {
-    /// <summary>
-    ///     Check if an object is a context output component (ContextPrintComponent or ContextBakeComponent)
-    /// </summary>
     public static bool IsContextOutputComponent(IGH_DocumentObject obj)
     {
         if (obj == null)
@@ -42,9 +35,6 @@ public static class ParameterTypeHelper
         return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
     }
 
-    /// <summary>
-    ///     Returns true if any source wired into <paramref name="inputParam" /> is an ISelvaFileOutput component.
-    /// </summary>
     public static bool IsSourcedFromFileOutput(IGH_Param inputParam)
     {
         if (inputParam == null)
@@ -63,10 +53,7 @@ public static class ParameterTypeHelper
         return false;
     }
 
-    /// <summary>
-    ///     Returns true if the component is a ContextBakeComponent whose inputs are sourced
-    ///     from an ISelvaFileOutput component (i.e. it is a file download output).
-    /// </summary>
+    /// <summary>A ContextBake fed by an ISelvaFileOutput component — a file download output.</summary>
     public static bool IsFileOutputBakeComponent(GH_Component component)
     {
         if (component == null || !IsContextBakeComponent(component))
@@ -91,9 +78,8 @@ public static class ParameterTypeHelper
     }
 
     /// <summary>
-    ///     Returns true if the component is a ContextBakeComponent whose inputs are sourced
-    ///     from a component that outputs PlotlyFigure goo (detected by TypeName convention).
-    ///     Uses duck-typing so Selva.GH has no hard dependency on external chart assemblies.
+    ///     A ContextBake fed by a PlotlyFigure-goo producer, detected by TypeName rather than a
+    ///     type reference so Selva.GH has no hard dependency on external chart assemblies.
     /// </summary>
     public static bool IsChartOutputBakeComponent(GH_Component component)
     {
@@ -119,10 +105,10 @@ public static class ParameterTypeHelper
     }
 
     /// <summary>
-    ///     Returns true if the component is a ContextBakeComponent fed by a GH_DynamicValueListOutput
-    ///     ("Set Dynamic Value List"). Detected by upstream component type, not goo TypeName: the Set
-    ///     component's output is a generic param, so its goo's "Dynamic Value List" TypeName is only
-    ///     visible in volatile data after a solve — component-type detection works pre-solve too.
+    ///     A ContextBake fed by a "Set Dynamic Value List" (GH_DynamicValueListOutput). Detected by
+    ///     upstream component type, not goo TypeName: the Set component's output is a generic param,
+    ///     so the goo's TypeName is only visible in volatile data after a solve — component-type
+    ///     detection also works pre-solve.
     /// </summary>
     public static bool IsDynamicValueListBakeComponent(GH_Component component)
     {
@@ -135,15 +121,13 @@ public static class ParameterTypeHelper
     }
 
     /// <summary>
-    ///     The single classifier for ContextBake output types. Returns the schema output type string
-    ///     ("file" / "chart" / "dynamicValueList") for a qualifying bake, or null if the component is
-    ///     not a bake or carries no recognized Selva output.
+    ///     The single classifier for ContextBake output types: returns "file" / "chart" /
+    ///     "dynamicValueList" for a qualifying bake, or null otherwise.
     ///
-    ///     Every place that asks "is this a qualifying bake output, and of what type?" — the scope
-    ///     filter, the post-solve add/remove sync, the schema collectors — must route through here so
-    ///     the set of supported bake output types lives in ONE place. Adding a 4th type = one branch
-    ///     here, not a hunt across the synchronizer. (This drift is what stripped dynamicValueList
-    ///     outputs every solve.)
+    ///     Every caller asking "is this a qualifying bake output, and of what type?" — scope filter,
+    ///     post-solve add/remove sync, schema collectors — must route through here so the set of
+    ///     supported types lives in one place. A duplicated check here is what stripped
+    ///     dynamicValueList outputs every solve before this existed.
     /// </summary>
     public static string ClassifyBakeOutputType(GH_Component component)
     {
@@ -171,19 +155,14 @@ public static class ParameterTypeHelper
         return ClassifyBakeOutputType(component) != null;
     }
 
-    /// <summary>
-    ///     Returns true if any source wired into <paramref name="inputParam" /> carries PlotlyFigure goo,
-    ///     detected by checking the goo TypeName from the upstream output param's volatile data,
-    ///     or from the ContextBake input param's own volatile data as a fallback.
-    /// </summary>
     public static bool IsSourcedFromChartOutput(IGH_Param inputParam)
     {
         return IsSourcedFromGooTypeName(inputParam, "Plotly Figure");
     }
 
     /// <summary>
-    ///     Find the GH_DynamicValueListOutput ("Set Dynamic Value List") component feeding a ContextBake,
-    ///     or null when none is wired. Walks the bake's input sources up to the producing component.
+    ///     Finds the "Set Dynamic Value List" component feeding a ContextBake, walking sources
+    ///     upward through the bake's inputs, or null when none is wired.
     /// </summary>
     public static GH_DynamicValueListOutput FindUpstreamDynamicValueListOutput(GH_Component bakeComponent)
     {
@@ -205,10 +184,9 @@ public static class ParameterTypeHelper
     }
 
     /// <summary>
-    ///     Walk a param's sources upward looking for a producing component of type
-    ///     <typeparamref name="T" />, transparently passing through wire relays and generic pass-through
-    ///     params (e.g. Param_GenericObject, param painters) that sit between the producer and the
-    ///     ContextBake. Cycle-guarded by visited instance ids.
+    ///     Walks a param's sources upward for a producing component of type <typeparamref name="T" />,
+    ///     passing transparently through wire relays and generic pass-through params (e.g.
+    ///     Param_GenericObject, param painters). Cycle-guarded by visited instance ids.
     /// </summary>
     private static T WalkUpstreamFor<T>(IGH_Param param, HashSet<Guid> visited) where T : class
     {
@@ -224,16 +202,15 @@ public static class ParameterTypeHelper
                 continue;
             }
 
-            // The component owning this source output param.
             var owner = source.Attributes?.GetTopLevel?.DocObject;
             if (owner is T match)
             {
                 return match;
             }
 
-            // Pass-through hop: a bare param (relay / generic) just forwards data — keep walking up.
-            // Component-owned params whose owner is a real component but not T stop the search on this
-            // branch (we don't tunnel through arbitrary components, only wire-forwarding params).
+            // A bare param (relay/generic) just forwards data, so keep walking up through it.
+            // A param owned by a real (non-T) component stops the search on this branch — we
+            // don't tunnel through arbitrary components, only wire-forwarding params.
             if (owner == null || ReferenceEquals(owner, source))
             {
                 var deeper = WalkUpstreamFor<T>(source, visited);
@@ -247,18 +224,14 @@ public static class ParameterTypeHelper
         return null;
     }
 
-    /// <summary>
-    ///     The TargetInputId of the GH_DynamicValueListOutput feeding a ContextBake, or Guid.Empty.
-    /// </summary>
     public static Guid ResolveDynamicValueListTargetId(GH_Component bakeComponent)
     {
         return FindUpstreamDynamicValueListOutput(bakeComponent)?.TargetInputId ?? Guid.Empty;
     }
 
     /// <summary>
-    ///     Returns true if any source wired into <paramref name="inputParam" /> carries a goo whose
-    ///     TypeName matches <paramref name="gooTypeName" />, checking the bake input's own volatile data
-    ///     and the upstream source params (TypeName + volatile data).
+    ///     Checks the bake input's own volatile data and the upstream source params' TypeName and
+    ///     volatile data for a goo matching <paramref name="gooTypeName" />.
     /// </summary>
     private static bool IsSourcedFromGooTypeName(IGH_Param inputParam, string gooTypeName)
     {
@@ -267,7 +240,6 @@ public static class ParameterTypeHelper
             return false;
         }
 
-        // Check the ContextBake input param's own volatile data (populated after solve)
         if (inputParam.VolatileData != null && !inputParam.VolatileData.IsEmpty)
         {
             foreach (var goo in inputParam.VolatileData.AllData(true))
@@ -279,7 +251,6 @@ public static class ParameterTypeHelper
             }
         }
 
-        // Check upstream source params' volatile data and TypeName
         foreach (var source in inputParam.Sources)
         {
             if (source == null)
@@ -287,17 +258,11 @@ public static class ParameterTypeHelper
                 continue;
             }
 
-            // TypeName on the param itself (works for strongly-typed params).
-            // Reading TypeName on a generic param whose T is an interface/abstract goo
-            // (e.g. Param_GenericObject) makes GH call InstantiateT() to derive the name,
-            // which throws "Cannot create an instance of an interface" — swallow it and
-            // fall through to volatile-data inspection.
             if (string.Equals(TryGetTypeName(source), gooTypeName, StringComparison.Ordinal))
             {
                 return true;
             }
 
-            // Volatile data on the upstream output param
             if (source.VolatileData != null && !source.VolatileData.IsEmpty)
             {
                 foreach (var goo in source.VolatileData.AllData(true))
@@ -315,9 +280,9 @@ public static class ParameterTypeHelper
 
     /// <summary>
     ///     Reads <see cref="IGH_Param.TypeName" /> defensively. For a generic param whose backing
-    ///     goo type is an interface or abstract (Param_GenericObject, param painters) GH derives the
-    ///     name via InstantiateT(), which throws "Cannot create an instance of an interface". We only
-    ///     want the name for type-matching, so return null on failure and let callers fall back.
+    ///     goo type is an interface or abstract (Param_GenericObject, param painters), GH derives the
+    ///     name via InstantiateT(), which throws "Cannot create an instance of an interface". Return
+    ///     null on failure so callers fall back to volatile-data inspection.
     /// </summary>
     private static string TryGetTypeName(IGH_Param param)
     {
@@ -331,10 +296,6 @@ public static class ParameterTypeHelper
         }
     }
 
-    /// <summary>
-    ///     Returns true if the object is a ContextBakeComponent wired to a UIBuilder component
-    ///     (i.e. one of its input sources has the given ownerGuid).
-    /// </summary>
     public static bool IsWiredToOwner(GH_Component component, Guid ownerGuid)
     {
         if (component?.Params.Input == null)
@@ -355,8 +316,8 @@ public static class ParameterTypeHelper
     }
 
     /// <summary>
-    ///     Extract minimum, maximum, and step size from a contextual parameter
-    ///     Prioritizes slider values if connected, falls back to parameter properties
+    ///     Extracts minimum, maximum, and step size for a contextual parameter, preferring a
+    ///     connected slider's values over the parameter's own properties.
     /// </summary>
     public static void ExtractNumberParameterConstraints(
         IGH_ContextualParameter param,
@@ -387,7 +348,6 @@ public static class ParameterTypeHelper
 
         if (needsAlternativeSource)
         {
-            // Try to get values from a connected slider
             if (ghParam?.SourceCount == 1 && ghParam.Sources[0] is GH_NumberSlider slider)
             {
                 try
@@ -400,7 +360,6 @@ public static class ParameterTypeHelper
                 {
                     Console.WriteLine(
                         $"Warning: Failed to extract slider constraints for '{availableParam.Nickname}': {ex.Message}");
-                    // Fall back to defaults
                     minimum = 0.0;
                     maximum = 100.0;
                     stepSize = 1m;
@@ -408,7 +367,6 @@ public static class ParameterTypeHelper
             }
             else
             {
-                // No slider available, use defaults
                 minimum = 0.0;
                 maximum = 100.0;
                 stepSize = 1m;
@@ -416,7 +374,7 @@ public static class ParameterTypeHelper
         }
         else if (ghParam?.SourceCount == 1 && ghParam.Sources[0] is GH_NumberSlider slider)
         {
-            // Valid parameter values exist, but if there's a slider, just get the step size
+            // Parameter values are already valid; only need the slider's step size.
             try
             {
                 stepSize = slider.Slider.Epsilon;
@@ -428,7 +386,6 @@ public static class ParameterTypeHelper
             }
         }
 
-        // Apply extracted values
         availableParam.Minimum = minimum.Value;
         availableParam.Maximum = maximum.Value;
         if (stepSize.HasValue)
@@ -573,10 +530,7 @@ public static class ParameterTypeHelper
         return method;
     }
 
-    /// <summary>
-    ///     Invokes ClearContextualData() on the given object via cached reflection.
-    ///     Returns true if the method exists on the type (regardless of whether the call threw).
-    /// </summary>
+    /// <summary>Invokes ClearContextualData() via cached reflection; true if the method exists on the type.</summary>
     public static bool TryInvokeClearContextualData(object obj)
     {
         if (obj == null)
@@ -636,12 +590,7 @@ public static class ParameterTypeHelper
         }
     }
 
-    /// <summary>
-    ///     Detect ContextBake components that have FileData in their input sources
-    ///     Returns a tuple containing:
-    ///     - bool: whether downloadable outputs exist
-    ///     - List<DiscoveredOutput>: ContextBake components with FileData, marked with outputType="file"
-    /// </summary>
+    /// <summary>Finds standalone file params and ContextBake components fed by a file output.</summary>
     public static (bool HasDownloadableOutputs, List<DiscoveredOutput> DownloadableComponents)
         DetectDownloadableOutputs(
             GH_Document document)
@@ -657,7 +606,6 @@ public static class ParameterTypeHelper
         {
             foreach (var obj in document.Objects)
             {
-                // Standalone file param (e.g. Param_FileData)
                 if (obj is IGH_Param fp && obj is ISelvaFileOutput)
                 {
                     downloadableComponents.Add(new DiscoveredOutput
@@ -669,7 +617,6 @@ public static class ParameterTypeHelper
                     continue;
                 }
 
-                // ContextBake fed by a file output component
                 if (!(obj is GH_Component c))
                 {
                     continue;

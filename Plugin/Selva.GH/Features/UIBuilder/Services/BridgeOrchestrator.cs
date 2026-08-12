@@ -16,13 +16,11 @@ using Selva.GH.Utilities.Helpers;
 namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
-///     Orchestrates communication between the web UI and Grasshopper component.
-///     Handles WebSocket event routing, message processing, and response broadcasting.
+///     Routes WebSocket events between the web UI and the Grasshopper component: value updates,
+///     schema save/sync, and output broadcasting.
 /// </summary>
 public class BridgeOrchestrator : IDisposable
 {
-    // Delay before broadcasting initial outputs after client connects.
-    // Gives Grasshopper time to finish its current solution before we read output data.
     private const int InitialOutputBroadcastDelayMs = AppConfig.UIBuilder.InitialOutputBroadcastDelayMs;
 
     private readonly WebSocketTransport _webSocketTransport;
@@ -80,9 +78,6 @@ public class BridgeOrchestrator : IDisposable
     // Lifecycle
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    ///     Initialize the service and wire up WebSocket event handlers.
-    /// </summary>
     public void Initialize(
         GH_Component component,
         Func<UISchema> getSchema,
@@ -108,10 +103,10 @@ public class BridgeOrchestrator : IDisposable
     {
         try
         {
-            // A solve is running or scheduled-but-not-yet-started: coalesce (latest wins) instead of
-            // dropping. The old drop-and-warn silently lost the final slider value when an update
-            // landed in the ~1 RTT window before the client's solving mirror caught up. The pending
-            // buffer is drained on a fresh UI tick once the in-flight solve ends (see DrainPendingValues).
+            // A solve is running or scheduled-but-not-started: coalesce (latest wins) instead of
+            // dropping. Dropping lost the final slider value when an update landed in the ~1 RTT
+            // window before the client's solving mirror caught up. Drained in DrainPendingValues
+            // on a fresh UI tick once the in-flight solve ends.
             if (_stateManager.IsBusy)
             {
                 _stateManager.MergePendingValues(values);
@@ -203,7 +198,6 @@ public class BridgeOrchestrator : IDisposable
                 return;
             }
 
-            // Try to read the schema from the wired ContextBake component.
             var contextBake = FindWiredContextBake();
             var schema = ReadSchemaFromContextBake(contextBake);
 
@@ -211,7 +205,6 @@ public class BridgeOrchestrator : IDisposable
             {
                 if (contextBake == null)
                 {
-                    // No ContextBake wired at all — refuse and tell the user.
                     _ = _webSocketTransport.BroadcastRuntimeMessage("error",
                         "UIBridge Schema output is not connected to a Context Bake component " +
                         "with param name \"Schema\". Wire it up in Grasshopper first.");
@@ -221,8 +214,11 @@ public class BridgeOrchestrator : IDisposable
                     return;
                 }
 
-                // ContextBake is wired but no schema saved yet — first-time use.
-                schema = CreateDefaultSchema(document);
+                // The Context Bake only holds a schema while a solve's volatile data is alive.
+                // After a cleared or expired solve it is empty even though the component still
+                // holds the real schema — fall back to that before inventing a blank one, or the
+                // editor opens on an empty canvas over a definition that still exists.
+                schema = _getSchema() ?? CreateDefaultSchema(document);
             }
 
             var validatedSchema = _schemaSynchronizer.ValidateSchema(schema, document);
@@ -244,7 +240,6 @@ public class BridgeOrchestrator : IDisposable
         }
         catch (Exception ex)
         {
-            // Always log — silent swallowing made failures invisible.
             Logger.Error($"[BridgeOrchestrator] Error sending initial data: {ex.Message}", ex);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error sending initial data: {ex.Message}");
         }
@@ -277,21 +272,24 @@ public class BridgeOrchestrator : IDisposable
                 return;
             }
 
-            // Conflict check: the UI sends the hash of the canonical it forked from.
-            // If the current canonical hashes to something different, the UI's draft is
-            // based on stale data; reply with the fresh canonical so the UI can prompt
-            // the user instead of silently overwriting Grasshopper-side changes.
+            // The UI sends the hash of the canonical it forked from. A mismatch means its draft
+            // is stale; reply with the fresh canonical instead of overwriting GH-side changes.
             var currentSchema = _getSchema();
-            if (currentSchema != null && !string.IsNullOrEmpty(request.BaseSchemaHash))
+            var verdict = SchemaSaveGuard.Evaluate(currentSchema, schema, request.BaseSchemaHash);
+            if (verdict != SchemaSaveVerdict.Accept)
             {
-                var currentHash = SchemaHash.Compute(currentSchema);
-                if (!string.Equals(currentHash, request.BaseSchemaHash, StringComparison.Ordinal))
+                _ = _webSocketTransport.BroadcastSchemaSaveRejected(currentSchema);
+                _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, verdict switch
                 {
-                    _ = _webSocketTransport.BroadcastSchemaSaveRejected(currentSchema);
-                    _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                        "Schema save rejected: definition changed in Grasshopper since you started editing.");
-                    return;
-                }
+                    SchemaSaveVerdict.RejectEmptyOverwrite =>
+                        "Schema save rejected: the editor sent an empty schema while this component " +
+                        "still holds one. Re-solve the definition so the editor loads it, then retry.",
+                    SchemaSaveVerdict.RejectMissingBase =>
+                        "Schema save rejected: the editor sent no base revision, so it cannot be " +
+                        "checked against the stored schema. Reload the editor and retry.",
+                    _ => "Schema save rejected: definition changed in Grasshopper since you started editing."
+                });
+                return;
             }
 
             schema.ProjectFileName = document.Properties.ProjectFileName;
@@ -299,6 +297,10 @@ public class BridgeOrchestrator : IDisposable
             schema.PluginVersion = _pluginVersion.ToString();
 
             SanitizeSchema(schema);
+
+            // Before validating: the editor's layout is the user's intent, so a widget missing
+            // from it stays missing rather than being restored from a tombstone.
+            _schemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
 
             var validatedSchema = _schemaSynchronizer.ValidateSchema(schema, document);
 #if DEBUG
@@ -313,12 +315,12 @@ public class BridgeOrchestrator : IDisposable
             _schemaSynchronizer.ClearMetadataCache();
             document.Modified();
 
-            // Suppress the re-solve triggered by the component expire below so the
-            // frontend does not see a spurious solving-state flash.
+            // Suppress the re-solve the component expire below triggers, or the frontend
+            // sees a spurious solving-state flash.
             _webSocketTransport.SuppressSolvingCycles(1);
 
-            // Broadcast the fresh canonical (with new hash) before the success ack so the
-            // UI re-bases its draft on the post-save canonical and clears isDirty.
+            // Send the fresh canonical (new hash) before the ack so the UI re-bases its
+            // draft and clears isDirty.
             _ = _webSocketTransport.BroadcastSchemaUpdate(validatedSchema);
             _ = _webSocketTransport.BroadcastSchemaSaved(true);
 
@@ -330,8 +332,7 @@ public class BridgeOrchestrator : IDisposable
         }
         catch (Exception ex)
         {
-            // Clear suppression so the next solve is not accidentally hidden.
-            _webSocketTransport.SuppressSolvingCycles(0);
+            _webSocketTransport.SuppressSolvingCycles(0); // clear suppression, or the next solve stays hidden
             _ = _webSocketTransport.BroadcastSchemaSaved(false, ex.Message);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error saving schema: {ex.Message}");
         }
@@ -405,7 +406,6 @@ public class BridgeOrchestrator : IDisposable
                 _ = _webSocketTransport.BroadcastSchemaUpdate(updatedSchema);
             }
 
-            // Refresh nicknames on the canvas for all changed objects.
             var changedObjects = changes
                 .Where(c => Guid.TryParse(c.ParamId, out _))
                 .Select(c => document.FindObject(Guid.Parse(c.ParamId), false) as IGH_ActiveObject)
@@ -430,10 +430,6 @@ public class BridgeOrchestrator : IDisposable
     // ContextBake helpers — single traversal, used by both connect and save
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    ///     Returns the first ContextBakeComponent wired to the UIBridge's Schema output,
-    ///     or null if none is connected.
-    /// </summary>
     private GH_Component FindWiredContextBake()
     {
         var schemaOutput = _component?.Params.Output.FirstOrDefault(p => p.Name == "Schema");
@@ -464,10 +460,6 @@ public class BridgeOrchestrator : IDisposable
         return null;
     }
 
-    /// <summary>
-    ///     Reads the UISchema from a ContextBakeComponent's volatile data.
-    ///     Returns null if no schema is stored yet (first-time use).
-    /// </summary>
     private static UISchema ReadSchemaFromContextBake(GH_Component contextBake)
     {
         if (contextBake == null)
@@ -485,10 +477,7 @@ public class BridgeOrchestrator : IDisposable
     // Private helpers
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    ///     Defers output broadcasting by <see cref="InitialOutputBroadcastDelayMs" /> to allow
-    ///     Grasshopper to finish its current solution before we read output data.
-    /// </summary>
+    // Delays reading outputs so the in-flight solve (if any) finishes first.
     private void ScheduleOutputBroadcast(UISchema schema)
     {
         Task.Run(async () =>

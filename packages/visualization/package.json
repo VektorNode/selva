@@ -1,0 +1,119 @@
+{
+	"name": "@selvajs/visualization",
+	"version": "1.0.0-beta.4",
+	"description": "Headless, extensible viewer core for Selva — parse, render and scene layers over Three.js",
+	"author": "VektorNode",
+	"license": "MIT",
+	"homepage": "https://github.com/VektorNode/selva#readme",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/visualization"
+	},
+	"type": "module",
+	"keywords": [
+		"three",
+		"threejs",
+		"viewer",
+		"cad",
+		"geometry",
+		"rhino",
+		"grasshopper",
+		"visualization",
+		"webgl"
+	],
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
+		},
+		"./parse": {
+			"import": {
+				"types": "./dist/parse.d.ts",
+				"default": "./dist/parse.js"
+			},
+			"require": {
+				"types": "./dist/parse.d.cts",
+				"default": "./dist/parse.cjs"
+			}
+		},
+		"./render": {
+			"import": {
+				"types": "./dist/render.d.ts",
+				"default": "./dist/render.js"
+			},
+			"require": {
+				"types": "./dist/render.d.cts",
+				"default": "./dist/render.cjs"
+			}
+		},
+		"./scene": {
+			"import": {
+				"types": "./dist/scene.d.ts",
+				"default": "./dist/scene.js"
+			},
+			"require": {
+				"types": "./dist/scene.d.cts",
+				"default": "./dist/scene.cjs"
+			}
+		}
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
+	],
+	"sideEffects": false,
+	"scripts": {
+		"build": "pnpm type-check && tsdown",
+		"dev": "tsdown --watch",
+		"example": "vite --config vite.config.ts",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"test": "vitest run",
+		"test:watch": "vitest watch",
+		"bench": "vitest bench --run",
+		"type-check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"fflate": "^0.8.2"
+	},
+	"peerDependencies": {
+		"three": ">=0.179.0"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@selvajs/config": "workspace:*",
+		"@types/node": "catalog:",
+		"@types/three": "catalog:",
+		"eslint": "catalog:",
+		"eslint-config-prettier": "^10.1.8",
+		"globals": "^17.5.0",
+		"prettier": "catalog:",
+		"three": "catalog:",
+		"tsdown": "catalog:",
+		"typescript": "catalog:",
+		"vite": "catalog:",
+		"vitest": "catalog:"
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"publishConfig": {
+		"access": "public"
+	}
+}

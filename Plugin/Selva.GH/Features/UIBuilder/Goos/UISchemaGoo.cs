@@ -90,14 +90,11 @@ public class UISchemaGoo : IGH_Goo, ISelvaSerializableGoo
 
     public object ScriptVariable()
     {
-        // Return the UISchema object for Rhino Compute serialization
-        // Rhino Compute will use JSON.NET to serialize this to JSON
-        // The JsonConverter attributes on the UISchema classes will ensure proper serialization
         return Value;
     }
 
-    // ISelvaSerializableGoo — Rhino.Compute returns this payload. UISchema needs its custom converters
-    // (SchemaSerializationSettings) to round-trip layout/widget polymorphism correctly.
+    // UISchema needs SchemaSerializationSettings' custom converters to round-trip
+    // layout/widget polymorphism correctly.
     public string ToComputeJson()
     {
         return JsonConvert.SerializeObject(Value, SchemaSerializationSettings.Settings);

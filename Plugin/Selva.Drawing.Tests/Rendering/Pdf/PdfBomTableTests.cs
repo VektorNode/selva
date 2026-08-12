@@ -9,10 +9,9 @@ using Selva.Drawing.Rendering.Svg;
 
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
-// Phase 7 exit-criteria coverage. The plan calls for a one-page PDF with a 5-row × 4-column
-// BOM table, generated from internalised data, with proper text wrapping in cells. We assert
-// the PDF reopens (i.e. the layout pass + renderer produced a valid file) rather than
-// snapshotting bytes — PdfSharpCore stamps creation dates that drift between runs.
+// A 5-row x 4-column BOM table rendered to a one-page PDF. We assert the PDF reopens
+// rather than snapshotting bytes — PdfSharpCore stamps creation dates that drift
+// between runs.
 public class PdfBomTableTests
 {
 	[Fact]

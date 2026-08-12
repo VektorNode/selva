@@ -1,0 +1,20 @@
+{
+	"description": "zero vertices and indices — degenerate but valid",
+	"flags": {
+		"float32": false,
+		"uint16Indices": false,
+		"deltaEncoded": true,
+		"hasUvs": false,
+		"hasColors": false,
+		"float32Uvs": false
+	},
+	"vertexCount": 0,
+	"indexCount": 0,
+	"origin": [0.0, 0.0, 0.0],
+	"scale": [1e-12, 1e-12, 1e-12],
+	"positionTolerance": 7.5e-13,
+	"uvTolerance": 0.0,
+	"sourceComponentId": "44444444-4444-4444-8444-444444444444",
+	"positions": [],
+	"indices": []
+}

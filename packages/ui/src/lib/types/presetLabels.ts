@@ -1,7 +1,6 @@
 /**
- * Overridable UI strings for the parameter-preset manager (Save/Load flow) and
- * footer copyright text. All optional — unset keys fall back to the English
- * defaults in `DEFAULT_PRESET_LABELS`. Pass a partial object to localize.
+ * Overridable UI strings for the parameter-preset manager. Pass a partial object to localize;
+ * unset keys fall back to `DEFAULT_PRESET_LABELS`.
  */
 export interface PresetLabels {
 	// Toolbar buttons
@@ -52,7 +51,7 @@ export const DEFAULT_PRESET_LABELS: PresetLabels = {
 	loadButton: 'Load State',
 
 	saveDialogTitle: 'Save Parameter State',
-	saveDialogDescription: 'Save the current parameter values as a .sps file',
+	saveDialogDescription: 'Save the current parameter values as a .slvp file',
 	saveNameLabel: 'State Name *',
 	saveNamePlaceholder: 'e.g., Design Option A',
 	saveDescriptionLabel: 'Description',
@@ -64,8 +63,8 @@ export const DEFAULT_PRESET_LABELS: PresetLabels = {
 	saveNameRequired: 'Please enter a name for this state',
 
 	loadDialogTitle: 'Load Parameter State',
-	loadDialogDescription: 'Select a .sps state file from your drive to load',
-	loadFromFileButton: 'Select .sps File',
+	loadDialogDescription: 'Select a .slvp state file from your drive to load',
+	loadFromFileButton: 'Select .slvp File',
 	loadEmptyList: 'No saved states found',
 	loadImportError: 'Failed to import state: ',
 

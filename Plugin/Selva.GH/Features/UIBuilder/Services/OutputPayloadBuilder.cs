@@ -5,34 +5,31 @@ using Selva.GH.Features.ComputeIO.Goos;
 namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
-///     A Rhino/GH-free view of a single goo sitting on a ContextBake input, reduced to the facts the
-///     payload decision needs. The Rhino-typed <see cref="ValueCollector" /> unwraps GH_ObjectWrapper
-///     and projects each goo into one of these; <see cref="OutputPayloadBuilder" /> then decides the
-///     payload. Splitting the unwrap (untestable) from the decision (pure) is what makes the
-///     output contract unit-testable without a Grasshopper runtime.
+///     Rhino/GH-free view of a single goo on a ContextBake input. The Rhino-typed <see cref="ValueCollector" />
+///     unwraps GH_ObjectWrapper into one of these; <see cref="OutputPayloadBuilder" /> decides the payload from
+///     it. Splitting the unwrap (untestable) from the decision (pure) makes the output contract unit-testable
+///     without a Grasshopper runtime.
 /// </summary>
 public sealed class GooView
 {
-    /// <summary>The goo's GH TypeName (e.g. "Plotly Figure", "Dynamic Value List", "File Data").</summary>
     public string TypeName { get; init; }
 
-    /// <summary>Dynamic value list routing payload, when the goo is a DynamicValueListGoo; else null.</summary>
+    /// <summary>Set when the goo is a DynamicValueListGoo; else null.</summary>
     public DynamicValueListPayload DynamicValueList { get; init; }
 
-    /// <summary>Chart JSON (PlotlyFigure.ToJson()), when the goo is a chart; else null.</summary>
+    /// <summary>PlotlyFigure.ToJson() when the goo is a chart; else null.</summary>
     public string ChartJson { get; init; }
 
-    /// <summary>File payload object, when the goo is a FileDataGoo; else null.</summary>
+    /// <summary>Set when the goo is a FileDataGoo; else null.</summary>
     public object FilePayload { get; init; }
 
-    // The fields above are optional facts; the plugin compiles without a nullable context, and the
-    // test project links this file into a nullable-enabled context. The decision logic treats every
-    // field as possibly-null, so the CS8618 "uninitialized" warnings are expected and harmless.
+    // Plugin compiles without a nullable context; the test project links this file in with one enabled.
+    // Every field is genuinely optional, so the CS8618 warnings there are expected, not bugs.
 }
 
 /// <summary>
-///     Why a goo-walk over a ContextBake input did not yield a payload — or that it did. Turns the
-///     three historically-silent null paths into named, testable, loggable outcomes:
+///     Outcome of a goo-walk over one ContextBake input — replaces three previously-silent null paths
+///     with named, testable, loggable results:
 ///     <list type="bullet">
 ///         <item><see cref="Empty" /> — the bake's first input had no data (wiring / solve-order).</item>
 ///         <item><see cref="UnknownType" /> — a goo was present but matched no Selva output type
@@ -52,15 +49,15 @@ public sealed class BuildOutcome
 {
     public BuildOutcomeKind Kind { get; init; }
 
-    /// <summary>The produced payload when <see cref="Kind" /> is Matched; else null.</summary>
+    /// <summary>Set when <see cref="Kind" /> is Matched; else null.</summary>
     public object Payload { get; init; }
 
-    /// <summary>The classified schema type ("dynamicValueList" / "chart" / "file") when Matched; else null.</summary>
+    /// <summary>Schema type ("dynamicValueList" / "chart" / "file") when Matched; else null.</summary>
     public string OutputType { get; init; }
 
     /// <summary>
-    ///     For diagnostics: the last observed goo TypeName. Set for both Matched and UnknownType so a
-    ///     null result in Rhino prints which goo was actually sitting on the input.
+    ///     Last observed goo TypeName, set for both Matched and UnknownType so a null result in Rhino
+    ///     still logs which goo was actually on the input.
     /// </summary>
     public string ObservedTypeName { get; init; }
 
@@ -78,17 +75,15 @@ public sealed class BuildOutcome
 }
 
 /// <summary>
-///     The single, table-driven contract that maps a ContextBake-wired goo to the value the WebSocket
-///     collector broadcasts. One branch per Selva output type. Adding a new output type means adding a
-///     branch here and a row to the golden contract test — no other collection code changes.
+///     Maps a ContextBake-wired goo to the value the WebSocket collector broadcasts — one branch per
+///     Selva output type. Adding an output type means adding a branch here plus a row in the golden
+///     contract test; no other collection code changes.
 ///
 ///     Pure: no Rhino/GH types. Unit-tested in Selva.Tests.
 /// </summary>
 public static class OutputPayloadBuilder
 {
-    /// <summary>
-    ///     Build the collector payload for one goo, or null if the goo is not a recognized Selva output.
-    /// </summary>
+    /// <summary>Collector payload for one goo, or null if it's not a recognized Selva output.</summary>
     public static object Build(GooView goo)
     {
         if (goo == null)
@@ -115,12 +110,9 @@ public static class OutputPayloadBuilder
     }
 
     /// <summary>
-    ///     Classify the goos observed on one ContextBake input into a tagged outcome. The first recognized
-    ///     goo wins (Matched). If at least one goo was seen but none matched, the result is UnknownType,
-    ///     carrying the last observed TypeName. An empty / all-null sequence yields Empty.
-    ///
-    ///     This is the testable replacement for the Rhino-walk's silent null: the adapter projects each
-    ///     goo into a <see cref="GooView" /> and hands the sequence here, then logs the outcome.
+    ///     Classifies the goos on one ContextBake input. The first recognized goo wins (Matched). If at
+    ///     least one goo was seen but none matched, the result is UnknownType, carrying the last observed
+    ///     TypeName. An empty / all-null sequence yields Empty.
     /// </summary>
     public static BuildOutcome Classify(IEnumerable<GooView> views)
     {
@@ -161,8 +153,8 @@ public static class OutputPayloadBuilder
     }
 
     /// <summary>
-    ///     The declared output type string (as it appears in schema.Outputs / layout items) for a goo,
-    ///     or null if unrecognized. Lets the schema side and the value side agree on one classifier.
+    ///     Output type string as it appears in schema.Outputs / layout items, or null if unrecognized.
+    ///     Lets the schema side and the value side agree on one classifier.
     /// </summary>
     public static string ClassifyType(GooView goo)
     {

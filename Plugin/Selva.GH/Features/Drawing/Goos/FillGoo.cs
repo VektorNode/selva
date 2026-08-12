@@ -17,8 +17,7 @@ public class FillGoo : IGH_Goo
     public string TypeName => "Fill";
     public string TypeDescription => "Fill style (color, opacity, hatch pattern)";
 
-    // Fill is immutable (init-only properties), so duplicates can safely share the
-    // same instance. The old JSON round-trip here silently zeroed Color (private ctor).
+    // Fill is immutable, so Duplicate can share the instance instead of copying.
     public IGH_Goo Duplicate() => new FillGoo(Value);
 
     public IGH_GooProxy EmitProxy() => null;
@@ -28,7 +27,7 @@ public class FillGoo : IGH_Goo
         if (source == null) return false;
         if (source is FillGoo fg) { Value = fg.Value; return Value != null; }
         if (source is Fill f) { Value = f; return true; }
-        // Auto-unwrap a PathStyle so users can wire Path Style -> Fill slots.
+        // Unwrap a PathStyle so a Path Style wire can feed a Fill input directly.
         if (source is PathStyleGoo psg && psg.Value?.Fill != null) { Value = psg.Value.Fill; return true; }
         if (source is PathStyle ps && ps.Fill != null) { Value = ps.Fill; return true; }
         return false;

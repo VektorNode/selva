@@ -7,20 +7,15 @@ using Selva.Drawing.Model.Style;
 
 namespace Selva.Drawing.Model.Layout;
 
-// Phase 7: paragraph layout. Wraps `Text` to fit a width (mm) using FontMetrics for line
-// breaking, then resolves to a stack of TextElements — one per line. Hard newlines in the
-// input force a paragraph break.
+// Paragraph layout: wraps `Text` to fit a width (mm) using FontMetrics for line breaking,
+// then resolves to a stack of TextElements, one per line. Hard newlines force a paragraph break.
 //
-// Width semantics:
-//   null  → auto-fill: use the parent's available width (from LayoutContext). Falls back to
-//           "no wrap" only when the parent provides no width (unconstrained context).
-//   >0    → fixed wrap width.
-// This lets a TextFlow inside a Page/Frame/Stack/Grid wrap to its container without the
-// user having to pre-compute it.
+// Width: null auto-fills from the parent's available width (LayoutContext), falling back to
+// "no wrap" only when the parent provides none. >0 is a fixed wrap width. Lets a TextFlow
+// inside a Page/Frame/Stack/Grid wrap to its container without the caller pre-computing it.
 //
-// Anchor: the resulting block's TOP-LEFT corner sits at (Origin.X, Origin.Y + height) in
-// world Y-up coords, so the FIRST line's baseline ends up at Origin.Y + height - ascent.
-// When wrapped in a Frame the frame handles centring/padding.
+// The resolved block's top-left sits at (Origin.X, Origin.Y + height) in world Y-up coords,
+// so the first line's baseline lands at Origin.Y + height - ascent.
 public sealed class TextFlow : LayoutElement
 {
 	public string Text { get; init; } = string.Empty;
@@ -28,8 +23,8 @@ public sealed class TextFlow : LayoutElement
 	public TextStyle Style { get; init; } = new TextStyle();
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
-	// Optional: when set, the resolved bounding box reports this height instead of the
-	// natural multi-line height. Useful for cells with fixed row heights.
+	// When set, ComputeBounds/Resolve report this height instead of the natural multi-line
+	// height. Useful for cells with a fixed row height.
 	public double? FixedHeight { get; init; }
 
 	public override BoundingBox ComputeBounds() => ComputeBounds(new LayoutContext(BoundingBox.Empty));
@@ -43,10 +38,9 @@ public sealed class TextFlow : LayoutElement
 		return new BoundingBox(Origin.X, Origin.Y, Origin.X + w, Origin.Y + h);
 	}
 
-	// Pagination: split at line boundaries. Wrap once, then bin-pack lines into the budget.
-	// The fits half keeps Origin; the overflow half resets to (0,0) so PaginationPass can
-	// re-anchor it on the next page. FixedHeight is dropped on overflow because the fixed
-	// height described the original whole flow.
+	// Splits at line boundaries: wrap once, then bin-pack lines into the budget. The fits
+	// half keeps Origin; the overflow half resets to (0,0) so PaginationPass re-anchors it on
+	// the next page. FixedHeight is dropped on overflow since it described the whole flow.
 	public override SplitResult TrySplit(double availableHeight, LayoutContext context)
 	{
 		var effectiveWidth = ResolveEffectiveWidth(context);
@@ -54,10 +48,9 @@ public sealed class TextFlow : LayoutElement
 		if (lines.Count == 0 || lineHeight <= 0)
 			return base.TrySplit(availableHeight, context);
 
-		// An unbounded budget fits everything by definition. Guard before the cast: casting
-		// +Infinity to int yields int.MinValue, which reads as "nothing fits" and makes
-		// pagination emit one line per page. DocumentLayoutPass passes +Infinity for every
-		// KeepTogether section, so this is the common path, not an edge case.
+		// Guard before the cast: casting +Infinity to int yields int.MinValue, which reads as
+		// "nothing fits" and makes pagination emit one line per page. DocumentLayoutPass passes
+		// +Infinity for every KeepTogether section, so this is the common path, not an edge case.
 		if (double.IsPositiveInfinity(availableHeight))
 			return base.TrySplit(availableHeight, context);
 
@@ -71,8 +64,7 @@ public sealed class TextFlow : LayoutElement
 		return SplitAfterLine(fitsLineCount, lines, lineHeight, context);
 	}
 
-	// Nothing fits on a fresh page (budget below one line height): force out the first
-	// line anyway so pagination keeps making progress.
+	// Budget below one line height: force out the first line anyway so pagination progresses.
 	public override SplitResult ForcePlace(double availableHeight, LayoutContext context)
 	{
 		var effectiveWidth = ResolveEffectiveWidth(context);
@@ -121,11 +113,10 @@ public sealed class TextFlow : LayoutElement
 		var children = new List<DrawElement>(lines.Count);
 		var totalH = FixedHeight ?? Math.Max(lineHeight, lines.Count * lineHeight);
 
-		// Horizontal anchor x — the renderer interprets style.HorizontalAnchor by shifting
-		// the glyph run left by 0/half-width/full-width. To make the run visually align
-		// inside the wrap rectangle (Origin.X .. Origin.X + width), pin Position.X to the
-		// matching anchor point. Falls back to Origin.X when no width is known (single-line
-		// no-wrap case), which preserves prior behaviour for unconstrained TextFlows.
+		// The renderer shifts the glyph run left by 0/half-width/full-width per
+		// style.HorizontalAnchor, so pin Position.X to the matching point in the wrap
+		// rectangle (Origin.X .. Origin.X + width). Falls back to Origin.X when no width is
+		// known (unconstrained, single-line case).
 		var style = Style ?? new TextStyle();
 		double anchorX = Origin.X;
 		if (effectiveWidth > 0)
@@ -138,8 +129,7 @@ public sealed class TextFlow : LayoutElement
 			};
 		}
 
-		// Place line i so its baseline sits at: top - ascent - i*lineHeight.
-		// Top in world Y-up = Origin.Y + totalH.
+		// Line i's baseline: top - ascent - i*lineHeight, top = Origin.Y + totalH (Y-up).
 		var top = Origin.Y + totalH;
 		for (var i = 0; i < lines.Count; i++)
 		{
@@ -152,9 +142,8 @@ public sealed class TextFlow : LayoutElement
 			});
 		}
 
-		// Pin the resolved bounds to the same box ComputeBounds reports. The glyph union is
-		// smaller vertically (it misses the line gap), so without this pin the pagination budget
-		// and the measured stack/frame layout disagree by up to one line.
+		// Pin bounds to what ComputeBounds reports: the glyph union misses the line gap, so
+		// without this the pagination budget and the measured layout disagree by up to one line.
 		var boundsWidth = InkWidth(lines, style, effectiveWidth);
 		return new GroupElement
 		{
@@ -166,16 +155,15 @@ public sealed class TextFlow : LayoutElement
 		};
 	}
 
-	// Greedy line-break using FontMetrics. Whitespace splits words; if a single word exceeds
-	// `width` it still goes on its own line (no hyphenation). Preserves explicit \n.
+	// Greedy line-break using FontMetrics. Whitespace splits words; a single word exceeding
+	// `width` still goes on its own line (no hyphenation). Preserves explicit \n.
 	internal static (IReadOnlyList<string> Lines, double LineHeight, double Ascent) LayoutLines(
 		TextStyle style, string text, double width)
 	{
 		style ??= new TextStyle();
 		text ??= string.Empty;
 
-		// Use a 1em probe to derive ascent/lineHeight. We pass empty string because we just
-		// want metrics, not a measured advance.
+		// Empty-string probe: we want font metrics, not a measured advance.
 		var probe = FontMetrics.Measure(string.Empty, style);
 		var ascent = probe.Ascent;
 		var lineHeight = (probe.Ascent + Math.Abs(probe.Descent) + probe.LineGap) * Math.Max(1.0, style.LineHeight);
@@ -216,9 +204,8 @@ public sealed class TextFlow : LayoutElement
 		return (lines, lineHeight, ascent);
 	}
 
-	// Width resolution: explicit Width wins; otherwise inherit from the parent's
-	// available rect; otherwise 0 (= no wrapping). 0 means "single-line per paragraph"
-	// because the wrap loop in LayoutLines short-circuits when width <= 0.
+	// Explicit Width wins; else the parent's available rect; else 0. LayoutLines
+	// short-circuits at width <= 0, so 0 means "single line per paragraph, no wrap".
 	private double ResolveEffectiveWidth(LayoutContext context)
 	{
 		if (Width.HasValue) return Math.Max(0, Width.Value);
@@ -227,18 +214,15 @@ public sealed class TextFlow : LayoutElement
 		return available;
 	}
 
-	// The width this flow actually OCCUPIES, as opposed to the width it was allowed to wrap
-	// within. Those are different numbers and conflating them made every width-filling container
-	// treat the budget as a measurement: an Auto grid column holding "Qty" (5 mm of ink) sized
-	// itself to the full 190 mm page, which made Auto tracks byte-identical to Star ones, and a
-	// Frame around the word "NOTE" spanned the sheet.
+	// The width this flow actually occupies, as opposed to the width it was allowed to wrap
+	// within — conflating the two made every width-filling container treat the wrap budget as
+	// a measurement (an Auto column holding "Qty" sized itself to the full page width).
 	//
-	// Capped at effectiveWidth because a single unbreakable word may overrun the wrap box, and
-	// reporting more than the budget would push the overflow back onto the container.
+	// Capped at effectiveWidth because an unbreakable word can overrun the wrap box, and
+	// reporting more than the budget would push that overflow back onto the container.
 	//
-	// This is deliberately NOT what the Center/Right anchor arithmetic uses — that still needs
-	// the wrap box, because "centred" means centred within the box the author asked to wrap in,
-	// not within the glyphs' own extent.
+	// Not used by the Center/Right anchor math in Resolve — that still centers within the box
+	// the caller asked to wrap in, not within the glyphs' own extent.
 	private static double InkWidth(IReadOnlyList<string> lines, TextStyle style, double effectiveWidth)
 	{
 		var ink = MaxLineWidth(lines, style);

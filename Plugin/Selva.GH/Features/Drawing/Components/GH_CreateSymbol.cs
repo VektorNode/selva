@@ -12,10 +12,8 @@ using DrawTransform = Selva.Drawing.Model.Geometry.Transform;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-// Places one reusable definition at many points. The renderers emit the definition once (SVG
-// <symbol>, PDF Form XObject) and reference it per instance, so a drawing with hundreds of
-// repeated marks — fixings, section flags, weld symbols — stays small. Dedupe is keyed on the
-// definition Id, which is why Name matters beyond being a label.
+// Renderers emit the definition once (SVG <symbol>, PDF Form XObject) and reference it per
+// instance, so hundreds of repeated marks — fixings, section flags, weld symbols — stay small.
 public class GH_CreateSymbol : GH_Component
 {
     private readonly ElementPreviewBuffer _preview = new ElementPreviewBuffer();
@@ -97,8 +95,7 @@ public class GH_CreateSymbol : GH_Component
             return;
         }
 
-        // One shared definition object across every instance: the renderers dedupe on its Id,
-        // and reusing the instance also lets them match by reference.
+        // One shared instance across all points: renderers dedupe by reference (or by Id, if set).
         var symbol = new SymbolDefinition
         {
             Id = string.IsNullOrWhiteSpace(name) ? null : name.Trim(),

@@ -3,7 +3,7 @@ import {
 	type GrasshopperComputeConfig,
 	TreeBuilder,
 	GrasshopperResponseProcessor
-} from '../src/features/grasshopper';
+} from '../src/grasshopper';
 
 /**
  * Simple example demonstrating how to use GrasshopperClient

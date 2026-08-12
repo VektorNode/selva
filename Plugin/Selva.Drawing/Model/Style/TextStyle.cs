@@ -8,9 +8,9 @@ public enum TextDecoration { None, Underline, Strikethrough }
 public enum TextAnchor { Left, Center, Right }
 public enum VerticalAnchor { Top, Middle, Baseline, Bottom }
 
-// Text rendering style. FontFamily is a single family name (or a comma-separated stack
-// for SVG fallback); the PDF renderer will pick the first family it can resolve to a
-// bundled or installed font. Size is in document units (mm).
+// FontFamily is a single family name, or a comma-separated stack for SVG fallback — the
+// PDF renderer picks the first one it can resolve to a bundled or installed font.
+// FontSize is in document units (mm).
 public sealed class TextStyle : IEquatable<TextStyle>
 {
 	public string FontFamily { get; init; } = "Inter";

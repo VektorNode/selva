@@ -3,21 +3,9 @@ using Rhino.Geometry;
 
 namespace Selva.GH.Features.Display.Services;
 
-/// <summary>
-///     Optimized mesh processing utilities that combine operations for better performance.
-/// </summary>
 public static class GeoMeshProcessor
 {
-    /// <summary>
-    ///     Converts a Rhino.Geometry.Mesh into vertex and face arrays in a single pass.
-    ///     Combines face counting and array conversion for optimal performance.
-    /// </summary>
-    /// <param name="mesh">The mesh to convert.</param>
-    /// <returns>
-    ///     A tuple containing:
-    ///     - vertices: Array of vertex coordinates (x, y, z floats)
-    ///     - faces: Array of face indices (triangulated)
-    /// </returns>
+    /// <summary>Converts a mesh into flat vertex (x,y,z) and triangulated face-index arrays.</summary>
     public static (float[] vertices, int[] faces) ConvertMeshToArrays(Mesh mesh)
     {
         var (vertices, faces, _, _) = ConvertMeshToArrays(mesh, extractUvs: false, extractColors: false);
@@ -25,15 +13,11 @@ public static class GeoMeshProcessor
     }
 
     /// <summary>
-    ///     Same as <see cref="ConvertMeshToArrays(Mesh)" /> but optionally extracts texture
-    ///     coordinates and vertex colors. Each channel is returned only when requested AND the
-    ///     mesh carries a full set (count == vertex count); partial/absent channels return null,
-    ///     so callers can treat null as "mesh has nothing to contribute".
+    ///     Same as <see cref="ConvertMeshToArrays(Mesh)" /> but optionally extracts UVs and vertex
+    ///     colors. A channel comes back non-null only when requested AND the mesh has a full set
+    ///     (count == vertex count) — partial or absent channels return null so callers can treat
+    ///     null as "this mesh contributes nothing here".
     /// </summary>
-    /// <returns>
-    ///     - uvs: u,v floats per vertex (vertexCount * 2), or null
-    ///     - colors: r,g,b bytes per vertex (vertexCount * 3), or null
-    /// </returns>
     public static (float[] vertices, int[] faces, float[] uvs, byte[] colors) ConvertMeshToArrays(
         Mesh mesh, bool extractUvs, bool extractColors)
     {
@@ -44,7 +28,7 @@ public static class GeoMeshProcessor
         var vertexCount = meshVertices.Count;
         var faceCount = meshFaces.Count;
 
-        // Convert vertices via indexed access (foreach over MeshVertexList boxes each Point3f).
+        // Indexed access, not foreach — MeshVertexList boxes each Point3f in a foreach.
         var vertices = new float[vertexCount * componentsPerVertex];
         var vertexIndex = 0;
         for (var i = 0; i < vertexCount; i++)
@@ -55,8 +39,8 @@ public static class GeoMeshProcessor
             vertices[vertexIndex++] = vertex.Z;
         }
 
-        // Optional channels: only a full per-vertex set is usable (partial sets have no defined
-        // mapping onto the combined vertex array), so anything else contributes null.
+        // A partial UV/color set has no defined mapping onto the combined vertex array, so only
+        // a full per-vertex set is usable; anything else contributes null.
         float[] uvs = null;
         if (extractUvs && mesh.TextureCoordinates.Count == vertexCount)
         {
@@ -86,8 +70,8 @@ public static class GeoMeshProcessor
             }
         }
 
-        // Triangle -> 3 indices, quad -> 6 (two triangles). Counts are O(1) on MeshFaceList, so we
-        // size the array exactly without a counting pass and walk the faces only once.
+        // Triangle -> 3 indices, quad -> 6 (two triangles). TriangleCount/QuadCount are O(1) on
+        // MeshFaceList, so the array is sized exactly without a separate counting pass.
         var faces = new int[meshFaces.TriangleCount * 3 + meshFaces.QuadCount * 6];
 
         var faceIndex = 0;

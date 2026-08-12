@@ -1,4 +1,5 @@
 import { describe, beforeEach, it } from 'vitest';
+import { randomBytes } from 'node:crypto';
 import { runOrgStoreConformance } from '@selvajs/platform/testing';
 import { SupabaseOrgStore } from '../SupabaseOrgStore.js';
 import { SupabaseInviteStore } from '../SupabaseInviteStore.js';
@@ -23,7 +24,9 @@ if (!envCtx) {
 			seedUser: (id) => seedUser(envCtx, id),
 			createCompanionStores: () => ({
 				invites: new SupabaseInviteStore(envCtx.bundle),
-				computeServer: new SupabaseComputeServerStore(envCtx.bundle)
+				// The cascade test saves an org server carrying an apiKey, which the
+				// store refuses to write without an at-rest key.
+				computeServer: new SupabaseComputeServerStore(envCtx.bundle, randomBytes(32))
 			})
 		});
 	});

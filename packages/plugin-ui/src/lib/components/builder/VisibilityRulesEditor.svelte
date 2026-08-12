@@ -28,7 +28,6 @@
 		options
 	}: VisibilityRulesEditorProps = $props();
 
-	// Validation
 	let validationErrors = $derived.by(() => {
 		const errors: string[] = [];
 
@@ -38,7 +37,6 @@
 			if (error) errors.push(`Rule ${idx + 1}: ${error}`);
 		});
 
-		// Validate defaultValue (only for item conditions, not group conditions)
 		if (visibilityCondition && !isGroupCondition) {
 			const item = visibilityCondition as VisibilityCondition;
 			if (
@@ -55,14 +53,12 @@
 
 	let hasErrors = $derived(validationErrors.length > 0);
 
-	// Mode toggle
 	function setMode(mode: 'all' | 'any') {
 		if (visibilityCondition) {
 			visibilityCondition.mode = mode;
 		}
 	}
 
-	// Rule management
 	function addRule() {
 		const newRule: VisibilityRule = {
 			paramId: '',
@@ -71,7 +67,6 @@
 		};
 
 		if (!visibilityCondition) {
-			// Initialize with first rule
 			const newCondition: VisibilityCondition | GroupVisibilityCondition = {
 				mode: 'all',
 				rules: [newRule] as [VisibilityRule, ...VisibilityRule[]],
@@ -92,7 +87,6 @@
 		if (!visibilityCondition?.rules) return;
 		const filtered = visibilityCondition.rules.filter((_, i) => i !== index);
 		if (filtered.length === 0) {
-			// If no rules left, remove the entire visibilityCondition
 			visibilityCondition = undefined;
 		} else {
 			visibilityCondition.rules = filtered as [VisibilityRule, ...VisibilityRule[]];
@@ -101,16 +95,13 @@
 </script>
 
 <div class="flex flex-col gap-3">
-	<!-- Conditions Section -->
 	<div class=" border-border rounded-lg border p-3">
-		<!-- Header with Mode Toggle -->
 		<div class="mb-3 flex items-center justify-between gap-2">
 			<div class="flex items-center gap-2">
 				<div class="bg-primary h-4 w-1 rounded-full"></div>
 				<span class="text-foreground text-[11px] font-semibold uppercase">Conditions</span>
 			</div>
 
-			<!-- Logic Mode Toggle -->
 			{#if visibilityCondition && visibilityCondition.rules?.length > 1}
 				<div class=" border-border flex h-5 items-center gap-0 rounded border">
 					<button
@@ -138,7 +129,6 @@
 			{/if}
 		</div>
 
-		<!-- Rules List -->
 		{#if visibilityCondition?.rules && visibilityCondition.rules.length > 0}
 			<div class="space-y-2">
 				{#each visibilityCondition.rules as rule, index (rule.paramId + index)}
@@ -154,10 +144,8 @@
 				{/each}
 			</div>
 
-			<!-- Add Rule Button -->
 			<Button variant="dashed" size="sm" onclick={addRule} class="mt-2">+ Add Condition</Button>
 		{:else}
-			<!-- Empty State -->
 			<Button variant="dashed" size="sm" onclick={addRule}>+ Add your first condition</Button>
 		{/if}
 	</div>
@@ -165,14 +153,12 @@
 	<!-- Effects Section -->
 	{#if visibilityCondition && visibilityCondition.rules?.length > 0}
 		<div class=" border-border rounded-lg border p-3">
-			<!-- Header -->
 			<div class="mb-3 flex items-center gap-2">
 				<div class="bg-primary h-4 w-1 rounded-full"></div>
 				<span class="text-foreground text-[11px] font-semibold uppercase">Then</span>
 			</div>
 
 			<div class="grid grid-cols-2 gap-3">
-				<!-- Action Select -->
 				<div class="flex flex-col gap-1.5">
 					<span class="text-muted-foreground text-[9px] font-semibold tracking-wider uppercase">
 						Action
@@ -208,7 +194,6 @@
 					</Select.Root>
 				</div>
 
-				<!-- Conditional Default Value Input -->
 				{#if !isGroupCondition && (visibilityCondition.action === 'disable' || visibilityCondition.action === 'hide')}
 					<div class="flex flex-col gap-1.5">
 						<span class="text-muted-foreground text-[9px] font-semibold tracking-wider uppercase">
@@ -226,7 +211,6 @@
 		</div>
 	{/if}
 
-	<!-- Validation Errors -->
 	{#if hasErrors}
 		<div class="border-destructive/40 bg-destructive/5 rounded-lg border p-2">
 			<div class="mb-1.5 flex items-center gap-1.5">

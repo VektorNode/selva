@@ -27,17 +27,12 @@ import { LocalPlatformPermissionStore } from '../permissions/LocalPlatformPermis
 import { createLocalUserDataStore, type LocalUserDataStore } from './userData.js';
 
 /**
- * Composition of every local-provider data store. One `LocalOrgStoreLoader`
- * is shared across org + project stores so they see the same cache and
- * atomic write path.
- *
- * The `LocalUserDataStore` is similarly shared across the permissions and
- * profile stores: both write to `user-data.json`, and `ensureUser` seeds
- * exactly the same row both stores read from. This is the local equivalent
- * of Supabase's `handle_new_auth_user` trigger.
- *
- * Stores are passed as a record so adding a new store doesn't ripple through
- * test fixtures and call sites.
+ * Composition root for every local-provider data store. One
+ * `LocalOrgStoreLoader` is shared across org + project stores so they see the
+ * same cache and atomic write path; one `LocalUserDataStore` is shared across
+ * the permissions, profile, and `ensureUser`/`onUserDeleted` paths so they
+ * all read and write the same `user-data.json` row (the local equivalent of
+ * Supabase's `handle_new_auth_user` trigger).
  */
 export class LocalDataProvider implements IDataProvider {
 	readonly orgs: IOrgStore;
@@ -49,7 +44,6 @@ export class LocalDataProvider implements IDataProvider {
 	readonly userProfile: IUserProfileStore;
 	readonly permissions: IPlatformPermissionStore;
 	readonly platformProjectGrants: IPlatformProjectGrantStore;
-	/** The sink the stores emit into (Noop unless injected) — per `IDataProvider.events`. */
 	readonly events?: IEventSink;
 
 	private readonly userData: LocalUserDataStore;
@@ -72,32 +66,25 @@ export class LocalDataProvider implements IDataProvider {
 	}
 
 	/**
-	 * Idempotently register a user in the data layer. Called from
-	 * `hooks.server.ts` on every authed request — the local equivalent of
-	 * Supabase's `handle_new_auth_user` trigger. After this completes the
-	 * user has an empty row in `user-data.json` that the permissions and
-	 * profile stores can read and update.
-	 *
-	 * `ctx` is unused — registration runs as a system operation regardless of
-	 * the calling user. Argument is kept for interface symmetry with adapters
-	 * that need it.
+	 * Idempotently seeds a user's `user-data.json` row. Called on every authed
+	 * request from `hooks.server.ts` — the local equivalent of Supabase's
+	 * `handle_new_auth_user` trigger. `ctx` is unused; registration runs as a
+	 * system operation regardless of the calling user, kept for interface
+	 * symmetry with adapters that need it.
 	 */
 	async ensureUser(_ctx: RequestContext, userId: string): Promise<void> {
 		await this.userData.ensure(userId);
 	}
 
 	/**
-	 * Cascade hook called after the auth provider deletes a user. Removes the
-	 * matching `user-data.json` row and every live org membership so the data
-	 * layer doesn't accumulate orphans — a leftover membership renders as a
-	 * bare user ID in the team roster forever. (Supabase gets the membership
-	 * cascade from FK constraints; local must do it explicitly.) Tolerates
-	 * missing rows.
+	 * Cascade hook run after the auth provider deletes a user: removes the
+	 * `user-data.json` row and every live org membership, so the roster
+	 * doesn't keep showing a bare user ID forever (Supabase gets this from FK
+	 * constraints; local does it explicitly). Tolerates missing rows.
 	 *
-	 * `opts.email` is accepted for interface parity but unused: the local
-	 * provider persists no audit_events or solve_metrics (Supabase-only tables),
-	 * and its invite set is small and operator-visible on disk. The email-keyed
-	 * erasure that closes audit P1 is a Supabase concern.
+	 * `opts.email` is unused — the local provider has no audit_events or
+	 * solve_metrics tables to scrub, and its invite set is small and
+	 * operator-visible on disk.
 	 */
 	async onUserDeleted(
 		ctx: RequestContext,
@@ -109,9 +96,9 @@ export class LocalDataProvider implements IDataProvider {
 		} catch {
 			// Already absent — nothing to clean up.
 		}
-		// `findUserMembership` returns one live membership at a time; removing
-		// it surfaces the next. Bounded far above any real org count in case a
-		// store bug ever makes removal a no-op.
+		// `findUserMembership` returns one live membership at a time; removing it
+		// surfaces the next. 100 is far above any real org count — a ceiling in
+		// case a store bug ever turns removal into a no-op.
 		for (let i = 0; i < 100; i++) {
 			const membership = await this.orgs.findUserMembership(ctx, userId);
 			if (!membership) break;
@@ -146,20 +133,15 @@ export class LocalDataProvider implements IDataProvider {
 		});
 
 		// Wire cross-store deps that aren't constructor-injected:
-		// - canEditDefinition needs the project store for `listPublic`
-		// - share-link resolution needs the definition store to enforce the §7
-		//   soft-delete cascade (Supabase does the equivalent via JOIN)
-		// - deleteProject needs the definition store to cascade the soft-delete
-		//   to the project's definitions (Supabase does the equivalent inline)
+		// - definitions needs the project store for listPublic's visibility check
+		// - shareLinks needs the definition store to enforce the soft-delete
+		//   cascade on resolution (Supabase does this via JOIN)
+		// - projects needs the definition store to cascade soft-delete to a
+		//   deleted project's definitions (Supabase does this inline)
 		definitions.setProjectProvider(projects);
 		shareLinks.setDefinitionProvider(definitions);
 		projects.setDefinitionProvider(definitions);
 
-		// ONE user-data store, shared across the profile store, permission store,
-		// and the data provider's ensureUser/deleteUser — so all three read/write
-		// through a single load-once write-through cache over `user-data.json`
-		// (§3a). Previously each constructed its own store on the same file, which
-		// with caching would run three divergent caches.
 		const userData = createLocalUserDataStore(userDataFilePath);
 
 		return new LocalDataProvider(

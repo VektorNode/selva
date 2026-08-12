@@ -11,7 +11,6 @@ const __dirname = path.dirname(__filename);
 
 const rootDir = path.resolve(__dirname, '..');
 const packagesDir = path.join(rootDir, 'packages');
-const examplesDir = path.join(rootDir, 'examples');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const FAST = process.argv.includes('--fast');
@@ -187,8 +186,14 @@ async function cleanup() {
   if (FOREGROUND) console.log('⏳ Foreground mode: waiting for deletes to finish');
   console.log();
 
-  // Sweep any leftover trash from previous runs (best effort, backgrounded)
+  // Sweep any leftover trash from previous runs (best effort, backgrounded).
+  // rmDirFast trashes next to the deleted dir, so package dirs need sweeping too.
   await sweepTrash(rootDir);
+  if (fs.existsSync(packagesDir)) {
+    for (const pkg of await fsp.readdir(packagesDir)) {
+      await sweepTrash(path.join(packagesDir, pkg));
+    }
+  }
 
   // Clean root
   console.log('Cleaning root directory...');
@@ -210,23 +215,6 @@ async function cleanup() {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn('⚠ Could not read packages directory:', message);
-  }
-
-  // Clean examples (optional)
-  if (fs.existsSync(examplesDir)) {
-    console.log('\nCleaning examples...');
-    try {
-      const examples = await fsp.readdir(examplesDir);
-      for (const ex of examples) {
-        if (ex.startsWith(TRASH_PREFIX)) continue;
-        await rmDirFast(path.join(examplesDir, ex, 'node_modules'));
-        await rmDirFast(path.join(examplesDir, ex, '.svelte-kit'));
-        await rmFile(path.join(examplesDir, ex, 'pnpm-lock.yaml'));
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn('⚠ Could not read examples directory:', message);
-    }
   }
 
   console.log('\n✨ Cleanup complete!');

@@ -1,17 +1,11 @@
 {
+	"extends": "../../../tsconfig.node.json",
 	"compilerOptions": {
-		"target": "ES2022",
-		"module": "NodeNext",
-		"moduleResolution": "NodeNext",
-		"declaration": true,
-		"declarationMap": true,
-		"sourceMap": true,
 		"outDir": "./dist",
 		"rootDir": "./src",
-		"strict": true,
-		"skipLibCheck": true,
-		"customConditions": ["source"]
+		"tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo.json",
+		"customConditions": ["selva-source"]
 	},
 	"include": ["src/**/*"],
-	"exclude": ["node_modules", "dist", "**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"]
+	"exclude": ["node_modules", "dist"]
 }

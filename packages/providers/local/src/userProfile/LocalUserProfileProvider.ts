@@ -24,24 +24,21 @@ function toProfile(u: StoredUserData): UserProfile {
 
 /**
  * Filesystem-backed user-profile store. Reads and writes `user-data.json`,
- * shared with `LocalPlatformPermissionStore`. Identity (email, password
- * hash) lives separately on the auth provider — this store keys exclusively
- * by user ID.
- *
+ * shared with `LocalPlatformPermissionStore`. Keys exclusively by user ID;
+ * identity (email, password hash) lives separately on the auth provider.
  * `IDataProvider.ensureUser` (called from `hooks.server.ts`) seeds an empty
- * row for every authed user, mirroring Supabase's `handle_new_auth_user`
- * trigger.
+ * row for every authed user.
  */
 export class LocalUserProfileProvider implements IUserProfileStore {
 	private readonly data: LocalUserDataStore;
 
 	/**
 	 * Accepts a file path (constructs its own store — for `fromEnv` and
-	 * standalone conformance tests) OR a shared `LocalUserDataStore`. In the
-	 * full provider, `LocalDataProvider` injects ONE store shared with the
-	 * permission store and the data provider, so all three see the same
-	 * load-once write-through cache over `user-data.json` (§3a). Constructing
-	 * separate stores on the same file would run divergent caches.
+	 * standalone conformance tests) or a shared `LocalUserDataStore`.
+	 * `LocalDataProvider` injects one store shared with the permission store
+	 * and the data provider so all three see the same load-once write-through
+	 * cache over `user-data.json` (§3a) — separate stores on the same file
+	 * would diverge.
 	 */
 	constructor(userData: string | LocalUserDataStore) {
 		this.data = typeof userData === 'string' ? createLocalUserDataStore(userData) : userData;
@@ -59,9 +56,8 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 	}
 
 	async getProfiles(_ctx: RequestContext, userIds: readonly string[]): Promise<UserProfile[]> {
-		// Batch read is read-only and used for display name lookups across the UI;
-		// scoping to a single user defeats the purpose. Adapters with stricter
-		// requirements should override.
+		// Unscoped by design: used for display-name lookups across the UI.
+		// Adapters needing per-caller restriction should override.
 		const all = await this.data.listAll();
 		const wanted = new Set(userIds);
 		return all.filter((u) => wanted.has(u.userId)).map(toProfile);
@@ -130,11 +126,7 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 	}
 }
 
-/**
- * Profile reads/writes are scoped to the user themselves. `instance_admin`
- * bypasses for admin tooling. `system: true` (background jobs, signup
- * auto-seed) also passes — those flows have already authorized.
- */
+/** Scoped to the user themselves; `instance_admin` and `system: true` callers bypass. */
 function assertCanAccess(ctx: RequestContext, userId: string): void {
 	if (ctx.system) return;
 	if (ctx.userId === userId) return;

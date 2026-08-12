@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/schemas",
-	"version": "4.7.0",
+	"version": "5.0.0-beta.3",
 	"description": "Schema definitions, generated TypeScript types, and code generators for Selva",
 	"license": "MIT",
 	"author": "VektorNode",
@@ -22,38 +22,46 @@
 		"directory": "packages/schemas"
 	},
 	"engines": {
-		"node": ">=22.0.0"
+		"node": ">=24.0.0"
 	},
 	"type": "module",
+	"sideEffects": false,
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
-			"source": "./src/index.ts",
+			"selva-source": "./src/index.ts",
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
-		}
+		},
+		"./ui-schema.json": "./ui-schema.json",
+		"./preset-schema.json": "./preset-schema.json"
 	},
 	"files": [
 		"dist",
-		"src",
 		"ui-schema.json",
-		"preset-schema.json"
+		"preset-schema.json",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
 	],
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
 		"type-check": "tsc --noEmit",
-		"prepack": "node ../../scripts/prepack.js",
-		"postpack": "node ../../scripts/prepack.js --restore",
+		"prepack": "publint --strict",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"generate": "pnpm run generate:ts && pnpm run generate:cs",
 		"generate:ts": "node scripts/generate-typescript.js",
-		"generate:cs": "node scripts/generate-csharp.js",
-		"generate:all": "pnpm run generate"
+		"generate:cs": "node scripts/generate-csharp.js"
 	},
 	"devDependencies": {
+		"@selvajs/config": "workspace:*",
+		"@types/node": "catalog:",
 		"json-schema-to-typescript": "^15.0.4",
 		"prettier": "catalog:",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "catalog:"
 	}
 }

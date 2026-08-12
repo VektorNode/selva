@@ -10,7 +10,7 @@ const headersWith = (id: string): Headers => new Headers({ [REQUEST_ID_HEADER]: 
 
 describe('sanitizeRequestId', () => {
 	it('passes through the id shapes real proxies emit', () => {
-		// UUID (nginx $request_id / Caddy), hex trace-id (W3C), ULID.
+		// In order: UUID (nginx $request_id / Caddy), W3C hex trace-id, ULID.
 		for (const id of [
 			'3f6b1c4e-9a2d-4f7b-8c1e-2a5d6f0b9c3a',
 			'4bf92f3577b34da6a3ce929d0e0e4736',
@@ -21,8 +21,8 @@ describe('sanitizeRequestId', () => {
 	});
 
 	it('strips CR/LF so a caller cannot forge extra log lines', () => {
-		// Log injection: the payload would otherwise terminate the record and
-		// inject a second, attacker-authored one.
+		// The payload is shaped to terminate the record and open a second,
+		// attacker-authored one — hence the space check too, not just CR/LF.
 		const forged = 'abc\r\nlevel=error msg="disk failure"';
 		const cleaned = sanitizeRequestId(forged);
 		expect(cleaned).not.toContain('\n');
@@ -68,7 +68,7 @@ describe('renderThrown', () => {
 	it('keeps the stack for Errors — that is the diagnostic', () => {
 		const rendered = renderThrown(new Error('boom'));
 		expect(rendered).toContain('boom');
-		// The stack, not just the message: it names the throw site.
+		// Matching this file's name proves the stack survived, not just the message.
 		expect(rendered).toContain('requestId.test.ts');
 	});
 

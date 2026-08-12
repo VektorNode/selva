@@ -2,12 +2,8 @@ using System.IO;
 
 namespace Selva.Drawing.Tests.Rendering;
 
-// Phase 2 originally compared SvgRenderer output byte-for-byte against the legacy
-// SvgDocument.Build. Phase 3 retired SvgDocument so we now compare against pinned
-// snapshot files captured from the same renderer (which itself was byte-equal with the
-// legacy at the moment of capture). Re-pin via SnapshotGenerator (set
-// SELVA_GENERATE_SNAPSHOTS=1 and run that test) when the renderer is intentionally
-// changed.
+// Compares renderer output against the pinned snapshot files; re-pin with
+// SnapshotGenerator when a renderer change is intentional.
 public class SvgRendererSnapshotTests
 {
 	private static readonly string SnapshotDir = Path.Combine(

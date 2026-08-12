@@ -20,19 +20,16 @@ export interface IProjectStore {
 			Pick<Project, 'name' | 'slug' | 'description' | 'visibility' | 'autoJoinOnUpload'>
 		>
 	): Promise<void>;
-	/**
-	 * Soft-delete the project. Cascades to project members and definitions.
-	 * Definition versions and share links cascade through the definition delete.
-	 */
+	/** Soft-delete. Cascades to project members and definitions (and, through the definition delete, to definition versions and share links). */
 	deleteProject(ctx: RequestContext, id: string): Promise<void>;
 	/**
-	 * Reactivate a previously soft-deleted project identified by its org + slug.
-	 * Clears `deleted_at` and reactivates the owner's `project_members` row.
-	 * Returns the live project, or `null` if no tombstone with that slug exists.
+	 * Reactivates a soft-deleted project by org + slug: clears `deleted_at`
+	 * and reactivates the owner's `project_members` row. Returns `null` if no
+	 * tombstone with that slug exists.
 	 *
-	 * Use this when `createProject` fails with a duplicate-key error on a slug
-	 * that was soft-deleted — the unconditional unique constraint blocks creation
-	 * even though `getProjectBySlug` returns null for tombstones.
+	 * Use this when `createProject` hits a duplicate-key error on a
+	 * soft-deleted slug — the unique constraint isn't conditional, so it
+	 * blocks creation even though `getProjectBySlug` returns null for tombstones.
 	 */
 	reactivateProject(ctx: RequestContext, orgId: string, slug: string): Promise<Project | null>;
 
@@ -47,6 +44,18 @@ export interface IProjectStore {
 		projectId: string,
 		userId: string
 	): Promise<ProjectMember | null>;
+	/**
+	 * One user's membership row across many projects, in a single query —
+	 * avoids one round-trip per project when evaluating `canView` over a list.
+	 * Keys are the requested `projectIds`; a project the user isn't a member of
+	 * maps to `null` rather than being absent, distinguishing "checked, not a
+	 * member" from "never asked".
+	 */
+	getProjectMembersFor(
+		ctx: RequestContext,
+		projectIds: readonly string[],
+		userId: string
+	): Promise<Map<string, ProjectMember | null>>;
 	addProjectMember(ctx: RequestContext, member: ProjectMember): Promise<void>;
 	updateProjectMemberRole(
 		ctx: RequestContext,

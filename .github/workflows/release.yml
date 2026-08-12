@@ -26,6 +26,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
@@ -41,6 +42,20 @@ jobs:
         with:
           # changesets needs full history to compute version diffs
           fetch-depth: 0
+          # The branch tip, NOT the SHA that triggered this run. On beta,
+          # cancel-in-progress means a burst of pushes leaves one survivor, and
+          # that survivor is not always the newest — it then evaluates changeset
+          # state at its own older SHA, reports "no unconsumed changesets", and
+          # exits green having published nothing. Checking out the tip makes the
+          # surviving run release everything on the branch regardless of which
+          # push it came from.
+          ref: ${{ github.ref }}
+
+      # Cheap and dependency-free, so it runs on the system node before install
+      # and before the ~5min test gate. A mixed changeset otherwise fails in
+      # `changeset version`, after everything expensive has already passed.
+      - name: Validate changesets
+        run: node scripts/validate-changesets.mjs
 
       # Outputs: should_run, is_beta, needs_version.
       - name: Check for pending release work
@@ -84,6 +99,13 @@ jobs:
           fi
 
           # ── main branch ──────────────────────────────────────────────────
+          # A beta→main merge that carries pre.json along would publish
+          # prerelease versions to the `latest` dist-tag.
+          if [ -f .changeset/pre.json ]; then
+            echo "::error::.changeset/pre.json present on main — pre mode leaked from beta."
+            echo "Run 'pnpm changeset pre exit' and commit before releasing from main."
+            exit 1
+          fi
           count=$(find .changeset -maxdepth 1 -type f -name '*.md' \
             ! -name 'README.md' ! -name 'config.md' | wc -l)
           if [ "$count" -gt 0 ]; then
@@ -113,28 +135,50 @@ jobs:
       - uses: actions/setup-node@v7
         if: steps.check.outputs.should_run == 'true'
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
       # Required for OIDC — without it publishes fall back to anonymous and 404.
+      # Trusted publishing needs >= 11.5.1; Node 24 bundles 11.x already, but the
+      # bundled patch moves with the runner image, so pin it here.
+      #
+      # Exact, not a range: this is the version that uploads to the registry, and
+      # `@latest` silently adopted each new major the morning it shipped. Bump it
+      # deliberately — a broken publish is discovered after the tag exists.
       - name: Upgrade npm for OIDC publishing
         if: steps.check.outputs.should_run == 'true'
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.19.0
 
       - name: Install dependencies
         if: steps.check.outputs.should_run == 'true'
         run: pnpm install --frozen-lockfile
 
-      - uses: actions/cache@v6
-        if: steps.check.outputs.should_run == 'true'
-        with:
-          path: .turbo
-          key: turbo-release-${{ github.sha }}
-          restore-keys: |
-            turbo-release-
+      # No .turbo cache on the release path, deliberately. It was keyed on
+      # github.sha, which can never hit exactly, so every run restored some
+      # earlier run's entry and saved a fresh ~1.1GB one — six of them held
+      # ~6.8GB of the repo's 10GB quota and evicted the caches that do pay off
+      # (pnpm store, eslint, nuget). It bought little anyway: `changeset version`
+      # rewrites package.json before the gate, and package.json is a build
+      # input, so the tasks that dominate this job miss regardless.
 
-      # Gates the publish: catches regressions in the version-PR merge commit.
+      # ── beta path ────────────────────────────────────────────────────────
+      # Versioning BEFORE the gate is deliberate, for two reasons:
+      #   · `changeset version` rewrites every package.json and every internal
+      #     dependency range. Testing the pre-version tree gates a tree that is
+      #     not the one being published — a bump that pushes a package outside a
+      #     sibling's peer range would ship green.
+      #   · package.json is a turbo build input, so versioning after the gate
+      #     invalidates every `^build` the gate just did, and `pnpm release`
+      #     rebuilds all of it from scratch.
+      # Nothing is pushed until the gate passes, so a failing test leaves no
+      # version commit behind on beta.
+      - name: Version beta packages
+        if: steps.check.outputs.is_beta == 'true' && steps.check.outputs.needs_version == 'true'
+        run: pnpm changeset version
+
+      # Gates the publish: on main, catches regressions in the version-PR merge
+      # commit; on beta, runs against the freshly versioned tree.
       - name: Type-check
         if: steps.check.outputs.should_run == 'true'
         run: pnpm type-check
@@ -143,26 +187,36 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         run: pnpm exec turbo run test
 
-      # ── beta path ────────────────────────────────────────────────────────
-      - name: Version beta packages
-        if: steps.check.outputs.is_beta == 'true' && steps.check.outputs.needs_version == 'true'
-        run: pnpm changeset version
-
       - name: Commit beta version bumps
         if: steps.check.outputs.is_beta == 'true' && steps.check.outputs.needs_version == 'true'
         # HUSKY=0 + --no-verify: lint-staged aborts on machine-generated commits.
         env:
           HUSKY: 0
         run: |
-          if git diff --quiet; then
+          # --porcelain, not `git diff --quiet`: in pre mode `changeset version`
+          # rewrites pre.json and adds CHANGELOG.md files, and a plain diff
+          # misses untracked ones.
+          if [ -z "$(git status --porcelain)" ]; then
             echo "No version changes to commit."
           else
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add -A
             git commit --no-verify -m "chore: version beta packages [skip ci]"
-            # No --force: a non-fast-forward push should fail, not clobber.
-            git push origin HEAD:beta
+            # Two pushes close together leave the second non-fast-forward. Rebase
+            # onto the new tip and retry rather than failing a run that has
+            # already versioned but not yet published. Never --force: a real
+            # divergence must fail, not clobber.
+            for attempt in 1 2 3; do
+              if git push origin HEAD:beta; then
+                exit 0
+              fi
+              echo "Push rejected (attempt $attempt) — rebasing onto origin/beta."
+              git fetch origin beta
+              git rebase origin/beta
+            done
+            echo "::error::Could not push version commit to beta after 3 attempts."
+            exit 1
           fi
 
       # In pre mode `changeset publish` uses the `beta` dist-tag automatically;
@@ -172,6 +226,29 @@ jobs:
         run: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A beta run that skips is normal (nothing to release). A beta run that
+      # finishes with changesets STILL unconsumed is not — it means the release
+      # silently missed work, which is invisible precisely because the run is
+      # green. Runs on every beta outcome, including the skip path.
+      - name: Verify no beta work was left behind
+        if: steps.check.outputs.is_beta == 'true'
+        run: |
+          leftover=0
+          for f in $(find .changeset -maxdepth 1 -type f -name '*.md' \
+            ! -name 'README.md' ! -name 'config.md'); do
+            name=$(basename "$f" .md)
+            if ! node -e "process.exit(require('./.changeset/pre.json').changesets.includes('$name') ? 0 : 1)"; then
+              echo "::error::Changeset '$name' is still unconsumed after the release."
+              leftover=$((leftover + 1))
+            fi
+          done
+          if [ "$leftover" -gt 0 ]; then
+            echo "::error::$leftover changeset(s) were not released. The run checked out \
+          $(git rev-parse --short HEAD); if newer commits exist on beta, re-run against the tip."
+            exit 1
+          fi
+          echo "All changesets on this ref are recorded in pre.json."
 
       # ── main path ────────────────────────────────────────────────────────
       - uses: changesets/action@v1

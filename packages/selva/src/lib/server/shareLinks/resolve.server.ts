@@ -39,8 +39,8 @@ export function readShareToken(request: Request, url: URL): string | null {
 }
 
 /**
- * Spec §7 token-resolution path. Run before user-based auth on definition-
- * scoped routes. Returns the resolved link + a synthetic ctx on success.
+ * Run before user-based auth on definition-scoped routes. Returns the
+ * resolved link + a synthetic ctx on success.
  *
  * Throws only when a token is *present but invalid* for the current request
  * (wrong definition, wrong channel, expired, revoked, view-only when solve

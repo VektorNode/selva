@@ -7,16 +7,12 @@ using Newtonsoft.Json.Linq;
 
 namespace Selva.GH.Features.ComputeIO.Goos;
 
-/// <summary>
-///     Custom IGH_Goo type for ValueList data
-/// </summary>
 [Guid("F5A0C45C-1B2D-4E7F-9A3C-8D2E5F7B4C6A")]
 public class GH_ValueListDataGoo : GH_Goo<string>
 {
-    // When true, an empty Value is still considered valid. Used by the dynamic value list to emit
-    // an intentional empty placeholder on the first solve (before any computed options arrive) so
-    // downstream params don't drop it as invalid. Defaults to false to preserve the static
-    // value list's behavior (empty = invalid).
+    // When true, an empty Value still counts as valid: the dynamic value list emits an intentional
+    // empty placeholder on the first solve, before any computed options arrive, and downstream params
+    // shouldn't drop it. Defaults to false so the static value list keeps its empty-is-invalid behavior.
     private readonly bool _allowEmpty;
 
     public GH_ValueListDataGoo()
@@ -41,9 +37,6 @@ public class GH_ValueListDataGoo : GH_Goo<string>
 
     public int SelectedIndex { get; private set; } = -1;
 
-    /// <summary>
-    ///     Gets the name/key of the currently selected item
-    /// </summary>
     public string SelectedName
     {
         get
@@ -57,21 +50,13 @@ public class GH_ValueListDataGoo : GH_Goo<string>
         }
     }
 
-    /// <summary>
-    ///     Gets the expression/value of the currently selected item (same as Value property)
-    /// </summary>
     public string SelectedExpression => Value;
 
     public override bool IsValid => _allowEmpty || !string.IsNullOrEmpty(Value);
 
-    /// <summary>
-    ///     For serialization: returns the name (key) instead of the expression value.
-    ///     This ensures Grasshopper receives the human-readable item name when values are sent from compute.
-    /// </summary>
+    // Returns the name (key), not the expression, so Grasshopper UI builders get e.g. "Sphere" instead of "0".
     public string SerializeValue()
     {
-        // Return the name (key) which is what Grasshopper UI builders expect
-        // e.g., "Sphere" instead of "0"
         return SelectedName ?? Value ?? string.Empty;
     }
 
@@ -90,9 +75,6 @@ public class GH_ValueListDataGoo : GH_Goo<string>
         return new GH_ValueListDataProxy(this);
     }
 
-    /// <summary>
-    ///     Gets the selected item as a key-value tuple (Name, Expression)
-    /// </summary>
     public (string Name, string Expression) GetSelectedItem()
     {
         if (SelectedIndex >= 0 && SelectedIndex < Items.Count)
@@ -103,9 +85,6 @@ public class GH_ValueListDataGoo : GH_Goo<string>
         return (string.Empty, Value ?? string.Empty);
     }
 
-    /// <summary>
-    ///     Gets the selected item as a JObject with "name" and "expression" properties
-    /// </summary>
     public JObject GetSelectedItemAsJson()
     {
         var item = GetSelectedItem();
@@ -128,9 +107,6 @@ public class GH_ValueListDataGoo : GH_Goo<string>
         return json;
     }
 
-    /// <summary>
-    ///     Returns the default value (selected value)
-    /// </summary>
     public string GetDefaultValue()
     {
         if (SelectedIndex >= 0 && SelectedIndex < Items.Count)
@@ -138,7 +114,7 @@ public class GH_ValueListDataGoo : GH_Goo<string>
             return Items[SelectedIndex].Expression;
         }
 
-        return Value; // Fallback to current value
+        return Value;
     }
 
     public static GH_ValueListDataGoo FromJson(JObject json)
@@ -167,10 +143,7 @@ public class GH_ValueListDataGoo : GH_Goo<string>
         return new GH_ValueListDataGoo(value, items, selectedIndex);
     }
 
-    /// <summary>
-    ///     Creates a ValueList item from a compute response.
-    ///     Handles conversion from name (key) format to proper GH_ValueListDataGoo.
-    /// </summary>
+    // Compute returns the name (key); look it up here to recover the expression.
     public static GH_ValueListDataGoo FromComputeValue(string incomingValue,
         List<(string Name, string Expression)> items)
     {
@@ -239,9 +212,6 @@ public class GH_ValueListDataGoo : GH_Goo<string>
         return true;
     }
 
-    /// <summary>
-    ///     Finds the name/key for a given expression value
-    /// </summary>
     private string FindNameByExpression(string expression)
     {
         if (expression == null)
@@ -262,7 +232,6 @@ public class GH_ValueListDataGoo : GH_Goo<string>
 
     public override bool CastTo<T>(ref T target)
     {
-        // Cast to string - return the expression value (consistent with number cast)
         if (typeof(T) == typeof(GH_String))
         {
             object obj = new GH_String(Value ?? string.Empty);
@@ -331,24 +300,12 @@ public class GH_ValueListDataGoo : GH_Goo<string>
 
         public override bool IsParsable => true;
 
-        /// <summary>
-        ///     The name/key of the selected item
-        /// </summary>
         public string Name => Owner.SelectedName;
 
-        /// <summary>
-        ///     The expression/value of the selected item
-        /// </summary>
         public string Expression => Owner.Value;
 
-        /// <summary>
-        ///     The default value (same as Expression)
-        /// </summary>
         public string Default => Owner.GetDefaultValue();
 
-        /// <summary>
-        ///     All available values in the list as a key-value object
-        /// </summary>
         public JObject Values
         {
             get
@@ -370,8 +327,7 @@ public class GH_ValueListDataGoo : GH_Goo<string>
                 input = string.Empty;
             }
 
-            // FromString receives the name (key), not the expression value
-            // Try to find a matching item by name and use its expression
+            // Receives the name (key), not the expression: look up the matching item's expression.
             for (var i = 0; i < Owner.Items.Count; i++)
             {
                 if (Owner.Items[i].Name == input)
@@ -382,7 +338,6 @@ public class GH_ValueListDataGoo : GH_Goo<string>
                 }
             }
 
-            // Fallback: treat as raw value if no name match found
             Owner.Value = input;
             return true;
         }

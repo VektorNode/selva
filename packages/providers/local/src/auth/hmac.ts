@@ -1,6 +1,6 @@
 import { timingSafeEqual, createHmac } from 'node:crypto';
 
-const DEFAULT_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
+const DEFAULT_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 
 /**
  * Token format: base64url(userId + ':' + expiry) + '.' + hmac(payload)

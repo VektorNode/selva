@@ -31,8 +31,8 @@ describe('LocalUserProfileProvider', () => {
 			return {
 				store,
 				seedUser: async (email: string) => {
-					// Real user creation: auth-users row + user-data row, mirroring
-					// what `hooks.server.ts` does in production via `ensureUser`.
+					// Creates both the auth-users row and the user-data row, mirroring
+					// hooks.server.ts's ensureUser flow in production.
 					const user = await auth.passwordAuth.createUserWithPassword(email, 'pw');
 					await userData.ensure(user.id);
 					return user;

@@ -4,11 +4,11 @@ import * as path from 'node:path';
 
 // E2E runs the production SPA build (adapter-static) served by `vite preview`, with a
 // WebSocket stub standing in for Grasshopper on :8765 (see e2e/ws-stub.ts). The app runs
-// unmodified through its GrasshopperSource — this exercises the real transport + the
-// SchemaSource seam end to end, which the node-env unit tests can't.
+// unmodified through its GrasshopperSource, exercising the real transport end to end —
+// something the node-env unit tests can't do.
 //
-// The stub is launched/torn down by e2e/global.setup.ts (Playwright can only health-check
-// HTTP webServers, and the stub is a raw WebSocket server).
+// The stub is launched/torn down by e2e/global.setup.ts, not this webServer block:
+// Playwright can only health-check HTTP webServers, and the stub is a raw WebSocket server.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

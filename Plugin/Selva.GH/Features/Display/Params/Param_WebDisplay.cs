@@ -10,11 +10,9 @@ namespace Selva.GH.Features.Display.Params;
 ///     Dedicated Grasshopper parameter for <see cref="WebDisplayGoo" />. Beyond a typed wire, it is:
 ///     - persistent (<see cref="GH_PersistentGeometryParam{T}" />), so a Web Display can be
 ///       internalized into the .gh file via the right-click "Internalise data" menu — a third way to
-///       persist a display alongside cloud solving and the .dmf file;
+///       persist a display alongside cloud solving and the .slvm mesh file;
 ///     - preview-capable: it computes its clipping box and draws directly from its own data,
-///       dispatching to each held <see cref="WebDisplayGoo" />'s <c>IGH_PreviewData</c> methods. The
-///       inherited Preview_* helpers were not used because they did not query the held goo's bbox
-///       (they returned an empty box, so Grasshopper skipped drawing the param entirely).
+///       dispatching to each held <see cref="WebDisplayGoo" />'s <c>IGH_PreviewData</c> methods.
 /// </summary>
 public class Param_WebDisplay : GH_PersistentGeometryParam<WebDisplayGoo>, IGH_PreviewObject
 {

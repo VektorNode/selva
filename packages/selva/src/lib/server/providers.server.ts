@@ -21,22 +21,18 @@ import { OrgAssetService } from './organizations/OrgAssetService.js';
 import { SentryErrorReporter } from '@selvajs/server/errors';
 import { ConsoleLogger, createLogger, renderThrown } from '@selvajs/server/logging';
 
-// Provider wiring lives in `@selvajs/server/providers`
-// (`createSelvaProviders`): env-driven selection over the registry below, an
-// external `selva.config.js` override via SELVA_CONFIG_PATH, and lazy
-// memoized instantiation (nothing touches provider secrets at import/build
-// time). This file is the app's composition root: the registry of bundled
-// provider implementations, the service singletons, and error reporting.
+// Provider wiring lives in `@selvajs/server/providers` (`createSelvaProviders`):
+// env-driven selection over the registry below, an external `selva.config.js`
+// override via SELVA_CONFIG_PATH, and lazy memoized instantiation (nothing
+// touches provider secrets at import/build time). This file is the app's
+// composition root: bundled provider implementations, service singletons,
+// and error reporting.
 
-/**
- * Forwards to whatever the root logger currently is, rather than capturing it.
- *
- * Provider wiring runs at module scope, while `_logger` starts as a console
- * placeholder and is swapped for pino once its async load resolves (see the
- * Logging section below). A provider handed `getLogger()` directly at
- * construction would pin the placeholder for the process's whole life; this
- * indirection keeps a long-lived provider on the current logger.
- */
+// Forwards to whatever the root logger currently is, rather than capturing it.
+// `_logger` starts as a console placeholder and is swapped for pino once its
+// async load resolves (see Logging below); a provider handed `getLogger()`
+// directly at construction would pin the placeholder for the process's whole
+// life, so long-lived providers get this indirection instead.
 export const lazyLogger: ILogger = {
 	debug: (m: string, f?: LogFields) => getLogger().debug(m, f),
 	info: (m: string, f?: LogFields) => getLogger().info(m, f),
@@ -54,8 +50,8 @@ const registry: ProviderRegistry = {
 	},
 	data: {
 		local: (e) => local.LocalDataProvider.fromEnv(e),
-		// `events` is the second param and stays defaulted — the app wires its
-		// event sink separately (see getEventSink below); the logger is third.
+		// `events` (2nd param) stays defaulted — the app wires its event sink
+		// separately, see getEventSink below.
 		supabase: (e) => supa.SupabaseDataProvider.fromEnv(e, undefined, lazyLogger)
 	},
 	storage: {
@@ -71,10 +67,10 @@ const runtime = await createSelvaProviders(env, {
 });
 
 /**
- * Memoized provider wiring. The first call instantiates providers from env
- * (and may throw if required secrets are missing); subsequent calls return the
- * cached config. Importing this module has no side effects — initialization
- * happens lazily on the first request, never at build time.
+ * Memoized. The first call instantiates providers from env (may throw if
+ * required secrets are missing); later calls return the cached config.
+ * Importing this module has no side effects — init happens lazily on the
+ * first request, never at build time.
  */
 export function resolveProviders(): SelvaConfig {
 	return runtime.resolve();
@@ -95,10 +91,7 @@ export function getTenancy(): TenancyMode {
 	return runtime.tenancy();
 }
 
-/**
- * Resolved branding — every field has a default so the UI never has to
- * null-check. White-label deployments override via SELVA_BRAND_* env vars.
- */
+/** Every field has a default so the UI never has to null-check. Override via SELVA_BRAND_* env vars. */
 export function getBranding(): Required<SelvaBranding> {
 	return runtime.branding();
 }
@@ -170,31 +163,25 @@ export function getPlatformProjectGrantStore() {
 	return resolveProviders().data.platformProjectGrants;
 }
 
-/**
- * Per-solve timing sink. Defaults to `NoopSolveMetricSink` when the config
- * omits `solveMetrics`, so the compute route can always record unconditionally.
- */
+/** Defaults to `NoopSolveMetricSink` when the config omits `solveMetrics`, so the compute route always records unconditionally. */
 export function getSolveMetricSink(): ISolveMetricSink {
 	return runtime.solveMetricSink();
 }
 
 /**
- * Optional. Null on deployments where the audit log isn't queryable
- * (local-provider stays on `NoopEventSink`; the read-side has nothing to
- * surface). Routes that consume this MUST handle null and degrade their UI.
+ * Null on deployments where the audit log isn't queryable (local-provider
+ * stays on `NoopEventSink`). Callers must handle null and degrade their UI.
  */
 export function getAuditQuery() {
 	return providers.data.auditQuery ?? null;
 }
 
-// Never-null via the Noop fallback, so emitters record unconditionally.
 const noopEventSink = new NoopEventSink();
 
 /**
  * Write-side event sink for routes with no store mutation to piggyback on
- * (e.g. the self-update lifecycle events, audit O2). Prefers the explicit
- * `SelvaConfig.events`, then the data provider's own sink, then a no-op —
- * mirroring how the stores themselves are wired.
+ * (e.g. self-update lifecycle events). Prefers the explicit `SelvaConfig.events`,
+ * then the data provider's own sink, then a no-op.
  */
 export function getEventSink(): IEventSink {
 	const p = resolveProviders();
@@ -205,61 +192,51 @@ export function getEventSink(): IEventSink {
 // Logging
 // ============================================================================
 
-// Same eager-init-then-swap shape as the error reporter below, with one
-// deliberate difference: the placeholder is a real ConsoleLogger, never a
-// no-op. Logging must not have a window where warnings vanish — an operator
-// debugging a boot failure is reading exactly these lines. So records written
-// before pino resolves land on the console, and the swap only upgrades the
-// formatting.
+// Same eager-init-then-swap shape as the error reporter below, but the
+// placeholder here is a real ConsoleLogger, never a no-op: logging must not
+// have a window where warnings vanish while an operator is debugging a boot
+// failure. Records written before pino resolves land on the console; the
+// swap only upgrades the formatting.
 const LOG_LEVEL: LogLevel = parseLogLevel(env.LOG_LEVEL);
 
 let _logger: ILogger = new ConsoleLogger({}, LOG_LEVEL);
 
 /**
- * The app's root logger. Structured, correlated, and pino-backed when `pino` is
- * installed (it ships with the app; the base `@selvajs/server` install treats it
- * as an optional peer and falls back to the console).
+ * The app's root logger. Pino-backed when `pino` is installed (ships with the
+ * app; the base `@selvajs/server` install treats it as an optional peer and
+ * falls back to the console).
  *
- * Prefer a request-scoped child — `event.locals.log` — inside route handlers, so
- * records carry `requestId`/`route`. Use this root logger for boot, shutdown and
- * background work that belongs to no request.
+ * Prefer a request-scoped child (`event.locals.log`) in route handlers so
+ * records carry `requestId`/`route`. Use this root logger for boot, shutdown,
+ * and background work with no request.
  */
 export function getLogger(): ILogger {
 	return _logger;
 }
 
-/**
- * `LOG_LEVEL` is operator input, so an unrecognized value must not crash boot
- * (or silently disable logging). Default to `info`, and to `debug` in dev where
- * the extra detail is the point.
- */
+// `LOG_LEVEL` is operator input — an unrecognized value must not crash boot
+// or silently disable logging. Defaults to `info`, `debug` in dev.
 function parseLogLevel(raw: string | undefined): LogLevel {
 	const value = raw?.trim().toLowerCase();
 	if (value === 'debug' || value === 'info' || value === 'warn' || value === 'error') return value;
-	// The compute debug flags emit at `debug`. An operator who turned one on has
-	// asked for that output in so many words, so honor it without also demanding
-	// LOG_LEVEL=debug — otherwise the flag would silently do nothing in
-	// production, which is exactly where it gets reached for.
+	// An operator who set SELVA_FLAG_COMPUTE_DEBUG asked for debug output in so
+	// many words — honor it without also requiring LOG_LEVEL=debug, since the
+	// flag would otherwise silently do nothing in production.
 	if (
-		isTruthyFlag(env.SELVA_FLAG_COMPUTE_DEBUG) ||
-		isTruthyFlag(env.SELVA_FLAG_COMPUTE_DEBUG_VERBOSE)
+		['true', '1', 'yes', 'on', 'verbose'].includes(
+			(env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase()
+		)
 	)
 		return 'debug';
 	return env.NODE_ENV === 'development' ? 'debug' : 'info';
 }
 
-/** Matches the flag spelling accepted elsewhere (`clientCache.server.ts`). */
-function isTruthyFlag(raw: string | undefined): boolean {
-	return ['true', '1', 'yes'].includes((raw ?? '').toLowerCase());
-}
-
 // Eager, fire-and-forget: `getLogger()` stays sync for the same reason
-// `getErrorReporter()` does — its callers (hooks, process handlers) can't await.
+// `getErrorReporter()` does below — callers (hooks, process handlers) can't await.
 void createLogger({
 	level: LOG_LEVEL,
-	// Pretty output in dev, newline-delimited JSON in production for the
-	// collector. `pino-pretty` is a devDependency, so this silently degrades to
-	// JSON if it's absent.
+	// Pretty in dev, newline-delimited JSON in production. `pino-pretty` is a
+	// devDependency, so this degrades to JSON if it's absent.
 	pretty: env.NODE_ENV === 'development',
 	base: { service: 'selva', release: env.SELVA_RELEASE }
 }).then((logger) => {
@@ -270,22 +247,19 @@ void createLogger({
 // Error reporting
 // ============================================================================
 
-// Starts as the no-op reporter and is swapped for a Sentry-backed one once its
-// async init resolves (see below). `getErrorReporter()` is synchronous — called
-// from `handleError` and the process error hooks, which can't await — so during
-// the sub-second boot window before Sentry finishes loading, reports go to the
-// no-op. Acceptable: the only errors lost are ones thrown in that window.
+// Starts as the no-op reporter, swapped for a Sentry-backed one once async
+// init resolves. `getErrorReporter()` is synchronous — called from
+// `handleError` and process error hooks, which can't await — so reports go
+// to the no-op during the sub-second boot window before Sentry loads.
+// Acceptable: only errors thrown in that window are lost.
 let _errorReporter: IErrorReporter = new NoopErrorReporter();
 
 /**
- * Unexpected-error reporter. Ships errors off-box (Sentry) only when
- * `SENTRY_DSN` is configured; otherwise a no-op, so self-hosters opt in via
- * env and the base install carries no error-tracking dependency.
- *
- * This reports ONLY genuinely unexpected errors. Intentional HTTP outcomes —
- * including the compute route's `apiError(500, …)` on a failed solve — are
- * thrown as SvelteKit `HttpError`s and short-circuit in `handleError` before
- * ever reaching this reporter. Compute failures are not tracked here by design.
+ * Ships errors off-box (Sentry) only when `SENTRY_DSN` is configured;
+ * otherwise a no-op, so self-hosters opt in via env and the base install
+ * carries no error-tracking dependency. Only genuinely unexpected errors
+ * reach here — see `handleError` in hooks.server.ts for what's filtered out
+ * before this is called.
  */
 export function getErrorReporter(): IErrorReporter {
 	return _errorReporter;
@@ -306,11 +280,10 @@ if (env.SENTRY_DSN) {
 	});
 }
 
-// Process-level safety net. `handleError` only sees errors on the request path;
-// a rejected promise with no awaiter (or a throw outside any request) bypasses
-// it entirely and would otherwise vanish into a bare `console.error` — or, for
-// an uncaught exception, crash the process silently. Report both, then let the
-// default behavior stand (Node logs uncaughtException and exits; we don't
+// Process-level safety net. `handleError` only sees errors on the request
+// path; a rejected promise with no awaiter, or a throw outside any request,
+// bypasses it and would otherwise vanish. Report both, then let Node's
+// default behavior stand (logs uncaughtException and exits — we don't
 // swallow it and pretend the process is healthy). Guarded so repeated module
 // evaluation in dev/HMR doesn't stack duplicate listeners.
 const ERROR_HOOKS_FLAG = '__selvaProcessErrorHooksRegistered';

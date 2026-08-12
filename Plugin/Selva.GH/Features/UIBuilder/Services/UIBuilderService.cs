@@ -22,7 +22,6 @@ public class UIBuilderService : IDisposable
     public DocumentEventManager EventManager { get; private set; }
     public SchemaCleanupService CleanupService { get; private set; }
 
-    // New services
     public SchemaArchiveSerializer PersistenceService { get; private set; }
     public ServerLifecycleManager ServerManager { get; private set; }
     public BridgeOrchestrator BridgeService { get; private set; }
@@ -43,7 +42,6 @@ public class UIBuilderService : IDisposable
 
     private void InitializeServices()
     {
-        // Core services
         SchemaSynchronizer = new SchemaSynchronizer(SessionId);
         ValueApplicator = new ValueApplicator();
         ValueCollector = new ValueCollector();
@@ -55,7 +53,6 @@ public class UIBuilderService : IDisposable
         EventManager = new DocumentEventManager(SchemaSynchronizer, ValueCollector, WebSocketTransport);
         CleanupService = new SchemaCleanupService();
 
-        // New services
         PersistenceService = new SchemaArchiveSerializer(PluginVersion);
         ServerManager = new ServerLifecycleManager(WebServer, WebSocketTransport);
         BridgeService = new BridgeOrchestrator(

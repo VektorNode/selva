@@ -12,12 +12,11 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
 // Hatch coverage for the PDF renderer. Two paths exercise the same machinery:
-//   * PathElement with Fill.Pattern != None — the user-facing path used by GH_PathStyle.
-//   * HatchElement — the model's first-class hatched-region element.
-// We can't byte-snapshot because PdfSharpCore stamps dates and trailer IDs into every
-// file, so we verify structural validity (parseable, expected page count) and content-
-// stream side effects (the rendered stream is materially larger than a stroke-only
-// version, proving pattern strokes were emitted into the page content).
+//   * PathElement with Fill.Pattern != None - the user-facing path used by GH_PathStyle.
+//   * HatchElement - the model's first-class hatched-region element.
+// PdfSharpCore stamps dates and trailer IDs into every file, so we can't byte-snapshot;
+// instead we check structural validity and that hatched output is larger than stroke-only,
+// proving pattern strokes actually reached the page content.
 public class PdfHatchTests
 {
 	private static byte[] RenderScene(DrawElement content)
@@ -65,10 +64,9 @@ public class PdfHatchTests
 	[Fact]
 	public void Hatched_fill_emits_more_content_than_stroke_only()
 	{
-		// Same boundary, same stroke; the hatched variant must produce a strictly larger
-		// content stream because pattern strokes are emitted *in addition* to the boundary.
-		// This proves the pattern path actually wrote drawing operators rather than being
-		// silently discarded (the regression we're fixing here).
+		// Same boundary and stroke; hatched must be strictly larger since pattern strokes
+		// are emitted in addition to the boundary. Regression check for the pattern path
+		// silently discarding its strokes.
 		var strokeOnly = new PathElement
 		{
 			Path = Square(),
@@ -91,9 +89,8 @@ public class PdfHatchTests
 	[Fact]
 	public void Pattern_scale_changes_content_size()
 	{
-		// Doubling the pattern scale halves the line frequency. Even though both render
-		// the same square, the byte sizes should differ because the number of emitted
-		// lines differs. Useful as a regression on PatternScale being read.
+		// Higher PatternScale means fewer lines emitted for the same square, so byte
+		// sizes should differ. Regression check that PatternScale is actually read.
 		var dense = new PathElement
 		{
 			Path = Square(),

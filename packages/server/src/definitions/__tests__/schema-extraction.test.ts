@@ -1,11 +1,7 @@
 /**
- * Tests for the compute-schema extraction gate (K4 / ADR 0005).
- *
- * `fetch` is stubbed per test to script the compute `/grasshopper/schema`
- * response. The version-compat gate (`assertSupportedSchemaVersion`) is also
- * exercised directly: newer-than-supported must throw 'unsupported', while
- * older / missing versions pass (compute's C# migrator emits its own current
- * version; older shapes only lack optional additions).
+ * The version-compat gate is asymmetric on purpose: newer-than-supported throws
+ * 'unsupported', while older / missing versions pass — compute's C# migrator
+ * emits its own current version, and older shapes only lack optional additions.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -14,7 +10,8 @@ import type { ComputeServerConfig } from '@selvajs/platform';
 import {
 	fetchSchemaFromCompute,
 	assertSupportedSchemaVersion,
-	SchemaExtractionError
+	SchemaExtractionError,
+	readSchemaResults
 } from '../schema-extraction.js';
 
 function schema(version?: string): UISchema {
@@ -158,5 +155,16 @@ describe('fetchSchemaFromCompute', () => {
 		await expect(fetchSchemaFromCompute(new Uint8Array([1]), server)).rejects.toMatchObject({
 			kind: 'unsupported'
 		});
+	});
+});
+
+describe('readSchemaResults', () => {
+	// The unwrap itself (both server casings, multi-file, content pass-through) is
+	// owned and tested by @selvajs/compute. This only pins the re-export, typed to
+	// UISchema — deliberately thin, not an oversight.
+	it('reads the PascalCase wrapper compute actually sends', () => {
+		const [result] = readSchemaResults([{ FileName: 'a.gh', Schemas: [schema()] }]);
+
+		expect(result.schemas).toHaveLength(1);
 	});
 });

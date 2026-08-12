@@ -1,7 +1,6 @@
-// Pure, framework-free transition logic for the builder state (mirrors the Solve Session
-// split in @selvajs/ui: see packages/ui/CONTEXT.md). No Svelte runes, no toast, no socket
-// — every message handler is a function over a plain BuilderState plus a small `deps` bag
-// (the SchemaSource, an undo-history hook, a notifier, and a clone fn). The reactive shell
+// Pure, framework-free transition logic for the builder state. No Svelte runes, no toast, no
+// socket — every message handler is a function over a plain BuilderState plus a small `deps`
+// bag (the SchemaSource, an undo-history hook, a notifier, and a clone fn). The reactive shell
 // in useBuilderState.svelte.ts is a thin delegation layer over these; everything testable
 // lives here and runs in the node-env vitest through a FakeSource.
 
@@ -252,8 +251,8 @@ export function handleMetadataUpdated(
 	});
 
 	// Patching canonical changes its content — its hash is now stale until the server
-	// re-broadcasts. Clear the hash so a save attempt before the next schemaUpdated will be
-	// safe-rejected rather than racing.
+	// re-broadcasts. Clear the hash so a save attempt before the next schemaUpdated is rejected
+	// (SchemaSaveGuard treats a missing base hash as unjudgeable) rather than racing.
 	if (canonicalResult.updated > 0) {
 		state.canonicalHash = null;
 	}

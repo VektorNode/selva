@@ -22,38 +22,31 @@ using Point = Rhino.Geometry.Point;
 namespace Selva.GH.Features.ComputeIO.Components;
 
 /// <summary>
-///     A contextual parameter that imports geometry from a file located relative to the
-///     compute server's data directory.
+///     A contextual parameter that imports geometry from a file relative to the compute
+///     server's data directory.
 ///
-///     The relative path (e.g. "geometry/bracket.3dm") is authored once on the definition —
-///     baked into the component or wired from an upstream string source. The absolute base
-///     directory is supplied per server at solve time via contextual data, so the same
-///     definition works against any server regardless of where its data lives on disk.
+///     The relative path (e.g. "geometry/bracket.3dm") is authored once on the definition;
+///     the absolute base directory is supplied per server at solve time via contextual data,
+///     so the same definition works against any server regardless of where its data lives.
 ///
-///     Paths are resolved cross-platform: backslashes and forward slashes in the relative
-///     path are normalised to the host separator, so a definition authored on Windows
-///     resolves correctly on a Linux server and vice versa.
-///
-///     Local testing: the .gh is shared across a company, so it only ever stores the
-///     relative path — absolute paths would break on a colleague's machine. To test a
-///     definition before deploying, a right-click "Pick local file…" menu item points the
-///     component at a real file on this machine. That absolute path is a per-machine
-///     override, never persisted to the .gh. Selva-injected context always wins over it,
-///     so the same definition resolves on the server after upload.
+///     The .gh is shared across a company, so it only ever stores the relative path —
+///     absolute paths would break on a colleague's machine. To test before deploying, a
+///     right-click "Pick local file…" menu item points the component at a real file on this
+///     machine. That absolute path is a per-machine override, never persisted to the .gh, and
+///     Selva-injected context always wins over it once present.
 /// </summary>
 public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParameter
 {
     private const int MaxContextualDataItems = 100;
     private const int MaxPathLength = 32767; // Windows MAX_PATH ceiling.
 
-    // Author-set relative path, persisted in the .gh file. May also arrive from a wired source.
+    // Persisted in the .gh; may also arrive from a wired source.
     private string _relativePath = string.Empty;
 
-    // Server data directory, assigned at solve time (web UI / Rhino.Compute), never persisted.
+    // Assigned at solve time (web UI / Rhino.Compute), never persisted.
     private string _serverDataPath;
 
-    // Local-testing override: an absolute path to a real file on this machine, set via the
-    // right-click menu. Never persisted (the .gh is shared) and never wins over Selva context.
+    // Set via the right-click menu; never persisted, never wins over Selva context.
     private string _localFilePath;
 
     public GetServerFileParameter()
@@ -71,7 +64,7 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
     protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.CreateFile);
     public bool TreeAccess { get; set; }
 
-    /// <summary>Author-set relative path to the file, e.g. "geometry/bracket.3dm".</summary>
+    /// <summary>Relative path to the file, e.g. "geometry/bracket.3dm".</summary>
     public string RelativePath
     {
         get => _relativePath;
@@ -96,8 +89,8 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
     }
 
     /// <summary>
-    ///     Receives the server data path from the web UI. Only the base directory comes
-    ///     through here — the relative path is part of the definition.
+    ///     Receives the server data path from the web UI. Only the base directory arrives
+    ///     here — the relative path is part of the definition.
     /// </summary>
     public void AssignContextualData(IEnumerable data)
     {
@@ -143,7 +136,6 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
 
     /// <summary>
     ///     Assigns the server data path as a tree — called by Rhino.Compute via reflection.
-    ///     Takes the first item of the first path (AtMost = 1).
     /// </summary>
     public void AssignContextualDataTree(DataTree<GH_String> data)
     {
@@ -163,6 +155,7 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
                 var branch = data.Branch(firstPath);
                 if (branch != null && branch.Count > 0)
                 {
+                    // AtMost = 1: first item of the first path.
                     var path = ExtractPathString(branch[0]);
                     if (!string.IsNullOrWhiteSpace(path))
                     {
@@ -184,10 +177,6 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
         _serverDataPath = null;
     }
 
-    /// <summary>
-    ///     Returns contextual JSON for web UI schema discovery. The discovered input is a
-    ///     server-supplied path, distinct from a user-facing file picker.
-    /// </summary>
     public JObject GetContextualJson()
     {
         return new JObject
@@ -200,11 +189,6 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
         };
     }
 
-    /// <summary>
-    ///     Adds a "Pick local file…" item for testing the definition on this machine before
-    ///     deploying. The chosen absolute path is a per-machine override (never saved to the
-    ///     shared .gh) and is ignored once Selva injects the server data path.
-    /// </summary>
     public override void AppendAdditionalMenuItems(ToolStripDropDown menu)
     {
         base.AppendAdditionalMenuItems(menu);
@@ -252,7 +236,6 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
     {
         m_data.Clear();
 
-        // The relative path may be wired from an upstream string source instead of baked in.
         var relativePath = _relativePath;
         var sourcePath = ReadFirstStringFromSources();
         if (!string.IsNullOrWhiteSpace(sourcePath))
@@ -264,17 +247,11 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
     }
 
     /// <summary>
-    ///     Resolves the file to import and outputs its geometry. Resolution priority:
-    ///     <list type="number">
-    ///         <item>Selva-injected server data path joined with the relative path (the real
-    ///             cloud / Rhino.Compute path — always wins when present).</item>
-    ///         <item>A local absolute file set via the right-click menu (local testing only,
-    ///             never persisted to the shared .gh).</item>
-    ///     </list>
+    ///     Resolves the file to import. The server data path wins whenever present; the
+    ///     locally-picked file is only a fallback for testing before that context exists.
     /// </summary>
     private void ResolveAndImport(string basePath, string relativePath)
     {
-        // 1) Selva context: resolve the relative path against the server's data directory.
         if (!string.IsNullOrWhiteSpace(basePath))
         {
             if (string.IsNullOrWhiteSpace(relativePath))
@@ -310,7 +287,6 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
             return;
         }
 
-        // 2) Local-testing fallback: a file picked via the right-click menu on this machine.
         if (!string.IsNullOrWhiteSpace(_localFilePath))
         {
             if (!File.Exists(_localFilePath))
@@ -325,7 +301,6 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
             return;
         }
 
-        // Neither a server data path nor a local test file is available.
         if (string.IsNullOrWhiteSpace(relativePath))
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No relative file path set");
@@ -337,9 +312,6 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
             "directory, or right-click → \"Pick local file…\" to test on this machine.");
     }
 
-    /// <summary>
-    ///     Imports geometry from FileInputData and outputs it to m_data.
-    /// </summary>
     private void ImportAndOutputGeometry(FileInputData fileData)
     {
         var result = FileImporter.ImportFromFileInputData(fileData);
@@ -387,9 +359,6 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
             $"Imported {ghGeometry.Count} objects from {result.DetectedFormat}");
     }
 
-    /// <summary>
-    ///     Reads the first non-empty string from wired sources (relative path override).
-    /// </summary>
     private string ReadFirstStringFromSources()
     {
         foreach (var source in Sources)

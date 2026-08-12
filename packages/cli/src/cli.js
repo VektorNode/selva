@@ -18,6 +18,59 @@ const COMMANDS = {
 	keys: () => import('./commands/keys.js').then((m) => keysDispatch(m))
 };
 
+// `selva doctor --help` used to run the full doctor: commands own their argv,
+// and only `doctor` reads a flag at all, so every other command silently
+// ignored `--help` and did its work. Intercepting here keeps `--help` uniform
+// across the whole surface without each command re-implementing it.
+const USAGE = {
+	init: {
+		usage: 'selva init',
+		blurb:
+			'Reconfigure this deployment. Prompts for the same values as scaffolding\nand rewrites .env; generated secrets are left alone.'
+	},
+	doctor: {
+		usage: 'selva doctor [--fix]',
+		blurb:
+			'Validate .env, providers, Node engine, pm2 boot persistence, and package\npins. Read-only without --fix.',
+		flags: [['--fix', 'Apply the repairs doctor reports as automatic. Prompts before each.']]
+	},
+	start: { usage: 'selva start', blurb: 'pm2 start ecosystem.config.cjs' },
+	stop: { usage: 'selva stop', blurb: 'pm2 stop selva-compute' },
+	restart: {
+		usage: 'selva restart',
+		blurb:
+			'pm2 restart selva-compute --update-env. The --update-env is why this\nexists: without it a pm2 restart keeps the old .env in memory.'
+	},
+	logs: { usage: 'selva logs', blurb: 'pm2 logs selva-compute' },
+	update: {
+		usage: 'selva update',
+		blurb:
+			'npm update @selvajs/cli + @selvajs/selva, then restart. Rolls the\ndependency tree back if the install fails.'
+	},
+	migrate: {
+		usage: 'selva migrate',
+		blurb:
+			'Bring package.json and the deployment layout onto the current release.\nRewrites keys, never comments.'
+	},
+	keys: {
+		usage: 'selva keys rotate <hmac|at-rest>',
+		blurb:
+			'Rotate one secret in .env. Destructive and not reversible — the command\nspells out the blast radius and asks before writing.'
+	}
+};
+
+function printCommandHelp(command) {
+	const entry = USAGE[command];
+	const lines = [pc.bold(entry.usage), '', entry.blurb];
+	if (entry.flags) {
+		lines.push('', pc.bold('Flags:'));
+		for (const [flag, description] of entry.flags) {
+			lines.push(`  ${flag.padEnd(22)}${description}`);
+		}
+	}
+	console.log(lines.join('\n'));
+}
+
 function keysDispatch(m) {
 	return async (argv) => {
 		const sub = argv[0];
@@ -51,6 +104,11 @@ export async function runSelva(argv) {
 		process.exit(1);
 	}
 
+	if (rest.includes('--help') || rest.includes('-h')) {
+		printCommandHelp(command);
+		return;
+	}
+
 	const run = await loader();
 	await run(rest);
 }
@@ -60,18 +118,28 @@ function printHelp() {
 		[
 			pc.bold('selva') + ' — operate a Selva deployment',
 			'',
+			pc.bold('Usage:') + '  npx selva <command>',
+			'',
 			pc.bold('Commands:'),
 			'  init                    Reconfigure this deployment (prompts again)',
-			'  doctor                  Validate env, providers, and installed packages',
+			'  doctor [--fix]          Validate env, providers, Node engine, and packages',
 			'  start                   pm2 start ecosystem.config.cjs',
 			'  stop                    pm2 stop selva-compute',
 			'  restart                 pm2 restart selva-compute --update-env',
 			'  logs                    pm2 logs selva-compute',
-			'  update                  npm update @selvajs/selva + restart',
+			'  update                  npm update @selvajs/cli + @selvajs/selva, then restart',
 			'  migrate                 Bring package.json onto the current layout',
 			'  keys rotate <hmac|at-rest>   Rotate a secret in .env (destructive)',
 			'',
-			pc.dim('To scaffold a new deployment: ') + pc.cyan('npx @selvajs/cli <dir>')
+			pc.dim('`npx selva <command> --help` explains one command.'),
+			'',
+			pc.bold('Two commands, two jobs:'),
+			'  ' + pc.cyan('npx @selvajs/cli <dir>') + '   scaffold a NEW deployment into <dir>',
+			'  ' + pc.cyan('npx selva <command>') + '      operate the deployment you are standing in',
+			'',
+			pc.dim('`npx selva` works in a deployment directory because @selvajs/cli is one of'),
+			pc.dim('its dependencies. The package.json scripts (`npm run doctor`, `npm start`)'),
+			pc.dim('are thin aliases for the same commands.')
 		].join('\n')
 	);
 }

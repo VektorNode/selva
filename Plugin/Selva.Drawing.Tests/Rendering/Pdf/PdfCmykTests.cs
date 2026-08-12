@@ -14,16 +14,15 @@ using PdfColorMode = Selva.Drawing.Rendering.Pdf.PdfColorMode;
 
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
-// Phase 9: CMYK colours flow through to the rendered PDF as device-CMYK ink values
-// without an RGB round-trip. This is the foundation for print-shop output (the legacy
-// /DeviceRGB colour space causes preflight warnings in Acrobat for production work).
+// CMYK colours must flow through to the rendered PDF as device-CMYK ink values without
+// an RGB round-trip — /DeviceRGB output causes preflight warnings in Acrobat for print work.
 public class PdfCmykTests
 {
 	[Fact]
 	public void Cmyk_fill_emits_device_cmyk_in_content_stream()
 	{
-		// 100% magenta 60% yellow — a saturated red-orange in CMYK that's nowhere near
-		// any default RGB colour, so the byte signature is unambiguous.
+		// A saturated red-orange, nowhere near any default RGB colour, so the byte
+		// signature is unambiguous.
 		var fill = new Fill { Color = Color.Cmyk(0.0f, 1.0f, 0.6f, 0.0f) };
 		var path = new Path.Builder()
 			.MoveTo(0, 0).LineTo(50, 0).LineTo(50, 30).LineTo(0, 30).Close().Build();
@@ -43,14 +42,12 @@ public class PdfCmykTests
 			},
 		};
 
-		// Opt in to document-wide CMYK output. PdfSharpCore has no per-page override —
-		// turning this on forces every content-stream colour operator to /DeviceCMYK.
+		// PdfSharpCore has no per-page override: this forces every content-stream
+		// colour operator to /DeviceCMYK for the whole document.
 		var bytes = new PdfRenderer(new PdfRenderOptions { ColorMode = PdfColorMode.Cmyk }).Render(doc);
 
-		// Reopen as Modify so we can read the (potentially Flate-compressed) content
-		// stream's UnfilteredValue. PdfSharpCore writes CMYK colours via `c m y k k`
-		// (lowercase = setcmykfill; uppercase K = setcmykstroke) operators. Either is
-		// proof CMYK survived without an RGB round-trip.
+		// Reopen as Modify to read the content stream's UnfilteredValue (may be
+		// Flate-compressed). PdfSharpCore writes CMYK via `k`/`K` (fill/stroke) operators.
 		using var ms = new MemoryStream(bytes);
 		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Modify);
 		Assert.Equal(1, reopened.PageCount);
@@ -76,7 +73,7 @@ public class PdfCmykTests
 	[Fact]
 	public void Default_color_mode_emits_device_rgb_operators()
 	{
-		// Sanity: default mode is RGB. CMYK source colours are converted on emit.
+		// Default mode is RGB; a CMYK source colour still converts on emit.
 		var fill = new Fill { Color = Color.Cmyk(0.0f, 1.0f, 0.6f, 0.0f) };
 		var path = new Path.Builder()
 			.MoveTo(0, 0).LineTo(50, 0).LineTo(50, 30).LineTo(0, 30).Close().Build();

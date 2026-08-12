@@ -1,12 +1,10 @@
 /**
  * Shared image-transcoding helper for `IStorageProvider` implementations.
- * Cover images are normalized to WebP at upload time (capped at 1200px,
- * quality 85) so storage/bandwidth stays predictable and the viewer path
- * is uniform.
+ * Normalizes uploads to WebP (capped at 1200px, quality 85) so storage,
+ * bandwidth, and the viewer path stay predictable.
  *
- * `sharp` is loaded via a dynamic import so the platform package has no
- * hard runtime dependency on it — install it in providers that need
- * transcoding (optional peer dependency).
+ * `sharp` is a dynamic import, not a hard dependency of this package —
+ * providers that need transcoding install it themselves.
  */
 
 export const IMAGE_MAX_WIDTH = 1200;
@@ -26,21 +24,19 @@ export function isImageUpload(contentType: string | undefined, storagePath: stri
 }
 
 /**
- * Rewrite a path's extension to `.webp`. Unchanged if not a recognized image
- * extension. SVG is included: every upload (including SVG) is rasterized to
- * WebP, so a `.svg` input is stored as `.webp` — no vector blob is ever
- * persisted, which keeps the served bytes XSS-free without a sanitizer.
+ * Rewrites a path's extension to `.webp`; unchanged for non-image extensions.
+ * SVG is rasterized like any other input, so no vector blob is ever
+ * persisted — served bytes stay XSS-free without a sanitizer.
  */
 export function toWebpPath(storagePath: string): string {
 	return storagePath.replace(/\.(png|jpe?g|gif|bmp|tif?f|svg)$/i, '.webp');
 }
 
 /**
- * If the input is an image, transcode to WebP (capped + re-encoded) and
- * return rewritten bytes/content-type/path. Non-images pass through, so
+ * Transcodes images to WebP; passes non-images through unchanged, so
  * providers can call this unconditionally before `put`.
  *
- * Throws if `sharp` isn't installed — that's a config error, not a fallback.
+ * Throws if `sharp` isn't installed — a config error, not a fallback.
  */
 export async function transcodeImageIfNeeded(
 	data: Uint8Array,

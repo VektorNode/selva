@@ -6,9 +6,7 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Rendering;
 
-// Phase 6: SVG has no native multi-page concept, so RenderAll returns one SVG string per
-// page. Single-page documents continue to come out of Render(...) unchanged — pinned by
-// the existing snapshot suite.
+// SVG has no native multi-page concept, so RenderAll returns one SVG string per page.
 public class SvgMultiPageTests
 {
 	[Fact]

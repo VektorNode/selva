@@ -2,20 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Rhino.Geometry;
+using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.Display.Services;
 
-/// <summary>
-///     Processes meshes in batches with material deduplication and optimized compression.
-///     Directly processes meshes without intermediate structures for better performance.
-/// </summary>
+/// <summary>Batches meshes with material dedup, groups by material, and compresses the combined blob.</summary>
 public static class MeshBatchProcessor
 {
-    /// <summary>
-    ///     Processes multiple meshes with materials into an optimized batch format.
-    ///     Groups meshes by material for efficient Three.js rendering and compresses all data together.
-    /// </summary>
     public static DisplayBatch CreateBatch(
         List<Mesh> meshes,
         List<string> names,
@@ -24,8 +19,8 @@ public static class MeshBatchProcessor
         List<string> layers = null,
         string sourceComponentId = null)
     {
-        // Convert each mesh to vertex/face arrays here (the legacy serial path). Callers that already
-        // extracted the arrays in their own parallel pass should use the overload below to skip this.
+        // Serial conversion path. Callers that already extracted arrays in their own parallel pass
+        // should call the overload below directly to skip this.
         var vertexArrays = new List<float[]>(meshes.Count);
         var faceArrays = new List<int[]>(meshes.Count);
         foreach (var mesh in meshes)
@@ -48,19 +43,16 @@ public static class MeshBatchProcessor
 
     /// <summary>
     ///     Same as <see cref="CreateBatch(List{Mesh},List{string},List{ThreeMaterial},List{Dictionary{string,string}},List{string},string)" />
-    ///     but takes vertex/face arrays already extracted from the meshes. The component runs that
-    ///     extraction inside its parallel meshing pass, so this overload keeps the serial assembly
-    ///     pass free of per-vertex copying. A null entry marks a slot whose mesh was invalid; it is
-    ///     skipped, exactly as the mesh-taking overload skips null/invalid meshes.
+    ///     but takes vertex/face arrays already extracted from the meshes, so the component's
+    ///     parallel meshing pass can do that extraction and this assembly pass stays free of
+    ///     per-vertex copying. A null entry marks an invalid mesh's slot and is skipped.
     ///
-    ///     <paramref name="uvArrays" /> / <paramref name="colorArrays" /> optionally carry per-mesh
-    ///     texture coordinates (vertexCount * 2 floats) and vertex colors (vertexCount * 3 bytes);
-    ///     null lists — or null entries — mean "this mesh has none". When ANY mesh in the batch has
-    ///     a channel, the whole batch carries it and the meshes without it get neutral fill
-    ///     (UV 0,0 / color white), which delta+deflate compresses to almost nothing and which
-    ///     renders identically to no channel at all (white multiplies to identity; a uv attribute
-    ///     is inert without a texture). When NO mesh has the channel, nothing is written and the
-    ///     blob stays byte-identical to today.
+    ///     <paramref name="uvArrays" /> / <paramref name="colorArrays" /> carry per-mesh UVs
+    ///     (vertexCount * 2 floats) and vertex colors (vertexCount * 3 bytes); null lists or
+    ///     entries mean "no channel". If ANY mesh has a channel, the whole batch carries it and
+    ///     meshes without it get neutral fill (UV 0,0 / color white) — renders identically to no
+    ///     channel and compresses to almost nothing. If NO mesh has it, nothing is written and the
+    ///     blob stays byte-identical to before this overload existed.
     /// </summary>
     public static DisplayBatch CreateBatch(
         List<float[]> vertexArrays,
@@ -76,8 +68,7 @@ public static class MeshBatchProcessor
         var count = vertexArrays.Count;
 
         // Zero meshes is valid: an items-only batch (curves/points, no meshable geometry) still
-        // produces a well-formed batch with a valid empty blob (vertexCount = 0). The component
-        // sets DisplayBatch.Items afterward.
+        // produces a well-formed batch with an empty blob (vertexCount = 0).
         if (faceArrays.Count != count || count != names.Count || count != materials.Count)
         {
             throw new ArgumentException("Vertex, face, name, and material lists must have the same length");
@@ -105,8 +96,8 @@ public static class MeshBatchProcessor
 
         var materialCache = new MaterialCache();
 
-        // Assign material IDs and accumulate the combined-array sizes so we avoid two extra Sum()
-        // passes later. Vertex/face extraction already happened (parallel pass), so this loop is cheap.
+        // Assign material IDs and accumulate combined-array sizes here, to avoid two extra Sum()
+        // passes later.
         var processedMeshes = new List<ProcessedMesh>(count);
         var totalComponentCount = 0;
         var totalIndexCount = 0;
@@ -145,16 +136,14 @@ public static class MeshBatchProcessor
             });
         }
 
-        // Order meshes by material id for optimal batching, keeping a stable order within a material
-        // (List.Sort isn't stable, so break ties on OriginalIndex). This replaces a GroupBy/OrderBy
-        // that allocated intermediate IGrouping objects.
+        // Order by material id for batching; List.Sort isn't stable, so break ties on OriginalIndex
+        // to keep a deterministic order within a material.
         processedMeshes.Sort((a, b) =>
         {
             var byMat = a.MaterialId.CompareTo(b.MaterialId);
             return byMat != 0 ? byMat : a.OriginalIndex.CompareTo(b.OriginalIndex);
         });
 
-        // Build batch structure
         var batch = new DisplayBatch
         {
             Materials = materialCache.GetAllMaterials()
@@ -164,14 +153,11 @@ public static class MeshBatchProcessor
             SourceComponentId = sourceComponentId
         };
 
-        // Single allocation for all combined geometry. Lengths are in component/index units:
-        //   allVertices: 3 * total vertex count (x,y,z floats)
-        //   allIndices:  total index count
         var allVertices = new float[totalComponentCount];
         var allIndices = new int[totalIndexCount];
 
-        // Optional combined channels, allocated only when some mesh carries them. UV fill defaults
-        // to (0,0) via array zeroing; colors must be explicitly white (byte default is black).
+        // Combined channels, allocated only when some mesh carries them. UV fill defaults to
+        // (0,0) via array zeroing; colors need an explicit white fill (byte default is black).
         var totalVertexCount = totalComponentCount / 3;
         var allUvs = anyUvs ? new float[totalVertexCount * 2] : null;
         byte[] allColors = null;
@@ -181,14 +167,20 @@ public static class MeshBatchProcessor
             allColors.AsSpan().Fill(255); // vectorized white fill (a byte loop was measurable here)
         }
 
-        var componentCursor = 0;          // write head into allVertices, in float components
-        var indexCursor = 0;              // write head into allIndices, in indices
-        var vertexBaseForIndices = 0;     // number of vertices already in the combined array (rebases per-mesh local indices)
+        // Pass A (serial, cheap): walk the sorted meshes once to open material groups, emit
+        // per-mesh metadata, and record each mesh's write offsets into the combined arrays. Every
+        // offset is a running total, so this pass is inherently sequential — but it only touches
+        // per-mesh scalars, never a vertex.
+        var offsets = new MeshOffsets[processedMeshes.Count];
+        var componentCursor = 0;         // write head into allVertices, in float components
+        var indexCursor = 0;             // write head into allIndices, in indices
+        var vertexBaseForIndices = 0;    // vertices already in the combined array; rebases per-mesh local indices
 
         // processedMeshes is sorted by MaterialId, so a new group starts whenever the id changes.
         MaterialGroup materialGroup = null;
-        foreach (var mesh in processedMeshes)
+        for (var m = 0; m < processedMeshes.Count; m++)
         {
+            var mesh = processedMeshes[m];
             if (materialGroup == null || materialGroup.MaterialId != mesh.MaterialId)
             {
                 materialGroup = new MaterialGroup
@@ -215,51 +207,159 @@ public static class MeshBatchProcessor
                 Metadata = mesh.Metadata
             });
 
-            var vertexSpan = allVertices.AsSpan(componentCursor, meshComponentCount);
-            mesh.Vertices.AsSpan().CopyTo(vertexSpan);
-
-            var indexSpan = allIndices.AsSpan(indexCursor, meshIndexCount);
-            for (var i = 0; i < meshIndexCount; i++)
+            offsets[m] = new MeshOffsets
             {
-                indexSpan[i] = mesh.Faces[i] + vertexBaseForIndices;
-            }
-
-            if (allUvs != null && mesh.Uvs != null)
-            {
-                mesh.Uvs.AsSpan().CopyTo(allUvs.AsSpan(vertexBaseForIndices * 2, meshVertexCount * 2));
-            }
-
-            if (allColors != null && mesh.Colors != null)
-            {
-                mesh.Colors.AsSpan().CopyTo(allColors.AsSpan(vertexBaseForIndices * 3, meshVertexCount * 3));
-            }
+                ComponentStart = componentCursor,
+                IndexStart = indexCursor,
+                VertexBase = vertexBaseForIndices
+            };
 
             componentCursor += meshComponentCount;
             indexCursor += meshIndexCount;
             vertexBaseForIndices += meshVertexCount;
         }
 
-        // Build the binary blob. The metadata JSON inside the blob is a self-contained copy of the
-        // batch envelope (without the blob itself), so the format is transport-agnostic — the same
-        // bytes can travel inside today's JSON values message or as a future binary WebSocket frame.
+        // Pass B (expensive, parallel across meshes): the actual per-vertex copying. Pass A gave
+        // every mesh a disjoint destination span, so copies never overlap and no locking is
+        // needed. This is the intra-branch parallelism that matters when a definition emits a
+        // single fat branch — the common case — leaving the per-branch Parallel.ForEach upstream
+        // with nothing to spread.
+        CopyMeshData(processedMeshes, offsets, allVertices, allIndices, allUvs, allColors);
+
+        // The metadata JSON inside the blob is a self-contained copy of the batch envelope
+        // (without the blob itself), so the format is transport-agnostic — the same bytes can
+        // travel inside a JSON values message or a future binary WebSocket frame.
         var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
+
+        // Skip the encode when this exact content was already encoded. A re-solve triggered by an
+        // unrelated upstream change (dragging one slider) re-runs this for every branch, and
+        // unchanged branches produce byte-identical arrays and metadata — writing + deflating them
+        // again is pure waste, and hashing is a fraction of that cost. See BatchBlobCache for the
+        // identity and memory-policy rationale.
+        var cacheKey = BlobKey.Compute(metadataJson, allVertices, allIndices, allUvs, allColors);
+        var cached = BatchBlobCache.TryGet(cacheKey);
+        if (cached != null)
+        {
+            batch.CompressedData = cached;
+            LogCacheStats();
+            return batch;
+        }
+
         using (var ms = new MemoryStream())
         {
             BinaryGeometryWriter.Write(ms, metadataJson, allVertices, allIndices,
                 uvs: allUvs, colors: allColors);
-            // The blob ships uncompressed over the wire (no transport gzip on dynamic responses or
-            // the local WS), so apply an optional gzip pass. Returns the original bytes unchanged
-            // when compression doesn't help; the decoder sniffs the leading magic either way.
-            // GetBuffer + length hands the stream's backing array over without a full ToArray copy.
+            // Nothing gzips the blob in transit (no transport gzip on dynamic responses or the
+            // local WS), so this applies an optional gzip pass; Compress returns the original
+            // bytes unchanged when it doesn't help, and the decoder sniffs the leading magic
+            // either way. GetBuffer + length avoids a full ToArray copy of the stream.
             batch.CompressedData = BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
         }
+
+        BatchBlobCache.Store(cacheKey, batch.CompressedData);
+        LogCacheStats();
 
         return batch;
     }
 
     /// <summary>
-    ///     Lightweight struct for mesh data during processing (replaces MeshWithMaterial).
+    ///     Logs <see cref="BatchBlobCache" /> hit rate. The cache's failure mode on a hash
+    ///     collision is silently serving the wrong geometry, so its real-world hit rate is worth
+    ///     watching outside unit tests.
     /// </summary>
+    private static void LogCacheStats()
+    {
+        var (count, bytes, hits, misses) = BatchBlobCache.Stats();
+        Logger.Log($"BatchBlobCache: entries={count} bytes={bytes} hits={hits} misses={misses}");
+    }
+
+    /// <summary>
+    ///     Vertex-component threshold below which the merge stays serial — spinning up
+    ///     Parallel.For costs more than it saves on small batches. ~200k components is roughly
+    ///     65k vertices, past where batches are unambiguously "fat".
+    /// </summary>
+    private const int ParallelMergeMinComponents = 200_000;
+
+    /// <summary>
+    ///     Copies each mesh's vertices/indices/UVs/colors into its pre-assigned span of the
+    ///     combined arrays. Parallel above <see cref="ParallelMergeMinComponents" />, serial
+    ///     otherwise; both write identical output since every mesh owns a disjoint destination range.
+    /// </summary>
+    private static void CopyMeshData(
+        List<ProcessedMesh> meshes,
+        MeshOffsets[] offsets,
+        float[] allVertices,
+        int[] allIndices,
+        float[] allUvs,
+        byte[] allColors)
+    {
+        if (allVertices.Length < ParallelMergeMinComponents || meshes.Count < 2)
+        {
+            for (var m = 0; m < meshes.Count; m++)
+            {
+                CopyOneMesh(meshes[m], offsets[m], allVertices, allIndices, allUvs, allColors);
+            }
+
+            return;
+        }
+
+        Parallel.For(0, meshes.Count,
+            m => CopyOneMesh(meshes[m], offsets[m], allVertices, allIndices, allUvs, allColors));
+    }
+
+    private static void CopyOneMesh(
+        ProcessedMesh mesh,
+        MeshOffsets offset,
+        float[] allVertices,
+        int[] allIndices,
+        float[] allUvs,
+        byte[] allColors)
+    {
+        var meshComponentCount = mesh.Vertices.Length;
+        var meshVertexCount = meshComponentCount / 3;
+        var meshIndexCount = mesh.Faces.Length;
+
+        mesh.Vertices.AsSpan().CopyTo(allVertices.AsSpan(offset.ComponentStart, meshComponentCount));
+
+        // Indices are rebased onto the combined vertex array, so this one can't be a plain copy.
+        var indexSpan = allIndices.AsSpan(offset.IndexStart, meshIndexCount);
+        var faces = mesh.Faces;
+        var vertexBase = offset.VertexBase;
+        for (var i = 0; i < meshIndexCount; i++)
+        {
+            indexSpan[i] = faces[i] + vertexBase;
+        }
+
+        if (allUvs != null && mesh.Uvs != null)
+        {
+            mesh.Uvs.AsSpan().CopyTo(allUvs.AsSpan(vertexBase * 2, meshVertexCount * 2));
+        }
+
+        if (allColors != null && mesh.Colors != null)
+        {
+            mesh.Colors.AsSpan().CopyTo(allColors.AsSpan(vertexBase * 3, meshVertexCount * 3));
+        }
+    }
+
+    /// <summary>
+    ///     Where one mesh writes into the combined arrays, computed in the serial offset pass so
+    ///     the copy pass can run out of order.
+    /// </summary>
+    private struct MeshOffsets
+    {
+        /// <summary>Offset into the combined vertex array, in float components.</summary>
+        public int ComponentStart;
+
+        /// <summary>Offset into the combined index array, in indices.</summary>
+        public int IndexStart;
+
+        /// <summary>
+        ///     Vertices already written by earlier meshes — rebases this mesh's local indices,
+        ///     and (times 2 / times 3) locates its UV and color spans.
+        /// </summary>
+        public int VertexBase;
+    }
+
     private struct ProcessedMesh
     {
         public string Name { get; set; }
