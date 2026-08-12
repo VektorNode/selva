@@ -41,6 +41,14 @@
 
 		<PackageVersion Include="PdfSharpCore" Version="1.3.67"/>
 		<PackageVersion Include="SharpZipLib" Version="1.4.2"/>
+
+		<!--
+			Transitive deps of PdfSharpCore, declared explicitly so Selva.Drawing can merge them
+			(see the ILRepack target there). These versions are what PdfSharpCore 1.3.67 resolves
+			to — raising either independently risks handing it an API it wasn't built against.
+		-->
+		<PackageVersion Include="SixLabors.ImageSharp" Version="2.1.11"/>
+		<PackageVersion Include="SixLabors.Fonts" Version="1.0.0-beta17"/>
 		<PackageVersion Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34"/>
 
 		<PackageVersion Include="coverlet.collector" Version="10.0.1"/>

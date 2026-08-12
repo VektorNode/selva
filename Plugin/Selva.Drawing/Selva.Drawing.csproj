@@ -7,10 +7,10 @@
 
 	<ItemGroup>
 		<!--
-                        Release: PrivateAssets="all" stops PdfSharpCore + SharpZipLib from flowing to
-                        consumers as separate sibling DLLs — they're merged into Selva.Drawing.dll by the
-                        ILRepack target below. GeneratePathProperty exposes $(Pkg…) so the merge target can
-                        locate the source DLLs in the NuGet cache.
+                        Release: PrivateAssets="all" stops PdfSharpCore + SharpZipLib + SixLabors.* from
+                        flowing to consumers as separate sibling DLLs — they're merged into
+                        Selva.Drawing.dll by the ILRepack target below. GeneratePathProperty exposes
+                        $(Pkg…) so the merge target can locate the source DLLs in the NuGet cache.
 
                         Debug: no PrivateAssets, so the DLLs flow through the project reference to
                         Selva.GH's output and are available when Grasshopper loads the plugin. ILRepack is
@@ -22,6 +22,26 @@
                 <PackageReference Include="SharpZipLib" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
                 <PackageReference Include="PdfSharpCore" Condition="'$(Configuration)' == 'Debug'" />
                 <PackageReference Include="SharpZipLib" Condition="'$(Configuration)' == 'Debug'" />
+                <!--
+                        SixLabors.* arrive transitively via PdfSharpCore, but referencing them directly
+                        does two things the transitive path can't:
+
+                        1. Release: PdfSharpCore is PrivateAssets="all", which severs its transitive deps
+                           too — nothing copied SixLabors next to the .gha, so PDF raster embedding threw
+                           FileNotFoundException. The merge target below needs $(Pkg…) to stage them.
+                        2. Both configs: PdfSharpCore 1.3.67 asks for ImageSharp 1.0.4, which carries 7
+                           known CVEs including use-after-free and out-of-bounds write in the PNG and GIF
+                           decoders — exactly what PdfRenderer feeds user-supplied images to. NuGet audit
+                           only flags direct references, so this stayed invisible while transitive. 2.1.11
+                           is the patched 2.x; PdfSharpCore's dependency is a minimum, not a pin, and its
+                           image path is exercised by PdfImageTests.
+
+                        GeneratePathProperty is Release-only because only the merge target reads $(Pkg…).
+                -->
+                <PackageReference Include="SixLabors.ImageSharp" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
+                <PackageReference Include="SixLabors.Fonts" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
+                <PackageReference Include="SixLabors.ImageSharp" Condition="'$(Configuration)' != 'Release'" />
+                <PackageReference Include="SixLabors.Fonts" Condition="'$(Configuration)' != 'Release'" />
                 <PackageReference Include="System.Drawing.Common" />
                 <!-- Provides the <ILRepack> MSBuild task used by the Release merge target below. -->
                 <PackageReference Include="ILRepack.Lib.MSBuild.Task" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
@@ -55,15 +75,17 @@
 		<!--
 			Stage only what we want merged. Anything in the stage dir is available to
 			ILRepack as both an input and a search target; nothing from the broader NuGet
-			cache leaks in, so the merge stays tight: just our primary + PdfSharpCore +
-			SharpZipLib. PdfSharpCore's *other* dependencies (SixLabors.*, System.Memory,
-			System.Drawing.Common, etc.) remain as plain references that consumers resolve
-			the normal way.
+			cache leaks in, so the merge stays tight: our primary + PdfSharpCore +
+			SharpZipLib + SixLabors.*. The remaining PdfSharpCore dependencies
+			(System.Memory, System.Drawing.Common, etc.) ship in the framework or as
+			ordinary references, so consumers resolve them the normal way.
 		-->
 		<ItemGroup>
 			<_RepackToStage Include="$(_RepackOutDir)$(AssemblyName).dll" />
 			<_RepackToStage Include="$(PkgPdfSharpCore)\lib\netstandard2.0\PdfSharpCore.dll" />
 			<_RepackToStage Include="$(PkgSharpZipLib)\lib\netstandard2.0\ICSharpCode.SharpZipLib.dll" />
+			<_RepackToStage Include="$(PkgSixLabors_ImageSharp)\lib\netstandard2.0\SixLabors.ImageSharp.dll" />
+			<_RepackToStage Include="$(PkgSixLabors_Fonts)\lib\netstandard2.0\SixLabors.Fonts.dll" />
 		</ItemGroup>
 
 		<RemoveDir Directories="$(_RepackStageDir)" />
@@ -74,6 +96,8 @@
 			<_RepackInputPrimary Include="$(_RepackStageDir)$(AssemblyName).dll" />
 			<_RepackInputMerge Include="$(_RepackStageDir)PdfSharpCore.dll" />
 			<_RepackInputMerge Include="$(_RepackStageDir)ICSharpCode.SharpZipLib.dll" />
+			<_RepackInputMerge Include="$(_RepackStageDir)SixLabors.ImageSharp.dll" />
+			<_RepackInputMerge Include="$(_RepackStageDir)SixLabors.Fonts.dll" />
 			<!-- Search the stage dir first; fall back to the main bin/ for sibling reference assemblies. -->
 			<_RepackSearchDirs Include="$(_RepackStageDir);$(_RepackOutDir)" />
 		</ItemGroup>
