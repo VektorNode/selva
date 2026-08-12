@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { meshCountForInput, startFakeCompute, type FakeCompute } from './helpers/fake-compute';
 
@@ -12,9 +12,8 @@ import { meshCountForInput, startFakeCompute, type FakeCompute } from './helpers
 // so the suite is hermetic and CI-able. Point E2E_COMPUTE_URL (+ E2E_COMPUTE_KEY)
 // at a live Rhino.Compute (VektorNode fork) to run the same flow for real.
 //
-// "Rendered" is asserted through the page's own per-solve telemetry line
-// (`[Compute/browser] … mesh=<ms>ms (<count>)`) plus a visible, non-zero-sized
-// viewer canvas.
+// "Rendered" is asserted through the viewer canvas's `data-mesh-count` — the live
+// count of decoded meshes in the scene — plus a visible, non-zero-sized canvas.
 
 const GH_FIXTURE = fileURLToPath(new URL('./fixtures/bench-display.gh', import.meta.url));
 
@@ -36,15 +35,6 @@ function isSolveResponse(url: string, method: string): boolean {
 	return method === 'POST' && new URL(url).pathname === '/api/v1/compute';
 }
 
-function collectMeshCounts(page: Page): number[] {
-	const counts: number[] = [];
-	page.on('console', (msg) => {
-		const m = msg.text().match(/mesh=\d+ms \((\d+)\)/);
-		if (m) counts.push(Number(m[1]));
-	});
-	return counts;
-}
-
 test('core loop: upload → solve → binary geometry renders and tracks input', async ({
 	page,
 	request
@@ -53,7 +43,7 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	test.setTimeout(240_000);
 
 	// -- Register the compute server (fake by default, live via env) -----------
-	const put = await request.put('/admin/api/compute', {
+	const put = await request.put('/api/admin/compute', {
 		data: {
 			defaultServerId: 'e2e-compute',
 			servers: [
@@ -89,7 +79,6 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	// -- Open the app page; first solve is automatic under the fake
 	//    (bench-schema.json ships instanceSolve: true), manual against a live
 	//    server whose schema sets it false --------
-	const meshCounts = collectMeshCounts(page);
 	const firstSolve = page.waitForResponse((r) => isSolveResponse(r.url(), r.request().method()), {
 		timeout: 180_000
 	});
@@ -102,20 +91,21 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	expect(solved.status(), await solved.text().catch(() => '')).toBe(200);
 
 	// -- Binary geometry rendered ----------------------------------------------
-	const canvas = page.locator('canvas').first();
+	const canvas = page.getByTestId('viewer-canvas');
 	await expect(canvas).toBeVisible({ timeout: 60_000 });
 	const box = await canvas.boundingBox();
 	expect(box?.width ?? 0).toBeGreaterThan(0);
 	expect(box?.height ?? 0).toBeGreaterThan(0);
 
-	await expect.poll(() => meshCounts.length, { timeout: 60_000 }).toBeGreaterThan(0);
-	const firstMeshCount = meshCounts[meshCounts.length - 1];
+	// `data-mesh-count` is the viewer's live count of decoded meshes in the scene —
+	// non-zero proves the binary SLVA payload was parsed and handed to three.js.
+	await expect(canvas).not.toHaveAttribute('data-mesh-count', '0', { timeout: 60_000 });
+	const firstMeshCount = Number(await canvas.getAttribute('data-mesh-count'));
 	expect(firstMeshCount).toBeGreaterThan(0);
 
 	// -- Slider change re-solves and geometry tracks the input ------------------
 	// `End` snaps the Count slider (min 50) to its max of 100; the commit is
 	// debounced 150ms, then the session throttles into a fresh POST /api/compute.
-	const countsBeforeChange = meshCounts.length;
 	const nextSolve = page.waitForResponse((r) => isSolveResponse(r.url(), r.request().method()), {
 		timeout: 180_000
 	});
@@ -131,21 +121,15 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	const resolved = await nextSolve;
 	expect(resolved.status(), await resolved.text().catch(() => '')).toBe(200);
 
-	await expect
-		.poll(() => meshCounts.length, { timeout: 60_000 })
-		.toBeGreaterThan(countsBeforeChange);
-
 	if (fake) {
-		// The fake maps Count → mesh count (100 → 4), so a changed render count
-		// proves the input value crossed browser → server → compute → parser.
-		await expect
-			.poll(() => meshCounts[meshCounts.length - 1], { timeout: 60_000 })
-			.toBe(meshCountForInput(100));
+		// The fake maps Count → mesh count (100 → 4), so the rendered count changing to
+		// match proves the input value crossed browser → server → compute → parser.
+		await expect(canvas).toHaveAttribute('data-mesh-count', String(meshCountForInput(100)), {
+			timeout: 60_000
+		});
 		expect(fake.solveInputs[fake.solveInputs.length - 1]).toBe(100);
 	} else {
 		// Live compute: assert the second solve still produced renderable meshes.
-		await expect
-			.poll(() => meshCounts[meshCounts.length - 1], { timeout: 60_000 })
-			.toBeGreaterThan(0);
+		await expect(canvas).not.toHaveAttribute('data-mesh-count', '0', { timeout: 60_000 });
 	}
 });

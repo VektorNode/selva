@@ -351,7 +351,15 @@
 		     so a conditionally-rendered pane keeps its slot. -->
 		<Resizable.Pane id="viewport" order={1} defaultSize={sceneManagerOpen ? 85 : 100} minSize={40}>
 			<div class="relative h-full w-full" style="touch-action: none;">
-				<canvas class="block h-full w-full" bind:this={canvas}></canvas>
+				<!-- Mesh count of the geometry currently in the scene. The canvas itself is opaque to
+				     the DOM, so this is the only observable proof a solve's geometry decoded and
+				     rendered; e2e asserts on it. -->
+				<canvas
+					class="block h-full w-full"
+					data-testid="viewer-canvas"
+					data-mesh-count={meshes.length}
+					bind:this={canvas}
+				></canvas>
 
 				<div
 					class="inset-0 blur-overlay absolute z-20 {isBlurred
