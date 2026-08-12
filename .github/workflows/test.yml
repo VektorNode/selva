@@ -51,8 +51,11 @@ jobs:
 
       # Releases are changeset-driven: a publishable-package change without a
       # changeset never ships. `pnpm changeset --empty` is the opt-out.
+      # The Version Packages PR is exempt by construction: it consumes every
+      # changeset and bumps the versions they called for, so it always touches
+      # publishable packages and never carries a changeset of its own.
       - name: Check changesets
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'changeset-release/')
         run: |
           git fetch --depth=1 origin "${{ github.base_ref }}"
           node scripts/check-changesets.mjs --base FETCH_HEAD
