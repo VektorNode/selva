@@ -1,6 +1,6 @@
 // Minimal Grasshopper WebSocket stub for E2E. Speaks just enough of the C# protocol
 // (messageSchemas.ts is the wire contract) to drive /builder and /preview without a live
-// Rhino+Grasshopper. The app runs UNMODIFIED through its GrasshopperSource — this is a true
+// Rhino+Grasshopper. The app runs unmodified through its GrasshopperSource — a true
 // transport-level fake, not a FakeSource swap.
 //
 // Handled inbound: requestInitialData -> initialData; saveSchema -> schemaUpdated +
@@ -12,8 +12,8 @@ import { WebSocketServer, type WebSocket } from 'ws';
 export const STUB_PORT = 8765;
 
 // A minimal but valid UISchema: one number input placed in one tab/group, one output. Layout
-// defaults are filled by the app, but we provide a tab so the builder shows a real editor and
-// the preview renders an input control.
+// defaults are filled by the app, but a tab is provided so the builder shows a real editor
+// and the preview renders an input control.
 function sampleSchema() {
 	return {
 		id: 'e2e-schema',

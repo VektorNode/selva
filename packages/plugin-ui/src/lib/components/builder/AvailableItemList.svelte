@@ -128,10 +128,10 @@
 
 	const headerCount = $derived(baseItems.length);
 
-	// Per-cluster local mirror so dndzone can mutate visually without
-	// touching the upstream catalog. Source zones are read-only — once a
-	// drop completes, `placedSet` recomputes and `clusters` re-derives,
-	// overriding any in-flight mutation.
+	// Per-cluster local mirror so dndzone can mutate visually without touching
+	// the upstream catalog. Source zones are read-only: once a drop completes,
+	// `placedSet` recomputes and `clusters` re-derives, overriding any in-flight
+	// mutation.
 	let localClusterItems = $state<Record<string, GroupedItem[]>>({});
 	let isDragging = $state(false);
 
@@ -153,9 +153,8 @@
 
 	function handleClusterFinalize(key: string, e: CustomEvent<{ items: GroupedItem[] }>) {
 		isDragging = false;
-		// Source is read-only: discard dndzone's mutated items and resync from
-		// the current cluster (the destination's commit will have updated
-		// placedSet, which re-derives the cluster).
+		// Discard dndzone's mutated items and resync from the current cluster —
+		// the destination's commit will have updated placedSet already.
 		const current = clusters.find((c) => c.key === key);
 		localClusterItems = {
 			...localClusterItems,

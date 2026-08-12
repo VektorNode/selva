@@ -24,21 +24,15 @@
 		onRemove
 	}: RuleRowProps = $props();
 
-	// Filter inputs (exclude current parameter to prevent self-referencing)
+	// Exclude the parameter this rule lives on, so it can't reference itself.
 	let filteredInputs = $derived(
 		availableInputs.filter((input) => input.id !== currentParamInfo?.id)
 	);
 
-	// Get parameter info for selected input
 	let selectedParamInfo = $derived(rule.paramId ? getParameterInfo(rule.paramId) : undefined);
-
-	// Get operators for selected param type
 	let availableOperators = $derived(getOperatorsForType(selectedParamInfo?.type));
-
-	// Validation
 	let validationError = $derived(validateRuleValue(rule, selectedParamInfo));
 
-	// Handle value changes
 	function updateRuleValue(newValue: unknown) {
 		const updatedRule = { ...rule, value: newValue as { [k: string]: unknown } | undefined };
 		onUpdate(updatedRule);
@@ -83,7 +77,7 @@
 
 	function updateRuleOperator(newOperator: RuleOperator) {
 		const updatedRule = { ...rule, operator: newOperator };
-		// Clear value when operator changes (especially for multi-value/no-value operators)
+		// Reset value/values: the old operator's value shape (single vs. multi vs. none) may not fit the new one.
 		if (
 			newOperator === 'between' ||
 			newOperator === 'in' ||
@@ -103,7 +97,6 @@
 </script>
 
 <div class="flex items-start gap-2">
-	<!-- Input Select -->
 	<div class="flex flex-1 flex-col gap-1">
 		<Select.Root
 			type="single"
@@ -130,7 +123,6 @@
 		</Select.Root>
 	</div>
 
-	<!-- Operator Select -->
 	<div class="flex flex-none flex-col gap-1">
 		<Select.Root
 			type="single"
@@ -152,10 +144,8 @@
 		</Select.Root>
 	</div>
 
-	<!-- Value Input (dynamic based on operator) -->
 	<div class="flex flex-1 flex-col gap-1">
 		{#if rule.operator === 'between'}
-			<!-- Two inputs for min/max -->
 			<div class="flex gap-2">
 				<Input
 					type="number"
@@ -181,11 +171,9 @@
 				/>
 			</div>
 		{:else if rule.operator === 'isEmpty' || rule.operator === 'isNotEmpty'}
-			<!-- No value input needed for empty/not-empty checks -->
 			<span class="text-muted-foreground text-[10px] italic">no value required</span>
 		{:else if rule.operator === 'in' || rule.operator === 'notIn' || rule.operator === 'containsAny'}
 			<!-- Multi-select for ValueList, comma-separated input for other types -->
-			<!-- Debug: type={selectedParamInfo?.type}, hasOptions={!!selectedParamInfo?.options} -->
 			{#if selectedParamInfo?.type === 'valueList' && selectedParamInfo?.options && Object.keys(selectedParamInfo.options).length > 0}
 				<Select.Root
 					type="multiple"
@@ -225,7 +213,6 @@
 					</Select.Content>
 				</Select.Root>
 			{:else}
-				<!-- Textarea for multiple values (comma-separated) -->
 				<Input
 					type="text"
 					value={rule.values?.join(',') || ''}
@@ -238,9 +225,7 @@
 				/>
 			{/if}
 		{:else}
-			<!-- Single value input -->
 			{#if selectedParamInfo?.type === 'boolean'}
-				<!-- Boolean: show dropdown with true/false -->
 				<Select.Root
 					type="single"
 					value={String(rule.value || '')}
@@ -261,7 +246,6 @@
 					</Select.Content>
 				</Select.Root>
 			{:else if selectedParamInfo?.type === 'valueList' && selectedParamInfo?.options}
-				<!-- Value list: show dropdown with option names -->
 				<Select.Root
 					type="single"
 					value={String(rule.value || '')}
@@ -286,7 +270,6 @@
 					</Select.Content>
 				</Select.Root>
 			{:else}
-				<!-- Other types: text or number input -->
 				<Input
 					type={selectedParamInfo?.type === 'number' || selectedParamInfo?.type === 'integer'
 						? 'number'
@@ -307,13 +290,11 @@
 			{/if}
 		{/if}
 
-		<!-- Validation Error -->
 		{#if validationError}
 			<span class="text-destructive text-[9px]">{validationError}</span>
 		{/if}
 	</div>
 
-	<!-- Remove Button -->
 	<Button variant="ghost" size="icon" class="h-9 w-9 flex-none" onclick={onRemove}>
 		<X size={16} />
 	</Button>

@@ -36,19 +36,16 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 	const state = $state<PreviewState>(createInitialPreviewState());
 	const { manager: notification, getMessage: getNotification } = createNotificationManager();
 
-	// The Solve Session and its driver are built on the first initialData (once a schema and
-	// scope key exist). Until then the route is in `loading` and never reads values/meshes.
 	let session: SolveSession | null = null;
 	let driver: PreviewSolveDriver | null = null;
 	let initialized = false;
 	let unsubscribeSession: (() => void) | null = null;
 
-	// The Solve Session is framework-free (it lives in @selvajs/solve/client), so its
-	// getters are inert on their own. This counter is bumped on every session notification and
-	// read by the getters below, which is what makes `values`/`displayMeshes`/`isSolving`
-	// re-render. @selvajs/ui's `useSolveSession` does the same job for components, but it binds
-	// via $effect at init — the session here is built lazily on the first initialData, so the
-	// subscription is managed by hand alongside the source listeners.
+	// The Solve Session is framework-free, so its getters are inert on their own. This counter
+	// is bumped on every session notification and read by the getters below — that's what makes
+	// `values`/`displayMeshes` re-render. useSolveSession does the same via $effect at init, but
+	// this session is built lazily on the first initialData, so the subscription is wired by
+	// hand instead.
 	let sessionVersion = $state(0);
 
 	const reporter: SolveReporter = {
@@ -59,10 +56,10 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		}
 	};
 
-	// Lazily builds the Solve Session + driver the first time the core reaches for it (which is
-	// from inside handleInitialData's loadValues, once state.schema is set). Before that the
-	// route is in `loading` and never reads values/meshes, so a build-on-demand getter keeps
-	// the pure handlers total without a no-op stand-in.
+	// Built lazily on the first initialData (from inside handleInitialData's loadValues, once
+	// state.schema is set) rather than at init — before that the route is `loading` and never
+	// reads values/meshes, so a build-on-demand getter keeps the pure handlers total without a
+	// no-op stand-in.
 	function getOrBuildSession(): SolveSession {
 		if (!session) {
 			const schema = state.schema!; // set by the core before it touches the session

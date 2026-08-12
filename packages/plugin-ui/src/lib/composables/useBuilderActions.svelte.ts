@@ -50,7 +50,6 @@ export function useBuilderActions(
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
 		const { dropType, data, targetItem, dropPosition } = event.detail;
@@ -123,7 +122,6 @@ export function useBuilderActions(
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
 		let group: GroupConfig | undefined;
@@ -163,7 +161,6 @@ export function useBuilderActions(
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
 		const parts = path.split('/').map((p) => p.trim());
@@ -180,7 +177,6 @@ export function useBuilderActions(
 					tab = schema.layout.tabs.find((t) => t.id === newTabId);
 					if (tab) {
 						tab.label = tabLabel;
-						// Auto-select the newly created tab
 						builderState.state.activeTabId = newTabId;
 						toast.success(`Created new tab: ${tabLabel}`);
 					}
@@ -196,7 +192,6 @@ export function useBuilderActions(
 				} else if (schema.layout.tabs.length > 0) {
 					tabId = schema.layout.tabs[0].id;
 				} else {
-					// Create first tab
 					const newTabId = addTab(schema);
 					tabId = newTabId;
 					builderState.state.activeTabId = newTabId;
@@ -267,7 +262,6 @@ export function useBuilderActions(
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
 		const newTabId = addTab(schema);
@@ -279,7 +273,6 @@ export function useBuilderActions(
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
 		removeTab(schema, tabId);
@@ -297,7 +290,6 @@ export function useBuilderActions(
 		const context = ensureSchema();
 		if (!context) return;
 
-		// Save snapshot before mutation
 		context.builderState.history.push($state.snapshot(context.schema));
 
 		reorderTabs(context.schema, fromIndex, toIndex);
@@ -307,7 +299,6 @@ export function useBuilderActions(
 		const context = ensureSchema();
 		if (!context) return;
 
-		// Save snapshot before mutation
 		context.builderState.history.push($state.snapshot(context.schema));
 
 		reorderGroups(context.schema, tabId, fromIndex, toIndex);
@@ -338,7 +329,6 @@ export function useBuilderActions(
 		const context = ensureSchema();
 		if (!context) return;
 
-		// Save snapshot before mutation
 		context.builderState.history.push($state.snapshot(context.schema));
 
 		addGroup(context.schema, tabId);
@@ -348,7 +338,6 @@ export function useBuilderActions(
 		const context = ensureSchema();
 		if (!context) return;
 
-		// Save snapshot before mutation
 		context.builderState.history.push($state.snapshot(context.schema));
 
 		removeGroup(context.schema, tabId, groupId);
@@ -358,7 +347,6 @@ export function useBuilderActions(
 		const context = ensureSchema();
 		if (!context) return;
 
-		// Save snapshot before mutation
 		context.builderState.history.push($state.snapshot(context.schema));
 
 		removeItem(context.schema, tabId, groupId, itemId);
@@ -386,8 +374,6 @@ export function useBuilderActions(
 	 * Bulk-import the given GH group names: for each, create (or reuse) a builder
 	 * group with the same label in the active tab (or flat layout) and add every
 	 * unplaced input/output whose `groupName` matches.
-	 *
-	 * Returns the number of items added so the caller can surface a toast.
 	 */
 	function onImportGhGroups(
 		groupNames: string[],
@@ -491,7 +477,6 @@ export function useBuilderActions(
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
 		const result = batchSetNumberWidgetType(schema, true);
@@ -508,7 +493,6 @@ export function useBuilderActions(
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		// Save snapshot before mutation
 		builderState.history.push($state.snapshot(schema));
 
 		const result = batchSetNumberWidgetType(schema, false);

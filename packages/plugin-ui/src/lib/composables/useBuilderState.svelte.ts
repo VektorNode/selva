@@ -1,7 +1,7 @@
-// Reactive shell over builder-state-core.ts (mirrors the Solve Session split in
-// @selvajs/ui). It owns the $state object and the live SchemaSource, wires the source's
-// push events to the pure handlers, and exposes the imperative API the route uses. All
-// decision logic lives in the core; this file is delegation + rune plumbing only.
+// Reactive shell over builder-state-core.ts. It owns the $state object and the live
+// SchemaSource, wires the source's push events to the pure handlers, and exposes the
+// imperative API the route uses. All decision logic lives in the core; this file is
+// delegation + rune plumbing only.
 
 import { toast } from '@selvajs/ui';
 import type { UISchema } from '@selvajs/schemas';

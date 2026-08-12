@@ -58,7 +58,6 @@
 		</Dialog.Header>
 
 		<div class="space-y-4">
-			<!-- Schema Info -->
 			<div class="bg-muted/50 rounded-lg border p-4">
 				<h3 class="mb-2 font-semibold">Schema Details</h3>
 				<dl class="space-y-1 text-sm">
@@ -113,7 +112,6 @@
 				</dl>
 			</div>
 
-			<!-- Validation Status -->
 			{#if validation.isValid}
 				<Alert.Root>
 					<CheckCircle2 class="text-success h-4 w-4" />
@@ -140,7 +138,6 @@
 				</Alert.Root>
 			{/if}
 
-			<!-- Validation Issues -->
 			{#if validation.issues.length > 0}
 				<div class="space-y-2">
 					<h3 class="text-sm font-semibold">
@@ -178,7 +175,6 @@
 				</div>
 			{/if}
 
-			<!-- Additional Information -->
 			<Alert.Root>
 				<Info class="h-4 w-4" />
 				<Alert.Title>What happens when you import?</Alert.Title>

@@ -1,7 +1,6 @@
-// Pure, framework-free transition logic for the builder state (mirrors the Solve Session
-// split in @selvajs/ui: see packages/ui/CONTEXT.md). No Svelte runes, no toast, no socket
-// — every message handler is a function over a plain BuilderState plus a small `deps` bag
-// (the SchemaSource, an undo-history hook, a notifier, and a clone fn). The reactive shell
+// Pure, framework-free transition logic for the builder state. No Svelte runes, no toast, no
+// socket — every message handler is a function over a plain BuilderState plus a small `deps`
+// bag (the SchemaSource, an undo-history hook, a notifier, and a clone fn). The reactive shell
 // in useBuilderState.svelte.ts is a thin delegation layer over these; everything testable
 // lives here and runs in the node-env vitest through a FakeSource.
 

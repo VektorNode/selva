@@ -54,10 +54,8 @@
 	let isGroupDragging = $state(false);
 	let draggedGroupId = $state<string | null>(null);
 
-	// Tab the user is currently hovering during a group drag. Read on
-	// finalize to route the drop as a cross-tab move (append to destination)
-	// instead of a same-tab reorder. Bail-out: hover off any tab → null →
-	// no move; release on a tab → move commits.
+	// Tab the user is hovering during a group drag, read on finalize to route the drop
+	// as a cross-tab move instead of a same-tab reorder. Null (hovered off all tabs) means no move.
 	let pendingTargetTabId = $state<string | null>(null);
 
 	$effect(() => {
@@ -88,10 +86,9 @@
 
 		if (!activeTab) return;
 
-		// Cross-tab move: user released while hovering another tab. Append
-		// to destination + switch. If they hovered off all tabs before
-		// releasing, targetTabIdSnapshot is null and we fall through to
-		// reorder/no-op — that's the bail-out path.
+		// Released while hovering another tab: append to destination and switch to it.
+		// If they hovered off all tabs first, targetTabIdSnapshot is null and this falls
+		// through to the same-tab reorder below.
 		if (
 			wasDragging &&
 			draggedIdSnapshot &&
@@ -104,13 +101,12 @@
 			return;
 		}
 
-		// Drag left this zone entirely.
+		// Drag left this zone entirely — svelte-dnd-action already moved it elsewhere.
 		if (e.detail.info?.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) {
 			localGroups = [...(activeTab.groups as ZoneGroup[])];
 			return;
 		}
 
-		// Same-tab reorder.
 		const committed = e.detail.items.filter((g) => !g.isDndShadowItem) as GroupConfig[];
 		const oldIds = activeTab.groups.map((g) => g.id);
 		const newIds = committed.map((g) => g.id);
@@ -148,8 +144,6 @@
 					message="Click 'Add Tab' to create your first tab"
 				/>
 			{:else}
-				<!-- Tab Navigation: hover surfaces a pending move target during
-					 a group drag; TabEditor commits the move on finalize. -->
 				<EditableTabNav
 					{tabs}
 					{activeTabId}
@@ -160,7 +154,6 @@
 					onPendingTargetChange={(id) => (pendingTargetTabId = id)}
 				/>
 
-				<!-- Active Tab Content -->
 				{#if activeTab}
 					<div class="animate-[fadeIn_0.2s]">
 						<div class="mb-6 flex justify-end">

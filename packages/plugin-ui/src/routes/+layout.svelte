@@ -9,11 +9,9 @@
 	let { children } = $props();
 
 	onMount(() => {
-		// Listen for runtime messages from Grasshopper
 		const handleRuntimeMessage = (event: CustomEvent<{ level: string; message: string }>) => {
 			const { level, message } = event.detail;
 
-			// Map Grasshopper message levels to toast methods
 			switch (level) {
 				case 'error':
 					toast.error(message);

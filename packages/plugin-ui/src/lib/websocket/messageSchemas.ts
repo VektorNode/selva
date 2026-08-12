@@ -15,8 +15,7 @@
  *     fallback round-trip via `requestInitialData`. No error surfaced.
  *
  * Both classes of bug are caught at the dispatcher boundary by the schemas here.
- * See `docs/development/schema-source-of-truth-plan.md` (Follow-up: wire-contract
- * validation) for the design rationale.
+ * See `docs/adr/0002-grasshopper-bridge-seam.md` for the design rationale.
  */
 
 import { z } from 'zod';

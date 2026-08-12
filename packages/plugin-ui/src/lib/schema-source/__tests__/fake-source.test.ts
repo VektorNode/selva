@@ -45,7 +45,7 @@ describe('FakeSource solve driver', () => {
 	it('records solves, mirrors solving state, and disposes', () => {
 		const source = createFakeSource();
 		source.makeSolveDriver('s1', () => noopReporter);
-		const driver = source.solveDriver!; // FakeSolveDriver — exposes the test-only accessors
+		const driver = source.solveDriver!;
 
 		driver.solve({ a: 1 });
 		expect(driver.solves).toEqual([{ a: 1 }]);
