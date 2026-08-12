@@ -99,10 +99,12 @@ jobs:
           fi
 
           # ── main branch ──────────────────────────────────────────────────
-          # A beta→main merge that carries pre.json along would publish
-          # prerelease versions to the `latest` dist-tag.
-          if [ -f .changeset/pre.json ]; then
-            echo "::error::.changeset/pre.json present on main — pre mode leaked from beta."
+          # A beta→main merge that carries ACTIVE pre mode would publish
+          # prerelease versions to the `latest` dist-tag. A pre.json in "exit"
+          # mode is expected: `changeset version` needs its initialVersions to
+          # collapse betas to stable, and deletes the file itself.
+          if [ -f .changeset/pre.json ] && grep -q '"mode": *"pre"' .changeset/pre.json; then
+            echo "::error::.changeset/pre.json in pre mode on main — pre mode leaked from beta."
             echo "Run 'pnpm changeset pre exit' and commit before releasing from main."
             exit 1
           fi
