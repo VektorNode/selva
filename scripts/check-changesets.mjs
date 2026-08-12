@@ -19,6 +19,7 @@
 // declares "intentionally no release" and passes everything.
 
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readWorkspacePackages } from './publishable-packages.mjs';
@@ -55,6 +56,13 @@ function shipsToConsumers(pathInPackage) {
 	);
 }
 
+// `ignore` in .changeset/config.json, not the package.json `private` flag:
+// this is the list `changeset version` itself consults when deciding what to
+// bump, so it's the one that decides whether a changeset is a no-op.
+const ignored = new Set(
+	JSON.parse(readFileSync(join(repoRoot, '.changeset', 'config.json'), 'utf8')).ignore ?? []
+);
+
 const publishable = readWorkspacePackages().filter((p) => !p.private);
 // Longest prefix wins, so nested package dirs never misattribute.
 const byPrefixDesc = [...publishable].sort((a, b) => b.relDir.length - a.relDir.length);
@@ -72,6 +80,7 @@ for (const file of changedFiles) {
 // Which packages do the PR's changesets cover?
 const covered = new Set();
 let hasEmptyChangeset = false;
+const noOpChangesets = []; // { file, packages } — every package ignored
 for (const file of changedFiles) {
 	if (!/^\.changeset\/[^/]+\.md$/.test(file) || file.endsWith('README.md')) continue;
 	let content;
@@ -87,10 +96,37 @@ for (const file of changedFiles) {
 	if (!frontmatter) continue;
 	const entries = [...frontmatter[1].matchAll(/^\s*['"]?(@?[\w./-]+)['"]?\s*:/gm)];
 	if (entries.length === 0) hasEmptyChangeset = true;
-	for (const e of entries) covered.add(e[1]);
+	const named = entries.map((e) => e[1]);
+	for (const name of named) covered.add(name);
+	// A changeset naming only ignored packages bumps nothing. `changeset
+	// version` consumes it and writes no diff, so the release action opens a
+	// PR with no commits and dies on "No commits between main and
+	// changeset-release/main" — far from the PR that introduced it. Use an
+	// empty changeset to say "no release" instead.
+	if (named.length > 0 && named.every((name) => ignored.has(name))) {
+		noOpChangesets.push({ file, packages: named });
+	}
 }
 
 const missing = [...touched.entries()].filter(([name]) => !covered.has(name));
+
+// Checked before the empty-changeset waiver: that waiver forgives a missing
+// version bump, but a no-op changeset still breaks the release job.
+if (noOpChangesets.length > 0) {
+	console.error('✗ Changeset(s) naming only ignored packages:\n');
+	for (const { file, packages } of noOpChangesets) {
+		console.error(`  ${file}`);
+		console.error(`    names only: ${packages.join(', ')}`);
+	}
+	console.error('');
+	console.error(`  Ignored in .changeset/config.json: ${[...ignored].join(', ')}`);
+	console.error('  These bump nothing, so `changeset version` writes no diff and the release');
+	console.error('  job fails with "No commits between main and changeset-release/main".');
+	console.error('');
+	console.error('  Name the published package that actually changed, or, if this genuinely');
+	console.error('  ships nothing, replace it with `pnpm changeset --empty`.');
+	process.exit(1);
+}
 
 if (missing.length === 0 || hasEmptyChangeset) {
 	if (missing.length > 0) {
