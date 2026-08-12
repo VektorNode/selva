@@ -1,18 +1,10 @@
 /**
  * Remote-definition fetch: SSRF-guarded, size-capped, timed, and TTL-cached.
  *
- * A solve can reference its `.gh` by remote URL instead of a stored blob. That
- * URL is attacker-controllable (a share-token caller supplies `definitionUrl`),
- * so every fetch runs through {@link assertSafeRemoteDefinitionUrl} (literal +
- * DNS host validation, blocking private/loopback/link-local targets and
- * literal-encoding bypasses), streams the body with an early size cap, and
- * bounds the wall time with a deadline.
- *
- * The TTL cache is a per-fetcher `Map<url, {data, fetchedAt}>` so repeated
- * solves of the same remote definition skip the network. It's created by
- * {@link createRemoteDefinitionFetcher} rather than being module-global, so a
- * consuming app can hold one fetcher per process (the app binding does) or
- * several isolated ones (tests) without shared state leaking across them.
+ * A solve can reference its `.gh` by remote URL instead of a stored blob, and
+ * that URL is attacker-controllable — a share-token caller supplies
+ * `definitionUrl`. Hence {@link assertSafeRemoteDefinitionUrl}, the early size
+ * cap, and the deadline.
  */
 
 import { assertSafeRemoteDefinitionUrl } from './safe-url.js';
@@ -26,16 +18,11 @@ export interface RemoteDefinitionConfig {
 	fetchTimeoutMs: number;
 	/** How long a fetched definition stays warm in the in-process cache. */
 	cacheTtlMs: number;
-	/**
-	 * Current epoch millis. Injected (not read via `Date.now()` ambiently) so the
-	 * TTL is testable and the module stays side-effect-free. The app binding
-	 * passes `() => Date.now()`.
-	 */
+	/** Current epoch millis. Injected so the TTL is testable; the app passes `() => Date.now()`. */
 	now: () => number;
 	/**
-	 * Structured logger for the SSRF guard's block diagnostics. Optional; defaults
-	 * to `NoopLogger` so an embedder that wires nothing gets silence rather than
-	 * unsolicited stdout writes.
+	 * Receives the SSRF guard's block diagnostics. Defaults to `NoopLogger` so an
+	 * embedder that wires nothing gets silence rather than unsolicited stdout writes.
 	 */
 	logger?: ILogger;
 }
@@ -56,8 +43,7 @@ const CACHE_EVICT_BATCH = 10;
 /**
  * Read a response body into memory, aborting (and throwing) as soon as the
  * running byte total exceeds `maxBytes`. Falls back to `arrayBuffer()` only when
- * the body isn't a readable stream (older fetch impls). Exported for direct use
- * and reuse; the fetcher below wraps it with SSRF + TTL.
+ * the body isn't a readable stream (older fetch impls).
  */
 export async function readBodyWithCap(
 	response: Response,
@@ -106,9 +92,8 @@ export function createRemoteDefinitionFetcher(
 
 	return {
 		async load(url: string): Promise<Uint8Array> {
-			// Resolves the host and rejects when any resolved IP is private/loopback/
-			// link-local — covers literal-encoding bypasses (integer/octal/hex/short-form,
-			// IPv4-mapped IPv6) and public names that point inward. Throws on rejection.
+			// Before the cache read, not after: a URL must never serve warm bytes
+			// without passing the guard.
 			await assertSafeRemoteDefinitionUrl(url, logger);
 
 			const now = config.now();
@@ -133,9 +118,9 @@ export function createRemoteDefinitionFetcher(
 				if (Number.isFinite(declared) && declared > config.maxBytes) {
 					throw new Error('Remote definition exceeds size limit');
 				}
-				// Stream and count rather than `arrayBuffer()` — a missing/lying
+				// Stream and count rather than `arrayBuffer()` — a missing or lying
 				// content-length must not let an unbounded body buffer into memory
-				// before the cap is checked. Abort the moment we cross the limit.
+				// before the cap is checked. Aborts the moment we cross the limit.
 				data = await readBodyWithCap(response, config.maxBytes, controller);
 			} finally {
 				clearTimeout(timeout);

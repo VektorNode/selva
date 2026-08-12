@@ -2,13 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { isSafeRemoteDefinitionUrl } from '../safe-url.js';
 
 /**
- * SSRF guard for `loadRemoteDefinition`. Each rejection row corresponds to
- * an attack the helper exists to block — leaving any of them unsuppressed
- * would let an authenticated user have the server fetch arbitrary
+ * Each rejection row is an attack the guard exists to block: unblocked, any of
+ * them lets an authenticated user have the server fetch arbitrary
  * intranet/cloud-metadata/loopback hosts on their behalf.
  *
- * Hostname-only — DNS rebinding is not addressed here. See the helper's
- * file-level comment.
+ * Hostname and IP literals only — DNS rebinding is out of scope here, and the
+ * resolve-then-check layer lives in `assertSafeRemoteDefinitionUrl`.
  */
 describe('isSafeRemoteDefinitionUrl', () => {
 	it.each([

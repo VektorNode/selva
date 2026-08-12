@@ -1,8 +1,3 @@
-// Definitions server slice — the write orchestration (DefinitionService), the
-// compute-schema extraction/validation gate, and the render loader. All
-// composition-root wiring (stores, warm-client cache, server resolution) is
-// injected; access gating stays with the calling app.
-
 export { DefinitionService, type CreateDefinitionRecord } from './definition-service.js';
 
 export {

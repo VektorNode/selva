@@ -3,17 +3,15 @@ import type { ILogger, LogFields, LogLevel } from '@selvajs/platform';
 /**
  * `ILogger` backed by pino, with a console-backed fallback.
  *
- * pino is an OPTIONAL peer dependency, mirroring `@sentry/node` next door: it's
- * imported dynamically so the base install ships without it. Unlike Sentry,
- * though, absence must NOT degrade to silence — an operator who never
- * configured a logging backend still needs to see warnings and errors on
- * stdout. So `create()` falls back to {@link ConsoleLogger} rather than `null`.
+ * pino is an OPTIONAL peer dependency, imported dynamically so the base install
+ * ships without it. Unlike `@sentry/node` next door, absence must NOT degrade to
+ * silence — an operator who never configured a logging backend still needs
+ * warnings and errors on stdout, so {@link createLogger} falls back to
+ * {@link ConsoleLogger} rather than returning `null`.
  *
- * Why pino at all, given the fallback works: it writes newline-delimited JSON
- * with a stable schema, which is what every log collector expects and what the
- * old `console.log` template literals could never produce. Structured fields
- * survive as typed JSON, so `requestId` becomes a filter and `durationMs`
- * becomes a range query instead of a substring match.
+ * pino earns its place by writing newline-delimited JSON with a stable schema:
+ * what every log collector expects, and what console template literals can't
+ * produce.
  */
 
 /** The slice of pino's surface used here — a hard import would make it mandatory. */
@@ -33,10 +31,15 @@ type PinoFactory = (options: {
 }) => PinoLike;
 
 /**
- * Field paths scrubbed before a record is written. Defense-in-depth only — call
- * sites are required not to log secrets in the first place (see `LogFields`).
- * This catches the accident where a whole object is spread into fields and
- * happens to carry a token, which is exactly how credentials reach log indexes.
+ * Field paths scrubbed before a record is written. A backstop for accidents,
+ * NOT a licence to log objects: call sites are required not to log secrets in
+ * the first place (see `LogFields`). This catches the case where a whole object
+ * is spread into fields and happens to carry a credential.
+ *
+ * It matches by FIELD NAME, and only at the top level or one level deep (the
+ * `*.` entries). It will not catch personal data — an email nested in a payload
+ * sails straight through, and a log line reaches a collector that erasure can
+ * never reach. Note the nested `*.` set covers only five of the eight names.
  */
 const REDACTED_PATHS = [
 	'token',
@@ -55,11 +58,9 @@ const REDACTED_PATHS = [
 ];
 
 /**
- * Minimal `ILogger` over `console.*`, used when pino isn't installed.
- *
- * Renders as `LEVEL message {fields}` — readable in a terminal, greppable, and
- * honest about not being machine-parseable. `child` fields are merged eagerly
- * so correlation still works without pino.
+ * Minimal `ILogger` over `console.*`, used when pino isn't installed. Renders
+ * as `LEVEL message {fields}` — greppable, and honest about not being
+ * machine-parseable. `child` fields merge eagerly so correlation still works.
  */
 export class ConsoleLogger implements ILogger {
 	constructor(
@@ -79,9 +80,8 @@ export class ConsoleLogger implements ILogger {
 		const merged = { ...this.bound, ...fields };
 		const suffix = Object.keys(merged).length > 0 ? ` ${safeStringify(merged)}` : '';
 		const line = `${level.toUpperCase()} ${message}${suffix}`;
-		// Route to the matching console method so stderr/stdout split as expected.
-		// `info` (not `log`) carries debug too — both go to stdout, and the level
-		// is already spelled out in the line's own prefix.
+		// Split stderr/stdout the way an operator expects. `info` carries debug
+		// too — both land on stdout, and the line already spells out its level.
 		if (level === 'error') console.error(line);
 		else if (level === 'warn') console.warn(line);
 		else console.info(line);
@@ -116,8 +116,8 @@ function safeStringify(value: unknown): string {
 class PinoLogger implements ILogger {
 	constructor(private readonly pino: PinoLike) {}
 
-	// pino takes (fields, message); ILogger takes (message, fields) — the flip is
-	// deliberate, since the message is what a human scans for first.
+	// pino takes (fields, message); ILogger takes (message, fields). The flip is
+	// deliberate — the message is what a human scans for first.
 	debug(message: string, fields?: LogFields): void {
 		try {
 			this.pino.debug(fields ?? {}, message);
@@ -156,23 +156,19 @@ class PinoLogger implements ILogger {
 }
 
 export interface CreateLoggerOptions {
-	/** Minimum level written. Below this, records are dropped. */
+	/** Minimum level written; records below it are dropped. Defaults to `info`. */
 	level?: LogLevel;
 	/**
-	 * Pretty-print via `pino-pretty` (human-readable, colorized) instead of JSON.
-	 * For local development — production wants JSON for the collector. Silently
-	 * ignored if `pino-pretty` isn't installed.
+	 * Pretty-print via `pino-pretty` instead of JSON — for local development;
+	 * production wants JSON for the collector. Asking for this without
+	 * `pino-pretty` installed drops the whole logger to {@link ConsoleLogger}.
 	 */
 	pretty?: boolean;
 	/** Fields stamped on every record (e.g. service name, release). */
 	base?: LogFields;
 }
 
-/**
- * Build the app's root logger. Never throws and never returns `null`: a
- * deployment with no pino installed gets {@link ConsoleLogger}, because losing
- * warnings and errors is a worse outcome than losing JSON formatting.
- */
+/** Build the app's root logger. Never throws, never returns `null`. */
 export async function createLogger(opts: CreateLoggerOptions = {}): Promise<ILogger> {
 	const level = opts.level ?? 'info';
 	try {
@@ -188,10 +184,9 @@ export async function createLogger(opts: CreateLoggerOptions = {}): Promise<ILog
 		});
 		return new PinoLogger(pino);
 	} catch (err) {
-		// pino resolved but could not be constructed — a real misconfiguration
-		// (e.g. `pretty: true` with pino-pretty absent). Unlike a plain absent
-		// package, this one is worth complaining about: the operator asked for
-		// something they didn't get. Fall back rather than go quiet.
+		// pino resolved but wouldn't construct — a real misconfiguration (e.g.
+		// `pretty: true` with pino-pretty absent). Worth complaining about, unlike
+		// a merely absent package: the operator asked for something they didn't get.
 		console.warn(
 			`[Logger] pino was found but could not be initialized; falling back to console logging. ${String(err)}`
 		);
@@ -202,16 +197,13 @@ export async function createLogger(opts: CreateLoggerOptions = {}): Promise<ILog
 /**
  * Load pino's factory, or `null` when it isn't installed.
  *
- * The indirection through a variable specifier is load-bearing, not stylistic.
- * A literal `import('pino')` is statically analyzable, so bundlers rewrite it —
- * and Vite, applying browser-field mapping to this server build, resolved it to
- * pino's `server_false` browser shim: a stub whose factory throws. That turned
- * "use pino" into a silent fall back to the console. Computing the specifier
- * defeats that resolution and leaves the import to Node at runtime, which is
- * exactly what an optional peer dependency needs.
- *
- * `@vite-ignore` alone was NOT sufficient — it suppressed the warning while the
- * rewrite happened anyway.
+ * Don't inline the specifier. A literal `import('pino')` is statically
+ * analyzable, so Vite applied browser-field mapping to this server build and
+ * resolved it to pino's `server_false` browser shim — a stub whose factory
+ * throws, turning "use pino" into a silent fall back to the console. Computing
+ * the specifier defeats that and leaves the import to Node at runtime.
+ * `@vite-ignore` alone was NOT enough: it silenced the warning and the rewrite
+ * still happened.
  */
 async function loadPinoFactory(): Promise<PinoFactory | null> {
 	const specifier = 'pino';
@@ -221,8 +213,8 @@ async function loadPinoFactory(): Promise<PinoFactory | null> {
 		return typeof factory === 'function' ? factory : null;
 	} catch {
 		// Not installed — the expected path on a base install, where the console
-		// fallback is the intended behavior. Staying quiet here on purpose: a
-		// boot-time complaint about an optional package nobody asked for is noise.
+		// fallback is intended. Quiet on purpose: complaining at boot about an
+		// optional package nobody asked for is noise.
 		return null;
 	}
 }

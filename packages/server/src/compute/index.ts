@@ -5,11 +5,9 @@
 // from running one.
 //
 // **The solve core is not here.** Pipeline, L2 result cache, single-flight, and the client /
-// definition-byte caches live in `@selvajs/solve/server`, which owns the solve flow on both sides of
-// the wire. This sub-path deliberately does NOT re-export them: a compat shim was built during the
-// extraction and removed before release, because it left this barrel at 24 exports of which 14 were
-// borrowed — a surface that no longer described what the package does. `@selvajs/server` does not
-// depend on `@selvajs/solve`.
+// definition-byte caches live in `@selvajs/solve/server`. Do not re-export them through this
+// barrel: `@selvajs/server` does not depend on `@selvajs/solve`, and a borrowed surface stops
+// describing what this package does.
 
 export {
 	resolveComputeLimits,

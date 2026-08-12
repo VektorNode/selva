@@ -1,19 +1,17 @@
 /**
  * Channel-aware semver comparison for update checks. Understands exactly the
- * two-channel model Selva-engine deployments publish under: a stable line
- * (`x.y.z`, npm `latest`) and a beta line (`x.y.z-beta.N`, npm `beta`).
- * Deliberately not a general semver implementation — no build metadata, no
- * arbitrary pre-release identifiers.
+ * two lines Selva publishes under: stable (`x.y.z`, npm `latest`) and beta
+ * (`x.y.z-beta.N`, npm `beta`). Deliberately not general semver — no build
+ * metadata, no arbitrary pre-release identifiers.
  */
 
 /** Which published line a deployment tracks. */
 export type ReleaseChannel = 'stable' | 'beta';
 
 /**
- * Parse `x.y.z` plus an optional `-beta.N` pre-release counter. The
- * pre-release number is returned separately so beta-channel comparisons can
- * order successive betas of the same x.y.z core. Returns null for anything
- * that doesn't lead with a numeric core.
+ * Parse `x.y.z` plus an optional `-beta.N` counter. `beta` comes back separate
+ * from the core so beta-channel comparisons can order successive betas of one
+ * core. Null when the string doesn't lead with a numeric core.
  */
 export function parseSemver(
 	v: string
@@ -27,8 +25,8 @@ export function parseSemver(
 }
 
 /**
- * Compare two `x.y.z` cores. Pre-release tails are ignored — callers that care
- * about them use `isNewer`, which layers channel rules on top.
+ * Compare two `x.y.z` cores, ignoring pre-release tails. Callers that care
+ * about those want `isNewer`, which layers the channel rules on top.
  */
 export function compareCore(a: string, b: string): number {
 	const pa = parseSemver(a);
@@ -44,14 +42,14 @@ export function compareCore(a: string, b: string): number {
 /**
  * Does `version` satisfy an `engines.node` range?
  *
- * Deliberately narrow: handles the `>=X`, `>X`, `^X`, `~X`, `=X` and bare-version
- * forms Selva and its dependencies actually publish, plus `||` alternatives and
- * space-separated conjunctions (`>=18 <21`). Anything it cannot parse returns
- * `null` — "unknown", never a false "incompatible", because a wrong block would
- * strand an operator who has no way to override a bad parse.
+ * Deliberately narrow: handles the `>=`, `>`, `<=`, `<`, `^`, `~`, `=` and
+ * bare-version forms Selva and its dependencies publish, plus `||` alternatives
+ * and space-separated conjunctions (`>=18 <21`). Anything it can't parse
+ * returns `null` for "unknown", never a false "incompatible" — a wrong block
+ * would strand an operator with no way to override the bad parse.
  *
- * A full `semver` dependency would subsume this; it isn't warranted for the
- * handful of range forms in play (issue #176).
+ * A full `semver` dependency would subsume this, but isn't warranted for the
+ * handful of range forms in play.
  */
 export function satisfiesRange(version: string, range: string): boolean | null {
 	const v = parseSemver(version);
@@ -126,18 +124,18 @@ export function satisfiesRange(version: string, range: string): boolean | null {
 }
 
 /**
- * True when `latest` is strictly newer than `current` by semver.
+ * True when `latest` is strictly newer than `current`.
  *
- * Stable channel (default): pre-release suffixes are ignored — only stable
+ * Stable channel (default): pre-release suffixes are ignored, so only stable
  * core bumps surface.
  *
- * Beta channel: pre-releases participate. A higher core wins; on an equal
- * core, a higher `-beta.N` wins, and a stable (no suffix) outranks any -beta
- * of the same core (4.6.0 > 4.6.0-beta.9). This lets an update UI show
- * "beta.1 → beta.2" and "beta → stable promotion of the same line".
+ * Beta channel: pre-releases participate. A higher core wins; on an equal core
+ * a higher `-beta.N` wins, and a stable (no suffix) outranks any -beta of that
+ * core (4.6.0 > 4.6.0-beta.9). An update UI can then show both "beta.1 →
+ * beta.2" and the promotion of a beta line to stable.
  *
  * Unparseable versions fall back to inequality: different strings count as
- * "newer" so a weird published version still surfaces, identical ones don't.
+ * newer, so an odd published version still surfaces; identical ones don't.
  */
 export function isNewer(
 	latest: string,
@@ -151,7 +149,6 @@ export function isNewer(
 		if (a.core[i] > b.core[i]) return true;
 		if (a.core[i] < b.core[i]) return false;
 	}
-	// Equal core. On the stable channel we don't compare pre-release tails.
 	if (channel !== 'beta') return false;
 	// Stable (beta == null) ranks above any pre-release of the same core.
 	const rank = (beta: number | null) => (beta == null ? Infinity : beta);

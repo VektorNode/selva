@@ -4,28 +4,26 @@
  *
  * **This absorbs client retries; it is not a result cache.** The TTL is short
  * and the store is process-local, so a retry that lands on another instance
- * (or after the TTL) re-solves. That is acceptable — a duplicate solve costs
- * compute, not correctness. What it must never do is return one caller's result
- * to another, hence the caller identity in the key.
+ * (or after the TTL) re-solves — a duplicate solve costs compute, not
+ * correctness. What it must never do is return one caller's result to another,
+ * hence the caller identity in the key.
  *
- * Concurrency matters more than the hit rate. A client that retries on timeout
- * usually retries *while the first solve is still running*, so the store holds a
- * **promise**, reserved before the work starts: the second request awaits the
- * first rather than starting a second solve. A reservation that rejects is
- * dropped, so a failed solve is retryable rather than a cached error.
+ * The store holds a **promise**, reserved before the work starts, because a
+ * client that retries on timeout usually retries while the first solve is still
+ * running: the second request awaits the first instead of starting a second solve.
  *
- * Bounded the same way as the rate limiter: amortized sweep plus a hard cap, both
- * driven by `run` rather than a timer — a timer would keep the event loop alive
- * and give this module a lifecycle its callers don't have.
+ * Sweep and cap are both driven by `run` rather than a timer — a timer would keep
+ * the event loop alive and give this module a lifecycle its callers don't have.
  */
 
 export interface IdempotencyStoreConfig {
 	/** How long a completed response stays replayable, in ms. */
 	ttlMs: number;
 	/**
-	 * Max retained entries. Once live entries exceed this, the ones nearest
-	 * expiry are evicted. Evicting only costs a re-solve on a retry, so size this
-	 * above the plausible number of in-flight + recent keys.
+	 * Max retained entries; once exceeded, the ones nearest expiry are evicted.
+	 * Evicting only costs a re-solve on a retry, so size this above the plausible
+	 * number of in-flight + recent keys. Defaults to
+	 * {@link DEFAULT_IDEMPOTENCY_MAX_KEYS}.
 	 */
 	maxKeys?: number;
 	/**
@@ -46,15 +44,14 @@ export interface IdempotencyOutcome<T> {
 
 export interface IdempotencyStore<T> {
 	/**
-	 * Run `fn` under `key`, or join/replay the entry already stored there.
-	 *
-	 * The entry is reserved before `fn` starts, so a concurrent retry awaits the
-	 * first run instead of starting its own. A rejection drops the reservation.
+	 * Run `fn` under `key`, or join/replay the entry already stored there. The
+	 * entry is reserved before `fn` starts, so a concurrent retry awaits the first
+	 * run; a rejection drops the reservation.
 	 */
 	run(key: string, fn: () => Promise<T>): Promise<IdempotencyOutcome<T>>;
 	/** Test seam — wipes in-memory state. Production code never calls this. */
 	reset(): void;
-	/** Retained entry count, including any not yet swept. For tests/observability. */
+	/** Retained entry count, including entries not yet swept. */
 	size(): number;
 	readonly config: Readonly<IdempotencyStoreConfig>;
 }
@@ -70,9 +67,8 @@ interface Entry<T> {
 }
 
 /**
- * Build a process-local idempotency store. `T` is whatever the caller replays;
- * the solve route stores a serialized response snapshot rather than a `Response`,
- * because a `Response` body can only be read once.
+ * `T` is whatever the caller replays. It must not be a `Response` — a body can
+ * only be read once, so the solve route stores a serialized snapshot instead.
  */
 export function createIdempotencyStore<T>(config: IdempotencyStoreConfig): IdempotencyStore<T> {
 	const ttlMs = Math.max(0, Math.floor(config.ttlMs));

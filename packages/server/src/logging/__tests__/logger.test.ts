@@ -76,8 +76,8 @@ describe('ConsoleLogger', () => {
 
 describe('createLogger', () => {
 	it('returns a working logger (pino when installed, console otherwise)', async () => {
-		// The contract that matters to call sites: always an ILogger, never null,
-		// never a throw — regardless of whether the optional peer is present.
+		// Asserted loosely on purpose: pino is an optional peer, so which backend
+		// you get varies by install. Always an ILogger, never null, never a throw.
 		const logger = await createLogger({ level: 'debug' });
 		expect(() => logger.info('boot', { component: 'test' })).not.toThrow();
 		expect(logger.child({ requestId: 'r-1' })).toBeDefined();

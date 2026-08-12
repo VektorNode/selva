@@ -1,14 +1,12 @@
 /**
- * Tests for `DefinitionService.uploadVersion` version-number allocation (caching
- * Phase 1.5). The root-cause fix: the next version number comes from the store's
- * monotonic `reserveNextVersionNumber` counter — NOT max(existing)+1, which
- * reused a number (and its `fileKey`) after delete-latest and let a stale storage
- * blob serve the old version's bytes for new content.
+ * The next version number comes from the store's monotonic
+ * `reserveNextVersionNumber` — NOT max(existing)+1, which reused a number (and
+ * its `fileKey`) after delete-latest and let a stale storage blob serve the old
+ * version's bytes for new content.
  *
- * These run against fakes that record the store/storage calls, so they pin the
- * SERVICE's contract (reserve → derive fileKey from the reserved number). That a
- * real provider's counter is truly monotonic across delete-then-reupload is
- * covered by the definition-store conformance suite (both providers).
+ * Fakes pin the SERVICE's half of that contract (reserve → derive fileKey from
+ * the reserved number). That a real provider's counter is monotonic across
+ * delete-then-reupload is covered by the definition-store conformance suite.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -45,11 +43,7 @@ function fakeRecord(guid: string, nextVersionNumber: number): DefinitionRecord {
 	};
 }
 
-/**
- * A minimal data provider whose `definitions` store hands out the reserved
- * number and records the version row it was told to create. Only the methods
- * `uploadVersion` touches are implemented.
- */
+/** Only the methods `uploadVersion` touches are implemented. */
 function fakeDeps(record: DefinitionRecord) {
 	let counter = record.nextVersionNumber;
 	const created: DefinitionVersion[] = [];
@@ -91,7 +85,8 @@ describe('DefinitionService.uploadVersion — version-number allocation', () => 
 		);
 
 		expect(version.versionNumber).toBe(3);
-		// fileKey encodes the reserved number — so a fresh number ⇒ fresh key.
+		// fileKey encodes the reserved number, so a fresh number ⇒ a fresh key —
+		// that implication is what stops the stale-blob reuse.
 		expect(version.fileKey).toContain('v3');
 		expect(puts).toEqual([version.fileKey]);
 		expect(created).toHaveLength(1);
@@ -112,8 +107,8 @@ describe('DefinitionService.uploadVersion — version-number allocation', () => 
 	});
 
 	it('does NOT derive the number from the version list (no listVersions call)', async () => {
-		// The old bug read the version list; the fix must not. A deps object with no
-		// listVersions still works — reserveNextVersionNumber is the only source.
+		// The fake has no listVersions at all: if the service reached for one it
+		// would throw, so passing proves reserveNextVersionNumber is the only source.
 		const record = fakeRecord('33333333-3333-3333-3333-333333333333', 9);
 		const { data, storage } = fakeDeps(record);
 		const svc = new DefinitionService(data, storage);

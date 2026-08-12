@@ -1,16 +1,16 @@
 /**
- * Validate a user-supplied post-login redirect target. Accepts only same-origin
- * relative paths starting with `/` followed by a non-`/` character, so
- * `//evil.com/path` (protocol-relative URL — browser treats as cross-origin)
- * and `/\evil.com` (back-slash variants some browsers normalize) are rejected.
- *
- * Always returns a safe path: the validated target on success, the fallback
- * otherwise. Routes call this with `redirectTo` from form data or query string.
+ * Validate a user-supplied post-login redirect target (`redirectTo` from form
+ * data or a query string) against open redirects. Returns the target when it is
+ * a same-origin relative path, the fallback otherwise — never a raw target.
  */
 export function safeRedirectTarget(raw: string | null | undefined, fallback: string): string {
+	// A valid target is `/` plus at least one more character, so the two guards
+	// below always have a real `raw[1]` to inspect.
 	if (typeof raw !== 'string' || raw.length < 2) return fallback;
+	// Absolute URLs (`https://evil.com`) leave this origin.
 	if (raw[0] !== '/') return fallback;
-	// Reject protocol-relative (`//host`) and back-slash bypass (`/\host`).
+	// `//evil.com` is protocol-relative — a browser treats it as cross-origin —
+	// and some browsers normalize `/\evil.com` into the same thing.
 	if (raw[1] === '/' || raw[1] === '\\') return fallback;
 	return raw;
 }

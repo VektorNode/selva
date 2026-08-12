@@ -1,48 +1,44 @@
 /**
- * Deny-by-default route classification. Every request is gated unless its
- * path matches one of the explicit allowlists supplied here — so adding a new
- * top-level route is safe: forgetting to update the lists makes it gated (a
- * loud 401/redirect), not silently public.
+ * Deny-by-default route classification. A request is gated unless its path
+ * matches one of the allowlists supplied here, so forgetting to list a new
+ * route makes it gated — a loud 401/redirect, not silently public.
  *
- * The *pattern* is reusable; the *values* are app policy — a consuming app
- * supplies its own route sets. All matching is plain exact/prefix string
- * comparison: cheap enough for the hooks hot path, and no regex to get wrong.
+ * The pattern is reusable; the values are app policy, supplied by the consuming
+ * app. Matching is plain exact/prefix string comparison: cheap enough for the
+ * hooks hot path, and no regex to get wrong.
  */
 
 export interface RouteClassifierConfig {
-	/** Exact-match public pages — no session needed (e.g. `/`, `/login`). */
+	/** Exact-match pages needing no session (e.g. `/`, `/login`). */
 	publicPages?: Iterable<string>;
-	/**
-	 * Public path prefixes (e.g. `/auth/` for OAuth start + callback — the
-	 * user has no session yet by definition).
-	 */
+	/** Public path prefixes (e.g. `/auth/` — OAuth start and callback precede any session). */
 	publicPrefixes?: readonly string[];
 	/**
-	 * Exact-match API endpoints that must answer without a session (e.g. a
-	 * load-balancer health probe). Anything added here must be safe to expose
-	 * to anonymous callers.
+	 * Exact-match API endpoints that answer without a session (e.g. a
+	 * load-balancer health probe). Anything listed here is exposed to anonymous
+	 * callers.
 	 */
 	publicApis?: Iterable<string>;
 	/**
-	 * A single prefix whose routes apply their own per-request authorization
-	 * (e.g. a blob proxy classifying each asset path). The hook must NOT deny
-	 * these up front; they classify as public (best-effort session attach) and
-	 * the route makes the real decision. Keep this to ONE prefix — every other
-	 * API route stays deny-by-default.
+	 * One prefix whose routes authorize each request themselves (e.g. a blob
+	 * proxy classifying per asset path). These classify as public so the hook
+	 * attaches a session best-effort and does not deny up front; the route makes
+	 * the real decision. Keep it to ONE prefix — every other API route stays
+	 * deny-by-default.
 	 */
 	selfGatingPrefix?: string;
-	/** Static-asset path prefixes the adapter serves directly (e.g. `/_app/`). */
+	/** Static-asset prefixes the adapter serves directly (e.g. `/_app/`). */
 	staticPrefixes?: readonly string[];
 	/** Exact static-asset paths (e.g. `/favicon.svg`, `/robots.txt`). */
 	staticPaths?: Iterable<string>;
 }
 
 export interface RouteClassifier {
-	/** Static assets bypass auth gating; callers may add cache headers. */
+	/** Matches `staticPaths`/`staticPrefixes`. These bypass auth gating entirely. */
 	isStaticAsset(pathname: string): boolean;
-	/** True for paths under `selfGatingPrefix` — the route gates itself. */
+	/** Matches `selfGatingPrefix`. The hook must not deny these — the route gates itself. */
 	isSelfGatingApiRoute(pathname: string): boolean;
-	/** True when the path needs no session: pages, APIs, prefixes, self-gating. */
+	/** Needs no session: a public page, API, prefix, or a self-gating route. */
 	isPublicRoute(pathname: string): boolean;
 }
 

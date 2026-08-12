@@ -1,14 +1,12 @@
-// Loader for "given a definition record, produce everything the client needs to
-// render its form and solve it": version resolution, blob fetch, compute-server
-// resolution, schema fetch (with the ADR 0005 staleness check), default merging.
+// Given a definition record, produces everything the client needs to render its
+// form and solve it.
 //
-// Access gating is intentionally NOT done here — the calling route decides
-// whether `ctx` is allowed to load this definition, since gates differ across
-// routes (project membership, segment ownership, share-token, admin override).
+// Access gating is deliberately NOT done here — the calling route decides
+// whether `ctx` may load this definition, since gates differ across routes
+// (project membership, segment ownership, share-token, admin override).
 //
-// Everything stateful is injected (`DefinitionLoaderDeps`): stores, server
-// resolution, the warm-client cache, and the schema fetcher — so any app built
-// on the engine can wire its own composition root.
+// Everything stateful is injected, so any app on the engine can wire its own
+// composition root.
 
 import type { GrasshopperClient } from '@selvajs/compute/grasshopper';
 import { UI_SCHEMA_VERSION, type UISchema } from '@selvajs/schemas';
@@ -57,13 +55,13 @@ export interface DefinitionLoaderDeps {
 	storage: Pick<IStorageProvider, 'get'>;
 	definitions: Pick<IDefinitionStore, 'getVersion' | 'setVersionSchema'>;
 	projects: Pick<IProjectStore, 'getProject'>;
-	/** §3 resolution order: definition pin → org default override → global default. */
+	/** Resolution order: definition pin → org default override → global default. */
 	resolveServer: (
 		ctx: RequestContext,
 		orgId: string | null,
 		opts: { definitionPin: string | null }
 	) => Promise<ComputeServerConfig>;
-	/** Shared warm-client cache (ADR 0004: keyed by server id, definition-guid affinity header). */
+	/** Shared warm-client cache, keyed by server id with a definition-guid affinity header. */
 	getClient: (
 		server: ComputeServerConfig,
 		opts: { definitionGuid: string }
@@ -71,37 +69,28 @@ export interface DefinitionLoaderDeps {
 	/** Schema extraction; defaults to `fetchSchemaFromCompute`. Injectable for tests. */
 	fetchSchema?: (bytes: Uint8Array, server: ComputeServerConfig) => Promise<UISchema>;
 	/**
-	 * Verbose IO diagnostics — when set, an unhealthy IO result (empty inputs /
-	 * parse / load errors) also dumps the raw /io wire shape so
-	 * casing/serialization mismatches are visible.
+	 * When set, an unhealthy IO result also dumps the raw /io wire shape, making
+	 * casing/serialization mismatches visible.
 	 */
 	computeDebug?: boolean;
-	/**
-	 * Legacy diagnostic sink, kept for callers that already pass one. When set it
-	 * receives the rendered strings and `logger` is not used for these warnings.
-	 */
+	/** Legacy diagnostic sink. When set it takes the warnings below instead of `logger`. */
 	onWarn?: (message: string, detail?: string) => void;
 	/**
-	 * Structured logger for the diagnostics below. Defaults to `NoopLogger`, so a
-	 * consumer that wires nothing gets silence rather than unsolicited stdout.
+	 * Defaults to `NoopLogger`, so a consumer that wires nothing gets silence
+	 * rather than unsolicited stdout.
 	 */
 	logger?: ILogger;
 }
 
 export interface DefinitionLoadOptions {
 	/**
-	 * Skip the `getIO` round-trip that merges compute default *values* into the
-	 * schema, when the cached schema on the version row is usable.
+	 * For callers that read only schema STRUCTURE (input ids, `source.key`,
+	 * widget types — anything persisted at upload). A fresh cached schema then
+	 * returns without touching compute, whose multi-second connect otherwise
+	 * dominates a page resolving several definitions.
 	 *
-	 * A caller that reads only schema STRUCTURE (input ids, `source.key`, widget
-	 * types — anything persisted at upload) does not need defaults, and paying a
-	 * multi-second compute connect per definition to fetch them dominates a page
-	 * that resolves several. With this set, a fresh cached schema returns without
-	 * touching compute at all; a missing or stale-format cache still falls back to
-	 * the full path, so the result is always a valid schema.
-	 *
-	 * Leave unset (the default) for anything that RENDERS a form — a form without
-	 * compute defaults shows the wrong initial values.
+	 * Leave unset (the default) for anything that RENDERS a form — without
+	 * compute defaults the form shows the wrong initial values.
 	 */
 	skipComputeDefaults?: boolean;
 }
@@ -115,14 +104,9 @@ export type DefinitionLoader = (
 ) => Promise<LoadedDefinition>;
 
 /**
- * Build a definition loader over the injected stores/compute wiring.
- *
- * The returned function loads a definition's version blob + schema (with
- * merged compute defaults). By default it resolves the `channel` pointer
- * (live/draft); pass `explicitVersionId` to render an arbitrary historical
- * version instead — the caller must gate that behind edit permission
- * (editor-only, like the draft channel). Throws `DefinitionLoadError` for
- * classified failures so the caller can translate to HTTP status codes.
+ * The returned loader resolves the `channel` pointer (live/draft) by default.
+ * `explicitVersionId` renders an arbitrary historical version instead — the
+ * caller MUST gate that behind edit permission, as with the draft channel.
  */
 export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLoader {
 	const {
@@ -173,10 +157,9 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 			);
 		}
 
-		// Structure-only callers stop here: a fresh cached schema is everything they
-		// need, and returning before `getClient` is the point — the connect is the
-		// multi-second cost, not the `getIO` call it carries. A missing or
-		// stale-format cache falls through to the full path below.
+		// Returning before `getClient` is the point — the connect is the cost, not
+		// the `getIO` it carries. A missing or stale-format cache falls through to
+		// the full path below, so the result is always a valid schema.
 		if (options?.skipComputeDefaults) {
 			const cachedSchema = version.schema as UISchema | undefined;
 			if (cachedSchema && cachedSchema.schemaVersion === UI_SCHEMA_VERSION) {
@@ -199,13 +182,11 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 		}
 
 		try {
-			// Prefer the schema cached on the version row (extracted + validated at
-			// upload) — but ONLY when its format version matches the app's. The
-			// stored schema is a disposable cache (ADR 0005): on a version mismatch
-			// (or a pre-caching row with no schema at all) re-extract from compute,
-			// whose C# SchemaMigrator emits the current format — the web side never
-			// migrates schemas itself. `getIO` is always needed to merge compute
-			// default values into the schema, cached or not.
+			// The stored schema is a disposable cache, used ONLY when its format
+			// version matches the app's. On a mismatch (or a pre-caching row with no
+			// schema) re-extract from compute, whose C# SchemaMigrator emits the
+			// current format — the web side never migrates schemas itself. `getIO`
+			// runs either way, to merge compute default values in.
 			const cachedSchema = version.schema as UISchema | undefined;
 			const freshCache =
 				cachedSchema && cachedSchema.schemaVersion === UI_SCHEMA_VERSION ? cachedSchema : null;
@@ -214,11 +195,10 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 				freshCache ? Promise.resolve(freshCache) : fetchSchema(definitionSource, computeServer)
 			]);
 
-			// Persist the refreshed schema back onto the version row (best-effort —
-			// a viewer context may lack write access; the next editor render or the
-			// solve-time backfill will land it). Only when the re-extracted schema
-			// is at the app's current version: persisting an older format (compute
-			// plugin behind the app) would just go stale again next render.
+			// Best-effort — a viewer context may lack write access, and the next
+			// editor render or the solve-time backfill will land it. Guarded on the
+			// current version because persisting an older format (compute plugin
+			// behind the app) would just go stale again next render.
 			if (!freshCache && fetchedSchema.schemaVersion === UI_SCHEMA_VERSION) {
 				definitions.setVersionSchema(ctx, version.id, fetchedSchema).catch((err) => {
 					if (onWarn) {
@@ -240,13 +220,12 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 				throw new Error(`Failed to get definition IO — server returned undefined`);
 			}
 
-			// Surface IO health when something looks off: zero inputs, or the compute
-			// layer reported parse/load problems (e.g. an empty ValueList because its
-			// backing GH component didn't resolve → "Missing Definition Objects", or a
-			// PascalCase /io response the parser silently dropped to []). On a problem
-			// we also fetch the raw IO so the un-parsed wire shape is in the logs.
-			// Always-on warn (cheap, only fires on the unhappy path); the verbose raw
-			// dump is gated on `computeDebug`.
+			// Zero inputs or reported parse/load problems mean a definition that will
+			// render wrong without saying why: an empty ValueList whose backing GH
+			// component didn't resolve ("Missing Definition Objects"), or a PascalCase
+			// /io response the parser silently dropped to []. Warning is always on —
+			// it only fires on the unhappy path — while the raw wire dump costs an
+			// extra round-trip and stays behind `computeDebug`.
 			const ioParseErrors = (definition as { parseErrors?: unknown[] }).parseErrors ?? [];
 			const ioLoadErrors = (definition as { loadErrors?: unknown[] }).loadErrors ?? [];
 			const ioLooksBroken =
@@ -297,9 +276,8 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 	};
 }
 
-// Merge default values from Compute definition into schema inputs.
-// Colors come back as "r,g,b" or "a,r,g,b" strings — convert to hex so the
-// color picker can consume them directly.
+// Colors come back from Compute as "r,g,b" or "a,r,g,b" strings — converted to
+// hex here so the color picker can consume them directly.
 function mergeComputeDefaults(
 	schema: UISchema,
 	computeInputs: Array<{ id?: string; paramType?: string; default?: unknown }>

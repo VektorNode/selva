@@ -1,15 +1,3 @@
-/**
- * The store's job is absorbing client retries, so the properties that matter are
- * about *concurrency and failure*, not hit rate:
- *
- *   - a retry arriving while the first solve is still running must join it, not
- *     start a second solve (the common case — clients retry on timeout);
- *   - a failed solve must be retryable, not replayed as a cached error for the
- *     whole TTL;
- *   - an expired entry must re-run, or the store becomes a result cache and
- *     serves stale geometry after a version pointer moves.
- */
-
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createIdempotencyStore } from '../idempotency.js';
 
@@ -46,7 +34,6 @@ describe('createIdempotencyStore', () => {
 
 		const a = store.run('k', fn);
 		const b = store.run('k', fn);
-		// Both are pending on the SAME call — this is the retry-during-solve case.
 		expect(fn).toHaveBeenCalledTimes(1);
 
 		gate.resolve('done');
@@ -62,7 +49,6 @@ describe('createIdempotencyStore', () => {
 			.mockResolvedValueOnce('ok');
 
 		await expect(store.run('k', fn)).rejects.toThrow('compute down');
-		// A cached error would make the client's retry pointless for the whole TTL.
 		expect(await store.run('k', fn)).toEqual({ value: 'ok', replayed: false });
 		expect(fn).toHaveBeenCalledTimes(2);
 		expect(store.size()).toBe(1);
@@ -84,7 +70,7 @@ describe('createIdempotencyStore', () => {
 	it('keeps different keys independent', async () => {
 		const store = createIdempotencyStore<string>({ ttlMs: 60_000 });
 		expect((await store.run('a', async () => 'A')).value).toBe('A');
-		// The route namespaces by caller, so this is what stops one tenant
+		// The route namespaces keys by caller, so this is what stops one tenant
 		// replaying another's result under the same client-chosen key.
 		expect((await store.run('b', async () => 'B')).value).toBe('B');
 		expect(store.size()).toBe(2);
@@ -96,8 +82,8 @@ describe('createIdempotencyStore', () => {
 		const gate = deferred<string>();
 
 		const inFlight = store.run('slow', () => gate.promise);
-		// Push past the cap while `slow` is still running. Evicting it would orphan
-		// the retries already awaiting it.
+		// Push past the cap while `slow` runs — evicting it would orphan the
+		// retries already awaiting it.
 		vi.advanceTimersByTime(2_000);
 		await store.run('other', async () => 'x');
 
@@ -115,7 +101,6 @@ describe('createIdempotencyStore', () => {
 		vi.advanceTimersByTime(1_001);
 		await store.run('fresh', async () => 0);
 
-		// The five dead entries went; only `fresh` remains.
 		expect(store.size()).toBe(1);
 	});
 });

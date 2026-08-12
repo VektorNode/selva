@@ -1,8 +1,7 @@
 /**
- * Tests for `createDefinitionLoader` (K4) — version resolution, error
- * classification, and the ADR 0005 schema-staleness behavior: a cached schema
- * is used only at the app's current format version; anything else re-extracts
- * from compute and persists back (best-effort, current-version only).
+ * Schema-staleness rule under test: a cached schema is used only at the app's
+ * current format version; anything else re-extracts from compute and persists
+ * back, best-effort and only when the result is itself current.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -87,7 +86,7 @@ describe('schema cache staleness (ADR 0005)', () => {
 
 		expect(mocks.fetchSchema).not.toHaveBeenCalled();
 		expect(mocks.definitions.setVersionSchema).not.toHaveBeenCalled();
-		// Compute defaults are merged into the cached schema's inputs.
+		// Cached still means live defaults: getIO's `default: 42` is merged in.
 		expect((result.schema.inputs[0] as { default?: unknown }).default).toBe(42);
 	});
 
@@ -118,7 +117,8 @@ describe('schema cache staleness (ADR 0005)', () => {
 	});
 
 	it('does NOT persist a re-extracted schema that is still not at the current version', async () => {
-		// Compute plugin behind the app: re-extraction yields an older format.
+		// The deployed compute plugin is behind the app, so even a fresh extract
+		// comes back old — caching it would pin the stale shape.
 		const { deps, mocks } = makeDeps({
 			fetchSchema: vi.fn(async () => uiSchema('2.10.0'))
 		});
@@ -128,7 +128,7 @@ describe('schema cache staleness (ADR 0005)', () => {
 		await flushMicrotasks();
 
 		expect(mocks.definitions.setVersionSchema).not.toHaveBeenCalled();
-		// The older schema still renders (older shapes only lack optional additions).
+		// Not persisted, but still returned — an old schema renders fine.
 		expect(result.schema.schemaVersion).toBe('2.10.0');
 	});
 
@@ -155,7 +155,7 @@ describe('skipComputeDefaults', () => {
 			skipComputeDefaults: true
 		});
 
-		// The connect is the cost this option exists to avoid — not just getIO.
+		// The connect is the cost this option exists to avoid, not just the getIO.
 		expect(mocks.getClient).not.toHaveBeenCalled();
 		expect(getIO).not.toHaveBeenCalled();
 		expect(mocks.fetchSchema).not.toHaveBeenCalled();

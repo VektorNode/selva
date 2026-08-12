@@ -42,14 +42,14 @@ describe('isNewer', () => {
 });
 
 // ============================================================================
-// engines.node range satisfaction (issue #176)
+// engines.node range satisfaction
 // ============================================================================
 
 describe('satisfiesRange', () => {
 	it('handles the >=X form we actually publish', () => {
 		expect(satisfiesRange('22.1.0', '>=22.0.0')).toBe(true);
 		expect(satisfiesRange('24.16.0', '>=22.0.0')).toBe(true);
-		// The incident from issue #176: Node 20 host, release requiring >=22.
+		// The shipped incident: a Node 20 host offered a release requiring >=22.
 		expect(satisfiesRange('20.20.2', '>=22.0.0')).toBe(false);
 	});
 
@@ -80,7 +80,7 @@ describe('satisfiesRange', () => {
 	});
 
 	it('returns null — never a false block — when it cannot parse', () => {
-		// A wrong `false` would strand an operator behind a check that misfired.
+		// A wrong `false` strands an operator behind an update check that misfired.
 		expect(satisfiesRange('22.0.0', 'not-a-range')).toBeNull();
 		expect(satisfiesRange('not-a-version', '>=22.0.0')).toBeNull();
 		expect(satisfiesRange('22.0.0', '')).toBeNull();

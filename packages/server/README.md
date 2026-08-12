@@ -9,12 +9,11 @@ single-flight, client and definition-byte caches. This package does not re-expor
 not depend on it. What stays here is HTTP _request policy_, which is a different job from running a
 solve.
 
-Logging follows the same rule as the rest of the package: nothing here logs unless you wire
-it. Modules that emit diagnostics take an optional `logger?: ILogger` and default to
-`NoopLogger`, so an embedder that wires nothing gets silence rather than unsolicited stdout
-writes. `@selvajs/server/logging` provides a pino-backed implementation (`createLogger`);
-`pino` is an **optional** peer dependency, and without it `createLogger` falls back to a
-console-backed logger rather than failing.
+Nothing here logs unless you wire it. Modules that emit diagnostics take an optional
+`logger?: ILogger` defaulting to `NoopLogger`, so an embedder that wires nothing gets silence
+rather than unsolicited stdout writes. `@selvajs/server/logging` provides a pino-backed
+`createLogger`; `pino` is an **optional** peer dependency, and without it `createLogger` falls
+back to a console-backed logger rather than failing.
 
 ## Install
 
@@ -25,20 +24,19 @@ pnpm add @selvajs/server
 ## Subpath exports
 
 **There is no root export.** Import from a subpath — `import … from '@selvajs/server'` fails to
-resolve, on purpose. A root barrel re-exporting all nine subpaths put 41 symbols in one namespace and
-hid which slice a consumer actually depended on; nothing in this repo used it.
+resolve, on purpose, so it stays visible which slice a consumer depends on.
 
-| Export                        | Contents                                                           |
-| ----------------------------- | ------------------------------------------------------------------ |
-| `@selvajs/server/compute`     | Compute limits, rate limiting, SSRF guard, remote-definition fetch |
-| `@selvajs/server/definitions` | Definition service + render loader                                 |
-| `@selvajs/server/providers`   | Provider composition helpers                                       |
-| `@selvajs/server/tokens`      | Mints and verifies personal API tokens                             |
-| `@selvajs/server/errors`      | Shared error types                                                 |
-| `@selvajs/server/logging`     | pino-backed `ILogger` + request-id correlation                     |
-| `@selvajs/server/http`        | Security headers, request limits, route classification             |
-| `@selvajs/server/access`      | Access/permission checks                                           |
-| `@selvajs/server/ops`         | Operational utilities                                              |
+| Export                        | Contents                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| `@selvajs/server/compute`     | Compute limits, rate limiting, idempotency, SSRF guard, remote-definition fetch |
+| `@selvajs/server/definitions` | Definition service, compute-schema extraction, render loader                    |
+| `@selvajs/server/providers`   | Env-driven provider selection over a caller-supplied registry                   |
+| `@selvajs/server/tokens`      | HMAC codec for capability-URL tokens (share links, invites)                     |
+| `@selvajs/server/errors`      | Sentry-backed `IErrorReporter`                                                  |
+| `@selvajs/server/logging`     | pino-backed `ILogger` + request-id correlation                                  |
+| `@selvajs/server/http`        | Security headers, body-size and redirect guards, route classification           |
+| `@selvajs/server/access`      | Builds the input platform's project access rules consume                        |
+| `@selvajs/server/ops`         | Channel-aware semver comparison                                                 |
 
 Requires a `@selvajs/platform` provider (e.g. `@selvajs/local-provider` or
 `@selvajs/supabase-provider`) for data/storage/auth.

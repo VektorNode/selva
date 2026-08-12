@@ -2,11 +2,7 @@ import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { resolveComputeLimits, readPositiveInt, readNonNegativeInt } from '../limits.js';
 import { NoopLogger, type ILogger } from '@selvajs/platform';
 
-/**
- * Fake logger — the env readers take an injected `ILogger` (defaulting to
- * `NoopLogger`), so the diagnostics are captured by passing this in rather than
- * by spying on `console`.
- */
+/** The env readers take an injected `ILogger`, so there is nothing to spy on. */
 function fakeLogger(): ILogger & { warn: Mock<ILogger['warn']> } {
 	const logger = new NoopLogger() as ILogger & { warn: Mock<ILogger['warn']> };
 	logger.warn = vi.fn<ILogger['warn']>();
@@ -18,8 +14,8 @@ const MB = 1024 * 1024;
 /**
  * The release-gate half of these tests exists because a "TEMP (dev)" raise of the
  * upload/request caps to 300 MB once survived all the way to a release branch —
- * the only thing tracking it was a code comment nobody re-read (audit B3). Bare
- * numbers can't defend themselves, so the invariants that make them correct are
+ * the only thing tracking it was a code comment nobody re-read. Bare numbers
+ * can't defend themselves, so the invariants that make them correct are
  * asserted here instead.
  */
 describe('resolveComputeLimits', () => {
@@ -29,19 +25,19 @@ describe('resolveComputeLimits', () => {
 
 	describe('defaults (release gate — see audit B3)', () => {
 		it('caps .gh uploads at 50 MB, matching Rhino.Compute RHINO_COMPUTE_MAX_REQUEST_SIZE', () => {
-			// Above this, compute 413s regardless — accepting more only defers the failure.
+			// Above this, compute 413s regardless — accepting more defers the failure.
 			expect(resolveComputeLimits({}).maxDefinitionFileSize).toBe(50 * MB);
 		});
 
 		it('caps the /api/compute request body at 210 MB, matching the shipped BODY_SIZE_LIMIT', () => {
-			// .env.example ships BODY_SIZE_LIMIT=210M; a larger cap here is dead
-			// config — adapter-node's global backstop rejects first.
+			// A larger cap here is dead config — adapter-node's global backstop
+			// rejects first.
 			expect(resolveComputeLimits({}).computeRequestMaxBytes).toBe(210 * MB);
 		});
 
 		it('caps the /api/compute response at 300 MB (intentional, not a dev leftover)', () => {
-			// Sized above any legitimate inline payload, below V8's ~512 MB string
-			// wall. Not bounded by BODY_SIZE_LIMIT, which only covers inbound bodies.
+			// Above any legitimate inline payload, below V8's ~512 MB string wall.
+			// Not bounded by BODY_SIZE_LIMIT, which only covers inbound bodies.
 			expect(resolveComputeLimits({}).computeResponseMaxBytes).toBe(300 * MB);
 		});
 
@@ -57,8 +53,8 @@ describe('resolveComputeLimits', () => {
 			).toBe(0);
 		});
 
-		// The rename is only safe if the old names keep working for a version —
-		// a var that silently stops being read looks identical to one that works.
+		// A var that silently stops being read looks identical to one that works,
+		// so the old names need asserting, not just documenting.
 		describe('renamed cache vars (2026-07)', () => {
 			it('honours each old name when the new one is unset', () => {
 				expect(
@@ -144,8 +140,8 @@ describe('resolveComputeLimits', () => {
 
 		it('keeps every payload cap under V8 single-string wall (~512 MB)', () => {
 			const limits = resolveComputeLimits({});
-			// A `file` output is base64-embedded and JSON.stringify'd into one string;
-			// past the wall that's a RangeError, which is the crash the caps prevent.
+			// A `file` output is base64-embedded and JSON.stringify'd into ONE string;
+			// past the wall that's a RangeError — the crash these caps prevent.
 			expect(limits.computeResponseMaxBytes).toBeLessThan(512 * MB);
 			expect(limits.computeRequestMaxBytes).toBeLessThan(512 * MB);
 		});
@@ -165,7 +161,7 @@ describe('resolveComputeLimits', () => {
 		});
 
 		it('sizes the request cap to clear a base64-inflated max upload', () => {
-			// base64 inflates ~4/3. The binding case is a 150 MB raw `file` widget
+			// base64 inflates ~4/3, so the binding case is a 150 MB raw `file` widget
 			// input (~200 MB on the wire) plus JSON envelope slack.
 			const limits = resolveComputeLimits({});
 			expect(limits.computeRequestMaxBytes).toBeGreaterThan(150 * MB * (4 / 3));
@@ -213,7 +209,7 @@ describe('readPositiveInt', () => {
 		const logger = fakeLogger();
 		expect(readPositiveInt({ X: raw }, 'X', 7, logger)).toBe(7);
 		expect(logger.warn).toHaveBeenCalledOnce();
-		// The variable data belongs in fields, not interpolated into the message.
+		// Asserted on the fields, not the message: variable data belongs in fields.
 		expect(logger.warn.mock.calls[0][1]).toMatchObject({ envVar: 'X', value: raw, fallback: 7 });
 	});
 

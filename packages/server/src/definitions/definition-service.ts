@@ -12,12 +12,9 @@ import type {
 import { ProviderError, definitionPaths } from '@selvajs/platform';
 
 /**
- * Input passed to `DefinitionService.create`. Carries everything the service
- * needs to assemble a `DefinitionRecord` plus orchestrate the v1 upload.
- *
- * Distinct from `CreateDefinitionInputSchema` exported by
- * `@selvajs/platform/definitions`, which validates the user-facing
- * HTTP body (no guid/ownerId — those are derived server-side).
+ * Not the HTTP body — that's `CreateDefinitionInputSchema` in
+ * `@selvajs/platform/definitions`, which has no guid/ownerId because those are
+ * derived server-side.
  */
 export interface CreateDefinitionRecord {
 	guid: string;
@@ -34,33 +31,13 @@ export interface CreateDefinitionRecord {
 }
 
 /**
- * Orchestrates writes that span IDataProvider + IStorageProvider for the
- * spec §6 versioning model. Lives in @selvajs/selva (not @selvajs/platform)
- * because it is application orchestration, not platform contract.
+ * Orchestrates writes spanning IDataProvider + IStorageProvider. Application
+ * orchestration, not platform contract — hence not in @selvajs/platform.
  *
- * Ordering rules:
- *
- *   create — metadata-first, then v1:
- *     1. Write record with status='pending', both pointers null
- *     2. Upload v1 blob to versions/v1.{ext}
- *     3. Insert DefinitionVersion row v1
- *     4. `attachInitialVersion` — atomically set live + draft pointers and
- *        flip status to 'draft' in a single store operation.
- *   Step 4 is one round-trip so a mid-flight failure can't leave a partial
- *   state (status='draft' with null pointers, or status='pending' with
- *   pointers set). If step 2 fails the record stays 'pending' with no
- *   blob and is filtered out of list endpoints by default.
- *
- *   uploadVersion — append-only:
- *     1. Reserve next versionNumber from the record's monotonic counter
- *     2. Upload blob to versions/v{N}.{ext}
- *     3. Insert DefinitionVersion row
- *     4. Advance draft pointer (live unchanged)
- *
- *   publish — pointer flip only, no blob writes.
- *
- *   deleteVersion — store enforces "not referenced by live/draft"; on
- *   success, delete the underlying blob.
+ * Methods that write both metadata and blobs order the two so a mid-flight
+ * failure leaves a state the API can still serve; those reasons sit inline at
+ * each write. `publish` and `updateMeta` flip pointers/metadata only and touch
+ * storage not at all.
  */
 export class DefinitionService {
 	constructor(
@@ -99,16 +76,15 @@ export class DefinitionService {
 			deletedAt: null
 		};
 
-		// 1. Metadata first — if this fails there's nothing to clean up.
+		// Metadata first — if this fails there's nothing to clean up.
 		await this.data.definitions.create(ctx, record);
 
-		// 2. v1 blob — if this fails the record stays 'pending' and is hidden
-		//    from default list queries.
+		// If the blob write fails, the record stays 'pending' and is hidden from
+		// default list queries.
 		const versionId = randomUUID();
 		const fileKey = definitionPaths.version(input.guid, 1, input.fileExt);
 		await this.storage.put(fileKey, file, 'application/octet-stream');
 
-		// 3. Version row.
 		const version: DefinitionVersion = {
 			id: versionId,
 			definitionId: input.guid,
@@ -123,10 +99,9 @@ export class DefinitionService {
 		};
 		await this.data.definitions.createVersion(ctx, version);
 
-		// 4. Atomically point both channels at v1 and flip status='draft' in a
-		//    single store operation. Replaces three separate writes
-		//    (setLiveVersion + setDraftVersion + update) — see the class
-		//    header for why ordering matters here.
+		// Points both channels at v1 and flips status='draft' in ONE store
+		// operation. Doing it as three writes leaves a partial state on failure:
+		// status='draft' with null pointers, or 'pending' with pointers set.
 		await this.data.definitions.attachInitialVersion(ctx, input.guid, versionId);
 
 		return {
@@ -136,9 +111,8 @@ export class DefinitionService {
 	}
 
 	/**
-	 * Upload a new version of an existing definition. Writes the blob, inserts
-	 * the version row, and advances the draft pointer. `live` is unchanged —
-	 * use `publish` to promote.
+	 * Advances the draft pointer only — `live` is unchanged. Use `publish` to
+	 * promote.
 	 */
 	async uploadVersion(
 		ctx: RequestContext,
@@ -152,10 +126,9 @@ export class DefinitionService {
 		const existing = await this.data.definitions.get(ctx, guid);
 		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
 
-		// Reserve the next version number from the record's monotonic counter — NOT
-		// max(existing)+1, which reused a number after delete-latest and collided
-		// the `fileKey` (stale blob served for new content). The counter only ever
-		// advances, so a delete-then-reupload gets a fresh number and fresh key.
+		// Monotonic counter, NOT max(existing)+1 — the latter reuses a number after
+		// delete-latest and collides the `fileKey`, serving a stale blob for new
+		// content.
 		const next = await this.data.definitions.reserveNextVersionNumber(ctx, guid);
 
 		const versionId = randomUUID();
@@ -184,9 +157,8 @@ export class DefinitionService {
 	}
 
 	/**
-	 * Advance the live channel. If `versionId` is omitted, promotes the
-	 * current draft. Pass an arbitrary version id to roll forward/back —
-	 * spec §6 makes rollback a first-class operation.
+	 * Moves the live channel to `versionId`, or to the current draft if omitted.
+	 * Any version id is accepted, so this rolls backward as well as forward.
 	 */
 	async publish(ctx: RequestContext, guid: string, versionId?: string): Promise<DefinitionVersion> {
 		const existing = await this.data.definitions.get(ctx, guid);
@@ -231,16 +203,13 @@ export class DefinitionService {
 	}
 
 	async delete(ctx: RequestContext, guid: string): Promise<void> {
-		// CONTRACT (spec §9): metadata is soft-deleted (preserved for audit,
-		// restorable by clearing `deleted_at`); blobs are HARD-deleted. The
-		// record is the audit trail; the blobs are storage cost.
+		// Metadata is soft-deleted (audit trail, restorable by clearing
+		// `deleted_at`); blobs are HARD-deleted.
 		//
-		// Order matters. Metadata first so the API immediately hides the
-		// record (RLS / `deleted_at IS NULL` filter). If the blob wipe then
-		// fails, the orphan storage is unreachable through the API — a
-		// retention sweep can clean it up later. The reverse order leaves a
-		// window where the record is still alive but its blobs are gone — a
-		// 404 source for any in-flight reader.
+		// Metadata first, so the API hides the record immediately. A failed blob
+		// wipe then leaves orphan storage that no reader can reach, for a
+		// retention sweep to collect. The reverse order leaves the record alive
+		// with its blobs gone — a 404 for any in-flight reader.
 		await this.data.definitions.delete(ctx, guid);
 		await this.storage.deletePrefix(definitionPaths.prefix(guid));
 	}

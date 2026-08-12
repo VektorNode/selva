@@ -1,16 +1,11 @@
 /**
- * Tests for `createRemoteDefinitionFetcher` — the SSRF-guarded, capped, TTL-cached
- * remote `.gh` fetch (K3).
- *
- * `safe-url` is mocked so the host check is a controllable pass/fail (its own
- * SSRF logic is covered in safe-url.test.ts), and `fetch` is stubbed per test to
- * return scripted bodies/headers. The injected `now` clock makes the TTL cache
- * deterministic without real time.
+ * `safe-url` is mocked so the host check is a controllable pass/fail — its own
+ * SSRF logic is covered in safe-url.test.ts. The injected `now` clock makes the
+ * TTL cache deterministic without real time.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// --- Mock the SSRF guard ---------------------------------------------------
 const assertSafe = vi.fn(async (_url: string) => {});
 vi.mock('../safe-url.js', () => ({
 	assertSafeRemoteDefinitionUrl: (url: string) => assertSafe(url)
@@ -76,7 +71,7 @@ describe('createRemoteDefinitionFetcher — happy path', () => {
 		const fetcher = createRemoteDefinitionFetcher({ ...baseConfig(), now: () => clock });
 
 		await fetcher.load('https://example.com/a.gh');
-		await fetcher.load('https://example.com/a.gh'); // within TTL → cached
+		await fetcher.load('https://example.com/a.gh');
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 
 		clock += 60_001; // past the 60s TTL
@@ -106,7 +101,6 @@ describe('createRemoteDefinitionFetcher — rejections', () => {
 	});
 
 	it('rejects when the streamed body exceeds the cap despite a missing content-length', async () => {
-		// No content-length header — the streaming cap must still catch it.
 		fetchMock.mockResolvedValue(streamResponse(new Uint8Array(50), { contentLength: null }));
 		const fetcher = createRemoteDefinitionFetcher({ ...baseConfig(), maxBytes: 10 });
 		await expect(fetcher.load('https://example.com/lying.gh')).rejects.toThrow(

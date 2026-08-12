@@ -1,20 +1,19 @@
 import type { Project, ProjectAccessInput, RequestContext } from '@selvajs/platform';
 
 /**
- * Assembly of `ProjectAccessInput` — the marshalling layer between an app's
- * providers and platform's pure access rules (`canView`/`canEdit`/`canSolve`/
- * `canManage`/…). The rules are pure functions over one input shape; the
- * knowledge captured here is **which rows each project visibility needs**, so
- * a consuming app doesn't reimplement (and mis-fetch) it:
+ * Marshals an app's providers into the one input shape platform's pure access
+ * rules (`canView`/`canEdit`/`canSolve`/`canManage`/…) read. What lives here is
+ * **which rows each visibility needs**, so a consuming app doesn't reimplement
+ * and mis-fetch it:
  *
  * - `platform` → grants (skipped entirely while the feature flag is off)
  * - `private`  → caller's project member row
  * - `org` / `public` → caller's project member row (for canEdit/canManage) and
  *   org member row (for canView). Cross-org public skips the org row.
  *
- * Wiring is injected: row lookups as functions (so lazily-initialized
- * providers work unchanged) and flags read per call (so runtime flag flips
- * behave like the app's own `flag()` reads).
+ * Row lookups are injected as functions so lazily-initialized providers work
+ * unchanged, and flags are read per call so runtime flips behave like the app's
+ * own `flag()` reads.
  */
 
 export interface ProjectAccessFlags {
@@ -45,10 +44,9 @@ export interface ProjectAccessInputDeps {
 
 export interface ProjectAccessInputBuilder {
 	/**
-	 * Build the rule input for any project-scope rule, fetching exactly the
-	 * rows the rule will consult based on `project.visibility`. Other fields
-	 * default to safe values; pass `overrides` for the rare callers that
-	 * already loaded a row (e.g. tests, batched listing pages).
+	 * Fetches exactly the rows the rule will consult, based on
+	 * `project.visibility`. Other fields default to safe values; `overrides` is
+	 * for the rare caller that already loaded a row (tests, batched listings).
 	 */
 	buildProjectAccessInput(
 		ctx: RequestContext,
@@ -56,10 +54,9 @@ export interface ProjectAccessInputBuilder {
 		overrides?: Partial<ProjectAccessInput>
 	): Promise<ProjectAccessInput>;
 	/**
-	 * Build a `ProjectAccessInput` from caller-provided rows without any I/O.
-	 * Used by listing pages that have already batch-loaded membership for many
-	 * projects; the per-row predicate calls this instead of
-	 * `buildProjectAccessInput` to avoid an N+1 fetch.
+	 * Same input, from caller-provided rows and no I/O. A listing page that has
+	 * batch-loaded membership calls this per row instead of
+	 * `buildProjectAccessInput`, which would fetch N+1 times.
 	 */
 	projectAccessInputFromRows(
 		ctx: RequestContext,
@@ -88,8 +85,8 @@ export function createProjectAccessInputBuilder(
 			let platformGrants: ProjectAccessInput['platformGrants'] = [];
 
 			if (project.visibility === 'platform') {
-				// When the flag is off the rule short-circuits before reading grants —
-				// skip the lookup to keep "feature disabled" cheap.
+				// With the flag off every rule returns false before reading grants,
+				// so the lookup would be wasted I/O.
 				if (enablePlatformProjects) {
 					platformGrants = await deps.listPlatformGrants(ctx, project.id);
 				}

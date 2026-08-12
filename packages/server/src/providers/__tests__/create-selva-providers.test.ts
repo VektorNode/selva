@@ -1,9 +1,3 @@
-/**
- * Tests for `createSelvaProviders` (K5) — registry-driven provider selection,
- * lazy memoized instantiation, config parsing (flags/branding/tenancy), the
- * solve-metrics duck-type pick, and the external config-path override.
- */
-
 import { describe, it, expect, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import type { IAuthProvider, IDataProvider, IStorageProvider } from '@selvajs/platform';
@@ -135,7 +129,7 @@ describe('solve metric sink', () => {
 		const runtime = await createSelvaProviders({}, { registry, ...noBoot });
 		const sink = runtime.solveMetricSink();
 		expect(typeof sink.record).toBe('function');
-		expect(runtime.solveMetricSink()).toBe(sink); // memoized
+		expect(runtime.solveMetricSink()).toBe(sink); // same instance — memoized
 	});
 
 	it('reuses a duck-typed solveMetrics sink carried by the data provider', async () => {
