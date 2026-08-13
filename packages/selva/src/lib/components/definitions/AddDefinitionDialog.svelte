@@ -96,8 +96,8 @@
 		name: string;
 		description?: string;
 		tags?: string[];
-		inputs: unknown[];
-		outputs: unknown[];
+		inputs?: unknown[];
+		outputs?: unknown[];
 	} | null>(null);
 
 	function formatBytes(bytes: number): string {
@@ -363,16 +363,14 @@
 						</p>
 					</div>
 				{:else if validationSchema}
+					{@const inputCount = validationSchema.inputs?.length ?? 0}
+					{@const outputCount = validationSchema.outputs?.length ?? 0}
 					<div class="border-success/30 bg-success/5 flex items-center gap-3 rounded-md border p-3">
 						<div class="min-w-0 flex-1">
 							<p class="text-success text-xs font-medium">Valid Selva definition</p>
 							<p class="text-muted-foreground mt-0.5 text-xs">
-								{validationSchema.inputs.length} input{validationSchema.inputs.length === 1
-									? ''
-									: 's'},
-								{validationSchema.outputs.length} output{validationSchema.outputs.length === 1
-									? ''
-									: 's'}
+								{inputCount} input{inputCount === 1 ? '' : 's'},
+								{outputCount} output{outputCount === 1 ? '' : 's'}
 							</p>
 						</div>
 					</div>

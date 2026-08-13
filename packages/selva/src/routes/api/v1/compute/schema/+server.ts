@@ -7,7 +7,11 @@ import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { MAX_DEFINITION_FILE_SIZE } from '$lib/server/computeLimits';
-import { postSchemaFormData, SchemaExtractionError } from '@selvajs/server/definitions';
+import {
+	assertCamelCaseSchema,
+	postSchemaFormData,
+	SchemaExtractionError
+} from '@selvajs/server/definitions';
 
 // Multipart envelope (boundaries + Content-Disposition headers) adds a small
 // constant overhead on top of the raw .gh bytes; 1 MB clears it comfortably.
@@ -68,6 +72,19 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			ApiErrorCode.UNPROCESSABLE,
 			diagnosis.length > 0 ? diagnosis.join('\n') : 'No schemas found in definition'
 		);
+	}
+
+	// `postSchemaFormData` already normalized the casing, so what survives to here
+	// is a schema with no readable `inputs` at all. Upload is a hard gate: letting
+	// it through creates a definition that renders empty, and the client cannot
+	// tell that from a definition that genuinely has no inputs.
+	try {
+		schemas.forEach(assertCamelCaseSchema);
+	} catch (err) {
+		if (err instanceof SchemaExtractionError) {
+			apiError(422, ApiErrorCode.UNPROCESSABLE, err.message);
+		}
+		throw err;
 	}
 
 	return new Response(JSON.stringify(schemas), {

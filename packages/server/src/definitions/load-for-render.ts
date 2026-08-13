@@ -162,7 +162,7 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 		// the full path below, so the result is always a valid schema.
 		if (options?.skipComputeDefaults) {
 			const cachedSchema = version.schema as UISchema | undefined;
-			if (cachedSchema && cachedSchema.schemaVersion === UI_SCHEMA_VERSION) {
+			if (cachedSchema && isUsableCachedSchema(cachedSchema)) {
 				return { version, definitionSource, computeServer, schema: cachedSchema };
 			}
 		}
@@ -188,8 +188,7 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 			// current format — the web side never migrates schemas itself. `getIO`
 			// runs either way, to merge compute default values in.
 			const cachedSchema = version.schema as UISchema | undefined;
-			const freshCache =
-				cachedSchema && cachedSchema.schemaVersion === UI_SCHEMA_VERSION ? cachedSchema : null;
+			const freshCache = cachedSchema && isUsableCachedSchema(cachedSchema) ? cachedSchema : null;
 			const [definition, fetchedSchema] = await Promise.all([
 				client.getIO(definitionSource),
 				freshCache ? Promise.resolve(freshCache) : fetchSchema(definitionSource, computeServer)
@@ -276,12 +275,34 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 	};
 }
 
+/**
+ * A cached schema is usable only if it is BOTH the current format version and
+ * structurally sound. The version check alone is not enough: a compute server
+ * that serialized the schema with the wrong Newtonsoft emits PascalCase keys, so
+ * `schemaVersion` reads as undefined while `SchemaVersion` holds the value —
+ * and a row cached during that window would otherwise be served forever, long
+ * after the server was fixed. See `assertCamelCaseSchema`.
+ */
+function isUsableCachedSchema(schema: UISchema): boolean {
+	return schema.schemaVersion === UI_SCHEMA_VERSION && Array.isArray(schema.inputs);
+}
+
 // Colors come back from Compute as "r,g,b" or "a,r,g,b" strings — converted to
 // hex here so the color picker can consume them directly.
 function mergeComputeDefaults(
 	schema: UISchema,
 	computeInputs: Array<{ id?: string; paramType?: string; default?: unknown }>
 ): UISchema {
+	if (!Array.isArray(schema.inputs)) {
+		throw new DefinitionLoadError(
+			'schema',
+			`Schema has no 'inputs' array (keys: ${Object.keys(schema as object)
+				.slice(0, 12)
+				.join(', ')}). A PascalCase shape here means compute serialized it with the wrong ` +
+				`Newtonsoft — see assertCamelCaseSchema.`
+		);
+	}
+
 	const byParamId = new Map(computeInputs.map((input) => [input.id, input]));
 
 	return {

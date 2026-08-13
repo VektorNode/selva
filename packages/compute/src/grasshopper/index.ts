@@ -53,6 +53,7 @@ export { default as ComputeServerStats } from './server/compute-server-stats';
 export { fetchDefinitionIO, fetchParsedDefinitionIO } from './io/definition-io';
 export { readSchemaResults } from './io/schema-endpoint';
 export type { SchemaEndpointResult } from './io/schema-endpoint';
+export { normalizeUISchemaCasing } from './io/normalize-ui-schema';
 export { processInput } from './io/input/input-processors';
 export type {
 	GetValuesOptions,

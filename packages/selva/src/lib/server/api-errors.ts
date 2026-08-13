@@ -89,9 +89,10 @@ function friendlyConstraintMessage(raw: string): string | null {
  */
 export function handleApiError(err: unknown, fallback: string): never {
 	if (isHttpError(err)) throw err;
-	// Compute unreachable → 503; invalid/newer-than-supported schema → 422.
+	// Compute unreachable, or serving a schema shape the app cannot read → 503
+	// (both are operator-side); invalid/newer-than-supported schema → 422.
 	if (err instanceof SchemaExtractionError) {
-		if (err.kind === 'unreachable') {
+		if (err.kind === 'unreachable' || err.kind === 'malformed') {
 			apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, err.message);
 		}
 		apiError(422, ApiErrorCode.UNPROCESSABLE, err.message);

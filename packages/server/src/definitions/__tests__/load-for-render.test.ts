@@ -228,6 +228,53 @@ describe('skipComputeDefaults', () => {
 	});
 });
 
+/**
+ * A schema with no readable `inputs` used to reach `mergeComputeDefaults` and
+ * die on `schema.inputs.map(...)`, surfacing as a bare "Cannot read properties of
+ * undefined (reading 'map')" attributed to an unrelated line. The shape came from
+ * a compute server emitting PascalCase (see `assertCamelCaseSchema`).
+ */
+describe('schema shapes that lack a readable inputs array', () => {
+	const pascalCase = {
+		Id: 'schema-1',
+		SchemaVersion: UI_SCHEMA_VERSION,
+		Inputs: [{ Id: 'a' }],
+		Outputs: [],
+		Layout: { Type: 'tabbed', Tabs: [] }
+	} as unknown as UISchema;
+
+	it('reports a classified error rather than throwing on undefined', async () => {
+		const { deps, mocks } = makeDeps({ fetchSchema: vi.fn(async () => pascalCase) });
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: undefined }));
+
+		await expect(createDefinitionLoader(deps)(ctx, record, 'live')).rejects.toMatchObject({
+			name: 'DefinitionLoadError',
+			kind: 'schema'
+		});
+	});
+
+	it('names the missing key instead of surfacing a map() TypeError', async () => {
+		const { deps, mocks } = makeDeps({ fetchSchema: vi.fn(async () => pascalCase) });
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: undefined }));
+
+		await expect(createDefinitionLoader(deps)(ctx, record, 'live')).rejects.toThrow(/inputs/);
+	});
+
+	// Without this, a row cached during a PascalCase window is served forever —
+	// the version matches, so the staleness check alone would accept it.
+	it('re-extracts rather than serving a cached schema with no inputs array', async () => {
+		const { deps, mocks } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: pascalCase }));
+
+		const result = await createDefinitionLoader(deps)(ctx, record, 'live', null, {
+			skipComputeDefaults: true
+		});
+
+		expect(mocks.fetchSchema).toHaveBeenCalled();
+		expect(result.schema.inputs[0]).toMatchObject({ id: 'a' });
+	});
+});
+
 describe('version resolution', () => {
 	it('resolves the draft pointer for the draft channel', async () => {
 		const { deps, mocks } = makeDeps();

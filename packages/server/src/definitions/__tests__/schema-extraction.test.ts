@@ -10,6 +10,7 @@ import type { ComputeServerConfig } from '@selvajs/platform';
 import {
 	fetchSchemaFromCompute,
 	assertSupportedSchemaVersion,
+	assertCamelCaseSchema,
 	SchemaExtractionError,
 	readSchemaResults
 } from '../schema-extraction.js';
@@ -70,6 +71,41 @@ describe('assertSupportedSchemaVersion', () => {
 
 	it('passes an unparseable version string (fail open — invalid is not "newer")', () => {
 		expect(() => assertSupportedSchemaVersion(schema('abc'))).not.toThrow();
+	});
+});
+
+describe('assertCamelCaseSchema', () => {
+	// The real regression: compute serialized the plugin's UISchema with its own
+	// Newtonsoft, which ignored the [JsonProperty] attributes and emitted raw CLR
+	// member names. Nothing threw — `schema.inputs` was just undefined everywhere.
+	const pascalCase = {
+		Id: 'schema-1',
+		Name: 'Test',
+		SchemaVersion: '2.14.0',
+		Inputs: [],
+		Outputs: [],
+		Layout: { Type: 'tabbed', Tabs: [] }
+	} as unknown as UISchema;
+
+	it('accepts a camelCase schema', () => {
+		expect(() => assertCamelCaseSchema(schema(UI_SCHEMA_VERSION))).not.toThrow();
+	});
+
+	it('rejects a PascalCase schema and names the offending keys', () => {
+		expect(() => assertCamelCaseSchema(pascalCase)).toThrow(/keys are PascalCase/);
+		expect(() => assertCamelCaseSchema(pascalCase)).toThrow(/Inputs/);
+	});
+
+	it('classifies a PascalCase schema as malformed', () => {
+		expect(() => assertCamelCaseSchema(pascalCase)).toThrowError(
+			expect.objectContaining({ name: 'SchemaExtractionError', kind: 'malformed' })
+		);
+	});
+
+	it('rejects a schema missing inputs entirely', () => {
+		expect(() => assertCamelCaseSchema({ id: 'x' } as unknown as UISchema)).toThrow(
+			/no 'inputs' array/
+		);
 	});
 });
 

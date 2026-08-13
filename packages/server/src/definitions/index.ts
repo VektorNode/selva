@@ -4,6 +4,7 @@ export {
 	fetchSchemaFromCompute,
 	postSchemaFormData,
 	assertSupportedSchemaVersion,
+	assertCamelCaseSchema,
 	readSchemaResults,
 	SchemaExtractionError
 } from './schema-extraction.js';
