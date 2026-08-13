@@ -1,0 +1,26 @@
+<!--
+	Neutralizes the automatic merge target that ILRepack.Lib.MSBuild.Task injects
+	into every Release build of a project referencing it.
+
+	The package's build/ILRepack.Lib.MSBuild.Task.targets defines
+	<Target Name="ILRepack" AfterTargets="Build"> guarded by
+	`!Exists('$(ILRepackTargetsFile)')`. When no such file exists, that target
+	merges the primary output with EVERY DLL in the output directory
+	(TargetKind="SameAsPrimaryAssembly") and then deletes the copy-local files.
+
+	For Selva.gha that meant System.Drawing.Common and the bodiless
+	System.Windows.Forms reference assembly were merged into the plugin, so
+	ILRepack rewrote Grasshopper member references like
+	AddCategoryIcon(String, System.Drawing.Bitmap) to point at the internalized
+	Bitmap copy — a different type identity than the one Grasshopper.dll
+	declares. Result: MissingMethodException the moment the plugin loads
+	(shipped in 0.17.1). Debug builds were unaffected because the auto-target is
+	Release-only, which is exactly why it went unnoticed.
+
+	Directory.Build.props points ILRepackTargetsFile here, so the Exists() check
+	succeeds, the auto-target's condition is false, and this (empty) project is
+	imported instead. The intended merges live in explicit targets in
+	Selva.GH.csproj and Selva.Drawing.csproj, with hand-picked inputs.
+-->
+<Project>
+</Project>

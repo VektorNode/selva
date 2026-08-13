@@ -25,6 +25,9 @@
 			Rhino 8 SDK; the net9.0 references carry VersionOverride for the 9.x wip build.
 		-->
 		<PackageVersion Include="Grasshopper" Version="8.0.23304.9001"/>
+		<!-- Direct reference only in Selva.PluginVerifier (elsewhere it flows
+		     transitively via Grasshopper); must stay in lockstep with it. -->
+		<PackageVersion Include="RhinoCommon" Version="8.0.23304.9001"/>
 
 		<!--
 			Pinned to 8.0.0, NOT the latest. Consumers target net7.0, where 10.x ships a
@@ -49,6 +52,10 @@
 		-->
 		<PackageVersion Include="SixLabors.ImageSharp" Version="2.1.11"/>
 		<PackageVersion Include="SixLabors.Fonts" Version="1.0.0-beta17"/>
+		<!-- ImageSharp needs Unsafe >= 5.0 (SkipInit) and CodePages; both are merged
+		     into Selva.Drawing.dll in Release because PrivateAssets severs them. -->
+		<PackageVersion Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0"/>
+		<PackageVersion Include="System.Text.Encoding.CodePages" Version="5.0.0"/>
 		<PackageVersion Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34"/>
 
 		<PackageVersion Include="coverlet.collector" Version="10.0.1"/>

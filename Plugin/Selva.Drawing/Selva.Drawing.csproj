@@ -42,6 +42,16 @@
                 <PackageReference Include="SixLabors.Fonts" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
                 <PackageReference Include="SixLabors.ImageSharp" Condition="'$(Configuration)' != 'Release'" />
                 <PackageReference Include="SixLabors.Fonts" Condition="'$(Configuration)' != 'Release'" />
+                <!--
+                        ImageSharp 2.1.11 needs Unsafe >= 5.0 (Unsafe.SkipInit) and CodePages,
+                        but PrivateAssets="all" severs those transitive deps, and Selva.GH's own
+                        net48 graph resolves an older Unsafe (4.x, via System.Memory) that lacks
+                        SkipInit — MissingMethodException on JPEG decode in netfx Rhino. Merging
+                        both alongside ImageSharp removes the runtime version dance entirely.
+                        Debug needs nothing: the plain ImageSharp reference flows them normally.
+                -->
+                <PackageReference Include="System.Runtime.CompilerServices.Unsafe" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
+                <PackageReference Include="System.Text.Encoding.CodePages" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
                 <PackageReference Include="System.Drawing.Common" />
                 <!-- Provides the <ILRepack> MSBuild task used by the Release merge target below. -->
                 <PackageReference Include="ILRepack.Lib.MSBuild.Task" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
@@ -86,6 +96,8 @@
 			<_RepackToStage Include="$(PkgSharpZipLib)\lib\netstandard2.0\ICSharpCode.SharpZipLib.dll" />
 			<_RepackToStage Include="$(PkgSixLabors_ImageSharp)\lib\netstandard2.0\SixLabors.ImageSharp.dll" />
 			<_RepackToStage Include="$(PkgSixLabors_Fonts)\lib\netstandard2.0\SixLabors.Fonts.dll" />
+			<_RepackToStage Include="$(PkgSystem_Runtime_CompilerServices_Unsafe)\lib\netstandard2.0\System.Runtime.CompilerServices.Unsafe.dll" />
+			<_RepackToStage Include="$(PkgSystem_Text_Encoding_CodePages)\lib\netstandard2.0\System.Text.Encoding.CodePages.dll" />
 		</ItemGroup>
 
 		<RemoveDir Directories="$(_RepackStageDir)" />
@@ -98,6 +110,8 @@
 			<_RepackInputMerge Include="$(_RepackStageDir)ICSharpCode.SharpZipLib.dll" />
 			<_RepackInputMerge Include="$(_RepackStageDir)SixLabors.ImageSharp.dll" />
 			<_RepackInputMerge Include="$(_RepackStageDir)SixLabors.Fonts.dll" />
+			<_RepackInputMerge Include="$(_RepackStageDir)System.Runtime.CompilerServices.Unsafe.dll" />
+			<_RepackInputMerge Include="$(_RepackStageDir)System.Text.Encoding.CodePages.dll" />
 			<!-- Search the stage dir first; fall back to the main bin/ for sibling reference assemblies. -->
 			<_RepackSearchDirs Include="$(_RepackStageDir);$(_RepackOutDir)" />
 		</ItemGroup>

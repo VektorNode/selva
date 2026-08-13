@@ -110,7 +110,7 @@ async function build() {
 		checkPrerequisites();
 
 		// Step 1: Copy web assets to plugin directory
-		log('[1/4] Copying web assets to plugin...');
+		log('[1/5] Copying web assets to plugin...');
 		const webDir = join(projectRoot, 'Plugin/Selva.GH/EmbeddedAssets/web');
 		const buildDir = join(projectRoot, 'packages/plugin-ui/build');
 
@@ -147,16 +147,80 @@ async function build() {
 		// duplicate-type errors because the internalized PdfSharpCore types inside
 		// Selva.Drawing become visible via InternalsVisibleTo and collide with the public
 		// PdfSharpCore package reference. Tests run separately in Debug.
-		log('[2/4] Building C# plugin...');
+		log('[2/5] Building C# plugin...');
+		let buildOutput;
 		try {
-			execSync('dotnet build Selva.GH/Selva.GH.csproj --configuration Release', {
+			buildOutput = execSync('dotnet build Selva.GH/Selva.GH.csproj --configuration Release', {
 				cwd: join(projectRoot, 'Plugin'),
-				stdio: 'inherit'
+				encoding: 'utf-8',
+				maxBuffer: 64 * 1024 * 1024
 			});
+			process.stdout.write(buildOutput);
 			logSuccess('Plugin build complete');
-		} catch {
+		} catch (err) {
+			const e = /** @type {{ stdout?: string, stderr?: string }} */ (err);
+			if (e.stdout) process.stdout.write(e.stdout);
+			if (e.stderr) process.stderr.write(e.stderr);
 			logError('Plugin build failed');
 			process.exit(1);
+		}
+		log('');
+
+		// ILRepack logs its warnings to the console, not to MSBuild — the build exits 0
+		// even when the merge corrupted a member reference. "Method reference is used
+		// with definition" is the pattern behind the 0.17.1 MissingMethodException:
+		// ILRepack rewrote a signature to a merged type and shipped it anyway.
+		const deadlyMergePatterns = [
+			'Method reference is used with definition',
+			'Duplicate type '
+		];
+		const mergeProblems = deadlyMergePatterns.filter((p) => buildOutput.includes(p));
+		if (mergeProblems.length > 0) {
+			logError(`ILRepack reported a broken merge (${mergeProblems.join(', ')}) — aborting.`);
+			process.exit(1);
+		}
+
+		// Step 3: Verify the merged assemblies actually bind.
+		// Selva.PluginVerifier force-JITs every method of the merged output on each
+		// Rhino runtime family; a corrupted merge fails here instead of inside a
+		// user's Rhino. Windows-only (the verifier hosts real WinForms); release
+		// builds are cut on Windows CI, macOS dev builds skip it.
+		if (process.platform === 'win32') {
+			log('[3/5] Verifying merged plugin assemblies...');
+			try {
+				execSync('dotnet build Selva.PluginVerifier/Selva.PluginVerifier.csproj --configuration Release', {
+					cwd: join(projectRoot, 'Plugin'),
+					stdio: 'inherit'
+				});
+			} catch {
+				logError('Verifier build failed');
+				process.exit(1);
+			}
+
+			const verifierDir = join(projectRoot, 'Plugin/Selva.PluginVerifier/bin/Release');
+			const verifyLegs = [
+				{ tfm: 'net48', cmd: `"${join(verifierDir, 'net48/Selva.PluginVerifier.exe')}"` },
+				{ tfm: 'net7.0', cmd: `dotnet "${join(verifierDir, 'net7.0-windows/Selva.PluginVerifier.dll')}"` },
+				{ tfm: 'net9.0', cmd: `dotnet "${join(verifierDir, 'net9.0-windows/Selva.PluginVerifier.dll')}"` }
+			];
+			for (const leg of verifyLegs) {
+				const outDir = join(projectRoot, 'Plugin/Selva.GH/bin/Release', leg.tfm);
+				try {
+					if (!statSync(outDir).isDirectory()) continue;
+				} catch {
+					logWarning(`${leg.tfm} output missing, skipping verification`);
+					continue;
+				}
+				try {
+					execSync(`${leg.cmd} "${outDir}"`, { stdio: 'inherit' });
+					logSuccess(`${leg.tfm}: all member references bind`);
+				} catch {
+					logError(`${leg.tfm}: verification FAILED — the merged plugin would break inside Rhino.`);
+					process.exit(1);
+				}
+			}
+		} else {
+			logWarning('[3/5] Skipping merge verification (Windows-only step)');
 		}
 		log('');
 
@@ -166,7 +230,7 @@ async function build() {
 		// Each TFM's output folder (containing Selva.gha and deps) is copied
 		// into the yak staging dir as a TFM-named subfolder, alongside the
 		// manifest and icon. `yak build` is then run in each staging dir.
-		log('[3/4] Staging and building yak packages...');
+		log('[4/5] Staging and building yak packages...');
 		const releaseDir = join(projectRoot, 'Plugin/Selva.GH/bin/Release');
 		const yakStagingRoot = join(projectRoot, 'Plugin/Selva.GH/bin/Yak');
 		const resourcesDir = join(projectRoot, 'Plugin/Selva.GH/Resources');
@@ -244,7 +308,7 @@ async function build() {
 		log('');
 
 		// Step 4: Display output information
-		log('[4/4] Build summary:');
+		log('[5/5] Build summary:');
 		log('');
 		log('Yak packages:');
 		for (const pkg of packages) {
