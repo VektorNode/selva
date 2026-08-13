@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/compute",
-	"version": "4.0.0",
+	"version": "4.0.1",
 	"description": "TypeScript library for Rhino Compute Server - Grasshopper and RhinoCommon",
 	"author": "VektorNode",
 	"license": "MIT",
