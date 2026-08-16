@@ -1,5 +1,4 @@
 <script lang="ts">
-	import GrowthHero from '$lib/components/GrowthHero.svelte';
 	import { FOOD4RHINO_URL, YAK_PACKAGE_NAME } from '$lib/nav';
 
 	const CONTACT_EMAIL = 'felix@vektornode.com';
@@ -25,18 +24,6 @@
 >
 	<!-- Atmosphere: soft green glows and ripple rings, all decorative. -->
 	<div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
-		<div
-			class="absolute -top-64 left-1/5 size-[55rem] rounded-full blur-3xl"
-			style="background: radial-gradient(circle, oklch(0.34 0.08 155 / 0.45), transparent 65%);"
-		></div>
-		<div
-			class="absolute top-[55rem] -right-72 size-[48rem] rounded-full blur-3xl"
-			style="background: radial-gradient(circle, oklch(0.3 0.07 150 / 0.4), transparent 65%);"
-		></div>
-		<div
-			class="absolute top-[110rem] -left-80 size-[50rem] rounded-full blur-3xl"
-			style="background: radial-gradient(circle, oklch(0.29 0.06 158 / 0.4), transparent 65%);"
-		></div>
 		<svg class="absolute top-16 -right-40 size-[44rem] opacity-[0.06]" viewBox="0 0 400 400">
 			{#each [36, 74, 116, 162, 199] as r (r)}
 				<circle cx="200" cy="200" {r} fill="none" stroke="white" stroke-width="1" />
@@ -57,7 +44,7 @@
 				<h1
 					class="font-display mt-6 text-6xl leading-[0.98] tracking-tight text-balance sm:text-7xl"
 				>
-					Host your own definitions.
+					Share your workflows
 				</h1>
 				<p class="mt-7 max-w-md leading-relaxed text-pretty text-white/65">
 					Turn Grasshopper definitions into web apps on your own machines. Your team gets a link —
@@ -80,7 +67,6 @@
 					</a>
 				</div>
 			</div>
-			<GrowthHero />
 		</section>
 
 		<!-- ═══ 01 Why ═══ -->
