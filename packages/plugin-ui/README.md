@@ -10,16 +10,17 @@ UI for the Selva Grasshopper plugin — schema designer + preview. Embedded into
 
 ## How it works
 
-The plugin (`Selva.gha`) starts a WebSocket server on port 8765. The dev server connects to it, discovers Grasshopper parameters automatically, and persists the schema back into the `.gh` file. `/preview` re-renders on every parameter change.
+The plugin (`Selva.gha`) starts a WebSocket server on loopback — 8765 by default, or a free port if that's taken — and opens the UI with its actual port in the `wsPort` query param. The page connects back over that socket, discovers Grasshopper parameters, and persists the schema into the `.gh` file. `/preview` re-renders on every parameter change.
+
+Every route needs a `session` query param; the root page refuses to proceed without one, since the session is what ties a browser tab to one UIBuilder component.
 
 ## Development
 
 ```bash
-pnpm install
-pnpm run dev    # http://localhost:5173
+pnpm dev:plugin    # http://localhost:5173
 ```
 
-No env vars required.
+No env vars — the WebSocket port arrives in the query string.
 
 ## Production
 

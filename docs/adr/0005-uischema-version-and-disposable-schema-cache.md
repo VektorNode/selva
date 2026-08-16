@@ -6,6 +6,13 @@
 > [`@selvajs/server`](../../packages/server/) (the former `docs/plans/embeddable-server-layer.md`
 > tracker, item K4; deleted 2026-07-13 once its work shipped), so the migration
 > story doesn't ship inside the package and freeze the blob format as contract.
+>
+> **Implementation moved (K4, since shipped).** The version-check and re-extract
+> logic named below now lives in
+> [`@selvajs/server/definitions`](../../packages/server/src/definitions/) —
+> `load-for-render.ts` and `schema-extraction.ts`. The app files still exist as
+> thin bindings that wire in providers and compute resolution; the decision logic
+> is in the package. Behaviour is unchanged.
 
 ## Problem
 

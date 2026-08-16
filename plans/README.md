@@ -1,187 +1,123 @@
-# Plans — implementation order
+# Plans — what's open, what's done
 
-Plan files are named by descriptive slug (no number prefixes — the numbers used to imply an order
-they didn't have). This index is the single source of truth for sequence. As of 2026-07-31.
+Plan files are named by descriptive slug. **Status lives on the issue tracker, not here** — this
+index just maps each plan to the issue that tracks it. See [CONVENTIONS.md](./CONVENTIONS.md).
+
+Everything below was verified against the source tree on 2026-08-16, not taken from the plans' own
+headers, several of which were badly wrong in both directions.
+
 `plans/` is internal-only (not Selva documentation — excluded from the published website) and lives
-at the repo root, separate from `docs/`. Plans are grouped by kind:
+at the repo root, separate from `docs/`.
 
-- [`refactors/`](./refactors/) — structural, no user-facing behavior change (Track A).
-- [`features/`](./features/) — new product surface (Track B).
-- [`fixes/`](./fixes/) — defects, performance residue, and open audit items (Track B).
-- [`archive/`](./archive/) — fully closed plans, kept for the reasoning.
+- [`features/`](./features/) — new product surface.
+- [`fixes/`](./fixes/) — defects, performance residue, and open audit items.
+- [`archive/`](./archive/) — closed plans, kept for the reasoning.
 
-## Status at a glance
+## What to pick up
 
-| Plan                                                                       | Status                                                                     | Track            |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------- |
-| [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)    | open items remain (P2/P3 list)                                             | B — efficiency   |
-| [api-redesign-plan](./features/api-redesign-plan.md)                       | not started                                                                | B — product      |
-| [token-plan](./features/token-plan.md) (PATs)                              | not started, **blocked by api-redesign**                                   | B — product      |
-| [presolve-bundle](./features/presolve-bundle.md)                           | not started (planning)                                                     | B — product      |
-| [cloud-binary-transport](./features/cloud-binary-transport.md)             | not started, deliberately deferred ("when the traffic arrives")            | B — product      |
-| [plugin-compat-gate](./features/plugin-compat-gate.md)                     | not started (planning)                                                     | B — operator     |
-| [compute-package-cleanup](./refactors/compute-package-cleanup.md)          | not started, **unblocked** (viz-package done)                              | **A — refactor** |
-| [admin-updates-yak-management](./features/admin-updates-yak-management.md) | design only, no implementation (planning)                                  | B — operator     |
-| [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)              | not started — traced 2026-07-31, GH fixture pending                        | B — correctness  |
-| [solve-engine-facade](./features/solve-engine-facade.md)                   | proposal, not started — written from the Parafa side, 2026-08-02           | **A — refactor** |
-| [solve-fn-raw-response](./features/solve-fn-raw-response.md)               | **shipped** in `@selvajs/solve@0.2.0-beta.4` (`64c954ef`)                  | **A — refactor** |
-| [solve-result-host-seam](./features/solve-result-host-seam.md)             | proposal, not started — the last hop; `@selvajs/ui` has no result-out seam | **A — refactor** |
+**Go to [the board](https://github.com/orgs/VektorNode/projects/2), not this file.** Issues own
+status, assignment and priority; plans own the reasoning. See [CONVENTIONS.md](./CONVENTIONS.md)
+for why, and read it before adding a plan.
 
-**Fully closed, moved to [`archive/`](./archive/)** — no residue. Kept for the _why_:
+Sorted by Priority then Effort, the board's top rows are the work worth starting. As of
+2026-08-16 that is #195 (org-admin privilege escalation) and #202 (the pm2 staging test) — both
+High priority, low effort.
 
-- [display-pipeline-open](./archive/display-pipeline-open.md) (full audit
-  [archived separately](./archive/display-pipeline-performance-audit.md)) — closed 2026-07-31 by
-  the live Rhino check: `BatchBlobCache` hit rate confirmed on a real definition (6 consecutive
-  hits on identical geometry, size flat at 1 entry throughout) and `Stats()` wired into a debug log
-  so the check is no longer a one-off. P3 (cloud binary transport) was rehomed to
-  [features/cloud-binary-transport](./features/cloud-binary-transport.md) before closing, since it
-  was an unstarted feature rather than display-pipeline residue.
-- [visualization-package](./archive/visualization-package.md) (all 8 steps) and
-  [visualization-standalone](./archive/visualization-standalone.md) (§1–§4; §5/§6 absorbed by
-  solve-package), both 2026-07-30. These hold the **GPU-ownership rules** —
+Each plan below links to its tracking issue at the top of the file.
+
+| Plan                                                                            | Tracked in                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [selva-app-security-audit](./fixes/selva-app-security-audit.md)                 | [#194](https://github.com/VektorNode/selva/issues/194) (6 sub-issues)                                                                                                                                                       |
+| [api-v1-residuals](./fixes/api-v1-residuals.md)                                 | [#201](https://github.com/VektorNode/selva/issues/201)                                                                                                                                                                      |
+| [host-prerequisites-and-pm2-audit](./fixes/host-prerequisites-and-pm2-audit.md) | [#202](https://github.com/VektorNode/selva/issues/202)                                                                                                                                                                      |
+| [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)         | [#203](https://github.com/VektorNode/selva/issues/203) (cheap wins only)                                                                                                                                                    |
+| [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)                   | [#208](https://github.com/VektorNode/selva/issues/208) (5 phases)                                                                                                                                                           |
+| [token-plan](./features/token-plan.md)                                          | [#97](https://github.com/VektorNode/selva/issues/97) + [#214](https://github.com/VektorNode/selva/issues/214)/[#215](https://github.com/VektorNode/selva/issues/215)/[#216](https://github.com/VektorNode/selva/issues/216) |
+| [admin-updates-yak-management](./features/admin-updates-yak-management.md)      | [#217](https://github.com/VektorNode/selva/issues/217) — Track A only                                                                                                                                                       |
+| [plugin-compat-gate](./features/plugin-compat-gate.md)                          | [#218](https://github.com/VektorNode/selva/issues/218)                                                                                                                                                                      |
+| [presolve-bundle](./features/presolve-bundle.md)                                | **unfiled** — parked on a storage decision                                                                                                                                                                                  |
+| [cloud-binary-transport](./features/cloud-binary-transport.md)                  | **unfiled** — deliberately deferred                                                                                                                                                                                         |
+
+The last two have no issue on purpose: an issue for work nobody can start is noise. They stay as
+design documents until something unblocks them.
+
+## Closed since the last index
+
+Three plans were marked "not started" here while being substantially or entirely finished, and two
+more were listed at paths that no longer exist. All are now accounted for:
+
+- **[api-redesign-plan](./archive/api-redesign-plan.md)** — Phases A–E all shipped. `/api/v1/*` is
+  the single versioned surface for browser and tokens, with an OpenAPI spec and a conformance test.
+  Four residuals extracted to [api-v1-residuals](./fixes/api-v1-residuals.md).
+- **[solve-result-host-seam](./archive/solve-result-host-seam.md)** — shipped and released. The
+  host reads the result via a `getLastResult` getter on `onReady`; the `onSolveResult` callback
+  alternative was rejected.
+- **[compute-package-cleanup](./archive/compute-package-cleanup.md)** — all 8 steps done
+  (2026-07-31), but **two pre-publish checks it deliberately left open still appear unclosed**:
+  grep parafa and parapet for the five removed symbols (`processInputs` and `getValues` are the
+  weakest-evidence cuts, and neither repo is in this monorepo's CI), and diff the published
+  `3.1.1` tarball rather than a local build. Both are cross-repo and unverifiable from here — close
+  them explicitly or they will read as done forever. Minor residue: `examples/simple_example.ts`
+  still imports `../src/grasshopper` rather than the package name, and the changeset the plan
+  points at was consumed by a release — the removed-symbol record is now in
+  `packages/compute/CHANGELOG.md`.
+- **solve-fn-raw-response** and **solve-engine-facade** — both **deleted from `features/`, not
+  archived**, in commit `b9c9d6a6`, while still listed in this index. The first shipped in
+  `@selvajs/solve@0.2.0-beta.4` (`64c954ef`); the second was an unstarted proposal, so its deletion
+  discarded a design rather than a record. Recoverable from git history if either is wanted back.
+  Separately, the `plans/refactors/` directory is gone — it only ever held compute-package-cleanup.
+
+Earlier closures, kept for the _why_ — these hold reasoning that is still load-bearing:
+
+- [visualization-package](./archive/visualization-package.md) and
+  [visualization-standalone](./archive/visualization-standalone.md) — the **GPU-ownership rules**:
   `CACHED_GEOMETRY_USERDATA_FLAG`, who disposes what, why `clearScene` skips cache-tagged geometry.
-  Two separate leaks have now been found on that seam, so the rationale is worth keeping reachable.
-- [edge-overlay-performance](./archive/edge-overlay-performance.md) (Phases 0–3, 2026-07-22; closed
-  2026-07-31 by the GPU-visual check). Holds the **why behind the edge pipeline** — the per-mesh
-  triangle cap (per-_mesh_, not scene-total), the worker + content-cache design, and why
-  `clearEdges` exists as distinct from `removeEdges`. The verification run also found the
-  `EdgesConfig` pass-through bug and repaired `pnpm example`, which the package move had broken.
-  Phase 4 (Rhino-authored edges) was never residue: it is an unstarted optional fidelity track and
-  gets its own plan if pursued.
-- [solve-package](./archive/solve-package.md) (Phases 0–4 + 6, 2026-07-30/31; Phase 5 superseded by
-  caching-simplification). `@selvajs/solve` now owns the whole "input change → solve result" chain on
-  both sides of the wire. Holds the **client/server boundary rationale** — why there is no root
-  barrel, and why the `@selvajs/server/compute` re-export shim was built and then deliberately
-  removed (it left 14 of 24 exports borrowed, erasing the boundary the extraction existed to draw).
-  Also records why L1 stays in `@selvajs/compute` and why `SolveResult.meshes` must stay opaque.
-- [caching-audit-2026-07](./archive/caching-audit-2026-07.md) — every finding closed or rehomed:
-  D1–D3 fixed, **F1 measured and fixed (a live GPU leak)**, F3 documented in
-  [Caching.md](../docs/Caching.md), F2 absorbed by
-  [caching-simplification](./archive/caching-simplification.md). Worth reading once: it found F1 by
+  Two separate leaks have been found on that seam.
+- [solve-package](./archive/solve-package.md) — the **client/server boundary rationale**: why there
+  is no root barrel, and why the `@selvajs/server/compute` re-export shim was built and then
+  deliberately removed (it left 14 of 24 exports borrowed, erasing the boundary the extraction
+  existed to draw).
+- [caching-simplification](./archive/caching-simplification.md) — ten cache names collapsed to
+  three, the redundant L2 tier deleted (~840 lines). Records **what was deliberately kept** and why
+  merging the two definition caches was rejected. Read before reviving any of them.
+- [caching-audit-2026-07](./archive/caching-audit-2026-07.md) — found a live GPU leak (F1) by
   reading the caches **as a system**, which is the one class of bug a per-cache review cannot catch.
-- [caching-simplification](./archive/caching-simplification.md) (all 4 phases, 2026-07-30) — ten
-  cache names collapsed to three, the redundant L2 tier deleted (~840 lines), three env gates
-  removed leaving two size knobs, and hit rates surfaced on `/admin/compute`. Holds the **reasoning
-  for what was deliberately kept**: `ISolveResultCache` as the Redis seam, single-flight made
-  unconditional, and `solveCacheLimit` left dormant rather than migrated away. Also records why
-  merging the two definition caches was rejected — read it before reviving any of the three.
+  **Its F2 is still marked open in its own header**, cross-referenced as solve-package Phase 5 —
+  which was then superseded by caching-simplification, which collapsed the tiers instead of
+  unifying their hash derivations. Nobody closed F2 against that; it is probably moot, but it is
+  the one loose thread in an otherwise closed plan.
+- [display-pipeline-open](./archive/display-pipeline-open.md) (+ its
+  [full audit](./archive/display-pipeline-performance-audit.md)) and
+  [edge-overlay-performance](./archive/edge-overlay-performance.md) — the **why behind the edge
+  pipeline**: the per-_mesh_ triangle cap, the worker + content-cache design, why `clearEdges` is
+  distinct from `removeEdges`. Edge Phase 4 (Rhino-authored edges) was never residue — it's an
+  unstarted optional fidelity track and gets its own plan if pursued.
+- [compute-monorepo-import](./archive/compute-monorepo-import.md).
 
-**Retired without being completed** — filed separately because it is not a success story:
+**Retired without being completed**, filed separately because it is not a success story:
 
-- [verify-slider-drag-solve-path](./archive/verify-slider-drag-solve-path.md) (2026-07-31) — a
-  measurement plan for the slider→solve path that **was never run**. Retired rather than left
-  open, because an unactioned verification doc reads as a pending check when it is really an
-  abandoned one. Two of its four claims closed on re-verification (single-flight was fixed in
-  code; `incrementSolveCount` became audit item C11); the two that needed a live stack were folded
-  into **C4** in [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md) as
-  explicitly unverified caveats. **Worth reading for one thing only:** its headline number
-  ("the 150ms debounce permits ~6.6 solves/sec") was itself a static-reading error — it ignored
-  the trailing-edge debounce and the single-in-flight throttle that bound the real rate far
-  lower — and it survived two weeks inside the very document written to warn against
-  static-reading errors. Treat code-reading claims about the solve path with corresponding
+- [verify-slider-drag-solve-path](./archive/verify-slider-drag-solve-path.md) — a measurement plan
+  that **was never run**. Its two live-stack claims folded into **C4** in
+  [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md) as explicitly unverified.
+  **Worth reading for one thing:** its headline number ("the 150ms debounce permits ~6.6
+  solves/sec") was itself a static-reading error — it ignored the trailing-edge debounce and the
+  single-in-flight throttle — and it survived two weeks inside the very document written to warn
+  against static-reading errors. Treat code-reading claims about the solve path with corresponding
   suspicion.
 
-## Hard dependencies
+## Why the statuses were wrong
 
-- ~~**compute-package-cleanup depends on visualization-package**~~ — **satisfied.**
-  visualization-package is complete, so the `/visualization` barrel is already deleted and
-  compute-package-cleanup is unblocked.
-- ~~**visualization-package before any further edge/display code-edits**~~ — **satisfied.** Those
-  files have moved. Note the new paths: `edges.ts` → `packages/visualization/src/render/edges.ts`
-  (+ `render/edges/*`), `three-initializer.ts` → `render/scene-setup/*`, `batch-parser.ts` →
-  `parse/webdisplay/`. Edge **Phase 4** and display residue now target `@selvajs/visualization`.
-- ~~**visualization-package before presolve-bundle / the UI phases of api-redesign**~~ —
-  **satisfied.** (The session layer has since moved again, to `@selvajs/solve/client` — see the
-  solve-package Phase 2 entry below for the path presolve-bundle should target.)
-- ~~**visualization-standalone §3 is a public-API decision**~~ — **settled: option 3a.** The envelope
-  is declared structurally in `parse/webdisplay/response-envelope.ts`; no API broke.
-- ~~**visualization-standalone §5 before presolve-bundle**~~ — **superseded.** §5 resolved to option C
-  (session stays put for now) and handed off to solve-package, which moves it to
-  **`@selvajs/solve/client`** — not `@selvajs/ui` and not a `@selvajs/session` package (both
-  rejected). The real dependency is the one below.
-- ~~**solve-package Phase 2 before presolve-bundle**~~ — **satisfied 2026-07-30.** The session layer
-  now lives at `@selvajs/solve/client`; the throttle is `createAsyncThrottle`; `SolveResult<TMesh>` is
-  opaque. presolve-bundle edits `createRequestResponseDriver`/`createSolveSession` — rebase onto their
-  new home before starting.
-- ~~**solve-package Phase 3 before its Phase 5**~~ — **moot.** Phase 5 was superseded by
-  caching-simplification, which collapsed the tiers rather than unifying their hash derivations.
-- ~~**caching-audit F1 is best measured before solve-package Phase 2**~~ — ✅ **resolved 2026-07-30.**
-  Measured and fixed: it was a live GPU leak (400 line geometries after 50 solves instead of 8),
-  closed by having `clearScene` release edge-cache entries. It was the only audit item that turned
-  out to be a bug rather than a refactor. No longer an ordering constraint.
-- **token-plan depends on api-redesign** — PAT auth gates on the `/api/v1/` prefix; api-redesign
-  Phases A/B before token-plan Phase 2.
-- **verify-slider gates §B/§C audit items** (C3, C4, LB-1, B5-lb) — cheap measurement that may
-  re-rank them or surface a user-facing 429 bug. Run before committing to those.
+Worth knowing, because it will happen again. Every error ran in the same direction as the reader's
+attention: **plans that got worked on stopped being updated**, while plans nobody touched kept
+accurate headers. The security audit and the value-list plan described themselves perfectly; the
+two plans that shipped still said "not started".
 
-## Recommended order
+A second failure mode is subtler and hit three plans: **adjacent work moved the ground without
+closing the item.** api-redesign renamed the routes that data-access-efficiency cites, so its
+findings read as fixed when only the paths changed. plugin-compat-gate's headline example
+(curves vanishing silently) got fixed incidentally, undercutting the argument while leaving the
+problem real at three other sites. C3's "cheapest win" was not fixed — it relocated.
 
-### Track A — the package-boundary refactor, in order
-
-This is the one sequence that matters right now; the rest of the list is independent of it.
-
-0. ~~**visualization-package**~~ — **done 2026-07-30.** All five layers extracted; `@selvajs/compute`
-   holds no `three` in any form.
-1. ~~**visualization-standalone §1/§2/§4** (+ §3 as option 3a)~~ — **done 2026-07-30**, independently
-   cross-validated. `@selvajs/visualization` no longer depends on `@selvajs/compute` at all.
-2. ~~**solve-package Phase 1** — scaffold `packages/solve` + `shared/`~~ — **done 2026-07-30.**
-3. ~~**solve-package Phase 2** — `client/`~~ — **done 2026-07-30.** 7 source + 5 test files moved,
-   **C1** (opaque `SolveResult<TMesh>` + injected `MeshPolicy`) and **C2** (`createAsyncThrottle`)
-   applied. `@selvajs/visualization` is now mesh-conversion + viewer only, and depends on nothing from
-   Selva. Phase 4's ESLint guard landed here too, since `client/` arriving is what made it enforceable.
-4. ~~**caching-audit F1** — measure the edge-cache growth (~1 hour).~~ — **done 2026-07-30.** It grew
-   unboundedly: 400 live line geometries after 50 solves instead of 8, because `clearScene` detached
-   overlays without ever decrementing a refcount, and the geometry cache had made the WeakMap's
-   "source becomes unreachable" premise false. Fixed with a `releaseEdgeGeometryFor` hook. This is the
-   **second** GPU-ownership leak found on the same seam — Phase 2 fixed the memo's mesh clone sharing
-   `geometry.userData` by reference. Both were cross-cache interactions, not per-cache defects.
-5. ~~**solve-package Phase 3** — `server/`~~ — **done 2026-07-30.** All 8 solve-core files moved; the
-   8 movers had zero import edges to the 4 stayers, so the cut needed no untangling. The planned
-   re-export shim **was built and then deliberately removed**: it left `@selvajs/server/compute` at 24
-   exports of which 14 were borrowed, so the package's surface no longer described what it did.
-   `@selvajs/server` therefore goes **major** and no longer depends on `@selvajs/solve` at all.
-6. ~~**solve-package Phase 4** — client/server boundary guards~~ — **done 2026-07-30.** No root
-   barrel, ESLint `no-restricted-imports` on `src/client/**`, and a bundle test over the shipped
-   `dist/client.js`. `*.server.ts` naming deliberately **not** applied inside the package — it is a
-   SvelteKit convention, and renaming 8 files would break their `git mv` rename records for no gain.
-7. ~~**solve-package Phase 5**~~ — **superseded** by
-   [caching-simplification](./archive/caching-simplification.md), which collapsed the cache tiers
-   instead of unifying three hash derivations across tiers that overlapped.
-8. ~~**solve-package Phase 6** — verify~~ — **done 2026-07-31.** `type-check` / `lint` (0 errors) /
-   `test` green in-repo. The Parafa half is tracked in the Parafa repo: it still imports the solve
-   core from `@selvajs/server/compute` and needs `@selvajs/solve` added, plus two call sites still
-   using the removed `extractMeshesFromResponse` (breakage independent of this plan).
-9. **compute-package-cleanup** — **now unblocked.** Same tree, low-risk once the viewer weight and
-   the solve core are both gone.
-10. **solve-engine-facade** — independent of compute-package-cleanup (touches `@selvajs/solve`, not
-    `@selvajs/compute`), but sequenced after it here since it's the next consumer-facing surface
-    change to `@selvajs/solve` and benefits from that package being settled first. Dogfoods on
-    Selva's own `/api/compute` route + `library/[guid]` page before Parafa (or any future platform)
-    adopts it.
-
-### Track B — independent of the above
-
-- **verify-slider-drag** — one measurement session before spending on solve-path efficiency items.
-- **dynamic-value-list-loop** — session-level reconciler + E2E tests; touches `@selvajs/solve/client`,
-  which is now its landed home. GH fixture user-supplied.
-- **api-redesign → token-plan** — if external/machine/LLM access is the priority.
-- **plugin-compat-gate** — when plugin-version drift becomes a support cost.
-- **admin-updates-yak-management** — Track A (scheduled updates + rollback UX) has no
-  dependencies and can ship first; Track B (Yak install API) needs **plugin-compat-gate**
-  implemented first (extends its `PLUGIN_CAPABILITIES` table) and a contract from the
-  Rhino.Compute repo (out of scope here).
-- **presolve-bundle** — product feature; P5.1 (pure enumerate engine) is a small high-confidence
-  start. Its Phase 2 blocker is cleared; rebase its session edits onto `@selvajs/solve/client`.
-- **data-access-efficiency-audit items** — slot cheap DB wins (2e/2f counts, 4g indexes, C3
-  delete-the-size-log) opportunistically; B1–B4 scaling roadmap is post-launch.
-- **caching-audit F2/F3** — F2 was absorbed by caching-simplification; F3 is an operator-doc note.
-
-## Tracks (can run in parallel across people)
-
-- **Track A (refactor):** ~~visualization-package~~ → ~~visualization-standalone~~ →
-  ~~solve-package~~ → **compute-package-cleanup** (the only step left). The completed steps touched
-  `@selvajs/visualization`, `@selvajs/server`, `@selvajs/ui` and the new `@selvajs/solve`.
-  **Not parallelizable within itself** — each phase moved files the next one edits.
-- **Track B (product/efficiency):** verify-slider → api-redesign → token-plan; plus plugin-compat-gate
-  and audit items independently. Anything in B that touches the **session layer** should now target
-  `@selvajs/solve/client` — that is where `createSolveSession`, the throttle and `SolveResult` live.
+So: **verify against the tree before trusting a status line here, including this one.** Re-verify
+whenever a plan's citations start failing to resolve; that is the earliest signal that a plan has
+drifted from the code rather than the code from the plan.

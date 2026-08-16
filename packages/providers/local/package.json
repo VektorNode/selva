@@ -4,7 +4,7 @@
 	"description": "Local filesystem, JSON, and HMAC implementations of @selvajs/platform interfaces",
 	"license": "MIT",
 	"author": "VektorNode",
-	"homepage": "https://github.com/VektorNode/selva#readme",
+	"homepage": "https://selva.dev",
 	"bugs": "https://github.com/VektorNode/selva/issues",
 	"keywords": [
 		"selva",

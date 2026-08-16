@@ -1,5 +1,15 @@
 # Plan: API v1 redesign — one versioned surface for browser + tokens
 
+**Status: complete, archived 2026-08-16.** Phases A–E all landed and were verified against the
+tree, not against this document's own claims. Four residuals were extracted to
+[fixes/api-v1-residuals](../fixes/api-v1-residuals.md): the `429` code, `requestId` in the error
+body, `Cache-Control` on v1 GETs, and the ADR.
+
+Read it for the _why_ — one versioned surface for browser and tokens, stability declared
+per-endpoint via `x-internal` rather than by maintaining two URL trees. **Do not read it as a map
+of the tree**: it describes the pre-move state, so most inline paths (`api/projects`,
+`api/invites`, `api/org/compute`, `admin/api/*`, `specs/*.md`) name locations that no longer exist.
+
 ## Context & decision
 
 The current `/api/*` surface is internally consistent (uniform `apiError`/`ApiErrorCode` envelope,

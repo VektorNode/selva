@@ -20,7 +20,7 @@ Two independent release tracks: **npm packages** (changesets) and **Grasshopper 
 | `@selvajs/local-provider`    | Filesystem implementation of platform interfaces.                            |
 | `@selvajs/supabase-provider` | Supabase implementation of platform interfaces.                              |
 
-Private (never published): `@selvajs/header-auth-provider`, `@selvajs/plugin-ui`, `@selvajs/config`.
+Private (never published): `@selvajs/header-auth-provider`, `@selvajs/plugin-ui`, `@selvajs/config`, `@selvajs/website`.
 
 The publish set is derived from the workspace by `scripts/publishable-packages.mjs` — adding a publishable package needs no edits to the release workflow.
 

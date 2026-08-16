@@ -13,7 +13,7 @@ import type { RecentRun } from '../../userProfile/index.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
 import { makeUuid } from './helpers.js';
 
-// Profile mutations need a ctx scoped to the target user (Permissions.md §9 +
+// Profile mutations need a ctx scoped to the target user (docs/contributing/permissions.md §9 +
 // the `IUserProfileStore` JSDoc auth-boundary note). The conformance suite
 // uses SYSTEM_CONTEXT throughout so it doesn't need to mint per-user ctxs;
 // the per-user authorization is exercised in adapter-specific tests.

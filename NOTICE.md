@@ -26,5 +26,12 @@ texts ship alongside the components where noted.
 - **License:** MIT — empira Software GmbH and contributors
   (https://github.com/ststeiger/PdfSharpCore)
 
+## SixLabors.ImageSharp / SixLabors.Fonts
+
+- **What:** Both arrive via PdfSharpCore and are merged (internalized via
+  ILRepack) into `Selva.Drawing.dll` in Release builds.
+- **License:** Apache-2.0 — Six Labors and contributors
+  (https://github.com/SixLabors/ImageSharp, https://github.com/SixLabors/Fonts)
+
 All other dependencies are consumed as ordinary NuGet/npm packages under their
 respective licenses; see each package manifest for details.

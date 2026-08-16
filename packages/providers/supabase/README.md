@@ -1,270 +1,49 @@
 # @selvajs/supabase-provider
 
-Supabase (Auth + Postgres + Storage) implementation of the `@selvajs/platform` interfaces.
+Supabase (Auth + Postgres + Storage) implementation of the `@selvajs/platform` interfaces — `IAuthProvider`, `IDataProvider`, `IStorageProvider`.
 
-Runs against **either** a managed Supabase project (production) or a local Supabase CLI stack in Docker (development) — same code, different `SUPABASE_URL` and keys.
+Runs against **either** a managed Supabase project or a local Supabase CLI stack in Docker — same code, different `SUPABASE_URL` and keys.
 
----
-
-## Table of contents
-
-- [Quick start](#quick-start)
-- [Environment variables](#environment-variables)
-- [Switching to the Supabase provider](#switching-to-the-supabase-provider)
-- [Applying the schema](#applying-the-schema)
-- [Development — local Supabase stack](#development--local-supabase-stack)
-- [Production — hosted Supabase project](#production--hosted-supabase-project)
-- [Running the conformance tests](#running-the-conformance-tests)
-- [Architecture notes](#architecture-notes)
+**Operator setup — provisioning, env vars, migrations, production checklist:** [docs/self-hosting/providers/supabase.md](../../../docs/self-hosting/providers/supabase.md).
 
 ---
 
-## Quick start
+## Usage
 
-1. Install the package in the workspace (already listed in `pnpm-workspace.yaml`).
-2. Provision Supabase — either local (`npx supabase start`) or hosted (supabase.com).
-3. Apply the migrations from `packages/providers/supabase/supabase/migrations/` (the local CLI does this automatically on `db reset`).
-4. Copy the three env vars into your selva app `.env` (see below).
-5. Set `SELVA_AUTH_PROVIDER=supabase`, `SELVA_DATA_PROVIDER=supabase`, `SELVA_STORAGE_PROVIDER=supabase` in the same `.env`.
-6. `pnpm dev` — the selva app now reads and writes from Supabase.
+```ts
+import { defineConfig } from '@selvajs/platform';
+import {
+	SupabaseAuthProvider,
+	SupabaseDataProvider,
+	SupabaseStorageProvider
+} from '@selvajs/supabase-provider';
+
+export default defineConfig((env) => ({
+	auth: SupabaseAuthProvider.fromEnv(env),
+	data: SupabaseDataProvider.fromEnv(env),
+	storage: SupabaseStorageProvider.fromEnv(env)
+}));
+```
+
+The Selva app already bundles this wiring — it picks a provider per interface from `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER` via `createSelvaProviders` ([create-selva-providers.ts](../../server/src/providers/create-selva-providers.ts)) over the registry in [providers.server.ts](../../selva/src/lib/server/providers.server.ts). For a provider not bundled in the app, point `SELVA_CONFIG_PATH` at an external `selva.config.js` — an actual `.js` file, since there's no TS compiler at runtime.
+
+`SupabaseDataProvider.fromEnv` refuses to construct without `SELVA_AT_REST_KEY`; it encrypts `compute_servers.api_key` before it reaches the database.
 
 ---
 
-## Environment variables
+## Migrations
 
-All env vars are documented in [`packages/selva/.env.example`](../../selva/.env.example) — copy that file to `.env` and edit it. This provider needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; the optional bucket / private-URL / signup overrides are also listed there.
+`supabase/migrations/` holds timestamp-prefixed files applied in filename order. **That directory is authoritative** — don't expect a list here to stay current.
 
-Both `SELVA_*` keys are still required, but for narrower jobs than under the local provider:
+`20260425155514_selva_initial.sql` installs the foundation: the `selva` schema itself, `user_profiles` (+ the `handle_new_auth_user` auto-seed trigger), `orgs` / `org_members` / `projects` / `project_members` (+ RLS helpers), `definitions` / `definition_versions` (+ deletion-protection FKs and the atomic `increment_run_count` RPC), `invites` (+ `get_invite_by_token`), `compute_servers`, `share_links` (+ `try_increment_share_link_solve_count`), and the `selva-public` / `selva-private` storage policies. Everything after it layers on top — cached version schemas, solve metrics, org assets, definition status/audit, erasure functions.
 
-- `SELVA_HMAC_KEY` — **not** used for sessions here (those are Supabase JWTs), but still hashes share-link and invite tokens before they're stored.
-- `SELVA_AT_REST_KEY` — encrypts `compute_servers.api_key` before it reaches the database. `SupabaseDataProvider` refuses to construct without it.
+New schema changes go in new files named `<UTCtimestamp>_selva_<name>.sql` (`date -u +%Y%m%d%H%M%S` for the prefix). The `_selva_` infix and timestamp prefix let a consuming app's own migrations interleave by time without ever colliding with Selva's.
 
-Rhino.Compute URL + API key are configured in `/admin/compute` and persisted in the `compute_config` table — unchanged by the provider choice.
+`supabase/seed.sql` creates the two storage buckets. It is dev-only — the CLI does not run it on a hosted project.
 
-### Finding the keys
+**No backfill is required for the schema-caching migration.** Existing definition versions keep working (the app falls back to fetching their schema from Rhino.Compute), and each version's `schema` column fills in lazily the first time it's solved.
 
-**Local (`npx supabase status`):**
-
-```
-╭──────────────────────────────────────────────────╮
-│ 🔑 Authentication Keys                            │
-├─────────────┬────────────────────────────────────┤
-│ Publishable │ sb_publishable_...                 │  ← SUPABASE_ANON_KEY
-│ Secret      │ sb_secret_...                      │  ← SUPABASE_SERVICE_ROLE_KEY
-╰─────────────┴────────────────────────────────────╯
-```
-
-**Hosted:** Supabase Dashboard → **Project Settings** → **API**.
-
-> **The S3-compat keys under the "Storage (S3)" section are NOT what you want.** Those are for external S3 tooling (rclone, etc.), not for `@supabase/supabase-js`.
-
----
-
-## Switching to the Supabase provider
-
-The selva app picks a provider per interface from env vars, via `createSelvaProviders` (`packages/server/src/providers/create-selva-providers.ts`) and the registry in `packages/selva/src/lib/server/providers.server.ts`:
-
-```
-SELVA_AUTH_PROVIDER=supabase      # local | supabase | header (default: local)
-SELVA_DATA_PROVIDER=supabase      # local | supabase          (default: local)
-SELVA_STORAGE_PROVIDER=supabase   # local | supabase          (default: local)
-```
-
-To switch back to the local provider, remove the three vars (or set them to `local`) and restart.
-
-For a provider not bundled in the app, point `SELVA_CONFIG_PATH` at an external `selva.config.js`, loaded dynamically at boot in place of the env-driven wiring. It must be an actual `.js` file — there's no TS compiler at runtime.
-
----
-
-## Applying the schema
-
-> **All Selva tables live in a dedicated `selva` schema, not `public`.** This keeps the `public` namespace entirely free for a consuming app's own tables — `selva.projects` and your `public.projects` can coexist. The initial migration creates the schema, grants the standard Supabase roles access, and tells PostgREST to expose it (see [Exposing the `selva` schema to PostgREST](#exposing-the-selva-schema-to-postgrest) for what that means on a hosted project).
-
-The `supabase/migrations/` directory holds timestamp-prefixed files, applied in filename order:
-
-| File                                                 | What it installs                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `20260425155514_selva_initial.sql`                   | The `selva` schema itself, plus `user_profiles` (+ auto-seed trigger), `orgs` / `org_members` / `projects` / `project_members` (+ RLS helpers), `definitions` / `definition_versions` (+ deletion-protection FKs and the atomic `increment_run_count` RPC), `invites` (+ `get_invite_by_token` RPC), `compute_servers` (+ per-org/instance defaults), `share_links` (+ `try_increment_share_link_solve_count` RPC), and the `selva-public` / `selva-private` storage policies. |
-| `20260529202220_selva_definition_version_schema.sql` | Adds `definition_versions.schema` + `schema_extracted_at` (cached compute-extracted UI schema) and the `change_note` column. All `add column if not exists`, safe to re-run.                                                                                                                                                                                                                                                                                                   |
-
-These two are only the foundation — `supabase/migrations/` ships further timestamp-prefixed files on top (solve metrics, org assets, definition status/audit, erasure functions, …). Filename order in that directory is authoritative, not this table.
-
-Future schema changes go in new timestamp-prefixed files: `<UTCtimestamp>_selva_<name>.sql` (e.g. `date -u +%Y%m%d%H%M%S` for the prefix). The `_selva_` infix and timestamp prefix let a consuming app's own migrations interleave by time without ever colliding with Selva's — see [Consuming migrations in an external app](#consuming-migrations-in-an-external-app).
-
-The `supabase/seed.sql` file creates the two storage buckets (`selva-public`, `selva-private`).
-
-**Local:** `npx supabase db reset` applies everything on a fresh DB.
-
-**Hosted:** link the CLI to your project, then push:
-
-```bash
-cd packages/providers/supabase
-
-# One-time link. Reads the project-ref from Supabase Dashboard → Project Settings → General.
-npx supabase link --project-ref <your-project-ref>
-
-# Review what will be applied.
-npx supabase db diff
-
-# Apply migrations + seed.
-npx supabase db push
-```
-
-You can also copy each `.sql` file into Supabase Dashboard → **SQL Editor** and run them in order, but prefer the CLI: it tracks which migrations already ran, so re-running it is safe.
-
-### Exposing the `selva` schema to PostgREST
-
-Because the tables live in `selva` rather than `public`, PostgREST (the REST API supabase-js talks to) must be told to expose that schema, or every query fails with `PGRST106 Invalid schema` / `PGRST205 schema cache`.
-
-The initial migration handles this for you: it runs `alter role authenticator set pgrst.db_schemas = '…, selva'` and notifies PostgREST to reload. **You do not list `selva` in `config.toml`'s `[api] schemas`** — PostgREST reads that file at stack boot, before migrations run, so naming a not-yet-created schema there aborts `supabase start`. The migration is the right place because it runs after the schema exists.
-
-- **Local dev:** nothing to do — `db reset` / `db push` runs the migration, which exposes `selva` automatically.
-- **Hosted:** the migration still does the work on `db push`. As a belt-and-braces check (or if you applied SQL by hand in the Editor), confirm the schema is exposed under Dashboard → **Project Settings** → **API** → **Exposed schemas** — `selva` should be listed alongside `public` and `graphql_public`. Add it there if it's missing.
-
-### Upgrading an existing database
-
-`supabase db push` keys on the version prefix recorded in the project's `supabase_migrations.schema_migrations` table. It applies any file whose prefix isn't recorded yet, in filename order, and skips the rest — so upgrading is always just **re-sync (external app) or re-pull (this repo), then `db push`**. Gaps and out-of-order prefixes are fine; only the lexical filename order matters.
-
-No backfill step is required for the schema-caching migration: existing definition versions keep working (the app falls back to fetching their schema from Rhino.Compute), and each version's `schema` column is populated lazily the first time it's solved.
-
-#### Migrated from the old `000N_` filenames?
-
-Earlier releases shipped `0001_initial.sql` / `0002_definition_version_schema.sql`, since renamed to `20260425155514_selva_initial.sql` / `20260529202220_selva_definition_version_schema.sql` (contents unchanged, only the names, so the files slot into a consuming app's migration timeline without collisions).
-
-To a database that already applied the `000N_` versions, the renamed files look like brand-new migrations. Both are idempotent (`create or replace`, `add column if not exists`), so a stray re-run is a harmless no-op, but you'd end up with duplicate history rows. To reconcile:
-
-- **Local dev stack:** just `npx supabase db reset` — applies the renamed files from scratch.
-- **Hosted project with the old versions applied:** tell the CLI the new versions are already present so it doesn't re-run them:
-  ```bash
-  npx supabase migration repair --status applied 20260425155514 20260529202220
-  ```
-  (Equivalent to inserting those version strings into `supabase_migrations.schema_migrations`.) Then future `db push` runs treat them as done.
-
-### Consuming migrations in an external app
-
-When you install `@selvajs/supabase-provider` in your own app (rather than running it from this repo), the migration SQL ships inside the package. The clean way to apply it is to **sync the files into your app's own `supabase/migrations/` directory** and let the Supabase CLI drive them alongside your app's own migrations:
-
-```bash
-# From your app root, after installing/upgrading the package:
-npx selva-supabase sync-migrations          # copies into ./supabase/migrations
-npx supabase db push                        # applies anything not yet recorded
-```
-
-`sync-migrations` copies each packaged migration **verbatim** (same timestamped filename, same bytes). That's deliberate: the filename is the migration's identity in the history table, so copying without renaming keeps every developer's and CI's history identical.
-
-- **`--dir <path>`** — target a non-default migrations directory.
-- **`--force`** — overwrite a same-named file whose content differs (otherwise it's reported as a conflict and the command exits non-zero, leaving your copy untouched).
-- Re-running is idempotent: unchanged files are skipped.
-
-**Upgrade flow** (running app, you bump the provider and it carries a new migration): `pnpm up @selvajs/supabase-provider`, then `npx selva-supabase sync-migrations` copies in the new file (later timestamp → sorts last), then `npx supabase db push` applies only that file and skips the ones already recorded. No renumbering, even if your app added its own migrations in between.
-
-**Notes specific to consuming in an external app:**
-
-- **Your tables stay in `public`; Selva's are in `selva`.** Because the engine owns a separate schema, there are no name clashes — your app can have its own `public.projects`, `public.orgs`, `public.definitions`, etc. without touching Selva's. Nothing to check before the first `db push`.
-- **Referencing engine objects from your own migrations.** When your app's tables need to point at the engine (FKs, RLS helpers), qualify them with the `selva` schema: `references selva.orgs(id)`, `selva.is_org_member(org_id)`, `selva.is_instance_admin()`, `selva.set_updated_at()`. The qualified names are self-documenting and won't accidentally resolve to a same-named object in your `public`.
-- **Expose `selva` in your app's PostgREST too.** If your app uses its own Supabase CLI project / `config.toml`, the synced initial migration exposes `selva` via `alter role authenticator …` when it runs — same mechanism as above. On a hosted project, verify it under Project Settings → API → Exposed schemas after the first push.
-- **Storage buckets aren't created by `db push` on a hosted project.** `seed.sql` (which creates `selva-public` / `selva-private`) is dev-only. On a hosted project, run it once by hand in the SQL Editor after the first push — same as the [Production](#production--hosted-supabase-project) flow.
-
----
-
-## Development — local Supabase stack
-
-Prerequisite: **Docker Desktop running.** First run pulls ~1 GB of images.
-
-```bash
-cd packages/providers/supabase
-npx supabase start
-```
-
-This spins up Postgres (54322), GoTrue/Auth (54321), Storage, Studio (54323), and Mailpit (54324 — fake SMTP inbox for auth emails). Migrations and the bucket seed apply automatically.
-
-Copy the printed **Publishable** and **Secret** keys into your `.env` at the selva app or repo root:
-
-```bash
-# selva app .env
-SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_ANON_KEY=sb_publishable_...
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
-```
-
-Rhino.Compute server URL + API key are registered in `/admin/compute` after first boot.
-
-Set the three `SELVA_*_PROVIDER=supabase` env vars (above), then:
-
-```bash
-pnpm dev
-```
-
-**Useful commands:**
-
-```bash
-npx supabase status         # show URL + keys again
-npx supabase db reset       # wipe DB + re-run migrations + seed
-npx supabase stop           # stop containers (keeps volumes)
-npx supabase stop --no-backup  # stop + wipe volumes
-```
-
-Studio is a full admin UI at `http://127.0.0.1:54323`. Use it to inspect tables, rows, and RLS policies while developing.
-
----
-
-## Production — hosted Supabase project
-
-1. Create a project on [supabase.com](https://supabase.com). Choose a region close to your selva app deployment.
-2. Dashboard → **Project Settings** → **API**. Copy the **Project URL**, **Publishable** key, and **Secret** key.
-3. Apply migrations via the CLI:
-   ```bash
-   cd packages/providers/supabase
-   npx supabase link --project-ref <your-project-ref>
-   npx supabase db push
-   ```
-4. Create the two storage buckets by running `supabase/seed.sql` in the Dashboard → **SQL Editor** (the CLI's `db push` doesn't run the seed on a hosted project — it's dev-only).
-5. Set the env vars on your selva app host (Vercel, Fly.io, Docker, etc.):
-   ```
-   SUPABASE_URL=https://<project-ref>.supabase.co
-   SUPABASE_ANON_KEY=sb_publishable_...
-   SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
-   ```
-   After deploying, register your Rhino.Compute server URL (+ optional API key) via `/admin/compute`.
-6. Deploy the selva app with the three `SELVA_*_PROVIDER=supabase` env vars set.
-7. Bootstrap the first user:
-   - Open `/setup` once — creates the first admin with `instance_admin`.
-   - Or manually: Dashboard → **Authentication** → **Add user**, then in the SQL Editor: `UPDATE selva.user_profiles SET platform_permissions = ARRAY['instance_admin']::text[] WHERE user_id = '<uuid>';`
-
-### Operational checklist
-
-- **Backups.** Supabase handles daily backups on paid plans; verify restore works before relying on it.
-- **Rotate keys** if the Secret key is ever logged or committed. Dashboard → **Project Settings** → **API** → **Reset service_role key**.
-- **Row-level security is on for every table.** Disabling it on any table silently breaks the tenant boundary.
-- **Email sender.** Dashboard → **Authentication** → **Email templates** — configure an SMTP provider before going live, otherwise password-reset emails route through Supabase's rate-limited dev sender.
-
----
-
-## Running the conformance tests
-
-The package ships a full conformance suite that runs against a **live** Supabase stack. It proves the provider implements every interface the same way the local provider does.
-
-```bash
-cd packages/providers/supabase
-
-# 1. Make sure the stack is running.
-npx supabase start
-
-# 2. Create .env.test with the same three vars.
-# (This is separate from your app's .env — it's gitignored and used only by tests.)
-cat > .env.test <<EOF
-SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_ANON_KEY=<publishable key>
-SUPABASE_SERVICE_ROLE_KEY=<secret key>
-EOF
-
-# 3. Run.
-pnpm test
-```
-
-When `.env.test` is missing the suite skips with a single explanatory test.
-
-The suite wipes every table and every auth user between tests — **do not point it at a production project.**
+The packaged migrations reach a consuming app through the `selva-supabase` bin ([src/cli/sync-migrations.ts](src/cli/sync-migrations.ts)), which copies them verbatim into the app's own `supabase/migrations/`. See the [operator page](../../../docs/self-hosting/providers/supabase.md#installing-the-migrations-in-an-external-app) for the flow.
 
 ---
 
@@ -275,19 +54,19 @@ The suite wipes every table and every auth user between tests — **do not point
 Two buckets:
 
 - **`selva-public`** (public) — covers, archives. `getPublicUrl` returns the direct CDN URL.
-- **`selva-private`** (private) — `.gh` / `.ghx` files. `getPublicUrl` returns `/api/files/{path}` which the selva app's route handler must proxy after an auth check.
+- **`selva-private`** (private) — `.gh` / `.ghx` files. `getPublicUrl` returns `/api/files/{path}`, which the selva app's route handler proxies after an auth check.
 
 Images are transcoded to WebP (1200px cap, quality 85) via the shared `transcodeImageIfNeeded` helper from `@selvajs/platform/storage`. Same bytes out of both providers.
 
 ### Auth
 
-`SupabaseAuthProvider.verifyLogin` wraps `supabase.auth.signInWithPassword`, returning the JWT directly as `sessionToken`. `verifyToken` calls `supabase.auth.getUser(token)` — GoTrue validates the signature for us. Platform permissions merge in from `user_profiles.platform_permissions` (auto-created by the signup trigger).
+`SupabaseAuthProvider.verifyLogin` wraps `supabase.auth.signInWithPassword`, returning the JWT directly as `sessionToken`. `verifyToken` calls `supabase.auth.getUser(token)` — GoTrue validates the signature for us. Platform permissions merge in from `user_profiles.platform_permissions`.
 
 MFA methods on `IPasswordAuth` are currently undefined — MFA is deferred. If a user enrolls a factor via the Supabase dashboard, `signInWithPassword` returns an AAL1 session and routes that gate on AAL2 would fail; no route does today.
 
 ### Data + RLS
 
-Every client is constructed with `db: { schema: 'selva' }`, so a bare `client.from('orgs')` resolves to `selva.orgs`. Every store goes through `ClientBundle.forRequest(ctx)`:
+Every client is constructed with `db: { schema: 'selva' }`, so a bare `client.from('orgs')` resolves to `selva.orgs`. Every store goes through `ClientBundle.forRequest(ctx)` ([src/data/client.ts](src/data/client.ts)):
 
 - `ctx.system` → service-role client (bypasses RLS)
 - `ctx.adapterContext.sessionToken` → anon client with `Authorization: Bearer <jwt>` (RLS enforces per-user visibility)
@@ -302,18 +81,31 @@ Helper SQL functions (`selva.is_instance_admin`, `selva.is_org_member`, `selva.v
 ### Atomic improvements over the local provider
 
 - **`incrementRunCount`** uses a SQL function (`UPDATE … SET run_count = run_count + 1`) — atomic. The local provider does read-modify-write and can lose bumps under concurrent solves.
+- **`try_increment_share_link_solve_count`** enforces a share link's cap in one statement, so concurrent solves can't overshoot it.
+
+### Erasure
+
+`SupabaseDataProvider.onUserDeleted(ctx, userId, { email })` scrubs what FK cascade doesn't reach: deletes `audit_events` the user authored (keyed by plain-text `actor_id`), deletes `invites` addressed to their email, redacts that email from surviving `invite.created` payloads (`redact_audit_event_email`), and tombstones `solve_metrics.actor_id` so capacity aggregates survive while the person doesn't. The caller must capture the email **before** `SupabaseAuthProvider.deleteUser` runs. Credentials live in Supabase `auth.users`, but the operator is still the data controller for everything above — see [CLAUDE.md](../../../CLAUDE.md#data-privacy).
 
 ---
 
-## Status
+## Conformance tests
 
-Every interface from `@selvajs/platform` is implemented and exercised by the shared conformance suites against a live local Supabase stack:
+The package ships the `@selvajs/platform` conformance suites running against a **live** Supabase stack. They prove this provider implements every interface the same way the local provider does.
 
-- `SupabaseAuthProvider` (incl. MFA-ready `LoginResult`)
-- `SupabaseStorageProvider`
-- `SupabaseOrgStore`, `SupabaseProjectStore`, `SupabaseDefinitionStore` (atomic `incrementRunCount`), `SupabaseInviteStore`, `SupabaseShareLinkStore`, `SupabaseComputeServerStore`
-- `SupabaseUserProfileProvider`
-- `SupabasePlatformPermissionStore`
-- `SupabaseDataProvider` — composition of the data stores
+```bash
+cd packages/providers/supabase
+npx supabase start
 
-Run them with `pnpm test` (see [Running the conformance tests](#running-the-conformance-tests)).
+cat > .env.test <<EOF
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=<publishable key>
+SUPABASE_SERVICE_ROLE_KEY=<secret key>
+EOF
+
+pnpm test
+```
+
+`.env.test` is gitignored and separate from your app's `.env`. `vitest.config.ts` loads it if present and probes `SUPABASE_URL` before the run; if the file is missing or the stack is unreachable it strips the three vars so every suite takes its no-credentials skip path and prints a warning.
+
+The suites wipe every table and every auth user between tests — **do not point them at a production project.**

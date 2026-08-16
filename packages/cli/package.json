@@ -4,7 +4,7 @@
 	"description": "Scaffold and operate a Selva white-label deployment. `npx @selvajs/cli <dir>` to bootstrap, `selva <cmd>` to manage.",
 	"license": "MIT",
 	"author": "VektorNode",
-	"homepage": "https://github.com/VektorNode/selva#readme",
+	"homepage": "https://selva.dev",
 	"bugs": "https://github.com/VektorNode/selva/issues",
 	"keywords": [
 		"selva",

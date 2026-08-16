@@ -1,5 +1,7 @@
 # Cloud transport — move the geometry blob out of the values JSON
 
+**Not tracked as an issue — deliberately deferred.** File one when cloud payload size shows up in real usage.
+
 > **Status: NOT STARTED — deliberately deferred, not forgotten.** This is a "when the traffic
 > arrives" item: the cost is a coordinated three-sided protocol change, and the benefit scales with
 > cloud traffic volume, which does not yet justify it. Revisit when cloud payload size shows up in
@@ -24,8 +26,8 @@ envelope carries only a count — the client calls `parseMeshBatchBlob` on the f
 `DisplayBatch` to `JsonConvert.SerializeObject`. Newtonsoft renders a `byte[]` as **base64 inside the
 values JSON**. The code says so itself, and has since it was written:
 
-> "Travels as base64 inside the values JSON for now; will move to an out-of-band binary transport in
-> a later phase." — [DisplayBatch.cs:31-32](../../Plugin/Selva.GH/Features/Display/Services/DisplayBatch.cs)
+> "Travels as base64 inside the values JSON for now." —
+> [DisplayBatch.cs:24-25](../../Plugin/Selva.GH/Features/Display/Services/DisplayBatch.cs)
 
 Costs, in order of size:
 

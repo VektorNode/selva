@@ -85,7 +85,7 @@
 	let updatingId = $state<string | null>(null);
 	let expandedUserId = $state<string | null>(null);
 
-	// Permissions.md §2 invariant mirror: if only one enabled user holds
+	// docs/contributing/permissions.md §2 invariant mirror: if only one enabled user holds
 	// instance_admin, lock the checkbox and delete button on that row. The
 	// server enforces the same; this is the UX nudge.
 	const enabledInstanceAdminCount = $derived(

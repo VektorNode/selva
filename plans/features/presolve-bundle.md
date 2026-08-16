@@ -1,5 +1,7 @@
 # Pre-solved bundle + prewarm (F1) — feature spec
 
+**Not tracked as an issue — parked on a storage decision.** The three open design questions are [#141](https://github.com/VektorNode/selva/issues/141), [#142](https://github.com/VektorNode/selva/issues/142), [#143](https://github.com/VektorNode/selva/issues/143).
+
 > **Status: PLANNING (2026-07-13).** Design only — no implementation yet. Was the
 > caching plan's "F1 / Phase 5", split out because it's a **product feature**, not
 > transparent caching: it adds author-facing surface (admin action, UI, file
@@ -38,6 +40,21 @@
 > (The former `docs/plans/CACHING.md` tracker was deleted 2026-07-13 once its work
 > was implemented and validated; its two deferred package/routing seams are issues
 > #144 and #145.)
+
+> **Verified 2026-08-16 — the route half is now stale too.** 0% built, as declared; the storage
+> blocker above is unchanged and still the reason. Two additions since that warning was written:
+>
+> - **The admin route shape described below no longer exists.** The API v1 redesign moved the
+>   sibling route this was modelled on (`publish/+server.ts`) under `/api/v1/`, and the whole
+>   handler layer now goes through `apiRoute` / `requireCaller` / `parseBody` from
+>   `lib/server/api/v1/route.ts`. A presolve route targets
+>   `api/v1/definitions/[guid]/presolve/`, not `api/definitions/[guid]/presolve/`.
+> - **New requirement: v1 conformance.** Any new route must be registered in
+>   `lib/server/api/v1/registry.ts` with an OpenAPI entry, and — being author/admin surface —
+>   carry `internal: true`. A conformance test enforces this; the plan predates it.
+>
+> The author-facing half (enumerability table, checklist/non-determinism policy, combo guardrail,
+> bundle format) is still sound and is the reason to keep this file.
 
 ---
 

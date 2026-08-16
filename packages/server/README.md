@@ -40,6 +40,3 @@ resolve, on purpose, so it stays visible which slice a consumer depends on.
 
 Requires a `@selvajs/platform` provider (e.g. `@selvajs/local-provider` or
 `@selvajs/supabase-provider`) for data/storage/auth.
-
-See the root [CLAUDE.md](../../CLAUDE.md) for how this package fits into the wider Selva
-architecture.

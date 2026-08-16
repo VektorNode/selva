@@ -32,12 +32,9 @@ export const YAK_PACKAGE_NAME = 'Selva';
 // a section on it rather than its own route.
 export const VEKTORNODE_CONTACT_URL = `${VEKTORNODE_URL}/en#contact`;
 
-// The /docs route still builds from the markdown in /docs, but nothing links to
-// it while the content is being reworked. Restore the entries below to bring it
-// back — the route itself was never removed.
-
 /** Primary navigation shown in the site header. */
 export const primaryNav: NavLink[] = [
+	{ label: 'Docs', href: '/docs' },
 	{ label: 'Packages', href: '/packages' },
 	{ label: 'Architecture', href: '/architecture' }
 ];
@@ -48,6 +45,7 @@ export const footerNav: NavSection[] = [
 		title: 'Product',
 		links: [
 			{ label: 'Overview', href: '/' },
+			{ label: 'Docs', href: '/docs' },
 			{ label: 'Packages', href: '/packages' },
 			{ label: 'Architecture', href: '/architecture' }
 		]

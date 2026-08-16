@@ -13,108 +13,40 @@
   Brief description of changes
   ```
 
-## Export Rules (Keep It Simple)
+## Export rules
 
-### ✅ DO
+The barrels (`src/index.ts`, `src/core/index.ts`, `src/grasshopper/index.ts`) are the published
+surface, so every line in them is a compatibility promise. Keep them readable:
 
-- **Be explicit**: Always list what you export by name
+- **Name every export.** No `export *` — a wildcard makes the public surface unreadable and
+  re-exports whatever a submodule adds next.
+- **Split types from values** with `export type`.
+- **Group with section headers** (a title between two lines of `=`), matching the existing barrels.
+- **No wrapper `index.ts`** that re-exports a single module. Import
+  `./compute-fetch/compute-fetch` directly.
+- **Don't export a symbol just because it exists.** Add it when a consumer needs it.
 
-  ```typescript
-  export { MyFunction } from './module';
-  ```
+`src/index.ts` is deliberately empty — the root would promise Rhino and Grasshopper to every
+consumer. Import from `/core` or `/grasshopper`.
 
-- **Use section comments**: Organize exports with clear headers
+## Error handling
 
-  ```typescript
-  // ============================================================================
-  // PUBLIC API
-  // ============================================================================
-  export { GrasshopperClient } from './client';
-  ```
-
-- **Separate types from values**: Use `export type` for types
-
-  ```typescript
-  export { solveGrasshopper } from './solve';
-  export type { Result } from './types';
-  ```
-
-- **Delete unnecessary files**: Remove intermediate index.ts files that just re-export one thing
-  ```
-  ❌ src/compute-fetch/index.ts  (just exports ./compute-fetch)
-  ✅ Import directly: './compute-fetch/compute-fetch'
-  ```
-
-### ❌ DON'T
-
-- **Never use `export *`** unless aggregating multiple submodules into a feature
-
-  ```typescript
-  // BAD - no one knows what's exported
-  export * from './errors';
-
-  // GOOD - clear what's public
-  export { ComputeError } from './base';
-  export { ErrorCodes } from './error-codes';
-  ```
-
-- **Don't create wrapper index.ts files** that only re-export one thing
-  - Removes a layer of indirection
-  - Makes imports more direct and clearer
-
-- **Don't mix explicit and wildcard exports** in the same file
-
-  ```typescript
-  // BAD - inconsistent
-  export { initThree } from './initializer';
-  export * from './helpers';
-
-  // GOOD - all explicit
-  export { initThree } from './initializer';
-  export { updateScene, parseColor } from './helpers';
-  ```
-
-## Quick Checklist
-
-When adding/modifying exports:
-
-- [ ] All exports are explicitly named
-- [ ] File has a JSDoc header explaining its purpose
-- [ ] Types are marked with `export type`
-- [ ] No `export *` unless it's a feature aggregator
-- [ ] No unnecessary index.ts wrappers
-- [ ] Imports in other files use direct paths, not aggregators
-
-## Error Handling
-
-Use `ComputeError` with static helper methods:
+Throw `ComputeError` with a code from `ErrorCodes` — never `undefined`. Two static helpers cover
+the recurring input cases:
 
 ```typescript
-// Generic validation error
-throw ComputeError.validation('inputName', 'reason');
-
-// Specific cases
 throw ComputeError.missingValues('inputName', 'Type');
-throw ComputeError.invalidDefault('inputName', defaultValue, availableValues);
 throw ComputeError.unknownParamType(paramType, paramName);
-throw ComputeError.invalidStructure('inputName', 'expected structure');
 ```
 
-Include proper error codes—never pass `undefined`.
+Everything else constructs directly with an explicit code and context.
 
-## Feature Dependencies
+## Feature dependencies
 
-If a feature requires Selva plugin components or custom compute, document it:
+If a feature needs Selva plugin components or the VektorNode compute fork, say so in the docstring:
 
 ```typescript
 /**
- * Extract meshes from geometry results.
- *
- * **Requires:** Selva Display component in Grasshopper + custom VektorNode compute branch.
- *
- * @throws {ComputeError} If three.js is not installed
+ * **Requires:** Selva Display component in Grasshopper + the VektorNode compute fork.
  */
-public async extractMeshesFromResponse(options?: MeshExtractionOptions) { }
 ```
-
-Use `@note` for optional enhancements, standard docstring for requirements.

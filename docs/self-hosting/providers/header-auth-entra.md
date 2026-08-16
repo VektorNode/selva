@@ -1,32 +1,25 @@
 ---
 title: Header-auth & Entra
 order: 3
-published: false
+published: true
 description: 'Trust a reverse proxy for identity: front Selva with Entra SSO via oauth2-proxy.'
 ---
 
 # Header-auth (Entra, Okta, Google Workspace…)
 
-`@selvajs/header-auth-provider` is an **auth-only** adapter that trusts identity headers set by an upstream reverse proxy. Through that proxy, it pairs with whichever IdP your org already uses (Microsoft Entra ID, Okta, Google Workspace), and with any data/storage provider underneath.
+`@selvajs/header-auth-provider` is an **auth-only** adapter that trusts identity headers set by an upstream reverse proxy. Through that proxy it pairs with whichever IdP your org already uses (Microsoft Entra ID, Okta, Google Workspace), and with any data/storage provider underneath — [`local`](./local.md) or [`supabase`](./supabase.md).
 
-## When to use it
-
-- Your org already authenticates through an SSO IdP.
-- A reverse proxy (Caddy `forward_auth`, oauth2-proxy, Authelia, Entra) sits in front of the app.
-
-It does auth only. Pair it with [`local`](./local.md) or [`supabase`](./supabase.md) for data and storage.
+Use it when your org already authenticates through an SSO IdP and a reverse proxy (Caddy `forward_auth`, oauth2-proxy, Authelia) sits in front of the app.
 
 ## ⚠ Security: the deployment IS the boundary
 
 This provider does **no cryptographic verification.** It trusts the headers it reads, so the proxy in front of it is the only thing standing between a stranger and an admin session. Nothing at runtime catches a misconfiguration.
 
-**Read the [`@selvajs/header-auth-provider` README](https://github.com/VektorNode/selva/blob/main/packages/providers/header-auth/README.md) before deploying this.** It lists the three requirements (network isolation, proxy-side auth, header scrubbing) and explains what each one fails like. That README also owns the header names, the env vars, and the self-test; this page assumes you've followed it and shows one concrete way to satisfy it with Entra.
+**Read the [`@selvajs/header-auth-provider` README](https://github.com/VektorNode/selva/blob/main/packages/providers/header-auth/README.md) before deploying this.** It lists the three requirements — network isolation, proxy-side auth, header scrubbing — and what each one fails like. That README owns the header names, env vars, bootstrap policy, and self-test; this page shows one concrete way to satisfy it with Entra.
 
 ## Prerequisites
 
-You need Selva already scaffolded and running with `SELVA_AUTH_PROVIDER=header` (see [Prerequisites](../deployment/prerequisites.md) and the [CLI guide](../get-started/cli.md)), and a reverse proxy in front of it (see [Reverse proxy](../deployment/reverse-proxy.md)). The walkthrough below uses Caddy + oauth2-proxy, one concrete recipe among several. Any proxy that can do `forward_auth` and header injection works the same way.
-
----
+Selva scaffolded and running with `SELVA_AUTH_PROVIDER=header` (see [Prerequisites](../deployment/prerequisites.md) and the [CLI guide](../get-started/cli.md)), plus a reverse proxy in front of it ([Reverse proxy](../deployment/reverse-proxy.md)). The walkthrough uses Caddy + oauth2-proxy; any proxy that can do `forward_auth` and header injection works the same way.
 
 ## Entra SSO via oauth2-proxy + Caddy
 
@@ -37,7 +30,7 @@ Browser ──HTTPS──> Caddy ──forward_auth──> oauth2-proxy ──OI
                         with SELVA-* identity headers injected
 ```
 
-You need a real domain with an A record pointing at the host, and port 443 open. Replace `[your-domain]` and `admin@corp.com` throughout.
+Needs a real domain with an A record pointing at the host, and port 443 open. Replace `[your-domain]` and `admin@corp.com` throughout.
 
 ### Part 1: Entra app registration
 
@@ -178,16 +171,16 @@ sudo nano /etc/caddy/Caddyfile
 }
 ```
 
-The `request_header -` lines strip inbound copies, which is **essential** to prevent header spoofing. Two things about their placement:
+The `request_header -` lines strip inbound copies and are **essential** against header spoofing. Two things about their placement:
 
-- **Site scope, not inside `handle`.** At site scope they cover every route including `/oauth2/*`, and they run before either `handle` block. Inside a `handle`, Caddy runs `request_header` in its own fixed directive order rather than the order you wrote — so a strip line sitting below `forward_auth` in the file does not reliably strip before it. Hoisting them removes the question.
+- **Site scope, not inside `handle`.** At site scope they cover every route including `/oauth2/*`, and run before either `handle` block. Inside a `handle`, Caddy runs `request_header` in its own fixed directive order rather than the order you wrote, so a strip line below `forward_auth` does not reliably strip before it.
 - **Strip both families.** `SELVA-*` because that is what the provider reads, and `X-Auth-Request-*` because `copy_headers` forwards a client-supplied copy when oauth2-proxy doesn't set its own.
 
-The `handle_response @bad` block redirects 401s to the Entra login page; without it you get a bare unauthorized response. Use `header Location ...` + `respond 302`, not `redirect`, which is not valid inside `handle_response`.
+The `handle_response @bad` block redirects 401s to the Entra login page; without it you get a bare unauthorized response. Use `header Location ...` + `respond 302` — `redirect` is not valid inside `handle_response`.
 
-The two-step header dance (copy `X-Auth-Request-*` out of forward_auth, then set `SELVA-*` from them) is specific to oauth2-proxy, which emits its own header names and can't be told to emit Selva's. The README's Caddyfile copies `SELVA-*` straight through because it assumes a helper that sets them directly. Both are correct; match whichever your helper actually emits — and note the two styles need opposite `.env` settings, covered in Part 6.
+The two-step header dance (copy `X-Auth-Request-*` out of forward_auth, then set `SELVA-*` from them) is specific to oauth2-proxy, which emits its own header names and can't be told to emit Selva's. A helper that sets `SELVA-*` directly needs neither step — `copy_headers SELVA-UserPrincipalName SELVA-Email SELVA-DisplayName` and no `request_header` mapping. Match whichever your helper emits: the two styles need opposite `.env` settings, covered in Part 6.
 
-No `SELVA-DisplayName` mapping is shown because oauth2-proxy has no display-name header. `X-Auth-Request-User` is Entra's subject identifier — an opaque OID, not a human name — so mapping it here would materialize GUIDs as display names. Leave it unmapped and the UI falls back to the email/UPN. To get real names, have oauth2-proxy emit the `name` claim as a custom header, add it to `copy_headers` **and** the strip list, and map it here.
+No `SELVA-DisplayName` mapping is shown because oauth2-proxy has no display-name header. `X-Auth-Request-User` is Entra's subject identifier — an opaque OID, not a human name — so mapping it would materialize GUIDs as display names. Left unmapped, the UI falls back to the email/UPN. For real names, have oauth2-proxy emit the `name` claim as a custom header, add it to `copy_headers` **and** the strip list, then map it here.
 
 ```bash
 sudo caddy validate --config /etc/caddy/Caddyfile

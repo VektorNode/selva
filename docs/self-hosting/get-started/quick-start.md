@@ -1,22 +1,22 @@
 ---
 title: Local Dev Setup
 order: 4
-published: false
+published: true
 description: 'Run the whole app on your own machine with hot reload before committing to servers.'
 ---
 
 # Local Dev Setup
 
-This runs the full Selva web app on your own machine, the fastest way to see it working before you deploy anything. One thing stays remote: solving needs a Rhino.Compute server, which is Windows-only and doesn't run as part of this. For a real deployment, see [Get Started](./overview.md) instead.
+Runs the full Selva web app on your own machine. Solving still needs a Rhino.Compute server, which is Windows-only and isn't part of this. For a real deployment, see [Get Started](./overview.md).
 
 ## Prerequisites
 
-- **Node.js >= 22** and **pnpm >= 11**: required
-- **.NET SDK 7.0+**: only if touching the C# plugin
-- **Rhino 8 or 9**: only if running the plugin (Rhino 7 is not supported)
-- **Docker Desktop**: only if using the Supabase provider locally
+- **Node.js >= 24** and **pnpm >= 11** — required
+- **.NET SDK 7.0+** — only to build the C# plugin
+- **Rhino 8 or 9** — only to run the plugin (Rhino 7 is not supported)
+- **Docker Desktop** — only for the Supabase provider's local stack
 
-Node and pnpm versions come from `engines` in the root `package.json`; pnpm is pinned exactly by `packageManager` there and activated through Corepack.
+Node and pnpm versions come from `engines` in the root `package.json`; pnpm is pinned exactly by `packageManager` and activated through Corepack.
 
 ## 1. Install
 
@@ -33,18 +33,18 @@ Both from the repo root. The build is not optional: the app imports the workspac
 cp packages/selva/.env.example packages/selva/.env
 ```
 
-[`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example) documents every setting inline. At minimum:
+[`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example) documents every setting inline. At minimum, replace the placeholder `SELVA_HMAC_KEY` (signs session cookies, hashes share-link and invite tokens) and `SELVA_AT_REST_KEY` (encrypts the stored Rhino.Compute API key). Both must be 32 bytes:
 
-- Replace the placeholder `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY`. The first signs session cookies, the second encrypts stored credentials. Generate each with:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
 
-  ```bash
-  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-  ```
+That's all the `local` provider needs — it stores everything as JSON under `.selva-data/` at the repo root (`DATA_PATH`).
 
-  That's all the `local` provider needs. It stores everything as JSON files under `.selva-data/` at the repo root.
+Optional:
 
-- For Supabase, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` (see the [`@selvajs/supabase-provider` README](https://github.com/VektorNode/selva/blob/main/packages/providers/supabase/README.md)), then point the slots you want it to own at `supabase`. That's usually all three: `SELVA_AUTH_PROVIDER`, `SELVA_DATA_PROVIDER`, `SELVA_STORAGE_PROVIDER`.
-- To test multi-org, set `SELVA_TENANCY=multi`.
+- **Supabase**: set `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`, then point the slots you want it to own at `supabase` — usually all three of `SELVA_AUTH_PROVIDER`, `SELVA_DATA_PROVIDER`, `SELVA_STORAGE_PROVIDER`. See [Supabase provider](../providers/supabase.md).
+- **Multi-org**: `SELVA_TENANCY=multi`.
 
 ## 3. Run
 
@@ -53,22 +53,22 @@ pnpm dev:selva
 # http://localhost:5173
 ```
 
-On first boot, visit `/setup` to create the platform admin: an email, a password of at least 8 characters, and (in single-tenant mode) a company name, which becomes your first organization with a "Default" project inside it. Once an admin exists the page redirects to `/login`.
+On first boot, visit `/setup` to create the platform admin: email, a password of at least 8 characters, and (in single-tenant mode) a company name, which becomes your first organization with a "Default" project inside it. Once an admin exists the page redirects to `/login`.
 
-Then register your Rhino.Compute server at `/admin/compute`, covered in [RhinoCompute.md](./rhino-compute.md). Until you do, the app runs but no definition will solve.
+Then register your Rhino.Compute server at `/admin/compute` — see [Rhino Compute Setup](./rhino-compute.md). Until you do, nothing will solve.
 
 ## Plugin UI (optional)
 
-The schema designer embedded in the Grasshopper plugin, a separate app from the one above. Running it against a live plugin gives you hot reload on the web UI while the C# stays debuggable:
+The schema designer embedded in the Grasshopper plugin — a separate app from the one above. Running it against a live plugin gives hot reload on the web UI while the C# stays debuggable:
 
 ```bash
-# Terminal 1: build the plugin and run it from your IDE
+# Terminal 1: build the plugin, then run it from your IDE
 cd Plugin && dotnet build
 # Terminal 2:
 pnpm dev:plugin
 ```
 
-The plugin serves the WebSocket (port 8765 by default) and the page connects back to it. Vite serves this app on 5173 too, so if the Selva app from step 3 is already running, this one takes the next free port. Check the terminal for the URL it prints.
+The plugin serves the WebSocket (8765 by default) and the page connects back to it. Vite serves this app on 5173 too, so if the Selva app is already running, this one takes the next free port — check the terminal for the URL.
 
 ## Providers
 
@@ -78,11 +78,11 @@ The plugin serves the WebSocket (port 8765 by default) and the page connects bac
 | External deps | none                        | Docker, for the local CLI stack |
 | Best for      | quick eval, single-instance | multi-instance, several tenants |
 
-The three provider slots (`SELVA_AUTH_PROVIDER`, `SELVA_DATA_PROVIDER`, `SELVA_STORAGE_PROVIDER`) are set independently and each defaults to `local`. Change them in `.env` and restart. Supabase also works as a managed project: point `SUPABASE_URL` at it and Docker isn't involved.
+The three slots (`SELVA_AUTH_PROVIDER`, `SELVA_DATA_PROVIDER`, `SELVA_STORAGE_PROVIDER`) are set independently and each defaults to `local`. Change them in `.env` and restart. Supabase also works as a managed project: point `SUPABASE_URL` at it and Docker isn't involved.
 
 ## Troubleshooting
 
 - **Compute 500s on solve.** Check that Rhino.Compute is running and registered at `/admin/compute`.
-- **`Cross-site POST form submissions are forbidden`.** SvelteKit compares the request's `Origin` header against the app's own URL. `vite dev` knows its own address, so this turns up only once the built app sits behind a proxy. Set `ORIGIN` to the public URL, no trailing slash.
-- **`/setup` redirects to `/login`.** An admin already exists, so setup is closed. With the `local` provider, delete the data directory (`DATA_PATH`, `.selva-data/` by default) to start over.
-- **Login succeeds but bounces back to `/login`.** This only bites a production build (`NODE_ENV=production`) served over plain `http://`: the session cookie is marked `Secure` and the browser drops it. Set `ALLOW_INSECURE_COOKIES=true`. `pnpm dev:selva` is unaffected.
+- **`Cross-site POST form submissions are forbidden`.** SvelteKit compares the request's `Origin` header against the app's own URL. `vite dev` knows its own address, so this only turns up once the built app sits behind a proxy. Set `ORIGIN` to the public URL, no trailing slash.
+- **`/setup` redirects to `/login`.** An admin already exists. With the `local` provider, delete the data directory (`DATA_PATH`, `.selva-data/` by default) to start over.
+- **Login succeeds but bounces back to `/login`.** Only bites a production build (`NODE_ENV=production`) served over plain `http://`: the session cookie is marked `Secure` and the browser drops it. Set `ALLOW_INSECURE_COOKIES=true`. `pnpm dev:selva` is unaffected.

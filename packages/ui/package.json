@@ -4,7 +4,7 @@
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
 	"author": "VektorNode",
-	"homepage": "https://github.com/VektorNode/selva#readme",
+	"homepage": "https://selva.dev",
 	"bugs": "https://github.com/VektorNode/selva/issues",
 	"keywords": [
 		"svelte",

@@ -1,13 +1,11 @@
 ---
 title: Architecture
 order: 2
-published: false
-description: 'How the plugin, app, Rhino.Compute, and providers fit together, with an interactive solve-flow map.'
+published: true
+description: 'How the plugin, app, Rhino.Compute, and providers fit together.'
 ---
 
 # Architecture
-
-How the parts fit together.
 
 ## Four moving parts
 
@@ -52,11 +50,11 @@ flowchart LR
 | `@selvajs/schemas`       | The schema contract + TS/C# generators. Source of truth for both stacks.                                                             |
 | `@selvajs/plugin-ui`     | The schema designer UI. Embedded into `Selva.gha`.                                                                                   |
 | `@selvajs/selva`         | The deployable web app.                                                                                                              |
-| `@selvajs/ui`            | Shared Svelte components, theme, viewer building blocks.                                                                             |
+| `@selvajs/ui`            | Shared Svelte components, theme, and the Svelte shells around the viewer.                                                            |
 | `@selvajs/compute`       | Type-safe Rhino.Compute client and data trees. Pure solve/data, no renderer. See [Build your own app](./packages/build/overview.md). |
-| `@selvajs/visualization` | Headless viewer core: solve response → Three.js. Layers `scene` → `render` → `parse`.                                                |
-| `@selvajs/solve`         | The solve flow, both sides of the wire (`client` / `server`).                                                                        |
-| `@selvajs/server`        | Server building blocks: limits, rate limit, SSRF guard, definitions.                                                                 |
+| `@selvajs/visualization` | Headless viewer core: solve response → Three.js. Layers `scene` → `render` → `parse` → `shared`.                                     |
+| `@selvajs/solve`         | The solve flow, both sides of the wire (`/client`, `/server`, `/shared`).                                                            |
+| `@selvajs/server`        | Server building blocks: compute limits and client cache, rate limit, SSRF guard, definitions, tokens, access.                        |
 | `@selvajs/platform`      | Provider _interfaces_, no implementations. See [Providers](./self-hosting/providers/overview.md).                                    |
 | `@selvajs/*-provider`    | Concrete provider implementations.                                                                                                   |
 | `@selvajs/cli`           | Scaffolds and operates a deployment. See [CLI](./self-hosting/get-started/cli.md).                                                   |

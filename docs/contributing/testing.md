@@ -24,10 +24,10 @@ there when it isn't testing one module — `@selvajs/compute`'s
 `tests/contract/` holds seam tests against a recorded server snapshot.
 
 Benchmarks live beside the tests as `*.bench.ts`. `pnpm test` never runs them;
-they're on-demand via a package's `bench` script (`@selvajs/visualization` has
-one). They record a baseline for the two costs that scale with mesh size —
-edge extraction and mesh-batch parsing — so a regression is measurable rather
-than remembered.
+they're on-demand via a package's `bench` script (`@selvajs/visualization` and
+`@selvajs/compute` have one). They record a baseline for the costs that scale
+with mesh size — edge extraction and mesh-batch parsing — so a regression is
+measurable rather than remembered.
 
 ## Vitest config
 

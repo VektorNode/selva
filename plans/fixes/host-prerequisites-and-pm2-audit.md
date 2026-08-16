@@ -1,5 +1,19 @@
 # Host prerequisites and pm2: audit and patch-governance plan
 
+**Tracked in [#202](https://github.com/VektorNode/selva/issues/202).**
+
+> **Status verified 2026-08-16: effectively complete — one item owed.** Everything in items 1–5
+> landed and was checked against source, including the validation pass (the doctor's daemon check
+> reads `pm2.pid` + `signal 0` and does not spawn a daemon). The pin is at 7.0.3 and derives from
+> `@selvajs/cli`'s `devDependencies`.
+>
+> **Owed before release:** one staging test of admin self-update under pm2 7. Also unverifiable
+> from source, and worth confirming once by hand: that Dependabot alerts are enabled in the repo
+> settings — item 2's advisory watch depends entirely on that toggle.
+>
+> This file stays out of `archive/` only because of that staging test. Archive it once the test
+> has run.
+
 _August 2026. Triggered by an operator question: "I installed the normal Debian
 packages on the server. If Selva brings its own packages, that's duplication —
 and who patches yours? Distro packages patch themselves."_

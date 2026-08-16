@@ -7,7 +7,7 @@ import { requireManageInstanceUsers } from '$lib/server/access.server';
 /**
  * POST /api/admin/users/[id]/disable
  *
- * Permissions.md §10 — disabling a user invalidates sessions while preserving
+ * docs/contributing/permissions.md §10 — disabling a user invalidates sessions while preserving
  * identity and attribution. The §2 sole-`instance_admin` invariant is
  * enforced here BEFORE the auth provider disables, by consulting
  * `IPlatformPermissionStore.countInstanceAdminsExcluding`. Auth providers no

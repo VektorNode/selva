@@ -1,22 +1,33 @@
 ---
 title: Admin Guide
 order: 7
-published: false
+published: true
 description: 'Day-to-day operation: registering compute servers, managing users, and the admin surfaces.'
 ---
 
 # Admin Guide
 
 `/admin` is where you run the instance: users, orgs, the compute pool, updates, and
-the audit log. This page is the operator's view. For the authorization model
-underneath it, see [Permissions & Organizations](./permissions.md).
+the audit log. For the authorization model underneath it, see
+[Permissions & Organizations](./permissions.md).
 
 ## Who can reach /admin
 
-You need **any** platform permission to get in: `instance_admin`, `manage_compute`,
-`manage_instance_users`, or `manage_updates`. Org-scope permissions don't admit you.
-Each section gates itself on top of that, so you see only the tools your permissions
-allow. `instance_admin` is the superuser.
+**Any** platform permission gets you in — `instance_admin`, `manage_compute`,
+`manage_instance_users`, or `manage_updates`. Org-scope permissions don't. Each
+section then gates itself on top of that:
+
+| Section       | Requires                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Users         | `manage_instance_users`                                                                                             |
+| Organizations | `instance_admin`; hidden in single-tenant mode                                                                      |
+| Compute       | `manage_compute`                                                                                                    |
+| System        | any platform permission to view; `manage_updates` to update; `instance_admin` for health check and throughput probe |
+| Audit         | `instance_admin`                                                                                                    |
+| Projects      | `instance_admin` + `SELVA_FLAG_ENABLE_PLATFORM_PROJECTS`; 404s otherwise                                            |
+
+`instance_admin` is the superuser: it bypasses management checks at the call site
+rather than expanding into the other permissions in the stored set.
 
 ## First-run setup
 
@@ -33,9 +44,12 @@ On a brand-new instance with no users, all traffic is redirected to `/setup`.
   - `multi` → the env var is **required** and must match, so a random first signup
     can't become staff.
 
-`BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is also how you get back in if admin access is
-ever lost, after restoring a backup, say, or after an upgrade leaves the database
-in a state nobody can administer.
+Under header-auth the same variable is matched against the upstream UPN rather than a
+password identity.
+
+`BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is also how you get back in if admin access is ever
+lost — after restoring a backup, or an upgrade that leaves the database in a state
+nobody can administer.
 
 ## Sections
 
@@ -44,26 +58,22 @@ in a state nobody can administer.
 Create users, change their permissions, and delete them. You can also add existing
 users to the active org, and create and revoke org invites.
 
-Two things to know:
-
-- **Granting platform-scope permissions requires you to already hold
-  `instance_admin`**, so an operator with only `manage_instance_users` can't
-  self-elevate.
-- **Deleting a user is a hard, irreversible erasure.** Rows that point at the user
-  go when the user does, but some personal data sits in places that link doesn't
-  reach, so it is cleaned up explicitly: on Supabase it deletes
-  audit rows the user authored, anonymizes their solve metrics, deletes invites to
-  their email, and redacts their email from surviving audit payloads. Delete,
-  disable, and permission-removal all refuse with a 409 if they'd remove the last
-  instance admin.
+- **Granting platform-scope permissions requires `instance_admin`**, so an operator
+  holding only `manage_instance_users` can't self-elevate.
+- **Deleting a user is a hard, irreversible erasure.** Rows pointing at the user go
+  with them; personal data that link doesn't reach is cleaned up explicitly — on
+  Supabase, audit rows the user authored are deleted, solve metrics anonymized,
+  invites to their email deleted, and their email redacted from surviving audit
+  payloads.
+- Delete, disable, and permission-removal each return **409** if they'd remove the
+  last enabled instance admin.
 
 ### Organizations (`instance_admin`, multi-tenant only)
 
-Lists every org with member counts. You create, rename, and delete orgs through the
-admin API. **Deleting an org takes everything under it with it:** org members,
-projects, and project members are marked deleted, while pending invites and the
-org's compute config are removed outright.
-Single-tenant instances hide this section.
+Lists every org with member counts; create, rename, and delete through the admin API.
+**Deleting an org takes everything under it:** org members, projects, and project
+members are marked deleted, while pending invites and the org's compute config are
+removed outright. Single-tenant instances hide this section.
 
 ### Compute (`manage_compute`)
 
@@ -85,23 +95,24 @@ keys here.
 - **Release channel** (`manage_updates`): switch between `stable` and `beta`. This
   only persists the channel, it does **not** trigger an update.
 - **Update** (`instance_admin`): runs the package update and restarts the app, with
-  output streamed live. A brief downtime is by design. If the new version doesn't
-  come up healthy it reverts to the old one by itself, and the whole thing gives up
-  after 15 minutes. Beta builds may be unstable, and getting back to stable means switching
-  channel and updating again.
+  output streamed live. A brief downtime is by design. The new process gets ~30 s to
+  pass its health check (15 probes, 2 s apart); if it doesn't, the update rolls back
+  to the prior version by itself. Beta builds may be unstable, and getting back to
+  stable means switching channel and updating again.
 - **Health check** (`instance_admin`): verifies at-rest secret decryption, DB schema
   version, default compute reachability, and that `DATA_PATH` is writable.
-- **Network probe** (`instance_admin`): measures download and upload throughput.
+- **Throughput probe** (`instance_admin`): measures download and upload bandwidth by
+  streaming incompressible bytes. It is not a reachability test.
 - Read-only panels show feature flags, resolved compute and upload limits, the
   version, and the current channel.
 
 ### Audit (`instance_admin`)
 
-A read-only view of the audit log, loaded a page at a time and enriched with actor
-and target names. You can filter by event type (a fixed set of ~25 covering org,
-project, member, definition, version, share-link, invite, and system-update
-events), by actor id, and by date range. It renders "unavailable" if the provider has no audit query layer.
-Remember that deleting a user scrubs their audit rows (see Users).
+A read-only, paged view of the audit log, enriched with actor and target names.
+Filter by event type (a fixed set of 25 covering org, project, member, definition,
+version, share-link, invite, and system-update events), by actor id, and by date
+range. Renders "unavailable" if the provider has no audit query layer. Deleting a
+user scrubs their audit rows (see Users).
 
 ### Platform Projects (`instance_admin`, `SELVA_FLAG_ENABLE_PLATFORM_PROJECTS`)
 

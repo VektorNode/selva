@@ -1,6 +1,6 @@
 # @selvajs/platform
 
-Pure TypeScript interfaces defining Selva's contract with its backends — no runtime dependency on a specific database, storage, or auth service. Concrete adapters (local filesystem, Supabase, Azure, ...) live in their own packages and implement these interfaces.
+Pure TypeScript interfaces defining Selva's contract with its backends — no runtime dependency on a specific database, storage, or auth service. Concrete adapters live in their own packages: `@selvajs/local-provider`, `@selvajs/supabase-provider`, `@selvajs/header-auth-provider`.
 
 This README is the contract. Read it before writing an adapter.
 
@@ -22,7 +22,7 @@ This README is the contract. Read it before writing an adapter.
 | `IComputeServerStore`        | Global + per-org compute-server config.                                           | No — not tenant-scoped.                                              |
 | `IStorageProvider`           | Path-based blob storage. Authorization is the caller's responsibility.            | No — callers pass already-authorized paths.                          |
 
-`IDataProvider` composes every store, plus optional `auditQuery` / `events` hooks and lifecycle methods `ensureUser` and `onUserDeleted`. An adapter typically implements one class per store and aggregates them.
+`IDataProvider` composes every store, plus optional `auditQuery` / `events` hooks, an optional `verifySchemaVersion` handshake (for adapters whose schema migrates out-of-band), and the `ensureUser` / `onUserDeleted` lifecycle methods. An adapter typically implements one class per store and aggregates them.
 
 ---
 
@@ -31,7 +31,7 @@ This README is the contract. Read it before writing an adapter.
 `RequestContext` carries the caller's identity and active scope. Built once per HTTP request in `hooks.server.ts` from the authenticated session.
 
 1. **The query is the security boundary.** Adapters MUST filter reads and writes by `ctx`. An unauthorized caller gets an empty page, `null`, or a `ProviderError` — never someone else's data.
-2. **Never trust a caller's pre-flight check.** `canSolve` / `canEdit` / `canManage` are UI-gating conveniences. A mutating method must remain safe even if the caller skipped them.
+2. **Never trust a caller's pre-flight check.** The predicates in [`access/rules.ts`](src/access/rules.ts) gate the UI and the route layer. A mutating store method must remain safe even if the caller skipped them.
 3. **Extend `RequestContext`, not method signatures.** Add a field to the interface for new dimensions (e.g. `tenantId`); don't thread it through every call.
 4. **`SYSTEM_CONTEXT` is for trusted server code only.** Bootstrap, scheduled janitors, migrations, test setup. Never derive it from a user session.
 
@@ -39,7 +39,7 @@ This README is the contract. Read it before writing an adapter.
 
 ## Transaction ordering rules
 
-Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`IStorageProvider`) with no shared transaction. `DefinitionService` (`@selvajs/server/definitions`) composes them with fixed ordering so partial failure is recoverable.
+Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`IStorageProvider`) with no shared transaction. The definition service in [`@selvajs/server/definitions`](../server/src/definitions/definition-service.ts) composes them with fixed ordering so partial failure is recoverable.
 
 **Create — metadata-first, `pending` → `draft`:**
 
@@ -78,7 +78,7 @@ export class MyDefinitionStore implements IDefinitionStore {
 }
 ```
 
-Wire it into a `SelvaConfig` via `defineConfig({ auth, data, storage })`. `data` is an `IDataProvider` composing every store.
+The Selva app normally picks bundled providers from `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER`. For an adapter that isn't bundled, export a `defineConfig({ auth, data, storage, … })` result from a `.js` file and point `SELVA_CONFIG_PATH` at it — see [config.ts](src/config.ts) for the full `SelvaConfig` shape (tenancy, flags, branding, event/metric sinks, binding resolver).
 
 ---
 
@@ -96,7 +96,7 @@ runDefinitionStoreConformance({
 });
 ```
 
-The suites cover `ctx` scoping, `pending` filtering, `includePending` opt-in, and `ProviderError` shapes. They do not cover performance or concurrency.
+A suite exists per store, plus auth, email-link auth, storage, event sink, and solve-metric sink. They cover `ctx` scoping, `pending` filtering, `includePending` opt-in, and `ProviderError` shapes; they do not cover performance or concurrency.
 
 ---
 
@@ -108,13 +108,13 @@ Throw `ProviderError` for user-facing failures (`new ProviderError('...', 404)`)
 
 ## Data privacy
 
-Identity and credentials belong to whichever `IAuthProvider` is configured — for Supabase that's a separate service; for the local provider, Selva itself is the auth provider and holds credentials on disk. This package's own stores hold only opaque session data, user IDs, and authorization metadata. Details: [Providers](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/providers/overview.md) and [Security & Limits](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/concepts/security-and-limits.md).
+Identity and credentials belong to whichever `IAuthProvider` is configured — for Supabase that's a separate service; for the local provider, Selva itself is the auth provider and holds email addresses and password hashes on disk. This package's own stores hold user IDs, authorization metadata, display names, invite email addresses, and audit payloads. **The operator is the data controller.** See [CLAUDE.md](../../CLAUDE.md#data-privacy) for the full inventory and what erasure reaches, plus [providers](../../docs/self-hosting/providers/overview.md) and [security & limits](../../docs/self-hosting/concepts/security-and-limits.md).
 
 ---
 
 ## What not to put in this package
 
 - No runtime dependencies on databases, ORMs, auth SDKs, or HTTP frameworks.
-- No concrete adapters. They live in their own packages.
-- No service orchestration. Multi-step workflows that compose data + storage live in the consuming app.
-- No HTTP-boundary concerns. Zod request schemas and access checks belong in route handlers.
+- No concrete adapters — they live in their own packages.
+- No service orchestration. Multi-step workflows composing data + storage live in `@selvajs/server`.
+- No HTTP-boundary concerns. Zod request schemas and route gating belong in the app's handlers.

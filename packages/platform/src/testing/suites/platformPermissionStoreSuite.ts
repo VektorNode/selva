@@ -29,7 +29,7 @@ export interface PlatformPermissionStoreConformanceOptions {
 	/**
 	 * Optional: disable a user in the adapter's auth backend, in a way the
 	 * store's enabled-admin invariant queries observe. When present, the
-	 * disabled-admin exclusion tests run (Permissions.md §10 counts only
+	 * disabled-admin exclusion tests run (docs/contributing/permissions.md §10 counts only
 	 * *enabled* instance_admins). Adapters whose permission store can't see
 	 * disabled state (local — documented boundary) omit it; the tests then
 	 * show as skipped rather than silently green.

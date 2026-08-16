@@ -34,7 +34,7 @@ the server was up.
 
 > **`g1_apply_graph` and `g1_connect` are broken in 0.1.5** — both error and change nothing, even
 > for a single stock component with no wires. Build the graph with `run_csharp` instead, using the
-> place-and-wire helper in [`scripts/rhino-mcp/snippets.csx`](../../../scripts/rhino-mcp/snippets.csx).
+> place-and-wire helper in [`.claude/skills/rhino-mcp/reference.csx`](../../../.claude/skills/rhino-mcp/reference.csx).
 
 1. `g1_start` — open Grasshopper.
 2. Place and wire via `run_csharp`. Placing by Guid with `g1_place_component` also works if you
@@ -42,7 +42,7 @@ the server was up.
 3. `g1_get_canvas_graph` to read back wires and per-param data — this is ground truth, not the
    tool return values.
 4. Save via `run_csharp` and `GH_Archive` (`GH_Document.SaveAs` does not exist in this build, and
-   `save_doc` is the _Rhino_ document) — see "Save a Grasshopper definition" in the snippets file.
+   `save_doc` is the _Rhino_ document) — see the save snippet in `reference.csx`.
 
 **Check what the rebuild dropped before overwriting a committed fixture.** A freshly-placed
 component carries no authored state, so a structurally correct rebuild can still lose data —

@@ -8,6 +8,15 @@
 > This ADR moves large file outputs **out of the solve JSON**: the solve response carries
 > small geometry/meshes + a **reference** to each file output; the browser fetches the file as a
 > separate binary stream on demand.
+>
+> **Still unimplemented as of 2026-08.** No `file-ref` descriptor, no `compute-staging/` prefix, and
+> no `/api/v1/compute/files/…` route exists. One piece landed on its own: the response guard
+> `COMPUTE_RESPONSE_MAX_BYTES` is live in
+> [`@selvajs/server/compute`](../../packages/server/src/compute/limits.ts), defaulting to 300 MB
+> rather than the ~25 MB this ADR proposed — it currently backstops the un-partitioned payload
+> instead of a partitioned one. `COMPUTE_INLINE_FILE_MAX_BYTES` and `COMPUTE_STAGING_TTL_MS` do not
+> exist. The compute-limits code has also moved out of `packages/selva/src/lib/server/computeLimits.ts`
+> into the package, so the line references below point at the pre-extraction layout.
 
 ## Problem
 
@@ -113,7 +122,7 @@ Modeled directly on the existing authenticated blob proxy
 
 1. Path-shape gate — `solveId`/`outputId` must be valid UUIDs (anchored regex).
 2. **Auth must match the solve's auth.** The original solve was gated by either a session
-   (`requireCanSolve`/`requireCanEditDefinition`) or a share-link token (spec §7). The download
+   (`requireCanSolve`/`requireCanEditDefinition`) or a share-link token. The download
    must re-run the _same_ gate against the _same_ definition. Cleanest: at stage time, record
    `{ definitionId, channel, projectId, shareLinkId? }` in a tiny sidecar
    (`compute-staging/{solveId}/manifest.json`) and have the download endpoint replay the gate.
@@ -140,7 +149,11 @@ Modeled directly on the existing authenticated blob proxy
 
 ## Compatibility with `@selvajs/compute` (sealed dist)
 
-The processor (`GrasshopperResponseProcessor`) is a prebuilt dist (v1.5.2) we do not edit here.
+> At the time of writing, `@selvajs/compute` was consumed as a prebuilt external dist. It has since
+> become a workspace package (`packages/compute`, 4.x), so "cannot edit it" is no longer the
+> constraint — but the design below still holds, and no library change is needed to ship this ADR.
+
+The processor (`GrasshopperResponseProcessor`) was a prebuilt dist (v1.5.2) not edited here.
 The design avoids touching it:
 
 - Partitioning happens in **our** route, on the parsed `GrasshopperComputeResponse`, _after_ the

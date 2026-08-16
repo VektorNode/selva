@@ -36,7 +36,9 @@ app.example.dev {
 	@api path /api/*
 	header @api Cache-Control "no-cache, no-store, must-revalidate"
 
-	request_body { max_size 100mb }
+	# Must clear the app's own BODY_SIZE_LIMIT (default 210M) or large `file`
+	# widget uploads are rejected at the proxy before Selva ever sees them.
+	request_body { max_size 210MB }
 
 	log {
 		output file /var/log/caddy/access.log

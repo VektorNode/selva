@@ -4,7 +4,7 @@
 	"description": "Schema definitions, generated TypeScript types, and code generators for Selva",
 	"license": "MIT",
 	"author": "VektorNode",
-	"homepage": "https://github.com/VektorNode/selva#readme",
+	"homepage": "https://selva.dev",
 	"bugs": "https://github.com/VektorNode/selva/issues",
 	"keywords": [
 		"json-schema",

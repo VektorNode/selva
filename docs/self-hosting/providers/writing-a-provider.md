@@ -1,7 +1,7 @@
 ---
 title: Writing a provider
 order: 4
-published: false
+published: true
 description: 'Implement the platform interfaces to back Selva with any auth, data, or storage system.'
 ---
 
@@ -11,14 +11,14 @@ None of the shipped providers fit? Write an adapter for an in-house identity ser
 
 ## Steps
 
-1. **Implement** the interface(s) you need from `@selvajs/platform` (`IAuthProvider`, `IDataProvider`, `IStorageProvider`). Adopt just one role and reuse shipped providers for the rest.
+1. **Implement** the interface(s) you need from `@selvajs/platform`: `IAuthProvider`, `IDataProvider`, `IStorageProvider`. Adopt just one role and reuse shipped providers for the rest.
 2. **Scope everything** by `RequestContext`. The query is the security boundary: an unauthorized caller gets empty results or an error, never someone else's data.
-3. **Run the conformance suite** from `@selvajs/platform/testing` against your adapter. Passing means it behaves identically to the reference implementation.
-4. **Wire it in** via `defineConfig({ auth, data, storage })`.
+3. **Run the conformance suites** from `@selvajs/platform/testing` (`runAuthProviderConformance`, `runDefinitionStoreConformance`, `runOrgStoreConformance`, and the rest) against your adapter. Passing means it behaves identically to the reference implementation.
+4. **Wire it in** with `defineConfig({ auth, data, storage })` in a `.js` file, and point `SELVA_CONFIG_PATH` at it.
 
 ## The contract
 
-The [platform README](https://www.npmjs.com/package/@selvajs/platform) is authoritative, including the transaction-ordering rules that keep the metadata store and blob store recoverable when one fails mid-operation (they share no transaction).
+The [platform README](https://www.npmjs.com/package/@selvajs/platform) is authoritative, including the transaction-ordering rules that keep the metadata store and blob store recoverable when one fails mid-operation — they share no transaction.
 
 ## Next
 

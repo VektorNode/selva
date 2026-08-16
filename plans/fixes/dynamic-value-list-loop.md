@@ -1,5 +1,7 @@
 # [Fix]: Dynamic value list — kill the feedback-loop class, centralize reconciliation, prove it end to end
 
+**Tracked in [#208](https://github.com/VektorNode/selva/issues/208).**
+
 **Status:** open · **Labels:** `correctness`, `solve-path` · **Scope:** `@selvajs/solve`, `@selvajs/ui`, `@selvajs/plugin-ui`, `Plugin/Selva.GH`, compute.rhino3d fork
 **Origin:** full four-repo trace 2026-07-31 (GH plugin → wire → solve package → UI reactivity → compute.geometry). File refs below are from that trace.
 **Progress:** Phase 5 Level 2 fixture repaired and walked live 2026-08-03 (scenarios 1–3, real WS). Phases 0–4 not started.
@@ -72,7 +74,7 @@ Consequences for the design below:
 typed `paramType: "ValueList"` (PascalCase, and the wrong type besides), so
 `ValueApplicator.cs:102`'s `skipDedup` for `dynamicValueList` never fired and the DVL path was
 never taken. Any earlier "verified live" claim about this fixture predates the path being
-exercised at all. See [PLUGIN-CONTEXT.md](../../PLUGIN-CONTEXT.md) for the four wiring/identity
+exercised at all. See [plugin-context.md](../../docs/contributing/plugin-context.md) for the four wiring/identity
 rules the fixture violated and now satisfies.
 
 ## Design
@@ -283,7 +285,7 @@ Bake and did not work: all three `Set DynVL` outputs shared one bake (only the f
 surfaced), `schema.outputs[]` was keyed on the Set-component GUIDs instead of the bakes, the three
 DVL inputs were typed `paramType: "ValueList"`, and there was no `Schema`-nicknamed bake at all —
 the plugin scaffolded one at load. The four rules those violate are in
-[PLUGIN-CONTEXT.md](../../PLUGIN-CONTEXT.md); the walk above is the first run where the DVL path
+[plugin-context.md](../../docs/contributing/plugin-context.md); the walk above is the first run where the DVL path
 executed.
 
 Three Get/Set pairs live simultaneously, so the multi-DVL global budget is exercised:
@@ -339,8 +341,8 @@ the session layer instead.
 Rebuild caveat: the 8 C# script bodies are not reachable through the MCP script sandbox (they live
 in each component's own `Script` chunk). A rebuild cannot restore them — hand-edit this fixture.
 
-The committed `.ghx` currently carries uncommitted local modifications — commit or revert before
-Level 2 relies on it.
+(Was: "the committed `.ghx` carries uncommitted local modifications". Resolved — the fixture is
+clean in git as of 2026-08-16 and Level 2 can rely on it.)
 
 ## Order & risk
 

@@ -5,39 +5,30 @@
 [![npm downloads](https://img.shields.io/npm/dm/@selvajs/compute.svg)](https://www.npmjs.com/package/@selvajs/compute)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue.svg)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-22+-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-24+-green.svg)](https://nodejs.org/)
 [![GitHub Repository](https://img.shields.io/badge/GitHub-VektorNode/selva-blue?logo=github)](https://github.com/VektorNode/selva)
 
 </div>
 
 # @selvajs/compute
 
-An intermediate-level TypeScript framework for building web applications with Rhino Compute and Grasshopper.
+A TypeScript client for Rhino Compute and Grasshopper definitions: typed definition IO, data trees,
+and a scheduler that handles cancellation, retries and caching.
 
-`@selvajs/compute` simplifies the process of communicating with Rhino Compute and handling Grasshopper definitions. It is pure solve/data — it has no rendering layer and no `three` dependency. To turn a solve response into Three.js objects, use [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization).
-
-## Installation
+Pure solve/data — no rendering layer, no `three` dependency. To turn a solve response into Three.js
+objects, use [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization).
 
 ```bash
 npm install @selvajs/compute
 ```
 
-## Why this project exists
+Three entrypoints: `@selvajs/compute/grasshopper` (client, data trees, IO parsing),
+`@selvajs/compute/core` (low-level fetch, errors, config). The root is empty on purpose — import a
+subpath.
 
-`@selvajs/compute` provides a type-safe, production-ready foundation for building with Rhino Compute:
-
-- **Type-safe API** — Full TypeScript with structured error codes and rich error context.
-- **High-level client** — `GrasshopperClient` for one-off solves, `client.createScheduler()` for any UI that fires solves frequently.
-- **Robust transport** — Configurable timeout, caller-supplied `AbortSignal`, and retries on errors that look temporary, waiting longer before each attempt. A server asking to be left alone with `Retry-After` is obeyed.
-- **Slider-friendly** — `latest-wins` scheduling aborts stale solves when newer values arrive. Optional response cache makes repeated inputs instant.
-
-Whether you're building a simple solver, a slider-driven configurator, or a long-running job submission flow, `@selvajs/compute` handles the plumbing so you can focus on your Grasshopper definitions.
-
-> **What this is not:** a job queue. For solves longer than a couple of
-> minutes, run this library server-side behind your own queue
-> (BullMQ / SQS / Cloud Tasks) and expose a status endpoint to the browser.
-
-> **Note:** The library currently focuses on the Grasshopper endpoint but is designed to support other Rhino Compute endpoints in future releases.
+> **This is not a job queue.** For solves longer than a couple of minutes, run this library
+> server-side behind your own queue (BullMQ / SQS / Cloud Tasks) and expose a status endpoint to
+> the browser.
 
 ## Quickstart
 
@@ -141,24 +132,18 @@ and expose a status endpoint to the browser.
 
 ## Requirements
 
-### Core Requirements
+**Node.js >= 24.**
 
-- **Node.js** >= 22
+The [official McNeel Rhino Compute](https://github.com/mcneel/compute.rhino3d) handles plain
+Grasshopper solving. Some features need more:
 
-### Rhino Compute Compatibility
+- The [VektorNode compute fork](https://github.com/VektorNode/compute.rhino3d) adds input grouping
+  (`groupName`), persistent input ids keyed on Grasshopper object GUIDs, file export, and block
+  instance support.
+- The [Selva Rhino plugin](https://www.food4rhino.com/en/app/selva?lang=en) supplies the Display
+  and file-export components those features read.
 
-`@selvajs/compute` works with both standard Rhino Compute and enhanced versions:
-
-**Standard Rhino Compute** – The [official McNeel repository](https://github.com/mcneel/compute.rhino3d) works for basic Grasshopper solving with core features.
-
-**Enhanced Setup** (Recommended) – Unlock advanced features:
-
-1. **Selva Rhino Plugin** – Grasshopper plugin that simplifies building Three.js visualizations and exporting results directly from Grasshopper. [Download from Food4Rhino](https://www.food4rhino.com/en/app/selva?lang=en). Detailed documentation will be available when the Selva project is open-sourced.
-2. **Custom Compute Server** – Our [custom branch](https://github.com/VektorNode/compute.rhino3d) enables:
-   - **Input Grouping** – Organize inputs with the `groupName` property
-   - **Persistent IDs** – Uniquely identify inputs across definition changes using Grasshopper object GUIDs
-
-> Features requiring the enhanced setup will be clearly marked in the documentation.
+Anything requiring either is marked where it's documented.
 
 ## Troubleshooting
 
@@ -180,16 +165,8 @@ The browser couldn't reach the server. Check, in order:
 
 ### Solves timing out before the server finishes (502 / 504 / aborted)
 
-The bottleneck is almost always a proxy in front of Compute, not the library.
-Common culprits:
-
-- **Cloudflare** — 100s idle timeout on free/pro plans (525s on enterprise).
-- **AWS ALB** — 60s default; raise via the `idle_timeout` attribute.
-- **nginx** — 60s default; set `proxy_read_timeout` and `proxy_send_timeout`.
-
-For solves longer than ~2 minutes, prefer running this library **server-side**
-and exposing your own job-status endpoint to the browser. Direct
-browser → Compute is fine for short solves but fragile for long ones.
+A proxy in front of Compute, not the library — see [Long jobs behind a
+proxy](#long-jobs-behind-a-proxy).
 
 ### `Definition URL/content is required`
 
@@ -208,21 +185,14 @@ from the server itself.
 
 ### "Superseded by newer solve" errors flooding my console
 
-That's the scheduler doing its job in `latest-wins` mode — every aborted slider
-solve rejects with this message. Filter it out:
-
-```ts
-scheduler.solve(def, tree).catch((err) => {
-	if (/superseded|aborted/i.test(err.message)) return; // expected, not an error
-	showError(err);
-});
-```
+The scheduler doing its job in `latest-wins` mode — every aborted slider solve rejects with this
+message. Filter it as shown in the [Quickstart](#quickstart).
 
 ## Acknowledgement
 
-This library is built on production experience and draws from several official McNeel repositories. Where code has been adapted, it is clearly marked in the relevant files.
+Where code is adapted from McNeel's repositories, it is marked in the relevant files.
 
-**Key References:**
+**Key references:**
 
 - [compute.rhino3d.appserver](https://github.com/mcneel/compute.rhino3d.appserver) – Server implementation reference
 - [IO/Schema.cs](https://github.com/mcneel/compute.rhino3d/blob/8.x/src/compute.geometry/IO/Schema.cs) – Grasshopper API structure

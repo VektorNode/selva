@@ -2,29 +2,25 @@
 
 Rule-based validation for UI schemas: each concern (structure, parameters, layout, ...) is its own rule class instead of one monolithic validator.
 
-## Architecture
+## Types
 
-### Core Components
+- `IValidationRule` — one self-contained check: `IEnumerable<ValidationIssue> Validate(UISchema)`
+- `SchemaValidator` — runs the rules and aggregates their issues
+- `ValidationResult` — the outcome plus every issue found
+- `ValidationIssue` — one problem, built via `ValidationIssue.Error` / `.Warning` / `.Info`
 
-1. **IValidationRule** - Interface that all validation rules implement
-2. **SchemaValidator** - Orchestrates validation by running all rules
-3. **ValidationResult** - Contains validation outcome and any issues found
-4. **ValidationIssue** - Represents a single validation problem (Error, Warning, or Info)
+## Built-in rules (`Rules/`)
 
-### Built-in Rules
-
-Located in `Services/Validation/Rules/`:
-
-- **BasicStructureRule** - Validates required top-level fields (Id, Name, Inputs, Outputs, Layout)
-- **ParameterValidationRule** - Validates input/output parameter definitions and uniqueness
-- **LayoutValidationRule** - Validates layout structure and parameter references
-- **WidgetConfigRule** - Validates widget-specific configurations (number ranges, dropdown options)
-- **VersioningRule** - Validates schema versioning information
-- **ConstraintsRule** - Validates business rules and data constraints
+| Rule                      | Checks                                                       |
+| ------------------------- | ------------------------------------------------------------ |
+| `BasicStructureRule`      | Required top-level fields: Id, Name, Inputs, Outputs, Layout |
+| `ParameterValidationRule` | Input/output parameter definitions and uniqueness            |
+| `LayoutValidationRule`    | Layout structure and its parameter references                |
+| `WidgetConfigRule`        | Widget-specific config — number ranges, dropdown options     |
+| `VersioningRule`          | Schema versioning information                                |
+| `ConstraintsRule`         | Business rules and data constraints                          |
 
 ## Usage
-
-### Basic Validation
 
 ```csharp
 using Selva.Schema.Services.Validation;
@@ -41,9 +37,9 @@ if (!result.IsValid)
 }
 ```
 
-### Adding Custom Rules
+### Custom rules
 
-Create a new rule by implementing `IValidationRule`:
+Implement `IValidationRule`:
 
 ```csharp
 public class CustomRule : IValidationRule
@@ -62,32 +58,20 @@ public class CustomRule : IValidationRule
 }
 ```
 
-Then add it to the validator:
+Then compose it — add to the defaults, drop a default, or supply the whole set:
 
 ```csharp
 var validator = new SchemaValidator();
 validator.AddRule(new CustomRule());
-var result = validator.Validate(schema);
-```
+validator.RemoveRule<VersioningRule>();
 
-### Creating a Validator with Custom Rules
-
-```csharp
-var customRules = new IValidationRule[]
+// Or start from an explicit set instead of the defaults:
+var explicitSet = new SchemaValidator(new IValidationRule[]
 {
     new BasicStructureRule(),
     new ParameterValidationRule(),
     new CustomRule()
-};
-
-var validator = new SchemaValidator(customRules);
+});
 ```
 
-### Removing Rules
-
-```csharp
-var validator = new SchemaValidator();
-validator.RemoveRule<VersioningRule>(); // Remove versioning validation
-```
-
-Each rule can be added, removed, or tested independently — new validation logic doesn't touch existing rules.
+Each rule is added, removed, and tested independently — new validation logic never touches existing rules.
