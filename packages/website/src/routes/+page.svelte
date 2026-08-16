@@ -18,24 +18,7 @@
 
 <!-- The landing commits to one look in both themes: a deep pond of layered
      greens with frosted panels floating on it. Explicit colours, on purpose. -->
-<div
-	class="relative isolate -mt-19 overflow-hidden pt-19"
-	style="background: linear-gradient(180deg, oklch(0.16 0.035 160), oklch(0.13 0.028 152) 55%, oklch(0.15 0.032 158)); color: oklch(0.94 0.012 120);"
->
-	<!-- Atmosphere: soft green glows and ripple rings, all decorative. -->
-	<div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
-		<svg class="absolute top-16 -right-40 size-[44rem] opacity-[0.06]" viewBox="0 0 400 400">
-			{#each [36, 74, 116, 162, 199] as r (r)}
-				<circle cx="200" cy="200" {r} fill="none" stroke="white" stroke-width="1" />
-			{/each}
-		</svg>
-		<svg class="absolute top-[86rem] -left-52 size-[36rem] opacity-[0.05]" viewBox="0 0 400 400">
-			{#each [42, 88, 137, 186] as r (r)}
-				<circle cx="200" cy="200" {r} fill="none" stroke="white" stroke-width="1" />
-			{/each}
-		</svg>
-	</div>
-
+<div class="relative isolate -mt-19 overflow-hidden bg-olive-900 pt-19" style="background: ">
 	<div class="relative mx-auto max-w-6xl px-6">
 		<!-- ═══ Hero: type left, organism right ═══ -->
 		<section class="grid items-center gap-x-8 gap-y-14 py-16 sm:py-24 lg:grid-cols-[1.05fr_1fr]">
