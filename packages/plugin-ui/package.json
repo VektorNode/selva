@@ -23,6 +23,8 @@
 		"@playwright/test": "catalog:",
 		"@selvajs/config": "workspace:*",
 		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/kit": "catalog:",
+		"svelte-check": "catalog:",
 		"@types/three": "catalog:",
 		"@types/ws": "catalog:",
 		"tw-animate-css": "catalog:",

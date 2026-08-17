@@ -12,6 +12,8 @@
 
 **Contents:** finding 0 (P0, unauthenticated) · 1–5 (P0) · 6–12 (P1) · 13–20 (P2) · 21–25 (found while verifying) · 26–29 (maintainability).
 
+**Status after Pass 10 — every P0 and P1 is closed.** What remains is P2 and spec text: findings **15**, **16**, **20** and the `apiRoute` bullet of **29**, plus the spec edits listed under [Spec changes needed](#spec-changes-needed). Finding 14 is 🧊 deferred by decision and finding 7's disable half is a documented bound, not an open defect. **15 and 16 need a human decision before code** (is the commons contract retroactive; may an `instance_admin` reclaim a `platform` project) — the rest is mechanical.
+
 ---
 
 ## ✅ Pass 1 shipped — 2026-08-17
@@ -302,6 +304,45 @@ Restoring local's read-then-write turned both new cases red. Replacing the RPC b
 `EXPECTED_MIGRATION_HEAD` bumped to `20260817180000`; `migration-head.test.ts` catches that drift and did.
 
 **Next up:** 13/15/16/19/20 remain open — all P2. 13+19 are one pass (the UI offers what the server refuses). Spec edits still outstanding: §5 (14), §10 (7, 9), §4:218 (15), §6 (20), §3 (20).
+
+---
+
+## ✅ Pass 10 shipped — 2026-08-17
+
+**Findings 13 and 19 are closed** — the two "the UI says something the server does not" items, correctly predicted as one pass. `pnpm check` (14/14), `pnpm type-check` (22/22), `pnpm lint` (0 errors) and the full `pnpm test` (25/25 packages) all pass. `@selvajs/selva` is **548/548** (+3).
+
+| Finding | Change                                                                                                                                | Test                                                 |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| 13      | Members tab carries a visibility-derived banner; removal confirms with copy naming what is and is not revoked                         | — (no component test infrastructure; see below)      |
+| 19      | Delete + new Disable share one `removalBlockReason` mirroring `requireCanRemoveInstanceAdmin`; sole-admin count moved into the loader | `admin/users/__tests__/sole-admin-count.test.ts` (3) |
+
+### 19 — the count was the testable half, the gate was the important half
+
+The Delete button was gated on `soleInstanceAdmin` alone, so a `manage_instance_users` holder was offered a live one-click delete on every admin row — finding 5's exploit rendered as an affordance. The checkboxes beside it already mirrored the rule via `platformLocked`; the button simply never got the same treatment. Both destructive buttons now derive from **one** `removalBlockReason`, so they cannot drift apart again the way the checkbox and the button did.
+
+**The sole-admin count moved to the server, and that is what the tests pin.** It was computed client-side over `data.users`, which `listUsers` caps at 200 — so past that many users the lock is mirrored from truncated input and locks the wrong rows. `countInstanceAdminsExcluding(ctx, '')` reads every row instead. Reverting to the page-derived version turns 2 of the 3 new tests red.
+
+A failed count degrades to `null` and **does not lock**. The server refuses the removal either way, so the choice is between a clear 409 and a disabled button the operator cannot explain — the 409 is the better failure.
+
+**Disable got its first UI at all.** It is still a one-way door (no enable endpoint exists, and building one is its own scoped work per §10), so the confirmation says exactly that rather than letting an admin discover it after the fact.
+
+### 13 — the fix had to be both tabs, as the verification pass predicted
+
+Neither string was false alone: Settings said visibility grants access, Members said membership controls editing. Jointly they told an admin that removing a contractor from a `public` project revokes something. The Members tab now carries a banner derived from visibility — amber on anything non-private — stating that view and solve access comes from visibility regardless of the list, and removal confirms with copy naming what actually changes.
+
+Keyed on **`project.visibility` (saved), not the `visibility` form state**: the General tab's select is an unsaved draft while the Members tab is live, so binding the warning to the draft would describe a project that does not exist yet.
+
+### What is not verified by test, and why
+
+**There is no component test infrastructure anywhere in this repo** — no `*.svelte.test.ts`, no jsdom environment configured. Finding 13 is entirely UI copy, and finding 19's gating is UI-side mirroring of a server rule that already has its own tests (`admin-removal-boundary.test.ts`). Those halves are review-verified only. Standing up a component harness to assert on button `disabled` attributes is a larger decision than this pass, and is not smuggled in here.
+
+### A pre-existing `pnpm check` failure, fixed on the way past
+
+`@selvajs/plugin-ui` failed `check` with `MODULE_NOT_FOUND` for `@sveltejs/kit` 2.70.1 — **not** a stale store. The package runs `svelte-kit sync` and `svelte-check` in its own `prepare`/`check` scripts while declaring **neither**, so both binaries resolved by hoisting accident. That held until the catalog moved kit 2.70.1 → 2.70.2 and the hoisted path went away. The error named the old version because that is what the stale resolution still referenced.
+
+Both are now declared `catalog:`, matching how `@selvajs/selva` declares kit. **`@selvajs/ui` and `@selvajs/website` have the same undeclared `svelte-check` dependency** and are one prune away from the identical failure — left alone here because it is outside this document's scope, but worth a two-line fix.
+
+**Next up:** 15/16/20 and the `apiRoute` bullet of 29 remain open — all P2. Spec edits outstanding: §5 (14), §10 (7, 9), §4:218 (15), §6 (20), §3 (20), §2 (17 is now transactional, so the wording is stale), §8 route matrix (two missing endpoints).
 
 ---
 
@@ -634,7 +675,7 @@ Read from migrations, not a running DB — worth confirming against a live insta
 
 ## P2 — Correctness, hygiene, spec drift
 
-### ☐ 13. Removing a member from a public/org project revokes nothing, and the UI implies it does
+### ✅ 13. Removing a member from a public/org project revokes nothing, and the UI implies it does
 
 **[`rules.ts:85-87`](../../packages/platform/src/access/rules.ts#L85-L87)** · **HIGH (UX), not a rule bug**
 
@@ -649,6 +690,8 @@ This is the finding that started the audit. An admin offboarding a contractor fr
 **Fix:** on a non-private project, the Members tab must state that visibility grants access independently, and removal must confirm with visibility-aware copy.
 
 **`[verified]`** — copy quoted accurately (**path corrected** to `routes/projects/_components/`). The sharper diagnosis: `visibilityHint` at :62-64 is individually correct for each visibility, but it sits in the **Settings** tab while the **Members** tab says membership controls editing. Neither string is false; the two tabs are jointly misleading. Fixing the Members copy alone will not resolve it — the two tabs have to agree.
+
+**DONE (Pass 10)** — both tabs, as the verification pass insisted. The Members tab carries a visibility-derived banner (amber on anything non-private) stating that view and solve access comes from visibility regardless of the list, and removal now confirms with copy naming what actually changes. Keyed on the **saved** `project.visibility`, not the General tab's unsaved select, so the warning never describes a project that does not exist yet. UI copy only — see the Pass 10 note on the absence of component tests.
 
 ---
 
@@ -726,13 +769,15 @@ It wraps a block spanning `listUsers`, `getProfiles`, `getForBatch` **and** `lis
 
 ---
 
-### ☐ 19. Admin UI delete button doesn't mirror the server
+### ✅ 19. Admin UI delete button doesn't mirror the server
 
 **[`UserListItem.svelte:147`](../../packages/selva/src/routes/admin/users/UserListItem.svelte#L147)** · **MEDIUM**
 
 `disabled={deleting || soleInstanceAdmin}` — not gated on `isPlatformAdmin`. A `manage_instance_users` holder sees a live Delete button on every admin row. The UI is _offering_ finding 5's exploit as one click. Checkboxes mirror correctly (`platformLocked = !isPlatformAdmin`); delete does not.
 
 Also: `soleInstanceAdmin` is computed client-side over a 200-row page, so the lock §2 asks for is computed on truncated input. Disable has **no UI at all** and there's no enable endpoint — currently a one-way door.
+
+**DONE (Pass 10), all three parts.** Delete and a new Disable button share one `removalBlockReason` derived from the same rule `requireCanRemoveInstanceAdmin` enforces — one source, so they cannot drift the way the checkbox and the button did. The sole-admin count moved into the loader (`countInstanceAdminsExcluding(ctx, '')` reads every row, not the 200-row page) and **degrades to `null` rather than locking** when it fails: the server refuses either way, so a clear 409 beats a button nobody can explain. Disable stays a one-way door and its confirmation says so.
 
 ---
 
