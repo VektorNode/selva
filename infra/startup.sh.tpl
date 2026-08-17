@@ -16,10 +16,11 @@ echo ""
 INSTALL_DIR="/home/${ssh_user}/selva"
 
 # ----------------------------------------------------------------------------
-# 1. Install Node.js + npm (NodeSource — gives us Node 20 with corepack).
+# 1. Install Node.js + npm (NodeSource — gives us Node 24 with corepack).
+#    Must stay >= the `engines.node` floor in every package.json.
 # ----------------------------------------------------------------------------
 if ! command -v node >/dev/null 2>&1; then
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
   apt-get install -y nodejs
 fi
 echo "Node $(node -v), npm $(npm -v)"

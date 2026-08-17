@@ -229,8 +229,9 @@ async function checkSupabaseMigrations(dir, env) {
 		// Provider package not installed in this deployment.
 	}
 	if (!expected) {
-		return yellow(
-			'@selvajs/supabase-provider migrations not found — skipping migration-head check'
+		return red(
+			'@selvajs/supabase-provider is not installed, so the migration SQL is missing. ' +
+				'Run `selva migrate` to add it, then `npm install`.'
 		);
 	}
 

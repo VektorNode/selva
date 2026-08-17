@@ -15,6 +15,7 @@ import {
 	DEPENDENCIES,
 	isFloatingPin,
 	LEGACY_DEPENDENCIES,
+	needsSupabaseProvider,
 	npmDistTagVersion,
 	OVERRIDES,
 	resolveSelvaPins,
@@ -122,7 +123,12 @@ export async function runMigrate(
 	}
 
 	const before = JSON.parse(readFileSync(pkgPath, 'utf8'));
-	const { pkg: target, notes: pinNotes } = buildTargetPackageJson(before, resolveVersion);
+	const deploymentEnv = readDeploymentEnv(join(dir, '.env'));
+	const { pkg: target, notes: pinNotes } = buildTargetPackageJson(
+		before,
+		resolveVersion,
+		deploymentEnv
+	);
 	const pkgDiff = diffPackageJson(before, target);
 
 	const configPath = join(dir, 'selva.config.js');
@@ -339,13 +345,32 @@ function restartAfterRollback(dir, pm2 = runPm2) {
 	}
 }
 
-function buildTargetPackageJson(current, resolveVersion = npmDistTagVersion) {
-	const { pins, notes } = resolveSelvaPins(current.dependencies, resolveVersion);
+// Only the provider keys matter here, so this reads `KEY=value` lines rather
+// than pulling in a dotenv parser: no quoting, expansion, or multi-line values
+// to honour.
+function readDeploymentEnv(envPath) {
+	if (!existsSync(envPath)) return {};
+	const env = {};
+	for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+		const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
+		if (match) env[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
+	}
+	return env;
+}
+
+function buildTargetPackageJson(current, resolveVersion = npmDistTagVersion, env = {}) {
+	const supabase = needsSupabaseProvider(env);
+	const { pins, notes } = resolveSelvaPins(
+		current.dependencies,
+		resolveVersion,
+		supabase ? ['@selvajs/supabase-provider'] : []
+	);
 	const pkg = buildDeploymentPackageJson({
 		name: current.name ?? 'selva-deployment',
 		version: current.version ?? '0.1.0',
 		engines: current.engines,
-		dependencies: pins
+		dependencies: pins,
+		supabase
 	});
 	return { pkg, notes };
 }

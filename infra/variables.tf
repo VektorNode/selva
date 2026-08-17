@@ -56,6 +56,31 @@ variable "acme_email" {
 }
 
 # ============================================================================
+# Scratch VM
+#
+# An unprovisioned second box (see scratch-vm.tf). Independent of the app VM:
+# toggling it off destroys only the scratch resources.
+# ============================================================================
+
+variable "scratch_vm_enabled" {
+  description = "Create the bare scratch VM. Set to false to destroy it without touching the app VM."
+  type        = bool
+  default     = false
+}
+
+variable "scratch_machine_type" {
+  description = "GCE machine type for the scratch VM."
+  type        = string
+  default     = "e2-medium"
+}
+
+variable "scratch_disk_size" {
+  description = "Boot disk size in GB for the scratch VM."
+  type        = number
+  default     = 20
+}
+
+# ============================================================================
 # Selva CLI configuration
 #
 # These are read by @selvajs/cli's non-interactive mode

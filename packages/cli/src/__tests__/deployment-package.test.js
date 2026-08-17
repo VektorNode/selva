@@ -12,6 +12,7 @@ import {
 	buildDeploymentPackageJson,
 	isFloatingPin,
 	isPrereleasePin,
+	needsSupabaseProvider,
 	resolveSelvaPins,
 	sanitizePackageName,
 	DEPENDENCIES,
@@ -387,4 +388,60 @@ test('deployment names are coerced to something npm accepts', () => {
 	assert.equal(sanitizePackageName('My Deployment'), 'my-deployment');
 	assert.equal(sanitizePackageName('...'), 'selva-deployment');
 	assert.equal(sanitizePackageName(''), 'selva-deployment');
+});
+
+// ============================================================================
+// Supabase provider dependency
+//
+// The provider's code is bundled into @selvajs/selva, but its migration SQL
+// ships only in its own tarball. A supabase deployment that doesn't depend on
+// it directly has no migrations on disk: `selva-supabase sync-migrations`
+// resolves nothing and the operator cannot apply the schema at all.
+// ============================================================================
+
+test('a supabase deployment depends on the provider that carries the migration SQL', () => {
+	const pkg = buildDeploymentPackageJson({ name: 'd', supabase: true });
+	assert.ok(
+		pkg.dependencies['@selvajs/supabase-provider'],
+		'supabase deployments need the package that ships supabase/migrations'
+	);
+});
+
+test('a local-provider deployment does not carry the supabase package', () => {
+	const pkg = buildDeploymentPackageJson({ name: 'd' });
+	assert.ok(!pkg.dependencies['@selvajs/supabase-provider']);
+});
+
+test('any supabase provider slot pulls the dependency in', () => {
+	for (const key of ['SELVA_AUTH_PROVIDER', 'SELVA_DATA_PROVIDER', 'SELVA_STORAGE_PROVIDER']) {
+		assert.ok(needsSupabaseProvider({ [key]: 'supabase' }), `${key}=supabase should count`);
+	}
+	assert.ok(!needsSupabaseProvider({ SELVA_AUTH_PROVIDER: 'local' }));
+	assert.ok(!needsSupabaseProvider({}));
+	assert.ok(!needsSupabaseProvider(undefined));
+});
+
+test('migrate adds the provider to an existing supabase deployment', () => {
+	// The upgrade path for deployments scaffolded before this dependency existed
+	// — the state that leaves an operator unable to apply migrations at all.
+	const before = buildDeploymentPackageJson({ name: 'd' });
+	const { pkg } = buildTargetPackageJson(before, stubResolve, {
+		SELVA_AUTH_PROVIDER: 'supabase'
+	});
+	assert.equal(pkg.dependencies['@selvajs/supabase-provider'], `^${STABLE}`);
+});
+
+test('migrate drops the provider when a deployment moves off supabase', () => {
+	// The pin is still in package.json, but .env no longer selects supabase.
+	// Carrying a stale pin forward would keep installing a package nothing loads.
+	const before = buildDeploymentPackageJson({ name: 'd', supabase: true });
+	const { pkg } = buildTargetPackageJson(before, stubResolve, { SELVA_AUTH_PROVIDER: 'local' });
+	assert.ok(!pkg.dependencies['@selvajs/supabase-provider']);
+});
+
+test('the supabase provider is no longer treated as a legacy package', () => {
+	// It was listed as "bundled into @selvajs/selva" — true of its code, false of
+	// its SQL. While it was legacy, migrate actively removed the only copy of the
+	// migrations a deployment had.
+	assert.ok(!('@selvajs/supabase-provider' in LEGACY_DEPENDENCIES));
 });

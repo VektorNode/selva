@@ -5,6 +5,52 @@ import pc from 'picocolors';
 
 const TRUTHY = new Set(['true', '1', 'yes']);
 
+// Mirrors FLAG_KEYS in @selvajs/server's create-selva-providers.ts. Every key
+// here is written to .env; `promptable: false` only hides it from the wizard.
+const FLAG_OPTIONS = [
+	{
+		value: 'ALLOW_ORG_CREATION',
+		label: 'Allow non-admin users to create their own orgs',
+		hint: 'multi-tenant self-service',
+		multiOnly: true,
+		// No route consults this flag yet — self-service org creation has not
+		// shipped. Offering it would promise behaviour nothing implements.
+		promptable: false
+	},
+	{
+		value: 'ALLOW_CROSS_ORG_PUBLIC',
+		label: 'Public projects visible across all orgs',
+		hint: 'instance-wide discovery',
+		multiOnly: true
+	},
+	{
+		value: 'ALLOW_ORG_COMPUTE_OVERRIDE',
+		label: 'Orgs can configure their own Rhino.Compute server',
+		hint: 'BYO compute',
+		multiOnly: true
+	},
+	{
+		value: 'ENABLE_PLATFORM_PROJECTS',
+		label: 'Platform projects (admin-owned, granted to orgs/users)',
+		hint: 'cross-org sharing without membership'
+	},
+	{
+		value: 'ENABLE_SHARING',
+		label: 'Per-definition share links (anonymous external access)',
+		hint: 'tokenized URLs'
+	}
+];
+
+const FLAG_NAMES = FLAG_OPTIONS.map((o) => o.value);
+
+/**
+ * Flags worth offering for a given tenancy. Cross-org flags are hidden under
+ * `single`, where one org makes both settings describe the same set.
+ */
+export function promptableFlags(tenancy) {
+	return FLAG_OPTIONS.filter((o) => o.promptable !== false && (tenancy === 'multi' || !o.multiOnly));
+}
+
 function envBool(v) {
 	if (v === undefined) return false;
 	return TRUTHY.has(String(v).toLowerCase());
@@ -95,14 +141,10 @@ export function collectConfigFromEnv(env = process.env) {
 	}
 	values.ORIGIN = origin;
 
-	const flagNames = [
-		'ALLOW_ORG_CREATION',
-		'ALLOW_CROSS_ORG_PUBLIC',
-		'ALLOW_ORG_COMPUTE_OVERRIDE',
-		'ENABLE_PLATFORM_PROJECTS',
-		'ENABLE_SHARING'
-	];
-	for (const f of flagNames) {
+	// An explicitly-set flag is preserved verbatim even when tenancy makes it
+	// inert: rewriting it to '' would hide the operator's misconfiguration
+	// rather than fix it, and the server already reads every key as opt-in.
+	for (const f of FLAG_NAMES) {
 		const key = `SELVA_FLAG_${f}`;
 		values[key] = envBool(env[key]) ? 'true' : '';
 	}
@@ -425,33 +467,7 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		}
 	}
 
-	const flagOptions = [
-		{
-			value: 'ALLOW_ORG_CREATION',
-			label: 'Allow non-admin users to create their own orgs',
-			hint: 'multi-tenant self-service'
-		},
-		{
-			value: 'ALLOW_CROSS_ORG_PUBLIC',
-			label: 'Public projects visible across all orgs',
-			hint: 'instance-wide discovery'
-		},
-		{
-			value: 'ALLOW_ORG_COMPUTE_OVERRIDE',
-			label: 'Orgs can configure their own Rhino.Compute server',
-			hint: 'BYO compute'
-		},
-		{
-			value: 'ENABLE_PLATFORM_PROJECTS',
-			label: 'Platform projects (admin-owned, granted to orgs/users)',
-			hint: 'cross-org sharing without membership'
-		},
-		{
-			value: 'ENABLE_SHARING',
-			label: 'Per-definition share links (anonymous external access)',
-			hint: 'tokenized URLs'
-		}
-	];
+	const flagOptions = promptableFlags(tenancy);
 
 	const flagDefaults = flagOptions
 		.map((o) => o.value)
@@ -475,9 +491,18 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		...providerValues
 	};
 
-	for (const opt of flagOptions) {
-		const enabled = Array.isArray(flags) && flags.includes(opt.value);
-		values[`SELVA_FLAG_${opt.value}`] = enabled ? 'true' : '';
+	// Every key is written, including the ones the prompt hid — a missing key
+	// reads as "unset" downstream, which is indistinguishable from "removed".
+	// A hidden flag keeps whatever the existing .env had; only offered flags
+	// are decided by the multiselect, so `init` can't silently clear one.
+	const offered = new Set(flagOptions.map((o) => o.value));
+	for (const name of FLAG_NAMES) {
+		const key = `SELVA_FLAG_${name}`;
+		if (!offered.has(name)) {
+			values[key] = envBool(defaults[key]) ? 'true' : '';
+			continue;
+		}
+		values[key] = Array.isArray(flags) && flags.includes(name) ? 'true' : '';
 	}
 
 	return values;

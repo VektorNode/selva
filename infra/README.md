@@ -16,7 +16,7 @@ The VM installs the published `@selvajs/selva` runtime from npm via
 
 On first boot the VM:
 
-1. Installs Node.js 20 from NodeSource.
+1. Installs Node.js 24 from NodeSource.
 2. Runs `npx @selvajs/cli@latest . --yes` as the `ssh_user`. The CLI
    reads its config from environment variables Terraform set
    (`SELVA_AUTH_PROVIDER`, `ORIGIN`, `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`, …)

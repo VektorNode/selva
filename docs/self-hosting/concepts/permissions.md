@@ -87,8 +87,9 @@ Selva shows it once and stores only a hash of it, and the acceptance page
 (`/accept-invite`) works without a session. Accepting
 creates the user (by password or upstream-header identity) and adds them to the
 org. New users start with **no platform permissions**.
-`SELVA_FLAG_ALLOW_ORG_CREATION` decides whether non-admins can create their own org,
-and it's off by default.
+Orgs are created at setup, or afterwards by an instance admin — there is no
+self-service org creation. `SELVA_FLAG_ALLOW_ORG_CREATION` is reserved for that
+future surface; no route consults it yet, so setting it has no effect.
 
 ## Share links
 

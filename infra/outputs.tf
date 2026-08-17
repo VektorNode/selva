@@ -28,6 +28,16 @@ output "health_check" {
   value       = "https://${local.domain}/api/health"
 }
 
+output "scratch_ip" {
+  description = "Static external IP of the scratch VM. Null when scratch_vm_enabled = false."
+  value       = var.scratch_vm_enabled ? google_compute_address.scratch[0].address : null
+}
+
+output "scratch_ssh_command" {
+  description = "SSH command for the scratch VM. Null when scratch_vm_enabled = false."
+  value       = var.scratch_vm_enabled ? "ssh ${var.ssh_user}@${google_compute_address.scratch[0].address}" : null
+}
+
 output "startup_log" {
   description = "Command to watch the startup log on the VM"
   value       = "ssh ${var.ssh_user}@${google_compute_address.selva.address} 'tail -f /var/log/selva-startup.log'"

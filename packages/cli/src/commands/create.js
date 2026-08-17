@@ -17,6 +17,7 @@ import {
 } from '../paths.js';
 import {
 	buildDeploymentPackageJson,
+	needsSupabaseProvider,
 	npmDistTagVersion,
 	resolveSelvaPins
 } from '../deployment-package.js';
@@ -65,12 +66,17 @@ export async function runCreate(argv) {
 	// `"latest"` re-resolves on every later `npm install`, so the deployment
 	// would follow the tag instead of the version it was scaffolded against —
 	// and `selva doctor` reports a floating pin as drift.
-	const { pins } = resolveSelvaPins({}, npmDistTagVersion);
+	const supabase = needsSupabaseProvider(values);
+	const { pins } = resolveSelvaPins(
+		{},
+		npmDistTagVersion,
+		supabase ? ['@selvajs/supabase-provider'] : []
+	);
 
 	// package.json first: npm install needs it, and the runtime templates below
 	// only exist once @selvajs/selva is installed into node_modules.
 	const pkgJson = JSON.stringify(
-		buildDeploymentPackageJson({ name: deployName, dependencies: pins }),
+		buildDeploymentPackageJson({ name: deployName, dependencies: pins, supabase }),
 		null,
 		2
 	);

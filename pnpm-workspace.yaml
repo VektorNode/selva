@@ -12,14 +12,16 @@ catalogs:
     '@sveltejs/kit': 2.70.2
     '@sveltejs/vite-plugin-svelte': ^7.2.0
     '@tailwindcss/vite': ^4.3.3
-    '@types/node': ^26.1.2
+    # Track the runtime (.nvmrc / engines.node), not the newest Node line —
+    # types ahead of the runtime typecheck APIs the deployed Node doesn't have.
+    '@types/node': ^24.13.3
     '@types/three': ^0.185.4
     bits-ui: ^2.18.0
     clsx: ^2.1.1
     eslint: ^10.8.0
     mode-watcher: ^1.1.0
     prettier: ^3.9.6
-    rimraf: ^6.0.1
+    rimraf: ^6.1.3
     sharp: ^0.35.3
     svelte: 5.56.8
     svelte-check: ^4.7.5

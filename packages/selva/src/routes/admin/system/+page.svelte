@@ -158,7 +158,7 @@
 		ALLOW_ORG_COMPUTE_OVERRIDE:
 			'When on, individual orgs can configure their own Rhino.Compute server instead of the instance pool.',
 		ALLOW_ORG_CREATION:
-			'When on, signed-in users see a "Create organization" action. Off by default in self-hosted instances.',
+			'Reserved for self-service org creation, which has not shipped — no route consults this flag yet, so flipping it changes nothing. Orgs are created at setup, or by an instance admin.',
 		ENABLE_PLATFORM_PROJECTS:
 			'When on, the Admin → Projects surface is reachable: instance admins can create platform-owned projects and grant view/solve access to orgs or individual users. When off, the surface 404s and platform-visibility projects are hidden everywhere — existing rows are preserved.',
 		ENABLE_SHARING:
