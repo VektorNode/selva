@@ -2,7 +2,11 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getOrganizationProvider, getPermissionStore } from '$lib/server/providers.server';
+import {
+	getEventSink,
+	getOrganizationProvider,
+	getPermissionStore
+} from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { listAllOrgMembers } from '$lib/server/org-members.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
@@ -10,6 +14,7 @@ import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/serv
 import {
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,
+	actorFrom,
 	hasPermission,
 	type OrgMember
 } from '@selvajs/platform';
@@ -92,6 +97,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				`${auth.name} cannot create a user directly. Send an invite instead — the recipient sets their own password.`
 			);
 		}
+
+		await getEventSink().emit({
+			type: 'user.created',
+			userId: user.id,
+			actorId: actorFrom(locals.ctx!)
+		});
 
 		// Grant platform permissions out-of-band via the data-layer store.
 		if (platform.length > 0) {

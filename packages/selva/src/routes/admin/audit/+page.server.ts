@@ -20,34 +20,44 @@ import { getAuthProvider } from '$lib/server/auth.server';
 /**
  * Closed allowlist of event types — `searchParams` come from untrusted user
  * input, so we filter to known variants before forwarding to the query layer.
+ *
+ * Keyed as a `Record<DomainEventType, true>` rather than an array so a new
+ * variant in the union is a type error here. An array would silently omit it,
+ * and the omission only shows as a filter option that never appears.
  */
-const KNOWN_EVENT_TYPES: readonly DomainEventType[] = [
-	'org.created',
-	'org.deleted',
-	'org_member.added',
-	'org_member.removed',
-	'org_member.role_changed',
-	'org_member.permissions_changed',
-	'project.created',
-	'project.deleted',
-	'project_member.added',
-	'project_member.removed',
-	'project_member.role_changed',
-	'definition.created',
-	'definition.deleted',
-	'definition.published',
-	'definition_version.created',
-	'definition_version.deleted',
-	'share_link.minted',
-	'share_link.revoked',
-	'invite.created',
-	'invite.accepted',
-	'invite.revoked',
-	'system.update.started',
-	'system.update.finished',
-	'system.update.rolled_back',
-	'system.update.failed'
-] as const;
+const EVENT_TYPE_ALLOWLIST: Record<DomainEventType, true> = {
+	'org.created': true,
+	'org.deleted': true,
+	'org_member.added': true,
+	'org_member.removed': true,
+	'org_member.role_changed': true,
+	'org_member.permissions_changed': true,
+	'project.created': true,
+	'project.deleted': true,
+	'project_member.added': true,
+	'project_member.removed': true,
+	'project_member.role_changed': true,
+	'definition.created': true,
+	'definition.deleted': true,
+	'definition.published': true,
+	'definition_version.created': true,
+	'definition_version.deleted': true,
+	'share_link.minted': true,
+	'share_link.revoked': true,
+	'invite.created': true,
+	'invite.accepted': true,
+	'invite.revoked': true,
+	'user.created': true,
+	'user.deleted': true,
+	'user.disabled': true,
+	'platform_permissions.changed': true,
+	'system.update.started': true,
+	'system.update.finished': true,
+	'system.update.rolled_back': true,
+	'system.update.failed': true
+};
+
+const KNOWN_EVENT_TYPES = Object.keys(EVENT_TYPE_ALLOWLIST) as readonly DomainEventType[];
 
 const KNOWN_TYPE_SET = new Set<string>(KNOWN_EVENT_TYPES);
 
@@ -176,6 +186,7 @@ async function enrichRows(rows: AuditEventRow[]): Promise<EnrichedAuditRow[]> {
 	const orgIds = new Set<string>();
 	const projectIds = new Set<string>();
 	const definitionIds = new Set<string>();
+	const userIds = new Set<string>();
 
 	for (const row of rows) {
 		// `share:` actors are anonymous — no profile and no auth user to resolve,
@@ -188,6 +199,9 @@ async function enrichRows(rows: AuditEventRow[]): Promise<EnrichedAuditRow[]> {
 			if (target.kind === 'org') orgIds.add(target.id);
 			else if (target.kind === 'project') projectIds.add(target.id);
 			else if (target.kind === 'definition') definitionIds.add(target.id);
+			// A user target resolves through the same profile/auth lookup as an
+			// actor, so it rides the existing batch rather than adding a third one.
+			else if (target.kind === 'user') userIds.add(target.id);
 		}
 	}
 
@@ -200,9 +214,12 @@ async function enrichRows(rows: AuditEventRow[]): Promise<EnrichedAuditRow[]> {
 	// Resolve each id to a [id, value|null] tuple so the Map construction is
 	// not order-dependent (and stays correct if any caller iterates a Set
 	// twice with a different intermediate operation).
+	// Actors and user targets resolve identically, so they share one lookup.
+	const peopleIds = new Set([...actorIds, ...userIds]);
+
 	const [profiles, orgEntries, projectEntries, definitionEntries] = await Promise.all([
-		actorIds.size > 0
-			? profileStore.getProfiles(SYSTEM_CONTEXT, [...actorIds])
+		peopleIds.size > 0
+			? profileStore.getProfiles(SYSTEM_CONTEXT, [...peopleIds])
 			: Promise.resolve([]),
 		Promise.all(
 			[...orgIds].map(
@@ -226,9 +243,9 @@ async function enrichRows(rows: AuditEventRow[]): Promise<EnrichedAuditRow[]> {
 	// Fall back to the auth provider for actors without a profile-store
 	// `displayName` — Supabase Auth is the source of truth for emails when
 	// profile state hasn't been seeded yet.
-	const unresolvedActors = [...actorIds].filter((id) => !profileById.get(id)?.displayName);
+	const unresolved = [...peopleIds].filter((id) => !profileById.get(id)?.displayName);
 	const authEntries = await Promise.all(
-		unresolvedActors.map(async (id) => [id, await auth.getUser(id).catch(() => null)] as const)
+		unresolved.map(async (id) => [id, await auth.getUser(id).catch(() => null)] as const)
 	);
 	const authById = new Map(authEntries.filter(([, u]) => u !== null));
 
@@ -245,6 +262,10 @@ async function enrichRows(rows: AuditEventRow[]): Promise<EnrichedAuditRow[]> {
 			else if (target.kind === 'project') name = projectById.get(target.id)?.name ?? null;
 			else if (target.kind === 'definition')
 				name = definitionById.get(target.id)?.displayName ?? null;
+			else if (target.kind === 'user')
+				// A deleted user resolves to neither, leaving the raw id — which is
+				// the point: the row outlives the person it names.
+				name = profileById.get(target.id)?.displayName ?? authById.get(target.id)?.email ?? null;
 			resolvedTarget = { kind: target.kind, id: target.id, name };
 		}
 
@@ -315,6 +336,11 @@ function targetFor(event: DomainEvent): { kind: AuditTargetKind; id: string } | 
 		case 'invite.accepted':
 		case 'invite.revoked':
 			return { kind: 'org', id: event.orgId };
+		case 'user.created':
+		case 'user.deleted':
+		case 'user.disabled':
+		case 'platform_permissions.changed':
+			return { kind: 'user', id: event.userId };
 		case 'system.update.started':
 		case 'system.update.finished':
 		case 'system.update.rolled_back':

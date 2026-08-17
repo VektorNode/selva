@@ -62,9 +62,49 @@ Pass 1 recorded these as pre-existing and stack-dependent. That was true of the 
 
 The second one is worth dwelling on: the local store's comment said it filtered expiry _"to match what Supabase filters in SQL"_, and the conformance suite's comment said the same. **Supabase never filtered it.** Both comments described an invariant that only one side upheld, which is precisely how a shared conformance suite is supposed to fail — and it did, as soon as the stack was actually running. Comments in all three places now state the contract rather than attributing it to one provider.
 
-**Next up:** 6/7 (platform-scope domain events + wiring `revokeSession` into logout/disable), then 8/9 (store-interface changes across both providers). Also still open: finding 18's blanket `catch` in `admin/users/+page.server.ts:88-90`, and findings 11/26/28/29.
-
 ---
+
+## ✅ Pass 3 shipped — 2026-08-17
+
+**Findings 6 and 7 are closed.** `pnpm type-check` (22/22), `pnpm lint` (0 errors), `pnpm check` (0 svelte-check errors) and the full `pnpm test` all pass. `@selvajs/selva` is **507/507**, with 8 new tests across 2 files.
+
+| Finding | Change                                                                                                                                      | Test                                                     |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 6       | four platform-scope event types added to `DomainEvent`; emitted from the `permissions.server.ts` seam plus the create/delete/disable routes | `api/admin/users/__tests__/platform-audit-trail.test.ts` |
+| 7       | logout revokes the session provider-side before clearing cookies, via a new `getSessionToken` accessor                                      | `routes/logout/__tests__/logout-revokes-session.test.ts` |
+
+**Finding 6 landed where the plan predicted.** `permissions.server.ts` was 18 lines whose own doc promised writes funnel through it _"so any future change (caching, invalidation, audit hooks) is one-file"_ — that held. All six silent grant paths (PATCH, create-user, disable's pre-revoke, `/setup`, `accept-invite`, and the delete path's cascade) emit from that one edit, because every one of them already routed through the seam. `SYSTEM_CONTEXT` callers emit with `actorId: 'system'`, which is the right attribution for a bootstrap grant.
+
+Emission is gated on `result === 'ok'`: a `last_admin` refusal or a missing user changed nothing, so recording a change would be a lie. That gate is one of the mutation-tested behaviours.
+
+Two ordering decisions worth keeping:
+
+- `user.deleted` emits **after** `onUserDeleted`, not before. The erasure pass deletes audit rows the deleted user authored; emitting first would delete the row recording the deletion. The actor is the admin, so the row survives.
+- The audit page's `KNOWN_EVENT_TYPES` array — a hand-maintained third copy of the union — became a `Record<DomainEventType, true>`. A new variant is now a type error there instead of a filter option that silently never appears. The `TYPE_LABELS` map in the `.svelte` file was already compiler-complete; it lives inside the component's `<script>` and is not importable, so the two stay separate by necessity rather than by choice.
+
+User targets now resolve to a display name by riding the profile/auth batch the actor lookup already performs — one merged set, not a third round-trip. A deleted user resolves to neither and renders as a raw id, which is correct: the row outlives the person it names.
+
+### Finding 7 is half a fix, and the other half is not implementable as written
+
+**The logout half is done and was exactly as described.** Deleting the cookie never touched the token; on Supabase the access token stayed valid at GoTrue and the refresh token lived 30 days. `revokeSession` with `signOut(token, 'global')` kills every session for that user, so revoking with the access token also kills the refresh token — no second call needed.
+
+**The disable half cannot be wired the way the finding proposes.** `revokeSession(token)` takes the _target's session token_, and an admin disabling someone else has their user id and nothing else. There is no by-user-id revocation to call:
+
+- `ISessionRefresh` exposes only token-based revocation.
+- GoTrue's admin API has no sign-out-by-user-id — `supabase.auth.admin.signOut` requires _"a valid, logged-in JWT"_.
+- No provider signs sessions out inside `disableUser`; all three only set a disabled flag.
+
+I prototyped an optional `revokeAllForUser(userId)` on `ISessionRefresh` and reverted it. The only honest Supabase implementation is a SECURITY DEFINER RPC deleting `auth.refresh_tokens` rows — a migration plus new privileged surface. **That is not proportionate to what it buys**, because the exposure is already bounded: `disableUser` sets `user_metadata.disabled`, and `refreshSession` rejects disabled users, so a disabled user cannot mint anything new. What survives is one already-issued access token until `revalidateMs` (default 60s), not the 30-day refresh token the finding's severity implies.
+
+So the disable route's docstring — which claimed _"disabling a user invalidates sessions"_ and pointed at `revokeSession` as the remedy — was the actual defect. It now states the real bound per provider and says why this route cannot close it. **Finding 7's spec ask ("either fix the code or state the bounded window") is satisfied by fixing logout and stating the window for disable.**
+
+If instant cutoff on disable is wanted later, it is its own scoped piece of work: `revokeAllForUser` on the interface + an RPC migration. Not folded in here.
+
+**Verified by mutation.** Disabling the `result === 'ok'` gate and the logout revoke call turned 3 tests red (both permission-event assertions and the logout revoke); both restored after.
+
+**Fixture change:** `freshProviders` now installs a `RecordingEventSink` instead of `NoopEventSink` and exposes `tp.events`, so any test can assert on an audit trail. `installSessionRefreshShim` follows the existing `installOAuthShim` pattern — the local provider mints stateless HMAC tokens and legitimately exposes no `sessionRefresh`, so a typed shim is the only way to test the path Supabase takes.
+
+**Next up:** 8/9 (store-interface changes across both providers — 8 needs a by-email query on `IInviteStore` that does not exist yet; 9 needs the `/team/shares` roster built or a cascade-revoke). Also still open: finding 18's blanket `catch` in `admin/users/+page.server.ts:88-90`, and findings 11/26/28/29.
 
 ---
 
@@ -231,7 +271,7 @@ PATCH is guarded — line 41 refuses a platform-scope change unless the caller h
 
 ## P1 — Real damage, needs a precondition
 
-### ☐ 6. No platform-scope domain events exist; permission changes leave no audit trail
+### ✅ 6. No platform-scope domain events exist; permission changes leave no audit trail
 
 **[`packages/platform/src/events/interface.ts:1-77`](../../packages/platform/src/events/interface.ts#L1-L77)** · **HIGH**
 
@@ -249,7 +289,7 @@ Two corrections: there are **six** silent write paths, not five — the list omi
 
 ---
 
-### ☐ 7. `revokeSession` has zero callers — logout doesn't log you out
+### ✅ 7. `revokeSession` has zero callers — logout doesn't log you out
 
 **[`SupabaseAuthProvider.ts:486`](../../packages/providers/supabase/src/auth/SupabaseAuthProvider.ts#L486)** (impl) · **[`logout/+page.server.ts:6-9`](../../packages/selva/src/routes/logout/+page.server.ts#L6-L9)** · **[`disable/+server.ts:36`](../../packages/selva/src/routes/api/admin/users/[id]/disable/+server.ts#L36)** · **HIGH**
 
@@ -267,7 +307,9 @@ Every hit in the tree is a definition, changelog entry, or doc comment. **Not on
 
 Local and header-auth pass only by accident — they happen to re-read state per request.
 
-**Fix:** wire `providers.auth.sessionRefresh?.revokeSession(token)` into both handlers. Two lines each; the method is idempotent and never throws.
+~~**Fix:** wire `providers.auth.sessionRefresh?.revokeSession(token)` into both handlers. Two lines each; the method is idempotent and never throws.~~
+
+**Corrected during Pass 3 — this works for logout and is impossible for disable.** `revokeSession` takes the _target's_ session token, which an admin disabling another user does not hold, and no by-user-id revocation exists on the interface or in GoTrue's admin API. Logout is wired; disable's docstring now states the real bound instead. See the Pass 3 section for why closing it properly is separate work.
 
 **`[verified]`** — zero application callers confirmed by full-repo grep; the only hits are the interface definition, the Supabase impl, two changelogs and this document. `logout/+page.server.ts` is 10 lines: `destroySession(cookies)` then redirect. `DEFAULT_REVALIDATE_MS = 60_000` is exact.
 
@@ -713,7 +755,7 @@ Sorted that way:
 **Spec is self-contradictory or false — must be rewritten:**
 
 - **§4:218** — the `autoJoinOnUpload` retroactivity sentence contradicts itself (15). Note also that _"It never changes"_ (:672) about `ownerId` is enforced by convention, not by the type.
-- **§10** — "Sessions invalidated" is false as an absolute; state the bounded window, and note it differs per provider (7).
+- **§10** — "Sessions invalidated" is false as an absolute; state the bounded window, and note it differs per provider (7). **Pass 3 settled the code side, so the spec sentence is now the only thing left.** Logout revokes provider-side; disable cannot, and the route's docstring already carries the accurate per-provider bound — §10 should say the same thing: local and header-auth cut off on the next request, Supabase within one access-token lifetime (`revalidateMs`, default 60s), and in no case does a 30-day refresh token survive, because `refreshSession` rejects disabled users.
 - **§6** — draft-channel "owner/editor only" vs the commons owner branch (20).
 - **§2** — the last-admin invariant is stated as absolute but is not transactional in either provider (17), and `disabled` admins count as live on local (4).
 

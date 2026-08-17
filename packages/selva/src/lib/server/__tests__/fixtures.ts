@@ -22,14 +22,16 @@ import {
 	createLocalAuthUserStore
 } from '@selvajs/local-provider';
 import {
-	NoopEventSink,
 	SYSTEM_CONTEXT,
 	DEFAULT_ORG_PERMISSIONS,
 	emptyProfile,
 	type AuthUser,
 	type DefinitionRecord,
 	type DefinitionVersion,
+	type DomainEvent,
+	type IEventSink,
 	type IOAuthAuth,
+	type ISessionRefresh,
 	type OrgPermission,
 	type Organization,
 	type OrgMember,
@@ -62,6 +64,14 @@ const TEST_AT_REST_KEY = '0'.repeat(64);
 // Provider stack
 // ============================================================================
 
+/** Keeps every emitted event so a test can assert an audit trail exists. */
+class RecordingEventSink implements IEventSink {
+	readonly events: DomainEvent[] = [];
+	async emit(event: DomainEvent): Promise<void> {
+		this.events.push(event);
+	}
+}
+
 export interface TestProviders {
 	root: string;
 	config: SelvaConfig;
@@ -70,6 +80,8 @@ export interface TestProviders {
 	definitionService: DefinitionService;
 	/** Identity-only file (auth-users.json). Shaped like the auth provider's view. */
 	authUsers: ReturnType<typeof createLocalAuthUserStore>;
+	/** Every event emitted since `freshProviders`, in order. */
+	events: DomainEvent[];
 	cleanup: () => Promise<void>;
 }
 
@@ -86,7 +98,7 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 		SELVA_AT_REST_KEY: TEST_AT_REST_KEY
 	};
 
-	const events = new NoopEventSink();
+	const events = new RecordingEventSink();
 	const auth = LocalAuthProvider.fromEnv(env);
 	const data = LocalDataProvider.fromEnv(env, events);
 	const storage = LocalStorageProvider.fromEnv(env);
@@ -113,6 +125,7 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 		flags: config.flags ?? {},
 		definitionService,
 		authUsers,
+		events: events.events,
 		cleanup: async () => {
 			clearTestProviders();
 			await fs.rm(root, { recursive: true, force: true });
@@ -384,6 +397,27 @@ export function installOAuthShim(
 	// provider's identity at runtime, which is exactly the seam the cast was
 	// papering over. The shim itself is now fully typed.
 	(tp.config.auth as { oauth?: IOAuthAuth }).oauth = shim;
+	return state;
+}
+
+/**
+ * Augment the test's auth provider with a `sessionRefresh` capability that
+ * records which tokens were revoked. The local provider mints stateless HMAC
+ * tokens and so exposes none — Supabase does, and it is the provider whose
+ * sessions outlive cookie deletion.
+ */
+export function installSessionRefreshShim(tp: TestProviders): { revoked: string[] } {
+	const state = { revoked: [] as string[] };
+	const shim: ISessionRefresh = {
+		async refreshSession() {
+			throw new Error('sessionRefresh shim: refreshSession not implemented for tests');
+		},
+		async revokeSession(token: string) {
+			state.revoked.push(token);
+			return true;
+		}
+	};
+	(tp.config.auth as { sessionRefresh?: ISessionRefresh }).sessionRefresh = shim;
 	return state;
 }
 

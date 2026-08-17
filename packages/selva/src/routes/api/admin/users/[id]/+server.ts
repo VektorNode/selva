@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getDataProvider, getPermissionStore } from '$lib/server/providers.server';
+import { getDataProvider, getEventSink, getPermissionStore } from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { requireCanRemoveInstanceAdmin } from '$lib/server/admin/instanceAdmins.server';
 import { throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
@@ -9,6 +9,7 @@ import {
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,
 	type PlatformPermission,
+	actorFrom,
 	hasPermission
 } from '@selvajs/platform';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
@@ -90,6 +91,11 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	// reachable by FK cascade (audit rows, invites-by-email, solve telemetry).
 	// Supabase erases those explicitly; local removes its JSON rows + memberships.
 	await getDataProvider().onUserDeleted(SYSTEM_CONTEXT, id, { email });
+
+	// Emitted after the erasure pass, which deletes audit rows this user
+	// authored — emitting first would delete the row recording their deletion.
+	// The actor is the admin, so the row itself survives.
+	await getEventSink().emit({ type: 'user.deleted', userId: id, actorId: actorFrom(locals.ctx!) });
 
 	return new Response(null, { status: 204 });
 };
