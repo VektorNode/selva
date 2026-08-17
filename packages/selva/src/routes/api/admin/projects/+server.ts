@@ -5,26 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { flag, getProjectProvider, getOrganizationProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
 import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { slugify } from '@selvajs/platform';
-import { ProviderError, SYSTEM_CONTEXT, type Project } from '@selvajs/platform';
-
-const MAX_SLUG_ATTEMPTS = 25;
-
-function isSlugConflict(err: unknown): boolean {
-	return (
-		err instanceof ProviderError &&
-		err.statusCode === 409 &&
-		/projects_org_id_slug_key/.test(err.message)
-	);
-}
-
-function isNameConflict(err: unknown): boolean {
-	return (
-		err instanceof ProviderError &&
-		err.statusCode === 409 &&
-		/projects_org_name_unique/.test(err.message)
-	);
-}
+import { createProjectWithUniqueSlug } from '$lib/server/projects/createProject.server';
+import { SYSTEM_CONTEXT, type Project } from '@selvajs/platform';
 
 const CreatePlatformProjectBody = z.object({
 	name: z.string().min(1, 'Project name is required').max(128).trim(),
@@ -90,48 +72,31 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!hostOrg)
 		apiError(400, ApiErrorCode.VALIDATION_FAILED, `Host organization '${hostOrgId}' not found.`);
 
-	const projectStore = getProjectProvider();
-	const baseSlug = slugify(parsed.data.name) || 'platform-project';
-	const now = new Date().toISOString();
-	const projectId = randomUUID();
-
-	for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
-		const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
-		const project: Project = {
-			id: projectId,
-			orgId: hostOrgId,
-			name: parsed.data.name,
-			slug,
-			description: parsed.data.description,
-			visibility: 'platform',
-			ownerId: user.id,
-			createdBy: user.id,
-			updatedBy: user.id,
-			autoJoinOnUpload: false,
-			createdAt: now,
-			updatedAt: now,
-			deletedAt: null
-		};
-
-		try {
-			await projectStore.createProject(SYSTEM_CONTEXT, project);
-			return json(project, { status: 201 });
-		} catch (err) {
-			if (isNameConflict(err)) {
-				apiError(
-					409,
-					ApiErrorCode.CONFLICT,
-					'A project with that name already exists in the host organization.'
-				);
+	try {
+		// `autoJoinOnUpload: false` is hardcoded, which is what makes skipping
+		// `validateProjectFlags` safe here — a platform project may not carry the
+		// flag at all. If this ever takes the flag from the body, validate it.
+		const project = await createProjectWithUniqueSlug(
+			getProjectProvider(),
+			{
+				id: randomUUID(),
+				orgId: hostOrgId,
+				name: parsed.data.name,
+				description: parsed.data.description,
+				visibility: 'platform',
+				ownerId: user.id,
+				createdBy: user.id,
+				updatedBy: user.id,
+				autoJoinOnUpload: false
+			},
+			{
+				writeCtx: SYSTEM_CONTEXT,
+				fallbackSlug: 'platform-project',
+				conflictScope: 'the host organization'
 			}
-			if (isSlugConflict(err)) continue;
-			handleApiError(err, 'Failed to create platform project');
-		}
+		);
+		return json(project, { status: 201 });
+	} catch (err) {
+		handleApiError(err, 'Failed to create platform project');
 	}
-
-	apiError(
-		409,
-		ApiErrorCode.CONFLICT,
-		'Could not pick a unique project slug after several attempts.'
-	);
 };

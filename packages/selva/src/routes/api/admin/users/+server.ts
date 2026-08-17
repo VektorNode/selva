@@ -7,7 +7,10 @@ import {
 	getOrganizationProvider,
 	getPermissionStore
 } from '$lib/server/providers.server';
-import { requireManageInstanceUsers } from '$lib/server/access.server';
+import {
+	assertCanGrantPlatformPermissions,
+	requireManageInstanceUsers
+} from '$lib/server/access.server';
 import { listAllOrgMembers } from '$lib/server/org-members.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
@@ -15,7 +18,6 @@ import {
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,
 	actorFrom,
-	hasPermission,
 	type OrgMember
 } from '@selvajs/platform';
 // `password` is deliberately absent: an admin never sets another user's
@@ -73,14 +75,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!parsed.success) throwZodError(parsed.error);
 	const { email, permissions: platform } = parsed.data;
 
-	// Only an existing platform admin may create a user with platform-scope perms.
-	if (platform.length > 0 && !hasPermission(locals.ctx!, 'instance_admin')) {
-		apiError(
-			403,
-			ApiErrorCode.FORBIDDEN,
-			'Only a platform admin can grant platform-scope permissions'
-		);
-	}
+	assertCanGrantPlatformPermissions(locals.ctx!, platform);
 
 	try {
 		let user;

@@ -3,30 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanCreateProject } from '$lib/server/access.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { slugify, hasPermission } from '@selvajs/platform';
-import { ProviderError, type Project } from '@selvajs/platform';
+import { hasPermission, validateProjectFlags } from '@selvajs/platform';
 import { resolveAccessibleProjects } from '$lib/server/definitions/visibility.server';
+import { createProjectWithUniqueSlug } from '$lib/server/projects/createProject.server';
 import { parseListOptions } from '$lib/server/pagination.server';
 import { CreateProjectBodySchema } from '$lib/server/api/v1/bodies';
 import { apiRoute, collection, created, parseBody, requireCaller } from '$lib/server/api/v1/route';
-
-const MAX_SLUG_ATTEMPTS = 25;
-
-function isSlugConflict(err: unknown): boolean {
-	return (
-		err instanceof ProviderError &&
-		err.statusCode === 409 &&
-		/projects_org_id_slug_key/.test(err.message)
-	);
-}
-
-function isNameConflict(err: unknown): boolean {
-	return (
-		err instanceof ProviderError &&
-		err.statusCode === 409 &&
-		/projects_org_name_unique/.test(err.message)
-	);
-}
 
 // GET — projects the caller can view.
 //
@@ -75,56 +57,35 @@ export const POST: RequestHandler = apiRoute(
 		}
 
 		const autoJoinOnUpload = input.autoJoinOnUpload ?? false;
-		if (autoJoinOnUpload && input.visibility !== 'public') {
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'autoJoinOnUpload requires visibility=public');
+		// Same call PATCH makes, rather than a second hand-rolled copy of the
+		// flag/visibility invariant.
+		const flagIssues = validateProjectFlags({
+			visibility: input.visibility,
+			autoJoinOnUpload
+		});
+		if (flagIssues.length > 0) {
+			apiError(
+				400,
+				ApiErrorCode.VALIDATION_FAILED,
+				flagIssues.map((i) => `${i.path}: ${i.message}`).join('; ')
+			);
 		}
 
-		const projectStore = getProjectProvider();
-		const baseSlug = slugify(input.name) || 'project';
-		const now = new Date().toISOString();
-		const projectId = randomUUID();
-
-		// Retry on slug collision: the caller may not be able to *see* a colliding
-		// project under RLS, so a pre-flight getProjectBySlug isn't enough — the
-		// unique index is the source of truth.
-		for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
-			const project: Project = {
-				id: projectId,
+		const project = await createProjectWithUniqueSlug(
+			getProjectProvider(),
+			{
+				id: randomUUID(),
 				orgId: ctx.actingOrgId,
 				name: input.name,
-				slug: attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`,
 				description: input.description,
 				visibility: input.visibility,
 				ownerId: locals.user!.id,
 				createdBy: locals.user!.id,
 				updatedBy: locals.user!.id,
-				autoJoinOnUpload,
-				createdAt: now,
-				updatedAt: now,
-				deletedAt: null
-			};
-
-			try {
-				await projectStore.createProject(ctx, project);
-				return created(project);
-			} catch (err) {
-				if (isNameConflict(err)) {
-					apiError(
-						409,
-						ApiErrorCode.CONFLICT,
-						'A project with that name already exists in this organization.'
-					);
-				}
-				// A slug clash is the one error worth another attempt; everything else
-				// leaves the loop for the wrapper to map.
-				if (!isSlugConflict(err)) throw err;
-			}
-		}
-
-		apiError(
-			409,
-			ApiErrorCode.CONFLICT,
-			'Could not pick a unique project slug after several attempts.'
+				autoJoinOnUpload
+			},
+			{ writeCtx: ctx, fallbackSlug: 'project', conflictScope: 'this organization' }
 		);
+		return created(project);
 	}
 );

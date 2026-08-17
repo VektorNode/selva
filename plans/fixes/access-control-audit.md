@@ -175,7 +175,33 @@ Three cases went into `platformPermissionStoreSuite` rather than either provider
 
 Reverting `/team/projects` to a raw `listProjects` turned the private-project test red. Reverting the Supabase batch guard to `assertAdmin` turned the conformance case red against the live stack. Removing the `ProviderError` re-throw turned the denial test red. All restored; 9 new selva tests and 3 new conformance cases per provider, green on local and against live Supabase.
 
-**Next up:** 26/28/29 (pure subtraction, cheap), then 12 (Supabase RLS diverges from `rules.ts` on four points, including reclaim being functionally broken for settings edits) and 10 (header-auth trust boundary, incl. `rebindUpn`). 13/15/16/17 remain open. Spec edits still outstanding: §5 must record that `private → org` is intentionally ungated (finding 14), §10 needs the per-provider session-invalidation bound (finding 7) and a line saying the share-link roster is the compensating control its "unaffected" stance assumes.
+**Next up:** 26/28/29 — closed in Pass 6 below, which also found that the maintainability tranche was not the pure subtraction it looked like.
+
+---
+
+## ✅ Pass 6 shipped — 2026-08-17
+
+**Findings 26, 28 and 29 are closed — the maintainability tranche.** Pure subtraction plus two extractions. `pnpm type-check` (22/22), `pnpm lint` (0 errors), `@selvajs/selva` **539/539** with 14 new tests across 2 files.
+
+| Finding | Change                                                                                                    | Test                                                   |
+| ------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| 26      | `DefinitionCard.svelte` imports `ProjectVisibility` instead of re-declaring the union                     | —                                                      |
+| 28      | `createProjectWithUniqueSlug` extracted; both create routes call it; v1 POST calls `validateProjectFlags` | `projects/__tests__/createProject.server.test.ts` (8)  |
+| 29      | `assertCanGrantPlatformPermissions` replaces 3 copies; `permissions-compat` → `permissions-scope`         | `__tests__/platform-permission-delegation.test.ts` (6) |
+
+### The tranche found a live test gap, not just duplication
+
+Consolidating three copies of the delegation rule into one function is only safe if something proves the surviving copy works. It didn't: **disabling `assertCanGrantPlatformPermissions` entirely left the suite at 525/525 green.** Three separate escalation paths were guarded by code no test reached.
+
+The cause is worth recording because it generalizes. `invites/__tests__/platform-permissions.test.ts` has a case titled _"refuses platform permissions from an org admin who is not an instance admin"_, commented _"bob can invite members"_ — **bob cannot.** He is a plain org `member` in `seedAcme`, so `requireManageOrgMembers` rejects him at the route's first gate and the delegation guard never runs. The test asserted a 403 and got one, from the wrong line, and had been passing vacuously since it was written.
+
+**A denial test must act as someone who clears every gate except the one under test.** The new file therefore acts as an org **owner** for the invite path and as a `manage_instance_users` holder for both admin paths — actors who pass their route's own gate and must still be refused. Disabling the guard now turns 4 of the 6 red; the two positive controls (an ordinary org invite, an instance admin granting scope) stay green, which is what proves the guard didn't just become a blanket deny. The old test was kept, retitled to say what it actually asserts, and points at the new file.
+
+Finding 28's extraction turned up the same shape: the slug-retry loop existed in two copies and **neither was tested**, though it gates on a regex matched against a Postgres constraint name. Rename the constraint and the loop silently stops retrying, turning a routine collision into a 500. Eight cases cover it now.
+
+**One shape change from the plan.** Finding 29 proposed `assertCanGrantPlatformPermissions(ctx, requested)`. PATCH needs more: it gates on _change_, not _grant_, because revoking `instance_admin` is a platform-scope write too. With the proposed signature a `manage_instance_users` holder could PATCH `permissions: []` onto every admin above them and pass. The helper takes an optional `current` instead, and the fifth test pins that case.
+
+**Next up:** 12 (Supabase RLS diverges from `rules.ts` on four points — includes a real bug: reclaim is functionally broken for settings edits on Supabase, since the policy keys on `projects.owner_id` while reclaim only writes a `project_members` row) and 10 (header-auth trust boundary, incl. `rebindUpn`). 13/15/16/17/19/20 remain open. Spec edits still outstanding: §5 must record that `private → org` is intentionally ungated (finding 14), §10 needs the per-provider session-invalidation bound (finding 7) and a line saying the share-link roster is the compensating control its "unaffected" stance assumes (finding 9).
 
 ---
 
@@ -719,7 +745,7 @@ Separate pass, run 2026-08-17 against the same code, asking a different question
 - **Three sole-owner checks are three different invariants** (project / org / instance) over three tables, each already delegating to a shared function. **Not duplication — leave them.**
 - **Last-admin logic in both permission stores** is a provider-interface contract with a shared conformance suite (`platformPermissionStoreSuite.ts:134`). Two implementations of one tested contract is correct.
 
-### ☐ 26. Visibility is the sprawl point — and it is why finding 3 exists
+### ✅ 26. Visibility is the sprawl point — and it is why finding 3 exists
 
 **[`rules.ts`](../../packages/platform/src/access/rules.ts)** · **REAL DEBT** · **`[new]`**
 
@@ -730,6 +756,8 @@ Adding a project visibility today touches ~8 production files: the enum in `proj
 **One site fails silently and should be fixed regardless:** [`api/v1/projects/[id]/+server.ts:122`](../../packages/selva/src/routes/api/v1/projects/[id]/+server.ts#L122) hand-writes the union `'public' | 'org' | 'private' | 'platform'` instead of importing `ProjectVisibility`. A new enum member type-checks here and is then silently dropped from the patch. `DefinitionCard.svelte:14` re-declares the union inline too.
 
 **Fix:** import `ProjectVisibility` at both sites (one line each). Do **not** restructure the seven branches — a visibility-behaviour table sounds tidy but would obscure rules that genuinely differ per function. Note the count in review instead.
+
+**DONE (Pass 6).** Both sites import `ProjectVisibility` now (the projects PATCH route landed in Pass 1, `DefinitionCard.svelte` in Pass 6). The seven branches were deliberately left alone, as the finding itself advises.
 
 ---
 
@@ -745,7 +773,7 @@ This is the one place the excellent "one line to add a permission" property abov
 
 ---
 
-### ☐ 28. Slug-collision retry is copied between v1 and admin, and has already drifted
+### ✅ 28. Slug-collision retry is copied between v1 and admin, and has already drifted
 
 **[`api/v1/projects/+server.ts:78-116`](../../packages/selva/src/routes/api/v1/projects/+server.ts#L78-L116)** and **`api/admin/projects/+server.ts:94-136`** · **REAL DEBT** · **`[new]`**
 
@@ -759,13 +787,17 @@ Matching a DB constraint name with a regex is exactly the fragile thing that sho
 
 **Fix:** extract `createProjectWithUniqueSlug(ctx, draft)` into `$lib/server/projects/`. Related: `validateProjectFlags` is called only from PATCH (`[id]/+server.ts:106`) while v1 POST hand-rolls the same invariant at :66 — POST should call it.
 
+**DONE (Pass 6).** Extracted to `$lib/server/projects/createProject.server.ts`; both routes call it, and v1 POST now calls `validateProjectFlags` instead of its hand-rolled copy. The three drifts resolved as: the helper always re-throws non-slug errors (v1's behaviour — admin's inline `handleApiError` in the loop was the more surprising one), and slug stem plus conflict-message scope became per-caller options rather than being unified into a wrong single value.
+
+**The extraction found a gap the finding did not name: neither copy had a test.** A regex against a Postgres constraint name gates the whole retry, so a renamed constraint would silently stop it retrying and turn a routine collision into a 500 — and nothing would have caught that. Eight cases now cover the helper (retry, run of collisions, fallback stem, name-conflict-does-not-retry, unrelated-error-escapes, exhaustion, timestamp stamping).
+
 ---
 
-### ☐ 29. Smaller maintainability items
+### ✅ 29. Smaller maintainability items
 
-- **`permissions-compat.server.ts` is misnamed, not dead.** `splitFlatPermissions` has one live caller (invites POST) and is a wire-format adapter, not a migration shim — the v1 invite body takes a flat `permissions[]` while adapters need two scopes. Only the name misleads: "compat" reads as legacy cruft and will be flagged by every future audit. **Rename to `permissions-scope.server.ts`; do not delete.**
-- **"Platform permissions are not delegable" is copied 3×** — `invites/+server.ts:50` (whose comment at :48 openly admits _"Same rule as POST /api/admin/users"_), `admin/users/+server.ts:72`, `admin/users/[id]/+server.ts:41`. All three currently **agree**. The clearest case of the CLAUDE.md rule being broken by a comment that knows it. Fix: a ~6-line `assertCanGrantPlatformPermissions(ctx, requested)` in `access.server.ts`.
-- **Last-instance-admin check copied 2×** in `admin/users/[id]/+server.ts:75-85` and `disable/+server.ts:24-34`; identical apart from the verb in the message. One `requireNotLastInstanceAdmin(ctx, id, verb)` helper. Fold into the finding 5 fix, which touches both handlers anyway.
+- ✅ **`permissions-compat.server.ts` is misnamed, not dead.** `splitFlatPermissions` has one live caller (invites POST) and is a wire-format adapter, not a migration shim — the v1 invite body takes a flat `permissions[]` while adapters need two scopes. Only the name misleads: "compat" reads as legacy cruft and will be flagged by every future audit. **Rename to `permissions-scope.server.ts`; do not delete.** — **DONE (Pass 6)**, renamed via `git mv`; the header no longer reads as a shim awaiting retirement.
+- ✅ **"Platform permissions are not delegable" is copied 3×** — `invites/+server.ts:50` (whose comment at :48 openly admits _"Same rule as POST /api/admin/users"_), `admin/users/+server.ts:72`, `admin/users/[id]/+server.ts:41`. All three currently **agree**. The clearest case of the CLAUDE.md rule being broken by a comment that knows it. Fix: a ~6-line `assertCanGrantPlatformPermissions(ctx, requested)` in `access.server.ts`. — **DONE (Pass 6)**, with one shape change: the helper takes an optional `current`, because PATCH gates on _change_ (revoking an admin is a platform-scope write too) while the two create paths gate on _grant_. Folding those into one predicate without `current` would have let a `manage_instance_users` holder strip the admins above them by PATCHing `[]`.
+- ✅ **Last-instance-admin check copied 2×** in `admin/users/[id]/+server.ts:75-85` and `disable/+server.ts:24-34`; identical apart from the verb in the message. One `requireNotLastInstanceAdmin(ctx, id, verb)` helper. Fold into the finding 5 fix, which touches both handlers anyway. — **DONE in Pass 1** as `requireCanRemoveInstanceAdmin(ctx, id, verb)` in `$lib/server/admin/instanceAdmins.server.ts`.
 - **`admin/*` never adopted `apiRoute`** — 0 of 22 handlers, vs 40 of 43 in v1. Drift, not design: admin routes hand-roll `if (!id) apiError(400, …)` (what `requireParams` exists for) and repeat `try/catch` in every handler. Converging is mechanical, ~2–3h, roughly **−80 lines**. Worth doing _after_ the security findings, because shared helpers are where a future rule change lands and admin routes currently cannot receive one. Three v1 stragglers (`v1/compute`, `v1/compute/schema`, `v1/definitions/[guid]/solve`) are streaming/solve paths — check before converting.
 - **Three permission-label maps** (`UserListItem.svelte:35,46`, `team/members/+page.svelte:71`, `admin/users/+page.svelte:32`) are `Record<Permission, string>`, so TypeScript **does** force updates. A cost, not a hazard. Leave.
 

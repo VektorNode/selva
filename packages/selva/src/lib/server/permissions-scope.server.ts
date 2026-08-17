@@ -1,8 +1,9 @@
 /**
  * Bridges the flat `permissions` array the v1 invite body accepts to the
  * two-scope model adapters expect. One invite legitimately carries both scopes,
- * so this outlives the admin/team UI split; retire it when the invite body
- * grows separate `platformPermissions` + `orgPermissions` fields.
+ * so this is a wire-format adapter, not a migration shim — retire it only when
+ * the invite body grows separate `platformPermissions` + `orgPermissions`
+ * fields.
  */
 
 import type { OrgPermission, PlatformPermission } from '@selvajs/platform';

@@ -80,6 +80,42 @@ export const assertManageCompute = (locals: Locals) =>
 export const requireInstanceAdmin = (locals: Locals) => requirePermission(locals, 'instance_admin');
 
 /**
+ * Platform scope is not delegable: `manage_instance_users` runs the user-admin
+ * surface but must not be able to mint an `instance_admin`, or an org admin
+ * holding it self-elevates. Three routes write platform permissions — the two
+ * `/api/admin/users` handlers and the invite mint route — and each carried its
+ * own copy of this check.
+ *
+ * Pass `current` on an update. Revoking is a platform-scope change too, so a
+ * PATCH that drops `instance_admin` is refused for the same reason granting it
+ * is; without `current` the caller is creating (a user, an invite) and there is
+ * nothing to compare against.
+ *
+ * Requesting nothing on a create is always allowed — that is a
+ * `manage_instance_users` operation, not a platform-scope one.
+ */
+export function assertCanGrantPlatformPermissions(
+	ctx: RequestContext,
+	requested: readonly PlatformPermission[],
+	current?: readonly PlatformPermission[]
+): void {
+	const changed = current
+		? requested.length !== current.length ||
+			requested.some((p) => !current.includes(p)) ||
+			current.some((p) => !requested.includes(p))
+		: requested.length > 0;
+	if (!changed) return;
+	if (hasPermission(ctx, 'instance_admin')) return;
+	apiError(
+		403,
+		ApiErrorCode.FORBIDDEN,
+		current
+			? 'Only a platform admin can change platform-scope permissions'
+			: 'Only a platform admin can grant platform-scope permissions'
+	);
+}
+
+/**
  * Tenancy gate for `/api/v1/orgs/{orgId}/…`. The URL id is never trusted alone
  * — the acting context decides which tenant a request applies to, so a
  * mismatch is 403 rather than a silent read of the caller's own org.

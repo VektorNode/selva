@@ -2,15 +2,17 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getDataProvider, getEventSink, getPermissionStore } from '$lib/server/providers.server';
-import { requireManageInstanceUsers } from '$lib/server/access.server';
+import {
+	assertCanGrantPlatformPermissions,
+	requireManageInstanceUsers
+} from '$lib/server/access.server';
 import { requireCanRemoveInstanceAdmin } from '$lib/server/admin/instanceAdmins.server';
 import { throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import {
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,
 	type PlatformPermission,
-	actorFrom,
-	hasPermission
+	actorFrom
 } from '@selvajs/platform';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 
@@ -32,21 +34,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (!parsed.success) throwZodError(parsed.error);
 	const platform = parsed.data.permissions;
 
-	// Granting or revoking platform-scope permissions requires the caller to
-	// already hold instance_admin. Without this, any org admin with
-	// manage_instance_users could self-elevate to instance_admin.
 	const existingPlatform: PlatformPermission[] = await getPermissionStore().getFor(locals.ctx!, id);
-	const platformChanged =
-		platform.length !== existingPlatform.length ||
-		platform.some((p: PlatformPermission) => !existingPlatform.includes(p)) ||
-		existingPlatform.some((p: PlatformPermission) => !platform.includes(p));
-	if (platformChanged && !hasPermission(locals.ctx!, 'instance_admin')) {
-		apiError(
-			403,
-			ApiErrorCode.FORBIDDEN,
-			'Only a platform admin can change platform-scope permissions'
-		);
-	}
+	assertCanGrantPlatformPermissions(locals.ctx!, platform, existingPlatform);
 
 	const platformResult = await setUserPlatformPermissions(locals.ctx!, id, platform);
 	if (platformResult === 'not_found') apiError(404, ApiErrorCode.NOT_FOUND, 'User not found');
