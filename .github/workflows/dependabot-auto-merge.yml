@@ -65,12 +65,57 @@ jobs:
             exit 0
           fi
 
+          git add pnpm-lock.yaml
+          echo "::notice::Regenerated pnpm-lock.yaml — Dependabot left catalog specifiers stale."
+
+      # Dependabot never writes a changeset, so a bump that touches a
+      # publishable package's manifest fails `check-changesets.mjs` forever —
+      # and no human edit can fix it without Dependabot then force-pushing over
+      # it. Author one here instead of exempting the guard: a dependency bump on
+      # a published package IS a shipped change, and skipping it would release
+      # the new dependency under the old version number with a silent CHANGELOG.
+      - name: Write a changeset for the bumped packages
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          # Via env, never `${{ }}` inside the script: a PR title is attacker-
+          # controlled text and this step runs on a write-scoped token.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          CHANGESET: .changeset/dependabot-${{ github.event.pull_request.number }}.md
+        run: |
+          # Same base the `test` job diffs against, so this sees exactly the set
+          # of packages the guard will demand a changeset for.
+          git fetch --depth=1 origin "$BASE_REF"
+          mapfile -t bumped < <(node scripts/changed-publishable-packages.mjs --base FETCH_HEAD)
+
+          # Rewritten from scratch each run, not appended: Dependabot force-
+          # pushes this branch on rebase, and the set of touched packages can
+          # shrink between pushes.
+          rm -f "$CHANGESET"
+
+          if [ ${#bumped[@]} -eq 0 ]; then
+            echo "No publishable package touched — no changeset needed."
+          else
+            printf 'Bumped: %s\n' "${bumped[@]}"
+            {
+              echo '---'
+              printf "'%s': patch\n" "${bumped[@]}"
+              echo '---'
+              echo
+              echo "$PR_TITLE"
+            } > "$CHANGESET"
+          fi
+          git add -A .changeset
+
+      - name: Commit and push repairs
+        run: |
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add pnpm-lock.yaml
-          git commit -m 'chore: regenerate lockfile for pnpm catalog specifiers'
+          git commit -m 'chore: repair lockfile and changeset for dependabot bump'
           git push
-          echo "::notice::Regenerated pnpm-lock.yaml — Dependabot left catalog specifiers stale."
 
   dependabot-auto-merge:
     runs-on: ubuntu-latest
@@ -79,8 +124,17 @@ jobs:
     # the wait below from concluding against the pre-repair commit's checks.
     needs: lockfile
     steps:
+      # skip-commit-verification: v3 verifies the head commit's GPG signature,
+      # which reads the PR's commits. Under pull_request_target the token has no
+      # contents access to the head repo, so that read 403s and the whole gate
+      # dies before it ever looks at CI. The lockfile job above already pushes
+      # an unsigned commit to this branch, so signature checking cannot pass
+      # here regardless — the `github.actor == 'dependabot[bot]'` job guard is
+      # what establishes the PR's provenance.
       - id: metadata
         uses: dependabot/fetch-metadata@v3
+        with:
+          skip-commit-verification: true
 
       # `gh pr checks --watch` can't be used: this job's own check run appears
       # in the PR's checks and would make --watch wait on itself forever. Poll
