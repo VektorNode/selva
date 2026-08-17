@@ -21,6 +21,10 @@ const SHARE_LINK_COLUMNS =
  * `getByTokenHash` and `tryIncrementSolveCount` go through the service-role
  * client and a SECURITY DEFINER RPC, bypassing RLS: the token itself is the
  * credential, not the authenticated user's identity.
+ *
+ * Reads filter `revoked_at` AND `expires_at` — a dead link must read dead
+ * through the store, not only wherever a route remembers to re-check the date.
+ * `try_increment_share_link_solve_count` already enforces both server-side.
  */
 export class SupabaseShareLinkStore implements IShareLinkStore {
 	private readonly events: IEventSink;
@@ -58,6 +62,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			.select(SHARE_LINK_COLUMNS, { count: 'exact' })
 			.eq('definition_guid', definitionId)
 			.is('revoked_at', null)
+			.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
 			.order('created_at', { ascending: false })
 			.range(range.from, range.to);
 		if (error) throw mapPostgrestError(error);
@@ -84,6 +89,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			.select(`${SHARE_LINK_COLUMNS}, definitions!inner(deleted_at)`)
 			.eq('token_hash', tokenHash)
 			.is('revoked_at', null)
+			.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
 			.is('definitions.deleted_at', null)
 			.maybeSingle();
 		if (error) throw mapPostgrestError(error);

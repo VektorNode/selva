@@ -24,5 +24,6 @@ export {
 	resolveServerForOrg,
 	findServerById,
 	platformServers,
-	orgServersFor
+	orgServersFor,
+	scopeConfigToOrg
 } from './utils.js';

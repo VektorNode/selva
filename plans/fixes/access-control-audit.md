@@ -16,7 +16,7 @@
 
 ## ✅ Pass 1 shipped — 2026-08-17
 
-**Every P0 is closed (0–5), plus the cleanup that touched the same files (22, 27, part of 26).** `pnpm type-check`, `pnpm lint` (0 errors) and `pnpm check` (0 svelte-check errors) all pass; `@selvajs/selva` is 486/486 green with 14 new tests across 5 files. The 10 failing `@selvajs/supabase-provider` conformance tests are **pre-existing on clean `main`** (verified by stashing) — they need a live Supabase stack.
+**Every P0 is closed (0–5), plus the cleanup that touched the same files (22, 27, part of 26).** `pnpm type-check`, `pnpm lint` (0 errors) and `pnpm check` (0 svelte-check errors) all pass; `@selvajs/selva` is 486/486 green with 14 new tests across 5 files. The failing `@selvajs/supabase-provider` conformance tests were **pre-existing on clean `main`** (verified by stashing). ~~They need a live Supabase stack.~~ **Corrected in Pass 2:** they were an unapplied migration plus a real expiry-filter bug in `SupabaseShareLinkStore`, and are now fixed.
 
 Each new test was checked to actually fail without its fix, not merely to pass with it.
 
@@ -36,7 +36,33 @@ Each new test was checked to actually fail without its fix, not merely to pass w
 
 **Note for whoever picks up finding 18:** it is now _partly_ done. Local `assertCanRead` and `assertCanReadBatch` agree, and the delete/disable routes gate deliberately, so aligning Supabase up no longer re-arms finding 5. The blanket `catch` in `admin/users/+page.server.ts:88-90` is still unfixed.
 
-**Next up:** 21, 23, 24, 25 (small, self-contained), then 6/7 (events + session revocation), then 8/9 (store-interface changes).
+---
+
+## ✅ Pass 2 shipped — 2026-08-17
+
+**Findings 21, 23, 24 and 25 are closed.** `pnpm type-check` (22/22), `pnpm lint` (0 errors) and the full `pnpm test` all pass — **including `@selvajs/supabase-provider` at 239/239**, which had 9 failures before this pass (see below). `@selvajs/selva` is 499/499 with 13 new tests across 4 files.
+
+| Finding | Change                                                                                                                                                   | Test                                                          |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 21      | route resolves through `getVisibleDefinition` like its siblings, so an invisible guid 404s instead of 403                                                | `[guid]/versions/__tests__/version-list-visibility.test.ts`   |
+| 23      | new `scopeToOrgId` option on `getConfig`, applied in both stores via the pure `scopeConfigToOrg`; three org-facing callers pass it                       | `lib/server/compute/__tests__/config-org-scoping.test.ts`     |
+| 24      | upload fallback resolves from `resolveAccessibleProjects` (the caller's `canView` set) instead of an unfiltered `listProjects`                           | `definitions/__tests__/upload-project-fallback.test.ts`       |
+| 25      | share ctx gains `shareLinkId` + a `share:{id}` sentinel actor; `assertNotShareContext` added to the six store guards that start `if (ctx.system) return` | `lib/server/shareLinks/__tests__/share-ctx-authority.test.ts` |
+
+**On finding 25's shape.** `system: true` was doing two unrelated jobs on the share path: pick the service-role client (correct — no user JWT exists to scope RLS) and "fully authorized" (wrong). Rather than strip `system`, which would have broken adapter dispatch, `shareLinkId` marks _why_ it is set, and the guards refuse on that. `forRequest` deliberately still keys on `system` alone.
+
+**Verified by mutation, not by passing.** Removing the guards from the loaded `LocalPlatformPermissionStore` build turned 2 of the 4 share-ctx tests red; reverting the finding-21 route to its unfiltered read turned the cross-tenant test red. Both restored after. Worth recording: the selva tests resolve `@selvajs/local-provider` through built `dist`, **not** source — a source-only edit proves nothing there.
+
+### The 9 Supabase failures were two real bugs, not environment
+
+Pass 1 recorded these as pre-existing and stack-dependent. That was true of the symptom but wrong about the cause — both were fixable:
+
+- **7 invite/org failures** — migration `20260817120000_invite_platform_permissions.sql` existed in the repo but had never been applied to the local database (`supabase migration list` showed it local-only). Applying it fixed all seven. Nothing to change in code.
+- **2 share-link failures** — a genuine provider divergence. `SupabaseShareLinkStore.listByDefinition` and `getByTokenHash` filtered `revoked_at` but **not** `expires_at`, so an expired link stayed listed and resolvable there while the local store reported it dead. Both now filter expiry in SQL.
+
+The second one is worth dwelling on: the local store's comment said it filtered expiry _"to match what Supabase filters in SQL"_, and the conformance suite's comment said the same. **Supabase never filtered it.** Both comments described an invariant that only one side upheld, which is precisely how a shared conformance suite is supposed to fail — and it did, as soon as the stack was actually running. Comments in all three places now state the contract rather than attributing it to one provider.
+
+**Next up:** 6/7 (platform-scope domain events + wiring `revokeSession` into logout/disable), then 8/9 (store-interface changes across both providers). Also still open: finding 18's blanket `catch` in `admin/users/+page.server.ts:88-90`, and findings 11/26/28/29.
 
 ---
 
@@ -478,7 +504,7 @@ Also: `soleInstanceAdmin` is computed client-side over a 200-row page, so the lo
 
 ## P1/P2 — found during the verification pass
 
-### ☐ 21. `GET /definitions/{guid}/versions` is a cross-tenant existence oracle
+### ✅ 21. `GET /definitions/{guid}/versions` is a cross-tenant existence oracle
 
 **[`api/v1/definitions/[guid]/versions/+server.ts:25-27`](../../packages/selva/src/routes/api/v1/definitions/[guid]/versions/+server.ts#L25-L27)** · **MEDIUM** · **`[new]`**
 
@@ -522,7 +548,7 @@ Three near-identical guards, of which the unused one is **the weakest** (content
 
 ---
 
-### ☐ 23. Compute-server inventory is not scoped in the store
+### ✅ 23. Compute-server inventory is not scoped in the store
 
 **[`team/compute/+page.server.ts:44-63`](../../packages/selva/src/routes/team/compute/+page.server.ts#L44-L63)** and **[`api/v1/orgs/[orgId]/compute/+server.ts:50-68`](../../packages/selva/src/routes/api/v1/orgs/[orgId]/compute/+server.ts#L50-L68)** · **MEDIUM** · **`[new]`**
 
@@ -536,7 +562,7 @@ This is the exact failure mode CLAUDE.md names: _"a rule that two endpoints must
 
 ---
 
-### ☐ 24. Implicit-project fallback on definition upload picks before it checks
+### ✅ 24. Implicit-project fallback on definition upload picks before it checks
 
 **[`api/v1/definitions/+server.ts:86-96`](../../packages/selva/src/routes/api/v1/definitions/+server.ts#L86-L96)** · **LOW-MEDIUM** · **`[new]`**
 
@@ -546,7 +572,7 @@ With no `projectId` in the body, the route takes `listProjects(ctx, actingOrgId,
 
 ---
 
-### ☐ 25. Share-token context is indistinguishable from an admin context at the store layer
+### ✅ 25. Share-token context is indistinguishable from an admin context at the store layer
 
 **[`shareLinks/resolve.server.ts:98-104`](../../packages/selva/src/lib/server/shareLinks/resolve.server.ts#L98-L104)** · **LOW (no live exploit)** · **`[new]`**
 

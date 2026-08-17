@@ -67,8 +67,9 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		await writeJsonFile(this.configFilePath, data);
 	}
 
-	// Revoked or expired counts as dead — match what Supabase filters in SQL,
-	// or the same link reads live locally and dead there.
+	// Revoked or expired counts as dead. Both providers filter both fields; a
+	// link that reads live under one and dead under the other is the bug this
+	// prevents.
 	private isLive(l: ShareLink | undefined | null): l is ShareLink {
 		if (!l || l.revokedAt != null) return false;
 		return l.expiresAt == null || Date.parse(l.expiresAt) > Date.now();

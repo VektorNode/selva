@@ -178,7 +178,11 @@ async function enrichRows(rows: AuditEventRow[]): Promise<EnrichedAuditRow[]> {
 	const definitionIds = new Set<string>();
 
 	for (const row of rows) {
-		if (row.actorId && row.actorId !== 'system') actorIds.add(row.actorId);
+		// `share:` actors are anonymous — no profile and no auth user to resolve,
+		// so keep them out of both batch lookups. `resolveActor` names them.
+		if (row.actorId && row.actorId !== 'system' && !row.actorId.startsWith('share:')) {
+			actorIds.add(row.actorId);
+		}
 		const target = targetFor(row.data);
 		if (target) {
 			if (target.kind === 'org') orgIds.add(target.id);
@@ -256,6 +260,12 @@ function resolveActor(
 ): AuditActorView {
 	if (!actorId || actorId === 'system') {
 		return { id: 'system', name: 'System', isSystem: true };
+	}
+	// A share-link actor is anonymous and has no profile to look up. Naming the
+	// link keeps it distinguishable from the platform itself, which is what a
+	// blank actor renders as one branch above.
+	if (actorId.startsWith('share:')) {
+		return { id: actorId, name: `Share link ${actorId.slice('share:'.length)}`, isSystem: false };
 	}
 	const display = profileById.get(actorId)?.displayName;
 	if (display) return { id: actorId, name: display, isSystem: false };

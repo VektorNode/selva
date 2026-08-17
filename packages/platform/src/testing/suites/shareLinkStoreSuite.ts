@@ -148,9 +148,9 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 			expect(got).toBeNull();
 		});
 
-		// Expiry is a store-level filter, not just a route-level check: the local
-		// store once tested only `revokedAt`, so an expired link stayed listed and
-		// resolvable while Supabase (which filters both in SQL) reported it dead.
+		// Expiry is a store-level filter, not just a route-level check. Each
+		// provider has at some point filtered only `revokedAt`, leaving an expired
+		// link listed and resolvable there while the other reported it dead.
 		it('an expired link is excluded from listByDefinition', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();

@@ -22,14 +22,28 @@ export interface GetConfigOptions {
 	 * `getServerApiKey` for just that one.
 	 */
 	includeApiKeys?: boolean;
+
+	/**
+	 * Narrow the result to what this org may see: `serversVisibleTo(orgId)`,
+	 * `orgDefaults` reduced to this org's entry, and `defaultServerId` blanked
+	 * when the global default is not among them.
+	 *
+	 * Org-facing surfaces must pass this. Without it the store hands back every
+	 * platform server and every *other* org's private servers, leaving each
+	 * caller to re-apply a filter it can silently forget — the global
+	 * `defaultServerId` in particular passed straight through before this
+	 * existed. Admin surfaces, boot health and the save-diff handlers omit it
+	 * deliberately; they act instance-wide.
+	 */
+	scopeToOrgId?: string;
 }
 
 export interface IComputeServerStore {
 	/**
-	 * Reads the full config. Callers apply the visibility predicate from
-	 * `serversVisibleTo` themselves — the store does not pre-filter, since the
-	 * same row set is needed at different scopes (admin manage vs. org manage
-	 * vs. solve).
+	 * Reads the config. Instance-wide by default — the same row set is needed at
+	 * different scopes (admin manage vs. org manage vs. solve). Pass
+	 * `scopeToOrgId` on any org-facing surface so the narrowing happens here
+	 * rather than in each caller.
 	 *
 	 * Servers come back with `apiKey: undefined` unless `includeApiKeys` is
 	 * set, so a returned server says nothing about whether a key is *stored*

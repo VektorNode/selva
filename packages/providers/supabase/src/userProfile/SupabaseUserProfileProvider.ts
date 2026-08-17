@@ -5,7 +5,7 @@ import type {
 	UserManagementResult,
 	UserProfile
 } from '@selvajs/platform';
-import { ProviderError, hasPermission } from '@selvajs/platform';
+import { ProviderError, hasPermission, assertNotShareContext } from '@selvajs/platform';
 import type { ClientBundle } from '../data/client.js';
 
 /**
@@ -130,6 +130,7 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 }
 
 function assertCanAccess(ctx: RequestContext, userId: string): void {
+	assertNotShareContext(ctx, 'access user profiles');
 	if (ctx.system) return;
 	if (ctx.userId === userId) return;
 	if (hasPermission(ctx, 'instance_admin')) return;

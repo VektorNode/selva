@@ -4,7 +4,12 @@ import type {
 	RequestContext,
 	UserManagementResult
 } from '@selvajs/platform';
-import { ProviderError, hasPermission, ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
+import {
+	ProviderError,
+	hasPermission,
+	assertNotShareContext,
+	ALL_PLATFORM_PERMISSIONS
+} from '@selvajs/platform';
 import type { ClientBundle } from '../data/client.js';
 
 /**
@@ -117,6 +122,7 @@ function filterValid(raw: readonly string[]): PlatformPermission[] {
 }
 
 function assertCanRead(ctx: RequestContext, userId: string): void {
+	assertNotShareContext(ctx, 'read permissions');
 	if (ctx.system) return;
 	if (ctx.userId === userId) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
@@ -124,6 +130,7 @@ function assertCanRead(ctx: RequestContext, userId: string): void {
 }
 
 function assertAdmin(ctx: RequestContext): void {
+	assertNotShareContext(ctx, 'manage permissions');
 	if (ctx.system) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
 	throw new ProviderError('Forbidden: instance admin required', 403);

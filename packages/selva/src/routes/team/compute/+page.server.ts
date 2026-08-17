@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { hasPermission, isOrgServer, isPlatformServer, serversVisibleTo } from '@selvajs/platform';
+import { hasPermission, isOrgServer, isPlatformServer } from '@selvajs/platform';
 import type {
 	ComputeServerConfig,
 	OrgComputeServer,
@@ -41,7 +41,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const orgId = ctx.actingOrgId;
 	const overrideEnabled = flag('ALLOW_ORG_COMPUTE_OVERRIDE');
 
-	const config = await getComputeServerConfigStore().getConfig(ctx);
+	// Scoped in the store: `config.servers` is already `serversVisibleTo(orgId)`
+	// and `defaultServerId` is blank unless the global default is one of them.
+	const config = await getComputeServerConfigStore().getConfig(ctx, { scopeToOrgId: orgId });
 
 	// Servers we own — editable.
 	const ownServers: OrgServerListing[] = config.servers
@@ -49,9 +51,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.map(({ apiKey: _apiKey, hasApiKey, ...rest }) => ({ ...rest, hasApiKey: !!hasApiKey }));
 
 	// Catalog drives the default-selection dropdown — every server visible to
-	// this org regardless of scope.
-	const visible = serversVisibleTo(config, orgId);
-	const catalog: CatalogEntry[] = visible.map((s) => ({
+	// this org regardless of scope, which is exactly what the scoped read returned.
+	const catalog: CatalogEntry[] = config.servers.map((s) => ({
 		id: s.id,
 		label: s.label,
 		serverUrl: s.serverUrl,

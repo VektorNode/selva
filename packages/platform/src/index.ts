@@ -165,7 +165,8 @@ export {
 	resolveServerForOrg,
 	findServerById,
 	platformServers,
-	orgServersFor
+	orgServersFor,
+	scopeConfigToOrg
 } from './computeServer/utils.js';
 
 // ---------------------------------------------------------------------------
@@ -251,7 +252,13 @@ export { auditUpdate, auditSoftDelete } from './utils/audit.js';
 // top-level (context, pagination, config, errors)
 // ---------------------------------------------------------------------------
 export type { RequestContext } from './context.js';
-export { SYSTEM_CONTEXT, hasPermission, requireActingOrg } from './context.js';
+export {
+	SYSTEM_CONTEXT,
+	hasPermission,
+	requireActingOrg,
+	isShareContext,
+	assertNotShareContext
+} from './context.js';
 
 export type { ListOptions, DefinitionListOptions, Page } from './pagination.js';
 export { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './pagination.js';

@@ -5,7 +5,7 @@ import type {
 	RequestContext,
 	UserManagementResult
 } from '@selvajs/platform';
-import { ProviderError, hasPermission } from '@selvajs/platform';
+import { ProviderError, hasPermission, assertNotShareContext } from '@selvajs/platform';
 import { createLocalUserDataStore, type LocalUserDataStore } from '../data/userData.js';
 
 /**
@@ -113,6 +113,7 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 // (as this file previously did) made the delete/disable routes throw a 500
 // where they meant to return 403.
 function assertCanRead(ctx: RequestContext, userId: string): void {
+	assertNotShareContext(ctx, 'read permissions');
 	if (ctx.system) return;
 	if (ctx.userId === userId) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
@@ -121,12 +122,14 @@ function assertCanRead(ctx: RequestContext, userId: string): void {
 }
 
 function assertAdmin(ctx: RequestContext): void {
+	assertNotShareContext(ctx, 'manage permissions');
 	if (ctx.system) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
 	throw new ProviderError('Forbidden: instance admin required', 403);
 }
 
 function assertCanReadBatch(ctx: RequestContext): void {
+	assertNotShareContext(ctx, 'read permissions');
 	if (ctx.system) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
 	if (hasPermission(ctx, 'manage_instance_users')) return;

@@ -68,7 +68,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const [orgsPage, recordsPage, computeConfig] = await Promise.all([
 			getOrganizationProvider().listOrgs(ctx, { limit: 200 }),
 			getDefinitionMeta().list(ctx, { limit: 200 }),
-			getComputeServerConfigStore().getConfig(ctx)
+			getComputeServerConfigStore().getConfig(
+				ctx,
+				ctx.actingOrgId ? { scopeToOrgId: ctx.actingOrgId } : {}
+			)
 		]);
 
 		const projectStore = getProjectProvider();
@@ -160,7 +163,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		// Picker shows only servers visible to the user's acting org —
 		// platform servers shared with this org (or with `'all'`, or the
-		// global default) plus this org's org-private servers.
+		// global default) plus this org's org-private servers. The store already
+		// applied this filter; re-running it covers the no-acting-org case, where
+		// the read above is unscoped.
 		const computeServers = serversVisibleTo(computeConfig, ctx.actingOrgId);
 		const defaultComputeServerId = defaultServerIdFor(computeConfig, ctx.actingOrgId) ?? null;
 

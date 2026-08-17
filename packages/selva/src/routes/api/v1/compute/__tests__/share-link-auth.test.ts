@@ -64,7 +64,14 @@ describe('share-link token resolution', () => {
 		expect(resolved).not.toBeNull();
 		expect(resolved!.link.id).toBe(link.id);
 		expect(resolved!.ctx.actingOrgId).toBe(alicesPrivate.orgId);
-		expect(resolved!.ctx.userId).toBe('');
+
+		// A sentinel actor, not `''` — a blank actor is the system convention and
+		// renders as "System" in the audit log, which would attribute an anonymous
+		// share-link solve to the platform itself.
+		expect(resolved!.ctx.userId).toBe(`share:${link.id}`);
+		// `system` stays on for adapter dispatch (no user JWT exists), so
+		// `shareLinkId` is what keeps store guards from reading it as authority.
+		expect(resolved!.ctx.shareLinkId).toBe(link.id);
 	});
 
 	it('no token at all → returns null (caller falls through to user auth)', async () => {

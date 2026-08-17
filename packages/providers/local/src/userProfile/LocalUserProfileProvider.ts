@@ -6,7 +6,7 @@ import type {
 	UserManagementResult,
 	UserProfile
 } from '@selvajs/platform';
-import { ProviderError, hasPermission } from '@selvajs/platform';
+import { ProviderError, hasPermission, assertNotShareContext } from '@selvajs/platform';
 import {
 	createLocalUserDataStore,
 	type LocalUserDataStore,
@@ -128,6 +128,7 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 
 /** Scoped to the user themselves; `instance_admin` and `system: true` callers bypass. */
 function assertCanAccess(ctx: RequestContext, userId: string): void {
+	assertNotShareContext(ctx, 'access user profiles');
 	if (ctx.system) return;
 	if (ctx.userId === userId) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
