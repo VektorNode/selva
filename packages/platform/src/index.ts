@@ -105,7 +105,7 @@ export {
 // ---------------------------------------------------------------------------
 // shareLinks
 // ---------------------------------------------------------------------------
-export type { ShareLink } from './shareLinks/types.js';
+export type { OrgShareLink, ShareLink } from './shareLinks/types.js';
 export type { IShareLinkStore } from './shareLinks/interface.js';
 export { DEFAULT_SHARE_LINK_MAX_SOLVES } from './shareLinks/types.js';
 export type { CreateShareLinkInput } from './shareLinks/schemas.js';

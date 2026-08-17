@@ -27,6 +27,22 @@ export interface IInviteStore {
 	/** No-op if already consumed or missing. */
 	revoke(ctx: RequestContext, id: string): Promise<void>;
 
+	/**
+	 * Revoke every pending invite to `email` in this org, returning the ids
+	 * revoked. Accepted invites are left alone — consuming one is history, not
+	 * a live grant.
+	 *
+	 * Offboarding needs this: `removeOrgMember` cascades `project_members` but
+	 * has never touched invites, so a dormant invite let a removed user walk
+	 * back in at their original role for the rest of its TTL. Matching by email
+	 * rather than user id is deliberate — an invite names an address, and the
+	 * account it will create may not exist yet.
+	 *
+	 * One call rather than list-then-revoke-each: the loop would race a
+	 * concurrent accept between the two round-trips.
+	 */
+	revokePendingByEmail(ctx: RequestContext, orgId: string, email: string): Promise<string[]>;
+
 	/** Called from the `deleteOrg` cascade — invites to a deleted org are unredeemable orphans otherwise. */
 	deleteByOrg(ctx: RequestContext, orgId: string): Promise<void>;
 }

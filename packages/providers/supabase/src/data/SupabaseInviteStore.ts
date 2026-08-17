@@ -111,6 +111,30 @@ export class SupabaseInviteStore implements IInviteStore {
 		});
 	}
 
+	async revokePendingByEmail(ctx: RequestContext, orgId: string, email: string): Promise<string[]> {
+		// Emails are stored lowercase at mint time; normalize the needle too so an
+		// offboarding call with the address as the admin typed it still matches.
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('invites')
+			.delete()
+			.eq('org_id', orgId)
+			.eq('email', email.trim().toLowerCase())
+			.is('accepted_at', null)
+			.select('id');
+		if (error) throw mapPostgrestError(error);
+		const ids = (data ?? []).map((r) => (r as { id: string }).id);
+		for (const id of ids) {
+			await this.events.emit({
+				type: 'invite.revoked',
+				inviteId: id,
+				orgId,
+				actorId: actorFrom(ctx)
+			});
+		}
+		return ids;
+	}
+
 	async deleteByOrg(ctx: RequestContext, orgId: string): Promise<void> {
 		const { error } = await this.clients
 			.forRequest(ctx)

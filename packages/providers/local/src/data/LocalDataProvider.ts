@@ -135,11 +135,13 @@ export class LocalDataProvider implements IDataProvider {
 		// Wire cross-store deps that aren't constructor-injected:
 		// - definitions needs the project store for listPublic's visibility check
 		// - shareLinks needs the definition store to enforce the soft-delete
-		//   cascade on resolution (Supabase does this via JOIN)
+		//   cascade on resolution, and both stores to walk link→definition→project
+		//   for the org roster (Supabase does both via JOIN)
 		// - projects needs the definition store to cascade soft-delete to a
 		//   deleted project's definitions (Supabase does this inline)
 		definitions.setProjectProvider(projects);
 		shareLinks.setDefinitionProvider(definitions);
+		shareLinks.setProjectProvider(projects);
 		projects.setDefinitionProvider(definitions);
 
 		const userData = createLocalUserDataStore(userDataFilePath);

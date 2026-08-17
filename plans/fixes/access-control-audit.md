@@ -108,6 +108,47 @@ If instant cutoff on disable is wanted later, it is its own scoped piece of work
 
 ---
 
+## ✅ Pass 4 shipped — 2026-08-17
+
+**Findings 8 and 9 are closed.** Both were store-interface changes across two providers, as predicted. Verified against the live Supabase stack, not just local.
+
+| Finding | Change                                                                                                                                               | Test                                                                               |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 8       | `revokePendingByEmail` on `IInviteStore`, both providers; called from the org-member DELETE route                                                    | `members/[userId]/__tests__/removal-revokes-invites.test.ts` + 5 conformance cases |
+| 9       | `listByOrg` on `IShareLinkStore` (new `OrgShareLink` row), both providers, new RLS policy + index; `/team/shares` stub replaced with the real roster | `team/shares/__tests__/share-roster.test.ts` + 5 conformance cases                 |
+
+### Finding 8 — one call, not list-then-revoke-each
+
+`revokePendingByEmail(ctx, orgId, email)` returns the ids it revoked. A query method plus a loop in the route would have raced a concurrent accept between the two round-trips, and would have needed the route to emit N events itself. Matching by **email, not user id** is deliberate: an invite names an address, and the account it will create may not exist yet.
+
+Emails are stored lowercase at mint; both stores normalize the needle too, so an offboarding call with the address as an admin typed it still matches. There is a conformance case for exactly that.
+
+The route logs rather than swallows a failure here — a silent `catch` on this path leaves a live re-entry route, which is the pattern finding 18 flags. The removal itself has already committed, so failing the request would report an offboarding that _did_ happen as one that didn't.
+
+### Finding 9 — the roster, and why not the cascade
+
+The cascade was the smaller option and it is the wrong one. Recorded on the finding itself; the short version is that a share link is an org asset that happens to have a minter, so revoking on departure punishes whoever holds the URL — usually a client — rather than the leaver. It also only fires on org-member removal, so disabled and deleted users' links survive it anyway.
+
+**What the roster required.** `listByOrg` has no org column to filter on: the org is two hops up, `link → definition → project`. Supabase does it as one `!inner` join (a filtering join, so soft-deleted parents drop out for free); the local store does the same walk as lookups, mirroring how `getByTokenHash` already handles the soft-delete cascade. The new RLS policy is deliberately **SELECT-only and separate** from the existing editor policy — revoking still requires edit rights on the parent definition, so seeing the roster never implies authority over it. The page reuses the existing per-definition DELETE endpoint for exactly that reason.
+
+**Gated on `manage_org_members`, not `manage_projects`.** The latter can be handed to a plain member (§11), who has no business enumerating every credential in the tenant. The RLS policy and the load function gate on the same permission, so the two layers agree rather than one being a superset.
+
+**`OrgShareLink` omits `tokenHash` from the type**, rather than merely not reading it. This is the only share-link shape built for a page, and it spans every definition in the org — so a careless serialization would ship every credential digest in the tenant at once. Both the conformance suite and the route test assert its absence, and both go red when the omission is removed.
+
+**Two wiring traps worth knowing.** The local store needs `setProjectProvider` from the composition root, and unwired it returns **empty** rather than unfiltered — a share-link list that silently spans tenants is worse than no list. The local conformance harness now builds a real `LocalDataProvider` instead of constructing the store directly, so a missing setter fails the suite instead of passing against nothing. Separately, `providers.server` has a mock surface in `__tests__/setup.ts` that must gain each new accessor; `mock-surface.test.ts` guards this and caught it.
+
+**Verified by mutation.** Killing the `manage_org_members` gate turned the member-refusal test red; removing the `tokenHash` omission turned both the conformance case and the route test red; stubbing out the invite-revocation lookup turned 3 of the 4 finding-8 route tests red (the fourth is the no-invite control, correctly still green). All restored.
+
+**Conformance counts:** invites 7 → 11 per provider, share links 14 → 19 per provider, both green on local **and** against the live Supabase stack.
+
+### Written into the PAT plan
+
+`IApiTokenStore` in [token-plan.md](../features/token-plan.md) had the same gap by design — `listByUser` only, and a `deleteByUser` cascade covering deleted users but not removed or disabled ones. Two notes added there: `listByOrg` is required and should match `OrgShareLink`'s shape including the omitted hash, and offboarding is roster-driven rather than cascading, for the same reason as share links. `/team/tokens` is then largely `/team/shares` with the first hop swapped, and this pass's RLS policy is the template.
+
+**Next up:** finding 18's blanket `catch` in `admin/users/+page.server.ts:88-90`, then 11 (the `_ctx` divergence in the local provider, which also covers 21 and 24), and 26/28/29. Spec edits still outstanding: §5 must record that `private → org` is intentionally ungated (finding 14), §10 needs the per-provider session-invalidation bound (finding 7) and now also a line saying the share-link roster is the compensating control its "unaffected" stance assumes.
+
+---
+
 ## The shape of the problem
 
 One sentence explains most of what follows: **`rules.ts` is well built and well tested as pure functions; the specific route handlers that call it were never exercised adversarially.** Findings 1, 2, 4 and 5 are all route-layer wiring bugs sitting directly behind correct, tested rules.
@@ -322,7 +363,7 @@ Two refinements that **narrow the disable case and leave the logout case as stat
 
 ---
 
-### ☐ 8. Pending invites survive member removal
+### ✅ 8. Pending invites survive member removal
 
 **[`members/[userId]/+server.ts:137`](../../packages/selva/src/routes/api/v1/orgs/[orgId]/members/[userId]/+server.ts#L137)** · **HIGH**
 
@@ -338,7 +379,7 @@ Combined with finding 1: an admin mints several dormant `owner` invites and wait
 
 ---
 
-### ☐ 9. Share links survive every form of offboarding, with no UI to find them
+### ✅ 9. Share links survive every form of offboarding, with no UI to find them
 
 **[`shareLinks/resolve.server.ts:51-107`](../../packages/selva/src/lib/server/shareLinks/resolve.server.ts#L51-L107)** · **HIGH**
 
@@ -352,6 +393,8 @@ The resolver validates expiry, revocation, channel, definition liveness and proj
 So the real offboarding runbook is: enumerate every definition in every project the departing user could edit, call the API on each, inspect `createdBy`, revoke by hand. At any scale, that will not happen. `ENABLE_SHARING=false` is the only bulk kill switch and it's instance-wide.
 
 **Fix:** build the `/team/shares` roster with a `createdBy` filter, **or** cascade-revoke on org-member removal. The spec's "unaffected" stance is only defensible with the former.
+
+**DECIDED 2026-08-17 — the roster, and deliberately not the cascade.** Cascade-revoke breaks the wrong people: a departing contractor's demo link dying means the _client_ loses access, and the contractor never needed the link — they had an account. It also only fires on org-member removal, leaving disabled and deleted users' links live, and still answers nothing. The roster is the capability; auto-revoke is a policy that can be layered on top of it later. The reverse does not work. See the Pass 4 section.
 
 ---
 

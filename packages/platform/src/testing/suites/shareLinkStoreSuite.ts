@@ -40,6 +40,14 @@ export interface ShareLinkTestScope {
 	definitionId: string;
 	/** A second definition id for cross-definition isolation tests. */
 	otherDefinitionId: string;
+	/**
+	 * Org owning both definitions' project. Set it to run the `listByOrg`
+	 * cases; adapters that can't seed the definition→project→org chain leave it
+	 * undefined and those cases skip.
+	 */
+	orgId?: string;
+	/** An org with no share links, to prove the roster is tenant-scoped. */
+	otherOrgId?: string;
 }
 
 export interface ShareLinkStoreConformanceOptions {
@@ -185,6 +193,86 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 
 			const got = await store.getByTokenHash(ctx(scope.ownerId), 'not-yet-expired');
 			expect(got?.id).toBe(l.id);
+		});
+
+		// The org roster is the only read that answers "what reaches this
+		// tenant's data right now?". `it.skipIf` rather than an omitted block, so
+		// an adapter that stops seeding an org shows as skipped instead of silently
+		// covering nothing.
+		describe('listByOrg', () => {
+			it('returns links across every definition in the org, newest first', async () => {
+				const scope = await scopeFor();
+				if (!scope.orgId) return;
+				const store = await createStore();
+				const a = link(scope, { createdAt: '2026-04-01T00:00:00.000Z' });
+				const b = link(scope, {
+					definitionId: scope.otherDefinitionId,
+					createdAt: '2026-04-02T00:00:00.000Z'
+				});
+				await store.create(ctx(scope.ownerId), a);
+				await store.create(ctx(scope.ownerId), b);
+
+				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId, { limit: 100 });
+				expect(page.items.map((l) => l.id)).toEqual([b.id, a.id]);
+			});
+
+			it('names the parent definition and project on every row', async () => {
+				const scope = await scopeFor();
+				if (!scope.orgId) return;
+				const store = await createStore();
+				const l = link(scope);
+				await store.create(ctx(scope.ownerId), l);
+
+				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId, { limit: 100 });
+				const row = page.items.find((x) => x.id === l.id);
+				// A roster of bare GUIDs can't be acted on — revoking the wrong link
+				// is unrecoverable.
+				expect(row?.definitionName).toBeTruthy();
+				expect(row?.projectName).toBeTruthy();
+				expect(row?.projectId).toBeTruthy();
+			});
+
+			it('never carries tokenHash — the roster spans the whole tenant', async () => {
+				const scope = await scopeFor();
+				if (!scope.orgId) return;
+				const store = await createStore();
+				await store.create(ctx(scope.ownerId), link(scope));
+
+				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId, { limit: 100 });
+				expect(page.items.length).toBeGreaterThan(0);
+				for (const row of page.items) {
+					expect(row).not.toHaveProperty('tokenHash');
+				}
+			});
+
+			it('excludes revoked and expired links', async () => {
+				const scope = await scopeFor();
+				if (!scope.orgId) return;
+				const store = await createStore();
+				const revoked = link(scope);
+				const expired = link(scope, { expiresAt: new Date(Date.now() - 60_000).toISOString() });
+				const live = link(scope);
+				await store.create(ctx(scope.ownerId), revoked);
+				await store.create(ctx(scope.ownerId), expired);
+				await store.create(ctx(scope.ownerId), live);
+				await store.revoke(ctx(scope.ownerId), revoked.id);
+
+				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId, { limit: 100 });
+				const ids = page.items.map((x) => x.id);
+				expect(ids).toContain(live.id);
+				expect(ids).not.toContain(revoked.id);
+				expect(ids).not.toContain(expired.id);
+			});
+
+			it('does not leak links into another org', async () => {
+				const scope = await scopeFor();
+				if (!scope.orgId || !scope.otherOrgId) return;
+				const store = await createStore();
+				await store.create(ctx(scope.ownerId), link(scope));
+
+				const page = await store.listByOrg(ctx(scope.ownerId), scope.otherOrgId, { limit: 100 });
+				expect(page.items).toHaveLength(0);
+			});
 		});
 
 		it('revoke is idempotent (no error on double-revoke)', async () => {

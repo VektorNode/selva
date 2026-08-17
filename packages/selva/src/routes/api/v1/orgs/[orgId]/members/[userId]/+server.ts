@@ -6,7 +6,12 @@ import {
 	type OrgRole,
 	type RequestContext
 } from '@selvajs/platform';
-import { getOrganizationProvider } from '$lib/server/providers.server';
+import {
+	getAuthProvider,
+	getInviteStore,
+	getLogger,
+	getOrganizationProvider
+} from '$lib/server/providers.server';
 import { requireManageOrgMembers, requireActingOrg } from '$lib/server/access.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { UpdateOrgMemberBodySchema } from '$lib/server/api/v1/bodies';
@@ -135,6 +140,26 @@ export const DELETE: RequestHandler = apiRoute(
 		}
 
 		await orgs.removeOrgMember(ctx, orgId, userId);
+
+		// `removeOrgMember` cascades `project_members` but not invites, so a
+		// dormant invite would let the removed user walk straight back in at
+		// their original role. Best-effort: the removal itself has committed, and
+		// failing the request now would report an offboarding that did happen as
+		// one that didn't. A failure here leaves a live re-entry path, so it is
+		// logged rather than swallowed.
+		const email = (await getAuthProvider().getUser(userId))?.email;
+		if (email) {
+			try {
+				await getInviteStore().revokePendingByEmail(ctx, orgId, email);
+			} catch (err) {
+				getLogger().error('Removed org member but failed to revoke their pending invites', {
+					orgId,
+					userId,
+					error: err instanceof Error ? err.message : String(err)
+				});
+			}
+		}
+
 		return noContent();
 	}
 );
