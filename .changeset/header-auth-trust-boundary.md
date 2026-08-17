@@ -1,8 +1,10 @@
 ---
-'@selvajs/header-auth-provider': minor
+'@selvajs/selva': minor
 ---
 
-Stop rewriting a stored UPN from request headers, and detect a non-stripping proxy.
+Header auth: stop rewriting a stored UPN from request headers, and detect a
+non-stripping proxy. Affects deployments running the bundled forward-auth
+provider (`SELVA_AUTH_PROVIDER=header`); no other provider is reachable by this.
 
 `identifyFromHeaders` no longer calls `rebindUpn` after an email-fallback match. Both
 headers on that path are proxy-supplied, so the rebind let one request repoint an
