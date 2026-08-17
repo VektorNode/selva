@@ -15,6 +15,13 @@ Check the site for what's currently public.
 
 Both are audience-neutral; read one, then branch.
 
+The Selva app carries its own internal specs, kept next to the code they
+describe rather than here — they answer "is this route/store/rule correct?",
+not "how does Selva work?":
+
+- **[packages/selva/specs/Architecture.md](../packages/selva/specs/Architecture.md)** — entity model, invariants, provider contracts, and what's designed but not yet wired
+- **[packages/selva/specs/Permissions.md](../packages/selva/specs/Permissions.md)** — the access-control authority; its permission matrix is parsed by the API conformance test
+
 ## [self-hosting/](./self-hosting/) — run the Selva app
 
 For operators deploying and running `@selvajs/selva`. Covers getting a first
