@@ -131,13 +131,6 @@ export async function runMigrate(
 	);
 	const pkgDiff = diffPackageJson(before, target);
 
-	const configPath = join(dir, 'selva.config.js');
-	const hasStaleConfig = existsSync(configPath);
-
-	const ecoPath = join(dir, 'ecosystem.config.cjs');
-	const ecoHasStaleRuntime =
-		existsSync(ecoPath) && readFileSync(ecoPath, 'utf8').includes('@selvajs/runtime');
-
 	// The server drops its read-old-name shim after one minor version, so
 	// rewriting now is what keeps a tuned value tuned instead of silently
 	// reverting to defaults later.
@@ -148,14 +141,6 @@ export async function runMigrate(
 		: { text: '', changes: [] };
 
 	const sideFileChanges = [];
-	if (hasStaleConfig)
-		sideFileChanges.push(
-			`${pc.red('-')} selva.config.js ${pc.dim('(no longer needed; providers are env-driven)')}`
-		);
-	if (ecoHasStaleRuntime)
-		sideFileChanges.push(
-			`${pc.yellow('~')} ecosystem.config.cjs ${pc.dim('(rewrite: @selvajs/runtime → @selvajs/selva)')}`
-		);
 	for (const [oldName, newName, action] of envRename.changes) {
 		sideFileChanges.push(
 			action === 'dropped'
@@ -213,27 +198,10 @@ export async function runMigrate(
 	// later migration cannot overwrite this one's (#184).
 	const stamp = backupStamp();
 	const bakPath = backupPathFor(pkgPath, stamp);
-	const configBak = backupPathFor(configPath, stamp);
-	const ecoBak = backupPathFor(ecoPath, stamp);
 	const envBak = backupPathFor(envPath, stamp);
 
 	copyFileSync(pkgPath, bakPath);
 	writeFileSync(pkgPath, JSON.stringify(target, null, 2) + '\n', 'utf8');
-
-	if (hasStaleConfig) {
-		copyFileSync(configPath, configBak);
-		rmSync(configPath, { force: true });
-	}
-
-	if (ecoHasStaleRuntime) {
-		copyFileSync(ecoPath, ecoBak);
-		// Text substitution, not regeneration, so any operator customizations to the file survive.
-		const ecoContent = readFileSync(ecoPath, 'utf8').replace(
-			/@selvajs\/runtime/g,
-			'@selvajs/selva'
-		);
-		writeFileSync(ecoPath, ecoContent, 'utf8');
-	}
 
 	if (envRename.changes.length > 0) {
 		copyFileSync(envPath, envBak);
@@ -263,12 +231,6 @@ export async function runMigrate(
 	} catch (err) {
 		s.stop(pc.red('npm install failed — rolling back'));
 		copyFileSync(bakPath, pkgPath);
-		if (hasStaleConfig && existsSync(configBak)) {
-			copyFileSync(configBak, configPath);
-		}
-		if (ecoHasStaleRuntime && existsSync(ecoBak)) {
-			copyFileSync(ecoBak, ecoPath);
-		}
 		if (envRename.changes.length > 0 && existsSync(envBak)) {
 			copyFileSync(envBak, envPath);
 		}
@@ -306,8 +268,6 @@ export async function runMigrate(
 	if (pm2Notice) p.log.warn(pm2Notice);
 
 	const backupHints = [`package.json.${stamp}.bak`];
-	if (hasStaleConfig) backupHints.push(`selva.config.js.${stamp}.bak`);
-	if (ecoHasStaleRuntime) backupHints.push(`ecosystem.config.cjs.${stamp}.bak`);
 	if (envRename.changes.length > 0) backupHints.push(`.env.${stamp}.bak`);
 
 	if (status === 0) {
@@ -480,14 +440,6 @@ export function detectDrift(pkgJson, dir) {
 	}
 
 	if (dir) {
-		const configPath = join(dir, 'selva.config.js');
-		if (existsSync(configPath)) {
-			reasons.push('selva.config.js is no longer needed (providers are env-driven)');
-		}
-		const ecoPath = join(dir, 'ecosystem.config.cjs');
-		if (existsSync(ecoPath) && readFileSync(ecoPath, 'utf8').includes('@selvajs/runtime')) {
-			reasons.push('ecosystem.config.cjs still references @selvajs/runtime');
-		}
 		const envPath = join(dir, '.env');
 		if (existsSync(envPath)) {
 			const { changes } = renameEnvKeys(readFileSync(envPath, 'utf8'), RENAMED_ENV_VARS);

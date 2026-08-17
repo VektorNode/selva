@@ -35,12 +35,11 @@ Flags, if you need them:
 
 ### What lands in the directory
 
-| File                   | What it's for                                                       |
-| ---------------------- | ------------------------------------------------------------------- |
-| `.env`                 | All config, including two secrets you should back up. See below.    |
-| `ecosystem.config.cjs` | Tells pm2 how to run the app.                                       |
-| `package.json`         | Depends on `@selvajs/selva`, `@selvajs/cli`, and a pinned `pm2`.    |
-| `.selva-version`       | Marks the scaffold layout so `selva migrate` knows what to upgrade. |
+| File                   | What it's for                                                    |
+| ---------------------- | ---------------------------------------------------------------- |
+| `.env`                 | All config, including two secrets you should back up. See below. |
+| `ecosystem.config.cjs` | Tells pm2 how to run the app.                                    |
+| `package.json`         | Depends on `@selvajs/selva`, `@selvajs/cli`, and a pinned `pm2`. |
 
 **Back up `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` from `.env`.** They're generated once, at create time. Losing the first logs everyone out; losing the second makes your stored Rhino.Compute API key unreadable. Every setting in the file is documented inline in [`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example).
 
@@ -64,6 +63,7 @@ Run these from the deployment directory.
 | `selva update`                      | Updates the `@selvajs/*` packages and restarts.                    |
 | `selva init`                        | Re-asks the setup questions and rewrites `.env`.                   |
 | `selva migrate`                     | Brings an old deployment onto the current scaffold layout.         |
+| `selva setup-proxy`                 | Installs and configures Caddy with TLS in front of the app.        |
 | `selva keys rotate <hmac\|at-rest>` | Replaces a secret. Destructive; see below.                         |
 
 `npm start`, `npm run stop`, `npm run restart`, `npm run logs`, `npm run doctor`, and `npm run update` alias the matching `selva` commands.

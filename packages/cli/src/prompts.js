@@ -48,7 +48,9 @@ const FLAG_NAMES = FLAG_OPTIONS.map((o) => o.value);
  * `single`, where one org makes both settings describe the same set.
  */
 export function promptableFlags(tenancy) {
-	return FLAG_OPTIONS.filter((o) => o.promptable !== false && (tenancy === 'multi' || !o.multiOnly));
+	return FLAG_OPTIONS.filter(
+		(o) => o.promptable !== false && (tenancy === 'multi' || !o.multiOnly)
+	);
 }
 
 function envBool(v) {

@@ -59,16 +59,25 @@ Choose `supabase` for auth, data, and storage, and paste the three values when p
 Selecting a Supabase provider makes the scaffold depend on `@selvajs/supabase-provider`, which carries the migration SQL. Copy it into your deployment, then let the Supabase CLI apply it:
 
 ```bash
-npx selva-supabase sync-migrations   # copies into ./supabase/migrations
-npx supabase login
+npx selva-supabase                   # copies into ./supabase/migrations
 npx supabase link --project-ref <your-ref>
-npx supabase db diff                 # review before writing anything
 npx supabase db push
 ```
 
-`supabase login` opens a browser. On a headless server, run the login/link/push part from a workstation instead — it talks to Supabase, not to your deployment, so it doesn't matter which machine it runs from.
+`selva-supabase` takes no subcommand — copying the migrations is all it does. It prints one line per file and ends with a count; re-running it is safe, since unchanged files are skipped.
 
-Deployments scaffolded before this dependency existed have no migrations on disk, and `npx selva-supabase` fails with a 404 from the npm registry. Run `selva migrate` to add the package, then `npm install`.
+Authenticate before `link`. `npx supabase login` prints a URL and waits for a verification code, which means a browser — on a headless server, paste the URL into a browser anywhere and type the code back into the waiting terminal. An access token skips the handshake entirely and is the easier path over SSH:
+
+```bash
+# Create one at https://supabase.com/dashboard/account/tokens
+export SUPABASE_ACCESS_TOKEN=sbp_...
+```
+
+`link` may then ask for the project's database password — set when the project was created, resettable under Dashboard → **Project Settings** → **Database**.
+
+None of this has to run on the deployment host. `db push` connects to Supabase, not to your app, so a workstation with the repo checked out works just as well.
+
+If `npx selva-supabase` fails with a 404 from the npm registry, the package isn't installed — check `node_modules/@selvajs/supabase-provider` exists and run `npm install` if it doesn't.
 
 ### 4. Create the storage buckets
 

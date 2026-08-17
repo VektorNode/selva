@@ -34,7 +34,10 @@ function legacyDeployment() {
 		JSON.stringify({
 			name: 'legacy',
 			version: '0.1.0',
-			dependencies: { '@selvajs/runtime': '1.0.0', '@selvajs/platform': '1.0.0' }
+			// Both are dropped, by different mechanisms: @selvajs/platform is a
+			// LEGACY_DEPENDENCIES entry, while an unrecognised package goes simply
+			// because migrate replaces `dependencies` wholesale.
+			dependencies: { '@selvajs/platform': '1.0.0', 'some-operator-addition': '1.0.0' }
 		}),
 		'utf8'
 	);
@@ -107,7 +110,7 @@ test('a failed install restores the dependency tree and restarts the app', async
 
 	// package.json and the lockfile are back on the pre-migration layout.
 	const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-	assert.ok(pkg.dependencies['@selvajs/runtime'], 'package.json rolled back');
+	assert.ok(pkg.dependencies['@selvajs/platform'], 'package.json rolled back');
 	assert.ok(existsSync(join(dir, 'package-lock.json')), 'lockfile restored');
 
 	// A stopped app is the operator-visible half of this bug: migrate stops
@@ -134,7 +137,12 @@ test('a successful migration rewrites the layout and leaves no stash', async (t)
 	});
 
 	const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-	assert.equal(pkg.dependencies['@selvajs/runtime'], undefined, 'legacy dep dropped');
+	assert.equal(pkg.dependencies['@selvajs/platform'], undefined, 'legacy dep dropped');
+	assert.equal(
+		pkg.dependencies['some-operator-addition'],
+		undefined,
+		'dependencies replaced wholesale'
+	);
 	assert.ok(pkg.dependencies['@selvajs/selva'], 'runtime added');
 	assert.equal(pkg.scripts.start, 'selva start');
 
@@ -166,7 +174,11 @@ test('a second migration does not overwrite the first migration backup (#184)', 
 	const first = backupsIn(dir, 'package.json');
 	assert.equal(first.length, 1);
 	const original = readFileSync(join(dir, first[0]), 'utf8');
-	assert.match(original, /@selvajs\/runtime/, 'the first backup holds the pre-migration config');
+	assert.match(
+		original,
+		/some-operator-addition/,
+		'the first backup holds the pre-migration config'
+	);
 
 	// Re-introduce drift so the second run has something to do — an already-current
 	// deployment hits the idempotence guard and never writes a backup at all.

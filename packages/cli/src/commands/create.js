@@ -9,12 +9,7 @@ import pc from 'picocolors';
 import { collectConfig, collectConfigFromEnv } from '../prompts.js';
 import { generateKey } from '../secrets.js';
 import { writeEnvFile } from '../env.js';
-import {
-	isEmptyOrMissing,
-	requiredNodeRange,
-	runtimeTemplatePath,
-	scaffoldVersion
-} from '../paths.js';
+import { isEmptyOrMissing, requiredNodeRange, runtimeTemplatePath } from '../paths.js';
 import {
 	buildDeploymentPackageJson,
 	needsSupabaseProvider,
@@ -97,7 +92,6 @@ export async function runCreate(argv) {
 			`Couldn't read runtime templates from ${dirname(envTemplatePath)}. ` +
 				`Run \`npm install\`, then \`selva init\` to finish setup.`
 		);
-		writeFileSync(join(targetDir, '.selva-version'), scaffoldVersion() + '\n', 'utf8');
 		p.outro(`Partial scaffold at ${pc.cyan(targetDir)}.`);
 		return;
 	}
@@ -106,23 +100,71 @@ export async function runCreate(argv) {
 
 	cpSync(ecosystemTemplatePath, join(targetDir, 'ecosystem.config.cjs'));
 
-	writeFileSync(join(targetDir, '.selva-version'), scaffoldVersion() + '\n', 'utf8');
 	writeGitignore(targetDir);
 
-	p.outro(
-		[
-			pc.green('Scaffolded ' + pc.cyan(targetDir)),
-			'',
-			pc.bold('Next steps:'),
-			`  cd ${rawDir}`,
-			`  npm run doctor         # sanity-check the install`,
-			`  npm start              # pm2 start ecosystem.config.cjs`,
-			'',
-			values.ORIGIN
-				? `Then visit ${pc.cyan(values.ORIGIN)} (set up your reverse proxy first).`
-				: `Then visit ${pc.cyan('http://localhost:3000')}.`
-		].join('\n')
+	p.outro(nextSteps({ rawDir, values, supabase }).join('\n'));
+}
+
+/**
+ * The remaining work, in the order it has to happen.
+ *
+ * Ordered by dependency, not by importance: the schema has to exist before the
+ * app can serve a request, and the proxy has to terminate TLS before a browser
+ * will keep the session cookie. A list that mentioned them in any other order
+ * would have the operator debugging a 503 or a login loop that the next step
+ * was about to fix.
+ */
+function nextSteps({ rawDir, values, supabase }) {
+	const lines = [
+		pc.green('Scaffolded ' + pc.cyan(targetDirLabel(rawDir))),
+		'',
+		pc.bold('Next steps:')
+	];
+	let n = 1;
+
+	lines.push(`  ${n++}. cd ${rawDir}`);
+
+	if (supabase) {
+		lines.push(
+			`  ${n++}. Apply the database schema (once per Supabase project):`,
+			pc.dim('       npx selva-supabase          # copy migrations into ./supabase'),
+			pc.dim('       npx supabase link --project-ref <ref>'),
+			pc.dim('       npx supabase db push')
+		);
+	}
+
+	lines.push(
+		`  ${n++}. npm run doctor${pc.dim('       # verify config, schema, and boot persistence')}`
 	);
+	lines.push(`  ${n++}. npm start${pc.dim('            # start under pm2')}`);
+
+	if (values.ORIGIN?.startsWith('https://')) {
+		lines.push(
+			`  ${n++}. npx selva setup-proxy${pc.dim(' # Caddy + TLS for ' + hostOf(values.ORIGIN))}`
+		);
+	}
+
+	lines.push(
+		'',
+		values.ORIGIN
+			? `Then visit ${pc.cyan(values.ORIGIN)} and open ${pc.cyan('/setup')} to claim admin.`
+			: `Then visit ${pc.cyan('http://localhost:3000')} and open ${pc.cyan('/setup')} to claim admin.`,
+		'',
+		pc.dim('`npm run doctor --fix` repairs what it can, including pm2 boot persistence.')
+	);
+	return lines;
+}
+
+function targetDirLabel(rawDir) {
+	return resolve(rawDir);
+}
+
+function hostOf(origin) {
+	try {
+		return new URL(origin).host;
+	} catch {
+		return origin;
+	}
 }
 
 function runNpmInstall(cwd) {
@@ -158,7 +200,6 @@ function runNpmInstall(cwd) {
 			shell: process.platform === 'win32'
 		});
 
-		let sawBrokenVersion = false;
 		const handleStream = (stream) => {
 			let buf = '';
 			stream.setEncoding('utf8');
@@ -169,7 +210,6 @@ function runNpmInstall(cwd) {
 				for (const line of lines) {
 					remember(line);
 					updateProgress(line);
-					if (line.includes('@selvajs/selva@0.10.2')) sawBrokenVersion = true;
 				}
 			});
 			stream.on('end', () => {
@@ -202,19 +242,19 @@ function runNpmInstall(cwd) {
 			for (const line of tail) console.error(line);
 			console.error(pc.dim('──────────────────────────────'));
 
-			if (sawBrokenVersion) {
-				console.error('');
-				console.error(
-					pc.yellow(
-						'npm resolved @selvajs/selva@0.10.2 — that version is broken (unresolved\n' +
-							'workspace:* / catalog: specs) and has been unpublished. Your local npm\n' +
-							'cache is stale. Clear it and retry:\n\n' +
-							'  npm cache clean --force\n' +
-							'  rm -rf node_modules package-lock.json\n' +
-							'  npm install --prefer-online'
-					)
-				);
-			}
+			// A stale npm cache resolves versions that no longer exist on the
+			// registry, and the error it produces names the package rather than the
+			// cache — so this is worth suggesting on any install failure.
+			console.error('');
+			console.error(
+				pc.yellow(
+					'If the output above names a version that cannot be resolved, the local\n' +
+						'npm cache is stale. Clear it and retry:\n\n' +
+						'  npm cache clean --force\n' +
+						'  rm -rf node_modules package-lock.json\n' +
+						'  npm install --prefer-online'
+				)
+			);
 
 			rejectP(new Error(`npm install exited with code ${code}`));
 		});

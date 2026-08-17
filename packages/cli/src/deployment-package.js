@@ -136,16 +136,16 @@ export const OVERRIDES = {
 };
 
 /**
- * Legacy `@selvajs/*` packages that a deployment may still list. Each was
- * either renamed or folded into `@selvajs/selva`; `migrate` drops them and
- * `doctor` reports them as layout drift.
+ * Packages folded into `@selvajs/selva` that a deployment may still list.
+ * `migrate` drops them and `doctor` reports them as layout drift.
+ *
+ * Only ones still on the registry are listed: an unpublished package fails
+ * `npm install` outright, so a deployment carrying one never reaches a state
+ * where this could report it — npm's own error is the diagnosis there.
  */
 export const LEGACY_DEPENDENCIES = {
-	'@selvajs/runtime': 'the old runtime package',
-	'@selvajs/create': 'the old CLI package',
 	'@selvajs/platform': 'now bundled into @selvajs/selva',
-	'@selvajs/local-provider': 'now bundled into @selvajs/selva',
-	'@selvajs/header-auth-provider': 'now bundled into @selvajs/selva'
+	'@selvajs/local-provider': 'now bundled into @selvajs/selva'
 };
 
 /**

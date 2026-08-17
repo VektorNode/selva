@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process';
 import { posix as path } from 'node:path';
 import { homedir } from 'node:os';
 import { green, red, yellow, fixable } from './result.js';
+import { escalationHint, runPrivileged } from './privileged.js';
 
 /** The real OS. Tests pass a stand-in with the same shape. */
 export const systemEnv = {
@@ -34,7 +35,8 @@ export const systemEnv = {
 			return false;
 		}
 	},
-	run: (cmd, args, opts) => spawnSync(cmd, args, { ...opts, encoding: 'utf8' })
+	run: (cmd, args, opts) => spawnSync(cmd, args, { ...opts, encoding: 'utf8' }),
+	runPrivileged: (cmd, args, opts) => runPrivileged(cmd, args, opts)
 };
 
 export function checkBootPersistence(dir, env = systemEnv) {
@@ -80,7 +82,12 @@ function checkSystemdUnit(dir, env) {
 			yellow(
 				'pm2 systemd boot unit not installed — the app will NOT restart after a ' +
 					'reboot. Run `npx pm2 startup systemd -u $USER --hp $HOME` and paste the ' +
-					'printed command (point it at this deployment’s pm2).'
+					'printed command (point it at this deployment’s pm2).',
+				user
+					? fixable('install the pm2 systemd boot unit (needs sudo)', () =>
+							installBootUnit(dir, user, env)
+						)
+					: undefined
 			)
 		];
 	}
@@ -106,9 +113,72 @@ function checkSystemdUnit(dir, env) {
 				`Reboots will resurrect via the wrong pm2 (version skew). Re-run startup ` +
 				`with the local binary:\n     ` +
 				`sudo env PATH=$PATH:${path.join(dir, 'node_modules', '.bin')} ${localPm2} ` +
-				`startup systemd -u $USER --hp $HOME`
+				`startup systemd -u $USER --hp $HOME`,
+			fixable('repoint the boot unit at this deployment’s pm2 (needs sudo)', () =>
+				installBootUnit(dir, user, env)
+			)
 		)
 	];
+}
+
+/**
+ * Install (or overwrite) the pm2 systemd unit so it resurrects via this
+ * deployment's pm2.
+ *
+ * pm2's own `startup` subcommand doesn't write the unit when run unprivileged —
+ * it prints a `sudo env PATH=… pm2 startup …` line for the operator to paste.
+ * Rather than parse that line, this runs the same command through `sudo`
+ * directly: PATH carries the deployment's `.bin` so systemd's generated
+ * ExecStart resolves to the local pm2 rather than whichever one is on root's
+ * PATH — the exact skew the wrong-unit branch above exists to catch.
+ *
+ * A unit without a saved process list resurrects nothing, so `pm2 save` runs
+ * after. Reporting it separately keeps a save failure from reading as a failed
+ * unit install.
+ */
+function installBootUnit(dir, user, env) {
+	const localPm2 = path.join(dir, 'node_modules', 'pm2', 'bin', 'pm2');
+	if (!env.exists(localPm2)) {
+		return red('pm2 not installed in this deployment — run `npm install` first');
+	}
+
+	const home = env.env().HOME ?? env.homedir();
+	const binDir = path.join(dir, 'node_modules', '.bin');
+	const result = env.runPrivileged(
+		'env',
+		[
+			`PATH=${env.env().PATH ?? ''}:${binDir}`,
+			localPm2,
+			'startup',
+			'systemd',
+			'-u',
+			user,
+			'--hp',
+			home
+		],
+		{ cwd: dir }
+	);
+
+	if (result.blocked) {
+		return yellow(
+			`could not escalate — ${escalationHint(result.reason)}. Run this yourself:\n     ` +
+				result.command
+		);
+	}
+	if (!result.ok) {
+		return red(
+			`pm2 startup failed (exit ${result.status}). Run it manually:\n     ` + result.command
+		);
+	}
+
+	const saved = env.run(path.join(binDir, 'pm2'), ['save'], { cwd: dir });
+	if ((saved.status ?? 1) !== 0) {
+		return yellow(
+			'boot unit installed, but `pm2 save` failed — a reboot would resurrect an ' +
+				'empty process list. Run `npx pm2 save` once the app is started.'
+		);
+	}
+	return green('pm2 systemd boot unit installed and process list saved');
 }
 
 // A pm2 outside the deployment is the root cause of daemon version skew.

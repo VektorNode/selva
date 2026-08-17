@@ -180,50 +180,6 @@ export function readEnvFile(path) {
 	return parseEnv(readFileSync(path, 'utf8'));
 }
 
-export function mergeEnv(template, values) {
-	const seen = new Set();
-	const lines = template.split(/\r?\n/);
-	const out = [];
-
-	for (const line of lines) {
-		const stripped = line.trim();
-		if (!stripped || stripped.startsWith('#')) {
-			out.push(line);
-			continue;
-		}
-		const eq = stripped.indexOf('=');
-		if (eq === -1) {
-			out.push(line);
-			continue;
-		}
-		const key = stripped.slice(0, eq).trim();
-		if (Object.prototype.hasOwnProperty.call(values, key)) {
-			out.push(`${key}=${quoteIfNeeded(values[key])}`);
-			seen.add(key);
-		} else {
-			out.push(line);
-		}
-	}
-
-	const appended = [];
-	for (const [key, value] of Object.entries(values)) {
-		if (seen.has(key)) continue;
-		if (value === undefined || value === null || value === '') continue;
-		appended.push(`${key}=${quoteIfNeeded(value)}`);
-	}
-
-	if (appended.length > 0) {
-		if (out.length > 0 && out[out.length - 1].trim() !== '') out.push('');
-		out.push('# ============================================================================');
-		out.push('# Additional values written by the Selva CLI');
-		out.push('# ============================================================================');
-		out.push(...appended);
-	}
-
-	while (out.length > 0 && out[out.length - 1] === '') out.pop();
-	return out.join('\n') + '\n';
-}
-
 /**
  * Render a values-only `.env` — the scaffold's default shape.
  *
@@ -265,14 +221,9 @@ export function renderEnvValues(template, values, { header = ENV_HEADER } = {}) 
 	return header ? `${header}\n\n${lines.join('\n')}\n` : `${lines.join('\n')}\n`;
 }
 
-/**
- * Writes the deployment `.env`. Values-only by default — pass
- * `{ annotated: true }` to merge into the template's comments instead, which
- * only an operator who explicitly wants the old shape should do.
- */
-export function writeEnvFile(path, template, values, { annotated = false } = {}) {
-	const text = annotated ? mergeEnv(template, values) : renderEnvValues(template, values);
-	writeFileSync(path, text, 'utf8');
+/** Writes the deployment `.env` — values only, in the template's key order. */
+export function writeEnvFile(path, template, values) {
+	writeFileSync(path, renderEnvValues(template, values), 'utf8');
 }
 
 /**

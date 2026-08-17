@@ -76,9 +76,10 @@ fi
 # ----------------------------------------------------------------------------
 # 3. Caddy in front of 127.0.0.1:3000 (prod mode, Let's Encrypt).
 #
-# Inlined from scripts/setup-caddy.sh (prod path). The dev / HTTP path lives
-# in that script for manual setup; for Terraform we only ship the prod path
-# so there's one fewer way to footgun the deploy.
+# Kept byte-identical to what `selva setup-proxy` generates
+# (packages/cli/src/caddyfile.js). Two deployment routes, one edge config: any
+# change here has to land there too, or a Terraform host and a hand-built one
+# stop behaving the same way.
 # ----------------------------------------------------------------------------
 if ! command -v caddy >/dev/null 2>&1; then
   apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl

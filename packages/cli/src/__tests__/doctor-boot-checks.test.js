@@ -27,7 +27,8 @@ function fakeEnv({
 	unit = `ExecStart=${LOCAL_PM2} resurrect`,
 	PATH = '',
 	writable = true,
-	run = () => ({ status: 0 })
+	run = () => ({ status: 0 }),
+	runPrivileged = () => ({ ok: true, blocked: false, status: 0, command: 'sudo …' })
 } = {}) {
 	const present = new Set(files);
 	return {
@@ -40,7 +41,8 @@ function fakeEnv({
 			return unit;
 		},
 		isWritable: () => writable,
-		run
+		run,
+		runPrivileged
 	};
 }
 
@@ -108,8 +110,98 @@ test('a missing systemd unit warns that the app will not survive a reboot', () =
 	const checks = checkBootPersistence(DIR, fakeEnv({ files: [DUMP] }));
 	assert.equal(checks[1].severity, 'yellow');
 	assert.match(checks[1].line, /will NOT restart after a reboot/);
-	// Installing it needs root, so doctor prints instructions instead.
-	assert.equal(checks[1].fix, undefined);
+	// The advice stays in the line: --fix is opt-in, and an operator reading a
+	// plain `doctor` run still needs the command.
+	assert.match(checks[1].line, /pm2 startup systemd/);
+});
+
+test('installing the boot unit runs pm2 startup through sudo, then saves', () => {
+	// The two halves are one repair: a unit with no saved process list
+	// resurrects nothing, which looks identical to no unit at all after a reboot.
+	const privileged = [];
+	const plain = [];
+	const checks = checkBootPersistence(
+		DIR,
+		fakeEnv({
+			files: [DUMP, LOCAL_PM2],
+			runPrivileged: (cmd, args) => {
+				privileged.push([cmd, ...args].join(' '));
+				return { ok: true, blocked: false, status: 0, command: 'sudo …' };
+			},
+			run: (cmd, args) => {
+				plain.push([cmd, ...args].join(' '));
+				return { status: 0 };
+			}
+		})
+	);
+	const result = checks[1].fix.run();
+
+	assert.equal(result.severity, 'green');
+	assert.equal(privileged.length, 1);
+	assert.match(privileged[0], /pm2 startup systemd -u selva --hp \/home\/selva/);
+	// PATH carries the deployment's .bin so the unit systemd writes resolves to
+	// the local pm2 — without it root's own pm2 wins and we recreate the skew.
+	assert.match(privileged[0], /node_modules\/\.bin/);
+	assert.ok(
+		plain.some((c) => /pm2 save/.test(c)),
+		`expected a pm2 save, got: ${JSON.stringify(plain)}`
+	);
+});
+
+test('a blocked escalation prints the command instead of half-applying it', () => {
+	// No sudo, or no TTY to answer for it. The operator has to run it elsewhere,
+	// so the exact line matters more than the failure.
+	const checks = checkBootPersistence(
+		DIR,
+		fakeEnv({
+			files: [DUMP, LOCAL_PM2],
+			runPrivileged: () => ({
+				ok: false,
+				blocked: true,
+				reason: 'no-sudo',
+				command: 'sudo env PATH=… pm2 startup systemd -u selva --hp /home/selva'
+			})
+		})
+	);
+	const result = checks[1].fix.run();
+
+	assert.equal(result.severity, 'yellow');
+	assert.match(result.line, /sudo is not available/);
+	assert.match(result.line, /pm2 startup systemd/, 'the command is printed to run by hand');
+});
+
+test('a boot-unit repair without pm2 installed fails before escalating', () => {
+	// Asking for a sudo password and only then discovering there is no binary to
+	// point the unit at is the worst order to do this in.
+	let escalated = false;
+	const checks = checkBootPersistence(
+		DIR,
+		fakeEnv({
+			files: [DUMP],
+			runPrivileged: () => {
+				escalated = true;
+				return { ok: true, blocked: false, status: 0, command: '' };
+			}
+		})
+	);
+	const result = checks[1].fix.run();
+
+	assert.equal(result.severity, 'red');
+	assert.match(result.line, /pm2 not installed/);
+	assert.equal(escalated, false, 'must not prompt for sudo before checking');
+});
+
+test('a wrong-pm2 unit can be repointed rather than only reported', () => {
+	const checks = checkBootPersistence(
+		DIR,
+		fakeEnv({
+			files: [DUMP, UNIT, LOCAL_PM2],
+			unit: 'ExecStart=/usr/lib/node_modules/pm2/bin/pm2 resurrect'
+		})
+	);
+	assert.equal(checks[1].severity, 'red');
+	assert.ok(checks[1].fix, 'the skew is repairable — it is the same startup command');
+	assert.equal(checks[1].fix.run().severity, 'green');
 });
 
 test('a unit pointing at a different pm2 is a failure, not a warning', () => {
