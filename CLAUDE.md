@@ -155,7 +155,13 @@ Component authoring is covered by video, not prose. For the display wire format,
 
 ```bash
 pnpm dev:plugin             # plugin-ui dev server (http://localhost:5173)
-pnpm dev:selva              # Selva app dev server
+pnpm dev:selva              # Selva app, your own .env and .selva-data
+
+# Same app pinned to one auth provider, each on throwaway data —
+# for testing provider behaviour, not for daily work. scripts/DEV-PROVIDERS.md
+pnpm dev:local              # local provider (filesystem + password)
+pnpm dev:supabase           # Supabase CLI stack (Docker)
+pnpm dev:header             # forward-auth, the path Entra reaches (Caddy)
 
 pnpm build                  # every package in dep order, cached
 pnpm build --filter=@selvajs/selva

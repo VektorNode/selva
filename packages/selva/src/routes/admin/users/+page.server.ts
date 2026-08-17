@@ -1,7 +1,6 @@
 import type { PageServerLoad } from './$types';
 import type {
 	AuthUser,
-	Invite,
 	OrgMember,
 	OrgPermission,
 	OrgRole,
@@ -10,18 +9,16 @@ import type {
 import { getAuthProvider } from '$lib/server/auth.server';
 import { listAllOrgMembers } from '$lib/server/org-members.server';
 import {
-	getInviteStore,
 	getOrganizationProvider,
 	getPermissionStore,
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { assertManageInstanceUsers } from '$lib/server/access.server';
-import { flattenPermissions } from '$lib/server/permissions-compat.server';
 
 /**
- * The admin users UI renders permissions as one flat list today; scoped views
- * come later. Each user's `platformPermissions` + default-org permissions are
- * merged into a single `permissions` array on the returned UserRow.
+ * `orgRole` and `orgPermissions` are the acting org's membership, shown here
+ * read-only for context — this page edits platform scope only. Editing them
+ * belongs to /team/members, which gates on `manage_org_members`.
  *
  * `displayName` lives on `UserProfile`, not `AuthUser`. Profiles are
  * batch-loaded and merged into the row so the UI keeps one row per user.
@@ -31,7 +28,6 @@ export interface UserRow extends AuthUser {
 	platformPermissions: PlatformPermission[];
 	orgRole?: OrgRole;
 	orgPermissions: OrgPermission[];
-	permissions: Array<PlatformPermission | OrgPermission>;
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -39,10 +35,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const ctx = locals.ctx!;
 	const auth = getAuthProvider();
 	// Admins never set another user's password, so the only direct-create path is
-	// the passwordless allowlist. A provider without `createUser` (the local one)
-	// admits users by invite alone — `none` hides the form rather than pointing it
-	// at a route that would 501.
-	const userCreation: 'email-only' | 'none' = auth.createUser ? 'email-only' : 'none';
+	// the passwordless allowlist.
+	//
+	// `createUser` says the provider CAN allowlist, not that it SHOULD. A
+	// credential-owning provider (Supabase, local) admits users by invite — the
+	// invitee sets their own password — and offering both paths there is two
+	// buttons for one job. Worse on Supabase: allowlisting mints a confirmed
+	// row with no password, so unless magic-link or OAuth is configured the
+	// user it creates cannot sign in at all. Invite is the honest single path.
+	const userCreation: 'email-only' | 'none' =
+		auth.createUser && !auth.passwordAuth ? 'email-only' : 'none';
 	const providerInfo = { name: auth.name, userCreation };
 
 	let users: UserRow[] | null = null;
@@ -79,8 +81,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 					displayName: profile?.displayName ?? metadataDisplayName,
 					platformPermissions,
 					orgRole,
-					orgPermissions,
-					permissions: flattenPermissions(platformPermissions, orgPermissions)
+					orgPermissions
 				};
 			});
 		}
@@ -88,18 +89,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
 	}
 
-	// Pending + recently-accepted invites for the active org. Non-fatal if
-	// no active org yet (e.g. multi-tenant user not in any org).
-	let invites: Invite[] = [];
-	if (ctx.actingOrgId) {
-		try {
-			const page = await getInviteStore().listByOrg(ctx, ctx.actingOrgId, { limit: 100 });
-			invites = page.items;
-		} catch {
-			// Non-fatal — users page still renders without invite list
-		}
-	}
-
 	const isPlatformAdmin = ctx.platformPermissions.includes('instance_admin');
-	return { users, provider: providerInfo, invites, isPlatformAdmin };
+	return { users, provider: providerInfo, isPlatformAdmin };
 };

@@ -72,13 +72,31 @@ The plugin serves the WebSocket (port 8765 by default) and the page connects bac
 
 ## Providers
 
-|               | Local                       | Supabase                        |
-| ------------- | --------------------------- | ------------------------------- |
-| State         | JSON files on disk          | Postgres + Auth + Storage       |
-| External deps | none                        | Docker, for the local CLI stack |
-| Best for      | quick eval, single-instance | multi-instance, several tenants |
+|               | Local                       | Supabase                        | Header (forward auth)                 |
+| ------------- | --------------------------- | ------------------------------- | ------------------------------------- |
+| Slots         | auth, data, storage         | auth, data, storage             | auth only — pair with another         |
+| State         | JSON files on disk          | Postgres + Auth + Storage       | allowlist JSON; identity is the IdP's |
+| External deps | none                        | Docker, for the local CLI stack | a reverse proxy that authenticates    |
+| Best for      | quick eval, single-instance | multi-instance, several tenants | SSO behind Entra, Okta, oauth2-proxy  |
 
 The three provider slots (`SELVA_AUTH_PROVIDER`, `SELVA_DATA_PROVIDER`, `SELVA_STORAGE_PROVIDER`) are set independently and each defaults to `local`. Change them in `.env` and restart. Supabase also works as a managed project: point `SUPABASE_URL` at it and Docker isn't involved.
+
+`header` is auth-only and has no data or storage layer, so it is always paired — usually `SELVA_DATA_PROVIDER=local`. See the [`@selvajs/header-auth-provider` README](https://github.com/VektorNode/selva/blob/main/packages/providers/header-auth/README.md); it is the only provider whose security depends on configuration outside Selva, since it trusts identity headers the proxy is responsible for stripping and setting.
+
+### Trying a provider without committing your `.env`
+
+Editing `.env` back and forth to compare providers is avoidable. From a repo checkout:
+
+```bash
+pnpm dev:local       # local provider
+pnpm dev:supabase    # starts the Supabase CLI stack first
+pnpm dev:header      # starts a local Caddy that fakes the SSO headers
+```
+
+Each pins one provider, keeps its own throwaway data directory, and leaves your
+`.env` and `.selva-data/` untouched. Testing the header provider this way needs
+no identity provider at all. Details in
+[scripts/DEV-PROVIDERS.md](https://github.com/VektorNode/selva/blob/main/scripts/DEV-PROVIDERS.md).
 
 ## Troubleshooting
 

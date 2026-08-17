@@ -20,8 +20,13 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const supabaseDir = path.join(rootDir, 'packages', 'providers', 'supabase');
 const caddyfilePath = path.join(rootDir, 'scripts', '.dev-caddyfile');
 
-const APP_PORT = 5173;
-const PROXY_PORT = 8080;
+// Deliberately off vite's default 5173: this harness is meant to run alongside
+// whatever else you already have open, and every vite project claims 5173. The
+// app port is pinned rather than auto-hunted because the generated Caddyfile
+// hard-codes it — a drifting app port would leave the proxy silently forwarding
+// to someone else's dev server. Override both if they collide anyway.
+const APP_PORT = Number(process.env.SELVA_DEV_PORT ?? 5273);
+const PROXY_PORT = Number(process.env.SELVA_DEV_PROXY_PORT ?? 8080);
 
 const PROVIDERS = new Set(['local', 'supabase', 'header']);
 
@@ -97,6 +102,33 @@ function has(command) {
 	return probe.status === 0;
 }
 
+/**
+ * Both ports are pinned, so a conflict has to be reported here. Vite's own
+ * "port in use" error names no owner, and Caddy's is worse: it binds happily and
+ * forwards to whatever already sits on APP_PORT — another project's dev server,
+ * served as though it were Selva.
+ */
+async function assertPortFree(port, label) {
+	const net = await import('node:net');
+	await new Promise((resolve) => {
+		const probe = net
+			.createServer()
+			.once('error', (err) => {
+				if (err.code !== 'EADDRINUSE') return resolve();
+				const flag = label === 'app' ? 'SELVA_DEV_PORT' : 'SELVA_DEV_PROXY_PORT';
+				console.error(
+					`\nPort ${port} (${label}) is already in use — likely another dev server.\n` +
+						`Stop it, or pick another port:  ${flag}=<port> pnpm dev:${provider}\n`
+				);
+				process.exit(1);
+			})
+			.once('listening', () => probe.close(resolve))
+			// No host: bind every family. Probing 127.0.0.1 alone would miss a
+			// process holding ::1, which is exactly what vite takes on Windows.
+			.listen(port);
+	});
+}
+
 // ============================================================================
 // Provider-specific setup
 // ============================================================================
@@ -135,7 +167,10 @@ function writeDevCaddyfile() {
 	request_header SELVA-Email "${persona.email}"
 	request_header SELVA-DisplayName "${persona.displayName}"
 
-	reverse_proxy 127.0.0.1:${APP_PORT}
+	# Host name, not 127.0.0.1: on Windows vite binds ::1 only, so an IPv4
+	# upstream gets connection-refused and Caddy answers 502. This resolves to
+	# whichever family vite actually took.
+	reverse_proxy localhost:${APP_PORT}
 }
 `;
 	fs.writeFileSync(caddyfilePath, config, 'utf-8');
@@ -167,6 +202,10 @@ Or skip the proxy and send the headers by hand:
 // Go
 // ============================================================================
 
+// Before anything is spawned: a failure here should leave nothing running.
+await assertPortFree(APP_PORT, 'app');
+if (provider === 'header') await assertPortFree(PROXY_PORT, 'proxy');
+
 if (provider === 'supabase') startSupabase();
 if (provider === 'header') startCaddy();
 
@@ -174,9 +213,15 @@ const url =
 	provider === 'header' ? `http://localhost:${PROXY_PORT}` : `http://localhost:${APP_PORT}`;
 console.info(`→ Provider "${provider}" — open ${url}\n`);
 
+// DATA_PATH is resolved against the CWD of the app process, and `pnpm --filter`
+// runs vite from packages/selva rather than from here. Passing an absolute path
+// through the environment (which outranks the .env file) pins the data
+// directory to the repo root no matter who launched what from where.
+const dataPath = path.join(rootDir, '.selva-data', `dev-${provider}`);
+
 // --strictPort, not vite's default port-hunting: the Caddyfile hard-codes
-// APP_PORT, so a vite that quietly moves to 5174 leaves the proxy pointing at
-// whatever else is on 5173. Failing to boot is the better outcome.
+// APP_PORT, so a vite that quietly moves one port up leaves the proxy pointing
+// at whatever else is there. Failing to boot is the better outcome.
 const app = run(
 	'pnpm',
 	[
@@ -191,7 +236,7 @@ const app = run(
 		String(APP_PORT),
 		'--strictPort'
 	],
-	{ cwd: rootDir }
+	{ cwd: rootDir, env: { ...process.env, DATA_PATH: dataPath } }
 );
 
 app.on('exit', (code) => shutdown(code ?? 0));

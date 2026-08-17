@@ -8,10 +8,22 @@ import {
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { getAuthProvider } from '$lib/server/auth.server';
+import { findAuthUserByEmail } from '$lib/server/auth-lookup.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 import { hashToken } from '$lib/server/invites/token.server';
 import { renderThrown } from '@selvajs/server/logging';
+
+/**
+ * Signup mode for an invite whose email has no account yet:
+ *   - `password` — the provider owns credentials; show password + confirm fields.
+ *   - `proxy`    — identity comes from upstream-proxy headers; the visit itself
+ *                  is the proof of identity and no password is collected.
+ */
+function signupMode(auth: ReturnType<typeof getAuthProvider>): 'password' | 'proxy' {
+	if (auth.passwordAuth) return 'password';
+	return auth.proxyAuth && auth.createUser ? 'proxy' : 'password';
+}
 
 /**
  * Public page — the invite token is the capability. `SYSTEM_CONTEXT` is
@@ -21,12 +33,14 @@ import { renderThrown } from '@selvajs/server/logging';
  * The raw URL token is HMAC-hashed before lookup — the store sees only the
  * digest. Mirrors the share-link flow.
  *
- * Form mode is decided here once and surfaced to the UI:
- *   - `password` — the provider owns credentials; show password + confirm fields.
- *   - `proxy`    — identity comes from upstream-proxy headers; the visit itself
- *                  is the proof of identity and no password is collected.
+ * An invite addressed to an email that already has an account takes the `join`
+ * mode instead of signing up: there is nothing to create, only a membership to
+ * add. That branch demands a session, because the token proves the invite is
+ * genuine — not that the visitor is the person it names. Honouring it
+ * anonymously would let anyone holding a forwarded link join an org as someone
+ * else.
  */
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
 	const token = url.searchParams.get('token')?.trim();
 	if (!token) {
 		return { ok: false as const, reason: 'This invite link is missing a token.' };
@@ -39,17 +53,18 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const org = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, invite.orgId);
 	const auth = getAuthProvider();
-	const mode: 'password' | 'proxy' = auth.passwordAuth
-		? 'password'
-		: auth.proxyAuth && auth.createUser
-			? 'proxy'
-			: 'password';
+	const existing = await findAuthUserByEmail(auth, invite.email).catch(() => null);
+	const mode: 'password' | 'proxy' | 'join' = existing ? 'join' : signupMode(auth);
+
 	return {
 		ok: true as const,
 		email: invite.email,
 		orgName: org?.name ?? 'the organization',
 		token,
-		mode
+		mode,
+		// `join` only: whether the visitor is already signed in as the invitee,
+		// which decides between the confirm button and a sign-in prompt.
+		signedInAsInvitee: mode === 'join' && !!locals.user && locals.user.id === existing!.id
 	};
 };
 
@@ -76,11 +91,8 @@ export const actions = {
 		}
 
 		const auth = getAuthProvider();
-		const mode: 'password' | 'proxy' = auth.passwordAuth
-			? 'password'
-			: auth.proxyAuth && auth.createUser
-				? 'proxy'
-				: 'password';
+		const existing = await findAuthUserByEmail(auth, invite.email).catch(() => null);
+		const mode: 'password' | 'proxy' | 'join' = existing ? 'join' : signupMode(auth);
 
 		if (mode === 'password') {
 			if (!password || password.length < 8) {
@@ -91,24 +103,37 @@ export const actions = {
 			}
 		}
 
+		// The token says the invite is real; it does not say who is holding it.
+		// For a brand-new account that gap closes itself — accepting is what
+		// creates the identity. An existing account has to prove it is theirs.
+		if (mode === 'join' && locals.user?.id !== existing!.id) {
+			return fail(401, {
+				error: `${invite.email} already has an account. Sign in as ${invite.email}, then open this link again to join.`
+			});
+		}
+
 		let user;
-		try {
-			if (mode === 'password' && auth.passwordAuth) {
-				user = await auth.passwordAuth.createUserWithPassword(invite.email, password!);
-			} else if (mode === 'proxy' && auth.createUser) {
-				// Forward-auth allowlist entry — the operator is currently behind the
-				// trusted proxy, so the next request will identify them via headers
-				// and mint a session. No password to collect, no token to set here.
-				user = await auth.createUser(invite.email);
-			} else {
-				return fail(501, { error: 'This provider does not support invite-based signup.' });
+		if (mode === 'join') {
+			user = existing!;
+		} else {
+			try {
+				if (mode === 'password' && auth.passwordAuth) {
+					user = await auth.passwordAuth.createUserWithPassword(invite.email, password!);
+				} else if (mode === 'proxy' && auth.createUser) {
+					// Forward-auth allowlist entry — the operator is currently behind the
+					// trusted proxy, so the next request will identify them via headers
+					// and mint a session. No password to collect, no token to set here.
+					user = await auth.createUser(invite.email);
+				} else {
+					return fail(501, { error: 'This provider does not support invite-based signup.' });
+				}
+			} catch (err) {
+				// The account is created before the invite is consumed on purpose: a
+				// failed signup must leave the invite usable. A re-submit is caught by
+				// the `!invite` guard above, which already returns 410.
+				const msg = err instanceof Error ? err.message : 'Could not create your account.';
+				return fail(400, { error: msg });
 			}
-		} catch (err) {
-			// The account is created before the invite is consumed on purpose: a
-			// failed signup must leave the invite usable. A re-submit is caught by
-			// the `!invite` guard above, which already returns 410.
-			const msg = err instanceof Error ? err.message : 'Could not create your account.';
-			return fail(400, { error: msg });
 		}
 
 		try {
@@ -130,33 +155,43 @@ export const actions = {
 				}
 			}
 
-			const joinedAt = new Date().toISOString();
-			await getOrganizationProvider().addOrgMember(SYSTEM_CONTEXT, {
-				orgId: invite.orgId,
-				userId: user.id,
-				role: invite.orgRole,
-				permissions: invite.orgPermissions,
-				joinedAt,
-				updatedAt: joinedAt,
-				updatedBy: invite.invitedBy,
-				deletedAt: null
-			});
+			const orgs = getOrganizationProvider();
+			// `addOrgMember` upserts, so accepting a second invite to an org the
+			// user is already in would overwrite their role — a `member` invite
+			// would demote an owner. Consume the invite and leave them as they are.
+			const alreadyMember = await orgs.getOrgMember(SYSTEM_CONTEXT, invite.orgId, user.id);
+			if (!alreadyMember) {
+				const joinedAt = new Date().toISOString();
+				await orgs.addOrgMember(SYSTEM_CONTEXT, {
+					orgId: invite.orgId,
+					userId: user.id,
+					role: invite.orgRole,
+					permissions: invite.orgPermissions,
+					joinedAt,
+					updatedAt: joinedAt,
+					updatedBy: invite.invitedBy,
+					deletedAt: null
+				});
+			}
 			await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
 		} catch (err) {
 			locals.log.error('Post-signup wiring failed', {
 				component: 'accept-invite',
 				err: renderThrown(err)
 			});
-			// The user account exists; surface a softer failure rather than a
-			// blank 500. They can still log in — an admin can add membership.
+			// The account is intact either way; surface a softer failure rather
+			// than a blank 500. An admin can add the membership by hand.
 			return fail(500, {
 				error:
-					'Your account was created, but we could not finish joining the organization. Please contact your admin.'
+					mode === 'join'
+						? 'We could not add you to the organization. Please contact your admin.'
+						: 'Your account was created, but we could not finish joining the organization. Please contact your admin.'
 			});
 		}
 
-		// Best-effort display name update — never blocks the signup
-		if (displayName) {
+		// Best-effort display name update — never blocks the signup. Skipped when
+		// joining: that profile is the user's own, not this invite's to rename.
+		if (displayName && mode !== 'join') {
 			try {
 				// User has just been created and isn't yet logged in — no ctx available.
 				// SYSTEM_CONTEXT is the right shape for an internal post-signup write.
@@ -179,6 +214,9 @@ export const actions = {
 		// Proxy mode: nothing to mint here. The very next request hits
 		// hooks.server.ts → proxyAuth.identifyFromHeaders → matches the
 		// allowlist row we just created → session attached transparently.
-		redirect(303, '/admin');
+		//
+		// Join mode: the session already in play is the one that proved identity,
+		// and an existing user lands in the app rather than the admin shell.
+		redirect(303, mode === 'join' ? '/library' : '/admin');
 	}
 } satisfies Actions;

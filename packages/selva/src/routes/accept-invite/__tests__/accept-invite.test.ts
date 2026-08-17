@@ -13,6 +13,9 @@ import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import {
 	freshProviders,
 	seedAcme,
+	seedOrg,
+	seedOrgMember,
+	seedUser,
 	actAs,
 	call,
 	grantPlatformPermissions,
@@ -54,7 +57,8 @@ async function mintFor(tp: TestProviders, email = INVITEE): Promise<string> {
  */
 async function submit(
 	token: string,
-	fields: Record<string, string> = {}
+	fields: Record<string, string> = {},
+	locals: Record<string, unknown> = {}
 ): Promise<{ status?: number; error?: string; redirected?: string; cookies: Map<string, string> }> {
 	const form = new FormData();
 	form.set('token', token);
@@ -69,7 +73,7 @@ async function submit(
 			delete: (n: string) => cookies.delete(n),
 			getAll: () => Array.from(cookies.entries()).map(([name, value]) => ({ name, value }))
 		},
-		locals: { log: { error: () => {}, warn: () => {}, info: () => {} } }
+		locals: { log: { error: () => {}, warn: () => {}, info: () => {} }, ...locals }
 	};
 
 	try {
@@ -386,5 +390,122 @@ describe('accept-invite grants platform permissions', () => {
 		const invited = await tp.authUsers.findByEmail(INVITEE);
 		const perms = await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, invited!.id);
 		expect(perms).toEqual([]);
+	});
+});
+
+/**
+ * Inviting an email that already has an account. Signing up is not an option —
+ * the provider would reject the duplicate — so the flow adds a membership to
+ * the account that exists. Multi-tenant is where this stops being hypothetical:
+ * one person, one login, several orgs.
+ */
+describe('accept-invite for an existing account', () => {
+	/**
+	 * Invite `email` to a second org, so accepting is a join and not a signup.
+	 * The inviter is Globex-only: `findUserMembership` returns the first
+	 * membership by insertion order, so an Acme member would act in Acme and
+	 * `requireActingOrg` would reject the mint.
+	 */
+	async function mintForExisting(
+		tp: TestProviders,
+		email: string
+	): Promise<{ token: string; orgId: string }> {
+		await seedAcme(tp);
+		const dana = await seedUser(tp, 'dana@globex.test');
+		const other = await seedOrg(tp, { name: 'Globex', slug: 'globex', ownerId: dana.id });
+		await seedOrgMember(tp, { orgId: other.id, userId: dana.id, role: 'owner' });
+		const locals = await actAs(tp, dana.id);
+		const res = await call(mintInvite, {
+			locals,
+			params: { orgId: other.id },
+			body: { email, orgRole: 'member', permissions: [] }
+		});
+		expect(res.status).toBe(201);
+		const { acceptUrl } = res.json as { acceptUrl: string };
+		return { token: new URL(acceptUrl).searchParams.get('token')!, orgId: other.id };
+	}
+
+	it('reports join mode rather than asking an existing user for a password', async () => {
+		tp = await freshProviders();
+		const existing = await seedUser(tp, 'carol@acme.test');
+		const { token } = await mintForExisting(tp, 'carol@acme.test');
+
+		const result = (await load({
+			url: new URL(`http://test.local/accept-invite?token=${token}`),
+			locals: { user: { id: existing.id, email: 'carol@acme.test' } }
+		} as never)) as { ok: boolean; mode?: string; signedInAsInvitee?: boolean };
+
+		expect(result.ok).toBe(true);
+		expect(result.mode).toBe('join');
+		expect(result.signedInAsInvitee).toBe(true);
+	});
+
+	it('adds the membership without creating a second account', async () => {
+		tp = await freshProviders();
+		const existing = await seedUser(tp, 'carol@acme.test');
+		const { token, orgId } = await mintForExisting(tp, 'carol@acme.test');
+
+		const result = await submit(token, {}, { user: { id: existing.id, email: 'carol@acme.test' } });
+		expect(result.redirected).toBe('/library');
+
+		const member = await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, orgId, existing.id);
+		expect(member?.role).toBe('member');
+
+		// One account, not two — the whole point of the branch.
+		const page = await tp.config.auth.listUsers({ limit: 200 });
+		const matches = page!.items.filter((u) => u.email === 'carol@acme.test');
+		expect(matches).toHaveLength(1);
+	});
+
+	// The token proves the invite is genuine, not that the visitor is its
+	// addressee. Anyone can forward a link; only the account holder may join.
+	it('refuses an anonymous visitor holding the link', async () => {
+		tp = await freshProviders();
+		await seedUser(tp, 'carol@acme.test');
+		const { token, orgId } = await mintForExisting(tp, 'carol@acme.test');
+
+		const result = await submit(token, {});
+		expect(result.status).toBe(401);
+		expect(result.error).toMatch(/sign in as/i);
+
+		const members = await tp.config.data.orgs.listOrgMembers(SYSTEM_CONTEXT, orgId);
+		expect(members.items.map((m) => m.userId)).not.toContain('carol@acme.test');
+	});
+
+	it('refuses a signed-in user who is not the invitee', async () => {
+		tp = await freshProviders();
+		await seedUser(tp, 'carol@acme.test');
+		const impostor = await seedUser(tp, 'mallory@acme.test');
+		const { token, orgId } = await mintForExisting(tp, 'carol@acme.test');
+
+		const result = await submit(
+			token,
+			{},
+			{ user: { id: impostor.id, email: 'mallory@acme.test' } }
+		);
+		expect(result.status).toBe(401);
+
+		const member = await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, orgId, impostor.id);
+		expect(member).toBeFalsy();
+	});
+
+	// `addOrgMember` upserts, so an unguarded re-accept would rewrite the role a
+	// `member` invite names over whatever the user already holds.
+	it('does not demote someone who is already a member of that org', async () => {
+		tp = await freshProviders();
+		const { alice, acme } = await seedAcme(tp);
+		const aliceLocals = await actAs(tp, alice.id);
+		const res = await call(mintInvite, {
+			locals: aliceLocals,
+			params: { orgId: acme.id },
+			body: { email: 'alice@acme.test', orgRole: 'member', permissions: [] }
+		});
+		expect(res.status).toBe(201);
+		const token = new URL((res.json as { acceptUrl: string }).acceptUrl).searchParams.get('token')!;
+
+		await submit(token, {}, { user: { id: alice.id, email: 'alice@acme.test' } });
+
+		const member = await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, acme.id, alice.id);
+		expect(member?.role).toBe('admin');
 	});
 });

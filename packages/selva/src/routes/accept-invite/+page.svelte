@@ -28,14 +28,17 @@
 				<p class="text-muted-foreground text-sm">{data.reason}</p>
 			</div>
 			<div class="text-center">
-				<a href="/login" class="text-primary text-sm underline">Go to login</a>
+				<a href="/login" class="text-primary text-sm underline">Go to sign in</a>
 			</div>
 		{:else}
 			<div class="space-y-1 text-center">
 				<h2 class="text-foreground text-2xl font-bold tracking-tight">Join {data.orgName}</h2>
 				<p class="text-muted-foreground text-sm">
 					You were invited as <span class="font-medium">{data.email}</span>.
-					{#if data.mode === 'proxy'}
+					{#if data.mode === 'join'}
+						This email already has an account, so there is nothing to create — accepting adds it to
+						{data.orgName}.
+					{:else if data.mode === 'proxy'}
 						Click below to finish creating your account — your identity is verified by your company
 						sign-in.
 					{:else}
@@ -44,51 +47,61 @@
 				</p>
 			</div>
 
-			<form method="POST" class="space-y-4">
-				<input type="hidden" name="token" value={data.token} />
+			{#if data.mode === 'join' && !data.signedInAsInvitee}
+				<Alert.Root>
+					<CircleAlert />
+					<Alert.Description>
+						Sign in as {data.email}, then open this link again to join.
+					</Alert.Description>
+				</Alert.Root>
+				<a href="/login" class="text-primary block text-center text-sm underline">Go to sign in</a>
+			{:else}
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="token" value={data.token} />
 
-				{#if form?.error}
-					<Alert.Root variant="destructive">
-						<CircleAlert />
-						<Alert.Description>{form.error}</Alert.Description>
-					</Alert.Root>
-				{/if}
+					{#if form?.error}
+						<Alert.Root variant="destructive">
+							<CircleAlert />
+							<Alert.Description>{form.error}</Alert.Description>
+						</Alert.Root>
+					{/if}
 
-				{#if data.mode === 'password'}
-					<div class="space-y-2">
-						<Label for="displayName"
-							>Display name <span class="text-muted-foreground">(optional)</span></Label
-						>
-						<Input id="displayName" name="displayName" type="text" placeholder="Your name" />
-					</div>
+					{#if data.mode === 'password'}
+						<div class="space-y-2">
+							<Label for="displayName"
+								>Display name <span class="text-muted-foreground">(optional)</span></Label
+							>
+							<Input id="displayName" name="displayName" type="text" placeholder="Your name" />
+						</div>
 
-					<div class="space-y-2">
-						<Label for="password">Password</Label>
-						<Input
-							id="password"
-							name="password"
-							type="password"
-							required
-							placeholder="Min. 8 characters"
-						/>
-					</div>
+						<div class="space-y-2">
+							<Label for="password">Password</Label>
+							<Input
+								id="password"
+								name="password"
+								type="password"
+								required
+								placeholder="Min. 8 characters"
+							/>
+						</div>
 
-					<div class="space-y-2">
-						<Label for="confirm">Confirm password</Label>
-						<Input
-							id="confirm"
-							name="confirm"
-							type="password"
-							required
-							placeholder="Repeat password"
-						/>
-					</div>
-				{/if}
+						<div class="space-y-2">
+							<Label for="confirm">Confirm password</Label>
+							<Input
+								id="confirm"
+								name="confirm"
+								type="password"
+								required
+								placeholder="Repeat password"
+							/>
+						</div>
+					{/if}
 
-				<Button type="submit" class="w-full">
-					{data.mode === 'proxy' ? 'Accept invite' : 'Create account'}
-				</Button>
-			</form>
+					<Button type="submit" class="w-full">
+						{data.mode === 'password' ? 'Create account' : `Join ${data.orgName}`}
+					</Button>
+				</form>
+			{/if}
 		{/if}
 	</div>
 </div>

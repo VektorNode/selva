@@ -41,14 +41,14 @@
 				body: JSON.stringify(patch)
 			});
 			if (res.ok) {
-				toast.success('Updated');
+				toast.success('Member updated');
 				await invalidateAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
-				toast.error(err.message || err.error || 'Update failed');
+				toast.error(err.message || err.error || 'Could not update member');
 			}
 		} catch {
-			toast.error('Update failed');
+			toast.error('Could not update member');
 		} finally {
 			savingId = null;
 		}
@@ -156,7 +156,7 @@
 </script>
 
 <svelte:head>
-	<title>Team · Members</title>
+	<title>Team · Members &amp; roles</title>
 </svelte:head>
 
 <div class="space-y-6">
@@ -283,7 +283,7 @@
 					<EmptyState
 						icon={UserPlus}
 						title="No members yet"
-						description="Invite teammates to get started."
+						description="Invite someone to get started."
 					/>
 				{:else}
 					<div class="divide-y rounded-lg border">
@@ -325,10 +325,11 @@
 											{/if}
 										</div>
 										<p class="text-muted-foreground text-xs">
-											{#if member.lastLoginAt}
-												Joined {new Date(member.joinedAt).toLocaleDateString()}
-											{:else}
-												Invited {new Date(member.joinedAt).toLocaleDateString()} · never signed in
+											<!-- One timestamp, one label: joinedAt is when the membership was
+											     written. Whether they have signed in since is a separate fact. -->
+											Joined {new Date(member.joinedAt).toLocaleDateString()}
+											{#if !member.lastLoginAt}
+												· never signed in
 											{/if}
 										</p>
 									</div>

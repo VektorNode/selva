@@ -1,32 +1,25 @@
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
-import {
-	getDataProvider,
-	getOrganizationProvider,
-	getPermissionStore
-} from '$lib/server/providers.server';
+import { getDataProvider, getPermissionStore } from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import {
-	OrgPermissionSchema,
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,
-	DEFAULT_ORG_PERMISSIONS,
-	MEMBER_ASSIGNABLE_PERMISSIONS,
 	type PlatformPermission,
 	hasPermission
 } from '@selvajs/platform';
-import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 
-const FlatPermissionSchema = z.union([PlatformPermissionSchema, OrgPermissionSchema]);
-
 const UpdatePermissionsBody = z.object({
-	permissions: z.array(FlatPermissionSchema)
+	permissions: z.array(PlatformPermissionSchema)
 });
 
-// Splits the flat list into platform + default-org permissions and writes both.
+// Platform scope only. Org role and permissions belong to
+// PATCH /api/v1/orgs/{orgId}/members/{userId}, which gates on
+// manage_org_members and enforces the sole-owner invariant — neither of which
+// this handler's manage_instance_users check can stand in for.
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	requireManageInstanceUsers(locals);
 	const { id } = params;
@@ -35,7 +28,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const body = await request.json().catch(() => null);
 	const parsed = UpdatePermissionsBody.safeParse(body);
 	if (!parsed.success) throwZodError(parsed.error);
-	const { platform, org } = splitFlatPermissions(parsed.data.permissions);
+	const platform = parsed.data.permissions;
 
 	// Granting or revoking platform-scope permissions requires the caller to
 	// already hold instance_admin. Without this, any org admin with
@@ -67,40 +60,6 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			ApiErrorCode.CONFLICT,
 			'Cannot remove the last instance admin. Promote another user to instance admin first.'
 		);
-
-	const orgId = locals.ctx?.actingOrgId;
-	if (orgId) {
-		const orgs = getOrganizationProvider();
-		const existing = await orgs.getOrgMember(SYSTEM_CONTEXT, orgId, id);
-		// owner/admin always hold all org permissions; members are capped to the
-		// non-governance subset. The UI mirrors this — the server is the
-		// safety net if anything bypasses the UI.
-		const resolvedPermissions = (role: 'owner' | 'admin' | 'member') =>
-			role === 'member'
-				? org.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p))
-				: [...DEFAULT_ORG_PERMISSIONS[role]];
-		if (existing) {
-			await orgs.updateOrgMemberPermissions(
-				SYSTEM_CONTEXT,
-				orgId,
-				id,
-				resolvedPermissions(existing.role)
-			);
-		} else {
-			// Promote to member with the requested org perms.
-			const joinedAt = new Date().toISOString();
-			await orgs.addOrgMember(SYSTEM_CONTEXT, {
-				orgId,
-				userId: id,
-				role: 'member',
-				permissions: resolvedPermissions('member'),
-				joinedAt,
-				updatedAt: joinedAt,
-				updatedBy: locals.user?.id ?? id,
-				deletedAt: null
-			});
-		}
-	}
 
 	return new Response(null, { status: 204 });
 };

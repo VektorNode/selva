@@ -1,23 +1,11 @@
 <script lang="ts">
 	import { Button, Card, EmptyState, Input, toast, SectionHeader } from '@selvajs/ui';
-	import { Plus, Trash2, ShieldCheck, Mail, Copy, X, Search } from '@lucide/svelte';
+	import { Plus, ShieldCheck, X, Search, Mail } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { page } from '$app/state';
-	import type { Invite, OrgPermission, OrgRole, PlatformPermission } from '@selvajs/platform';
-	import {
-		ALL_ORG_PERMISSIONS,
-		ALL_PLATFORM_PERMISSIONS,
-		OWNER_ADMIN_ONLY_PERMISSIONS
-	} from '@selvajs/platform';
+	import type { OrgRole, PlatformPermission } from '@selvajs/platform';
+	import { ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
 	import UserListItem from './UserListItem.svelte';
-
-	// One flat list today; scoped Platform-admin + Org-member views come later.
-	type FlatPermission = PlatformPermission | OrgPermission;
-	const ALL_FLAT_PERMISSIONS: FlatPermission[] = [
-		...ALL_PLATFORM_PERMISSIONS,
-		...ALL_ORG_PERMISSIONS
-	];
 
 	interface PageData {
 		users: UserRow[] | null;
@@ -25,7 +13,6 @@
 			name: string;
 			userCreation: 'email-password' | 'email-only' | 'none';
 		};
-		invites: Invite[];
 		isPlatformAdmin: boolean;
 	}
 	interface Props {
@@ -33,21 +20,20 @@
 	}
 	let { data }: Props = $props();
 
-	// Platform-scope checkboxes are hidden for non-platform-admins — the server
-	// rejects them anyway.
-	const assignablePermissions = $derived<FlatPermission[]>(
-		data.isPlatformAdmin ? ALL_FLAT_PERMISSIONS : [...ALL_ORG_PERMISSIONS]
+	// Platform scope only — org role and permissions are edited at /team/members,
+	// which gates on manage_org_members. This page holds manage_instance_users,
+	// which says nothing about any one org.
+	const assignablePermissions = $derived<PlatformPermission[]>(
+		data.isPlatformAdmin ? [...ALL_PLATFORM_PERMISSIONS] : []
 	);
 
-	const PERMISSION_LABELS: Record<FlatPermission, string> = {
-		instance_admin: 'Instance Admin (all)',
-		manage_instance_users: 'Manage Instance Users',
-		manage_compute: 'Manage Compute (instance)',
-		manage_updates: 'Manage Updates',
-		manage_org_members: 'Manage Org Members',
-		manage_org_compute: 'Manage Org Compute',
-		manage_definitions: 'Manage Definitions',
-		manage_projects: 'Manage Projects'
+	// Same wording as UserListItem's PERM_LABEL — the two render side by side
+	// (filter dropdown and row detail), so a casing split reads as two vocabularies.
+	const PERMISSION_LABELS: Record<PlatformPermission, string> = {
+		instance_admin: 'Instance admin',
+		manage_instance_users: 'Manage instance users',
+		manage_compute: 'Manage compute',
+		manage_updates: 'Manage updates'
 	};
 
 	const ORG_ROLES: OrgRole[] = ['owner', 'admin', 'member'];
@@ -55,32 +41,8 @@
 	// Allowlist-user form state
 	let showAddForm = $state(false);
 	let newEmail = $state('');
-	let newPermissions = $state<FlatPermission[]>([]);
+	let newPermissions = $state<PlatformPermission[]>([]);
 	let adding = $state(false);
-
-	// Invite form state
-	let showInviteForm = $state(false);
-	let inviteEmail = $state('');
-	let inviteRole = $state<OrgRole>('member');
-	let invitePermissions = $state<FlatPermission[]>([]);
-	let creatingInvite = $state(false);
-	let lastInviteLink = $state<string | null>(null);
-	let revokingId = $state<string | null>(null);
-
-	// For members, hide owner/admin-only permissions entirely — they're never
-	// grantable to a member. Owners/admins see the whole list (all boxes are
-	// implicitly checked in the template).
-	//
-	// Org scope only. Platform permissions render in their own group because the
-	// owner/admin lock above must not reach them: a locked checkbox is rendered
-	// checked, which would hand instance_admin to every owner invite.
-	const inviteOrgPermissionOptions = $derived<OrgPermission[]>(
-		inviteRole === 'member'
-			? ALL_ORG_PERMISSIONS.filter(
-					(p) => !(OWNER_ADMIN_ONLY_PERMISSIONS as readonly OrgPermission[]).includes(p)
-				)
-			: [...ALL_ORG_PERMISSIONS]
-	);
 
 	// Per-user loading state
 	let deletingId = $state<string | null>(null);
@@ -90,7 +52,7 @@
 	// Filter state — client-side over the loaded page (listUsers caps at 200).
 	let query = $state('');
 	let roleFilter = $state<OrgRole | 'all'>('all');
-	let permissionFilter = $state<FlatPermission | 'all'>('all');
+	let permissionFilter = $state<PlatformPermission | 'all'>('all');
 	let statusFilter = $state<'all' | 'enabled' | 'disabled' | 'never-signed-in'>('all');
 
 	const filtersActive = $derived(
@@ -125,7 +87,7 @@
 			(user) =>
 				(needle === '' || matchesQuery(user, needle)) &&
 				(roleFilter === 'all' || user.orgRole === roleFilter) &&
-				(permissionFilter === 'all' || user.permissions.includes(permissionFilter)) &&
+				(permissionFilter === 'all' || user.platformPermissions.includes(permissionFilter)) &&
 				matchesStatus(user)
 		);
 	});
@@ -150,7 +112,7 @@
 		!user.disabled &&
 		user.platformPermissions.includes('instance_admin');
 
-	function toggleNewPermission(p: FlatPermission, checked: boolean) {
+	function toggleNewPermission(p: PlatformPermission, checked: boolean) {
 		if (checked) {
 			newPermissions = [...newPermissions, p];
 		} else {
@@ -186,7 +148,7 @@
 		}
 	}
 
-	async function updatePermissions(id: string, permissions: FlatPermission[]) {
+	async function updatePermissions(id: string, permissions: PlatformPermission[]) {
 		updatingId = id;
 		try {
 			const res = await fetch(`/api/admin/users/${id}`, {
@@ -206,66 +168,6 @@
 			toast.error('Failed to update permissions');
 		} finally {
 			updatingId = null;
-		}
-	}
-
-	function toggleInvitePermission(p: FlatPermission, checked: boolean) {
-		if (checked) {
-			invitePermissions = [...invitePermissions, p];
-		} else {
-			invitePermissions = invitePermissions.filter((x) => x !== p);
-		}
-	}
-
-	async function createInvite() {
-		creatingInvite = true;
-		try {
-			const res = await fetch(`/api/v1/orgs/${page.data.ctx?.orgId}/invites`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					email: inviteEmail,
-					orgRole: inviteRole,
-					permissions: invitePermissions
-				})
-			});
-			if (res.ok) {
-				const { acceptUrl } = (await res.json()) as { acceptUrl: string };
-				lastInviteLink = acceptUrl;
-				toast.success(`Invite created for ${inviteEmail}`);
-				inviteEmail = '';
-				inviteRole = 'member';
-				invitePermissions = [];
-				showInviteForm = false;
-				await invalidateAll();
-			} else {
-				const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-				toast.error(err.message || err.error || 'Failed to create invite');
-			}
-		} catch {
-			toast.error('Failed to create invite');
-		} finally {
-			creatingInvite = false;
-		}
-	}
-
-	async function revokeInvite(id: string, email: string) {
-		if (!confirm(`Revoke invite for "${email}"?`)) return;
-		revokingId = id;
-		try {
-			const res = await fetch(`/api/v1/orgs/${page.data.ctx?.orgId}/invites/${id}`, {
-				method: 'DELETE'
-			});
-			if (res.ok) {
-				toast.success('Invite revoked');
-				await invalidateAll();
-			} else {
-				toast.error('Failed to revoke invite');
-			}
-		} catch {
-			toast.error('Failed to revoke invite');
-		} finally {
-			revokingId = null;
 		}
 	}
 
@@ -303,26 +205,18 @@
 	>
 		{#snippet actions()}
 			{#if data.users !== null}
-				<Button
-					onclick={() => {
-						showInviteForm = !showInviteForm;
-						if (showInviteForm) showAddForm = false;
-					}}
-					variant={showInviteForm ? 'outline' : 'default'}
-				>
-					<Mail class="mr-2 h-4 w-4" />
-					Invite user
-				</Button>
 				{#if data.provider.userCreation === 'email-only'}
 					<Button
-						onclick={() => {
-							showAddForm = !showAddForm;
-							if (showAddForm) showInviteForm = false;
-						}}
-						variant={showAddForm ? 'outline' : 'secondary'}
+						onclick={() => (showAddForm = !showAddForm)}
+						variant={showAddForm ? 'outline' : 'default'}
 					>
 						<Plus class="mr-2 h-4 w-4" />
 						Allowlist user
+					</Button>
+				{:else}
+					<Button href="/team/members" variant="default">
+						<Mail class="mr-2 h-4 w-4" />
+						Invite member
 					</Button>
 				{/if}
 			{/if}
@@ -331,113 +225,6 @@
 
 	<Card.Root>
 		<Card.Content class="space-y-4 pt-6">
-			<!-- Invite-user form -->
-			{#if showInviteForm}
-				<div class="bg-muted/40 space-y-3 rounded-lg border p-4">
-					<p class="text-sm font-medium">Invite user</p>
-					<p class="text-muted-foreground text-xs">
-						The invitee sets their own password when they open the link. No password leaves your
-						machine.
-					</p>
-					<div class="grid gap-3 sm:grid-cols-2">
-						<Input type="email" placeholder="Email" bind:value={inviteEmail} />
-						<select
-							bind:value={inviteRole}
-							class="border-input bg-background h-9 rounded-md border px-3 text-sm"
-						>
-							{#each ORG_ROLES as role (role)}
-								<option value={role}>{role}</option>
-							{/each}
-						</select>
-					</div>
-					<div>
-						<p class="mb-2 text-xs font-medium">Organization permissions</p>
-						{#if inviteRole !== 'member'}
-							<p class="text-muted-foreground mb-2 text-xs">
-								{inviteRole === 'owner' ? 'Owners' : 'Admins'} automatically receive all organization
-								permissions. Pick <span class="font-mono">member</span> to grant a custom subset.
-							</p>
-						{/if}
-						<div class="flex flex-wrap gap-3">
-							{#each inviteOrgPermissionOptions as p (p)}
-								{@const roleLocked = inviteRole !== 'member'}
-								<label
-									class="flex items-center gap-1.5 text-xs {roleLocked
-										? 'cursor-not-allowed opacity-60'
-										: 'cursor-pointer'}"
-								>
-									<input
-										type="checkbox"
-										checked={roleLocked || invitePermissions.includes(p)}
-										disabled={roleLocked}
-										onchange={(e) =>
-											toggleInvitePermission(p, (e.target as HTMLInputElement).checked)}
-									/>
-									{PERMISSION_LABELS[p]}
-								</label>
-							{/each}
-						</div>
-					</div>
-					{#if data.isPlatformAdmin}
-						<div>
-							<p class="mb-2 text-xs font-medium">Instance permissions</p>
-							<p class="text-muted-foreground mb-2 text-xs">
-								Apply across the whole instance, not just this organization. The org role above
-								never grants these — tick them deliberately.
-							</p>
-							<div class="flex flex-wrap gap-3">
-								{#each ALL_PLATFORM_PERMISSIONS as p (p)}
-									<label class="flex cursor-pointer items-center gap-1.5 text-xs">
-										<input
-											type="checkbox"
-											checked={invitePermissions.includes(p)}
-											onchange={(e) =>
-												toggleInvitePermission(p, (e.target as HTMLInputElement).checked)}
-										/>
-										{PERMISSION_LABELS[p]}
-									</label>
-								{/each}
-							</div>
-						</div>
-					{/if}
-					<div class="flex gap-2">
-						<Button onclick={createInvite} disabled={creatingInvite || !inviteEmail}>
-							{creatingInvite ? 'Creating…' : 'Create invite'}
-						</Button>
-						<Button variant="outline" onclick={() => (showInviteForm = false)}>Cancel</Button>
-					</div>
-				</div>
-			{/if}
-
-			{#if lastInviteLink}
-				<div
-					class="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/5 p-4"
-				>
-					<div class="min-w-0 flex-1">
-						<p class="text-sm font-medium">Invite ready — copy the link and share it</p>
-						<p class="text-muted-foreground mt-1 truncate font-mono text-xs">{lastInviteLink}</p>
-					</div>
-					<Button
-						size="sm"
-						variant="outline"
-						onclick={async () => {
-							try {
-								await navigator.clipboard.writeText(lastInviteLink!);
-								toast.success('Invite link copied');
-							} catch {
-								toast.error('Could not copy to clipboard');
-							}
-						}}
-					>
-						<Copy class="mr-1.5 h-3.5 w-3.5" />
-						Copy
-					</Button>
-					<Button size="sm" variant="ghost" onclick={() => (lastInviteLink = null)}>
-						<X class="h-4 w-4" />
-					</Button>
-				</div>
-			{/if}
-
 			<!-- Add user form -->
 			{#if showAddForm}
 				<div class="bg-muted/40 space-y-3 rounded-lg border p-4">
@@ -446,40 +233,35 @@
 					<p class="text-muted-foreground text-xs">
 						This user will authenticate via {data.provider.name}. No password is stored.
 					</p>
-					<div>
-						<p class="mb-2 text-xs font-medium">Permissions</p>
-						<p class="text-muted-foreground mb-2 text-xs">
-							New users are added as <span class="font-mono">member</span>. Promote them to owner or
-							admin from the user list to grant full organization access.
-						</p>
-						<div class="flex flex-wrap gap-3">
-							{#each assignablePermissions as p (p)}
-								{@const isOwnerAdminOnly = (
-									OWNER_ADMIN_ONLY_PERMISSIONS as readonly FlatPermission[]
-								).includes(p)}
-								{@const isPlatformScope = (
-									ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]
-								).includes(p)}
-								{@const memberExcluded = isOwnerAdminOnly && !isPlatformScope}
-								<label
-									class="flex items-center gap-1.5 text-xs {memberExcluded
-										? 'cursor-not-allowed opacity-60'
-										: 'cursor-pointer'}"
-									title={memberExcluded
-										? 'Only owners and admins can hold this permission'
-										: undefined}
-								>
-									<input
-										type="checkbox"
-										checked={!memberExcluded && newPermissions.includes(p)}
-										disabled={memberExcluded}
-										onchange={(e) => toggleNewPermission(p, (e.target as HTMLInputElement).checked)}
-									/>
-									{PERMISSION_LABELS[p]}
-								</label>
-							{/each}
+					{#if data.isPlatformAdmin}
+						<div>
+							<p class="mb-2 text-xs font-medium">Instance permissions</p>
+							<p class="text-muted-foreground mb-2 text-xs">
+								Apply across the whole instance. The user joins the active organization as a
+								<span class="font-mono">member</span>; grant them access there from
+								<a href="/team/members" class="underline">Members &amp; roles</a>.
+							</p>
+							<div class="flex flex-wrap gap-3">
+								{#each assignablePermissions as p (p)}
+									<label class="flex cursor-pointer items-center gap-1.5 text-xs">
+										<input
+											type="checkbox"
+											checked={newPermissions.includes(p)}
+											onchange={(e) =>
+												toggleNewPermission(p, (e.target as HTMLInputElement).checked)}
+										/>
+										{PERMISSION_LABELS[p]}
+									</label>
+								{/each}
+							</div>
 						</div>
-					</div>
+					{:else}
+						<p class="text-muted-foreground text-xs">
+							The user joins the active organization as a <span class="font-mono">member</span>.
+							Grant them access from
+							<a href="/team/members" class="underline">Members &amp; roles</a>.
+						</p>
+					{/if}
 					<div class="flex gap-2">
 						<Button onclick={addUser} disabled={adding || !newEmail}>
 							{adding ? 'Adding…' : 'Allowlist user'}
@@ -514,20 +296,20 @@
 					</div>
 					<select
 						bind:value={roleFilter}
-						aria-label="Filter by role"
+						aria-label="Filter by role in the active organization"
 						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 					>
-						<option value="all">All roles</option>
+						<option value="all">All org roles</option>
 						{#each ORG_ROLES as role (role)}
 							<option value={role}>{role}</option>
 						{/each}
 					</select>
 					<select
 						bind:value={permissionFilter}
-						aria-label="Filter by permission"
+						aria-label="Filter by instance permission"
 						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 					>
-						<option value="all">All permissions</option>
+						<option value="all">All instance permissions</option>
 						{#each assignablePermissions as p (p)}
 							<option value={p}>{PERMISSION_LABELS[p]}</option>
 						{/each}
@@ -572,8 +354,8 @@
 									(expandedUserId = expandedUserId === user.id ? null : user.id)}
 								onTogglePermission={async (perm, checked) => {
 									const next = checked
-										? [...user.permissions, perm]
-										: user.permissions.filter((x) => x !== perm);
+										? [...user.platformPermissions, perm]
+										: user.platformPermissions.filter((x) => x !== perm);
 									await updatePermissions(user.id, next);
 								}}
 								onDelete={() => deleteUser(user.id, user.email ?? user.id)}
@@ -584,46 +366,4 @@
 			{/if}
 		</Card.Content>
 	</Card.Root>
-
-	{#if data.invites.length > 0}
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>Invites</Card.Title>
-				<Card.Description>
-					{data.invites.filter((i) => !i.acceptedAt).length} pending, {data.invites.filter(
-						(i) => i.acceptedAt
-					).length} accepted
-				</Card.Description>
-			</Card.Header>
-			<Card.Content>
-				<div class="divide-y rounded-lg border">
-					{#each data.invites as invite (invite.id)}
-						{@const expired = Date.parse(invite.expiresAt) <= Date.now()}
-						{@const status = invite.acceptedAt ? 'Accepted' : expired ? 'Expired' : 'Pending'}
-						<div class="flex items-center justify-between gap-4 px-4 py-3">
-							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm font-medium">{invite.email}</p>
-								<p class="text-muted-foreground text-xs">
-									{status} · {invite.orgRole} · expires {new Date(
-										invite.expiresAt
-									).toLocaleDateString()}
-								</p>
-							</div>
-							{#if !invite.acceptedAt && !expired}
-								<Button
-									size="sm"
-									variant="ghost"
-									disabled={revokingId === invite.id}
-									onclick={() => revokeInvite(invite.id, invite.email)}
-									class="text-destructive hover:text-destructive"
-								>
-									<Trash2 class="h-4 w-4" />
-								</Button>
-							{/if}
-						</div>
-					{/each}
-				</div>
-			</Card.Content>
-		</Card.Root>
-	{/if}
 </div>
