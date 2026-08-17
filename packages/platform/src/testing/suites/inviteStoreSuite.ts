@@ -139,5 +139,64 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 			const got = await store.getByTokenHash(SYSTEM_CONTEXT, inv.tokenHash);
 			expect(got).toBeNull();
 		});
+
+		it('revokePendingByEmail kills every pending invite to that address', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const email = `offboard-${makeUuid()}@test.local`;
+			const first = invite(scope, { email });
+			const second = invite(scope, { email });
+			await store.create(ctx(scope.adminId), first);
+			await store.create(ctx(scope.adminId), second);
+
+			const revoked = await store.revokePendingByEmail(ctx(scope.adminId), scope.orgId, email);
+			expect(revoked.sort()).toEqual([first.id, second.id].sort());
+			expect(await store.getByTokenHash(SYSTEM_CONTEXT, first.tokenHash)).toBeNull();
+			expect(await store.getByTokenHash(SYSTEM_CONTEXT, second.tokenHash)).toBeNull();
+		});
+
+		it('revokePendingByEmail leaves other addresses and other orgs alone', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const target = `target-${makeUuid()}@test.local`;
+			const bystander = invite(scope, { email: `bystander-${makeUuid()}@test.local` });
+			await store.create(ctx(scope.adminId), invite(scope, { email: target }));
+			await store.create(ctx(scope.adminId), bystander);
+
+			await store.revokePendingByEmail(ctx(scope.adminId), scope.orgId, target);
+			expect(await store.getByTokenHash(SYSTEM_CONTEXT, bystander.tokenHash)).not.toBeNull();
+		});
+
+		it('revokePendingByEmail does not un-consume an accepted invite', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const { userId: acceptor } = await seedUser(makeUuid());
+			const email = `accepted-${makeUuid()}@test.local`;
+			const inv = invite(scope, { email });
+			await store.create(ctx(scope.adminId), inv);
+			await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
+
+			// Accepting is history, not a live grant — offboarding must not erase
+			// the record that this person once joined.
+			const revoked = await store.revokePendingByEmail(ctx(scope.adminId), scope.orgId, email);
+			expect(revoked).toEqual([]);
+			const listed = await store.listByOrg(ctx(scope.adminId), scope.orgId, { limit: 100 });
+			expect(listed.items.find((i) => i.id === inv.id)?.acceptedAt).toBeTruthy();
+		});
+
+		it('revokePendingByEmail matches case-insensitively', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const email = `mixed-${makeUuid()}@test.local`;
+			const inv = invite(scope, { email });
+			await store.create(ctx(scope.adminId), inv);
+
+			const revoked = await store.revokePendingByEmail(
+				ctx(scope.adminId),
+				scope.orgId,
+				email.toUpperCase()
+			);
+			expect(revoked).toEqual([inv.id]);
+		});
 	});
 }

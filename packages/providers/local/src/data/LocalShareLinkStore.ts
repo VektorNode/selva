@@ -2,7 +2,9 @@ import * as path from 'node:path';
 import type {
 	IShareLinkStore,
 	IDefinitionStore,
+	IProjectStore,
 	IEventSink,
+	OrgShareLink,
 	ShareLink,
 	RequestContext,
 	ListOptions,
@@ -31,6 +33,7 @@ export interface LocalShareLinkStoreOptions {
  */
 export class LocalShareLinkStore implements IShareLinkStore {
 	private definitionProvider?: IDefinitionStore;
+	private projectProvider?: IProjectStore;
 	private readonly events: IEventSink;
 	private readonly configFilePath: string;
 
@@ -59,6 +62,16 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		this.definitionProvider = definitions;
 	}
 
+	/**
+	 * Wires the project store so `listByOrg` can complete the definition→project
+	 * hop that gives a link its org. Unset, the roster reads empty rather than
+	 * unfiltered — a share-link list that silently spans tenants is worse than
+	 * no list.
+	 */
+	setProjectProvider(projects: IProjectStore): void {
+		this.projectProvider = projects;
+	}
+
 	private async readAll(): Promise<OnDiskShape> {
 		return readJsonFile<OnDiskShape>(this.configFilePath, empty());
 	}
@@ -67,8 +80,9 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		await writeJsonFile(this.configFilePath, data);
 	}
 
-	// Revoked or expired counts as dead — match what Supabase filters in SQL,
-	// or the same link reads live locally and dead there.
+	// Revoked or expired counts as dead. Both providers filter both fields; a
+	// link that reads live under one and dead under the other is the bug this
+	// prevents.
 	private isLive(l: ShareLink | undefined | null): l is ShareLink {
 		if (!l || l.revokedAt != null) return false;
 		return l.expiresAt == null || Date.parse(l.expiresAt) > Date.now();
@@ -98,6 +112,52 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		const rows = Object.values(all.links)
 			.filter((l) => l.definitionId === definitionId && this.isLive(l))
 			.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+		return paginate(rows, opts);
+	}
+
+	async listByOrg(
+		ctx: RequestContext,
+		orgId: string,
+		opts?: ListOptions
+	): Promise<Page<OrgShareLink>> {
+		// No org column on a link — the org is two hops up, through the parent
+		// definition to its project. Supabase does this as a SQL join; here it is
+		// a lookup, same as the soft-delete cascade in `getByTokenHash`.
+		if (!this.definitionProvider || !this.projectProvider) return paginate([], opts);
+
+		const all = await this.readAll();
+		const live = Object.values(all.links).filter((l) => this.isLive(l));
+		if (live.length === 0) return paginate([], opts);
+
+		const definitions = new Map(
+			await Promise.all(
+				[...new Set(live.map((l) => l.definitionId))].map(
+					async (id) => [id, await this.definitionProvider!.get(SYSTEM_CONTEXT, id)] as const
+				)
+			)
+		);
+
+		// One page covers any realistic org; the roster is a per-tenant view.
+		const projects = await this.projectProvider.listProjects(ctx, orgId, { limit: 1000 });
+		const projectById = new Map(projects.items.map((p) => [p.id, p]));
+
+		const rows: OrgShareLink[] = [];
+		for (const link of live) {
+			const definition = definitions.get(link.definitionId);
+			// A link whose definition is soft-deleted is unresolvable, so listing it
+			// would offer a revoke that changes nothing.
+			if (!definition) continue;
+			const project = projectById.get(definition.projectId);
+			if (!project) continue;
+			const { tokenHash: _tokenHash, ...rest } = link;
+			rows.push({
+				...rest,
+				definitionName: definition.displayName,
+				projectId: project.id,
+				projectName: project.name
+			});
+		}
+		rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 		return paginate(rows, opts);
 	}
 

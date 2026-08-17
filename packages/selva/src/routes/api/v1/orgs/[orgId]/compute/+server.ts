@@ -47,7 +47,9 @@ export const GET: RequestHandler = apiRoute(
 		requireManageOrgCompute(locals);
 		const { ctx, orgId } = requireActingOrg(locals, params.orgId);
 
-		const config = await getComputeServerConfigStore().getConfig(ctx);
+		// Scoped in the store, so `config.servers` holds only what this org may
+		// see and `defaultServerId` is blank unless it is one of them.
+		const config = await getComputeServerConfigStore().getConfig(ctx, { scopeToOrgId: orgId });
 
 		// Servers this org owns and may edit. `apiKey` is dropped by the response
 		// schema; `hasApiKey` is what a picker needs to render "key set".
@@ -57,7 +59,7 @@ export const GET: RequestHandler = apiRoute(
 
 		// Platform and own servers visible to this org — the read-only catalog
 		// behind the "default selection" dropdown.
-		const catalog = serversVisibleTo(config, orgId).map((s) => ({
+		const catalog = config.servers.map((s) => ({
 			id: s.id,
 			label: s.label,
 			serverUrl: s.serverUrl,

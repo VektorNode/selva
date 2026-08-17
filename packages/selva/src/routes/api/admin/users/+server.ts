@@ -2,15 +2,23 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getOrganizationProvider, getPermissionStore } from '$lib/server/providers.server';
-import { requireManageInstanceUsers } from '$lib/server/access.server';
+import {
+	getEventSink,
+	getOrganizationProvider,
+	getPermissionStore
+} from '$lib/server/providers.server';
+import {
+	assertCanGrantPlatformPermissions,
+	requireManageInstanceUsers
+} from '$lib/server/access.server';
 import { listAllOrgMembers } from '$lib/server/org-members.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiRoute, created, parseBody } from '$lib/server/api/http';
 import {
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,
-	hasPermission,
+	actorFrom,
 	type OrgMember
 } from '@selvajs/platform';
 // `password` is deliberately absent: an admin never sets another user's
@@ -25,7 +33,7 @@ const CreateUserBody = z.object({
 });
 
 // GET — list all users with their platform permissions and acting-org membership.
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = apiRoute('Failed to list users', async ({ locals }) => {
 	requireManageInstanceUsers(locals);
 	const page = await getAuthProvider().listUsers({ limit: 200 });
 	if (page === null) {
@@ -56,28 +64,19 @@ export const GET: RequestHandler = async ({ locals }) => {
 		};
 	});
 	return json({ users });
-};
+});
 
 // POST — create a user + attach to default org with split permissions.
-export const POST: RequestHandler = async ({ request, locals }) => {
-	requireManageInstanceUsers(locals);
-	const auth = getAuthProvider();
+export const POST: RequestHandler = apiRoute(
+	'Failed to create user',
+	async ({ request, locals }) => {
+		requireManageInstanceUsers(locals);
+		const auth = getAuthProvider();
 
-	const body = await request.json().catch(() => null);
-	const parsed = CreateUserBody.safeParse(body);
-	if (!parsed.success) throwZodError(parsed.error);
-	const { email, permissions: platform } = parsed.data;
+		const { email, permissions: platform } = await parseBody(request, CreateUserBody);
 
-	// Only an existing platform admin may create a user with platform-scope perms.
-	if (platform.length > 0 && !hasPermission(locals.ctx!, 'instance_admin')) {
-		apiError(
-			403,
-			ApiErrorCode.FORBIDDEN,
-			'Only a platform admin can grant platform-scope permissions'
-		);
-	}
+		assertCanGrantPlatformPermissions(locals.ctx!, platform);
 
-	try {
 		let user;
 		if (auth.createUser) {
 			// No password branch: a provider that owns credentials admits users by
@@ -92,6 +91,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				`${auth.name} cannot create a user directly. Send an invite instead — the recipient sets their own password.`
 			);
 		}
+
+		await getEventSink().emit({
+			type: 'user.created',
+			userId: user.id,
+			actorId: actorFrom(locals.ctx!)
+		});
 
 		// Grant platform permissions out-of-band via the data-layer store.
 		if (platform.length > 0) {
@@ -116,8 +121,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			});
 		}
 
-		return json(user, { status: 201 });
-	} catch (err) {
-		handleApiError(err, 'Failed to create user');
+		return created(user);
 	}
-};
+);

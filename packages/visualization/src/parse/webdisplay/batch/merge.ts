@@ -105,6 +105,10 @@ export function finalizeMergedMesh(
 		name: threeMesh.name,
 		layer: firstMesh?.layer ?? '',
 		originalIndex: firstMesh?.originalIndex ?? 0,
+		// A merged mesh has no single source index, so `originalIndex` alone cannot identify it:
+		// two merges of one component both report their first member's index and collide, which
+		// makes hiding one hide the other. Identity keys on every member instead.
+		mergedIndices: group.meshes.map((m) => m.originalIndex).sort((a, b) => a - b),
 		metadata: firstMesh?.metadata ?? {},
 		mergedFrom: group.meshes.slice(1).map((m) => ({
 			name: m.name,

@@ -285,7 +285,10 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	const serverConfig = await resolveServerForOrg(solveCtx, solveOrgId, { definitionPin });
 	mark('resolveServer');
 
-	// BRIDGE: remove ~2026-09 — lazy backfill for pre-cached versions. Best-effort.
+	// BRIDGE: remove ~2026-09 — lazy backfill for versions uploaded before schema
+	// caching existed. Best-effort. Removing it means: delete this block, tighten
+	// `DefinitionVersion.schema` to required in platform types + Zod, and drop the
+	// live-fetch fallback in loadForRender.server.ts.
 	if (localVersionForBackfill && !localVersionForBackfill.hasSchema && localDefinitionRef) {
 		const versionId = localVersionForBackfill.id;
 		try {

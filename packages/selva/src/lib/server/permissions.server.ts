@@ -1,5 +1,6 @@
 import type { PlatformPermission, RequestContext, UserManagementResult } from '@selvajs/platform';
-import { getPermissionStore } from './providers.server.js';
+import { actorFrom } from '@selvajs/platform';
+import { getEventSink, getPermissionStore } from './providers.server.js';
 
 /**
  * Permission read/write seam over `IPlatformPermissionStore`. Reads happen
@@ -13,5 +14,17 @@ export async function setUserPlatformPermissions(
 	userId: string,
 	permissions: PlatformPermission[]
 ): Promise<UserManagementResult> {
-	return getPermissionStore().set(ctx, userId, permissions);
+	const result = await getPermissionStore().set(ctx, userId, permissions);
+	// Emit only on success — a `last_admin` refusal or a missing user changed
+	// nothing. Neither permission store takes an event sink, so this seam is
+	// where the audit row gets written; every grant path routes through here.
+	if (result === 'ok') {
+		await getEventSink().emit({
+			type: 'platform_permissions.changed',
+			userId,
+			permissions,
+			actorId: actorFrom(ctx)
+		});
+	}
+	return result;
 }

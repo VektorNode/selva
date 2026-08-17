@@ -54,9 +54,12 @@ describe('POST /api/v1/orgs/{orgId}/invites — platform permissions', () => {
 		expect(row?.platformPermissions).toEqual(['instance_admin']);
 	});
 
-	it('refuses platform permissions from an org admin who is not an instance admin', async () => {
-		// The escalation this guard exists for: bob can invite members, and
-		// without the check that would be enough to mint himself an admin.
+	it('refuses an invite from someone who cannot manage org members at all', async () => {
+		// Bob is a plain `member`, so `requireManageOrgMembers` stops him at the
+		// door — this asserts the first gate, NOT the delegation guard behind it.
+		// That distinction is covered in `platform-permission-delegation.test.ts`,
+		// which acts as an org owner: someone who clears this gate and must still
+		// be refused the platform scope.
 		tp = await freshProviders();
 		const { bob, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, bob.id);

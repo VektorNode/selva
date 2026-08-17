@@ -108,6 +108,30 @@ export class LocalInviteStore implements IInviteStore {
 		});
 	}
 
+	async revokePendingByEmail(ctx: RequestContext, orgId: string, email: string): Promise<string[]> {
+		// Emails are stored lowercase at mint time; normalize the needle too so an
+		// offboarding call with the address as the admin typed it still matches.
+		const needle = email.trim().toLowerCase();
+		const file = await this.load();
+		const doomed = file.invites.filter(
+			(i) => i.orgId === orgId && !i.acceptedAt && i.email.toLowerCase() === needle
+		);
+		if (doomed.length === 0) return [];
+
+		const ids = new Set(doomed.map((i) => i.id));
+		file.invites = file.invites.filter((i) => !ids.has(i.id));
+		await this.save(file);
+		for (const invite of doomed) {
+			await this.events.emit({
+				type: 'invite.revoked',
+				inviteId: invite.id,
+				orgId: invite.orgId,
+				actorId: actorFrom(ctx)
+			});
+		}
+		return [...ids];
+	}
+
 	async deleteByOrg(_ctx: RequestContext, orgId: string): Promise<void> {
 		const file = await this.load();
 		const before = file.invites.length;

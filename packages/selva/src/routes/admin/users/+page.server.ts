@@ -1,3 +1,4 @@
+import { error, isHttpError } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type {
 	AuthUser,
@@ -6,9 +7,11 @@ import type {
 	OrgRole,
 	PlatformPermission
 } from '@selvajs/platform';
+import { ProviderError } from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { listAllOrgMembers } from '$lib/server/org-members.server';
 import {
+	getLogger,
 	getOrganizationProvider,
 	getPermissionStore,
 	getUserProfileStore
@@ -86,9 +89,44 @@ export const load: PageServerLoad = async ({ locals }) => {
 			});
 		}
 	} catch (err) {
-		if (err && typeof err === 'object' && 'status' in err) throw err;
+		// `users: null` means "this provider exposes no user store" — the page
+		// renders wiring advice for it. Anything thrown here is a different thing
+		// entirely, so it gets logged rather than rendered as that same message:
+		// this block spans four provider calls, and swallowing all of them silently
+		// turned every outage into "configure DATA_PATH".
+		//
+		// A denial still propagates. `ProviderError` carries `statusCode`, not
+		// `status` — checking the wrong field is what made a 403 from
+		// `getForBatch` render as an unavailable store on Supabase.
+		if (isHttpError(err)) throw err;
+		if (err instanceof ProviderError) error(err.statusCode, err.message);
+		getLogger().error('Failed to load the admin user list', {
+			actorId: ctx.userId,
+			error: err instanceof Error ? err.message : String(err)
+		});
 	}
 
 	const isPlatformAdmin = ctx.platformPermissions.includes('instance_admin');
-	return { users, provider: providerInfo, isPlatformAdmin };
+
+	// The §2 sole-admin lock must not be derived from `users`: that list is a
+	// 200-row page, so on a larger instance a second admin can sit past the cut
+	// and the UI would lock a row the server would happily let go. Counting
+	// admins other than nobody is the whole enabled-admin count, which the store
+	// answers over every row.
+	let enabledInstanceAdminCount: number | null = null;
+	if (users) {
+		try {
+			enabledInstanceAdminCount = await getPermissionStore().countInstanceAdminsExcluding(ctx, '');
+		} catch (err) {
+			// A null count means "unknown" and the UI falls back to not locking —
+			// the server refuses the removal either way, so a failed count must not
+			// become a lock the operator cannot explain.
+			getLogger().warn('Failed to count instance admins for the admin user list', {
+				actorId: ctx.userId,
+				error: err instanceof Error ? err.message : String(err)
+			});
+		}
+	}
+
+	return { users, provider: providerInfo, isPlatformAdmin, enabledInstanceAdminCount };
 };

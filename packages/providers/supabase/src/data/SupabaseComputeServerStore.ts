@@ -1,6 +1,7 @@
 import {
 	isOrgServer,
 	isPlatformServer,
+	scopeConfigToOrg,
 	type IComputeServerStore,
 	type ComputeConfig,
 	type ComputeServerConfig,
@@ -97,11 +98,12 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			if (row.default_server_id) orgDefaults[row.org_id] = row.default_server_id;
 		}
 
-		return {
+		const config: ComputeConfig = {
 			servers,
 			defaultServerId: platDefRes.data?.default_server_id ?? undefined,
 			orgDefaults
 		};
+		return opts.scopeToOrgId ? scopeConfigToOrg(config, opts.scopeToOrgId) : config;
 	}
 
 	/**

@@ -80,7 +80,35 @@ if (!envCtx) {
 				]);
 				if (defError) throw defError;
 
-				return { ownerId, ownerSessionToken, definitionId, otherDefinitionId };
+				// A second org the owner also leads, holding no links. Proves
+				// `listByOrg` scopes by tenant rather than by "orgs I can read".
+				const otherOrgId = crypto.randomUUID();
+				const { error: otherOrgError } = await admin.from('orgs').insert({
+					id: otherOrgId,
+					name: 'Other Org',
+					slug: `sl-other-${otherOrgId.slice(0, 8)}`,
+					owner_id: ownerId,
+					created_at: now,
+					updated_at: now
+				});
+				if (otherOrgError) throw otherOrgError;
+				const { error: otherMemberError } = await admin.from('org_members').insert({
+					org_id: otherOrgId,
+					user_id: ownerId,
+					role: 'owner',
+					permissions: [...DEFAULT_ORG_PERMISSIONS.owner],
+					joined_at: now
+				});
+				if (otherMemberError) throw otherMemberError;
+
+				return {
+					ownerId,
+					ownerSessionToken,
+					definitionId,
+					otherDefinitionId,
+					orgId,
+					otherOrgId
+				};
 			}
 		});
 	});

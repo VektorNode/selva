@@ -151,6 +151,10 @@ export function getUserProfileStore() {
 	return resolveProviders().data.userProfile;
 }
 
+export function getShareLinkStore() {
+	return resolveProviders().data.shareLinks;
+}
+
 export function getInviteStore() {
 	return resolveProviders().data.invites;
 }

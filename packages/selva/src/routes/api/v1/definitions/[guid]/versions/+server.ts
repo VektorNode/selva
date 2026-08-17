@@ -1,7 +1,8 @@
 import type { RequestHandler } from './$types';
 import { getDefinitionMeta, getDefinitionService } from '$lib/server/providers.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { requireCanViewProject, requireEditableDefinition } from '$lib/server/access.server';
+import { requireEditableDefinition } from '$lib/server/access.server';
+import { getVisibleDefinition } from '$lib/server/definitions/visibility.server';
 import { GuidSchema } from '@selvajs/platform/definitions';
 import { GH_EXTENSIONS, MAX_DEFINITION_FILE_SIZE } from '$lib/server/admin-config';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
@@ -13,6 +14,7 @@ import {
 	created,
 	formText,
 	parseParam,
+	requireCaller,
 	requireUpload
 } from '$lib/server/api/v1/route';
 
@@ -20,15 +22,15 @@ export const GET: RequestHandler = apiRoute(
 	'Failed to list versions',
 	async ({ params, locals, url }) => {
 		const guid = parseParam(params.guid, GuidSchema, 'GUID');
-		if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+		const { ctx } = requireCaller(locals);
 
-		const def = await getDefinitionMeta().get(locals.ctx, guid);
+		// Resolve through `getVisibleDefinition` like the sibling routes, which
+		// answers 404 for a guid the caller cannot see. A 403 here would confirm
+		// the definition exists and turn this into a cross-tenant existence oracle.
+		const def = await getVisibleDefinition(ctx, guid);
 		if (!def) apiError(404, ApiErrorCode.NOT_FOUND, 'Definition not found');
-		await requireCanViewProject(locals, def.projectId);
 
-		return collection(
-			await getDefinitionMeta().listVersions(locals.ctx, guid, parseListOptions(url))
-		);
+		return collection(await getDefinitionMeta().listVersions(ctx, guid, parseListOptions(url)));
 	}
 );
 

@@ -13,6 +13,7 @@ import {
 	canEditDefinition,
 	canChangeVisibilityToPublic,
 	checkOwnerRemoval,
+	canChangeOrgRole,
 	withAdminBypass,
 	type DefinitionAccessInput,
 	type OrgMember,
@@ -111,13 +112,20 @@ function def(
 	};
 }
 
-/** Default non-platform fields for DefinitionAccessInput. */
+/**
+ * Default non-platform fields for DefinitionAccessInput.
+ *
+ * `orgMember` defaults to a present member: it gates only the commons branch,
+ * and "still belongs to the org" is the ordinary case. Departure is what a test
+ * states explicitly, by passing `orgMember: null`.
+ */
 function defAccessInput(
 	overrides: Partial<DefinitionAccessInput> &
 		Pick<DefinitionAccessInput, 'project' | 'definition' | 'userId'>
 ): DefinitionAccessInput {
 	return {
 		member: null,
+		orgMember: orgMember('member'),
 		platformPermissions: [],
 		enablePlatformProjects: true,
 		...overrides
@@ -523,6 +531,51 @@ describe('canEditDefinition', () => {
 		).toBe(true);
 	});
 
+	it('commons project: definition owner who left the org loses edit', () => {
+		// `ownerId` records who uploaded, not who still belongs. Without this
+		// check, flipping `autoJoinOnUpload` on hands a departed contractor edit,
+		// delete and share-link authority over everything they ever uploaded —
+		// retroactively, and with no action taken against them.
+		const p = project({ visibility: 'public', autoJoinOnUpload: true });
+		expect(
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					orgMember: null,
+					userId: 'u-alice'
+				})
+			)
+		).toBe(false);
+	});
+
+	it('container project: org membership is not consulted', () => {
+		// The commons test above must not be read as "org membership grants edit".
+		// In container mode project role is the whole rule, so an org member with
+		// no project role stays out and a project editor stays in.
+		const p = project({ visibility: 'org', autoJoinOnUpload: false });
+		expect(
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					userId: 'u-alice'
+				})
+			)
+		).toBe(false);
+		expect(
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					member: member('editor', 'u-alice'),
+					orgMember: null,
+					userId: 'u-alice'
+				})
+			)
+		).toBe(true);
+	});
+
 	it('commons project: random user cannot edit someone else’s definition (Alice/Peter)', () => {
 		const p = project({ visibility: 'public', autoJoinOnUpload: true });
 		expect(
@@ -674,5 +727,36 @@ describe('checkOwnerRemoval', () => {
 				confirmed: true
 			})
 		).toBe('sole_owner');
+	});
+});
+
+// ============================================================================
+// canChangeOrgRole
+// ============================================================================
+describe('canChangeOrgRole', () => {
+	it('only an owner may grant or revoke owner/admin standing', () => {
+		for (const role of ['owner', 'admin'] as const) {
+			expect(canChangeOrgRole({ actorMember: orgMember('owner'), role })).toBe(true);
+			expect(canChangeOrgRole({ actorMember: orgMember('admin'), role })).toBe(false);
+			expect(canChangeOrgRole({ actorMember: orgMember('member'), role })).toBe(false);
+			expect(canChangeOrgRole({ actorMember: null, role })).toBe(false);
+		}
+	});
+
+	it('admins may still act on plain members', () => {
+		// The gate narrows to owner/admin targets. Ordinary member management is
+		// what `manage_org_members` is for, and this rule must not swallow it.
+		expect(canChangeOrgRole({ actorMember: orgMember('admin'), role: 'member' })).toBe(true);
+		expect(canChangeOrgRole({ actorMember: orgMember('member'), role: 'member' })).toBe(true);
+	});
+
+	it('reads the membership row, not the org owner_id', () => {
+		// `Organization.ownerId` and the membership row are separate fields that
+		// can disagree — `seedAcme` has exactly that shape. Only the row is
+		// authority here, so an `admin` row is refused regardless of who the org
+		// claims its owner is.
+		expect(canChangeOrgRole({ actorMember: orgMember('admin', 'u-founder'), role: 'owner' })).toBe(
+			false
+		);
 	});
 });

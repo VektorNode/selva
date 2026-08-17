@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '@selvajs/ui';
-	import { ChevronDown, ChevronRight, Trash2 } from '@lucide/svelte';
+	import { Ban, ChevronDown, ChevronRight, Trash2 } from '@lucide/svelte';
 	import type { OrgPermission, OrgRole, PlatformPermission } from '@selvajs/platform';
 	import { ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
@@ -15,9 +15,11 @@
 		soleInstanceAdmin: boolean;
 		updating: boolean;
 		deleting: boolean;
+		disabling: boolean;
 		onToggleExpand: () => void;
 		onTogglePermission: (perm: PlatformPermission, checked: boolean) => Promise<void>;
 		onDelete: () => void;
+		onDisable: () => void;
 	}
 
 	let {
@@ -27,9 +29,11 @@
 		soleInstanceAdmin,
 		updating,
 		deleting,
+		disabling,
 		onToggleExpand,
 		onTogglePermission,
-		onDelete
+		onDelete,
+		onDisable
 	}: Props = $props();
 
 	const PERM_LABEL: Record<FlatPermission, string> = {
@@ -69,6 +73,22 @@
 	// Owners/admins hold every org permission implicitly, so listing them adds
 	// nothing the role badge doesn't already say.
 	const orgSummaryPerms = $derived<OrgPermission[]>(isOwnerOrAdmin ? [] : user.orgPermissions);
+
+	// Deleting or disabling a platform admin is a platform-scope permission
+	// change, so `manage_instance_users` alone does not authorize it — the server
+	// refuses with 403 (requireCanRemoveInstanceAdmin). The checkboxes already
+	// mirrored that rule via `platformLocked`; these buttons did not, so the page
+	// offered a `manage_instance_users` holder a live Delete on every admin row.
+	const targetIsPlatformAdmin = $derived(user.platformPermissions.includes('instance_admin'));
+	const platformScopeLocked = $derived(targetIsPlatformAdmin && !isPlatformAdmin);
+
+	const removalBlockReason = $derived(
+		platformScopeLocked
+			? 'Only a platform admin can remove another platform admin.'
+			: soleInstanceAdmin
+				? 'Cannot remove the only instance admin. Promote another user first.'
+				: null
+	);
 
 	function checkboxState(perm: PlatformPermission) {
 		const checked = user.platformPermissions.includes(perm);
@@ -141,14 +161,25 @@
 			{/if}
 		</div>
 
+		{#if !user.disabled}
+			<Button
+				size="sm"
+				variant="ghost"
+				disabled={disabling || !!removalBlockReason}
+				onclick={onDisable}
+				title={removalBlockReason ?? 'Disable user — they keep their history but cannot sign in'}
+				class="text-muted-foreground hover:text-foreground h-8 w-8 shrink-0 p-0"
+			>
+				<Ban class="h-4 w-4" />
+			</Button>
+		{/if}
+
 		<Button
 			size="sm"
 			variant="ghost"
-			disabled={deleting || soleInstanceAdmin}
+			disabled={deleting || !!removalBlockReason}
 			onclick={onDelete}
-			title={soleInstanceAdmin
-				? 'Cannot delete the only instance admin. Promote another user first.'
-				: 'Delete user'}
+			title={removalBlockReason ?? 'Delete user'}
 			class="text-destructive hover:text-destructive h-8 w-8 shrink-0 p-0"
 		>
 			<Trash2 class="h-4 w-4" />

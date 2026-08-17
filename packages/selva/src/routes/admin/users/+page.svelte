@@ -14,6 +14,8 @@
 			userCreation: 'email-password' | 'email-only' | 'none';
 		};
 		isPlatformAdmin: boolean;
+		/** Instance-wide, not page-derived. `null` when the count failed. */
+		enabledInstanceAdminCount: number | null;
 	}
 	interface Props {
 		data: PageData;
@@ -46,6 +48,7 @@
 
 	// Per-user loading state
 	let deletingId = $state<string | null>(null);
+	let disablingId = $state<string | null>(null);
 	let updatingId = $state<string | null>(null);
 	let expandedUserId = $state<string | null>(null);
 
@@ -100,15 +103,14 @@
 	}
 
 	// Permissions.md §2 invariant mirror: if only one enabled user holds
-	// instance_admin, lock the checkbox and delete button on that row. The
+	// instance_admin, lock the checkbox and destructive buttons on that row. The
 	// server enforces the same; this is the UX nudge.
-	const enabledInstanceAdminCount = $derived(
-		(data.users ?? []).filter(
-			(u) => !u.disabled && u.platformPermissions.includes('instance_admin')
-		).length
-	);
+	//
+	// The count comes from the loader, which asks the permission store over every
+	// row. Counting the loaded page instead would lock the wrong rows once an
+	// instance outgrows 200 users.
 	const isSoleInstanceAdmin = (user: UserRow) =>
-		enabledInstanceAdminCount === 1 &&
+		data.enabledInstanceAdminCount === 1 &&
 		!user.disabled &&
 		user.platformPermissions.includes('instance_admin');
 
@@ -168,6 +170,32 @@
 			toast.error('Failed to update permissions');
 		} finally {
 			updatingId = null;
+		}
+	}
+
+	// One-way door: there is no enable endpoint, so the confirmation says so
+	// rather than letting an admin discover it afterwards.
+	async function disableUser(id: string, email: string) {
+		if (
+			!confirm(
+				`Disable "${email}"? They keep their identity and history but cannot sign in. There is no way to re-enable them from this page.`
+			)
+		)
+			return;
+		disablingId = id;
+		try {
+			const res = await fetch(`/api/admin/users/${id}/disable`, { method: 'POST' });
+			if (res.ok) {
+				toast.success(`User "${email}" disabled`);
+				await invalidateAll();
+			} else {
+				const err = await res.json().catch(() => ({}));
+				toast.error(err.message || err.error || 'Failed to disable user');
+			}
+		} catch {
+			toast.error('Failed to disable user');
+		} finally {
+			disablingId = null;
 		}
 	}
 
@@ -350,6 +378,7 @@
 								soleInstanceAdmin={isSoleInstanceAdmin(user)}
 								updating={updatingId === user.id}
 								deleting={deletingId === user.id}
+								disabling={disablingId === user.id}
 								onToggleExpand={() =>
 									(expandedUserId = expandedUserId === user.id ? null : user.id)}
 								onTogglePermission={async (perm, checked) => {
@@ -359,6 +388,7 @@
 									await updatePermissions(user.id, next);
 								}}
 								onDelete={() => deleteUser(user.id, user.email ?? user.id)}
+								onDisable={() => disableUser(user.id, user.email ?? user.id)}
 							/>
 						{/each}
 					</div>

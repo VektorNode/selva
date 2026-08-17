@@ -11,7 +11,15 @@ import {
 	projectAccessInputFromRows
 } from '$lib/server/access.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { slugify, SYSTEM_CONTEXT, canView, canEdit, canSolve } from '@selvajs/platform';
+import {
+	slugify,
+	SYSTEM_CONTEXT,
+	canView,
+	canEdit,
+	canSolve,
+	hasPermission,
+	type ProjectVisibility
+} from '@selvajs/platform';
 import {
 	canChangeVisibilityToPublic,
 	validateProjectFlags,
@@ -81,6 +89,20 @@ export const PATCH: RequestHandler = apiRoute(
 
 		const input = await parseBody(request, UpdateProjectBodySchema);
 
+		// `platform` takes a project out of its org entirely: no org member can
+		// see it, `canReclaim` returns false forever, and with
+		// ENABLE_PLATFORM_PROJECTS off (the default) every rule denies everyone,
+		// including admins. Escalating into it must be instance-admin only.
+		if (input.visibility === 'platform' && existing.visibility !== 'platform') {
+			if (!hasPermission(ctx, 'instance_admin')) {
+				apiError(
+					403,
+					ApiErrorCode.FORBIDDEN,
+					'Only a platform admin can give a project platform visibility.'
+				);
+			}
+		}
+
 		// Flipping *to* public is a disclosure action — a stricter gate than a
 		// normal edit.
 		if (input.visibility === 'public' && existing.visibility !== 'public') {
@@ -119,7 +141,7 @@ export const PATCH: RequestHandler = apiRoute(
 			name?: string;
 			slug?: string;
 			description?: string;
-			visibility?: 'public' | 'org' | 'private' | 'platform';
+			visibility?: ProjectVisibility;
 			autoJoinOnUpload?: boolean;
 		} = {};
 		// A renamed project gets a re-derived slug; the two must not drift apart.

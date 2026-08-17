@@ -12,6 +12,7 @@ import {
 	hasPermission,
 	canView,
 	canEdit,
+	canManage,
 	serversVisibleTo,
 	defaultServerIdFor
 } from '@selvajs/platform';
@@ -35,14 +36,25 @@ export type {
 };
 
 export interface ProjectWithMembers extends Project {
+	/** Empty unless `canManage` — membership is not part of viewing a project. */
 	members: ProjectMember[];
 	/**
-	 * Whether the caller can edit this project (add/edit definitions, change
-	 * settings). Computed per-row so the UI can disable affordances on rows the
-	 * user can only view (leadership visibility per Permissions.md §4).
-	 * `instance_admin` always edits via the centralized bypass.
+	 * Whether the caller can add and edit definitions in this project — owner or
+	 * editor. Computed per-row so the UI can disable affordances on rows the user
+	 * can only view (leadership visibility per Permissions.md §4).
+	 *
+	 * There is no `instance_admin` bypass here. Content access follows `canView`
+	 * and `canEdit` for everyone (§2); the bypass applies to management scope
+	 * only, and reclaim is the explicit escalation path into a project.
 	 */
 	canEdit: boolean;
+	/**
+	 * Whether the caller can change settings and manage members — owner only
+	 * (§5). Narrower than `canEdit`: an editor edits content, not the project.
+	 * The org-wide `manage_projects` permission gates whether the surface exists
+	 * at all; this gates which rows it may act on.
+	 */
+	canManage: boolean;
 }
 
 /** User row with display name joined from the profile store. */
@@ -68,7 +80,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const [orgsPage, recordsPage, computeConfig] = await Promise.all([
 			getOrganizationProvider().listOrgs(ctx, { limit: 200 }),
 			getDefinitionMeta().list(ctx, { limit: 200 }),
-			getComputeServerConfigStore().getConfig(ctx)
+			getComputeServerConfigStore().getConfig(
+				ctx,
+				ctx.actingOrgId ? { scopeToOrgId: ctx.actingOrgId } : {}
+			)
 		]);
 
 		const projectStore = getProjectProvider();
@@ -111,29 +126,32 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const projectIds = new Set(accessibleProjects.map((p) => p.id));
 		const records = recordsPage.items.filter((r) => projectIds.has(r.projectId));
 
-		// Load members for projects if user can manage projects
-		let projects: ProjectWithMembers[];
-		const editInput = (project: Project) =>
+		const accessInput = (project: Project) =>
 			projectAccessInputFromRows(ctx, project, {
 				member: memberByProjectId.get(project.id) ?? null,
 				orgMember: orgMemberByOrgId.get(project.orgId) ?? null
 			});
 
-		if (canManageProjects) {
-			projects = await Promise.all(
-				visibleProjects.map(async (project) => ({
+		// The roster drives member-management UI, so it follows `canManage` rather
+		// than the org-wide permission that decides whether that UI exists at all.
+		// Seeing a project is not authority to enumerate who is in it, and
+		// `manage_projects` can be held by a plain member (§11) — on a public
+		// project that would otherwise list every member to them.
+		const projects: ProjectWithMembers[] = await Promise.all(
+			visibleProjects.map(async (project) => {
+				const input = accessInput(project);
+				const manageable = canManage(input);
+				return {
 					...project,
-					members: (await projectStore.listProjectMembers(ctx, project.id, { limit: 200 })).items,
-					canEdit: canEdit(editInput(project))
-				}))
-			);
-		} else {
-			projects = visibleProjects.map((project) => ({
-				...project,
-				members: [],
-				canEdit: canEdit(editInput(project))
-			}));
-		}
+					members:
+						canManageProjects && manageable
+							? (await projectStore.listProjectMembers(ctx, project.id, { limit: 200 })).items
+							: [],
+					canEdit: canEdit(input),
+					canManage: manageable
+				};
+			})
+		);
 
 		// Load users for member management — scoped to members of the active org.
 		let users: UserListItem[] = [];
@@ -160,7 +178,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		// Picker shows only servers visible to the user's acting org —
 		// platform servers shared with this org (or with `'all'`, or the
-		// global default) plus this org's org-private servers.
+		// global default) plus this org's org-private servers. The store already
+		// applied this filter; re-running it covers the no-acting-org case, where
+		// the read above is unscoped.
 		const computeServers = serversVisibleTo(computeConfig, ctx.actingOrgId);
 		const defaultComputeServerId = defaultServerIdFor(computeConfig, ctx.actingOrgId) ?? null;
 

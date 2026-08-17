@@ -4,27 +4,10 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { flag, getProjectProvider, getOrganizationProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
-import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { slugify } from '@selvajs/platform';
-import { ProviderError, SYSTEM_CONTEXT, type Project } from '@selvajs/platform';
-
-const MAX_SLUG_ATTEMPTS = 25;
-
-function isSlugConflict(err: unknown): boolean {
-	return (
-		err instanceof ProviderError &&
-		err.statusCode === 409 &&
-		/projects_org_id_slug_key/.test(err.message)
-	);
-}
-
-function isNameConflict(err: unknown): boolean {
-	return (
-		err instanceof ProviderError &&
-		err.statusCode === 409 &&
-		/projects_org_name_unique/.test(err.message)
-	);
-}
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiRoute, created, parseBody } from '$lib/server/api/http';
+import { createProjectWithUniqueSlug } from '$lib/server/projects/createProject.server';
+import { SYSTEM_CONTEXT, type Project } from '@selvajs/platform';
 
 const CreatePlatformProjectBody = z.object({
 	name: z.string().min(1, 'Project name is required').max(128).trim(),
@@ -44,10 +27,12 @@ const CreatePlatformProjectBody = z.object({
  * `SYSTEM_CONTEXT` because admin reads cross every org boundary; the route is
  * gated on `instance_admin`.
  */
-export const GET: RequestHandler = async ({ locals }) => {
-	requireInstanceAdmin(locals);
-	if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
-	try {
+export const GET: RequestHandler = apiRoute(
+	'Failed to list platform projects',
+	async ({ locals }) => {
+		requireInstanceAdmin(locals);
+		if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
+
 		// Listing across orgs requires walking each org. Fast enough for the
 		// admin surface; if instance scale ever demands it, add a dedicated
 		// `listPlatform()` to IProjectStore.
@@ -62,76 +47,53 @@ export const GET: RequestHandler = async ({ locals }) => {
 			}
 		}
 		return json({ projects: all });
-	} catch (err) {
-		handleApiError(err, 'Failed to list platform projects');
 	}
-};
+);
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	const user = requireInstanceAdmin(locals);
-	if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
-	const ctx = locals.ctx!;
+export const POST: RequestHandler = apiRoute(
+	'Failed to create platform project',
+	async ({ request, locals }) => {
+		const user = requireInstanceAdmin(locals);
+		if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
 
-	const body = await request.json().catch(() => null);
-	const parsed = CreatePlatformProjectBody.safeParse(body);
-	if (!parsed.success) throwZodError(parsed.error);
+		const input = await parseBody(request, CreatePlatformProjectBody);
 
-	// Resolve the host org. Admin's `actingOrgId` is the natural default; if
-	// they pass an explicit `orgId`, validate it exists.
-	const hostOrgId = parsed.data.orgId ?? ctx.actingOrgId;
-	if (!hostOrgId) {
-		apiError(
-			400,
-			ApiErrorCode.VALIDATION_FAILED,
-			'A host orgId is required (no active organization in context).'
-		);
-	}
-	const hostOrg = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, hostOrgId);
-	if (!hostOrg)
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, `Host organization '${hostOrgId}' not found.`);
-
-	const projectStore = getProjectProvider();
-	const baseSlug = slugify(parsed.data.name) || 'platform-project';
-	const now = new Date().toISOString();
-	const projectId = randomUUID();
-
-	for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
-		const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
-		const project: Project = {
-			id: projectId,
-			orgId: hostOrgId,
-			name: parsed.data.name,
-			slug,
-			description: parsed.data.description,
-			visibility: 'platform',
-			ownerId: user.id,
-			createdBy: user.id,
-			updatedBy: user.id,
-			autoJoinOnUpload: false,
-			createdAt: now,
-			updatedAt: now,
-			deletedAt: null
-		};
-
-		try {
-			await projectStore.createProject(SYSTEM_CONTEXT, project);
-			return json(project, { status: 201 });
-		} catch (err) {
-			if (isNameConflict(err)) {
-				apiError(
-					409,
-					ApiErrorCode.CONFLICT,
-					'A project with that name already exists in the host organization.'
-				);
-			}
-			if (isSlugConflict(err)) continue;
-			handleApiError(err, 'Failed to create platform project');
+		// Resolve the host org. Admin's `actingOrgId` is the natural default; if
+		// they pass an explicit `orgId`, validate it exists.
+		const hostOrgId = input.orgId ?? locals.ctx!.actingOrgId;
+		if (!hostOrgId) {
+			apiError(
+				400,
+				ApiErrorCode.VALIDATION_FAILED,
+				'A host orgId is required (no active organization in context).'
+			);
 		}
-	}
+		const hostOrg = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, hostOrgId);
+		if (!hostOrg)
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Host organization '${hostOrgId}' not found.`);
 
-	apiError(
-		409,
-		ApiErrorCode.CONFLICT,
-		'Could not pick a unique project slug after several attempts.'
-	);
-};
+		// `autoJoinOnUpload: false` is hardcoded, which is what makes skipping
+		// `validateProjectFlags` safe here — a platform project may not carry the
+		// flag at all. If this ever takes the flag from the body, validate it.
+		const project = await createProjectWithUniqueSlug(
+			getProjectProvider(),
+			{
+				id: randomUUID(),
+				orgId: hostOrgId,
+				name: input.name,
+				description: input.description,
+				visibility: 'platform',
+				ownerId: user.id,
+				createdBy: user.id,
+				updatedBy: user.id,
+				autoJoinOnUpload: false
+			},
+			{
+				writeCtx: SYSTEM_CONTEXT,
+				fallbackSlug: 'platform-project',
+				conflictScope: 'the host organization'
+			}
+		);
+		return created(project);
+	}
+);

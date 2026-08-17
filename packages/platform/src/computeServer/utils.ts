@@ -86,6 +86,30 @@ export function resolveServerForOrg(
 	return visible[0];
 }
 
+/**
+ * The config as one org may see it: visible servers only, `orgDefaults` reduced
+ * to this org's own entry, and `defaultServerId` dropped when the global default
+ * is not visible here.
+ *
+ * Applied inside `getConfig` when `scopeToOrgId` is passed, so an org-facing
+ * caller cannot forget the filter and leak other orgs' server URLs or the
+ * instance's default choice.
+ */
+export function scopeConfigToOrg(config: ComputeConfig, orgId: string): ComputeConfig {
+	const servers = serversVisibleTo(config, orgId);
+	const visibleIds = new Set(servers.map((s) => s.id));
+	const orgDefault = config.orgDefaults?.[orgId];
+
+	return {
+		servers,
+		defaultServerId:
+			config.defaultServerId && visibleIds.has(config.defaultServerId)
+				? config.defaultServerId
+				: undefined,
+		orgDefaults: orgDefault ? { [orgId]: orgDefault } : {}
+	};
+}
+
 /** Lookup by id, ignoring scope or visibility — for admin contexts that display a server outside the visibility filter. */
 export function findServerById(config: ComputeConfig, id: string): ComputeServerConfig | undefined {
 	return config.servers.find((s) => s.id === id);

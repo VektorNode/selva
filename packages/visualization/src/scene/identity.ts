@@ -27,6 +27,13 @@ export function getStableKey(object: THREE.Object3D): string | null {
 	if (typeof data.id === 'string' && data.id) return data.id;
 
 	if (typeof data.sourceComponentId === 'string' && data.sourceComponentId) {
+		// A merged mesh covers several source meshes and its `originalIndex` is only the first
+		// member's, which collides with every other merge starting at the same index. Key on the
+		// whole (sorted, so material grouping order can't change it) member set when there is one.
+		if (Array.isArray(data.mergedIndices) && data.mergedIndices.length > 0) {
+			const members = [...data.mergedIndices].sort((a, b) => a - b).join(',');
+			return `gh${SEP}${data.sourceComponentId}${SEP}m${SEP}${members}`;
+		}
 		// `originalIndex` is 0 for the first mesh of a component, so check presence, not truthiness.
 		const index = typeof data.originalIndex === 'number' ? data.originalIndex : 0;
 		return `gh${SEP}${data.sourceComponentId}${SEP}${index}`;

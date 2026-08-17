@@ -1,6 +1,7 @@
 import type {
 	IShareLinkStore,
 	IEventSink,
+	OrgShareLink,
 	ShareLink,
 	RequestContext,
 	ListOptions,
@@ -21,6 +22,10 @@ const SHARE_LINK_COLUMNS =
  * `getByTokenHash` and `tryIncrementSolveCount` go through the service-role
  * client and a SECURITY DEFINER RPC, bypassing RLS: the token itself is the
  * credential, not the authenticated user's identity.
+ *
+ * Reads filter `revoked_at` AND `expires_at` — a dead link must read dead
+ * through the store, not only wherever a route remembers to re-check the date.
+ * `try_increment_share_link_solve_count` already enforces both server-side.
  */
 export class SupabaseShareLinkStore implements IShareLinkStore {
 	private readonly events: IEventSink;
@@ -58,10 +63,39 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			.select(SHARE_LINK_COLUMNS, { count: 'exact' })
 			.eq('definition_guid', definitionId)
 			.is('revoked_at', null)
+			.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
 			.order('created_at', { ascending: false })
 			.range(range.from, range.to);
 		if (error) throw mapPostgrestError(error);
 		const items = (data ?? []).map(rowToLink);
+		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
+	}
+
+	async listByOrg(
+		ctx: RequestContext,
+		orgId: string,
+		opts?: ListOptions
+	): Promise<Page<OrgShareLink>> {
+		// `!inner` makes the embeds a filtering join, so `projects.org_id` scopes
+		// the whole query — links whose definition or project is soft-deleted drop
+		// out for free. RLS narrows this further to orgs the caller leads.
+		const range = toRange(opts);
+		const { data, error, count } = await this.clients
+			.forRequest(ctx)
+			.from('share_links')
+			.select(
+				`${SHARE_LINK_COLUMNS}, definitions!inner(display_name, deleted_at, projects!inner(id, name, org_id, deleted_at))`,
+				{ count: 'exact' }
+			)
+			.is('revoked_at', null)
+			.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+			.is('definitions.deleted_at', null)
+			.is('definitions.projects.deleted_at', null)
+			.eq('definitions.projects.org_id', orgId)
+			.order('created_at', { ascending: false })
+			.range(range.from, range.to);
+		if (error) throw mapPostgrestError(error);
+		const items = (data ?? []).map((row) => rowToOrgLink(row as unknown as OrgShareLinkRow));
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
 
@@ -84,6 +118,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			.select(`${SHARE_LINK_COLUMNS}, definitions!inner(deleted_at)`)
 			.eq('token_hash', tokenHash)
 			.is('revoked_at', null)
+			.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
 			.is('definitions.deleted_at', null)
 			.maybeSingle();
 		if (error) throw mapPostgrestError(error);
@@ -130,6 +165,40 @@ interface ShareLinkRow {
 	allow_solve: boolean;
 	max_solves: number | null;
 	solve_count: number;
+}
+
+/**
+ * `listByOrg`'s row. PostgREST returns an embed as an object for a to-one
+ * relationship and an array for to-many; both shapes are accepted because the
+ * choice depends on how it infers the FK, not on anything this store controls.
+ */
+interface OrgShareLinkRow extends ShareLinkRow {
+	definitions:
+		| { display_name: string; projects: ProjectEmbed | ProjectEmbed[] }
+		| { display_name: string; projects: ProjectEmbed | ProjectEmbed[] }[];
+}
+
+interface ProjectEmbed {
+	id: string;
+	name: string;
+}
+
+function one<T>(embed: T | T[]): T {
+	return Array.isArray(embed) ? embed[0] : embed;
+}
+
+function rowToOrgLink(row: OrgShareLinkRow): OrgShareLink {
+	const definition = one(row.definitions);
+	const project = one(definition.projects);
+	// `tokenHash` is dropped rather than carried: this row is built for a page
+	// spanning every definition in the tenant.
+	const { tokenHash: _tokenHash, ...rest } = rowToLink(row);
+	return {
+		...rest,
+		definitionName: definition.display_name,
+		projectId: project.id,
+		projectName: project.name
+	};
 }
 
 function rowToLink(row: ShareLinkRow): ShareLink {

@@ -2,7 +2,9 @@ import { error, redirect } from '@sveltejs/kit';
 import type {
 	AuthUser,
 	DefinitionRecord,
+	OrgMember,
 	OrgPermission,
+	OrgRole,
 	PlatformPermission,
 	Project,
 	RequestContext
@@ -12,6 +14,7 @@ import {
 	hasPermission,
 	canReclaim,
 	canCreateProject,
+	canChangeOrgRole,
 	canView,
 	canSolve,
 	canEdit,
@@ -27,9 +30,7 @@ import {
 	getPlatformProjectGrantStore,
 	flag
 } from './providers.server.js';
-import { handleApiError, apiError, ApiErrorCode } from './api-errors.js';
-
-export const throwProviderError = handleApiError;
+import { apiError, ApiErrorCode } from './api-errors.js';
 
 type AnyPermission = PlatformPermission | OrgPermission;
 
@@ -62,6 +63,10 @@ export function assertPagePermission(locals: Locals, permission: AnyPermission):
 	return user;
 }
 
+// Named aliases exist only for permissions with real call sites. Routes gating
+// on anything else call `requirePermission(locals, '…')` directly rather than
+// growing an alias per permission — `manage_definitions` and `manage_projects`
+// had wrappers that nothing ever called.
 export const requireManageInstanceUsers = (locals: Locals) =>
 	requirePermission(locals, 'manage_instance_users');
 export const requireManageCompute = (locals: Locals) => requirePermission(locals, 'manage_compute');
@@ -69,21 +74,49 @@ export const requireManageOrgMembers = (locals: Locals) =>
 	requirePermission(locals, 'manage_org_members');
 export const requireManageOrgCompute = (locals: Locals) =>
 	requirePermission(locals, 'manage_org_compute');
-export const requireManageDefinitions = (locals: Locals) =>
-	requirePermission(locals, 'manage_definitions');
-export const requireManageProjects = (locals: Locals) =>
-	requirePermission(locals, 'manage_projects');
 
 export const assertManageInstanceUsers = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_instance_users');
 export const assertManageCompute = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_compute');
-export const assertManageDefinitions = (locals: Locals) =>
-	assertPagePermission(locals, 'manage_definitions');
-export const assertManageProjects = (locals: Locals) =>
-	assertPagePermission(locals, 'manage_projects');
 
 export const requireInstanceAdmin = (locals: Locals) => requirePermission(locals, 'instance_admin');
+
+/**
+ * Platform scope is not delegable: `manage_instance_users` runs the user-admin
+ * surface but must not be able to mint an `instance_admin`, or an org admin
+ * holding it self-elevates. Three routes write platform permissions — the two
+ * `/api/admin/users` handlers and the invite mint route — and each carried its
+ * own copy of this check.
+ *
+ * Pass `current` on an update. Revoking is a platform-scope change too, so a
+ * PATCH that drops `instance_admin` is refused for the same reason granting it
+ * is; without `current` the caller is creating (a user, an invite) and there is
+ * nothing to compare against.
+ *
+ * Requesting nothing on a create is always allowed — that is a
+ * `manage_instance_users` operation, not a platform-scope one.
+ */
+export function assertCanGrantPlatformPermissions(
+	ctx: RequestContext,
+	requested: readonly PlatformPermission[],
+	current?: readonly PlatformPermission[]
+): void {
+	const changed = current
+		? requested.length !== current.length ||
+			requested.some((p) => !current.includes(p)) ||
+			current.some((p) => !requested.includes(p))
+		: requested.length > 0;
+	if (!changed) return;
+	if (hasPermission(ctx, 'instance_admin')) return;
+	apiError(
+		403,
+		ApiErrorCode.FORBIDDEN,
+		current
+			? 'Only a platform admin can change platform-scope permissions'
+			: 'Only a platform admin can grant platform-scope permissions'
+	);
+}
 
 /**
  * Tenancy gate for `/api/v1/orgs/{orgId}/…`. The URL id is never trusted alone
@@ -105,21 +138,13 @@ export function requireActingOrg(
 }
 
 /**
- * Gate for routes reachable by any platform-class permission holder (e.g. the
+ * Gate for pages reachable by any platform-class permission holder (the
  * `/admin` shell — `instance_admin`, `manage_compute`, `manage_instance_users`,
  * or `manage_updates` all qualify). Org-scope permissions never admit entry:
  * org admins do not belong on platform-scoped surfaces.
  *
- * Throws 403 — use in API routes.
+ * Redirects to /library — use in page load functions on platform-scoped routes.
  */
-export function requireAnyPlatformPermission(locals: Locals): AuthUser {
-	const { user, ctx } = requireAuthed(locals);
-	const allowed = ALL_PLATFORM_PERMISSIONS.some((p) => hasPermission(ctx, p));
-	if (!allowed) throw error(403, `You don't have permission to do this.`);
-	return user;
-}
-
-/** Redirects to /library — use in page load functions on platform-scoped routes. */
 export function assertAnyPlatformPermission(locals: Locals): AuthUser {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = ALL_PLATFORM_PERMISSIONS.some((p) => hasPermission(ctx, p));
@@ -176,16 +201,6 @@ const accessInputs = createProjectAccessInputBuilder({
 
 const buildProjectAccessInput = accessInputs.buildProjectAccessInput;
 export const projectAccessInputFromRows = accessInputs.projectAccessInputFromRows;
-
-export async function requireCanEdit(locals: Locals, projectId: string): Promise<AuthUser> {
-	const { user, ctx } = requireAuthed(locals);
-	const allowed = await contentCheck(async () => {
-		const project = await loadProjectOr404(ctx, projectId);
-		return canEdit(await buildProjectAccessInput(ctx, project));
-	});
-	if (!allowed) throw error(403, 'You do not have permission to edit this project.');
-	return user;
-}
 
 /**
  * Gates creation of a *new* definition. Container projects require project
@@ -246,6 +261,25 @@ export async function requireTargetIsOrgMember(
 }
 
 /**
+ * `canChangeOrgRole` with the actor's membership row loaded — whether the
+ * caller may grant or revoke org `owner`/`admin` standing (§3).
+ *
+ * Returns rather than throws: the three callers each phrase the refusal for
+ * what they were doing ("invite someone as owner", "change roles", "remove
+ * another owner") and raise it through `apiError`. What must not diverge is the
+ * decision, which is why that half lives in `rules.ts` and this loads its input.
+ */
+export async function canActorChangeOrgRole(
+	ctx: RequestContext,
+	orgId: string,
+	role: OrgRole
+): Promise<boolean> {
+	if (role === 'member') return true;
+	const actorMember = await getOrganizationProvider().getOrgMember(ctx, orgId, ctx.userId);
+	return canChangeOrgRole({ actorMember, role });
+}
+
+/**
  * `canReclaim` — org owner/admin escape hatch. Returns the project so the
  * handler can use its `orgId` without re-fetching.
  */
@@ -255,6 +289,16 @@ export async function requireCanReclaim(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
+
+	// Ahead of the bypass, not inside the check: `instance_admin` short-circuits
+	// `managementBypassOrRun`, so `canReclaim`'s platform-project refusal (§4a)
+	// never ran for the one role that could reach it. Reclaim is content
+	// escalation wearing management clothing — the management bypass is not its
+	// to inherit.
+	if (project.visibility === 'platform') {
+		throw error(403, 'Platform projects cannot be reclaimed.');
+	}
+
 	const allowed = await managementBypassOrRun(ctx, async () => {
 		const orgMember = await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
 		return canReclaim({
@@ -291,26 +335,29 @@ export async function requireCanCreateProject(
 	return { user, ctx };
 }
 
-export async function requireCanManage(locals: Locals, projectId: string): Promise<AuthUser> {
-	const { user, ctx } = requireAuthed(locals);
-	const allowed = await managementBypassOrRun(ctx, async () => {
-		const project = await loadProjectOr404(ctx, projectId);
-		return canManage(await buildProjectAccessInput(ctx, project));
-	});
-	if (!allowed) throw error(403, 'Only project owners can manage this project.');
-	return user;
-}
-
-export async function requireCanManageMembers(
+/**
+ * Project-management gate (`canManage` — owner, or `instance_admin` via the
+ * bypass). Managing members is the same authority as managing the project, so
+ * both callers share this; `action` only shapes the 403 message.
+ */
+export async function requireCanManage(
 	locals: Locals,
-	projectId: string
+	projectId: string,
+	action: 'project' | 'members' = 'project'
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await managementBypassOrRun(ctx, async () => {
 		const project = await loadProjectOr404(ctx, projectId);
 		return canManage(await buildProjectAccessInput(ctx, project));
 	});
-	if (!allowed) throw error(403, 'Only project owners can manage members.');
+	if (!allowed) {
+		throw error(
+			403,
+			action === 'members'
+				? 'Only project owners can manage members.'
+				: 'Only project owners can manage this project.'
+		);
+	}
 	return user;
 }
 
@@ -362,6 +409,20 @@ export async function requireCanSolve(
 }
 
 /**
+ * Org membership for the commons branch of `canEditDefinition`, or `null` when
+ * that branch cannot fire. Skipping the round-trip on container projects keeps
+ * the common edit path at the same two reads it had before commons gained the
+ * membership test.
+ */
+async function loadCommonsOrgMember(
+	ctx: RequestContext,
+	project: Project | null
+): Promise<OrgMember | null> {
+	if (!project?.autoJoinOnUpload) return null;
+	return await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
+}
+
+/**
  * Loads the record and gates editing. Returns the record AND the project it
  * loads for the gate, so callers skip a re-fetch of either.
  */
@@ -379,6 +440,7 @@ export async function requireEditableDefinition(locals: Locals, guid: string) {
 			project,
 			definition: record,
 			member,
+			orgMember: await loadCommonsOrgMember(ctx, project),
 			userId: ctx.userId,
 			platformPermissions: ctx.platformPermissions,
 			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
@@ -412,6 +474,7 @@ export async function requireCanEditDefinition(
 			project,
 			definition,
 			member,
+			orgMember: await loadCommonsOrgMember(ctx, project),
 			userId: ctx.userId,
 			platformPermissions: ctx.platformPermissions,
 			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')

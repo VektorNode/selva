@@ -127,6 +127,10 @@ definitions-config.json
 packages/plugin-ui/static/baseHDR.hdr
 packages/ui/static/baseHDR.hdr
 
+# TypeDoc output — regenerate with `pnpm --filter @selvajs/compute build-docs`
+packages/compute/docs/api/
+packages/website/static/docs/
+
 
 # Terraform
 infra/terraform.tfvars

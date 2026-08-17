@@ -10,7 +10,8 @@ import {
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
-import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiRoute, created, parseBody, requireParams } from '$lib/server/api/http';
 import { SYSTEM_CONTEXT, type PlatformProjectGrant } from '@selvajs/platform';
 
 const CreateGrantBody = z.object({
@@ -28,60 +29,51 @@ async function assertPlatformProject(id: string) {
 	return project;
 }
 
-export const GET: RequestHandler = async ({ params, locals }) => {
+export const GET: RequestHandler = apiRoute('Failed to list grants', async ({ params, locals }) => {
 	requireInstanceAdmin(locals);
-	const { id } = params;
-	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
-	try {
-		await assertPlatformProject(id);
-		const grants = await getPlatformProjectGrantStore().listByProject(SYSTEM_CONTEXT, id);
-		return json({ grants });
-	} catch (err) {
-		handleApiError(err, 'Failed to list grants');
-	}
-};
+	const { id } = requireParams(params, 'id');
 
-export const POST: RequestHandler = async ({ params, request, locals }) => {
-	const user = requireInstanceAdmin(locals);
-	const { id } = params;
-	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing project ID');
+	await assertPlatformProject(id);
+	const grants = await getPlatformProjectGrantStore().listByProject(SYSTEM_CONTEXT, id);
+	return json({ grants });
+});
 
-	const body = await request.json().catch(() => null);
-	const parsed = CreateGrantBody.safeParse(body);
-	if (!parsed.success) throwZodError(parsed.error);
+export const POST: RequestHandler = apiRoute(
+	'Failed to create grant',
+	async ({ params, request, locals }) => {
+		const user = requireInstanceAdmin(locals);
+		const { id } = requireParams(params, 'id');
 
-	try {
+		const input = await parseBody(request, CreateGrantBody);
 		await assertPlatformProject(id);
 
 		// Validate the grantee actually exists. Local provider has no FK so we
 		// catch typos here; Supabase will eventually enforce via DB FK.
-		if (parsed.data.granteeType === 'org') {
-			const org = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, parsed.data.granteeId);
+		if (input.granteeType === 'org') {
+			const org = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, input.granteeId);
 			if (!org)
 				apiError(
 					400,
 					ApiErrorCode.VALIDATION_FAILED,
-					`Organization '${parsed.data.granteeId}' not found`
+					`Organization '${input.granteeId}' not found`
 				);
 		} else {
-			const profile = await getUserProfileStore().getProfile(SYSTEM_CONTEXT, parsed.data.granteeId);
+			const profile = await getUserProfileStore().getProfile(SYSTEM_CONTEXT, input.granteeId);
 			if (!profile)
-				apiError(400, ApiErrorCode.VALIDATION_FAILED, `User '${parsed.data.granteeId}' not found`);
+				apiError(400, ApiErrorCode.VALIDATION_FAILED, `User '${input.granteeId}' not found`);
 		}
 
 		const grant: PlatformProjectGrant = {
 			id: randomUUID(),
 			projectId: id,
-			granteeType: parsed.data.granteeType,
-			granteeId: parsed.data.granteeId,
-			canSolve: parsed.data.canSolve,
+			granteeType: input.granteeType,
+			granteeId: input.granteeId,
+			canSolve: input.canSolve,
 			createdBy: user.id,
 			createdAt: new Date().toISOString()
 		};
 
 		await getPlatformProjectGrantStore().create(SYSTEM_CONTEXT, grant);
-		return json(grant, { status: 201 });
-	} catch (err) {
-		handleApiError(err, 'Failed to create grant');
+		return created(grant);
 	}
-};
+);

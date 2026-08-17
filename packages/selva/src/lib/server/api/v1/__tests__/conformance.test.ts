@@ -305,6 +305,8 @@ describe('every admin handler calls a platform-permission guard', () => {
 	// Four helpers, not one: three named guards plus raw `requirePermission` with
 	// a platform permission. `requireManageOrgMembers` is deliberately absent —
 	// it is org-scoped, and the one admin route that used it moved to v1.
+	// `requireAnyPlatformPermission` is absent too: it was the page-load variant
+	// only, and no endpoint ever called it.
 	const PLATFORM_PERMISSIONS = [
 		'instance_admin',
 		'manage_compute',
@@ -314,8 +316,7 @@ describe('every admin handler calls a platform-permission guard', () => {
 	const NAMED_GUARDS = [
 		'requireInstanceAdmin',
 		'requireManageCompute',
-		'requireManageInstanceUsers',
-		'requireAnyPlatformPermission'
+		'requireManageInstanceUsers'
 	];
 
 	function guardsMethod(source: string, method: HttpMethod): boolean {
@@ -345,5 +346,128 @@ describe('every admin handler calls a platform-permission guard', () => {
 			guardsMethod(route.source, method),
 			`${method} /api/admin/${route.routePath} calls no platform-permission guard`
 		).toBe(true);
+	});
+});
+
+// ============================================================================
+// Both API surfaces share one handler wrapper
+// ============================================================================
+
+/**
+ * `/api/v1/*` and `/api/admin/*` are siblings over one core, so a rule that
+ * lands in the shared helpers must reach both. For a long time it couldn't:
+ * `apiRoute` lived under `api/v1/` and 0 of the admin handlers used it, so each
+ * one hand-rolled its own `try/catch` and `if (!id) apiError(400, …)` preamble.
+ * A handler that forgot the catch surfaced a raw 500 with a provider message in
+ * it, and nothing flagged the omission.
+ *
+ * Exempt by nature, not by neglect: handlers that return a stream own their own
+ * error signalling, because the status line is already sent by the time
+ * anything can fail. `apiRoute` cannot help them, and wrapping them would hide
+ * that.
+ */
+describe('every API handler is wrapped in apiRoute', () => {
+	const STREAMING_EXEMPT = new Set([
+		'POST api/admin/system/update', // SSE — errors are `sendEvent`'d into the stream
+		'GET api/admin/system/update', // returns the tee'd log as text/plain
+		'GET api/admin/system/throughput', // streams random bytes downstream
+		'POST api/admin/system/throughput', // reads the body as a stream
+		'GET api/admin/system/health', // every check self-reports its own status
+		'GET api/admin/compute', // maps its catch to a deliberate logged 500
+		'PUT api/admin/compute',
+		'POST api/admin/compute/actions',
+		'GET api/admin/compute/status',
+		'POST api/v1/compute', // solve paths: streaming + their own metric marks
+		'POST api/v1/compute/schema',
+		'POST api/v1/definitions/[guid]/solve'
+	]);
+
+	function wrapsMethod(source: string, method: HttpMethod): boolean {
+		return new RegExp(`export\\s+const\\s+${method}\\s*:[^=]*=\\s*apiRoute\\s*\\(`).test(source);
+	}
+
+	const withPrefix = [
+		...v1Routes.map((r) => ({ ...r, prefix: 'api/v1' })),
+		...adminRoutes.map((r) => ({ ...r, prefix: 'api/admin' }))
+	];
+
+	const cases = withPrefix.flatMap((r) =>
+		r.methods
+			.map((m) => [`${m} ${r.prefix}/${r.routePath}`, r, m] as const)
+			.filter(([name]) => !STREAMING_EXEMPT.has(name))
+	);
+
+	it('found some to check', () => {
+		expect(cases.length).toBeGreaterThan(40);
+	});
+
+	it('every exemption names a route that still exists', () => {
+		// An exemption for a deleted route silently excuses nothing; an exemption
+		// for a route that was later converted hides a passing case.
+		const shipped = new Set(
+			withPrefix.flatMap((r) => r.methods.map((m) => `${m} ${r.prefix}/${r.routePath}`))
+		);
+		expect([...STREAMING_EXEMPT].filter((e) => !shipped.has(e))).toEqual([]);
+	});
+
+	it.each(cases)('%s', (_name, route, method) => {
+		expect(
+			wrapsMethod(route.source, method),
+			`${method} ${route.prefix}/${route.routePath} is not wrapped in apiRoute — ` +
+				'an unhandled error there becomes a raw 500 carrying a provider message'
+		).toBe(true);
+	});
+});
+
+// ============================================================================
+// The permissions spec lists every route
+// ============================================================================
+
+/**
+ * `Permissions.md` §8 is a table — endpoint, method, governing rule — which
+ * makes it the one part of a 770-line prose document a test can hold.
+ *
+ * The registry↔route check above catches an undocumented *contract*. This
+ * catches an unreviewed *authorization decision*, which is a different miss:
+ * `GET /orgs/{orgId}/members` and `GET /definitions/{guid}/versions` were both
+ * fully registered and fully documented in OpenAPI while being absent from the
+ * matrix, so nobody had ever written down who may call them. The audit found
+ * one of them returning every colleague's permission array and the other
+ * acting as a cross-tenant existence oracle.
+ *
+ * Deliberately one-directional: a matrix row with no route is fine, because
+ * §8 documents unbuilt endpoints on purpose (`GET /api/v1/projects` is marked
+ * "not implemented yet"). The direction that matters is shipped-but-unlisted.
+ */
+describe('Permissions.md §8 lists every route', () => {
+	const matrix = readFileSync(resolve(packageRoot, 'specs/Permissions.md'), 'utf8');
+
+	/**
+	 * Rows look like `| \`/api/v1/orgs/[orgId]/members\` | \`GET/PATCH\` | … |`.
+	 * Paths keep SvelteKit's `[param]` here rather than OpenAPI's `{param}`, a
+	 * single row may cover several methods, and `*` means "every method on this
+	 * path" — used where one permission governs the whole resource.
+	 */
+	const documented = new Set<string>();
+	for (const [, path, methods] of matrix.matchAll(
+		/^\|\s*`(\/api\/[^`]+)`\s*\|\s*`([A-Z/*]+)`\s*\|/gm
+	)) {
+		const listed = methods === '*' ? METHODS : (methods.split('/') as HttpMethod[]);
+		for (const method of listed) documented.add(`${method} ${path}`);
+	}
+
+	const cases = [
+		...v1Routes.flatMap((r) => r.methods.map((m) => [`${m} /api/v1/${r.routePath}`] as const)),
+		...adminRoutes.flatMap((r) => r.methods.map((m) => [`${m} /api/admin/${r.routePath}`] as const))
+	];
+
+	it('parsed the matrix at all', () => {
+		// Without this the whole describe passes vacuously if the table format
+		// changes — the failure mode this file exists to prevent.
+		expect(documented.size).toBeGreaterThan(30);
+	});
+
+	it.each(cases)('%s is in the matrix', (key) => {
+		expect(documented.has(key), `${key} ships but §8 never says who may call it`).toBe(true);
 	});
 });

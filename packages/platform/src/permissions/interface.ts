@@ -48,4 +48,26 @@ export interface IPlatformPermissionStore {
 	 * admin and the op must be refused. Must exclude disabled users.
 	 */
 	countInstanceAdminsExcluding(ctx: RequestContext, excludeUserId: string): Promise<number>;
+
+	/**
+	 * First-run bootstrap: grant `userId` every platform permission **only if
+	 * the instance has no enabled `instance_admin` yet**. Returns whether this
+	 * call was the one that claimed it.
+	 *
+	 * Exists because `hasInstanceAdmin()` followed by `set()` is a read-then-
+	 * write: on a fresh single-tenant install with no
+	 * `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` configured, any signer is eligible, so
+	 * two people signing in at the same moment both observe "no admin" and both
+	 * become permanent platform admins. §2 promises "first signer wins" — this
+	 * is what makes that true rather than aspirational.
+	 *
+	 * Same shape as the sole-admin invariant (`set`), pointing the other way:
+	 * that one refuses to drop the last admin, this one refuses to create a
+	 * second first admin. Adapters MUST make the check and the write atomic.
+	 */
+	claimFirstInstanceAdmin(
+		ctx: RequestContext,
+		userId: string,
+		permissions: readonly PlatformPermission[]
+	): Promise<boolean>;
 }

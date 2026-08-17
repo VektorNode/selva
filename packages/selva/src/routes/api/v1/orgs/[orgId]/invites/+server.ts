@@ -1,15 +1,19 @@
 import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { getInviteStore } from '$lib/server/providers.server';
-import { requireManageOrgMembers, requireActingOrg } from '$lib/server/access.server';
+import {
+	assertCanGrantPlatformPermissions,
+	canActorChangeOrgRole,
+	requireManageOrgMembers,
+	requireActingOrg
+} from '$lib/server/access.server';
 import {
 	DEFAULT_ORG_PERMISSIONS,
 	MEMBER_ASSIGNABLE_PERMISSIONS,
-	hasPermission,
 	type Invite
 } from '@selvajs/platform';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
+import { splitFlatPermissions } from '$lib/server/permissions-scope.server';
 import { hashToken, mintRawToken } from '$lib/server/invites/token.server';
 import { CreateInviteBodySchema } from '$lib/server/api/v1/bodies';
 import { parseListOptions } from '$lib/server/pagination.server';
@@ -45,13 +49,20 @@ export const POST: RequestHandler = apiRoute(
 			input.permissions
 		);
 
-		// Same rule as POST /api/admin/users: platform scope is not delegable, so
-		// an org admin who can invite members still cannot mint an instance_admin.
-		if (submittedPlatformPerms.length > 0 && !hasPermission(locals.ctx!, 'instance_admin')) {
+		// An invite is a third write path into platform scope, so it shares the
+		// guard with both /api/admin/users handlers rather than restating it.
+		assertCanGrantPlatformPermissions(ctx, submittedPlatformPerms);
+
+		// An invite is a second door into `org_members`, so it carries the same
+		// owner-only role gate as PATCH /orgs/{orgId}/members/{userId}. Without
+		// it an admin mints themselves an `owner` invite, accepts it, and then
+		// passes the sole-owner check when removing the founder — `accept-invite`
+		// writes `invite.orgRole` verbatim and cannot re-verify the minter.
+		if (!(await canActorChangeOrgRole(ctx, orgId, input.orgRole))) {
 			apiError(
 				403,
 				ApiErrorCode.FORBIDDEN,
-				'Only a platform admin can grant platform-scope permissions'
+				'Only the org owner can invite someone as owner or admin.'
 			);
 		}
 
