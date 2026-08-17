@@ -215,6 +215,50 @@ export function runPlatformPermissionStoreConformance(
 			expect(await store.hasInstanceAdmin(sysCtx)).toBe(true);
 		});
 
+		it('claimFirstInstanceAdmin grants on a fresh instance and refuses once claimed', async () => {
+			const { store, seedUser } = await createStore();
+			const first = await seedUser();
+			const second = await seedUser();
+			const sysCtx: RequestContext = {
+				userId: '',
+				platformPermissions: [],
+				orgPermissions: [],
+				system: true
+			};
+
+			expect(await store.claimFirstInstanceAdmin(sysCtx, first, ['instance_admin'])).toBe(true);
+			expect(await store.getFor(adminCtx(first), first)).toContain('instance_admin');
+
+			// The instance is claimed. A later signer must not become a second
+			// "first" admin, however they arrive.
+			expect(await store.claimFirstInstanceAdmin(sysCtx, second, ['instance_admin'])).toBe(false);
+			expect(await store.getFor(adminCtx(first), second)).not.toContain('instance_admin');
+		});
+
+		it('a burst of concurrent first-admin claims produces exactly one admin', async () => {
+			const { store, seedUser } = await createStore();
+			// The §2 "first signer wins" promise. With no
+			// BOOTSTRAP_INSTANCE_ADMIN_EMAIL configured every signer is eligible,
+			// so this is four different people hitting a fresh install at once —
+			// the read-then-write version granted all four.
+			const ids: string[] = [];
+			for (let i = 0; i < 4; i++) ids.push(await seedUser());
+			const sysCtx: RequestContext = {
+				userId: '',
+				platformPermissions: [],
+				orgPermissions: [],
+				system: true
+			};
+
+			const results = await Promise.all(
+				ids.map((id) => store.claimFirstInstanceAdmin(sysCtx, id, ['instance_admin']))
+			);
+
+			expect(results.filter(Boolean)).toHaveLength(1);
+			const admins = await store.getForBatch(adminCtx(ids[0]), ids);
+			expect([...admins.values()].filter((p) => p.includes('instance_admin'))).toHaveLength(1);
+		});
+
 		it('countInstanceAdminsExcluding excludes the named user', async () => {
 			const { store, seedUser } = await createStore();
 			const adminA = await seedUser();

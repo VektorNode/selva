@@ -56,6 +56,11 @@ export interface LocalUserDataStore {
 		userId: string,
 		permissions: PlatformPermission[]
 	): Promise<'ok' | 'last_admin' | 'not_found'>;
+	/** Grants only if no user holds `instance_admin` yet. True if this call claimed it. */
+	claimFirstInstanceAdminGuarded(
+		userId: string,
+		permissions: PlatformPermission[]
+	): Promise<boolean>;
 	updateDisplayName(userId: string, displayName: string | undefined): Promise<void>;
 	starDefinition(userId: string, definitionId: string): Promise<void>;
 	unstarDefinition(userId: string, definitionId: string): Promise<void>;
@@ -154,6 +159,25 @@ export function createLocalUserDataStore(filePath: string): LocalUserDataStore {
 				row.platformPermissions = permissions;
 				await persist(file);
 				return 'ok';
+			});
+		},
+
+		async claimFirstInstanceAdminGuarded(userId, permissions) {
+			// Shares the lock with `updatePermissionsGuarded` deliberately: the
+			// two decide the same question from opposite ends ("is there still an
+			// admin" / "is there one yet"), so they must not interleave with each
+			// other any more than with themselves.
+			return withPermissionLock(async () => {
+				const file = await load();
+				if (file.users.some((u) => u.platformPermissions.includes('instance_admin'))) {
+					return false;
+				}
+				const row = file.users.find((u) => u.userId === userId);
+				if (!row) return false;
+
+				row.platformPermissions = permissions;
+				await persist(file);
+				return true;
 			});
 		},
 

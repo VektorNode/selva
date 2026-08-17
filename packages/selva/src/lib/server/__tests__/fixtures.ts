@@ -9,6 +9,13 @@
  * `setTestProviders()` from ./test-providers makes the stack visible to the
  * mocked `$lib/server/providers.server` so route handlers and access helpers
  * see this test's providers when they call `getProjectProvider()` etc.
+ *
+ * **Workspace packages resolve through `dist/`, not source.** Tests here import
+ * `@selvajs/platform` and `@selvajs/local-provider` as built artifacts, so
+ * editing a rule in `packages/platform/src` changes nothing until that package
+ * is rebuilt. This matters most when checking a test by breaking the code it
+ * guards: a source-only edit leaves the suite green and reads as a vacuous
+ * test when it is really a stale build. Rebuild the package first.
  */
 
 import * as fs from 'node:fs/promises';
@@ -444,6 +451,15 @@ export interface AcmeFixture {
 	acmePublic: Project;
 }
 
+/**
+ * The §11 cast.
+ *
+ * **Alice is the org's `ownerId` but her membership row is `admin`.** Those are
+ * separate fields and this fixture deliberately makes them disagree, because
+ * production can too. Every org-role gate reads the **membership row**, so a
+ * test that treats `alice` as "the owner" will invert its own result and pass
+ * for the wrong reason — seed an explicit `role: 'owner'` member instead.
+ */
 export async function seedAcme(tp: TestProviders): Promise<AcmeFixture> {
 	const alice = await seedUser(tp, 'alice@acme.test');
 	const bob = await seedUser(tp, 'bob@acme.test');

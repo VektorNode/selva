@@ -3,6 +3,16 @@ export type DomainEvent =
 	| { type: 'org.deleted'; orgId: string; actorId: string }
 	| { type: 'org_member.added'; orgId: string; userId: string; actorId: string }
 	| { type: 'org_member.removed'; orgId: string; userId: string; actorId: string }
+	// Offboarding that left projects with no owner. Removal is deliberately not
+	// blocked on this (see the org members DELETE handler), so this event is the
+	// only signal that someone needs to reclaim them.
+	| {
+			type: 'org_member.removed_orphaning_projects';
+			orgId: string;
+			userId: string;
+			projectIds: readonly string[];
+			actorId: string;
+	  }
 	| {
 			type: 'org_member.role_changed';
 			orgId: string;

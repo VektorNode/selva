@@ -13,7 +13,8 @@ import {
 } from '$lib/server/access.server';
 import { listAllOrgMembers } from '$lib/server/org-members.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiRoute, created, parseBody } from '$lib/server/api/http';
 import {
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,
@@ -32,7 +33,7 @@ const CreateUserBody = z.object({
 });
 
 // GET — list all users with their platform permissions and acting-org membership.
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = apiRoute('Failed to list users', async ({ locals }) => {
 	requireManageInstanceUsers(locals);
 	const page = await getAuthProvider().listUsers({ limit: 200 });
 	if (page === null) {
@@ -63,21 +64,19 @@ export const GET: RequestHandler = async ({ locals }) => {
 		};
 	});
 	return json({ users });
-};
+});
 
 // POST — create a user + attach to default org with split permissions.
-export const POST: RequestHandler = async ({ request, locals }) => {
-	requireManageInstanceUsers(locals);
-	const auth = getAuthProvider();
+export const POST: RequestHandler = apiRoute(
+	'Failed to create user',
+	async ({ request, locals }) => {
+		requireManageInstanceUsers(locals);
+		const auth = getAuthProvider();
 
-	const body = await request.json().catch(() => null);
-	const parsed = CreateUserBody.safeParse(body);
-	if (!parsed.success) throwZodError(parsed.error);
-	const { email, permissions: platform } = parsed.data;
+		const { email, permissions: platform } = await parseBody(request, CreateUserBody);
 
-	assertCanGrantPlatformPermissions(locals.ctx!, platform);
+		assertCanGrantPlatformPermissions(locals.ctx!, platform);
 
-	try {
 		let user;
 		if (auth.createUser) {
 			// No password branch: a provider that owns credentials admits users by
@@ -122,8 +121,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			});
 		}
 
-		return json(user, { status: 201 });
-	} catch (err) {
-		handleApiError(err, 'Failed to create user');
+		return created(user);
 	}
-};
+);

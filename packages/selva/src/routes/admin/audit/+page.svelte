@@ -16,6 +16,7 @@
 		'org.deleted': 'Org · deleted',
 		'org_member.added': 'Org member · added',
 		'org_member.removed': 'Org member · removed',
+		'org_member.removed_orphaning_projects': 'Org member · removed, PROJECTS ORPHANED',
 		'org_member.role_changed': 'Org member · role changed',
 		'org_member.permissions_changed': 'Org member · permissions changed',
 		'project.created': 'Project · created',

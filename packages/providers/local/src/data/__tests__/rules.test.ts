@@ -13,6 +13,7 @@ import {
 	canEditDefinition,
 	canChangeVisibilityToPublic,
 	checkOwnerRemoval,
+	canChangeOrgRole,
 	withAdminBypass,
 	type DefinitionAccessInput,
 	type OrgMember,
@@ -726,5 +727,36 @@ describe('checkOwnerRemoval', () => {
 				confirmed: true
 			})
 		).toBe('sole_owner');
+	});
+});
+
+// ============================================================================
+// canChangeOrgRole
+// ============================================================================
+describe('canChangeOrgRole', () => {
+	it('only an owner may grant or revoke owner/admin standing', () => {
+		for (const role of ['owner', 'admin'] as const) {
+			expect(canChangeOrgRole({ actorMember: orgMember('owner'), role })).toBe(true);
+			expect(canChangeOrgRole({ actorMember: orgMember('admin'), role })).toBe(false);
+			expect(canChangeOrgRole({ actorMember: orgMember('member'), role })).toBe(false);
+			expect(canChangeOrgRole({ actorMember: null, role })).toBe(false);
+		}
+	});
+
+	it('admins may still act on plain members', () => {
+		// The gate narrows to owner/admin targets. Ordinary member management is
+		// what `manage_org_members` is for, and this rule must not swallow it.
+		expect(canChangeOrgRole({ actorMember: orgMember('admin'), role: 'member' })).toBe(true);
+		expect(canChangeOrgRole({ actorMember: orgMember('member'), role: 'member' })).toBe(true);
+	});
+
+	it('reads the membership row, not the org owner_id', () => {
+		// `Organization.ownerId` and the membership row are separate fields that
+		// can disagree — `seedAcme` has exactly that shape. Only the row is
+		// authority here, so an `admin` row is refused regardless of who the org
+		// claims its owner is.
+		expect(canChangeOrgRole({ actorMember: orgMember('admin', 'u-founder'), role: 'owner' })).toBe(
+			false
+		);
 	});
 });

@@ -178,6 +178,7 @@ export type {
 	VisibilityChangeInput,
 	ReclaimAccessInput,
 	CreateProjectAccessInput,
+	OrgOwnerAuthorityInput,
 	OwnerRemovalInput,
 	OwnerRemovalCheck
 } from './access/rules.js';
@@ -191,6 +192,7 @@ export {
 	canEditDefinition,
 	canReclaim,
 	canCreateProject,
+	canChangeOrgRole,
 	checkOwnerRemoval,
 	withAdminBypass
 } from './access/rules.js';

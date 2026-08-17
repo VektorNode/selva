@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { flag, getProjectProvider, getOrganizationProvider } from '$lib/server/providers.server';
 import { requireInstanceAdmin } from '$lib/server/access.server';
-import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiRoute, created, parseBody } from '$lib/server/api/http';
 import { createProjectWithUniqueSlug } from '$lib/server/projects/createProject.server';
 import { SYSTEM_CONTEXT, type Project } from '@selvajs/platform';
 
@@ -26,10 +27,12 @@ const CreatePlatformProjectBody = z.object({
  * `SYSTEM_CONTEXT` because admin reads cross every org boundary; the route is
  * gated on `instance_admin`.
  */
-export const GET: RequestHandler = async ({ locals }) => {
-	requireInstanceAdmin(locals);
-	if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
-	try {
+export const GET: RequestHandler = apiRoute(
+	'Failed to list platform projects',
+	async ({ locals }) => {
+		requireInstanceAdmin(locals);
+		if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
+
 		// Listing across orgs requires walking each org. Fast enough for the
 		// admin surface; if instance scale ever demands it, add a dedicated
 		// `listPlatform()` to IProjectStore.
@@ -44,35 +47,31 @@ export const GET: RequestHandler = async ({ locals }) => {
 			}
 		}
 		return json({ projects: all });
-	} catch (err) {
-		handleApiError(err, 'Failed to list platform projects');
 	}
-};
+);
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	const user = requireInstanceAdmin(locals);
-	if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
-	const ctx = locals.ctx!;
+export const POST: RequestHandler = apiRoute(
+	'Failed to create platform project',
+	async ({ request, locals }) => {
+		const user = requireInstanceAdmin(locals);
+		if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
 
-	const body = await request.json().catch(() => null);
-	const parsed = CreatePlatformProjectBody.safeParse(body);
-	if (!parsed.success) throwZodError(parsed.error);
+		const input = await parseBody(request, CreatePlatformProjectBody);
 
-	// Resolve the host org. Admin's `actingOrgId` is the natural default; if
-	// they pass an explicit `orgId`, validate it exists.
-	const hostOrgId = parsed.data.orgId ?? ctx.actingOrgId;
-	if (!hostOrgId) {
-		apiError(
-			400,
-			ApiErrorCode.VALIDATION_FAILED,
-			'A host orgId is required (no active organization in context).'
-		);
-	}
-	const hostOrg = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, hostOrgId);
-	if (!hostOrg)
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, `Host organization '${hostOrgId}' not found.`);
+		// Resolve the host org. Admin's `actingOrgId` is the natural default; if
+		// they pass an explicit `orgId`, validate it exists.
+		const hostOrgId = input.orgId ?? locals.ctx!.actingOrgId;
+		if (!hostOrgId) {
+			apiError(
+				400,
+				ApiErrorCode.VALIDATION_FAILED,
+				'A host orgId is required (no active organization in context).'
+			);
+		}
+		const hostOrg = await getOrganizationProvider().getOrg(SYSTEM_CONTEXT, hostOrgId);
+		if (!hostOrg)
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Host organization '${hostOrgId}' not found.`);
 
-	try {
 		// `autoJoinOnUpload: false` is hardcoded, which is what makes skipping
 		// `validateProjectFlags` safe here — a platform project may not carry the
 		// flag at all. If this ever takes the flag from the body, validate it.
@@ -81,8 +80,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			{
 				id: randomUUID(),
 				orgId: hostOrgId,
-				name: parsed.data.name,
-				description: parsed.data.description,
+				name: input.name,
+				description: input.description,
 				visibility: 'platform',
 				ownerId: user.id,
 				createdBy: user.id,
@@ -95,8 +94,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				conflictScope: 'the host organization'
 			}
 		);
-		return json(project, { status: 201 });
-	} catch (err) {
-		handleApiError(err, 'Failed to create platform project');
+		return created(project);
 	}
-};
+);

@@ -4,6 +4,7 @@ export type {
 	VisibilityChangeInput,
 	ReclaimAccessInput,
 	CreateProjectAccessInput,
+	OrgOwnerAuthorityInput,
 	OwnerRemovalInput,
 	OwnerRemovalCheck
 } from './rules.js';
@@ -18,6 +19,7 @@ export {
 	canEditDefinition,
 	canReclaim,
 	canCreateProject,
+	canChangeOrgRole,
 	checkOwnerRemoval,
 	withAdminBypass
 } from './rules.js';

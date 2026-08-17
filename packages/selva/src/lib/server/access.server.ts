@@ -4,6 +4,7 @@ import type {
 	DefinitionRecord,
 	OrgMember,
 	OrgPermission,
+	OrgRole,
 	PlatformPermission,
 	Project,
 	RequestContext
@@ -13,6 +14,7 @@ import {
 	hasPermission,
 	canReclaim,
 	canCreateProject,
+	canChangeOrgRole,
 	canView,
 	canSolve,
 	canEdit,
@@ -256,6 +258,25 @@ export async function requireTargetIsOrgMember(
 	if (!member) {
 		throw error(400, 'User must be a member of this organization to be added to a project.');
 	}
+}
+
+/**
+ * `canChangeOrgRole` with the actor's membership row loaded — whether the
+ * caller may grant or revoke org `owner`/`admin` standing (§3).
+ *
+ * Returns rather than throws: the three callers each phrase the refusal for
+ * what they were doing ("invite someone as owner", "change roles", "remove
+ * another owner") and raise it through `apiError`. What must not diverge is the
+ * decision, which is why that half lives in `rules.ts` and this loads its input.
+ */
+export async function canActorChangeOrgRole(
+	ctx: RequestContext,
+	orgId: string,
+	role: OrgRole
+): Promise<boolean> {
+	if (role === 'member') return true;
+	const actorMember = await getOrganizationProvider().getOrgMember(ctx, orgId, ctx.userId);
+	return canChangeOrgRole({ actorMember, role });
 }
 
 /**

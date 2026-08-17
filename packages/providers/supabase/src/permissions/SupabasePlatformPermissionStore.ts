@@ -88,6 +88,22 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		return existing ? 'last_admin' : 'not_found';
 	}
 
+	async claimFirstInstanceAdmin(
+		_ctx: RequestContext,
+		userId: string,
+		permissions: readonly PlatformPermission[]
+	): Promise<boolean> {
+		// No `assertAdmin`: by definition nobody holds `instance_admin` when this
+		// succeeds. The RPC takes an advisory lock and re-reads inside it, so a
+		// second concurrent signer blocks and then correctly loses.
+		const { data, error } = await this.client().rpc('claim_first_instance_admin', {
+			p_user_id: userId,
+			p_permissions: [...permissions]
+		});
+		if (error) throw mapError(error);
+		return data === true;
+	}
+
 	async hasInstanceAdmin(_ctx: RequestContext): Promise<boolean> {
 		const { count, error } = await this.client()
 			.from('user_profiles')

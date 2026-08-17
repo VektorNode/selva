@@ -1,8 +1,9 @@
 import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
-import { getInviteStore, getOrganizationProvider } from '$lib/server/providers.server';
+import { getInviteStore } from '$lib/server/providers.server';
 import {
 	assertCanGrantPlatformPermissions,
+	canActorChangeOrgRole,
 	requireManageOrgMembers,
 	requireActingOrg
 } from '$lib/server/access.server';
@@ -57,15 +58,12 @@ export const POST: RequestHandler = apiRoute(
 		// it an admin mints themselves an `owner` invite, accepts it, and then
 		// passes the sole-owner check when removing the founder — `accept-invite`
 		// writes `invite.orgRole` verbatim and cannot re-verify the minter.
-		if (input.orgRole !== 'member') {
-			const actorMember = await getOrganizationProvider().getOrgMember(ctx, orgId, ctx.userId);
-			if (actorMember?.role !== 'owner') {
-				apiError(
-					403,
-					ApiErrorCode.FORBIDDEN,
-					'Only the org owner can invite someone as owner or admin.'
-				);
-			}
+		if (!(await canActorChangeOrgRole(ctx, orgId, input.orgRole))) {
+			apiError(
+				403,
+				ApiErrorCode.FORBIDDEN,
+				'Only the org owner can invite someone as owner or admin.'
+			);
 		}
 
 		// owner/admin always carry the full set — the checkbox array from the UI is

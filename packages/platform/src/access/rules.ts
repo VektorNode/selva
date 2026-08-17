@@ -1,5 +1,5 @@
 import type { PlatformPermission } from '../permissions/types.js';
-import type { OrgPermission } from '../organizations/schemas.js';
+import type { OrgPermission, OrgRole } from '../organizations/schemas.js';
 import type { Project, ProjectMember } from '../projects/types.js';
 import type { OrgMember } from '../organizations/types.js';
 import type { DefinitionRecord } from '../definitions/types.js';
@@ -265,6 +265,32 @@ export function canCreateProject(input: CreateProjectAccessInput): boolean {
 	if (role === 'owner' || role === 'admin') return true;
 	if (role === 'member' && orgPermissions.includes('manage_projects')) return true;
 	return false;
+}
+
+export interface OrgOwnerAuthorityInput {
+	/** The acting user's own membership row, not the org's `ownerId` column. */
+	actorMember: OrgMember | null;
+	/** The role being granted, or the role the target already holds. */
+	role: OrgRole;
+}
+
+/**
+ * Whether the actor may hand out or take away org `owner`/`admin` standing (§3).
+ *
+ * Three routes decide this — inviting someone as owner/admin, changing an
+ * existing member's role, and removing an owner — and all three had written it
+ * out longhand. Two of them had drifted by the time the access audit found
+ * them: the invite route let an admin mint an `owner` invite for themselves,
+ * and DELETE let an admin remove an owner that PATCH would not let them demote.
+ * They are one rule, so they read it from one place.
+ *
+ * Reads the actor's **membership row**. `Organization.ownerId` is a separate
+ * field that can disagree with it — see the sole-`instance_admin` finding — and
+ * is not authority for this decision.
+ */
+export function canChangeOrgRole(input: OrgOwnerAuthorityInput): boolean {
+	if (input.role === 'member') return true;
+	return input.actorMember?.role === 'owner';
 }
 
 /**

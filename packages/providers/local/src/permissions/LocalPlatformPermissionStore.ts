@@ -89,6 +89,17 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 		}
 	}
 
+	async claimFirstInstanceAdmin(
+		_ctx: RequestContext,
+		userId: string,
+		permissions: readonly PlatformPermission[]
+	): Promise<boolean> {
+		// No `assertAdmin`: by definition nobody holds `instance_admin` when this
+		// succeeds. The guard is the store's own no-admin-yet condition, which is
+		// why the check cannot be hoisted into the caller.
+		return this.data.claimFirstInstanceAdminGuarded(userId, [...permissions]);
+	}
+
 	async hasInstanceAdmin(_ctx: RequestContext): Promise<boolean> {
 		// Read-only existence probe, always allowed — used for first-run checks.
 		const all = await this.data.listAll();

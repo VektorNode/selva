@@ -30,6 +30,7 @@ const EVENT_TYPE_ALLOWLIST: Record<DomainEventType, true> = {
 	'org.deleted': true,
 	'org_member.added': true,
 	'org_member.removed': true,
+	'org_member.removed_orphaning_projects': true,
 	'org_member.role_changed': true,
 	'org_member.permissions_changed': true,
 	'project.created': true,
@@ -311,6 +312,7 @@ function targetFor(event: DomainEvent): { kind: AuditTargetKind; id: string } | 
 		case 'org_member.removed':
 		case 'org_member.role_changed':
 		case 'org_member.permissions_changed':
+		case 'org_member.removed_orphaning_projects':
 			return { kind: 'org', id: event.orgId };
 		case 'project.created':
 		case 'project.deleted':

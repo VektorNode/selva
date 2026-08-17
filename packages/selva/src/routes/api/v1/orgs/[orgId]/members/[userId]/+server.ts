@@ -2,15 +2,20 @@ import type { RequestHandler } from './$types';
 import {
 	MEMBER_ASSIGNABLE_PERMISSIONS,
 	ALL_ORG_PERMISSIONS,
+	actorFrom,
+	canChangeOrgRole,
 	type OrgPermission,
 	type OrgRole,
+	type Project,
 	type RequestContext
 } from '@selvajs/platform';
 import {
 	getAuthProvider,
+	getEventSink,
 	getInviteStore,
 	getLogger,
-	getOrganizationProvider
+	getOrganizationProvider,
+	getProjectProvider
 } from '$lib/server/providers.server';
 import { requireManageOrgMembers, requireActingOrg } from '$lib/server/access.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
@@ -78,6 +83,44 @@ async function hasAnotherOwner(
 	return false;
 }
 
+/**
+ * Projects in `orgId` where `userId` is the only live owner — the ones that
+ * will have no owner once `removeOrgMember` cascades their membership rows.
+ *
+ * **Decided (2026-08-17): report, do not block.** §10 said removal should be
+ * blocked until a new owner is assigned, and that rule is being retired rather
+ * than implemented. Blocking puts an unbounded chore in front of offboarding —
+ * the cost scales with how many projects the departing person owned, which is
+ * backwards, because the most prolific people are the ones whose departure most
+ * needs to be clean. An offboarding that fails halfway is worse than an
+ * ownerless project: the person stays in the org while someone works through
+ * the backlog. Reclaim (§5) already exists to adopt an ownerless project, so
+ * the recovery path is built; what was missing was any signal that recovery was
+ * needed. Hence the event.
+ *
+ * MUST be called before the removal — afterwards the rows it reads are gone.
+ */
+async function findProjectsLosingSoleOwner(
+	ctx: RequestContext,
+	orgId: string,
+	userId: string
+): Promise<Project[]> {
+	const projects = getProjectProvider();
+	const orgProjects = await projects.listProjects(ctx, orgId, { limit: ROSTER_PAGE_LIMIT });
+
+	const checks = await Promise.all(
+		orgProjects.items.map(async (project) => {
+			const members = await projects.listProjectMembers(ctx, project.id, {
+				limit: ROSTER_PAGE_LIMIT
+			});
+			const owners = members.items.filter((m) => m.role === 'owner' && !m.deletedAt);
+			return owners.length === 1 && owners[0].userId === userId ? project : null;
+		})
+	);
+
+	return checks.filter((p): p is Project => p !== null);
+}
+
 export const PATCH: RequestHandler = apiRoute(
 	'Failed to update member',
 	async ({ params, request, locals }) => {
@@ -103,7 +146,12 @@ export const PATCH: RequestHandler = apiRoute(
 		}
 
 		if (patch.role !== undefined && patch.role !== target.role) {
-			if (actorMember.role !== 'owner') {
+			// Gated on both the role being granted and the one being taken away —
+			// demoting an owner is an owner-only act even though `member` is not.
+			if (
+				!canChangeOrgRole({ actorMember, role: patch.role }) ||
+				!canChangeOrgRole({ actorMember, role: target.role })
+			) {
 				apiError(403, ApiErrorCode.FORBIDDEN, 'Only the org owner can change roles.');
 			}
 			if (
@@ -164,7 +212,7 @@ export const DELETE: RequestHandler = apiRoute(
 		// Same owner-only gate PATCH applies to demotion (§3). Removing an owner
 		// ends their role just as demoting them does, so an admin got 403 on the
 		// demote and 204 on the remove — the harder-to-reverse of the two.
-		if (target.role === 'owner' && actorMember?.role !== 'owner') {
+		if (!canChangeOrgRole({ actorMember, role: target.role })) {
 			apiError(403, ApiErrorCode.FORBIDDEN, 'Only the org owner can remove another owner.');
 		}
 
@@ -176,7 +224,27 @@ export const DELETE: RequestHandler = apiRoute(
 			);
 		}
 
+		// Must run before the removal: the cascade soft-deletes the very rows this
+		// reads. Reported, not blocked — see the docblock on `findProjectsLosingSoleOwner`.
+		const orphaned = await findProjectsLosingSoleOwner(ctx, orgId, userId);
+
 		await orgs.removeOrgMember(ctx, orgId, userId);
+
+		if (orphaned.length > 0) {
+			await getEventSink().emit({
+				type: 'org_member.removed_orphaning_projects',
+				orgId,
+				userId,
+				projectIds: orphaned.map((p) => p.id),
+				actorId: actorFrom(ctx)
+			});
+			getLogger().warn('Org member removal left projects without an owner', {
+				orgId,
+				userId,
+				actorId: ctx.userId,
+				projectCount: orphaned.length
+			});
+		}
 
 		// `removeOrgMember` cascades `project_members` but not invites, so a
 		// dormant invite would let the removed user walk straight back in at
