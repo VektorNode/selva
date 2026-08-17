@@ -213,3 +213,38 @@ test('the real 4.6-era template is over the budget and strips cleanly', () => {
 		ORIGIN: 'https://vektornode.dev'
 	});
 });
+
+// A scaffolded deployment used to omit BODY_SIZE_LIMIT entirely, because the
+// template was read for key ORDER only. Unset, adapter-node falls back to
+// 512 KB and every upload 413s with an opaque non-JSON body.
+test('seeds BODY_SIZE_LIMIT from the template when the prompts do not set it', () => {
+	const template = [
+		'# Global body cap.',
+		'BODY_SIZE_LIMIT=256M',
+		'ORIGIN=https://example.dev'
+	].join('\n');
+
+	const rendered = renderEnvValues(template, { ORIGIN: 'https://selvajs.com' });
+	assert.equal(parseEnv(rendered).BODY_SIZE_LIMIT, '256M');
+	assert.equal(parseEnv(rendered).ORIGIN, 'https://selvajs.com');
+});
+
+test('an operator value beats the template default', () => {
+	const template = 'BODY_SIZE_LIMIT=256M';
+	const rendered = renderEnvValues(template, { BODY_SIZE_LIMIT: '512M' });
+	assert.equal(parseEnv(rendered).BODY_SIZE_LIMIT, '512M');
+});
+
+// Seeding is an allowlist, not "every live line in the template": the template
+// also ships a placeholder key and a monorepo-relative DATA_PATH.
+test('never seeds the scaffold placeholder secrets or DATA_PATH', () => {
+	const template = [
+		'SELVA_HMAC_KEY=replace-this-with-a-random-32-byte-hex-key',
+		'SELVA_AT_REST_KEY=replace-this-with-a-random-32-byte-hex-key',
+		'DATA_PATH="../../.selva-data"',
+		'BODY_SIZE_LIMIT=256M'
+	].join('\n');
+
+	const parsed = parseEnv(renderEnvValues(template, {}));
+	assert.deepEqual(parsed, { BODY_SIZE_LIMIT: '256M' });
+});

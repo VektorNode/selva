@@ -64,18 +64,35 @@ npx supabase link --project-ref <your-ref>
 npx supabase db push
 ```
 
+Substitute your own project ref for `<your-ref>` — the shell reads angle brackets as redirection and fails on them.
+
 `selva-supabase` takes no subcommand — copying the migrations is all it does. It prints one line per file and ends with a count; re-running it is safe, since unchanged files are skipped.
 
-Authenticate before `link`. `npx supabase login` prints a URL and waits for a verification code, which means a browser — on a headless server, paste the URL into a browser anywhere and type the code back into the waiting terminal. An access token skips the handshake entirely and is the easier path over SSH:
+#### Why this needs a second credential
+
+The three keys in `.env` don't authenticate `db push`, and this catches most people out:
+
+| Credential                                              | What it is                      | What it does                            |
+| ------------------------------------------------------- | ------------------------------- | --------------------------------------- |
+| `SUPABASE_URL` + `SUPABASE_ANON_KEY` + service-role key | **Project** keys, set by `.env` | Let the running app read and write data |
+| `SUPABASE_ACCESS_TOKEN`                                 | An **account** credential       | Lets the Supabase CLI change schemas    |
+
+The service-role key can't stand in for the account credential: `db push` connects over Postgres and records applied versions in a migration-history table, which a REST key cannot reach. So authenticate once, either way — they are alternatives, not steps:
 
 ```bash
-# Create one at https://supabase.com/dashboard/account/tokens
-export SUPABASE_ACCESS_TOKEN=sbp_...
+npx supabase login                     # browser: prints a URL, you paste back a code
+# ── or ──
+export SUPABASE_ACCESS_TOKEN=sbp_...   # no browser; create at
+                                       # https://supabase.com/dashboard/account/tokens
 ```
+
+`supabase login` stores its credential in `~/.supabase`, **outside the deployment directory** — so it survives rescaffolding the deployment, and you only do it once per machine. Over SSH with no browser, either paste the printed URL into a browser on any other machine and type the code back, or use the token and skip the handshake.
 
 `link` may then ask for the project's database password — set when the project was created, resettable under Dashboard → **Project Settings** → **Database**.
 
 None of this has to run on the deployment host. `db push` connects to Supabase, not to your app, so a workstation with the repo checked out works just as well.
+
+`Remote database is up to date` means the schema was already applied — success, not an error. You'll see it if you re-link a project you pushed to earlier.
 
 If `npx selva-supabase` fails with a 404 from the npm registry, the package isn't installed — check `node_modules/@selvajs/supabase-provider` exists and run `npm install` if it doesn't.
 
@@ -107,7 +124,7 @@ Two things `doctor` can't see: `ORIGIN` must match the URL you actually serve on
 When a Selva upgrade ships new migrations, repeat the sync and push:
 
 ```bash
-npx selva-supabase sync-migrations
+npx selva-supabase
 npx supabase db push
 ```
 

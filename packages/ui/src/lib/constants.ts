@@ -2,8 +2,8 @@ export const APP_DEFAULTS = {
 	// File upload limits
 	// TEMP (dev): raised 150 MB → 300 MB so large dev file-widget inputs aren't
 	// blocked client-side. The server request cap (COMPUTE_REQUEST_MAX_BYTES)
-	// still defaults to 210 MB, and base64 inflates a raw file by ~4/3, so
-	// anything over ~157 MB is rejected with a 413 after the client accepts it.
+	// still defaults to 256 MB, and base64 inflates a raw file by ~4/3, so
+	// anything over ~192 MB is rejected with a 413 after the client accepts it.
 	// Revert to 150 before release.
 	FILE_UPLOAD: {
 		MAX_SIZE_MB: 300,

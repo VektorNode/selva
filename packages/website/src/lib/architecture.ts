@@ -247,7 +247,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			{
 				kind: 'facts',
 				rows: [
-					['1 · Too big?', 'over 210 MB, refused before the body is read'],
+					['1 · Too big?', 'over 256 MB, refused before the body is read'],
 					['2 · Who is asking?', 'a share-link token, or a logged-in session'],
 					['3 · Too often?', '120 per 100 s, then 429 with Retry-After']
 				]
@@ -259,7 +259,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			{
 				kind: 'facts',
 				rows: [
-					['COMPUTE_REQUEST_MAX_BYTES', 'body cap, default 210 MB'],
+					['COMPUTE_REQUEST_MAX_BYTES', 'body cap, default 256 MB'],
 					['COMPUTE_RATE_LIMIT_MAX', 'requests per window, default 120'],
 					['COMPUTE_RATE_LIMIT_WINDOW_MS', 'window length ms, default 100000']
 				]
@@ -698,7 +698,7 @@ export const ENV_VAR_GROUPS: EnvVarGroup[] = [
 		vars: [
 			{
 				name: 'COMPUTE_REQUEST_MAX_BYTES',
-				default: '210 MB',
+				default: '256 MB',
 				text: 'JSON request body cap for /api/compute (inputs + values, not the .gh file). Must stay under adapter-node’s global BODY_SIZE_LIMIT or that rejects first.'
 			},
 			{

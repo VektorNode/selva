@@ -27,6 +27,7 @@ import { green, yellow, red, fixable } from '../checks/result.js';
 import { checkBootPersistence } from '../checks/boot.js';
 import { checkRuntimeEnvironment } from '../checks/runtime.js';
 import {
+	checkBodySizeLimit,
 	checkDeprecatedEnv,
 	checkEnvDocumentation,
 	checkHeaderNames,
@@ -82,6 +83,7 @@ export async function runDoctor(argv = []) {
 	checks.push(...checkRuntimeEnvironment(dir));
 	checks.push(...checkBootPersistence(dir));
 	checks.push(checkOrigin(env));
+	checks.push(checkBodySizeLimit(env));
 	checks.push(...checkDeprecatedEnv(env));
 	checks.push(checkEnvDocs(dir));
 
@@ -174,7 +176,7 @@ function checkDataPath(dir, dataPath) {
 	}
 }
 
-async function checkSupabase(env) {
+export async function checkSupabase(env) {
 	if (!env.SUPABASE_URL) return red('SUPABASE_URL unset');
 	if (!env.SUPABASE_ANON_KEY) return red('SUPABASE_ANON_KEY unset');
 	if (!env.SUPABASE_SERVICE_ROLE_KEY) return red('SUPABASE_SERVICE_ROLE_KEY unset');
@@ -189,11 +191,21 @@ async function checkSupabase(env) {
 	try {
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), 4000);
+		// GoTrue rejects an unauthenticated request to its own health endpoint, so
+		// without the key a perfectly healthy project answers 401 and this reads as
+		// a broken deployment. Sending the anon key makes 200 mean what it says.
 		const res = await fetch(env.SUPABASE_URL + '/auth/v1/health', {
+			headers: { apikey: env.SUPABASE_ANON_KEY },
 			signal: controller.signal
 		});
 		clearTimeout(timer);
 		if (res.ok) return green(`SUPABASE_URL reachable (${res.status})`);
+		if (res.status === 401) {
+			return red(
+				`SUPABASE_URL rejected SUPABASE_ANON_KEY (401) — the key does not belong ` +
+					`to this project, or it has been rotated.`
+			);
+		}
 		return yellow(`SUPABASE_URL responded ${res.status} — check project status`);
 	} catch (err) {
 		return yellow(`SUPABASE_URL unreachable (${err.message ?? err}) — skipping`);

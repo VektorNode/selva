@@ -8,6 +8,8 @@ import {
 	safeRedirectTarget
 } from '$lib/server/admin-auth.server';
 import { getAuthProvider } from '$lib/server/auth.server';
+import { getPermissionStore } from '$lib/server/providers.server';
+import { SYSTEM_CONTEXT } from '@selvajs/platform';
 
 /**
  * Surface the auth capabilities the page should render. We ask the auth port
@@ -26,6 +28,18 @@ export const load: PageServerLoad = async ({ locals, url, request }) => {
 	if (locals.user) {
 		const destination = safeRedirectTarget(url.searchParams.get('redirectTo'), '/library');
 		redirect(303, destination);
+	}
+
+	// Mirrors `/setup`'s redirect to here once an admin exists: exactly one of
+	// the two pages is live at a time. `/login` is a public route, so the
+	// first-run redirect in hooks.server.ts skips it — without this, a fresh
+	// deployment renders a working-looking form where every credential fails,
+	// and the only way forward is guessing the /setup URL.
+	//
+	// Keyed on admin existence, not user count, for the same reason /setup is:
+	// an OIDC provider that can't enumerate users still answers this.
+	if (!(await getPermissionStore().hasInstanceAdmin(SYSTEM_CONTEXT))) {
+		redirect(303, '/setup');
 	}
 
 	const auth = getAuthProvider();
@@ -65,6 +79,14 @@ export const actions = {
 	default: async (event: RequestEvent) => {
 		const { request, cookies, url } = event;
 		const ip = event.getClientAddress();
+
+		// A POST can arrive without the load ever running (a stale form, a direct
+		// post). On an uninitialized instance every credential fails, so without
+		// this the attempt burns a rate-limit slot and answers "Invalid
+		// credentials" — blaming the operator for a password that doesn't exist yet.
+		if (!(await getPermissionStore().hasInstanceAdmin(SYSTEM_CONTEXT))) {
+			redirect(303, '/setup');
+		}
 
 		const { allowed } = checkRateLimit(ip);
 		if (!allowed) {

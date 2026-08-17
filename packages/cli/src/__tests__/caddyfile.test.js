@@ -46,8 +46,9 @@ test('a subdomain gets no www block', () => {
 
 test('the body limit matches what the app accepts', () => {
 	// A smaller edge limit rejects uploads the app would have taken, and the
-	// error surfaces as a bare 413 with no app-side log.
-	assert.match(render(), /max_size 100mb/);
+	// error surfaces as a bare 413 with no app-side log. Tracks the app's
+	// COMPUTE_REQUEST_MAX_BYTES / BODY_SIZE_LIMIT defaults (both 256 MB).
+	assert.match(render(), /max_size 256mb/);
 });
 
 test('a custom port is honoured', () => {

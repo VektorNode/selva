@@ -136,7 +136,7 @@ export interface ComputeLimits {
 	/**
 	 * /api/v1/compute JSON *request* body cap (inputs + values, not the .gh). Must
 	 * stay <= adapter-node's global `BODY_SIZE_LIMIT` or that backstop rejects
-	 * first. 210 MB matches the `BODY_SIZE_LIMIT=210M` shipped in `.env.example`:
+	 * first. 256 MB matches the `BODY_SIZE_LIMIT=256M` shipped in `.env.example`:
 	 * a `file` widget embeds geometry as base64 in `values`, so the client's
 	 * 150 MB raw file inflates to ~200 MB on the wire, plus JSON envelope slack.
 	 */
@@ -259,7 +259,7 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 		rateLimitMaxRequests: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_MAX', 120, logger),
 		maxDefinitionFileSize,
 		maxImageFileSize: readPositiveInt(env, 'MAX_IMAGE_FILE_SIZE_BYTES', 10 * MB, logger),
-		computeRequestMaxBytes: readPositiveInt(env, 'COMPUTE_REQUEST_MAX_BYTES', 210 * MB, logger),
+		computeRequestMaxBytes: readPositiveInt(env, 'COMPUTE_REQUEST_MAX_BYTES', 256 * MB, logger),
 		computeResponseMaxBytes: readPositiveInt(env, 'COMPUTE_RESPONSE_MAX_BYTES', 300 * MB, logger),
 		remoteDefinitionMaxBytes: maxDefinitionFileSize,
 		remoteDefinitionFetchTimeoutMs: readPositiveInt(
