@@ -163,6 +163,58 @@ export function runPlatformPermissionStoreConformance(
 			expect(after).toContain('instance_admin');
 		});
 
+		// The invariant has to survive concurrency, not just sequence. Two admins
+		// demoting each other at the same moment used to each read the other as
+		// "another admin exists" and both commit, bricking the instance. Exactly
+		// one must win.
+		it('concurrent demotions of two admins leave one standing', async () => {
+			const { store, seedUser } = await createStore();
+			const adminA = await seedUser();
+			const adminB = await seedUser();
+			await store.set(adminCtx(adminA), adminA, ['instance_admin']);
+			await store.set(adminCtx(adminA), adminB, ['instance_admin']);
+
+			const [resA, resB] = await Promise.all([
+				store.set(adminCtx(adminA), adminA, []),
+				store.set(adminCtx(adminB), adminB, [])
+			]);
+
+			// One demotion succeeds, the other is refused — never both.
+			expect([resA, resB].filter((r) => r === 'ok')).toHaveLength(1);
+			expect([resA, resB].filter((r) => r === 'last_admin')).toHaveLength(1);
+
+			const sysCtx: RequestContext = {
+				userId: '',
+				platformPermissions: [],
+				orgPermissions: [],
+				system: true
+			};
+			expect(await store.hasInstanceAdmin(sysCtx)).toBe(true);
+		});
+
+		it('a burst of concurrent demotions never drops the last admin', async () => {
+			const { store, seedUser } = await createStore();
+			// Seeded sequentially on purpose: concurrent seeding races the
+			// adapter's own row-creation writes, which is not what this asserts.
+			const ids: string[] = [];
+			for (let i = 0; i < 4; i++) ids.push(await seedUser());
+			for (const id of ids) await store.set(adminCtx(ids[0]), id, ['instance_admin']);
+
+			const results = await Promise.all(ids.map((id) => store.set(adminCtx(id), id, [])));
+
+			// Whatever the interleaving, exactly one admin survives.
+			expect(results.filter((r) => r === 'ok')).toHaveLength(ids.length - 1);
+			expect(results.filter((r) => r === 'last_admin')).toHaveLength(1);
+
+			const sysCtx: RequestContext = {
+				userId: '',
+				platformPermissions: [],
+				orgPermissions: [],
+				system: true
+			};
+			expect(await store.hasInstanceAdmin(sysCtx)).toBe(true);
+		});
+
 		it('countInstanceAdminsExcluding excludes the named user', async () => {
 			const { store, seedUser } = await createStore();
 			const adminA = await seedUser();

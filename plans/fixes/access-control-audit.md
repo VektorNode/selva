@@ -272,6 +272,39 @@ The proposed `HEADER_AUTH_SHARED_SECRET` was rejected on config-surface grounds 
 
 ---
 
+## ✅ Pass 9 shipped — 2026-08-17
+
+**Finding 17 is closed.** One migration, one mutex, two conformance cases. `@selvajs/local-provider` 326/326, `@selvajs/providers-supabase` **257/257 against live Postgres** — the only way to test this, since the bug is a lock-visibility question no mock reproduces.
+
+| Provider | Change                                                                                                                  |
+| -------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Supabase | `selva.set_platform_permissions` RPC — locks the target row, then the surviving admin rows, with `for update`           |
+| Local    | `updatePermissionsGuarded` on `LocalUserDataStore` — counts and writes inside a promise-chain mutex, no `await` between |
+
+### The obvious fix does not work, and the suite proved it
+
+The first attempt put the whole thing in one statement, exactly like §7's share-link counter: `update … where user_id = $1 and (not currently_admin or stays_admin or exists (another enabled admin))`. It reads as atomic and it is not. Under READ COMMITTED the `exists` subquery evaluates against the snapshot taken when the statement began, so four concurrent demotions each see the other three as admins and **all four commit** — the burst test returned `['ok','ok','ok','ok']` against the live stack.
+
+The share-link counter gets away with a single statement because its predicate reads _the same row it updates_ (`solve_count < max_solves`), which the row lock covers. This predicate reads _other_ rows, which it does not. The fix takes explicit `for update` locks on the surviving admins so the second demotion blocks, re-reads after the first commits, and sees the count it actually has to obey. Locks are taken target-first, then survivors, so two demotions of different users cannot deadlock by grabbing rows in opposite order.
+
+Worth keeping: **a lock wait re-reads the row, and it may no longer qualify**, so the count is taken as a second read after the `perform … for update`, not from the locking statement's own result.
+
+### Local is a mutex, not a transaction, and the doc says so
+
+`updatePermissionsGuarded` chains onto a promise tail so the count and the write cannot interleave. That closes the real local race — `load()` yields, and a count taken before that yield is stale by the time the write lands. It protects one process, which is the same boundary the load-once cache already draws; two processes over one `user-data.json` was never supported and this does not change that. The chain attaches with `.then(fn, fn)` so one rejection cannot wedge the queue permanently.
+
+The store's `set` no longer pre-checks anything — the class doc now warns that a caller who counts and then calls `set` has reintroduced the bug, because that gap is precisely what the guard exists to close.
+
+### Verified by mutation on both providers
+
+Restoring local's read-then-write turned both new cases red. Replacing the RPC body with the non-locking `exists` version turned the burst case red against live Postgres while the pair case still passed — which is itself worth noting: **two concurrent demotions were not enough to expose it reliably; four were.** A two-way test alone would have shipped the broken version green.
+
+`EXPECTED_MIGRATION_HEAD` bumped to `20260817180000`; `migration-head.test.ts` catches that drift and did.
+
+**Next up:** 13/15/16/19/20 remain open — all P2. 13+19 are one pass (the UI offers what the server refuses). Spec edits still outstanding: §5 (14), §10 (7, 9), §4:218 (15), §6 (20), §3 (20).
+
+---
+
 ## The shape of the problem
 
 One sentence explains most of what follows: **`rules.ts` is well built and well tested as pure functions; the specific route handlers that call it were never exercised adversarially.** Findings 1, 2, 4 and 5 are all route-layer wiring bugs sitting directly behind correct, tested rules.
@@ -659,13 +692,15 @@ For the record, the `→ public` gate itself is faithful and a project owner who
 
 ---
 
-### ☐ 17. TOCTOU on the last-admin invariant
+### ✅ 17. TOCTOU on the last-admin invariant
 
 **Local [`set:71-81`](../../packages/providers/local/src/permissions/LocalPlatformPermissionStore.ts#L71-L81)** · **Supabase [`set:63-83`](../../packages/providers/supabase/src/permissions/SupabasePlatformPermissionStore.ts#L63-L83)** · **MEDIUM**
 
 Read-then-write with no lock, transaction, `SELECT … FOR UPDATE`, or conditional `UPDATE`. Two concurrent demotions each count the other admin, both pass, both commit → zero admins. Same race across DELETE + disable pairs; they share no mutual exclusion.
 
 §7's share-link counter is explicitly a single atomic statement _"because a check at resolution would race"_ — the pattern is known, just not applied here. Supabase is the worse case (genuinely concurrent across app instances).
+
+**DONE (Pass 9)** — `20260817180000_atomic_last_admin_invariant.sql` plus a mutex in the local store, both pinned by two new conformance cases. Reproduced against live Postgres before fixing: a four-way concurrent demotion returned `['ok','ok','ok','ok']`. See the Pass 9 section — including why the obvious one-statement version does not work.
 
 ---
 

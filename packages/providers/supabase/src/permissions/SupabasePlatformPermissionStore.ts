@@ -65,28 +65,27 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		permissions: readonly PlatformPermission[]
 	): Promise<UserManagementResult> {
 		assertAdmin(ctx);
+
+		// The §2 last-admin check lives inside the UPDATE's WHERE clause, so it
+		// is evaluated under the row lock that guards the write. Doing it here
+		// as count-then-update let two concurrent demotions each observe the
+		// other as "another admin exists" and both commit, leaving zero admins.
+		const { data, error } = await this.client().rpc('set_platform_permissions', {
+			p_user_id: userId,
+			p_permissions: [...permissions]
+		});
+		if (error) throw mapError(error);
+		if ((data ?? 0) > 0) return 'ok';
+
+		// Zero rows written: either the row is absent, or the predicate refused
+		// the demotion. Only the second is `last_admin`, so disambiguate.
 		const { data: existing, error: fetchError } = await this.client()
 			.from('user_profiles')
-			.select('platform_permissions')
+			.select('user_id')
 			.eq('user_id', userId)
 			.maybeSingle();
 		if (fetchError) throw mapError(fetchError);
-		if (!existing) return 'not_found';
-
-		// Refuse to drop the last enabled instance_admin.
-		const wasAdmin = (existing.platform_permissions ?? []).includes('instance_admin');
-		const willBeAdmin = permissions.includes('instance_admin');
-		if (wasAdmin && !willBeAdmin) {
-			const others = await this.countOtherEnabledAdmins(userId);
-			if (others === 0) return 'last_admin';
-		}
-
-		const { error } = await this.client()
-			.from('user_profiles')
-			.update({ platform_permissions: [...permissions] })
-			.eq('user_id', userId);
-		if (error) throw mapError(error);
-		return 'ok';
+		return existing ? 'last_admin' : 'not_found';
 	}
 
 	async hasInstanceAdmin(_ctx: RequestContext): Promise<boolean> {

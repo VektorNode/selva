@@ -19,7 +19,13 @@ import { createLocalUserDataStore, type LocalUserDataStore } from '../data/userD
  * from `hooks.server.ts`); before that call `set` returns `not_found`.
  *
  * `set` enforces the §2 sole-`instance_admin` invariant (refuses to drop the
- * last admin). It has no visibility into "disabled" state, which lives on
+ * last admin) through `updatePermissionsGuarded`, which counts and writes
+ * without yielding — a caller must never pre-check the count and then call
+ * `set`, since the gap between the two is the race the guard exists to close.
+ * That protects this process only; two processes sharing one `user-data.json`
+ * is outside what the load-once cache supports either.
+ *
+ * It has no visibility into "disabled" state, which lives on
  * the auth provider's record — **every row here counts as enabled**. A
  * disabled admin would therefore still satisfy the "another admin exists"
  * check and let the last enabled one be demoted, so whoever disables a user
@@ -72,17 +78,11 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 		permissions: readonly PlatformPermission[]
 	): Promise<UserManagementResult> {
 		assertAdmin(ctx);
-		const target = await this.data.findById(userId);
-		if (!target) return 'not_found';
-		const wasAdmin = target.platformPermissions.includes('instance_admin');
-		const willBeAdmin = permissions.includes('instance_admin');
-		if (wasAdmin && !willBeAdmin) {
-			const others = await this.countOtherAdmins(userId);
-			if (others === 0) return 'last_admin';
-		}
+		// The count and the write have to be indivisible — checking here and
+		// writing after would let two concurrent demotions each see the other
+		// as the surviving admin. `updatePermissionsGuarded` owns both.
 		try {
-			await this.data.updatePermissions(userId, [...permissions]);
-			return 'ok';
+			return await this.data.updatePermissionsGuarded(userId, [...permissions]);
 		} catch (err) {
 			if (err instanceof ProviderError && err.statusCode === 404) return 'not_found';
 			throw err;
