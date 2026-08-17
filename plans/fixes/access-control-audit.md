@@ -12,7 +12,7 @@
 
 **Contents:** finding 0 (P0, unauthenticated) · 1–5 (P0) · 6–12 (P1) · 13–20 (P2) · 21–25 (found while verifying) · 26–29 (maintainability).
 
-**Status after Pass 10 — every P0 and P1 is closed.** What remains is P2 and spec text: findings **15**, **16**, **20** and the `apiRoute` bullet of **29**, plus the spec edits listed under [Spec changes needed](#spec-changes-needed). Finding 14 is 🧊 deferred by decision and finding 7's disable half is a documented bound, not an open defect. **15 and 16 need a human decision before code** (is the commons contract retroactive; may an `instance_admin` reclaim a `platform` project) — the rest is mechanical.
+**Status after Pass 12 — every defect this audit found is closed except one deferred by decision.** Findings 15 and 16 shipped in Pass 12; 15's decision also retired finding 20's draft-channel item. What remains: one bullet of **20** (org-member removal stripping a project's sole owner) still needs a product decision, the `apiRoute` bullet of **29** is a mechanical refactor nobody has scheduled, and a handful of spec edits are listed under [Spec changes needed](#spec-changes-needed). Finding 14 is 🧊 deferred by decision and finding 7's disable half is a documented bound, not an open defect.
 
 ---
 
@@ -343,6 +343,77 @@ Keyed on **`project.visibility` (saved), not the `visibility` form state**: the 
 Both are now declared `catalog:`, matching how `@selvajs/selva` declares kit. **`@selvajs/ui` and `@selvajs/website` have the same undeclared `svelte-check` dependency** and are one prune away from the identical failure — left alone here because it is outside this document's scope, but worth a two-line fix.
 
 **Next up:** 15/16/20 and the `apiRoute` bullet of 29 remain open — all P2. Spec edits outstanding: §5 (14), §10 (7, 9), §4:218 (15), §6 (20), §3 (20), §2 (17 is now transactional, so the wording is stale), §8 route matrix (two missing endpoints).
+
+---
+
+## ✅ Pass 11 shipped — 2026-08-17
+
+**Three of finding 20's eleven items are closed** — the ones that needed no decision. `pnpm check` (14/14), `pnpm type-check` (22/22), `pnpm lint` (0 errors), full `pnpm test` (25/25). `@selvajs/selva` is **553/553** (+5).
+
+| Item                              | Change                                                                         | Test                                  |
+| --------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------- |
+| Org DELETE lacked PATCH's gate    | owner-only gate on removing an owner, mirroring the demotion gate at :79       | `owner-removal-gate.test.ts` (3 of 5) |
+| `hasAnotherOwner` page ceiling    | cursor loop with the same cap and warn-on-exhaust shape as `listAllOrgMembers` | same file (2 of 5)                    |
+| Stale comment in `projects/+page` | corrected — there is no `instance_admin` content bypass                        | —                                     |
+
+### The two real ones were the same invariant seen twice
+
+PATCH refused an admin demoting an owner (403) while DELETE let that same admin remove them (204) whenever a second owner existed. **The harder-to-reverse operation was the less guarded one** — a demoted owner can be re-promoted, a removed one has lost every project membership to the cascade. DELETE now runs the same owner-only check, keyed on the target being an owner so ordinary offboarding by an admin is untouched.
+
+`hasAnotherOwner` read one 200-row page with no cursor, so a co-owner past the cut read as "no other owner" and the invariant refused operations that were in fact safe. It failed _closed_, which is the right direction — but it made an org unadministrable exactly when it had grown enough to need administering. The loop returns on the first owner found, so the common case is still one round-trip, and hitting the page cap still reports "sole owner" so an incomplete read cannot green-light the removal it exists to prevent.
+
+**A fixture trap worth recording.** `seedAcme` sets Acme's `ownerId` to Alice but seeds her membership row as **`admin`** — the `owner_id`-vs-member-role split finding 12 was about. Every gate here reads the membership row, so tests written against `fixture.alice` as "the owner" invert their results and pass for the wrong reason. The first draft of all five did exactly that. They now seed owners explicitly through a local helper that says why.
+
+**Verified by mutation, separately for each fix.** Neutering the owner gate turns 1 of 5 red; replacing the cursor loop with the old single-page read turns a different 1 of 5 red. Both restored.
+
+### What was deliberately left in finding 20
+
+Two items look mechanical and are not — both need a decision, so neither was touched:
+
+- **Org-member removal stripping a project of its sole owner.** §10 says removal is "blocked until a new owner is assigned", but reclaim exists precisely to recover orphaned projects. Block, auto-transfer, or orphan-and-rely-on-reclaim are three different products.
+- **Draft-channel solve reachable by commons definition owners.** §6 says draft is owner/editor only; the commons branch admits non-members. This is the same question as finding 15 — whether `autoJoinOnUpload` confers edit retroactively — and must be answered once, not twice.
+
+The remaining six are spec gaps, environment/config concerns (CSRF, rate-limit `ADDRESS_HEADER`), or already-narrow bootstrap notes.
+
+**Next up:** 15/16, the two deferred items above, and the `apiRoute` bullet of 29. All need a decision first except `apiRoute`, which is mechanical.
+
+---
+
+## ✅ Pass 12 shipped — 2026-08-17
+
+**Findings 15 and 16, both decided and closed** — and 15's decision retired finding 20's draft-channel bullet as a side effect. `pnpm check` (14/14), `pnpm type-check` (22/22), `pnpm lint` (0 errors), full `pnpm test` (25/25). `@selvajs/selva` is **560/560** (+7).
+
+| Item                                    | Decision                                               | Test                                                          |
+| --------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------- |
+| 15 — commons edit outliving membership  | require live org membership alongside `ownerId`        | `commons-departed-uploader.test.ts` (4) + `rules.test.ts` (2) |
+| 16 — reclaim indistinguishable in audit | add `project.reclaimed` with `priorVisibility`         | `reclaim-audit.test.ts` (2 of 3)                              |
+| 16 — platform reclaim never refused     | enforce the §4a refusal ahead of the management bypass | same file (1 of 3)                                            |
+
+### 15 — the fix is one `&& orgMember`, the decision was everything
+
+`ownerId` records who uploaded; it is stamped once and never revisited. The commons branch matched it and nothing else, so it answered "did you upload this" when the question is "may you edit this" — and those diverge the moment someone leaves. Removing a contributor from the org left their edit, delete and share-link authority intact over everything they had ever uploaded, and flipping `autoJoinOnUpload` on handed it back to every past uploader at once, retroactively, with no action taken against any of them.
+
+**Chosen: commons grants edit on top of belonging.** Retroactivity stays — a flip does cover existing definitions — because with the membership test in place it can no longer reach anyone who has left, which was the only reason to consider giving it up. The alternative (non-retroactive, keyed on a stored flip timestamp) would have needed a migration and is surprising in the other direction: "why can't I edit my own file?"
+
+Accepted cost: a commons project can no longer serve as an anonymous drop-box for people outside the org. That is a real feature reduction, stated in §4 rather than left to be discovered.
+
+The membership fetch is skipped entirely on container projects, so the ordinary edit path still costs the same two reads it did before.
+
+### 16 — the audit event, and a rule that could never fire
+
+Reclaim's whole justification is that it is visible afterwards; §4 calls the audit trail "the load-bearing protection." What it actually wrote was `project_member.added` — the same event, same shape, as an owner adding a teammate. The only way to tell them apart was `actorId === userId`, inferential and documented nowhere. `project.reclaimed` now carries `priorVisibility` alongside the ids, because a later visibility flip would otherwise rewrite how serious the entry looks in retrospect.
+
+The second half is the more interesting bug. §4a says platform projects cannot be reclaimed, and `canReclaim` implements exactly that — inside `managementBypassOrRun`, which short-circuits for `instance_admin`. That is the only role that can reach a platform project at all, so **the refusal existed and never executed.** It now runs ahead of the bypass. Reclaim is content escalation wearing management clothing; treating it as a governance action let it inherit a bypass that was never meant for it.
+
+Two exhaustive maps on the audit page refused to compile until the new variant was handled — `Record<DomainEventType, …>` doing precisely the job its comment claims. No migration: `audit_events.type` is free text with no enum.
+
+### Verification
+
+Each fix mutated separately. Reverting the `&& orgMember` reddens 2 of 4 end-to-end plus 1 rule test while both positive controls stay green; `if (false)` on the platform gate reddens 1 of 3; emitting the old event type reddens the other 2 of 3.
+
+**One false negative worth recording.** The first mutation run of 15 came back all-green, which looked like a vacuous test. It was not — the app tests resolve `@selvajs/platform` through `dist/`, so editing the source proves nothing until the package is rebuilt. Any future mutation check that crosses a package boundary has to rebuild, or it is testing the artifact it meant to break.
+
+**Also corrected mid-pass:** a fourth test asserted that a project editor with no org membership keeps edit in container mode, and failed — because `removeOrgMember` cascades project memberships, so that state cannot be produced that way. The test was wrong, not the code; it now seeds the rows in the order that reaches the state, with a note saying why.
 
 ---
 
@@ -709,7 +780,7 @@ For the record, the `→ public` gate itself is faithful and a project owner who
 
 ---
 
-### ☐ 15. Flipping `autoJoinOnUpload` retroactively grants edit rights to departed users
+### ✅ 15. Flipping `autoJoinOnUpload` retroactively grants edit rights to departed users
 
 **[`rules.ts:198`](../../packages/platform/src/access/rules.ts#L198)** · **MEDIUM**
 
@@ -719,9 +790,13 @@ For the record, the `→ public` gate itself is faithful and a project owner who
 
 **`[verified]`, with one correction to the reasoning.** The rule behaves as described. But `ownerId` is **not** immutable in code: `DefinitionRecordPatch` includes `ownerId?: string` and `LocalDefinitionStore` applies it. No route currently sends it, so the conclusion holds in practice — but the spec's _"It never changes"_ (Permissions.md:672) is enforced by convention, not by the type. A future patch route wiring `ownerId` through would silently transfer edit rights on a commons project.
 
+**DECIDED 2026-08-17 — option B, and DONE (Pass 12).** Commons grants edit **on top of** belonging: `canEditDefinition`'s commons branch now also requires a live `orgMember`. The retroactive semantics stay (a flip does cover existing definitions), because with the membership test in place retroactivity no longer reaches anyone who has left — which was the only reason to give it up. Cost accepted: a commons project can no longer serve as an anonymous drop-box for people outside the org.
+
+Declined for now: making `ownerId` immutable in the type. Nothing writes it, and the spec note recording that it is convention rather than a guarantee is enough until something tries.
+
 ---
 
-### ☐ 16. Reclaim emits no distinguishable event
+### ✅ 16. Reclaim emits no distinguishable event
 
 **[`api/v1/projects/[id]/reclaim/+server.ts:12-32`](../../packages/selva/src/routes/api/v1/projects/[id]/reclaim/+server.ts#L12-L32)** · **MEDIUM**
 
@@ -732,6 +807,10 @@ For the record, the `→ public` gate itself is faithful and a project owner who
 **Also:** `requireCanReclaim` wraps in `managementBypassOrRun`, so `instance_admin` short-circuits before `canReclaim` runs — meaning **an instance admin can reclaim a `platform` project**, despite `rules.ts:220` returning false and §4a:284 + §11:739 mandating 403. Benign in effect, live divergence from a spec line written to prevent it.
 
 **Fix:** add `{ type: 'project.reclaimed'; projectId; orgId; actorId; priorVisibility }`.
+
+**DONE (Pass 12), both halves.** The event landed as specified above and the platform-project refusal moved ahead of the bypass in `requireCanReclaim` — enforcing it inside the rule was never going to work, because the bypass short-circuits for the only role that can reach a platform project. Reclaim is content escalation wearing management clothing; it does not inherit the management bypass. `priorVisibility` is on the event because a later visibility flip would otherwise rewrite how serious the entry looks.
+
+`project_member.added` still fires alongside it — the fix adds a signal rather than replacing one, so anything reading the roster feed keeps working. The Supabase `audit_events.type` column is free text with no enum, so no migration was needed; the two exhaustive maps on the audit page (`EVENT_TYPE_ALLOWLIST`, `TYPE_LABELS`) both refused to compile until the variant was added, which is exactly what they are for.
 
 ---
 
@@ -785,16 +864,16 @@ Also: `soleInstanceAdmin` is computed client-side over a 200-row page, so the lo
 
 **All eleven verified TRUE.** One has been promoted out of this list: _"`/setup` action doesn't re-check `hasInstanceAdmin`"_ is now **finding 0** at the top — it is an unauthenticated privilege escalation, and its "mitigated by duplicate-email rejection" caveat was wrong (a _fresh_ email succeeds).
 
-- **`hasAnotherOwner` pagination ceiling** — [`members/[userId]/+server.ts:45`](../../packages/selva/src/routes/api/v1/orgs/[orgId]/members/[userId]/+server.ts#L45) uses `limit: 200` with no cursor loop; fails closed (availability, not security). A correct paginating sibling exists — `listAllOrgMembers`, used by `admin/users/+page.server.ts:65`.
-- **Org DELETE lacks the owner-only gate org PATCH has** — an admin gets 403 demoting an owner but 204 removing one, whenever a second owner exists. Feeds finding 1's chain. Confirmed: PATCH:74 has `if (actorMember.role !== 'owner')`; DELETE:118-140 has only `requireManageOrgMembers` + `hasAnotherOwner`.
+- ✅ **`hasAnotherOwner` pagination ceiling** — [`members/[userId]/+server.ts:45`](../../packages/selva/src/routes/api/v1/orgs/[orgId]/members/[userId]/+server.ts#L45) uses `limit: 200` with no cursor loop; fails closed (availability, not security). A correct paginating sibling exists — `listAllOrgMembers`, used by `admin/users/+page.server.ts:65`. — **DONE (Pass 11)**, cursor loop with the same cap and warn-on-exhaust shape; returns on the first owner found, so the common case stays one round-trip.
+- ✅ **Org DELETE lacks the owner-only gate org PATCH has** — an admin gets 403 demoting an owner but 204 removing one, whenever a second owner exists. Feeds finding 1's chain. Confirmed: PATCH:74 has `if (actorMember.role !== 'owner')`; DELETE:118-140 has only `requireManageOrgMembers` + `hasAnotherOwner`. — **DONE (Pass 11)**. The unguarded operation was the harder one to reverse: a demoted owner can be re-promoted, a removed one has lost every project membership to the cascade.
 - **`updateOrgMemberRole` re-seeds permissions from the role** in both providers (`LocalOrgStore.ts:298`, `SupabaseOrgStore.ts:339`, both `[...DEFAULT_ORG_PERMISSIONS[role]]`). Spec never states whether custom grants survive a role change. **Spec gap.**
-- **Removing an org member can strip a project of its sole owner** — confirmed in both providers; the cascade soft-deletes every `project_members` row with no `checkOwnerRemoval`. Contradicts §10's _"removal is blocked until a new owner is assigned."_
-- **Draft-channel solve reachable by commons definition owners** — [`solve.server.ts:204-220`](../../packages/selva/src/lib/server/compute/solve.server.ts#L204-L220) routes draft to `canEditDefinition`, whose commons branch (`rules.ts:198`) admits non-members. §6 says draft is owner/editor **only**. Both statements can't be true.
+- 🧊 **Removing an org member can strip a project of its sole owner** — confirmed in both providers; the cascade soft-deletes every `project_members` row with no `checkOwnerRemoval`. Contradicts §10's _"removal is blocked until a new owner is assigned."_ **Needs a decision (Pass 11):** block the removal, auto-transfer ownership, or orphan and rely on reclaim. §10 says block, but reclaim exists precisely to recover orphans — the two answers describe different products, so the code cannot pick one.
+- ✅ **Draft-channel solve reachable by commons definition owners** — [`solve.server.ts:204-220`](../../packages/selva/src/lib/server/compute/solve.server.ts#L204-L220) routes draft to `canEditDefinition`, whose commons branch admits non-members. §6 says draft is owner/editor **only**. Both statements can't be true. — **RESOLVED by finding 15's decision (Pass 12).** Answering it once, as this bullet asked: commons edit now requires live org membership, so the draft channel is reachable only by someone who both uploaded the definition and still belongs to the org. The remaining gap is wording, not access — §6's "owner/editor only" should say "project owner/editor, or a commons definition's own owner while still an org member," which is the same sentence §4 and §5 now carry.
 - **`auth-bootstrap.server.ts:49` early-return** skips the single-tenant default-org self-heal for a non-matching signer. Narrower than it reads — it only fires while no admin exists, so no org exists to find anyway; the cost is that the _next_ matching signer must trigger the seed, and the non-matching user's session is a dead end meanwhile.
 - **Bootstrap race** — two simultaneous OAuth callbacks on a fresh single-tenant install both observe no admin and both get `ALL_PLATFORM_PERMISSIONS`. Same read-then-write shape as finding 17. §2 says "first signer wins"; the code lets both win.
 - **CSRF is form-only** — **`[partly corrected]`** no `csrf.checkOrigin` override exists in `svelte.config.js`, so SvelteKit's default is active: it checks `Origin` on form-like content types, **not** on `application/json`. The practical characterization stands. The frame-header half is confirmed, but the omission is implemented in `applySecurityHeaders` in `@selvajs/server/http`, not at the cited `hooks.server.ts:379` (which is only the comment).
 - **No rate limit on permission-mutation endpoints.** Login is well done (`checkRateLimit` peeks before parsing the body; `clear` on success). **`ADDRESS_HEADER`/`XFF_DEPTH` appear nowhere in the repo** — not in `.env.example`, no README, no deploy script. Under header-auth behind a proxy `getClientAddress()` returns the proxy IP, so every user genuinely does share one bucket, and operators have no documented way to fix it.
-- **Stale comment** — [`projects/+page.server.ts:44`](../../packages/selva/src/routes/projects/+page.server.ts#L44) claims _"`instance_admin` always edits via the centralized bypass"_. Contradicted 40 lines later in the same file (:85-86) and by `access.server.ts:149-154`. A maintainer could "restore" the bypass it describes and break §2.
+- ✅ **Stale comment** — [`projects/+page.server.ts:44`](../../packages/selva/src/routes/projects/+page.server.ts#L44) claims _"`instance_admin` always edits via the centralized bypass"_. Contradicted 40 lines later in the same file (:85-86) and by `access.server.ts:149-154`. A maintainer could "restore" the bypass it describes and break §2. — **DONE (Pass 11)**, rewritten to state that content access follows `canView`/`canEdit` for everyone and that reclaim is the escalation path.
 
 ---
 
@@ -1014,9 +1093,9 @@ Sorted that way:
 
 **Spec is self-contradictory or false — must be rewritten:**
 
-- **§4:218** — the `autoJoinOnUpload` retroactivity sentence contradicts itself (15). Note also that _"It never changes"_ (:672) about `ownerId` is enforced by convention, not by the type.
+- ✅ **§4:218** — the `autoJoinOnUpload` retroactivity sentence contradicts itself (15). Note also that _"It never changes"_ (:672) about `ownerId` is enforced by convention, not by the type. — **DONE (Pass 12).** §4 now states the retroactive semantics plainly and adds the membership requirement with its reason; §5's `canEditDefinition` bullet and §6's draft-channel row carry the same sentence; :672 says "no route changes it" and names `DefinitionRecordPatch` as the reason that is convention rather than a guarantee.
 - **§10** — "Sessions invalidated" is false as an absolute; state the bounded window, and note it differs per provider (7). **Pass 3 settled the code side, so the spec sentence is now the only thing left.** Logout revokes provider-side; disable cannot, and the route's docstring already carries the accurate per-provider bound — §10 should say the same thing: local and header-auth cut off on the next request, Supabase within one access-token lifetime (`revalidateMs`, default 60s), and in no case does a 30-day refresh token survive, because `refreshSession` rejects disabled users.
-- **§6** — draft-channel "owner/editor only" vs the commons owner branch (20).
+- ✅ **§6** — draft-channel "owner/editor only" vs the commons owner branch (20). — **DONE (Pass 12).** The channel table now says draft is whoever passes `canEditDefinition`, spelled out, rather than a narrower claim the code never made.
 - **§2** — the last-admin invariant is stated as absolute but is not transactional in either provider (17), and `disabled` admins count as live on local (4).
 
 **Spec is silent — needs a human decision:**
@@ -1024,7 +1103,7 @@ Sorted that way:
 - **§5** — is `private → org` a disclosure action needing leadership (14)?
 - **§3** — do custom org permissions survive a role change (20)?
 - **§10** — offboarding: what happens to pending invites (8) and share links (9)? Note both need store-interface changes, so the decision has real cost attached.
-- **§4a** — may `instance_admin` reclaim a `platform` project? The code says yes via the bypass, §4a:284 says 403 (16).
+- ✅ **§4a** — may `instance_admin` reclaim a `platform` project? The code says yes via the bypass, §4a:284 says 403 (16). — **DECIDED: no, and DONE (Pass 12).** The code moved to match the spec rather than the reverse: the refusal now runs ahead of the management bypass, §5's `canReclaim` section records why it cannot live inside the rule, and §11 gained the `instance_admin` row that was missing beside the org-admin one.
 
 **Missing from the route matrix entirely:**
 

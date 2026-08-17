@@ -2,6 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import type {
 	AuthUser,
 	DefinitionRecord,
+	OrgMember,
 	OrgPermission,
 	PlatformPermission,
 	Project,
@@ -267,6 +268,16 @@ export async function requireCanReclaim(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId);
+
+	// Ahead of the bypass, not inside the check: `instance_admin` short-circuits
+	// `managementBypassOrRun`, so `canReclaim`'s platform-project refusal (§4a)
+	// never ran for the one role that could reach it. Reclaim is content
+	// escalation wearing management clothing — the management bypass is not its
+	// to inherit.
+	if (project.visibility === 'platform') {
+		throw error(403, 'Platform projects cannot be reclaimed.');
+	}
+
 	const allowed = await managementBypassOrRun(ctx, async () => {
 		const orgMember = await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
 		return canReclaim({
@@ -377,6 +388,20 @@ export async function requireCanSolve(
 }
 
 /**
+ * Org membership for the commons branch of `canEditDefinition`, or `null` when
+ * that branch cannot fire. Skipping the round-trip on container projects keeps
+ * the common edit path at the same two reads it had before commons gained the
+ * membership test.
+ */
+async function loadCommonsOrgMember(
+	ctx: RequestContext,
+	project: Project | null
+): Promise<OrgMember | null> {
+	if (!project?.autoJoinOnUpload) return null;
+	return await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
+}
+
+/**
  * Loads the record and gates editing. Returns the record AND the project it
  * loads for the gate, so callers skip a re-fetch of either.
  */
@@ -394,6 +419,7 @@ export async function requireEditableDefinition(locals: Locals, guid: string) {
 			project,
 			definition: record,
 			member,
+			orgMember: await loadCommonsOrgMember(ctx, project),
 			userId: ctx.userId,
 			platformPermissions: ctx.platformPermissions,
 			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
@@ -427,6 +453,7 @@ export async function requireCanEditDefinition(
 			project,
 			definition,
 			member,
+			orgMember: await loadCommonsOrgMember(ctx, project),
 			userId: ctx.userId,
 			platformPermissions: ctx.platformPermissions,
 			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')

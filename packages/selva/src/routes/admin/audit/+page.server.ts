@@ -37,6 +37,7 @@ const EVENT_TYPE_ALLOWLIST: Record<DomainEventType, true> = {
 	'project_member.added': true,
 	'project_member.removed': true,
 	'project_member.role_changed': true,
+	'project.reclaimed': true,
 	'definition.created': true,
 	'definition.deleted': true,
 	'definition.published': true,
@@ -313,6 +314,7 @@ function targetFor(event: DomainEvent): { kind: AuditTargetKind; id: string } | 
 			return { kind: 'org', id: event.orgId };
 		case 'project.created':
 		case 'project.deleted':
+		case 'project.reclaimed':
 		case 'project_member.added':
 		case 'project_member.removed':
 		case 'project_member.role_changed':

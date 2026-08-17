@@ -20,6 +20,7 @@
 		'org_member.permissions_changed': 'Org member · permissions changed',
 		'project.created': 'Project · created',
 		'project.deleted': 'Project · deleted',
+		'project.reclaimed': 'Project · RECLAIMED',
 		'project_member.added': 'Project member · added',
 		'project_member.removed': 'Project member · removed',
 		'project_member.role_changed': 'Project member · role changed',

@@ -36,19 +36,46 @@ import { apiRoute, noContent, parseBody, requireParams } from '$lib/server/api/v
  * the most common way to discover this — handler returns 409.
  */
 
+const ROSTER_PAGE_LIMIT = 200;
+// Runaway guard against an adapter returning a non-advancing cursor. Matches
+// `listAllOrgMembers`; 100 pages is 20k members, past any real org here.
+const MAX_ROSTER_PAGES = 100;
+
 /**
  * Whether anyone other than `exceptUserId` still owns the org.
  *
  * Both branches below need this and both used to scan the roster themselves —
  * the sole-owner invariant is one rule, so it reads from one place.
+ *
+ * Pages rather than reading one 200-row window: a second owner sitting past the
+ * first page read as "no other owner", so the invariant refused a demotion or
+ * removal that was in fact safe. That failed closed, but it made the org
+ * unadministrable exactly when it had grown enough to need administering.
+ * Returns on the first owner found, so the common case is still one round-trip.
  */
 async function hasAnotherOwner(
 	ctx: RequestContext,
 	orgId: string,
 	exceptUserId: string
 ): Promise<boolean> {
-	const page = await getOrganizationProvider().listOrgMembers(ctx, orgId, { limit: 200 });
-	return page.items.some((m) => m.role === 'owner' && m.userId !== exceptUserId && !m.deletedAt);
+	const orgs = getOrganizationProvider();
+	let cursor: string | undefined;
+	for (let page = 0; page < MAX_ROSTER_PAGES; page++) {
+		const result = await orgs.listOrgMembers(ctx, orgId, { limit: ROSTER_PAGE_LIMIT, cursor });
+		if (result.items.some((m) => m.role === 'owner' && m.userId !== exceptUserId && !m.deletedAt)) {
+			return true;
+		}
+		cursor = result.nextCursor;
+		if (!cursor) return false;
+	}
+	// Cap hit without finding one: report "no other owner" so the caller refuses.
+	// Failing closed on an incomplete read is the safe direction for an invariant
+	// whose whole job is preventing an unadministrable org.
+	getLogger().warn('hasAnotherOwner hit the page cap — treating as sole owner', {
+		orgId,
+		pages: MAX_ROSTER_PAGES
+	});
+	return false;
 }
 
 export const PATCH: RequestHandler = apiRoute(
@@ -128,8 +155,18 @@ export const DELETE: RequestHandler = apiRoute(
 		const { ctx, orgId } = requireActingOrg(locals, params.orgId);
 
 		const orgs = getOrganizationProvider();
-		const target = await orgs.getOrgMember(ctx, orgId, userId);
+		const [actorMember, target] = await Promise.all([
+			orgs.getOrgMember(ctx, orgId, ctx.userId),
+			orgs.getOrgMember(ctx, orgId, userId)
+		]);
 		if (!target) apiError(404, ApiErrorCode.NOT_FOUND, 'Member not found in this organization.');
+
+		// Same owner-only gate PATCH applies to demotion (§3). Removing an owner
+		// ends their role just as demoting them does, so an admin got 403 on the
+		// demote and 204 on the remove — the harder-to-reverse of the two.
+		if (target.role === 'owner' && actorMember?.role !== 'owner') {
+			apiError(403, ApiErrorCode.FORBIDDEN, 'Only the org owner can remove another owner.');
+		}
 
 		if (target.role === 'owner' && !(await hasAnotherOwner(ctx, orgId, target.userId))) {
 			apiError(

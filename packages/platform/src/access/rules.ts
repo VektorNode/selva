@@ -169,6 +169,13 @@ export interface DefinitionAccessInput {
 	project: Project | null;
 	definition: DefinitionRecord | null;
 	member: ProjectMember | null;
+	/**
+	 * The actor's membership in the project's parent org, used only by the
+	 * commons branch below. `null` means "not a member of this org" — which on a
+	 * commons project is what separates a current contributor from a departed
+	 * one.
+	 */
+	orgMember: OrgMember | null;
 	userId: string;
 	platformPermissions: readonly PlatformPermission[];
 	/**
@@ -182,11 +189,19 @@ export interface DefinitionAccessInput {
 /**
  * For platform projects: `instance_admin` only.
  * For all other projects: project editor/owner can always edit (moderation).
- * On commons projects (`autoJoinOnUpload=true`) the definition owner can edit their own.
+ * On commons projects (`autoJoinOnUpload=true`) the definition owner can edit
+ * their own, as long as they still belong to the project's org.
  */
 export function canEditDefinition(input: DefinitionAccessInput): boolean {
-	const { project, definition, member, userId, platformPermissions, enablePlatformProjects } =
-		input;
+	const {
+		project,
+		definition,
+		member,
+		orgMember,
+		userId,
+		platformPermissions,
+		enablePlatformProjects
+	} = input;
 	if (!project || !definition) return false;
 
 	if (project.visibility === 'platform') {
@@ -195,7 +210,13 @@ export function canEditDefinition(input: DefinitionAccessInput): boolean {
 	}
 
 	if (member?.role === 'owner' || member?.role === 'editor') return true;
-	if (project.autoJoinOnUpload && userId === definition.ownerId) return true;
+
+	// Commons grants edit on top of belonging, not instead of it. `ownerId` is
+	// stamped at upload and never revisited, so without the org-membership test
+	// a departed uploader keeps edit/delete/share-link authority on everything
+	// they ever uploaded — and flipping `autoJoinOnUpload` on hands it back to
+	// them retroactively, with no action taken against them.
+	if (project.autoJoinOnUpload && userId === definition.ownerId && orgMember) return true;
 
 	return false;
 }

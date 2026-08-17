@@ -42,7 +42,10 @@ export interface ProjectWithMembers extends Project {
 	 * Whether the caller can add and edit definitions in this project — owner or
 	 * editor. Computed per-row so the UI can disable affordances on rows the user
 	 * can only view (leadership visibility per Permissions.md §4).
-	 * `instance_admin` always edits via the centralized bypass.
+	 *
+	 * There is no `instance_admin` bypass here. Content access follows `canView`
+	 * and `canEdit` for everyone (§2); the bypass applies to management scope
+	 * only, and reclaim is the explicit escalation path into a project.
 	 */
 	canEdit: boolean;
 	/**

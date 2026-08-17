@@ -208,14 +208,16 @@ Selva supports two distinct authority models, selected per-project by `autoJoinO
 **Project-as-commons model** (`autoJoinOnUpload=true`) — user-generated content, commons publishing.
 
 - **Anyone authenticated can upload a new definition.** They become the _definition owner_ (not a project member).
-- **Definition owners can edit/delete their own definitions.** They cannot touch anyone else's.
+- **Definition owners can edit/delete their own definitions**, for as long as they remain a member of the project's org. They cannot touch anyone else's.
 - Project `owner`/`editor` can still edit anyone's definition (moderation).
 - No auto-grant of project `editor` role. The flag enables the per-definition ownership gate, nothing else.
 - Use for: instance-wide "Shared Scripts" common, community libraries, user-contributed galleries.
 
 The distinction protects the Alice/Peter case: on a commons project, Peter cannot upload a new version of Alice's definition (he isn't its owner and isn't a project editor). Peter can upload _his own_ new definition and edit _that_. Alice's work stays Alice's.
 
-**The project model is chosen at creation time** and changing it later is a deliberate decision — flipping `autoJoinOnUpload` from false → true on a project with existing definitions grants the commons contract to _new_ definitions only; existing ones remain under project-role control with their `createdBy` user treated as the definition owner retroactively.
+**Commons grants edit on top of belonging, not instead of it.** `canEditDefinition` requires a live org membership alongside `ownerId`, because `ownerId` records who uploaded and is never revisited. Without that second test, removing someone from the org would leave their edit, delete and share-link authority intact over everything they had ever uploaded, and offboarding would not be offboarding. Deliberate consequence: a commons project cannot serve as an anonymous drop-box for people outside the org.
+
+**The project model is chosen at creation time** and changing it later is a deliberate decision. Flipping `autoJoinOnUpload` from false → true is **retroactive** — every existing definition falls under the commons contract at once, with its uploader as definition owner. Combined with the membership test above, this means the flip re-grants edit only to uploaders who are still around; it cannot resurrect a departed contributor's authority.
 
 ---
 
@@ -351,7 +353,7 @@ The generic "can this user touch project-scoped resources" predicate. Used where
 ### `canEditDefinition(project, definition, user) → bool`
 
 - Project `owner` or `editor` → **yes** (always — moderation authority)
-- Project has `autoJoinOnUpload=true` **and** `user.id === definition.ownerId` → **yes** (commons: you own what you uploaded)
+- Project has `autoJoinOnUpload=true` **and** `user.id === definition.ownerId` **and** the user is still a member of the project's org → **yes** (commons: you own what you uploaded, while you are still here)
 - Otherwise → no
 
 > **Takes the definition as input**, not just the project. The commons model needs to know _which_ definition is being edited because ownership is per-definition. In the container model (`autoJoinOnUpload=false`) the definition parameter isn't consulted — project role decides.
@@ -407,7 +409,11 @@ Org leadership can reclaim any project in their org to regain access (e.g., orig
 - `ctx.actingOrgId === project.orgId` **and** user is org `owner` or `admin` → yes
 - Otherwise → no
 
-**Reclaim adds the actor as a co-owner.** It does **not** demote the existing owner. This preserves the original owner's access if they return and provides an audit trail of the escalation.
+**The platform-project refusal is enforced ahead of the management bypass**, in `requireCanReclaim` rather than inside the rule. `managementBypassOrRun` short-circuits for `instance_admin`, which is the only role that can reach a platform project at all — so a refusal that lived only in the rule would never execute. Reclaim is content escalation wearing management clothing; the bypass is not its to inherit.
+
+**Reclaim adds the actor as a co-owner.** It does **not** demote the existing owner. This preserves the original owner's access if they return.
+
+**Reclaim emits `project.reclaimed`**, carrying `projectId`, `orgId`, `actorId` and the `priorVisibility` at the moment of escalation. `addProjectMember` also emits its usual `project_member.added`, but that event is indistinguishable from an owner adding a teammate — and §4 rests the whole escape hatch on the escalation being visible afterwards. `priorVisibility` is recorded because a later visibility flip would otherwise rewrite how serious the entry looks.
 
 ### `canCreateProject(org, user, ctx) → bool`
 
@@ -433,10 +439,10 @@ Every definition has **immutable versions** and **named channels** pointing at v
 
 ### Channels
 
-| Channel | Points to        | Who can solve it                              |
-| ------- | ---------------- | --------------------------------------------- |
-| `live`  | `liveVersionId`  | Anyone who passes `canSolve` for the project. |
-| `draft` | `draftVersionId` | Project `owner` / `editor` only.              |
+| Channel | Points to        | Who can solve it                                                                                                                                  |
+| ------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `live`  | `liveVersionId`  | Anyone who passes `canSolve` for the project.                                                                                                     |
+| `draft` | `draftVersionId` | Whoever passes `canEditDefinition` — project `owner`/`editor`, or on a commons project the definition's own owner while still an org member (§4). |
 
 ### Flow
 
@@ -669,8 +675,8 @@ Hard deletion is a background / admin-only operation that removes rows with `del
 
 ### Definition ownership
 
-- `Definition.ownerId` is **not nullable** and is set to the uploader at creation time. It never changes.
-- In the container model (`autoJoinOnUpload=false`) it is display metadata only. In the commons model (`autoJoinOnUpload=true`) it is an access-control input — only the owner or project editors can edit/delete a commons definition.
+- `Definition.ownerId` is **not nullable** and is set to the uploader at creation time. No route changes it. Note that `DefinitionRecordPatch` still types it as writable, so this is convention rather than a type guarantee — a future patch route wiring `ownerId` through would silently transfer edit authority on a commons project.
+- In the container model (`autoJoinOnUpload=false`) it is display metadata only. In the commons model (`autoJoinOnUpload=true`) it is an access-control input — a commons definition is editable by project editors, or by its owner while they remain an org member (§4).
 - If the owner's account is deleted, `ownerId` points at an unresolvable id; UI renders "Deleted user" and the definition effectively becomes editable only by project editors (moderation path).
 
 ### Events (future-proofing)
@@ -711,7 +717,7 @@ Walk through these to confirm the model behaves as expected.
 | Alice tries to delete `v1` while it's the live version.                                                                                                        | **409.** §6 deletion protection — repoint `live` first.                                                                                                                                                                                                                                       |
 | Alice (project `editor`) tries to edit project settings.                                                                                                       | **403.** Editors cannot edit settings. Promote to owner if needed.                                                                                                                                                                                                                            |
 | Alice (project `viewer`) tries to delete a definition.                                                                                                         | **403.** Viewers cannot edit.                                                                                                                                                                                                                                                                 |
-| Project owner leaves Acme. Org owner opens the project.                                                                                                        | Uses **Reclaim** → becomes co-owner. Original owner not demoted. Audit entry (future).                                                                                                                                                                                                        |
+| Project owner leaves Acme. Org owner opens the project.                                                                                                        | Uses **Reclaim** → becomes co-owner. Original owner not demoted. Emits `project.reclaimed` with the prior visibility.                                                                                                                                                                         |
 | Reclaim done; co-owner tries to remove the original owner.                                                                                                     | Handler surfaces owner-on-owner confirm step (`?confirm=true`) before proceeding.                                                                                                                                                                                                             |
 | Alice flips a `private` project to `public`.                                                                                                                   | Requires org `owner`/`admin` (Alice qualifies as `admin`). If cross-org public is off at platform level, flip is rejected.                                                                                                                                                                    |
 | Alice (Acme `admin`) tries to promote Bob (`member`) to `admin`.                                                                                               | **403.** Role changes are owner-only (§3). Alice can grant Bob `manage_definitions` / `manage_projects` permissions, but not change his role.                                                                                                                                                 |
@@ -737,6 +743,7 @@ Walk through these to confirm the model behaves as expected.
 | `instance_admin` creates a `platform` project and grants Acme org `canSolve = true`.                                                                           | **OK.** All Acme members can view and solve. `canEditDefinition` remains `instance_admin`-only.                                                                                                                                                                                               |
 | Acme `member` (org grant `canSolve = false`) tries to solve a `platform` project definition.                                                                   | **403.** View-only grant; `canSolve` requires `grant.canSolve = true`.                                                                                                                                                                                                                        |
 | Acme org `admin` tries to Reclaim a `platform` project.                                                                                                        | **403.** `canReclaim` returns false for `platform` visibility.                                                                                                                                                                                                                                |
+| `instance_admin` tries to Reclaim a `platform` project.                                                                                                        | **403.** Checked before the management bypass, which would otherwise short-circuit the rule for the one role that can reach such a project.                                                                                                                                                   |
 
 ---
 

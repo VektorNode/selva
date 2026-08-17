@@ -111,13 +111,20 @@ function def(
 	};
 }
 
-/** Default non-platform fields for DefinitionAccessInput. */
+/**
+ * Default non-platform fields for DefinitionAccessInput.
+ *
+ * `orgMember` defaults to a present member: it gates only the commons branch,
+ * and "still belongs to the org" is the ordinary case. Departure is what a test
+ * states explicitly, by passing `orgMember: null`.
+ */
 function defAccessInput(
 	overrides: Partial<DefinitionAccessInput> &
 		Pick<DefinitionAccessInput, 'project' | 'definition' | 'userId'>
 ): DefinitionAccessInput {
 	return {
 		member: null,
+		orgMember: orgMember('member'),
 		platformPermissions: [],
 		enablePlatformProjects: true,
 		...overrides
@@ -517,6 +524,51 @@ describe('canEditDefinition', () => {
 				defAccessInput({
 					project: p,
 					definition: def({ ownerId: 'u-alice' }),
+					userId: 'u-alice'
+				})
+			)
+		).toBe(true);
+	});
+
+	it('commons project: definition owner who left the org loses edit', () => {
+		// `ownerId` records who uploaded, not who still belongs. Without this
+		// check, flipping `autoJoinOnUpload` on hands a departed contractor edit,
+		// delete and share-link authority over everything they ever uploaded —
+		// retroactively, and with no action taken against them.
+		const p = project({ visibility: 'public', autoJoinOnUpload: true });
+		expect(
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					orgMember: null,
+					userId: 'u-alice'
+				})
+			)
+		).toBe(false);
+	});
+
+	it('container project: org membership is not consulted', () => {
+		// The commons test above must not be read as "org membership grants edit".
+		// In container mode project role is the whole rule, so an org member with
+		// no project role stays out and a project editor stays in.
+		const p = project({ visibility: 'org', autoJoinOnUpload: false });
+		expect(
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					userId: 'u-alice'
+				})
+			)
+		).toBe(false);
+		expect(
+			canEditDefinition(
+				defAccessInput({
+					project: p,
+					definition: def({ ownerId: 'u-alice' }),
+					member: member('editor', 'u-alice'),
+					orgMember: null,
 					userId: 'u-alice'
 				})
 			)
