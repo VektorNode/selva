@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/local-provider",
-	"version": "0.14.1",
+	"version": "0.15.0",
 	"description": "Local filesystem, JSON, and HMAC implementations of @selvajs/platform interfaces",
 	"license": "MIT",
 	"author": "VektorNode",
