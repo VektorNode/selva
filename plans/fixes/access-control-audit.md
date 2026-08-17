@@ -201,7 +201,46 @@ Finding 28's extraction turned up the same shape: the slug-retry loop existed in
 
 **One shape change from the plan.** Finding 29 proposed `assertCanGrantPlatformPermissions(ctx, requested)`. PATCH needs more: it gates on _change_, not _grant_, because revoking `instance_admin` is a platform-scope write too. With the proposed signature a `manage_instance_users` holder could PATCH `permissions: []` onto every admin above them and pass. The helper takes an optional `current` instead, and the fifth test pins that case.
 
-**Next up:** 12 (Supabase RLS diverges from `rules.ts` on four points — includes a real bug: reclaim is functionally broken for settings edits on Supabase, since the policy keys on `projects.owner_id` while reclaim only writes a `project_members` row) and 10 (header-auth trust boundary, incl. `rebindUpn`). 13/15/16/17/19/20 remain open. Spec edits still outstanding: §5 must record that `private → org` is intentionally ungated (finding 14), §10 needs the per-provider session-invalidation bound (finding 7) and a line saying the share-link roster is the compensating control its "unaffected" stance assumes (finding 9).
+**Next up:** 12 — closed in Pass 7 below.
+
+---
+
+## ✅ Pass 7 shipped — 2026-08-17
+
+**Finding 12 is closed.** One migration, one route change, one UI gate. `pnpm type-check` (22/22), `pnpm lint` (0 errors), `pnpm check` (0 errors), `@selvajs/selva` **545/545** (+6), and `@selvajs/providers-supabase` **181/181 against a live Postgres** — the whole point, since RLS cannot be tested any other way.
+
+| Divergence                                              | Outcome                                                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| #3 Project mutation keys on `owner_id`, not member role | **Fixed** — `selva.is_project_owner()` reads `project_members`; 5 policies now use it            |
+| #4 Public project exposes its full member roster        | **Fixed** — narrower SELECT policy, plus the route decision that makes both providers agree      |
+| #1 `visible_project` has no `platform` branch           | **Deliberately open** — the feature does not exist on this provider; documented in the migration |
+| #2 `public` ignores `ALLOW_CROSS_ORG_PUBLIC`            | **Deliberately open** — Postgres cannot read a deploy-time env flag; documented in the migration |
+
+### The reclaim break, reproduced and fixed
+
+`canManage` and `canEditProjectSettings` are both `member?.role === 'owner'`. The policies read `projects.owner_id`. Those agree until a Reclaim, which adds an owner-role member row and **deliberately leaves `owner_id` alone** — after which the app layer authorizes an edit that RLS rejects.
+
+The live-stack test reproduces it exactly: with the old predicate restored, renaming a reclaimed project comes back as `ProviderError: Project '…' not found`, because `updateProject` maps an RLS-filtered update to a 404. Not an error a user could ever diagnose. With the fix, it passes; the negative control — an editor who must still be refused — stays red-on-attempt, which is what proves the fix narrowed rather than widened.
+
+**Postgres charges for the UPSERT.** `addProjectMember` upserts so a soft-deleted row reactivates in place, and Postgres checks an upsert against the INSERT policy _and_ the UPDATE policy. The first attempt gave the owner-seeding rule an INSERT arm only, and it rejected the very first `createProject` — the ON CONFLICT arm had no UPDATE policy to fall back on. Both arms, always; the migration says so where the next person will hit it.
+
+### Two divergences left open, on purpose
+
+Closing a "drift" by inventing the thing it drifted from is not a fix. `platform` visibility is not a hole on Supabase — the `visibility` CHECK constraint does not admit the value and `IPlatformProjectGrantStore` throws 501, so there is no grant table for a policy to read and the constraint already fails closed. `ALLOW_CROSS_ORG_PUBLIC` is worse to "fix": mirroring a deploy-time env flag into the database gives the same question two answers that can disagree, which is a worse failure than RLS being the more permissive of two layers. Both reasons now live in the migration, so the next audit does not re-raise them as oversights.
+
+### The roster fix had to go to the route, not only to RLS
+
+Tightening the SELECT policy alone would have made Supabase quietly stricter than local — the same class of drift this finding is about, pointing the other way. Pass 5's precedent applies: decide where the audience is known. `/projects` now loads the roster only for projects the caller `canManage`, so both providers agree because neither store is deciding, and the policy is the backstop under it.
+
+That pulled a UI bug up with it. The settings button was gated on `data.canManageProjects` — the **org-wide** permission §11 says an admin may hand to a plain member — so it was offered on every visible row while the `PATCH` behind it is owner-only. A dead-end affordance, the same shape finding 11 found on the Delete button. The loader already computed the per-project decision and threw it away; it now returns `canManage` per row and the button follows it. The `ProjectWithMembers.canEdit` doc claimed it covered "change settings", which is what mis-gated this in the first place — `canEdit` is owner _or editor_, settings are owner-only. Corrected.
+
+### Verified by mutation, both halves
+
+Reverting `is_project_owner` to the `owner_id` predicate turns the reclaim test red against the live stack with the original 404. Reverting the route to an unconditional `listProjectMembers` turns 3 of the 6 selva tests red while both positive controls stay green. Both restored, both suites re-run green.
+
+One trap worth recording for anyone writing the next RLS test: `test-helpers.ts` has two seeders, and the default `seedUser` **promotes to `instance_admin`**. Every policy in this migration short-circuits on `is_instance_admin()`, so a test written with it passes no matter what the rest of the policy says — vacuous in exactly the way Pass 6's invite test was. `project-rls.test.ts` uses `seedPlainUser` throughout and says why at the top.
+
+**Next up:** 10 (header-auth trust boundary, incl. `rebindUpn`). 13/15/16/17/19/20 remain open. Spec edits still outstanding: §5 must record that `private → org` is intentionally ungated (finding 14), §10 needs the per-provider session-invalidation bound (finding 7) and a line saying the share-link roster is the compensating control its "unaffected" stance assumes (finding 9).
 
 ---
 
@@ -510,7 +549,7 @@ Root cause is the `_ctx` pattern named at the top: `LocalProjectStore.listProjec
 
 ---
 
-### ☐ 12. Supabase RLS diverges from `rules.ts` on three points
+### ✅ 12. Supabase RLS diverges from `rules.ts` on three points
 
 **[`20260425155514_selva_initial.sql`](../../packages/providers/supabase/supabase/migrations/20260425155514_selva_initial.sql)** · **MEDIUM**
 
@@ -525,6 +564,8 @@ Read from migrations, not a running DB — worth confirming against a live insta
 **`[verified]` — all three, and no later migration redefines `visible_project`** (subsequent migrations touch only `user_profiles` policies). RLS is genuinely live for a non-system ctx: `client.ts:89` routes `ctx.system` to the service-role client and everything else to a user-JWT client, so these policies do apply in practice. The reclaim break is confirmed: `reclaim/+server.ts` inserts a `project_members` row with `role: 'owner'` and never touches `projects.owner_id`, while the policy reads `using (selva.is_instance_admin() or owner_id = auth.uid())`.
 
 **`[new]` — a fourth divergence:** the `project_members` SELECT policy is `visible_project(project_id)`, so on a **public** project any authenticated user can read the full member roster — not just leadership. That is a membership disclosure the app layer does not intend.
+
+**DONE (Pass 7)** — `20260817160000_rls_matches_access_rules.sql`, verified against a live stack. **Two of the four are closed; two are deliberately left open and now say so in the migration.** #3 (the reclaim break) and #4 (the roster) are fixed. #1 (`platform`) is an unbuilt feature on this provider — the `visibility` CHECK does not even admit the value and the grant store throws 501, so the branch is part of shipping platform projects, not of closing a drift. #2 (`ALLOW_CROSS_ORG_PUBLIC`) is a deploy-time env flag Postgres cannot read; mirroring it into the DB creates a second source of truth that can disagree with the first, which is a worse failure than the one it fixes. See the Pass 7 section.
 
 ---
 
