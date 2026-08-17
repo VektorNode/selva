@@ -17,6 +17,12 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.test
+# Provider dev harness (scripts/dev-provider.mjs). Throwaway keys and the
+# Supabase CLI's published local-dev keys only — tracked so `pnpm dev:<provider>`
+# works on a fresh clone. Never put a real secret in one of these.
+!.env.dev-local
+!.env.dev-supabase
+!.env.dev-header
 
 # Deployment-specific config (edit example.* files instead, setup.sh copies them)
 ecosystem.config.cjs
