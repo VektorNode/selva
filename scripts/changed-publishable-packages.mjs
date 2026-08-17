@@ -26,5 +26,5 @@ if (!baseRef) {
 }
 
 for (const name of touchedPublishablePackages(diffFiles(baseRef, headRef)).keys()) {
-	console.log(name);
+	console.info(name);
 }

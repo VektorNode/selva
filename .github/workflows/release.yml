@@ -68,16 +68,10 @@ jobs:
               echo "Run 'pnpm changeset pre enter beta' on the beta branch first."
               exit 1
             fi
-            # In pre mode `changeset version` does NOT delete the .md — it records
-            # it in pre.json. So "unconsumed" = absent from pre.json.changesets.
-            unconsumed=0
-            for f in $(find .changeset -maxdepth 1 -type f -name '*.md' \
-              ! -name 'README.md' ! -name 'config.md'); do
-              name=$(basename "$f" .md)
-              if ! node -e "process.exit(require('./.changeset/pre.json').changesets.includes('$name') ? 0 : 1)"; then
-                unconsumed=$((unconsumed + 1))
-              fi
-            done
+            # In pre mode `changeset version` does NOT delete a consumed .md —
+            # it moves it to `.changeset/pre/`. See the script for why this is
+            # not read out of pre.json.
+            unconsumed=$(node scripts/unconsumed-changesets.mjs | grep -c . || true)
             if [ "$unconsumed" -gt 0 ]; then
               echo "Found $unconsumed unconsumed changeset(s) — version + publish."
               echo "should_run=true" >> "$GITHUB_OUTPUT"
@@ -101,8 +95,8 @@ jobs:
           # ── main branch ──────────────────────────────────────────────────
           # A beta→main merge that carries ACTIVE pre mode would publish
           # prerelease versions to the `latest` dist-tag. A pre.json in "exit"
-          # mode is expected: `changeset version` needs its initialVersions to
-          # collapse betas to stable, and deletes the file itself.
+          # mode is expected: `changeset version` reads it to collapse betas to
+          # stable, and deletes the file itself.
           if [ -f .changeset/pre.json ] && grep -q '"mode": *"pre"' .changeset/pre.json; then
             echo "::error::.changeset/pre.json in pre mode on main — pre mode leaked from beta."
             echo "Run 'pnpm changeset pre exit' and commit before releasing from main."
@@ -237,14 +231,11 @@ jobs:
         if: steps.check.outputs.is_beta == 'true'
         run: |
           leftover=0
-          for f in $(find .changeset -maxdepth 1 -type f -name '*.md' \
-            ! -name 'README.md' ! -name 'config.md'); do
-            name=$(basename "$f" .md)
-            if ! node -e "process.exit(require('./.changeset/pre.json').changesets.includes('$name') ? 0 : 1)"; then
-              echo "::error::Changeset '$name' is still unconsumed after the release."
-              leftover=$((leftover + 1))
-            fi
-          done
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            echo "::error::Changeset '$name' is still unconsumed after the release."
+            leftover=$((leftover + 1))
+          done < <(node scripts/unconsumed-changesets.mjs)
           if [ "$leftover" -gt 0 ]; then
             echo "::error::$leftover changeset(s) were not released. The run checked out \
           $(git rev-parse --short HEAD); if newer commits exist on beta, re-run against the tip."
@@ -253,14 +244,18 @@ jobs:
           echo "All changesets on this ref are recorded in pre.json."
 
       # ── main path ────────────────────────────────────────────────────────
-      - uses: changesets/action@v1
+      # v2 renamed every input used here (version→version-script,
+      # publish→publish-script, commit→commit-message, title→pr-title) and no
+      # longer reads GITHUB_TOKEN from the environment — it must be passed as
+      # `github-token`. A v1 name under v2 is silently ignored, which would run
+      # the action with no version/publish script at all.
+      - uses: changesets/action@v2
         if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true'
         with:
-          version: pnpm changeset version
+          version-script: pnpm changeset version
           # `pnpm release` = build + publish. The build is required: @selvajs/selva
           # ships a prebuilt SvelteKit artifact, @selvajs/ui compiled components.
-          publish: pnpm release
-          commit: 'chore: version packages'
-          title: 'chore: version packages'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          publish-script: pnpm release
+          commit-message: 'chore: version packages'
+          pr-title: 'chore: version packages'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
