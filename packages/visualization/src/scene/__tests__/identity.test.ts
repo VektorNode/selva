@@ -43,6 +43,40 @@ describe('getStableKey', () => {
 		expect(a).not.toBe(b);
 	});
 
+	describe('merged meshes', () => {
+		// Both merges report member 0 as their `originalIndex`, so keying on that alone made hiding
+		// one hide the other.
+		it('distinguishes two merges that start at the same index', () => {
+			const a = getStableKey(
+				obj({ sourceComponentId: 'gh-1', originalIndex: 0, mergedIndices: [0, 1] })
+			);
+			const b = getStableKey(
+				obj({ sourceComponentId: 'gh-1', originalIndex: 0, mergedIndices: [0, 2] })
+			);
+			expect(a).not.toBe(b);
+		});
+
+		it('does not collide with an unmerged mesh at the same index', () => {
+			const merged = getStableKey(
+				obj({ sourceComponentId: 'gh-1', originalIndex: 4, mergedIndices: [4, 5] })
+			);
+			expect(merged).not.toBe(meshKey('gh-1', 4));
+		});
+
+		// Material grouping decides member order, and it is not stable across solves.
+		it('is independent of member order', () => {
+			const a = getStableKey(obj({ sourceComponentId: 'gh-1', mergedIndices: [2, 0, 1] }));
+			const b = getStableKey(obj({ sourceComponentId: 'gh-1', mergedIndices: [0, 1, 2] }));
+			expect(a).toBe(b);
+		});
+
+		it('ignores an empty member list rather than keying on it', () => {
+			expect(
+				getStableKey(obj({ sourceComponentId: 'gh-1', originalIndex: 3, mergedIndices: [] }))
+			).toBe(meshKey('gh-1', 3));
+		});
+	});
+
 	it('falls back to name and layer when there is no component id', () => {
 		expect(getStableKey(obj({ name: 'north wall', layer: 'Walls' }))).toBe(
 			nameKey('Walls', 'north wall')

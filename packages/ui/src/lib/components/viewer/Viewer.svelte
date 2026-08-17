@@ -50,6 +50,8 @@
 		showDisplayMenu?: boolean;
 		enableMeshClick?: boolean;
 		backgroundColor?: string;
+		/** Initial state of the edge overlay and its display-menu checkmark. Default false. */
+		showEdges?: boolean;
 	}
 
 	interface Props {
@@ -83,7 +85,8 @@
 		showGridToggle: true,
 		showDisplayMenu: true,
 		enableMeshClick: true,
-		backgroundColor: '#E6E6E6'
+		backgroundColor: '#E6E6E6',
+		showEdges: false
 	};
 
 	let {
@@ -136,7 +139,8 @@
 	let measureActive = $state(false);
 	let gridVisible = $state(false);
 	let renderStyle: Look = $state('technical');
-	let edgesVisible = $state(false);
+	// Seeded once, then owned by the menu toggle.
+	let edgesVisible = $state(untrack(() => viewerConfig.showEdges) ?? defaultViewerConfig.showEdges);
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
 

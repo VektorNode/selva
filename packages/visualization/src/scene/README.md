@@ -58,9 +58,14 @@ state is keyed by **stable identity** (`identity.ts`) instead, synthesized from 
 | Priority | Source                                | Applies to                                 |
 | -------- | ------------------------------------- | ------------------------------------------ |
 | 1        | `userData.id`                         | display items (curves, points)             |
-| 2        | `sourceComponentId` + `originalIndex` | meshes                                     |
-| 3        | `name` + `layer`                      | content from plugin versions predating (2) |
+| 2        | `sourceComponentId` + `mergedIndices` | meshes merged by material                  |
+| 3        | `sourceComponentId` + `originalIndex` | unmerged meshes                            |
+| 4        | `name` + `layer`                      | content from plugin versions predating (2) |
 | —        | instance `uuid`                       | fallback; cannot survive a solve           |
+
+A merged mesh's `originalIndex` is only its _first_ member's, so two merges from one component
+collide under (3) — hiding one hides the other. The parse layer stamps `mergedIndices` (sorted,
+since material grouping order is not stable across solves) and (2) keys on that instead.
 
 `applyTo()` re-hides everything in the hidden set against the new content. **A host must call it
 after each solve** — nothing else will, and the user's hiding silently comes back visible if it is

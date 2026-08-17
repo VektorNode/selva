@@ -418,6 +418,29 @@ describe('parseMeshBatchObject', () => {
 
 			expect(meshes[0]!.userData.sourceComponentId).toBe('gh-component-xyz');
 		});
+
+		// Stable identity type-checks the field to decide whether it can key on the component; a
+		// null passes `in` but fails that check, demoting every mesh to the weaker name+layer key.
+		it('omits sourceComponentId when the batch has none', async () => {
+			const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+
+			const meshes = await parseMeshBatchObject(batch, { mergeByMaterial: true });
+
+			expect(meshes[0]!.userData.sourceComponentId).toBeUndefined();
+		});
+
+		it('gives merged meshes a member list distinct from their first index', async () => {
+			const { batch } = buildMeshBatch({
+				materialCount: 1,
+				meshCount: 3,
+				vertsPerMesh: 3,
+				sourceComponentId: 'gh-component-xyz'
+			});
+
+			const meshes = await parseMeshBatchObject(batch, { mergeByMaterial: true });
+
+			expect(meshes[0]!.userData.mergedIndices).toEqual([0, 1, 2]);
+		});
 	});
 });
 
