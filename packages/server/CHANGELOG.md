@@ -1,5 +1,12 @@
 # @selvajs/server
 
+## 1.0.2
+
+### Patch Changes
+
+- Updated dependencies [679a24f]
+  - @selvajs/platform@0.18.0
+
 ## 1.0.1
 
 ### Patch Changes
