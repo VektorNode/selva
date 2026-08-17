@@ -61,19 +61,21 @@
 
 	// Display metadata for each resolved limit, in render order. The `value`
 	// thunk picks the right unit formatter; `env` is the override var name.
+	// `note` is optional and only carries what the label and value can't: a
+	// multiplier, a disable sentinel, what a limit is keyed on. What each var
+	// means belongs in .env.example, not here.
 	const limitRows: Array<{
 		key: keyof PageData['limits'];
 		label: string;
 		env: string;
 		value: (l: PageData['limits']) => string;
-		description: string;
+		note?: string;
 	}> = [
 		{
 			key: 'SOLVE_DEADLINE_MS',
 			label: 'Solve deadline',
 			env: 'COMPUTE_SOLVE_DEADLINE_MS',
-			value: (l) => formatMs(l.SOLVE_DEADLINE_MS),
-			description: 'Longest a single /api/compute solve may run before it is aborted.'
+			value: (l) => formatMs(l.SOLVE_DEADLINE_MS)
 		},
 		{
 			key: 'RATE_LIMIT_MAX_REQUESTS',
@@ -82,87 +84,74 @@
 			// operator who wants to change "/ 1.7 min" knows which knob to set.
 			env: 'COMPUTE_RATE_LIMIT_MAX · COMPUTE_RATE_LIMIT_WINDOW_MS',
 			value: (l) => `${l.RATE_LIMIT_MAX_REQUESTS} / ${formatMs(l.RATE_LIMIT_WINDOW_MS)}`,
-			description: 'Max solves per key (user or share-link) within the fixed window.'
+			note: 'Counted per key — a user or a share link.'
 		},
 		{
 			key: 'MAX_DEFINITION_FILE_SIZE',
 			label: 'Max .gh upload size',
 			env: 'MAX_DEFINITION_FILE_SIZE_BYTES',
-			value: (l) => formatBytes(l.MAX_DEFINITION_FILE_SIZE),
-			description: 'Largest Grasshopper definition accepted on upload.'
+			value: (l) => formatBytes(l.MAX_DEFINITION_FILE_SIZE)
 		},
 		{
 			key: 'MAX_IMAGE_FILE_SIZE',
 			label: 'Max cover image size',
 			env: 'MAX_IMAGE_FILE_SIZE_BYTES',
-			value: (l) => formatBytes(l.MAX_IMAGE_FILE_SIZE),
-			description: 'Largest cover image accepted on upload.'
+			value: (l) => formatBytes(l.MAX_IMAGE_FILE_SIZE)
 		},
 		{
 			key: 'COMPUTE_REQUEST_MAX_BYTES',
 			label: 'Compute request body cap',
 			env: 'COMPUTE_REQUEST_MAX_BYTES',
 			value: (l) => formatBytes(l.COMPUTE_REQUEST_MAX_BYTES),
-			description: 'Max /api/compute JSON request size (inputs + base64 file values).'
+			note: 'Inputs plus base64 file values.'
 		},
 		{
 			key: 'COMPUTE_RESPONSE_MAX_BYTES',
 			label: 'Compute response body cap',
 			env: 'COMPUTE_RESPONSE_MAX_BYTES',
-			value: (l) => formatBytes(l.COMPUTE_RESPONSE_MAX_BYTES),
-			description: 'Max /api/compute JSON response size before it 413s.'
+			value: (l) => formatBytes(l.COMPUTE_RESPONSE_MAX_BYTES)
 		},
 		{
 			key: 'REMOTE_DEFINITION_MAX_BYTES',
 			label: 'Remote definition fetch cap',
 			env: 'MAX_DEFINITION_FILE_SIZE_BYTES',
 			value: (l) => formatBytes(l.REMOTE_DEFINITION_MAX_BYTES),
-			description: 'Max size of a remotely-fetched .gh (tracks the upload cap).'
+			note: 'Shares the upload cap above — one var sets both.'
 		},
 		{
 			key: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
 			label: 'Remote definition fetch timeout',
 			env: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
-			value: (l) => formatMs(l.REMOTE_DEFINITION_FETCH_TIMEOUT_MS),
-			description: 'Deadline for fetching a remote .gh before the request is dropped.'
+			value: (l) => formatMs(l.REMOTE_DEFINITION_FETCH_TIMEOUT_MS)
 		},
 		{
 			key: 'REMOTE_DEFINITION_CACHE_TTL_MS',
 			label: 'Remote definition cache TTL',
 			env: 'REMOTE_DEFINITION_CACHE_TTL_MS',
 			value: (l) => formatMs(l.REMOTE_DEFINITION_CACHE_TTL_MS),
-			description:
-				'How long .gh bytes fetched from a remote URL stay cached. Only remote fetches expire — uploaded definitions are keyed on an immutable version, so they never go stale.'
+			note: 'Remote fetches only — uploads are keyed on an immutable version and never go stale.'
 		},
 		{
 			key: 'COMPUTE_DEFINITION_CACHE_BYTES',
 			label: 'Definition cache',
 			env: 'COMPUTE_DEFINITION_CACHE_MB',
 			value: (l) => formatBytes(l.COMPUTE_DEFINITION_CACHE_BYTES),
-			description:
-				'How much .gh data to keep warm so a solve can skip re-reading it from storage. 0 disables.'
+			note: '0 disables.'
 		},
 		{
 			key: 'COMPUTE_SOLVE_CACHE_BYTES',
 			label: 'Solve cache',
 			env: 'COMPUTE_SOLVE_CACHE_MB',
 			value: (l) => formatBytes(l.COMPUTE_SOLVE_CACHE_BYTES),
-			description:
-				'How many solve results to keep warm, so re-solving the same inputs returns without calling Rhino. This budget applies per compute server kept warm (up to 16), so the worst-case total is 16× this number. 0 disables.'
+			note: 'Per compute server, up to 16 kept warm — worst case is 16× this. 0 disables.'
 		}
 	];
 
-	const flagDescriptions: Record<keyof PageData['flags'], string> = {
-		ALLOW_CROSS_ORG_PUBLIC:
-			'When on, projects can be made visible to every authenticated user on the instance, not just their own org.',
-		ALLOW_ORG_COMPUTE_OVERRIDE:
-			'When on, individual orgs can configure their own Rhino.Compute server instead of the instance pool.',
+	// Only flags whose resolved value misleads on its own. What each flag *does* is
+	// documented in .env.example — repeating it here just gives it somewhere to drift.
+	const flagNotes: Partial<Record<keyof PageData['flags'], string>> = {
 		ALLOW_ORG_CREATION:
-			'Reserved for self-service org creation, which has not shipped — no route consults this flag yet, so flipping it changes nothing. Orgs are created at setup, or by an instance admin.',
-		ENABLE_PLATFORM_PROJECTS:
-			'When on, the Admin → Projects surface is reachable: instance admins can create platform-owned projects and grant view/solve access to orgs or individual users. When off, the surface 404s and platform-visibility projects are hidden everywhere — existing rows are preserved.',
-		ENABLE_SHARING:
-			'When on, editors can mint per-definition share links that grant anonymous external access. When off, the mint/list/revoke routes return 404 and any previously-minted tokens stop resolving.'
+			'Not wired up yet — no route consults this flag, so flipping it does nothing.'
 	};
 
 	let updateRunning = $state(false);
@@ -360,26 +349,28 @@
 	<SectionHeader
 		eyebrow="Admin"
 		title="System settings"
-		description="Instance-wide configuration, platform flags, and the update runner. To change platform flags, edit SELVA_FLAG_* in your .env and restart the app."
+		description="Instance-wide configuration, platform flags, and the update runner. Flags and limits are env-driven — change one in your .env and restart the app."
 	/>
 
 	<Card.Root>
 		<Card.Header>
 			<Card.Title class="text-sm font-medium">Platform flags</Card.Title>
 			<Card.Description>
-				Resolved state of the env-driven flags that control instance behavior. To change a flag,
-				edit your environment configuration and restart the app.
+				Resolved state of the <code class="font-mono text-xs">SELVA_FLAG_*</code> env vars. See
+				<code class="font-mono text-xs">.env.example</code> for what each one does.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
 			<div class="divide-y rounded-lg border">
 				{#each Object.entries(data.flags) as [name, value] (name)}
-					<div class="flex items-start justify-between gap-4 px-4 py-3">
+					<div class="flex items-center justify-between gap-4 px-4 py-2">
 						<div class="min-w-0 flex-1">
 							<code class="text-foreground font-mono text-xs">{name}</code>
-							<p class="text-muted-foreground mt-1 text-xs">
-								{flagDescriptions[name as keyof PageData['flags']]}
-							</p>
+							{#if flagNotes[name as keyof PageData['flags']]}
+								<p class="text-muted-foreground mt-1 text-xs">
+									{flagNotes[name as keyof PageData['flags']]}
+								</p>
+							{/if}
 						</div>
 						<span
 							class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${
@@ -400,9 +391,8 @@
 		<Card.Header>
 			<Card.Title class="text-sm font-medium">Platform limits</Card.Title>
 			<Card.Description>
-				Resolved compute, upload, and timeout caps currently enforced by the instance. Each value
-				reflects its environment override or the built-in default. To change one, set the listed
-				variable in your environment configuration and restart the app.
+				Caps currently enforced by the instance — each value is its environment override, or the
+				built-in default where unset. Set the listed variable and restart to change one.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
@@ -411,8 +401,11 @@
 					<div class="flex items-start justify-between gap-4 px-4 py-3">
 						<div class="min-w-0 flex-1">
 							<span class="text-foreground text-sm font-medium">{row.label}</span>
-							<p class="text-muted-foreground mt-1 text-xs">{row.description}</p>
-							<code class="text-muted-foreground mt-1 block font-mono text-[10px]">{row.env}</code>
+							<code class="text-muted-foreground mt-0.5 block font-mono text-[10px]">{row.env}</code
+							>
+							{#if row.note}
+								<p class="text-muted-foreground mt-1 text-xs">{row.note}</p>
+							{/if}
 						</div>
 						<span
 							class="border-border text-foreground shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide whitespace-nowrap"

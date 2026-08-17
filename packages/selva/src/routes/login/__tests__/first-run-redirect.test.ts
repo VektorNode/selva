@@ -35,7 +35,7 @@ vi.mock('$lib/server/admin-auth.server', () => ({
 const { load, actions } = await import('../+page.server');
 
 /** SvelteKit's `redirect()` throws; this pulls the status/location back out. */
-async function captureRedirect(run: () => Promise<unknown>) {
+async function captureRedirect(run: () => unknown) {
 	try {
 		await run();
 	} catch (thrown) {

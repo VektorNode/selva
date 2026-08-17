@@ -45,7 +45,7 @@ function useProxyAuthProvider(providers: TestProviders) {
 	const config = providers.config as unknown as { auth: Record<string, unknown> };
 	const createUser = vi.fn(async (email: string) => {
 		const user = await providers.authUsers.createUser(email, null);
-		return { id: user.id, email: user.email, displayName: user.displayName ?? null };
+		return { id: user.id, email: user.email, createdAt: user.createdAt };
 	});
 	const createUserWithPassword = vi.fn();
 
