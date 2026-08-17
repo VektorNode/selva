@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { getProjectProvider } from '$lib/server/providers.server';
 import { requireCanCreateProject } from '$lib/server/access.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { slugify } from '@selvajs/platform';
+import { slugify, hasPermission } from '@selvajs/platform';
 import { ProviderError, type Project } from '@selvajs/platform';
 import { resolveAccessibleProjects } from '$lib/server/definitions/visibility.server';
 import { parseListOptions } from '$lib/server/pagination.server';
@@ -61,6 +61,18 @@ export const POST: RequestHandler = apiRoute(
 		await requireCanCreateProject(locals, ctx.actingOrgId);
 
 		const input = await parseBody(request, CreateProjectBodySchema);
+
+		// Same gate as PATCH: a `platform` project belongs to no org, so creating
+		// one here would put it beyond its own org's reach — and beyond anyone's
+		// with ENABLE_PLATFORM_PROJECTS off. Platform projects are created
+		// through /api/admin/projects.
+		if (input.visibility === 'platform' && !hasPermission(ctx, 'instance_admin')) {
+			apiError(
+				403,
+				ApiErrorCode.FORBIDDEN,
+				'Only a platform admin can create a project with platform visibility.'
+			);
+		}
 
 		const autoJoinOnUpload = input.autoJoinOnUpload ?? false;
 		if (autoJoinOnUpload && input.visibility !== 'public') {

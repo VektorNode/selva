@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getDataProvider, getPermissionStore } from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
+import { requireCanRemoveInstanceAdmin } from '$lib/server/admin/instanceAdmins.server';
 import { throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
 import {
 	PlatformPermissionSchema,
@@ -64,25 +65,16 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	return new Response(null, { status: 204 });
 };
 
-// DELETE — remove user. The §2 sole-`instance_admin` invariant is enforced
-// here, BEFORE the auth provider deletes, by consulting the permission store
-// (the auth provider no longer owns Selva-specific authorization).
+// DELETE — remove user. The §2 sole-`instance_admin` invariant and the
+// platform-scope caller check are enforced here, BEFORE the auth provider
+// deletes, by consulting the permission store (the auth provider no longer
+// owns Selva-specific authorization).
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	requireManageInstanceUsers(locals);
 	const { id } = params;
 	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing user ID');
 
-	const targetPerms = await getPermissionStore().getFor(locals.ctx!, id);
-	if (targetPerms.includes('instance_admin')) {
-		const others = await getPermissionStore().countInstanceAdminsExcluding(locals.ctx!, id);
-		if (others === 0) {
-			apiError(
-				409,
-				ApiErrorCode.CONFLICT,
-				'Cannot delete the last instance admin. Promote another user to instance admin first.'
-			);
-		}
-	}
+	await requireCanRemoveInstanceAdmin(locals.ctx!, id, 'delete');
 
 	// Capture the email BEFORE deletion — `onUserDeleted` needs it to scrub
 	// invite/audit rows keyed by email, but the auth user is gone by then.

@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { getProjectProvider } from '$lib/server/providers.server';
-import { requireCanManageMembers, requireTargetIsOrgMember } from '$lib/server/access.server';
+import { requireCanManage, requireTargetIsOrgMember } from '$lib/server/access.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import type { ProjectMember } from '@selvajs/platform';
 import { AddProjectMemberBodySchema } from '$lib/server/api/v1/bodies';
@@ -11,7 +11,7 @@ export const GET: RequestHandler = apiRoute(
 	'Failed to load members',
 	async ({ params, locals, url }) => {
 		const { id } = requireParams(params, 'id');
-		await requireCanManageMembers(locals, id);
+		await requireCanManage(locals, id, 'members');
 
 		return collection(
 			await getProjectProvider().listProjectMembers(locals.ctx!, id, parseListOptions(url))
@@ -23,7 +23,7 @@ export const POST: RequestHandler = apiRoute(
 	'Failed to add member',
 	async ({ params, request, locals }) => {
 		const { id } = requireParams(params, 'id');
-		await requireCanManageMembers(locals, id);
+		await requireCanManage(locals, id, 'members');
 		const ctx = locals.ctx!;
 
 		const input = await parseBody(request, AddProjectMemberBodySchema);

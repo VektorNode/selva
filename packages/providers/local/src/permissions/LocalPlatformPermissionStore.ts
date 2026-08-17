@@ -20,9 +20,13 @@ import { createLocalUserDataStore, type LocalUserDataStore } from '../data/userD
  *
  * `set` enforces the §2 sole-`instance_admin` invariant (refuses to drop the
  * last admin). It has no visibility into "disabled" state, which lives on
- * the auth provider's record — every row here counts as enabled, so
- * `LocalAuthProvider.disableUser` is expected to drop the user's
- * `instance_admin` grant via `set` first.
+ * the auth provider's record — **every row here counts as enabled**. A
+ * disabled admin would therefore still satisfy the "another admin exists"
+ * check and let the last enabled one be demoted, so whoever disables a user
+ * must revoke `instance_admin` through `set` first. That sequencing lives in
+ * the disable route (`POST /api/admin/users/[id]/disable`), which holds both
+ * this store and the auth provider; `LocalAuthProvider` deliberately has no
+ * reference to the permission store.
  */
 export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 	private readonly data: LocalUserDataStore;
@@ -103,10 +107,16 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 	}
 }
 
+// Reading one row and reading many must agree: `manage_instance_users` runs the
+// user-admin surface, which needs to know who holds `instance_admin` in order
+// to render locks correctly. Denying the single read while allowing the batch
+// (as this file previously did) made the delete/disable routes throw a 500
+// where they meant to return 403.
 function assertCanRead(ctx: RequestContext, userId: string): void {
 	if (ctx.system) return;
 	if (ctx.userId === userId) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
+	if (hasPermission(ctx, 'manage_instance_users')) return;
 	throw new ProviderError('Forbidden: cannot read another user’s permissions', 403);
 }
 

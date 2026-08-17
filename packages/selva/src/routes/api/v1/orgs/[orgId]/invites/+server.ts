@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
-import { getInviteStore } from '$lib/server/providers.server';
+import { getInviteStore, getOrganizationProvider } from '$lib/server/providers.server';
 import { requireManageOrgMembers, requireActingOrg } from '$lib/server/access.server';
 import {
 	DEFAULT_ORG_PERMISSIONS,
@@ -53,6 +53,22 @@ export const POST: RequestHandler = apiRoute(
 				ApiErrorCode.FORBIDDEN,
 				'Only a platform admin can grant platform-scope permissions'
 			);
+		}
+
+		// An invite is a second door into `org_members`, so it carries the same
+		// owner-only role gate as PATCH /orgs/{orgId}/members/{userId}. Without
+		// it an admin mints themselves an `owner` invite, accepts it, and then
+		// passes the sole-owner check when removing the founder — `accept-invite`
+		// writes `invite.orgRole` verbatim and cannot re-verify the minter.
+		if (input.orgRole !== 'member') {
+			const actorMember = await getOrganizationProvider().getOrgMember(ctx, orgId, ctx.userId);
+			if (actorMember?.role !== 'owner') {
+				apiError(
+					403,
+					ApiErrorCode.FORBIDDEN,
+					'Only the org owner can invite someone as owner or admin.'
+				);
+			}
 		}
 
 		// owner/admin always carry the full set — the checkbox array from the UI is

@@ -305,6 +305,8 @@ describe('every admin handler calls a platform-permission guard', () => {
 	// Four helpers, not one: three named guards plus raw `requirePermission` with
 	// a platform permission. `requireManageOrgMembers` is deliberately absent —
 	// it is org-scoped, and the one admin route that used it moved to v1.
+	// `requireAnyPlatformPermission` is absent too: it was the page-load variant
+	// only, and no endpoint ever called it.
 	const PLATFORM_PERMISSIONS = [
 		'instance_admin',
 		'manage_compute',
@@ -314,8 +316,7 @@ describe('every admin handler calls a platform-permission guard', () => {
 	const NAMED_GUARDS = [
 		'requireInstanceAdmin',
 		'requireManageCompute',
-		'requireManageInstanceUsers',
-		'requireAnyPlatformPermission'
+		'requireManageInstanceUsers'
 	];
 
 	function guardsMethod(source: string, method: HttpMethod): boolean {

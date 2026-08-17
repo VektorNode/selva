@@ -1,8 +1,9 @@
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getPermissionStore } from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
+import { requireCanRemoveInstanceAdmin } from '$lib/server/admin/instanceAdmins.server';
+import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 
 /**
  * POST /api/admin/users/[id]/disable
@@ -21,10 +22,17 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	const { id } = params;
 	if (!id) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing user ID');
 
-	const targetPerms = await getPermissionStore().getFor(locals.ctx!, id);
-	if (targetPerms.includes('instance_admin')) {
-		const others = await getPermissionStore().countInstanceAdminsExcluding(locals.ctx!, id);
-		if (others === 0) {
+	const { targetIsAdmin } = await requireCanRemoveInstanceAdmin(locals.ctx!, id, 'disable');
+
+	// Revoke before disabling. The local permission store cannot see the
+	// disabled flag (it lives in the auth provider's file), so a disabled admin
+	// still counts as live there — disable two admins in a row and the instance
+	// reaches zero enabled admins with both checks having passed.
+	//
+	// Re-enabling does not restore the grant; an admin re-assigns it.
+	if (targetIsAdmin) {
+		const revoked = await setUserPlatformPermissions(locals.ctx!, id, []);
+		if (revoked === 'last_admin') {
 			apiError(
 				409,
 				ApiErrorCode.CONFLICT,

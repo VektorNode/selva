@@ -68,6 +68,10 @@
 
 	const ORG_ROLES: OrgRole[] = ['owner', 'admin', 'member'];
 
+	// Mirrors the invite route's owner-only gate: an admin who could mint an
+	// `owner` invite would be able to accept it and then evict the founder.
+	const invitableRoles = $derived(isOwner ? ORG_ROLES : ORG_ROLES.filter((r) => r !== 'owner'));
+
 	const PERMISSION_LABELS: Record<OrgPermission, string> = {
 		manage_org_members: 'Manage members',
 		manage_org_compute: 'Manage compute',
@@ -198,7 +202,7 @@
 							bind:value={inviteRole}
 							class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 						>
-							{#each ORG_ROLES as role (role)}
+							{#each invitableRoles as role (role)}
 								<option value={role}>{role}</option>
 							{/each}
 						</select>

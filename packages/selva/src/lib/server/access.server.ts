@@ -27,9 +27,7 @@ import {
 	getPlatformProjectGrantStore,
 	flag
 } from './providers.server.js';
-import { handleApiError, apiError, ApiErrorCode } from './api-errors.js';
-
-export const throwProviderError = handleApiError;
+import { apiError, ApiErrorCode } from './api-errors.js';
 
 type AnyPermission = PlatformPermission | OrgPermission;
 
@@ -62,6 +60,10 @@ export function assertPagePermission(locals: Locals, permission: AnyPermission):
 	return user;
 }
 
+// Named aliases exist only for permissions with real call sites. Routes gating
+// on anything else call `requirePermission(locals, '…')` directly rather than
+// growing an alias per permission — `manage_definitions` and `manage_projects`
+// had wrappers that nothing ever called.
 export const requireManageInstanceUsers = (locals: Locals) =>
 	requirePermission(locals, 'manage_instance_users');
 export const requireManageCompute = (locals: Locals) => requirePermission(locals, 'manage_compute');
@@ -69,19 +71,11 @@ export const requireManageOrgMembers = (locals: Locals) =>
 	requirePermission(locals, 'manage_org_members');
 export const requireManageOrgCompute = (locals: Locals) =>
 	requirePermission(locals, 'manage_org_compute');
-export const requireManageDefinitions = (locals: Locals) =>
-	requirePermission(locals, 'manage_definitions');
-export const requireManageProjects = (locals: Locals) =>
-	requirePermission(locals, 'manage_projects');
 
 export const assertManageInstanceUsers = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_instance_users');
 export const assertManageCompute = (locals: Locals) =>
 	assertPagePermission(locals, 'manage_compute');
-export const assertManageDefinitions = (locals: Locals) =>
-	assertPagePermission(locals, 'manage_definitions');
-export const assertManageProjects = (locals: Locals) =>
-	assertPagePermission(locals, 'manage_projects');
 
 export const requireInstanceAdmin = (locals: Locals) => requirePermission(locals, 'instance_admin');
 
@@ -105,21 +99,13 @@ export function requireActingOrg(
 }
 
 /**
- * Gate for routes reachable by any platform-class permission holder (e.g. the
+ * Gate for pages reachable by any platform-class permission holder (the
  * `/admin` shell — `instance_admin`, `manage_compute`, `manage_instance_users`,
  * or `manage_updates` all qualify). Org-scope permissions never admit entry:
  * org admins do not belong on platform-scoped surfaces.
  *
- * Throws 403 — use in API routes.
+ * Redirects to /library — use in page load functions on platform-scoped routes.
  */
-export function requireAnyPlatformPermission(locals: Locals): AuthUser {
-	const { user, ctx } = requireAuthed(locals);
-	const allowed = ALL_PLATFORM_PERMISSIONS.some((p) => hasPermission(ctx, p));
-	if (!allowed) throw error(403, `You don't have permission to do this.`);
-	return user;
-}
-
-/** Redirects to /library — use in page load functions on platform-scoped routes. */
 export function assertAnyPlatformPermission(locals: Locals): AuthUser {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = ALL_PLATFORM_PERMISSIONS.some((p) => hasPermission(ctx, p));
@@ -176,16 +162,6 @@ const accessInputs = createProjectAccessInputBuilder({
 
 const buildProjectAccessInput = accessInputs.buildProjectAccessInput;
 export const projectAccessInputFromRows = accessInputs.projectAccessInputFromRows;
-
-export async function requireCanEdit(locals: Locals, projectId: string): Promise<AuthUser> {
-	const { user, ctx } = requireAuthed(locals);
-	const allowed = await contentCheck(async () => {
-		const project = await loadProjectOr404(ctx, projectId);
-		return canEdit(await buildProjectAccessInput(ctx, project));
-	});
-	if (!allowed) throw error(403, 'You do not have permission to edit this project.');
-	return user;
-}
 
 /**
  * Gates creation of a *new* definition. Container projects require project
@@ -291,26 +267,29 @@ export async function requireCanCreateProject(
 	return { user, ctx };
 }
 
-export async function requireCanManage(locals: Locals, projectId: string): Promise<AuthUser> {
-	const { user, ctx } = requireAuthed(locals);
-	const allowed = await managementBypassOrRun(ctx, async () => {
-		const project = await loadProjectOr404(ctx, projectId);
-		return canManage(await buildProjectAccessInput(ctx, project));
-	});
-	if (!allowed) throw error(403, 'Only project owners can manage this project.');
-	return user;
-}
-
-export async function requireCanManageMembers(
+/**
+ * Project-management gate (`canManage` — owner, or `instance_admin` via the
+ * bypass). Managing members is the same authority as managing the project, so
+ * both callers share this; `action` only shapes the 403 message.
+ */
+export async function requireCanManage(
 	locals: Locals,
-	projectId: string
+	projectId: string,
+	action: 'project' | 'members' = 'project'
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await managementBypassOrRun(ctx, async () => {
 		const project = await loadProjectOr404(ctx, projectId);
 		return canManage(await buildProjectAccessInput(ctx, project));
 	});
-	if (!allowed) throw error(403, 'Only project owners can manage members.');
+	if (!allowed) {
+		throw error(
+			403,
+			action === 'members'
+				? 'Only project owners can manage members.'
+				: 'Only project owners can manage this project.'
+		);
+	}
 	return user;
 }
 

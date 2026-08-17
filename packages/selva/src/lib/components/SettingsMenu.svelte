@@ -4,6 +4,7 @@
 	import { Settings, Users, Shield } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
+	import { ALL_ORG_PERMISSIONS, ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 
 	interface Props {
 		platformPermissions?: PlatformPermission[];
@@ -18,18 +19,11 @@
 
 	const isPlatformAdmin = $derived(platformPermissions.includes('instance_admin'));
 
-	const ANY_PLATFORM_PERM: PlatformPermission[] = [
-		'instance_admin',
-		'manage_compute',
-		'manage_instance_users',
-		'manage_updates'
-	];
-	const ANY_ORG_ADMIN_PERM: OrgPermission[] = [
-		'manage_org_members',
-		'manage_org_compute',
-		'manage_definitions',
-		'manage_projects'
-	];
+	// Derived from the schemas, never re-listed: a hand-copied array still
+	// type-checks after a permission is added, and the menu would silently stop
+	// appearing for whoever holds the new one.
+	const ANY_PLATFORM_PERM = ALL_PLATFORM_PERMISSIONS;
+	const ANY_ORG_ADMIN_PERM = ALL_ORG_PERMISSIONS;
 
 	const showAdmin = $derived(
 		isPlatformAdmin || ANY_PLATFORM_PERM.some((p) => platformPermissions.includes(p))
