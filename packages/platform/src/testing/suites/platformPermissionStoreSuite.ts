@@ -60,6 +60,15 @@ export function runPlatformPermissionStoreConformance(
 		};
 	}
 
+	/** §8's user-admin role: runs `/admin/users`, holds no `instance_admin`. */
+	function userAdminCtx(userId: string): RequestContext {
+		return {
+			userId,
+			platformPermissions: ['manage_instance_users'],
+			orgPermissions: []
+		};
+	}
+
 	describe(`IPlatformPermissionStore conformance: ${name}`, () => {
 		beforeEach(() => {
 			// Every test creates its own store via createStore — no shared state.
@@ -235,6 +244,42 @@ export function runPlatformPermissionStoreConformance(
 			const attacker = await seedUser();
 			const target = await seedUser();
 			await expect(store.getForBatch(selfCtx(attacker), [target])).rejects.toThrow();
+		});
+
+		// §8 — `manage_instance_users` runs the user-admin surface, so it must be
+		// able to see who holds `instance_admin`: without that read the page cannot
+		// render its locks, and `/admin/users` fails for the exact role it serves.
+		// The two adapters disagreed here (local admitted the role, Supabase did
+		// not), which surfaced as "User store unavailable" on Supabase only. Read
+		// access is not authority — the `set` case below is what keeps them apart.
+		it('manage_instance_users can batch-read platform permissions', async () => {
+			const { store, seedUser } = await createStore();
+			const admin = await seedUser();
+			const userAdmin = await seedUser();
+			await store.set(adminCtx(admin), admin, ['instance_admin']);
+
+			const map = await store.getForBatch(userAdminCtx(userAdmin), [admin, userAdmin]);
+			expect(map.get(admin)).toContain('instance_admin');
+		});
+
+		it('manage_instance_users can read another user’s permissions singly', async () => {
+			const { store, seedUser } = await createStore();
+			const admin = await seedUser();
+			const userAdmin = await seedUser();
+			await store.set(adminCtx(admin), admin, ['instance_admin']);
+
+			// Single and batch reads must agree; when they didn't, the delete/disable
+			// routes threw 500 where they meant to return 403.
+			expect(await store.getFor(userAdminCtx(userAdmin), admin)).toContain('instance_admin');
+		});
+
+		it('manage_instance_users cannot grant permissions', async () => {
+			const { store, seedUser } = await createStore();
+			const target = await seedUser();
+			const userAdmin = await seedUser();
+			await expect(
+				store.set(userAdminCtx(userAdmin), target, ['instance_admin'])
+			).rejects.toThrow();
 		});
 	});
 }

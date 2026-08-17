@@ -21,6 +21,19 @@ export interface ReclaimRow extends Project {
  * Distinct from the old `/admin/reclaim` (deleted): platform-scoped Reclaim
  * was redundant with the `instance_admin` centralized bypass (§5). Reclaim
  * exists for org leadership who don't hold the bypass.
+ *
+ * The `SYSTEM_CONTEXT` scan below is deliberate and is the one place in the app
+ * where a leadership read is not `canView`-filtered. Reclaim's entire purpose is
+ * reaching a project leadership currently *cannot* view — an orphaned private
+ * project whose owner has left. Filtering this list would empty it of exactly
+ * the rows the page exists to offer. The escalation itself is audited:
+ * `addProjectMember` emits `project_member.added` naming the actor, so taking
+ * co-ownership leaves a trace even though listing does not.
+ *
+ * The narrow gate is what makes that acceptable — `manage_org_members` is
+ * owner/admin only (§3). Its sibling `/team/projects` gates on
+ * `manage_projects`, which an admin may hand to a plain member, and therefore
+ * does filter.
  */
 export const load: PageServerLoad = async ({ locals }) => {
 	const ctx = locals.ctx;

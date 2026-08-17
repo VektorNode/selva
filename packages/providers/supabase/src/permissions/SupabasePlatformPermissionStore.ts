@@ -45,7 +45,7 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		ctx: RequestContext,
 		userIds: readonly string[]
 	): Promise<Map<string, PlatformPermission[]>> {
-		assertAdmin(ctx);
+		assertCanReadBatch(ctx);
 		const out = new Map<string, PlatformPermission[]>();
 		if (userIds.length === 0) return out;
 		const { data, error } = await this.client()
@@ -121,12 +121,29 @@ function filterValid(raw: readonly string[]): PlatformPermission[] {
 	return raw.filter((p): p is PlatformPermission => VALID_PERMISSIONS.has(p));
 }
 
+// Reading one row and reading many must agree, and both must match the local
+// provider — §8 gives `manage_instance_users` the user-admin surface, which
+// cannot render its locks without knowing who holds `instance_admin`. This
+// store denied both until now, so on Supabase `/admin/users` failed for exactly
+// the role it exists to serve.
+//
+// Read access is not authority: `set` stays `instance_admin`-only via
+// `assertAdmin`, and the delete/disable routes gate separately.
 function assertCanRead(ctx: RequestContext, userId: string): void {
 	assertNotShareContext(ctx, 'read permissions');
 	if (ctx.system) return;
 	if (ctx.userId === userId) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
+	if (hasPermission(ctx, 'manage_instance_users')) return;
 	throw new ProviderError('Forbidden: cannot read another user’s permissions', 403);
+}
+
+function assertCanReadBatch(ctx: RequestContext): void {
+	assertNotShareContext(ctx, 'read permissions');
+	if (ctx.system) return;
+	if (hasPermission(ctx, 'instance_admin')) return;
+	if (hasPermission(ctx, 'manage_instance_users')) return;
+	throw new ProviderError('Forbidden: instance admin or manage_instance_users required', 403);
 }
 
 function assertAdmin(ctx: RequestContext): void {

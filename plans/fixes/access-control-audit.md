@@ -145,7 +145,37 @@ The cascade was the smaller option and it is the wrong one. Recorded on the find
 
 `IApiTokenStore` in [token-plan.md](../features/token-plan.md) had the same gap by design — `listByUser` only, and a `deleteByUser` cascade covering deleted users but not removed or disabled ones. Two notes added there: `listByOrg` is required and should match `OrgShareLink`'s shape including the omitted hash, and offboarding is roster-driven rather than cascading, for the same reason as share links. `/team/tokens` is then largely `/team/shares` with the first hop swapped, and this pass's RLS policy is the template.
 
-**Next up:** finding 18's blanket `catch` in `admin/users/+page.server.ts:88-90`, then 11 (the `_ctx` divergence in the local provider, which also covers 21 and 24), and 26/28/29. Spec edits still outstanding: §5 must record that `private → org` is intentionally ungated (finding 14), §10 needs the per-provider session-invalidation bound (finding 7) and now also a line saying the share-link roster is the compensating control its "unaffected" stance assumes.
+---
+
+## ✅ Pass 5 shipped — 2026-08-17
+
+**Findings 11 and 18 closed.** Both were "the two providers mean different things by the same call", which is why they went together.
+
+### Finding 11 — filter at the route, not in the store
+
+The plan said to fix the `_ctx` divergence by making `LocalProjectStore.listProjects` honor its context. **That was the wrong call and was not done.** `listProjects` is a raw store read, used deliberately with `SYSTEM_CONTEXT` by `visibility.server.ts`, `/admin/projects` and reclaim — the very callers that must see past a caller's visibility. Teaching it to filter would have made a low-level read mean two things depending on who called it, and it still would not have matched Supabase's RLS predicate exactly.
+
+The filter belongs where the audience is known. `/team/projects` now calls `resolveAccessibleProjects(ctx)` — the same `canView` pass the library and `/projects` already use — and narrows to the acting org. That is provider-agnostic by construction: local and Supabase now agree because neither is deciding.
+
+**Why this page and not reclaim.** `/team/projects` gates on `manage_projects`, which §11 says an admin may hand to a plain member; the gate means "may administer projects", never "may see every project". `/team/reclaim` gates on `manage_org_members` (owner/admin only) and exists **specifically** to reach projects leadership cannot currently view — an orphaned private project whose owner has left. Filtering it would empty it of the only rows it exists to offer. Its `SYSTEM_CONTEXT` scan is now documented as deliberate rather than left looking like an oversight.
+
+The missing audit event on that read was considered and **not** added: a new `DomainEvent` variant plus every sink is disproportionate for a page load, and the escalation itself is already audited — `addProjectMember` emits `project_member.added` naming the actor, so taking co-ownership leaves a trace.
+
+Member counts still run as `SYSTEM_CONTEXT`, now with a reason on the line: visibility was already decided before the project became nameable, so counting is a leadership read rather than a second access decision.
+
+### Finding 18 — both halves
+
+**The guard.** `SupabasePlatformPermissionStore` gained `assertCanReadBatch` and admits `manage_instance_users` on `getFor` too, matching local and §8. Read access is not authority — `set` stays `instance_admin`-only through `assertAdmin`, and delete/disable gate separately (Pass 1). Aligning up no longer re-arms finding 5.
+
+Three cases went into `platformPermissionStoreSuite` rather than either provider's own tests, so the two cannot drift here again: the role can batch-read, can read singly, and **cannot** `set`. That last one is what keeps "can see" and "can grant" apart in the suite itself.
+
+**The catch.** `admin/users/+page.server.ts` now distinguishes three outcomes that were previously one. `users: null` still means "this provider exposes no user store" and renders wiring advice. A `ProviderError` re-throws as its own status — `statusCode`, not `status`, which is the field the old check got wrong. Anything else logs and degrades, so an outage is no longer indistinguishable from an unconfigured `DATA_PATH`. The log line carries `actorId` and a message string, never the error object (CLAUDE.md).
+
+### Verified by mutation
+
+Reverting `/team/projects` to a raw `listProjects` turned the private-project test red. Reverting the Supabase batch guard to `assertAdmin` turned the conformance case red against the live stack. Removing the `ProviderError` re-throw turned the denial test red. All restored; 9 new selva tests and 3 new conformance cases per provider, green on local and against live Supabase.
+
+**Next up:** 26/28/29 (pure subtraction, cheap), then 12 (Supabase RLS diverges from `rules.ts` on four points, including reclaim being functionally broken for settings edits) and 10 (header-auth trust boundary, incl. `rebindUpn`). 13/15/16/17 remain open. Spec edits still outstanding: §5 must record that `private → org` is intentionally ungated (finding 14), §10 needs the per-provider session-invalidation bound (finding 7) and a line saying the share-link roster is the compensating control its "unaffected" stance assumes.
 
 ---
 
@@ -428,7 +458,7 @@ The comment frames this as an Entra UPN≠mail convenience. Under the spoofing s
 
 ---
 
-### ☐ 11. Private project names leak to non-members via `/team/*`
+### ✅ 11. Private project names leak to non-members via `/team/*`
 
 **[`team/reclaim/+page.server.ts:36-52`](../../packages/selva/src/routes/team/reclaim/+page.server.ts#L36-L52)** and **[`team/projects/+page.server.ts:25-37`](../../packages/selva/src/routes/team/projects/+page.server.ts#L25-L37)** · **HIGH**
 
@@ -449,6 +479,8 @@ Correct implementations to copy: [`projects/+page.server.ts:100-107`](../../pack
 The two loaders have **different audiences**, which the shared heading obscures: `/team/reclaim` gates on `manage_org_members` (owner/admin only — narrow, and the listing is arguably intrinsic to offering reclaim), while `/team/projects` gates on `manage_projects`, which §11 says an admin may hand to a plain member. **`/team/projects` is the finding; reclaim is the lesser half.**
 
 Root cause is the `_ctx` pattern named at the top: `LocalProjectStore.listProjects(_ctx, orgId, …)` filters on `p.orgId === orgId && isLive(p)` and nothing else. Supabase filters correctly via `forRequest(ctx)` → user-JWT client → RLS.
+
+**DECIDED (Pass 5) — fixed at the route, not in the store.** `listProjects` stays `_ctx`: it is a raw read, and three callers pass `SYSTEM_CONTEXT` on purpose because they must see past the caller's visibility. `/team/projects` now filters through `resolveAccessibleProjects(ctx)`, so both providers agree because neither decides. `/team/reclaim` is deliberately left unfiltered and now documents why — reclaim exists to reach exactly the projects leadership cannot view, and its escalation is already audited via `project_member.added`.
 
 ---
 
@@ -540,7 +572,7 @@ Read-then-write with no lock, transaction, `SELECT … FOR UPDATE`, or condition
 
 ---
 
-### ☐ 18. Stores disagree on who may batch-read platform permissions
+### ✅ 18. Stores disagree on who may batch-read platform permissions
 
 **Local [`assertCanReadBatch:119-124`](../../packages/providers/local/src/permissions/LocalPlatformPermissionStore.ts#L119-L124)** admits `manage_instance_users`; **Supabase [`getForBatch:43`](../../packages/providers/supabase/src/permissions/SupabasePlatformPermissionStore.ts#L43)** is `instance_admin`-only · **MEDIUM**
 
@@ -557,6 +589,8 @@ Local matches §8; Supabase is the deviation. **Note the conflict:** aligning Su
 ```
 
 It wraps a block spanning `listUsers`, `getProfiles`, `getForBatch` **and** `listAllOrgMembers`, swallows **every** error from all four, and logs nothing. Any provider outage or bug anywhere in that path renders as _"configure DATA_PATH."_ Correcting `.status` → `.statusCode` fixes the 403 symptom and leaves the blanket swallow in place — fix both.
+
+**DONE (Pass 5), both halves.** Supabase gained `assertCanReadBatch` and admits the role on `getFor` too; `set` stays `instance_admin`-only, so read access does not become authority. Three conformance cases pin all three facts for **both** providers. The catch now separates "provider has no user store" (renders wiring advice) from a `ProviderError` (re-thrown at its own status) from anything else (logged, then degrades).
 
 ---
 
