@@ -153,6 +153,22 @@ Component authoring is covered by video, not prose. For the display wire format,
 
 `pnpm install` first. Builds are orchestrated by Turborepo (see `docs/contributing/turborepo.md`); most scripts run through it, with the exceptions noted.
 
+### Searching the repo
+
+1,910 tracked files, ~70,000 in `node_modules`. Anything that walks the tree
+without honouring `.gitignore` spends 97% of its time in dependencies — `grep -r`
+and `du -sh .` both take minutes here and `du -sh .` will blow a 120s timeout.
+
+```bash
+rg -n "pattern" -g '*.mjs'      # honours .gitignore. ~0.1s
+git grep -n "pattern" -- '*.mjs' # tracked files only — misses untracked ones
+git count-objects -vH            # repo size, instant
+rg -uu "pattern" packages/cli    # opt back INTO node_modules; always scope it
+```
+
+Piping to `head` or post-filtering with `grep -v node_modules` doesn't help: the
+traversal has already happened by then.
+
 ```bash
 pnpm dev:plugin             # plugin-ui dev server (http://localhost:5173)
 pnpm dev:selva              # Selva app, your own .env and .selva-data
