@@ -193,19 +193,39 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 	it('resolves a row pre-allowlisted by email when the proxy UPN differs', async () => {
 		// Entra norm: admin allowlists by mail, proxy forwards a different UPN.
 		const created = await provider.createUser('alice@company.com');
-		const result = await provider.proxyAuth.identifyFromHeaders(
+		const headers = {
+			[DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com',
+			[DEFAULT_HEADERS.email]: 'alice@company.com'
+		};
+		const result = await provider.proxyAuth.identifyFromHeaders(makeRequestHeaders(headers));
+		expect(result?.id).toBe(created.id);
+
+		// Every subsequent login takes the same email-fallback branch — the row
+		// is resolved, not rewritten.
+		const second = await provider.proxyAuth.identifyFromHeaders(makeRequestHeaders(headers));
+		expect(second?.id).toBe(created.id);
+	});
+
+	it('does not rewrite the stored UPN from headers on an email-fallback match', async () => {
+		// The identity-takeover primitive: if this rebound, one request bearing a
+		// spoofable email header would permanently repoint a real user's lookup
+		// key at an attacker-chosen UPN.
+		const created = await provider.createUser('alice@company.com');
+		await provider.proxyAuth.identifyFromHeaders(
 			makeRequestHeaders({
-				[DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com',
+				[DEFAULT_HEADERS.upn]: 'attacker@evil.example',
 				[DEFAULT_HEADERS.email]: 'alice@company.com'
 			})
 		);
-		expect(result?.id).toBe(created.id);
 
-		// The UPN is rebound, so the next login resolves via the fast UPN path.
-		const second = await provider.proxyAuth.identifyFromHeaders(
-			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com' })
+		const stored = await provider.getUser(created.id);
+		expect(stored?.metadata?.upn).toBe('alice@company.com');
+
+		// And the injected UPN alone still authenticates nobody.
+		const byInjected = await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'attacker@evil.example' })
 		);
-		expect(second?.id).toBe(created.id);
+		expect(byInjected).toBeNull();
 	});
 
 	it('refuses to identify a disabled user even with valid headers', async () => {
@@ -215,6 +235,78 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'alice@example.com' })
 		);
 		expect(result).toBeNull();
+	});
+
+	// The refusal itself is not what these assert: a comma-joined UPN matches no
+	// allowlist row, so it already failed before this check existed. The check
+	// earns its place by naming the cause — without the warning, a non-stripping
+	// proxy is indistinguishable from "user not allowlisted".
+	it('names the non-stripping proxy when a UPN header carries two values', async () => {
+		const warn = vi.fn();
+		const p = new HeaderAuthProvider({
+			allowlistFilePath,
+			logger: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } as never
+		});
+		await p.createUser('alice@company.com');
+
+		const h = new Headers();
+		h.append(DEFAULT_HEADERS.upn, 'attacker@evil.example');
+		h.append(DEFAULT_HEADERS.upn, 'alice@company.com');
+
+		expect(await p.proxyAuth.identifyFromHeaders(h)).toBeNull();
+		expect(warn).toHaveBeenCalledOnce();
+		expect(warn.mock.calls[0][0]).toMatch(/not stripping/i);
+		expect(warn.mock.calls[0][1]).toMatchObject({ header: DEFAULT_HEADERS.upn });
+	});
+
+	it('refuses the joined UPN even when the spoofed half is the allowlisted one', async () => {
+		await provider.createUser('alice@company.com');
+		const h = new Headers();
+		h.append(DEFAULT_HEADERS.upn, 'alice@company.com');
+		h.append(DEFAULT_HEADERS.upn, 'attacker@evil.example');
+
+		expect(await provider.proxyAuth.identifyFromHeaders(h)).toBeNull();
+	});
+
+	it('warns once per process, not once per spoofed request', async () => {
+		const warn = vi.fn();
+		const p = new HeaderAuthProvider({
+			allowlistFilePath,
+			logger: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } as never
+		});
+		const h = new Headers();
+		h.append(DEFAULT_HEADERS.upn, 'a@x.example');
+		h.append(DEFAULT_HEADERS.upn, 'b@y.example');
+
+		await p.proxyAuth.identifyFromHeaders(h);
+		await p.proxyAuth.identifyFromHeaders(h);
+		expect(warn).toHaveBeenCalledOnce();
+	});
+
+	it('does not reject a display name containing a comma', async () => {
+		// "Doe, Jane" is standard Entra formatting — gating the display-name
+		// header on commas would break working deployments.
+		const created = await provider.createUser('alice@company.com');
+		const result = await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({
+				[DEFAULT_HEADERS.upn]: 'alice@company.com',
+				[DEFAULT_HEADERS.displayName]: 'Anderson, Alice'
+			})
+		);
+		expect(result?.id).toBe(created.id);
+		expect(result?.metadata?.displayName).toBe('Anderson, Alice');
+	});
+
+	it('does not reject a duplicated email header when the UPN is single-valued', async () => {
+		// Only the UPN decides identity, so a repeated email header is noise
+		// rather than a spoofing signal — it must not lock the user out.
+		const created = await provider.createUser('alice@company.com');
+		const h = new Headers();
+		h.append(DEFAULT_HEADERS.upn, 'alice@company.com');
+		h.append(DEFAULT_HEADERS.email, 'alice@company.com');
+		h.append(DEFAULT_HEADERS.email, 'spoof@evil.example');
+
+		expect((await provider.proxyAuth.identifyFromHeaders(h))?.id).toBe(created.id);
 	});
 
 	it('does NOT auto-create rows when no bootstrap policy is configured', async () => {

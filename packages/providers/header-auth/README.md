@@ -146,9 +146,10 @@ app.example.com {
     # 1. Strip any inbound copies of the trusted headers. Without this, a
     #    browser can send its own `SELVA-*` headers and the auth helper's
     #    copies are appended — `Headers.get()` returns them joined with `, `
-    #    (e.g. "attacker@x.com, real@y.com"), which won't match any
-    #    allowlisted UPN. So the practical failure mode is "no one can log in"
-    #    rather than "anyone can spoof", but you do NOT want to rely on that —
+    #    (e.g. "attacker@x.com, real@y.com"). The provider refuses a UPN
+    #    header carrying more than one value and logs why, so the failure mode
+    #    is "no one can log in, with a warning naming this line" rather than
+    #    "anyone can spoof". That refusal is a diagnostic, not a control —
     #    strip the headers and keep the trust path clean.
     #
     #    Keep these at site scope, above any `handle`. Inside a `handle`,

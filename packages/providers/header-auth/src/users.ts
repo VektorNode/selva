@@ -73,10 +73,15 @@ export interface AllowlistStore {
 	 */
 	syncFromHeaders(id: string, fields: { email?: string; displayName?: string }): Promise<void>;
 	/**
-	 * Repoint a row's UPN to the value the proxy actually forwards. Called once
-	 * after an email-fallback match so subsequent logins resolve via the fast
-	 * `findByUpn` path. No-ops if the new UPN already belongs to a different
-	 * row (a collision means manual operator cleanup — never silently merge).
+	 * Repoint a row's UPN — for an operator correcting an allowlist entry after
+	 * a directory-side rename. No-ops if the new UPN already belongs to a
+	 * different row (a collision means manual operator cleanup — never silently
+	 * merge).
+	 *
+	 * Deliberately NOT called from `identifyFromHeaders`: both the UPN and email
+	 * headers are proxy-supplied, so rebinding on an email-fallback match would
+	 * let a request rewrite a stored identity. The fallback re-resolves the row
+	 * by email on every login instead.
 	 */
 	rebindUpn(id: string, upn: string): Promise<void>;
 	setDisabled(id: string, disabled: boolean): Promise<void>;

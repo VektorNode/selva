@@ -244,6 +244,34 @@ One trap worth recording for anyone writing the next RLS test: `test-helpers.ts`
 
 ---
 
+## ✅ Pass 8 shipped — 2026-08-17
+
+**Finding 10 is closed — one half fixed, one half deliberately open and now documented as such.** `@selvajs/header-auth-provider` is 47/47, +5 tests.
+
+| Half                                       | Outcome                                                                                   |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `rebindUpn` identity write                 | **Fixed** — the email fallback adopts the row, never rewrites its UPN                     |
+| Non-stripping proxy (README condition 3)   | **Self-detecting** — a multi-valued UPN header is refused with a warning naming the cause |
+| Direct network access (README condition 1) | **Deliberately open** — no new env var; reasoning in the provider's trust-boundary banner |
+
+### The rebind was the real defect, and removing it costs almost nothing
+
+An email-fallback match permanently repointed the matched row's UPN at the forwarded value. Both headers on that path are proxy-supplied, so under the spoofing scenario a single request rewrote a real user's lookup key — turning impersonation into persistence, with `.catch(() => {})` hiding any failure. The fallback still adopts the row, so the Entra UPN≠mail deployments it exists for keep working; they simply resolve by email on every login instead of being rewritten after the first. On a JSON allowlist that cost is unmeasurable. `rebindUpn` stays on the store as an operator primitive and its doc now says why nothing on the header path calls it.
+
+### The duplicate-header check is a diagnostic, and the tests had to say so
+
+A comma-joined UPN already failed — no allowlisted UPN contains a comma, so the lookup missed and the user saw a generic "not allowlisted". **That is why the first three tests I wrote were worthless: disabling the branch entirely left them green.** They asserted the `null`, which the old code already produced. Rewritten to assert the warning — its text, its `header` field, and that it fires once per process rather than once per request — the same mutation turns 2 red. The refusal is not the behaviour worth pinning; the named cause is.
+
+Scoped to the **UPN header only**. Display names legitimately contain commas — `"Doe, Jane"` is standard Entra formatting — so gating that header would break working deployments on day one. There is a test for the comma-bearing display name and one for a duplicated email header, both asserting a successful login, precisely so a later "let's check all three headers" tightening fails loudly.
+
+### Why no shared secret
+
+The proposed `HEADER_AUTH_SHARED_SECRET` was rejected on config-surface grounds — 61 env vars are already documented, 4 of them header-auth — and the objection holds up under scrutiny. The secret is a second control over the same failure the README's two deployment conditions already govern, and an operator who misconfigured header stripping is no likelier to have configured a secret correctly. It buys real defense-in-depth only against direct network access, which is a firewall/bind-address concern the app genuinely cannot verify. Recorded in the provider's banner so the next audit reads it as a decision, not an oversight.
+
+**Next up:** 13/15/16/17/19/20 remain open. Spec edits still outstanding: §5 (finding 14), §10 (findings 7 and 9).
+
+---
+
 ## The shape of the problem
 
 One sentence explains most of what follows: **`rules.ts` is well built and well tested as pure functions; the specific route handlers that call it were never exercised adversarially.** Findings 1, 2, 4 and 5 are all route-layer wiring bugs sitting directly behind correct, tested rules.
@@ -493,7 +521,7 @@ So the real offboarding runbook is: enumerate every definition in every project 
 
 ---
 
-### ☐ 10. header-auth has no enforceable trust boundary
+### ✅ 10. header-auth has no enforceable trust boundary
 
 **[`HeaderAuthProvider.ts:18-34`](../../packages/providers/header-auth/src/HeaderAuthProvider.ts#L18-L34)** · **HIGH**
 
@@ -520,6 +548,8 @@ if (byEmail) {
 ```
 
 The comment frames this as an Entra UPN≠mail convenience. Under the spoofing scenario above it is also **persistence**: a real user's account, with its org memberships and permissions, is rebound to a header value the attacker chooses, and the `.catch(() => {})` swallows any failure silently. Whatever gating lands for this finding must cover the email fallback path, not only the UPN one.
+
+**DONE (Pass 8) — the identity write is closed; one half is deliberately open.** `rebindUpn` is no longer called from `identifyFromHeaders`, and the non-stripping-proxy misconfiguration is now self-detecting. Direct network access to the process remains uncaught, on purpose. See the Pass 8 section.
 
 ---
 
