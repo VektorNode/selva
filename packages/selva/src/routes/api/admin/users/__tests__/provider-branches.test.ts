@@ -1,16 +1,14 @@
 /**
- * How `POST /api/admin/users` creates a user depends entirely on which surface
- * the auth provider exposes, and the two branches mean very different things:
+ * `POST /api/admin/users` has exactly one create path: `createUser`, which
+ * allowlists an email without a credential. The row is a UPN allowlist entry;
+ * the IdP owns the password and proves identity on the next request.
  *
- *   - `passwordAuth` present (Local, Supabase) — the ADMIN picks the new user's
- *     password and it travels to the server.
- *   - `passwordAuth` absent but `createUser` present (header-auth/Entra) — there
- *     is no password at all. The row is a UPN allowlist entry; the IdP owns the
- *     credential and proves identity on the next request.
+ * This is the ONLY way to admit a user to a header-auth deployment — a provider
+ * that owns credentials (Local, Supabase) admits by invite instead, so the
+ * recipient chooses their own password and an admin never sets one.
  *
- * The second branch is the ONLY way to admit a user to a header-auth
- * deployment, and it has had no route-level test. These pin it, so that
- * reworking the password branch cannot quietly take the allowlist path with it.
+ * These pin the allowlist path so that work on the invite flow cannot quietly
+ * take the header-auth lifeline with it.
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -181,6 +179,6 @@ describe('POST /api/admin/users — provider exposes neither surface', () => {
 		});
 
 		expect(res.status).toBe(501);
-		expect((res.json as { message: string }).message).toMatch(/not supported by external-idp/i);
+		expect((res.json as { message: string }).message).toMatch(/external-idp cannot create/i);
 	});
 });

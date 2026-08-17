@@ -20,12 +20,12 @@ import { splitFlatPermissions, flattenPermissions } from '$lib/server/permission
 // scopes server-side until the UI grows two dedicated surfaces.
 const FlatPermissionSchema = z.union([PlatformPermissionSchema, OrgPermissionSchema]);
 
-const BaseUserBody = z.object({
+// `password` is deliberately absent: an admin never sets another user's
+// credential. A stale client may still send one — Zod strips unknown keys, so it
+// is dropped rather than rejected.
+const CreateUserBody = z.object({
 	email: z.string().email('Valid email is required'),
 	permissions: z.array(FlatPermissionSchema)
-});
-const PasswordUserBody = BaseUserBody.extend({
-	password: z.string().min(8, 'Password must be at least 8 characters').optional()
 });
 
 // GET — list all users with a flat "permissions" projection for the admin UI.
@@ -73,9 +73,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const auth = getAuthProvider();
 
 	const body = await request.json().catch(() => null);
-	const parsed = PasswordUserBody.safeParse(body);
+	const parsed = CreateUserBody.safeParse(body);
 	if (!parsed.success) throwZodError(parsed.error);
-	const { email, password, permissions } = parsed.data;
+	const { email, permissions } = parsed.data;
 	const { platform, org } = splitFlatPermissions(permissions);
 
 	// Only an existing platform admin may create a user with platform-scope perms.
@@ -89,16 +89,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		let user;
-		if (auth.passwordAuth) {
-			if (!password) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Password is required');
-			user = await auth.passwordAuth.createUserWithPassword(email, password);
-		} else if (auth.createUser) {
+		if (auth.createUser) {
+			// No password branch: a provider that owns credentials admits users by
+			// invite, so nobody but the account holder ever chooses the password.
+			// `createUser` is the allowlist path — under header-auth it is the only
+			// way in, since the IdP holds the credential and Selva never sees one.
 			user = await auth.createUser(email);
 		} else {
 			apiError(
 				501,
 				ApiErrorCode.INTERNAL,
-				`User creation is not supported by ${auth.name}. Users are managed externally.`
+				`${auth.name} cannot create a user directly. Send an invite instead — the recipient sets their own password.`
 			);
 		}
 

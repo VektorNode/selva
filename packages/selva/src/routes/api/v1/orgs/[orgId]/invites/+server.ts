@@ -5,8 +5,10 @@ import { requireManageOrgMembers, requireActingOrg } from '$lib/server/access.se
 import {
 	DEFAULT_ORG_PERMISSIONS,
 	MEMBER_ASSIGNABLE_PERMISSIONS,
+	hasPermission,
 	type Invite
 } from '@selvajs/platform';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
 import { hashToken, mintRawToken } from '$lib/server/invites/token.server';
 import { CreateInviteBodySchema } from '$lib/server/api/v1/bodies';
@@ -39,7 +41,19 @@ export const POST: RequestHandler = apiRoute(
 		const { ctx, orgId } = requireActingOrg(locals, params.orgId);
 
 		const input = await parseBody(request, CreateInviteBodySchema);
-		const { org: submittedOrgPerms } = splitFlatPermissions(input.permissions);
+		const { platform: submittedPlatformPerms, org: submittedOrgPerms } = splitFlatPermissions(
+			input.permissions
+		);
+
+		// Same rule as POST /api/admin/users: platform scope is not delegable, so
+		// an org admin who can invite members still cannot mint an instance_admin.
+		if (submittedPlatformPerms.length > 0 && !hasPermission(locals.ctx!, 'instance_admin')) {
+			apiError(
+				403,
+				ApiErrorCode.FORBIDDEN,
+				'Only a platform admin can grant platform-scope permissions'
+			);
+		}
 
 		// owner/admin always carry the full set — the checkbox array from the UI is
 		// ignored for those roles. `member` takes the caller's selection intersected
@@ -62,6 +76,7 @@ export const POST: RequestHandler = apiRoute(
 			orgId,
 			orgRole: input.orgRole,
 			orgPermissions,
+			platformPermissions: submittedPlatformPerms,
 			invitedBy: locals.user!.id,
 			createdAt: now.toISOString(),
 			expiresAt: new Date(now.getTime() + INVITE_TTL_MS).toISOString()

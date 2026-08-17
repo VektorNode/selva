@@ -18,6 +18,9 @@
 	"scripts": {
 		"dev:plugin": "pnpm --filter @selvajs/plugin-ui dev",
 		"dev:selva": "pnpm --filter @selvajs/selva dev",
+		"dev:local": "node scripts/dev-provider.mjs local",
+		"dev:supabase": "node scripts/dev-provider.mjs supabase",
+		"dev:header": "node scripts/dev-provider.mjs header",
 		"dev:ui": "pnpm --filter @selvajs/ui dev",
 		"dev:website": "pnpm --filter @selvajs/website dev",
 		"watch:ui": "pnpm --filter @selvajs/ui build:watch",

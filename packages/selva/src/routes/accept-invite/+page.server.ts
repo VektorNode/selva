@@ -2,11 +2,13 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { SYSTEM_CONTEXT, type Invite } from '@selvajs/platform';
 import {
+	getDataProvider,
 	getInviteStore,
 	getOrganizationProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { getAuthProvider } from '$lib/server/auth.server';
+import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 import { hashToken } from '$lib/server/invites/token.server';
 import { renderThrown } from '@selvajs/server/logging';
@@ -91,8 +93,6 @@ export const actions = {
 
 		let user;
 		try {
-			// Invites grant org-scope perms only; new users start with no
-			// platform permissions (the empty default in IPlatformPermissionStore).
 			if (mode === 'password' && auth.passwordAuth) {
 				user = await auth.passwordAuth.createUserWithPassword(invite.email, password!);
 			} else if (mode === 'proxy' && auth.createUser) {
@@ -112,6 +112,24 @@ export const actions = {
 		}
 
 		try {
+			// Authority the inviting admin chose at mint time. The mint route already
+			// verified they held `instance_admin` — re-checking here is impossible,
+			// as the only party present now is the invitee.
+			if (invite.platformPermissions?.length) {
+				// `set` keys on the data-layer row, which is normally seeded by
+				// `ensureUser` on the first authed request — one the invitee has not
+				// made yet. Without this the grant returns `not_found` and vanishes.
+				await getDataProvider().ensureUser(SYSTEM_CONTEXT, user.id);
+				const granted = await setUserPlatformPermissions(
+					SYSTEM_CONTEXT,
+					user.id,
+					invite.platformPermissions
+				);
+				if (granted !== 'ok') {
+					throw new Error(`Platform permission grant failed: ${granted}`);
+				}
+			}
+
 			const joinedAt = new Date().toISOString();
 			await getOrganizationProvider().addOrgMember(SYSTEM_CONTEXT, {
 				orgId: invite.orgId,

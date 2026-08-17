@@ -1,4 +1,5 @@
 import type { OrgRole, OrgPermission } from '../organizations/schemas.js';
+import type { PlatformPermission } from '../permissions/types.js';
 
 /**
  * "The holder of the raw token whose hash is `tokenHash` may join `orgId` at
@@ -23,6 +24,15 @@ export interface Invite {
 	orgRole: OrgRole;
 	/** May be empty — adapters may seed from `DEFAULT_ORG_PERMISSIONS` in that case. */
 	orgPermissions: OrgPermission[];
+	/**
+	 * Instance-wide permissions granted on accept — usually empty.
+	 *
+	 * Only a caller who already holds `instance_admin` may mint an invite
+	 * carrying these; the mint route enforces that, because anyone able to set
+	 * this field can hand out `instance_admin` and escalate past org scope.
+	 * Optional so invites stored before this field existed still parse.
+	 */
+	platformPermissions?: PlatformPermission[];
 	invitedBy: string;
 	createdAt: string;
 	expiresAt: string;

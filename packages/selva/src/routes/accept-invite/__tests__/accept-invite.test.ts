@@ -15,6 +15,7 @@ import {
 	seedAcme,
 	actAs,
 	call,
+	grantPlatformPermissions,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
 import { POST as mintInvite } from '../../api/v1/orgs/[orgId]/invites/+server.js';
@@ -339,5 +340,51 @@ describe('accept-invite under forward-auth', () => {
 
 		expect(result.redirected).toBe('/admin');
 		expect(result.cookies.size).toBe(0);
+	});
+});
+
+/**
+ * Accepting an invite that carries instance-wide permissions is the only way to
+ * create a second instance admin once an admin can no longer set someone's
+ * password. If the grant silently no-ops here, a deployment is stuck with the
+ * one admin it bootstrapped with.
+ */
+describe('accept-invite grants platform permissions', () => {
+	/** Mint an invite carrying `permissions`, as an instance admin would. */
+	async function mintCarrying(tp: TestProviders, permissions: string[]): Promise<string> {
+		const { alice, acme } = await seedAcme(tp);
+		await grantPlatformPermissions(tp, alice.id, ['instance_admin']);
+		const locals = await actAs(tp, alice.id);
+		const res = await call(mintInvite, {
+			locals,
+			params: { orgId: acme.id },
+			body: { email: INVITEE, orgRole: 'member', permissions }
+		});
+		expect(res.status).toBe(201);
+		const { acceptUrl } = res.json as { acceptUrl: string };
+		return new URL(acceptUrl).searchParams.get('token')!;
+	}
+
+	it('promotes the invitee to instance_admin on accept', async () => {
+		tp = await freshProviders();
+		const token = await mintCarrying(tp, ['instance_admin']);
+
+		const result = await submit(token, { password: PASSWORD, confirm: PASSWORD });
+		expect(result.redirected).toBe('/admin');
+
+		const invited = await tp.authUsers.findByEmail(INVITEE);
+		const perms = await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, invited!.id);
+		expect(perms).toContain('instance_admin');
+	});
+
+	it('leaves an ordinary invitee with no platform permissions', async () => {
+		tp = await freshProviders();
+		const token = await mintCarrying(tp, ['manage_definitions']);
+
+		await submit(token, { password: PASSWORD, confirm: PASSWORD });
+
+		const invited = await tp.authUsers.findByEmail(INVITEE);
+		const perms = await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, invited!.id);
+		expect(perms).toEqual([]);
 	});
 });

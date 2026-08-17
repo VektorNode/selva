@@ -38,11 +38,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 	assertManageInstanceUsers(locals);
 	const ctx = locals.ctx!;
 	const auth = getAuthProvider();
-	const userCreation: 'email-password' | 'email-only' | 'none' = auth.passwordAuth
-		? 'email-password'
-		: auth.createUser
-			? 'email-only'
-			: 'none';
+	// Admins never set another user's password, so the only direct-create path is
+	// the passwordless allowlist. A provider without `createUser` (the local one)
+	// admits users by invite alone — `none` hides the form rather than pointing it
+	// at a route that would 501.
+	const userCreation: 'email-only' | 'none' = auth.createUser ? 'email-only' : 'none';
 	const providerInfo = { name: auth.name, userCreation };
 
 	let users: UserRow[] | null = null;
