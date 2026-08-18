@@ -88,7 +88,7 @@
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
-		"supabase": "^2.112.0",
+		"supabase": "^2.114.0",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}
