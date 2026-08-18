@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/server",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "Transport-agnostic server building blocks for apps built on the Selva engine (limits, rate limiting, SSRF guard, remote-definition fetch, definition service + render loader); the solve core lives in @selvajs/solve/server",
 	"license": "MIT",
 	"author": "VektorNode",

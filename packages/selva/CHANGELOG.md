@@ -1,5 +1,124 @@
 # @selvajs/selva
 
+## 4.12.0
+
+### Minor Changes
+
+- e779034: Header auth: stop rewriting a stored UPN from request headers, and detect a
+  non-stripping proxy. Affects deployments running the bundled forward-auth
+  provider (`SELVA_AUTH_PROVIDER=header`); no other provider is reachable by this.
+
+  `identifyFromHeaders` no longer calls `rebindUpn` after an email-fallback match. Both
+  headers on that path are proxy-supplied, so the rebind let one request repoint an
+  existing allowlist row's lookup key at a caller-supplied UPN — impersonation became
+  persistence, and a `.catch(() => {})` hid any failure. The fallback still adopts the
+  matched row, so Entra deployments where the UPN differs from the mail address keep
+  working; they resolve by email on each login rather than being rewritten after the
+  first. `rebindUpn` remains on `AllowlistStore` for operator-driven correction.
+
+  A UPN header carrying more than one value is now refused with a warning that names the
+  cause. `Headers.get()` joins repeats with `", "`, which is what a proxy that fails to
+  strip client-supplied copies produces. Such a request never matched an allowlist row
+  anyway, so no working login changes — the warning replaces a failure that was
+  indistinguishable from "user not allowlisted". The check applies to the UPN header
+  only: display names legitimately contain commas.
+
+- e779034: Give the org-owner boundary one predicate instead of three hand-written copies.
+
+  Three routes decided whether an actor may grant or revoke org `owner`/`admin`
+  standing — minting an invite, changing a member's role, and removing an owner —
+  and each spelled the rule out longhand. Two had already drifted: the invite route
+  let an admin mint themselves an `owner` invite, and member `DELETE` removed an
+  owner that `PATCH` would not let them demote. The unguarded operation was the
+  harder one to reverse; a demoted owner can be re-promoted, a removed one has lost
+  every project membership to the cascade.
+
+  `canChangeOrgRole({ actorMember, role })` now lives in `rules.ts` beside the
+  project predicates, and all three routes call it. It reads the **membership
+  row**, never `Organization.ownerId` — those are separate fields that can
+  disagree, and only the row is authority here.
+
+  One tightening falls out of the consolidation: the role-change branch of `PATCH
+/api/v1/orgs/{orgId}/members/{userId}` now gates on both the role being granted
+  and the role being taken away. Demoting an owner crosses the boundary even though
+  granting `member` does not, and the old code checked only the target role.
+
+  The point is not the deduplication. Changing that single predicate to admit
+  admins turns **nine** route tests red across all three files plus two rule tests,
+  from one edit — previously, breaking the rule in one route left the other two
+  silently green, which is exactly how it drifted twice.
+
+- e779034: Report projects left without an owner when an org member is removed, instead of orphaning them silently.
+
+  `removeOrgMember` cascades every `project_members` row, so removing someone who
+  was the only owner of a project left that project with nobody able to manage it —
+  no settings, no roster, no delete — and nothing anywhere said so.
+
+  Permissions.md §10 promised the removal would be **blocked** until a new owner was
+  assigned. That rule is retired rather than implemented. Blocking makes the cost of
+  offboarding scale with how many projects the departing person owned, which is
+  backwards: the most prolific people are the ones whose departure most needs to be
+  clean, and an offboarding that stalls halfway leaves a live account in the org
+  while someone works through the backlog. Auto-transfer was rejected separately —
+  it hands someone authority silently, by a heuristic nobody remembers, and six
+  months later the audit log cannot explain why they own it.
+
+  `DELETE /api/v1/orgs/{orgId}/members/{userId}` now emits
+  `org_member.removed_orphaning_projects` carrying every affected project id in one
+  event, rather than one event each: an admin reading the log wants "this
+  offboarding cost three projects", not three rows to correlate. Reclaim already
+  adopts an ownerless project, so the recovery path predates the problem — what was
+  missing was any signal that recovery was needed.
+
+  The check runs **before** the removal, because the cascade soft-deletes the very
+  rows it reads. In the other order it finds no owners, concludes nothing was
+  orphaned, and reports nothing on precisely the case it exists for — so that
+  ordering has its own test.
+
+### Patch Changes
+
+- e779034: Admin routes adopt the shared HTTP wrapper, and two conformance tests keep both surfaces honest.
+
+  `/api/admin/*` had zero of 22 handlers using `apiRoute`, against 40 of 43 in v1.
+  That was drift rather than design, and the cause was the file path: the helpers
+  lived at `api/v1/route.ts`, and a helper under a version prefix reads as
+  belonging to that version. So the sibling surface hand-rolled `if (!id)
+apiError(400, …)` and a per-handler `try/catch` instead. Nothing in those helpers
+  was ever v1-specific; they now live at `api/http.ts`, with `api/v1/route.ts` left
+  as a re-export so existing importers are untouched.
+
+  **Two inner catches were kept deliberately.** `apiRoute` re-throws anything
+  already structured, so a `apiError(409, …)` passes straight through — which means
+  a `catch` mapping `ProviderError.statusCode === 409` to a typed conflict is doing
+  real work. A blanket "remove every try/catch" sweep would have turned two clean
+  409s into 500s. The compute routes keep theirs too: they log deliberately and
+  return a specific 500. Only the `catch (err) { handleApiError(err, '…') }` tail
+  that `apiRoute` now owns was deleted.
+
+  Streaming and SSE handlers stay unwrapped on purpose — once the status line is
+  sent a wrapper cannot change the response, so `apiRoute` has nothing to offer
+  them and wrapping them would imply it does.
+
+  Two new conformance checks, because nothing had ever pinned either fact:
+
+  - **Every route handler is wrapped**, generated per route/method across both
+    surfaces. The exemption list for streaming handlers has its own test: an
+    exemption naming a route that no longer ships fails, so a stale exemption
+    cannot silently excuse nothing.
+  - **Every shipped route appears in the Permissions.md §8 matrix.** Deliberately
+    one-directional — a row with no route is fine, since §8 documents unbuilt
+    endpoints on purpose; only shipped-but-unlisted fails. It found 16 routes with
+    no row, two rows whose path never matched a real route
+    (`/api/v1/compute/solve` does not exist), and one naming the wrong permission
+    (`/api/admin/system/update` was documented as `manage_updates`; the code
+    requires `instance_admin`).
+
+  Also documents `ADDRESS_HEADER` / `XFF_DEPTH` in `.env.example`. Both are read by
+  `@sveltejs/adapter-node`, but the login and email-sign-in rate limiters key on
+  `getClientAddress()` — behind a proxy that is the proxy's own IP for every
+  request, so one noisy client can lock out the whole deployment and no per-IP
+  limit means anything.
+
 ## 4.11.0
 
 ### Minor Changes
