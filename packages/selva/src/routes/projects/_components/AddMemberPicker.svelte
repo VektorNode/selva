@@ -4,6 +4,7 @@
 	import type { ProjectRole } from '@selvajs/platform/projects';
 	import type { UserListItem } from '../+page.server';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import { primaryLabel, emailSubtitle } from '$lib/user-display';
 
 	interface Props {
 		availableUsers: UserListItem[];
@@ -39,7 +40,7 @@
 	});
 
 	function userLabel(u: UserListItem) {
-		return u.displayName ?? u.email ?? u.id.slice(0, 8);
+		return primaryLabel(u, u.id.slice(0, 8));
 	}
 
 	function pick(user: UserListItem) {
@@ -125,7 +126,7 @@
 						<UserAvatar name={userLabel(user)} size="sm" />
 						<div class="min-w-0 flex-1">
 							<p class="truncate text-sm font-medium">{userLabel(user)}</p>
-							{#if user.displayName && user.email}
+							{#if emailSubtitle(user)}
 								<p class="text-muted-foreground truncate font-mono text-xs">{user.email}</p>
 							{/if}
 						</div>
@@ -138,7 +139,7 @@
 			<UserAvatar name={userLabel(selected)} size="sm" />
 			<div class="min-w-0 flex-1">
 				<p class="truncate text-sm font-medium">{userLabel(selected)}</p>
-				{#if selected.email && selected.displayName}
+				{#if emailSubtitle(selected)}
 					<p class="text-muted-foreground truncate font-mono text-xs">{selected.email}</p>
 				{/if}
 			</div>

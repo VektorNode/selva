@@ -5,6 +5,7 @@
 	import { ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import { primaryLabel, emailSubtitle } from '$lib/user-display';
 
 	type FlatPermission = PlatformPermission | OrgPermission;
 
@@ -64,9 +65,11 @@
 		member: 'border-border text-muted-foreground'
 	};
 
-	const displayLine = $derived(
-		user.displayName ? `${user.displayName} · ${user.email ?? user.id}` : (user.email ?? user.id)
-	);
+	const displayLine = $derived.by(() => {
+		const primary = primaryLabel(user, user.id);
+		const secondary = emailSubtitle(user);
+		return secondary ? `${primary} · ${secondary}` : primary;
+	});
 
 	const isOwnerOrAdmin = $derived(user.orgRole === 'owner' || user.orgRole === 'admin');
 
@@ -113,7 +116,7 @@
 			{/if}
 		</button>
 
-		<UserAvatar name={user.displayName ?? user.email ?? user.id} />
+		<UserAvatar name={primaryLabel(user, user.id)} />
 
 		<div class="min-w-0 flex-1">
 			<div class="flex items-center gap-2">

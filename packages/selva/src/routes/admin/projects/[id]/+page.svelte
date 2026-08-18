@@ -15,6 +15,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { GrantRow, OrgOption, UserOption, DefinitionRow } from './+page.server';
 	import type { Project } from '@selvajs/platform';
+	import { primaryLabel, emailSubtitle } from '$lib/user-display';
 
 	interface PageData {
 		project: Project;
@@ -102,8 +103,8 @@
 			? data.orgOptions.map((o) => ({ id: o.id, label: o.name, sub: o.slug }))
 			: data.userOptions.map((u) => ({
 					id: u.id,
-					label: u.displayName ?? u.email ?? u.id,
-					sub: u.displayName && u.email ? u.email : undefined
+					label: primaryLabel(u, u.id),
+					sub: emailSubtitle(u)
 				}))
 	);
 
