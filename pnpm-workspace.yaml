@@ -14,7 +14,7 @@ catalogs:
     '@tailwindcss/vite': ^4.3.3
     # Track the runtime (.nvmrc / engines.node), not the newest Node line —
     # types ahead of the runtime typecheck APIs the deployed Node doesn't have.
-    '@types/node': ^24.13.3
+    '@types/node': ^26.2.0
     '@types/three': ^0.185.4
     bits-ui: ^2.18.0
     clsx: ^2.1.1
