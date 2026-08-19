@@ -1,5 +1,13 @@
 # @selvajs/solve
 
+## 1.0.3
+
+### Patch Changes
+
+- e782803: chore(deps): bump the npm group across 1 directory with 12 updates
+- Updated dependencies [e782803]
+  - @selvajs/compute@4.0.2
+
 ## 1.0.2
 
 ### Patch Changes
