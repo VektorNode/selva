@@ -288,8 +288,7 @@ Rhino 8, net9.0 for Rhino 9). The plugin allocates a local HTTP port at runtime 
 **Compute app.** Standalone SvelteKit deployment. Provider selection, tenancy, feature flags, and
 secrets are all env vars — [.env.example](../../packages/selva/.env.example) is authoritative. `PORT` defaults to 3000.
 The compute server URL and API key are configured at `/admin/compute` and persisted through
-`IComputeServerStore`, never via env. `npx @selvajs/cli` generates the deployment directory from
-[templates/ecosystem.config.cjs](../../packages/selva/templates/ecosystem.config.cjs).
+`IComputeServerStore`, never via env. `npx @selvajs/cli` generates the deployment directory, including a PM2 `ecosystem.config.cjs`.
 
 ---
 
