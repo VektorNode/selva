@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { Button, Card, EmptyState, Input, toast, SectionHeader } from '@selvajs/ui';
-	import { Plus, ShieldCheck, X, Search, Mail } from '@lucide/svelte';
+	import { Button, Card, EmptyState, Input, toast, SectionHeader, Pagination } from '@selvajs/ui';
+	import { Plus, ShieldCheck, X, Search, Users } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { OrgRole, PlatformPermission } from '@selvajs/platform';
 	import { ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
 	import UserListItem from './UserListItem.svelte';
+	import { PERMISSION_LABELS, ORG_ROLES } from '$lib/permission-labels';
 
 	interface PageData {
 		users: UserRow[] | null;
@@ -28,17 +29,6 @@
 	const assignablePermissions = $derived<PlatformPermission[]>(
 		data.isPlatformAdmin ? [...ALL_PLATFORM_PERMISSIONS] : []
 	);
-
-	// Same wording as UserListItem's PERM_LABEL — the two render side by side
-	// (filter dropdown and row detail), so a casing split reads as two vocabularies.
-	const PERMISSION_LABELS: Record<PlatformPermission, string> = {
-		instance_admin: 'Instance admin',
-		manage_instance_users: 'Manage instance users',
-		manage_compute: 'Manage compute',
-		manage_updates: 'Manage updates'
-	};
-
-	const ORG_ROLES: OrgRole[] = ['owner', 'admin', 'member'];
 
 	// Allowlist-user form state
 	let showAddForm = $state(false);
@@ -94,6 +84,19 @@
 				matchesStatus(user)
 		);
 	});
+
+	const PER_PAGE = 25;
+	let page = $state(1);
+
+	// Changing a filter re-slices from the top: staying on page 4 after a search
+	// that matches three people shows an empty list.
+	const filterKey = $derived(`${query} ${roleFilter} ${permissionFilter} ${statusFilter}`);
+	$effect(() => {
+		void filterKey;
+		page = 1;
+	});
+
+	const pagedUsers = $derived(visibleUsers.slice((page - 1) * PER_PAGE, page * PER_PAGE));
 
 	function clearFilters() {
 		query = '';
@@ -229,7 +232,7 @@
 		title="Users"
 		description={data.users === null
 			? 'The current auth provider does not expose a user store. Configure DATA_PATH (local provider) or check your provider wiring.'
-			: `${data.users.length} user${data.users.length === 1 ? '' : 's'} on this instance.`}
+			: `${data.users.length} user${data.users.length === 1 ? '' : 's'} on this instance. Org roles live in Members & roles.`}
 	>
 		{#snippet actions()}
 			{#if data.users !== null}
@@ -242,9 +245,9 @@
 						Allowlist user
 					</Button>
 				{:else}
-					<Button href="/team/members" variant="default">
-						<Mail class="mr-2 h-4 w-4" />
-						Invite member
+					<Button href="/team/members" variant="outline">
+						<Users class="mr-2 h-4 w-4" />
+						Members &amp; roles
 					</Button>
 				{/if}
 			{/if}
@@ -362,7 +365,7 @@
 
 				{#if filtersActive}
 					<p class="text-muted-foreground text-xs">
-						{visibleUsers.length} of {data.users.length} users
+						{visibleUsers.length} of {data.users.length} users match
 					</p>
 				{/if}
 
@@ -370,7 +373,7 @@
 					<EmptyState title="No matching users" description="Adjust or clear the filters above." />
 				{:else}
 					<div class="divide-y rounded-lg border">
-						{#each visibleUsers as user (user.id)}
+						{#each pagedUsers as user (user.id)}
 							<UserListItem
 								{user}
 								expanded={expandedUserId === user.id}
@@ -392,6 +395,7 @@
 							/>
 						{/each}
 					</div>
+					<Pagination bind:page total={visibleUsers.length} perPage={PER_PAGE} label="users" />
 				{/if}
 			{/if}
 		</Card.Content>

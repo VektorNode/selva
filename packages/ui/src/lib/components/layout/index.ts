@@ -8,3 +8,4 @@ export { default as SideNav } from './SideNav.svelte';
 export type { SideNavItem } from './SideNav.svelte';
 export { default as SectionHeader } from './SectionHeader.svelte';
 export { default as EmptyState } from './EmptyState.svelte';
+export { default as Pagination } from './Pagination.svelte';
