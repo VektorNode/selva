@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button, Card, Input, toast, SectionHeader, EmptyState } from '@selvajs/ui';
-	import { Mail, Trash2, Copy, X, UserPlus } from '@lucide/svelte';
+	import { Mail, Trash2, Copy, X, UserPlus, Send } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { Invite, OrgPermission, OrgRole } from '@selvajs/platform';
 	import {
@@ -17,6 +17,8 @@
 		orgId: string | null;
 		actorRole: OrgRole | null;
 		actorUserId: string;
+		/** SMTP is set up, so minting an invite also mails the link. */
+		mailConfigured: boolean;
 	}
 	let { data }: { data: PageData } = $props();
 
@@ -93,7 +95,16 @@
 	let invitePermissions = $state<OrgPermission[]>([]);
 	let creatingInvite = $state(false);
 	let lastInviteLink = $state<string | null>(null);
+	let lastInviteEmail = $state('');
+	let lastDelivery = $state<InviteDelivery | null>(null);
 	let revokingId = $state<string | null>(null);
+	let resendingId = $state<string | null>(null);
+
+	type InviteDelivery = 'sent' | 'not-configured' | 'failed';
+	interface CreatedInvite {
+		acceptUrl: string;
+		delivery: InviteDelivery;
+	}
 
 	const invitePermissionOptions = $derived<OrgPermission[]>(
 		inviteRole === 'member'
@@ -122,9 +133,15 @@
 				})
 			});
 			if (res.ok) {
-				const { acceptUrl } = (await res.json()) as { acceptUrl: string };
+				const { acceptUrl, delivery } = (await res.json()) as CreatedInvite;
 				lastInviteLink = acceptUrl;
-				toast.success(`Invite created for ${inviteEmail}`);
+				lastDelivery = delivery;
+				lastInviteEmail = inviteEmail;
+				toast.success(
+					delivery === 'sent'
+						? `Invite sent to ${inviteEmail}`
+						: `Invite created for ${inviteEmail}`
+				);
 				inviteEmail = '';
 				inviteRole = 'member';
 				invitePermissions = [];
@@ -180,6 +197,41 @@
 		}
 	}
 
+	// Resend replaces the invite rather than re-reading it: the raw token is
+	// never stored, so the server mints a new one and revokes the old row. Any
+	// link already sent stops working.
+	async function resendInvite(invite: Invite) {
+		if (
+			!confirm(
+				`Resend the invite for "${invite.email}"?\n\nA new link is issued and the previous one stops working.`
+			)
+		)
+			return;
+		resendingId = invite.id;
+		try {
+			const res = await fetch(`/api/v1/orgs/${data.orgId}/invites/${invite.id}/resend`, {
+				method: 'POST'
+			});
+			if (res.ok) {
+				const { acceptUrl, delivery } = (await res.json()) as CreatedInvite;
+				lastInviteLink = acceptUrl;
+				lastDelivery = delivery;
+				lastInviteEmail = invite.email;
+				toast.success(
+					delivery === 'sent' ? `Invite resent to ${invite.email}` : 'New invite link issued'
+				);
+				await invalidateAll();
+			} else {
+				const err = await res.json().catch(() => ({}));
+				toast.error(err.message || err.error || 'Could not resend invite');
+			}
+		} catch {
+			toast.error('Could not resend invite');
+		} finally {
+			resendingId = null;
+		}
+	}
+
 	async function revokeInvite(id: string, email: string) {
 		if (!confirm(`Revoke invite for "${email}"?`)) return;
 		revokingId = id;
@@ -232,8 +284,14 @@
 					<div>
 						<p class="text-sm font-medium">Invite member</p>
 						<p class="text-muted-foreground text-xs">
-							The invitee sets their own credentials when they open the link. No password leaves
-							your machine.
+							{#if data.mailConfigured}
+								Selva emails the invite link to this address. The invitee sets their own credentials
+								when they open it.
+							{:else}
+								You'll get a link to send yourself — set <span class="font-mono">SMTP_HOST</span> to have
+								Selva email invites directly. The invitee sets their own credentials when they open the
+								link.
+							{/if}
 						</p>
 					</div>
 					<div class="grid gap-3 sm:grid-cols-2">
@@ -284,9 +342,33 @@
 		{/if}
 
 		{#if lastInviteLink}
-			<div class="border-success/30 bg-success/5 flex items-start gap-3 rounded-lg border p-4">
+			{@const sent = lastDelivery === 'sent'}
+			<div
+				class={`flex items-start gap-3 rounded-lg border p-4 ${
+					lastDelivery === 'failed'
+						? 'border-destructive/30 bg-destructive/5'
+						: 'border-success/30 bg-success/5'
+				}`}
+			>
 				<div class="min-w-0 flex-1">
-					<p class="text-sm font-medium">Invite ready — copy the link and share it</p>
+					<p class="text-sm font-medium">
+						{#if sent}
+							Invite emailed to {lastInviteEmail}
+						{:else if lastDelivery === 'failed'}
+							Invite created, but the email could not be sent
+						{:else}
+							Invite ready — copy the link and share it
+						{/if}
+					</p>
+					{#if lastDelivery === 'failed'}
+						<p class="text-muted-foreground mt-1 text-xs">
+							Check the server logs and your SMTP settings. Send this link manually in the meantime.
+						</p>
+					{:else if sent}
+						<p class="text-muted-foreground mt-1 text-xs">
+							Keep this link as a backup in case the mail does not arrive — it is shown only once.
+						</p>
+					{/if}
 					<p class="text-muted-foreground mt-1 truncate font-mono text-xs">{lastInviteLink}</p>
 				</div>
 				<Button
@@ -455,16 +537,32 @@
 										).toLocaleDateString()}
 									</p>
 								</div>
-								{#if !invite.acceptedAt && !expired}
-									<Button
-										size="sm"
-										variant="ghost"
-										disabled={revokingId === invite.id}
-										onclick={() => revokeInvite(invite.id, invite.email)}
-										class="text-destructive hover:text-destructive"
-									>
-										<Trash2 class="h-4 w-4" />
-									</Button>
+								{#if !invite.acceptedAt}
+									<div class="flex shrink-0 items-center gap-1">
+										<!-- Expired invites can be resent too — that is the whole point of the
+										     button, since the link is unrecoverable once minted. -->
+										<Button
+											size="sm"
+											variant="ghost"
+											disabled={resendingId === invite.id}
+											onclick={() => resendInvite(invite)}
+											title={data.mailConfigured
+												? 'Email a fresh link (the current one stops working)'
+												: 'Issue a fresh link (the current one stops working)'}
+										>
+											<Send class="mr-1.5 h-3.5 w-3.5" />
+											{resendingId === invite.id ? 'Sending…' : 'Resend'}
+										</Button>
+										<Button
+											size="sm"
+											variant="ghost"
+											disabled={revokingId === invite.id}
+											onclick={() => revokeInvite(invite.id, invite.email)}
+											class="text-destructive hover:text-destructive"
+										>
+											<Trash2 class="h-4 w-4" />
+										</Button>
+									</div>
 								{/if}
 							</div>
 						{/each}

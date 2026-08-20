@@ -4,6 +4,7 @@ import type { AuthUser, Invite, OrgMember, OrgRole } from '@selvajs/platform';
 import { hasPermission } from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { getInviteStore, getOrganizationProvider } from '$lib/server/providers.server';
+import { isMailConfigured } from '$lib/server/email';
 
 export interface MemberRow extends OrgMember {
 	email?: string;
@@ -28,6 +29,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			members: [] as MemberRow[],
 			invites: [] as Invite[],
 			orgId: null,
+			mailConfigured: isMailConfigured(),
 			actorRole: null as OrgRole | null,
 			actorUserId: ctx.userId
 		};
@@ -71,5 +73,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// Non-fatal
 	}
 
-	return { members, invites, orgId, actorRole, actorUserId: ctx.userId };
+	// Drives the copy after minting: with mail off the admin must send the link
+	// themselves, so the UI says so instead of implying it was delivered.
+	return {
+		members,
+		invites,
+		orgId,
+		actorRole,
+		actorUserId: ctx.userId,
+		mailConfigured: isMailConfigured()
+	};
 };

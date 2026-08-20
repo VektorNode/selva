@@ -67,9 +67,15 @@ export const InviteResponseSchema = z.object({
 	acceptedByUserId: z.string().optional()
 });
 
-/** The create response: the invite plus the link to send, built per request. */
+/**
+ * The create response: the invite plus the link to send, built per request.
+ *
+ * `acceptUrl` is returned whatever `delivery` says — mail is best-effort, and
+ * manual sharing is the fallback when it is off or the send failed.
+ */
 export const CreatedInviteResponseSchema = InviteResponseSchema.extend({
-	acceptUrl: z.string()
+	acceptUrl: z.string(),
+	delivery: z.enum(['sent', 'not-configured', 'failed'])
 });
 
 // ============================================================================
