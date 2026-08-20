@@ -234,7 +234,7 @@ export async function createSelvaProviders(
 			return {
 				name,
 				copyrightName: brand.copyrightName?.trim() || name,
-				tagline: brand.tagline?.trim() || 'Turn Grasshopper definitions into tools anyone can use.',
+				tagline: brand.tagline?.trim() || '',
 				description:
 					brand.description?.trim() ||
 					`Build and deploy interactive web applications powered by Grasshopper definitions with ${name}.`
