@@ -25,8 +25,12 @@ you'd prefer to stay anonymous.
 
 ## Scope
 
-Selva stores only opaque session tokens and minimal authorization data — auth
-credentials and PII are owned by the configured auth provider (see
-[CLAUDE.md § Data Privacy & Compliance](./CLAUDE.md#data-privacy--compliance)).
+Selva holds personal data — session tokens, user ids and permissions, display
+names, invite emails, and audit-event payloads. How much identity data lives
+elsewhere depends on the auth provider: with Supabase, credentials sit in
+Supabase `auth.users`; with the local provider, Selva _is_ the auth provider and
+stores emails and PBKDF2 password hashes on its own disk. See
+[CLAUDE.md § Data privacy](./CLAUDE.md#data-privacy).
+
 Reports involving credential handling, session management, the WebSocket bridge,
 or the embedded HTTP server are especially welcome.

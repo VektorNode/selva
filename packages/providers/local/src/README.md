@@ -22,13 +22,7 @@ Writes to `<path>.<uuid>.tmp`, then renames into place. Each writer gets its own
 await writeJsonFile(path, { users: [...] });
 ```
 
-### Why this exists
-
-All stores follow a read-modify-write pattern on small JSON files. Centralizing it means:
-
-- One place to get atomicity right (no partial writes on crash)
-- One place to handle "file doesn't exist yet" (fallback instead of try/catch everywhere)
-- Tab-indented JSON output for readable diffs when data dirs are checked into git
+Output is tab-indented, so a data dir checked into git diffs readably.
 
 ### Caveats
 

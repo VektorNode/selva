@@ -140,3 +140,7 @@ infra/*.tfstate.backup
 infra/.terraform.lock.hcl
 **/dist/
 .DS_Store
+
+# Generated API reference (typedoc) — rebuilt by packages/website/scripts/build-api-docs.mjs
+packages/compute/docs/api/
+packages/website/static/docs/api/

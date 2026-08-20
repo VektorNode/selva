@@ -1,6 +1,14 @@
 # ADR 0001 — Pre-Step Producers
 
 > **Frozen decision record.** V1 shipped 2026-05-08. The "Recommended architecture" and later sections describe future-state design that informed V1 — they are _not_ a roadmap. Treat anything below "V1 status: shipped" as historical context for _why_ V1 looks the way it does. For current behavior, the "V1 status" and "Getting started" sections below are authoritative.
+>
+> **Implementation moved (2026-07).** The external-value primitives (`readExternalValue`,
+> `writeExternalValue`, `clearExternalValue`, `getExternalInputs`) now live in
+> [`@selvajs/solve/client`](../../packages/solve/src/client/), beside the solve session that hydrates
+> from them. `packages/ui/src/lib/external/storage.ts` survives as a re-export shim, so the published
+> `@selvajs/ui/external` sub-path still works — but new code should import from `@selvajs/solve/client`.
+> Note the sub-path: the code samples below import from bare `@selvajs/ui`, which no longer resolves.
+> `@selvajs/producers` was never built.
 
 ## V1 status: shipped (2026-05-08)
 
@@ -65,9 +73,9 @@ The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` i
 
 ## Getting started: building your first concrete producer
 
-When you're ready to replace the JSON-paste stub with a real one (line drawer, file uploader, sketch tool, etc.), follow this recipe. Most of the plumbing already exists.
+Recipe for replacing the removed JSON-paste stub with a real producer (line drawer, file uploader, sketch tool). Most of the plumbing already exists.
 
-### The two-layer rule (don't skip this)
+### The two-layer rule
 
 A producer is **two things**, kept strictly separate:
 
@@ -76,9 +84,9 @@ A producer is **two things**, kept strictly separate:
 
 If your component imports anything Selva-specific, you've crossed the boundary. Push it up to the route.
 
-### Recipe: "Line Drawer" producer (concrete walkthrough)
+### Recipe: "Line Drawer" producer
 
-Pick this as the first one because it's representative of complex data.
+Representative of complex data, so a good first one.
 
 #### Step 1 — extract the domain-pure component
 
@@ -464,12 +472,9 @@ What's worth _keeping_ from such patterns:
 - [ ] **Multiple pre-step inputs ordering.** If a schema has 3 pre-step inputs, what order does the user fill them? Schema order? An explicit `preStepOrder` field? Wizard-style "Next" between each?
 - [ ] **Skip behavior.** If a pre-step input has a saved value (from `persist: 'platform'`), should the runner be auto-skipped or shown for review? Probably show with "looks good, continue" affordance.
 
-## TL;DR
+## TL;DR (future-state design, not shipped)
 
 - Add optional `source: { kind, producer, config }` to input schema items. Open string for `producer`.
 - New workspace package `@selvajs/producers` exporting `defaultRegistry` + builtins.
 - Each producer is a self-contained module: metadata, schemas, lazy `RunnerComponent`, `toDataTree`.
-- Plugin-UI: visibility toggle on all items, producer dropdown on inputs (filtered by `acceptableInputs`).
-- Compute-app: generic `gatherPreStepValues` replaces all per-producer glue.
-- Platform decides which producers are enabled per deployment.
-- Build-time only for now; design seams (factory registry, namespaced ids, no components in schema) so runtime loading is an additive upgrade.
+- Build-time only; design seams (factory registry, namespaced ids, no components in schema) so runtime loading is an additive upgrade.

@@ -1,9 +1,6 @@
-# Grasshopper Feature
+# `grasshopper/` — solving definitions through Rhino Compute
 
-This module provides a complete TypeScript interface for working with Grasshopper definitions
-through Rhino Compute.
-
-## Quick Start
+## Quick start
 
 ```typescript
 import {
@@ -38,85 +35,32 @@ try {
 }
 ```
 
-A complete runnable version of this flow lives in
-[`examples/simple_example.ts`](../../../examples/simple_example.ts).
+A runnable version of this flow lives in
+[`examples/simple_example.ts`](../../examples/simple_example.ts).
 
-## Core Concepts
-
-### 1. Definition I/O
-
-Every Grasshopper definition has inputs (parameters you can set) and outputs (results it produces).
-This library automatically discovers and types these for you.
-
-### 2. Data Trees
-
-Grasshopper uses a hierarchical data structure called "data trees" to organize information. Inputs
-and outputs travel as `DataTree[]`; `TreeBuilder` builds and edits them without hand-writing branch
-paths.
-
-### 3. Type Safety
-
-Raw API responses are transformed into strongly-typed TypeScript interfaces, giving you autocomplete
-and compile-time validation.
-
-## Module Structure
+## Layout
 
 ```
 grasshopper/
-├── client/              # High-level GrasshopperClient class + response processor
-├── solve.ts             # Low-level solve operation
-├── io/                  # Input/output handling
-│   ├── input/           # Input parsing: normalize-default, input-type-parsers, input-processors
-│   └── output/          # Output response processing
-├── data-tree/           # Data tree utilities (TreeBuilder)
-├── scheduler/           # Solve scheduling (latest-wins / queue / parallel)
-├── types.ts             # TypeScript type definitions
-└── index.ts             # Public API exports
+├── client/        GrasshopperClient + GrasshopperResponseProcessor
+├── solve.ts       the low-level solve call
+├── io/
+│   ├── input/     normalize-default, input-type-parsers, input-processors
+│   └── output/    response processing, Rhino decoders, extractFileData
+├── data-tree/     TreeBuilder + branch-path parsing
+├── scheduler/     SolveScheduler (latest-wins / queue / parallel)
+├── server/        ComputeServerStats — rhino.compute's control plane
+└── types/         inputs, outputs, request/response schemas
 ```
 
-> Generic file zip/base64/download utilities live in [`core/files/`](../../core/files/)
-> (not Grasshopper-specific); only `extractFileData` — which reads a Grasshopper
-> response — stays here, in `io/output/`.
+Generic file zip/base64/download utilities live in [`core/files/`](../core/files/) — not
+Grasshopper-specific. Only `extractFileData`, which reads a Grasshopper response, stays in
+`io/output/`.
 
-## Key Features
+## Data trees
 
-### Input Processing
-
-- **Type Detection** - Automatically identifies Number, Text, Boolean, Geometry, etc.
-- **Validation** - Enforces min/max bounds, required fields
-- **Defaults** - Handles default values, including data trees
-
-### Output Processing
-
-- **Parsing** - Converts string responses to typed JavaScript objects
-- **Data Trees** - Flattens or preserves Grasshopper's tree structure
-- **Error Handling** - Captures and reports computation errors/warnings
-
-### Compute Operations
-
-- **Caching** - Optional server-side result caching
-- **Timeouts** - Configurable request timeouts
-- **Debug Mode** - Detailed logging for troubleshooting
-
-## Usage Examples
-
-### Basic Solve
-
-```typescript
-const { inputs } = await client.getIO('https://example.com/box.gh');
-
-const inputTree = TreeBuilder.fromInputParams(inputs);
-TreeBuilder.replaceTreeValue(inputTree, 'width', 5);
-TreeBuilder.replaceTreeValue(inputTree, 'height', 10);
-TreeBuilder.replaceTreeValue(inputTree, 'depth', 3);
-
-const result = await client.solve('https://example.com/box.gh', inputTree);
-
-// Extract parsed outputs (keyed by output parameter name)
-const { values } = new GrasshopperResponseProcessor(result).getValues();
-```
-
-### Working with Data Trees
+Inputs and outputs travel as `DataTree[]`. `TreeBuilder` builds and edits them without
+hand-writing branch paths:
 
 ```typescript
 // Single values and arrays both go through replaceTreeValue
@@ -127,13 +71,14 @@ TreeBuilder.replaceTreeValue(inputTree, 'points', [
 	[2, 2, 2]
 ]);
 
-// Read a value back out of a tree
 const count = TreeBuilder.getTreeValue(inputTree, 'count');
 ```
 
-See [`data-tree/README.md`](data-tree/README.md) for branch paths and multi-branch trees.
+`fromInputParams` flattens geometry and file data-trees into one leaf — to set a value on those,
+use `replaceTreeValue`. See [`data-tree/README.md`](data-tree/README.md) for branch paths and
+multi-branch trees.
 
-### Per-Call Options
+## Per-call options
 
 ```typescript
 // Cancel or bound an individual solve without touching the client config
@@ -144,95 +89,43 @@ const result = await client.solve(definitionUrl, inputTree, {
 });
 ```
 
-### Error Handling
+## Errors
+
+A solve response carries `errors`/`warnings` from the definition itself; a thrown `ComputeError`
+means the request failed.
 
 ```typescript
 import { ComputeError } from '@selvajs/compute/core';
 
 try {
 	const result = await client.solve(definitionUrl, inputTree);
-
-	if (result.errors?.length) {
-		console.error('Computation errors:', result.errors);
-	}
-
-	if (result.warnings?.length) {
-		console.warn('Computation warnings:', result.warnings);
-	}
+	if (result.errors?.length) console.error(result.errors);
 } catch (error) {
-	if (error instanceof ComputeError) {
-		console.error('Code:', error.code);
-		console.error('Context:', error.context);
-	}
+	if (error instanceof ComputeError) console.error(error.code, error.context);
 }
 ```
 
-## API Reference
+## GrasshopperClient
 
-### GrasshopperClient
-
-High-level client for Grasshopper operations.
+The constructor is private — `create()` validates the server is reachable first.
 
 ```typescript
-const client = await GrasshopperClient.create(config);
+const client = await GrasshopperClient.create(config); // GrasshopperComputeConfig
 
-// Fetch parsed definition metadata: { inputs, outputs, parseErrors }
-await client.getIO(definition); // definition: URL string, base64 string, or Uint8Array
-
-// Solve with a data tree
+// definition: URL string, base64 string, or Uint8Array
+await client.getIO(definition); // → { inputs, outputs, parseErrors }
 await client.solve(definition, dataTree, options?); // → GrasshopperComputeResponse
-
-// Release resources (pending schedulers etc.)
+client.createScheduler(options?); // → SolveScheduler
 await client.dispose();
 ```
 
-## Advanced Topics
+`GrasshopperComputeConfig` (in [`types/schema.ts`](types/schema.ts)) takes `serverUrl` plus
+optional `apiKey`, `authToken`, `timeoutMs`, `debug`, `suppressBrowserWarning`, and the
+Grasshopper-specific `cachesolve`, `absolutetolerance`, `angletolerance`, `modelunits`.
 
-### Custom Input Parsers
+## More
 
-See [`io/input/README.md`](io/input/README.md) for how to add support
-for new Grasshopper parameter types (the `InputTypeParser` registry).
-
-### Data Tree Manipulation
-
-See [`data-tree/README.md`](data-tree/README.md) for utilities to work with
-Grasshopper's data tree structure.
-
-### Response Processing
-
-See [`io/output/response-processors.ts`](io/output/response-processors.ts) for how output parsing
-works.
-
-## Configuration Options
-
-```typescript
-interface GrasshopperComputeConfig {
-	// Required
-	serverUrl: string;
-
-	// Optional
-	apiKey?: string;
-	authToken?: string;
-	timeoutMs?: number;
-	debug?: boolean;
-	suppressBrowserWarning?: boolean;
-
-	// Grasshopper-specific
-	cachesolve?: boolean;
-	absolutetolerance?: number;
-	angletolerance?: number;
-	modelunits?: RhinoModelUnit;
-}
-```
-
-## Related Documentation
-
-- [Input Parsers](io/input/README.md) - Extending input type support
-- [Core Types](types.ts) - Complete type definitions
-- [Compute Fetch](../../core/compute-fetch/) - Low-level HTTP operations
-
-## Examples
-
-See [`examples/`](../../../examples/) for complete working examples, starting with
-[`simple_example.ts`](../../../examples/simple_example.ts) (client creation → getIO → TreeBuilder →
-solve → response processing).
+- [`io/input/README.md`](io/input/README.md) — adding a param type (the `InputTypeParser` registry)
+- [`data-tree/README.md`](data-tree/README.md) — branch paths and multi-branch trees
+- [`io/output/response-processors.ts`](io/output/response-processors.ts) — how output parsing works
+- [`core/compute-fetch/`](../core/compute-fetch/) — the low-level HTTP layer

@@ -8,8 +8,10 @@ Quick reference for what lives where. The repo-wide rules are in [STRUCTURE.md](
 | `features/<feature>/`   | Pure TypeScript logic for the same feature — operations, config, types. **No Svelte.** UI imports from logic, never the reverse. |
 | `composables/`          | Reactive helpers (`.svelte.ts` files using runes).                                                                               |
 | `websocket/`            | Builder-specific WebSocket bridge to the Grasshopper plugin.                                                                     |
+| `schema-source/`        | Where a schema and its solves come from — the Grasshopper source, a fake for tests, and the WebSocket solve driver.              |
+| `dnd/`                  | Drag-and-drop primitives the builder canvas is built on.                                                                         |
 | `utils/`                | Generic helpers (no domain assumptions).                                                                                         |
-| `app.config.ts`         | App-level constants (port, dev URLs, etc.).                                                                                      |
+| `app.config.ts`         | Schema version and WebSocket constants (default port, query-param name, reconnect settings).                                     |
 
 ## Why `features/` and `components/` are split
 

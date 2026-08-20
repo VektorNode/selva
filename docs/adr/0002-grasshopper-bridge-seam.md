@@ -9,6 +9,12 @@
 > bite. **PR 2 (orchestration split) is still proposed.** This extends the established cross-stack
 > contract pattern (Rhino-free payload type, golden fixture, extract-decision-from-Rhino) to the
 > wire layer and bridge.
+>
+> **Still accurate as of 2026-08.** `InboundMessageParser.cs` / `OutboundEnvelopes.cs` and the twelve
+> fixtures under `packages/schemas/fixtures/wire/` are in place; PR 2 has not landed — there is no
+> `Features/UIBuilder/Bridge/` folder and no `ConversationPolicy`, and `BridgeOrchestrator` still
+> reaches into Rhino directly. The `wire-fixtures/` name used below is the shipped
+> `packages/schemas/fixtures/wire/`.
 
 ## Problem
 
@@ -22,7 +28,7 @@ The UI half of the wire is already well-factored:
 - `SchemaSource` is a clean transport interface; `FakeSource` and the E2E `ws-stub` drive
   `/builder` and `/preview` with no Rhino at all
   ([schema-source.ts](../../packages/plugin-ui/src/lib/schema-source/schema-source.ts),
-  [ws-stub.ts](../../packages/plugin-ui/src/lib/../../e2e/ws-stub.ts)).
+  [ws-stub.ts](../../packages/plugin-ui/e2e/ws-stub.ts)).
 - Inbound messages have runtime guards born from real bugs
   ([messageSchemas.ts](../../packages/plugin-ui/src/lib/websocket/messageSchemas.ts)).
 

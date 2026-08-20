@@ -104,7 +104,7 @@ Pure solve/data — see the `three` prohibition above. Anything that turns a res
 
 ### `@selvajs/visualization`
 
-`packages/visualization`. Framework-free (no Svelte, no runes); `three` is a peer dep. Four layers that **depend downward only** — `scene → render → parse → shared`. Each layer has its own barrel and README naming its extension points.
+`packages/visualization`. Framework-free (no Svelte, no runes); `three` is a peer dep. Four layers that **depend downward only**: `scene`, `render`, and `parse` are siblings — none imports another — and each may import `shared`. Each layer has its own barrel and README naming its extension points.
 
 - `/scene` — `createSceneOutliner`: reads a scene (visibility/selection/layers), never owns content
 - `/render` — `initThree` plus the CAD viewer toolkit (camera, edges, grid, gizmo, measure)
@@ -130,11 +130,11 @@ Pluggable provider interfaces (auth, data stores, storage, permissions, access r
 
 ### Grasshopper components
 
-[PLUGIN-CONTEXT.md](./PLUGIN-CONTEXT.md) is authoritative for canvas wiring and schema identity —
+[docs/contributing/plugin-context.md](./docs/contributing/plugin-context.md) is authoritative for canvas wiring and schema identity —
 which ContextBake carries what, which GUID is an output's identity, why `paramType` case matters.
 Read it before editing a `.ghx` or touching schema sync; every rule in it fails silently.
 Component authoring is covered by video, not prose. For the display wire format, see
-[SLVA-FORMAT.md](./packages/visualization/src/parse/webdisplay/SLVA-FORMAT.md).
+[docs/contributing/slva-format.md](./docs/contributing/slva-format.md).
 
 `Plugin/Selva.GH/Features/`:
 
@@ -262,4 +262,4 @@ The plugin UI needs none (WebSocket port comes from the `wsPort` query param, 87
 
 ## Issues
 
-Use the templates in [.github/ISSUE_TEMPLATE/](/.github/ISSUE_TEMPLATE/).
+Use the templates in [.github/ISSUE_TEMPLATE/](./.github/ISSUE_TEMPLATE/).

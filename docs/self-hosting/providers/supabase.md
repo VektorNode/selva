@@ -132,6 +132,32 @@ npx supabase db push
 
 Full setup, env vars, migrations, and RLS notes: [supabase-provider README](https://www.npmjs.com/package/@selvajs/supabase-provider).
 
+## Local development stack
+
+Needs Docker Desktop running; the first run pulls ~1 GB of images.
+
+```bash
+cd packages/providers/supabase
+npx supabase start
+```
+
+That brings up Postgres (54322), GoTrue/Auth (54321), Storage, Studio (54323), and Mailpit (54324 — a fake SMTP inbox for auth emails), and applies the migrations plus the bucket seed automatically. Studio at `http://127.0.0.1:54323` is a full admin UI for inspecting tables, rows, and RLS policies.
+
+```bash
+npx supabase status            # show URL + keys again
+npx supabase db reset          # wipe DB + re-run migrations + seed
+npx supabase stop              # stop containers, keep volumes
+npx supabase stop --no-backup  # stop + wipe volumes
+```
+
+Then in your `.env`:
+
+```bash
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=sb_publishable_...
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
+```
+
 ## Next
 
 - [Providers overview](./overview.md)

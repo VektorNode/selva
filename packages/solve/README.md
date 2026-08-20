@@ -3,10 +3,6 @@
 One owner for the solve flow — **from an input change to a solve result, on both sides of the wire,
 with no transport and no UI.**
 
-Before this package the solve flow was scattered across four packages and owned by none of them, so
-both apps hand-wrote a solve coordinator — and one of them ended up serving results from the wrong
-definition out of its cache.
-
 ## Layout
 
 ```

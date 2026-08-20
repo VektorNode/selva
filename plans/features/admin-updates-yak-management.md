@@ -1,6 +1,25 @@
 # Admin: scheduled updates, rollback UX, and Yak plugin management — plan
 
+**Track A tracked in [#217](https://github.com/VektorNode/selva/issues/217).** Track B is unfiled — it needs a Rhino.Compute contract that does not exist.
+
 > **Status: PLANNING (2026-07-27).** Design only — no implementation yet.
+>
+> **Verified 2026-08-16.** Confirmed: A1, A2, B3, B4, B5 are all unbuilt. The baseline the plan
+> describes is real (self-update, channels, automatic rollback-on-failed-healthcheck), and
+> `manage_compute` / `manage_updates` already exist as permissions. Two notes for whoever starts:
+>
+> - **The two tracks share nothing but this document.** Track A (scheduled updates + rollback UX)
+>   has no dependencies and can ship alone. Track B (Yak install API) needs both
+>   [plugin-compat-gate](./plugin-compat-gate.md) and an endpoint contract from the Rhino.Compute
+>   repo that does not exist — `/plugins/gh/install`, `/update` and `/available` are all absent;
+>   only `/plugins/gh/installed` is real. Track B is not startable.
+> - **A2 is cheaper than the plan assumes.** `buildNpmRunnerScript(npmArgs, …)` already takes
+>   caller-supplied install args, so only a target-version seam and the history file are new.
+>
+> Stale paths: `docs/Publishing.md` → `docs/contributing/publishing.md`; `compute-server-stats.ts`
+> is under `packages/compute/src/grasshopper/server/`, not `core/server/`; `update-outcome.ts` is
+> in `lib/`, not `lib/server/`. Route paths written as `admin/api/system/*` are now
+> `api/admin/system/*`.
 
 Five asks, grouped into two tracks because they touch different systems:
 

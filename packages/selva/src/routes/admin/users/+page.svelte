@@ -102,7 +102,7 @@
 		statusFilter = 'all';
 	}
 
-	// Permissions.md §2 invariant mirror: if only one enabled user holds
+	// docs/contributing/permissions.md §2 invariant mirror: if only one enabled user holds
 	// instance_admin, lock the checkbox and destructive buttons on that row. The
 	// server enforces the same; this is the UX nudge.
 	//

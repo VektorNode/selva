@@ -424,7 +424,7 @@ describe('every API handler is wrapped in apiRoute', () => {
 // ============================================================================
 
 /**
- * `Permissions.md` §8 is a table — endpoint, method, governing rule — which
+ * `docs/contributing/permissions.md` §8 is a table — endpoint, method, governing rule — which
  * makes it the one part of a 770-line prose document a test can hold.
  *
  * The registry↔route check above catches an undocumented *contract*. This
@@ -439,8 +439,11 @@ describe('every API handler is wrapped in apiRoute', () => {
  * §8 documents unbuilt endpoints on purpose (`GET /api/v1/projects` is marked
  * "not implemented yet"). The direction that matters is shipped-but-unlisted.
  */
-describe('Permissions.md §8 lists every route', () => {
-	const matrix = readFileSync(resolve(packageRoot, 'specs/Permissions.md'), 'utf8');
+describe('permissions.md §8 lists every route', () => {
+	const matrix = readFileSync(
+		resolve(packageRoot, '../../docs/contributing/permissions.md'),
+		'utf8'
+	);
 
 	/**
 	 * Rows look like `| \`/api/v1/orgs/[orgId]/members\` | \`GET/PATCH\` | … |`.

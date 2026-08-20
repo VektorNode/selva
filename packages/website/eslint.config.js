@@ -7,6 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default [
 	...createConfig(__dirname),
 	{
-		ignores: ['node_modules', 'build', '.svelte-kit']
+		// static/docs/api is generated typedoc output (see scripts/build-api-docs.mjs).
+		ignores: ['node_modules', 'build', '.svelte-kit', 'static/docs/api']
 	}
 ];

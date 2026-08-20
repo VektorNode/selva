@@ -1,5 +1,24 @@
 # Plan: Token-based API auth (PATs) + managed public API, MCP designed-but-deferred
 
+**Tracked in [#97](https://github.com/VektorNode/selva/issues/97)** (Phases 0–3) with [#214](https://github.com/VektorNode/selva/issues/214)/[#215](https://github.com/VektorNode/selva/issues/215)/[#216](https://github.com/VektorNode/selva/issues/216) as sub-issues.
+
+> **Status verified 2026-08-16: not started, and now UNBLOCKED.** Phases 0–3 and 5 are 0% built —
+> no `packages/platform/src/apiTokens/`, no `ApiToken` type, no Bearer branch in
+> `hooks.server.ts`, no `/api/v1/tokens` routes, no `/settings/` tree. That is accurate to the
+> plan's own claims.
+>
+> What changed: the api-redesign this was waiting on **shipped and was archived**. `/api/v1/*` is
+> the single versioned surface, `bearerAuth` is already declared in `openapi/v1.yaml` alongside
+> `cookieAuth`, and Phase 4's "managed public REST API" was delivered wholesale by it — this plan
+> already records that supersession inline.
+>
+> Two things to fold in when starting:
+>
+> - Phase 4's "document Bearer auth in the OpenAPI spec" item is **done**.
+> - Per-token rate limiting will need `RATE_LIMITED` added to `ApiErrorCode`. The redesign
+>   documented 429 in the spec but never added the code — tracked at
+>   [fixes/api-v1-residuals](../fixes/api-v1-residuals.md).
+
 ## Context
 
 Selva today authenticates humans through exactly one selected session-auth provider
@@ -177,7 +196,7 @@ In [packages/selva/src/hooks.server.ts](packages/selva/src/hooks.server.ts) `han
 **before** the `admin_session` cookie read. **Not** gated on `isJsonApiRoute` — that helper matches
 the whole `/api/` tree including the admin subtree, and admin endpoints must stay session-only.
 Gate the PAT branch on `pathname.startsWith('/api/v1/')` exactly (the versioned surface from
-[api-redesign-plan.md](api-redesign-plan.md)).
+[api-redesign-plan.md](../archive/api-redesign-plan.md)).
 
 Note the api-redesign moves `/admin/api/*` → `/api/admin/*`. This does **not** loosen anything: the
 PAT gate is a `/api/v1/` prefix test, and `/api/admin/` does not match it. The two scopes stay
@@ -225,7 +244,7 @@ off the token path entirely.
 
 ## Phase 4 — Managed public REST API
 
-**Superseded by [api-redesign-plan.md](api-redesign-plan.md).** The wrapper approach ("two URLs, one
+**Superseded by [api-redesign-plan.md](../archive/api-redesign-plan.md).** The wrapper approach ("two URLs, one
 implementation") is dropped: the API is redesigned once as a single versioned surface `/api/v1/*`
 used by both the browser UI and PATs, with per-endpoint stability (`x-internal`) in the OpenAPI
 spec. That plan owns the endpoint map, the missing read endpoints, the OpenAPI spec + conformance
@@ -300,7 +319,7 @@ Selva PAT — it holds no direct DB/provider access, so it inherits every scope/
 - `packages/selva/src/lib/server/apiTokens/{resolve,token}.server.ts`
 - `packages/selva/src/routes/api/v1/tokens/+server.ts`, `.../tokens/[id]/+server.ts`
 - `packages/selva/src/routes/settings/tokens/+page.{svelte,server.ts}` (+ new `settings/+layout.svelte` — section doesn't exist yet)
-- (v1 namespace + `packages/selva/openapi/v1.yaml` come from [api-redesign-plan.md](api-redesign-plan.md))
+- (v1 namespace + `packages/selva/openapi/v1.yaml` come from [api-redesign-plan.md](../archive/api-redesign-plan.md))
 - `packages/cli/src/api/` — PAT-authenticated v1 client + credential store (Phase 5a); the existing
   CLI has no HTTP client for a running Selva instance, only direct Supabase calls
 - `docs/adr/00xx-api-tokens-and-mcp.md`

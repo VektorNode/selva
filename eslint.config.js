@@ -26,6 +26,8 @@ export default [
 			'**/generated/**',
 			'**/*.d.ts',
 			'Plugin/Selva.GH/EmbeddedAssets/web',
+			// Generated typedoc output copied into static/ by build-api-docs.mjs.
+			'packages/website/static/docs/api',
 			// Config files at package root — not in any tsconfig include, and
 			// they don't need application linting.
 			'packages/*/vitest.config.ts',

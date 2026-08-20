@@ -11,7 +11,7 @@ import { actorFrom } from '@selvajs/platform';
 /**
  * POST /api/admin/users/[id]/disable
  *
- * Permissions.md §10 — disable preserves identity and attribution. The §2
+ * docs/contributing/permissions.md §10 — disable preserves identity and attribution. The §2
  * sole-`instance_admin` invariant is enforced here BEFORE the auth provider
  * disables, by consulting
  * `IPlatformPermissionStore.countInstanceAdminsExcluding`. Auth providers no

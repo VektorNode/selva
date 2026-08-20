@@ -1,7 +1,7 @@
 ---
 title: Permissions & Orgs
 order: 4
-published: false
+published: true
 description: 'How organizations, roles, and per-resource permissions decide who can see and do what.'
 ---
 
@@ -43,21 +43,24 @@ Two consequences worth stating, because both surfaces show them:
 
 Platform permissions are instance-wide operator authority. There are four:
 
-| Permission              | Grants                                              |
-| ----------------------- | --------------------------------------------------- |
-| `instance_admin`        | Superuser; implies every other platform permission. |
-| `manage_compute`        | Configure the instance-wide Rhino.Compute pool.     |
-| `manage_instance_users` | Create, delete, and enable/disable any user.        |
-| `manage_updates`        | Run system updates and switch release channel.      |
+| Permission              | Grants                                          |
+| ----------------------- | ----------------------------------------------- |
+| `instance_admin`        | Superuser; bypasses every other platform check. |
+| `manage_compute`        | Configure the instance-wide Rhino.Compute pool. |
+| `manage_instance_users` | Create, delete, and enable/disable any user.    |
+| `manage_updates`        | Run system updates and switch release channel.  |
 
 Regular users hold none of these. Holding any one of them gets you into `/admin`.
 Org-scope permissions don't, even though several of those also start with `manage_`.
 
 A hard **sole-admin invariant** applies throughout: the data layer refuses any action
 that would leave the instance with zero enabled `instance_admin` users, so it holds
-even when the UI is bypassed. `instance_admin` skips _management_ checks such as org
-governance and project admin, but **not** _content_ checks. Platform staff have to
-use "Reclaim" to touch a project's content, and that leaves an audit trail.
+even when the UI is bypassed.
+
+`instance_admin` is a bypass applied at each call site, not a permission set that
+expands into the other three. It skips _management_ checks such as org governance and
+project admin, but **not** _content_ checks — platform staff have to use "Reclaim" to
+touch a project's content, and that leaves an audit trail.
 
 ## Org scope (multi-tenant)
 
@@ -98,8 +101,9 @@ confirmation.
 
 **Platform projects** (`visibility: 'platform'`) are cross-org and managed by
 instance admins. Access comes from an explicit grant to an org or a user, each
-carrying a `canSolve` flag, where `false` means view-only. They need the
-`SELVA_FLAG_ENABLE_PLATFORM_PROJECTS` flag.
+carrying a `canSolve` flag, where `false` means view-only. Membership of the host org
+does not by itself grant access. With `SELVA_FLAG_ENABLE_PLATFORM_PROJECTS` off they
+are inaccessible **even to instance admins**, and `/admin/projects` 404s.
 
 ## Invites
 
@@ -110,12 +114,14 @@ invites always get the full default set. Invites expire after **7 days**.
 
 Whoever holds the raw token can accept the invite; there is nothing else to check.
 Selva shows it once and stores only a hash of it, and the acceptance page
-(`/accept-invite`) works without a session. Accepting
-creates the user (by password or upstream-header identity) and adds them to the
-org. New users start with **no platform permissions**.
+(`/accept-invite`) works without a session. Accepting creates the user (by
+password or upstream-header identity) and adds them to the org. New users start
+with **no platform permissions**.
+
 Orgs are created at setup, or afterwards by an instance admin — there is no
 self-service org creation. `SELVA_FLAG_ALLOW_ORG_CREATION` is reserved for that
-future surface; no route consults it yet, so setting it has no effect.
+future surface and is surfaced read-only on `/admin/system`, but no route
+consults it, so setting it has no effect.
 
 ## Share links
 

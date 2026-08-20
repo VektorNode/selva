@@ -70,7 +70,7 @@ drawing on top of solve results rather than in a stage before them. Three runtim
 `labelLayer` (annotations). This package ships no tools of its own beyond measure and the gizmo;
 apps bring their own.
 
-**[VIEWER-APPS.md](./VIEWER-APPS.md) is the guide** — the seams, the traps, and a checklist.
+**[docs/contributing/viewer-apps.md](../../../../docs/contributing/viewer-apps.md) is the guide** — the seams, the traps, and a checklist.
 
 ## Extension points
 
@@ -89,14 +89,14 @@ These require editing this package, unlike the host-app seams above.
 
 ## The render↔parse seam
 
-`render/` never imports `parse/`. Two things nonetheless cross that line, and **neither requires
-host wiring** — both are self-managing:
+`render/` never imports `parse/`. One thing nonetheless crosses that line, and it needs **no host
+wiring**:
 
-- **GPU capabilities (anisotropy).** `initThree` calls `publishMaxAnisotropy` at init;
-  `parse/webdisplay/apply-texture.ts` subscribes via `observeMaxAnisotropy` at module load — the
-  observer fires immediately on subscribe, so load order doesn't matter. The `onMaxAnisotropy`
-  option on `ThreeInitializerOptions` still exists for hosts doing their own texture work, but is
-  **not needed to get sharp textures**.
+**GPU capabilities (anisotropy).** `initThree` calls `publishMaxAnisotropy` at init;
+`parse/webdisplay/apply-texture.ts` subscribes via `observeMaxAnisotropy` at module load. The
+observer fires immediately on subscribe, so load order doesn't matter. The `onMaxAnisotropy` option
+on `ThreeInitializerOptions` remains for hosts doing their own texture work, but is **not needed to
+get sharp textures**.
 
 ## GPU ownership: ask, don't remember
 

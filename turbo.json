@@ -33,6 +33,24 @@
 			],
 			"env": ["ADAPTER", "NODE_ENV", "SELVA_HMAC_KEY", "SELVA_AT_REST_KEY", "DATA_PATH"]
 		},
+		"@selvajs/website#build": {
+			"dependsOn": ["^build"],
+			"outputs": ["dist/**", "build/**", ".svelte-kit/output/**"],
+			"inputs": [
+				"src/**",
+				"static/**",
+				"!static/docs/api/**",
+				"scripts/**",
+				"package.json",
+				"tsconfig.json",
+				"svelte.config.js",
+				"vite.config.ts",
+				"../compute/src/**",
+				"../compute/typedoc.json",
+				"../compute/README.md",
+				"../compute/package.json"
+			]
+		},
 		"check": {
 			"dependsOn": ["^build"],
 			"outputs": [],

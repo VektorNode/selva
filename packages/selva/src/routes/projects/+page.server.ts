@@ -41,7 +41,7 @@ export interface ProjectWithMembers extends Project {
 	/**
 	 * Whether the caller can add and edit definitions in this project — owner or
 	 * editor. Computed per-row so the UI can disable affordances on rows the user
-	 * can only view (leadership visibility per Permissions.md §4).
+	 * can only view (leadership visibility per docs/contributing/permissions.md §4).
 	 *
 	 * There is no `instance_admin` bypass here. Content access follows `canView`
 	 * and `canEdit` for everyone (§2); the bypass applies to management scope
@@ -98,7 +98,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// (drives `canView` for org/public visibility). Both arrive in one bulk
 		// read each, so `canView` below runs with NO further I/O.
 		// `instance_admin` gets NO content bypass — follows canView like everyone
-		// else (Permissions.md §2). Reclaim is the explicit escalation path.
+		// else (docs/contributing/permissions.md §2). Reclaim is the explicit escalation path.
 		const [orgMemberByOrgId, memberByProjectId] = await Promise.all([
 			orgs.getOrgMembersFor(
 				ctx,

@@ -18,11 +18,11 @@
 
 ## Why this was confusing — three sources, three answers
 
-| Source                                                            | Claims                                                                 | Accurate?           |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------- |
-| [docs/Caching.md](../../docs/Caching.md)                          | "**three independent caches**"; "**Nothing is cached in the browser**" | **No**              |
-| [architecture.ts](../../packages/website/src/lib/architecture.ts) | 12 entries across 5 tiers, each with key/policy/invalidation/files     | Yes, one stale path |
-| The code                                                          | 10 Selva-owned caches + 2 owned by Rhino.Compute                       | —                   |
+| Source                                                                               | Claims                                                                 | Accurate?           |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- | ------------------- |
+| [docs/self-hosting/concepts/caching.md](../../docs/self-hosting/concepts/caching.md) | "**three independent caches**"; "**Nothing is cached in the browser**" | **No**              |
+| [architecture.ts](../../packages/website/src/lib/architecture.ts)                    | 12 entries across 5 tiers, each with key/policy/invalidation/files     | Yes, one stale path |
+| The code                                                                             | 10 Selva-owned caches + 2 owned by Rhino.Compute                       | —                   |
 
 `Caching.md` is the page a person reads, and both of its headline claims are false. It documents only
 the three Rhino.Compute-facing caches and predates the client memo, L2, the definition-byte cache, and

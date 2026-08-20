@@ -49,7 +49,7 @@ This is a deliberate compliance decision (least privilege / GDPR / SOC 2): blank
 
 **Break-glass recovery.** If the invariant is ever bypassed by non-runtime means (manual DB edits, restoring from a backup pre-dating the invariant, migration drift), set `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` and have the named user sign in via OAuth. The callback grants every platform permission iff no admin exists _and_ the signing-in email matches. Local provider has no equivalent path because admin can be edited directly in `users.json`.
 
-**Deployment modes** are selected by `tenancy` in [`selva.config.ts`](../../../selva.config.ts) (`'single' | 'multi'`):
+**Deployment modes** are selected by `tenancy` in [`config.ts`](../../packages/platform/src/config.ts) (`'single' | 'multi'`):
 
 - **Self-hosted / single-tenant** (`tenancy: 'single'`). One org exists, provisioned at install time via `/setup`. The `instance_admin` is typically also the org owner; the UI merges the two views. **Bootstrap path is open by default:** without `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`, the first OAuth signer on a fresh install wins the bootstrap race — exactly one of them, even if several arrive at once (`claimFirstInstanceAdmin`, above). Setting the env var hardens the path to a named operator only, and is the right default for anything reachable from the internet: "first signer" is only a safe rule while nobody else knows the URL.
 - **Multi-tenant / SaaS** (`tenancy: 'multi'`). Many orgs coexist. `instance_admin` is Selva-staff-only; customers — even org owners of the largest tenant — never hold it. **Bootstrap path is closed by default:** the OAuth callback refuses to grant `instance_admin` unless `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is set AND matches the signer. Without this gate, the first random signup would become Selva staff. Operators seed admin explicitly. The env var is safe to leave permanently set — the path is inert once an admin exists. Self-service org creation, plan/billing, and quota gating are deferred — see §12.
@@ -302,13 +302,13 @@ Definitions on platform projects use the existing `/api/v1/definitions/*` routes
 
 ## 5. Rules
 
-The pure access-control functions live in [rules.ts](../../platform/src/access/rules.ts). They take already-resolved entities as input and return booleans. Adapters do the lookup; rules do the logic.
+The pure access-control functions live in [rules.ts](../../packages/platform/src/access/rules.ts). They take already-resolved entities as input and return booleans. Adapters do the lookup; rules do the logic.
 
 > **Single source of truth.** Every gate — adapter `can*` methods, route-layer `requireCan*` helpers — funnels through `rules.ts`. No predicate is duplicated; the route layer pre-loads the membership rows the rule needs and calls it directly. Cross-org-public visibility short-circuits the fetch so the hot path stays cheap.
 
 ### The `instance_admin` bypass is split: management yes, content no
 
-The bypass is centralized in [access.server.ts](../src/lib/server/access.server.ts) as two separate wrappers, not one:
+The bypass is centralized in [access.server.ts](../../packages/selva/src/lib/server/access.server.ts) as two separate wrappers, not one:
 
 **`managementBypassOrRun`** — used for governance actions: Reclaim, create/delete project, manage project members, edit project settings, create org. `instance_admin` bypasses these so platform staff can administer the instance without being a member of every org.
 
@@ -823,6 +823,6 @@ The rules that keep this model from rotting:
 2. **No permission inheritance.** Each project carries its own ACL. No cascading from folders, orgs, or templates. Org permissions don't leak into project rules (the old `editor + manage_projects → edit settings` rule violated this and was removed).
 3. **A rule that two routes must agree on is a function, not a paragraph.** This is the one the 2026-08 access audit kept re-learning. Almost every real defect it found was a rule that existed correctly in one place and was retyped, slightly differently, in another: the owner-only role gate written out in three routes (two had drifted), the sole-admin lock mirrored client-side from a truncated page, the platform-permission delegation rule copied three times with a comment admitting it. None were subtle logic errors. The test for whether a rule is safe is not "is it correct in every copy today" but **"does breaking it turn one edit into a red test everywhere it applies"** — if the answer is no, the copies will drift, and the drift will be found by an audit rather than by CI.
 
-   Concretely: pure predicates go in [`rules.ts`](../../platform/src/access/rules.ts), the loading of their inputs goes in `access.server.ts`, and routes call the guard. UI that gates on a server rule receives the **answer** from its loader rather than recomputing the rule client-side.
+   Concretely: pure predicates go in [`rules.ts`](../../packages/platform/src/access/rules.ts), the loading of their inputs goes in `access.server.ts`, and routes call the guard. UI that gates on a server rule receives the **answer** from its loader rather than recomputing the rule client-side.
 
 When in doubt: **flat, explicit, and one concept per scope.**

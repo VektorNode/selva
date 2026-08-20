@@ -1,5 +1,5 @@
 /**
- * §11 sanity checks from packages/selva/specs/Permissions.md.
+ * §11 sanity checks from docs/contributing/permissions.md.
  *
  * Each test mirrors one row of the §11 matrix end-to-end through the real
  * provider stack (LocalDataProvider in a tmpdir) — no mocks for the rules,
@@ -682,7 +682,7 @@ describe('§11 — instance-admin invariants', () => {
 		tp = await freshProviders();
 		const { alicesPrivate, bob } = await seedAcme(tp);
 		// Bob is an Acme member but NOT a member of Alice's private project.
-		// `instance_admin` no longer bypasses content access (Permissions.md §2) —
+		// `instance_admin` no longer bypasses content access (docs/contributing/permissions.md §2) —
 		// private projects are private from everyone without a membership, including
 		// platform staff. Reclaim is the explicit escalation path.
 		await grantPlatformPermissions(tp, bob.id, ['instance_admin']);

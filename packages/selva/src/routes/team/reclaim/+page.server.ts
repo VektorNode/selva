@@ -9,7 +9,7 @@ export interface ReclaimRow extends Project {
 }
 
 /**
- * Org-scoped Reclaim (Permissions.md §5 `canReclaim`). Lists every project in
+ * Org-scoped Reclaim (docs/contributing/permissions.md §5 `canReclaim`). Lists every project in
  * the caller's `actingOrgId`; the actor is org owner/admin and may add
  * themselves as co-owner via `POST /api/projects/[id]/reclaim`.
  *

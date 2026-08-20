@@ -1,10 +1,12 @@
 # Surfacing the reported `SolveResult` to a `ComputeApp` host
 
-**Status: proposal, not started.** Written from the Parafa side, 2026-08-02, after adopting
-`@selvajs/solve@0.2.0-beta.4` and finding `source`/`values` unreachable from the app.
+**Status: complete, archived 2026-08-16.** Every item shipped and released — the retained
+`source`/`values` on `SolveSession.lastResult`, the `track()` getter on `useSolveSession`, the
+`getLastResult` handoff on `ComputeApp`'s `onReady`, and all four tests. The seam was built as a
+getter; the `onSolveResult` callback alternative was rejected.
 
-Follow-up to [solve-fn-raw-response](./solve-fn-raw-response.md), which shipped in
-`0.2.0-beta.4` (commit `64c954ef`). That change is correct and complete **within
+Follow-up to `solve-fn-raw-response`, which shipped in `0.2.0-beta.4` (commit `64c954ef`). That
+plan file was deleted rather than archived, so the link is to the commit, not a document. That change is correct and complete **within
 `@selvajs/solve`**. This one covers the last hop: `@selvajs/ui` has no seam to hand the
 result to the app embedding `ComputeApp`, so the new fields dead-end one layer short of
 the consumer they were added for.

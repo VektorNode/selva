@@ -1,7 +1,7 @@
 ---
 title: Reverse Proxy
 order: 2
-published: false
+published: true
 description: 'Why Selva needs a reverse proxy in front of it, and a minimal Caddy example.'
 ---
 
@@ -9,11 +9,9 @@ description: 'Why Selva needs a reverse proxy in front of it, and a minimal Cadd
 
 Selva must be unreachable except through a reverse proxy: bind it to `127.0.0.1` only, never a public interface, and don't open its port (default 3000) in any firewall. The proxy is the security boundary: it terminates TLS and, if you add SSO later, is what strips and re-injects the `SELVA-*` identity headers (see [Header-auth & Entra](../providers/header-auth-entra.md)).
 
-Any reverse proxy that can do a simple `reverse_proxy` and, later, `forward_auth` works: Caddy, nginx, Traefik, a platform-managed proxy. The example below uses Caddy for its automatic HTTPS and simple config; treat it as illustrative, not a requirement.
+Any reverse proxy that can do `reverse_proxy` and, later, `forward_auth` works: Caddy, nginx, Traefik, a platform-managed proxy. The example below uses Caddy for its automatic HTTPS; treat it as illustrative.
 
 Assumes Selva is already scaffolded and running per the [CLI guide](../get-started/cli.md).
-
----
 
 ## Minimal Caddy example
 
@@ -32,11 +30,11 @@ No domain yet? Swap the site block for `:80 { reverse_proxy 127.0.0.1:3000 }`. C
 
 For a hardened config (security headers, per-route caching, access logging), start from [Caddyfile.example](./Caddyfile.example).
 
+If your proxy caps request bodies, keep that cap at or above the app's `BODY_SIZE_LIMIT` (default 210M). A lower proxy cap rejects large `file` widget uploads before Selva sees them. The same goes for read timeouts and `COMPUTE_SOLVE_DEADLINE_MS`: a long solve 502s at the proxy regardless of what Selva allows.
+
 ## Adding SSO
 
-Pairing Selva with `@selvajs/header-auth-provider` needs the proxy to authenticate the request, then strip any inbound `SELVA-*` headers and set trusted ones before forwarding. Order matters, since skipping the strip lets a client spoof identity. Provider-specific runbooks: [Header-auth & Entra](../providers/header-auth-entra.md).
-
----
+Pairing Selva with `@selvajs/header-auth-provider` needs the proxy to authenticate the request, then strip any inbound `SELVA-*` headers and set trusted ones before forwarding. Order matters: skipping the strip lets a client spoof identity. Runbook: [Header-auth & Entra](../providers/header-auth-entra.md).
 
 ## Debugging
 

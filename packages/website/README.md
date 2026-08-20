@@ -1,6 +1,6 @@
 # @selvajs/website
 
-Marketing website for Selva (selva.app). Fully static SvelteKit site —
+Marketing website for Selva (selva.dev). Fully static SvelteKit site —
 every route is prerendered to HTML via `@sveltejs/adapter-static`.
 
 Shares the design system (`@selvajs/ui` theme tokens, dark mode) and tooling
@@ -18,12 +18,13 @@ pnpm --filter @selvajs/website dev     # or: pnpm dev:website
 pnpm --filter @selvajs/website build   # or: pnpm build:website
 ```
 
-Output is static HTML/CSS/JS in `build/`, deployable to any static host.
+`scripts/build-api-docs.mjs` runs first, generating the API reference pages; then
+Vite prerenders everything into `build/`, deployable to any static host.
 
 ## Deploy
 
-Firebase Hosting, project `rhino-compute-prod` (`.firebaserc`). Deploys are
-manual — no CI job publishes the site.
+Firebase Hosting, project `selva-website` (`.firebaserc`). Deploys are manual —
+no CI job publishes the site.
 
 ```bash
 pnpm --filter @selvajs/website deploy           # build + publish live

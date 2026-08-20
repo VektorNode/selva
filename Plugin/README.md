@@ -1,47 +1,50 @@
-# Selva - Grasshopper Plugin
+# Selva — Grasshopper plugin
 
-A Grasshopper plugin for building web-based UIs and bridging Grasshopper definitions with Rhino Compute.
+Builds web UIs from a Grasshopper definition and bridges it to Rhino.Compute. Ships as one
+self-contained `.gha` with the web assets embedded.
 
-## Features
+Features live under `Selva.GH/Features/`:
 
-- **Web UI Builder** - Drag-and-drop interface for designing parameter controls
-- **Real-time Updates** - WebSocket communication for instant parameter changes
-- **3D Viewer** - Built-in Three.js geometry visualization
-- **Rhino Compute Bridge** - Components for preparing data exchange with Rhino Compute
-- **Self-Contained** - Single .gha file with embedded web assets
+- **UIBuilder** — the `UI Builder` component, schema linking, and the WebSocket server
+- **Display** — `ThreeMaterial` and the 3D web-visualization config
+- **Drawing** — document-model drawing, rendered through `Selva.Drawing`
+- **FileIO** — geometry and data export (`GH_DataToFileGeneric`, `GH_BlockToFile`)
+- **ComputeIO** — interactive-selection params: value lists, colors, images, files
 
 ## Installation
 
-Copy the `.gha` file to your Grasshopper Libraries folder:
+Copy the `.gha` into the Grasshopper Libraries folder, then restart Rhino completely.
 
 - **Rhino 8 (Windows):** `%APPDATA%\Grasshopper\Libraries-8\`
 - **Rhino 8 (macOS):** `~/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/`
 - **Rhino 9 (Windows):** `%APPDATA%\Grasshopper\Libraries-9\`
 
-Restart Rhino after installation. Rhino 7 is not supported.
+Rhino 7 is not supported.
 
 ## Usage
 
-1. Add contextual parameters to your Grasshopper definition (e.g., Context Number Slider)
-2. Add the **UI Builder** component from the Selva tab
-3. Set **Enable** to `true` — browser opens automatically
-4. Design your UI in the builder, then switch to preview mode
+1. Add contextual parameters to the definition (e.g. Context Number Slider).
+2. Drop the **UI Builder** component from the Selva tab.
+3. Set **Enable** to `true` — the browser opens automatically.
+4. Design the UI in the builder, then switch to preview.
 
-## Building from Source
+## Building from source
 
 ```bash
-# Build complete plugin with embedded web assets
 pnpm build:plugin
-
-# Output locations:
-# - Rhino 8: Plugin/bin/Release/net7.0/Selva.gha
 ```
 
-## Requirements
+Builds the web assets, embeds them, and multi-targets:
+`Selva.GH/bin/Release/{net48,net7.0,net9.0}/Selva.gha`. Rhino 8 loads net48 + net7.0; Rhino 9 loads
+net9.0.
 
-- Rhino 8 or 9 (Windows/macOS) — Rhino 7 is not supported
-- Grasshopper
+For a debug loop, `cd Plugin && dotnet build` and run from your IDE alongside `pnpm dev:plugin` — the
+plugin opens the dev-server URL and connects back over WebSocket.
 
 ## Development
 
-- [Project structure & conventions](../STRUCTURE.md) — including the obsolete-component naming convention
+- [STRUCTURE.md](../STRUCTURE.md) — layout, naming, and the OBSOLETE + upgrader procedure for
+  changing a released component's params
+- [plugin-context.md](../docs/contributing/plugin-context.md) — canvas wiring and schema identity; every rule in it
+  fails silently
+- [CHANGELOG.md](./CHANGELOG.md) — releases, upgraders, obsolete components

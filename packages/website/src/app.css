@@ -1,5 +1,11 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import '@fontsource-variable/familjen-grotesk';
+
+/* Site typeface: Familjen Grotesk (OFL), self-hosted via Fontsource. */
+@theme {
+	--font-sans: 'Familjen Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+}
 @plugin '@tailwindcss/typography';
 @source '../../ui/src/lib';
 
@@ -97,4 +103,12 @@
 
 .dark {
 	--primary: oklch(73.653% 0.13688 138.527);
+}
+
+/* Display style for headlines and section numerals: the same grotesk, set
+   tighter and heavier so display sizes keep their character. */
+.font-display {
+	font-family: var(--font-sans);
+	font-weight: 600;
+	letter-spacing: -0.025em;
 }

@@ -5,7 +5,7 @@
  * Without it an org admin mints themselves an `owner` invite, accepts it (the
  * accept handler trusts the mint-time decision and cannot re-verify the
  * minter), and is then a second owner — which satisfies the sole-owner check
- * guarding removal of the founder. Permissions.md §3 says an owner survives any
+ * guarding removal of the founder. docs/contributing/permissions.md §3 says an owner survives any
  * admin coup; this is the coup.
  */
 

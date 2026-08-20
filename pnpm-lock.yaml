@@ -800,6 +800,9 @@ importers:
 
   packages/website:
     dependencies:
+      '@fontsource-variable/familjen-grotesk':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@lucide/svelte':
         specifier: 'catalog:'
         version: 1.31.0(svelte@5.56.9(@typescript-eslint/types@8.67.0))
@@ -1258,6 +1261,9 @@ packages:
 
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
+
+  '@fontsource-variable/familjen-grotesk@5.3.0':
+    resolution: {integrity: sha512-R9W0xEZRIHUV658cuOGRMAIcqX1QJ8p5/W6Boooa6zAw1BAozU//mr8C0VNggSE26/VHPwj2XNyMAG6yUJmjxA==}
 
   '@fortawesome/fontawesome-free@6.7.2':
     resolution: {integrity: sha512-JUOtgFW6k9u4Y+xeIaEiLr3+cjoUPiAuLXoyKOJSia6Duzb7pq+A76P9ZdPDoAoxHdHzq6gE9/jKBGXlZT8FbA==}
@@ -7407,6 +7413,8 @@ snapshots:
       '@floating-ui/utils': 0.2.12
 
   '@floating-ui/utils@0.2.12': {}
+
+  '@fontsource-variable/familjen-grotesk@5.3.0': {}
 
   '@fortawesome/fontawesome-free@6.7.2': {}
 

@@ -1,5 +1,7 @@
 # Plugin ↔ app compatibility gate — plan
 
+**Tracked in [#218](https://github.com/VektorNode/selva/issues/218).**
+
 > **Status: PLANNING (revised 2026-08-04).** Design only — no implementation yet.
 >
 > Problem: when a definition, the Selva plugin on a Rhino.Compute server, and the
@@ -13,6 +15,32 @@
 > can answer "which definitions are affected?" before deprecating anything.
 
 ---
+
+## Verified against the tree 2026-08-16 — read this before starting
+
+**0 of 8 work items are done.** Item 2 (countable degradation) is the only partial, and only
+because one throw predates the plan. That much is as the plan claims. Four things have decayed
+and would mislead someone picking this up:
+
+- **The headline example is fixed.** The plan opens on curves silently vanishing as a "live
+  example, today, in the working tree". `parse/display-items/items/curves.ts` now throws a
+  `VisualizationError` with a fix-it message, and both OBSOLETE components pass `points`. The
+  argument still holds — three other sites are still silent (unknown item kind warns and skips;
+  missing `compressedData` returns `[]`; absent material groups fall back to `[]`) — but it needs
+  a different opening example. A degenerate curve (`points.length < 6`) does still return `null`.
+- **The draft `COMPAT` version constants are stale.** Schema is 2.14.0, not 2.12.0; plugin is
+  0.17.2, not 0.15.x.
+- **`parseSemver` has three copies to consolidate, not two** —
+  `packages/server/src/definitions/schema-extraction.ts`, `packages/server/src/ops/semver.ts`
+  (exported, channel-aware), and a third private one in
+  `packages/selva/src/lib/server/updateCheck.server.ts`.
+- **Two cited paths moved.** `compute-server-stats.ts` is under `packages/compute/src/grasshopper/server/`,
+  not `core/server/` — which invalidates the proposed `core/server/compatibility.ts` home for the
+  compat module. Display-item parsing is at `packages/visualization/src/parse/display-items/`, with
+  no `webdisplay/` segment. Line numbers throughout have drifted.
+
+Items 3 (wire-format codegen) and 4 (the compat module) are the durable core and are unaffected.
+Item 8 is a one-line delete: `ValidateCompatibility` still has zero callers, not even in tests.
 
 ## What changed in this revision (2026-08-04)
 

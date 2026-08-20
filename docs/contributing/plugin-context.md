@@ -1,4 +1,4 @@
-# PLUGIN-CONTEXT.md
+# Grasshopper plugin context
 
 How the Grasshopper plugin's pieces actually fit together — the wiring rules and identity
 invariants that decide whether a definition works.
@@ -16,7 +16,7 @@ symptom is a blank UI, a stale value, or an output that never appears.
 
 The UI Bridge finds its schema bake by walking its own `Schema` output's recipients and requiring
 **`bake.Params.Input[0].NickName == "Schema"`**, ordinal and case-sensitive
-([BridgeOrchestrator.cs:437-465](Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs#L437-L465)).
+([BridgeOrchestrator.cs:433-462](../../Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs#L433-L462)).
 Miss it and the plugin refuses to serve the UI at all:
 
 > UIBridge Schema output is not connected to a Context Bake component with param name "Schema".
@@ -24,12 +24,12 @@ Miss it and the plugin refuses to serve the UI at all:
 
 Schema saves are rejected on the same check. The stock Hops bake ships as `Content`/`Content`; the
 `Schema` nickname is written **only** by the auto-scaffold path
-([GH_UIBuilderComponent.cs:656](Plugin/Selva.GH/Features/UIBuilder/Components/GH_UIBuilderComponent.cs#L656)),
+([GH_UIBuilderComponent.cs:624](../../Plugin/Selva.GH/Features/UIBuilder/Components/GH_UIBuilderComponent.cs#L624)),
 so a hand-placed bake keeps `Content` and does not qualify.
 
-**Value goos must not share that bake.** The schema read is `AllData(true).FirstOrDefault()`
-followed by `data is UISchemaGoo` — a positional read, not a search
-([BridgeOrchestrator.cs:471-482](Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs#L471-L482)).
+**Value goos must not share that bake.** The schema read takes the `Schema`-nicknamed input's
+`AllData(true).FirstOrDefault()` and tests `data is UISchemaGoo` — first goo wins, no search
+([BridgeOrchestrator.cs:463-474](../../Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs#L463-L474)).
 Put anything else on that input and whichever goo Grasshopper orders first wins; if it isn't the
 schema, the plugin silently serves a blank default schema instead of the authored one.
 
@@ -37,10 +37,10 @@ schema, the plugin silently serves a blank default schema instead of the authore
 
 `BuildFirstInputPayload` classifies **the first recognized goo** on the bake's first input and
 returns
-([ValueCollector.cs:459-476](Plugin/Selva.GH/Features/UIBuilder/Services/ValueCollector.cs#L459-L476)).
+([ValueCollector.cs:417-433](../../Plugin/Selva.GH/Features/UIBuilder/Services/ValueCollector.cs#L417-L433)).
 `SchemaOutput` holds a single scalar `TargetInputId`, and `FindUpstreamDynamicValueListOutput`
 returns on its first hit
-([ParameterTypeHelper.cs:188-205](Plugin/Selva.GH/Features/UIBuilder/Helpers/ParameterTypeHelper.cs#L188-L205)).
+([ParameterTypeHelper.cs:167-184](../../Plugin/Selva.GH/Features/UIBuilder/Helpers/ParameterTypeHelper.cs#L167-L184)).
 
 So N `Set Dynamic Value List` components feeding one bake collapse to **one** output, whose target
 is whichever source Grasshopper happens to order first. The other N−1 routes are structurally
@@ -52,7 +52,7 @@ unrepresentable. No warning is emitted.
 
 `schema.outputs[].id` must be the **bake's** `InstanceGuid`. `ValueCollector` resolves
 `document.FindObject(output.Id)` and reads that object's first input
-([ValueCollector.cs:85-98](Plugin/Selva.GH/Features/UIBuilder/Services/ValueCollector.cs#L85-L98)).
+([ValueCollector.cs:72-92](../../Plugin/Selva.GH/Features/UIBuilder/Services/ValueCollector.cs#L72-L92)).
 Point it at the `Set Dynamic Value List` component instead and it resolves that component, whose
 first input is the **`Options` text param** — producing the diagnostic:
 
@@ -64,13 +64,13 @@ first input is the **`Options` text param** — producing the diagnostic:
 
 Nothing repairs it. `PurgeStaleReferences` only checks that the GUID resolves to _some_ document
 object, not that it is a bake
-([SchemaSynchronizer.cs:755-767](Plugin/Selva.GH/Features/UIBuilder/Services/Schema/SchemaSynchronizer.cs#L755-L767)),
+([SchemaSynchronizer.cs:762](../../Plugin/Selva.GH/Features/UIBuilder/Services/Schema/SchemaSynchronizer.cs#L762)),
 and the post-solve remove branch only considers IDs that already _are_ bakes — so a wrong-kind
 output entry is invisible to both and survives indefinitely.
 
 ### 4. `paramType` is camelCase, is never validated, and is never repaired
 
-Valid values ([ui-schema.json:11-25](packages/schemas/ui-schema.json#L11-L25)): `number`,
+Valid values ([ui-schema.json:13-23](../../packages/schemas/ui-schema.json#L13-L23)): `number`,
 `integer`, `boolean`, `text`, `valueList`, `dynamicValueList`, `file`, `color`, `generic`.
 
 `valueList` and `dynamicValueList` are **different types**. There is no case normalization anywhere
@@ -79,11 +79,11 @@ in the plugin, and `ParameterValidationRule` only checks for emptiness — so `"
 
 - `ValueApplicator`'s `skipDedup` for `dynamicValueList` never fires, so a re-sent selection is
   deduped away and the output freezes on the previous solve's value
-  ([ValueApplicator.cs:102](Plugin/Selva.GH/Features/UIBuilder/Services/ValueApplicator.cs#L102))
+  ([ValueApplicator.cs:94](../../Plugin/Selva.GH/Features/UIBuilder/Services/ValueApplicator.cs#L94))
 - numeric coercion is bypassed
 
 And it is permanent: `MergeDiscoveredInputs` skips any ID already present in `schema.Inputs`
-([SchemaSynchronizer.cs:851](Plugin/Selva.GH/Features/UIBuilder/Services/Schema/SchemaSynchronizer.cs#L851)),
+([SchemaSynchronizer.cs:811](../../Plugin/Selva.GH/Features/UIBuilder/Services/Schema/SchemaSynchronizer.cs#L811)),
 so `paramType` is written once at first discovery and never re-derived.
 
 Validate a payload before grafting it:
@@ -97,10 +97,10 @@ node .claude/skills/rhino-mcp/validate-ui-schema.mjs <file.json>
 Dropping a UI Bridge on a fresh canvas yields **three objects and two wires**: the Bridge, a
 Boolean Toggle wired into `Enable`, and a ContextBake whose input is renamed to `Schema` and wired
 from the `Schema` output
-([WireDefaultNeighbors](Plugin/Selva.GH/Features/UIBuilder/Components/GH_UIBuilderComponent.cs#L611-L668)).
+([WireDefaultNeighbors](../../Plugin/Selva.GH/Features/UIBuilder/Components/GH_UIBuilderComponent.cs#L579-L637)).
 
 It is gated on `IsFreshPlacement()`
-([:584-609](Plugin/Selva.GH/Features/UIBuilder/Components/GH_UIBuilderComponent.cs#L584-L609)) —
+([:554-577](../../Plugin/Selva.GH/Features/UIBuilder/Components/GH_UIBuilderComponent.cs#L554-L577)) —
 skipped when the component carries an embedded schema, when `Enable` already has a source, or when
 `Schema` already has a recipient. Each side is wired independently, so a half-wired Bridge gets
 only the missing half and never a duplicate toggle.
@@ -129,7 +129,7 @@ To label outputs, name the **bake's input param** distinctly, or set `DisplayNam
 truth**. On schema save, `ApplyParameterAccessFromSchema` walks each
 `OutputDynamicValueListLayoutItem`, resolves its `ParamId` → the ContextBake → up to the Set
 component, and writes `TargetInputId` onto the live component
-([SchemaSynchronizer.cs:609-625](Plugin/Selva.GH/Features/UIBuilder/Services/Schema/SchemaSynchronizer.cs#L609-L625)).
+([SchemaSynchronizer.cs:612-624](../../Plugin/Selva.GH/Features/UIBuilder/Services/Schema/SchemaSynchronizer.cs#L612-L624)).
 The next solve reads it back out into `schema.outputs[]`.
 
 Two consequences:
@@ -172,7 +172,7 @@ change.
 
 Rhino.Compute reflects on the literal class name `GH_UIBuilderComponent` and the private field name
 `_embeddedSchema` to serve `/grasshopper/schema` without solving
-([GH_UIBuilderComponent.cs:27-50](Plugin/Selva.GH/Features/UIBuilder/Components/GH_UIBuilderComponent.cs#L27-L50)).
+([GH_UIBuilderComponent.cs:23-46](../../Plugin/Selva.GH/Features/UIBuilder/Components/GH_UIBuilderComponent.cs#L23-L46)).
 Renaming either compiles clean and makes every definition report "no embedded schema". Nothing in
 either repo catches it.
 
@@ -183,7 +183,7 @@ Files` shares the purple accent styling but is _not_ a ContextBake.
 ## Debugging live in Rhino
 
 **`Logger.Log` is `#if DEBUG`**
-([Logger.cs:8-13](Plugin/Selva.GH/Utilities/Helpers/Logger.cs#L8-L13)). Every `[ValueCollector]`
+([Logger.cs:8-13](../../Plugin/Selva.GH/Utilities/Helpers/Logger.cs#L8-L13)). Every `[ValueCollector]`
 classification line — the most useful signal for a missing output — is **silent in a Release
 `.gha`**. `Logger.Warn` and `Logger.Error` always fire.
 
@@ -201,7 +201,7 @@ Reading the output diagnostic:
 
 A blind spot worth knowing: when the component is busy, inbound value updates are merged into a
 pending buffer and applied later with **no log line at all**
-([BridgeOrchestrator.cs:117-122](Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs#L117-L122)).
+([BridgeOrchestrator.cs:105-115](../../Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs#L105-L115)).
 Values appearing to "not apply" often land one solve later.
 
 ## Editing a fixture by hand
@@ -227,8 +227,8 @@ A missing `<item name="Schema"` means the fixture is degraded — don't commit i
 ## No test covers any of this
 
 Nothing in `Plugin/Selva.Tests` pins the `"Schema"` nickname coupling, bake counts, or fixture
-wiring. The write at `GH_UIBuilderComponent.cs:656` and the reads at `BridgeOrchestrator.cs:453`
-and `:478` are joined by a repeated string literal and nothing else. The source says so itself:
+wiring. The write at `GH_UIBuilderComponent.cs:624` and the reads at `BridgeOrchestrator.cs:449`
+and `:470` are joined by a repeated string literal and nothing else. The source says so itself:
 
 > Context Bake wiring. Nothing in either repo catches this: the boundary has no test.
 
@@ -267,8 +267,3 @@ Two traps that cost a save cycle here:
 - The `Could not write schema history: Method not found: JToken.ToString` warning on save is a
   Newtonsoft mismatch in the MCP script sandbox. It affects only the optional history backup — the
   `Schema` item is written correctly. Confirm with the item diff above rather than trusting it.
-
-Documentation drift, still uncorrected at source:
-[plans/fixes/dynamic-value-list-loop.md:183](plans/fixes/dynamic-value-list-loop.md#L183) claims
-all three Set outputs plus the Schema feed _one_ Context Bake — a topology the plugin cannot
-express. The plan also says 8 C# scripts; there are 4.

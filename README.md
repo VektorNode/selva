@@ -7,18 +7,18 @@
 
 Turn Grasshopper definitions into full web applications — with a live schema designer, 3D visualization in the browser, and cloud deployment via Rhino.Compute.
 
-## Features
+## What you get
 
-- **Schema Designer** — Drag-and-drop UI builder that maps Grasshopper parameters to web controls (sliders, dropdowns, number inputs, etc.)
-- **Live WebSocket Connection** — Edit your web UI while connected to a running Rhino instance with hot reload
-- **3D Viewer** — Render Grasshopper geometry directly in the browser using Three.js
-- **Cloud Deployment** — Publish standalone web apps that solve Grasshopper definitions through Rhino.Compute, no Rhino install required for end users
-- **Type-Safe End-to-End** — A single schema generates both TypeScript types and C# types, keeping the plugin and UI in sync
-- **Embeddable Plugin** — Single `.gha` file with all web assets embedded, no external dependencies
+- **Schema designer** — drag-and-drop UI builder mapping Grasshopper params to web controls
+- **Live WebSocket link** — edit the web UI against a running Rhino, with hot reload
+- **3D viewer** — Grasshopper geometry rendered in the browser via Three.js
+- **Cloud deployment** — standalone apps that solve through Rhino.Compute; end users need no Rhino
+- **Type-safe end to end** — one schema generates both the TypeScript and C# types
+- **Single-file plugin** — one `.gha` with the web assets embedded
 
 ## Selva Canopy
 
-[Selva Canopy](https://www.food4rhino.com/en/app/selva-canopy) is a companion Grasshopper plugin that extends Selva with additional components for geometry processing and data preparation. It integrates directly into the Selva workflow and is available on Food4Rhino.
+[Selva Canopy](https://www.food4rhino.com/en/app/selva-canopy) is a companion Grasshopper plugin adding components for geometry processing and data preparation.
 
 ## Packages
 
@@ -38,13 +38,14 @@ Turn Grasshopper definitions into full web applications — with a live schema d
 | [`header-auth-provider`](./packages/providers/header-auth/README.md) | Auth-only adapter that trusts reverse-proxy identity headers                     |
 | [`cli`](./packages/cli/README.md)                                    | Scaffold and operate a white-label deployment                                    |
 
-Most of these publish to npm under the `@selvajs/*` scope; `plugin-ui`, `header-auth-provider`, and
-the shared build config are internal to the workspace. [STRUCTURE.md](./STRUCTURE.md) is
-authoritative for the full folder layout.
+Most publish to npm under the `@selvajs/*` scope. `plugin-ui`, `header-auth-provider`, `website`,
+and `config` stay internal to the workspace. [STRUCTURE.md](./STRUCTURE.md) is authoritative for the
+full folder layout.
 
 ## Requirements
 
 - Node.js >= 24.0.0
+- pnpm >= 11.0.0 (pinned in `packageManager`, activated via Corepack)
 - .NET SDK 7.0+
 - Rhino 8 or 9 (Rhino 7 is not supported)
 - Rhino.Compute server (the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support)

@@ -1,14 +1,13 @@
 ---
 title: Rhino Compute Setup
 order: 2
-published: false
+published: true
 description: 'Stand up the headless Rhino that solves your definitions, using the VektorNode fork.'
 ---
 
 # Rhino Compute Setup
 
-This is the headless Rhino that does the actual solving once you're live. It runs on
-its own Windows machine, separate from the app server.
+The headless Rhino that solves definitions, on its own Windows machine separate from the app server.
 
 ## Prerequisites
 
@@ -21,22 +20,22 @@ its own Windows machine, separate from the app server.
 
 2. **Install Rhino Compute.** Follow the [Deploy to IIS guide](https://developer.rhino3d.com/guides/compute/deploy-to-iis/).
 
-3. **Install the VektorNode fork.** Open PowerShell as Administrator on the compute VM and run [`update_compute_selva.ps1`](https://github.com/VektorNode/compute.rhino3d/blob/8.x.selva/script/update_compute_server/update_compute_selva.ps1). The fork carries several changes Selva relies on, block instances and the `definition_not_cached` reply that makes pointer reuse safe among them.
+3. **Install the VektorNode fork.** It carries changes Selva relies on — block instances, and the `definition_not_cached` reply that makes pointer reuse safe. In PowerShell as Administrator on the compute VM:
 
    ```powershell
    irm https://raw.githubusercontent.com/VektorNode/compute.rhino3d/8.x.selva/script/update_compute_server/update_compute_selva.ps1 | iex
    ```
 
-   The script takes no arguments. It downloads the latest `8.x.selva` build, stops the `RhinoComputeAppPool` app pool and the `Rhino.Compute` site, backs up the current deployment to `C:\RhinoComputeBackups\` (keeping the last five), swaps in the new `rhino.compute` and `compute.geometry` folders under `C:\inetpub\wwwroot\aspnet_client\system_web\4_0_30319\`, restarts IIS, and hits `http://localhost/healthcheck` to confirm. If anything fails it rolls back to the previous backup. Logs land in `C:\Logs\RhinoCompute\`.
+   The script takes no arguments. It downloads the latest `8.x.selva` build, stops the `RhinoComputeAppPool` app pool and the `Rhino.Compute` site, backs up the current deployment to `C:\RhinoComputeBackups\` (keeping the last five), swaps in the new `rhino.compute` and `compute.geometry` folders under `C:\inetpub\wwwroot\aspnet_client\system_web\4_0_30319\`, restarts IIS, and hits `http://localhost/healthcheck` to confirm. On failure it rolls back to the previous backup. Logs land in `C:\Logs\RhinoCompute\`.
 
-4. **Enable block instances.** Set the env var `RHINO_COMPUTE_CREATE_HEADLESS_DOC=true` and restart the service.
+4. **Enable block instances.** Set `RHINO_COMPUTE_CREATE_HEADLESS_DOC=true` and restart the service.
 
-5. **Install the Selva plugin.** Under the `rhino.compute` user account, open the Grasshopper Package Manager and install **Selva**, along with any other plugins your definitions need. Restart Rhino/Compute afterwards.
+5. **Install the Selva plugin.** Under the `rhino.compute` user account, open the Grasshopper Package Manager and install **Selva** plus any other plugins your definitions need. Restart afterwards. Plugins installed as a different user aren't found at solve time.
 
 ## Updating
 
-Re-run [`update_compute_selva.ps1`](https://github.com/VektorNode/compute.rhino3d/blob/8.x.selva/script/update_compute_server/update_compute_selva.ps1) as Administrator. It always pulls the latest `8.x.selva` build and keeps a rollback backup, so updating is the same command as installing.
+Re-run the same script as Administrator — it always pulls the latest `8.x.selva` build and keeps a rollback backup.
 
 ## Connecting
 
-Register the server in Selva's admin dashboard at `/admin/compute` by entering its URL and an optional API key. The data provider persists this config, not env vars.
+Register the server at `/admin/compute` with its URL and an optional API key. The data provider persists this config; there is no env var for it.

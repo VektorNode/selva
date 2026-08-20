@@ -1,6 +1,6 @@
 # Project Structure
 
-This document defines the conventions for where code lives and how it's named. The rules here are the contract every refactor and new file conforms to. If something in the codebase violates a rule, it's a bug — fix it or update this doc.
+Where code lives and how it's named. Every refactor and new file conforms to these rules. If the codebase violates one, it's a bug — fix the code or update this doc.
 
 ## Repository layout
 
@@ -11,6 +11,7 @@ selva/
 │   ├── Selva.Drawing/              # Document-model drawing library + SVG/PDF renderers (no Rhino/GH deps)
 │   ├── Selva.Rhino/                # Rhino interop layer for Selva.Drawing (Rhino/GH deps, no Goos)
 │   ├── Selva.GH/                   # Grasshopper plugin (depends on Selva.Schema + Selva.Drawing)
+│   ├── Selva.PluginVerifier/       # Post-merge smoke test that loads the built .gha
 │   ├── Selva.Tests/                # xUnit tests for Selva.GH + Selva.Schema
 │   ├── Selva.Drawing.Tests/        # xUnit tests for Selva.Drawing
 │   └── Releases/                   # Local build output only — NOT tracked; releases ship via plugin-release.yml
@@ -47,16 +48,19 @@ selva/
 
 ### Project boundaries
 
-| Project               | Target            | Rhino/GH deps | Purpose                                                           |
-| --------------------- | ----------------- | ------------- | ----------------------------------------------------------------- |
-| `Selva.Schema`        | `netstandard2.0`  | none          | Generated schema, validation, migration, shared constants         |
-| `Selva.Drawing`       | `netstandard2.0`  | none          | Document model + SVG/PDF renderers                                |
-| `Selva.Rhino`         | `net48/net7/net9` | yes           | Rhino interop adapter for `Selva.Drawing`                         |
-| `Selva.GH`            | `net48/net7/net9` | yes           | `.gha` plugin — all GH components, params, Goos, server lifecycle |
-| `Selva.Tests`         | xUnit             | —             | Tests for `Selva.GH` + `Selva.Schema`                             |
-| `Selva.Drawing.Tests` | xUnit             | —             | Tests for `Selva.Drawing`                                         |
+| Project                | Target            | Rhino/GH deps | Purpose                                                           |
+| ---------------------- | ----------------- | ------------- | ----------------------------------------------------------------- |
+| `Selva.Schema`         | `netstandard2.0`  | none          | Generated schema, validation, migration, shared constants         |
+| `Selva.Drawing`        | `netstandard2.0`  | none          | Document model + SVG/PDF renderers                                |
+| `Selva.Rhino`          | `net48/net7/net9` | yes           | Rhino interop adapter for `Selva.Drawing`                         |
+| `Selva.GH`             | `net48/net7/net9` | yes           | `.gha` plugin — all GH components, params, Goos, server lifecycle |
+| `Selva.PluginVerifier` | `net48/net7/net9` | yes           | Loads the merged `.gha` after a Release build; Windows-only       |
+| `Selva.Tests`          | `net8.0` (xUnit)  | —             | Tests for `Selva.GH` + `Selva.Schema`                             |
+| `Selva.Drawing.Tests`  | `net8.0` (xUnit)  | —             | Tests for `Selva.Drawing`                                         |
 
 Rhino 8 loads `net48` + `net7.0`; Rhino 9 loads `net9.0`. Rhino 7 is not supported.
+`Selva.Rhino` and `Selva.PluginVerifier` use the `-windows` variants (`net7.0-windows`,
+`net9.0-windows`) since they pull in WinForms. On non-Windows, `Selva.GH` builds `net7.0` only.
 
 ### NuGet versions live in one file
 
@@ -216,11 +220,11 @@ files already on users' disks — frozen forever. The **extension** is what writ
 it is cheap (readers detect by magic) but readers must accept retired extensions forever. The
 **human name** in UI and docs can change freely.
 
-| Format           | Extension            | Magic            | Spec                                                |
-| ---------------- | -------------------- | ---------------- | --------------------------------------------------- |
-| Mesh batch blob  | wire-only            | `SLVA` / `SLVZ`* | `BinaryGeometryWriter.cs` header / `SLVA-FORMAT.md` |
-| Selva mesh file  | `.slvm` (was `.dmf`) | `DMF1`           | `DmfFile.cs` header — JSON sidecar + SLVA/SLVZ blob |
-| Parameter preset | `.slvp` (was `.sps`) | none (JSON)      | `packages/schemas/preset-schema.json`               |
+| Format           | Extension            | Magic            | Spec                                                                  |
+| ---------------- | -------------------- | ---------------- | --------------------------------------------------------------------- |
+| Mesh batch blob  | wire-only            | `SLVA` / `SLVZ`* | `BinaryGeometryWriter.cs` header / `docs/contributing/slva-format.md` |
+| Selva mesh file  | `.slvm` (was `.dmf`) | `DMF1`           | `SlvmFile.cs` header — JSON sidecar + SLVA/SLVZ blob                  |
+| Parameter preset | `.slvp` (was `.sps`) | none (JSON)      | `packages/schemas/preset-schema.json`                                 |
 
 \* `SLVZ` is `SLVA` in an optional DEFLATE container; decoders sniff which by the leading magic.
 
@@ -287,5 +291,9 @@ config, the provider conformance kits, and why `@selvajs/cli` is exempt.
 - `CLAUDE.md` is for AI agents working in the repo.
 - `CONTRIBUTING.md` is for human contributors.
 - `STRUCTURE.md` (this file) is the source of truth for layout/naming.
-- Project-internal docs (developer notes, architecture deep-dives) go in `docs/`. Keep `examples/` for runnable artifacts only.
+- [docs/contributing/plugin-context.md](./docs/contributing/plugin-context.md) is the source of truth for Grasshopper canvas wiring and schema identity.
+- Package-level developer notes and deep-dives go in `docs/contributing/`, not scattered through package folders. A spec, backlog, or format reference under `packages/` or `Plugin/` is misplaced — move it.
+- A package's `README.md` stays with the package: it's the published API surface, and npm renders it.
+- `CONTEXT.md` beside its code is the one documented exception — source comments reference it by bare filename, so it has to sit next to what it describes.
+- Keep `examples/` for runnable artifacts only.
 - `docs/` is grouped by audience, and any doc that can reach the website lives at `audience/group/doc.md` — the folder decides its sidebar group, so there is no `group:` frontmatter to drift. `docs/contributing/` is exempt: it never gets published. See [docs/README.md](./docs/README.md).

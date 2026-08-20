@@ -64,5 +64,5 @@ document the change — whenever the envelope changes in a way a consumer could 
 
 That sub-path keeps only HTTP _request policy_ — rate limiting, the SSRF guard, env-derived
 limits, the remote-definition fetcher — with no re-export of anything here and no dependency on
-`@selvajs/solve`. The two packages are independent; importing solve-core from `@selvajs/server`
-is a breaking change for consumers on `0.2.x`.
+`@selvajs/solve`. The two packages are independent, and re-exporting solve-core from
+`@selvajs/server` would be a breaking change for its consumers.

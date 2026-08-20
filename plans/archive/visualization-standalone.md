@@ -197,7 +197,7 @@ before §3, since 3b changes who owns the envelope walk and that interacts with 
 - Neutral scene-graph layer — still deferred (see the old plan's decision).
 - Splitting `parse`/`render`/`scene` apart. One package, internal layers, unchanged.
 - `three` / `rhino3dm` peer deps. Those are legitimate and stay.
-- `@selvajs/compute`'s own cleanup — see [compute-package-cleanup](../refactors/compute-package-cleanup.md).
+- `@selvajs/compute`'s own cleanup — see [compute-package-cleanup](./compute-package-cleanup.md).
 
 ## Open questions
 

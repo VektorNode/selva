@@ -1,20 +1,20 @@
 ---
 title: Security & Limits
 order: 6
-published: false
+published: true
 description: 'Request limits, rate limiting, guards on outbound fetches, and the boundaries that keep a deployment safe.'
 ---
 
 # Security & Limits
 
-A reference for the guardrails an operator tunes: rate limits, request-size and
-concurrency caps, the guard on remote-definition URLs, the two secret keys, and
-cookie/transport behaviour. Every setting below is verified against the code;
-[`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example) is the authoritative env-var list
-and documents each inline.
+The guardrails an operator tunes: rate limits, size and concurrency caps, the guard
+on remote-definition URLs, the two secret keys, and cookie/transport behaviour.
+[`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example)
+is the authoritative env-var list and documents each inline.
 
-Sizes below use `MB = 1024 × 1024`. All the `COMPUTE_*` / `*_BYTES` / `*_MS` caps
-are resolved once at boot; an invalid value warns and falls back to the default.
+Sizes use `MB = 1024 × 1024`. Every cap resolves once at boot
+(`packages/server/src/compute/limits.ts`); an invalid value warns and falls back to
+the default.
 
 ## Rate limiting
 
@@ -50,8 +50,6 @@ solve returns **429** ("Share link solve cap reached").
 
 ## Size, concurrency, and queue caps
 
-All resolved in `packages/server/src/compute/limits.ts`.
-
 | Env var                              | Default              | Guards                                                                                                                                                                                                      |
 | ------------------------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `COMPUTE_SOLVE_DEADLINE_MS`          | `100000`             | Longest a single solve may run before it is aborted. Renamed from `MAX_SOLVE_DURATION_MS`, which still works for one minor version and warns at boot.                                                       |
@@ -64,40 +62,43 @@ All resolved in `packages/server/src/compute/limits.ts`.
 | `REMOTE_DEFINITION_FETCH_TIMEOUT_MS` | `30000`              | Deadline on remote-definition fetch, so a server that trickles bytes forever can't tie one up indefinitely.                                                                                                 |
 | `BODY_SIZE_LIMIT`                    | `256M`               | adapter-node's global body cap on **every** route. Must be ≥ `COMPUTE_REQUEST_MAX_BYTES`. Use `256M` or a raw byte count — only `K`/`M`/`G` are units, so `256mb` and `Infinity` are NaN and throw on boot. |
 
-How many solves may run at once is not an env var: Selva reads it from the number
-of Rhino worker processes the compute server has running, re-checking periodically
-as that number changes, and falls back to `1` if it can't be read. The one
-place to change it is `--childcount` on the compute server itself.
+How many solves may run at once is not an env var: Selva probes the compute server's
+active child count, once at connect and again after solves, since children exit under
+`--idlespan` and the pool resizes at runtime. A failed probe — or a cold server
+honestly reporting `0` — falls back to `1`, on the grounds that an unknown-capacity
+server is safer under-used than oversent. The one place to change it is
+`--childcount` on the compute server.
 
 Cache byte budgets (`COMPUTE_DEFINITION_CACHE_MB`, `COMPUTE_SOLVE_CACHE_MB`) and the
 Rhino.Compute server flags are covered in [Caching](./caching.md).
 
 ## Guard on remote-definition URLs
 
-A definition can be loaded from a URL someone supplies. Without a check, that URL
-could point back at your own network, at a database on a private address or a
-cloud metadata endpoint, and the server would dutifully fetch it and hand back
-the result. The attack has a name: server-side request forgery, or SSRF.
+A definition can be loaded from a user-supplied URL. Without a check that URL could
+point back at your own network — a private-address database, a cloud metadata
+endpoint — and the server would fetch it and hand back the result. That's SSRF.
 
-So the URL is validated before any fetch (`packages/server/src/compute/safe-url.ts`). Rather than
-listing the addresses that are allowed, it lists the ones that are blocked, and checks twice:
+`packages/server/src/compute/safe-url.ts` validates before any fetch, using a scheme
+allowlist plus an address blocklist, checked twice:
 
-1. First the URL text itself, without touching DNS: the scheme must be `http` or
-   `https`, and `localhost` is rejected along with every way of writing a private
-   IPv4 address (decimal, octal, hex, short-form) and its IPv6 equivalents.
-2. Then the addresses the name actually resolves to, each re-checked against the
-   same list, because a harmless-looking hostname can resolve to a private one.
+1. **The URL text, no DNS.** Scheme must be `http` or `https`. `localhost` and
+   `*.localhost` are rejected, as is every encoding of a private IPv4 address
+   (decimal, octal, hex, short-form, IPv4-mapped IPv6) — each is canonicalized before
+   judging.
+2. **The resolved addresses**, each re-checked against the same list, because a
+   harmless-looking hostname can resolve to a private one.
 
-Blocked: loopback (`127/8`, `::1`), private ranges (`10/8`, `172.16–31`,
-`192.168/16`, `fc00::/7`), link-local **including the cloud metadata endpoint
-`169.254.169.254`**, and the unspecified/`0.0.0.0` addresses. Rejections return a
-deliberately vague message ("Remote definition URL is not allowed") so nobody can
-use the guard to map your internal network by watching which URLs it complains
-about differently; the specific reason is logged server-side.
+Blocked: `0.0.0.0/8`, loopback (`127/8`, `::1`, `::`), private ranges (`10/8`,
+`172.16–31`, `192.168/16`, `fc00::/7`), and link-local (`169.254/16` — **including
+the cloud metadata endpoint `169.254.169.254`** — and `fe80::/10`).
+
+Every rejection returns the same vague message, `Remote definition URL is not
+allowed`, so nobody can map your internal network by watching which URLs it
+complains about differently; the specific reason is logged server-side.
 
 One gap is documented rather than closed: an address can change between the check
-and the fetch, so a hostname that passes could still be pointed somewhere else a
-moment later.
+and the fetch (DNS rebinding), so a hostname that passes could be pointed elsewhere
+a moment later.
 
 Rhino.Compute _server_ URLs are not subject to this guard; they are configured in
 `/admin/compute` and stored by the data provider, not fetched from user input.
@@ -127,43 +128,35 @@ system health view.
 
 ### Why two keys and not one
 
-One signs and one encrypts. Merging them would use a single secret for two
-different jobs, worth avoiding on its own. The practical reason is recovery cost. The two keys fail in deliberately asymmetric ways: losing the HMAC
-key costs a round of logins, while losing the at-rest key costs a credential you
-must re-enter by hand. Keeping them separate is what lets `selva keys rotate` treat
-a suspected session-secret leak as a cheap, routine action instead of one that also
-takes compute offline until an operator notices.
+One signs, one encrypts, and they fail asymmetrically: losing the HMAC key costs a
+round of logins, losing the at-rest key costs a credential you must re-enter by hand.
+Keeping them separate is what lets `selva keys rotate hmac` treat a suspected
+session-secret leak as routine instead of an action that also takes compute offline.
 
-They aren't interchangeable in practice either. At-rest must decode to exactly 32
-bytes, HMAC only needs 32 characters, and under Supabase the two are wanted
-independently. If one `.env` entry ever becomes the goal, derive two separate keys
-from a single root secret rather than passing the same bytes to both. That keeps
-the two jobs apart, though it still ties their rotation together.
+They aren't interchangeable anyway — at-rest must decode to exactly 32 bytes, HMAC
+only needs 32 characters. If one `.env` entry ever becomes the goal, derive two keys
+from a single root secret rather than passing the same bytes to both.
 
 ### What rotating `SELVA_HMAC_KEY` breaks
 
-`selva keys rotate hmac` takes effect on restart and hits three things. Nothing
-errors or requires a cleanup pass; everything affected simply stops being found:
+`selva keys rotate hmac` takes effect on restart. Nothing errors; the affected things
+simply stop being found:
 
-1. **Sessions (local provider only).** A cookie carries a signature made with this
-   key, so once it changes every issued cookie fails its check and everyone signs
-   in again. Under `supabase` or
-   `header` auth, sessions are unaffected; those never touch this key.
-2. **Share links (all providers).** A link is looked up by a hash made with this
-   key, so previously issued links resolve to nothing and read as invalid. Mint replacements from the
-   definition's share dialog.
-3. **Pending invites (all providers).** Same mechanism: unaccepted invites stop
-   resolving and read as "invalid or has expired". Already-accepted invites are
-   unaffected; membership is a stored record, not a token. Re-send any still open.
+1. **Sessions — local provider only.** Every issued cookie fails its signature check
+   and everyone signs in again. Under `supabase` or `header` auth, sessions never
+   touch this key and are unaffected.
+2. **Share links — all providers.** Links are looked up by hash, so existing ones
+   read as invalid. Mint replacements from the definition's share dialog.
+3. **Pending invites — all providers.** Same mechanism; unaccepted invites read as
+   "invalid or has expired". Already-accepted invites are unaffected — membership is a
+   stored record, not a token. Re-send any still open.
 
-Rows for dead links and invites stay in the store. They're matched by hash, and a
-hash that no longer matches is simply never found. They're harmless, but rotation
+Rows for dead links and invites stay in the store, unreachable and harmless. Rotation
 does not clean them up.
 
-What rotation does **not** touch: user accounts, passwords (hashed with their own
-scheme, unrelated to this key), org membership and permissions, projects,
-definitions, uploaded files, and the Rhino.Compute API key (that's
-`SELVA_AT_REST_KEY`).
+Untouched: user accounts, passwords (hashed with their own scheme), org membership
+and permissions, projects, definitions, uploaded files, and the Rhino.Compute API key
+(that's `SELVA_AT_REST_KEY`).
 
 ## Cookies and transport
 
@@ -180,22 +173,28 @@ definitions, uploaded files, and the Rhino.Compute API key (that's
   behalf. To do that it has to know its own public address: behind a reverse proxy,
   set `ORIGIN=https://your-domain.com` (no trailing slash). Without it, form POSTs
   fail with "Cross-site POST form submissions are forbidden".
-- **`HOST` / header-auth boundary.** `HOST` defaults to `0.0.0.0`. When running the
-  header-auth provider, the app **must** be reachable only through the trusted
-  proxy (bind `127.0.0.1` or firewall the port), the proxy must authenticate every
-  request, and it must strip inbound `SELVA-*` headers. There is no runtime check:
-  the deployment is the entire trust boundary.
+- **`HOST` / header-auth boundary.** `HOST` defaults to `0.0.0.0` (adapter-node's
+  default). Under the header-auth provider the app **must** be reachable only through
+  the trusted proxy — bind `127.0.0.1` or firewall the port. The proxy must
+  authenticate every request and **overwrite** the inbound `SELVA-*` headers, since
+  Selva reads them as identity and never strips them itself. There is no runtime
+  check; the deployment is the entire trust boundary.
 
 ## Logging and personal data
 
-`PinoLogger` strips values by **field name** only, and only credential-shaped names:
-`token`, `apiKey`, `password`, `authorization`, `cookie`. For most of those it also
-looks one level down into nested objects, but no further. It does **not** catch
-emails or other personal data buried in a payload, and it only runs when the
-optional `pino` package is installed; the console fallback strips nothing. Log identifiers (`eventType`, `actorId`, `userId`), never whole domain
-objects. An audit payload can embed an invitee's email, and logs are the one
-place erasure cannot reach. See the Data Privacy section of the repo `CLAUDE.md`
-for the full contract.
+`PinoLogger` strips values by **field name** only, and only credential-shaped names.
+Eight at the top level — `token`, `sessionToken`, `refreshToken`, `apiKey`,
+`api_key`, `password`, `authorization`, `cookie` — of which only five are also
+matched one level down (`*.token`, `*.sessionToken`, `*.refreshToken`, `*.apiKey`,
+`*.password`). Nothing deeper, and `authorization`, `cookie`, and `api_key` are
+**not** caught when nested.
+
+It does **not** catch emails or other personal data buried in a payload, and it only
+runs when the optional `pino` package is installed — the console fallback strips
+nothing. Log identifiers (`eventType`, `actorId`, `userId`), never whole domain
+objects. An audit payload can embed an invitee's email, and logs are the one place
+erasure cannot reach. See the Data Privacy section of the repo `CLAUDE.md` for the
+full contract.
 
 ## Next
 

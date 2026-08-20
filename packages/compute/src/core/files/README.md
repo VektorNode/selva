@@ -1,19 +1,16 @@
-## File Handling Requirements & Workflow
+# `core/files/` — file export
 
-This feature depends on:
+Zip, base64 and download helpers for files a definition emits. Generic: nothing here reads a
+Grasshopper response (that's `extractFileData` in `grasshopper/io/output/`).
 
-- The **Selva plugin** for Grasshopper
-- The **custom branch of rhino.compute** from VektorNode ([see implementation reference](https://github.com/VektorNode/compute.rhino3d/blob/1fc5e2c78928cddca249c0d61a7db42fd778bafc/src/compute.geometry/GrasshopperDefinition.cs#L1161))
+**Requires the Selva plugin and the [VektorNode rhino.compute
+fork](https://github.com/VektorNode/compute.rhino3d/blob/1fc5e2c78928cddca249c0d61a7db42fd778bafc/src/compute.geometry/GrasshopperDefinition.cs#L1161).**
+Standard rhino.compute drops file outputs entirely.
 
-### How File Export Works
+On the canvas: **Block to File** / **Geometry To File** feed a **Context Bake** component, and the
+fork returns the files in the compute response.
 
-1. In Grasshopper, use the components **Block to File** and **Geometry To File** to generate files.
-2. Plug these components into a **Context Bake** component.
-3. The custom VektorNode rhino.compute server will properly process and return the files in the compute response.
-
-> **Note:** Standard rhino.compute does not support this workflow. The custom branch is required for file export integration.
-
-### Folders and archive names
+## Folders and archive names
 
 Each file component has a `Sub Folder` input. `::` nests, matching Rhino's layer separator:
 

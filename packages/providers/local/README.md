@@ -1,48 +1,33 @@
 # @selvajs/local-provider
 
-Filesystem + JSON + HMAC implementation of the `@selvajs/platform` interfaces.
+Filesystem + JSON + HMAC implementation of the `@selvajs/platform` interfaces — `IAuthProvider`, `IDataProvider`, `IStorageProvider`.
 
-The default provider for development and small single-instance deployments. All state — users, orgs, projects, definitions, compute config, uploaded `.gh` files — lives under one directory on disk. No database, no external services.
+The default for all three provider slots. All state — users, orgs, projects, definitions, compute config, uploaded `.gh` files — lives under one directory on disk. No database, no external services.
 
-For production-scale or multi-instance deployments, use [`@selvajs/supabase-provider`](../supabase/README.md) instead.
+For multi-instance or multi-tenant deployments, use [`@selvajs/supabase-provider`](../supabase/README.md).
 
----
-
-## Table of contents
-
-- [When to use this provider](#when-to-use-this-provider)
-- [Environment variables](#environment-variables)
-- [On-disk layout](#on-disk-layout)
-- [Switching providers](#switching-providers)
-- [Architecture notes](#architecture-notes)
+**Operator setup — env vars, key generation, backups:** [docs/self-hosting/providers/local.md](../../../docs/self-hosting/providers/local.md).
 
 ---
 
-## When to use this provider
+## Usage
 
-Pick local when:
+```ts
+import { defineConfig } from '@selvajs/platform';
+import {
+	LocalAuthProvider,
+	LocalDataProvider,
+	LocalStorageProvider
+} from '@selvajs/local-provider';
 
-- You're developing or evaluating Selva
-- You're running a single-tenant, single-instance deployment (one VM, PM2)
-- You want zero external dependencies — no DB, no S3
-- You're OK with simple file-based backups (`tar` the data dir)
+export default defineConfig((env) => ({
+	auth: LocalAuthProvider.fromEnv(env),
+	data: LocalDataProvider.fromEnv(env),
+	storage: LocalStorageProvider.fromEnv(env)
+}));
+```
 
-Pick [Supabase](../supabase/README.md) when:
-
-- You need multiple selva app instances behind a load balancer
-- You want managed auth (password reset, MFA, OAuth)
-- You want managed Postgres + storage with backups, and per-row access rules enforced by the database
-- You need a counter several processes can raise at once without losing increments
-
----
-
-## Environment variables
-
-All env vars are documented in [`packages/selva/.env.example`](../../selva/.env.example) — copy that file to `.env` and edit it. The local provider reads `DATA_PATH`, `SELVA_HMAC_KEY` (signs sessions + tokens), and `SELVA_AT_REST_KEY` (encrypts the Rhino.Compute API key on disk) from there.
-
-The first admin user is created through the in-app setup page on first boot — there is no env-var fallback login.
-
-Rhino.Compute server URL + API key are configured in `/admin/compute` and persisted to `compute.config.json` — not env vars.
+The Selva app already bundles this wiring — `fromEnv` reads `DATA_PATH`, `SELVA_HMAC_KEY`, and `SELVA_AT_REST_KEY`. `LocalDataProvider.fromEnv` constructs every store: orgs, projects, definitions, share links, invites, compute server, user profile, platform permissions, platform project grants.
 
 ---
 
@@ -64,9 +49,9 @@ $DATA_PATH/
         └── cover.webp
 ```
 
-All JSON files are written atomically (temp file + rename) so a crash mid-write leaves either the old or new file — never a partial. Image uploads are transcoded to WebP (1200px max, quality 85) via `sharp`.
+The blob paths come from `definitionPaths` in `@selvajs/platform` — `LocalStorageProvider` appends them to `$DATA_PATH` verbatim.
 
-**Backups:** `tar -czf backup.tar.gz $DATA_PATH`. Restore is the reverse — no schema migrations, no DB to bring up.
+All JSON files are written atomically (temp file + rename) so a crash mid-write leaves either the old or new file — never a partial.
 
 **Caveats:**
 
@@ -75,32 +60,40 @@ All JSON files are written atomically (temp file + rename) so a crash mid-write 
 
 ---
 
-## Switching providers
-
-Local is the default: the selva app picks each provider from `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER`, all defaulting to `local` when unset. `LocalDataProvider.fromEnv(env)` wires every store — orgs, projects, definitions, share-links, invites, compute server, user profile, platform permissions.
-
-To switch to Supabase, see [`@selvajs/supabase-provider`](../supabase/README.md#switching-to-the-supabase-provider).
-
----
-
 ## Architecture notes
 
 ### Auth
 
-`LocalAuthProvider` issues HMAC-signed session tokens (no JWT library; see [`auth/`](src/auth/)). Tokens carry `{ userId, expiresAt }` and are verified on every request.
+`LocalAuthProvider` ([src/auth/LocalAuthProvider.ts](src/auth/LocalAuthProvider.ts)) issues HMAC-SHA256 session tokens — no JWT library. Tokens carry `{ userId, expiresAt }` and are verified on every request.
 
-Users live in `auth-users.json` with `PBKDF2-SHA256` password hashes. Platform permissions live separately in `user-data.json`. The first admin is bootstrapped through the in-app setup page on a fresh install.
+Users live in `auth-users.json` ([src/auth/users.ts](src/auth/users.ts)) with PBKDF2-SHA256 password hashes, stored as `pbkdf2:sha256:<iterations>:<salt>:<hash>` (100 000 iterations, 32-byte key, base64url). Platform permissions live separately in `user-data.json`. The first admin is bootstrapped through the in-app setup page on a fresh install — there is no env-var fallback login.
+
+**Under this provider Selva _is_ the auth provider** — email addresses and password hashes sit on the deployment's own disk, with no third party holding them. The operator is the data controller for all of it; see [CLAUDE.md](../../../CLAUDE.md#data-privacy) for the full inventory.
 
 ### Data
 
-Each store (`LocalOrgStore`, `LocalProjectStore`, `LocalDefinitionStore`, `LocalInviteStore`, `LocalComputeServerStore`, `LocalShareLinkStore`, `LocalPlatformProjectGrantStore`) reads its JSON file fully into memory on each call, mutates, and writes back. Fine at config-scale; not for high-churn data.
+Each store (`LocalOrgStore`, `LocalProjectStore`, `LocalDefinitionStore`, `LocalInviteStore`, `LocalComputeServerStore`, `LocalShareLinkStore`, `LocalPlatformProjectGrantStore`, `LocalPlatformPermissionStore`, `LocalUserProfileProvider`) reads its JSON file fully into memory on each call, mutates, and writes back. Fine at config-scale; not for high-churn data.
 
 Access control is enforced **in the app process** by inspecting `RequestContext.adapterContext`. There is no database underneath to enforce it a second time, so these checks are the only thing standing between a caller and someone else's data. Tests for them live alongside each store.
 
 ### Storage
 
-`LocalStorageProvider` writes blobs under `$DATA_PATH/<path>` (e.g. `$DATA_PATH/definitions/<guid>/versions/v1.gh`) — the caller's storage path is appended directly to the data root, with `..` rejected. `getPublicUrl` returns `/api/files/<path>`, which the selva app proxies after an auth check. Image uploads pass through the shared `transcodeImageIfNeeded` helper from `@selvajs/platform/storage` — same WebP output as Supabase.
+`LocalStorageProvider` writes blobs under `$DATA_PATH/<path>` — the caller's storage path is appended directly to the data root, with `..` rejected. `getPublicUrl` returns `/api/files/<path>`, which the selva app proxies after an auth check. Image uploads pass through the shared `transcodeImageIfNeeded` helper from `@selvajs/platform/storage` (WebP, 1200px cap, quality 85) — same bytes as Supabase.
 
 ### Shared helpers
 
-`src/data/fsJson.ts` centralizes the read/atomic-write pattern every store uses. See [src/README.md](src/README.md) for details on the helper API.
+[src/data/fsJson.ts](src/data/fsJson.ts) centralizes the read/atomic-write pattern every store uses. See [src/README.md](src/README.md) for the helper API.
+
+---
+
+## Conformance tests
+
+The `@selvajs/platform` conformance suites run against this provider in-process — no external services, no setup.
+
+```bash
+cd packages/providers/local
+pnpm test          # vitest run
+pnpm test:watch
+```
+
+`src/**/__tests__/*-conformance.test.ts` covers the org, project, definition, invite, share-link, compute-server, event-sink, and platform-project-grant stores, plus auth, permissions, storage, and user-profile. A new store is wired up by pointing its suite at a temp directory.

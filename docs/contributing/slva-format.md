@@ -45,19 +45,25 @@ Two things worth knowing here:
 The meshes are then packed into a compact binary format, in four steps:
 
 1. **Group by material.** Every unique material becomes one group; all meshes using it are concatenated into one vertex/index stream. Fewer groups means fewer draw calls in the browser.
-2. **Quantize.** Vertex positions are snapped to a 16-bit grid spanning the geometry's bounding box — a 2× size reduction over float32, and lossless enough that the error stays far below anything visible. If the resulting step would exceed ~5 cm per unit (a very large model), it falls back to raw float32 rather than degrade the preview. UVs quantize to 16 bits the same way; vertex colours are 8-bit per channel.
+2. **Quantize.** Vertex positions are snapped to a signed 16-bit grid spanning the geometry's bounding box — a 2× size reduction over float32, with error far below anything visible. If the resulting step would exceed 5 cm per int16 unit (a very large model), the whole block falls back to raw float32 rather than degrade the preview. UVs quantize to unsigned 16 bits the same way, with their own fallback when a step exceeds 1/4096 (heavily tiled UVs). Vertex colours are 8-bit per channel and never fall back.
 3. **Delta filter.** Each vertex component is stored as the difference from the previous vertex, zigzag-mapped so small differences become small unsigned numbers. Welded meshes have spatially-local vertices, so the deltas cluster near zero — this is a PNG-style pre-filter and it exists purely to make the next step work better.
 4. **Deflate.** The filtered stream is compressed.
 
-The result is a **SLVA** blob: a magic header, a version, a JSON metadata envelope (materials, groups, source component id), then the geometry block. Curves and points ride as JSON next to it.
+The result is a **SLVA** blob: magic `SLVA`, a uint32 version (currently 3), a UTF-8 JSON metadata envelope (materials, groups, `sourceComponentId`), then the geometry block — flags, quantization origin and scale, vertices, indices, and optional trailing UV and vertex-colour chunks. Little-endian throughout. When DEFLATE shrinks it, the whole blob is wrapped in an `SLVZ` container (`magic | uncompressedLen | raw-deflate stream`); decoders sniff which by the leading magic. Curves and points ride as JSON next to it.
+
+Version gates are additive: each bump so far only added a flag bit, and readers ignore trailing bytes, so a decoder handles every blob back to version 1. That matters because blobs persist — saved `.gh` files, `.slvm` mesh files and cached compute results must stay decodable after an upgrade.
 
 The blob is self-describing and transport-agnostic — the browser decoder never branches on how it arrived.
 
-> The wire format is an internal detail of the plugin and `@selvajs/visualization`. It is versioned and can change without a major bump; don't build against it directly. The authoritative spec is the comment block at the top of `BinaryGeometryWriter.cs`.
+> **The byte-level spec is normative and lives in code, in two places that must agree:** the remarks block at the top of [`BinaryGeometryWriter.cs`](../../Plugin/Selva.GH/Features/Display/Services/BinaryGeometryWriter.cs) (encoder) and the constants in [`binary/header.ts`](../../packages/visualization/src/parse/webdisplay/binary/header.ts) plus the layout comment in [`binary-parser.ts`](../../packages/visualization/src/parse/webdisplay/binary-parser.ts) (decoder). Change them together and bump the version.
+>
+> The format is internal to the plugin and `@selvajs/visualization`. It is versioned and can change without a major bump — don't build against it directly.
 
 ## Stage 3 — Transport
 
-The blob travels base64-encoded inside the solve response from Rhino.Compute. Large file outputs stream out-of-band instead ([ADR 0003](../../../../../docs/adr/0003-large-file-output-streaming.md)); display payloads currently do not.
+The blob travels inside a `DisplayBatch` JSON envelope (`types.ts`) — base64 over HTTP from Rhino.Compute, raw binary over the plugin's WebSocket. Large file outputs stream out-of-band instead ([ADR 0003](../adr/0003-large-file-output-streaming.md)); display payloads currently do not.
+
+Producing these payloads requires the VektorNode Rhino.Compute fork.
 
 This is the stage to look at when a scene is slow to _appear_ but fast to _interact with_. Check the payload size with the **Display Size** component. If it's large, the usual causes are meshing too finely, or emitting geometry the user can't see.
 
@@ -68,14 +74,15 @@ Handled by `@selvajs/visualization` in its `/parse` layer. It reverses the encod
 ```
 solve response
   └─ webdisplay-parser      pick out display data, scale to metres, ground, bound
-       └─ batch-parser      entry point; can run off-thread in a worker
+       └─ batch-parser      entry points; dispatches the off-thread worker path
             ├─ binary-parser     SLVA decode: header, inflate, un-delta, dequantize
-            ├─ batch/metadata    validate group windows
+            ├─ batch/metadata    validate group windows, dequantize
             ├─ batch/materials   SerializableMaterial → MeshPhysicalMaterial
-            └─ batch/merge       build merged + individual meshes
+            ├─ batch/merge       build merged + individual meshes
+            └─ mesh-assembly     the pure assembly function the worker and main thread share
 ```
 
-Curves and points go down a separate path: decoded with `rhino3dm`, adaptively tessellated, and built into fat lines and point clouds.
+Curves and points go down a separate path. Nothing is decoded in the browser: the plugin tessellates curves and sends `points`, which become fat `Line2` lines and `THREE.Points` clouds. This package has no `rhino3dm` dependency.
 
 Two behaviours to know:
 
@@ -106,5 +113,5 @@ Three invariants hold across the whole pipeline:
 
 ## Next
 
-- [Parse layer](../README.md): the barrel this format is decoded behind.
-- [Caching](../../../../../docs/self-hosting/concepts/caching.md): what is and isn't reused between solves.
+- [Parse layer](../../packages/visualization/src/parse/README.md): the barrel this format is decoded behind.
+- [Caching](../self-hosting/concepts/caching.md): what is and isn't reused between solves.

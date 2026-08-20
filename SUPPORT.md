@@ -1,6 +1,6 @@
 # Support
 
-Thanks for using Selva! Here's where to go depending on what you need:
+Where to go, depending on what you need:
 
 - **Documentation** — start with the [docs](./docs/README.md) and
   [Quick Start](./docs/self-hosting/get-started/quick-start.md).

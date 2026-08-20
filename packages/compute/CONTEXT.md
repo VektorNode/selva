@@ -87,111 +87,38 @@ definition`) the `solveByCacheKey` primitive transparently falls back to a full
   canonical type produces the typed param. Parse failure is caught at the
   registry boundary and paired with the parser's own fallback param.
 
-## Resolved issues
+## Invariants that cost something to learn
 
-- **Tree-shaped defaults reaching scalar parsers** _(fixed)._ For a tree-access
-  input (`treeAccess: true` or `atMost > 1`), `normalizeDefault` keeps the
-  default as a `DataTreeDefault` (object keyed by branch paths like `{0}`).
-  `TreeBuilder.fromInputParams` reads exactly that shape. The numeric parser used
-  to run scalar coercion over the tree object and silently collapse it to
-  `undefined` — dropping a tree-access slider's default. The numeric parser now
-  detects a tree-shaped default (`isDataTreeDefault`) and passes it through
-  untouched; the other scalar parsers already preserved it. Pinned by the
-  `tree-access defaults` block in `process-inputs.characterization.test.ts`.
+Each of these was a bug once; the rule is what survives, not the incident.
 
-- **Branch-path detection forked across three sites** _(fixed)._ "Is this value a
-  tree-shaped default?" was answered by two divergent runtime predicates — the
-  parser's `isTreeShapedDefault` (loose: `/^\{.*\}$/`, no array-value check) and
-  `TreeBuilder`'s private `isDataTreeStructure` (strict: `/^\{[\d;]+\}$/`, arrays
-  required) — plus a third inline `[\d;]*` regex in `parsePathString`. The two
-  predicates could classify the same value differently. Unified on one exported
-  `isDataTreeDefault` / `TREE_PATH_RE` in `data-tree/tree-path.ts`, widened to
-  accept the root path `{}` (matching `parsePathString`). The parser and
-  `TreeBuilder` now share the predicate, so they agree by construction on which
-  values are trees. No behavior change — pinned by the existing characterization
-  and `data-tree` test suites.
-
-- **Binary definitions colliding in the solve cache** _(fixed)._ The Scheduler's
-  response cache keys on `hashSolveInput(definition, dataTree)`. A binary
-  (`Uint8Array`) definition was keyed on its **length alone** (`{ __u8, len }`) —
-  despite the docstring claiming a sample — so two different `.gh` files of equal
-  length produced the same key and one's cached solve was served for the other,
-  silently, as a `fromCache: true` success. Binary definitions are now hashed over
-  their **full content** (`fnv1aBytes`), prefixed `u8:<len>:<hash>`. This is the
-  definition's _identity_, so correctness wins over the marginal cost of a linear
-  byte pass — distinct from `stableStringify`'s deliberate sampling of a
-  `Uint8Array` found _inside_ a dataTree (hashed every solve). Pinned by
-  `scheduler/__tests__/stable-hash.test.ts` (equal-length and shared-endpoint
-  collision regressions).
-
-- **File handling fused decode + fetch; base64 path corrupted content** _(fixed)._
-  `core/files/handle-files.ts`'s `processFiles` did two orthogonal jobs in one
-  body — synchronously decoding the inline `FileData` of a compute response, and
-  asynchronously fetching external `FileBaseInfo` URLs (swallowing per-file
-  failures). Split into `decodeResponseFiles` (pure/sync) and `fetchRemoteFiles`
-  (async, deliberate swallow), composed by a thin `processFiles`; public API
-  unchanged. Adding a real test surface (`core/files/__tests__/handle-files.test.ts`)
-  immediately surfaced a latent bug: the base64 branch wrapped the decoded bytes
-  in `new Uint8Array(bites.buffer)`, discarding the view's `byteOffset`/
-  `byteLength` and exposing the whole (pooled) backing buffer as corrupt content.
-  Now uses the correctly-bounded view `decodeBase64ToBinary` already returns.
-  The remote-fetch swallow (one dead URL degrades, never aborts the batch) is now
-  pinned as intentional.
-
-- **Mesh batch entry points had drifting, leaky options** _(fixed)._ The three
-  `parseMeshBatch*` functions each inlined their own options literal, drifting
-  apart (`parseMeshBatchObject` even exposed internal `parseTime`/`perfStart`
-  timings as public options), while the real contract hid in the private
-  `BuildOptions`. Unified all three on the existing public `MeshBatchParsingOptions`;
-  the two that historically also took `scaleFactor` keep it via
-  `MeshBatchParsingOptions & { scaleFactor? }`; timings now thread through a
-  private `ParseTelemetry` arg, never a caller surface. Behavior-preserving —
-  pinned by the existing `parseMeshBatchObject`/`parseMeshBatch` suites plus new
-  direct tests for the previously-untested `parseMeshBatchBlob`.
-
-- **`serverUrl` validated twice, with rules that had drifted** _(fixed)._ The same
-  URL was checked in `GrasshopperClient.normalizeComputeConfig` and again in the
-  `ComputeServerStats` constructor (the client constructs `ComputeServerStats`
-  with the already-validated URL). Neither was a superset: the client rejected the
-  default public endpoint but skipped the `http(s)://` scheme check; the stats
-  constructor checked the scheme but allowed the public endpoint — so a bad URL
-  threw a different message from a different place depending on path, and each
-  validator missed a rule the other had. Extracted one `validateServerUrl` in
-  `core/server/validate-server-url.ts` enforcing the **union** of all rules
-  (non-empty, scheme, parseable, not-public-endpoint, strip trailing slash); both
-  call sites delegate. `ComputeServerStats` is publicly exported and standalone-
-  constructible, so its validation is load-bearing — this unifies, it doesn't
-  remove. Pinned by `core/server/__tests__/validate-server-url.test.ts` (neither
-  validator had any test before).
-
-- **Scheduler settle-once guard was hand-rolled at every settle site** _(fixed)._
-  A solve promise can be settled from four concurrent sources — the executor
-  resolving, the executor rejecting, `supersede`, and `cancelAll` — and a JS
-  promise silently ignores a second settle, so the `item.settled` flag is
-  load-bearing: it stops a late executor success from firing `onSettle` twice and
-  clobbering `_lastResult`/`_lastError` out of order after a supersede/cancel. The
-  flag itself is **deep and correct** (an architecture review had mis-flagged the
-  "checked in 4 places" as accidental complexity — it's concurrency correctness,
-  not shallowness). The legibility risk was that each site re-implemented the
-  `if (settled) {...}` dance by hand, so a future fifth settle path could forget
-  the guard. Centralized into `settleError` / `settleSuccess` private helpers that
-  own the settle-once invariant and return whether they won (so callers fire their
-  hook only on the winning settle). Behavior-preserving — pinned by the existing
-  21-test scheduler suite (supersede-then-late-rejection, `cancelAll`). Any new
-  settle path must go through these helpers.
-
-- **`scaleFactor` was applied in two places** _(fixed)._ `buildMeshesFromParsed`
-  scaled meshes when `scaleFactor !== 1` (a `scaleFactor?` option on
-  `parseMeshBatchObject`/`Blob`), _and_ the webdisplay orchestrator re-scaled the
-  returned meshes itself (`webdisplay-parser.ts`, from `modelunits`). The real
-  extraction path goes through the orchestrator, which never passed `scaleFactor`
-  into the parser — so the in-parser knob was dead on that path, yet a caller using
-  `parseMeshBatchObject` directly _and_ the orchestrator would double-scale.
-  Resolved by giving the **orchestrator** sole ownership of unit→scale (it is the
-  only thing that sees `modelunits`): removed `scaleFactor` from the two parsers'
-  options and from the private `BuildOptions`, deleting the dead scale loop in
-  `buildMeshesFromParsed`. The parsers now always emit identity-scaled meshes;
-  pinned by the updated `batch-parser` suite.
+- **One predicate answers "is this a tree-shaped default?"** — `isDataTreeDefault` / `TREE_PATH_RE`
+  in `data-tree/tree-path.ts`, accepting the root path `{}`. The input parsers and `TreeBuilder`
+  both import it, so they agree by construction. Three forked regexes here once classified the same
+  value differently.
+- **A tree-access input keeps its `DataTreeDefault`.** For `treeAccess: true` or `atMost > 1`,
+  `normalizeDefault` leaves the default as an object keyed by branch path, and scalar parsers pass
+  it through untouched. Coercing it collapses a tree-access slider's default to `undefined`.
+- **A binary definition is keyed on its full content**, `u8:<len>:<hash>` over `fnv1aBytes`. Keying
+  on length alone silently serves one `.gh` file's cached solve for another of equal length. This
+  is the definition's identity — correctness outranks the linear byte pass. Distinct from
+  `stableStringify`'s deliberate sampling of a `Uint8Array` found _inside_ a dataTree.
+- **`serverUrl` is validated in exactly one place** — `validateServerUrl` in
+  `core/server/validate-server-url.ts` (non-empty, scheme, parseable, not the public endpoint,
+  strip trailing slash). Both `GrasshopperClient` and the standalone-constructible
+  `ComputeServerStats` delegate to it.
+- **Every scheduler settle path goes through `settleError` / `settleSuccess`.** A solve promise can
+  settle from four concurrent sources (executor resolve, executor reject, `supersede`, `cancelAll`)
+  and JS silently ignores the second one, so the settle-once flag is load-bearing: without it a
+  late executor success clobbers `_lastResult`/`_lastError` after a cancel. A fifth path that
+  hand-rolls the guard will forget it.
+- **The webdisplay orchestrator owns unit→scale.** It is the only thing that sees `modelunits`, so
+  the `parseMeshBatch*` functions always emit identity-scaled meshes. A `scaleFactor` knob in both
+  places double-scales.
+- **`decodeBase64ToBinary`'s view is already correctly bounded.** Re-wrapping it as
+  `new Uint8Array(bytes.buffer)` discards `byteOffset`/`byteLength` and exposes the whole pooled
+  backing buffer as content.
+- **`fetchRemoteFiles` swallows per-file failures on purpose** — one dead URL degrades, it never
+  aborts the batch.
 
 ## Display-pipeline performance
 

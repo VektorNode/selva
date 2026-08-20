@@ -5,7 +5,7 @@
  * rule denies everyone including admins, so the project is unreachable and
  * undeletable.
  *
- * Permissions.md §4a: only `instance_admin` may create a platform project. The
+ * docs/contributing/permissions.md §4a: only `instance_admin` may create a platform project. The
  * UI hid the option; the API accepted it on both POST and PATCH.
  */
 
