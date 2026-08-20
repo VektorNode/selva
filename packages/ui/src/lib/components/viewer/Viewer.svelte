@@ -389,7 +389,7 @@
 						<img
 							src={logoUrl}
 							alt=""
-							class="h-8 max-w-32 drop-shadow-sm sm:h-10 w-auto object-contain opacity-80"
+							class="h-10 max-w-40 drop-shadow-sm sm:h-14 sm:max-w-56 w-auto object-contain opacity-80"
 						/>
 					</div>
 				{/if}
