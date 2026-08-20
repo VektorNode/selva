@@ -64,7 +64,35 @@ const DEPENDENCIES = {
 	pm2: PM2_VERSION
 };
 
-/** The `@selvajs/*` packages whose pin belongs to the operator, not the scaffold. */
+/**
+ * Installed on top of `DEPENDENCIES` when a Supabase provider is selected.
+ *
+ * The provider's *code* is bundled into `@selvajs/selva`, so the app runs
+ * without this. Its migration SQL is not: `@selvajs/selva` publishes only
+ * `build` + `templates`, while the SQL and the `selva-supabase` bin ship in
+ * this package's own tarball. Without it, a deployment has no way to reach the
+ * schema it needs — `npx selva-supabase sync-migrations` resolves nothing and
+ * `doctor`'s migration-head check finds no directory to compare against.
+ */
+export const SUPABASE_DEPENDENCIES = {
+	'@selvajs/supabase-provider': 'latest'
+};
+
+/** True when any provider slot is set to supabase. */
+export function needsSupabaseProvider(env) {
+	return ['SELVA_AUTH_PROVIDER', 'SELVA_DATA_PROVIDER', 'SELVA_STORAGE_PROVIDER'].some(
+		(key) => env?.[key] === 'supabase'
+	);
+}
+
+/**
+ * The `@selvajs/*` packages whose pin belongs to the operator, not the scaffold.
+ *
+ * `@selvajs/supabase-provider` is deliberately absent: it's conditional, and
+ * `resolveSelvaPins` runs before anything knows which providers a deployment
+ * uses. Its pin is resolved alongside these only when it's actually installed
+ * (see `resolveSelvaPins`' `extra` argument).
+ */
 export const SELVA_PACKAGES = ['@selvajs/cli', '@selvajs/selva'];
 
 /**
@@ -108,17 +136,16 @@ export const OVERRIDES = {
 };
 
 /**
- * Legacy `@selvajs/*` packages that a deployment may still list. Each was
- * either renamed or folded into `@selvajs/selva`; `migrate` drops them and
- * `doctor` reports them as layout drift.
+ * Packages folded into `@selvajs/selva` that a deployment may still list.
+ * `migrate` drops them and `doctor` reports them as layout drift.
+ *
+ * Only ones still on the registry are listed: an unpublished package fails
+ * `npm install` outright, so a deployment carrying one never reaches a state
+ * where this could report it — npm's own error is the diagnosis there.
  */
 export const LEGACY_DEPENDENCIES = {
-	'@selvajs/runtime': 'the old runtime package',
-	'@selvajs/create': 'the old CLI package',
 	'@selvajs/platform': 'now bundled into @selvajs/selva',
-	'@selvajs/local-provider': 'now bundled into @selvajs/selva',
-	'@selvajs/supabase-provider': 'now bundled into @selvajs/selva',
-	'@selvajs/header-auth-provider': 'now bundled into @selvajs/selva'
+	'@selvajs/local-provider': 'now bundled into @selvajs/selva'
 };
 
 /**
@@ -139,14 +166,29 @@ export const LEGACY_DEPENDENCIES = {
  * an operator choice too. `migrate` passes the resolved `@selvajs/*` pins in
  * here; a fresh scaffold passes none and inherits the defaults.
  */
-export function buildDeploymentPackageJson({ name, version = '0.1.0', engines, dependencies }) {
+export function buildDeploymentPackageJson({
+	name,
+	version = '0.1.0',
+	engines,
+	dependencies,
+	supabase = false
+}) {
+	const base = supabase ? { ...DEPENDENCIES, ...SUPABASE_DEPENDENCIES } : { ...DEPENDENCIES };
+	// A caller-supplied pin wins, but only for a package the deployment actually
+	// carries: an operator's stale supabase pin must not reinstate the dependency
+	// on a deployment that has since moved off supabase.
+	const resolved = { ...base };
+	for (const [pkgName, pin] of Object.entries(dependencies ?? {})) {
+		if (pkgName in base) resolved[pkgName] = pin;
+	}
+
 	const pkg = {
 		name: sanitizePackageName(name),
 		version,
 		private: true,
 		type: 'module',
 		scripts: { ...SCRIPTS },
-		dependencies: { ...DEPENDENCIES, ...dependencies },
+		dependencies: resolved,
 		overrides: { ...OVERRIDES }
 	};
 	if (engines && typeof engines === 'object') pkg.engines = { ...engines };
@@ -186,11 +228,11 @@ export function npmDistTagVersion(name, tag) {
  * so migrate can report it rather than inventing a version or aborting a
  * migration whose other half (layout, overrides, env renames) is still valid.
  */
-export function resolveSelvaPins(currentDeps, resolveVersion) {
+export function resolveSelvaPins(currentDeps, resolveVersion, extra = []) {
 	const pins = {};
 	const notes = [];
 
-	for (const name of SELVA_PACKAGES) {
+	for (const name of [...SELVA_PACKAGES, ...extra]) {
 		const current = currentDeps?.[name];
 
 		if (isPrereleasePin(current)) {
@@ -214,7 +256,7 @@ export function resolveSelvaPins(currentDeps, resolveVersion) {
 		// Nothing resolvable and nothing worth keeping — fall back to the tag so
 		// the install still succeeds. Rare: offline *and* a floating pin.
 		if (isFloatingPin(current)) {
-			pins[name] = DEPENDENCIES[name];
+			pins[name] = DEPENDENCIES[name] ?? SUPABASE_DEPENDENCIES[name];
 			if (!notes.some((n) => n.name === name)) {
 				notes.push({ name, kind: 'unresolved', pin: current, reason: 'no version returned' });
 			}

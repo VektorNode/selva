@@ -17,7 +17,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -40,6 +40,31 @@ function runner(versionBefore: string | undefined = '4.2.0', tag = 'latest'): st
 }
 
 /**
+ * On Windows, `bash` on PATH is System32's WSL launcher, which shadows Git Bash
+ * and fails with ENOENT when the installed distro has no /bin/bash — a machine
+ * detail that says nothing about the script. Prefer a real bash; fall back to
+ * PATH so Linux CI is unaffected.
+ */
+function resolveBash(): string | null {
+	if (process.platform !== 'win32') return 'bash';
+	const candidates = [
+		join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe'),
+		join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Git', 'bin', 'bash.exe'),
+		join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Git', 'bin', 'bash.exe')
+	];
+	const git = candidates.find((p) => existsSync(p));
+	if (git) return git;
+	try {
+		execFileSync('bash', ['-c', 'exit 0'], { stdio: 'pipe' });
+		return 'bash';
+	} catch {
+		return null;
+	}
+}
+
+const BASH = resolveBash();
+
+/**
  * `bash -n` parses without executing — catches unterminated blocks, broken
  * heredocs, and quoting damage, which is what editing a template string breaks.
  *
@@ -52,11 +77,15 @@ function assertParses(script: string) {
 	const file = join(dir, 'script.sh');
 	try {
 		writeFileSync(file, script);
-		execFileSync('bash', ['-n', file], { stdio: 'pipe' });
+		execFileSync(BASH!, ['-n', file], { stdio: 'pipe' });
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
 }
+
+// Reported as skipped rather than passing vacuously — a green tick with no bash
+// behind it is how this check would rot unnoticed.
+const itParses = it.skipIf(!BASH);
 
 /**
  * Every `[` opening a test must be closed by a matching `]` on the same line.
@@ -93,7 +122,7 @@ function emittedLine(script: string, needle: string): string {
 }
 
 describe('generated runner script', () => {
-	it('parses as valid bash', () => {
+	itParses('parses as valid bash', () => {
 		assertParses(runner());
 	});
 
@@ -102,15 +131,15 @@ describe('generated runner script', () => {
 		assertTestBrackets(runner(undefined));
 	});
 
-	it('parses with no prior version (the rollback-impossible path)', () => {
+	itParses('parses with no prior version (the rollback-impossible path)', () => {
 		assertParses(runner(undefined));
 	});
 
-	it('parses once wrapped in the launcher heredoc', () => {
+	itParses('parses once wrapped in the launcher heredoc', () => {
 		assertParses(buildLauncher(runner(), '/srv/selva/selva-update.log', ['[INFO] starting']));
 	});
 
-	it('survives a deployment path containing a single quote', () => {
+	itParses('survives a deployment path containing a single quote', () => {
 		const script = buildNpmRunnerScript(
 			npmInstallArgs('stable'),
 			'4.2.0',

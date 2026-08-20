@@ -13,6 +13,32 @@ in the link itself and bypass all three. A user's identity (`id`, `email`) carri
 every grant lives in a store keyed by user id, so an external identity provider
 never has to model Selva's authorization.
 
+## User, member, the words the UI uses
+
+"User" and "member" are not two names for one thing, and the admin surfaces are
+split along exactly that line.
+
+A **user** is an identity that can sign in — an id, an email, and any platform
+permissions. It belongs to the instance. Deleting one is irreversible and erases
+their data everywhere. `/admin/users` is where users are managed, behind
+`manage_instance_users`.
+
+A **member** is a membership: one user's role and permissions _inside one org_.
+The same user can be an owner of one org and a plain member of another, so a role
+is never a property of the person — only of the pairing. Removing a member drops
+that one row and leaves the account untouched. `/team/members` is where members
+are managed, behind `manage_org_members`.
+
+Two consequences worth stating, because both surfaces show them:
+
+- Anything scoped to an org — role, org permissions, invites — is member
+  vocabulary, even when you reach it from the admin side. `/admin/users` shows a
+  user's role in the acting org read-only, and links to Members & roles to change it.
+- Admitting an identity and granting it access are separate steps. On providers
+  where an external IdP owns the credential there is nothing to invite, so an
+  admin allowlists the email; everywhere else the person is invited and sets their
+  own password. Either way they arrive as a bare `member` with no permissions.
+
 ## Platform scope
 
 Platform permissions are instance-wide operator authority. There are four:
@@ -87,13 +113,15 @@ Governance permissions are stripped for `member` invites, while owner and admin
 invites always get the full default set. Invites expire after **7 days**.
 
 Whoever holds the raw token can accept the invite; there is nothing else to check.
-Selva shows it once and stores only a hash, and the acceptance page
-(`/accept-invite`) works without a session. Accepting creates the user (by password
-or upstream-header identity) and adds them to the org. New users start with **no
-platform permissions**.
+Selva shows it once and stores only a hash of it, and the acceptance page
+(`/accept-invite`) works without a session. Accepting creates the user (by
+password or upstream-header identity) and adds them to the org. New users start
+with **no platform permissions**.
 
-> `SELVA_FLAG_ALLOW_ORG_CREATION` is defined and surfaced read-only on
-> `/admin/system`, but **no route consults it** — it does not currently gate anything.
+Orgs are created at setup, or afterwards by an instance admin — there is no
+self-service org creation. `SELVA_FLAG_ALLOW_ORG_CREATION` is reserved for that
+future surface and is surfaced read-only on `/admin/system`, but no route
+consults it, so setting it has no effect.
 
 ## Share links
 

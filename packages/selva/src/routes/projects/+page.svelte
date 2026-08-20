@@ -325,7 +325,7 @@
 					(!activeProject ? 'Definitions across every project in this organization.' : undefined)}
 			>
 				{#snippet actions()}
-					{#if data.canManageProjects && activeProject}
+					{#if data.canManageProjects && activeProject?.canManage}
 						<Button
 							variant="outline"
 							size="sm"
@@ -454,7 +454,7 @@
 	{/key}
 {/if}
 
-{#if editingProject && data.canManageProjects}
+{#if editingProject && data.canManageProjects && editingProject.canManage}
 	<ProjectSettingsDialog
 		project={editingProject}
 		users={data.users}

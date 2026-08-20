@@ -15,6 +15,7 @@
 	import { hexToOklch } from '../../utils/color';
 	import AppShell from '../layout/AppShell.svelte';
 	import AppLayout from './AppLayout.svelte';
+	import { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
 	import type { Locale } from '../../i18n/messages';
@@ -68,6 +69,8 @@
 		}) => void;
 		/** Hands the live three.js viewer to the host once it mounts. See `Viewer.svelte` for the contract. */
 		onViewerReady?: (viewer: ThreeViewer) => void | (() => void);
+		/** Viewer chrome and defaults. `backgroundColor` and `showSceneManager` are set by the layout. */
+		viewerConfig?: ViewerConfig;
 		headerRight?: Snippet;
 		// Replaces the built-in header; takes precedence over `headerRight`.
 		header?: Snippet;
@@ -106,6 +109,7 @@
 		header,
 		onReady,
 		onViewerReady,
+		viewerConfig = {},
 		externalScopeKey,
 		clientSlot,
 		lang
@@ -239,6 +243,7 @@
 					values={session.values}
 					logoUrl={logo}
 					{onViewerReady}
+					{viewerConfig}
 					{panelActions}
 					{showSaveButton}
 					{showLoadButton}

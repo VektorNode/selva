@@ -3,6 +3,16 @@ export type DomainEvent =
 	| { type: 'org.deleted'; orgId: string; actorId: string }
 	| { type: 'org_member.added'; orgId: string; userId: string; actorId: string }
 	| { type: 'org_member.removed'; orgId: string; userId: string; actorId: string }
+	// Offboarding that left projects with no owner. Removal is deliberately not
+	// blocked on this (see the org members DELETE handler), so this event is the
+	// only signal that someone needs to reclaim them.
+	| {
+			type: 'org_member.removed_orphaning_projects';
+			orgId: string;
+			userId: string;
+			projectIds: readonly string[];
+			actorId: string;
+	  }
 	| {
 			type: 'org_member.role_changed';
 			orgId: string;
@@ -20,6 +30,17 @@ export type DomainEvent =
 	| { type: 'project.created'; projectId: string; orgId: string; actorId: string }
 	| { type: 'project.deleted'; projectId: string; actorId: string }
 	| { type: 'project_member.added'; projectId: string; userId: string; actorId: string }
+	// Org leadership forcing its way into a project it holds no membership in.
+	// Distinct from `project_member.added` because the two are otherwise
+	// indistinguishable in the log, and the escalation is permitted precisely
+	// on the strength of being auditable afterwards.
+	| {
+			type: 'project.reclaimed';
+			projectId: string;
+			orgId: string;
+			actorId: string;
+			priorVisibility: string;
+	  }
 	| { type: 'project_member.removed'; projectId: string; userId: string; actorId: string }
 	| {
 			type: 'project_member.role_changed';
@@ -50,6 +71,19 @@ export type DomainEvent =
 	  }
 	| { type: 'invite.accepted'; inviteId: string; orgId: string; userId: string; actorId: string }
 	| { type: 'invite.revoked'; inviteId: string; orgId: string; actorId: string }
+	// Platform scope. `instance_admin` reaches every tenant's data, so a change
+	// to it is the one grant whose history has to survive the admin who made it —
+	// including the self-elevate/act/revoke sequence, which leaves no other trace.
+	| { type: 'user.created'; userId: string; actorId: string }
+	| { type: 'user.deleted'; userId: string; actorId: string }
+	| { type: 'user.disabled'; userId: string; actorId: string }
+	| {
+			type: 'platform_permissions.changed';
+			userId: string;
+			/** Post-change set. The prior set is not recorded — read the preceding event of this type. */
+			permissions: readonly string[];
+			actorId: string;
+	  }
 	// `started` is emitted by the process that launches the update; the app
 	// restarts mid-update, so the terminal event comes from post-restart
 	// reconciliation of the persisted update log, not the launching process.

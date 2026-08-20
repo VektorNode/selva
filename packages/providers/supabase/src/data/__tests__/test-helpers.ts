@@ -114,6 +114,12 @@ async function deleteAllAuthUsers(ctx: TestContext): Promise<void> {
  *
  * The session token is what makes RLS *see* the user at all — without it the
  * Supabase client falls back to the anon role and every write fails.
+ *
+ * **Do not use this to test a policy.** Nearly every policy in the schema
+ * short-circuits on `is_instance_admin()`, so a test written with this helper
+ * passes no matter what the rest of the policy says — it is green against a
+ * policy that grants nothing and against one that grants everything. Reach for
+ * {@link seedPlainUser} whenever the assertion is about who may do what.
  */
 export async function seedUser(
 	ctx: TestContext,
@@ -123,9 +129,12 @@ export async function seedUser(
 }
 
 /**
- * Variant of `seedUser` that leaves `platform_permissions` empty. Use this
- * when a test specifically asserts on a fresh user's permission state (e.g.
- * the platform-permission store conformance suite).
+ * Variant of `seedUser` that leaves `platform_permissions` empty.
+ *
+ * **The right default for any RLS or permission test.** Without the
+ * `instance_admin` grant the policy under test actually runs, so the assertion
+ * means what it says. Use it for the permission-store conformance suite and
+ * for every `*-rls.test.ts`.
  */
 export async function seedPlainUser(
 	ctx: TestContext,

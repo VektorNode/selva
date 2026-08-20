@@ -1,8 +1,9 @@
 /**
- * Bridges the flat permission list the admin UI currently sends
- * (`{ permissions: ['instance_admin', 'manage_instance_users', ...] }`) to
- * the two-scope model adapters expect. Retire this when the UI splits into
- * scoped Platform-admin + Org-member views.
+ * Bridges the flat `permissions` array the v1 invite body accepts to the
+ * two-scope model adapters expect. One invite legitimately carries both scopes,
+ * so this is a wire-format adapter, not a migration shim — retire it only when
+ * the invite body grows separate `platformPermissions` + `orgPermissions`
+ * fields.
  */
 
 import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
@@ -25,12 +26,4 @@ export function splitFlatPermissions(flat: readonly string[]): SplitPermissions 
 		else if (ORG_SET.has(p)) org.push(p as OrgPermission);
 	}
 	return { platform, org };
-}
-
-/** Merge platform + org perms into one flat array (for UI rendering). */
-export function flattenPermissions(
-	platform: readonly PlatformPermission[],
-	org: readonly OrgPermission[]
-): Array<PlatformPermission | OrgPermission> {
-	return [...platform, ...org];
 }

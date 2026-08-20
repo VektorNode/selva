@@ -29,10 +29,10 @@ describe('resolveComputeLimits', () => {
 			expect(resolveComputeLimits({}).maxDefinitionFileSize).toBe(50 * MB);
 		});
 
-		it('caps the /api/compute request body at 210 MB, matching the shipped BODY_SIZE_LIMIT', () => {
+		it('caps the /api/compute request body at 256 MB, matching the shipped BODY_SIZE_LIMIT', () => {
 			// A larger cap here is dead config — adapter-node's global backstop
 			// rejects first.
-			expect(resolveComputeLimits({}).computeRequestMaxBytes).toBe(210 * MB);
+			expect(resolveComputeLimits({}).computeRequestMaxBytes).toBe(256 * MB);
 		});
 
 		it('caps the /api/compute response at 300 MB (intentional, not a dev leftover)', () => {

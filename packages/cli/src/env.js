@@ -180,48 +180,29 @@ export function readEnvFile(path) {
 	return parseEnv(readFileSync(path, 'utf8'));
 }
 
-export function mergeEnv(template, values) {
-	const seen = new Set();
-	const lines = template.split(/\r?\n/);
-	const out = [];
+/**
+ * Template vars whose shipped value is a real default a deployment should run
+ * with, rather than a placeholder or a prompt answer.
+ *
+ * Deliberately an allowlist, not "every live line in the template". The template
+ * also ships `SELVA_HMAC_KEY=replace-this-…` (seeding it would give every
+ * deployment a publicly known key) and a monorepo-relative `DATA_PATH` that is
+ * wrong anywhere but this repo.
+ *
+ * `BODY_SIZE_LIMIT` has to be here: unset, adapter-node falls back to 512 KB and
+ * every upload 413s with an opaque non-JSON body, which reads as a broken
+ * install rather than a missing setting.
+ */
+const SEEDED_TEMPLATE_DEFAULTS = ['BODY_SIZE_LIMIT'];
 
-	for (const line of lines) {
-		const stripped = line.trim();
-		if (!stripped || stripped.startsWith('#')) {
-			out.push(line);
-			continue;
-		}
-		const eq = stripped.indexOf('=');
-		if (eq === -1) {
-			out.push(line);
-			continue;
-		}
-		const key = stripped.slice(0, eq).trim();
-		if (Object.prototype.hasOwnProperty.call(values, key)) {
-			out.push(`${key}=${quoteIfNeeded(values[key])}`);
-			seen.add(key);
-		} else {
-			out.push(line);
-		}
+/** The subset of the template's live `KEY=value` lines that are safe to seed. */
+function seededTemplateDefaults(template) {
+	const parsed = parseEnv(template);
+	const out = {};
+	for (const key of SEEDED_TEMPLATE_DEFAULTS) {
+		if (parsed[key] !== undefined) out[key] = parsed[key];
 	}
-
-	const appended = [];
-	for (const [key, value] of Object.entries(values)) {
-		if (seen.has(key)) continue;
-		if (value === undefined || value === null || value === '') continue;
-		appended.push(`${key}=${quoteIfNeeded(value)}`);
-	}
-
-	if (appended.length > 0) {
-		if (out.length > 0 && out[out.length - 1].trim() !== '') out.push('');
-		out.push('# ============================================================================');
-		out.push('# Additional values written by the Selva CLI');
-		out.push('# ============================================================================');
-		out.push(...appended);
-	}
-
-	while (out.length > 0 && out[out.length - 1] === '') out.pop();
-	return out.join('\n') + '\n';
+	return out;
 }
 
 /**
@@ -236,6 +217,7 @@ export function mergeEnv(template, values) {
 export function renderEnvValues(template, values, { header = ENV_HEADER } = {}) {
 	const ordered = [];
 	const seen = new Set();
+	const defaults = seededTemplateDefaults(template);
 
 	// The template names a var three ways — live (`KEY=v`), commented-out
 	// (`# KEY=v`), and as a bare mention in prose (`# KEY   single | multi`).
@@ -246,7 +228,17 @@ export function renderEnvValues(template, values, { header = ENV_HEADER } = {}) 
 		const key = stripped.split(/[\s=]/)[0]?.trim();
 		if (!key || !/^[A-Z][A-Z0-9_]{2,}$/.test(key)) continue;
 		if (seen.has(key)) continue;
-		if (!Object.prototype.hasOwnProperty.call(values, key)) continue;
+		// A live `KEY=value` in the template is a shipped default, not just an
+		// ordering hint: the prompts cover a fraction of the vars, so without this
+		// a scaffolded deployment silently runs on the code's fallback instead.
+		// BODY_SIZE_LIMIT is the case that bites — adapter-node's fallback is
+		// 512 KB, so every upload 413s until an operator sets it by hand.
+		if (
+			!Object.prototype.hasOwnProperty.call(values, key) &&
+			!Object.prototype.hasOwnProperty.call(defaults, key)
+		) {
+			continue;
+		}
 		seen.add(key);
 		ordered.push(key);
 	}
@@ -257,7 +249,9 @@ export function renderEnvValues(template, values, { header = ENV_HEADER } = {}) 
 
 	const lines = [];
 	for (const key of ordered) {
-		const value = values[key];
+		// Operator values win over the template's defaults, including when the
+		// operator has deliberately blanked one out.
+		const value = Object.prototype.hasOwnProperty.call(values, key) ? values[key] : defaults[key];
 		if (value === undefined || value === null || value === '') continue;
 		lines.push(`${key}=${quoteIfNeeded(value)}`);
 	}
@@ -265,14 +259,9 @@ export function renderEnvValues(template, values, { header = ENV_HEADER } = {}) 
 	return header ? `${header}\n\n${lines.join('\n')}\n` : `${lines.join('\n')}\n`;
 }
 
-/**
- * Writes the deployment `.env`. Values-only by default — pass
- * `{ annotated: true }` to merge into the template's comments instead, which
- * only an operator who explicitly wants the old shape should do.
- */
-export function writeEnvFile(path, template, values, { annotated = false } = {}) {
-	const text = annotated ? mergeEnv(template, values) : renderEnvValues(template, values);
-	writeFileSync(path, text, 'utf8');
+/** Writes the deployment `.env` — values only, in the template's key order. */
+export function writeEnvFile(path, template, values) {
+	writeFileSync(path, renderEnvValues(template, values), 'utf8');
 }
 
 /**

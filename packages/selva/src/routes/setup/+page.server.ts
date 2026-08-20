@@ -44,6 +44,13 @@ export const load: PageServerLoad = async () => {
 
 export const actions = {
 	default: async ({ request, cookies, locals }) => {
+		// The `load` guard above is not a control — a direct POST never runs it.
+		// Without this, /setup stays a public endpoint that mints a full
+		// ALL_PLATFORM_PERMISSIONS admin on an already-configured instance.
+		if (await getPermissionStore().hasInstanceAdmin(SYSTEM_CONTEXT)) {
+			return fail(403, { error: 'This instance is already set up.' });
+		}
+
 		const tenancy = getTenancy();
 		const data = await request.formData();
 		const companyName = (data.get('companyName') as string | null)?.trim() ?? '';

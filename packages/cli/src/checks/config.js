@@ -165,6 +165,73 @@ export function checkEnvDocumentation(commentLines, fix) {
 	);
 }
 
+/**
+ * Parse a `BODY_SIZE_LIMIT` the way adapter-node does, so this check agrees with
+ * the thing that actually rejects the request.
+ *
+ * The quirk is load-bearing: adapter-node reads only the LAST character as the
+ * suffix, so `60mb` parses as the digits `60m` and happens to mean 60 MB, while
+ * `60xy` silently becomes NaN. Returns bytes, or `null` when the value is one
+ * adapter-node can't use.
+ */
+export function parseBodySizeLimit(raw) {
+	if (raw == null || raw === '') return null;
+	const value = String(raw).trim();
+	if (value === '') return null;
+
+	// Mirrors adapter-node's parse_as_bytes (files/utils.js): only K/M/G count as
+	// units, and the rest goes through `Number`, which is strict — "256mb" leaves
+	// a trailing "m" and yields NaN, so adapter-node throws on boot.
+	const units = { K: 1024, M: 1024 * 1024, G: 1024 * 1024 * 1024 };
+	const multiplier = units[value.at(-1).toUpperCase()] ?? 1;
+	const bytes = Number(multiplier !== 1 ? value.slice(0, -1) : value) * multiplier;
+	if (!Number.isFinite(bytes) || bytes <= 0) return null;
+	return bytes;
+}
+
+// The app's own default for COMPUTE_REQUEST_MAX_BYTES (packages/server
+// compute/limits.ts). Duplicated rather than imported: the CLI installs the
+// runtime and cannot import from it.
+const COMPUTE_REQUEST_DEFAULT_BYTES = 256 * 1024 * 1024;
+
+/**
+ * BODY_SIZE_LIMIT has to clear the compute request cap, or adapter-node's global
+ * backstop rejects the upload first — with a non-JSON body the app never sees
+ * and cannot log. Unset is the dangerous case, not a neutral one: adapter-node
+ * falls back to 512 KB, so every upload 413s on a deployment that looks fine.
+ */
+export function checkBodySizeLimit(env) {
+	const raw = env.BODY_SIZE_LIMIT;
+	const requestCap = Number(env.COMPUTE_REQUEST_MAX_BYTES) || COMPUTE_REQUEST_DEFAULT_BYTES;
+	const asMb = (bytes) => `${Math.round(bytes / (1024 * 1024))} MB`;
+
+	if (raw == null || raw === '') {
+		return red(
+			`BODY_SIZE_LIMIT unset — adapter-node falls back to 512 KB, so uploads over ` +
+				`that fail with an opaque 413 no app log records. Set it to at least ` +
+				`${asMb(requestCap)} (the compute request cap).`
+		);
+	}
+
+	const bytes = parseBodySizeLimit(raw);
+	if (bytes === null) {
+		return red(
+			`BODY_SIZE_LIMIT="${raw}" — adapter-node cannot parse this and throws on boot. ` +
+				`Use a byte count or a single K/M/G suffix, e.g. "256M".`
+		);
+	}
+
+	if (bytes < requestCap) {
+		return yellow(
+			`BODY_SIZE_LIMIT=${raw} (${asMb(bytes)}) is below COMPUTE_REQUEST_MAX_BYTES ` +
+				`(${asMb(requestCap)}) — the global cap rejects first, making the compute cap ` +
+				`dead config. Raise it to at least ${asMb(requestCap)}.`
+		);
+	}
+
+	return green(`BODY_SIZE_LIMIT=${raw}`);
+}
+
 // A rename is auto-fixable (`selva migrate` rewrites the key). A replacement
 // encodes a value in the new name, so migrate leaves it alone rather than
 // guessing — it's reported here and nowhere else.

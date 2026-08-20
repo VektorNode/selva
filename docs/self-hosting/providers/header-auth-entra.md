@@ -237,7 +237,7 @@ Re-run the self-test after any change to the Caddyfile, oauth2-proxy config, or 
 ### Day-2
 
 - **Restrict who can log in:** replace `email_domains = ["*"]` with `authenticated_emails_file = "/etc/oauth2-proxy-emails.txt"` (one email per line), or use `allowed_groups` with Entra groups claims.
-- **Add users:** after the first admin exists, new users must be pre-allowlisted in **Admin → Users → New user**.
+- **Add users:** after the first admin exists, new users must be pre-allowlisted in **Admin → Users → Allowlist user**. That admits the identity; grant them access to an org from **Team → Members & roles**.
 - **Rotate Entra secret:** make a new secret in Entra, update `client_secret` in `/etc/oauth2-proxy.cfg`, restart oauth2-proxy.
 
 ## Next

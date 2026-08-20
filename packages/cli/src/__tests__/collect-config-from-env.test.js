@@ -8,7 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { collectConfigFromEnv } from '../prompts.js';
+import { collectConfigFromEnv, promptableFlags } from '../prompts.js';
 
 const SUPABASE = {
 	SUPABASE_URL: 'https://project.supabase.co',
@@ -240,4 +240,45 @@ test('one flag being set does not enable the others', () => {
 	assert.equal(v.SELVA_FLAG_ENABLE_SHARING, 'true');
 	assert.equal(v.SELVA_FLAG_ALLOW_ORG_CREATION, '');
 	assert.equal(v.SELVA_FLAG_ALLOW_CROSS_ORG_PUBLIC, '');
+});
+
+test('a cross-org flag set under single tenancy is preserved, not silently cleared', () => {
+	// Inert is not the same as unset — rewriting it would hide the mistake.
+	const v = collectConfigFromEnv({
+		SELVA_TENANCY: 'single',
+		SELVA_FLAG_ALLOW_CROSS_ORG_PUBLIC: 'true'
+	});
+	assert.equal(v.SELVA_FLAG_ALLOW_CROSS_ORG_PUBLIC, 'true');
+});
+
+// ── Which flags the wizard offers ───────────────────────────────────────
+
+test('single tenancy hides cross-org flags from the prompt', () => {
+	const offered = promptableFlags('single').map((o) => o.value);
+	assert.deepEqual(offered, ['ENABLE_PLATFORM_PROJECTS', 'ENABLE_SHARING']);
+});
+
+test('multi tenancy offers the cross-org flags', () => {
+	const offered = promptableFlags('multi').map((o) => o.value);
+	assert.ok(offered.includes('ALLOW_CROSS_ORG_PUBLIC'));
+	assert.ok(offered.includes('ALLOW_ORG_COMPUTE_OVERRIDE'));
+});
+
+test('no tenancy offers a flag that no route enforces', () => {
+	for (const tenancy of ['single', 'multi']) {
+		const offered = promptableFlags(tenancy).map((o) => o.value);
+		assert.ok(
+			!offered.includes('ALLOW_ORG_CREATION'),
+			`ALLOW_ORG_CREATION must stay hidden under ${tenancy} until a route consults it`
+		);
+	}
+});
+
+test('every promptable flag is still written to .env', () => {
+	const written = new Set(Object.keys(collectConfigFromEnv({})));
+	for (const tenancy of ['single', 'multi']) {
+		for (const opt of promptableFlags(tenancy)) {
+			assert.ok(written.has(`SELVA_FLAG_${opt.value}`), `SELVA_FLAG_${opt.value} must be written`);
+		}
+	}
 });

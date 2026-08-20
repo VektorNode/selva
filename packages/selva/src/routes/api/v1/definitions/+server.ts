@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
-import { getDefinitionService, getProjectProvider } from '$lib/server/providers.server';
+import { getDefinitionService } from '$lib/server/providers.server';
 import { requireCanCreateDefinition } from '$lib/server/access.server';
 import { apiError, ApiErrorCode, throwZodError } from '$lib/server/api-errors';
 import { CreateDefinitionInputSchema } from '@selvajs/platform/definitions';
@@ -11,7 +11,10 @@ import {
 } from '$lib/server/admin-config';
 import { resolveServerForOrg } from '$lib/server/compute/resolve.server';
 import { fetchSchemaFromCompute } from '$lib/server/definitions/schemaExtraction.server';
-import { listVisibleDefinitions } from '$lib/server/definitions/visibility.server';
+import {
+	listVisibleDefinitions,
+	resolveAccessibleProjects
+} from '$lib/server/definitions/visibility.server';
 import { parseDefinitionListOptions } from '$lib/server/pagination.server';
 import { toDefinitionListItem, type DefinitionStatus } from '@selvajs/platform';
 import {
@@ -85,11 +88,18 @@ export const POST: RequestHandler = apiRoute(
 
 		let projectId = formText(form, 'projectId');
 		if (!projectId) {
-			// Fall back to the first project of the acting org.
+			// The fallback picks a project on the caller's behalf, so it must pick
+			// from what the caller can already see. `listProjects` ignores its ctx on
+			// the local provider, which would let the pick land on a `private`
+			// project the caller is not a member of — and on an `autoJoinOnUpload`
+			// project `requireCanCreateDefinition` then allows the write, so the
+			// upload succeeds into a project the caller never named.
 			if (!ctx.actingOrgId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No active organization');
-			const page = await getProjectProvider().listProjects(ctx, ctx.actingOrgId, { limit: 1 });
-			const fallback = page.items[0];
-			if (!fallback) apiError(500, ApiErrorCode.INTERNAL, 'No project configured');
+			const { projects } = await resolveAccessibleProjects(ctx);
+			const fallback = projects.find((p) => p.orgId === ctx.actingOrgId);
+			if (!fallback) {
+				apiError(400, ApiErrorCode.VALIDATION_FAILED, 'No accessible project — pass projectId.');
+			}
 			projectId = fallback.id;
 		}
 

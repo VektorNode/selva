@@ -1,6 +1,6 @@
 import type { RequestContext } from '../context.js';
 import type { ListOptions, Page } from '../pagination.js';
-import type { ShareLink } from './types.js';
+import type { OrgShareLink, ShareLink } from './types.js';
 
 /**
  * Per-definition tokens granting unauthenticated access to one
@@ -18,6 +18,19 @@ export interface IShareLinkStore {
 		definitionId: string,
 		opts?: ListOptions
 	): Promise<Page<ShareLink>>;
+	/**
+	 * Every live link across every definition in the org, newest first.
+	 *
+	 * A share link is a bearer credential: the URL is the whole authentication.
+	 * Listing by definition — the only other read — means "what reaches my org's
+	 * data right now?" can only be answered by walking every definition by hand,
+	 * so in practice it goes unanswered. Offboarding depends on this being one
+	 * query.
+	 *
+	 * Rows carry the definition and project they hang off, because a roster of
+	 * bare GUIDs is not something anyone can act on.
+	 */
+	listByOrg(ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<OrgShareLink>>;
 	getById(ctx: RequestContext, id: string): Promise<ShareLink | null>;
 	/** Returns null when the link doesn't exist, is revoked, or its parent definition is soft-deleted. */
 	getByTokenHash(ctx: RequestContext, tokenHash: string): Promise<ShareLink | null>;

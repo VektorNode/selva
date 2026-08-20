@@ -13,7 +13,7 @@ import { nextCursorFromRange, toRange } from './pagination.js';
 
 /** Explicit column list for `invites` — every field `rowToInvite` consumes. */
 const INVITE_COLUMNS =
-	'id, token_hash, email, org_id, org_role, org_permissions, invited_by, created_at, expires_at, accepted_at, accepted_by_user_id';
+	'id, token_hash, email, org_id, org_role, org_permissions, platform_permissions, invited_by, created_at, expires_at, accepted_at, accepted_by_user_id';
 
 /**
  * Invite store. `getByTokenHash` routes through a SECURITY DEFINER RPC so an
@@ -111,6 +111,30 @@ export class SupabaseInviteStore implements IInviteStore {
 		});
 	}
 
+	async revokePendingByEmail(ctx: RequestContext, orgId: string, email: string): Promise<string[]> {
+		// Emails are stored lowercase at mint time; normalize the needle too so an
+		// offboarding call with the address as the admin typed it still matches.
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('invites')
+			.delete()
+			.eq('org_id', orgId)
+			.eq('email', email.trim().toLowerCase())
+			.is('accepted_at', null)
+			.select('id');
+		if (error) throw mapPostgrestError(error);
+		const ids = (data ?? []).map((r) => (r as { id: string }).id);
+		for (const id of ids) {
+			await this.events.emit({
+				type: 'invite.revoked',
+				inviteId: id,
+				orgId,
+				actorId: actorFrom(ctx)
+			});
+		}
+		return ids;
+	}
+
 	async deleteByOrg(ctx: RequestContext, orgId: string): Promise<void> {
 		const { error } = await this.clients
 			.forRequest(ctx)
@@ -128,6 +152,7 @@ interface InviteRow {
 	org_id: string;
 	org_role: Invite['orgRole'];
 	org_permissions: string[];
+	platform_permissions: string[];
 	invited_by: string;
 	created_at: string;
 	expires_at: string;
@@ -143,6 +168,11 @@ function rowToInvite(row: InviteRow): Invite {
 		orgId: row.org_id,
 		orgRole: row.org_role,
 		orgPermissions: row.org_permissions as Invite['orgPermissions'],
+		// `?? []` covers a row read through a client whose projection predates the
+		// column, not a null default — the column is `not null default '{}'`.
+		platformPermissions: (row.platform_permissions ?? []) as NonNullable<
+			Invite['platformPermissions']
+		>,
 		invitedBy: row.invited_by,
 		createdAt: row.created_at,
 		expiresAt: row.expires_at,
@@ -159,6 +189,7 @@ function inviteToRow(i: Invite): InviteRow {
 		org_id: i.orgId,
 		org_role: i.orgRole,
 		org_permissions: i.orgPermissions,
+		platform_permissions: i.platformPermissions ?? [],
 		invited_by: i.invitedBy,
 		created_at: i.createdAt,
 		expires_at: i.expiresAt,

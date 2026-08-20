@@ -1,5 +1,5 @@
 import type { PlatformPermission } from '../permissions/types.js';
-import type { OrgPermission } from '../organizations/schemas.js';
+import type { OrgPermission, OrgRole } from '../organizations/schemas.js';
 import type { Project, ProjectMember } from '../projects/types.js';
 import type { OrgMember } from '../organizations/types.js';
 import type { DefinitionRecord } from '../definitions/types.js';
@@ -169,6 +169,13 @@ export interface DefinitionAccessInput {
 	project: Project | null;
 	definition: DefinitionRecord | null;
 	member: ProjectMember | null;
+	/**
+	 * The actor's membership in the project's parent org, used only by the
+	 * commons branch below. `null` means "not a member of this org" — which on a
+	 * commons project is what separates a current contributor from a departed
+	 * one.
+	 */
+	orgMember: OrgMember | null;
 	userId: string;
 	platformPermissions: readonly PlatformPermission[];
 	/**
@@ -182,11 +189,19 @@ export interface DefinitionAccessInput {
 /**
  * For platform projects: `instance_admin` only.
  * For all other projects: project editor/owner can always edit (moderation).
- * On commons projects (`autoJoinOnUpload=true`) the definition owner can edit their own.
+ * On commons projects (`autoJoinOnUpload=true`) the definition owner can edit
+ * their own, as long as they still belong to the project's org.
  */
 export function canEditDefinition(input: DefinitionAccessInput): boolean {
-	const { project, definition, member, userId, platformPermissions, enablePlatformProjects } =
-		input;
+	const {
+		project,
+		definition,
+		member,
+		orgMember,
+		userId,
+		platformPermissions,
+		enablePlatformProjects
+	} = input;
 	if (!project || !definition) return false;
 
 	if (project.visibility === 'platform') {
@@ -195,7 +210,13 @@ export function canEditDefinition(input: DefinitionAccessInput): boolean {
 	}
 
 	if (member?.role === 'owner' || member?.role === 'editor') return true;
-	if (project.autoJoinOnUpload && userId === definition.ownerId) return true;
+
+	// Commons grants edit on top of belonging, not instead of it. `ownerId` is
+	// stamped at upload and never revisited, so without the org-membership test
+	// a departed uploader keeps edit/delete/share-link authority on everything
+	// they ever uploaded — and flipping `autoJoinOnUpload` on hands it back to
+	// them retroactively, with no action taken against them.
+	if (project.autoJoinOnUpload && userId === definition.ownerId && orgMember) return true;
 
 	return false;
 }
@@ -244,6 +265,32 @@ export function canCreateProject(input: CreateProjectAccessInput): boolean {
 	if (role === 'owner' || role === 'admin') return true;
 	if (role === 'member' && orgPermissions.includes('manage_projects')) return true;
 	return false;
+}
+
+export interface OrgOwnerAuthorityInput {
+	/** The acting user's own membership row, not the org's `ownerId` column. */
+	actorMember: OrgMember | null;
+	/** The role being granted, or the role the target already holds. */
+	role: OrgRole;
+}
+
+/**
+ * Whether the actor may hand out or take away org `owner`/`admin` standing (§3).
+ *
+ * Three routes decide this — inviting someone as owner/admin, changing an
+ * existing member's role, and removing an owner — and all three had written it
+ * out longhand. Two of them had drifted by the time the access audit found
+ * them: the invite route let an admin mint an `owner` invite for themselves,
+ * and DELETE let an admin remove an owner that PATCH would not let them demote.
+ * They are one rule, so they read it from one place.
+ *
+ * Reads the actor's **membership row**. `Organization.ownerId` is a separate
+ * field that can disagree with it — see the sole-`instance_admin` finding — and
+ * is not authority for this decision.
+ */
+export function canChangeOrgRole(input: OrgOwnerAuthorityInput): boolean {
+	if (input.role === 'member') return true;
+	return input.actorMember?.role === 'owner';
 }
 
 /**

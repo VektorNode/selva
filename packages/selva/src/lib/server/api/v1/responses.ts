@@ -59,6 +59,7 @@ export const InviteResponseSchema = z.object({
 	orgId: z.string(),
 	orgRole: z.string(),
 	orgPermissions: z.array(z.string()),
+	platformPermissions: z.array(z.string()).default([]),
 	invitedBy: z.string(),
 	createdAt: z.string(),
 	expiresAt: z.string(),

@@ -105,7 +105,7 @@ export {
 // ---------------------------------------------------------------------------
 // shareLinks
 // ---------------------------------------------------------------------------
-export type { ShareLink } from './shareLinks/types.js';
+export type { OrgShareLink, ShareLink } from './shareLinks/types.js';
 export type { IShareLinkStore } from './shareLinks/interface.js';
 export { DEFAULT_SHARE_LINK_MAX_SOLVES } from './shareLinks/types.js';
 export type { CreateShareLinkInput } from './shareLinks/schemas.js';
@@ -165,7 +165,8 @@ export {
 	resolveServerForOrg,
 	findServerById,
 	platformServers,
-	orgServersFor
+	orgServersFor,
+	scopeConfigToOrg
 } from './computeServer/utils.js';
 
 // ---------------------------------------------------------------------------
@@ -177,6 +178,7 @@ export type {
 	VisibilityChangeInput,
 	ReclaimAccessInput,
 	CreateProjectAccessInput,
+	OrgOwnerAuthorityInput,
 	OwnerRemovalInput,
 	OwnerRemovalCheck
 } from './access/rules.js';
@@ -190,6 +192,7 @@ export {
 	canEditDefinition,
 	canReclaim,
 	canCreateProject,
+	canChangeOrgRole,
 	checkOwnerRemoval,
 	withAdminBypass
 } from './access/rules.js';
@@ -251,7 +254,13 @@ export { auditUpdate, auditSoftDelete } from './utils/audit.js';
 // top-level (context, pagination, config, errors)
 // ---------------------------------------------------------------------------
 export type { RequestContext } from './context.js';
-export { SYSTEM_CONTEXT, hasPermission, requireActingOrg } from './context.js';
+export {
+	SYSTEM_CONTEXT,
+	hasPermission,
+	requireActingOrg,
+	isShareContext,
+	assertNotShareContext
+} from './context.js';
 
 export type { ListOptions, DefinitionListOptions, Page } from './pagination.js';
 export { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './pagination.js';

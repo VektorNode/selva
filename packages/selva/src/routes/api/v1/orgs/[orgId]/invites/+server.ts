@@ -1,13 +1,19 @@
 import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { getInviteStore } from '$lib/server/providers.server';
-import { requireManageOrgMembers, requireActingOrg } from '$lib/server/access.server';
+import {
+	assertCanGrantPlatformPermissions,
+	canActorChangeOrgRole,
+	requireManageOrgMembers,
+	requireActingOrg
+} from '$lib/server/access.server';
 import {
 	DEFAULT_ORG_PERMISSIONS,
 	MEMBER_ASSIGNABLE_PERMISSIONS,
 	type Invite
 } from '@selvajs/platform';
-import { splitFlatPermissions } from '$lib/server/permissions-compat.server';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { splitFlatPermissions } from '$lib/server/permissions-scope.server';
 import { hashToken, mintRawToken } from '$lib/server/invites/token.server';
 import { CreateInviteBodySchema } from '$lib/server/api/v1/bodies';
 import { parseListOptions } from '$lib/server/pagination.server';
@@ -39,7 +45,26 @@ export const POST: RequestHandler = apiRoute(
 		const { ctx, orgId } = requireActingOrg(locals, params.orgId);
 
 		const input = await parseBody(request, CreateInviteBodySchema);
-		const { org: submittedOrgPerms } = splitFlatPermissions(input.permissions);
+		const { platform: submittedPlatformPerms, org: submittedOrgPerms } = splitFlatPermissions(
+			input.permissions
+		);
+
+		// An invite is a third write path into platform scope, so it shares the
+		// guard with both /api/admin/users handlers rather than restating it.
+		assertCanGrantPlatformPermissions(ctx, submittedPlatformPerms);
+
+		// An invite is a second door into `org_members`, so it carries the same
+		// owner-only role gate as PATCH /orgs/{orgId}/members/{userId}. Without
+		// it an admin mints themselves an `owner` invite, accepts it, and then
+		// passes the sole-owner check when removing the founder — `accept-invite`
+		// writes `invite.orgRole` verbatim and cannot re-verify the minter.
+		if (!(await canActorChangeOrgRole(ctx, orgId, input.orgRole))) {
+			apiError(
+				403,
+				ApiErrorCode.FORBIDDEN,
+				'Only the org owner can invite someone as owner or admin.'
+			);
+		}
 
 		// owner/admin always carry the full set — the checkbox array from the UI is
 		// ignored for those roles. `member` takes the caller's selection intersected
@@ -62,6 +87,7 @@ export const POST: RequestHandler = apiRoute(
 			orgId,
 			orgRole: input.orgRole,
 			orgPermissions,
+			platformPermissions: submittedPlatformPerms,
 			invitedBy: locals.user!.id,
 			createdAt: now.toISOString(),
 			expiresAt: new Date(now.getTime() + INVITE_TTL_MS).toISOString()

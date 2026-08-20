@@ -1,0 +1,21 @@
+{
+	"_comment": "Fake identities for local provider testing. Used by scripts/dev-provider.mjs to generate the dev Caddyfile (header-auth) and to seed the local allowlist. `upn` deliberately differs from `email` on some personas to exercise the Entra UPN-vs-mail fallback in HeaderAuthProvider.identifyFromHeaders.",
+	"personas": {
+		"admin": {
+			"upn": "admin@dev.local",
+			"email": "admin@dev.local",
+			"displayName": "Ada Admin"
+		},
+		"member": {
+			"upn": "member@dev.onmicrosoft.com",
+			"email": "member@dev.local",
+			"displayName": "Mo Member"
+		},
+		"outsider": {
+			"upn": "outsider@dev.local",
+			"email": "outsider@dev.local",
+			"displayName": "Otto Outsider"
+		}
+	},
+	"default": "admin"
+}

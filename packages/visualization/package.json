@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/visualization",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Headless, extensible viewer core for Selva — parse, render and scene layers over Three.js",
 	"author": "VektorNode",
 	"license": "MIT",
@@ -102,7 +102,7 @@
 		"@types/three": "catalog:",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
-		"globals": "^17.5.0",
+		"globals": "^17.11.0",
 		"prettier": "catalog:",
 		"three": "catalog:",
 		"tsdown": "catalog:",

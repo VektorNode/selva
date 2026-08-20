@@ -4,7 +4,12 @@ import type {
 	RequestContext,
 	UserManagementResult
 } from '@selvajs/platform';
-import { ProviderError, hasPermission, ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
+import {
+	ProviderError,
+	hasPermission,
+	assertNotShareContext,
+	ALL_PLATFORM_PERMISSIONS
+} from '@selvajs/platform';
 import type { ClientBundle } from '../data/client.js';
 
 /**
@@ -40,7 +45,7 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		ctx: RequestContext,
 		userIds: readonly string[]
 	): Promise<Map<string, PlatformPermission[]>> {
-		assertAdmin(ctx);
+		assertCanReadBatch(ctx);
 		const out = new Map<string, PlatformPermission[]>();
 		if (userIds.length === 0) return out;
 		const { data, error } = await this.client()
@@ -60,28 +65,43 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		permissions: readonly PlatformPermission[]
 	): Promise<UserManagementResult> {
 		assertAdmin(ctx);
+
+		// The §2 last-admin check lives inside the UPDATE's WHERE clause, so it
+		// is evaluated under the row lock that guards the write. Doing it here
+		// as count-then-update let two concurrent demotions each observe the
+		// other as "another admin exists" and both commit, leaving zero admins.
+		const { data, error } = await this.client().rpc('set_platform_permissions', {
+			p_user_id: userId,
+			p_permissions: [...permissions]
+		});
+		if (error) throw mapError(error);
+		if ((data ?? 0) > 0) return 'ok';
+
+		// Zero rows written: either the row is absent, or the predicate refused
+		// the demotion. Only the second is `last_admin`, so disambiguate.
 		const { data: existing, error: fetchError } = await this.client()
 			.from('user_profiles')
-			.select('platform_permissions')
+			.select('user_id')
 			.eq('user_id', userId)
 			.maybeSingle();
 		if (fetchError) throw mapError(fetchError);
-		if (!existing) return 'not_found';
+		return existing ? 'last_admin' : 'not_found';
+	}
 
-		// Refuse to drop the last enabled instance_admin.
-		const wasAdmin = (existing.platform_permissions ?? []).includes('instance_admin');
-		const willBeAdmin = permissions.includes('instance_admin');
-		if (wasAdmin && !willBeAdmin) {
-			const others = await this.countOtherEnabledAdmins(userId);
-			if (others === 0) return 'last_admin';
-		}
-
-		const { error } = await this.client()
-			.from('user_profiles')
-			.update({ platform_permissions: [...permissions] })
-			.eq('user_id', userId);
+	async claimFirstInstanceAdmin(
+		_ctx: RequestContext,
+		userId: string,
+		permissions: readonly PlatformPermission[]
+	): Promise<boolean> {
+		// No `assertAdmin`: by definition nobody holds `instance_admin` when this
+		// succeeds. The RPC takes an advisory lock and re-reads inside it, so a
+		// second concurrent signer blocks and then correctly loses.
+		const { data, error } = await this.client().rpc('claim_first_instance_admin', {
+			p_user_id: userId,
+			p_permissions: [...permissions]
+		});
 		if (error) throw mapError(error);
-		return 'ok';
+		return data === true;
 	}
 
 	async hasInstanceAdmin(_ctx: RequestContext): Promise<boolean> {
@@ -116,14 +136,33 @@ function filterValid(raw: readonly string[]): PlatformPermission[] {
 	return raw.filter((p): p is PlatformPermission => VALID_PERMISSIONS.has(p));
 }
 
+// Reading one row and reading many must agree, and both must match the local
+// provider — §8 gives `manage_instance_users` the user-admin surface, which
+// cannot render its locks without knowing who holds `instance_admin`. This
+// store denied both until now, so on Supabase `/admin/users` failed for exactly
+// the role it exists to serve.
+//
+// Read access is not authority: `set` stays `instance_admin`-only via
+// `assertAdmin`, and the delete/disable routes gate separately.
 function assertCanRead(ctx: RequestContext, userId: string): void {
+	assertNotShareContext(ctx, 'read permissions');
 	if (ctx.system) return;
 	if (ctx.userId === userId) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
+	if (hasPermission(ctx, 'manage_instance_users')) return;
 	throw new ProviderError('Forbidden: cannot read another user’s permissions', 403);
 }
 
+function assertCanReadBatch(ctx: RequestContext): void {
+	assertNotShareContext(ctx, 'read permissions');
+	if (ctx.system) return;
+	if (hasPermission(ctx, 'instance_admin')) return;
+	if (hasPermission(ctx, 'manage_instance_users')) return;
+	throw new ProviderError('Forbidden: instance admin or manage_instance_users required', 403);
+}
+
 function assertAdmin(ctx: RequestContext): void {
+	assertNotShareContext(ctx, 'manage permissions');
 	if (ctx.system) return;
 	if (hasPermission(ctx, 'instance_admin')) return;
 	throw new ProviderError('Forbidden: instance admin required', 403);

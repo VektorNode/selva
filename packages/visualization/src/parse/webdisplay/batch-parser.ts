@@ -261,7 +261,10 @@ function buildMeshesFromParsed(
 				parsed.uvs,
 				parsed.colors
 			);
-			mergedMesh.userData.sourceComponentId = sourceComponentId ?? null;
+			// Left absent when unknown, never null: stable identity tests the field's type to decide
+			// whether it can key on the component, and a null would silently demote every mesh of
+			// this batch to the weaker name+layer key.
+			if (sourceComponentId) mergedMesh.userData.sourceComponentId = sourceComponentId;
 			meshes.push(mergedMesh);
 		} else {
 			const individualMeshes = createIndividualMeshes(
@@ -272,8 +275,10 @@ function buildMeshesFromParsed(
 				parsed.uvs,
 				parsed.colors
 			);
-			for (const mesh of individualMeshes) {
-				mesh.userData.sourceComponentId = sourceComponentId ?? null;
+			if (sourceComponentId) {
+				for (const mesh of individualMeshes) {
+					mesh.userData.sourceComponentId = sourceComponentId;
+				}
 			}
 			meshes.push(...individualMeshes);
 		}
@@ -408,7 +413,7 @@ async function tryBuildViaWorker(
 			ref.kind === 'merged'
 				? finalizeMergedMesh(geometry, ref.group, materials)
 				: finalizeSingleMesh(geometry, ref.meshMeta!, ref.group, materials);
-		mesh.userData.sourceComponentId = sourceComponentId ?? null;
+		if (sourceComponentId) mesh.userData.sourceComponentId = sourceComponentId;
 		meshes.push(mesh);
 	}
 

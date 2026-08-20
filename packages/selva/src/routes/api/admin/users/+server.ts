@@ -2,34 +2,38 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getOrganizationProvider, getPermissionStore } from '$lib/server/providers.server';
-import { requireManageInstanceUsers } from '$lib/server/access.server';
+import {
+	getEventSink,
+	getOrganizationProvider,
+	getPermissionStore
+} from '$lib/server/providers.server';
+import {
+	assertCanGrantPlatformPermissions,
+	requireManageInstanceUsers
+} from '$lib/server/access.server';
 import { listAllOrgMembers } from '$lib/server/org-members.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-import { handleApiError, throwZodError, apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiRoute, created, parseBody } from '$lib/server/api/http';
 import {
-	OrgPermissionSchema,
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,
-	hasPermission,
-	MEMBER_ASSIGNABLE_PERMISSIONS
+	actorFrom,
+	type OrgMember
 } from '@selvajs/platform';
-import { splitFlatPermissions, flattenPermissions } from '$lib/server/permissions-compat.server';
-
-// Admin UI sends a flat permission list; we split into platform + default-org
-// scopes server-side until the UI grows two dedicated surfaces.
-const FlatPermissionSchema = z.union([PlatformPermissionSchema, OrgPermissionSchema]);
-
-const BaseUserBody = z.object({
+// `password` is deliberately absent: an admin never sets another user's
+// credential. A stale client may still send one — Zod strips unknown keys, so it
+// is dropped rather than rejected.
+//
+// Platform scope only — a new user joins the active org as a bare `member`, and
+// their org permissions are granted at /team/members under manage_org_members.
+const CreateUserBody = z.object({
 	email: z.string().email('Valid email is required'),
-	permissions: z.array(FlatPermissionSchema)
-});
-const PasswordUserBody = BaseUserBody.extend({
-	password: z.string().min(8, 'Password must be at least 8 characters').optional()
+	permissions: z.array(PlatformPermissionSchema)
 });
 
-// GET — list all users with a flat "permissions" projection for the admin UI.
-export const GET: RequestHandler = async ({ locals }) => {
+// GET — list all users with their platform permissions and acting-org membership.
+export const GET: RequestHandler = apiRoute('Failed to list users', async ({ locals }) => {
 	requireManageInstanceUsers(locals);
 	const page = await getAuthProvider().listUsers({ limit: 200 });
 	if (page === null) {
@@ -40,76 +44,68 @@ export const GET: RequestHandler = async ({ locals }) => {
 		);
 	}
 
-	// Merge each user's platform perms with their default-org perms so the
-	// current admin UI sees the familiar flat list. Default org = ctx.actingOrgId.
 	const orgId = locals.ctx?.actingOrgId;
 	const orgs = getOrganizationProvider();
 	// Single batch read for platform permissions instead of N round-trips.
 	const userIds = page.items.map((u) => u.id);
 	const platformByUser = await getPermissionStore().getForBatch(locals.ctx!, userIds);
 	// One membership listing instead of a getOrgMember round-trip per user.
-	const memberByUserId = new Map<string, { permissions: readonly string[] }>();
+	const memberByUserId = new Map<string, OrgMember>();
 	if (orgId) {
 		for (const m of await listAllOrgMembers(orgs, orgId)) memberByUserId.set(m.userId, m);
 	}
-	const flattened = page.items.map((u) => {
-		const orgPerms = memberByUserId.get(u.id)?.permissions ?? [];
-		const platformPerms = platformByUser.get(u.id) ?? [];
+	const users = page.items.map((u) => {
+		const member = memberByUserId.get(u.id);
 		return {
 			...u,
-			platformPermissions: platformPerms,
-			permissions: flattenPermissions(
-				platformPerms,
-				orgPerms as Parameters<typeof flattenPermissions>[1]
-			)
+			platformPermissions: platformByUser.get(u.id) ?? [],
+			orgRole: member?.role,
+			orgPermissions: member ? [...member.permissions] : []
 		};
 	});
-	return json({ users: flattened });
-};
+	return json({ users });
+});
 
 // POST — create a user + attach to default org with split permissions.
-export const POST: RequestHandler = async ({ request, locals }) => {
-	requireManageInstanceUsers(locals);
-	const auth = getAuthProvider();
+export const POST: RequestHandler = apiRoute(
+	'Failed to create user',
+	async ({ request, locals }) => {
+		requireManageInstanceUsers(locals);
+		const auth = getAuthProvider();
 
-	const body = await request.json().catch(() => null);
-	const parsed = PasswordUserBody.safeParse(body);
-	if (!parsed.success) throwZodError(parsed.error);
-	const { email, password, permissions } = parsed.data;
-	const { platform, org } = splitFlatPermissions(permissions);
+		const { email, permissions: platform } = await parseBody(request, CreateUserBody);
 
-	// Only an existing platform admin may create a user with platform-scope perms.
-	if (platform.length > 0 && !hasPermission(locals.ctx!, 'instance_admin')) {
-		apiError(
-			403,
-			ApiErrorCode.FORBIDDEN,
-			'Only a platform admin can grant platform-scope permissions'
-		);
-	}
+		assertCanGrantPlatformPermissions(locals.ctx!, platform);
 
-	try {
 		let user;
-		if (auth.passwordAuth) {
-			if (!password) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Password is required');
-			user = await auth.passwordAuth.createUserWithPassword(email, password);
-		} else if (auth.createUser) {
+		if (auth.createUser) {
+			// No password branch: a provider that owns credentials admits users by
+			// invite, so nobody but the account holder ever chooses the password.
+			// `createUser` is the allowlist path — under header-auth it is the only
+			// way in, since the IdP holds the credential and Selva never sees one.
 			user = await auth.createUser(email);
 		} else {
 			apiError(
 				501,
 				ApiErrorCode.INTERNAL,
-				`User creation is not supported by ${auth.name}. Users are managed externally.`
+				`${auth.name} cannot create a user directly. Send an invite instead — the recipient sets their own password.`
 			);
 		}
+
+		await getEventSink().emit({
+			type: 'user.created',
+			userId: user.id,
+			actorId: actorFrom(locals.ctx!)
+		});
 
 		// Grant platform permissions out-of-band via the data-layer store.
 		if (platform.length > 0) {
 			await setUserPlatformPermissions(locals.ctx!, user.id, platform);
 		}
 
-		// Attach to the active org as a member. Members can only hold the
-		// non-governance permissions (manage_definitions, manage_projects) —
-		// drop anything else silently so the UI can send whatever.
+		// Attach to the active org as a bare member. Under header-auth this is the
+		// only way in — the IdP holds the credential, so there is no invite to
+		// accept. Org permissions are granted separately at /team/members.
 		const orgId = locals.ctx?.actingOrgId;
 		if (orgId) {
 			const joinedAt = new Date().toISOString();
@@ -117,7 +113,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				orgId,
 				userId: user.id,
 				role: 'member',
-				permissions: org.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p)),
+				permissions: [],
 				joinedAt,
 				updatedAt: joinedAt,
 				updatedBy: locals.user?.id ?? user.id,
@@ -125,8 +121,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			});
 		}
 
-		return json(user, { status: 201 });
-	} catch (err) {
-		handleApiError(err, 'Failed to create user');
+		return created(user);
 	}
-};
+);

@@ -1,27 +1,27 @@
+import { error, isHttpError } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type {
 	AuthUser,
-	Invite,
 	OrgMember,
 	OrgPermission,
 	OrgRole,
 	PlatformPermission
 } from '@selvajs/platform';
+import { ProviderError } from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { listAllOrgMembers } from '$lib/server/org-members.server';
 import {
-	getInviteStore,
+	getLogger,
 	getOrganizationProvider,
 	getPermissionStore,
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { assertManageInstanceUsers } from '$lib/server/access.server';
-import { flattenPermissions } from '$lib/server/permissions-compat.server';
 
 /**
- * The admin users UI renders permissions as one flat list today; scoped views
- * come later. Each user's `platformPermissions` + default-org permissions are
- * merged into a single `permissions` array on the returned UserRow.
+ * `orgRole` and `orgPermissions` are the acting org's membership, shown here
+ * read-only for context — this page edits platform scope only. Editing them
+ * belongs to /team/members, which gates on `manage_org_members`.
  *
  * `displayName` lives on `UserProfile`, not `AuthUser`. Profiles are
  * batch-loaded and merged into the row so the UI keeps one row per user.
@@ -31,18 +31,23 @@ export interface UserRow extends AuthUser {
 	platformPermissions: PlatformPermission[];
 	orgRole?: OrgRole;
 	orgPermissions: OrgPermission[];
-	permissions: Array<PlatformPermission | OrgPermission>;
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
 	assertManageInstanceUsers(locals);
 	const ctx = locals.ctx!;
 	const auth = getAuthProvider();
-	const userCreation: 'email-password' | 'email-only' | 'none' = auth.passwordAuth
-		? 'email-password'
-		: auth.createUser
-			? 'email-only'
-			: 'none';
+	// Admins never set another user's password, so the only direct-create path is
+	// the passwordless allowlist.
+	//
+	// `createUser` says the provider CAN allowlist, not that it SHOULD. A
+	// credential-owning provider (Supabase, local) admits users by invite — the
+	// invitee sets their own password — and offering both paths there is two
+	// buttons for one job. Worse on Supabase: allowlisting mints a confirmed
+	// row with no password, so unless magic-link or OAuth is configured the
+	// user it creates cannot sign in at all. Invite is the honest single path.
+	const userCreation: 'email-only' | 'none' =
+		auth.createUser && !auth.passwordAuth ? 'email-only' : 'none';
 	const providerInfo = { name: auth.name, userCreation };
 
 	let users: UserRow[] | null = null;
@@ -79,27 +84,49 @@ export const load: PageServerLoad = async ({ locals }) => {
 					displayName: profile?.displayName ?? metadataDisplayName,
 					platformPermissions,
 					orgRole,
-					orgPermissions,
-					permissions: flattenPermissions(platformPermissions, orgPermissions)
+					orgPermissions
 				};
 			});
 		}
 	} catch (err) {
-		if (err && typeof err === 'object' && 'status' in err) throw err;
-	}
-
-	// Pending + recently-accepted invites for the active org. Non-fatal if
-	// no active org yet (e.g. multi-tenant user not in any org).
-	let invites: Invite[] = [];
-	if (ctx.actingOrgId) {
-		try {
-			const page = await getInviteStore().listByOrg(ctx, ctx.actingOrgId, { limit: 100 });
-			invites = page.items;
-		} catch {
-			// Non-fatal — users page still renders without invite list
-		}
+		// `users: null` means "this provider exposes no user store" — the page
+		// renders wiring advice for it. Anything thrown here is a different thing
+		// entirely, so it gets logged rather than rendered as that same message:
+		// this block spans four provider calls, and swallowing all of them silently
+		// turned every outage into "configure DATA_PATH".
+		//
+		// A denial still propagates. `ProviderError` carries `statusCode`, not
+		// `status` — checking the wrong field is what made a 403 from
+		// `getForBatch` render as an unavailable store on Supabase.
+		if (isHttpError(err)) throw err;
+		if (err instanceof ProviderError) error(err.statusCode, err.message);
+		getLogger().error('Failed to load the admin user list', {
+			actorId: ctx.userId,
+			error: err instanceof Error ? err.message : String(err)
+		});
 	}
 
 	const isPlatformAdmin = ctx.platformPermissions.includes('instance_admin');
-	return { users, provider: providerInfo, invites, isPlatformAdmin };
+
+	// The §2 sole-admin lock must not be derived from `users`: that list is a
+	// 200-row page, so on a larger instance a second admin can sit past the cut
+	// and the UI would lock a row the server would happily let go. Counting
+	// admins other than nobody is the whole enabled-admin count, which the store
+	// answers over every row.
+	let enabledInstanceAdminCount: number | null = null;
+	if (users) {
+		try {
+			enabledInstanceAdminCount = await getPermissionStore().countInstanceAdminsExcluding(ctx, '');
+		} catch (err) {
+			// A null count means "unknown" and the UI falls back to not locking —
+			// the server refuses the removal either way, so a failed count must not
+			// become a lock the operator cannot explain.
+			getLogger().warn('Failed to count instance admins for the admin user list', {
+				actorId: ctx.userId,
+				error: err instanceof Error ? err.message : String(err)
+			});
+		}
+	}
+
+	return { users, provider: providerInfo, isPlatformAdmin, enabledInstanceAdminCount };
 };

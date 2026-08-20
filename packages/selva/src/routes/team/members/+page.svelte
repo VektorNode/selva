@@ -9,6 +9,7 @@
 		OWNER_ADMIN_ONLY_PERMISSIONS
 	} from '@selvajs/platform';
 	import type { MemberRow } from './+page.server';
+	import { removalBlockReason } from './removal-gate';
 
 	interface PageData {
 		members: MemberRow[];
@@ -41,14 +42,14 @@
 				body: JSON.stringify(patch)
 			});
 			if (res.ok) {
-				toast.success('Updated');
+				toast.success('Member updated');
 				await invalidateAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
-				toast.error(err.message || err.error || 'Update failed');
+				toast.error(err.message || err.error || 'Could not update member');
 			}
 		} catch {
-			toast.error('Update failed');
+			toast.error('Could not update member');
 		} finally {
 			savingId = null;
 		}
@@ -67,6 +68,10 @@
 	}
 
 	const ORG_ROLES: OrgRole[] = ['owner', 'admin', 'member'];
+
+	// Mirrors the invite route's owner-only gate: an admin who could mint an
+	// `owner` invite would be able to accept it and then evict the founder.
+	const invitableRoles = $derived(isOwner ? ORG_ROLES : ORG_ROLES.filter((r) => r !== 'owner'));
 
 	const PERMISSION_LABELS: Record<OrgPermission, string> = {
 		manage_org_members: 'Manage members',
@@ -136,6 +141,45 @@
 		}
 	}
 
+	let removingId = $state<string | null>(null);
+
+	const blockReasonFor = (member: MemberRow) =>
+		removalBlockReason({
+			target: member,
+			actorUserId: data.actorUserId,
+			actorRole: data.actorRole,
+			ownerCount
+		});
+
+	async function removeMember(member: MemberRow) {
+		const who = member.email ?? member.displayName ?? member.userId;
+		// Removal proceeds even when it orphans projects (§10) — the server reports
+		// them rather than blocking, so the warning belongs here, before the fact.
+		if (
+			!confirm(
+				`Remove "${who}" from this organization?\n\nThey lose access to every project in it, and any pending invites to their email are revoked. Projects they solely own are left without an owner and can be adopted from Team → Reclaim.`
+			)
+		)
+			return;
+		removingId = member.userId;
+		try {
+			const res = await fetch(`/api/v1/orgs/${data.orgId}/members/${member.userId}`, {
+				method: 'DELETE'
+			});
+			if (res.ok) {
+				toast.success(`${who} removed from the organization`);
+				await invalidateAll();
+			} else {
+				const err = await res.json().catch(() => ({}));
+				toast.error(err.message || err.error || 'Could not remove member');
+			}
+		} catch {
+			toast.error('Could not remove member');
+		} finally {
+			removingId = null;
+		}
+	}
+
 	async function revokeInvite(id: string, email: string) {
 		if (!confirm(`Revoke invite for "${email}"?`)) return;
 		revokingId = id;
@@ -156,7 +200,7 @@
 </script>
 
 <svelte:head>
-	<title>Team · Members</title>
+	<title>Team · Members &amp; roles</title>
 </svelte:head>
 
 <div class="space-y-6">
@@ -198,7 +242,7 @@
 							bind:value={inviteRole}
 							class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 						>
-							{#each ORG_ROLES as role (role)}
+							{#each invitableRoles as role (role)}
 								<option value={role}>{role}</option>
 							{/each}
 						</select>
@@ -283,7 +327,7 @@
 					<EmptyState
 						icon={UserPlus}
 						title="No members yet"
-						description="Invite teammates to get started."
+						description="Invite someone to get started."
 					/>
 				{:else}
 					<div class="divide-y rounded-lg border">
@@ -292,6 +336,7 @@
 							{@const isSoleOwner = member.role === 'owner' && ownerCount === 1}
 							{@const canEditRole = isOwner && !isSelf && !isSoleOwner}
 							{@const canEditPermissions = isOwnerOrAdmin && member.role === 'member'}
+							{@const blockReason = blockReasonFor(member)}
 							<div class="px-4 py-3">
 								<div class="flex items-start justify-between gap-4">
 									<div class="min-w-0 flex-1">
@@ -325,13 +370,24 @@
 											{/if}
 										</div>
 										<p class="text-muted-foreground text-xs">
-											{#if member.lastLoginAt}
-												Joined {new Date(member.joinedAt).toLocaleDateString()}
-											{:else}
-												Invited {new Date(member.joinedAt).toLocaleDateString()} · never signed in
+											<!-- One timestamp, one label: joinedAt is when the membership was
+											     written. Whether they have signed in since is a separate fact. -->
+											Joined {new Date(member.joinedAt).toLocaleDateString()}
+											{#if !member.lastLoginAt}
+												· never signed in
 											{/if}
 										</p>
 									</div>
+									<Button
+										size="sm"
+										variant="ghost"
+										disabled={removingId === member.userId || !!blockReason}
+										onclick={() => removeMember(member)}
+										title={blockReason ?? 'Remove from organization'}
+										class="text-destructive hover:text-destructive h-8 w-8 shrink-0 p-0"
+									>
+										<Trash2 class="h-4 w-4" />
+									</Button>
 								</div>
 								{#if member.role === 'member'}
 									<div class="mt-2 flex flex-wrap gap-3">

@@ -1,5 +1,151 @@
 # @selvajs/platform
 
+## 0.19.0
+
+### Minor Changes
+
+- e779034: Make the first-admin bootstrap atomic, so "first signer wins" is true under concurrency.
+
+  `bootstrapUserSession` asked `hasInstanceAdmin()` and then called `set()` — two
+  round-trips with nothing holding the gap. On a single-tenant install with no
+  `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` configured, `shouldBootstrapAdmin` returns true
+  for _any_ signer, so two different people signing in at the same moment both
+  observed "no admin yet" and both were granted every platform permission,
+  permanently. Permissions.md §2 promises the first signer wins; it was aspiration.
+
+  `IPlatformPermissionStore` gains `claimFirstInstanceAdmin(ctx, userId,
+permissions)`, which grants only if no enabled `instance_admin` exists and
+  returns whether this call was the one that claimed it. It is the mirror of the
+  sole-admin invariant already enforced in `set`: that one refuses to drop the
+  _last_ admin, this one refuses to create a _second first_ admin.
+
+  Supabase implements it as a `SECURITY DEFINER` RPC
+  (`selva.claim_first_instance_admin`) taking a transaction-scoped advisory lock,
+  then re-reading inside it. There is no row to lock — the whole point is that no
+  admin row exists yet — so the `for update` approach used for the last-admin
+  invariant does not apply here, and a bare `not exists` in the `UPDATE` predicate
+  would not work either: under READ COMMITTED both racers read the snapshot taken
+  when their statement began and both see an empty set. A caller that blocks on
+  the advisory lock re-reads after the winner commits and correctly loses.
+
+  Local shares the existing promise-chain mutex with `updatePermissionsGuarded`,
+  deliberately: the two decide the same question from opposite ends, so they must
+  not interleave with each other any more than with themselves.
+
+  `platformPermissionStoreSuite` gains two cases — a sequential claim-then-refuse,
+  and a four-way concurrent burst asserting exactly one admin results. Both
+  adapters are pinned to the same contract.
+
+  Supabase deployments need the new migration
+  (`20260817200000_atomic_first_admin_claim.sql`); `EXPECTED_MIGRATION_HEAD` moves
+  with it, so a stale database fails the startup check rather than silently
+  running the old path.
+
+- e779034: Make the sole-`instance_admin` invariant atomic in both providers.
+
+  `set` checked the surviving-admin count and wrote in two steps with nothing
+  holding the gap. Two admins demoting each other at the same moment each observed
+  the other as "another admin exists", both passed, and both committed — leaving
+  zero instance admins and an instance that can no longer be administered through
+  the UI. Permissions.md §2 states the invariant as absolute; it was not.
+
+  Supabase moves the check inside a `SECURITY DEFINER` RPC
+  (`selva.set_platform_permissions`) that locks the target row and then the
+  surviving admin rows with `for update`, so concurrent demotions serialize
+  instead of racing. A bare `exists` in the `UPDATE` predicate is not sufficient
+  under READ COMMITTED — the subquery reads the statement's snapshot — and the
+  conformance suite fails without the explicit locks.
+
+  Local serializes guarded permission writes through a promise-chain mutex and
+  counts inside the critical section, matching the single-process boundary its
+  load-once cache already assumes.
+
+  `platformPermissionStoreSuite` gains two concurrency cases (a mutual demotion of
+  two admins, and a four-way burst) so both adapters are pinned to the same
+  contract: exactly one demotion wins and `hasInstanceAdmin` stays true.
+
+- e779034: Give the org-owner boundary one predicate instead of three hand-written copies.
+
+  Three routes decided whether an actor may grant or revoke org `owner`/`admin`
+  standing — minting an invite, changing a member's role, and removing an owner —
+  and each spelled the rule out longhand. Two had already drifted: the invite route
+  let an admin mint themselves an `owner` invite, and member `DELETE` removed an
+  owner that `PATCH` would not let them demote. The unguarded operation was the
+  harder one to reverse; a demoted owner can be re-promoted, a removed one has lost
+  every project membership to the cascade.
+
+  `canChangeOrgRole({ actorMember, role })` now lives in `rules.ts` beside the
+  project predicates, and all three routes call it. It reads the **membership
+  row**, never `Organization.ownerId` — those are separate fields that can
+  disagree, and only the row is authority here.
+
+  One tightening falls out of the consolidation: the role-change branch of `PATCH
+/api/v1/orgs/{orgId}/members/{userId}` now gates on both the role being granted
+  and the role being taken away. Demoting an owner crosses the boundary even though
+  granting `member` does not, and the old code checked only the target role.
+
+  The point is not the deduplication. Changing that single predicate to admit
+  admins turns **nine** route tests red across all three files plus two rule tests,
+  from one edit — previously, breaking the rule in one route left the other two
+  silently green, which is exactly how it drifted twice.
+
+- e779034: Report projects left without an owner when an org member is removed, instead of orphaning them silently.
+
+  `removeOrgMember` cascades every `project_members` row, so removing someone who
+  was the only owner of a project left that project with nobody able to manage it —
+  no settings, no roster, no delete — and nothing anywhere said so.
+
+  Permissions.md §10 promised the removal would be **blocked** until a new owner was
+  assigned. That rule is retired rather than implemented. Blocking makes the cost of
+  offboarding scale with how many projects the departing person owned, which is
+  backwards: the most prolific people are the ones whose departure most needs to be
+  clean, and an offboarding that stalls halfway leaves a live account in the org
+  while someone works through the backlog. Auto-transfer was rejected separately —
+  it hands someone authority silently, by a heuristic nobody remembers, and six
+  months later the audit log cannot explain why they own it.
+
+  `DELETE /api/v1/orgs/{orgId}/members/{userId}` now emits
+  `org_member.removed_orphaning_projects` carrying every affected project id in one
+  event, rather than one event each: an admin reading the log wants "this
+  offboarding cost three projects", not three rows to correlate. Reclaim already
+  adopts an ownerless project, so the recovery path predates the problem — what was
+  missing was any signal that recovery was needed.
+
+  The check runs **before** the removal, because the cascade soft-deletes the very
+  rows it reads. In the other order it finds no owners, concludes nothing was
+  orphaned, and reports nothing on precisely the case it exists for — so that
+  ordering has its own test.
+
+## 0.18.0
+
+### Minor Changes
+
+- 679a24f: Invites carry instance permissions; admins no longer set another user's password.
+
+  Creating a user had two shapes depending on the provider: an admin typed someone
+  else's password (Local, Supabase), or allowlisted an email and let the IdP hold
+  the credential (header-auth/Entra). The first is now gone. A provider that owns
+  credentials admits users by invite, so the account holder is the only party who
+  ever chooses their password.
+
+  That removal needed a replacement first: the admin-sets-password form was the
+  only way to create a second instance admin, so deleting it alone would have left
+  a deployment stuck with the admin it bootstrapped with. Invites now carry
+  `platformPermissions`, mintable only by a caller who already holds
+  `instance_admin` — `manage_org_members` is enough to invite people, so without
+  that check an org admin could mint themselves an admin invite and accept it.
+
+  The allowlist path (`createUser`) is untouched — it is the only way into a
+  header-auth deployment, and it is now the sole branch of `POST /api/admin/users`.
+  The local provider implements no `createUser`, so that route reports 501 there
+  and points at invites; the admin UI hides the form to match.
+
+  In the invite form, platform permissions render as their own group. The
+  owner/admin role lock renders a checkbox as checked-and-disabled, and reusing it
+  across scopes would have granted `instance_admin` to every owner invite.
+
+  Requires `supabase db push` — adds `selva.invites.platform_permissions`.
+
 ## 0.17.0
 
 ### Minor Changes

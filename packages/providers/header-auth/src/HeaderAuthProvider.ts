@@ -28,9 +28,18 @@ import type { AllowlistStore, AllowlistEntry } from './users.js';
 //      from inbound requests before adding its own.
 //
 // If any of those fails, anyone on the network can spoof the headers and
-// become anyone. There is no runtime check that catches a misconfiguration —
-// the deployment IS the security boundary. See README.md for a working
-// Caddy config and a curl-based self-test.
+// become anyone. See README.md for a working Caddy config and a curl-based
+// self-test.
+//
+// One of the three is partly self-detecting: a proxy that doesn't strip (3)
+// leaves two values in the UPN header, which `identifyFromHeaders` refuses
+// with a warning naming the cause. Nothing detects a breach of (1) — a
+// request reaching the process directly carries one clean header and is
+// indistinguishable from a proxied one. Closing that needs a shared secret
+// between proxy and app, deliberately not added: it is a second control over
+// the same failure, and an operator who misconfigured header stripping is no
+// likelier to have configured a secret correctly. Network isolation is the
+// control; the deployment IS the security boundary.
 // ============================================================================
 
 interface HeaderNames {
@@ -110,6 +119,10 @@ class HeaderProxyAuth implements IProxyAuth {
 	// process restarts and you see the warning again next deploy.
 	private missingHeadersWarned = false;
 
+	// Same one-shot treatment for the opposite misconfiguration: identity
+	// headers arriving more than once per request.
+	private duplicateUpnWarned = false;
+
 	constructor(
 		private readonly users: AllowlistStore,
 		private readonly headers: HeaderNames,
@@ -166,6 +179,33 @@ class HeaderProxyAuth implements IProxyAuth {
 			return null;
 		}
 
+		// A UPN header carrying more than one value means the proxy is not
+		// stripping client-supplied copies before adding its own: `Headers.get`
+		// joins repeats with ", ", so a spoofing attempt arrives as
+		// "attacker@x.com, real@y.com". A UPN is a single directory identifier
+		// and never contains a comma, so this can only be the duplicate case.
+		//
+		// The lookup below would miss anyway — no allowlisted UPN has a comma —
+		// so refusing here changes no outcome. What it adds is a named cause in
+		// the logs for a failure that otherwise looks like "user not
+		// allowlisted", which is what makes this misconfiguration so hard to
+		// diagnose. Checked on the UPN only: display names legitimately contain
+		// commas ("Doe, Jane" is standard Entra formatting).
+		if (upn.includes(',')) {
+			if (!this.duplicateUpnWarned) {
+				this.duplicateUpnWarned = true;
+				this.logger.warn(
+					'Multiple values arrived in the UPN identity header on one request. The ' +
+						'forward-auth proxy is not stripping client-supplied copies of the trusted ' +
+						'headers before setting its own, so a visitor can submit their own identity ' +
+						'alongside the real one. Refusing to identify. Strip the configured headers at ' +
+						'site scope, above forward_auth — see the @selvajs/header-auth-provider README.',
+					{ component: 'HeaderAuth', header: this.headers.upn }
+				);
+			}
+			return null;
+		}
+
 		const email = headers.get(this.headers.email)?.trim() || undefined;
 		const displayName = headers.get(this.headers.displayName)?.trim() || undefined;
 
@@ -174,16 +214,20 @@ class HeaderProxyAuth implements IProxyAuth {
 		// Fallback: the proxy's UPN didn't match, but an admin may have
 		// pre-allowlisted this person by EMAIL (Entra UPN ≠ mail is common).
 		// Adopt that row so the org membership + permissions provisioned
-		// against its UUID survive, and rebind its UPN to what the proxy
-		// actually sends so the next login hits the fast findByUpn path.
+		// against its UUID survive.
+		//
+		// Deliberately does NOT rebind the row's UPN to the forwarded value.
+		// Both headers on this path are proxy-supplied, so a rebind would let a
+		// header write identity: a request that matches an existing row by email
+		// would permanently repoint that row's lookup key at whatever UPN the
+		// request carried, turning a single spoofed request into persistence in
+		// the allowlist. The email fallback resolves the same row on every
+		// subsequent login, so the only cost is staying on this branch instead
+		// of the faster findByUpn path. Repointing a row's UPN is an operator
+		// action — `rebindUpn` remains on the store for that.
 		if (!entry && email) {
 			const byEmail = await this.users.findByEmail(email);
-			if (byEmail) {
-				entry = byEmail;
-				if (byEmail.upn !== upn.trim().toLowerCase()) {
-					await this.users.rebindUpn(byEmail.id, upn).catch(() => {});
-				}
-			}
+			if (byEmail) entry = byEmail;
 		}
 
 		// Bootstrap path: when there's no allowlist row yet AND a bootstrap

@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/compute",
-	"version": "4.0.1",
+	"version": "4.0.2",
 	"description": "TypeScript library for Rhino Compute Server - Grasshopper and RhinoCommon",
 	"author": "VektorNode",
 	"license": "MIT",
@@ -115,7 +115,7 @@
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.22.0",
-		"globals": "^17.9.0",
+		"globals": "^17.11.0",
 		"lint-staged": "^17.3.0",
 		"prettier": "catalog:",
 		"prettier-plugin-svelte": "^4.1.1",

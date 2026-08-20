@@ -25,6 +25,14 @@ export interface RequestContext {
 	orgPermissions: OrgPermission[];
 	/** Never derive from a user session. */
 	system?: true;
+	/**
+	 * Set when `system` was granted by a share-link token rather than by a
+	 * trusted server flow. The token holder is anonymous, so `system` here means
+	 * only "use the service-role client" (no user JWT exists to scope RLS) — it
+	 * must never read as "authorized". `assertNotShareContext` is how a store
+	 * guard refuses.
+	 */
+	shareLinkId?: string;
 	/** Opaque adapter payload — the Supabase adapter passes the user JWT through for RLS; local ignores it. */
 	adapterContext?: unknown;
 }
@@ -52,6 +60,26 @@ export function hasPermission(
 		return ctx.platformPermissions.includes(permission);
 	}
 	return ctx.orgPermissions.includes(permission);
+}
+
+/**
+ * An anonymous share-link holder. `system` is true on these contexts for adapter
+ * dispatch only — a guard that treats `system` as "fully authorized" must
+ * exclude them first.
+ */
+export function isShareContext(ctx: RequestContext): boolean {
+	return ctx.shareLinkId !== undefined;
+}
+
+/**
+ * Refuse a privileged operation to a share-link context. Call at the top of any
+ * guard whose first line is `if (ctx.system) return` — the token grants one
+ * definition on one channel, never instance authority.
+ */
+export function assertNotShareContext(ctx: RequestContext, what: string): void {
+	if (isShareContext(ctx)) {
+		throw new ProviderError(`Forbidden: a share link cannot ${what}`, 403);
+	}
 }
 
 const PLATFORM_PERMISSION_VALUES = new Set<string>(ALL_PLATFORM_PERMISSIONS);

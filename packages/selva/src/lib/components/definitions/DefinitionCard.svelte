@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ArrowRight, Server, Star } from '@lucide/svelte';
-	import type { DefinitionRecord } from '@selvajs/platform';
+	import type { DefinitionRecord, ProjectVisibility } from '@selvajs/platform';
 	import { huesFor, monogram, formatUpdated } from './cardStyles';
 	import { statusRing, statusDot } from '../../../routes/projects/_components/statusStyles';
 
@@ -11,7 +11,7 @@
 		/** Optional project chip; pass when the surrounding view shows multiple projects. */
 		projectName?: string;
 		/** Visibility of the parent project. Shown as muted text alongside projectName. */
-		projectVisibility?: 'public' | 'org' | 'private' | 'platform';
+		projectVisibility?: ProjectVisibility;
 
 		// ---- Author surface (projects) ----
 		/** When true, renders the status badge top-left and "updated X ago" in the footer. */

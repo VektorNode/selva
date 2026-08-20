@@ -1,38 +1,136 @@
 ---
 title: Supabase provider
 order: 2
-published: true
+published: false
 description: 'Auth, Postgres, and Storage on Supabase, with identity living in the provider.'
 ---
 
 # Supabase provider
 
-`@selvajs/supabase-provider` — Auth + Postgres + Storage in one. Reach for it in production, and for deployments serving several tenants: Postgres row-level security enforces who can see which rows, so one tenant's query cannot return another's data even if the app asks for it.
+`@selvajs/supabase-provider`: Auth + Postgres + Storage in one. Reach for it in production, and for deployments serving several tenants: the database itself enforces who can see which rows, so one tenant's query cannot return another's data even if the app asks for it. Postgres calls this row-level security, or RLS.
 
-Use it when you run more than one app instance, need a real database, have several tenants sharing one database, or already run Supabase.
+## When to use it
 
-Credentials and identity live in Supabase `auth.users`; Selva holds only authorization data.
+- You run more than one app instance, or you need a real database.
+- Several tenants share the database and must not see each other's rows.
+- You already run Supabase (hosted or self-hosted).
 
-## Setup
+## Setup at a glance
 
-1. Provision Supabase — hosted (supabase.com) or local (`cd packages/providers/supabase && npx supabase start`).
-2. Apply the migrations shipped with the package (`supabase/migrations/`).
-3. In `.env`, set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. On Supabase CLI v2.95+ these are labelled "Publishable" (`sb_publishable_…`) and "Secret" (`sb_secret_…`); the secret key is server-only.
-4. Point the slots at it — `SELVA_AUTH_PROVIDER=supabase` plus the data and storage vars — and restart.
+1. Provision Supabase, hosted (supabase.com) or local (`npx supabase start`).
+2. Apply the migrations shipped with the package.
+3. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` in `.env`.
+4. Set `SELVA_AUTH_PROVIDER=supabase` (and the data/storage vars) and restart.
 
-The same code runs against a local Docker stack or a hosted project; only the URL and keys change.
+The same code runs against a local Docker stack or a hosted project. Only the URL and keys change.
 
-`SELVA_AT_REST_KEY` is still required — it encrypts `compute_servers.api_key` before it reaches the database, and `SupabaseDataProvider` refuses to construct without it. `SELVA_HMAC_KEY` is read by the app to hash share-link and invite tokens; sessions here are Supabase JWTs, not HMAC tokens.
+## Setting up a hosted project
 
-Optional knobs, all documented inline in [`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example): bucket overrides (`SUPABASE_PUBLIC_BUCKET` / `SUPABASE_PRIVATE_BUCKET`, defaulting to `selva-public` / `selva-private`), the proxy prefix for private files (`SUPABASE_PRIVATE_URL_PREFIX`), self-service signup (`SUPABASE_ENABLE_SELF_SIGNUP`, default off) and email-link signup (`SUPABASE_ALLOW_EMAIL_LINK_SIGNUP`), OAuth providers to surface on the login page (`SUPABASE_OAUTH_PROVIDERS`), and JWT verification mode (`SUPABASE_TOKEN_VERIFICATION`, `hybrid` by default, with the recheck window set by `SUPABASE_REVALIDATE_MS`).
+Step 2 above — applying the migrations — is a manual step, and the one that catches people out. The CLI writes your credentials to `.env` and starts the app; it never creates tables. An app pointed at an empty database connects fine, then fails its health check, because it compares the database's migration head against the version it ships with and refuses to serve on a mismatch.
 
-### Finding the keys
+So do the schema first, then scaffold.
 
-**Local:** `npx supabase status` prints them — "Publishable" is `SUPABASE_ANON_KEY`, "Secret" is `SUPABASE_SERVICE_ROLE_KEY`.
+### 1. Collect the credentials
 
-**Hosted:** Dashboard → **Project Settings** → **API**.
+Supabase Dashboard → **Project Settings**:
 
-The S3-compat keys under "Storage (S3)" are **not** what you want — those are for external S3 tooling, not for `@supabase/supabase-js`.
+| Value           | Where                                               | Goes to                     |
+| --------------- | --------------------------------------------------- | --------------------------- |
+| Project URL     | **Data API** (older dashboards: **API**)            | `SUPABASE_URL`              |
+| Publishable key | **API Keys**                                        | `SUPABASE_ANON_KEY`         |
+| Secret key      | **API Keys** → reveal                               | `SUPABASE_SERVICE_ROLE_KEY` |
+| Reference ID    | **General** — also the subdomain of the project URL | `--project-ref`             |
+
+The project URL is the bare origin: `https://<ref>.supabase.co`, no path. The Data API page displays it with `/rest/v1/` appended — that's the PostgREST endpoint, not this value. Include the suffix and every request doubles it up into `/rest/v1/rest/v1/…`.
+
+The secret key bypasses row-level security, so it stays server-side. Never ship it to a browser.
+
+### 2. Scaffold the deployment
+
+```bash
+npx @selvajs/cli my-deployment
+cd my-deployment
+```
+
+Choose `supabase` for auth, data, and storage, and paste the three values when prompted. This writes `.env` and nothing else.
+
+### 3. Apply the schema
+
+Selecting a Supabase provider makes the scaffold depend on `@selvajs/supabase-provider`, which carries the migration SQL. Copy it into your deployment, then let the Supabase CLI apply it:
+
+```bash
+npx selva-supabase                   # copies into ./supabase/migrations
+npx supabase link --project-ref <your-ref>
+npx supabase db push
+```
+
+Substitute your own project ref for `<your-ref>` — the shell reads angle brackets as redirection and fails on them.
+
+`selva-supabase` takes no subcommand — copying the migrations is all it does. It prints one line per file and ends with a count; re-running it is safe, since unchanged files are skipped.
+
+#### Why this needs a second credential
+
+The three keys in `.env` don't authenticate `db push`, and this catches most people out:
+
+| Credential                                              | What it is                      | What it does                            |
+| ------------------------------------------------------- | ------------------------------- | --------------------------------------- |
+| `SUPABASE_URL` + `SUPABASE_ANON_KEY` + service-role key | **Project** keys, set by `.env` | Let the running app read and write data |
+| `SUPABASE_ACCESS_TOKEN`                                 | An **account** credential       | Lets the Supabase CLI change schemas    |
+
+The service-role key can't stand in for the account credential: `db push` connects over Postgres and records applied versions in a migration-history table, which a REST key cannot reach. So authenticate once, either way — they are alternatives, not steps:
+
+```bash
+npx supabase login                     # browser: prints a URL, you paste back a code
+# ── or ──
+export SUPABASE_ACCESS_TOKEN=sbp_...   # no browser; create at
+                                       # https://supabase.com/dashboard/account/tokens
+```
+
+`supabase login` stores its credential in `~/.supabase`, **outside the deployment directory** — so it survives rescaffolding the deployment, and you only do it once per machine. Over SSH with no browser, either paste the printed URL into a browser on any other machine and type the code back, or use the token and skip the handshake.
+
+`link` may then ask for the project's database password — set when the project was created, resettable under Dashboard → **Project Settings** → **Database**.
+
+None of this has to run on the deployment host. `db push` connects to Supabase, not to your app, so a workstation with the repo checked out works just as well.
+
+`Remote database is up to date` means the schema was already applied — success, not an error. You'll see it if you re-link a project you pushed to earlier.
+
+If `npx selva-supabase` fails with a 404 from the npm registry, the package isn't installed — check `node_modules/@selvajs/supabase-provider` exists and run `npm install` if it doesn't.
+
+### 4. Create the storage buckets
+
+`db push` skips `seed.sql` on hosted projects — the seed is a local-dev convenience. Paste the contents of `node_modules/@selvajs/supabase-provider/supabase/seed.sql` into Dashboard → **SQL Editor** and run it once. It creates `selva-public` and `selva-private`, and re-running it is harmless.
+
+Skip this and the app runs until someone uploads a file.
+
+### 5. Verify the schema is exposed
+
+Dashboard → **Project Settings** → **API** → **Exposed schemas**. `selva` should be listed next to `public`.
+
+The initial migration sets this, so it's normally already correct. It's worth a look anyway: if the schema isn't exposed, every query fails with `PGRST106 Invalid schema` — a runtime error that looks nothing like its cause.
+
+### 6. Start
+
+```bash
+npm run doctor
+npm start
+```
+
+`doctor` checks the credentials and compares migration heads, so a green run confirms steps 3 through 5 landed. Then open `/setup` — the first user through becomes instance admin.
+
+Two things `doctor` can't see: `ORIGIN` must match the URL you actually serve on or auth cookies won't persist, and `npm start` binds to `127.0.0.1:3000`, so a public deployment needs Caddy or nginx terminating TLS in front of it.
+
+### Upgrading later
+
+When a Selva upgrade ships new migrations, repeat the sync and push:
+
+```bash
+npx selva-supabase
+npx supabase db push
+```
+
+`db push` applies only what the database hasn't recorded yet. `npm run doctor` is what tells you an upgrade is pending — it reports the expected head against the actual one.
+
+Full setup, env vars, migrations, and RLS notes: [supabase-provider README](https://www.npmjs.com/package/@selvajs/supabase-provider).
 
 ## Local development stack
 
@@ -59,64 +157,6 @@ SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_ANON_KEY=sb_publishable_...
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
 ```
-
-## Applying the schema
-
-All Selva tables live in a dedicated `selva` schema, never `public`, so a consuming app's own `public.projects` and Selva's `selva.projects` coexist without a clash.
-
-**Local:** `npx supabase db reset` applies everything on a fresh database.
-
-**Hosted:**
-
-```bash
-cd packages/providers/supabase
-npx supabase link --project-ref <your-project-ref>   # ref: Dashboard → Project Settings → General
-npx supabase db diff                                  # review what will be applied
-npx supabase db push                                  # apply
-```
-
-You can paste each `.sql` file into the Dashboard SQL Editor instead, but prefer the CLI — it records which migrations already ran, so re-running is safe.
-
-`db push` keys on the version prefix recorded in `supabase_migrations.schema_migrations`, applies any file whose prefix isn't recorded yet in filename order, and skips the rest. So **upgrading is always: pull the new migrations, then `db push`.** Gaps and out-of-order prefixes are fine.
-
-The initial migration tells PostgREST to expose the `selva` schema (`alter role authenticator set pgrst.db_schemas = '…, selva'`), so nothing further is needed locally. Do **not** list `selva` in `config.toml`'s `[api] schemas` — PostgREST reads that file at stack boot, before migrations run, and naming a not-yet-created schema there aborts `supabase start`. On a hosted project, confirm `selva` appears under Project Settings → **API** → **Exposed schemas** after the first push; without it every query fails with `PGRST106 Invalid schema` or `PGRST205 schema cache`.
-
-## Production checklist
-
-1. Create a project on [supabase.com](https://supabase.com), in a region close to your Selva deployment.
-2. Apply migrations via the CLI (above).
-3. Create the two storage buckets by running `supabase/seed.sql` in the Dashboard SQL Editor — `db push` does not run the seed on a hosted project.
-4. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and the three `SELVA_*_PROVIDER=supabase` vars on your host, then deploy.
-5. Register your Rhino.Compute server URL and API key at `/admin/compute`.
-6. Bootstrap the first admin: open `/setup` once. Or add a user in the Dashboard and run
-   `UPDATE selva.user_profiles SET platform_permissions = ARRAY['instance_admin']::text[] WHERE user_id = '<uuid>';`
-
-Then:
-
-- **Backups.** Supabase runs daily backups on paid plans; verify a restore before relying on it.
-- **Rotate keys** if the secret key is ever logged or committed: Project Settings → API → Reset service_role key.
-- **Row-level security is on for every table.** Disabling it on any table silently breaks the tenant boundary.
-- **Email sender.** Configure SMTP under Authentication → Email templates before going live, or password-reset mail routes through Supabase's rate-limited dev sender.
-
-## Installing the migrations in an external app
-
-When you install `@selvajs/supabase-provider` in your own app rather than running it from this repo, the migration SQL ships inside the package. Sync it into your app's own migrations directory and let the Supabase CLI drive it alongside yours:
-
-```bash
-npx @selvajs/supabase-provider sync-migrations   # copies into ./supabase/migrations
-npx supabase db push
-```
-
-Files copy **verbatim** — same timestamped filename, same bytes — because the filename is the migration's identity in the history table. `--dir <path>` targets a different directory; `--force` overwrites a same-named file whose content differs (without it the file is reported as a conflict and the command exits non-zero, leaving your copy untouched). Re-running is idempotent.
-
-Upgrading is the same two commands: `pnpm up @selvajs/supabase-provider`, sync, push. The new file has a later timestamp so it sorts last, and `db push` applies only it — no renumbering, even if your app added migrations in between.
-
-Two things to watch:
-
-- **Reference engine objects by schema.** From your own migrations, write `references selva.orgs(id)`, `selva.is_org_member(org_id)`, `selva.is_instance_admin()`, `selva.set_updated_at()`. Qualified names can't accidentally resolve to a same-named object in your `public`.
-- **Storage buckets aren't created by `db push` on a hosted project.** `seed.sql` is dev-only; run it once by hand in the SQL Editor after the first push.
-
-Architecture, RLS internals, and conformance tests: [supabase-provider README](https://github.com/VektorNode/selva/blob/main/packages/providers/supabase/README.md).
 
 ## Next
 

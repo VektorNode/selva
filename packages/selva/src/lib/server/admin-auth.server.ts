@@ -50,6 +50,11 @@ export function setSessionCookie(cookies: Cookies, sessionToken: string): void {
 	});
 }
 
+/** Read before `destroySession` — logout needs the token to revoke it provider-side. */
+export function getSessionToken(cookies: Cookies): string | undefined {
+	return cookies.get(SESSION_COOKIE_NAME);
+}
+
 export function destroySession(cookies: Cookies): void {
 	cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
 	cookies.delete(REFRESH_COOKIE_NAME, { path: '/' });

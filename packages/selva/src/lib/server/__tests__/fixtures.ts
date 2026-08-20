@@ -9,6 +9,13 @@
  * `setTestProviders()` from ./test-providers makes the stack visible to the
  * mocked `$lib/server/providers.server` so route handlers and access helpers
  * see this test's providers when they call `getProjectProvider()` etc.
+ *
+ * **Workspace packages resolve through `dist/`, not source.** Tests here import
+ * `@selvajs/platform` and `@selvajs/local-provider` as built artifacts, so
+ * editing a rule in `packages/platform/src` changes nothing until that package
+ * is rebuilt. This matters most when checking a test by breaking the code it
+ * guards: a source-only edit leaves the suite green and reads as a vacuous
+ * test when it is really a stale build. Rebuild the package first.
  */
 
 import * as fs from 'node:fs/promises';
@@ -22,14 +29,16 @@ import {
 	createLocalAuthUserStore
 } from '@selvajs/local-provider';
 import {
-	NoopEventSink,
 	SYSTEM_CONTEXT,
 	DEFAULT_ORG_PERMISSIONS,
 	emptyProfile,
 	type AuthUser,
 	type DefinitionRecord,
 	type DefinitionVersion,
+	type DomainEvent,
+	type IEventSink,
 	type IOAuthAuth,
+	type ISessionRefresh,
 	type OrgPermission,
 	type Organization,
 	type OrgMember,
@@ -62,6 +71,14 @@ const TEST_AT_REST_KEY = '0'.repeat(64);
 // Provider stack
 // ============================================================================
 
+/** Keeps every emitted event so a test can assert an audit trail exists. */
+class RecordingEventSink implements IEventSink {
+	readonly events: DomainEvent[] = [];
+	async emit(event: DomainEvent): Promise<void> {
+		this.events.push(event);
+	}
+}
+
 export interface TestProviders {
 	root: string;
 	config: SelvaConfig;
@@ -70,6 +87,8 @@ export interface TestProviders {
 	definitionService: DefinitionService;
 	/** Identity-only file (auth-users.json). Shaped like the auth provider's view. */
 	authUsers: ReturnType<typeof createLocalAuthUserStore>;
+	/** Every event emitted since `freshProviders`, in order. */
+	events: DomainEvent[];
 	cleanup: () => Promise<void>;
 }
 
@@ -86,7 +105,7 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 		SELVA_AT_REST_KEY: TEST_AT_REST_KEY
 	};
 
-	const events = new NoopEventSink();
+	const events = new RecordingEventSink();
 	const auth = LocalAuthProvider.fromEnv(env);
 	const data = LocalDataProvider.fromEnv(env, events);
 	const storage = LocalStorageProvider.fromEnv(env);
@@ -113,6 +132,7 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 		flags: config.flags ?? {},
 		definitionService,
 		authUsers,
+		events: events.events,
 		cleanup: async () => {
 			clearTestProviders();
 			await fs.rm(root, { recursive: true, force: true });
@@ -388,6 +408,27 @@ export function installOAuthShim(
 }
 
 /**
+ * Augment the test's auth provider with a `sessionRefresh` capability that
+ * records which tokens were revoked. The local provider mints stateless HMAC
+ * tokens and so exposes none — Supabase does, and it is the provider whose
+ * sessions outlive cookie deletion.
+ */
+export function installSessionRefreshShim(tp: TestProviders): { revoked: string[] } {
+	const state = { revoked: [] as string[] };
+	const shim: ISessionRefresh = {
+		async refreshSession() {
+			throw new Error('sessionRefresh shim: refreshSession not implemented for tests');
+		},
+		async revokeSession(token: string) {
+			state.revoked.push(token);
+			return true;
+		}
+	};
+	(tp.config.auth as { sessionRefresh?: ISessionRefresh }).sessionRefresh = shim;
+	return state;
+}
+
+/**
  * Set an env-stub key visible to code that imports `$env/dynamic/private`.
  * Mutates the shared stub object — restore in afterEach if needed.
  */
@@ -410,6 +451,15 @@ export interface AcmeFixture {
 	acmePublic: Project;
 }
 
+/**
+ * The §11 cast.
+ *
+ * **Alice is the org's `ownerId` but her membership row is `admin`.** Those are
+ * separate fields and this fixture deliberately makes them disagree, because
+ * production can too. Every org-role gate reads the **membership row**, so a
+ * test that treats `alice` as "the owner" will invert its own result and pass
+ * for the wrong reason — seed an explicit `role: 'owner'` member instead.
+ */
 export async function seedAcme(tp: TestProviders): Promise<AcmeFixture> {
 	const alice = await seedUser(tp, 'alice@acme.test');
 	const bob = await seedUser(tp, 'bob@acme.test');

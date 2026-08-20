@@ -10,6 +10,13 @@ layout plus each file's `published: true` frontmatter
 - [what-is-selva.md](./what-is-selva.md) — the problem Selva solves and the two halves that make it work
 - [architecture.md](./architecture.md) — how the plugin, app, Rhino.Compute, and providers fit together
 
+The Selva app carries its own internal specs, kept next to the code they
+describe rather than here — they answer "is this route/store/rule correct?",
+not "how does Selva work?":
+
+- **[docs/contributing/selva-architecture.md](./contributing/selva-architecture.md)** — entity model, invariants, provider contracts, and what's designed but not yet wired
+- **[docs/contributing/permissions.md](./contributing/permissions.md)** — the access-control authority; its permission matrix is parsed by the API conformance test
+
 ## [self-hosting/](./self-hosting/) — run the Selva app
 
 For operators deploying `@selvajs/selva`.

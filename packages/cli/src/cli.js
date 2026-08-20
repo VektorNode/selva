@@ -15,6 +15,7 @@ const COMMANDS = {
 	logs: () => import('./commands/pm2.js').then((m) => m.runLogs),
 	update: () => import('./commands/pm2.js').then((m) => m.runUpdate),
 	migrate: () => import('./commands/migrate.js').then((m) => m.runMigrate),
+	'setup-proxy': () => import('./commands/proxy.js').then((m) => m.runSetupProxy),
 	keys: () => import('./commands/keys.js').then((m) => keysDispatch(m))
 };
 
@@ -51,6 +52,15 @@ const USAGE = {
 		usage: 'selva migrate',
 		blurb:
 			'Bring package.json and the deployment layout onto the current release.\nRewrites keys, never comments.'
+	},
+	'setup-proxy': {
+		usage: 'selva setup-proxy [--domain <fqdn>] [--acme-email <addr>]',
+		blurb:
+			"Put Caddy in front of the app with a Let's Encrypt certificate. Installs\nCaddy if missing, writes /etc/caddy/Caddyfile, validates, and reloads.\nNeeds sudo; prints the config to apply by hand when it can't escalate.",
+		flags: [
+			['--domain', 'Domain to serve. Prompts (defaulting to ORIGIN) when omitted.'],
+			['--acme-email', "Address Let's Encrypt sends expiry notices to."]
+		]
 	},
 	keys: {
 		usage: 'selva keys rotate <hmac|at-rest>',
@@ -129,6 +139,7 @@ function printHelp() {
 			'  logs                    pm2 logs selva-compute',
 			'  update                  npm update @selvajs/cli + @selvajs/selva, then restart',
 			'  migrate                 Bring package.json onto the current layout',
+			'  setup-proxy             Install + configure Caddy with TLS for this deployment',
 			'  keys rotate <hmac|at-rest>   Rotate a secret in .env (destructive)',
 			'',
 			pc.dim('`npx selva <command> --help` explains one command.'),

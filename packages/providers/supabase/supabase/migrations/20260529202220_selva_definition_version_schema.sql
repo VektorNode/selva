@@ -2,8 +2,7 @@
 -- Cache the compute-extracted UI schema on each definition version.
 --
 -- The render path used to re-fetch the schema from Rhino.Compute on every load;
--- it is now extracted + validated once at upload and stored here. See
--- packages/selva/specs/SchemaCaching.md.
+-- it is now extracted + validated once at upload and stored here.
 --
 -- `change_note` is added in the same migration: it is referenced by
 -- SupabaseDefinitionStore (versionToRow / rowToVersion) but was never created

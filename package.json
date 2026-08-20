@@ -18,6 +18,9 @@
 	"scripts": {
 		"dev:plugin": "pnpm --filter @selvajs/plugin-ui dev",
 		"dev:selva": "pnpm --filter @selvajs/selva dev",
+		"dev:local": "node scripts/dev-provider.mjs local",
+		"dev:supabase": "node scripts/dev-provider.mjs supabase",
+		"dev:header": "node scripts/dev-provider.mjs header",
 		"dev:ui": "pnpm --filter @selvajs/ui dev",
 		"dev:website": "pnpm --filter @selvajs/website dev",
 		"watch:ui": "pnpm --filter @selvajs/ui build:watch",
@@ -61,7 +64,7 @@
 		]
 	},
 	"devDependencies": {
-		"@changesets/cli": "^2.31.1",
+		"@changesets/cli": "^3.0.0",
 		"@eslint/compat": "^2.0.5",
 		"@eslint/js": "^10.0.1",
 		"@selvajs/header-auth-provider": "workspace:*",
@@ -80,7 +83,7 @@
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.22.0",
-		"globals": "^17.9.0",
+		"globals": "^17.11.0",
 		"husky": "^9.1.7",
 		"lint-staged": "^17.3.0",
 		"prettier": "catalog:",
@@ -91,7 +94,7 @@
 		"svelte-check": "catalog:",
 		"tailwindcss": "catalog:",
 		"three": "catalog:",
-		"turbo": "^2.10.8",
+		"turbo": "^2.10.10",
 		"typescript": "catalog:",
 		"typescript-eslint": "^8.66.0",
 		"vite": "catalog:"

@@ -56,8 +56,9 @@
 	<Card.Header>
 		<Card.Title class="text-sm font-medium">System health</Card.Title>
 		<Card.Description>
-			Re-runs runtime integrity checks live (not the cached boot snapshot), so results reflect the
-			current state after any fix.
+			Tests the things that break solving: compute server keys, the database schema, whether the
+			default compute server answers, and whether the data folder is writable. Runs the checks fresh
+			each time — after fixing something, run it again to confirm.
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-4">

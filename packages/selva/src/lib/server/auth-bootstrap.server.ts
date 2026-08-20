@@ -47,8 +47,17 @@ export async function bootstrapUserSession(user: AuthUser): Promise<void> {
 	let grantedAdminHere = false;
 	if (!hasAdmin) {
 		if (!shouldBootstrapAdmin(user, env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL, tenancy)) return;
-		await perms.set(SYSTEM_CONTEXT, user.id, [...ALL_PLATFORM_PERMISSIONS]);
-		grantedAdminHere = true;
+		// `claimFirstInstanceAdmin`, not `set`: the probe above and the write are
+		// two round-trips, and with no BOOTSTRAP_INSTANCE_ADMIN_EMAIL configured
+		// every signer is eligible — so two people signing in at the same moment
+		// both saw "no admin" and both became permanent platform admins. The
+		// store re-checks under a lock and only one caller wins.
+		grantedAdminHere = await perms.claimFirstInstanceAdmin(SYSTEM_CONTEXT, user.id, [
+			...ALL_PLATFORM_PERMISSIONS
+		]);
+		// Lost the race: an admin now exists and it is not this user. Everything
+		// below is org self-heal, which the winner performs.
+		if (!grantedAdminHere) return;
 	}
 
 	// Self-heal: deployments that skipped /setup (header-auth, OAuth callback)

@@ -1,5 +1,5 @@
 /**
- * Upload schema-validation gate (docs/contributing/schema-caching.md §3).
+ * Upload schema-validation gate.
  *
  * Every upload must extract + validate the definition's UI schema from
  * Rhino.Compute BEFORE any blob or version row is written. These tests drive

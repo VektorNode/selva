@@ -355,6 +355,7 @@
 							{logoUrl}
 							{onViewerReady}
 							viewerConfig={{
+								...viewerConfig,
 								backgroundColor: schema?.viewerOptions?.backgroundColor
 							}}
 						/>

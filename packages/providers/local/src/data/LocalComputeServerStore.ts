@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import {
 	isOrgServer,
 	isPlatformServer,
+	scopeConfigToOrg,
 	type IComputeServerStore,
 	type ComputeConfig,
 	type ComputeServerConfig,
@@ -180,13 +181,14 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		const servers = opts.includeApiKeys
 			? this.decryptApiKeys(all.servers)
 			: all.servers.map((s) => ({ ...s, apiKey: undefined }));
-		return {
+		const config: ComputeConfig = {
 			// `hasApiKey` reads the stored (still-encrypted) value, so presence is
 			// reported without decrypting anything.
 			servers: servers.map((s, i) => ({ ...s, hasApiKey: !!all.servers[i].apiKey })),
 			defaultServerId: all.defaultServerId,
 			orgDefaults: all.orgDefaults
 		};
+		return opts.scopeToOrgId ? scopeConfigToOrg(config, opts.scopeToOrgId) : config;
 	}
 
 	/**

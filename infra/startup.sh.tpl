@@ -16,10 +16,11 @@ echo ""
 INSTALL_DIR="/home/${ssh_user}/selva"
 
 # ----------------------------------------------------------------------------
-# 1. Install Node.js + npm (NodeSource — gives us Node 20 with corepack).
+# 1. Install Node.js + npm (NodeSource — gives us Node 24 with corepack).
+#    Must stay >= the `engines.node` floor in every package.json.
 # ----------------------------------------------------------------------------
 if ! command -v node >/dev/null 2>&1; then
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
   apt-get install -y nodejs
 fi
 echo "Node $(node -v), npm $(npm -v)"
@@ -75,9 +76,10 @@ fi
 # ----------------------------------------------------------------------------
 # 3. Caddy in front of 127.0.0.1:3000 (prod mode, Let's Encrypt).
 #
-# Inlined from scripts/setup-caddy.sh (prod path). The dev / HTTP path lives
-# in that script for manual setup; for Terraform we only ship the prod path
-# so there's one fewer way to footgun the deploy.
+# Kept byte-identical to what `selva setup-proxy` generates
+# (packages/cli/src/caddyfile.js). Two deployment routes, one edge config: any
+# change here has to land there too, or a Terraform host and a hand-built one
+# stop behaving the same way.
 # ----------------------------------------------------------------------------
 if ! command -v caddy >/dev/null 2>&1; then
   apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
@@ -115,8 +117,11 @@ ${domain} {
 	@api path /api/*
 	header @api Cache-Control "no-cache, no-store, must-revalidate"
 
+	# Must clear the app's own caps (COMPUTE_REQUEST_MAX_BYTES / BODY_SIZE_LIMIT,
+	# both 256 MB) — Caddy rejects first, so a lower value here silently caps
+	# every upload no matter what .env says.
 	request_body {
-		max_size 100mb
+		max_size 256mb
 	}
 
 	log {

@@ -1,14 +1,11 @@
 <script lang="ts">
 	import { Button } from '@selvajs/ui';
-	import { ChevronDown, ChevronRight, Trash2 } from '@lucide/svelte';
+	import { Ban, ChevronDown, ChevronRight, Trash2 } from '@lucide/svelte';
 	import type { OrgPermission, OrgRole, PlatformPermission } from '@selvajs/platform';
-	import {
-		ALL_ORG_PERMISSIONS,
-		ALL_PLATFORM_PERMISSIONS,
-		OWNER_ADMIN_ONLY_PERMISSIONS
-	} from '@selvajs/platform';
+	import { ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import { primaryLabel, emailSubtitle } from '$lib/user-display';
 
 	type FlatPermission = PlatformPermission | OrgPermission;
 
@@ -19,9 +16,11 @@
 		soleInstanceAdmin: boolean;
 		updating: boolean;
 		deleting: boolean;
+		disabling: boolean;
 		onToggleExpand: () => void;
-		onTogglePermission: (perm: FlatPermission, checked: boolean) => Promise<void>;
+		onTogglePermission: (perm: PlatformPermission, checked: boolean) => Promise<void>;
 		onDelete: () => void;
+		onDisable: () => void;
 	}
 
 	let {
@@ -31,9 +30,11 @@
 		soleInstanceAdmin,
 		updating,
 		deleting,
+		disabling,
 		onToggleExpand,
 		onTogglePermission,
-		onDelete
+		onDelete,
+		onDisable
 	}: Props = $props();
 
 	const PERM_LABEL: Record<FlatPermission, string> = {
@@ -41,7 +42,7 @@
 		manage_instance_users: 'Manage instance users',
 		manage_compute: 'Manage compute',
 		manage_updates: 'Manage updates',
-		manage_org_members: 'Manage members',
+		manage_org_members: 'Manage org members',
 		manage_org_compute: 'Manage org compute',
 		manage_definitions: 'Manage definitions',
 		manage_projects: 'Manage projects'
@@ -64,40 +65,39 @@
 		member: 'border-border text-muted-foreground'
 	};
 
-	const displayLine = $derived(
-		user.displayName ? `${user.displayName} · ${user.email ?? user.id}` : (user.email ?? user.id)
-	);
+	const displayLine = $derived.by(() => {
+		const primary = primaryLabel(user, user.id);
+		const secondary = emailSubtitle(user);
+		return secondary ? `${primary} · ${secondary}` : primary;
+	});
 
 	const isOwnerOrAdmin = $derived(user.orgRole === 'owner' || user.orgRole === 'admin');
 
-	// Compact summary chips for collapsed state — only show explicit grants
-	// beyond the role default. Owners/admins get all org perms implicitly so
-	// they show no chips. Members show their granular org perms.
-	const summaryPerms = $derived<FlatPermission[]>(
-		user.permissions.filter((p) => {
-			if ((ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]).includes(p)) return true;
-			if (isOwnerOrAdmin) return false;
-			return true;
-		})
+	// Owners/admins hold every org permission implicitly, so listing them adds
+	// nothing the role badge doesn't already say.
+	const orgSummaryPerms = $derived<OrgPermission[]>(isOwnerOrAdmin ? [] : user.orgPermissions);
+
+	// Deleting or disabling a platform admin is a platform-scope permission
+	// change, so `manage_instance_users` alone does not authorize it — the server
+	// refuses with 403 (requireCanRemoveInstanceAdmin). The checkboxes already
+	// mirrored that rule via `platformLocked`; these buttons did not, so the page
+	// offered a `manage_instance_users` holder a live Delete on every admin row.
+	const targetIsPlatformAdmin = $derived(user.platformPermissions.includes('instance_admin'));
+	const platformScopeLocked = $derived(targetIsPlatformAdmin && !isPlatformAdmin);
+
+	const removalBlockReason = $derived(
+		platformScopeLocked
+			? 'Only a platform admin can remove another platform admin.'
+			: soleInstanceAdmin
+				? 'Cannot remove the only instance admin. Promote another user first.'
+				: null
 	);
 
-	function isPlatformPerm(p: FlatPermission) {
-		return (ALL_PLATFORM_PERMISSIONS as readonly FlatPermission[]).includes(p);
-	}
-
-	function isOwnerAdminOnly(p: FlatPermission) {
-		return (OWNER_ADMIN_ONLY_PERMISSIONS as readonly FlatPermission[]).includes(p);
-	}
-
-	function checkboxState(perm: FlatPermission) {
-		const checked = user.permissions.includes(perm);
-		const platformLocked = isPlatformPerm(perm) && !isPlatformAdmin;
+	function checkboxState(perm: PlatformPermission) {
+		const checked = user.platformPermissions.includes(perm);
+		const platformLocked = !isPlatformAdmin;
 		const soleAdminLock = perm === 'instance_admin' && soleInstanceAdmin;
-		// Member excluded from owner/admin-only org perms
-		const memberExcluded =
-			!isPlatformPerm(perm) && isOwnerAdminOnly(perm) && user.orgRole === 'member';
-		const locked = platformLocked || soleAdminLock || memberExcluded;
-		return { checked, locked, soleAdminLock, platformLocked, memberExcluded };
+		return { checked, locked: platformLocked || soleAdminLock, soleAdminLock, platformLocked };
 	}
 </script>
 
@@ -116,7 +116,7 @@
 			{/if}
 		</button>
 
-		<UserAvatar name={user.displayName ?? user.email ?? user.id} />
+		<UserAvatar name={primaryLabel(user, user.id)} />
 
 		<div class="min-w-0 flex-1">
 			<div class="flex items-center gap-2">
@@ -139,20 +139,23 @@
 						class="rounded-full border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 font-mono text-[10px] tracking-wide text-amber-600 uppercase dark:text-amber-400"
 						title="Provisioned but has never signed in. Permissions take effect on first login."
 					>
-						invited
+						never signed in
 					</span>
 				{/if}
 			</div>
 			<p class="text-muted-foreground truncate font-mono text-xs">{user.id}</p>
-			{#if !expanded && summaryPerms.length > 0}
+			{#if !expanded && (user.platformPermissions.length > 0 || orgSummaryPerms.length > 0)}
 				<div class="mt-1.5 flex flex-wrap gap-1">
-					{#each summaryPerms as p (p)}
+					{#each user.platformPermissions as p (p)}
 						<span
-							class={`rounded-full px-2 py-0.5 font-mono text-[10px] ${
-								isPlatformPerm(p)
-									? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-									: 'bg-muted text-muted-foreground'
-							}`}
+							class="rounded-full bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] text-amber-700 dark:text-amber-400"
+						>
+							{PERM_LABEL[p]}
+						</span>
+					{/each}
+					{#each orgSummaryPerms as p (p)}
+						<span
+							class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 font-mono text-[10px]"
 						>
 							{PERM_LABEL[p]}
 						</span>
@@ -161,14 +164,25 @@
 			{/if}
 		</div>
 
+		{#if !user.disabled}
+			<Button
+				size="sm"
+				variant="ghost"
+				disabled={disabling || !!removalBlockReason}
+				onclick={onDisable}
+				title={removalBlockReason ?? 'Disable user — they keep their history but cannot sign in'}
+				class="text-muted-foreground hover:text-foreground h-8 w-8 shrink-0 p-0"
+			>
+				<Ban class="h-4 w-4" />
+			</Button>
+		{/if}
+
 		<Button
 			size="sm"
 			variant="ghost"
-			disabled={deleting || soleInstanceAdmin}
+			disabled={deleting || !!removalBlockReason}
 			onclick={onDelete}
-			title={soleInstanceAdmin
-				? 'Cannot delete the only instance admin. Promote another user first.'
-				: 'Delete user'}
+			title={removalBlockReason ?? 'Delete user'}
 			class="text-destructive hover:text-destructive h-8 w-8 shrink-0 p-0"
 		>
 			<Trash2 class="h-4 w-4" />
@@ -212,40 +226,23 @@
 				<h4 class="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
 					Organization
 				</h4>
-				{#if isOwnerOrAdmin}
-					<p class="text-muted-foreground text-sm">
-						<strong class="text-foreground capitalize">{user.orgRole}s</strong> automatically
-						receive all organization permissions. To grant a custom subset, change the role to
-						<span class="font-mono">member</span>.
-					</p>
+				{#if !user.orgRole}
+					<p class="text-muted-foreground text-sm">Not a member of the active organization.</p>
 				{:else}
-					<div class="grid gap-2 sm:grid-cols-2">
-						{#each ALL_ORG_PERMISSIONS as p (p)}
-							{@const state = checkboxState(p)}
-							<label
-								class={`flex items-start gap-2 rounded-md border p-2.5 ${
-									state.locked
-										? 'border-border cursor-not-allowed opacity-60'
-										: 'border-border hover:bg-accent/40 cursor-pointer'
-								}`}
-								title={state.memberExcluded
-									? 'Only owners and admins can hold this permission.'
-									: undefined}
-							>
-								<input
-									type="checkbox"
-									class="mt-0.5 shrink-0"
-									checked={state.checked}
-									disabled={updating || state.locked}
-									onchange={(e) => onTogglePermission(p, (e.target as HTMLInputElement).checked)}
-								/>
-								<div class="min-w-0">
-									<p class="text-sm leading-tight font-medium">{PERM_LABEL[p]}</p>
-									<p class="text-muted-foreground mt-0.5 text-xs">{PERM_DESC[p]}</p>
-								</div>
-							</label>
-						{/each}
-					</div>
+					<p class="text-muted-foreground text-sm">
+						{#if isOwnerOrAdmin}
+							<strong class="text-foreground capitalize">{user.orgRole}s</strong> hold every organization
+							permission.
+						{:else if user.orgPermissions.length > 0}
+							Member, holding {user.orgPermissions.map((p) => PERM_LABEL[p]).join(', ')}.
+						{:else}
+							Member, with no organization permissions granted.
+						{/if}
+					</p>
+					<p class="text-muted-foreground mt-2 text-xs">
+						Role and organization permissions are managed at
+						<a href="/team/members" class="underline">Members &amp; roles</a>.
+					</p>
 				{/if}
 			</section>
 		</div>

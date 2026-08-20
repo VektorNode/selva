@@ -24,9 +24,7 @@ selva keys rotate hmac      # rotate SELVA_HMAC_KEY (logs everyone out)
 selva keys rotate at-rest   # rotate SELVA_AT_REST_KEY (compute API key needs re-entry)
 ```
 
-`selva <command> --help` explains one command; `selva help` lists them all.
-
-`selva init` never regenerates `SELVA_HMAC_KEY` or `SELVA_AT_REST_KEY` once they're set — rotating those is `keys rotate`'s job, since it invalidates sessions or encrypted data. A `.selva-version` marker records which CLI version scaffolded the directory, so a later `selva migrate` knows what layout it's upgrading from.
+`selva init` never regenerates `SELVA_HMAC_KEY` or `SELVA_AT_REST_KEY` once they're set — rotating those is `keys rotate`'s job, since it invalidates sessions or encrypted data.
 
 ## Relationship to `@selvajs/selva`
 

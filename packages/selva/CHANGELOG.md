@@ -1,5 +1,260 @@
 # @selvajs/selva
 
+## 4.13.1
+
+### Patch Changes
+
+- e782803: chore(deps): bump the npm group across 1 directory with 12 updates
+
+## 4.13.0
+
+### Minor Changes
+
+- 8d71c01: Wire org-member removal into `/team/members`, and stop rendering the same email twice.
+
+  `DELETE /api/v1/orgs/{orgId}/members/{userId}` had been fully built and tested —
+  the owner-only gate, the sole-owner 409, the invite revocation that closes the
+  re-entry path, the `org_member.removed_orphaning_projects` event — but nothing on
+  the page called it. The only reachable delete control was the one on the invites
+  list, which revokes an unaccepted invite and not a membership, so an operator's
+  route to removing someone from an org was the API directly. Instance scope
+  (`/admin/users`) and project scope (the settings dialog) both already had theirs.
+
+  The button mirrors the route's gates rather than inventing new ones: no
+  self-removal, no removing the sole owner, and no admin removing an owner —
+  `canChangeOrgRole` again, on the harder-to-reverse half of the pair. Those live in
+  `removal-gate.ts` beside the page, not inline in the component, so they are
+  unit-testable; the route stays load-bearing. The confirm copy names what the
+  server will not block, since removal proceeds and **reports** the projects it
+  orphans: it says they can be adopted from Team → Reclaim, which is the recovery
+  path that already existed for exactly this.
+
+  Separately, header-auth deployments were showing `x@y.com · x@y.com` on the admin
+  user list. The provider mirrors `email` and `displayName` from two proxy headers,
+  and Entra forwards `mail` for both when the display-name claim is unmapped, so the
+  pair arrives identical. Four surfaces rendered that pair — the admin user row and
+  its avatar, the platform-project grantee picker, and the project member picker's
+  list and selected row — each with its own copy of the "show both" test, so the
+  duplicate appeared in all of them. One `user-display.ts` now owns it, compared
+  case-insensitively because the allowlist case-folds the UPN it materializes
+  `email` from but leaves the forwarded display name as the IdP sent it.
+
+  One authority fix falls out of the same pass: `/team/settings` decided "are you
+  the owner" from `Organization.ownerId`, the only place left that read that column
+  as authority. It records who created the org and can disagree with the roster —
+  the `seedAcme` fixture makes it disagree on purpose — so a founder demoted to
+  `admin` still saw the ownership copy and the delete-org danger zone. It reads the
+  membership row now, like every other org-role gate. Both controls behind it are
+  still disabled pending their endpoints, which is why this was cosmetic today and
+  worth fixing before it wasn't.
+
+## 4.12.0
+
+### Minor Changes
+
+- e779034: Header auth: stop rewriting a stored UPN from request headers, and detect a
+  non-stripping proxy. Affects deployments running the bundled forward-auth
+  provider (`SELVA_AUTH_PROVIDER=header`); no other provider is reachable by this.
+
+  `identifyFromHeaders` no longer calls `rebindUpn` after an email-fallback match. Both
+  headers on that path are proxy-supplied, so the rebind let one request repoint an
+  existing allowlist row's lookup key at a caller-supplied UPN — impersonation became
+  persistence, and a `.catch(() => {})` hid any failure. The fallback still adopts the
+  matched row, so Entra deployments where the UPN differs from the mail address keep
+  working; they resolve by email on each login rather than being rewritten after the
+  first. `rebindUpn` remains on `AllowlistStore` for operator-driven correction.
+
+  A UPN header carrying more than one value is now refused with a warning that names the
+  cause. `Headers.get()` joins repeats with `", "`, which is what a proxy that fails to
+  strip client-supplied copies produces. Such a request never matched an allowlist row
+  anyway, so no working login changes — the warning replaces a failure that was
+  indistinguishable from "user not allowlisted". The check applies to the UPN header
+  only: display names legitimately contain commas.
+
+- e779034: Give the org-owner boundary one predicate instead of three hand-written copies.
+
+  Three routes decided whether an actor may grant or revoke org `owner`/`admin`
+  standing — minting an invite, changing a member's role, and removing an owner —
+  and each spelled the rule out longhand. Two had already drifted: the invite route
+  let an admin mint themselves an `owner` invite, and member `DELETE` removed an
+  owner that `PATCH` would not let them demote. The unguarded operation was the
+  harder one to reverse; a demoted owner can be re-promoted, a removed one has lost
+  every project membership to the cascade.
+
+  `canChangeOrgRole({ actorMember, role })` now lives in `rules.ts` beside the
+  project predicates, and all three routes call it. It reads the **membership
+  row**, never `Organization.ownerId` — those are separate fields that can
+  disagree, and only the row is authority here.
+
+  One tightening falls out of the consolidation: the role-change branch of `PATCH
+/api/v1/orgs/{orgId}/members/{userId}` now gates on both the role being granted
+  and the role being taken away. Demoting an owner crosses the boundary even though
+  granting `member` does not, and the old code checked only the target role.
+
+  The point is not the deduplication. Changing that single predicate to admit
+  admins turns **nine** route tests red across all three files plus two rule tests,
+  from one edit — previously, breaking the rule in one route left the other two
+  silently green, which is exactly how it drifted twice.
+
+- e779034: Report projects left without an owner when an org member is removed, instead of orphaning them silently.
+
+  `removeOrgMember` cascades every `project_members` row, so removing someone who
+  was the only owner of a project left that project with nobody able to manage it —
+  no settings, no roster, no delete — and nothing anywhere said so.
+
+  Permissions.md §10 promised the removal would be **blocked** until a new owner was
+  assigned. That rule is retired rather than implemented. Blocking makes the cost of
+  offboarding scale with how many projects the departing person owned, which is
+  backwards: the most prolific people are the ones whose departure most needs to be
+  clean, and an offboarding that stalls halfway leaves a live account in the org
+  while someone works through the backlog. Auto-transfer was rejected separately —
+  it hands someone authority silently, by a heuristic nobody remembers, and six
+  months later the audit log cannot explain why they own it.
+
+  `DELETE /api/v1/orgs/{orgId}/members/{userId}` now emits
+  `org_member.removed_orphaning_projects` carrying every affected project id in one
+  event, rather than one event each: an admin reading the log wants "this
+  offboarding cost three projects", not three rows to correlate. Reclaim already
+  adopts an ownerless project, so the recovery path predates the problem — what was
+  missing was any signal that recovery was needed.
+
+  The check runs **before** the removal, because the cascade soft-deletes the very
+  rows it reads. In the other order it finds no owners, concludes nothing was
+  orphaned, and reports nothing on precisely the case it exists for — so that
+  ordering has its own test.
+
+### Patch Changes
+
+- e779034: Admin routes adopt the shared HTTP wrapper, and two conformance tests keep both surfaces honest.
+
+  `/api/admin/*` had zero of 22 handlers using `apiRoute`, against 40 of 43 in v1.
+  That was drift rather than design, and the cause was the file path: the helpers
+  lived at `api/v1/route.ts`, and a helper under a version prefix reads as
+  belonging to that version. So the sibling surface hand-rolled `if (!id)
+apiError(400, …)` and a per-handler `try/catch` instead. Nothing in those helpers
+  was ever v1-specific; they now live at `api/http.ts`, with `api/v1/route.ts` left
+  as a re-export so existing importers are untouched.
+
+  **Two inner catches were kept deliberately.** `apiRoute` re-throws anything
+  already structured, so a `apiError(409, …)` passes straight through — which means
+  a `catch` mapping `ProviderError.statusCode === 409` to a typed conflict is doing
+  real work. A blanket "remove every try/catch" sweep would have turned two clean
+  409s into 500s. The compute routes keep theirs too: they log deliberately and
+  return a specific 500. Only the `catch (err) { handleApiError(err, '…') }` tail
+  that `apiRoute` now owns was deleted.
+
+  Streaming and SSE handlers stay unwrapped on purpose — once the status line is
+  sent a wrapper cannot change the response, so `apiRoute` has nothing to offer
+  them and wrapping them would imply it does.
+
+  Two new conformance checks, because nothing had ever pinned either fact:
+
+  - **Every route handler is wrapped**, generated per route/method across both
+    surfaces. The exemption list for streaming handlers has its own test: an
+    exemption naming a route that no longer ships fails, so a stale exemption
+    cannot silently excuse nothing.
+  - **Every shipped route appears in the Permissions.md §8 matrix.** Deliberately
+    one-directional — a row with no route is fine, since §8 documents unbuilt
+    endpoints on purpose; only shipped-but-unlisted fails. It found 16 routes with
+    no row, two rows whose path never matched a real route
+    (`/api/v1/compute/solve` does not exist), and one naming the wrong permission
+    (`/api/admin/system/update` was documented as `manage_updates`; the code
+    requires `instance_admin`).
+
+  Also documents `ADDRESS_HEADER` / `XFF_DEPTH` in `.env.example`. Both are read by
+  `@sveltejs/adapter-node`, but the login and email-sign-in rate limiters key on
+  `getClientAddress()` — behind a proxy that is the proxy's own IP for every
+  request, so one noisy client can lock out the whole deployment and no per-IP
+  limit means anything.
+
+## 4.11.0
+
+### Minor Changes
+
+- 9eefad5: `/admin/users` and `/team/members` split along the scope they actually govern, and an invite to an existing account joins it to the org instead of failing.
+
+  ## One surface per scope
+
+  The two pages overlapped because `/admin/users` edited org memberships and minted org invites — work that belongs to `/team/members` under `manage_org_members`. `/admin/users` is now platform-scoped only: it lists identities, edits the four `PlatformPermission` values, and deletes users. Org role and permissions render there read-only, linking to Members & roles.
+
+  Invites live at `/team/members` alone. The duplicate form, copy-link banner, and invites card are gone from `/admin/users`; both pages were already calling the same `/api/v1/orgs/{orgId}/invites` endpoint, so nothing moved — the second copy was deleted.
+
+  **`PATCH /api/admin/users/[id]` no longer writes org memberships.** It gated only on `manage_instance_users` and wrote through `SYSTEM_CONTEXT`, so a caller who was not a member of the acting org and held no `manage_org_members` could still rewrite that org's permissions — including resetting an owner's — and the sole-owner invariant that `/api/v1/orgs/{orgId}/members/{userId}` enforces never ran. The body now accepts platform permissions only.
+
+  `POST /api/admin/users` keeps attaching new users to the acting org, as a bare `member` with no permissions: under header-auth the IdP holds the credential, so there is no invite to accept and this is the only way in. Access is granted afterwards at Members & roles.
+
+  `GET /api/admin/users` returns `platformPermissions`, `orgRole`, and `orgPermissions` instead of one merged `permissions` array. `/api/admin/*` is unversioned and internal, and its only consumer is its own page.
+
+  ## Inviting someone who already has an account
+
+  Accepting an invite assumed the invitee was new and always created an account, so an email that already had one hit the provider's duplicate error. The page now resolves the email first and takes a `join` mode when the account exists: no signup, just the membership. This is what multi-tenant needs — one person, one login, several orgs.
+
+  **`join` requires a session belonging to the invitee.** The token proves the invite is genuine, not that the visitor is the person it names; for a new account that gap closes itself, because accepting is what mints the identity. An existing account has to prove it is theirs, or a forwarded link would let anyone join an org as someone else.
+
+  Re-accepting an invite to an org you are already in consumes the invite and leaves the membership untouched. `addOrgMember` upserts in both adapters, so an unguarded accept of a `member` invite would have demoted an existing owner.
+
+  ## One admission path per provider
+
+  The allowlist form appeared wherever the provider implemented `createUser`, which says a provider _can_ allowlist, not that it _should_. It is now shown only where no credential-owning path exists (`createUser && !passwordAuth`).
+
+  On Supabase that removes a second, confusing route to the same goal — and a trap: allowlisting minted a confirmed `auth.users` row with no password, so unless magic-link or OAuth happened to be configured, it created a user who could not sign in at all. Header-auth is unchanged, since allowlisting is the only way into those deployments. Where the form is hidden, the page links to Members & roles rather than offering a second invite form.
+
+  ## "User" and "member" mean different things, and the copy now says so
+
+  A user is an identity that can sign in; a member is one user's role and permissions inside one org. The same person is an owner of one org and a plain member of another, so a role is never a property of the person — only of the pairing. The API layers already respected this; the UI leaked across it.
+
+  - The cross-link from `/admin/users` said `Invite user` for the button that `/team/members` calls `Invite member` — one action, two names. It mints an org invite, so it is member vocabulary.
+  - The `invited` badge is now `never signed in`. It keys off `lastLoginAt`, so on an allowlisted identity no invite was ever sent; the tooltip already said "provisioned".
+  - Filters read `All org roles` and `All instance permissions` rather than `All roles` and `All permissions`. Both scopes appear in one filter row, and the role one describes the acting org only — a distinction multi-tenant makes load-bearing.
+  - One timestamp, one label: the roster showed `joinedAt` as either "Joined" or "Invited" depending on `lastLoginAt`, an unrelated fact. It now always reads "Joined", with "never signed in" appended separately.
+  - Smaller: `Manage members` → `Manage org members` on the admin page, matching its `Manage org compute` sibling; the member PATCH toast names its object (`Member updated`) instead of a bare `Updated`; the two permission-label maps that render side by side no longer differ in casing; "teammates" and "Go to login" are gone, each having been the only occurrence of a term used differently everywhere else.
+
+  `docs/self-hosting/concepts/permissions.md` gains the vocabulary section this was missing — it already drew the distinction most carefully, so the words live next to the model rather than in a glossary of their own. The Entra guide pointed at **Admin → Users → New user**, a control that does not exist; it now names `Allowlist user` and the org step that follows it.
+
+## 4.10.0
+
+### Minor Changes
+
+- 679a24f: Invites carry instance permissions; admins no longer set another user's password.
+
+  Creating a user had two shapes depending on the provider: an admin typed someone
+  else's password (Local, Supabase), or allowlisted an email and let the IdP hold
+  the credential (header-auth/Entra). The first is now gone. A provider that owns
+  credentials admits users by invite, so the account holder is the only party who
+  ever chooses their password.
+
+  That removal needed a replacement first: the admin-sets-password form was the
+  only way to create a second instance admin, so deleting it alone would have left
+  a deployment stuck with the admin it bootstrapped with. Invites now carry
+  `platformPermissions`, mintable only by a caller who already holds
+  `instance_admin` — `manage_org_members` is enough to invite people, so without
+  that check an org admin could mint themselves an admin invite and accept it.
+
+  The allowlist path (`createUser`) is untouched — it is the only way into a
+  header-auth deployment, and it is now the sole branch of `POST /api/admin/users`.
+  The local provider implements no `createUser`, so that route reports 501 there
+  and points at invites; the admin UI hides the form to match.
+
+  In the invite form, platform permissions render as their own group. The
+  owner/admin role lock renders a checkbox as checked-and-disabled, and reusing it
+  across scopes would have granted `instance_admin` to every owner invite.
+
+  Requires `supabase db push` — adds `selva.invites.platform_permissions`.
+
+## 4.9.1
+
+### Patch Changes
+
+- c285409: Redirect `/login` to `/setup` on a deployment that has no instance admin yet.
+
+  `/setup` already redirected to `/login` once an admin existed, but not the reverse — and `/login` is on the public-route allowlist, so the first-run redirect in `hooks.server.ts` skipped it. A fresh deployment therefore served a fully rendered login form on which every credential failed with "Invalid credentials", and the only way to reach the bootstrap flow was guessing the `/setup` URL. The landing page's own "Sign in" link pointed straight at it.
+
+  The gate keys on `hasInstanceAdmin` rather than user count, matching what `/setup` uses — an OIDC provider that can't enumerate users still answers it. The form action carries the same check, so a stale or direct POST redirects instead of spending a rate-limit slot on a password that cannot exist yet.
+
+## 4.9.0
+
+## 4.8.2
+
 ## 4.8.1
 
 ### Patch Changes

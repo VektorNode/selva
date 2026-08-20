@@ -108,10 +108,36 @@ New module `packages/platform/src/apiTokens/` mirroring the `invites/` layout:
   `all-projects-admin` is the cross-project admin/IT capability — the only resource whose reach
   exceeds the creator's membership. Minting a scope containing it is rejected unless the creator holds
   `read_all_projects`, and its `action` may only be `read`/`solve` (never `write`).
-- **`interface.ts`** — `IApiTokenStore` (create / getByTokenHash(SYSTEM_CONTEXT,hash) / listByUser(ctx,userId) / revoke(ctx,id) / touchLastUsed(id) / deleteByUser(ctx,userId) for the `onUserDeleted` cascade).
+- **`interface.ts`** — `IApiTokenStore` (create / getByTokenHash(SYSTEM_CONTEXT,hash) / listByUser(ctx,userId) / **listByOrg(ctx,orgId,opts)** / revoke(ctx,id) / touchLastUsed(id) / deleteByUser(ctx,userId) for the `onUserDeleted` cascade).
+
+  **`listByOrg` is not optional — see the share-link precedent.** `IShareLinkStore` shipped with
+  `listByDefinition` only, and finding 9 of the access-control audit is the result: a bearer
+  credential nobody could enumerate. Answering _"what machine credentials currently reach this
+  tenant's data?"_ has to be one query. Match the signature and the row shape that
+  [`OrgShareLink`](packages/platform/src/shareLinks/types.ts) established — parent names resolved,
+  and **`tokenHash` omitted from the type**, not merely left unread, since this is the row a page
+  renders across the whole tenant. PATs make the stakes higher than share links: an
+  `all-projects-admin` token reaches every project including ones its holder is not a member of.
+
+  `/team/tokens` is then largely `/team/shares` with the first hop swapped —
+  [`+page.server.ts`](packages/selva/src/routes/team/shares/+page.server.ts) and its RLS policy
+  ([`20260817140000_share_links_org_roster.sql`](packages/providers/supabase/supabase/migrations/20260817140000_share_links_org_roster.sql))
+  are the templates. Gate on `manage_org_members` for the same reason: it is the offboarding
+  permission, whereas `manage_projects` can be handed to a plain member (§11).
+
 - Add `apiTokens: IApiTokenStore` to `IDataProvider`
   ([packages/platform/src/data/interface.ts](packages/platform/src/data/interface.ts)); wire the
   `onUserDeleted` cascade to `deleteByUser`.
+
+  **Deletion cascades; removal and disable deliberately do not.** `deleteByUser` fires only when the
+  account itself is erased. A user removed from an org, or disabled, keeps their tokens — matching
+  the share-link stance (Permissions.md §10) and for the same reason: a token is usually the
+  credential behind a running integration, and killing it because the person who minted it changed
+  teams is an outage, not a security win. Offboarding is roster-driven — open `/team/tokens`, filter
+  to the leaver, revoke deliberately — which is exactly why `listByOrg` above is load-bearing rather
+  than a convenience. If a deployment later wants auto-revoke, it layers on top of the roster; the
+  reverse does not work.
+
 - Add **two** values to `PlatformPermissionSchema`
   ([packages/platform/src/permissions/types.ts](packages/platform/src/permissions/types.ts)):
   - `'manage_api_tokens'` — **holding it = allowed to mint API tokens for yourself.**
@@ -170,7 +196,7 @@ In [packages/selva/src/hooks.server.ts](packages/selva/src/hooks.server.ts) `han
 **before** the `admin_session` cookie read. **Not** gated on `isJsonApiRoute` — that helper matches
 the whole `/api/` tree including the admin subtree, and admin endpoints must stay session-only.
 Gate the PAT branch on `pathname.startsWith('/api/v1/')` exactly (the versioned surface from
-[api-redesign-plan.md](api-redesign-plan.md)).
+[api-redesign-plan.md](../archive/api-redesign-plan.md)).
 
 Note the api-redesign moves `/admin/api/*` → `/api/admin/*`. This does **not** loosen anything: the
 PAT gate is a `/api/v1/` prefix test, and `/api/admin/` does not match it. The two scopes stay
@@ -218,7 +244,7 @@ off the token path entirely.
 
 ## Phase 4 — Managed public REST API
 
-**Superseded by [api-redesign-plan.md](api-redesign-plan.md).** The wrapper approach ("two URLs, one
+**Superseded by [api-redesign-plan.md](../archive/api-redesign-plan.md).** The wrapper approach ("two URLs, one
 implementation") is dropped: the API is redesigned once as a single versioned surface `/api/v1/*`
 used by both the browser UI and PATs, with per-endpoint stability (`x-internal`) in the OpenAPI
 spec. That plan owns the endpoint map, the missing read endpoints, the OpenAPI spec + conformance
@@ -293,7 +319,7 @@ Selva PAT — it holds no direct DB/provider access, so it inherits every scope/
 - `packages/selva/src/lib/server/apiTokens/{resolve,token}.server.ts`
 - `packages/selva/src/routes/api/v1/tokens/+server.ts`, `.../tokens/[id]/+server.ts`
 - `packages/selva/src/routes/settings/tokens/+page.{svelte,server.ts}` (+ new `settings/+layout.svelte` — section doesn't exist yet)
-- (v1 namespace + `packages/selva/openapi/v1.yaml` come from [api-redesign-plan.md](api-redesign-plan.md))
+- (v1 namespace + `packages/selva/openapi/v1.yaml` come from [api-redesign-plan.md](../archive/api-redesign-plan.md))
 - `packages/cli/src/api/` — PAT-authenticated v1 client + credential store (Phase 5a); the existing
   CLI has no HTTP client for a running Selva instance, only direct Supabase calls
 - `docs/adr/00xx-api-tokens-and-mcp.md`

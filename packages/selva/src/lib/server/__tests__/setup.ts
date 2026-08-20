@@ -53,6 +53,7 @@ vi.mock('$lib/server/providers.server', async () => {
 		getDefinitionMeta: () => currentTestProviders().config.data.definitions,
 		getComputeServerConfigStore: () => currentTestProviders().config.data.computeServer,
 		getUserProfileStore: () => currentTestProviders().config.data.userProfile,
+		getShareLinkStore: () => currentTestProviders().config.data.shareLinks,
 		getInviteStore: () => currentTestProviders().config.data.invites,
 		getPermissionStore: () => currentTestProviders().config.data.permissions,
 		getPlatformProjectGrantStore: () => currentTestProviders().config.data.platformProjectGrants,

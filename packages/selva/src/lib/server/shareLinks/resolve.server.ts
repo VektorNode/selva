@@ -95,12 +95,18 @@ export async function tryResolveShareToken(
 	// (definition, channel) pair. Tenancy info (`actingOrgId`) is included so
 	// org-scoped lookups (e.g. compute server resolution) still target the
 	// right tenant.
+	//
+	// `shareLinkId` narrows what that `system` flag is allowed to mean: store
+	// guards written as `if (ctx.system) return` would otherwise treat an
+	// anonymous token holder as an instance admin. The sentinel `userId` keeps
+	// the same distinction in audit rows, which render a blank actor as "System".
 	const ctx: RequestContext = {
-		userId: '',
+		userId: `share:${link.id}`,
 		actingOrgId: project.orgId,
 		platformPermissions: [],
 		orgPermissions: [],
-		system: true
+		system: true,
+		shareLinkId: link.id
 	};
 
 	return { link, ctx };
