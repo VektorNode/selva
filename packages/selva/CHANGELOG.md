@@ -1,5 +1,21 @@
 # @selvajs/selva
 
+## 4.14.0
+
+### Minor Changes
+
+- fe4cbec: Email invitations directly instead of copying the link by hand.
+
+  Set `SMTP_HOST`/`SMTP_FROM` (see `.env.example`) and creating an invite mails the accept link to the invitee. Sending is best-effort — with SMTP unconfigured, or if delivery fails, the link is still returned for manual sharing, and the members page says which happened.
+
+  Adds `POST /api/v1/orgs/{orgId}/invites/{id}/resend`, surfaced as a Resend button. Because the raw token is never stored, a resend mints a replacement and revokes the original: the previous link stops working.
+
+### Patch Changes
+
+- fe4cbec: Fix the display name typed at invite signup being silently discarded.
+
+  `updateProfile` patches an existing data-layer row and reports `not_found` for a missing one. A new invitee has no row yet — `ensureUser` seeds it on the first authed request, which has not happened at signup — so the name was dropped and the UI fell back to the email's local part. Seed the row first, and log a non-`ok` result instead of swallowing it.
+
 ## 4.13.1
 
 ### Patch Changes
