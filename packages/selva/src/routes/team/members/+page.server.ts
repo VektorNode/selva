@@ -3,7 +3,12 @@ import type { PageServerLoad } from './$types';
 import type { AuthUser, Invite, OrgMember, OrgRole } from '@selvajs/platform';
 import { hasPermission } from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
-import { getInviteStore, getOrganizationProvider } from '$lib/server/providers.server';
+import {
+	getInviteStore,
+	getOrganizationProvider,
+	getUserProfileStore
+} from '$lib/server/providers.server';
+import { isMailConfigured } from '$lib/server/email';
 
 export interface MemberRow extends OrgMember {
 	email?: string;
@@ -28,6 +33,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			members: [] as MemberRow[],
 			invites: [] as Invite[],
 			orgId: null,
+			mailConfigured: isMailConfigured(),
 			actorRole: null as OrgRole | null,
 			actorUserId: ctx.userId
 		};
@@ -45,6 +51,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 			userIds.map((id) => auth.getUser(id).catch(() => null as AuthUser | null))
 		);
 		const userById = new Map(users.filter((u): u is AuthUser => !!u).map((u) => [u.id, u]));
+		// `displayName` lives on `UserProfile`, not `AuthUser`, and the profile only
+		// has a value once the user sets one. Header-auth carries the IdP name on
+		// the identity's metadata instead — same resolution order as /admin/users,
+		// so one person renders identically on both pages.
+		const profiles = await getUserProfileStore().getProfiles(ctx, userIds);
+		const profileById = new Map(profiles.map((p) => [p.userId, p]));
 		members = page.items.map((m) => {
 			const authUser = userById.get(m.userId);
 			const metadataDisplayName =
@@ -54,7 +66,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			return {
 				...m,
 				email: authUser?.email,
-				displayName: metadataDisplayName,
+				displayName: profileById.get(m.userId)?.displayName ?? metadataDisplayName,
 				lastLoginAt: authUser?.lastLoginAt
 			};
 		});
@@ -71,5 +83,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// Non-fatal
 	}
 
-	return { members, invites, orgId, actorRole, actorUserId: ctx.userId };
+	// Drives the copy after minting: with mail off the admin must send the link
+	// themselves, so the UI says so instead of implying it was delivered.
+	return {
+		members,
+		invites,
+		orgId,
+		actorRole,
+		actorUserId: ctx.userId,
+		mailConfigured: isMailConfigured()
+	};
 };

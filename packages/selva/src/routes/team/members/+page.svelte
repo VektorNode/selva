@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Button, Card, Input, toast, SectionHeader, EmptyState } from '@selvajs/ui';
-	import { Mail, Trash2, Copy, X, UserPlus } from '@lucide/svelte';
+	import { Button, Card, Input, toast, SectionHeader, EmptyState, Pagination } from '@selvajs/ui';
+	import { Mail, Trash2, Copy, X, UserPlus, Send, Search } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { Invite, OrgPermission, OrgRole } from '@selvajs/platform';
 	import {
@@ -10,6 +10,8 @@
 	} from '@selvajs/platform';
 	import type { MemberRow } from './+page.server';
 	import { removalBlockReason } from './removal-gate';
+	import UserRowIdentity from '$lib/components/UserRowIdentity.svelte';
+	import { PERMISSION_LABELS, ROLE_TONE, ORG_ROLES } from '$lib/permission-labels';
 
 	interface PageData {
 		members: MemberRow[];
@@ -17,6 +19,8 @@
 		orgId: string | null;
 		actorRole: OrgRole | null;
 		actorUserId: string;
+		/** SMTP is set up, so minting an invite also mails the link. */
+		mailConfigured: boolean;
 	}
 	let { data }: { data: PageData } = $props();
 
@@ -67,24 +71,44 @@
 		patchMember(member.userId, { permissions: next });
 	}
 
-	const ORG_ROLES: OrgRole[] = ['owner', 'admin', 'member'];
+	// Client-side over the loaded roster — the org member list is bounded and
+	// already fully in `data.members`.
+	let query = $state('');
+	let roleFilter = $state<OrgRole | 'all'>('all');
+
+	const filtersActive = $derived(query.trim() !== '' || roleFilter !== 'all');
+
+	const visibleMembers = $derived.by(() => {
+		const needle = query.trim().toLowerCase();
+		return data.members.filter(
+			(m) =>
+				(needle === '' ||
+					[m.displayName, m.email, m.userId].some((f) => f?.toLowerCase().includes(needle))) &&
+				(roleFilter === 'all' || m.role === roleFilter)
+		);
+	});
+
+	const PER_PAGE = 25;
+	let page = $state(1);
+
+	// Changing a filter re-slices from the top: staying on page 4 after a search
+	// that matches three people shows an empty list.
+	const filterKey = $derived(`${query} ${roleFilter}`);
+	$effect(() => {
+		void filterKey;
+		page = 1;
+	});
+
+	const pagedMembers = $derived(visibleMembers.slice((page - 1) * PER_PAGE, page * PER_PAGE));
+
+	function clearFilters() {
+		query = '';
+		roleFilter = 'all';
+	}
 
 	// Mirrors the invite route's owner-only gate: an admin who could mint an
 	// `owner` invite would be able to accept it and then evict the founder.
 	const invitableRoles = $derived(isOwner ? ORG_ROLES : ORG_ROLES.filter((r) => r !== 'owner'));
-
-	const PERMISSION_LABELS: Record<OrgPermission, string> = {
-		manage_org_members: 'Manage members',
-		manage_org_compute: 'Manage compute',
-		manage_definitions: 'Manage definitions',
-		manage_projects: 'Manage projects'
-	};
-
-	const ROLE_TONE: Record<OrgRole, string> = {
-		owner: 'border-amber-500/40 text-amber-600 dark:text-amber-400',
-		admin: 'border-blue-500/40 text-blue-600 dark:text-blue-400',
-		member: 'border-border text-muted-foreground'
-	};
 
 	// Invite form
 	let showInviteForm = $state(false);
@@ -93,7 +117,16 @@
 	let invitePermissions = $state<OrgPermission[]>([]);
 	let creatingInvite = $state(false);
 	let lastInviteLink = $state<string | null>(null);
+	let lastInviteEmail = $state('');
+	let lastDelivery = $state<InviteDelivery | null>(null);
 	let revokingId = $state<string | null>(null);
+	let resendingId = $state<string | null>(null);
+
+	type InviteDelivery = 'sent' | 'not-configured' | 'failed';
+	interface CreatedInvite {
+		acceptUrl: string;
+		delivery: InviteDelivery;
+	}
 
 	const invitePermissionOptions = $derived<OrgPermission[]>(
 		inviteRole === 'member'
@@ -122,9 +155,15 @@
 				})
 			});
 			if (res.ok) {
-				const { acceptUrl } = (await res.json()) as { acceptUrl: string };
+				const { acceptUrl, delivery } = (await res.json()) as CreatedInvite;
 				lastInviteLink = acceptUrl;
-				toast.success(`Invite created for ${inviteEmail}`);
+				lastDelivery = delivery;
+				lastInviteEmail = inviteEmail;
+				toast.success(
+					delivery === 'sent'
+						? `Invite sent to ${inviteEmail}`
+						: `Invite created for ${inviteEmail}`
+				);
 				inviteEmail = '';
 				inviteRole = 'member';
 				invitePermissions = [];
@@ -180,6 +219,41 @@
 		}
 	}
 
+	// Resend replaces the invite rather than re-reading it: the raw token is
+	// never stored, so the server mints a new one and revokes the old row. Any
+	// link already sent stops working.
+	async function resendInvite(invite: Invite) {
+		if (
+			!confirm(
+				`Resend the invite for "${invite.email}"?\n\nA new link is issued and the previous one stops working.`
+			)
+		)
+			return;
+		resendingId = invite.id;
+		try {
+			const res = await fetch(`/api/v1/orgs/${data.orgId}/invites/${invite.id}/resend`, {
+				method: 'POST'
+			});
+			if (res.ok) {
+				const { acceptUrl, delivery } = (await res.json()) as CreatedInvite;
+				lastInviteLink = acceptUrl;
+				lastDelivery = delivery;
+				lastInviteEmail = invite.email;
+				toast.success(
+					delivery === 'sent' ? `Invite resent to ${invite.email}` : 'New invite link issued'
+				);
+				await invalidateAll();
+			} else {
+				const err = await res.json().catch(() => ({}));
+				toast.error(err.message || err.error || 'Could not resend invite');
+			}
+		} catch {
+			toast.error('Could not resend invite');
+		} finally {
+			resendingId = null;
+		}
+	}
+
 	async function revokeInvite(id: string, email: string) {
 		if (!confirm(`Revoke invite for "${email}"?`)) return;
 		revokingId = id;
@@ -232,8 +306,14 @@
 					<div>
 						<p class="text-sm font-medium">Invite member</p>
 						<p class="text-muted-foreground text-xs">
-							The invitee sets their own credentials when they open the link. No password leaves
-							your machine.
+							{#if data.mailConfigured}
+								Selva emails the invite link to this address. The invitee sets their own credentials
+								when they open it.
+							{:else}
+								You'll get a link to send yourself — set <span class="font-mono">SMTP_HOST</span> to have
+								Selva email invites directly. The invitee sets their own credentials when they open the
+								link.
+							{/if}
 						</p>
 					</div>
 					<div class="grid gap-3 sm:grid-cols-2">
@@ -284,9 +364,33 @@
 		{/if}
 
 		{#if lastInviteLink}
-			<div class="border-success/30 bg-success/5 flex items-start gap-3 rounded-lg border p-4">
+			{@const sent = lastDelivery === 'sent'}
+			<div
+				class={`flex items-start gap-3 rounded-lg border p-4 ${
+					lastDelivery === 'failed'
+						? 'border-destructive/30 bg-destructive/5'
+						: 'border-success/30 bg-success/5'
+				}`}
+			>
 				<div class="min-w-0 flex-1">
-					<p class="text-sm font-medium">Invite ready — copy the link and share it</p>
+					<p class="text-sm font-medium">
+						{#if sent}
+							Invite emailed to {lastInviteEmail}
+						{:else if lastDelivery === 'failed'}
+							Invite created, but the email could not be sent
+						{:else}
+							Invite ready — copy the link and share it
+						{/if}
+					</p>
+					{#if lastDelivery === 'failed'}
+						<p class="text-muted-foreground mt-1 text-xs">
+							Check the server logs and your SMTP settings. Send this link manually in the meantime.
+						</p>
+					{:else if sent}
+						<p class="text-muted-foreground mt-1 text-xs">
+							Keep this link as a backup in case the mail does not arrive — it is shown only once.
+						</p>
+					{/if}
 					<p class="text-muted-foreground mt-1 truncate font-mono text-xs">{lastInviteLink}</p>
 				</div>
 				<Button
@@ -310,10 +414,12 @@
 			</div>
 		{/if}
 
-		<!-- Roster -->
 		<Card.Root>
 			<Card.Header>
-				<Card.Title class="text-sm font-medium">Roster</Card.Title>
+				<Card.Title class="text-sm font-medium">
+					Members
+					<span class="text-muted-foreground ml-1 font-normal">({data.members.length})</span>
+				</Card.Title>
 				<Card.Description>
 					Roles and per-member permissions.{isOwner
 						? ' You can change roles and permissions.'
@@ -322,7 +428,7 @@
 							: ''}
 				</Card.Description>
 			</Card.Header>
-			<Card.Content>
+			<Card.Content class="space-y-4">
 				{#if data.members.length === 0}
 					<EmptyState
 						icon={UserPlus}
@@ -330,102 +436,142 @@
 						description="Invite someone to get started."
 					/>
 				{:else}
-					<div class="divide-y rounded-lg border">
-						{#each data.members as member (member.userId)}
-							{@const isSelf = member.userId === data.actorUserId}
-							{@const isSoleOwner = member.role === 'owner' && ownerCount === 1}
-							{@const canEditRole = isOwner && !isSelf && !isSoleOwner}
-							{@const canEditPermissions = isOwnerOrAdmin && member.role === 'member'}
-							{@const blockReason = blockReasonFor(member)}
-							<div class="px-4 py-3">
-								<div class="flex items-start justify-between gap-4">
-									<div class="min-w-0 flex-1">
-										<div class="flex items-center gap-2">
-											<p class="truncate text-sm font-medium">
-												{member.email ?? member.displayName ?? member.userId}
-											</p>
-											{#if canEditRole}
-												<select
-													value={member.role}
-													disabled={savingId === member.userId}
-													onchange={(e) =>
-														changeRole(member, (e.target as HTMLSelectElement).value as OrgRole)}
-													class={`border-input bg-background h-6 rounded-md border px-1.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[member.role]}`}
-												>
-													{#each ORG_ROLES as role (role)}
-														<option value={role}>{role}</option>
-													{/each}
-												</select>
-											{:else}
-												<span
-													class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[member.role]}`}
-													title={isSoleOwner
-														? 'Sole owner — promote another member to owner before changing this role.'
-														: isSelf
-															? 'You cannot change your own role.'
-															: undefined}
-												>
-													{member.role}
-												</span>
-											{/if}
-										</div>
-										<p class="text-muted-foreground text-xs">
-											<!-- One timestamp, one label: joinedAt is when the membership was
-											     written. Whether they have signed in since is a separate fact. -->
-											Joined {new Date(member.joinedAt).toLocaleDateString()}
-											{#if !member.lastLoginAt}
-												· never signed in
-											{/if}
-										</p>
-									</div>
-									<Button
-										size="sm"
-										variant="ghost"
-										disabled={removingId === member.userId || !!blockReason}
-										onclick={() => removeMember(member)}
-										title={blockReason ?? 'Remove from organization'}
-										class="text-destructive hover:text-destructive h-8 w-8 shrink-0 p-0"
-									>
-										<Trash2 class="h-4 w-4" />
-									</Button>
-								</div>
-								{#if member.role === 'member'}
-									<div class="mt-2 flex flex-wrap gap-3">
-										{#each MEMBER_ASSIGNABLE_PERMISSIONS as p (p)}
-											{@const has = member.permissions.includes(p)}
-											{#if canEditPermissions}
-												<label class="flex cursor-pointer items-center gap-1.5 text-xs">
-													<input
-														type="checkbox"
-														checked={has}
+					{#if data.members.length > 5}
+						<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+							<div class="relative flex-1">
+								<Search
+									class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+								/>
+								<Input
+									type="search"
+									placeholder="Search name or email"
+									bind:value={query}
+									class="pl-9"
+								/>
+							</div>
+							<select
+								bind:value={roleFilter}
+								aria-label="Filter by role"
+								class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+							>
+								<option value="all">All roles</option>
+								{#each ORG_ROLES as role (role)}
+									<option value={role}>{role}</option>
+								{/each}
+							</select>
+							{#if filtersActive}
+								<Button variant="ghost" size="sm" onclick={clearFilters}>
+									<X class="mr-1.5 h-3.5 w-3.5" />
+									Clear
+								</Button>
+							{/if}
+						</div>
+					{/if}
+
+					{#if visibleMembers.length === 0}
+						<EmptyState
+							title="No matching members"
+							description="Adjust or clear the filters above."
+						/>
+					{:else}
+						<div class="divide-y rounded-lg border">
+							{#each pagedMembers as member (member.userId)}
+								{@const isSelf = member.userId === data.actorUserId}
+								{@const isSoleOwner = member.role === 'owner' && ownerCount === 1}
+								{@const canEditRole = isOwner && !isSelf && !isSoleOwner}
+								{@const canEditPermissions = isOwnerOrAdmin && member.role === 'member'}
+								{@const blockReason = blockReasonFor(member)}
+								<div class="px-4 py-3">
+									<div class="flex items-start justify-between gap-4">
+										<UserRowIdentity
+											user={member}
+											id={member.userId}
+											role={member.role}
+											lastLoginAt={member.lastLoginAt}
+											subtitle={`Joined ${new Date(member.joinedAt).toLocaleDateString()}`}
+										>
+											{#snippet roleBadge()}
+												{#if canEditRole}
+													<select
+														value={member.role}
 														disabled={savingId === member.userId}
 														onchange={(e) =>
-															toggleMemberPermission(
-																member,
-																p,
-																(e.target as HTMLInputElement).checked
-															)}
-													/>
-													{PERMISSION_LABELS[p] ?? p}
-												</label>
-											{:else if has}
-												<span
-													class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 font-mono text-[10px]"
-												>
-													{PERMISSION_LABELS[p] ?? p}
-												</span>
-											{/if}
-										{/each}
+															changeRole(member, (e.target as HTMLSelectElement).value as OrgRole)}
+														class={`border-input bg-background h-6 rounded-md border px-1.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[member.role]}`}
+													>
+														{#each ORG_ROLES as role (role)}
+															<option value={role}>{role}</option>
+														{/each}
+													</select>
+												{:else}
+													<span
+														class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[member.role]}`}
+														title={isSoleOwner
+															? 'Sole owner — promote another member to owner before changing this role.'
+															: isSelf
+																? 'You cannot change your own role.'
+																: undefined}
+													>
+														{member.role}
+													</span>
+												{/if}
+											{/snippet}
+										</UserRowIdentity>
+										<Button
+											size="sm"
+											variant="ghost"
+											disabled={removingId === member.userId || !!blockReason}
+											onclick={() => removeMember(member)}
+											title={blockReason ?? 'Remove from organization'}
+											class="text-destructive hover:text-destructive h-8 w-8 shrink-0 p-0"
+										>
+											<Trash2 class="h-4 w-4" />
+										</Button>
 									</div>
-								{:else if OWNER_ADMIN_ONLY_PERMISSIONS.length > 0}
-									<p class="text-muted-foreground mt-2 text-xs">
-										{member.role === 'owner' ? 'Owners' : 'Admins'} hold all organization permissions
-										by default.
-									</p>
-								{/if}
-							</div>
-						{/each}
-					</div>
+									{#if member.role === 'member'}
+										<div class="mt-2 flex flex-wrap gap-3">
+											{#each MEMBER_ASSIGNABLE_PERMISSIONS as p (p)}
+												{@const has = member.permissions.includes(p)}
+												{#if canEditPermissions}
+													<label class="flex cursor-pointer items-center gap-1.5 text-xs">
+														<input
+															type="checkbox"
+															checked={has}
+															disabled={savingId === member.userId}
+															onchange={(e) =>
+																toggleMemberPermission(
+																	member,
+																	p,
+																	(e.target as HTMLInputElement).checked
+																)}
+														/>
+														{PERMISSION_LABELS[p] ?? p}
+													</label>
+												{:else if has}
+													<span
+														class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 font-mono text-[10px]"
+													>
+														{PERMISSION_LABELS[p] ?? p}
+													</span>
+												{/if}
+											{/each}
+										</div>
+									{:else if OWNER_ADMIN_ONLY_PERMISSIONS.length > 0}
+										<p class="text-muted-foreground mt-2 text-xs">
+											{member.role === 'owner' ? 'Owners' : 'Admins'} hold all organization permissions
+											by default.
+										</p>
+									{/if}
+								</div>
+							{/each}
+						</div>
+						<Pagination
+							bind:page
+							total={visibleMembers.length}
+							perPage={PER_PAGE}
+							label="members"
+						/>
+					{/if}
 				{/if}
 			</Card.Content>
 		</Card.Root>
@@ -455,16 +601,32 @@
 										).toLocaleDateString()}
 									</p>
 								</div>
-								{#if !invite.acceptedAt && !expired}
-									<Button
-										size="sm"
-										variant="ghost"
-										disabled={revokingId === invite.id}
-										onclick={() => revokeInvite(invite.id, invite.email)}
-										class="text-destructive hover:text-destructive"
-									>
-										<Trash2 class="h-4 w-4" />
-									</Button>
+								{#if !invite.acceptedAt}
+									<div class="flex shrink-0 items-center gap-1">
+										<!-- Expired invites can be resent too — that is the whole point of the
+										     button, since the link is unrecoverable once minted. -->
+										<Button
+											size="sm"
+											variant="ghost"
+											disabled={resendingId === invite.id}
+											onclick={() => resendInvite(invite)}
+											title={data.mailConfigured
+												? 'Email a fresh link (the current one stops working)'
+												: 'Issue a fresh link (the current one stops working)'}
+										>
+											<Send class="mr-1.5 h-3.5 w-3.5" />
+											{resendingId === invite.id ? 'Sending…' : 'Resend'}
+										</Button>
+										<Button
+											size="sm"
+											variant="ghost"
+											disabled={revokingId === invite.id}
+											onclick={() => revokeInvite(invite.id, invite.email)}
+											class="text-destructive hover:text-destructive"
+										>
+											<Trash2 class="h-4 w-4" />
+										</Button>
+									</div>
 								{/if}
 							</div>
 						{/each}

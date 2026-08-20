@@ -85,7 +85,11 @@ scripts/.dev-caddyfile
 # packages/selva/.env.example.
 .selva-data/
 
+# Deployment-specific PM2 process files, wherever they get dropped.
+# The shipped runtime template is source, not deployment config.
 **/ecosystem.config.cjs
+!packages/selva/templates/ecosystem.config.cjs
+
 # Web
 **/node_modules/
 **/.svelte-kit/

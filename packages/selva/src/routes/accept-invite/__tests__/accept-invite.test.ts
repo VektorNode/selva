@@ -24,6 +24,7 @@ import {
 import { POST as mintInvite } from '../../api/v1/orgs/[orgId]/invites/+server.js';
 import { hashToken } from '$lib/server/invites/token.server.js';
 import { load, actions } from '../+page.server.js';
+import { findAuthUserByEmail } from '$lib/server/auth-lookup.server.js';
 
 let tp: TestProviders | null = null;
 
@@ -507,5 +508,43 @@ describe('accept-invite for an existing account', () => {
 
 		const member = await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, acme.id, alice.id);
 		expect(member?.role).toBe('admin');
+	});
+});
+
+describe('accept-invite display name', () => {
+	/**
+	 * Regression: `updateProfile` patches an existing data-layer row and 404s on
+	 * a missing one. A brand-new invitee has no row yet — `ensureUser` normally
+	 * seeds it on the first authed request, which has not happened at signup —
+	 * so the write returned `not_found` and the name the invitee typed was
+	 * dropped without a trace. The UI then fell back to the email local part,
+	 * which looks like the field was ignored.
+	 */
+	it('persists the display name a new invitee typed', async () => {
+		tp = await freshProviders();
+		const token = await mintFor(tp);
+
+		const res = await submit(token, {
+			password: PASSWORD,
+			confirm: PASSWORD,
+			displayName: 'Felix Brunold'
+		});
+		expect(res.redirected).toBeDefined();
+
+		const user = await findAuthUserByEmail(tp.config.auth, INVITEE);
+		const profile = await tp.config.data.userProfile.getProfile(SYSTEM_CONTEXT, user!.id);
+		expect(profile?.displayName).toBe('Felix Brunold');
+	});
+
+	it('leaves the profile alone when no display name is given', async () => {
+		tp = await freshProviders();
+		const token = await mintFor(tp);
+
+		const res = await submit(token, { password: PASSWORD, confirm: PASSWORD });
+		expect(res.redirected).toBeDefined();
+
+		const user = await findAuthUserByEmail(tp.config.auth, INVITEE);
+		const profile = await tp.config.data.userProfile.getProfile(SYSTEM_CONTEXT, user!.id);
+		expect(profile?.displayName ?? null).toBeNull();
 	});
 });

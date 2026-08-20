@@ -6,7 +6,7 @@
 	import type { PageData } from './$types';
 	import DefinitionCard from '$lib/components/definitions/DefinitionCard.svelte';
 	import ToolListView from './_components/ToolListView.svelte';
-	import { formatRelative } from './_components/toolStyles';
+	import { formatRelative } from '$lib/format/relativeTime';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 
 	type ViewMode = 'grid' | 'list';
@@ -112,7 +112,7 @@
 	}
 </script>
 
-<AppHeader homeUrl="/library">
+<AppHeader>
 	<PageContent>
 		<div class="space-y-6">
 			<SectionHeader

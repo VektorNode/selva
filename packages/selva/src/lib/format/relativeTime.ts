@@ -1,4 +1,4 @@
-/** Relative timestamp — "2m ago", "3h ago", "5d ago" — for the Recent Runs row. */
+/** Relative timestamp — "2m ago", "3h ago", "5d ago" — for recent-activity rows. */
 export function formatRelative(iso: string): string {
 	const diff = Date.now() - new Date(iso).getTime();
 	const m = Math.floor(diff / 60_000);

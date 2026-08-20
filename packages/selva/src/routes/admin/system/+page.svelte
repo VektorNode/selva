@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Card, SectionHeader } from '@selvajs/ui';
+	import { ChevronRight } from '@lucide/svelte';
 	import UpdateSection from './UpdateSection.svelte';
 	import ChannelSection from './ChannelSection.svelte';
 	import HealthSection from './HealthSection.svelte';
@@ -153,6 +154,8 @@
 		ALLOW_ORG_CREATION:
 			'Not wired up yet — no route consults this flag, so flipping it does nothing.'
 	};
+
+	const enabledFlagCount = $derived(Object.values(data.flags).filter(Boolean).length);
 
 	let updateRunning = $state(false);
 	let updateLogs = $state('');
@@ -349,84 +352,10 @@
 	<SectionHeader
 		eyebrow="Admin"
 		title="System settings"
-		description="Instance-wide configuration, platform flags, and the update runner. Flags and limits are env-driven — change one in your .env and restart the app."
+		description="Updates, health checks, and the instance's env-driven configuration."
 	/>
 
-	<Card.Root>
-		<Card.Header>
-			<Card.Title class="text-sm font-medium">Platform flags</Card.Title>
-			<Card.Description>
-				Resolved state of the <code class="font-mono text-xs">SELVA_FLAG_*</code> env vars. See
-				<code class="font-mono text-xs">.env.example</code> for what each one does.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content>
-			<div class="divide-y rounded-lg border">
-				{#each Object.entries(data.flags) as [name, value] (name)}
-					<div class="flex items-center justify-between gap-4 px-4 py-2">
-						<div class="min-w-0 flex-1">
-							<code class="text-foreground font-mono text-xs">{name}</code>
-							{#if flagNotes[name as keyof PageData['flags']]}
-								<p class="text-muted-foreground mt-1 text-xs">
-									{flagNotes[name as keyof PageData['flags']]}
-								</p>
-							{/if}
-						</div>
-						<span
-							class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${
-								value
-									? 'border-success/40 bg-success/10 text-success'
-									: 'border-border text-muted-foreground'
-							}`}
-						>
-							{value ? 'On' : 'Off'}
-						</span>
-					</div>
-				{/each}
-			</div>
-		</Card.Content>
-	</Card.Root>
-
-	<Card.Root>
-		<Card.Header>
-			<Card.Title class="text-sm font-medium">Platform limits</Card.Title>
-			<Card.Description>
-				Caps currently enforced by the instance — each value is its environment override, or the
-				built-in default where unset. Set the listed variable and restart to change one.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content>
-			<div class="divide-y rounded-lg border">
-				{#each limitRows as row (row.key)}
-					<div class="flex items-start justify-between gap-4 px-4 py-3">
-						<div class="min-w-0 flex-1">
-							<span class="text-foreground text-sm font-medium">{row.label}</span>
-							<code class="text-muted-foreground mt-0.5 block font-mono text-[10px]">{row.env}</code
-							>
-							{#if row.note}
-								<p class="text-muted-foreground mt-1 text-xs">{row.note}</p>
-							{/if}
-						</div>
-						<span
-							class="border-border text-foreground shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide whitespace-nowrap"
-						>
-							{row.value(data.limits)}
-						</span>
-					</div>
-				{/each}
-			</div>
-		</Card.Content>
-	</Card.Root>
-
-	{#if data.isInstanceAdmin}
-		<HealthSection />
-		<NetworkSection />
-	{/if}
-
 	{#if data.canManageUpdates}
-		{#key data.channel}
-			<ChannelSection channel={data.channel} disabled={updateRunning} />
-		{/key}
 		<UpdateSection
 			currentVersion={data.version}
 			latestVersion={data.update.latest}
@@ -439,5 +368,88 @@
 			nodeCompatibility={data.update.nodeCompatibility}
 			onRun={runUpdate}
 		/>
+		{#key data.channel}
+			<ChannelSection channel={data.channel} disabled={updateRunning} />
+		{/key}
 	{/if}
+
+	{#if data.isInstanceAdmin}
+		<HealthSection />
+		<NetworkSection />
+	{/if}
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title class="text-sm font-medium">Configuration</Card.Title>
+			<Card.Description>
+				Flags and limits resolved from the environment. To change one, set the listed variable in
+				your <code class="font-mono text-xs">.env</code> and restart the app.
+				<code class="font-mono text-xs">.env.example</code> documents what each does.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-3">
+			<details class="group rounded-lg border">
+				<summary
+					class="hover:bg-accent/40 flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"
+				>
+					<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+					Platform flags
+					<span class="text-muted-foreground ml-auto font-mono text-xs">{enabledFlagCount} on</span>
+				</summary>
+				<div class="divide-y border-t">
+					{#each Object.entries(data.flags) as [name, value] (name)}
+						<div class="flex items-center justify-between gap-4 px-4 py-2">
+							<div class="min-w-0 flex-1">
+								<code class="text-foreground font-mono text-xs">{name}</code>
+								{#if flagNotes[name as keyof PageData['flags']]}
+									<p class="text-muted-foreground mt-1 text-xs">
+										{flagNotes[name as keyof PageData['flags']]}
+									</p>
+								{/if}
+							</div>
+							<span
+								class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${
+									value
+										? 'border-success/40 bg-success/10 text-success'
+										: 'border-border text-muted-foreground'
+								}`}
+							>
+								{value ? 'On' : 'Off'}
+							</span>
+						</div>
+					{/each}
+				</div>
+			</details>
+
+			<details class="group rounded-lg border">
+				<summary
+					class="hover:bg-accent/40 flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"
+				>
+					<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+					Platform limits
+					<span class="text-muted-foreground ml-auto font-mono text-xs">{limitRows.length}</span>
+				</summary>
+				<div class="divide-y border-t">
+					{#each limitRows as row (row.key)}
+						<div class="flex items-start justify-between gap-4 px-4 py-3">
+							<div class="min-w-0 flex-1">
+								<span class="text-foreground text-sm font-medium">{row.label}</span>
+								<code class="text-muted-foreground mt-0.5 block font-mono text-[10px]"
+									>{row.env}</code
+								>
+								{#if row.note}
+									<p class="text-muted-foreground mt-1 text-xs">{row.note}</p>
+								{/if}
+							</div>
+							<span
+								class="border-border text-foreground shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide whitespace-nowrap"
+							>
+								{row.value(data.limits)}
+							</span>
+						</div>
+					{/each}
+				</div>
+			</details>
+		</Card.Content>
+	</Card.Root>
 </div>

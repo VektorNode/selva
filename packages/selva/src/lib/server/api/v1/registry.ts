@@ -366,6 +366,15 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		errors: [403, 404]
 	},
 	{
+		method: 'POST',
+		path: '/orgs/{orgId}/invites/{id}/resend',
+		summary:
+			'Re-send an invite. Issues a replacement and revokes the original, so the previous link stops working.',
+		response: 'object',
+		status: 201,
+		errors: [403, 404, 409]
+	},
+	{
 		method: 'GET',
 		path: '/orgs/{orgId}/compute',
 		summary: 'Org compute-server overrides and the shared catalog.',

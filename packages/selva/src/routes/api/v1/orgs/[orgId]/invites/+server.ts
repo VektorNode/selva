@@ -1,6 +1,7 @@
 import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { getInviteStore } from '$lib/server/providers.server';
+import { deliverInvite } from '$lib/server/invites/deliver.server';
 import {
 	assertCanGrantPlatformPermissions,
 	canActorChangeOrgRole,
@@ -96,10 +97,15 @@ export const POST: RequestHandler = apiRoute(
 
 		// `acceptUrl` carries the raw token and exists only in this response — it
 		// is not a field of the stored invite.
-		return shaped(
-			CreatedInviteResponseSchema,
-			{ ...invite, acceptUrl: `${url.origin}/accept-invite?token=${rawToken}` },
-			201
-		);
+		const acceptUrl = `${url.origin}/accept-invite?token=${rawToken}`;
+		const delivery = await deliverInvite({
+			ctx,
+			log: locals.log,
+			invite,
+			acceptUrl,
+			actor: { profile: locals.profile, user: locals.user }
+		});
+
+		return shaped(CreatedInviteResponseSchema, { ...invite, acceptUrl, delivery }, 201);
 	}
 );

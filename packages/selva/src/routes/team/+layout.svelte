@@ -87,6 +87,10 @@
 		].filter((i) => i.show) satisfies (SideNavItem & { show: boolean })[]
 	);
 
+	const showSlug = $derived(
+		!!data.org && data.org.slug !== data.org.name.toLowerCase().replace(/\s+/g, '-')
+	);
+
 	function orgInitials(name: string): string {
 		return name
 			.split(/\s+/)
@@ -112,7 +116,9 @@
 						</span>
 						<div class="min-w-0 flex-1">
 							<p class="truncate text-sm leading-tight font-medium">{data.org.name}</p>
-							<p class="text-muted-foreground truncate font-mono text-[10px]">{data.org.slug}</p>
+							{#if showSlug}
+								<p class="text-muted-foreground truncate font-mono text-[10px]">{data.org.slug}</p>
+							{/if}
 						</div>
 					</div>
 				{/if}

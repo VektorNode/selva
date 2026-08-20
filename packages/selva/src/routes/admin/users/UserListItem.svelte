@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { Button } from '@selvajs/ui';
 	import { Ban, ChevronDown, ChevronRight, Trash2 } from '@lucide/svelte';
-	import type { OrgPermission, OrgRole, PlatformPermission } from '@selvajs/platform';
+	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 	import { ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
-	import { primaryLabel, emailSubtitle } from '$lib/user-display';
-
-	type FlatPermission = PlatformPermission | OrgPermission;
+	import UserRowIdentity from '$lib/components/UserRowIdentity.svelte';
+	import {
+		PERMISSION_LABELS as PERM_LABEL,
+		PERMISSION_DESCRIPTIONS as PERM_DESC
+	} from '$lib/permission-labels';
 
 	interface Props {
 		user: UserRow;
@@ -36,40 +37,6 @@
 		onDelete,
 		onDisable
 	}: Props = $props();
-
-	const PERM_LABEL: Record<FlatPermission, string> = {
-		instance_admin: 'Instance admin',
-		manage_instance_users: 'Manage instance users',
-		manage_compute: 'Manage compute',
-		manage_updates: 'Manage updates',
-		manage_org_members: 'Manage org members',
-		manage_org_compute: 'Manage org compute',
-		manage_definitions: 'Manage definitions',
-		manage_projects: 'Manage projects'
-	};
-
-	const PERM_DESC: Record<FlatPermission, string> = {
-		instance_admin: 'Full access to every action on the instance.',
-		manage_instance_users: 'Create, disable, and delete any user on the instance.',
-		manage_compute: 'Configure the instance Rhino.Compute pool.',
-		manage_updates: 'Run the application update script.',
-		manage_org_members: 'Invite, remove, and change roles of org members.',
-		manage_org_compute: "Configure this org's BYO compute server.",
-		manage_definitions: 'Upload, edit, and delete any definition in the org.',
-		manage_projects: 'Create, edit, and delete any project in the org.'
-	};
-
-	const ROLE_TONE: Record<OrgRole, string> = {
-		owner: 'border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/5',
-		admin: 'border-blue-500/40 text-blue-600 dark:text-blue-400 bg-blue-500/5',
-		member: 'border-border text-muted-foreground'
-	};
-
-	const displayLine = $derived.by(() => {
-		const primary = primaryLabel(user, user.id);
-		const secondary = emailSubtitle(user);
-		return secondary ? `${primary} · ${secondary}` : primary;
-	});
 
 	const isOwnerOrAdmin = $derived(user.orgRole === 'owner' || user.orgRole === 'admin');
 
@@ -116,34 +83,13 @@
 			{/if}
 		</button>
 
-		<UserAvatar name={primaryLabel(user, user.id)} />
-
-		<div class="min-w-0 flex-1">
-			<div class="flex items-center gap-2">
-				<p class="truncate text-sm font-medium">{displayLine}</p>
-				{#if user.orgRole}
-					<span
-						class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[user.orgRole]}`}
-					>
-						{user.orgRole}
-					</span>
-				{/if}
-				{#if user.disabled}
-					<span
-						class="border-border bg-muted text-muted-foreground rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase"
-					>
-						disabled
-					</span>
-				{:else if !user.lastLoginAt}
-					<span
-						class="rounded-full border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 font-mono text-[10px] tracking-wide text-amber-600 uppercase dark:text-amber-400"
-						title="Provisioned but has never signed in. Permissions take effect on first login."
-					>
-						never signed in
-					</span>
-				{/if}
-			</div>
-			<p class="text-muted-foreground truncate font-mono text-xs">{user.id}</p>
+		<UserRowIdentity
+			{user}
+			id={user.id}
+			role={user.orgRole}
+			disabled={user.disabled}
+			lastLoginAt={user.lastLoginAt}
+		>
 			{#if !expanded && (user.platformPermissions.length > 0 || orgSummaryPerms.length > 0)}
 				<div class="mt-1.5 flex flex-wrap gap-1">
 					{#each user.platformPermissions as p (p)}
@@ -162,7 +108,7 @@
 					{/each}
 				</div>
 			{/if}
-		</div>
+		</UserRowIdentity>
 
 		{#if !user.disabled}
 			<Button

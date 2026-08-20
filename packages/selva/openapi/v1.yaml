@@ -1916,6 +1916,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/invites/{id}/resend":
+    post:
+      summary: "Re-send an invite. Issues a replacement and revokes the original, so the previous link stops working."
+      operationId: postOrgsByOrgIdInvitesByIdResend
+      tags:
+        - Orgs
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The request conflicts with the current state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/orgs/{orgId}/compute":
     get:
       summary: Org compute-server overrides and the shared catalog.

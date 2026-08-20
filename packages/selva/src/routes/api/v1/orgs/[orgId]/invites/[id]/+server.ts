@@ -3,6 +3,7 @@ import { getInviteStore } from '$lib/server/providers.server';
 import { requireManageOrgMembers, requireActingOrg } from '$lib/server/access.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { apiRoute, noContent, requireParams } from '$lib/server/api/v1/route';
+import { findPendingInviteInOrg } from '$lib/server/invites/lookup.server';
 
 /** Revoke a pending invite. Consumed invites are preserved for audit. */
 export const DELETE: RequestHandler = apiRoute(
@@ -12,23 +13,10 @@ export const DELETE: RequestHandler = apiRoute(
 		const { ctx, orgId } = requireActingOrg(locals, params.orgId);
 		const { id } = requireParams(params, 'id');
 
-		// `manage_org_members` is org-scoped, so a permitted caller must not reach
-		// invites in another org. Neither store scopes revoke() by actingOrgId, so
-		// confirm the invite belongs to this org before revoking it.
-		const store = getInviteStore();
-		let cursor: string | undefined;
-		let found = false;
-		do {
-			const page = await store.listByOrg(ctx, orgId, { limit: 200, cursor });
-			if (page.items.some((i) => i.id === id)) {
-				found = true;
-				break;
-			}
-			cursor = page.nextCursor ?? undefined;
-		} while (cursor);
-
-		if (!found) apiError(404, ApiErrorCode.NOT_FOUND, 'Invite not found');
-		await store.revoke(ctx, id);
+		if (!(await findPendingInviteInOrg(ctx, orgId, id))) {
+			apiError(404, ApiErrorCode.NOT_FOUND, 'Invite not found');
+		}
+		await getInviteStore().revoke(ctx, id);
 		return noContent();
 	}
 );

@@ -193,11 +193,32 @@ export const actions = {
 		// joining: that profile is the user's own, not this invite's to rename.
 		if (displayName && mode !== 'join') {
 			try {
+				// `updateProfile` patches an existing row and 404s on a missing one.
+				// The data-layer row is normally seeded by `ensureUser` on the first
+				// authed request — one the invitee has not made yet — so without this
+				// the name the invitee typed was silently dropped.
+				await getDataProvider().ensureUser(SYSTEM_CONTEXT, user.id);
 				// User has just been created and isn't yet logged in — no ctx available.
 				// SYSTEM_CONTEXT is the right shape for an internal post-signup write.
-				await getUserProfileStore().updateProfile(SYSTEM_CONTEXT, user.id, { displayName });
-			} catch {
-				// Non-fatal
+				const result = await getUserProfileStore().updateProfile(SYSTEM_CONTEXT, user.id, {
+					displayName
+				});
+				// Returns a status rather than throwing, so an ignored result loses the
+				// name with no trace.
+				if (result !== 'ok') {
+					locals.log.warn('Could not set display name at signup', {
+						component: 'accept-invite',
+						userId: user.id,
+						result
+					});
+				}
+			} catch (err) {
+				// Non-fatal: the account and membership are already in place.
+				locals.log.warn('Could not set display name at signup', {
+					component: 'accept-invite',
+					userId: user.id,
+					err: renderThrown(err)
+				});
 			}
 		}
 

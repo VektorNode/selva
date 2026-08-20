@@ -202,7 +202,8 @@
 							</div>
 							{#if version.changeNote}
 								<p class="mt-1 truncate text-sm">{version.changeNote}</p>
-							{:else if version.originalFilename}
+							{/if}
+							{#if version.originalFilename}
 								<p class="text-muted-foreground mt-1 truncate font-mono text-xs">
 									{version.originalFilename}
 								</p>

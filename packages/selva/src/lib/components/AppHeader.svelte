@@ -18,7 +18,7 @@
 	}
 
 	let {
-		homeUrl = '/library',
+		homeUrl = '/',
 		title = undefined,
 		mode = 'scroll',
 		sidenav,
