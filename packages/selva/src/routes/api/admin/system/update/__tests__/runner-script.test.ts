@@ -511,8 +511,15 @@ describe('a rollback names the cause the health endpoint reported', () => {
 		expect(out).toContain('SCHEMA_SKEW');
 		expect(out).toContain('20260817200000');
 		expect(out).toContain('20260717120000');
-		expect(out).toContain('sync-migrations');
+		expect(out).toContain('npx selva-supabase');
 		expect(out).toContain('supabase db push');
+		// The bin takes no subcommand: `... supabase-provider sync-migrations` exits 1.
+		// This block is copy-paste bait, so a form that cannot run must never appear.
+		expect(out).not.toContain('supabase-provider sync-migrations');
+		// The rollback re-pins the OLD provider, whose packaged migrations stop at the
+		// head already applied — so syncing without reinstalling copies nothing and the
+		// push reports success having done nothing.
+		expect(out).toContain('npm install --prefer-online @selvajs/supabase-provider@latest');
 		// The question the operator actually asked: why not automatically?
 		expect(out).toMatch(/not reversible|cannot be rolled back/i);
 	});

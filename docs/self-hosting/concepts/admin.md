@@ -99,6 +99,13 @@ keys here.
   pass its health check (15 probes, 2 s apart); if it doesn't, the update rolls back
   to the prior version by itself. Beta builds may be unstable, and getting back to
   stable means switching channel and updating again.
+
+  On Supabase, apply pending migrations **before** updating — see
+  [Upgrading later](../providers/supabase.md#upgrading-later). The update never touches
+  the database (migrations aren't reversible, so auto-applying them would strand the
+  schema ahead of a rolled-back app), so a release whose migrations are missing fails
+  its health check and rolls back every time until you run them.
+
 - **Health check** (`instance_admin`): verifies at-rest secret decryption, DB schema
   version, default compute reachability, and that `DATA_PATH` is writable.
 - **Throughput probe** (`instance_admin`): measures download and upload bandwidth by

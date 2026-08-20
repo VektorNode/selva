@@ -206,8 +206,12 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 				'during an update, because they cannot be rolled back — auto-migrating ' +
 				'and then rolling the code back would leave the app and database on ' +
 				'different heads. Apply them on the server, then re-run this update: ' +
-				'`npx @selvajs/supabase-provider sync-migrations` followed by ' +
-				'`npx supabase db push`. Retrying without this will fail in exactly the same way.',
+				'`npm install --prefer-online @selvajs/supabase-provider@latest`, then ' +
+				'`npx selva-supabase`, then `npx supabase db push`. The provider install ' +
+				'is not optional — the migration SQL ships inside that package, and the ' +
+				'rollback pinned it back to the old version, so a sync without it copies ' +
+				'nothing and the push reports "up to date" having done nothing. ' +
+				'Retrying without this will fail in exactly the same way.',
 			from,
 			to
 		};

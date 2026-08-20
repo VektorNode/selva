@@ -25,6 +25,8 @@ npm start         # runs under pm2
 
 It prompts for provider, origin, and tenancy, generates your secrets, and runs `npm install`.
 
+**Choosing Supabase adds a step this block doesn't show:** the database schema has to be applied before the app can serve a request, and the scaffold only prints the commands — it doesn't run them. `npm run doctor` fails on the migration head until you do. Follow [Apply the schema](../providers/supabase.md#3-apply-the-schema); it also covers the Supabase account credential `db push` needs, which is none of the three keys in `.env`.
+
 | Flag             | Use it when                                            |
 | ---------------- | ------------------------------------------------------ |
 | `--force`        | The target directory exists and isn't empty.           |

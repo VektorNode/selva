@@ -395,8 +395,8 @@ test('deployment names are coerced to something npm accepts', () => {
 //
 // The provider's code is bundled into @selvajs/selva, but its migration SQL
 // ships only in its own tarball. A supabase deployment that doesn't depend on
-// it directly has no migrations on disk: `selva-supabase sync-migrations`
-// resolves nothing and the operator cannot apply the schema at all.
+// it directly has no migrations on disk: `selva-supabase` resolves nothing and
+// the operator cannot apply the schema at all.
 // ============================================================================
 
 test('a supabase deployment depends on the provider that carries the migration SQL', () => {

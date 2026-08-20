@@ -265,7 +265,7 @@ async function checkSupabaseMigrations(dir, env) {
 		clearTimeout(timer);
 		if (res.status === 404) {
 			return red(
-				`Database is missing selva.migration_head() — migrations are pending (expected head ${expected}). Sync + run: npx supabase db push`
+				`Database is missing selva.migration_head() — migrations are pending (expected head ${expected}). Run: npx selva-supabase && npx supabase db push`
 			);
 		}
 		if (!res.ok) {
@@ -274,13 +274,13 @@ async function checkSupabaseMigrations(dir, env) {
 		const actual = String((await res.json()) ?? '');
 		if (!actual) {
 			return red(
-				`Database reports no applied migrations (expected head ${expected}). Sync + run: npx supabase db push`
+				`Database reports no applied migrations (expected head ${expected}). Run: npx selva-supabase && npx supabase db push`
 			);
 		}
 		// String comparison — relies on both heads being fixed-width, zero-padded timestamps.
 		if (actual < expected) {
 			return red(
-				`Database migration head ${actual} is behind the installed provider (${expected}). Sync + run: npx supabase db push`
+				`Database migration head ${actual} is behind the installed provider (${expected}). Run: npx selva-supabase && npx supabase db push`
 			);
 		}
 		return green(`Database migration head ${actual} matches the installed provider`);

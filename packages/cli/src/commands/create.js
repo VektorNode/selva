@@ -127,9 +127,14 @@ function nextSteps({ rawDir, values, supabase }) {
 	if (supabase) {
 		lines.push(
 			`  ${n++}. Apply the database schema (once per Supabase project):`,
+			pc.dim('       npx supabase login          # or: export SUPABASE_ACCESS_TOKEN=sbp_...'),
 			pc.dim('       npx selva-supabase          # copy migrations into ./supabase'),
 			pc.dim('       npx supabase link --project-ref <ref>'),
-			pc.dim('       npx supabase db push')
+			pc.dim('       npx supabase db push'),
+			// `link` fails without an ACCOUNT credential, which is none of the three
+			// project keys the prompts just collected — the distinction is the most
+			// common first-run stall, so name it here rather than only in the docs.
+			pc.dim('       (login is a Supabase account credential — not the keys in .env)')
 		);
 	}
 

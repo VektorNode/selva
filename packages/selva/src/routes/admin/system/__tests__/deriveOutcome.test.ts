@@ -67,7 +67,10 @@ describe('deriveOutcome', () => {
 		expect(o.title).toMatch(/online/i);
 		// The operator's whole problem was not knowing the next step.
 		expect(o.detail).toContain('supabase db push');
-		expect(o.detail).toContain('sync-migrations');
+		expect(o.detail).toContain('npx selva-supabase');
+		// The bin takes no subcommand: `... supabase-provider sync-migrations` exits 1,
+		// and this string is exactly what a stuck operator copy-pastes.
+		expect(o.detail).not.toContain('supabase-provider sync-migrations');
 		expect(o.detail).toMatch(/same way/i);
 	});
 

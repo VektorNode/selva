@@ -121,14 +121,23 @@ Two things `doctor` can't see: `ORIGIN` must match the URL you actually serve on
 
 ### Upgrading later
 
-When a Selva upgrade ships new migrations, repeat the sync and push:
+**Migrate first, then update the app.** The updater refuses to finish against a database that is behind: the new version boots, reports `degraded`, fails its health probe for 30 seconds, and rolls back. The site stays up, but you get an outage window and no upgrade.
+
+The migration SQL ships inside `@selvajs/supabase-provider`, so the newer provider has to be on disk before the sync has anything new to copy:
 
 ```bash
+npm install --prefer-online @selvajs/supabase-provider@latest
 npx selva-supabase
 npx supabase db push
 ```
 
-`db push` applies only what the database hasn't recorded yet. `npm run doctor` is what tells you an upgrade is pending — it reports the expected head against the actual one.
+Then run the update.
+
+Skipping the first line is the trap: `selva-supabase` copies from whatever provider version is installed, so with the old one still pinned it reports `0 copied` and `db push` says `Remote database is up to date` — both look like success, and neither did anything.
+
+`db push` applies only what the database hasn't recorded yet, and `npm run doctor` tells you an upgrade is pending — it reports the expected head against the actual one. Running the migrations while the older app is still serving is safe; they are additive.
+
+A sync may report `conflict` on a file you already have. It is refusing to overwrite an already-applied migration, which is correct — rewriting one would break the history it is recorded under. Diff the two copies before reaching for `--force`; a difference that is only comments or whitespace is harmless.
 
 Full setup, env vars, migrations, and RLS notes: [supabase-provider README](https://www.npmjs.com/package/@selvajs/supabase-provider).
 

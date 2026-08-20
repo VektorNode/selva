@@ -164,8 +164,8 @@ export class SupabaseDataProvider implements IDataProvider {
 	async verifySchemaVersion(): Promise<SchemaVersionReport> {
 		const expected = EXPECTED_MIGRATION_HEAD;
 		const pushHint =
-			'Apply the pending Supabase migrations: sync them into your project ' +
-			'(see @selvajs/supabase-provider sync-migrations) and run `npx supabase db push`.';
+			'Apply the pending Supabase migrations: run `npx selva-supabase` to copy them ' +
+			'into your project, then `npx supabase db push`.';
 		try {
 			const { data, error } = await this.clients.serviceClient.rpc('migration_head');
 			if (error) {

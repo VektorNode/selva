@@ -43,7 +43,7 @@ New schema changes go in new files named `<UTCtimestamp>_selva_<name>.sql` (`dat
 
 **No backfill is required for the schema-caching migration.** Existing definition versions keep working (the app falls back to fetching their schema from Rhino.Compute), and each version's `schema` column fills in lazily the first time it's solved.
 
-The packaged migrations reach a consuming app through the `selva-supabase` bin ([src/cli/sync-migrations.ts](src/cli/sync-migrations.ts)), which copies them verbatim into the app's own `supabase/migrations/`. See the [operator page](../../../docs/self-hosting/providers/supabase.md#installing-the-migrations-in-an-external-app) for the flow.
+The packaged migrations reach a consuming app through the `selva-supabase` bin ([src/cli/sync-migrations.ts](src/cli/sync-migrations.ts)), which copies them verbatim into the app's own `supabase/migrations/`. See the [operator page](../../../docs/self-hosting/providers/supabase.md#3-apply-the-schema) for the flow.
 
 ---
 

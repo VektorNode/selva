@@ -8,7 +8,11 @@
 // copy time would make every machine/CI produce a different history.
 //
 // Usage:
-//   npx @selvajs/supabase-provider sync-migrations [--dir <path>] [--force]
+//   npx selva-supabase [--dir <path>] [--force]
+//
+// The bin is `selva-supabase` and this script IS the whole command — there is
+// no `sync-migrations` subcommand to type, and parseArgs rejects one as an
+// unknown argument.
 //
 //   --dir <path>   Target migrations dir (default: ./supabase/migrations)
 //   --force        Overwrite files that exist with differing content
@@ -55,10 +59,10 @@ function parseArgs(argv: string[]): Options {
 function printHelp(): void {
 	console.log(
 		[
-			'sync-migrations — copy @selvajs/supabase-provider migrations into your app.',
+			'selva-supabase — copy @selvajs/supabase-provider migrations into your app.',
 			'',
 			'Usage:',
-			'  npx @selvajs/supabase-provider sync-migrations [--dir <path>] [--force]',
+			'  npx selva-supabase [--dir <path>] [--force]',
 			'',
 			'  --dir <path>   Target migrations dir (default: ./supabase/migrations)',
 			'  --force        Overwrite files that exist with differing content',

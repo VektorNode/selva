@@ -71,7 +71,7 @@ const DEPENDENCIES = {
  * without this. Its migration SQL is not: `@selvajs/selva` publishes only
  * `build` + `templates`, while the SQL and the `selva-supabase` bin ship in
  * this package's own tarball. Without it, a deployment has no way to reach the
- * schema it needs — `npx selva-supabase sync-migrations` resolves nothing and
+ * schema it needs — `npx selva-supabase` resolves nothing and
  * `doctor`'s migration-head check finds no directory to compare against.
  */
 export const SUPABASE_DEPENDENCIES = {
