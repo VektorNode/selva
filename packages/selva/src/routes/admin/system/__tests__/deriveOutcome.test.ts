@@ -51,6 +51,48 @@ describe('deriveOutcome', () => {
 		expect(o.title).toMatch(/online/i);
 	});
 
+	it('names the database as the cause when a rollback was caused by schema skew', () => {
+		const logs = [
+			'[INFO] Target (latest): 4.9.0 → 4.14.0',
+			'[INFO] New @selvajs/selva: 4.14.0',
+			'[FATAL] New process failed health check after 30s',
+			'[FATAL] SCHEMA_SKEW: @selvajs/selva@4.14.0 expects database migration head 20260817200000,',
+			'[FATAL] but this database is at 20260717120000. The new version is fine — its migrations',
+			'[DONE] Rolled back to 4.9.0 — previous version is online'
+		].join('\n');
+		const o = deriveOutcome(5, logs);
+		expect(o.severity).toBe('warning');
+		expect(o.title).toContain('20260817200000');
+		expect(o.title).toContain('20260717120000');
+		expect(o.title).toMatch(/online/i);
+		// The operator's whole problem was not knowing the next step.
+		expect(o.detail).toContain('supabase db push');
+		expect(o.detail).toContain('sync-migrations');
+		expect(o.detail).toMatch(/same way/i);
+	});
+
+	it('does not fall through to the generic "review the log" rollback text on schema skew', () => {
+		const logs = [
+			'[FATAL] SCHEMA_SKEW: @selvajs/selva@4.14.0 expects database migration head 20260817200000,',
+			'[FATAL] but this database is at 20260717120000. The new version is fine',
+			'[DONE] Rolled back to 4.9.0 — previous version is online'
+		].join('\n');
+		const o = deriveOutcome(5, logs);
+		expect(o.detail).not.toMatch(/Review the log below for why/);
+	});
+
+	it('attributes an at-rest secret rollback to host configuration, not the release', () => {
+		const logs = [
+			'[FATAL] New process failed health check after 30s',
+			'[FATAL] AT_REST_SECRETS: stored compute server API keys could not be decrypted under the',
+			'[DONE] Rolled back to 4.9.0 — previous version is online'
+		].join('\n');
+		const o = deriveOutcome(5, logs);
+		expect(o.severity).toBe('warning');
+		expect(o.title).toMatch(/SELVA_AT_REST_KEY/);
+		expect(o.detail).toMatch(/not a fault in the new/i);
+	});
+
 	it('treats a failed rollback as critical and says the app may be offline', () => {
 		const logs = [
 			'[FATAL] Rollback restart also failed health check (HTTP 000)',

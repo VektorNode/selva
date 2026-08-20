@@ -454,3 +454,97 @@ describe('Node engine mismatch is never a green success (issue #176)', () => {
 		expect(deriveOutcome(0, clean).severity).toBe('success');
 	});
 });
+
+describe('a rollback names the cause the health endpoint reported', () => {
+	// Verbatim body from a real deployment: 4.14.0 installed and started fine,
+	// but its migrations were never applied, so /api/health held at 503 for the
+	// full probe window and the runner rolled back. The runner printed the JSON
+	// and nothing else, so the operator's takeaway was "the update is broken"
+	// rather than "the database needs migrating" — and a retry repeats it.
+	const DEGRADED_SCHEMA_BODY =
+		'{"status":"degraded","timestamp":"2026-08-20T16:26:05.449Z",' +
+		'"instanceId":"fc070940-aa51-4e06-af4c-066256e0a471","version":"4.14.0",' +
+		'"boot":{"checkedAt":"2026-08-20T16:25:35.923Z",' +
+		'"atRestSecrets":{"ok":true,"failures":[],"plaintextFound":false},' +
+		'"schemaVersion":{"ok":false,"expected":"20260817200000","actual":"20260717120000",' +
+		'"message":"Database migration head 20260717120000 is behind the app\'s expected 20260817200000."}}}';
+
+	/**
+	 * Runs the runner's own classifier block against a health body, so the test
+	 * exercises the emitted bash rather than a hand-copied approximation of it.
+	 * The block is delimited by the two markers it sits between.
+	 */
+	function classify(body: string): string {
+		const script = runner();
+		const start = script.indexOf('  if echo "$BODY" | grep -q \'"expected":\'');
+		const end = script.indexOf('rm -f /tmp/selva-health.$$', start);
+		expect(start).toBeGreaterThan(-1);
+		expect(end).toBeGreaterThan(start);
+
+		const dir = mkdtempSync(join(tmpdir(), 'selva-classify-'));
+		const file = join(dir, 'classify.sh');
+		try {
+			writeFileSync(
+				file,
+				[
+					'#!/bin/bash',
+					'BODY=$(cat)',
+					'AFTER=4.14.0',
+					'LATEST=4.14.0',
+					'ECOSYSTEM=/srv/selva/ecosystem.config.cjs',
+					script.slice(start, end)
+				].join('\n')
+			);
+			return execFileSync(BASH!, [file], { input: body, encoding: 'utf8' });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}
+
+	itParses('the classifier block parses and balances its brackets', () => {
+		assertParses(runner());
+		assertTestBrackets(runner());
+	});
+
+	itParses('turns the real degraded body into a SCHEMA_SKEW marker naming both heads', () => {
+		const out = classify(DEGRADED_SCHEMA_BODY);
+		expect(out).toContain('SCHEMA_SKEW');
+		expect(out).toContain('20260817200000');
+		expect(out).toContain('20260717120000');
+		expect(out).toContain('sync-migrations');
+		expect(out).toContain('supabase db push');
+		// The question the operator actually asked: why not automatically?
+		expect(out).toMatch(/not reversible|cannot be rolled back/i);
+	});
+
+	itParses('does not blame at-rest secrets when only the schema is behind', () => {
+		expect(classify(DEGRADED_SCHEMA_BODY)).not.toContain('AT_REST_SECRETS');
+	});
+
+	itParses('reports at-rest secret failures without claiming schema skew', () => {
+		const body =
+			'{"status":"degraded","boot":{"atRestSecrets":{"ok":false,' +
+			'"failures":[{"serverId":"a","serverLabel":"Prod","reason":"key_mismatch"}],' +
+			'"plaintextFound":false},"schemaVersion":null}}';
+		const out = classify(body);
+		expect(out).toContain('AT_REST_SECRETS');
+		expect(out).not.toContain('SCHEMA_SKEW');
+	});
+
+	itParses('says so plainly when the body reports no cause it recognises', () => {
+		const out = classify(
+			'{"status":"degraded","boot":{"atRestSecrets":null,"schemaVersion":null}}'
+		);
+		expect(out).not.toContain('SCHEMA_SKEW');
+		expect(out).not.toContain('AT_REST_SECRETS');
+		expect(out).toMatch(/did not report a known cause/i);
+	});
+
+	itParses('the marker it emits is the one deriveOutcome classifies', () => {
+		const logs =
+			classify(DEGRADED_SCHEMA_BODY) + '\n[DONE] Rolled back to 4.9.0 — previous version is online';
+		const outcome = deriveOutcome(5, logs);
+		expect(outcome.severity).toBe('warning');
+		expect(outcome.detail).toContain('supabase db push');
+	});
+});

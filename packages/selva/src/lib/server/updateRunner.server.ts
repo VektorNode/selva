@@ -428,8 +428,42 @@ fi
 # ---------------------------------------------------------------------------
 echo "[FATAL] New process failed health check after 30s"
 if [ -f /tmp/selva-health.$$ ]; then
+  BODY=$(cat /tmp/selva-health.$$)
   echo "[FATAL] Last response body:"
-  cat /tmp/selva-health.$$
+  echo "$BODY"
+
+  # Name the cause before rolling back. /api/health reports WHY it is degraded
+  # in a structured body, but a rollback that only prints raw JSON reads to an
+  # operator as "the update just failed" — they retry, hit the identical
+  # failure, and never learn the database is the thing that needs attention.
+  # Each branch below emits a stable marker deriveOutcome keys on.
+  # Match on the keys unique to each report rather than a bare \`"ok":false\`,
+  # which appears in whichever sub-report failed and would misattribute one
+  # cause to the other. \`expected\` only ever appears in schemaVersion;
+  # \`plaintextFound\`/\`failures\` only in atRestSecrets.
+  if echo "$BODY" | grep -q '"expected":'; then
+    EXPECTED=$(echo "$BODY" | grep -o '"expected":"[^"]*"' | head -1 | cut -d'"' -f4)
+    ACTUAL=$(echo "$BODY" | grep -o '"actual":"[^"]*"' | head -1 | cut -d'"' -f4)
+    echo "[FATAL] SCHEMA_SKEW: @selvajs/selva@\${AFTER:-$LATEST} expects database migration head \${EXPECTED:-(unknown)},"
+    echo "[FATAL] but this database is at \${ACTUAL:-(unavailable)}. The new version is fine — its migrations"
+    echo "[FATAL] were never applied. Retrying the update WILL fail again in exactly the same way."
+    echo "[FATAL] The update does not apply migrations itself: they are not reversible, so an"
+    echo "[FATAL] auto-migrate followed by a rollback would leave code and database on different heads."
+    echo "[FATAL] Apply them yourself, then re-run the update:"
+    echo "[FATAL]   cd $(dirname "$ECOSYSTEM")"
+    echo "[FATAL]   npx @selvajs/supabase-provider sync-migrations"
+    echo "[FATAL]   npx supabase db push"
+  elif echo "$BODY" | grep -qE '"plaintextFound":true|"failures":\\[[^]]'; then
+    echo "[FATAL] AT_REST_SECRETS: stored compute server API keys could not be decrypted under the"
+    echo "[FATAL] current SELVA_AT_REST_KEY. This is a configuration problem on this host, not a"
+    echo "[FATAL] fault in the new version — retrying the update will fail the same way."
+    echo "[FATAL] Re-enter the affected keys at /admin/compute, or restore the original"
+    echo "[FATAL] SELVA_AT_REST_KEY, then re-run the update."
+  else
+    echo "[FATAL] The health endpoint did not report a known cause. Inspect the body above and"
+    echo "[FATAL] \\\`pm2 logs selva-compute\\\` for what the new version failed on."
+  fi
+
   rm -f /tmp/selva-health.$$
 fi
 

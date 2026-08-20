@@ -189,6 +189,43 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 			to
 		};
 	}
+	// A rollback whose cause is the DATABASE, not the release. Ranked ahead of
+	// the generic rollback case: "review the log before retrying" is actively
+	// misleading here, because the log holds nothing about the new version —
+	// it is fine, and retrying without touching the database repeats verbatim.
+	if (has(logs, 'SCHEMA_SKEW')) {
+		const expected = firstMatch(logs, /expects database migration head (\S+?),/);
+		const actual = firstMatch(logs, /this database is at (\S+?)\./);
+		const skew =
+			expected && actual ? ` The database is at ${actual}; ${to ?? 'it'} needs ${expected}.` : '';
+		return {
+			severity: 'warning',
+			title: `Update rolled back — the database migrations for ${to ?? 'the new version'} have not been applied.${skew} The app is online${from ? ` on ${from}` : ''}.`,
+			detail:
+				'Nothing is wrong with the new version. Selva does not apply migrations ' +
+				'during an update, because they cannot be rolled back — auto-migrating ' +
+				'and then rolling the code back would leave the app and database on ' +
+				'different heads. Apply them on the server, then re-run this update: ' +
+				'`npx @selvajs/supabase-provider sync-migrations` followed by ' +
+				'`npx supabase db push`. Retrying without this will fail in exactly the same way.',
+			from,
+			to
+		};
+	}
+	// Same shape: the rollback was caused by host configuration, not the release.
+	if (has(logs, 'AT_REST_SECRETS')) {
+		return {
+			severity: 'warning',
+			title: `Update rolled back — stored compute server keys do not decrypt under this host's SELVA_AT_REST_KEY. The app is online${from ? ` on ${from}` : ''}.`,
+			detail:
+				'This is a configuration problem on the server, not a fault in the new ' +
+				'version, so retrying alone will fail identically. Re-enter the affected ' +
+				'keys at /admin/compute, or restore the SELVA_AT_REST_KEY the values were ' +
+				'encrypted with, then re-run the update.',
+			from,
+			to
+		};
+	}
 	if (exitCode === 5 || has(logs, 'Rolled back')) {
 		return {
 			severity: 'warning',
