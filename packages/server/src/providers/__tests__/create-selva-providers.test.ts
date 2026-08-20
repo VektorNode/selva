@@ -111,7 +111,7 @@ describe('config parsing', () => {
 		const plain = await createSelvaProviders({}, { registry, ...noBoot });
 		expect(plain.branding().name).toBe('Selva');
 		expect(plain.branding().copyrightName).toBe('Selva');
-		expect(plain.branding().tagline).toBeTruthy();
+		expect(plain.branding().tagline).toBe('');
 
 		const branded = await createSelvaProviders(
 			{ SELVA_BRAND_NAME: '  Acme  ' },
