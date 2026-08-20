@@ -24,8 +24,9 @@ Thumbs.db
 !.env.dev-supabase
 !.env.dev-header
 
-# Deployment-specific config (edit example.* files instead, setup.sh copies them)
-ecosystem.config.cjs
+# Deployment-specific config (edit example.* files instead, setup.sh copies them).
+# Anchored to this directory — templates/ecosystem.config.cjs is the tracked source.
+/ecosystem.config.cjs
 
 # Release channel selection (written at runtime by the admin System page)
 selva-channel.json
