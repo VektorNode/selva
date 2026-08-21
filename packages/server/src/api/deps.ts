@@ -12,11 +12,13 @@
  * may supply its own.
  */
 
+import { isFlagEnabled } from '@selvajs/platform';
 import type {
 	IAuthProvider,
 	IDataProvider,
 	IStorageProvider,
-	SelvaConfig
+	SelvaConfig,
+	SelvaFlags
 } from '@selvajs/platform';
 
 export interface SelvaDeps {
@@ -35,6 +37,12 @@ export interface SelvaDeps {
 	invites: IDataProvider['invites'];
 	permissions: IDataProvider['permissions'];
 	platformProjectGrants: IDataProvider['platformProjectGrants'];
+	/**
+	 * Feature flags, as a predicate rather than a record: an omitted flag must
+	 * read as false, and keeping that in `isFlagEnabled` stops each caller from
+	 * re-deciding what a missing flag means.
+	 */
+	flag: (name: keyof SelvaFlags) => boolean;
 	/** Composed services the host supplies. Shapes stay host-defined for now. */
 	services: Record<string, unknown>;
 }
@@ -61,6 +69,7 @@ export function depsFromConfig(
 		invites: data.invites,
 		permissions: data.permissions,
 		platformProjectGrants: data.platformProjectGrants,
+		flag: (name) => isFlagEnabled(config, name),
 		services
 	};
 }

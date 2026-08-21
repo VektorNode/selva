@@ -188,6 +188,41 @@ describe('POST /api/v1/projects through the binding', () => {
 		expect(body.fields).toHaveProperty('name');
 	});
 
+	it('reads the guard’s org membership through the injected deps too', async () => {
+		tp = await freshProviders();
+		const { alice } = await seedAcme(tp);
+		const { createProject } = await import('../handlers/projects.js');
+
+		// The guard's read path is the half that stays on the module globals if
+		// only the write path is injected — a split that passes every test in an
+		// app whose globals happen to be the same instance, and reaches the wrong
+		// provider set under a second host.
+		const event = await eventFor(alice.id, {
+			method: 'POST',
+			body: { name: 'Guarded', visibility: 'private' }
+		});
+		let sawGuardRead = false;
+		const realOrgs = event.locals.providers.data.orgs;
+		event.locals.providers = {
+			...event.locals.providers,
+			data: {
+				...event.locals.providers.data,
+				orgs: {
+					...realOrgs,
+					getOrgMember: (...args: Parameters<typeof realOrgs.getOrgMember>) => {
+						sawGuardRead = true;
+						return realOrgs.getOrgMember(...args);
+					}
+				}
+			}
+		} as typeof event.locals.providers;
+
+		const res = await mount('Failed to create project', createProject)(event);
+
+		expect(res.status).toBe(201);
+		expect(sawGuardRead).toBe(true);
+	});
+
 	it('writes through the injected deps, not the module-global provider', async () => {
 		tp = await freshProviders();
 		const { alice } = await seedAcme(tp);

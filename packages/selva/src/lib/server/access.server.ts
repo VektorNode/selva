@@ -22,7 +22,11 @@ import {
 	canEditProjectSettings,
 	canEditDefinition
 } from '@selvajs/platform';
-import { createProjectAccessInputBuilder } from '@selvajs/server/access';
+import {
+	createProjectAccessInputBuilder,
+	type ProjectAccessInputBuilder
+} from '@selvajs/server/access';
+import type { SelvaDeps } from '@selvajs/server/api';
 import {
 	getProjectProvider,
 	getDefinitionMeta,
@@ -37,6 +41,44 @@ type AnyPermission = PlatformPermission | OrgPermission;
 interface Locals {
 	user?: AuthUser;
 	ctx?: RequestContext;
+	deps?: AccessDeps;
+}
+
+/**
+ * The stores a guard reads, injected rather than resolved.
+ *
+ * `ApiRequest` satisfies this structurally, so a mounted handler passes itself
+ * and the guard runs against that request's providers. Every guard takes it
+ * *optionally* and falls back to the module globals: the page loads that share
+ * these guards have no `deps` to pass and must keep working untouched.
+ *
+ * Without this a mounted handler's write path is injected while its guard's
+ * read path is not — a split that produces correct results under one app and
+ * reaches for the wrong provider set under a second.
+ */
+export type AccessDeps = Pick<
+	SelvaDeps,
+	'orgs' | 'projects' | 'definitionMeta' | 'platformProjectGrants' | 'flag'
+>;
+
+interface HasDeps {
+	deps?: AccessDeps;
+}
+
+function orgsOf(src?: HasDeps) {
+	return src?.deps?.orgs ?? getOrganizationProvider();
+}
+
+function projectsOf(src?: HasDeps) {
+	return src?.deps?.projects ?? getProjectProvider();
+}
+
+function definitionMetaOf(src?: HasDeps) {
+	return src?.deps?.definitionMeta ?? getDefinitionMeta();
+}
+
+function flagOf(src?: HasDeps) {
+	return src?.deps?.flag ?? flag;
 }
 
 function requireAuthed(locals: Locals): { user: AuthUser; ctx: RequestContext } {
@@ -178,29 +220,48 @@ async function contentCheck(check: () => Promise<boolean>): Promise<boolean> {
 	return await check();
 }
 
-async function loadProjectOr404(ctx: RequestContext, projectId: string): Promise<Project> {
-	const project = await getProjectProvider().getProject(ctx, projectId);
+async function loadProjectOr404(
+	ctx: RequestContext,
+	projectId: string,
+	src?: HasDeps
+): Promise<Project> {
+	const project = await projectsOf(src).getProject(ctx, projectId);
 	if (!project) throw error(404, 'Project not found');
 	return project;
 }
 
 // Rule-input assembly (the "which rows does each visibility need" knowledge)
-// lives in `@selvajs/server/access`; this binding wires it to the app's
-// lazily-initialized providers and flag reads.
-const accessInputs = createProjectAccessInputBuilder({
-	getProjectMember: (ctx, projectId, userId) =>
-		getProjectProvider().getProjectMember(ctx, projectId, userId),
-	getOrgMember: (ctx, orgId, userId) => getOrganizationProvider().getOrgMember(ctx, orgId, userId),
-	listPlatformGrants: (ctx, projectId) =>
-		getPlatformProjectGrantStore().listByProject(ctx, projectId),
-	flags: () => ({
-		allowCrossOrgPublic: flag('ALLOW_CROSS_ORG_PUBLIC'),
-		enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
-	})
-});
+// lives in `@selvajs/server/access`; this binding wires it to whichever
+// provider set the caller carries, falling back to the app's lazily
+// initialized globals.
+function accessInputsFor(src?: HasDeps) {
+	const readFlag = flagOf(src);
+	return createProjectAccessInputBuilder({
+		getProjectMember: (ctx, projectId, userId) =>
+			projectsOf(src).getProjectMember(ctx, projectId, userId),
+		getOrgMember: (ctx, orgId, userId) => orgsOf(src).getOrgMember(ctx, orgId, userId),
+		listPlatformGrants: (ctx, projectId) =>
+			(src?.deps?.platformProjectGrants ?? getPlatformProjectGrantStore()).listByProject(
+				ctx,
+				projectId
+			),
+		flags: () => ({
+			allowCrossOrgPublic: readFlag('ALLOW_CROSS_ORG_PUBLIC'),
+			enablePlatformProjects: readFlag('ENABLE_PLATFORM_PROJECTS')
+		})
+	});
+}
 
-const buildProjectAccessInput = accessInputs.buildProjectAccessInput;
-export const projectAccessInputFromRows = accessInputs.projectAccessInputFromRows;
+function buildProjectAccessInput(
+	ctx: RequestContext,
+	project: Project,
+	overrides?: Parameters<ProjectAccessInputBuilder['buildProjectAccessInput']>[2],
+	src?: HasDeps
+) {
+	return accessInputsFor(src).buildProjectAccessInput(ctx, project, overrides);
+}
+
+export const projectAccessInputFromRows = accessInputsFor().projectAccessInputFromRows;
 
 /**
  * Gates creation of a *new* definition. Container projects require project
@@ -213,10 +274,10 @@ export async function requireCanCreateDefinition(
 	projectId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
-	const project = await loadProjectOr404(ctx, projectId);
+	const project = await loadProjectOr404(ctx, projectId, locals);
 	const allowed = await contentCheck(async () => {
 		if (project.autoJoinOnUpload) return true;
-		return canEdit(await buildProjectAccessInput(ctx, project));
+		return canEdit(await buildProjectAccessInput(ctx, project, undefined, locals));
 	});
 	if (!allowed) {
 		throw error(403, 'You do not have permission to upload definitions to this project.');
@@ -236,7 +297,7 @@ export async function requireCanCreateDefinition(
 export async function requireCanViewOrg(locals: Locals, orgId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await contentCheck(async () => {
-		const member = await getOrganizationProvider().getOrgMember(ctx, orgId, ctx.userId);
+		const member = await orgsOf(locals).getOrgMember(ctx, orgId, ctx.userId);
 		return member !== null;
 	});
 	if (!allowed) throw error(403, 'You do not have access to this organization.');
@@ -254,7 +315,7 @@ export async function requireTargetIsOrgMember(
 	targetUserId: string
 ): Promise<void> {
 	const { ctx } = requireAuthed(locals);
-	const member = await getOrganizationProvider().getOrgMember(ctx, orgId, targetUserId);
+	const member = await orgsOf(locals).getOrgMember(ctx, orgId, targetUserId);
 	if (!member) {
 		throw error(400, 'User must be a member of this organization to be added to a project.');
 	}
@@ -272,10 +333,11 @@ export async function requireTargetIsOrgMember(
 export async function canActorChangeOrgRole(
 	ctx: RequestContext,
 	orgId: string,
-	role: OrgRole
+	role: OrgRole,
+	src?: HasDeps
 ): Promise<boolean> {
 	if (role === 'member') return true;
-	const actorMember = await getOrganizationProvider().getOrgMember(ctx, orgId, ctx.userId);
+	const actorMember = await orgsOf(src).getOrgMember(ctx, orgId, ctx.userId);
 	return canChangeOrgRole({ actorMember, role });
 }
 
@@ -288,7 +350,7 @@ export async function requireCanReclaim(
 	projectId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
-	const project = await loadProjectOr404(ctx, projectId);
+	const project = await loadProjectOr404(ctx, projectId, locals);
 
 	// Ahead of the bypass, not inside the check: `instance_admin` short-circuits
 	// `managementBypassOrRun`, so `canReclaim`'s platform-project refusal (§4a)
@@ -300,7 +362,7 @@ export async function requireCanReclaim(
 	}
 
 	const allowed = await managementBypassOrRun(ctx, async () => {
-		const orgMember = await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
+		const orgMember = await orgsOf(locals).getOrgMember(ctx, project.orgId, ctx.userId);
 		return canReclaim({
 			project,
 			orgMember,
@@ -323,7 +385,7 @@ export async function requireCanCreateProject(
 ): Promise<{ user: AuthUser; ctx: RequestContext }> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await managementBypassOrRun(ctx, async () => {
-		const orgMember = await getOrganizationProvider().getOrgMember(ctx, targetOrgId, ctx.userId);
+		const orgMember = await orgsOf(locals).getOrgMember(ctx, targetOrgId, ctx.userId);
 		return canCreateProject({
 			orgPermissions: ctx.orgPermissions,
 			orgMember,
@@ -347,8 +409,8 @@ export async function requireCanManage(
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await managementBypassOrRun(ctx, async () => {
-		const project = await loadProjectOr404(ctx, projectId);
-		return canManage(await buildProjectAccessInput(ctx, project));
+		const project = await loadProjectOr404(ctx, projectId, locals);
+		return canManage(await buildProjectAccessInput(ctx, project, undefined, locals));
 	});
 	if (!allowed) {
 		throw error(
@@ -368,9 +430,9 @@ export async function requireCanEditProjectSettings(
 	projectId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
-	const project = await loadProjectOr404(ctx, projectId);
+	const project = await loadProjectOr404(ctx, projectId, locals);
 	const allowed = await managementBypassOrRun(ctx, async () =>
-		canEditProjectSettings(await buildProjectAccessInput(ctx, project))
+		canEditProjectSettings(await buildProjectAccessInput(ctx, project, undefined, locals))
 	);
 	if (!allowed) throw error(403, 'Only project owners can edit project settings.');
 	return { user, ctx, project };
@@ -379,8 +441,8 @@ export async function requireCanEditProjectSettings(
 export async function requireCanViewProject(locals: Locals, projectId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await contentCheck(async () => {
-		const project = await loadProjectOr404(ctx, projectId);
-		return canView(await buildProjectAccessInput(ctx, project));
+		const project = await loadProjectOr404(ctx, projectId, locals);
+		return canView(await buildProjectAccessInput(ctx, project, undefined, locals));
 	});
 	if (!allowed) throw error(403, 'You do not have access to this project.');
 	return user;
@@ -400,9 +462,9 @@ export async function requireCanSolve(
 	preloadedProject?: Project
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
-	const project = preloadedProject ?? (await loadProjectOr404(ctx, projectId));
+	const project = preloadedProject ?? (await loadProjectOr404(ctx, projectId, locals));
 	const allowed = await contentCheck(async () =>
-		canSolve(await buildProjectAccessInput(ctx, project))
+		canSolve(await buildProjectAccessInput(ctx, project, undefined, locals))
 	);
 	if (!allowed) throw error(403, 'You do not have access to this project.');
 	return { user, ctx, project };
@@ -416,10 +478,11 @@ export async function requireCanSolve(
  */
 async function loadCommonsOrgMember(
 	ctx: RequestContext,
-	project: Project | null
+	project: Project | null,
+	src?: HasDeps
 ): Promise<OrgMember | null> {
 	if (!project?.autoJoinOnUpload) return null;
-	return await getOrganizationProvider().getOrgMember(ctx, project.orgId, ctx.userId);
+	return await orgsOf(src).getOrgMember(ctx, project.orgId, ctx.userId);
 }
 
 /**
@@ -428,19 +491,19 @@ async function loadCommonsOrgMember(
  */
 export async function requireEditableDefinition(locals: Locals, guid: string) {
 	const { ctx } = requireAuthed(locals);
-	const record = await getDefinitionMeta().get(ctx, guid);
+	const record = await definitionMetaOf(locals).get(ctx, guid);
 	if (!record) throw error(404, 'Definition not found');
 	// Load project + member once up front; `project` is returned for reuse.
 	const [project, member] = await Promise.all([
-		getProjectProvider().getProject(ctx, record.projectId),
-		getProjectProvider().getProjectMember(ctx, record.projectId, ctx.userId)
+		projectsOf(locals).getProject(ctx, record.projectId),
+		projectsOf(locals).getProjectMember(ctx, record.projectId, ctx.userId)
 	]);
 	const allowed = await contentCheck(async () =>
 		canEditDefinition({
 			project,
 			definition: record,
 			member,
-			orgMember: await loadCommonsOrgMember(ctx, project),
+			orgMember: await loadCommonsOrgMember(ctx, project, locals),
 			userId: ctx.userId,
 			platformPermissions: ctx.platformPermissions,
 			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
@@ -464,17 +527,17 @@ export async function requireCanEditDefinition(
 		const [project, definition, member] = await Promise.all([
 			preloaded?.project !== undefined
 				? Promise.resolve(preloaded.project)
-				: getProjectProvider().getProject(ctx, projectId),
+				: projectsOf(locals).getProject(ctx, projectId),
 			preloaded?.definition !== undefined
 				? Promise.resolve(preloaded.definition)
-				: getDefinitionMeta().get(ctx, definitionGuid),
-			getProjectProvider().getProjectMember(ctx, projectId, ctx.userId)
+				: definitionMetaOf(locals).get(ctx, definitionGuid),
+			projectsOf(locals).getProjectMember(ctx, projectId, ctx.userId)
 		]);
 		return canEditDefinition({
 			project,
 			definition,
 			member,
-			orgMember: await loadCommonsOrgMember(ctx, project),
+			orgMember: await loadCommonsOrgMember(ctx, project, locals),
 			userId: ctx.userId,
 			platformPermissions: ctx.platformPermissions,
 			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
