@@ -54,10 +54,7 @@ import {
 	type ShareLink,
 	type TenancyMode
 } from '@selvajs/platform';
-import {
-	DefinitionService,
-	type CreateDefinitionRecord
-} from '../definitions/DefinitionService.js';
+import { DefinitionService, type CreateDefinitionRecord } from '@selvajs/server/definitions';
 import { hashToken, mintRawToken } from '../shareLinks/token.server.js';
 import { setTestProviders, clearTestProviders } from './test-providers.js';
 

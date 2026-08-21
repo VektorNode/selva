@@ -9,7 +9,7 @@
  */
 
 import type { SelvaConfig, SelvaFlags, TenancyMode } from '@selvajs/platform';
-import type { DefinitionService } from '../definitions/DefinitionService.js';
+import type { DefinitionService } from '@selvajs/server/definitions';
 
 export interface TestProviderHandle {
 	config: SelvaConfig;

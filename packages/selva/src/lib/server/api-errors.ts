@@ -2,7 +2,7 @@ import { error, isHttpError } from '@sveltejs/kit';
 import { ProviderError, type ILogger } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
 import type { ZodError } from 'zod';
-import { SchemaExtractionError } from './definitions/schemaExtraction.server';
+import { SchemaExtractionError } from '@selvajs/server/definitions';
 import { ComputeServerUnconfiguredError } from './compute/resolve.server';
 
 // ============================================================================

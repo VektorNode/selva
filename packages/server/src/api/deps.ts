@@ -12,11 +12,12 @@
  * may supply its own.
  */
 
-import { isFlagEnabled } from '@selvajs/platform';
+import { isFlagEnabled, NoopEventSink } from '@selvajs/platform';
 import type { DefinitionService } from '../definitions/definition-service.js';
 import type {
 	IAuthProvider,
 	IDataProvider,
+	IEventSink,
 	IStorageProvider,
 	SelvaConfig,
 	SelvaFlags
@@ -38,6 +39,15 @@ export interface SelvaDeps {
 	invites: IDataProvider['invites'];
 	permissions: IDataProvider['permissions'];
 	platformProjectGrants: IDataProvider['platformProjectGrants'];
+	/**
+	 * Audit sink. Never optional here even though `SelvaConfig.events` is:
+	 * handlers emit escalation events (`project.reclaimed`,
+	 * `org_member.removed_orphaning_projects`) that the audit trail depends on,
+	 * and a handler deciding for itself what a missing sink means is how one of
+	 * them ends up silently unlogged. `depsFromConfig` substitutes
+	 * `NoopEventSink`, which discards explicitly.
+	 */
+	events: IEventSink;
 	/**
 	 * Feature flags, as a predicate rather than a record: an omitted flag must
 	 * read as false, and keeping that in `isFlagEnabled` stops each caller from
@@ -78,6 +88,7 @@ export function depsFromConfig(
 		invites: data.invites,
 		permissions: data.permissions,
 		platformProjectGrants: data.platformProjectGrants,
+		events: config.events ?? new NoopEventSink(),
 		flag: (name) => isFlagEnabled(config, name),
 		services
 	};

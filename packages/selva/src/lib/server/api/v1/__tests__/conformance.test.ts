@@ -397,7 +397,7 @@ describe('every admin handler calls a platform-permission guard', () => {
  * anything can fail. `apiRoute` cannot help them, and wrapping them would hide
  * that.
  */
-describe('every API handler is wrapped in apiRoute', () => {
+describe('every API handler is wrapped (v1: mount; admin: apiRoute or mount)', () => {
 	const STREAMING_EXEMPT = new Set([
 		'POST api/admin/system/update', // SSE — errors are `sendEvent`'d into the stream
 		'GET api/admin/system/update', // returns the tee'd log as text/plain
@@ -416,10 +416,15 @@ describe('every API handler is wrapped in apiRoute', () => {
 	// `apiRoute` wraps a SvelteKit handler; `mount` wraps a transport-free one
 	// from `api/handlers/` and routes its errors through `runHandler`. Both
 	// guarantee the structured envelope, which is what this asserts.
-	function wrapsMethod(source: string, method: HttpMethod): boolean {
-		return new RegExp(`export\\s+const\\s+${method}\\s*:[^=]*=\\s*(apiRoute|mount)\\s*\\(`).test(
-			source
-		);
+	//
+	// **v1 accepts only `mount`.** Every v1 method is converted, so allowing
+	// `apiRoute` there would let the next new route pick the wrapper that
+	// cannot be mounted by a second host — which is exactly the drift this
+	// whole refactor exists to end. Admin still accepts either: those handlers
+	// have not been converted, and forcing them now would be a second project.
+	function wrapsMethod(source: string, method: HttpMethod, prefix: string): boolean {
+		const wrappers = prefix === 'api/v1' ? 'mount' : '(?:apiRoute|mount)';
+		return new RegExp(`export\\s+const\\s+${method}\\s*:[^=]*=\\s*${wrappers}\\s*\\(`).test(source);
 	}
 
 	const withPrefix = [
@@ -447,9 +452,10 @@ describe('every API handler is wrapped in apiRoute', () => {
 	});
 
 	it.each(cases)('%s', (_name, route, method) => {
+		const required = route.prefix === 'api/v1' ? 'mount' : 'apiRoute or mount';
 		expect(
-			wrapsMethod(route.source, method),
-			`${method} ${route.prefix}/${route.routePath} is not wrapped in apiRoute — ` +
+			wrapsMethod(route.source, method, route.prefix),
+			`${method} ${route.prefix}/${route.routePath} is not wrapped in ${required} — ` +
 				'an unhandled error there becomes a raw 500 carrying a provider message'
 		).toBe(true);
 	});

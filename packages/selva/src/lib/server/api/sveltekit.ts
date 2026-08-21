@@ -21,7 +21,7 @@ import {
 } from '@selvajs/server/api';
 import { ProviderError } from '@selvajs/platform';
 import { getDefinitionService, getOrgAssetService } from '../providers.server';
-import { SchemaExtractionError } from '../definitions/schemaExtraction.server';
+import { SchemaExtractionError } from '@selvajs/server/definitions';
 import { ComputeServerUnconfiguredError } from '../compute/resolve.server';
 
 // Postgres unique-constraint names → friendly explanations. Postgrest surfaces

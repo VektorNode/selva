@@ -2,14 +2,13 @@
  * Definition handlers: the collection, one definition's detail and metadata,
  * its live schema, cover image, and the publish channel.
  *
- * Solve and the two compute routes stay on `apiRoute` deliberately — they
- * stream and mark their own metrics, which the `ApiResponse` envelope does not
- * model.
+ * Solve and the two compute routes stay unwrapped deliberately — they stream
+ * and mark their own metrics, which the `ApiResponse` envelope does not model.
  */
 
 import { randomUUID } from 'node:crypto';
 import { apiError, ApiErrorCode, collection, created, noContent } from '@selvajs/server/api';
-import type { ApiHandler, SelvaDeps } from '@selvajs/server/api';
+import type { ApiHandler } from '@selvajs/server/api';
 import { toDefinitionListItem, type DefinitionStatus } from '@selvajs/platform';
 import {
 	CreateDefinitionInputSchema,
@@ -22,7 +21,7 @@ import { requireCanCreateDefinition, requireEditableDefinition } from '../../acc
 import { throwZodError } from '../../api-errors';
 import { GH_EXTENSIONS, MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '../../admin-config';
 import { resolveServerForOrg } from '../../compute/resolve.server';
-import { fetchSchemaFromCompute } from '../../definitions/schemaExtraction.server';
+import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import {
 	getVisibleDefinition,
 	listVisibleDefinitions,
@@ -32,23 +31,9 @@ import {
 import { parseDefinitionListOptions } from '../../pagination.server';
 import { formText, parseBody, parseParam, requireUpload } from '../v1/route';
 import { requireCaller } from '../callers';
+import { definitionService } from './services';
 
 const LISTABLE_STATUSES: DefinitionStatus[] = ['draft', 'published', 'archived'];
-
-/**
- * The composed service, or a 500 naming what is missing.
- *
- * `services` is host-supplied, so a host that mounts these handlers without
- * wiring `definitions` gets a clear failure here rather than a
- * `Cannot read properties of undefined` from inside the service call.
- */
-function definitionService(deps: SelvaDeps) {
-	const service = deps.services.definitions;
-	if (!service) {
-		throw new Error('SelvaDeps.services.definitions is not wired — mount requires it.');
-	}
-	return service;
-}
 
 /**
  * Definitions the caller can view. Visibility is resolved into the query via

@@ -32,7 +32,7 @@ import type {
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import { getStorageProvider, getSolveMetricSink, providers } from '$lib/server/providers.server';
 import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
-import { fetchSchemaFromCompute } from '$lib/server/definitions/schemaExtraction.server';
+import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import { renderThrown } from '@selvajs/server/logging';
 import type { ShareLink } from '@selvajs/platform';
 

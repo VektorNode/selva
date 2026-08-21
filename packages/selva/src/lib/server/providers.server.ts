@@ -17,7 +17,7 @@ import { createSelvaProviders, type ProviderRegistry } from '@selvajs/server/pro
 import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
 import * as header from '@selvajs/header-auth-provider';
-import { DefinitionService } from './definitions/DefinitionService.js';
+import { DefinitionService } from '@selvajs/server/definitions';
 import { OrgAssetService } from './organizations/OrgAssetService.js';
 import { SentryErrorReporter } from '@selvajs/server/errors';
 import { SmtpNotificationProvider } from '@selvajs/server/notifications';
