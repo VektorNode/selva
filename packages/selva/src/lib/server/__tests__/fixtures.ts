@@ -37,7 +37,6 @@ import {
 	type IEventSink,
 	type IOAuthAuth,
 	type ISessionRefresh,
-	type Organization,
 	type PlatformPermission,
 	type Project,
 	type RequestContext,
@@ -48,14 +47,7 @@ import {
 } from '@selvajs/platform';
 import { DefinitionService, type CreateDefinitionRecord } from '@selvajs/server/definitions';
 import type { TestHarness, SeededUser, CallResult } from '@selvajs/server/testing';
-import {
-	actAs as actAsShared,
-	seedUser,
-	seedOrg,
-	seedOrgMember,
-	seedProject,
-	silentLog
-} from '@selvajs/server/testing';
+import { actAs as actAsShared, seedUser, seedProject, silentLog } from '@selvajs/server/testing';
 import { isApiError } from '@selvajs/server/api';
 import { mapAppError } from '../api/sveltekit.js';
 import { hashToken, mintRawToken, shareLinkCodec } from '../shareLinks/token.server.js';
@@ -384,96 +376,14 @@ export async function setEnv(key: string, value: string | undefined): Promise<vo
 // Compound scenario seeders — the §11 cast
 // ============================================================================
 
-export interface AcmeFixture {
-	acme: Organization;
-	alice: SeededUser;
-	bob: SeededUser;
-	alicesPrivate: Project;
-	acmeOrg: Project;
-	acmePublic: Project;
-}
-
 /**
- * The §11 cast.
- *
- * **Alice is the org's `ownerId` but her membership row is `admin`.** Those are
- * separate fields and this fixture deliberately makes them disagree, because
- * production can too. Every org-role gate reads the **membership row**, so a
- * test that treats `alice` as "the owner" will invert its own result and pass
- * for the wrong reason — seed an explicit `role: 'owner'` member instead.
+ * The tenant casts moved to `@selvajs/server/testing` alongside the handler
+ * tests that use them. Re-exported here so this module stays the single import
+ * for tests; they take a `TestHarness`, which `TestProviders` extends, so call
+ * sites pass `tp` unchanged.
  */
-export async function seedAcme(tp: TestProviders): Promise<AcmeFixture> {
-	const alice = await seedUser(tp, 'alice@acme.test');
-	const bob = await seedUser(tp, 'bob@acme.test');
-	const acme = await seedOrg(tp, { name: 'Acme', slug: 'acme', ownerId: alice.id });
-	await seedOrgMember(tp, { orgId: acme.id, userId: alice.id, role: 'admin' });
-	await seedOrgMember(tp, { orgId: acme.id, userId: bob.id, role: 'member' });
-
-	const alicesPrivate = await seedProject(tp, {
-		orgId: acme.id,
-		name: 'Alice Private',
-		slug: 'alice-private',
-		ownerId: alice.id,
-		visibility: 'private'
-	});
-	const acmeOrg = await seedProject(tp, {
-		orgId: acme.id,
-		name: 'Acme Org Project',
-		slug: 'acme-org',
-		ownerId: alice.id,
-		visibility: 'org'
-	});
-	const acmePublic = await seedProject(tp, {
-		orgId: acme.id,
-		name: 'Acme Public',
-		slug: 'acme-public',
-		ownerId: alice.id,
-		visibility: 'public'
-	});
-
-	return { acme, alice, bob, alicesPrivate, acmeOrg, acmePublic };
-}
-
-export interface BigClientFixture {
-	bigClient: Organization;
-	carol: SeededUser;
-}
-
-/**
- * Second tenant. Carol is a member of BigClient — used for cross-org rejection
- * scenarios (Carol acting in BigClient context cannot view Acme data).
- */
-export async function seedBigClient(tp: TestProviders): Promise<BigClientFixture> {
-	const carol = await seedUser(tp, 'carol@bigclient.test');
-	const bigClient = await seedOrg(tp, {
-		name: 'BigClient',
-		slug: 'bigclient',
-		ownerId: carol.id
-	});
-	await seedOrgMember(tp, { orgId: bigClient.id, userId: carol.id, role: 'member' });
-	return { bigClient, carol };
-}
-
-export interface ThirdOrgFixture {
-	initech: Organization;
-	dave: SeededUser;
-}
-
-/**
- * Third tenant. Dave is a member of Initech — used for cross-org public-visibility
- * scenarios (any authenticated user from any org can view a public project when
- * `ALLOW_CROSS_ORG_PUBLIC=true`).
- */
-export async function seedThirdOrg(tp: TestProviders): Promise<ThirdOrgFixture> {
-	const dave = await seedUser(tp, 'dave@initech.test');
-	const initech = await seedOrg(tp, {
-		name: 'Initech',
-		slug: 'initech',
-		ownerId: dave.id
-	});
-	await seedOrgMember(tp, { orgId: initech.id, userId: dave.id, role: 'member' });
-	return { initech, dave };
-}
+export { seedAcme, seedBigClient, seedThirdOrg } from '@selvajs/server/testing';
+export type { AcmeFixture, BigClientFixture, ThirdOrgFixture } from '@selvajs/server/testing';
 
 export interface CommonsFixture {
 	commonsProject: Project;

@@ -645,6 +645,9 @@ importers:
       '@selvajs/config':
         specifier: workspace:*
         version: link:../config
+      '@selvajs/local-provider':
+        specifier: workspace:*
+        version: link:../providers/local
       '@types/node':
         specifier: 'catalog:'
         version: 26.2.0

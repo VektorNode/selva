@@ -15,18 +15,11 @@
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import {
-	freshProviders,
-	seedAcme,
-	seedOrgMember,
-	seedUser,
-	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { removeOrgMember } from '$lib/server/api/handlers/orgMembers.js';
+import { freshHarness, type HandlerHarness } from './harness.js';
+import { seedAcme, seedOrgMember, seedUser, actAs, callHandler } from '../../testing/index.js';
+import { removeOrgMember } from '../orgMembers.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	vi.restoreAllMocks();
@@ -49,7 +42,7 @@ async function seedOwner(orgId: string, email: string) {
 
 describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () => {
 	it('refuses to let an org admin remove an owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 
 		// Alice is an org admin holding `manage_org_members`, so she clears the
@@ -74,7 +67,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () =>
 	});
 
 	it('lets an owner remove another owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 		const owner = await seedOwner(acme.id, 'owner@acme.test');
 		const coOwner = await seedOwner(acme.id, 'coowner@acme.test');
@@ -90,7 +83,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () =>
 	});
 
 	it('lets an org admin remove a non-owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, bob } = await seedAcme(tp);
 		const admin = await seedUser(tp, 'admin@acme.test');
 		await seedOrgMember(tp, {
@@ -111,7 +104,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () =>
 	});
 
 	it('still refuses to remove the sole owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 		const owner = await seedOwner(acme.id, 'owner@acme.test');
 
@@ -124,7 +117,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () =>
 	});
 
 	it('finds a second owner sitting past the first roster page', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 		const owner = await seedOwner(acme.id, 'owner@acme.test');
 		const coOwner = await seedOwner(acme.id, 'coowner@acme.test');

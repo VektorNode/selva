@@ -19,7 +19,7 @@ import {
 	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { removeOrgMember } from '$lib/server/api/handlers/orgMembers.js';
+import { removeOrgMember } from '@selvajs/server/handlers';
 import { createInvite } from '$lib/server/api/handlers/invites.js';
 
 let tp: TestProviders | null = null;

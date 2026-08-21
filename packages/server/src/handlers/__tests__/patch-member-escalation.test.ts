@@ -24,19 +24,12 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import {
-	freshProviders,
-	seedUser,
-	seedOrgMember,
-	seedAcme,
-	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+import { freshHarness, type HandlerHarness } from './harness.js';
+import { seedUser, seedOrgMember, seedAcme, actAs, callHandler } from '../../testing/index.js';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { updateOrgMember } from '$lib/server/api/handlers/orgMembers.js';
+import { updateOrgMember } from '../orgMembers.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -56,7 +49,7 @@ async function seedOrgWithOwnerAndAdmin() {
 
 describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () => {
 	it('refuses an admin promoting THEMSELVES to owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, admin } = await seedOrgWithOwnerAndAdmin();
 
 		const res = await callHandler(updateOrgMember, {
@@ -71,7 +64,7 @@ describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () 
 	});
 
 	it('refuses an admin promoting a PEER admin to owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, admin } = await seedOrgWithOwnerAndAdmin();
 		const peer = await seedUser(tp, 'peer-admin@acme.test');
 		await seedOrgMember(tp, { orgId: acme.id, userId: peer.id, role: 'admin' });
@@ -89,7 +82,7 @@ describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () 
 	});
 
 	it('refuses an admin demoting the real owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, owner, admin } = await seedOrgWithOwnerAndAdmin();
 
 		const res = await callHandler(updateOrgMember, {
@@ -104,7 +97,7 @@ describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () 
 	});
 
 	it('refuses an admin promoting a plain member to owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, admin, member } = await seedOrgWithOwnerAndAdmin();
 
 		const res = await callHandler(updateOrgMember, {
@@ -119,7 +112,7 @@ describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () 
 	});
 
 	it('applies NEITHER half when a role+permissions request is refused', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, admin, member } = await seedOrgWithOwnerAndAdmin();
 
 		// The role branch must reject the whole request — not reject the role and
@@ -140,7 +133,7 @@ describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () 
 
 describe('PATCH member — what an admin legitimately may do (guards against over-tightening)', () => {
 	it('lets an admin grant a member the member-assignable permissions', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, admin, member } = await seedOrgWithOwnerAndAdmin();
 
 		const res = await callHandler(updateOrgMember, {
@@ -157,7 +150,7 @@ describe('PATCH member — what an admin legitimately may do (guards against ove
 	});
 
 	it('refuses governance permissions on a member-role target regardless of actor', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, owner, member } = await seedOrgWithOwnerAndAdmin();
 
 		// Even the OWNER cannot park an owner/admin-only permission on someone
@@ -175,7 +168,7 @@ describe('PATCH member — what an admin legitimately may do (guards against ove
 	});
 
 	it('lets the owner promote a member and grant governance perms in one request', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, owner, member } = await seedOrgWithOwnerAndAdmin();
 
 		// The `effectiveRole = patch.role ?? target.role` path: the permission is

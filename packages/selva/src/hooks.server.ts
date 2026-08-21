@@ -429,7 +429,7 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({
 		return { message: body.message, code: body.code, fields: body.fields };
 	}
 	// Backstop only. `ApiError` reaching here means a page load called a guard
-	// without going through `pageGuard()` — SvelteKit's `get_status` returns 500
+	// without going through `asHttpError()` — SvelteKit's `get_status` returns 500
 	// for anything that isn't its own `HttpError`, and `handleError` cannot
 	// change the status, so the message below is right but the status is not.
 	if (isApiError(error)) {

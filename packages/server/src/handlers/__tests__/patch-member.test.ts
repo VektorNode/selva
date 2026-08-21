@@ -11,21 +11,20 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { freshHarness, type HandlerHarness } from './harness.js';
 import {
-	freshProviders,
 	seedUser,
 	seedOrg,
 	seedOrgMember,
 	seedAcme,
 	seedBigClient,
 	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+	callHandler
+} from '../../testing/index.js';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { updateOrgMember } from '$lib/server/api/handlers/orgMembers.js';
+import { updateOrgMember } from '../orgMembers.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -36,7 +35,7 @@ afterEach(async () => {
 
 describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 	it("owner can change a member's role to admin", async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		// seedAcme gives alice@acme as admin and bob@acme as member, plus an
 		// org whose ownerId points at alice. Add a real owner-role user so the
 		// owner-only path has a subject. Use SYSTEM_CONTEXT for the seed
@@ -59,7 +58,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 	});
 
 	it('admin cannot change roles', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 
@@ -75,7 +74,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 	});
 
 	it('admin can grant member permissions', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 
@@ -93,7 +92,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 	});
 
 	it('member-role target rejects owner-admin-only permissions', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 
@@ -106,7 +105,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 	});
 
 	it('cross-tenant: BigClient member cannot mutate Acme members even via direct URL', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, bob } = await seedAcme(tp);
 		const { carol } = await seedBigClient(tp);
 		const carolLocals = await actAs(tp, carol.id);
@@ -122,7 +121,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 	});
 
 	it('cannot demote the sole owner of the org', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		// Custom org with a single owner. Owner demotes themselves → blocked.
 		const owner = await seedUser(tp, 'sole@example.test');
 		const org = await seedOrg(tp, { name: 'Solo', slug: 'solo', ownerId: owner.id });
@@ -142,7 +141,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 	});
 
 	it('owner can transfer by promoting a second user — sole-owner check passes when ≥2 owners exist', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, bob } = await seedAcme(tp);
 		const owner = await seedUser(tp, 'owner@acme.test');
 		await seedOrgMember(tp, { orgId: acme.id, userId: owner.id, role: 'owner' });

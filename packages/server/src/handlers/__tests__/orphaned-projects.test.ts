@@ -15,20 +15,19 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import type { DomainEvent } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
+import { freshHarness, type HandlerHarness } from './harness.js';
 import {
-	freshProviders,
 	seedAcme,
 	seedUser,
 	seedOrgMember,
 	seedProject,
 	seedProjectMember,
 	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { removeOrgMember } from '$lib/server/api/handlers/orgMembers.js';
+	callHandler
+} from '../../testing/index.js';
+import { removeOrgMember } from '../orgMembers.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -37,7 +36,7 @@ afterEach(async () => {
 	}
 });
 
-function orphanEvents(events: TestProviders['events']) {
+function orphanEvents(events: HandlerHarness['events']) {
 	return events.filter(
 		(e): e is Extract<DomainEvent, { type: 'org_member.removed_orphaning_projects' }> =>
 			e.type === 'org_member.removed_orphaning_projects'
@@ -53,7 +52,7 @@ async function seedActingOwner(orgId: string) {
 
 describe('DELETE org member — projects left without an owner', () => {
 	it('removes the member and reports the orphaned project rather than blocking', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, bob } = await seedAcme(tp);
 		const actor = await seedActingOwner(acme.id);
 
@@ -83,7 +82,7 @@ describe('DELETE org member — projects left without an owner', () => {
 	});
 
 	it('stays silent when the project keeps another owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob } = await seedAcme(tp);
 		const actor = await seedActingOwner(acme.id);
 
@@ -110,7 +109,7 @@ describe('DELETE org member — projects left without an owner', () => {
 	});
 
 	it('does not count a non-owner membership as orphaning', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob } = await seedAcme(tp);
 		const actor = await seedActingOwner(acme.id);
 
@@ -136,7 +135,7 @@ describe('DELETE org member — projects left without an owner', () => {
 	});
 
 	it('reports every orphaned project, not just the first', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, bob } = await seedAcme(tp);
 		const actor = await seedActingOwner(acme.id);
 
@@ -167,7 +166,7 @@ describe('DELETE org member — projects left without an owner', () => {
 	});
 
 	it('checks before the cascade, not after', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, bob } = await seedAcme(tp);
 		const actor = await seedActingOwner(acme.id);
 		const project = await seedProject(tp, {
