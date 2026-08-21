@@ -31,7 +31,7 @@ import {
 	requireActingOrg
 } from '../../access.server';
 import { splitFlatPermissions } from '../../permissions-scope.server';
-import { hashToken, mintRawToken } from '../../invites/token.server';
+import { tokenCodec } from './services';
 import { deliverInvite } from '../../invites/deliver.server';
 import { findPendingInviteInOrg } from '../../invites/lookup.server';
 import { parseListOptions } from '../../pagination.server';
@@ -90,11 +90,12 @@ export const createInvite: ApiHandler = async (req) => {
 			? submittedOrgPerms.filter((p) => MEMBER_ASSIGNABLE_PERMISSIONS.includes(p))
 			: [...DEFAULT_ORG_PERMISSIONS[input.orgRole]];
 
-	const rawToken = mintRawToken();
+	const codec = tokenCodec(req.deps, 'invites');
+	const rawToken = codec.mintRawToken();
 	const now = new Date();
 	const invite: Invite = {
 		id: randomUUID(),
-		tokenHash: hashToken(rawToken),
+		tokenHash: codec.hashToken(rawToken),
 		email: input.email,
 		orgId,
 		orgRole: input.orgRole,
@@ -126,7 +127,7 @@ export const revokeInvite: ApiHandler = async (req) => {
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);
 	const { id } = requireParams(req.params, 'id');
 
-	if (!(await findPendingInviteInOrg(ctx, orgId, id))) {
+	if (!(await findPendingInviteInOrg(ctx, orgId, id, req.deps.invites))) {
 		apiError(404, ApiErrorCode.NOT_FOUND, 'Invite not found');
 	}
 	await req.deps.invites.revoke(ctx, id);
@@ -151,18 +152,19 @@ export const resendInvite: ApiHandler = async (req) => {
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);
 	const { id } = requireParams(req.params, 'id');
 
-	const existing = await findPendingInviteInOrg(ctx, orgId, id);
+	const existing = await findPendingInviteInOrg(ctx, orgId, id, req.deps.invites);
 	if (!existing) apiError(404, ApiErrorCode.NOT_FOUND, 'Invite not found');
 	if (existing.acceptedAt) {
 		apiError(409, ApiErrorCode.CONFLICT, 'This invite has already been accepted.');
 	}
 
-	const rawToken = mintRawToken();
+	const codec = tokenCodec(req.deps, 'invites');
+	const rawToken = codec.mintRawToken();
 	const now = new Date();
 	const replacement: Invite = {
 		...existing,
 		id: randomUUID(),
-		tokenHash: hashToken(rawToken),
+		tokenHash: codec.hashToken(rawToken),
 		createdAt: now.toISOString(),
 		expiresAt: new Date(now.getTime() + INVITE_TTL_MS).toISOString()
 	};

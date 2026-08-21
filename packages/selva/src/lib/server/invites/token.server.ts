@@ -30,6 +30,14 @@ function getCodec(): TokenCodec {
 	return cached.codec;
 }
 
+/**
+ * The codec itself, for the composition root to put on `SelvaDeps.tokens`.
+ * Handlers take theirs injected — see the share-link binding for why.
+ */
+export function inviteCodec(): TokenCodec {
+	return getCodec();
+}
+
 /** Mint: generate a fresh raw token. Show to the recipient exactly once. */
 export function mintRawToken(): string {
 	return getCodec().mintRawToken();

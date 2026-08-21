@@ -1,15 +1,17 @@
 import {
 	resolveServerForOrg as resolvePure,
 	type ComputeServerConfig,
+	type IDataProvider,
 	type RequestContext
 } from '@selvajs/platform';
-import { getComputeServerConfigStore } from '../providers.server';
 import { ComputeServerUnconfiguredError } from './errors';
 
 // Re-exported so the throw site and the class still read as one unit. Error
-// mappers should import from `./errors` directly — importing it from here drags
-// in `providers.server` and its top-level await.
+// mappers should import from `./errors` directly.
 export { ComputeServerUnconfiguredError };
+
+/** The one store this module reads — `SelvaDeps['computeServer']`. */
+type ComputeServerStore = IDataProvider['computeServer'];
 
 /**
  * Pick the right Rhino.Compute server for an (org, definition) pair.
@@ -30,9 +32,9 @@ export { ComputeServerUnconfiguredError };
 export async function resolveServerForOrg(
 	ctx: RequestContext,
 	orgId: string | null | undefined,
+	store: ComputeServerStore,
 	opts: { definitionPin?: string | null } = {}
 ): Promise<ComputeServerConfig> {
-	const store = getComputeServerConfigStore();
 	const config = await store.getConfig(ctx);
 	let server: ComputeServerConfig;
 	try {

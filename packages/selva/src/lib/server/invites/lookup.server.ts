@@ -1,5 +1,4 @@
-import type { Invite, RequestContext } from '@selvajs/platform';
-import { getInviteStore } from '$lib/server/providers.server';
+import type { IDataProvider, Invite, RequestContext } from '@selvajs/platform';
 
 /**
  * Find an invite by id, confirming it belongs to `orgId`.
@@ -12,9 +11,9 @@ import { getInviteStore } from '$lib/server/providers.server';
 export async function findPendingInviteInOrg(
 	ctx: RequestContext,
 	orgId: string,
-	id: string
+	id: string,
+	store: IDataProvider['invites']
 ): Promise<Invite | null> {
-	const store = getInviteStore();
 	let cursor: string | undefined;
 	do {
 		const page = await store.listByOrg(ctx, orgId, { limit: 200, cursor });

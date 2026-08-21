@@ -282,7 +282,12 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		mark('shareCap');
 	}
 
-	const serverConfig = await resolveServerForOrg(solveCtx, solveOrgId, { definitionPin });
+	const serverConfig = await resolveServerForOrg(
+		solveCtx,
+		solveOrgId,
+		locals.providers.data.computeServer,
+		{ definitionPin }
+	);
 	mark('resolveServer');
 
 	// BRIDGE: remove ~2026-09 — lazy backfill for versions uploaded before schema

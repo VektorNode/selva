@@ -34,6 +34,18 @@ function getCodec(): TokenCodec {
 	return cached.codec;
 }
 
+/**
+ * The codec itself, for the composition root to put on `SelvaDeps.tokens`.
+ *
+ * Handlers take their codec injected rather than importing this module — that
+ * is what keeps them free of `$env` and lets a second host supply its own
+ * secret. This accessor exists so the wiring reads the secret through the same
+ * lazy, re-keyed path everything else here does.
+ */
+export function shareLinkCodec(): TokenCodec {
+	return getCodec();
+}
+
 /** Mint: generate a fresh raw token. Show to the caller exactly once. */
 export function mintRawToken(): string {
 	return getCodec().mintRawToken();

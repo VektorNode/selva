@@ -19,7 +19,7 @@ import {
 import type { ApiHandler } from '@selvajs/server/api';
 import { GuidSchema } from '@selvajs/platform/definitions';
 import { requireEditableDefinition } from '../../access.server';
-import { GH_EXTENSIONS, MAX_DEFINITION_FILE_SIZE } from '../../admin-config';
+import { GH_EXTENSIONS } from '@selvajs/platform';
 import { resolveServerForOrg } from '../../compute/resolve.server';
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import { getVisibleDefinition, loadVisibleVersion } from '../../definitions/visibility.server';
@@ -48,7 +48,7 @@ export const uploadVersion: ApiHandler = async (req) => {
 
 	const form = await req.request.formData();
 	const { file, extension } = requireUpload(form, 'file', {
-		maxBytes: MAX_DEFINITION_FILE_SIZE,
+		maxBytes: req.deps.uploadLimits.maxDefinitionFileSize,
 		extensions: GH_EXTENSIONS,
 		label: 'Grasshopper (.gh or .ghx) file'
 	});
@@ -60,7 +60,7 @@ export const uploadVersion: ApiHandler = async (req) => {
 	// Validate-and-cache gate: extract the schema from compute BEFORE any
 	// write, so a failure rejects the upload with nothing persisted.
 	// `project` comes from the guard — no re-fetch.
-	const server = await resolveServerForOrg(ctx, project?.orgId ?? null, {
+	const server = await resolveServerForOrg(ctx, project?.orgId ?? null, req.deps.computeServer, {
 		definitionPin: record.computeServerId ?? null
 	});
 	const schema = await fetchSchemaFromCompute(data, server);

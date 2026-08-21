@@ -14,11 +14,13 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { mount } from '../sveltekit.js';
+import { depsFromConfig } from '@selvajs/server/api';
 import {
 	deleteVersion,
 	getVersion,
 	getVersionSchema,
-	listVersions
+	listVersions,
+	uploadVersion
 } from '../handlers/definitionVersions.js';
 import {
 	freshProviders,
@@ -181,5 +183,46 @@ describe('dependency injection', () => {
 
 		expect(res.status).toBe(200);
 		expect(sawList).toBe(true);
+	});
+});
+
+/**
+ * The upload cap is read from `deps.uploadLimits`, not a module constant.
+ *
+ * Worth its own test because nothing else exercises it: every other upload in
+ * this suite is comfortably under the limit, so a handler that ignored the
+ * injected cap would pass the whole file green.
+ *
+ * Calls the handler directly rather than through `mount`, because the point is
+ * that the cap travels on `deps` — routing it through the binding would test
+ * the binding's wiring instead, which is a different claim.
+ */
+describe('upload limits come from deps', () => {
+	it('rejects a file over the injected cap', async () => {
+		tp = await freshProviders();
+		const { alice, def } = await ownedDefinition();
+		const locals = await actAs(tp, alice.id);
+
+		const form = new FormData();
+		form.set('file', new File([new Uint8Array(4096)], 'big.gh'));
+
+		const deps = depsFromConfig(
+			locals.providers,
+			{},
+			{ uploadLimits: { maxDefinitionFileSize: 1024 } }
+		);
+
+		await expect(
+			uploadVersion({
+				ctx: locals.ctx,
+				user: locals.user,
+				profile: locals.profile,
+				log: locals.log,
+				params: { guid: def.record.guid },
+				url: new URL('http://test.local/'),
+				request: new Request('http://test.local/', { method: 'POST', body: form }),
+				deps
+			})
+		).rejects.toMatchObject({ status: 400, message: expect.stringMatching(/too large/i) });
 	});
 });

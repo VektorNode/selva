@@ -739,8 +739,14 @@ export async function call(handler: AnyHandler, opts: CallOpts): Promise<CallRes
 		headers: opts.headers ?? {}
 	};
 	if (opts.body !== undefined) {
-		(init.headers as Record<string, string>)['content-type'] ??= 'application/json';
-		init.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
+		// FormData sets its own multipart content-type with a generated boundary;
+		// forcing `application/json` onto it makes `request.formData()` throw.
+		if (opts.body instanceof FormData) {
+			init.body = opts.body;
+		} else {
+			(init.headers as Record<string, string>)['content-type'] ??= 'application/json';
+			init.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
+		}
 	}
 	const request = new Request(url.toString(), init);
 	const cookieMap = opts.cookies ?? new Map<string, string>();

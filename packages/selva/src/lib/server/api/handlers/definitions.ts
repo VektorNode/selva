@@ -29,7 +29,7 @@ import {
 } from '@selvajs/platform/definitions';
 import type { DefinitionVersion } from '@selvajs/platform';
 import { requireCanCreateDefinition, requireEditableDefinition } from '../../access.server';
-import { GH_EXTENSIONS, MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '../../admin-config';
+import { GH_EXTENSIONS } from '@selvajs/platform';
 import { resolveServerForOrg } from '../../compute/resolve.server';
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import {
@@ -87,17 +87,18 @@ export const createDefinition: ApiHandler = async (req) => {
 	const form = await req.request.formData();
 
 	const { file, extension } = requireUpload(form, 'file', {
-		maxBytes: MAX_DEFINITION_FILE_SIZE,
+		maxBytes: req.deps.uploadLimits.maxDefinitionFileSize,
 		extensions: GH_EXTENSIONS,
 		label: 'Grasshopper (.gh or .ghx) file'
 	});
 
 	const imageFile = form.get('image');
-	if (imageFile instanceof File && imageFile.size > MAX_IMAGE_FILE_SIZE) {
+	const maxImageBytes = req.deps.uploadLimits.maxImageFileSize;
+	if (imageFile instanceof File && imageFile.size > maxImageBytes) {
 		apiError(
 			400,
 			ApiErrorCode.VALIDATION_FAILED,
-			`Image too large. Max size: ${MAX_IMAGE_FILE_SIZE / (1024 * 1024)} MB`
+			`Image too large. Max size: ${maxImageBytes / (1024 * 1024)} MB`
 		);
 	}
 
@@ -139,7 +140,7 @@ export const createDefinition: ApiHandler = async (req) => {
 	// Validate-and-cache gate: extract the schema from compute BEFORE any
 	// write, so compute being down or the file having no Schema output rejects
 	// the upload with nothing persisted.
-	const server = await resolveServerForOrg(ctx, project.orgId, {
+	const server = await resolveServerForOrg(ctx, project.orgId, req.deps.computeServer, {
 		definitionPin: parsed.data.computeServerId ?? null
 	});
 	const schema = await fetchSchemaFromCompute(fileData, server);
@@ -266,7 +267,7 @@ export const uploadDefinitionImage: ApiHandler = async (req) => {
 	const { ctx } = await requireEditableDefinition(req, guid);
 
 	const { file } = requireUpload(await req.request.formData(), 'image', {
-		maxBytes: MAX_IMAGE_FILE_SIZE,
+		maxBytes: req.deps.uploadLimits.maxImageFileSize,
 		label: 'Image'
 	});
 

@@ -26,7 +26,7 @@ import { CreateShareLinkInputSchema, DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selv
 import type { ShareLink } from '@selvajs/platform';
 import { GuidSchema } from '@selvajs/platform/definitions';
 import { requireEditableDefinition } from '../../access.server';
-import { hashToken, mintRawToken } from '../../shareLinks/token.server';
+import { tokenCodec } from './services';
 import { parseListOptions } from '../../pagination.server';
 import { CreatedShareLinkResponseSchema, ShareLinkResponseSchema } from '../v1/responses';
 import { requireCaller } from '../callers';
@@ -66,12 +66,13 @@ export const createShareLink: ApiHandler = async (req) => {
 
 	const input = await parseBody(req.request, CreateShareLinkInputSchema, { missingAs: {} });
 
-	const raw = mintRawToken();
+	const codec = tokenCodec(req.deps, 'shareLinks');
+	const raw = codec.mintRawToken();
 	const link: ShareLink = {
 		id: randomUUID(),
 		definitionId: guid,
 		channel: input.channel,
-		tokenHash: hashToken(raw),
+		tokenHash: codec.hashToken(raw),
 		name: input.name,
 		createdBy: user.id,
 		createdAt: new Date().toISOString(),

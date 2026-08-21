@@ -42,9 +42,12 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 
 	let server;
 	try {
-		server = await resolveServerForOrg(locals.ctx!, project.orgId, {
-			definitionPin: computeServerId
-		});
+		server = await resolveServerForOrg(
+			locals.ctx!,
+			project.orgId,
+			locals.providers.data.computeServer,
+			{ definitionPin: computeServerId }
+		);
 	} catch (err) {
 		if (err instanceof ComputeServerUnconfiguredError)
 			apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, err.message);

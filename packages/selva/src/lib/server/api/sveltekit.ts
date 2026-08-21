@@ -21,6 +21,9 @@ import {
 } from '@selvajs/server/api';
 import { ProviderError } from '@selvajs/platform';
 import { getDefinitionService, getOrgAssetService } from '../providers.server';
+import { shareLinkCodec } from '../shareLinks/token.server';
+import { inviteCodec } from '../invites/token.server';
+import { MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '../computeLimits';
 import { SchemaExtractionError } from '@selvajs/server/definitions';
 import { ComputeServerUnconfiguredError } from '../compute/errors';
 
@@ -86,10 +89,25 @@ function mapAppError(err: unknown): ApiError | undefined {
 // Providers resolve lazily and memoize, so building deps per request costs a
 // few property reads — no provider is constructed here.
 function buildDeps(event: RequestEvent): SelvaDeps {
-	return depsFromConfig(event.locals.providers, {
-		definitions: getDefinitionService(),
-		orgAssets: getOrgAssetService()
-	});
+	return depsFromConfig(
+		event.locals.providers,
+		{
+			definitions: getDefinitionService(),
+			orgAssets: getOrgAssetService()
+		},
+		{
+			// Resolved per request, not captured: both codecs re-key on the secret,
+			// so a rotated `SELVA_HMAC_KEY` takes effect without a restart.
+			tokens: { shareLinks: shareLinkCodec(), invites: inviteCodec() },
+			// Passed explicitly: `depsFromConfig` defaults these, and letting the
+			// default win would silently ignore this deployment's
+			// MAX_*_FILE_SIZE_BYTES.
+			uploadLimits: {
+				maxDefinitionFileSize: MAX_DEFINITION_FILE_SIZE,
+				maxImageFileSize: MAX_IMAGE_FILE_SIZE
+			}
+		}
+	);
 }
 
 export function toApiRequest(event: RequestEvent): ApiRequest {

@@ -12,7 +12,12 @@ import {
 	type LoadedDefinition
 } from '@selvajs/server/definitions';
 import type { DefinitionRecord, RequestContext } from '@selvajs/platform';
-import { getStorageProvider, getDefinitionMeta, getProjectProvider } from '../providers.server';
+import {
+	getStorageProvider,
+	getDefinitionMeta,
+	getProjectProvider,
+	getComputeServerConfigStore
+} from '../providers.server';
 import { resolveServerForOrg } from '../compute/resolve.server';
 import { getClient, COMPUTE_DEBUG } from '../compute/engine.server';
 
@@ -29,7 +34,8 @@ export async function loadDefinitionForRender(
 		storage: getStorageProvider(),
 		definitions: getDefinitionMeta(),
 		projects: getProjectProvider(),
-		resolveServer: (ctx, orgId, opts) => resolveServerForOrg(ctx, orgId, opts),
+		resolveServer: (ctx, orgId, opts) =>
+			resolveServerForOrg(ctx, orgId, getComputeServerConfigStore(), opts),
 		getClient,
 		computeDebug: COMPUTE_DEBUG
 	});

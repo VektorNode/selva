@@ -33,11 +33,14 @@ import type { SelvaDeps } from '@selvajs/server/api';
 const SCAN_LIMIT = 200;
 
 /**
- * The stores this module reads. Optional at every call site: passing nothing
- * falls back to the app's composition root, so the page loads that predate
- * dependency injection keep working unchanged. Handlers moving to
- * `@selvajs/server/api` pass `req.deps`, which is what lets a second app on a
- * different provider set reuse this tenancy boundary instead of rebuilding it.
+ * The stores this module reads. Required at every call site.
+ *
+ * These used to fall back to the app's composition root, which meant this
+ * tenancy boundary imported `providers.server.ts` and its top-level
+ * `await createSelvaProviders()` — so anything importing it booted the whole
+ * app. Handlers pass `req.deps`; page loads pass
+ * `accessDepsFromConfig(locals.providers)`. That is what lets a second app on a
+ * different provider set reuse this boundary instead of rebuilding it.
  */
 export type VisibilityDeps = Pick<
 	SelvaDeps,

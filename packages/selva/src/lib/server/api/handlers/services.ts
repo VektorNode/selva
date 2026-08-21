@@ -8,6 +8,7 @@
  */
 
 import type { SelvaDeps } from '@selvajs/server/api';
+import type { TokenCodec } from '@selvajs/server/tokens';
 import type { OrgAssetService } from '../../organizations/OrgAssetService';
 
 export function definitionService(deps: SelvaDeps) {
@@ -29,4 +30,19 @@ export function orgAssetService(deps: SelvaDeps): OrgAssetService {
 		throw new Error('SelvaDeps.services.orgAssets is not wired — mount requires it.');
 	}
 	return service;
+}
+
+/**
+ * A token codec, or a named failure.
+ *
+ * Minting through an absent codec is the one failure mode worth being loud
+ * about: a handler that quietly skipped hashing would persist a row whose token
+ * can never be verified, and nothing downstream would report it.
+ */
+export function tokenCodec(deps: SelvaDeps, family: keyof SelvaDeps['tokens']): TokenCodec {
+	const codec = deps.tokens[family];
+	if (!codec) {
+		throw new Error(`SelvaDeps.tokens.${family} is not wired — mount requires it.`);
+	}
+	return codec;
 }

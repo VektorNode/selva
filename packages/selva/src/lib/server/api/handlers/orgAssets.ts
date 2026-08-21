@@ -17,7 +17,6 @@ import {
 } from '@selvajs/server/api';
 import { OrgAssetKindSchema } from '@selvajs/platform';
 import { requireManageOrgMembers, requireActingOrg } from '../../access.server';
-import { MAX_IMAGE_FILE_SIZE } from '../../admin-config';
 import { orgAssetService } from './services';
 
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -44,7 +43,7 @@ export const uploadOrgAsset: ApiHandler = async (req) => {
 	if (!org) apiError(404, ApiErrorCode.NOT_FOUND, 'Organization not found');
 
 	const { file } = requireUpload(await req.request.formData(), 'image', {
-		maxBytes: MAX_IMAGE_FILE_SIZE,
+		maxBytes: req.deps.uploadLimits.maxImageFileSize,
 		contentTypes: {
 			allowed: ALLOWED_CONTENT_TYPES,
 			message: 'Unsupported image type. Allowed: PNG, JPG, WebP, GIF, SVG'
