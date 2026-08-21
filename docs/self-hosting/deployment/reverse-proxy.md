@@ -41,6 +41,36 @@ XFF_DEPTH=1
 
 `XFF_DEPTH` is how many proxies you run, counted from the outside in — `1` for the Caddy setup above, `2` if a CDN or load balancer sits in front of Caddy. Count wrong and Selva reads the wrong hop.
 
+Count only the proxies **you** control. `X-Forwarded-For` is a list each hop appends to and the adapter counts entries from the right, so the depth is what tells it where your infrastructure ends and client-supplied text begins. Whatever a caller prepends sits to the left of your hops and is ignored.
+
+| Chain in front of Selva | `XFF_DEPTH` |
+| ----------------------- | ----------- |
+| Caddy / nginx           | `1`         |
+| Cloudflare → Caddy      | `2`         |
+| CDN → cloud LB → Caddy  | `3`         |
+
+### Checking the count
+
+If the chain is not obvious, read the header the app actually receives. Stop Selva, listen on its port, and make one request from outside your network:
+
+```bash
+npm run stop
+node -e 'require("http").createServer((q,s)=>{console.log(q.headers["x-forwarded-for"]);s.end("ok")}).listen(3000)'
+```
+
+Load `https://selva.yourdomain.com` from a phone on mobile data. Not from the LAN, and not with `curl` on the server itself — neither traverses the full chain, so both undercount. Then `Ctrl-C` and `npm start`.
+
+`XFF_DEPTH` is the number of comma-separated entries printed:
+
+```
+1.2.3.4                 → XFF_DEPTH=1
+1.2.3.4, 172.68.24.11   → XFF_DEPTH=2
+```
+
+The leftmost entry should be the phone's public IP. If it is not, some hop is replacing the header instead of appending to it. Cloudflare is the common case: use `ADDRESS_HEADER=CF-Connecting-IP` and leave `XFF_DEPTH` unset, since that header holds a single address and has no depth to count.
+
+If nothing prints, the header never arrives. The proxy is not setting it — nginx needs `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` spelled out, Caddy does it by default — and `ADDRESS_HEADER` changes nothing until it does.
+
 Without these, `getClientAddress()` returns the socket peer, which is `127.0.0.1` for every request that comes through the proxy. Login rate limiting is keyed on that address, so the entire instance shares one bucket: five failed logins from anywhere lock out every user for 15 minutes, and only a successful login clears the bucket — which nobody can now reach. The app logs a warning the first time it sees this, but the setting is what fixes it.
 
 **These two settings are safe only because the app is bound to `127.0.0.1`.** `X-Forwarded-For` is a client-supplied header. If Selva is reachable directly — a public bind, an open firewall port, a container published to `0.0.0.0` — anyone can spoof it and pick their own rate-limit bucket. Bind to loopback first, then set these.

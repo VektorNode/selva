@@ -98,6 +98,11 @@
 			"types": "./dist/access/index.d.ts",
 			"import": "./dist/access/index.js"
 		},
+		"./notifications": {
+			"selva-source": "./src/notifications/index.ts",
+			"types": "./dist/notifications/index.d.ts",
+			"import": "./dist/notifications/index.js"
+		},
 		"./events": {
 			"selva-source": "./src/events/index.ts",
 			"types": "./dist/events/index.d.ts",

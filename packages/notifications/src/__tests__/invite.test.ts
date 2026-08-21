@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { renderInviteEmail } from '../inviteEmail';
+import { renderInviteEmail } from '../templates/invite.js';
 
 const BASE = {
 	to: 'newhire@acme.test',
@@ -19,6 +19,10 @@ describe('renderInviteEmail', () => {
 		expect(mail.text).toContain(BASE.acceptUrl);
 		expect(mail.html).toContain(BASE.acceptUrl);
 		expect(mail.to).toBe(BASE.to);
+	});
+
+	it('tags the message with its kind so the dispatcher can route it', () => {
+		expect(renderInviteEmail(BASE).kind).toBe('org.invite');
 	});
 
 	it('names the org and the inviter in the subject', () => {
@@ -42,6 +46,14 @@ describe('renderInviteEmail', () => {
 		expect(mail.html).not.toContain('<script>alert(1)</script>');
 		expect(mail.html).not.toContain('<img src=x>');
 		expect(mail.html).toContain('&lt;script&gt;');
+	});
+
+	it('escapes the accept url, which carries an attacker-influenced token', () => {
+		const mail = renderInviteEmail({
+			...BASE,
+			acceptUrl: 'https://selva.test/accept-invite?token="><img src=x>'
+		});
+		expect(mail.html).not.toContain('<img src=x>');
 	});
 
 	it('states the expiry rather than printing a raw ISO string', () => {

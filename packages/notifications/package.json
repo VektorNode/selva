@@ -1,0 +1,57 @@
+{
+	"name": "@selvajs/notifications",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Message templates for Selva's outbound notifications — pure render, no transport",
+	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://selva.dev",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"selva",
+		"notifications",
+		"email",
+		"templates"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/notifications"
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"selva-source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "eslint .",
+		"lint:types": "eslint . --config eslint.typed.config.js"
+	},
+	"dependencies": {
+		"@selvajs/platform": "workspace:*"
+	},
+	"devDependencies": {
+		"@selvajs/config": "workspace:*",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	}
+}

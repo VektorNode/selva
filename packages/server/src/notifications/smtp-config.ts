@@ -1,10 +1,3 @@
-import { env } from '$env/dynamic/private';
-
-/**
- * SMTP settings, read per call so a restart is the only thing needed to
- * reconfigure. Email is optional: with `SMTP_HOST` unset the invite route
- * skips sending and the admin copies the link by hand, exactly as before.
- */
 export interface SmtpConfig {
 	host: string;
 	port: number;
@@ -13,12 +6,28 @@ export interface SmtpConfig {
 	from: string;
 }
 
+/** The env vars this provider reads. The app passes `process.env` or its framework equivalent. */
+export interface SmtpEnv {
+	SMTP_HOST?: string;
+	SMTP_PORT?: string;
+	SMTP_USER?: string;
+	SMTP_PASS?: string;
+	SMTP_FROM?: string;
+	SMTP_SECURE?: string;
+}
+
 function parsePort(raw: string | undefined): number {
 	const n = Number(raw ?? 587);
 	return Number.isInteger(n) && n > 0 && n < 65536 ? n : 587;
 }
 
 /**
+ * Read SMTP settings from an env bag. Taken as a parameter rather than read
+ * from `process.env` directly: under `vite dev` the framework does not mirror
+ * `.env` into `process.env`, so the app must hand over its own resolved env
+ * (`$env/dynamic/private` in SvelteKit) or overrides silently fall back to
+ * defaults.
+ *
  * Returns null when mail is not configured — the caller treats that as "no
  * mail", not as an error.
  *
@@ -27,7 +36,7 @@ function parsePort(raw: string | undefined): number {
  * never sending. Every message needs an envelope sender, and guessing one
  * produces mail that fails SPF at the recipient.
  */
-export function readSmtpConfig(): SmtpConfig | null {
+export function readSmtpConfig(env: SmtpEnv): SmtpConfig | null {
 	const host = env.SMTP_HOST?.trim();
 	if (!host) return null;
 

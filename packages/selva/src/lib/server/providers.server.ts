@@ -3,6 +3,7 @@ import type {
 	IErrorReporter,
 	IEventSink,
 	ILogger,
+	INotificationProvider,
 	ISolveMetricSink,
 	LogFields,
 	LogLevel,
@@ -19,6 +20,7 @@ import * as header from '@selvajs/header-auth-provider';
 import { DefinitionService } from './definitions/DefinitionService.js';
 import { OrgAssetService } from './organizations/OrgAssetService.js';
 import { SentryErrorReporter } from '@selvajs/server/errors';
+import { SmtpNotificationProvider } from '@selvajs/server/notifications';
 import { ConsoleLogger, createLogger, renderThrown } from '@selvajs/server/logging';
 
 // Provider wiring lives in `@selvajs/server/providers` (`createSelvaProviders`):
@@ -216,6 +218,22 @@ let _logger: ILogger = new ConsoleLogger({}, LOG_LEVEL);
  */
 export function getLogger(): ILogger {
 	return _logger;
+}
+
+let _notifications: INotificationProvider | null = null;
+
+/**
+ * Outbound message transport. SMTP-backed; sends nothing when `SMTP_HOST` is
+ * unset, which is a supported deployment — callers fall back to sharing links
+ * by hand.
+ *
+ * `env` is passed rather than read inside the provider: under `vite dev` Vite
+ * does not mirror `.env` into `process.env`, so a provider reading it directly
+ * would silently ignore every override.
+ */
+export function getNotificationProvider(): INotificationProvider {
+	_notifications ??= new SmtpNotificationProvider(env);
+	return _notifications;
 }
 
 // `LOG_LEVEL` is operator input — an unrecognized value must not crash boot

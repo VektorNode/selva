@@ -5,10 +5,10 @@ import { hasPermission } from '@selvajs/platform';
 import { getAuthProvider } from '$lib/server/auth.server';
 import {
 	getInviteStore,
+	getNotificationProvider,
 	getOrganizationProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
-import { isMailConfigured } from '$lib/server/email';
 
 export interface MemberRow extends OrgMember {
 	email?: string;
@@ -33,7 +33,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			members: [] as MemberRow[],
 			invites: [] as Invite[],
 			orgId: null,
-			mailConfigured: isMailConfigured(),
+			mailConfigured: getNotificationProvider().isConfigured(),
 			actorRole: null as OrgRole | null,
 			actorUserId: ctx.userId
 		};
@@ -91,6 +91,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		orgId,
 		actorRole,
 		actorUserId: ctx.userId,
-		mailConfigured: isMailConfigured()
+		mailConfigured: getNotificationProvider().isConfigured()
 	};
 };

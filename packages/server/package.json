@@ -70,6 +70,11 @@
 			"selva-source": "./src/ops/index.ts",
 			"types": "./dist/ops/index.d.ts",
 			"import": "./dist/ops/index.js"
+		},
+		"./notifications": {
+			"selva-source": "./src/notifications/index.ts",
+			"types": "./dist/notifications/index.d.ts",
+			"import": "./dist/notifications/index.js"
 		}
 	},
 	"files": [
@@ -95,10 +100,14 @@
 	},
 	"peerDependencies": {
 		"@sentry/node": ">=8",
+		"nodemailer": ">=7",
 		"pino": ">=9"
 	},
 	"peerDependenciesMeta": {
 		"@sentry/node": {
+			"optional": true
+		},
+		"nodemailer": {
 			"optional": true
 		},
 		"pino": {
@@ -108,6 +117,8 @@
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
+		"@types/nodemailer": "^8.0.1",
+		"nodemailer": "^9.0.5",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

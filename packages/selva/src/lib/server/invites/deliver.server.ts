@@ -1,6 +1,10 @@
 import type { ILogger, Invite, RequestContext, UserProfile, AuthUser } from '@selvajs/platform';
-import { getBranding, getOrganizationProvider } from '$lib/server/providers.server';
-import { renderInviteEmail, sendMail } from '$lib/server/email';
+import {
+	getBranding,
+	getNotificationProvider,
+	getOrganizationProvider
+} from '$lib/server/providers.server';
+import { renderInviteEmail } from '@selvajs/notifications';
 
 export type InviteDelivery = 'sent' | 'not-configured' | 'failed';
 
@@ -25,7 +29,7 @@ export async function deliverInvite(input: DeliverInviteInput): Promise<InviteDe
 	const { ctx, log, invite, acceptUrl, actor } = input;
 	try {
 		const org = await getOrganizationProvider().getOrg(ctx, invite.orgId);
-		const { status } = await sendMail(
+		const { status } = await getNotificationProvider().send(
 			renderInviteEmail({
 				to: invite.email,
 				acceptUrl,

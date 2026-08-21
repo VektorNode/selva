@@ -82,14 +82,34 @@ jobs:
           fi
 
       # lint, check, type-check and test all run through turbo, which keys each
-      # task on its own inputs. Restoring .turbo lets an unchanged package skip
-      # entirely — without it every run is fully cold.
+      # task on its own inputs, and all four depend on `^build` — so a restored
+      # cache skips the ~75s build they would otherwise each trigger.
+      #
+      # Cache only .turbo/cache (the task outputs). The rest of .turbo is daemon
+      # state and logs, which must not travel between runners.
+      #
+      # actions/cache never overwrites an existing key, so the key carries the
+      # run id to stay unique; restore-keys does the actual work, taking the most
+      # recent prefix match. Keyed on lockfile too: a dependency change
+      # invalidates every task hash anyway, so old entries are dead weight.
       - uses: actions/cache@v6
         with:
-          path: .turbo
-          key: turbo-js-${{ github.sha }}
+          path: .turbo/cache
+          key: turbo-js-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}
           restore-keys: |
+            turbo-js-${{ hashFiles('pnpm-lock.yaml') }}-
             turbo-js-
+
+      # `pnpm format:check` passes --cache-strategy content: the default keys on
+      # mtime, which actions/checkout rewrites every run, so every entry would
+      # miss. Keyed on the prettier config so a rule change busts it.
+      - uses: actions/cache@v6
+        with:
+          path: node_modules/.cache/prettier
+          key: prettier-${{ hashFiles('prettier.config.js', '.prettierignore') }}-${{ github.run_id }}
+          restore-keys: |
+            prettier-${{ hashFiles('prettier.config.js', '.prettierignore') }}-
+            prettier-
 
       - run: pnpm format:check
       - run: pnpm lint
@@ -100,6 +120,16 @@ jobs:
       # suites self-skip without Supabase creds (no .env.test in CI); its
       # no-stack unit tests still gate.
       - run: pnpm exec turbo run test
+
+      # actions/cache has no eviction: .turbo/cache would grow by every task
+      # output every run until it crowds out the repo's 10GB budget. Keep the
+      # most recent entries and drop the rest before the post-step uploads.
+      - name: Prune turbo cache
+        if: always()
+        run: |
+          cd .turbo/cache 2>/dev/null || exit 0
+          ls -1t | tail -n +600 | xargs -r rm -f
+          echo "turbo cache: $(du -sh . | cut -f1) across $(ls -1 | wc -l) files"
 
   # Rhino-free .NET libraries; runs in parallel with the JS job. The
   # Rhino-coupled Selva.GH tests still need a Windows+Rhino runner.

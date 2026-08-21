@@ -319,6 +319,22 @@ importers:
         specifier: ^4.0.0
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.10)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/notifications:
+    dependencies:
+      '@selvajs/platform':
+        specifier: workspace:*
+        version: link:../platform
+    devDependencies:
+      '@selvajs/config':
+        specifier: workspace:*
+        version: link:../config
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.10)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/platform:
     dependencies:
       '@selvajs/schemas':
@@ -558,6 +574,9 @@ importers:
       '@selvajs/local-provider':
         specifier: workspace:*
         version: link:../providers/local
+      '@selvajs/notifications':
+        specifier: workspace:*
+        version: link:../notifications
       '@selvajs/platform':
         specifier: workspace:*
         version: link:../platform
@@ -626,6 +645,12 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.2.0
+      '@types/nodemailer':
+        specifier: ^8.0.1
+        version: 8.0.1
+      nodemailer:
+        specifier: ^9.0.5
+        version: 9.0.5
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

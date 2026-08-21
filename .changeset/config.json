@@ -11,6 +11,7 @@
 		"@selvajs/plugin-ui",
 		"@selvajs/config",
 		"@selvajs/header-auth-provider",
+		"@selvajs/notifications",
 		"@selvajs/website"
 	],
 	"___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {

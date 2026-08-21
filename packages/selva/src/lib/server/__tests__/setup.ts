@@ -15,7 +15,8 @@ import {
 	NoopSolveMetricSink,
 	NoopErrorReporter,
 	NoopEventSink,
-	NoopLogger
+	NoopLogger,
+	NoopNotificationProvider
 } from '@selvajs/platform';
 
 vi.mock('$lib/server/providers.server', async () => {
@@ -60,6 +61,10 @@ vi.mock('$lib/server/providers.server', async () => {
 		getAuditQuery: () => currentTestProviders().config.data.auditQuery ?? null,
 		getEventSink: () => currentTestProviders().config.data.events ?? new NoopEventSink(),
 		getErrorReporter: () => new NoopErrorReporter(),
+		// Nothing is mailed in tests. `not-configured` is a supported runtime
+		// state, so routes already handle it — asserting on delivery would test
+		// the transport rather than the route.
+		getNotificationProvider: () => new NoopNotificationProvider(),
 		// Tests assert behavior, not log output; a no-op keeps the suite quiet.
 		// One shared instance, not a fresh one per call, so a test can spy on the
 		// logger and see the calls the code under test makes through it.

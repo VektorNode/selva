@@ -151,7 +151,8 @@ export function checkClientAddress(env: DeploymentEnv): ConfigFinding {
 				'the proxy, so all users share ONE login rate-limit bucket. Five failed logins from ' +
 				'anyone locks out the whole instance for 15 minutes.',
 			remediation:
-				'Set ADDRESS_HEADER=X-Forwarded-For and XFF_DEPTH=<number of proxies>, then restart.'
+				'Set ADDRESS_HEADER=X-Forwarded-For and XFF_DEPTH=<number of proxies>, then restart. ' +
+				'To count your proxies, see docs/self-hosting/deployment/reverse-proxy.md.'
 		};
 	}
 
@@ -164,7 +165,9 @@ export function checkClientAddress(env: DeploymentEnv): ConfigFinding {
 				'client-appendable list, so a caller can prepend fake entries — adapter-node needs ' +
 				'the proxy count to know which entry is real.',
 			remediation:
-				'Set XFF_DEPTH=1 for a single reverse proxy, 2 if a CDN or load balancer sits in front of it.'
+				'Set XFF_DEPTH=1 for a single reverse proxy, 2 if a CDN or load balancer sits in ' +
+				'front of it. Unsure? docs/self-hosting/deployment/reverse-proxy.md shows how to ' +
+				'read the header the app actually receives.'
 		};
 	}
 

@@ -239,6 +239,17 @@ export type { ILogger, LogFields, LogLevel } from './logging/interface.js';
 export { NoopLogger } from './logging/interface.js';
 
 // ---------------------------------------------------------------------------
+// notifications (outbound message transport)
+// ---------------------------------------------------------------------------
+export type {
+	INotificationProvider,
+	NotificationKind,
+	OutboundMessage,
+	SendResult
+} from './notifications/index.js';
+export { NoopNotificationProvider } from './notifications/index.js';
+
+// ---------------------------------------------------------------------------
 // bindings (server-side resolver for schema inputs marked `source.kind === 'server'`)
 // ---------------------------------------------------------------------------
 export type { IBindingResolver } from './bindings/interface.js';
