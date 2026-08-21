@@ -11,6 +11,7 @@ import {
 	type SchemaVersionReport,
 	type SecretVerificationReport
 } from '@selvajs/platform';
+import { checkDeploymentConfig, type ConfigFinding } from '@selvajs/server/ops';
 import { providers, getComputeServerConfigStore } from '$lib/server/providers.server';
 import { requirePermission } from '$lib/server/access.server';
 
@@ -32,6 +33,19 @@ import { requirePermission } from '$lib/server/access.server';
  *   3. Data path writable — for the local provider, a temp file can be
  *      written + deleted under DATA_PATH. Catches disk-full / permission
  *      regressions before they corrupt a JSON store mid-write.
+ *   4. Deployment config — the reverse-proxy and upload-limit vars adapter-node
+ *      reads. These break a running deployment without failing anything at
+ *      boot, so a panel that omits them reads as "all clear" while every user
+ *      shares one login rate-limit bucket. Same rules `selva doctor` applies.
+ *
+ * Deliberately NOT covered, because the running process cannot answer them
+ * honestly — `selva doctor` owns these, and the panel says so:
+ *   - Host filesystem state (`.env` present, interrupted migration, pm2 boot
+ *     unit). The app sees its own resolved env, not the files behind it, so a
+ *     green here would only mean "something booted me".
+ *   - Secret strength (SELVA_HMAC_KEY / SELVA_AT_REST_KEY still the shipped
+ *     placeholder). Checkable, but it means handling raw signing keys in a
+ *     request handler to report a fact that cannot change without a restart.
  *
  * `instance_admin` only — this reveals which compute servers failed and why.
  */
@@ -220,6 +234,24 @@ async function dataPathWritableCheck(): Promise<HealthCheck> {
 	}
 }
 
+/**
+ * Deployment-config rules run against the live process env, which is what
+ * adapter-node itself read at boot — not a re-parse of `.env`, so a var
+ * overridden by the service manager is judged as it actually applies.
+ *
+ * A `fail` maps to `error` rather than `degraded`: these are the same verdicts
+ * that exit `selva doctor` non-zero, and the panel should not soften them.
+ */
+function deploymentConfigChecks(): HealthCheck[] {
+	return checkDeploymentConfig(privateEnv).map((finding: ConfigFinding) => ({
+		id: finding.id,
+		label: finding.label,
+		status: finding.verdict === 'fail' ? 'error' : finding.verdict === 'warn' ? 'degraded' : 'ok',
+		summary: finding.summary,
+		remediation: finding.remediation
+	}));
+}
+
 export const GET: RequestHandler = async ({ locals }) => {
 	requirePermission(locals, 'instance_admin');
 
@@ -255,6 +287,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 	// Reachability + writability run in parallel — independent of each other
 	// and of the at-rest check above. Each self-contains its error handling.
 	checks.push(...(await Promise.all([computeReachabilityCheck(locals), dataPathWritableCheck()])));
+
+	checks.push(...deploymentConfigChecks());
 
 	// Worst status wins for the overall verdict. `not_applicable` never
 	// degrades the overall result.

@@ -57,8 +57,9 @@
 		<Card.Title class="text-sm font-medium">System health</Card.Title>
 		<Card.Description>
 			Tests the things that break solving: compute server keys, the database schema, whether the
-			default compute server answers, and whether the data folder is writable. Runs the checks fresh
-			each time — after fixing something, run it again to confirm.
+			default compute server answers, whether the data folder is writable, and the reverse-proxy and
+			upload-limit settings that fail silently at runtime. Runs the checks fresh each time — after
+			fixing something, run it again to confirm. Config changes need a restart first.
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-4">
@@ -120,6 +121,14 @@
 						</div>
 					{/each}
 				</div>
+
+				<p class="text-muted-foreground text-xs">
+					This covers what the running app can see. Checks that need the host filesystem — that
+					<span class="font-mono">.env</span> and the pm2 boot unit are in place, that no migration
+					was interrupted, that the signing keys are real keys and not the shipped placeholder —
+					only run from a shell on the server:
+					<span class="text-foreground font-mono">npx selva doctor</span>
+				</p>
 			</div>
 		{/if}
 	</Card.Content>

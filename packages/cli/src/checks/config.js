@@ -1,6 +1,14 @@
 // Checks that read only `.env` values — no filesystem, no network, no
 // subprocesses. These decide whether a deployment is validly configured, so
 // they run on every `selva doctor` regardless of which providers are in play.
+//
+// The reverse-proxy and body-limit rules (checkClientAddress, checkBodySizeLimit)
+// are duplicated in @selvajs/server/ops deploymentConfig.ts, which the admin
+// health panel runs so an operator who never opens a shell sees the same
+// findings. Duplicated because this package is dependency-free by design — it
+// scaffolds the deployment that installs the runtime, so it cannot import from
+// it. `__tests__/doctor-config-parity.test.js` asserts both against one fixture
+// table, so a rule changed here and not there fails CI.
 
 import { RENAMED_ENV_VARS, REPLACED_ENV_VARS } from '../env.js';
 import { green, red, yellow } from './result.js';
