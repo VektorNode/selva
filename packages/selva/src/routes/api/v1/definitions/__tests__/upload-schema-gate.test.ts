@@ -73,15 +73,18 @@ function mockComputeNoSchema(): void {
 	);
 }
 
+/**
+ * `locals` must carry the whole shape `actAs` returns, not just `{ user, ctx }`
+ * — the mounted handler builds its deps from `locals.providers`, so a partial
+ * fixture fails inside `depsFromConfig` before the handler runs.
+ */
 function createEvent(
-	tp: TestProviders,
-	user: { id: string },
-	ctx: unknown,
+	locals: Awaited<ReturnType<typeof actAs>>,
 	form: FormData
 ): CreateDefinitionEvent {
 	return {
 		request: new Request('http://test.local/api/definitions', { method: 'POST', body: form }),
-		locals: { user, ctx },
+		locals,
 		params: {},
 		url: new URL('http://test.local/api/definitions')
 	} as unknown as CreateDefinitionEvent;
@@ -95,14 +98,21 @@ function uploadForm(projectId: string): FormData {
 	return form;
 }
 
-async function expectStatus(promise: unknown, status: number): Promise<void> {
+/**
+ * Accepts either failure shape.
+ *
+ * The route is mounted, so failures come back as a `Response` carrying the
+ * error envelope. It still catches a thrown `HttpError`: the guards throw, and
+ * a regression that lets one escape the binding should fail on the status here,
+ * not silently pass because nothing was thrown.
+ */
+async function expectStatus(promise: Response | Promise<Response>, status: number): Promise<void> {
 	try {
-		await promise;
+		const res = await promise;
+		expect(res.status).toBe(status);
 	} catch (err) {
 		expect((err as { status?: number }).status).toBe(status);
-		return;
 	}
-	throw new Error(`expected throw with status ${status}, but resolved`);
 }
 
 describe('definition upload — schema validation gate', () => {
@@ -110,15 +120,15 @@ describe('definition upload — schema validation gate', () => {
 		tp = await freshProviders();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		await seedComputeServer();
-		const { ctx, user } = await actAs(tp, alice.id);
+		const locals = await actAs(tp, alice.id);
 
 		const schema = { name: 'Test', inputs: [], outputs: [] };
 		mockComputeSchemaOk(schema);
 
-		const res = await createDefinition(createEvent(tp, user, ctx, uploadForm(alicesPrivate.id)));
+		const res = await createDefinition(createEvent(locals, uploadForm(alicesPrivate.id)));
 		const body = (await res.json()) as { guid: string; version: { id: string } };
 
-		const stored = await tp.config.data.definitions.getVersion(ctx, body.version.id);
+		const stored = await tp.config.data.definitions.getVersion(locals.ctx, body.version.id);
 		expect(stored?.schema).toEqual(schema);
 		expect(stored?.schemaExtractedAt).toBeTypeOf('string');
 	});
@@ -127,17 +137,14 @@ describe('definition upload — schema validation gate', () => {
 		tp = await freshProviders();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		await seedComputeServer();
-		const { ctx, user } = await actAs(tp, alice.id);
+		const locals = await actAs(tp, alice.id);
 
 		mockComputeUnreachable();
 
-		await expectStatus(
-			createDefinition(createEvent(tp, user, ctx, uploadForm(alicesPrivate.id))),
-			503
-		);
+		await expectStatus(createDefinition(createEvent(locals, uploadForm(alicesPrivate.id))), 503);
 
 		// Nothing written: no definition in the project.
-		const page = await tp.config.data.definitions.listByProject(ctx, alicesPrivate.id, {
+		const page = await tp.config.data.definitions.listByProject(locals.ctx, alicesPrivate.id, {
 			includePending: true
 		});
 		expect(page.items).toHaveLength(0);
@@ -147,16 +154,13 @@ describe('definition upload — schema validation gate', () => {
 		tp = await freshProviders();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		await seedComputeServer();
-		const { ctx, user } = await actAs(tp, alice.id);
+		const locals = await actAs(tp, alice.id);
 
 		mockComputeNoSchema();
 
-		await expectStatus(
-			createDefinition(createEvent(tp, user, ctx, uploadForm(alicesPrivate.id))),
-			422
-		);
+		await expectStatus(createDefinition(createEvent(locals, uploadForm(alicesPrivate.id))), 422);
 
-		const page = await tp.config.data.definitions.listByProject(ctx, alicesPrivate.id, {
+		const page = await tp.config.data.definitions.listByProject(locals.ctx, alicesPrivate.id, {
 			includePending: true
 		});
 		expect(page.items).toHaveLength(0);
@@ -166,18 +170,15 @@ describe('definition upload — schema validation gate', () => {
 		tp = await freshProviders();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		// Intentionally NO seedComputeServer() — resolve has nothing to return.
-		const { ctx, user } = await actAs(tp, alice.id);
+		const locals = await actAs(tp, alice.id);
 
 		// fetch must never be reached; if it is, the test should still fail loudly.
 		const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-		await expectStatus(
-			createDefinition(createEvent(tp, user, ctx, uploadForm(alicesPrivate.id))),
-			503
-		);
+		await expectStatus(createDefinition(createEvent(locals, uploadForm(alicesPrivate.id))), 503);
 		expect(fetchSpy).not.toHaveBeenCalled();
 
-		const page = await tp.config.data.definitions.listByProject(ctx, alicesPrivate.id, {
+		const page = await tp.config.data.definitions.listByProject(locals.ctx, alicesPrivate.id, {
 			includePending: true
 		});
 		expect(page.items).toHaveLength(0);

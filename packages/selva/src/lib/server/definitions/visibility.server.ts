@@ -32,7 +32,7 @@ import {
 	getProjectProvider,
 	getPlatformProjectGrantStore
 } from '$lib/server/providers.server';
-import { projectAccessInputFromRows } from '$lib/server/access.server';
+import { projectAccessInputFromRowsWith } from '$lib/server/access.server';
 import type { SelvaDeps } from '@selvajs/server/api';
 
 /** Upper bound on the org/project scan. Visibility needs the whole set. */
@@ -47,7 +47,7 @@ const SCAN_LIMIT = 200;
  */
 export type VisibilityDeps = Pick<
 	SelvaDeps,
-	'orgs' | 'projects' | 'platformProjectGrants' | 'definitionMeta'
+	'orgs' | 'projects' | 'platformProjectGrants' | 'definitionMeta' | 'flag'
 >;
 
 /**
@@ -100,7 +100,7 @@ export async function resolveAccessibleProjects(
 
 	const projects = allProjects.filter((project) =>
 		canView(
-			projectAccessInputFromRows(ctx, project, {
+			projectAccessInputFromRowsWith(deps && { deps }, ctx, project, {
 				member: memberByProjectId.get(project.id) ?? null,
 				orgMember: orgMemberByOrgId.get(project.orgId) ?? null,
 				platformGrants: grantsByProjectId.get(project.id) ?? []
@@ -127,15 +127,16 @@ export interface ListVisibleDefinitionsResult extends Page<DefinitionRecord> {
  */
 export async function listVisibleDefinitions(
 	ctx: RequestContext,
-	opts: DefinitionListOptions & { projectId?: string } = {}
+	opts: DefinitionListOptions & { projectId?: string } = {},
+	deps?: VisibilityDeps
 ): Promise<ListVisibleDefinitionsResult> {
 	const { projectId, ...listOpts } = opts;
-	const { projects } = await resolveAccessibleProjects(ctx);
+	const { projects } = await resolveAccessibleProjects(ctx, deps);
 
 	const scoped = projectId ? projects.filter((p) => p.id === projectId) : projects;
 	// An empty id set matches nothing, which is what a caller with no visible
 	// projects should get — not an unfiltered listing.
-	const page = await getDefinitionMeta().list(ctx, {
+	const page = await (deps?.definitionMeta ?? getDefinitionMeta()).list(ctx, {
 		...listOpts,
 		projectIds: scoped.map((p) => p.id)
 	});
@@ -152,24 +153,35 @@ export async function listVisibleDefinitions(
  */
 export async function getVisibleDefinition(
 	ctx: RequestContext,
-	guid: string
+	guid: string,
+	deps?: VisibilityDeps
 ): Promise<DefinitionRecord | null> {
-	const record = await getDefinitionMeta().get(ctx, guid);
+	const meta = deps?.definitionMeta ?? getDefinitionMeta();
+	const projectStore = deps?.projects ?? getProjectProvider();
+
+	const record = await meta.get(ctx, guid);
 	if (!record) return null;
 
-	const project = await getProjectProvider().getProject(SYSTEM_CONTEXT, record.projectId);
+	const project = await projectStore.getProject(SYSTEM_CONTEXT, record.projectId);
 	if (!project) return null;
 
 	const [orgMembers, projectMembers, grants] = await Promise.all([
-		getOrganizationProvider().getOrgMembersFor(SYSTEM_CONTEXT, [project.orgId], ctx.userId),
-		getProjectProvider().getProjectMembersFor(SYSTEM_CONTEXT, [project.id], ctx.userId),
+		(deps?.orgs ?? getOrganizationProvider()).getOrgMembersFor(
+			SYSTEM_CONTEXT,
+			[project.orgId],
+			ctx.userId
+		),
+		projectStore.getProjectMembersFor(SYSTEM_CONTEXT, [project.id], ctx.userId),
 		project.visibility === 'platform'
-			? getPlatformProjectGrantStore().listByProject(SYSTEM_CONTEXT, project.id)
+			? (deps?.platformProjectGrants ?? getPlatformProjectGrantStore()).listByProject(
+					SYSTEM_CONTEXT,
+					project.id
+				)
 			: Promise.resolve([] as PlatformProjectGrant[])
 	]);
 
 	const allowed = canView(
-		projectAccessInputFromRows(ctx, project, {
+		projectAccessInputFromRowsWith(deps && { deps }, ctx, project, {
 			member: projectMembers.get(project.id) ?? null,
 			orgMember: orgMembers.get(project.orgId) ?? null,
 			platformGrants: grants
@@ -187,12 +199,13 @@ export async function getVisibleDefinition(
 export async function loadVisibleVersion(
 	ctx: RequestContext,
 	guid: string,
-	versionId: string
+	versionId: string,
+	deps?: VisibilityDeps
 ): Promise<DefinitionVersion | null> {
-	const record = await getVisibleDefinition(ctx, guid);
+	const record = await getVisibleDefinition(ctx, guid, deps);
 	if (!record) return null;
 
-	const version = await getDefinitionMeta().getVersion(ctx, versionId);
+	const version = await (deps?.definitionMeta ?? getDefinitionMeta()).getVersion(ctx, versionId);
 	if (!version || version.definitionId !== record.guid) return null;
 	return version;
 }

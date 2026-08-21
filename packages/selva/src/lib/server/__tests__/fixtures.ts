@@ -586,6 +586,7 @@ export async function actAs(
 	ctx: RequestContext;
 	profile: ReturnType<typeof emptyProfile>;
 	providers: SelvaConfig;
+	log: typeof silentLog;
 }> {
 	const stored = await tp.authUsers.findById(userId);
 	if (!stored) throw new Error(`actAs: user not found: ${userId}`);

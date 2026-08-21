@@ -10,7 +10,7 @@
 
 import { apiError, ApiErrorCode, collection, created, noContent } from '@selvajs/server/api';
 import type { ApiHandler, ApiRequest } from '@selvajs/server/api';
-import { checkOwnerRemoval, type ProjectMember } from '@selvajs/platform';
+import { checkOwnerRemoval, type ProjectMember, type ProjectRole } from '@selvajs/platform';
 import { requireCanManage, requireTargetIsOrgMember } from '../../access.server';
 import { parseListOptions } from '../../pagination.server';
 import { AddProjectMemberBodySchema, UpdateProjectMemberBodySchema } from '../v1/bodies';
@@ -61,7 +61,7 @@ export const addProjectMember: ApiHandler = async (req) => {
 async function assertOwnerRemovable(
 	req: ApiRequest,
 	projectId: string,
-	target: { role: string },
+	target: { role: ProjectRole },
 	action: 'demote' | 'remove'
 ): Promise<void> {
 	const { ctx } = requireCaller(req);

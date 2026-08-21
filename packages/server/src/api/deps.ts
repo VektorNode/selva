@@ -13,6 +13,7 @@
  */
 
 import { isFlagEnabled } from '@selvajs/platform';
+import type { DefinitionService } from '../definitions/definition-service.js';
 import type {
 	IAuthProvider,
 	IDataProvider,
@@ -43,8 +44,16 @@ export interface SelvaDeps {
 	 * re-deciding what a missing flag means.
 	 */
 	flag: (name: keyof SelvaFlags) => boolean;
-	/** Composed services the host supplies. Shapes stay host-defined for now. */
-	services: Record<string, unknown>;
+	/**
+	 * Composed services the host supplies.
+	 *
+	 * `definitions` is typed because handlers call it — leaving it `unknown`
+	 * pushed a cast into every call site, and a cast is exactly where a second
+	 * host's differently-shaped service would slip through unnoticed. The index
+	 * signature keeps host-specific extras (`orgAssets`) possible without
+	 * naming them here.
+	 */
+	services: { definitions?: DefinitionService } & Record<string, unknown>;
 }
 
 /**
@@ -53,7 +62,7 @@ export interface SelvaDeps {
  */
 export function depsFromConfig(
 	config: SelvaConfig,
-	services: Record<string, unknown> = {}
+	services: SelvaDeps['services'] = {}
 ): SelvaDeps {
 	const { data } = config;
 	return {

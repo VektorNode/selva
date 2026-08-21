@@ -530,7 +530,7 @@ export async function requireEditableDefinition(locals: Locals, guid: string) {
 			orgMember: await loadCommonsOrgMember(ctx, project, locals),
 			userId: ctx.userId,
 			platformPermissions: ctx.platformPermissions,
-			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
+			enablePlatformProjects: flagOf(locals)('ENABLE_PLATFORM_PROJECTS')
 		})
 	);
 	if (!allowed) throw error(403, 'You do not have permission to edit this definition.');
@@ -564,7 +564,7 @@ export async function requireCanEditDefinition(
 			orgMember: await loadCommonsOrgMember(ctx, project, locals),
 			userId: ctx.userId,
 			platformPermissions: ctx.platformPermissions,
-			enablePlatformProjects: flag('ENABLE_PLATFORM_PROJECTS')
+			enablePlatformProjects: flagOf(locals)('ENABLE_PLATFORM_PROJECTS')
 		});
 	});
 	if (!allowed) throw error(403, 'You do not have permission to edit this definition.');
