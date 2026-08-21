@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { isHttpError } from '@sveltejs/kit';
+import { isApiError } from '@selvajs/server/api';
 import type { AuthUser, RequestContext } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
 import { applySecurityHeaders, createRouteClassifier } from '@selvajs/server/http';
@@ -426,6 +427,13 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({
 	if (isHttpError(error)) {
 		const body = error.body as App.Error;
 		return { message: body.message, code: body.code, fields: body.fields };
+	}
+	// Backstop only. `ApiError` reaching here means a page load called a guard
+	// without going through `pageGuard()` — SvelteKit's `get_status` returns 500
+	// for anything that isn't its own `HttpError`, and `handleError` cannot
+	// change the status, so the message below is right but the status is not.
+	if (isApiError(error)) {
+		return { message: error.message, code: error.code, fields: error.fields };
 	}
 	if (status === 404) {
 		return { message: 'Page not found.', code: 'NOT_FOUND' };

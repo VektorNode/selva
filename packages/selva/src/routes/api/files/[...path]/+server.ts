@@ -7,7 +7,12 @@ import {
 	COVER_IMAGE_CONTENT_TYPES
 } from '@selvajs/platform';
 import { getDefinitionMeta, getStorageProvider } from '$lib/server/providers.server';
-import { requireCanViewProject, requireCanViewOrg, scoped } from '$lib/server/access.server';
+import {
+	asHttpError,
+	requireCanViewProject,
+	requireCanViewOrg,
+	scoped
+} from '$lib/server/access.server';
 
 /**
  * Authenticated/­public blob proxy. The set of servable paths is the closed
@@ -77,7 +82,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 			if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
 			const orgId = match.scopeId;
 			if (!orgId) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
-			await requireCanViewOrg(scoped(locals), orgId);
+			await asHttpError(() => requireCanViewOrg(scoped(locals), orgId));
 			break;
 		}
 
@@ -89,7 +94,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 			const record = await getDefinitionMeta().get(locals.ctx, guidParsed.data);
 			if (!record) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
-			await requireCanViewProject(scoped(locals), record.projectId);
+			await asHttpError(() => requireCanViewProject(scoped(locals), record.projectId));
 
 			canonicalPath = definitionPaths.image(guidParsed.data);
 			break;

@@ -15,6 +15,7 @@
  */
 
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { isApiError } from '@selvajs/server/api';
 import { isHttpError } from '@sveltejs/kit';
 import type { RequestContext, SolveFailureKind } from '@selvajs/platform';
 import {
@@ -212,7 +213,12 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 					await requireCanSolve(scoped(locals), record.projectId, project ?? undefined);
 				}
 			} catch (err) {
-				if (concealAccessFailure && isHttpError(err) && err.status === 403) {
+				// Reads the status off either error shape. The guards raise `ApiError`
+				// and `requireCanEditDefinition` may still surface an `HttpError`;
+				// matching only one lets the other's 403 through, which tells a caller
+				// that a guid they cannot reach exists.
+				const status = isApiError(err) ? err.status : isHttpError(err) ? err.status : undefined;
+				if (concealAccessFailure && status === 403) {
 					apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' not found`);
 				}
 				throw err;
@@ -382,6 +388,14 @@ export async function runSolve(params: SolveParams): Promise<Response> {
  */
 export function mapSolveError(err: unknown, locals: App.Locals): never {
 	if (isHttpError(err)) throw err;
+	// A guard's own decision, not a failed solve. Converted rather than
+	// re-thrown: these routes return their Response directly instead of going
+	// through `mount`, so an `ApiError` escaping here reaches SvelteKit, which
+	// gives anything that isn't its own `HttpError` a 500 — turning a working
+	// permission check into an operator page.
+	if (isApiError(err)) {
+		apiError(err.status, err.code, err.message);
+	}
 
 	if (err instanceof ComputeServerUnconfiguredError) {
 		apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, err.message);

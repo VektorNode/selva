@@ -56,6 +56,7 @@ import {
 	seedProject,
 	silentLog
 } from '@selvajs/server/testing';
+import { isApiError } from '@selvajs/server/api';
 import { mapAppError } from '../api/sveltekit.js';
 import { hashToken, mintRawToken, shareLinkCodec } from '../shareLinks/token.server.js';
 import { inviteCodec } from '../invites/token.server.js';
@@ -677,12 +678,19 @@ export async function expectHttpError(
 
 interface HttpErrorLike {
 	status: number;
-	body: { message?: string } | undefined;
+	body: { message?: string; code?: string } | undefined;
 	location?: string;
 }
 
 function asHttpErrorLike(err: unknown): HttpErrorLike | null {
 	if (!err || typeof err !== 'object') return null;
+	// The access guards raise `ApiError`, which carries `message`/`code` as own
+	// fields rather than under `body`. Production folds it into the envelope at
+	// the boundary (`mapAppError`, or `asHttpError` off the mounted path); these
+	// helpers call guards directly, so they normalize it here.
+	if (isApiError(err)) {
+		return { status: err.status, body: { message: err.message, code: err.code } };
+	}
 	const e = err as Record<string, unknown>;
 	if (
 		typeof e.status === 'number' &&
