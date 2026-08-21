@@ -1,5 +1,11 @@
 # Schema Changelog
 
+## 5.0.1
+
+### Patch Changes
+
+- 6fa6b27: Add ESLint configs and lint scripts. Build output and published files are unchanged.
+
 ## 5.0.0
 
 ### Major Changes
