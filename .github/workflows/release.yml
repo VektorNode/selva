@@ -179,6 +179,12 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         run: pnpm type-check
 
+      # svelte-check owns type coverage for the SvelteKit packages (selva,
+      # plugin-ui); they have no tsc task, so type-check alone would skip them.
+      - name: Check
+        if: steps.check.outputs.should_run == 'true'
+        run: pnpm check
+
       - name: Test
         if: steps.check.outputs.should_run == 'true'
         run: pnpm exec turbo run test

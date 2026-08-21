@@ -39,7 +39,6 @@
 		"clean": "rimraf build templates",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"type-check": "tsc --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"openapi:generate": "node scripts/generate-openapi.js",

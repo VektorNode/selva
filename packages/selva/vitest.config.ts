@@ -17,11 +17,11 @@ export default createVitestConfig({
 		setupFiles: ['./src/lib/server/__tests__/setup.ts'],
 		testTimeout: 15000,
 		hookTimeout: 15000,
-		// Each test owns a tmpdir; serial avoids cross-test contention and keeps
-		// the global `currentTestProviders()` holder unambiguous.
-		fileParallelism: false,
-		pool: 'forks',
-		maxForks: 1,
-		minForks: 1
+		// Forks, not threads: the `currentTestProviders()` holder in
+		// __tests__/test-providers.ts is module-level state, so every test file
+		// needs its own module registry. Files still run in parallel — each test
+		// roots itself in its own `fs.mkdtemp` directory, so there is nothing for
+		// concurrent files to contend over.
+		pool: 'forks'
 	}
 });

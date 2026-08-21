@@ -30,14 +30,15 @@
 		"build:plugin-ui": "turbo run build --filter=@selvajs/plugin-ui",
 		"build:selva": "turbo run build --filter=@selvajs/selva",
 		"build:website": "turbo run build --filter=@selvajs/website",
-		"check:website": "turbo run check type-check --filter=@selvajs/website",
+		"check:website": "turbo run check --filter=@selvajs/website",
+		"lint:website": "turbo run lint --filter=@selvajs/website",
 		"build:plugin": "turbo run build --filter=@selvajs/plugin-ui && node scripts/build-production.js",
 		"release:plugin": "node scripts/release-plugin.js",
 		"check": "turbo run check --concurrency=20 --filter=!@selvajs/website",
 		"type-check": "turbo run type-check --concurrency=20 --filter=!@selvajs/website",
-		"lint": "turbo run lint --concurrency=20",
-		"lint:types": "turbo run lint:types --concurrency=20",
-		"lint:fix": "turbo run lint --concurrency=20 -- --fix",
+		"lint": "turbo run lint --concurrency=20 --filter=!@selvajs/website",
+		"lint:types": "turbo run lint:types --concurrency=20 --filter=!@selvajs/website",
+		"lint:fix": "turbo run lint --concurrency=20 --filter=!@selvajs/website -- --fix",
 		"test": "turbo run test --concurrency=20",
 		"test:e2e": "turbo run test:e2e",
 		"format": "prettier --write \"**/*.{ts,tsx,svelte,json,yaml,md}\"",
@@ -53,12 +54,6 @@
 		"*.{ts,tsx,svelte}": [
 			"eslint --fix",
 			"prettier --write"
-		],
-		"packages/compute/**/*.{ts,svelte}": [
-			"eslint --fix --config packages/compute/eslint.config.mjs"
-		],
-		"packages/visualization/**/*.ts": [
-			"eslint --fix --config packages/visualization/eslint.config.mjs"
 		],
 		"*.{json,yaml,yml,md}": [
 			"prettier --write"

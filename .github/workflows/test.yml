@@ -81,23 +81,20 @@ jobs:
             exit 1
           fi
 
-      # Keyed on lint config so a rule change busts the cache. Must include
-      # packages/config/eslint.config.js — the root config just re-exports it,
-      # so the rules themselves live there.
-      #
-      # `pnpm lint` passes --cache-strategy content: the default (metadata)
-      # keys on mtime, which actions/checkout rewrites every run, so every
-      # entry would miss and the cache would be dead weight.
+      # lint, check, type-check and test all run through turbo, which keys each
+      # task on its own inputs. Restoring .turbo lets an unchanged package skip
+      # entirely — without it every run is fully cold.
       - uses: actions/cache@v6
         with:
-          path: node_modules/.cache/eslint
-          key: eslint-${{ hashFiles('eslint.config.js', 'packages/config/eslint.config.js') }}
+          path: .turbo
+          key: turbo-js-${{ github.sha }}
           restore-keys: |
-            eslint-
+            turbo-js-
 
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm type-check
+      - run: pnpm check
 
       # Every package's test task. @selvajs/supabase-provider's live-stack
       # suites self-skip without Supabase creds (no .env.test in CI); its
