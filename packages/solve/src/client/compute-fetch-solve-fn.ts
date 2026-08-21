@@ -95,7 +95,6 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			definitionUrl: opts.definitionUrl(),
 			...(versionId ? { versionId } : channel === 'draft' ? { channel: 'draft' } : {})
 		});
-		const valuesBytes = JSON.stringify(values).length;
 
 		let res: Response;
 		try {
@@ -187,6 +186,7 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		}
 
 		if (debug) {
+			const valuesBytes = JSON.stringify(values).length;
 			const serverTiming = parseServerTiming(res.headers.get('Server-Timing'));
 			const serverTotal = serverTiming.total ?? 0;
 			const networkMs = Math.max(0, ttfbMs - serverTotal);

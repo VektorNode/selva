@@ -5,8 +5,7 @@
 		"pnpm-workspace.yaml",
 		"pnpm-lock.yaml",
 		"tsconfig.base.json",
-		"tsconfig.node.json",
-		"docs/**"
+		"tsconfig.node.json"
 	],
 	"tasks": {
 		"generate": {
@@ -48,7 +47,9 @@
 				"../compute/src/**",
 				"../compute/typedoc.json",
 				"../compute/README.md",
-				"../compute/package.json"
+				"../compute/package.json",
+				"../../docs/**/*.md",
+				"!../../docs/adr/**"
 			]
 		},
 		"check": {

@@ -30,13 +30,6 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup
 
-      - uses: actions/cache@v6
-        with:
-          path: .turbo
-          key: turbo-test-${{ github.sha }}
-          restore-keys: |
-            turbo-test-
-
       # Publish coverage, bundle-only selva, cli/selva fixed-group.
       - name: Check publish invariants
         run: node scripts/publishable-packages.mjs --check
