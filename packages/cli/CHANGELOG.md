@@ -1,5 +1,7 @@
 # @selvajs/cli
 
+## 4.15.0
+
 ## 4.14.2
 
 ### Patch Changes
