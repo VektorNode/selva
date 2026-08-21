@@ -80,6 +80,11 @@
 			"selva-source": "./src/notifications/index.ts",
 			"types": "./dist/notifications/index.d.ts",
 			"import": "./dist/notifications/index.js"
+		},
+		"./testing": {
+			"selva-source": "./src/testing/index.ts",
+			"types": "./dist/testing/index.d.ts",
+			"import": "./dist/testing/index.js"
 		}
 	},
 	"files": [

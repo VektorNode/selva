@@ -30,8 +30,6 @@ import {
 } from '@selvajs/local-provider';
 import {
 	SYSTEM_CONTEXT,
-	DEFAULT_ORG_PERMISSIONS,
-	emptyProfile,
 	type AuthUser,
 	type DefinitionRecord,
 	type DefinitionVersion,
@@ -39,15 +37,9 @@ import {
 	type IEventSink,
 	type IOAuthAuth,
 	type ISessionRefresh,
-	type OrgPermission,
 	type Organization,
-	type OrgMember,
-	type OrgRole,
 	type PlatformPermission,
 	type Project,
-	type ProjectMember,
-	type ProjectRole,
-	type ProjectVisibility,
 	type RequestContext,
 	type SelvaConfig,
 	type SelvaFlags,
@@ -55,7 +47,15 @@ import {
 	type TenancyMode
 } from '@selvajs/platform';
 import { DefinitionService, type CreateDefinitionRecord } from '@selvajs/server/definitions';
-import { depsFromConfig, runHandler, type ApiHandler, type ApiRequest } from '@selvajs/server/api';
+import type { TestHarness, SeededUser, CallResult } from '@selvajs/server/testing';
+import {
+	actAs as actAsShared,
+	seedUser,
+	seedOrg,
+	seedOrgMember,
+	seedProject,
+	silentLog
+} from '@selvajs/server/testing';
 import { mapAppError } from '../api/sveltekit.js';
 import { hashToken, mintRawToken, shareLinkCodec } from '../shareLinks/token.server.js';
 import { inviteCodec } from '../invites/token.server.js';
@@ -80,7 +80,13 @@ class RecordingEventSink implements IEventSink {
 	}
 }
 
-export interface TestProviders {
+/**
+ * Extends `TestHarness` so the shared seeders in `@selvajs/server/testing`
+ * accept it directly. The extra fields are this host's: `authUsers` is the
+ * local provider's identity file, which the auth and admin route tests read
+ * directly and no interface exposes.
+ */
+export interface TestProviders extends TestHarness {
 	root: string;
 	config: SelvaConfig;
 	tenancy: TenancyMode;
@@ -133,6 +139,22 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 		flags: config.flags ?? {},
 		definitionService,
 		authUsers,
+		// --- TestHarness ---
+		// `null` password marks an OAuth-allowlisted entry; tests don't
+		// authenticate, they just need the ids to align across stores.
+		auth: {
+			createUser: (email) => authUsers.createUser(email, null),
+			findById: (id) => authUsers.findById(id)
+		},
+		mapError: mapAppError,
+		deps: {
+			// The app's own codecs, not fresh ones: a second codec would hash under
+			// a different secret than the seeders use, so every token lookup would
+			// miss and read as a broken handler rather than a broken fixture.
+			tokens: { shareLinks: shareLinkCodec(), invites: inviteCodec() },
+			services: { definitions: definitionService }
+		},
+		log: silentLog,
 		events: events.events,
 		cleanup: async () => {
 			clearTestProviders();
@@ -153,123 +175,41 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 // Seeders
 // ============================================================================
 
-export interface SeededUser {
-	id: string;
-	email: string;
-}
+/**
+ * The basic seeders live in `@selvajs/server/testing` and are re-exported here
+ * so this module stays the single import for tests. They take a `TestHarness`,
+ * which `TestProviders` extends — call sites pass `tp` unchanged.
+ */
+export {
+	seedUser,
+	seedOrg,
+	seedOrgMember,
+	seedProject,
+	seedProjectMember,
+	anon,
+	callHandler,
+	silentLog
+} from '@selvajs/server/testing';
+export type {
+	SeededUser,
+	ActingLocals,
+	CallHandlerOpts,
+	CallResult
+} from '@selvajs/server/testing';
 
-export async function seedUser(
+/**
+ * The shared `actAs`, plus this app's `deps`.
+ *
+ * `access.server.ts` guards read their stores off `locals.deps`, which is a
+ * Selva concept — the shared harness knows only what a handler reads. Page
+ * loads and the guard unit tests both pass these locals straight to a guard, so
+ * the field has to be here rather than added per test.
+ */
+export async function actAs(
 	tp: TestProviders,
-	email: string,
-	platformPermissions: PlatformPermission[] = []
-): Promise<SeededUser> {
-	// Identity row (auth-users.json) + data-layer row (user-data.json), in that
-	// order — same sequence production runs through `hooks.server.ts` /
-	// `setup`. `null` password marks an OAuth-allowlisted entry; tests don't
-	// authenticate, they just need the IDs to align across stores.
-	const u = await tp.authUsers.createUser(email, null);
-	await tp.config.data.ensureUser(SYSTEM_CONTEXT, u.id);
-	if (platformPermissions.length > 0) {
-		await tp.config.data.permissions.set(SYSTEM_CONTEXT, u.id, platformPermissions);
-	}
-	return { id: u.id, email: u.email };
-}
-
-export async function seedOrg(
-	tp: TestProviders,
-	opts: { name: string; slug: string; ownerId: string }
-): Promise<Organization> {
-	const now = new Date().toISOString();
-	const org: Organization = {
-		id: randomUUID(),
-		name: opts.name,
-		slug: opts.slug,
-		ownerId: opts.ownerId,
-		createdBy: opts.ownerId,
-		updatedBy: opts.ownerId,
-		createdAt: now,
-		updatedAt: now,
-		deletedAt: null
-	};
-	await tp.config.data.orgs.createOrg(SYSTEM_CONTEXT, org);
-	return org;
-}
-
-export async function seedOrgMember(
-	tp: TestProviders,
-	opts: { orgId: string; userId: string; role: OrgRole; permissions?: OrgPermission[] }
-): Promise<OrgMember> {
-	const now = new Date().toISOString();
-	const member: OrgMember = {
-		orgId: opts.orgId,
-		userId: opts.userId,
-		role: opts.role,
-		permissions: opts.permissions ?? [...DEFAULT_ORG_PERMISSIONS[opts.role]],
-		joinedAt: now,
-		updatedAt: now,
-		updatedBy: opts.userId,
-		deletedAt: null
-	};
-	await tp.config.data.orgs.addOrgMember(SYSTEM_CONTEXT, member);
-	return member;
-}
-
-export async function seedProject(
-	tp: TestProviders,
-	opts: {
-		orgId: string;
-		name: string;
-		slug: string;
-		ownerId: string;
-		visibility?: ProjectVisibility;
-		autoJoinOnUpload?: boolean;
-	}
-): Promise<Project> {
-	const now = new Date().toISOString();
-	const project: Project = {
-		id: randomUUID(),
-		orgId: opts.orgId,
-		name: opts.name,
-		slug: opts.slug,
-		visibility: opts.visibility ?? 'private',
-		ownerId: opts.ownerId,
-		createdBy: opts.ownerId,
-		updatedBy: opts.ownerId,
-		autoJoinOnUpload: opts.autoJoinOnUpload ?? false,
-		createdAt: now,
-		updatedAt: now,
-		deletedAt: null
-	};
-	await tp.config.data.projects.createProject(SYSTEM_CONTEXT, project);
-	// Owner membership row.
-	await tp.config.data.projects.addProjectMember(SYSTEM_CONTEXT, {
-		projectId: project.id,
-		userId: opts.ownerId,
-		role: 'owner',
-		joinedAt: now,
-		updatedAt: now,
-		updatedBy: opts.ownerId,
-		deletedAt: null
-	});
-	return project;
-}
-
-export async function seedProjectMember(
-	tp: TestProviders,
-	opts: { projectId: string; userId: string; role: ProjectRole }
-): Promise<ProjectMember> {
-	const now = new Date().toISOString();
-	const member: ProjectMember = {
-		projectId: opts.projectId,
-		userId: opts.userId,
-		role: opts.role,
-		joinedAt: now,
-		updatedAt: now,
-		updatedBy: opts.userId,
-		deletedAt: null
-	};
-	await tp.config.data.projects.addProjectMember(SYSTEM_CONTEXT, member);
-	return member;
+	userId: string
+): Promise<Awaited<ReturnType<typeof actAsShared>> & { deps: AccessDeps }> {
+	return { ...(await actAsShared(tp, userId)), deps: accessDepsFromConfig(tp.config) };
 }
 
 // ============================================================================
@@ -570,73 +510,6 @@ export async function seedCommons(
 	return { commonsProject, alicesCommonsDef, peter };
 }
 
-// ============================================================================
-// Locals + handler invocation
-// ============================================================================
-
-/**
- * Build an `App.Locals`-shaped object for the given user. Mirrors
- * `buildContext()` from hooks.server.ts but reads from this test's providers
- * via the mocked module surface.
- */
-export async function actAs(
-	tp: TestProviders,
-	userId: string
-): Promise<{
-	user: AuthUser;
-	ctx: RequestContext;
-	profile: ReturnType<typeof emptyProfile>;
-	providers: SelvaConfig;
-	deps: AccessDeps;
-	log: typeof silentLog;
-}> {
-	const stored = await tp.authUsers.findById(userId);
-	if (!stored) throw new Error(`actAs: user not found: ${userId}`);
-	const user: AuthUser = {
-		id: stored.id,
-		email: stored.email,
-		createdAt: stored.createdAt,
-		lastLoginAt: stored.lastLoginAt,
-		disabled: stored.disabled
-	};
-
-	const platformPermissions = await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, user.id);
-	// Mirror the production bootstrap path (hooks.server.ts) — single
-	// `findUserMembership` lookup, with the instance-admin fallback to the
-	// first listed org for admins not in any org. Keeping this aligned with
-	// production behavior is the whole point of testing routes through real
-	// stores instead of mocks.
-	const membership = await tp.config.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id);
-	let actingOrgId: string | undefined = membership?.org.id;
-	const orgPermissions: OrgPermission[] = membership ? [...membership.member.permissions] : [];
-	if (!actingOrgId && platformPermissions.includes('instance_admin')) {
-		const firstOrgPage = await tp.config.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
-		actingOrgId = firstOrgPage.items[0]?.id;
-	}
-
-	const ctx: RequestContext = {
-		userId: user.id,
-		actingOrgId,
-		platformPermissions,
-		orgPermissions
-	};
-
-	const profile =
-		(await tp.config.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ?? emptyProfile(user.id);
-
-	// `deps` mirrors what `hooks.server.ts` gives a real request: the guards read
-	// providers through it rather than module globals, so a test exercises the
-	// same wiring production does.
-	return {
-		user,
-		ctx,
-		profile,
-		providers: tp.config,
-		deps: accessDepsFromConfig(tp.config),
-		log: silentLog
-	};
-}
-
 /**
  * Wrap one store method to observe that it was called, leaving behaviour intact.
  *
@@ -676,37 +549,6 @@ export function spyOnStore<
 	};
 }
 
-/**
- * A no-op logger, so `locals` matches what production hooks build.
- *
- * Mounted handlers log through `locals.log` on the 500 path. Without this a
- * test that trips an unexpected 500 dies with "Cannot read properties of
- * undefined (reading 'error')" — which hides the error that actually caused it.
- *
- * Run with `LOUD=1` to print what a 500 actually was; the fallback envelope
- * carries only a generic message, so the stack is otherwise unreachable.
- */
-const silentLog = {
-	error: (...args: unknown[]) => {
-		if (process.env.LOUD) console.error('[test log]', ...args);
-	},
-	warn: () => {},
-	info: () => {},
-	debug: () => {},
-	child: () => silentLog
-};
-
-export interface AnonymousLocals {
-	user?: undefined;
-	ctx?: undefined;
-	profile?: undefined;
-	providers: SelvaConfig;
-}
-
-export function anon(tp: TestProviders): AnonymousLocals {
-	return { providers: tp.config };
-}
-
 // ----------------------------------------------------------------------------
 // Synthetic RequestEvent for direct +server.ts handler invocation.
 // ----------------------------------------------------------------------------
@@ -722,13 +564,9 @@ export interface CallOpts {
 	cookies?: Map<string, string>;
 }
 
-export interface CallResult {
-	status: number;
-	headers: Headers;
-	json?: unknown;
-	text?: string;
-	location?: string;
-}
+// `CallResult` is the shared one, re-exported above — `call` and `callHandler`
+// return the same shape so a test converts between them without touching its
+// assertions.
 
 /**
  * Invoke a `+server.ts` handler directly. Catches HttpError thrown by
@@ -790,80 +628,6 @@ export async function call(handler: AnyHandler, opts: CallOpts): Promise<CallRes
 		}
 		throw err;
 	}
-}
-
-// ----------------------------------------------------------------------------
-// Direct ApiHandler invocation — no SvelteKit event.
-// ----------------------------------------------------------------------------
-
-export interface CallHandlerOpts {
-	/** Same `actAs`/`anon` value as `call`, so a test converts by swapping the callee. */
-	locals: unknown;
-	params?: Record<string, string>;
-	url?: string;
-	body?: unknown;
-	headers?: Record<string, string>;
-}
-
-/**
- * Invoke an `ApiHandler` directly, skipping the SvelteKit `+server.ts` binding.
- *
- * `call()` goes through `mount()`, which is the app's adapter: it builds an
- * `ApiRequest` from a `RequestEvent` and folds this app's domain errors into the
- * envelope. Handler tests that route through it are really testing the adapter
- * too, which is what pins them to selva — the handler is portable, the event is
- * not.
- *
- * This keeps `runHandler` and `mapAppError`, because those are the contract:
- * `mapAppError` is what turns a guard's SvelteKit `error()` into an envelope,
- * and dropping it would turn every guard rejection into a 500 and quietly make
- * the status assertions meaningless. When these tests move into
- * `@selvajs/server`, `mapAppError` is the one argument that has to travel with
- * them or be replaced by the new host's equivalent.
- */
-export async function callHandler(handler: ApiHandler, opts: CallHandlerOpts): Promise<CallResult> {
-	const url = new URL(opts.url ?? 'http://test.local/');
-	const init: RequestInit = {
-		method: opts.body !== undefined ? 'POST' : 'GET',
-		headers: opts.headers ?? {}
-	};
-	if (opts.body !== undefined) {
-		if (opts.body instanceof FormData) {
-			init.body = opts.body;
-		} else {
-			(init.headers as Record<string, string>)['content-type'] ??= 'application/json';
-			init.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
-		}
-	}
-
-	const locals = opts.locals as {
-		ctx?: RequestContext;
-		user?: AuthUser;
-		profile?: ReturnType<typeof emptyProfile>;
-		providers: SelvaConfig;
-		log?: typeof silentLog;
-	};
-
-	const req: ApiRequest = {
-		ctx: locals.ctx,
-		user: locals.user,
-		profile: locals.profile,
-		log: locals.log ?? silentLog,
-		params: opts.params ?? {},
-		url,
-		request: new Request(url.toString(), init),
-		// The app's own codec accessors, not fresh ones. A second codec built here
-		// would hash under a different secret than `seedShareLink` and the invite
-		// seeders use, so every token lookup would miss — and the tests would read
-		// as a broken handler rather than a broken fixture.
-		deps: depsFromConfig(
-			locals.providers,
-			{ definitions: new DefinitionService(locals.providers.data, locals.providers.storage) },
-			{ tokens: { shareLinks: shareLinkCodec(), invites: inviteCodec() } }
-		)
-	};
-
-	return readResponse(await runHandler(handler, req, { fallback: 'Test', mapError: mapAppError }));
 }
 
 async function readResponse(res: Response): Promise<CallResult> {
