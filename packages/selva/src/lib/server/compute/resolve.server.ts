@@ -4,21 +4,12 @@ import {
 	type RequestContext
 } from '@selvajs/platform';
 import { getComputeServerConfigStore } from '../providers.server';
+import { ComputeServerUnconfiguredError } from './errors';
 
-/**
- * Thrown when no compute server is configured or visible for the org — a
- * misconfiguration an operator must fix in `/admin/compute`, not a bug. Routes
- * map this to 503 instead of letting the pure helper's plain `Error` surface as
- * a generic 500.
- */
-export class ComputeServerUnconfiguredError extends Error {
-	constructor(
-		message = 'No compute server configured. Ask an admin to add one in /admin/compute.'
-	) {
-		super(message);
-		this.name = 'ComputeServerUnconfiguredError';
-	}
-}
+// Re-exported so the throw site and the class still read as one unit. Error
+// mappers should import from `./errors` directly — importing it from here drags
+// in `providers.server` and its top-level await.
+export { ComputeServerUnconfiguredError };
 
 /**
  * Pick the right Rhino.Compute server for an (org, definition) pair.

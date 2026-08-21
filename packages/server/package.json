@@ -101,7 +101,8 @@
 	"dependencies": {
 		"@selvajs/compute": "workspace:^",
 		"@selvajs/platform": "workspace:^",
-		"@selvajs/schemas": "workspace:^"
+		"@selvajs/schemas": "workspace:^",
+		"zod": "catalog:"
 	},
 	"peerDependencies": {
 		"@sentry/node": ">=8",

@@ -7,4 +7,13 @@ export { ApiError, ApiErrorCode, apiError, codeForStatus, isApiError } from './e
 export type { ApiHandler, ApiRequest, ApiResponse } from './types.js';
 export { depsFromConfig, type SelvaDeps } from './deps.js';
 export { collection, created, noContent } from './responses.js';
+export { shaped, shapedCollection } from './shaped.js';
+export {
+	formText,
+	parseBody,
+	parseParam,
+	requireParams,
+	requireUpload,
+	throwZodError
+} from './request.js';
 export { runHandler, toErrorBody, type ApiErrorBody } from './respond.js';

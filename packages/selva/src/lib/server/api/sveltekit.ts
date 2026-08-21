@@ -22,7 +22,7 @@ import {
 import { ProviderError } from '@selvajs/platform';
 import { getDefinitionService, getOrgAssetService } from '../providers.server';
 import { SchemaExtractionError } from '@selvajs/server/definitions';
-import { ComputeServerUnconfiguredError } from '../compute/resolve.server';
+import { ComputeServerUnconfiguredError } from '../compute/errors';
 
 // Postgres unique-constraint names → friendly explanations. Postgrest surfaces
 // the constraint name verbatim, which is useless to end users.

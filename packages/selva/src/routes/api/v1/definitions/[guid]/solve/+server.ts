@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode, handleApiError } from '$lib/server/api-errors';
 import { SolveBodySchema } from '$lib/server/api/v1/bodies';
 import { parseBody, requireCaller, requireParams } from '$lib/server/api/v1/route';
 import type { PipelineInput } from '@selvajs/solve/server';
@@ -37,7 +37,14 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 	const { guid } = requireParams(params, 'guid');
 	const { ctx, user } = requireCaller(locals);
 
-	const body = await parseBody(request, SolveBodySchema, { missingAs: {} });
+	// This route streams and marks its own metrics, so it is deliberately not
+	// wrapped in `apiRoute`/`mount` — nothing above it turns a thrown error into
+	// the response envelope. `parseBody` raises `ApiError` now that the request
+	// helpers are transport-free, so it is funnelled through `handleApiError`
+	// here; without it a bad body escapes as an unhandled 500, not the 400 it is.
+	const body = await parseBody(request, SolveBodySchema, { missingAs: {} }).catch((err) =>
+		handleApiError(err, 'Invalid solve request', locals.log)
+	);
 	mark('body');
 
 	const definitionUrl = `local:${guid}`;

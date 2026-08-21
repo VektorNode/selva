@@ -8,13 +8,20 @@
  * would.
  */
 
-import { apiError, ApiErrorCode, collection, created, noContent } from '@selvajs/server/api';
+import {
+	apiError,
+	ApiErrorCode,
+	collection,
+	created,
+	noContent,
+	parseBody,
+	requireParams
+} from '@selvajs/server/api';
 import type { ApiHandler, ApiRequest } from '@selvajs/server/api';
 import { checkOwnerRemoval, type ProjectMember, type ProjectRole } from '@selvajs/platform';
 import { requireCanManage, requireTargetIsOrgMember } from '../../access.server';
 import { parseListOptions } from '../../pagination.server';
 import { AddProjectMemberBodySchema, UpdateProjectMemberBodySchema } from '../v1/bodies';
-import { parseBody, requireParams } from '../v1/route';
 import { requireCaller } from '../callers';
 
 export const listProjectMembers: ApiHandler = async (req) => {

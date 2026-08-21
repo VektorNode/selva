@@ -1,9 +1,9 @@
 import { error, isHttpError } from '@sveltejs/kit';
 import { ProviderError, type ILogger } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
-import type { ZodError } from 'zod';
+import { isApiError } from '@selvajs/server/api';
 import { SchemaExtractionError } from '@selvajs/server/definitions';
-import { ComputeServerUnconfiguredError } from './compute/resolve.server';
+import { ComputeServerUnconfiguredError } from './compute/errors';
 
 // ============================================================================
 // Error envelope
@@ -90,6 +90,13 @@ function friendlyConstraintMessage(raw: string): string | null {
  */
 export function handleApiError(err: unknown, fallback: string, log?: ILogger): never {
 	if (isHttpError(err)) throw err;
+	// The transport-free parsers in `@selvajs/server/api` raise `ApiError`, not
+	// SvelteKit's `error()`. Routes still wrapped in `apiRoute` (admin, and the
+	// streaming solve routes) reach this path, so translate rather than letting
+	// a validation failure fall through to the 500 branch below.
+	if (isApiError(err)) {
+		apiError(err.status, err.code, err.message, err.fields);
+	}
 	// Compute unreachable, or serving a schema shape the app cannot read → 503
 	// (both are operator-side); invalid/newer-than-supported schema → 422.
 	if (err instanceof SchemaExtractionError) {
@@ -120,20 +127,7 @@ export function handleApiError(err: unknown, fallback: string, log?: ILogger): n
 	apiError(500, ApiErrorCode.INTERNAL, fallback);
 }
 
-/**
- * Throws a 400 VALIDATION_FAILED from a Zod error. The top-level `message` is
- * the first issue (human-friendly); `fields` maps every issue's dotted path
- * to its message for machine consumption.
- */
-export function throwZodError(err: ZodError): never {
-	const fields: Record<string, string> = {};
-	for (const issue of err.issues) {
-		const key = issue.path.length ? issue.path.join('.') : '_';
-		// First message per field wins; later issues on the same path are
-		// usually redundant refinements.
-		if (!(key in fields)) fields[key] = issue.message;
-	}
-	const first = err.issues[0];
-	const path = first.path.length ? `${first.path.join('.')}: ` : '';
-	apiError(400, ApiErrorCode.VALIDATION_FAILED, `${path}${first.message}`, fields);
-}
+// `throwZodError` moved to `@selvajs/server/api`, which is where the parsers
+// that raise it now live. Keeping a second copy here would let this app's
+// validation envelope drift from the package's.
+export { throwZodError } from '@selvajs/server/api';

@@ -7,7 +7,18 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { apiError, ApiErrorCode, collection, created, noContent } from '@selvajs/server/api';
+import {
+	apiError,
+	ApiErrorCode,
+	collection,
+	created,
+	formText,
+	noContent,
+	parseBody,
+	parseParam,
+	requireUpload,
+	throwZodError
+} from '@selvajs/server/api';
 import type { ApiHandler } from '@selvajs/server/api';
 import { toDefinitionListItem, type DefinitionStatus } from '@selvajs/platform';
 import {
@@ -18,7 +29,6 @@ import {
 } from '@selvajs/platform/definitions';
 import type { DefinitionVersion } from '@selvajs/platform';
 import { requireCanCreateDefinition, requireEditableDefinition } from '../../access.server';
-import { throwZodError } from '../../api-errors';
 import { GH_EXTENSIONS, MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '../../admin-config';
 import { resolveServerForOrg } from '../../compute/resolve.server';
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
@@ -29,7 +39,6 @@ import {
 	resolveAccessibleProjects
 } from '../../definitions/visibility.server';
 import { parseDefinitionListOptions } from '../../pagination.server';
-import { formText, parseBody, parseParam, requireUpload } from '../v1/route';
 import { requireCaller } from '../callers';
 import { definitionService } from './services';
 

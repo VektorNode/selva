@@ -6,8 +6,7 @@
  * expand stars into definitions filter by visibility there.
  */
 
-import { noContent, type ApiHandler } from '@selvajs/server/api';
-import { requireParams } from '../v1/route';
+import { noContent, requireParams, type ApiHandler } from '@selvajs/server/api';
 import { requireCaller } from '../callers';
 
 export const starDefinition: ApiHandler = async (req) => {

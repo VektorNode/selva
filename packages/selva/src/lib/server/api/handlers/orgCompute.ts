@@ -11,7 +11,7 @@
  * agree, which is why the merge lives in `serverConfigWrite`, not inline.
  */
 
-import { apiError, ApiErrorCode, noContent } from '@selvajs/server/api';
+import { apiError, ApiErrorCode, noContent, parseBody, shaped } from '@selvajs/server/api';
 import type { ApiHandler, ApiRequest } from '@selvajs/server/api';
 import {
 	isOrgServer,
@@ -27,7 +27,6 @@ import {
 	storedKeysById,
 	type IncomingServerBase
 } from '../../compute/serverConfigWrite';
-import { parseBody, shaped } from '../v1/route';
 import { OrgComputeResponseSchema } from '../v1/responses';
 import { OrgComputePatchBodySchema } from '../v1/bodies';
 

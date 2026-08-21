@@ -14,6 +14,8 @@ import {
 	collection,
 	created,
 	noContent,
+	parseBody,
+	requireParams,
 	type ApiHandler
 } from '@selvajs/server/api';
 import {
@@ -38,7 +40,6 @@ import {
 } from '../../access.server';
 import { createProjectWithUniqueSlug } from '../../projects/createProject.server';
 import { CreateProjectBodySchema, UpdateProjectBodySchema } from '../v1/bodies';
-import { parseBody, requireParams } from '../v1/route';
 import { requireCaller } from '../callers';
 
 export const listProjects: ApiHandler = async (req) => {

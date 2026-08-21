@@ -6,10 +6,9 @@
  * reactivates a soft-deleted row in place.
  */
 
-import { created, type ApiHandler } from '@selvajs/server/api';
+import { created, requireParams, type ApiHandler } from '@selvajs/server/api';
 import { actorFrom, type ProjectMember } from '@selvajs/platform';
 import { requireCanReclaim } from '../../access.server';
-import { requireParams } from '../v1/route';
 
 export const reclaimProject: ApiHandler = async (req) => {
 	const { id } = requireParams(req.params, 'id');

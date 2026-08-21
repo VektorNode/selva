@@ -12,7 +12,15 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { apiError, ApiErrorCode, noContent } from '@selvajs/server/api';
+import {
+	apiError,
+	ApiErrorCode,
+	noContent,
+	parseBody,
+	parseParam,
+	shaped,
+	shapedCollection
+} from '@selvajs/server/api';
 import type { ApiHandler, ApiRequest } from '@selvajs/server/api';
 import { CreateShareLinkInputSchema, DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selvajs/platform';
 import type { ShareLink } from '@selvajs/platform';
@@ -20,7 +28,6 @@ import { GuidSchema } from '@selvajs/platform/definitions';
 import { requireEditableDefinition } from '../../access.server';
 import { hashToken, mintRawToken } from '../../shareLinks/token.server';
 import { parseListOptions } from '../../pagination.server';
-import { parseBody, parseParam, shaped, shapedCollection } from '../v1/route';
 import { CreatedShareLinkResponseSchema, ShareLinkResponseSchema } from '../v1/responses';
 import { requireCaller } from '../callers';
 

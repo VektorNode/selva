@@ -6,7 +6,16 @@
  * A 403 anywhere here would confirm a guid exists across a tenant boundary.
  */
 
-import { apiError, ApiErrorCode, collection, created, noContent } from '@selvajs/server/api';
+import {
+	apiError,
+	ApiErrorCode,
+	collection,
+	created,
+	formText,
+	noContent,
+	parseParam,
+	requireUpload
+} from '@selvajs/server/api';
 import type { ApiHandler } from '@selvajs/server/api';
 import { GuidSchema } from '@selvajs/platform/definitions';
 import { requireEditableDefinition } from '../../access.server';
@@ -15,7 +24,6 @@ import { resolveServerForOrg } from '../../compute/resolve.server';
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import { getVisibleDefinition, loadVisibleVersion } from '../../definitions/visibility.server';
 import { parseListOptions } from '../../pagination.server';
-import { formText, parseParam, requireUpload } from '../v1/route';
 import { requireCaller } from '../callers';
 import { definitionService } from './services';
 

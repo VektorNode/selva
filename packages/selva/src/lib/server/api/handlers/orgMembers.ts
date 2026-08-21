@@ -11,7 +11,7 @@
  * demoting them does.
  */
 
-import { apiError, ApiErrorCode, noContent } from '@selvajs/server/api';
+import { apiError, ApiErrorCode, noContent, parseBody, requireParams } from '@selvajs/server/api';
 import type { ApiHandler, ApiRequest } from '@selvajs/server/api';
 import {
 	MEMBER_ASSIGNABLE_PERMISSIONS,
@@ -25,7 +25,6 @@ import {
 } from '@selvajs/platform';
 import { requireManageOrgMembers, requireActingOrg } from '../../access.server';
 import { UpdateOrgMemberBodySchema } from '../v1/bodies';
-import { parseBody, requireParams } from '../v1/route';
 
 const ROSTER_PAGE_LIMIT = 200;
 // Runaway guard against an adapter returning a non-advancing cursor. Matches
