@@ -1,5 +1,13 @@
 # @selvajs/platform
 
+## 0.19.1
+
+### Patch Changes
+
+- 6fa6b27: Add ESLint configs and lint scripts. Build output and published files are unchanged.
+- Updated dependencies [6fa6b27]
+  - @selvajs/schemas@5.0.1
+
 ## 0.19.0
 
 ### Minor Changes
