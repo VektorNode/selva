@@ -19,11 +19,11 @@ import {
 	seedAcme,
 	seedBigClient,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { PATCH } from '../+server.js';
+import { updateOrgMember } from '$lib/server/api/handlers/orgMembers.js';
 
 let tp: TestProviders | null = null;
 
@@ -47,7 +47,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 
 		const ownerLocals = await actAs(tp, owner.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: ownerLocals,
 			params: { orgId: acme.id, userId: bob.id },
 			body: { role: 'admin' }
@@ -63,7 +63,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 		const { acme, alice, bob } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: aliceLocals,
 			params: { orgId: acme.id, userId: bob.id },
 			body: { role: 'admin' }
@@ -79,7 +79,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 		const { acme, alice, bob } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: aliceLocals,
 			params: { orgId: acme.id, userId: bob.id },
 			body: { permissions: ['manage_definitions', 'manage_projects'] }
@@ -97,7 +97,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 		const { acme, alice, bob } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: aliceLocals,
 			params: { orgId: acme.id, userId: bob.id },
 			body: { permissions: ['manage_org_members'] }
@@ -111,7 +111,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 		const { carol } = await seedBigClient(tp);
 		const carolLocals = await actAs(tp, carol.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: carolLocals,
 			params: { orgId: acme.id, userId: bob.id },
 			body: { role: 'admin' }
@@ -130,7 +130,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 
 		const ownerLocals = await actAs(tp, owner.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: ownerLocals,
 			params: { orgId: org.id, userId: owner.id },
 			body: { role: 'member' }
@@ -150,7 +150,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 		const ownerLocals = await actAs(tp, owner.id);
 
 		// Promote Bob to owner (now 2 owners)
-		const promote = await call(PATCH, {
+		const promote = await callHandler(updateOrgMember, {
 			locals: ownerLocals,
 			params: { orgId: acme.id, userId: bob.id },
 			body: { role: 'owner' }
@@ -158,7 +158,7 @@ describe('PATCH /api/orgs/[orgId]/members/[userId]', () => {
 		expect(promote.status).toBe(204);
 
 		// Now demote original owner (Bob remains as second owner)
-		const demote = await call(PATCH, {
+		const demote = await callHandler(updateOrgMember, {
 			locals: ownerLocals,
 			params: { orgId: acme.id, userId: owner.id },
 			body: { role: 'member' }

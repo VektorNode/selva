@@ -17,10 +17,10 @@ import {
 	seedOrgMember,
 	seedUser,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { POST } from '../+server.js';
+import { createInvite } from '$lib/server/api/handlers/invites.js';
 
 let tp: TestProviders | null = null;
 
@@ -39,7 +39,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — org role ceiling', () => {
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createInvite, {
 			locals,
 			params: { orgId: acme.id },
 			body: { email: 'coup@acme.test', orgRole: 'owner', permissions: [] }
@@ -58,7 +58,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — org role ceiling', () => {
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createInvite, {
 			locals,
 			params: { orgId: acme.id },
 			body: { email: 'second-admin@acme.test', orgRole: 'admin', permissions: [] }
@@ -74,7 +74,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — org role ceiling', () => {
 		await seedOrgMember(tp, { orgId: acme.id, userId: founder.id, role: 'owner' });
 		const locals = await actAs(tp, founder.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createInvite, {
 			locals,
 			params: { orgId: acme.id },
 			body: { email: 'cofounder@acme.test', orgRole: 'owner', permissions: [] }
@@ -92,7 +92,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — org role ceiling', () => {
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createInvite, {
 			locals,
 			params: { orgId: acme.id },
 			body: { email: 'newhire@acme.test', orgRole: 'member', permissions: [] }

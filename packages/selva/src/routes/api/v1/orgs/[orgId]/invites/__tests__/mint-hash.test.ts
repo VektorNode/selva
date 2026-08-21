@@ -16,10 +16,10 @@ import {
 	freshProviders,
 	seedAcme,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { GET, POST } from '../+server.js';
+import { listInvites, createInvite } from '$lib/server/api/handlers/invites.js';
 import { hashToken } from '$lib/server/invites/token.server.js';
 
 let tp: TestProviders | null = null;
@@ -37,7 +37,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — raw-token-once + hashed-at-rest'
 		const { alice, acme } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createInvite, {
 			locals: aliceLocals,
 			params: { orgId: acme.id },
 			body: { email: 'newhire@acme.test', orgRole: 'member', permissions: [] }
@@ -64,7 +64,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — raw-token-once + hashed-at-rest'
 		const { alice, acme } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createInvite, {
 			locals: aliceLocals,
 			params: { orgId: acme.id },
 			body: { email: 'newhire@acme.test', orgRole: 'member', permissions: [] }
@@ -90,18 +90,18 @@ describe('GET /api/v1/orgs/{orgId}/invites — listing strips tokenHash', () => 
 		const aliceLocals = await actAs(tp, alice.id);
 
 		// Mint two invites so the listing is non-empty.
-		await call(POST, {
+		await callHandler(createInvite, {
 			locals: aliceLocals,
 			params: { orgId: acme.id },
 			body: { email: 'one@acme.test', orgRole: 'member', permissions: [] }
 		});
-		await call(POST, {
+		await callHandler(createInvite, {
 			locals: aliceLocals,
 			params: { orgId: acme.id },
 			body: { email: 'two@acme.test', orgRole: 'member', permissions: [] }
 		});
 
-		const res = await call(GET, { locals: aliceLocals, params: { orgId: acme.id } });
+		const res = await callHandler(listInvites, { locals: aliceLocals, params: { orgId: acme.id } });
 		expect(res.status).toBe(200);
 		const items = (res.json as { items: Array<Record<string, unknown>> }).items;
 		expect(items.length).toBeGreaterThanOrEqual(2);

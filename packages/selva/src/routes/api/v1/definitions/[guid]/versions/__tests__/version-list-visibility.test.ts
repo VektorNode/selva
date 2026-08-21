@@ -18,10 +18,10 @@ import {
 	seedProjectMember,
 	seedDefinition,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { GET } from '../+server.js';
+import { listVersions } from '$lib/server/api/handlers/definitionVersions.js';
 
 let tp: TestProviders | null = null;
 
@@ -54,7 +54,7 @@ describe('GET /api/v1/definitions/{guid}/versions — visibility', () => {
 		await seedOrgMember(tp, { orgId: other.id, userId: mallory.id, role: 'owner' });
 		const locals = await actAs(tp, mallory.id);
 
-		const res = await call(GET, { locals, params: { guid: def.record.guid } });
+		const res = await callHandler(listVersions, { locals, params: { guid: def.record.guid } });
 
 		// 403 would confirm the guid resolves to a real definition.
 		expect(res.status).toBe(404);
@@ -68,7 +68,7 @@ describe('GET /api/v1/definitions/{guid}/versions — visibility', () => {
 		await seedOrgMember(tp, { orgId: other.id, userId: mallory.id, role: 'owner' });
 		const locals = await actAs(tp, mallory.id);
 
-		const res = await call(GET, {
+		const res = await callHandler(listVersions, {
 			locals,
 			params: { guid: '11111111-2222-3333-4444-555555555555' }
 		});
@@ -92,7 +92,7 @@ describe('GET /api/v1/definitions/{guid}/versions — visibility', () => {
 		const def = await seedDefinition(tp, { projectId: project.id, ownerId: alice.id });
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(GET, { locals, params: { guid: def.record.guid } });
+		const res = await callHandler(listVersions, { locals, params: { guid: def.record.guid } });
 
 		expect(res.status).toBe(200);
 		expect((res.json as { items: unknown[] }).items.length).toBeGreaterThan(0);

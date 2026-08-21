@@ -21,10 +21,10 @@ import {
 	seedOrgMember,
 	seedUser,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { DELETE } from '../+server.js';
+import { removeOrgMember } from '$lib/server/api/handlers/orgMembers.js';
 
 let tp: TestProviders | null = null;
 
@@ -65,7 +65,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () =>
 		// A second owner, so the sole-owner check cannot be what refuses.
 		await seedOwner(acme.id, 'coowner@acme.test');
 
-		const res = await call(DELETE, {
+		const res = await callHandler(removeOrgMember, {
 			locals: await actAs(tp, alice.id),
 			params: { orgId: acme.id, userId: owner.id }
 		});
@@ -81,7 +81,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () =>
 
 		// The positive control: the gate must narrow to non-owners, not deny
 		// owner removal outright.
-		const res = await call(DELETE, {
+		const res = await callHandler(removeOrgMember, {
 			locals: await actAs(tp, owner.id),
 			params: { orgId: acme.id, userId: coOwner.id }
 		});
@@ -102,7 +102,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () =>
 
 		// The other control: the new gate keys on the *target* being an owner, so
 		// ordinary offboarding by an admin must still work.
-		const res = await call(DELETE, {
+		const res = await callHandler(removeOrgMember, {
 			locals: await actAs(tp, admin.id),
 			params: { orgId: acme.id, userId: bob.id }
 		});
@@ -115,7 +115,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () =>
 		const { acme } = await seedAcme(tp);
 		const owner = await seedOwner(acme.id, 'owner@acme.test');
 
-		const res = await call(DELETE, {
+		const res = await callHandler(removeOrgMember, {
 			locals: await actAs(tp, owner.id),
 			params: { orgId: acme.id, userId: owner.id }
 		});
@@ -144,7 +144,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () =>
 
 		// An owner removing a co-owner; with the single-page read this came back
 		// 409 ("sole owner") even though the co-owner is right there on page two.
-		const res = await call(DELETE, {
+		const res = await callHandler(removeOrgMember, {
 			locals: await actAs(tp, owner.id),
 			params: { orgId: acme.id, userId: coOwner.id }
 		});

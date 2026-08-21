@@ -48,7 +48,7 @@ function friendlyConstraintMessage(raw: string): string | null {
  * unreachable or serving an unreadable schema is operator-side (503); a schema
  * this app cannot parse is the caller's file (422).
  */
-function mapAppError(err: unknown): ApiError | undefined {
+export function mapAppError(err: unknown): ApiError | undefined {
 	// The access guards in `access.server.ts` throw SvelteKit's `error()`, and
 	// must keep doing so: page loads share them and need SvelteKit to render
 	// the failure. Without this branch every 403 from a guard would miss

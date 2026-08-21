@@ -24,10 +24,10 @@ import {
 	seedProject,
 	grantPlatformPermissions,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { POST } from '../+server.js';
+import { reclaimProject } from '$lib/server/api/handlers/reclaim.js';
 
 let tp: TestProviders | null = null;
 
@@ -51,7 +51,7 @@ describe('POST /api/v1/projects/{id}/reclaim — audit trail', () => {
 		const { acme, alice, bob, alicesPrivate } = await seedAcme(tp);
 		await tp.config.data.orgs.updateOrgMemberRole(SYSTEM_CONTEXT, acme.id, bob.id, 'owner');
 
-		const res = await call(POST, {
+		const res = await callHandler(reclaimProject, {
 			locals: await actAs(tp, bob.id),
 			params: { id: alicesPrivate.id }
 		});
@@ -75,7 +75,7 @@ describe('POST /api/v1/projects/{id}/reclaim — audit trail', () => {
 		const { acme, bob, alicesPrivate } = await seedAcme(tp);
 		await tp.config.data.orgs.updateOrgMemberRole(SYSTEM_CONTEXT, acme.id, bob.id, 'owner');
 
-		await call(POST, {
+		await callHandler(reclaimProject, {
 			locals: await actAs(tp, bob.id),
 			params: { id: alicesPrivate.id }
 		});
@@ -102,7 +102,7 @@ describe('POST /api/v1/projects/{id}/reclaim — audit trail', () => {
 		await tp.config.data.orgs.updateOrgMemberRole(SYSTEM_CONTEXT, acme.id, bob.id, 'owner');
 		await grantPlatformPermissions(tp, bob.id, ['instance_admin']);
 
-		const res = await call(POST, {
+		const res = await callHandler(reclaimProject, {
 			locals: await actAs(tp, bob.id),
 			params: { id: platformProject.id }
 		});

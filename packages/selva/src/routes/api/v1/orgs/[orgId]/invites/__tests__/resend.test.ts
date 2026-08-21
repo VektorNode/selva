@@ -15,11 +15,10 @@ import {
 	seedAcme,
 	seedOrg,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { POST as MINT } from '../+server.js';
-import { POST as RESEND } from '../[id]/resend/+server.js';
+import { createInvite, resendInvite } from '$lib/server/api/handlers/invites.js';
 import { hashToken } from '$lib/server/invites/token.server.js';
 
 let tp: TestProviders | null = null;
@@ -34,7 +33,7 @@ afterEach(async () => {
 type TestLocals = Awaited<ReturnType<typeof actAs>>;
 
 async function mint(orgId: string, locals: TestLocals, body: Record<string, unknown>) {
-	const res = await call(MINT, { locals, params: { orgId }, body });
+	const res = await callHandler(createInvite, { locals, params: { orgId }, body });
 	expect(res.status).toBe(201);
 	const json = res.json as { id: string; acceptUrl: string; delivery: string };
 	return { ...json, token: new URL(json.acceptUrl).searchParams.get('token')! };
@@ -52,7 +51,7 @@ describe('POST /api/v1/orgs/{orgId}/invites/{id}/resend', () => {
 			permissions: []
 		});
 
-		const res = await call(RESEND, {
+		const res = await callHandler(resendInvite, {
 			locals,
 			params: { orgId: acme.id, id: original.id }
 		});
@@ -84,7 +83,10 @@ describe('POST /api/v1/orgs/{orgId}/invites/{id}/resend', () => {
 			permissions: ['manage_projects']
 		});
 
-		const res = await call(RESEND, { locals, params: { orgId: acme.id, id: original.id } });
+		const res = await callHandler(resendInvite, {
+			locals,
+			params: { orgId: acme.id, id: original.id }
+		});
 		const body = res.json as {
 			email: string;
 			orgRole: string;
@@ -111,7 +113,7 @@ describe('POST /api/v1/orgs/{orgId}/invites/{id}/resend', () => {
 			permissions: []
 		});
 
-		const res = await call(RESEND, {
+		const res = await callHandler(resendInvite, {
 			locals,
 			params: { orgId: other.id, id: original.id }
 		});

@@ -17,11 +17,14 @@ import {
 	seedDefinition,
 	seedProjectMember,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { GET, POST } from '../+server.js';
-import { DELETE } from '../[linkId]/+server.js';
+import {
+	listShareLinks,
+	createShareLink,
+	revokeShareLink
+} from '$lib/server/api/handlers/shareLinks.js';
 import { DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selvajs/platform';
 
 let tp: TestProviders | null = null;
@@ -40,7 +43,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createShareLink, {
 			locals: aliceLocals,
 			params: { guid: def.record.guid },
 			body: { channel: 'live', allowSolve: true }
@@ -60,7 +63,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createShareLink, {
 			locals: aliceLocals,
 			params: { guid: def.record.guid },
 			body: { channel: 'live', allowSolve: true, maxSolves: null }
@@ -76,13 +79,16 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
 
-		await call(POST, {
+		await callHandler(createShareLink, {
 			locals: aliceLocals,
 			params: { guid: def.record.guid },
 			body: { channel: 'live', allowSolve: true }
 		});
 
-		const list = await call(GET, { locals: aliceLocals, params: { guid: def.record.guid } });
+		const list = await callHandler(listShareLinks, {
+			locals: aliceLocals,
+			params: { guid: def.record.guid }
+		});
 		expect(list.status).toBe(200);
 		const body = list.json as { items: Array<Record<string, unknown>> };
 		expect(body.items.length).toBe(1);
@@ -96,7 +102,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const bobLocals = await actAs(tp, bob.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createShareLink, {
 			locals: bobLocals,
 			params: { guid: def.record.guid },
 			body: { channel: 'live', allowSolve: true }
@@ -110,7 +116,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 		const { alicesCommonsDef } = await seedCommons(tp, { acmeId: acme.id, aliceId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createShareLink, {
 			locals: aliceLocals,
 			params: { guid: alicesCommonsDef.record.guid },
 			body: { channel: 'live', allowSolve: true }
@@ -127,7 +133,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 		});
 		const peterLocals = await actAs(tp, peter.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createShareLink, {
 			locals: peterLocals,
 			params: { guid: alicesCommonsDef.record.guid },
 			body: { channel: 'live', allowSolve: true }
@@ -146,7 +152,7 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const bobLocals = await actAs(tp, bob.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createShareLink, {
 			locals: bobLocals,
 			params: { guid: def.record.guid },
 			body: { channel: 'live', allowSolve: true }
@@ -162,20 +168,23 @@ describe('DELETE /api/definitions/[guid]/share-links/[linkId]', () => {
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
 
-		const mint = await call(POST, {
+		const mint = await callHandler(createShareLink, {
 			locals: aliceLocals,
 			params: { guid: def.record.guid },
 			body: { channel: 'live', allowSolve: true }
 		});
 		const linkId = (mint.json as { link: { id: string } }).link.id;
 
-		const del = await call(DELETE, {
+		const del = await callHandler(revokeShareLink, {
 			locals: aliceLocals,
 			params: { guid: def.record.guid, linkId }
 		});
 		expect(del.status).toBe(204);
 
-		const list = await call(GET, { locals: aliceLocals, params: { guid: def.record.guid } });
+		const list = await callHandler(listShareLinks, {
+			locals: aliceLocals,
+			params: { guid: def.record.guid }
+		});
 		const body = list.json as { items: Array<unknown> };
 		expect(body.items).toHaveLength(0);
 	});
@@ -187,7 +196,7 @@ describe('DELETE /api/definitions/[guid]/share-links/[linkId]', () => {
 		const defB = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		const aliceLocals = await actAs(tp, alice.id);
 
-		const mint = await call(POST, {
+		const mint = await callHandler(createShareLink, {
 			locals: aliceLocals,
 			params: { guid: defA.record.guid },
 			body: { channel: 'live', allowSolve: true }
@@ -195,7 +204,7 @@ describe('DELETE /api/definitions/[guid]/share-links/[linkId]', () => {
 		const linkId = (mint.json as { link: { id: string } }).link.id;
 
 		// linkId belongs to defA; we ask DELETE against defB.
-		const del = await call(DELETE, {
+		const del = await callHandler(revokeShareLink, {
 			locals: aliceLocals,
 			params: { guid: defB.record.guid, linkId }
 		});

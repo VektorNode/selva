@@ -11,14 +11,14 @@
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { POST as createDefinition } from '../+server.js';
+import { createDefinition } from '$lib/server/api/handlers/definitions.js';
 
-type CreateDefinitionEvent = Parameters<typeof createDefinition>[0];
 import {
 	freshProviders,
 	seedAcme,
 	seedDefinition,
 	actAs,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
 import { SYSTEM_CONTEXT, type ComputeServerConfig } from '@selvajs/platform';
@@ -75,19 +75,15 @@ function mockComputeNoSchema(): void {
 
 /**
  * `locals` must carry the whole shape `actAs` returns, not just `{ user, ctx }`
- * — the mounted handler builds its deps from `locals.providers`, so a partial
- * fixture fails inside `depsFromConfig` before the handler runs.
+ * — `callHandler` builds the handler's deps from `locals.providers`, so a
+ * partial fixture fails inside `depsFromConfig` before the handler runs.
  */
-function createEvent(
-	locals: Awaited<ReturnType<typeof actAs>>,
-	form: FormData
-): CreateDefinitionEvent {
-	return {
-		request: new Request('http://test.local/api/definitions', { method: 'POST', body: form }),
+function upload(locals: Awaited<ReturnType<typeof actAs>>, form: FormData) {
+	return callHandler(createDefinition, {
 		locals,
-		params: {},
-		url: new URL('http://test.local/api/definitions')
-	} as unknown as CreateDefinitionEvent;
+		url: 'http://test.local/api/v1/definitions',
+		body: form
+	});
 }
 
 function uploadForm(projectId: string): FormData {
@@ -99,20 +95,13 @@ function uploadForm(projectId: string): FormData {
 }
 
 /**
- * Accepts either failure shape.
- *
- * The route is mounted, so failures come back as a `Response` carrying the
- * error envelope. It still catches a thrown `HttpError`: the guards throw, and
- * a regression that lets one escape the binding should fail on the status here,
- * not silently pass because nothing was thrown.
+ * `runHandler` folds every failure — including the `HttpError` the access
+ * guards throw — into a result carrying the error envelope, so a status is
+ * always returned rather than sometimes thrown. Asserting on it directly means
+ * an unexpected throw fails the test instead of being absorbed.
  */
-async function expectStatus(promise: Response | Promise<Response>, status: number): Promise<void> {
-	try {
-		const res = await promise;
-		expect(res.status).toBe(status);
-	} catch (err) {
-		expect((err as { status?: number }).status).toBe(status);
-	}
+async function expectStatus(promise: Promise<{ status: number }>, status: number): Promise<void> {
+	expect((await promise).status).toBe(status);
 }
 
 describe('definition upload — schema validation gate', () => {
@@ -125,8 +114,9 @@ describe('definition upload — schema validation gate', () => {
 		const schema = { name: 'Test', inputs: [], outputs: [] };
 		mockComputeSchemaOk(schema);
 
-		const res = await createDefinition(createEvent(locals, uploadForm(alicesPrivate.id)));
-		const body = (await res.json()) as { guid: string; version: { id: string } };
+		const res = await upload(locals, uploadForm(alicesPrivate.id));
+		expect(res.status).toBe(201);
+		const body = res.json as { guid: string; version: { id: string } };
 
 		const stored = await tp.config.data.definitions.getVersion(locals.ctx, body.version.id);
 		expect(stored?.schema).toEqual(schema);
@@ -141,7 +131,7 @@ describe('definition upload — schema validation gate', () => {
 
 		mockComputeUnreachable();
 
-		await expectStatus(createDefinition(createEvent(locals, uploadForm(alicesPrivate.id))), 503);
+		await expectStatus(upload(locals, uploadForm(alicesPrivate.id)), 503);
 
 		// Nothing written: no definition in the project.
 		const page = await tp.config.data.definitions.listByProject(locals.ctx, alicesPrivate.id, {
@@ -158,7 +148,7 @@ describe('definition upload — schema validation gate', () => {
 
 		mockComputeNoSchema();
 
-		await expectStatus(createDefinition(createEvent(locals, uploadForm(alicesPrivate.id))), 422);
+		await expectStatus(upload(locals, uploadForm(alicesPrivate.id)), 422);
 
 		const page = await tp.config.data.definitions.listByProject(locals.ctx, alicesPrivate.id, {
 			includePending: true
@@ -175,7 +165,7 @@ describe('definition upload — schema validation gate', () => {
 		// fetch must never be reached; if it is, the test should still fail loudly.
 		const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-		await expectStatus(createDefinition(createEvent(locals, uploadForm(alicesPrivate.id))), 503);
+		await expectStatus(upload(locals, uploadForm(alicesPrivate.id)), 503);
 		expect(fetchSpy).not.toHaveBeenCalled();
 
 		const page = await tp.config.data.definitions.listByProject(locals.ctx, alicesPrivate.id, {

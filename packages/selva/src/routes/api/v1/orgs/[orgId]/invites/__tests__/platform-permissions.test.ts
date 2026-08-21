@@ -15,11 +15,11 @@ import {
 	freshProviders,
 	seedAcme,
 	actAs,
-	call,
+	callHandler,
 	grantPlatformPermissions,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { POST } from '../+server.js';
+import { createInvite } from '$lib/server/api/handlers/invites.js';
 
 let tp: TestProviders | null = null;
 
@@ -37,7 +37,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — platform permissions', () => {
 		await grantPlatformPermissions(tp, alice.id, ['instance_admin']);
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createInvite, {
 			locals,
 			params: { orgId: acme.id },
 			body: {
@@ -64,7 +64,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — platform permissions', () => {
 		const { bob, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, bob.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createInvite, {
 			locals,
 			params: { orgId: acme.id },
 			body: { email: 'escalation@acme.test', orgRole: 'member', permissions: ['instance_admin'] }
@@ -81,7 +81,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — platform permissions', () => {
 		await grantPlatformPermissions(tp, alice.id, ['instance_admin']);
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createInvite, {
 			locals,
 			params: { orgId: acme.id },
 			body: {

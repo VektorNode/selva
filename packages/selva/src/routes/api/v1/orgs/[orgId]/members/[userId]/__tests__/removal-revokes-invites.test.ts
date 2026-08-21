@@ -16,11 +16,11 @@ import {
 	seedOrgMember,
 	seedUser,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { DELETE } from '../+server.js';
-import { POST as MINT_INVITE } from '../../../invites/+server.js';
+import { removeOrgMember } from '$lib/server/api/handlers/orgMembers.js';
+import { createInvite } from '$lib/server/api/handlers/invites.js';
 
 let tp: TestProviders | null = null;
 
@@ -38,7 +38,7 @@ async function mintInvite(
 	orgId: string,
 	email: string
 ): Promise<void> {
-	const res = await call(MINT_INVITE, {
+	const res = await callHandler(createInvite, {
 		locals,
 		params: { orgId },
 		body: { email, orgRole: 'member', permissions: [] }
@@ -53,7 +53,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — pending invites', () 
 		const locals = await actAs(tp, alice.id);
 		await mintInvite(tp, locals, acme.id, bob.email);
 
-		const res = await call(DELETE, {
+		const res = await callHandler(removeOrgMember, {
 			locals,
 			params: { orgId: acme.id, userId: bob.id }
 		});
@@ -72,7 +72,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — pending invites', () 
 		await mintInvite(tp, locals, acme.id, bob.email);
 		await mintInvite(tp, locals, acme.id, carol.email);
 
-		await call(DELETE, { locals, params: { orgId: acme.id, userId: bob.id } });
+		await callHandler(removeOrgMember, { locals, params: { orgId: acme.id, userId: bob.id } });
 
 		const stored = await tp.config.data.invites.listByOrg(SYSTEM_CONTEXT, acme.id, { limit: 100 });
 		expect(stored.items.map((i) => i.email)).toEqual([carol.email]);
@@ -84,7 +84,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — pending invites', () 
 		const locals = await actAs(tp, alice.id);
 		await mintInvite(tp, locals, acme.id, bob.email);
 
-		await call(DELETE, { locals, params: { orgId: acme.id, userId: bob.id } });
+		await callHandler(removeOrgMember, { locals, params: { orgId: acme.id, userId: bob.id } });
 
 		const revoked = tp.events.filter((e) => e.type === 'invite.revoked');
 		expect(revoked).toMatchObject([{ orgId: acme.id, actorId: alice.id }]);
@@ -95,7 +95,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — pending invites', () 
 		const { acme, alice, bob } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(DELETE, {
+		const res = await callHandler(removeOrgMember, {
 			locals,
 			params: { orgId: acme.id, userId: bob.id }
 		});

@@ -17,10 +17,10 @@ import {
 	seedUser,
 	seedOrgMember,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { PATCH } from '../+server.js';
+import { updateProjectMemberRole } from '$lib/server/api/handlers/projectMembers.js';
 
 let tp: TestProviders | null = null;
 
@@ -44,7 +44,7 @@ describe('PATCH /api/v1/projects/{id}/members/{userId} — owner count', () => {
 		await seedProjectMember(tp, { projectId: project.id, userId: alice.id, role: 'owner' });
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateProjectMemberRole, {
 			locals,
 			params: { id: project.id, userId: alice.id },
 			body: { role: 'viewer' }
@@ -75,14 +75,14 @@ describe('PATCH /api/v1/projects/{id}/members/{userId} — owner count', () => {
 		await seedProjectMember(tp, { projectId: project.id, userId: carol.id, role: 'owner' });
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateProjectMemberRole, {
 			locals,
 			params: { id: project.id, userId: carol.id },
 			body: { role: 'viewer' }
 		});
 		expect(res.status).toBe(409);
 
-		const confirmed = await call(PATCH, {
+		const confirmed = await callHandler(updateProjectMemberRole, {
 			locals,
 			params: { id: project.id, userId: carol.id },
 			url: 'http://test.local/?confirm=true',
@@ -107,7 +107,7 @@ describe('PATCH /api/v1/projects/{id}/members/{userId} — owner count', () => {
 		await seedProjectMember(tp, { projectId: project.id, userId: carol.id, role: 'editor' });
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateProjectMemberRole, {
 			locals,
 			params: { id: project.id, userId: carol.id },
 			body: { role: 'viewer' }
@@ -131,7 +131,7 @@ describe('PATCH /api/v1/projects/{id}/members/{userId} — owner count', () => {
 		await seedProjectMember(tp, { projectId: project.id, userId: carol.id, role: 'editor' });
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateProjectMemberRole, {
 			locals,
 			params: { id: project.id, userId: carol.id },
 			body: { role: 'owner' }

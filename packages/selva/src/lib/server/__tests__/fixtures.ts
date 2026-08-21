@@ -55,7 +55,10 @@ import {
 	type TenancyMode
 } from '@selvajs/platform';
 import { DefinitionService, type CreateDefinitionRecord } from '@selvajs/server/definitions';
-import { hashToken, mintRawToken } from '../shareLinks/token.server.js';
+import { depsFromConfig, runHandler, type ApiHandler, type ApiRequest } from '@selvajs/server/api';
+import { mapAppError } from '../api/sveltekit.js';
+import { hashToken, mintRawToken, shareLinkCodec } from '../shareLinks/token.server.js';
+import { inviteCodec } from '../invites/token.server.js';
 import { setTestProviders, clearTestProviders } from './test-providers.js';
 import { accessDepsFromConfig, type AccessDeps } from '../access.server.js';
 
@@ -787,6 +790,80 @@ export async function call(handler: AnyHandler, opts: CallOpts): Promise<CallRes
 		}
 		throw err;
 	}
+}
+
+// ----------------------------------------------------------------------------
+// Direct ApiHandler invocation — no SvelteKit event.
+// ----------------------------------------------------------------------------
+
+export interface CallHandlerOpts {
+	/** Same `actAs`/`anon` value as `call`, so a test converts by swapping the callee. */
+	locals: unknown;
+	params?: Record<string, string>;
+	url?: string;
+	body?: unknown;
+	headers?: Record<string, string>;
+}
+
+/**
+ * Invoke an `ApiHandler` directly, skipping the SvelteKit `+server.ts` binding.
+ *
+ * `call()` goes through `mount()`, which is the app's adapter: it builds an
+ * `ApiRequest` from a `RequestEvent` and folds this app's domain errors into the
+ * envelope. Handler tests that route through it are really testing the adapter
+ * too, which is what pins them to selva — the handler is portable, the event is
+ * not.
+ *
+ * This keeps `runHandler` and `mapAppError`, because those are the contract:
+ * `mapAppError` is what turns a guard's SvelteKit `error()` into an envelope,
+ * and dropping it would turn every guard rejection into a 500 and quietly make
+ * the status assertions meaningless. When these tests move into
+ * `@selvajs/server`, `mapAppError` is the one argument that has to travel with
+ * them or be replaced by the new host's equivalent.
+ */
+export async function callHandler(handler: ApiHandler, opts: CallHandlerOpts): Promise<CallResult> {
+	const url = new URL(opts.url ?? 'http://test.local/');
+	const init: RequestInit = {
+		method: opts.body !== undefined ? 'POST' : 'GET',
+		headers: opts.headers ?? {}
+	};
+	if (opts.body !== undefined) {
+		if (opts.body instanceof FormData) {
+			init.body = opts.body;
+		} else {
+			(init.headers as Record<string, string>)['content-type'] ??= 'application/json';
+			init.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
+		}
+	}
+
+	const locals = opts.locals as {
+		ctx?: RequestContext;
+		user?: AuthUser;
+		profile?: ReturnType<typeof emptyProfile>;
+		providers: SelvaConfig;
+		log?: typeof silentLog;
+	};
+
+	const req: ApiRequest = {
+		ctx: locals.ctx,
+		user: locals.user,
+		profile: locals.profile,
+		log: locals.log ?? silentLog,
+		params: opts.params ?? {},
+		url,
+		request: new Request(url.toString(), init),
+		// The app's own codec accessors, not fresh ones. A second codec built here
+		// would hash under a different secret than `seedShareLink` and the invite
+		// seeders use, so every token lookup would miss — and the tests would read
+		// as a broken handler rather than a broken fixture.
+		deps: depsFromConfig(
+			locals.providers,
+			{ definitions: new DefinitionService(locals.providers.data, locals.providers.storage) },
+			{ tokens: { shareLinks: shareLinkCodec(), invites: inviteCodec() } }
+		)
+	};
+
+	return readResponse(await runHandler(handler, req, { fallback: 'Test', mapError: mapAppError }));
 }
 
 async function readResponse(res: Response): Promise<CallResult> {

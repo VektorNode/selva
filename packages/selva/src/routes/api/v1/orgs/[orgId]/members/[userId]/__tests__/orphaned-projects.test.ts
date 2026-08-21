@@ -23,10 +23,10 @@ import {
 	seedProject,
 	seedProjectMember,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { DELETE } from '../+server.js';
+import { removeOrgMember } from '$lib/server/api/handlers/orgMembers.js';
 
 let tp: TestProviders | null = null;
 
@@ -68,7 +68,7 @@ describe('DELETE org member — projects left without an owner', () => {
 		});
 		await seedProjectMember(tp, { projectId: project.id, userId: bob.id, role: 'owner' });
 
-		const res = await call(DELETE, {
+		const res = await callHandler(removeOrgMember, {
 			locals: await actAs(tp, actor.id),
 			params: { orgId: acme.id, userId: bob.id }
 		});
@@ -100,7 +100,7 @@ describe('DELETE org member — projects left without an owner', () => {
 		await seedProjectMember(tp, { projectId: project.id, userId: alice.id, role: 'owner' });
 		await seedProjectMember(tp, { projectId: project.id, userId: bob.id, role: 'owner' });
 
-		const res = await call(DELETE, {
+		const res = await callHandler(removeOrgMember, {
 			locals: await actAs(tp, actor.id),
 			params: { orgId: acme.id, userId: bob.id }
 		});
@@ -126,7 +126,7 @@ describe('DELETE org member — projects left without an owner', () => {
 		await seedProjectMember(tp, { projectId: project.id, userId: alice.id, role: 'owner' });
 		await seedProjectMember(tp, { projectId: project.id, userId: bob.id, role: 'editor' });
 
-		const res = await call(DELETE, {
+		const res = await callHandler(removeOrgMember, {
 			locals: await actAs(tp, actor.id),
 			params: { orgId: acme.id, userId: bob.id }
 		});
@@ -153,7 +153,7 @@ describe('DELETE org member — projects left without an owner', () => {
 			ids.push(p.id);
 		}
 
-		await call(DELETE, {
+		await callHandler(removeOrgMember, {
 			locals: await actAs(tp, actor.id),
 			params: { orgId: acme.id, userId: bob.id }
 		});
@@ -179,7 +179,7 @@ describe('DELETE org member — projects left without an owner', () => {
 		});
 		await seedProjectMember(tp, { projectId: project.id, userId: bob.id, role: 'owner' });
 
-		await call(DELETE, {
+		await callHandler(removeOrgMember, {
 			locals: await actAs(tp, actor.id),
 			params: { orgId: acme.id, userId: bob.id }
 		});

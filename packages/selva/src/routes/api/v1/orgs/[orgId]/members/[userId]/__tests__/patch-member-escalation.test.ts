@@ -30,11 +30,11 @@ import {
 	seedOrgMember,
 	seedAcme,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { PATCH } from '../+server.js';
+import { updateOrgMember } from '$lib/server/api/handlers/orgMembers.js';
 
 let tp: TestProviders | null = null;
 
@@ -59,7 +59,7 @@ describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () 
 		tp = await freshProviders();
 		const { acme, admin } = await seedOrgWithOwnerAndAdmin();
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: await actAs(tp, admin.id),
 			params: { orgId: acme.id, userId: admin.id },
 			body: { role: 'owner' }
@@ -77,7 +77,7 @@ describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () 
 		await seedOrgMember(tp, { orgId: acme.id, userId: peer.id, role: 'admin' });
 
 		// Minting an owner indirectly is the same escalation, one step removed.
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: await actAs(tp, admin.id),
 			params: { orgId: acme.id, userId: peer.id },
 			body: { role: 'owner' }
@@ -92,7 +92,7 @@ describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () 
 		tp = await freshProviders();
 		const { acme, owner, admin } = await seedOrgWithOwnerAndAdmin();
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: await actAs(tp, admin.id),
 			params: { orgId: acme.id, userId: owner.id },
 			body: { role: 'member' }
@@ -107,7 +107,7 @@ describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () 
 		tp = await freshProviders();
 		const { acme, admin, member } = await seedOrgWithOwnerAndAdmin();
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: await actAs(tp, admin.id),
 			params: { orgId: acme.id, userId: member.id },
 			body: { role: 'owner' }
@@ -125,7 +125,7 @@ describe('PATCH member — an admin cannot cross the owner boundary (Q5.5)', () 
 		// The role branch must reject the whole request — not reject the role and
 		// then quietly apply the permissions. Grant-worthy perms are used here so
 		// that a fall-through would be visibly wrong rather than a no-op.
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: await actAs(tp, admin.id),
 			params: { orgId: acme.id, userId: member.id },
 			body: { role: 'owner', permissions: ['manage_definitions'] }
@@ -143,7 +143,7 @@ describe('PATCH member — what an admin legitimately may do (guards against ove
 		tp = await freshProviders();
 		const { acme, admin, member } = await seedOrgWithOwnerAndAdmin();
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: await actAs(tp, admin.id),
 			params: { orgId: acme.id, userId: member.id },
 			body: { permissions: ['manage_definitions', 'manage_projects'] }
@@ -163,7 +163,7 @@ describe('PATCH member — what an admin legitimately may do (guards against ove
 		// Even the OWNER cannot park an owner/admin-only permission on someone
 		// whose role is `member` — the role/permission sets must stay coherent,
 		// otherwise `member` becomes a de-facto admin without the role.
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: await actAs(tp, owner.id),
 			params: { orgId: acme.id, userId: member.id },
 			body: { permissions: ['manage_org_members'] }
@@ -181,7 +181,7 @@ describe('PATCH member — what an admin legitimately may do (guards against ove
 		// The `effectiveRole = patch.role ?? target.role` path: the permission is
 		// illegal for the CURRENT role but legal for the requested one, so the
 		// combined request must be judged against the new role.
-		const res = await call(PATCH, {
+		const res = await callHandler(updateOrgMember, {
 			locals: await actAs(tp, owner.id),
 			params: { orgId: acme.id, userId: member.id },
 			body: { role: 'admin', permissions: ['manage_org_members'] }

@@ -18,11 +18,10 @@ import {
 	seedProjectMember,
 	grantPlatformPermissions,
 	actAs,
-	call,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { POST } from '../+server.js';
-import { PATCH } from '../[id]/+server.js';
+import { createProject, updateProject } from '$lib/server/api/handlers/projects.js';
 
 let tp: TestProviders | null = null;
 
@@ -39,7 +38,7 @@ describe('platform visibility is instance-admin only', () => {
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(POST, {
+		const res = await callHandler(createProject, {
 			locals,
 			params: {},
 			body: { name: 'Sneaky', visibility: 'platform' }
@@ -65,7 +64,7 @@ describe('platform visibility is instance-admin only', () => {
 		await seedProjectMember(tp, { projectId: project.id, userId: alice.id, role: 'owner' });
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateProject, {
 			locals,
 			params: { id: project.id },
 			body: { visibility: 'platform' }
@@ -90,7 +89,7 @@ describe('platform visibility is instance-admin only', () => {
 		await seedProjectMember(tp, { projectId: project.id, userId: alice.id, role: 'owner' });
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateProject, {
 			locals,
 			params: { id: project.id },
 			body: { visibility: 'platform' }
@@ -111,7 +110,7 @@ describe('platform visibility is instance-admin only', () => {
 		await seedProjectMember(tp, { projectId: project.id, userId: alice.id, role: 'owner' });
 		const locals = await actAs(tp, alice.id);
 
-		const res = await call(PATCH, {
+		const res = await callHandler(updateProject, {
 			locals,
 			params: { id: project.id },
 			body: { visibility: 'org' }

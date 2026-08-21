@@ -22,9 +22,10 @@ import {
 	seedOrgMember,
 	seedProject,
 	actAs,
+	callHandler,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
-import { POST } from '../+server.js';
+import { createDefinition } from '$lib/server/api/handlers/definitions.js';
 
 let tp: TestProviders | null = null;
 
@@ -43,28 +44,12 @@ function uploadForm(): FormData {
 	return form;
 }
 
-/**
- * Invoked directly rather than through `call`, which serializes its `body` as
- * JSON — this route reads multipart form data.
- */
-async function callUpload(locals: unknown): Promise<{ status: number }> {
-	const url = new URL('http://test.local/api/v1/definitions');
-	const request = new Request(url.toString(), { method: 'POST', body: uploadForm() });
-	try {
-		const res = (await (POST as (e: unknown) => Promise<Response>)({
-			url,
-			params: {},
-			request,
-			locals,
-			setHeaders: () => {},
-			route: { id: null }
-		})) as Response;
-		return { status: res.status };
-	} catch (err) {
-		const e = err as { status?: number };
-		if (typeof e.status === 'number') return { status: e.status };
-		throw err;
-	}
+function callUpload(locals: unknown): Promise<{ status: number }> {
+	return callHandler(createDefinition, {
+		locals,
+		url: 'http://test.local/api/v1/definitions',
+		body: uploadForm()
+	});
 }
 
 describe('POST /api/v1/definitions — implicit project fallback', () => {
