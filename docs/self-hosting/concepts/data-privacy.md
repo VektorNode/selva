@@ -1,3 +1,10 @@
+---
+title: Data Privacy
+order: 9
+published: true
+description: 'What personal data a deployment holds, who owns the identity half, what erasure reaches, and where it cannot follow.'
+---
+
 # Data Privacy
 
 **Selva minimizes the personal data it holds, but it does hold some — and the operator is
