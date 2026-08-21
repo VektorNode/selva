@@ -11,6 +11,7 @@
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { listVisibleDefinitions } from '../visibility.server.js';
+import { depsFromConfig } from '@selvajs/server/api';
 import {
 	freshProviders,
 	seedOrg,
@@ -111,7 +112,11 @@ describe('listVisibleDefinitions query count', () => {
 		const { ctx } = await actAs(tp, user.id);
 
 		const counts = countStoreCalls(tp);
-		await listVisibleDefinitions({ ...ctx, actingOrgId: homeOrgId }, { limit: 50 });
+		await listVisibleDefinitions(
+			{ ...ctx, actingOrgId: homeOrgId },
+			{ limit: 50 },
+			depsFromConfig(tp.config)
+		);
 
 		// The two per-row reads must not appear at all — one call each of their
 		// bulk counterparts covers every org and project.
@@ -127,7 +132,11 @@ describe('listVisibleDefinitions query count', () => {
 		const { ctx: smallCtx } = await actAs(tp, small.user.id);
 
 		const smallCounts = countStoreCalls(tp);
-		await listVisibleDefinitions({ ...smallCtx, actingOrgId: small.homeOrgId }, { limit: 50 });
+		await listVisibleDefinitions(
+			{ ...smallCtx, actingOrgId: small.homeOrgId },
+			{ limit: 50 },
+			depsFromConfig(tp.config)
+		);
 		const smallMembershipReads = smallCounts.getOrgMembersFor + smallCounts.getProjectMembersFor;
 		vi.restoreAllMocks();
 
@@ -135,7 +144,11 @@ describe('listVisibleDefinitions query count', () => {
 		const { ctx: largeCtx } = await actAs(tp, large.user.id);
 
 		const largeCounts = countStoreCalls(tp);
-		await listVisibleDefinitions({ ...largeCtx, actingOrgId: large.homeOrgId }, { limit: 50 });
+		await listVisibleDefinitions(
+			{ ...largeCtx, actingOrgId: large.homeOrgId },
+			{ limit: 50 },
+			depsFromConfig(tp.config)
+		);
 		const largeMembershipReads = largeCounts.getOrgMembersFor + largeCounts.getProjectMembersFor;
 
 		expect(largeMembershipReads).toBe(smallMembershipReads);
@@ -149,7 +162,11 @@ describe('listVisibleDefinitions query count', () => {
 		const { ctx } = await actAs(tp, user.id);
 
 		const counts = countStoreCalls(tp);
-		await listVisibleDefinitions({ ...ctx, actingOrgId: homeOrgId }, { limit: 50 });
+		await listVisibleDefinitions(
+			{ ...ctx, actingOrgId: homeOrgId },
+			{ limit: 50 },
+			depsFromConfig(tp.config)
+		);
 
 		// `listProjects` is per-org by interface shape. It is a paged list, not a
 		// row lookup, so it stays O(orgs) rather than O(projects) — collapsing it

@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { listVisibleDefinitions } from '$lib/server/definitions/visibility.server';
+import { accessDepsFromConfig } from '$lib/server/access.server';
 import { renderThrown } from '@selvajs/server/logging';
 import type { DefinitionRecord, Project } from '@selvajs/platform';
 
@@ -16,7 +17,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 	try {
 		const { items: visibleRecords, projects: accessibleProjects } = await listVisibleDefinitions(
 			locals.ctx!,
-			{ limit: 200, statuses: ['published'] }
+			{ limit: 200, statuses: ['published'] },
+			accessDepsFromConfig(locals.providers)
 		);
 
 		const projectMap = Object.fromEntries(accessibleProjects.map((p) => [p.id, p]));

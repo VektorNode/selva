@@ -7,10 +7,12 @@ import type {
 	OrgRole,
 	PlatformPermission,
 	Project,
-	RequestContext
+	RequestContext,
+	SelvaConfig
 } from '@selvajs/platform';
 import {
 	ALL_PLATFORM_PERMISSIONS,
+	isFlagEnabled,
 	hasPermission,
 	canReclaim,
 	canCreateProject,
@@ -27,34 +29,46 @@ import {
 	type ProjectAccessInputBuilder
 } from '@selvajs/server/access';
 import type { SelvaDeps } from '@selvajs/server/api';
-import {
-	getProjectProvider,
-	getDefinitionMeta,
-	getOrganizationProvider,
-	getPlatformProjectGrantStore,
-	flag
-} from './providers.server.js';
 import { apiError, ApiErrorCode } from './api-errors.js';
 
 type AnyPermission = PlatformPermission | OrgPermission;
 
+/**
+ * What the permission-only guards read.
+ *
+ * `deps` is absent here on purpose: `requirePermission` and friends check
+ * `ctx.platformPermissions` and touch no store, so demanding providers from
+ * their callers — the ~20 admin routes and page loads that only ever ask "may
+ * this user do X?" — would be a cost with nothing behind it. The guards that do
+ * read stores take `HasDeps` instead, which requires them.
+ */
 interface Locals {
 	user?: AuthUser;
 	ctx?: RequestContext;
-	deps?: AccessDeps;
 }
+
+/**
+ * What a store-reading guard takes: identity plus the providers to read with.
+ *
+ * `ApiRequest` satisfies this structurally, so a mounted handler passes itself.
+ * Page loads pass `{ ...locals, deps: accessDepsFor(locals) }`.
+ */
+type ScopedLocals = Locals & HasDeps;
 
 /**
  * The stores a guard reads, injected rather than resolved.
  *
  * `ApiRequest` satisfies this structurally, so a mounted handler passes itself
- * and the guard runs against that request's providers. Every guard takes it
- * *optionally* and falls back to the module globals: the page loads that share
- * these guards have no `deps` to pass and must keep working untouched.
+ * and the guard runs against that request's providers.
  *
- * Without this a mounted handler's write path is injected while its guard's
- * read path is not — a split that produces correct results under one app and
- * reaches for the wrong provider set under a second.
+ * **Required, not optional.** These guards used to fall back to the app's module
+ * globals when no `deps` arrived, which meant importing this file pulled in
+ * `providers.server.ts` — and that module runs a top-level
+ * `await createSelvaProviders()`. Any handler importing a guard therefore booted
+ * the whole Selva provider stack, which is what kept these handlers from moving
+ * into `@selvajs/server`. Page loads get the globals-bound forms from
+ * `access-globals.server.ts` instead; the fallback lives there, at the one place
+ * that already knows which app it is.
  */
 export type AccessDeps = Pick<
 	SelvaDeps,
@@ -62,24 +76,40 @@ export type AccessDeps = Pick<
 >;
 
 interface HasDeps {
-	deps?: AccessDeps;
+	deps: AccessDeps;
 }
 
-function orgsOf(src?: HasDeps) {
-	return src?.deps?.orgs ?? getOrganizationProvider();
+/**
+ * Derive the stores a guard needs from a resolved config.
+ *
+ * Pure — it reads the config it is handed and nothing else, which is what keeps
+ * this module free of any import that boots the app. Page loads pass
+ * `locals.providers`; `hooks.server.ts` sets it on every request.
+ */
+export function accessDepsFromConfig(config: SelvaConfig): AccessDeps {
+	return {
+		orgs: config.data.orgs,
+		projects: config.data.projects,
+		definitionMeta: config.data.definitions,
+		platformProjectGrants: config.data.platformProjectGrants,
+		flag: (name) => isFlagEnabled(config, name)
+	};
 }
 
-function projectsOf(src?: HasDeps) {
-	return src?.deps?.projects ?? getProjectProvider();
+/** `locals` as a store-reading guard wants it. */
+export function scoped<L extends Locals & { providers: SelvaConfig }>(
+	locals: L
+): L & { deps: AccessDeps } {
+	return { ...locals, deps: accessDepsFromConfig(locals.providers) };
 }
 
-function definitionMetaOf(src?: HasDeps) {
-	return src?.deps?.definitionMeta ?? getDefinitionMeta();
-}
-
-function flagOf(src?: HasDeps) {
-	return src?.deps?.flag ?? flag;
-}
+// Accessors rather than `src.deps.orgs` inline: they keep the 17 call sites
+// below reading the same as before, and they are the single place that would
+// change if `AccessDeps` grew a store.
+const orgsOf = (src: HasDeps) => src.deps.orgs;
+const projectsOf = (src: HasDeps) => src.deps.projects;
+const definitionMetaOf = (src: HasDeps) => src.deps.definitionMeta;
+const flagOf = (src: HasDeps) => src.deps.flag;
 
 function requireAuthed(locals: Locals): { user: AuthUser; ctx: RequestContext } {
 	const { user, ctx } = locals;
@@ -223,7 +253,7 @@ async function contentCheck(check: () => Promise<boolean>): Promise<boolean> {
 async function loadProjectOr404(
 	ctx: RequestContext,
 	projectId: string,
-	src?: HasDeps
+	src: HasDeps
 ): Promise<Project> {
 	const project = await projectsOf(src).getProject(ctx, projectId);
 	if (!project) throw error(404, 'Project not found');
@@ -231,20 +261,16 @@ async function loadProjectOr404(
 }
 
 // Rule-input assembly (the "which rows does each visibility need" knowledge)
-// lives in `@selvajs/server/access`; this binding wires it to whichever
-// provider set the caller carries, falling back to the app's lazily
-// initialized globals.
-function accessInputsFor(src?: HasDeps) {
+// lives in `@selvajs/server/access`; this binding wires it to the provider set
+// the caller carries.
+function accessInputsFor(src: HasDeps) {
 	const readFlag = flagOf(src);
 	return createProjectAccessInputBuilder({
 		getProjectMember: (ctx, projectId, userId) =>
 			projectsOf(src).getProjectMember(ctx, projectId, userId),
 		getOrgMember: (ctx, orgId, userId) => orgsOf(src).getOrgMember(ctx, orgId, userId),
 		listPlatformGrants: (ctx, projectId) =>
-			(src?.deps?.platformProjectGrants ?? getPlatformProjectGrantStore()).listByProject(
-				ctx,
-				projectId
-			),
+			src.deps.platformProjectGrants.listByProject(ctx, projectId),
 		flags: () => ({
 			allowCrossOrgPublic: readFlag('ALLOW_CROSS_ORG_PUBLIC'),
 			enablePlatformProjects: readFlag('ENABLE_PLATFORM_PROJECTS')
@@ -255,8 +281,8 @@ function accessInputsFor(src?: HasDeps) {
 function buildProjectAccessInput(
 	ctx: RequestContext,
 	project: Project,
-	overrides?: Parameters<ProjectAccessInputBuilder['buildProjectAccessInput']>[2],
-	src?: HasDeps
+	src: HasDeps,
+	overrides?: Parameters<ProjectAccessInputBuilder['buildProjectAccessInput']>[2]
 ) {
 	return accessInputsFor(src).buildProjectAccessInput(ctx, project, overrides);
 }
@@ -269,23 +295,11 @@ function buildProjectAccessInput(
  * cross-org-public or platform project is visible at all.
  */
 export function projectAccessInputFromRowsWith(
-	src: HasDeps | undefined,
+	src: HasDeps,
 	...args: Parameters<ProjectAccessInputBuilder['projectAccessInputFromRows']>
 ) {
 	return accessInputsFor(src).projectAccessInputFromRows(...args);
 }
-
-/**
- * The globals-bound form, for the page loads that have no deps to pass.
- *
- * Deliberately a function, not `accessInputsFor().projectAccessInputFromRows`:
- * the const form ran `accessInputsFor()` at import time, which reads
- * `flagOf(undefined)` and captures the module globals before the composition
- * root has necessarily finished wiring them.
- */
-export const projectAccessInputFromRows: ProjectAccessInputBuilder['projectAccessInputFromRows'] = (
-	...args
-) => projectAccessInputFromRowsWith(undefined, ...args);
 
 /**
  * Gates creation of a *new* definition. Container projects require project
@@ -294,14 +308,14 @@ export const projectAccessInputFromRows: ProjectAccessInputBuilder['projectAcces
  * uploader becomes the owner.
  */
 export async function requireCanCreateDefinition(
-	locals: Locals,
+	locals: ScopedLocals,
 	projectId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId, locals);
 	const allowed = await contentCheck(async () => {
 		if (project.autoJoinOnUpload) return true;
-		return canEdit(await buildProjectAccessInput(ctx, project, undefined, locals));
+		return canEdit(await buildProjectAccessInput(ctx, project, locals));
 	});
 	if (!allowed) {
 		throw error(403, 'You do not have permission to upload definitions to this project.');
@@ -318,7 +332,7 @@ export async function requireCanCreateDefinition(
  *
  * Throws 401 unauthenticated, 403 when not a member.
  */
-export async function requireCanViewOrg(locals: Locals, orgId: string): Promise<AuthUser> {
+export async function requireCanViewOrg(locals: ScopedLocals, orgId: string): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await contentCheck(async () => {
 		const member = await orgsOf(locals).getOrgMember(ctx, orgId, ctx.userId);
@@ -334,7 +348,7 @@ export async function requireCanViewOrg(locals: Locals, orgId: string): Promise<
  * later without a schema migration.
  */
 export async function requireTargetIsOrgMember(
-	locals: Locals,
+	locals: ScopedLocals,
 	orgId: string,
 	targetUserId: string
 ): Promise<void> {
@@ -358,7 +372,7 @@ export async function canActorChangeOrgRole(
 	ctx: RequestContext,
 	orgId: string,
 	role: OrgRole,
-	src?: HasDeps
+	src: HasDeps
 ): Promise<boolean> {
 	if (role === 'member') return true;
 	const actorMember = await orgsOf(src).getOrgMember(ctx, orgId, ctx.userId);
@@ -370,7 +384,7 @@ export async function canActorChangeOrgRole(
  * handler can use its `orgId` without re-fetching.
  */
 export async function requireCanReclaim(
-	locals: Locals,
+	locals: ScopedLocals,
 	projectId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
@@ -404,7 +418,7 @@ export async function requireCanReclaim(
  * Tenancy is enforced via `actingOrgId`.
  */
 export async function requireCanCreateProject(
-	locals: Locals,
+	locals: ScopedLocals,
 	targetOrgId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext }> {
 	const { user, ctx } = requireAuthed(locals);
@@ -427,14 +441,14 @@ export async function requireCanCreateProject(
  * both callers share this; `action` only shapes the 403 message.
  */
 export async function requireCanManage(
-	locals: Locals,
+	locals: ScopedLocals,
 	projectId: string,
 	action: 'project' | 'members' = 'project'
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await managementBypassOrRun(ctx, async () => {
 		const project = await loadProjectOr404(ctx, projectId, locals);
-		return canManage(await buildProjectAccessInput(ctx, project, undefined, locals));
+		return canManage(await buildProjectAccessInput(ctx, project, locals));
 	});
 	if (!allowed) {
 		throw error(
@@ -450,23 +464,26 @@ export async function requireCanManage(
 // Owner-only gate for project settings, centralized so PATCH
 // /api/projects/[id] matches the rest of the access layer.
 export async function requireCanEditProjectSettings(
-	locals: Locals,
+	locals: ScopedLocals,
 	projectId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId, locals);
 	const allowed = await managementBypassOrRun(ctx, async () =>
-		canEditProjectSettings(await buildProjectAccessInput(ctx, project, undefined, locals))
+		canEditProjectSettings(await buildProjectAccessInput(ctx, project, locals))
 	);
 	if (!allowed) throw error(403, 'Only project owners can edit project settings.');
 	return { user, ctx, project };
 }
 
-export async function requireCanViewProject(locals: Locals, projectId: string): Promise<AuthUser> {
+export async function requireCanViewProject(
+	locals: ScopedLocals,
+	projectId: string
+): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
 	const allowed = await contentCheck(async () => {
 		const project = await loadProjectOr404(ctx, projectId, locals);
-		return canView(await buildProjectAccessInput(ctx, project, undefined, locals));
+		return canView(await buildProjectAccessInput(ctx, project, locals));
 	});
 	if (!allowed) throw error(403, 'You do not have access to this project.');
 	return user;
@@ -479,7 +496,7 @@ export async function requireCanViewProject(locals: Locals, projectId: string): 
  * passes; platform projects narrow to grants with `canSolve=true`.
  */
 export async function requireCanSolve(
-	locals: Locals,
+	locals: ScopedLocals,
 	projectId: string,
 	// Callers that already loaded the project (e.g. the solve endpoint, which
 	// reads orgId/pin off it) pass it to skip a redundant `getProject` here.
@@ -488,7 +505,7 @@ export async function requireCanSolve(
 	const { user, ctx } = requireAuthed(locals);
 	const project = preloadedProject ?? (await loadProjectOr404(ctx, projectId, locals));
 	const allowed = await contentCheck(async () =>
-		canSolve(await buildProjectAccessInput(ctx, project, undefined, locals))
+		canSolve(await buildProjectAccessInput(ctx, project, locals))
 	);
 	if (!allowed) throw error(403, 'You do not have access to this project.');
 	return { user, ctx, project };
@@ -503,7 +520,7 @@ export async function requireCanSolve(
 async function loadCommonsOrgMember(
 	ctx: RequestContext,
 	project: Project | null,
-	src?: HasDeps
+	src: HasDeps
 ): Promise<OrgMember | null> {
 	if (!project?.autoJoinOnUpload) return null;
 	return await orgsOf(src).getOrgMember(ctx, project.orgId, ctx.userId);
@@ -513,7 +530,7 @@ async function loadCommonsOrgMember(
  * Loads the record and gates editing. Returns the record AND the project it
  * loads for the gate, so callers skip a re-fetch of either.
  */
-export async function requireEditableDefinition(locals: Locals, guid: string) {
+export async function requireEditableDefinition(locals: ScopedLocals, guid: string) {
 	const { ctx } = requireAuthed(locals);
 	const record = await definitionMetaOf(locals).get(ctx, guid);
 	if (!record) throw error(404, 'Definition not found');
@@ -538,7 +555,7 @@ export async function requireEditableDefinition(locals: Locals, guid: string) {
 }
 
 export async function requireCanEditDefinition(
-	locals: Locals,
+	locals: ScopedLocals,
 	projectId: string,
 	definitionGuid: string,
 	// Callers that already loaded the project and/or definition (e.g. the solve

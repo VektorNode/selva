@@ -7,7 +7,7 @@ import {
 	getProjectProvider,
 	getOrganizationProvider
 } from '$lib/server/providers.server';
-import { requireCanSolve } from '$lib/server/access.server';
+import { requireCanSolve, scoped } from '$lib/server/access.server';
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
 import { SOLVE_DEADLINE_MS } from '$lib/server/computeLimits';
 import {
@@ -47,13 +47,13 @@ export const load = (async ({ params, locals, request, url }) => {
 		if (!record) throw new Error(`Definition '${guid}' not found`);
 
 		// User-auth path needs the canSolve gate; token-auth was already gated.
-		if (!sharedAccess) await requireCanSolve(locals, record.projectId);
+		if (!sharedAccess) await requireCanSolve(scoped(locals), record.projectId);
 
 		// Draft channel and explicit-version picks require edit permission on top
 		// of solve.
 		if (channel === 'draft' || explicitVersionId) {
 			const { requireEditableDefinition } = await import('$lib/server/access.server');
-			await requireEditableDefinition(locals, guid);
+			await requireEditableDefinition(scoped(locals), guid);
 		}
 
 		const loaded = await loadDefinitionForRender(ctx, record, channel, explicitVersionId);

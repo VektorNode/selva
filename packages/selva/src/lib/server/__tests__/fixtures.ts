@@ -57,6 +57,7 @@ import {
 import { DefinitionService, type CreateDefinitionRecord } from '@selvajs/server/definitions';
 import { hashToken, mintRawToken } from '../shareLinks/token.server.js';
 import { setTestProviders, clearTestProviders } from './test-providers.js';
+import { accessDepsFromConfig, type AccessDeps } from '../access.server.js';
 
 const TEST_HMAC_KEY = 'test-hmac-key-32-chars-min-length';
 // Deterministic 32-byte hex — `LocalComputeServerStore.fromEnv` needs a key
@@ -583,6 +584,7 @@ export async function actAs(
 	ctx: RequestContext;
 	profile: ReturnType<typeof emptyProfile>;
 	providers: SelvaConfig;
+	deps: AccessDeps;
 	log: typeof silentLog;
 }> {
 	const stored = await tp.authUsers.findById(userId);
@@ -619,7 +621,17 @@ export async function actAs(
 	const profile =
 		(await tp.config.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ?? emptyProfile(user.id);
 
-	return { user, ctx, profile, providers: tp.config, log: silentLog };
+	// `deps` mirrors what `hooks.server.ts` gives a real request: the guards read
+	// providers through it rather than module globals, so a test exercises the
+	// same wiring production does.
+	return {
+		user,
+		ctx,
+		profile,
+		providers: tp.config,
+		deps: accessDepsFromConfig(tp.config),
+		log: silentLog
+	};
 }
 
 /**

@@ -59,7 +59,11 @@ describe('listVisibleDefinitions', () => {
 		await seedDefinition(tp, { projectId: acmeOrg.id, ownerId: alice.id });
 
 		const { ctx } = await actAs(tp, alice.id);
-		const page = await listVisibleDefinitions({ ...ctx, actingOrgId: acme.id });
+		const page = await listVisibleDefinitions(
+			{ ...ctx, actingOrgId: acme.id },
+			{},
+			depsFromConfig(tp.config)
+		);
 
 		expect(page.items.map((r) => r.guid)).not.toContain(carolsDef.record.guid);
 		expect(page.projects.map((p) => p.id)).not.toContain(bigClientProject.id);
@@ -76,7 +80,11 @@ describe('listVisibleDefinitions', () => {
 
 		// Bob is an Acme member but not a member of Alice's private project.
 		const { ctx } = await actAs(tp, bob.id);
-		const page = await listVisibleDefinitions({ ...ctx, actingOrgId: acme.id });
+		const page = await listVisibleDefinitions(
+			{ ...ctx, actingOrgId: acme.id },
+			{},
+			depsFromConfig(tp.config)
+		);
 
 		expect(page.items.map((r) => r.guid)).not.toContain(hidden.record.guid);
 	});
@@ -92,7 +100,11 @@ describe('listVisibleDefinitions', () => {
 		});
 
 		const { ctx } = await actAs(tp, bob.id);
-		const page = await listVisibleDefinitions({ ...ctx, actingOrgId: acme.id });
+		const page = await listVisibleDefinitions(
+			{ ...ctx, actingOrgId: acme.id },
+			{},
+			depsFromConfig(tp.config)
+		);
 
 		expect(page.items.map((r) => r.guid)).toContain(def.record.guid);
 	});
@@ -105,7 +117,11 @@ describe('listVisibleDefinitions', () => {
 
 		// Carol acts in BigClient, which has no projects at all.
 		const { ctx } = await actAs(tp, carol.id);
-		const page = await listVisibleDefinitions({ ...ctx, actingOrgId: bigClient.id });
+		const page = await listVisibleDefinitions(
+			{ ...ctx, actingOrgId: bigClient.id },
+			{},
+			depsFromConfig(tp.config)
+		);
 
 		expect(page.items).toEqual([]);
 	});
@@ -135,7 +151,11 @@ describe('listVisibleDefinitions', () => {
 		const seen: string[] = [];
 		let cursor: string | undefined;
 		for (let guard = 0; guard < 10; guard++) {
-			const page = await listVisibleDefinitions(bobCtx, { limit: 4, cursor });
+			const page = await listVisibleDefinitions(
+				bobCtx,
+				{ limit: 4, cursor },
+				depsFromConfig(tp.config)
+			);
 			// Short pages before the end mean visibility ran after the fetch.
 			if (page.nextCursor) expect(page.items).toHaveLength(4);
 			seen.push(...page.items.map((r) => r.guid));
@@ -156,12 +176,20 @@ describe('listVisibleDefinitions', () => {
 		const { ctx } = await actAs(tp, bob.id);
 		const bobCtx = { ...ctx, actingOrgId: acme.id };
 
-		const scoped = await listVisibleDefinitions(bobCtx, { projectId: acmeOrg.id });
+		const scoped = await listVisibleDefinitions(
+			bobCtx,
+			{ projectId: acmeOrg.id },
+			depsFromConfig(tp.config)
+		);
 		expect(scoped.items.map((r) => r.guid)).toEqual([visible.record.guid]);
 
 		// An invisible project yields an empty page, not a 403 — the endpoint must
 		// not confirm that the project exists.
-		const denied = await listVisibleDefinitions(bobCtx, { projectId: alicesPrivate.id });
+		const denied = await listVisibleDefinitions(
+			bobCtx,
+			{ projectId: alicesPrivate.id },
+			depsFromConfig(tp.config)
+		);
 		expect(denied.items).toEqual([]);
 	});
 });
@@ -184,7 +212,11 @@ describe('getVisibleDefinition', () => {
 		});
 
 		const { ctx } = await actAs(tp, alice.id);
-		const got = await getVisibleDefinition({ ...ctx, actingOrgId: acme.id }, carolsDef.record.guid);
+		const got = await getVisibleDefinition(
+			{ ...ctx, actingOrgId: acme.id },
+			carolsDef.record.guid,
+			depsFromConfig(tp.config)
+		);
 
 		// null, not a throw: the caller renders 404 so the guid isn't confirmed.
 		expect(got).toBeNull();
@@ -196,7 +228,11 @@ describe('getVisibleDefinition', () => {
 		const def = await seedDefinition(tp, { projectId: acmeOrg.id, ownerId: alice.id });
 
 		const { ctx } = await actAs(tp, bob.id);
-		const got = await getVisibleDefinition({ ...ctx, actingOrgId: acme.id }, def.record.guid);
+		const got = await getVisibleDefinition(
+			{ ...ctx, actingOrgId: acme.id },
+			def.record.guid,
+			depsFromConfig(tp.config)
+		);
 
 		expect(got?.guid).toBe(def.record.guid);
 	});
@@ -208,7 +244,8 @@ describe('getVisibleDefinition', () => {
 
 		const got = await getVisibleDefinition(
 			{ ...ctx, actingOrgId: acme.id },
-			'00000000-0000-4000-8000-000000000000'
+			'00000000-0000-4000-8000-000000000000',
+			depsFromConfig(tp.config)
 		);
 		expect(got).toBeNull();
 	});
@@ -250,7 +287,11 @@ describe('resolveAccessibleProjects with injected deps', () => {
 		expect(viaDeps.projects.map((p) => p.id)).not.toContain(bigClientProject.id);
 	});
 
-	it('returns the same project set as the singleton path', async () => {
+	// The "same set as the singleton path" test that stood here is gone with the
+	// path it compared against: `resolveAccessibleProjects` now requires its deps,
+	// so there is no globals-resolved second path that could disagree with the
+	// injected one. Parity is structural, not something a test can observe.
+	it('returns the membership rows a second rule needs', async () => {
 		tp = await freshProviders();
 		const { acme, alice } = await seedAcme(tp);
 		await seedBigClient(tp);
@@ -258,19 +299,17 @@ describe('resolveAccessibleProjects with injected deps', () => {
 		const { ctx } = await actAs(tp, alice.id);
 		const scoped = { ...ctx, actingOrgId: acme.id };
 
-		const viaSingletons = await resolveAccessibleProjects(scoped);
-		const viaDeps = await resolveAccessibleProjects(scoped, depsFromConfig(tp.config));
+		const resolved = await resolveAccessibleProjects(scoped, depsFromConfig(tp.config));
 
-		const ids = (set: { projects: { id: string }[] }) => set.projects.map((p) => p.id).sort();
-		expect(ids(viaDeps)).toEqual(ids(viaSingletons));
-		// The membership rows too: a caller reusing them for a second rule
-		// (`canEdit` on the projects page) must see the same input either way.
-		expect([...viaDeps.memberByProjectId.keys()].sort()).toEqual(
-			[...viaSingletons.memberByProjectId.keys()].sort()
-		);
-		expect([...viaDeps.orgMemberByOrgId.keys()].sort()).toEqual(
-			[...viaSingletons.orgMemberByOrgId.keys()].sort()
-		);
+		// The projects page reuses these for `canEdit` rather than re-reading, so
+		// an accessible project missing its membership row silently downgrades to
+		// "visible but not editable".
+		expect(resolved.projects.length).toBeGreaterThan(0);
+		for (const project of resolved.projects) {
+			expect(
+				resolved.memberByProjectId.has(project.id) || resolved.orgMemberByOrgId.has(project.orgId)
+			).toBe(true);
+		}
 	});
 
 	it('excludes a private project the caller is not a member of', async () => {
@@ -318,13 +357,9 @@ describe('resolveAccessibleProjects with injected deps', () => {
 		const scoped = { ...ctx, actingOrgId: acme.id };
 
 		const viaDeps = await resolveAccessibleProjects(scoped, depsFromConfig(tp.config));
-		const viaSingletons = await resolveAccessibleProjects(scoped);
 
 		// The grant is what makes it visible at all — a project in another org
 		// with `platform` visibility is otherwise unreachable.
 		expect(viaDeps.projects.map((p) => p.id)).toContain(shared.id);
-		expect(viaDeps.projects.map((p) => p.id).sort()).toEqual(
-			viaSingletons.projects.map((p) => p.id).sort()
-		);
 	});
 });

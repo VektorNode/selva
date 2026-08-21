@@ -31,7 +31,7 @@ import type {
 } from '@selvajs/solve/server';
 import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import { getStorageProvider, getSolveMetricSink, providers } from '$lib/server/providers.server';
-import { requireCanSolve, requireCanEditDefinition } from '$lib/server/access.server';
+import { requireCanSolve, requireCanEditDefinition, scoped } from '$lib/server/access.server';
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import { renderThrown } from '@selvajs/server/logging';
 import type { ShareLink } from '@selvajs/platform';
@@ -204,12 +204,12 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		if (!sharedAccess) {
 			try {
 				if (channel === 'draft' || explicitVersionId) {
-					await requireCanEditDefinition(locals, record.projectId, guid, {
+					await requireCanEditDefinition(scoped(locals), record.projectId, guid, {
 						project,
 						definition: record
 					});
 				} else {
-					await requireCanSolve(locals, record.projectId, project ?? undefined);
+					await requireCanSolve(scoped(locals), record.projectId, project ?? undefined);
 				}
 			} catch (err) {
 				if (concealAccessFailure && isHttpError(err) && err.status === 403) {
