@@ -1,5 +1,12 @@
 # @selvajs/solve
 
+## 1.0.5
+
+### Patch Changes
+
+- Updated dependencies [4d16b79]
+  - @selvajs/platform@0.20.0
+
 ## 1.0.4
 
 ### Patch Changes

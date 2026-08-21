@@ -1,5 +1,12 @@
 # @selvajs/supabase-provider
 
+## 0.19.3
+
+### Patch Changes
+
+- Updated dependencies [4d16b79]
+  - @selvajs/platform@0.20.0
+
 ## 0.19.2
 
 ### Patch Changes
