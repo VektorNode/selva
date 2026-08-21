@@ -34,6 +34,11 @@ export interface DeploymentEnv {
 	XFF_DEPTH?: string;
 	BODY_SIZE_LIMIT?: string;
 	COMPUTE_REQUEST_MAX_BYTES?: string;
+	// Callers hand over a whole env bag (`process.env`, `$env/dynamic/private`),
+	// which carries far more than these keys. Without this, an env bag typed as a
+	// bare index signature has no declared property in common with an all-optional
+	// interface, and TS's weak-type check rejects it at every call site.
+	[key: string]: string | undefined;
 }
 
 /**

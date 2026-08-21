@@ -14,6 +14,11 @@ export interface SmtpEnv {
 	SMTP_PASS?: string;
 	SMTP_FROM?: string;
 	SMTP_SECURE?: string;
+	// Callers hand over a whole env bag (`process.env`, `$env/dynamic/private`),
+	// which carries far more than these keys. Without this, an env bag typed as a
+	// bare index signature has no declared property in common with an all-optional
+	// interface, and TS's weak-type check rejects it at every call site.
+	[key: string]: string | undefined;
 }
 
 function parsePort(raw: string | undefined): number {
