@@ -66,6 +66,11 @@
 			"types": "./dist/access/index.d.ts",
 			"import": "./dist/access/index.js"
 		},
+		"./api": {
+			"selva-source": "./src/api/index.ts",
+			"types": "./dist/api/index.d.ts",
+			"import": "./dist/api/index.js"
+		},
 		"./ops": {
 			"selva-source": "./src/ops/index.ts",
 			"types": "./dist/ops/index.d.ts",

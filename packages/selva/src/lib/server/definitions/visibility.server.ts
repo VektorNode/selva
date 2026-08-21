@@ -33,9 +33,22 @@ import {
 	getPlatformProjectGrantStore
 } from '$lib/server/providers.server';
 import { projectAccessInputFromRows } from '$lib/server/access.server';
+import type { SelvaDeps } from '@selvajs/server/api';
 
 /** Upper bound on the org/project scan. Visibility needs the whole set. */
 const SCAN_LIMIT = 200;
+
+/**
+ * The stores this module reads. Optional at every call site: passing nothing
+ * falls back to the app's composition root, so the page loads that predate
+ * dependency injection keep working unchanged. Handlers moving to
+ * `@selvajs/server/api` pass `req.deps`, which is what lets a second app on a
+ * different provider set reuse this tenancy boundary instead of rebuilding it.
+ */
+export type VisibilityDeps = Pick<
+	SelvaDeps,
+	'orgs' | 'projects' | 'platformProjectGrants' | 'definitionMeta'
+>;
 
 /**
  * The caller's accessible project set plus the membership rows it was derived
@@ -58,10 +71,12 @@ export interface AccessibleProjectSet {
  * `canView` short-circuits before reading them for every other visibility.
  */
 export async function resolveAccessibleProjects(
-	ctx: RequestContext
+	ctx: RequestContext,
+	deps?: VisibilityDeps
 ): Promise<AccessibleProjectSet> {
-	const orgs = getOrganizationProvider();
-	const projectStore = getProjectProvider();
+	const orgs = deps?.orgs ?? getOrganizationProvider();
+	const projectStore = deps?.projects ?? getProjectProvider();
+	const grantStore = deps?.platformProjectGrants ?? getPlatformProjectGrantStore();
 
 	const orgsPage = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: SCAN_LIMIT });
 	const orgIds = orgsPage.items.map((o) => o.id);
@@ -79,7 +94,7 @@ export async function resolveAccessibleProjects(
 		orgs.getOrgMembersFor(SYSTEM_CONTEXT, orgIds, ctx.userId),
 		projectStore.getProjectMembersFor(SYSTEM_CONTEXT, projectIds, ctx.userId),
 		platformProjectIds.length
-			? getPlatformProjectGrantStore().listByProjects(SYSTEM_CONTEXT, platformProjectIds)
+			? grantStore.listByProjects(SYSTEM_CONTEXT, platformProjectIds)
 			: Promise.resolve(new Map<string, PlatformProjectGrant[]>())
 	]);
 

@@ -13,7 +13,13 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { listVisibleDefinitions, getVisibleDefinition } from '../visibility.server.js';
+import {
+	listVisibleDefinitions,
+	getVisibleDefinition,
+	resolveAccessibleProjects
+} from '../visibility.server.js';
+import { depsFromConfig } from '@selvajs/server/api';
+import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import {
 	freshProviders,
 	seedAcme,
@@ -205,5 +211,120 @@ describe('getVisibleDefinition', () => {
 			'00000000-0000-4000-8000-000000000000'
 		);
 		expect(got).toBeNull();
+	});
+});
+
+// ============================================================================
+// Injected deps
+// ============================================================================
+
+/**
+ * `resolveAccessibleProjects` takes an optional `deps` so handlers moving to
+ * `@selvajs/server/api` can pass `req.deps` instead of reaching the app's
+ * composition root. It is a tenancy boundary, and the deps path is what a
+ * second app (parafa, on Supabase) would run — so the two paths have to agree
+ * on *exclusion*, not just on the rows they return.
+ *
+ * Without these, `depsFromConfig` could map a field to the wrong store and
+ * every existing test would still pass: they all exercise the singleton path.
+ */
+describe('resolveAccessibleProjects with injected deps', () => {
+	it('excludes another org’s projects, same as the singleton path', async () => {
+		tp = await freshProviders();
+		const { acme, alice } = await seedAcme(tp);
+		const { bigClient, carol } = await seedBigClient(tp);
+
+		const bigClientProject = await seedProject(tp, {
+			orgId: bigClient.id,
+			name: 'BigClient Secret',
+			slug: 'bigclient-secret-deps',
+			ownerId: carol.id,
+			visibility: 'org'
+		});
+
+		const { ctx } = await actAs(tp, alice.id);
+		const scoped = { ...ctx, actingOrgId: acme.id };
+
+		const viaDeps = await resolveAccessibleProjects(scoped, depsFromConfig(tp.config));
+
+		expect(viaDeps.projects.map((p) => p.id)).not.toContain(bigClientProject.id);
+	});
+
+	it('returns the same project set as the singleton path', async () => {
+		tp = await freshProviders();
+		const { acme, alice } = await seedAcme(tp);
+		await seedBigClient(tp);
+
+		const { ctx } = await actAs(tp, alice.id);
+		const scoped = { ...ctx, actingOrgId: acme.id };
+
+		const viaSingletons = await resolveAccessibleProjects(scoped);
+		const viaDeps = await resolveAccessibleProjects(scoped, depsFromConfig(tp.config));
+
+		const ids = (set: { projects: { id: string }[] }) => set.projects.map((p) => p.id).sort();
+		expect(ids(viaDeps)).toEqual(ids(viaSingletons));
+		// The membership rows too: a caller reusing them for a second rule
+		// (`canEdit` on the projects page) must see the same input either way.
+		expect([...viaDeps.memberByProjectId.keys()].sort()).toEqual(
+			[...viaSingletons.memberByProjectId.keys()].sort()
+		);
+		expect([...viaDeps.orgMemberByOrgId.keys()].sort()).toEqual(
+			[...viaSingletons.orgMemberByOrgId.keys()].sort()
+		);
+	});
+
+	it('excludes a private project the caller is not a member of', async () => {
+		tp = await freshProviders();
+		const { acme, bob, alicesPrivate } = await seedAcme(tp);
+
+		const { ctx } = await actAs(tp, bob.id);
+		const viaDeps = await resolveAccessibleProjects(
+			{ ...ctx, actingOrgId: acme.id },
+			depsFromConfig(tp.config)
+		);
+
+		expect(viaDeps.projects.map((p) => p.id)).not.toContain(alicesPrivate.id);
+	});
+
+	/**
+	 * The `platform` branch is the only one that reads
+	 * `deps.platformProjectGrants`, and no other test in this file seeds a
+	 * platform-visibility project — so a mis-mapped grant store passes every
+	 * assertion above. This is the test that fails when it is wrong.
+	 */
+	it('reads platform grants through the injected store', async () => {
+		tp = await freshProviders({ flags: { ENABLE_PLATFORM_PROJECTS: true } });
+		const { acme, alice } = await seedAcme(tp);
+		const { bigClient, carol } = await seedBigClient(tp);
+
+		const shared = await seedProject(tp, {
+			orgId: bigClient.id,
+			name: 'Shared Platform Project',
+			slug: 'shared-platform-project',
+			ownerId: carol.id,
+			visibility: 'platform'
+		});
+		await tp.config.data.platformProjectGrants.create(SYSTEM_CONTEXT, {
+			id: 'grant-alice-shared',
+			projectId: shared.id,
+			granteeType: 'user',
+			granteeId: alice.id,
+			canSolve: false,
+			createdBy: carol.id,
+			createdAt: new Date().toISOString()
+		});
+
+		const { ctx } = await actAs(tp, alice.id);
+		const scoped = { ...ctx, actingOrgId: acme.id };
+
+		const viaDeps = await resolveAccessibleProjects(scoped, depsFromConfig(tp.config));
+		const viaSingletons = await resolveAccessibleProjects(scoped);
+
+		// The grant is what makes it visible at all — a project in another org
+		// with `platform` visibility is otherwise unreachable.
+		expect(viaDeps.projects.map((p) => p.id)).toContain(shared.id);
+		expect(viaDeps.projects.map((p) => p.id).sort()).toEqual(
+			viaSingletons.projects.map((p) => p.id).sort()
+		);
 	});
 });

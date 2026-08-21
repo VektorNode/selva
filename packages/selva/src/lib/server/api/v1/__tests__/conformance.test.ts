@@ -55,13 +55,44 @@ interface RouteFile {
 	methods: HttpMethod[];
 }
 
+const handlersDir = resolve(packageRoot, 'src/lib/server/api/handlers');
+
+/**
+ * A route that `mount`s a transport-free handler keeps its logic in
+ * `api/handlers/`, so every source-grep assertion below would pass vacuously on
+ * the route file alone. Appending the handler source keeps those assertions
+ * checking the code that actually runs as handlers move out of the routes.
+ */
+/**
+ * Drop comments before any source grep.
+ *
+ * Every assertion below greps for a call shape, and prose naming that shape —
+ * `// throws SvelteKit's error()` — matches just as well as a call does. A
+ * false positive here is worse than noise: the obvious fix is to reword the
+ * comment, which leaves the next author to hit the same wall.
+ */
+function stripComments(source: string): string {
+	return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+function withMountedHandlers(source: string): string {
+	const imports = [...source.matchAll(/from\s+'\$lib\/server\/api\/handlers\/([\w-]+)'/g)];
+	const bodies = imports.map(([, name]) => {
+		const file = join(handlersDir, `${name}.ts`);
+		return existsSync(file) ? readFileSync(file, 'utf8') : '';
+	});
+	return stripComments([source, ...bodies].join('\n'));
+}
+
 function loadRoutes(baseDir: string): RouteFile[] {
 	return findServerFiles(baseDir).map((file) => {
 		const source = readFileSync(file, 'utf8');
 		return {
 			file,
 			routePath: routePathOf(file, baseDir),
-			source,
+			source: withMountedHandlers(source),
+			// Methods come from the route file itself — a handler module exports
+			// functions, not HTTP verbs.
 			methods: exportedMethods(source)
 		};
 	});
@@ -382,8 +413,13 @@ describe('every API handler is wrapped in apiRoute', () => {
 		'POST api/v1/definitions/[guid]/solve'
 	]);
 
+	// `apiRoute` wraps a SvelteKit handler; `mount` wraps a transport-free one
+	// from `api/handlers/` and routes its errors through `runHandler`. Both
+	// guarantee the structured envelope, which is what this asserts.
 	function wrapsMethod(source: string, method: HttpMethod): boolean {
-		return new RegExp(`export\\s+const\\s+${method}\\s*:[^=]*=\\s*apiRoute\\s*\\(`).test(source);
+		return new RegExp(`export\\s+const\\s+${method}\\s*:[^=]*=\\s*(apiRoute|mount)\\s*\\(`).test(
+			source
+		);
 	}
 
 	const withPrefix = [
