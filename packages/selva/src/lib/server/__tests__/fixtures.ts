@@ -621,8 +621,67 @@ export async function actAs(
 	const profile =
 		(await tp.config.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ?? emptyProfile(user.id);
 
-	return { user, ctx, profile, providers: tp.config };
+	return { user, ctx, profile, providers: tp.config, log: silentLog };
 }
+
+/**
+ * Wrap one store method to observe that it was called, leaving behaviour intact.
+ *
+ * Proxies rather than spreads. The stores are class instances, so
+ * `{ ...store, method: spy }` copies own properties and drops every prototype
+ * method — the resulting object throws `store.getProject is not a function` at
+ * the first untouched call, which surfaces as an opaque 500 rather than a
+ * pointer at the spread.
+ *
+ * This is what proves a handler reads `req.deps` instead of a module global:
+ * the global still holds the unwrapped store, so a handler that reaches for it
+ * never trips the spy.
+ */
+export function spyOnStore<
+	K extends keyof SelvaConfig['data'],
+	M extends keyof SelvaConfig['data'][K]
+>(config: SelvaConfig, store: K, method: M, onCall: () => void): SelvaConfig {
+	const real = config.data[store];
+	const spied = new Proxy(real as object, {
+		get(target, prop, receiver) {
+			const value = Reflect.get(target, prop, receiver);
+			if (prop === method) {
+				return (...args: unknown[]) => {
+					onCall();
+					return (value as (...a: unknown[]) => unknown).apply(target, args);
+				};
+			}
+			return typeof value === 'function' ? value.bind(target) : value;
+		}
+	});
+	return {
+		...config,
+		data: new Proxy(config.data, {
+			get: (target, prop, receiver) =>
+				prop === store ? spied : Reflect.get(target, prop, receiver)
+		})
+	};
+}
+
+/**
+ * A no-op logger, so `locals` matches what production hooks build.
+ *
+ * Mounted handlers log through `locals.log` on the 500 path. Without this a
+ * test that trips an unexpected 500 dies with "Cannot read properties of
+ * undefined (reading 'error')" — which hides the error that actually caused it.
+ *
+ * Run with `LOUD=1` to print what a 500 actually was; the fallback envelope
+ * carries only a generic message, so the stack is otherwise unreachable.
+ */
+const silentLog = {
+	error: (...args: unknown[]) => {
+		if (process.env.LOUD) console.error('[test log]', ...args);
+	},
+	warn: () => {},
+	info: () => {},
+	debug: () => {},
+	child: () => silentLog
+};
 
 export interface AnonymousLocals {
 	user?: undefined;

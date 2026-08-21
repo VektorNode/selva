@@ -14,7 +14,13 @@ import { error } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { apiError, ApiErrorCode, type ApiHandler } from '@selvajs/server/api';
 import { mount } from '../sveltekit.js';
-import { freshProviders, seedAcme, actAs, type TestProviders } from '../../__tests__/fixtures.js';
+import {
+	freshProviders,
+	seedAcme,
+	actAs,
+	spyOnStore,
+	type TestProviders
+} from '../../__tests__/fixtures.js';
 
 let tp: TestProviders;
 
@@ -27,7 +33,6 @@ async function eventFor(
 	userId: string,
 	init: { method?: string; body?: unknown; url?: string } = {}
 ): Promise<RequestEvent> {
-	const { user, ctx, profile, providers } = await actAs(tp, userId);
 	const url = new URL(init.url ?? 'http://localhost/api/v1/projects');
 	const request = new Request(url, {
 		method: init.method ?? 'GET',
@@ -36,22 +41,12 @@ async function eventFor(
 			: { body: JSON.stringify(init.body), headers: { 'content-type': 'application/json' } })
 	});
 	return {
-		locals: { user, ctx, profile, providers, log: silentLog },
+		locals: await actAs(tp, userId),
 		params: {},
 		url,
 		request
 	} as unknown as RequestEvent;
 }
-
-// The 500 branch logs through `req.log`; a real logger would print a stack per
-// test run. Assertions are on the response, not on what was logged.
-const silentLog = {
-	error: () => {},
-	warn: () => {},
-	info: () => {},
-	debug: () => {},
-	child: () => silentLog
-};
 
 describe('mount — error mapping', () => {
 	it('maps a guard’s HttpError to its own status, not 500', async () => {
@@ -202,20 +197,9 @@ describe('POST /api/v1/projects through the binding', () => {
 			body: { name: 'Guarded', visibility: 'private' }
 		});
 		let sawGuardRead = false;
-		const realOrgs = event.locals.providers.data.orgs;
-		event.locals.providers = {
-			...event.locals.providers,
-			data: {
-				...event.locals.providers.data,
-				orgs: {
-					...realOrgs,
-					getOrgMember: (...args: Parameters<typeof realOrgs.getOrgMember>) => {
-						sawGuardRead = true;
-						return realOrgs.getOrgMember(...args);
-					}
-				}
-			}
-		} as typeof event.locals.providers;
+		event.locals.providers = spyOnStore(event.locals.providers, 'orgs', 'getOrgMember', () => {
+			sawGuardRead = true;
+		});
 
 		const res = await mount('Failed to create project', createProject)(event);
 
@@ -233,20 +217,9 @@ describe('POST /api/v1/projects through the binding', () => {
 			body: { name: 'Injected', visibility: 'private' }
 		});
 		let sawWrite = false;
-		const realProjects = event.locals.providers.data.projects;
-		event.locals.providers = {
-			...event.locals.providers,
-			data: {
-				...event.locals.providers.data,
-				projects: {
-					...realProjects,
-					createProject: (ctx: never, project: never) => {
-						sawWrite = true;
-						return realProjects.createProject(ctx, project);
-					}
-				}
-			}
-		} as typeof event.locals.providers;
+		event.locals.providers = spyOnStore(event.locals.providers, 'projects', 'createProject', () => {
+			sawWrite = true;
+		});
 
 		const res = await mount('Failed to create project', createProject)(event);
 

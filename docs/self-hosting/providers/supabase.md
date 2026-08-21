@@ -21,6 +21,7 @@ description: 'Auth, Postgres, and Storage on Supabase, with identity living in t
 2. Apply the migrations shipped with the package.
 3. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` in `.env`.
 4. Set `SELVA_AUTH_PROVIDER=supabase` (and the data/storage vars) and restart.
+5. For email-link sign-in, point Supabase at an SMTP sender and fix its mail templates.
 
 The same code runs against a local Docker stack or a hosted project. Only the URL and keys change.
 
@@ -108,7 +109,63 @@ Dashboard → **Project Settings** → **API** → **Exposed schemas**. `selva` 
 
 The initial migration sets this, so it's normally already correct. It's worth a look anyway: if the schema isn't exposed, every query fails with `PGRST106 Invalid schema` — a runtime error that looks nothing like its cause.
 
-### 6. Start
+### 6. Set up email sign-in
+
+Skip this if nobody signs in by email link. If they do, it needs both a mail sender and two template edits — the defaults produce a link Selva cannot read.
+
+#### Custom SMTP
+
+Supabase's built-in sender only delivers to your own project members and is capped at a few messages an hour, so production needs your own. Any transactional provider works; Resend is used here.
+
+Verify your sending domain with the provider first — add its SPF and DKIM records to your DNS and wait for the domain to go green. Until then every send is rejected.
+
+Then Dashboard → **Authentication** → **Emails** → **SMTP Settings** → enable custom SMTP:
+
+| Field        | Value                                                       |
+| ------------ | ----------------------------------------------------------- |
+| Sender email | `no-reply@your-domain.com` — must be at the verified domain |
+| Sender name  | `Selva`                                                     |
+| Host         | `smtp.resend.com`                                           |
+| Port         | `465`, or `587` for STARTTLS                                |
+| Username     | `resend`                                                    |
+| Password     | your API key                                                |
+
+**Username is the provider's fixed SMTP login, not your sender name or address.** Resend wants the literal string `resend`; SendGrid wants `apikey`. Put anything else there and the send fails AUTH, which reaches Selva as `AuthRetryableFetchError: Error sending magic link email` — a 500 with no hint that a username is at fault. Supabase's **Logs → Auth Logs** shows the underlying `535`.
+
+Enabling custom SMTP also unlocks the template editor, which the next part needs.
+
+#### Redirect URLs
+
+Dashboard → **Authentication** → **URL Configuration**:
+
+- **Site URL** — the origin you serve on, matching `ORIGIN` in `.env`
+- **Redirect URLs** — add `https://your-domain.com/auth/email/callback`
+
+GoTrue drops any `emailRedirectTo` not on this list and falls back to Site URL, so a missing entry sends every user to the default landing page instead of the one they asked for.
+
+#### Templates
+
+Dashboard → **Authentication** → **Emails** → **Templates**. Edit **Magic Link**, and switch the Body to **Source**:
+
+```html
+<h2>Your sign-in link</h2>
+<p>Follow the link below to sign in. This link expires shortly and can only be used once.</p>
+<p><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=magiclink">Sign in</a></p>
+```
+
+Do the same for **Confirm signup** with `type=signup` and **Invite user** with `type=invite`. All three land on the same callback and fail the same way if left alone.
+
+Two details in that one line, both of which fail silently:
+
+**`{{ .TokenHash }}`, not `{{ .ConfirmationURL }}`.** The default template uses `ConfirmationURL`, which routes through GoTrue's own `/auth/v1/verify` and lands on your callback with the token in the URL _fragment_ — `#access_token=…`. Fragments never reach the server, so the callback sees no token and returns "This sign-in link is invalid or has expired" for a link that is perfectly valid. Handing over the token hash instead lets the callback exchange it directly.
+
+**`{{ .RedirectTo }}`, not `{{ .SiteURL }}`.** Selva appends `?redirectTo=/library` to the callback URL so the user lands where they were headed before signing in. `RedirectTo` carries that whole URL through; `SiteURL` is the bare origin and discards it. It already includes the path, so append `?token_hash=` straight onto it.
+
+#### Verify
+
+Sign in by email. The link should arrive pointing at `/auth/email/callback?redirectTo=…&token_hash=pkce_…&type=magiclink` — query parameters, no `#`. A `#access_token=` means the template did not save, or the mail predates the change.
+
+### 7. Start
 
 ```bash
 npm run doctor
@@ -117,7 +174,7 @@ npm start
 
 `doctor` checks the credentials and compares migration heads, so a green run confirms steps 3 through 5 landed. Then open `/setup` — the first user through becomes instance admin.
 
-Two things `doctor` can't see: `ORIGIN` must match the URL you actually serve on or auth cookies won't persist, and `npm start` binds to `127.0.0.1:3000`, so a public deployment needs Caddy or nginx terminating TLS in front of it.
+Three things `doctor` can't see: the email setup in step 6 — a broken template only shows up when someone clicks a link — `ORIGIN`, which must match the URL you actually serve on or auth cookies won't persist, and that `npm start` binds to `127.0.0.1:3000`, so a public deployment needs Caddy or nginx terminating TLS in front of it.
 
 ### Upgrading later
 
@@ -151,6 +208,8 @@ npx supabase start
 ```
 
 That brings up Postgres (54322), GoTrue/Auth (54321), Storage, Studio (54323), and Mailpit (54324 — a fake SMTP inbox for auth emails), and applies the migrations plus the bucket seed automatically. Studio at `http://127.0.0.1:54323` is a full admin UI for inspecting tables, rows, and RLS policies.
+
+Auth emails go to Mailpit rather than a real inbox, so magic-link sign-in works locally with no SMTP setup. The template traps from step 6 still apply, and `config.toml` ships no template overrides — a link clicked out of Mailpit fails exactly as it would in production. To exercise the real flow locally, add the template and callback URL to `config.toml` under `[auth.email.template.magic_link]` and `additional_redirect_urls`, then `npx supabase stop && npx supabase start` to reload it.
 
 ```bash
 npx supabase status            # show URL + keys again

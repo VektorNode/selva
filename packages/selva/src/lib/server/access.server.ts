@@ -261,7 +261,31 @@ function buildProjectAccessInput(
 	return accessInputsFor(src).buildProjectAccessInput(ctx, project, overrides);
 }
 
-export const projectAccessInputFromRows = accessInputsFor().projectAccessInputFromRows;
+/**
+ * Assemble a rule input from rows the caller already loaded.
+ *
+ * Unlike the other builders this one issues no reads — the caller batched them.
+ * It still needs `deps` for the flag lookups, which decide whether a
+ * cross-org-public or platform project is visible at all.
+ */
+export function projectAccessInputFromRowsWith(
+	src: HasDeps | undefined,
+	...args: Parameters<ProjectAccessInputBuilder['projectAccessInputFromRows']>
+) {
+	return accessInputsFor(src).projectAccessInputFromRows(...args);
+}
+
+/**
+ * The globals-bound form, for the page loads that have no deps to pass.
+ *
+ * Deliberately a function, not `accessInputsFor().projectAccessInputFromRows`:
+ * the const form ran `accessInputsFor()` at import time, which reads
+ * `flagOf(undefined)` and captures the module globals before the composition
+ * root has necessarily finished wiring them.
+ */
+export const projectAccessInputFromRows: ProjectAccessInputBuilder['projectAccessInputFromRows'] = (
+	...args
+) => projectAccessInputFromRowsWith(undefined, ...args);
 
 /**
  * Gates creation of a *new* definition. Container projects require project
