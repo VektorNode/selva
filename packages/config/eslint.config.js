@@ -41,6 +41,16 @@ export const config = [
 		}
 	},
 	{
+		// `no-undef` can't see TypeScript's type-only globals — `EventListener`,
+		// `RequestInit`, `NodeListOf` and friends live in lib.dom.d.ts, not in any
+		// runtime globals list — so it reports them as undefined. tsc already fails
+		// on genuinely undefined identifiers, making the rule redundant here.
+		files: ['**/*.ts', '**/*.tsx', '**/*.svelte'],
+		rules: {
+			'no-undef': 'off'
+		}
+	},
+	{
 		ignores: [
 			'build/',
 			'.svelte-kit/',
@@ -77,47 +87,68 @@ export const config = [
 ];
 
 /**
- * Create a project-specific ESLint config
- * @param {string} tsconfigRootDir - The root directory of the project (usually __dirname)
+ * What the typed pass covers unless a package overrides it: async-heavy code
+ * where a dropped promise actually costs something. Widen per package via
+ * `createConfig`'s `typedFiles`, not here — every added glob is paid in full
+ * TypeScript program construction.
+ */
+const DEFAULT_TYPED_FILES = ['src/lib/server/**/*.ts', 'src/routes/**/*.ts', 'src/**/*.server.ts'];
+
+/**
+ * Project-specific ESLint config. Untyped unless asked otherwise.
+ *
+ * The type-aware rules need `projectService`, which builds a full TypeScript
+ * program for every file it matches. On this repo that is the difference between
+ * a 19s and a 132s run, so they're opt-in — a package turns them on from its
+ * `eslint.typed.config.js`, run by `pnpm lint:types` — and scoped to `typedFiles`
+ * rather than every TypeScript file in the package.
+ *
+ * @param {string} tsconfigRootDir - Project root, usually `__dirname`.
+ * @param {{ typed?: boolean, typedFiles?: string[] }} [options] `typed` turns the
+ *   typed pass on; `typedFiles` overrides its scope.
  * @returns {import('eslint').Linter.Config[]}
  */
-export const createConfig = (tsconfigRootDir) => [
-	...config,
-	{
-		// Typed linting for TS/Svelte only. `tsconfigRootDir` is pinned so the
-		// project service resolves each file's nearest tsconfig from this root
-		// deterministically instead of auto-detecting multiple candidate roots.
-		files: ['**/*.ts', '**/*.tsx', '**/*.svelte'],
-		languageOptions: {
-			parserOptions: {
-				projectService: true,
-				tsconfigRootDir,
-				extraFileExtensions: ['.svelte']
+export const createConfig = (tsconfigRootDir, options = {}) => {
+	const { typed = false, typedFiles = DEFAULT_TYPED_FILES } = options;
+
+	if (!typed) return [...config];
+
+	return [
+		...config,
+		{
+			// `tsconfigRootDir` is pinned so the project service resolves each file's
+			// nearest tsconfig from this root deterministically instead of
+			// auto-detecting multiple candidate roots.
+			files: typedFiles,
+			languageOptions: {
+				parserOptions: {
+					projectService: true,
+					tsconfigRootDir,
+					extraFileExtensions: ['.svelte']
+				}
+			},
+			// The two type-aware rules that catch real bugs (dropped awaits, promises
+			// passed where sync callbacks are expected), cherry-picked instead of all
+			// of `recommendedTypeChecked` — the rest is dominated by `no-unsafe-*`
+			// noise cascading from existing `any`s.
+			rules: {
+				'@typescript-eslint/no-floating-promises': 'warn',
+				'@typescript-eslint/no-misused-promises': 'warn'
 			}
 		},
-		// The two type-aware rules that catch real bugs (dropped awaits, promises
-		// passed where sync callbacks are expected), cherry-picked instead of all
-		// of `recommendedTypeChecked` — the rest is dominated by `no-unsafe-*`
-		// noise cascading from existing `any`s. Typed rules need the project
-		// service, so they live here, not in the base config (compute and
-		// visualization lint untyped).
-		rules: {
-			'@typescript-eslint/no-floating-promises': 'warn',
-			'@typescript-eslint/no-misused-promises': 'warn'
-		}
-	},
-	{
-		// Re-assert the untyped parser for JS after the typed block, since the
-		// base `ts.configs.recommended` (in `config`) matches all files.
-		files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
-		languageOptions: {
-			parserOptions: {
-				projectService: false,
-				project: null,
-				program: null
+		{
+			// Re-assert the untyped parser for JS after the typed block, since the
+			// base `ts.configs.recommended` (in `config`) matches all files.
+			files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
+			languageOptions: {
+				parserOptions: {
+					projectService: false,
+					project: null,
+					program: null
+				}
 			}
 		}
-	}
-];
+	];
+};
 
 export default config;

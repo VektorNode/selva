@@ -34,7 +34,11 @@ export {
 	type IdempotencyOutcome
 } from './idempotency.js';
 
-export { isSafeRemoteDefinitionUrl, assertSafeRemoteDefinitionUrl } from './safe-url.js';
+export {
+	isSafeRemoteDefinitionUrl,
+	assertSafeRemoteDefinitionUrl,
+	isLinkLocalUrl
+} from './safe-url.js';
 
 export {
 	createRemoteDefinitionFetcher,

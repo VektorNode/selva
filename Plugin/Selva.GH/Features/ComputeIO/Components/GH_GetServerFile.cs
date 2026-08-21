@@ -12,7 +12,6 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
-using Newtonsoft.Json.Linq;
 using Rhino.Geometry;
 using Selva.Schema.Models;
 using Selva.GH.Features.FileIO.Services;
@@ -175,18 +174,6 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
     public void ClearContextualData()
     {
         _serverDataPath = null;
-    }
-
-    public JObject GetContextualJson()
-    {
-        return new JObject
-        {
-            { "description", Description ?? "" },
-            { "name", Name },
-            { "nickname", NickName },
-            { "treeAccess", Access == GH_ParamAccess.tree },
-            { "paramType", "serverDataPath" }
-        };
     }
 
     public override void AppendAdditionalMenuItems(ToolStripDropDown menu)

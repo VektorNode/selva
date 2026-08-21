@@ -202,20 +202,6 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         return DynamicValueListLogic.GetDefaultValue(selected, _storedItems);
     }
 
-    public JObject GetContextualJson()
-    {
-        return new JObject
-        {
-            { "description", Description ?? "" },
-            { "name", Name },
-            { "nickname", NickName },
-            { "treeAccess", Access == GH_ParamAccess.tree },
-            { "paramType", "dynamicValueList" },
-            { "default", GetDefaultValue() },
-            { "values", JObject.FromObject(Values) }
-        };
-    }
-
     // Grasshopper calls _Custom when the param has NO wired sources, and _FromSources when it does.
     // This param is usually unwired (its value comes from the web UI), so both must emit our data.
     protected override void CollectVolatileData_Custom()

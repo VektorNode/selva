@@ -16,7 +16,9 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"type-check": "tsc --noEmit",
 		"test": "vitest run",
-		"test:watch": "vitest watch"
+		"test:watch": "vitest watch",
+		"lint": "eslint .",
+		"lint:types": "eslint . --config eslint.typed.config.js"
 	},
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",

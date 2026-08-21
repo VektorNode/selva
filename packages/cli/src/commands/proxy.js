@@ -128,6 +128,22 @@ export async function runSetupProxy(argv = []) {
 		return;
 	}
 
+	// Caddy sets X-Forwarded-For on its own, but the app ignores it unless told
+	// to trust it — and unset, every request looks like it came from Caddy, so
+	// all users share one login rate-limit bucket. Nothing fails visibly, which
+	// is why it is said here rather than left to the docs.
+	if (!env.ADDRESS_HEADER) {
+		p.log.warn(
+			`Add these to .env, then \`selva restart\`:\n` +
+				pc.cyan('  ADDRESS_HEADER=X-Forwarded-For\n  XFF_DEPTH=1\n') +
+				pc.dim(
+					'Without them the app sees every request as coming from Caddy, so one\n' +
+						'user failing five logins rate-limits everyone. Use XFF_DEPTH=2 if a CDN\n' +
+						'or load balancer sits in front of Caddy.'
+				)
+		);
+	}
+
 	p.outro(
 		[
 			pc.green(`Caddy is serving ${domain}.`),

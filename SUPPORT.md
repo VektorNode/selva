@@ -10,5 +10,8 @@ Where to go, depending on what you need:
   [issue templates](https://github.com/VektorNode/selva/issues/new/choose).
 - **Security vulnerabilities** — do **not** open a public issue; follow
   [SECURITY.md](./SECURITY.md) instead.
+- **Paid deployment help, funded features, or training** — see
+  [COMMERCIAL.md](./COMMERCIAL.md). Community support here is free and stays free; that page is
+  for organisations that want an engagement.
 
 Please search existing issues and discussions before opening a new one.

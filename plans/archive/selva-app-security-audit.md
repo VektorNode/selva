@@ -5,11 +5,18 @@
 > together. Each issue carries the implementation reasoning — read those, not this document, for what
 > the code does now.
 >
-> **Two fixes need operator action and will not take effect on their own:**
+> **One fix needs operator action and will not take effect on its own:**
 > `ADDRESS_HEADER=X-Forwarded-For` + `XFF_DEPTH=<proxy count>` must be set per deployment or SEL-2's
-> per-address bucket still collapses (the per-account limiter and a boot warning cover the gap), and
-> `COMPUTE_ALLOW_PRIVATE_SERVER_URL=true` is required by any deployment whose Rhino.Compute runs on
-> loopback or a LAN address — SEL-3 blocks private ranges by default, on the write path only.
+> per-address bucket still collapses; the per-account limiter and a boot warning cover the gap until
+> then.
+>
+> **SEL-3 was narrowed from what this plan proposed.** The plan called for routing `serverUrl`
+> through `assertSafeRemoteDefinitionUrl`, which blocks all private ranges. That would reject
+> `localhost` and RFC1918 — how most deployments actually reach their compute server — so it shipped
+> as a link-local-only block (`169.254.0.0/16`, the cloud metadata range) with no opt-out flag. A
+> guard every operator has to disable protects nobody. The residual risk the plan wanted covered, a
+> `manage_compute` holder probing an internal host, is accepted: it needs a privileged actor already
+> and is inseparable from the legitimate case.
 >
 > **Still open, tracked elsewhere:** B5-lb (multi-instance rate-limit drift, the horizontal-scaling
 > half of SEL-2) and S4 (`ORIGIN` boot validation, adjacent to SEL-5), both in

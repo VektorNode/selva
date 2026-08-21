@@ -8,7 +8,6 @@ using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
-using Newtonsoft.Json.Linq;
 using Selva.GH.Properties;
 
 namespace Selva.GH.Features.ComputeIO.Components;
@@ -130,18 +129,6 @@ public class GetColorParameter : GH_Param<GH_Colour>, IGH_ContextualParameter
     {
         _contextualColor = null;
         _isFromContextual = false;
-    }
-
-    public JObject GetContextualJson()
-    {
-        return new JObject
-        {
-            { "description", Description ?? "" },
-            { "name", Name },
-            { "nickname", NickName },
-            { "paramType", "color" },
-            { "treeAccess", Access == GH_ParamAccess.tree }
-        };
     }
 
     protected override void CollectVolatileData_Custom()

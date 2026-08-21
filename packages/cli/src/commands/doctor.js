@@ -28,6 +28,7 @@ import { checkBootPersistence } from '../checks/boot.js';
 import { checkRuntimeEnvironment } from '../checks/runtime.js';
 import {
 	checkBodySizeLimit,
+	checkClientAddress,
 	checkDeprecatedEnv,
 	checkEnvDocumentation,
 	checkHeaderNames,
@@ -84,6 +85,7 @@ export async function runDoctor(argv = []) {
 	checks.push(...checkBootPersistence(dir));
 	checks.push(checkOrigin(env));
 	checks.push(checkBodySizeLimit(env));
+	checks.push(checkClientAddress(env));
 	checks.push(...checkDeprecatedEnv(env));
 	checks.push(checkEnvDocs(dir));
 

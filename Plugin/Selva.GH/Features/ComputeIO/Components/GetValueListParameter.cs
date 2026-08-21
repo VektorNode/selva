@@ -339,20 +339,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         _storedItems = options.Select(kvp => (kvp.Key, kvp.Value)).ToList();
     }
 
-    public JObject GetContextualJson()
-    {
-        return new JObject
-        {
-            { "description", Description ?? "" },
-            { "name", Name },
-            { "nickname", NickName },
-            { "treeAccess", Access == GH_ParamAccess.tree },
-            { "paramType", TypeName },
-            { "default", GetDefaultValue() },
-            { "values", JObject.FromObject(Values) }
-        };
-    }
-
     protected override void CollectVolatileData_FromSources()
     {
         if (_contextual != null)

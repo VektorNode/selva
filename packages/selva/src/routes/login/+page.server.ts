@@ -94,21 +94,33 @@ export const actions = {
 		const email = (data.get('email') as string | null) ?? '';
 		const password = data.get('password');
 		const redirectTo = data.get('redirectTo');
+		// Each failed round-trip bumps this so the page can tell a fresh rejection
+		// from the one still on screen. Without it, a second wrong password renders
+		// an identical page and reads as "nothing happened".
+		const attempt = Number(data.get('attempt') ?? 0) + 1;
 
 		// After the body is read, because the account bucket needs the email.
 		warnIfAddressKeysCollapse(ip, event.locals.log);
 		const { allowed } = checkRateLimit(ip, email);
 		if (!allowed) {
-			return fail(429, { error: 'Too many failed attempts. Try again in 15 minutes.' });
+			return fail(429, {
+				email,
+				attempt,
+				error: 'Too many failed attempts. Try again in 15 minutes.'
+			});
 		}
 
 		if (!password || typeof password !== 'string') {
-			return fail(400, { error: 'Password is required' });
+			return fail(400, { email, attempt, error: 'Password is required' });
 		}
 
 		const passwordAuth = getAuthProvider().passwordAuth;
 		if (!passwordAuth) {
-			return fail(501, { error: 'Password login is not supported by this provider' });
+			return fail(501, {
+				email,
+				attempt,
+				error: 'Password login is not supported by this provider'
+			});
 		}
 
 		const result = await passwordAuth.verifyLogin(email, password);
@@ -116,7 +128,7 @@ export const actions = {
 		switch (result.kind) {
 			case 'failed':
 				recordFailedAttempt(ip, email);
-				return fail(401, { error: 'Invalid credentials' });
+				return fail(401, { email, attempt, error: 'Invalid credentials' });
 			case 'success': {
 				clearRateLimit(ip, email);
 				setSessionCookie(cookies, result.sessionToken);

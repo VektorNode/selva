@@ -232,6 +232,60 @@ export function checkBodySizeLimit(env) {
 	return green(`BODY_SIZE_LIMIT=${raw}`);
 }
 
+/**
+ * `ADDRESS_HEADER` / `XFF_DEPTH` are read by adapter-node, not by Selva, and
+ * unset they are invisible: nothing fails, nothing logs, and the deployment
+ * looks healthy.
+ *
+ * What actually happens is that `getClientAddress()` returns the socket peer,
+ * which behind a reverse proxy is the proxy — `127.0.0.1` for every request
+ * from every user. Login rate limiting keys on that, so the whole instance
+ * shares one bucket: five failed logins from anywhere return 429 to everyone,
+ * and only a *successful* login clears a bucket, which nobody can then reach.
+ *
+ * `ORIGIN` is the proxy tell. It is only needed when the app is served under a
+ * public URL it can't derive from its own socket, so its presence means a proxy
+ * is terminating requests. Without it we say nothing: on a directly-reachable
+ * app these settings are a footgun, since `X-Forwarded-For` is client-supplied
+ * and anyone could then pick their own rate-limit bucket.
+ */
+export function checkClientAddress(env) {
+	const header = env.ADDRESS_HEADER;
+	const depth = env.XFF_DEPTH;
+
+	if (!env.ORIGIN) {
+		// No proxy signal — nothing to advise either way.
+		return green('ADDRESS_HEADER not needed (no ORIGIN, so no reverse proxy)');
+	}
+
+	if (!header) {
+		return red(
+			`ADDRESS_HEADER unset while ORIGIN is set — every request looks like it came from ` +
+				`the proxy, so all users share ONE login rate-limit bucket. Five failed logins ` +
+				`from anyone locks out the whole instance for 15 minutes. ` +
+				`Set ADDRESS_HEADER=X-Forwarded-For and XFF_DEPTH=<number of proxies>.`
+		);
+	}
+
+	if (header.toLowerCase() === 'x-forwarded-for' && !depth) {
+		return yellow(
+			`ADDRESS_HEADER=${header} but XFF_DEPTH is unset. X-Forwarded-For is a ` +
+				`client-appendable list, so a caller can prepend fake entries — adapter-node ` +
+				`needs the proxy count to know which entry is real. Set XFF_DEPTH=1 for a ` +
+				`single reverse proxy, 2 if a CDN or load balancer sits in front of it.`
+		);
+	}
+
+	if (depth !== undefined && !/^[1-9][0-9]*$/.test(depth)) {
+		return red(
+			`XFF_DEPTH="${depth}" is not a positive integer — it counts proxies from the ` +
+				`outside in. Use 1 for a single reverse proxy.`
+		);
+	}
+
+	return green(`ADDRESS_HEADER=${header}${depth ? ` (XFF_DEPTH=${depth})` : ''}`);
+}
+
 // A rename is auto-fixable (`selva migrate` rewrites the key). A replacement
 // encodes a value in the new name, so migrate leaves it alone rather than
 // guessing — it's reported here and nowhere else.

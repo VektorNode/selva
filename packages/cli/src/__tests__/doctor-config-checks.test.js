@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+	checkClientAddress,
 	checkDeprecatedEnv,
 	checkHeaderNames,
 	checkOrigin,
@@ -181,4 +182,58 @@ test('deprecated vars are reported together, not just the first', () => {
 	const env = {};
 	for (const k of [...renamed, ...replaced]) env[k] = '1';
 	assert.equal(checkDeprecatedEnv(env).length, renamed.length + replaced.length);
+});
+
+// ── Client address (login rate-limit bucketing) ─────────────────────────
+
+test('stays quiet when there is no proxy to configure for', () => {
+	// X-Forwarded-For is client-supplied. On a directly-reachable app, advising
+	// these settings would tell an operator to let callers pick their own bucket.
+	assert.equal(checkClientAddress({}).severity, 'green');
+});
+
+test('flags ADDRESS_HEADER unset behind a proxy as red', () => {
+	const r = checkClientAddress({ ORIGIN: 'https://selva.example.test' });
+	assert.equal(r.severity, 'red');
+	// The line has to name the consequence, not just the missing key — an
+	// operator skimming doctor output will not go look this one up.
+	assert.match(r.line, /one login rate-limit bucket/i);
+	assert.match(r.line, /X-Forwarded-For/);
+});
+
+test('warns when X-Forwarded-For is trusted without a proxy count', () => {
+	const r = checkClientAddress({
+		ORIGIN: 'https://selva.example.test',
+		ADDRESS_HEADER: 'X-Forwarded-For'
+	});
+	assert.equal(r.severity, 'yellow');
+	assert.match(r.line, /XFF_DEPTH/);
+});
+
+test('accepts a configured pair', () => {
+	const r = checkClientAddress({
+		ORIGIN: 'https://selva.example.test',
+		ADDRESS_HEADER: 'X-Forwarded-For',
+		XFF_DEPTH: '1'
+	});
+	assert.equal(r.severity, 'green');
+});
+
+test('does not demand XFF_DEPTH for a single-value header', () => {
+	// CF-Connecting-IP carries one address, not an appendable list, so a depth
+	// is meaningless there — asking for it would push operators to set noise.
+	const r = checkClientAddress({
+		ORIGIN: 'https://selva.example.test',
+		ADDRESS_HEADER: 'CF-Connecting-IP'
+	});
+	assert.equal(r.severity, 'green');
+});
+
+test('rejects a non-numeric XFF_DEPTH', () => {
+	const r = checkClientAddress({
+		ORIGIN: 'https://selva.example.test',
+		ADDRESS_HEADER: 'X-Forwarded-For',
+		XFF_DEPTH: 'true'
+	});
+	assert.equal(r.severity, 'red');
 });

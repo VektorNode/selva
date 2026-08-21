@@ -68,7 +68,8 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"format": "prettier --write .",
-		"lint": "prettier --check . && eslint ."
+		"lint": "prettier --check . && eslint .",
+		"lint:types": "eslint . --config eslint.typed.config.js"
 	},
 	"peerDependencies": {
 		"@selvajs/compute": "workspace:^",

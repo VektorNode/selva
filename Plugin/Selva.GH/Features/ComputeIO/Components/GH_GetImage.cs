@@ -10,7 +10,6 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Selva.GH.Config;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
@@ -159,19 +158,6 @@ public class GetImageParameter : GH_Param<FileInputGoo>, IGH_ContextualParameter
     {
         _contextualFileData = null;
         _isFromContextual = false;
-    }
-
-    public JObject GetContextualJson()
-    {
-        return new JObject
-        {
-            { "description", Description ?? "" },
-            { "name", Name },
-            { "nickname", NickName },
-            { "treeAccess", Access == GH_ParamAccess.tree },
-            { "paramType", TypeName },
-            { "acceptedFormats", new JArray(ImageInputResolver.AcceptedFormats) }
-        };
     }
 
     protected override void CollectVolatileData_Custom()

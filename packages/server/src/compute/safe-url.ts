@@ -158,6 +158,40 @@ export function isSafeRemoteDefinitionUrl(raw: string): boolean {
 }
 
 /**
+ * True when `raw` targets the link-local range (`169.254.0.0/16`), which
+ * carries the cloud metadata service at `169.254.169.254` — the endpoint that
+ * hands out a host's own IAM credentials to anything on the box.
+ *
+ * A far narrower judgement than {@link isSafeRemoteDefinitionUrl}, for the one
+ * caller that must tolerate private addresses: an operator's own compute server
+ * legitimately lives on `localhost` or a LAN, so blocking RFC1918 there would
+ * reject the ordinary self-hosted layout. Nothing legitimate is ever reached
+ * over link-local, so this stays blocked with no opt-out.
+ *
+ * Shares `canonicalizeNumericIpv4`, so the encodings that bypass a naive string
+ * comparison — `http://2852039166/`, `http://0251.0376.0251.0376/`,
+ * `http://0xa9fea9fe/` — all resolve to the same verdict.
+ */
+export function isLinkLocalUrl(raw: string): boolean {
+	let host: string;
+	try {
+		host = new URL(raw).hostname.toLowerCase();
+	} catch {
+		return false;
+	}
+	if (!host) return false;
+	if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+
+	// IPv6 link-local (fe80::/10), the v6 counterpart of the range below.
+	if (isIP(host) === 6) return /^fe[89ab][0-9a-f]:/.test(host);
+
+	const canonical = canonicalizeNumericIpv4(host);
+	if (!canonical) return false; // a real hostname — DNS is not this check's job
+	const [a, b] = canonical.split('.').map(Number);
+	return a === 169 && b === 254;
+}
+
+/**
  * Full SSRF check: literal pre-filter, then resolve every A/AAAA record and
  * reject if *any* resolved IP is blocked. Returns the original URL on success
  * so callers can `await assertSafeRemoteDefinitionUrl(url)` inline.

@@ -10,7 +10,6 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Rhino.Geometry;
 using Selva.Schema.Models;
 using Selva.GH.Config;
@@ -169,22 +168,6 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
     {
         _contextualFileData = null;
         _isFromContextual = false;
-    }
-
-    public JObject GetContextualJson()
-    {
-        return new JObject
-        {
-            { "description", Description ?? "" },
-            { "name", Name },
-            { "nickname", NickName },
-            { "treeAccess", Access == GH_ParamAccess.tree },
-            { "paramType", TypeName },
-            {
-                "acceptedFormats",
-                new JArray(AcceptedFileFormats.Values)
-            }
-        };
     }
 
     protected override void CollectVolatileData_Custom()

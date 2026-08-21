@@ -2,9 +2,15 @@
 	import { page } from '$app/state';
 	import { Button, Input, Label, Alert } from '@selvajs/ui';
 	import { CircleAlert } from '@lucide/svelte';
+	import { fade } from 'svelte/transition';
 
 	interface ActionData {
 		error?: string;
+		// Echoed back so a failed attempt does not wipe what the user typed.
+		email?: string;
+		// Increments per rejected submission. Two identical rejections render
+		// identical pages otherwise, and the second one reads as a dead form.
+		attempt?: number;
 	}
 
 	interface PageData {
@@ -30,6 +36,15 @@
 	let { form, data }: Props = $props();
 
 	const redirectTo = $derived(page.url.searchParams.get('redirectTo') ?? '');
+	const submittedEmail = $derived(form?.email ?? '');
+	const attempt = $derived(form?.attempt ?? 0);
+
+	// A rejected submission is a full page render, so the field the user must
+	// retype starts unfocused and the failure is easy to miss. Re-attaches on
+	// every attempt because the count is read inside.
+	function focusOnRetry(node: HTMLElement) {
+		if (attempt > 0) node.focus();
+	}
 
 	function oauthHref(provider: string): string {
 		// Plain string concatenation — `URLSearchParams` triggers a Svelte
@@ -86,10 +101,18 @@
 		</div>
 
 		{#if form?.error}
-			<Alert.Root variant="destructive">
-				<CircleAlert />
-				<Alert.Description>{form.error}</Alert.Description>
-			</Alert.Root>
+			{#key attempt}
+				<div in:fade={{ duration: 120 }}>
+					<Alert.Root variant="destructive" aria-live="assertive">
+						<CircleAlert />
+						<Alert.Description>
+							{form.error}{#if attempt > 1}
+								<span class="opacity-80"> (attempt {attempt})</span>
+							{/if}
+						</Alert.Description>
+					</Alert.Root>
+				</div>
+			{/key}
 		{/if}
 
 		{#if data.oauthProviders.length > 0}
@@ -125,6 +148,7 @@
 						type="email"
 						required
 						placeholder="you@example.com"
+						value={submittedEmail}
 					/>
 				</div>
 				<Button type="submit" variant="outline" class="w-full">Email me a sign-in link</Button>
@@ -144,15 +168,31 @@
 				{#if redirectTo}
 					<input type="hidden" name="redirectTo" value={redirectTo} />
 				{/if}
+				<input type="hidden" name="attempt" value={attempt} />
 
 				<div class="space-y-2">
 					<Label for="email">Email</Label>
-					<Input id="email" name="email" type="email" required placeholder="admin@example.com" />
+					<Input
+						id="email"
+						name="email"
+						type="email"
+						required
+						placeholder="admin@example.com"
+						value={submittedEmail}
+					/>
 				</div>
 
 				<div class="space-y-2">
 					<Label for="password">Password</Label>
-					<Input id="password" name="password" type="password" required placeholder="Password" />
+					<Input
+						id="password"
+						name="password"
+						type="password"
+						required
+						placeholder="Password"
+						aria-invalid={attempt > 0}
+						{@attach focusOnRetry}
+					/>
 				</div>
 
 				<Button type="submit" class="w-full">Sign in with password</Button>

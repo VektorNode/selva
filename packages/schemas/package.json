@@ -54,7 +54,8 @@
 		"test:watch": "vitest",
 		"generate": "pnpm run generate:ts && pnpm run generate:cs",
 		"generate:ts": "node scripts/generate-typescript.js",
-		"generate:cs": "node scripts/generate-csharp.js"
+		"generate:cs": "node scripts/generate-csharp.js",
+		"lint": "eslint ."
 	},
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
