@@ -108,7 +108,7 @@ Throw `ProviderError` for user-facing failures (`new ProviderError('...', 404)`)
 
 ## Data privacy
 
-Identity and credentials belong to whichever `IAuthProvider` is configured — for Supabase that's a separate service; for the local provider, Selva itself is the auth provider and holds email addresses and password hashes on disk. This package's own stores hold user IDs, authorization metadata, display names, invite email addresses, and audit payloads. **The operator is the data controller.** See [CLAUDE.md](../../CLAUDE.md#data-privacy) for the full inventory and what erasure reaches, plus [providers](../../docs/self-hosting/providers/overview.md) and [security & limits](../../docs/self-hosting/concepts/security-and-limits.md).
+Identity and credentials belong to whichever `IAuthProvider` is configured — for Supabase that's a separate service; for the local provider, Selva itself is the auth provider and holds email addresses and password hashes on disk. This package's own stores hold user IDs, authorization metadata, display names, invite email addresses, and audit payloads. **The operator is the data controller.** See [data privacy](../../docs/self-hosting/concepts/data-privacy.md) for the full inventory and what erasure reaches, plus [providers](../../docs/self-hosting/providers/overview.md) and [security & limits](../../docs/self-hosting/concepts/security-and-limits.md).
 
 ---
 

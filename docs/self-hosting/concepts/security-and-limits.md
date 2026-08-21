@@ -193,8 +193,7 @@ It does **not** catch emails or other personal data buried in a payload, and it 
 runs when the optional `pino` package is installed — the console fallback strips
 nothing. Log identifiers (`eventType`, `actorId`, `userId`), never whole domain
 objects. An audit payload can embed an invitee's email, and logs are the one place
-erasure cannot reach. See the Data Privacy section of the repo `CLAUDE.md` for the
-full contract.
+erasure cannot reach. See [data privacy](./data-privacy.md) for the full contract.
 
 ## Next
 

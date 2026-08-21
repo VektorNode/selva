@@ -21,12 +21,20 @@ export async function readJsonFile<T>(filePath: string, fallback: T): Promise<T>
  * longer existed. With a random name each writer renames its own file; last
  * rename wins, same as the last-write-wins the read-modify-write callers
  * already have.
+ *
+ * Owner-only permissions are not optional here: this helper is the sole writer
+ * for `auth-users.json` (email addresses + PBKDF2 password hashes) and
+ * `compute.config.json`. Under a default umask those land 0644, and any other
+ * local user or co-tenant service on the host can copy the hashes and crack
+ * them offline. The mode goes on the temp file, not the target — `rename`
+ * keeps the temp file's bits, so a post-rename `chmod` would leave a readable
+ * window. No-op on Windows.
  */
 export async function writeJsonFile<T>(filePath: string, data: T): Promise<void> {
-	await fs.mkdir(path.dirname(filePath), { recursive: true });
+	await fs.mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
 	const tmp = `${filePath}.${randomUUID()}.tmp`;
 	try {
-		await fs.writeFile(tmp, JSON.stringify(data, null, '\t'), 'utf-8');
+		await fs.writeFile(tmp, JSON.stringify(data, null, '\t'), { encoding: 'utf-8', mode: 0o600 });
 		await fs.rename(tmp, filePath);
 	} catch (err) {
 		await fs.rm(tmp, { force: true }).catch(() => {});

@@ -1,8 +1,8 @@
 /**
  * `getConfig` returns the whole instance's server list by default — every
  * platform server and every other org's org-private servers. Both org-facing
- * callers filtered it themselves, which is the shape CLAUDE.md warns about: a
- * rule two endpoints must agree on, copied into both. `globalDefaultServerId`
+ * callers filtered it themselves, which is the shape to avoid: a rule two
+ * endpoints must agree on, copied into both. `globalDefaultServerId`
  * passed through unfiltered even so.
  *
  * `scopeToOrgId` moves the filter into the store. What leaks without it is

@@ -149,3 +149,32 @@ describe('writeJsonFile', () => {
 		expect(await fs.readdir(dir)).toEqual(['doc.json']);
 	});
 });
+
+/**
+ * SEL-4. This helper is the sole writer for `auth-users.json` (email addresses
+ * + PBKDF2 password hashes), so a default-umask 0644 lets any other local user
+ * or co-tenant service on the host copy the hashes and crack them offline.
+ * Windows has no POSIX mode bits, so the assertion is POSIX-only — the write
+ * itself is correct on both.
+ */
+const posixMode = it.skipIf(process.platform === 'win32');
+
+describe('writeJsonFile permissions', () => {
+	posixMode('writes the file owner-only (0600)', async () => {
+		await writeJsonFile(file, { secret: true });
+		const { mode } = await fs.stat(file);
+		expect(mode & 0o777).toBe(0o600);
+	});
+
+	posixMode('creates a missing parent directory owner-only (0700)', async () => {
+		const nested = path.join(dir, 'sub', 'doc.json');
+		await writeJsonFile(nested, { secret: true });
+		const { mode } = await fs.stat(path.dirname(nested));
+		expect(mode & 0o777).toBe(0o700);
+	});
+
+	posixMode('leaves no readable temp file behind', async () => {
+		await writeJsonFile(file, { secret: true });
+		expect((await fs.readdir(dir)).filter((n) => n.endsWith('.tmp'))).toEqual([]);
+	});
+});

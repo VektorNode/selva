@@ -1,5 +1,6 @@
 import { error, isHttpError } from '@sveltejs/kit';
-import { ProviderError } from '@selvajs/platform';
+import { ProviderError, type ILogger } from '@selvajs/platform';
+import { renderThrown } from '@selvajs/server/logging';
 import type { ZodError } from 'zod';
 import { SchemaExtractionError } from './definitions/schemaExtraction.server';
 import { ComputeServerUnconfiguredError } from './compute/resolve.server';
@@ -87,7 +88,7 @@ function friendlyConstraintMessage(raw: string): string | null {
  * ProviderError to its statusCode, and falls back to a 500 INTERNAL with the
  * provided message.
  */
-export function handleApiError(err: unknown, fallback: string): never {
+export function handleApiError(err: unknown, fallback: string, log?: ILogger): never {
 	if (isHttpError(err)) throw err;
 	// Compute unreachable, or serving a schema shape the app cannot read → 503
 	// (both are operator-side); invalid/newer-than-supported schema → 422.
@@ -105,7 +106,17 @@ export function handleApiError(err: unknown, fallback: string): never {
 		const friendly = friendlyConstraintMessage(err.message);
 		apiError(err.statusCode, codeForStatus(err.statusCode), friendly ?? err.message);
 	}
-	console.error(`[API] ${fallback}:`, err);
+	// Through the logger, never `console.error(…, err)`. Provider adapters stash
+	// connection details (host, user, sometimes a DSN) on `cause`, and a raw
+	// console call hands the whole object to stdout, where pino's redaction
+	// never runs and erasure can't follow. `renderThrown` flattens to a stack
+	// string; the logger redacts what remains.
+	// `log` is `locals.log` when a request is in scope. The console fallback is
+	// for the handful of callers outside one; `renderThrown` has already
+	// flattened the error, so no object reaches stdout either way.
+	const rendered = renderThrown(err);
+	if (log) log.error(`[API] ${fallback}`, { component: 'api', err: rendered });
+	else console.error(`[API] ${fallback}:`, rendered);
 	apiError(500, ApiErrorCode.INTERNAL, fallback);
 }
 

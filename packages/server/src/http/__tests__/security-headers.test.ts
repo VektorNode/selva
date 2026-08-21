@@ -21,9 +21,15 @@ describe('applySecurityHeaders', () => {
 		);
 	});
 
-	it('never sets CSP or frame headers (iframe embedding is a product requirement)', () => {
+	it('leaves app routes framable by default (iframe embedding is a product requirement)', () => {
 		const out = applySecurityHeaders(new Response('ok'), { hsts: true });
 		expect(out.headers.get('Content-Security-Policy')).toBeNull();
 		expect(out.headers.get('X-Frame-Options')).toBeNull();
+	});
+
+	it('denies framing when the caller opts in (operator surfaces)', () => {
+		const out = applySecurityHeaders(new Response('ok'), { hsts: true, denyFraming: true });
+		expect(out.headers.get('X-Frame-Options')).toBe('DENY');
+		expect(out.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none'");
 	});
 });

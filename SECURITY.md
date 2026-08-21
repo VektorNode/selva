@@ -30,7 +30,7 @@ names, invite emails, and audit-event payloads. How much identity data lives
 elsewhere depends on the auth provider: with Supabase, credentials sit in
 Supabase `auth.users`; with the local provider, Selva _is_ the auth provider and
 stores emails and PBKDF2 password hashes on its own disk. See
-[CLAUDE.md § Data privacy](./CLAUDE.md#data-privacy).
+[Data privacy](./docs/self-hosting/concepts/data-privacy.md).
 
 Reports involving credential handling, session management, the WebSocket bridge,
 or the embedded HTTP server are especially welcome.

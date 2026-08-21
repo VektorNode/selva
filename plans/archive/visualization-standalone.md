@@ -22,7 +22,7 @@
 >   a package with zero direct consumers). So viz keeps its `@selvajs/schemas` dep for now, confined
 >   to `session/`.
 > - **§3 → 3a, not 3b.** Settled by the solve plan's seam table: the app is the assembly point and
->   passes a whole response into `getThreeMeshesFromComputeResponse` (its Parafa fix snippet does
+>   passes a whole response into `getThreeMeshesFromComputeResponse` (its downstream fix snippet does
 >   exactly that). 3b would have broken the call the other plan depends on. Verified after the fact:
 >   all three consumers type-check unchanged, because compute's `GrasshopperComputeResponse` is a
 >   structural superset of the local `DisplayComputeResponse`.

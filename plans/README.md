@@ -6,8 +6,11 @@ index just maps each plan to the issue that tracks it. See [CONVENTIONS.md](./CO
 Everything below was verified against the source tree on 2026-08-16, not taken from the plans' own
 headers, several of which were badly wrong in both directions.
 
-`plans/` is internal-only (not Selva documentation — excluded from the published website) and lives
-at the repo root, separate from `docs/`.
+**These are design documents, not a backlog, and not user documentation.** They record why something
+is built the way it is — the tradeoffs weighed and the alternatives rejected. For how to _use_ or
+self-host Selva, see [`docs/`](../docs/README.md); `plans/` is excluded from the published website.
+A plan may describe the tree as it was when written, so when a path here stops resolving, the plan
+has drifted — that is not a sign the code is wrong.
 
 - [`features/`](./features/) — new product surface.
 - [`fixes/`](./fixes/) — defects, performance residue, and open audit items.
@@ -15,19 +18,17 @@ at the repo root, separate from `docs/`.
 
 ## What to pick up
 
-**Go to [the board](https://github.com/orgs/VektorNode/projects/2), not this file.** Issues own
+**Go to the [issue tracker](https://github.com/VektorNode/selva/issues), not this file.** Issues own
 status, assignment and priority; plans own the reasoning. See [CONVENTIONS.md](./CONVENTIONS.md)
 for why, and read it before adding a plan.
 
-Sorted by Priority then Effort, the board's top rows are the work worth starting. As of
-2026-08-16 that is #195 (org-admin privilege escalation) and #202 (the pm2 staging test) — both
-High priority, low effort.
+Issues carry Priority and Effort fields; sorted by Priority then Effort, the top rows are the work
+worth starting. Issues labelled `good first issue` are the small, self-contained ones.
 
 Each plan below links to its tracking issue at the top of the file.
 
 | Plan                                                                            | Tracked in                                                                                                                                                                                                                  |
 | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [selva-app-security-audit](./fixes/selva-app-security-audit.md)                 | [#194](https://github.com/VektorNode/selva/issues/194) (6 sub-issues)                                                                                                                                                       |
 | [api-v1-residuals](./fixes/api-v1-residuals.md)                                 | [#201](https://github.com/VektorNode/selva/issues/201)                                                                                                                                                                      |
 | [host-prerequisites-and-pm2-audit](./fixes/host-prerequisites-and-pm2-audit.md) | [#202](https://github.com/VektorNode/selva/issues/202)                                                                                                                                                                      |
 | [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)         | [#203](https://github.com/VektorNode/selva/issues/203) (cheap wins only)                                                                                                                                                    |
@@ -54,7 +55,7 @@ more were listed at paths that no longer exist. All are now accounted for:
   alternative was rejected.
 - **[compute-package-cleanup](./archive/compute-package-cleanup.md)** — all 8 steps done
   (2026-07-31), but **two pre-publish checks it deliberately left open still appear unclosed**:
-  grep parafa and parapet for the five removed symbols (`processInputs` and `getValues` are the
+  grep the two known downstream consumers for the five removed symbols (`processInputs` and `getValues` are the
   weakest-evidence cuts, and neither repo is in this monorepo's CI), and diff the published
   `3.1.1` tarball rather than a local build. Both are cross-repo and unverifiable from here — close
   them explicitly or they will read as done forever. Minor residue: `examples/simple_example.ts`

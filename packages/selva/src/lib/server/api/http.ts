@@ -257,8 +257,10 @@ export function apiRoute<E extends RequestEvent>(
 			return await handler(event);
 		} catch (err) {
 			// `handleApiError` re-throws anything already structured, so a
-			// deliberate `apiError(404, …)` passes through untouched.
-			handleApiError(err, fallback);
+			// deliberate `apiError(404, …)` passes through untouched. The
+			// request logger goes with it so the 500 branch lands in pino
+			// (redaction, request id) rather than raw on stdout.
+			handleApiError(err, fallback, event.locals.log);
 		}
 	};
 }

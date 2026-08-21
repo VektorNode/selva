@@ -5,6 +5,7 @@ import {
 	checkRateLimit,
 	recordFailedAttempt,
 	clearRateLimit,
+	warnIfAddressKeysCollapse,
 	safeRedirectTarget
 } from '$lib/server/admin-auth.server';
 import { getAuthProvider } from '$lib/server/auth.server';
@@ -88,16 +89,18 @@ export const actions = {
 			redirect(303, '/setup');
 		}
 
-		const { allowed } = checkRateLimit(ip);
-		if (!allowed) {
-			return fail(429, { error: 'Too many failed attempts. Try again in 15 minutes.' });
-		}
-
 		const data = await request.formData();
 		// Email is optional — when users.json is not configured only password is needed
 		const email = (data.get('email') as string | null) ?? '';
 		const password = data.get('password');
 		const redirectTo = data.get('redirectTo');
+
+		// After the body is read, because the account bucket needs the email.
+		warnIfAddressKeysCollapse(ip, event.locals.log);
+		const { allowed } = checkRateLimit(ip, email);
+		if (!allowed) {
+			return fail(429, { error: 'Too many failed attempts. Try again in 15 minutes.' });
+		}
 
 		if (!password || typeof password !== 'string') {
 			return fail(400, { error: 'Password is required' });
@@ -112,10 +115,10 @@ export const actions = {
 
 		switch (result.kind) {
 			case 'failed':
-				recordFailedAttempt(ip);
+				recordFailedAttempt(ip, email);
 				return fail(401, { error: 'Invalid credentials' });
 			case 'success': {
-				clearRateLimit(ip);
+				clearRateLimit(ip, email);
 				setSessionCookie(cookies, result.sessionToken);
 
 				// Same-origin only. Form value wins; query-string is the fallback.

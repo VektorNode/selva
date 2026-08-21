@@ -30,6 +30,21 @@ No domain yet? Swap the site block for `:80 { reverse_proxy 127.0.0.1:3000 }`. C
 
 For a hardened config (security headers, per-route caching, access logging), start from [Caddyfile.example](./Caddyfile.example).
 
+## Tell Selva the real client IP
+
+Set these two in `.env` once the proxy is in front of the app:
+
+```bash
+ADDRESS_HEADER=X-Forwarded-For
+XFF_DEPTH=1
+```
+
+`XFF_DEPTH` is how many proxies you run, counted from the outside in — `1` for the Caddy setup above, `2` if a CDN or load balancer sits in front of Caddy. Count wrong and Selva reads the wrong hop.
+
+Without these, `getClientAddress()` returns the socket peer, which is `127.0.0.1` for every request that comes through the proxy. Login rate limiting is keyed on that address, so the entire instance shares one bucket: five failed logins from anywhere lock out every user for 15 minutes, and only a successful login clears the bucket — which nobody can now reach. The app logs a warning the first time it sees this, but the setting is what fixes it.
+
+**These two settings are safe only because the app is bound to `127.0.0.1`.** `X-Forwarded-For` is a client-supplied header. If Selva is reachable directly — a public bind, an open firewall port, a container published to `0.0.0.0` — anyone can spoof it and pick their own rate-limit bucket. Bind to loopback first, then set these.
+
 If your proxy caps request bodies, keep that cap at or above the app's `BODY_SIZE_LIMIT` (default 210M). A lower proxy cap rejects large `file` widget uploads before Selva sees them. The same goes for read timeouts and `COMPUTE_SOLVE_DEADLINE_MS`: a long solve 502s at the proxy regardless of what Selva allows.
 
 ## Adding SSO

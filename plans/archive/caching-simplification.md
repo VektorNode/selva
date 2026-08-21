@@ -340,7 +340,7 @@ learns the system is on.
 - **Phase 1 changes default behaviour.** The others are deletions and renames of things that are
   already off. Land Phase 1 alone and watch it before proceeding.
 - **`@selvajs/solve` goes major again** (second time this month — Phase 3 of the solve extraction was
-  the first). `@selvajs/server` is untouched. Parafa consumes `@selvajs/solve/server`; it does not use
+  the first). `@selvajs/server` is untouched. A downstream consumer uses `@selvajs/solve/server`; it does not use
   L2, but confirm before publishing.
 - **The seam could rot.** `ISolveResultCache` survives with no production implementation, which is
   how interfaces drift out of usability. Mitigate by keeping the pipeline hook exercised: a test

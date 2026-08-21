@@ -5,6 +5,14 @@ export interface SecurityHeaderOptions {
 	 * what "production" means (e.g. `NODE_ENV`).
 	 */
 	hsts: boolean;
+	/**
+	 * Forbid framing this response. Off by default — Selva-engine app routes are
+	 * built to be embedded. Turn it on for operator surfaces (`/admin/*`,
+	 * `/setup`), where an authenticated session plus a framable page is a
+	 * UI-redress attack. `SameSite=Lax` blunts cross-site POST, not same-origin
+	 * redress, so the cookie flag is not a substitute.
+	 */
+	denyFraming?: boolean;
 }
 
 /**
@@ -18,12 +26,14 @@ export interface SecurityHeaderOptions {
  *   - Permissions-Policy: opts out of browser APIs Selva-engine apps don't use,
  *     so XSS can't enable them.
  *   - HSTS when `opts.hsts`.
+ *   - X-Frame-Options + `frame-ancestors 'none'` when `opts.denyFraming` — the
+ *     caller opts in per route, since embeddable app routes must stay framable.
  *
  * **Intentionally NOT set here:**
- *   - Content-Security-Policy + frame-ancestors. Selva-engine apps are built
- *     for iframe embedding, so a strict CSP needs validating against real
- *     consumer sites before it can ship.
- *   - X-Frame-Options. Same iframe-embedding constraint.
+ *   - A full Content-Security-Policy. Selva-engine apps are built for iframe
+ *     embedding, so a strict CSP needs validating against real consumer sites
+ *     before it can ship. `denyFraming` sets only the `frame-ancestors`
+ *     directive, which constrains nothing else the page loads.
  *   - Cache-Control. Asset-path layout is app policy; set it in the caller.
  */
 export function applySecurityHeaders(response: Response, opts: SecurityHeaderOptions): Response {
@@ -35,6 +45,10 @@ export function applySecurityHeaders(response: Response, opts: SecurityHeaderOpt
 	);
 	if (opts.hsts) {
 		response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+	}
+	if (opts.denyFraming) {
+		response.headers.set('X-Frame-Options', 'DENY');
+		response.headers.set('Content-Security-Policy', "frame-ancestors 'none'");
 	}
 	return response;
 }

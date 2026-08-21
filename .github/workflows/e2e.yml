@@ -3,6 +3,10 @@ name: E2E
 on:
   pull_request:
 
+# Read-only: this workflow builds and uploads artifacts, never writes to the repo.
+permissions:
+  contents: read
+
 concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true

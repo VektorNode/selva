@@ -51,9 +51,11 @@ officially representing the community in public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported via [GitHub Security Advisories](https://github.com/VektorNode/selva/security/advisories/new)
-on this repository, which reaches maintainers privately. All complaints will be
-reviewed and investigated promptly and fairly.
+reported privately to the maintainers at **conduct@vektornode.com**. All
+complaints will be reviewed and investigated promptly and fairly, and the
+reporter's privacy and security will be respected.
+
+Security vulnerabilities go somewhere else — see [SECURITY.md](./SECURITY.md).
 
 Community leaders will follow these Community Impact Guidelines in determining
 the consequences for any action they deem in violation of this Code of Conduct:

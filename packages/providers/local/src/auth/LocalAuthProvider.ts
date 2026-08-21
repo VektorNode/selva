@@ -21,6 +21,12 @@ const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 // rather than imported — the local provider has no `@selvajs/server` dependency.
 const MIN_HMAC_SECRET_LENGTH = 32;
 
+// The `.env.example` placeholder is 41 chars, so it clears the length guard
+// above. An operator who copies the file without rotating boots with a signing
+// key that is public in the repo — every session token forgeable. `selva
+// doctor` catches it, but nothing forces anyone to run doctor.
+export const PLACEHOLDER_SECRET = 'replace-this-with-a-random-32-byte-hex-key';
+
 function toAuthUser(
 	u: Pick<StoredAuthUser, 'id' | 'email' | 'createdAt' | 'lastLoginAt' | 'disabled'>
 ): AuthUser {
@@ -107,6 +113,12 @@ export class LocalAuthProvider implements IAuthProvider {
 	static fromEnv(env: Record<string, string | undefined>): LocalAuthProvider {
 		const hmacSecret = env.SELVA_HMAC_KEY;
 		if (!hmacSecret) throw new Error('Missing required env var: SELVA_HMAC_KEY');
+		if (hmacSecret === PLACEHOLDER_SECRET) {
+			throw new Error(
+				'SELVA_HMAC_KEY is still the .env.example placeholder — every session token ' +
+					'would be forgeable by anyone with the repo. Generate one with: openssl rand -hex 32'
+			);
+		}
 		if (hmacSecret.length < MIN_HMAC_SECRET_LENGTH) {
 			throw new Error(
 				`SELVA_HMAC_KEY must be at least ${MIN_HMAC_SECRET_LENGTH} characters ` +

@@ -274,7 +274,7 @@ other repo's work and can ship first.
   concurrent-user warning" concept first? (No such concept exists today.)
 - Rollback history retention: unbounded history file, or cap at N entries /
   purge entries older than X? (Mirrors the "no time-based retention" gap
-  called out for `audit_events`/`solve_metrics` in CLAUDE.md — don't repeat it
+  called out for `audit_events`/`solve_metrics` in the data-privacy doc — don't repeat it
   here without a decision.)
 - Track B auth: confirmed separate admin-key vs. solve-key on the compute
   side, or does this plan need to specify that separation as a requirement

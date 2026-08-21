@@ -288,7 +288,8 @@ config, the provider conformance kits, and why `@selvajs/cli` is exempt.
 ## Documentation
 
 - Top-level `README.md` is for users.
-- `CLAUDE.md` is for AI agents working in the repo.
+- `CLAUDE.md` is an entrance guide for AI agents working in the repo. It points outward and is
+  never the authority for anything — no other document should cite it.
 - `CONTRIBUTING.md` is for human contributors.
 - `STRUCTURE.md` (this file) is the source of truth for layout/naming.
 - [docs/contributing/plugin-context.md](./docs/contributing/plugin-context.md) is the source of truth for Grasshopper canvas wiring and schema identity.

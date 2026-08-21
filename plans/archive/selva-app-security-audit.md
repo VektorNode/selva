@@ -1,5 +1,22 @@
 # Selva App Security Audit — Fix Plan
 
+> **Status: CLOSED (archived 2026-08-21). All six findings fixed; [#194](https://github.com/VektorNode/selva/issues/194)
+> and every sub-issue closed.** SEL-1 landed separately on 2026-08-17; SEL-2 through SEL-6 landed
+> together. Each issue carries the implementation reasoning — read those, not this document, for what
+> the code does now.
+>
+> **Two fixes need operator action and will not take effect on their own:**
+> `ADDRESS_HEADER=X-Forwarded-For` + `XFF_DEPTH=<proxy count>` must be set per deployment or SEL-2's
+> per-address bucket still collapses (the per-account limiter and a boot warning cover the gap), and
+> `COMPUTE_ALLOW_PRIVATE_SERVER_URL=true` is required by any deployment whose Rhino.Compute runs on
+> loopback or a LAN address — SEL-3 blocks private ranges by default, on the write path only.
+>
+> **Still open, tracked elsewhere:** B5-lb (multi-instance rate-limit drift, the horizontal-scaling
+> half of SEL-2) and S4 (`ORIGIN` boot validation, adjacent to SEL-5), both in
+> [data-access-efficiency-audit](../fixes/data-access-efficiency-audit.md). The
+> [Known and accepted](#known-and-accepted--no-action-proposed) section below was deliberately not
+> actioned and still describes live tradeoffs.
+
 **Tracked in [#194](https://github.com/VektorNode/selva/issues/194).**
 
 **Run:** 2026-08-16 (branch `feat/docs-website`) by five parallel read-only reviewers across
@@ -35,7 +52,7 @@ hardening.
 | [#200](https://github.com/VektorNode/selva/issues/200) | **SEL-6** | Admin pages framable; error path bypasses pino redaction                | Low      |
 
 Related open items already tracked in
-[data-access-efficiency-audit](./data-access-efficiency-audit.md): **B5-lb** (multi-instance
+[data-access-efficiency-audit](../fixes/data-access-efficiency-audit.md): **B5-lb** (multi-instance
 rate-limit drift) is the horizontal-scaling half of SEL-2 — fixing SEL-2 does not close it, and
 closing B5-lb with a shared store does not fix SEL-2's key collapse. **S4** (validate `ORIGIN` at
 boot, Origin allowlist) is adjacent to SEL-5.
@@ -66,7 +83,7 @@ them. The same asymmetry lets an admin promote any third party to owner by re-in
 **Fix.** Gate the invitable `orgRole` on the actor's own role: only an owner may invite an `owner`
 (and arguably an `admin`). Put the rule next to the existing permission intersection in the POST
 handler so the two paths can't drift apart again — this is the same "one rule, two siblings"
-hazard CLAUDE.md calls out for `/api/admin/*` vs `/api/v1/*`.
+hazard called out for `/api/admin/*` vs `/api/v1/*` — one rule, one place.
 
 **Regression test.** Admin actor + `orgRole: "owner"` → 403. Owner actor + `orgRole: "owner"` → 201. Cover it in the existing `invites/__tests__`.
 
@@ -201,7 +218,7 @@ scoping it.
 `console.error(…, err)` rather than the pino logger, so `REDACTED_PATHS`
 (`packages/server/src/logging/PinoLogger.ts:44`) never runs on it. Provider adapters stash
 connection details in `cause`, which reaches stdout unredacted — the one place erasure cannot
-follow (see the logging prohibition in CLAUDE.md). Same at `providers.server.ts:304`. The client
+follow (see the logging prohibition in the data-privacy doc). Same at `providers.server.ts:304`. The client
 still correctly receives a generic 500 with no stack. **Fix:** route through
 `locals.log.error(…, { err: renderThrown(err) })`, as the `+server.ts` handlers already do.
 

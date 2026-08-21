@@ -9,6 +9,10 @@ on:
   schedule:
     - cron: '0 6 * * 1' # Mondays 06:00 UTC
 
+# Read-only: this workflow only builds and tests, never writes to the repo.
+permissions:
+  contents: read
+
 # Keyed on workflow too, so push-to-main and PR runs for one ref don't cancel
 # each other.
 concurrency:

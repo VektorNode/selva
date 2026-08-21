@@ -376,13 +376,24 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 //
 // Applied to every response — successful resolves and the 401/503
 // short-circuits above. The browser-hardening set (nosniff, Referrer-Policy,
-// Permissions-Policy, HSTS in production; CSP and frame headers deliberately
-// omitted for iframe embedding) lives in `@selvajs/server/http` — see
-// `applySecurityHeaders` there. Cache-control stays here: it encodes this
+// Permissions-Policy, HSTS in production) lives in `@selvajs/server/http` —
+// see `applySecurityHeaders` there. Cache-control stays here: it encodes this
 // app's asset layout.
+//
+// Frame headers are the one route-dependent piece. App routes must stay
+// framable (embedding is what Selva-engine apps are for), but the operator
+// surfaces below hold an authenticated admin session, where a framable page is
+// a UI-redress attack.
+const FRAME_DENIED_PREFIXES = ['/admin', '/setup', '/login'];
+
+function deniesFraming(pathname: string): boolean {
+	return FRAME_DENIED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 function applyResponseHeaders(response: Response, pathname: string, requestId: string): Response {
 	applySecurityHeaders(response, {
-		hsts: process.env.NODE_ENV === 'production'
+		hsts: process.env.NODE_ENV === 'production',
+		denyFraming: deniesFraming(pathname)
 	});
 
 	// Echoed so a user reporting "request X failed" gives an operator the

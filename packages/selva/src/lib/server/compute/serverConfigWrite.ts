@@ -13,7 +13,52 @@
  * build time.
  */
 
+import { env } from '$env/dynamic/private';
+import { isSafeRemoteDefinitionUrl } from '@selvajs/server/compute';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+
+/**
+ * A stored `serverUrl` is fetched server-side on every status probe, every
+ * purge/shutdown action, and every solve — so an unfiltered one is an SSRF
+ * primitive handed to whoever holds `manage_compute`. Two rules:
+ *
+ *   - Scheme allowlist (`http`/`https`), always. `file:`, `gopher:` and friends
+ *     are never a Rhino.Compute endpoint, so there is nothing to trade off.
+ *   - Private/link-local block, on by default. This one IS a real tradeoff: a
+ *     compute server on the same LAN or on loopback is an ordinary
+ *     self-hosted deployment, not an attack. So it is opt-out via
+ *     `COMPUTE_ALLOW_PRIVATE_SERVER_URL=true` — an operator who genuinely runs
+ *     compute on `10.x` sets it once and knows what they turned off. Left on,
+ *     it blocks the case that actually matters: `169.254.169.254` and other
+ *     cloud metadata endpoints.
+ *
+ * The literal filter is reused rather than reimplemented — it already handles
+ * the IP encodings (integer, octal, hex, IPv4-mapped IPv6) a hand-rolled check
+ * misses. Only the synchronous half applies here: the DNS half of
+ * `assertSafeRemoteDefinitionUrl` would make a config save fail on a name that
+ * merely doesn't resolve yet, which is the wrong failure for an operator
+ * typing in a server they are about to stand up.
+ */
+function assertUsableServerUrl(serverUrl: string): void {
+	let parsed: URL;
+	try {
+		parsed = new URL(serverUrl);
+	} catch {
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, `Invalid serverUrl: ${serverUrl}`);
+	}
+	if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, `serverUrl must use http or https: ${serverUrl}`);
+	}
+	if (env.COMPUTE_ALLOW_PRIVATE_SERVER_URL === 'true') return;
+	if (!isSafeRemoteDefinitionUrl(serverUrl)) {
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			`serverUrl points at a private, loopback, or link-local address: ${serverUrl}. ` +
+				'Set COMPUTE_ALLOW_PRIVATE_SERVER_URL=true if your compute server really is on an internal network.'
+		);
+	}
+}
 
 /** The fields every incoming server carries, whatever its scope. */
 export interface IncomingServerBase {
@@ -42,11 +87,7 @@ export function validateIncomingServers(servers: readonly IncomingServerBase[]):
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a label');
 		if (!s.serverUrl || typeof s.serverUrl !== 'string')
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a serverUrl');
-		try {
-			new URL(s.serverUrl);
-		} catch {
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Invalid serverUrl: ${s.serverUrl}`);
-		}
+		assertUsableServerUrl(s.serverUrl);
 		if (s.apiKey !== undefined && s.apiKey !== null && typeof s.apiKey !== 'string')
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a string, null, or omitted');
 	}

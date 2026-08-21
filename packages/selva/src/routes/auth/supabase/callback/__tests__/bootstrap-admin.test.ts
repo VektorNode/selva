@@ -18,6 +18,7 @@ import {
 	setEnv,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures.js';
+import { issueOAuthState } from '$lib/server/auth/oauthState.server.js';
 import { GET } from '../+server.js';
 
 let tp: TestProviders | null = null;
@@ -39,17 +40,25 @@ async function callback(opts: { code: string }): Promise<{
 	location?: string;
 	json?: unknown;
 }> {
+	// A real jar, because the callback consumes the CSRF state nonce out of it
+	// before anything else runs. Issuing one here is the same thing
+	// `/auth/supabase/start` does — these tests are about the bootstrap grant,
+	// not the gate, and `oauthState.test.ts` covers the gate on its own.
+	const jar = new Map<string, string>();
+	const cookies = {
+		get: (name: string) => jar.get(name),
+		set: (name: string, value: string) => void jar.set(name, value),
+		delete: (name: string) => void jar.delete(name),
+		getAll: () => [...jar].map(([name, value]) => ({ name, value }))
+	};
+	const state = issueOAuthState(cookies as never);
+
 	const event = {
-		url: new URL(`http://test.local/auth/supabase/callback?code=${opts.code}`),
+		url: new URL(`http://test.local/auth/supabase/callback?code=${opts.code}&selva_state=${state}`),
 		params: {},
 		request: new Request('http://test.local/'),
 		locals: {},
-		cookies: {
-			get: () => undefined,
-			set: () => {},
-			delete: () => {},
-			getAll: () => []
-		},
+		cookies,
 		setHeaders: () => {},
 		fetch,
 		platform: undefined,
@@ -181,5 +190,43 @@ describe('OAuth callback bootstrap admin grant', () => {
 			staff!.id
 		);
 		expect(perms).toContain('instance_admin');
+	});
+});
+
+/**
+ * SEL-5. The callback is a GET that sets a session cookie, so SvelteKit's CSRF
+ * origin check does not reach it. Without the state nonce an attacker replays
+ * their own `?code=` into the victim's browser and the victim ends up signed
+ * into the attacker's account.
+ */
+describe('OAuth callback CSRF state', () => {
+	async function callbackWithoutState(): Promise<number> {
+		const event = {
+			url: new URL('http://test.local/auth/supabase/callback?code=fake-code'),
+			params: {},
+			request: new Request('http://test.local/'),
+			locals: {},
+			cookies: { get: () => undefined, set: () => {}, delete: () => {}, getAll: () => [] },
+			setHeaders: () => {},
+			fetch,
+			platform: undefined,
+			route: { id: null },
+			isDataRequest: false,
+			isSubRequest: false
+		};
+		try {
+			await GET(event as never);
+			return 200;
+		} catch (err) {
+			return (err as { status?: number }).status ?? 500;
+		}
+	}
+
+	it('refuses a callback carrying no state, before the code is exchanged', async () => {
+		tp = await freshProviders();
+		installOAuthShim(tp, { email: 'victim@example.test' });
+		expect(await callbackWithoutState()).toBe(400);
+		// The exchange never ran, so no user was created.
+		expect(await tp.authUsers.findByEmail('victim@example.test')).toBeNull();
 	});
 });

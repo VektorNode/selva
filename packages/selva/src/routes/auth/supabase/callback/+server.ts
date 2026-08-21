@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getAuthProvider } from '$lib/server/auth.server';
 import { bootstrapUserSession } from '$lib/server/auth-bootstrap.server';
+import { consumeOAuthState } from '$lib/server/auth/oauthState.server';
 import {
 	safeRedirectTarget,
 	setSessionCookie,
@@ -20,6 +21,15 @@ import {
  * sequence in the same order.
  */
 export const GET: RequestHandler = async ({ url, cookies }) => {
+	// Before the exchange, and before anything is read from the URL: this is a
+	// GET that sets a session cookie, and SvelteKit's CSRF origin check only
+	// covers form POSTs. Without the nonce an attacker's captured `?code=` logs
+	// the victim into the attacker's account. Consuming it also clears the
+	// cookie, so a nonce is good for exactly one attempt.
+	if (!consumeOAuthState(cookies, url.searchParams.get('selva_state'))) {
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Sign-in session expired. Please try again.');
+	}
+
 	const code = url.searchParams.get('code');
 	if (!code) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Missing authorization code');
 

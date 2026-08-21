@@ -19,6 +19,10 @@ on:
       - '.github/workflows/website.yml'
       - 'pnpm-lock.yaml'
 
+# Read-only: this workflow only builds the site, never writes to the repo.
+permissions:
+  contents: read
+
 concurrency:
   group: website-${{ github.ref }}
   cancel-in-progress: true

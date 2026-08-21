@@ -9,7 +9,7 @@ Read this before adding a file to `plans/` or wondering why a plan has no status
 |           | Issues                                        | Plans                                 |
 | --------- | --------------------------------------------- | ------------------------------------- |
 | Owns      | what to do, who has it, what's done, priority | why, tradeoffs, rejected alternatives |
-| Lives     | GitHub, on the project board                  | `plans/*.md`                          |
+| Lives     | GitHub, on the issue tracker                  | `plans/*.md`                          |
 | Read when | picking up work                               | you need context on a decision        |
 
 A plan **carries no status and no task list.** Not "Phase 1 ☐ open", not a checkbox, not a
@@ -39,7 +39,7 @@ Signals you don't: it's a bug, it's one package, the approach is obvious once st
 
 For anything with more than about three separable tasks, use one **epic** issue with GitHub
 [sub-issues](https://docs.github.com/en/issues) under it — real parent/child links, not markdown
-checkboxes, so the parent shows progress and the board can filter to parents only.
+checkboxes, so the parent shows progress and the tracker can filter to parents only.
 
 The rule of thumb: a sub-issue is worth creating when someone could pick it up **without** taking
 the rest. Four items that must ship together are one issue, not four.
@@ -66,20 +66,19 @@ That single line is the only status-adjacent thing a plan may contain, because i
 
 ## Priority
 
-Priority and Effort are **fields on the [project board](https://github.com/orgs/VektorNode/projects/2)**,
-not labels — Priority is Urgent/High/Medium/Low, Effort is High/Medium/Low. Set both at triage.
+Priority and Effort are **issue fields, not labels** — Priority is Urgent/High/Medium/Low, Effort is
+High/Medium/Low. Maintainers set both at triage; you don't need to.
 
 Note Effort runs the opposite way to intuition: **Effort: Low means quick**. Sorting by Priority
 then Effort puts the highest-value, cheapest work on top, which is the list to work from.
 
-Consequence worth knowing: an issue not on the board has no priority. If it matters, add it to the
-board.
+Consequence worth knowing: an issue with neither field set has not been triaged yet.
 
 Issue **Type** (Bug / Feature / Task / Verification) is separate again, and org-level rather than
 per-repo. `Verification` is for empirical checks whose output is evidence rather than a code
 change — a staging test, a measurement run.
 
-Priority means urgency-to-us, not severity. The old efficiency audit ranked by _cost of fixing
+Priority means urgency to the project, not severity. The old efficiency audit ranked by _cost of fixing
 later ÷ cost of fixing now_, which is a better instinct than severity and worth keeping.
 
 ## Labels

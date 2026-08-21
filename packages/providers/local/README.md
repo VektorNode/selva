@@ -68,7 +68,7 @@ All JSON files are written atomically (temp file + rename) so a crash mid-write 
 
 Users live in `auth-users.json` ([src/auth/users.ts](src/auth/users.ts)) with PBKDF2-SHA256 password hashes, stored as `pbkdf2:sha256:<iterations>:<salt>:<hash>` (100 000 iterations, 32-byte key, base64url). Platform permissions live separately in `user-data.json`. The first admin is bootstrapped through the in-app setup page on a fresh install — there is no env-var fallback login.
 
-**Under this provider Selva _is_ the auth provider** — email addresses and password hashes sit on the deployment's own disk, with no third party holding them. The operator is the data controller for all of it; see [CLAUDE.md](../../../CLAUDE.md#data-privacy) for the full inventory.
+**Under this provider Selva _is_ the auth provider** — email addresses and password hashes sit on the deployment's own disk, with no third party holding them. The operator is the data controller for all of it; see [data privacy](../../../docs/self-hosting/concepts/data-privacy.md) for the full inventory.
 
 ### Data
 

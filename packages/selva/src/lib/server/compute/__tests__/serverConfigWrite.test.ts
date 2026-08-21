@@ -5,7 +5,8 @@
  * than through either route.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
+import { env } from '$env/dynamic/private';
 import {
 	resolveApiKey,
 	storedKeysById,
@@ -79,5 +80,50 @@ describe('validateIncomingServers', () => {
 	it('allows apiKey to be omitted or explicitly null', () => {
 		expect(() => validateIncomingServers([server({ apiKey: null })])).not.toThrow();
 		expect(() => validateIncomingServers([server()])).not.toThrow();
+	});
+});
+
+/**
+ * The stored `serverUrl` is fetched server-side on every status probe and every
+ * solve, so validation here is the SSRF gate — see SEL-3. The private-range
+ * half is opt-out because a compute server on the LAN is an ordinary
+ * self-hosted layout; the scheme allowlist never is.
+ */
+describe('validateIncomingServers — SSRF guard on serverUrl', () => {
+	afterEach(() => {
+		delete env.COMPUTE_ALLOW_PRIVATE_SERVER_URL;
+	});
+
+	it.each([
+		['cloud metadata', 'http://169.254.169.254/latest/meta-data/'],
+		['metadata as an integer literal', 'http://2852039166/'],
+		['loopback', 'http://127.0.0.1:6500'],
+		['loopback by name', 'http://localhost:6500'],
+		['RFC1918', 'http://10.0.0.5:6500'],
+		['IPv6 loopback', 'http://[::1]:6500']
+	])('rejects %s by default', (_case, serverUrl) => {
+		expect(() => validateIncomingServers([server({ serverUrl })])).toThrow();
+	});
+
+	it.each([
+		['file', 'file:///etc/passwd'],
+		['gopher', 'gopher://compute.example.test/'],
+		['javascript', 'javascript:alert(1)']
+	])('rejects the %s scheme even when private addresses are allowed', (_case, serverUrl) => {
+		env.COMPUTE_ALLOW_PRIVATE_SERVER_URL = 'true';
+		expect(() => validateIncomingServers([server({ serverUrl })])).toThrow();
+	});
+
+	it('allows a private address once the operator opts in', () => {
+		env.COMPUTE_ALLOW_PRIVATE_SERVER_URL = 'true';
+		expect(() =>
+			validateIncomingServers([server({ serverUrl: 'http://10.0.0.5:6500' })])
+		).not.toThrow();
+	});
+
+	it('always allows an ordinary public https endpoint', () => {
+		expect(() =>
+			validateIncomingServers([server({ serverUrl: 'https://compute.example.test' })])
+		).not.toThrow();
 	});
 });

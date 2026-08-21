@@ -305,7 +305,10 @@ if (!(globalThis as Record<string, unknown>)[ERROR_HOOKS_FLAG]) {
 		// Also write straight to the console here: Node is about to exit, and a
 		// buffered/async log transport may never flush. The duplicate line is a
 		// cheap price for not losing the record that explains the crash.
-		console.error('[uncaughtException]', error);
+		// Rendered, not raw — handing the object to stdout would print whatever
+		// a provider adapter stashed on `cause` (connection details, sometimes a
+		// DSN) where pino's redaction never runs.
+		console.error('[uncaughtException]', renderThrown(error));
 		getLogger().error('Uncaught exception', {
 			component: 'process',
 			origin: 'uncaughtException',

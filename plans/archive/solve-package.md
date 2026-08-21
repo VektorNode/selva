@@ -2,8 +2,8 @@
 
 > **Status: CLOSED (archived 2026-07-31). Phases 0–4 DONE (2026-07-30). Phase 5 is SUPERSEDED by
 > [caching-simplification](./caching-simplification.md) — do not implement it from this document.
-> Phase 6's in-repo half is verified green (`type-check` / `lint` 0 errors / `test`); its Parafa half
-> is tracked in the Parafa repo, not here.** Supersedes the open
+> Phase 6's in-repo half is verified green (`type-check` / `lint` 0 errors / `test`); its downstream half
+> is tracked in that app's own repo, not here.** Supersedes the open
 > items in [visualization-standalone](./visualization-standalone.md) — §1–§4 **landed** (its §3 chose
 > option 3a), and §5/§6 are absorbed here. Scope: extract the client-side solve orchestration out of
 > `@selvajs/visualization/session` and the server-side solve core out of `@selvajs/server/compute`
@@ -21,7 +21,7 @@ The solve flow is one causal chain scattered across four packages, and **no pack
 ```
 slider change      @selvajs/ui           (ComputeApp, useSolveSession)
 throttle + memo    @selvajs/visualization/session
-HTTP call          each app, hand-written  ← Selva and Parafa both wrote this
+HTTP call          each app, hand-written  ← Selva and the second app both wrote this
 pipeline + caches  @selvajs/server/compute
 Rhino.Compute      @selvajs/compute
 parse → render     @selvajs/visualization/{parse,render}
@@ -33,18 +33,18 @@ Two consequences, both measured rather than assumed:
    (seed defaults, auto-vs-manual solve, dirty flags, project values to inputs). It has nothing to do
    with meshes — `meshes` is typed `unknown[]` and passed straight through. Its presence is why
    `@selvajs/visualization` can't be described in one sentence.
-2. **The duplication already caused a production bug.** Both Selva and Parafa hand-wrote a solve
-   coordinator. Parafa's `solve.server.ts` header records that its hand-rolled version had a
+2. **The duplication already caused a production bug.** Both Selva and the second app hand-wrote a solve
+   coordinator. The second app's `solve.server.ts` header records that its hand-rolled version had a
    _"poisoned-empty-result bug F-B [that] persisted until restart"_, fixed only by adopting
    `@selvajs/server/compute`. This is not a tidiness argument.
 
 **Verified before writing this plan** (2026-07-30), because the plan's shape depends on it:
 
-- Parafa's compute route is a **stripped port**, not a divergent implementation — its line 1 says so,
+- The second app's compute route is a **stripped port**, not a divergent implementation — its line 1 says so,
   and the other shared routes name the exact commit (`@ selva@20c4722d`) plus their deviations.
 - Both apps already call the same `runSolvePipeline`, receive the same discriminated `SolveOutcome`,
   and map the same five variants to the same status codes.
-- `PipelineInput` (Selva) and `SolveInput` (Parafa) are **the same type declared twice**:
+- `PipelineInput` (Selva) and `SolveInput` (the second app) are **the same type declared twice**:
   `SchemaInput & { minimum?, maximum?, stepSize? }`.
 - Every divergence between the two apps is **authorization/tenancy policy**, never what the
   operation does or returns.
@@ -128,7 +128,7 @@ candidate for a small `client/transport.ts` helper. Steps 3–5 stay with the pa
 formats. The line to hold: a transport helper is **something the app may call**, never _the way solves
 happen_ — the moment it becomes mandatory we are building the API layer this plan deferred.
 
-Selva spends ~150 lines on steps 1–2 and ~90 on 3–6. Parafa's equivalent is thinner (it extracted
+Selva spends ~150 lines on steps 1–2 and ~90 on 3–6. The second app's equivalent is thinner (it extracted
 `solveRequest`), which is mild evidence the helper is worth extracting — confirm by diffing the two
 before doing it.
 
@@ -318,7 +318,7 @@ with no consumer touched.
 Move the 9 session files + 55 tests. Apply C2, and the **remaining half of C1** — the opaque
 `SolveResult<TMesh>` type landed in Phase 1, so what is left here is the memo's injected
 clone/dispose policy and deleting viz's now-duplicate `solve-fn.ts`. `@selvajs/visualization/session` is deleted;
-`@selvajs/ui` re-exports from the new home so `ComputeApp` and Parafa's `@selvajs/ui` imports keep
+`@selvajs/ui` re-exports from the new home so `ComputeApp` and the second app's `@selvajs/ui` imports keep
 working. `useSolveSession.svelte.ts` and `solving.svelte.ts` stay in `@selvajs/ui` — they are the
 Svelte binding, and this package is framework-free.
 
@@ -333,7 +333,7 @@ goal three plans ago.
   Phase 0's stated end state and only became true here.
 - `@selvajs/ui` re-exports `client/` from `lib/index.ts`, `lib/public.ts` and `lib/external/storage.ts`.
   Verified: `plugin-ui` imports `createSolveSession`/`SolveSession`/`SolveReporter` **by name from
-  `@selvajs/ui`**, so it needed no edit, and neither does Parafa.
+  `@selvajs/ui`**, so it needed no edit, and neither does the second app.
 - `pnpm build` (14) / `check` (14) / `test` (21) green; `pnpm lint` 0 errors. Viz drops 425 → 380
   tests (−55 session, +10 new mesh-policy), solve rises 6 → 63.
 
@@ -387,7 +387,7 @@ would not have.** `BufferGeometry.clone()` copies `userData` **by reference**. S
 Move the 8 solve-core files. `@selvajs/server/compute` keeps `rate-limit`, `safe-url`, `limits`,
 `remote-definition` and re-exports the moved symbols from `@selvajs/solve/server` so its 14 importers
 across two repos keep resolving. **Do not break `@selvajs/server/compute`'s public surface in this
-phase** — Parafa is on published `@selvajs/server@0.2.1`, and a re-export shim costs nothing.
+phase** — the second app is on published `@selvajs/server@0.2.1`, and a re-export shim costs nothing.
 
 **As landed.** All 8 files + 5 test files moved with `git mv` (13 renames recorded, history intact).
 `@selvajs/solve` gains a `./server` sub-path export and `@selvajs/compute` + `@selvajs/platform` as
@@ -440,8 +440,8 @@ confusion this plan opens by describing, preserved in the one artifact consumers
    depended on. **Nothing in the repo imported it**, verified before removal. Consumers use a
    subpath, matching the stance `@selvajs/solve` already takes.
 
-`@selvajs/server` therefore goes **major**, not minor. Phase 6's Parafa build is now load-bearing
-rather than a formality: Parafa is on published `@selvajs/server@0.2.1` and must repoint its
+`@selvajs/server` therefore goes **major**, not minor. Phase 6's downstream build is now load-bearing
+rather than a formality: the second app is on published `@selvajs/server@0.2.1` and must repoint its
 solve-core imports to `@selvajs/solve/server` and add the dependency. In-repo, `@selvajs/selva`'s 5
 affected modules were repointed and it gained a direct `@selvajs/solve` dependency.
 
@@ -529,12 +529,11 @@ tier choosing its own digest. Verify before merging; don't assume the three are 
 
 ### Phase 6 — verify
 
-`pnpm build && pnpm check && pnpm test` green. Then **build Parafa against the local packages** — it
-is a real second consumer on published versions.
+`pnpm build && pnpm check && pnpm test` green. Then **build the second app against the local packages** — it is a real external consumer on published versions.
 
 **This step is now load-bearing, not a formality.** The original plan expected re-export shims to
-absorb the move, so Parafa would need no edit and the build was a sanity check. With the shims
-removed (see the Phase 3 correction), Parafa has **two required edits** before it can take the new
+absorb the move, so the second app would need no edit and the build was a sanity check. With the shims
+removed (see the Phase 3 correction), the second app has **two required edits** before it can take the new
 versions:
 
 1. Repoint solve-core imports from `@selvajs/server/compute` to `@selvajs/solve/server`, and add
@@ -545,10 +544,10 @@ Changeset: `major` for `@selvajs/visualization` (loses `/session`), **`major` fo
 (loses the solve core and its root export), `minor` for `@selvajs/ui` (additive re-exports), new
 package at `0.1.0`.
 
-**Known Parafa breakage, independent of this plan.** Found 2026-07-30 while tracing the seam:
+**Known downstream breakage, independent of this plan.** Found 2026-07-30 while tracing the seam:
 `src/routes/app/solve/[guid]/+page.svelte` still calls
 `processor.extractMeshesFromResponse({ parsing: { mergeByMaterial: false } })` — a method the
-**visualization-package refactor already removed**. Parafa breaks the moment it takes the new
+**visualization-package refactor already removed**. The second app breaks the moment it takes the new
 `@selvajs/compute`, regardless of anything here. Fix is the documented one:
 
 ```ts
@@ -560,7 +559,7 @@ const meshes = await getThreeMeshesFromComputeResponse(processor.response, {
 });
 ```
 
-Note Parafa's call passes `mergeByMaterial: false` deliberately ("keep one THREE object per compute
+Note the second app's call passes `mergeByMaterial: false` deliberately ("keep one THREE object per compute
 mesh so parts stay individually selectable"), so the option must survive the move — verify it is
 still honoured by the standalone parser.
 
@@ -575,7 +574,7 @@ Written deliberately, because the brief asked for it.
   second concrete consumer of the _handlers_ (as opposed to the pipeline) is guesswork. Deferred, not
   rejected.
 - **Splitting `@selvajs/server` apart / renaming it.** Its nine subfolders are already
-  near-completely decoupled (only `providers` reaches into `compute`), and Parafa already consumes it
+  near-completely decoupled (only `providers` reaches into `compute`), and the second app already consumes it
   as **five independent sub-paths**, never the root barrel. The boundary being sought already exists
   and is in use. Splitting it would break a live consumer to achieve a rename. **Do not do this.**
 - **A `@selvajs/session` package.** Zero direct consumers — both apps reach the session only through
@@ -601,17 +600,17 @@ Written deliberately, because the brief asked for it.
 **The honest minimal alternative:** move `session/` into `@selvajs/ui` (its only consumer), do C1 and
 C2, and leave the server side alone. That is a fraction of the work and fixes the
 `@selvajs/visualization` scope problem completely. It does **not** fix the duplicated solve
-coordination between Selva and Parafa — which is the thing that already produced a bug. Choose this
+coordination between Selva and the second app — which is the thing that already produced a bug. Choose this
 plan only if that second problem is worth the extra work; otherwise take the alternative and stop.
 
 ## Deliberately deferred
 
 - **API/HTTP layer + CLI.** The design constraint discovered while verifying this plan, recorded so
-  it isn't rediscovered: the five route families shared by Selva and Parafa (`compute`,
+  it isn't rediscovered: the five route families shared by Selva and the second app (`compute`,
   `compute/schema`, `definitions`, `definitions/[guid]/versions`, `files/[...path]`) diverge **only**
   in authorization/tenancy. Any shared handler layer must take an injected policy, following the
   `platform`/`providers` pattern, or it will be unusable by the second app — exactly the wall that
-  made Parafa strip-port rather than reuse. A CLI `solve` needs `@selvajs/solve/server` **without**
+  made the second app strip-port rather than reuse. A CLI `solve` needs `@selvajs/solve/server` **without**
   HTTP, which this plan's boundary already allows.
 - **Splitting `solve-pipeline.ts`.** After the move, if ever.
 - **Repo-wide boundary enforcement.** Its own plan.
@@ -676,7 +675,7 @@ kept **separate from the package name** and **optional**:
 
 - It touches 23 sites plus the **published** API: `createSolveSession`, `SolveSession` and
   `SolveSessionArgs` are all re-exported from both `@selvajs/ui` (`lib/index.ts`) and
-  `@selvajs/ui/public`. Verified 2026-07-30: **Parafa does not import them** (it reaches the session
+  `@selvajs/ui/public`. Verified 2026-07-30: **the second app does not import them** (it reaches the session
   only through `ComputeApp`, as this plan assumes elsewhere) — but `plugin-ui` imports
   `createSolveSession`, `SolveSession` and `SolveReporter` **by name from `@selvajs/ui`**
   (`usePreviewState.svelte.ts:9`), so the rename is not free even in-repo, and it is still a breaking
@@ -729,7 +728,7 @@ It touched only `visualization/render`, so it does not intersect this plan's mov
    schema-driven (`UISchema`, `getDefaultValue`, `getInputItems`). Noting it so the dep isn't read as
    a leak later. It also means viz becomes fully dependency-free only once `session/` leaves.
 3. **Is the honest minimal alternative the right call?** ~~Decide before Phase 3.~~ **Leaning no —
-   take the full plan**, on evidence gathered after this plan was written: Parafa is a real second
+   take the full plan**, on evidence gathered after this plan was written: the second app is a real external
    consumer that hand-wrote its own solve coordinator and paid for it with a poisoned-cache bug, and
    its `onSolve` is a documented strip-port of Selva's. The minimal alternative (session → `@selvajs/ui`)
    fixes the viz scope problem but leaves that duplication in place. **Still revisit if Phase 2 lands

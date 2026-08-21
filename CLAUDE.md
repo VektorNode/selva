@@ -224,27 +224,10 @@ Restart Rhino completely afterwards.
 
 ## Data privacy
 
-**Selva minimizes the personal data it holds, but it does hold some — and the operator is the data controller**, responsible for residency, retention, and erasure requests.
-
-Stored in every deployment:
-
-- Opaque session tokens (cookies)
-- User id + permissions
-- Display names (`user_profiles.display_name`)
-- Invite email addresses (`invites.email`) — retained after accept or expiry
-- Audit-event payloads (`audit_events.data`), which embed an email for `invite.created` (see the `DomainEvent` union in `packages/platform/src/events/interface.ts`)
-- Solve telemetry (`solve_metrics`), keyed by `actor_id` and deliberately **not** FK-cascaded, so it survives deletion of the definition or user it refers to
-
-Login IPs are processed by the rate limiter but stay in memory, expire within the rate-limit window, and are never persisted.
-
-How much the auth provider owns depends on which one runs:
-
-- **Supabase** — credentials and identity live in Supabase `auth.users`; Selva holds only the authorization data above. This is the case the "provider owns it" framing describes.
-- **Local** — **Selva _is_ the auth provider.** `auth-users.json` holds email addresses and PBKDF2 password hashes on the deployment's own disk (`packages/providers/local/src/auth/users.ts`). No third party, no credential-isolation claim.
-
-**Erasure.** `SupabaseDataProvider.onUserDeleted(ctx, userId, { email })` scrubs what FK cascade doesn't reach: deletes `audit_events` the user authored (keyed by plain-text `actor_id`) and `invites` addressed to their email, redacts that email from surviving `invite.created` payloads (`redact_audit_event_email`), and tombstones `solve_metrics.actor_id` to `'deleted'` so the row survives for capacity aggregates while the person does not. The admin delete handler captures the email before `deleteUser` and passes it through. **Open gap:** no time-based retention on `audit_events` or `solve_metrics` — rows live until a subject is erased.
-
-**Logs are the escape hatch erasure cannot follow.** `onUserDeleted` scrubs rows; it has no reach into stdout, which on a real deployment has already shipped to a collector and may be indexed by a third party. A log line carrying personal data outlives every guarantee above — hence the prohibition on logging domain objects. The pino redaction list (`packages/server/src/logging/PinoLogger.ts`) scrubs by **credential field name** (`token`, `apiKey`, …) and will NOT catch an email nested in a payload; it is a backstop for accidents, not a licence to log objects.
+Selva holds personal data and the operator is the data controller. The full inventory —
+what is stored, what erasure reaches, and why logs are the one place it cannot follow — is
+[docs/self-hosting/concepts/data-privacy.md](./docs/self-hosting/concepts/data-privacy.md).
+Read it before touching audit events, invites, solve metrics, or logging.
 
 ## Environment variables
 

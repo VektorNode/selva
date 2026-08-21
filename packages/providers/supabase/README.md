@@ -85,7 +85,7 @@ Helper SQL functions (`selva.is_instance_admin`, `selva.is_org_member`, `selva.v
 
 ### Erasure
 
-`SupabaseDataProvider.onUserDeleted(ctx, userId, { email })` scrubs what FK cascade doesn't reach: deletes `audit_events` the user authored (keyed by plain-text `actor_id`), deletes `invites` addressed to their email, redacts that email from surviving `invite.created` payloads (`redact_audit_event_email`), and tombstones `solve_metrics.actor_id` so capacity aggregates survive while the person doesn't. The caller must capture the email **before** `SupabaseAuthProvider.deleteUser` runs. Credentials live in Supabase `auth.users`, but the operator is still the data controller for everything above — see [CLAUDE.md](../../../CLAUDE.md#data-privacy).
+`SupabaseDataProvider.onUserDeleted(ctx, userId, { email })` scrubs what FK cascade doesn't reach: deletes `audit_events` the user authored (keyed by plain-text `actor_id`), deletes `invites` addressed to their email, redacts that email from surviving `invite.created` payloads (`redact_audit_event_email`), and tombstones `solve_metrics.actor_id` so capacity aggregates survive while the person doesn't. The caller must capture the email **before** `SupabaseAuthProvider.deleteUser` runs. Credentials live in Supabase `auth.users`, but the operator is still the data controller for everything above — see [data privacy](../../../docs/self-hosting/concepts/data-privacy.md).
 
 ---
 

@@ -28,7 +28,7 @@ So a host passing `onSolve` into `ComputeApp` cannot observe the result the view
 actually showing. `SolveSession` is public and `report()` is on its interface, but the host
 never touches the session — `ComputeApp` constructs it internally and keeps it.
 
-## Why this is not just a Parafa problem
+## Why this is not just one host's problem
 
 The `solve-fn-raw-response` changeset documents the failure mode precisely:
 
@@ -42,7 +42,7 @@ the layer that forces the bug is unchanged.** Any host with a commit/persist ste
 quoting, ordering, versioning, archiving — writes the broken pattern by construction, and
 now does so against a package whose docs correctly tell them not to.
 
-Concretely, in Parafa today ([solve/[guid]/+page.svelte:419-420](https://github.com/…)):
+Concretely, in a downstream host today (`solve/[guid]/+page.svelte:419-420`):
 
 ```ts
 lastValues = values; // captured inside onSolve
@@ -228,7 +228,7 @@ onReady?: (api: {
 ```
 
 A getter, not a snapshot: `onReady` fires once, so a value would be permanently stale.
-Hosts already hold the api object (Parafa keeps it as `computeApi`), so this costs them
+Hosts already hold the api object (one host keeps it as `computeApi`), so this costs them
 nothing structurally and cannot break an existing caller.
 
 **Alternative considered — an `onSolveResult?: (result: SolveResult) => void` prop.** More
@@ -254,9 +254,9 @@ Both could ship; the getter is the smaller, safer core.
    holds the last good result (locking in the decision above rather than leaving it to
    drift).
 
-## Migration for Parafa
+## Migration for downstream hosts
 
-Once both land, Parafa:
+Once both land, such a host:
 
 1. Replaces its hand-written `onSolve` with `createComputeFetchSolveFn`, picking up the
    429 cooldown, session-expiry detection and non-JSON guarding it currently lacks.
@@ -266,7 +266,7 @@ Once both land, Parafa:
 3. Deletes its local `GrasshopperResponseProcessor` + mesh-extraction block from both
    `solve/[guid]` and `jobs/[id]/batch`, which the factory's `meshes.extract` hook covers.
 
-Until then Parafa keeps the hand-written `onSolve` and should carry a defensive guard —
+Until then the host keeps the hand-written `onSolve` and should carry a defensive guard —
 the upgrade to `0.2.0-beta.4` is inert for it, since nothing it can reach exposes the new
 fields.
 

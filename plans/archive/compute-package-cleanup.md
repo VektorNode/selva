@@ -6,8 +6,8 @@
 > symbol and its replacement path — is [`.changeset/compute-package-cleanup.md`](../../.changeset/compute-package-cleanup.md),
 > not this file.
 >
-> **Two things were deliberately left open** and must happen before publishing: grep parafa and
-> parapet for the five removed symbols (`processInputs` and `getValues` are the weakest-evidence
+> **Two things were deliberately left open** and must happen before publishing: grep Consumer A and
+> Consumer B for the five removed symbols (`processInputs` and `getValues` are the weakest-evidence
 > cuts; neither repo is in this monorepo's CI), and diff the published `3.1.1` tarball rather than a
 > local build to confirm the 11 never-published symbols really were never published.
 >
@@ -98,7 +98,7 @@ still needs a deliberate call, and **that decision list _is_ the work of this st
 
 **`extractFilesFromComputeResponse`, `downloadFileData`, `FileData`, and `ProcessedFile` are already
 published** from `/grasshopper` today — the inner barrel re-exports them from `@/core/files` on its
-own, independently of `src/grasshopper.ts`. Deleting that file does not affect them, so parafa's file
+own, independently of `src/grasshopper.ts`. Deleting that file does not affect them, so Consumer A's file
 pipeline is not at risk here. (They must still stay public; the risk is just not in this step.)
 
 **The real break runs the other way, and only bites `/grasshopper`.** Four symbols reach the
@@ -108,7 +108,7 @@ pipeline is not at risk here. (They must still stay public; the risk is just not
 
 They are absent from the inner barrel, so deleting `src/grasshopper.ts` **removes them from
 `/grasshopper`**. All four remain reachable from the root barrel (`index.ts` re-exports `./core`
-directly), so root-importing consumers are unaffected — but parapet imports values through
+directly), so root-importing consumers are unaffected — but Consumer B imports values through
 `/grasshopper`, and `RhinoComputeError` is a value. Decide explicitly: either add these four to the
 inner barrel to hold the subpath surface steady, or accept the narrowing and treat it as the breaking
 part of the changeset.
@@ -118,15 +118,15 @@ part of the changeset.
 The original plan proposed making the two layers "first-class." Within this monorepo that looks
 unjustified, but the external consumers change the answer:
 
-| Subpath                        | In this monorepo                          | parafa                   | parapet                                                            |
+| Subpath                        | In this monorepo                          | Consumer A               | Consumer B                                                         |
 | ------------------------------ | ----------------------------------------- | ------------------------ | ------------------------------------------------------------------ |
 | `@selvajs/compute` (root)      | 18 symbols — the real surface             | 8 symbols                | 12 symbols                                                         |
 | `@selvajs/compute/core`        | 2 — `ComputeServerStats`, `camelcaseKeys` | 1 — `ComputeServerStats` | 1 — `camelcaseKeys` (2 call sites)                                 |
 | `@selvajs/compute/grasshopper` | 1, type-only — `GrasshopperClient`        | 1 — `GrasshopperClient`  | **3 as values** — `GrasshopperClient`, `TreeBuilder`, `InputParam` |
 
-Parapet is the only consumer that genuinely imports through the layer split, including value
-imports in [`routes/compute/[slug]/+page.svelte`](d:/Coding/parapet/packages/app/src/routes/compute/[slug]/+page.svelte)
-and [`routes/api/admin/compute/+server.ts`](d:/Coding/parapet/packages/app/src/routes/api/admin/compute/+server.ts).
+Consumer B is the only consumer that genuinely imports through the layer split, including value
+imports in `routes/compute/[slug]/+page.svelte`
+and `routes/api/admin/compute/+server.ts`.
 
 The root barrel is `export * from './core'` + `'./grasshopper'`, so every symbol is _also_ reachable
 from the root. **Conclusion unchanged in effect but not in reasoning:** keep all three entry points
@@ -138,14 +138,14 @@ or narrow them**, because a real external consumer depends on `/grasshopper` res
 Neither external repo tracks the workspace version, so an API break here surfaces on their next bump
 rather than in CI:
 
-| Repo                                   | Pin              | Notes                                                |
-| -------------------------------------- | ---------------- | ---------------------------------------------------- |
-| parafa                                 | `3.1.0` (exact)  | workspace is at `3.1.1`                              |
-| parapet `packages/app`                 | `^3.1.0-beta.18` | still a beta                                         |
-| parapet `packages/shared`              | `^1.3.1`         | **1.x** — a v3 break is invisible there until bumped |
-| parapet `packages/app/src/lib/package` | `^1.5.1`         | third concurrent pin in one repo                     |
+| Repo                                      | Pin              | Notes                                                |
+| ----------------------------------------- | ---------------- | ---------------------------------------------------- |
+| Consumer A                                | `3.1.0` (exact)  | workspace is at `3.1.1`                              |
+| Consumer B `packages/app`                 | `^3.1.0-beta.18` | still a beta                                         |
+| Consumer B `packages/shared`              | `^1.3.1`         | **1.x** — a v3 break is invisible there until bumped |
+| Consumer B `packages/app/src/lib/package` | `^1.5.1`         | third concurrent pin in one repo                     |
 
-Parapet's lockfile resolves both `1.5.0` and `3.1.0-beta.18`, each as `(three@0.184.0)` — it still
+Consumer B's lockfile resolves both `1.5.0` and `3.1.0-beta.18`, each as `(three@0.184.0)` — it still
 installs compute's old `three` peer graph. Worth knowing before assuming the viewer split fully
 propagated downstream.
 
@@ -153,13 +153,13 @@ propagated downstream.
 
 A first pass over this monorepo alone marked these as consumer-less. They are not — do not prune:
 
-- `processInput`, `TreeBuilder`, `InputParam`, `InputParamSchema` — parapet's
-  [`routes/api/compute/+server.ts`](d:/Coding/parapet/packages/app/src/routes/api/compute/+server.ts)
-- `ErrorCodes` — parapet's `lib/server/compute-retry.ts`, which classifies retryable failures on the
-  `COMPUTATION_ERROR` mapping; the contract is documented in parapet's `RHINO_COMPUTE_DEBUG.md`
-- `DataTree` — parapet `packages/shared/src/types/projects.ts`
-- `fetchRhinoCompute` — parafa's
-  [`tessellate3dm.server.ts`](d:/Coding/parafa/src/lib/server/solutions/tessellate3dm.server.ts),
+- `processInput`, `TreeBuilder`, `InputParam`, `InputParamSchema` — Consumer B's
+  `routes/api/compute/+server.ts`
+- `ErrorCodes` — Consumer B's `lib/server/compute-retry.ts`, which classifies retryable failures on the
+  `COMPUTATION_ERROR` mapping; the contract is documented in Consumer B's `RHINO_COMPUTE_DEBUG.md`
+- `DataTree` — Consumer B `packages/shared/src/types/projects.ts`
+- `fetchRhinoCompute` — Consumer A's
+  `tessellate3dm.server.ts`,
   calling the RhinoCommon endpoint `rhino/geometry/mesh/createfrombrep` directly. This is the
   "talk to a compute server myself" case, and it is the **only** raw endpoint string in either
   external repo — everything else goes through `GrasshopperClient`.
@@ -235,7 +235,7 @@ Each is independently reviewable. Tests move with the code they cover.
    **Verification:** build and diff the emitted `dist/grasshopper.d.ts` against the pre-change copy —
    capture that baseline _after_ step 2, since the local `dist/` is stale. The diff is the real
    public-API change; it should contain only the ~17 symbols chosen above and nothing else.
-   Then grep parafa and parapet for every removed symbol — especially `processInputs` and `getValues`,
+   Then grep Consumer A and Consumer B for every removed symbol — especially `processInputs` and `getValues`,
    the two weakest-evidence cuts. Neither repo is in this monorepo's CI and both pin older versions,
    so nothing here will catch the break for them.
 4. **Split `compute-fetch.ts`** → `request.ts` (buildUrl / buildHeaders / generateRequestId /
@@ -270,7 +270,7 @@ Each is independently reviewable. Tests move with the code they cover.
   collision stops being externally visible and the rename becomes optional cleanup — still not
   required, but no longer blocked if you want it while the file is open.
 - **Promoting `/core` and `/grasshopper` as first-class layers** — not worth new work, but keep all
-  three entry points as they are: parapet imports values through `/grasshopper` and `camelcaseKeys`
+  three entry points as they are: Consumer B imports values through `/grasshopper` and `camelcaseKeys`
   through `/core`.
 - **Behaviour changes**, `SolveScheduler` semantics (latest-wins / queue / parallel), and anything in
   `@selvajs/visualization`.
@@ -315,7 +315,7 @@ weaker argument for cutting than the deferred section implied.
 `solveGrasshopperDefinition`, `fetchDefinitionIO`, `fetchParsedDefinitionIO`, `isDefinitionRef`,
 plus the `DefinitionRef` / `SolveDefinition` types.
 
-These five _are_ the "drive compute without `GrasshopperClient`" path, and parafa already does
+These five _are_ the "drive compute without `GrasshopperClient`" path, and Consumer A already does
 something adjacent — calling `fetchRhinoCompute` against a raw RhinoCommon endpoint. `SolveDefinition`
 must be exported regardless (it appears in `createScheduler`'s executor signature), and shipping that
 union without its narrowing guard `isDefinitionRef` is the worst of both. Cost of keeping: five
@@ -339,9 +339,9 @@ listed under "Deliberately not doing" loses its blocker. Optional, still not req
 
 ### Before publishing
 
-- `processInputs` and `getValues` are the two cuts with the weakest evidence — grep parafa and parapet
+- `processInputs` and `getValues` are the two cuts with the weakest evidence — grep Consumer A and Consumer B
   for both before release. Neither repo is in this monorepo's CI.
-- parafa and parapet are the _known_ consumers; `@selvajs/compute` is on public npm, so even they are
+- Consumer A and Consumer B are the _known_ consumers; `@selvajs/compute` is on public npm, so even they are
   not the full population.
 - The package already removed a subpath once (`/visualization`, still in `CHANGELOG.md`), so external
   users have absorbed breakage recently.

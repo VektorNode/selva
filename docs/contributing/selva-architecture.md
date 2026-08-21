@@ -296,7 +296,8 @@ including a PM2 [ecosystem.config.cjs](../../packages/selva/templates/ecosystem.
 ## 9. Data privacy
 
 Selva minimizes the personal data it holds, but it holds some, and **the operator is the data
-controller** — not the auth provider. [CLAUDE.md](../../CLAUDE.md#data-privacy) is the
+controller** — not the auth provider.
+[Data privacy](../self-hosting/concepts/data-privacy.md) is the
 authoritative inventory of what is stored and what erasure reaches. The provider abstraction moves
 where _credentials_ live (Supabase `auth.users` vs the local provider's own `auth-users.json`); it
 does not move Selva out of the compliance surface.
