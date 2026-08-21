@@ -43,7 +43,9 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"openapi:generate": "node scripts/generate-openapi.js",
-		"test:e2e": "playwright test"
+		"test:e2e": "playwright test",
+		"lint": "eslint .",
+		"lint:types": "eslint . --config eslint.typed.config.js"
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",

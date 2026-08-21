@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSafeRemoteDefinitionUrl } from '../safe-url.js';
+import { isSafeRemoteDefinitionUrl, isLinkLocalUrl } from '../safe-url.js';
 
 /**
  * Each rejection row is an attack the guard exists to block: unblocked, any of
@@ -67,5 +67,54 @@ describe('isSafeRemoteDefinitionUrl', () => {
 		['', 'empty']
 	])('rejects %j (%s)', (url) => {
 		expect(isSafeRemoteDefinitionUrl(url)).toBe(false);
+	});
+});
+
+/**
+ * The narrow check, for the compute-config write path. That caller must accept
+ * loopback and RFC1918 — running Rhino.Compute on `localhost` or a LAN box is
+ * the ordinary self-hosted layout — so it cannot use the full filter above.
+ * Link-local is the one range where nothing legitimate lives and where the
+ * payoff is the host's own IAM credentials.
+ */
+describe('isLinkLocalUrl', () => {
+	it.each([
+		'http://169.254.169.254/latest/meta-data/',
+		'http://169.254.169.254/',
+		'http://169.254.0.1/',
+		'http://169.254.255.255/'
+	])('flags %s', (url) => {
+		expect(isLinkLocalUrl(url)).toBe(true);
+	});
+
+	// A string compare against the dotted form misses every one of these.
+	it.each([
+		['integer', 'http://2852039166/'],
+		['hex', 'http://0xa9fea9fe/'],
+		['octal', 'http://0251.0376.0251.0376/'],
+		['short form', 'http://169.254.43518/']
+	])('flags the %s encoding of the metadata address', (_case, url) => {
+		expect(isLinkLocalUrl(url)).toBe(true);
+	});
+
+	it('flags IPv6 link-local', () => {
+		expect(isLinkLocalUrl('http://[fe80::1]/')).toBe(true);
+	});
+
+	// These must stay false — each is a real compute-server address.
+	it.each([
+		['loopback', 'http://127.0.0.1:6500'],
+		['RFC1918 class A', 'http://10.0.0.5:6500'],
+		['RFC1918 class B', 'http://172.20.1.50:6500'],
+		['RFC1918 class C', 'http://192.168.1.42:6500'],
+		['IPv6 loopback', 'http://[::1]:6500'],
+		['public hostname', 'https://compute.example.test'],
+		['a name that merely looks close', 'https://169.254.example.test']
+	])('leaves %s alone', (_case, url) => {
+		expect(isLinkLocalUrl(url)).toBe(false);
+	});
+
+	it('returns false for an unparseable URL rather than throwing', () => {
+		expect(isLinkLocalUrl('not-a-url')).toBe(false);
 	});
 });

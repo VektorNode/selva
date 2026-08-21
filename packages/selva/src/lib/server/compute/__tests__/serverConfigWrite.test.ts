@@ -5,8 +5,7 @@
  * than through either route.
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
-import { env } from '$env/dynamic/private';
+import { describe, it, expect } from 'vitest';
 import {
 	resolveApiKey,
 	storedKeysById,
@@ -85,23 +84,22 @@ describe('validateIncomingServers', () => {
 
 /**
  * The stored `serverUrl` is fetched server-side on every status probe and every
- * solve, so validation here is the SSRF gate — see SEL-3. The private-range
- * half is opt-out because a compute server on the LAN is an ordinary
- * self-hosted layout; the scheme allowlist never is.
+ * solve, so validation here is the SSRF gate — see SEL-3.
+ *
+ * The guard is narrowed to link-local on purpose. Loopback and RFC1918 are how
+ * most deployments actually reach their compute server, so blocking them would
+ * break those instances and push everyone onto an opt-out flag — and a guard
+ * everyone disables protects nobody. `169.254.0.0/16` is the one range where no
+ * legitimate compute server lives and where the damage is credential theft.
  */
 describe('validateIncomingServers — SSRF guard on serverUrl', () => {
-	afterEach(() => {
-		delete env.COMPUTE_ALLOW_PRIVATE_SERVER_URL;
-	});
-
 	it.each([
 		['cloud metadata', 'http://169.254.169.254/latest/meta-data/'],
 		['metadata as an integer literal', 'http://2852039166/'],
-		['loopback', 'http://127.0.0.1:6500'],
-		['loopback by name', 'http://localhost:6500'],
-		['RFC1918', 'http://10.0.0.5:6500'],
-		['IPv6 loopback', 'http://[::1]:6500']
-	])('rejects %s by default', (_case, serverUrl) => {
+		['metadata as a hex literal', 'http://0xa9fea9fe/'],
+		['anywhere else in link-local', 'http://169.254.1.1/'],
+		['IPv6 link-local', 'http://[fe80::1]/']
+	])('rejects %s', (_case, serverUrl) => {
 		expect(() => validateIncomingServers([server({ serverUrl })])).toThrow();
 	});
 
@@ -109,21 +107,21 @@ describe('validateIncomingServers — SSRF guard on serverUrl', () => {
 		['file', 'file:///etc/passwd'],
 		['gopher', 'gopher://compute.example.test/'],
 		['javascript', 'javascript:alert(1)']
-	])('rejects the %s scheme even when private addresses are allowed', (_case, serverUrl) => {
-		env.COMPUTE_ALLOW_PRIVATE_SERVER_URL = 'true';
+	])('rejects the %s scheme', (_case, serverUrl) => {
 		expect(() => validateIncomingServers([server({ serverUrl })])).toThrow();
 	});
 
-	it('allows a private address once the operator opts in', () => {
-		env.COMPUTE_ALLOW_PRIVATE_SERVER_URL = 'true';
-		expect(() =>
-			validateIncomingServers([server({ serverUrl: 'http://10.0.0.5:6500' })])
-		).not.toThrow();
-	});
-
-	it('always allows an ordinary public https endpoint', () => {
-		expect(() =>
-			validateIncomingServers([server({ serverUrl: 'https://compute.example.test' })])
-		).not.toThrow();
+	// The ordinary self-hosted layouts. If any of these ever starts throwing,
+	// upgrading Selva breaks real deployments at their next compute-config save.
+	it.each([
+		['loopback', 'http://127.0.0.1:6500'],
+		['loopback by name', 'http://localhost:6500'],
+		['RFC1918 class A', 'http://10.0.0.5:6500'],
+		['RFC1918 class B (docker)', 'http://172.20.1.50:6500'],
+		['RFC1918 class C', 'http://192.168.1.42:6500'],
+		['IPv6 loopback', 'http://[::1]:6500'],
+		['public https', 'https://compute.example.test']
+	])('allows %s', (_case, serverUrl) => {
+		expect(() => validateIncomingServers([server({ serverUrl })])).not.toThrow();
 	});
 });

@@ -13,31 +13,37 @@
  * build time.
  */
 
-import { env } from '$env/dynamic/private';
-import { isSafeRemoteDefinitionUrl } from '@selvajs/server/compute';
+import { isLinkLocalUrl } from '@selvajs/server/compute';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 
 /**
  * A stored `serverUrl` is fetched server-side on every status probe, every
- * purge/shutdown action, and every solve — so an unfiltered one is an SSRF
+ * purge/shutdown action, and every solve, so an unfiltered one is an SSRF
  * primitive handed to whoever holds `manage_compute`. Two rules:
  *
- *   - Scheme allowlist (`http`/`https`), always. `file:`, `gopher:` and friends
- *     are never a Rhino.Compute endpoint, so there is nothing to trade off.
- *   - Private/link-local block, on by default. This one IS a real tradeoff: a
- *     compute server on the same LAN or on loopback is an ordinary
- *     self-hosted deployment, not an attack. So it is opt-out via
- *     `COMPUTE_ALLOW_PRIVATE_SERVER_URL=true` — an operator who genuinely runs
- *     compute on `10.x` sets it once and knows what they turned off. Left on,
- *     it blocks the case that actually matters: `169.254.169.254` and other
- *     cloud metadata endpoints.
+ *   - Scheme allowlist: `http`/`https`. `file:`, `gopher:` and friends are never
+ *     a Rhino.Compute endpoint.
+ *   - Link-local (`169.254.0.0/16`) is refused. That range carries the cloud
+ *     metadata service at `169.254.169.254`, which hands out the host's own IAM
+ *     credentials to anything running on the box.
  *
- * The literal filter is reused rather than reimplemented — it already handles
- * the IP encodings (integer, octal, hex, IPv4-mapped IPv6) a hand-rolled check
- * misses. Only the synchronous half applies here: the DNS half of
- * `assertSafeRemoteDefinitionUrl` would make a config save fail on a name that
- * merely doesn't resolve yet, which is the wrong failure for an operator
- * typing in a server they are about to stand up.
+ * **Loopback and RFC1918 are deliberately allowed.** Running compute on
+ * `localhost:6500` or a LAN box is the ordinary self-hosted layout, not an
+ * attack — most deployments reach their compute server over exactly those
+ * addresses. Blocking them by default would break those instances on upgrade
+ * and push every operator toward an opt-out flag, and a guard that everyone
+ * disables protects nobody. So the check is narrowed to the range where no
+ * legitimate compute server ever lives.
+ *
+ * What this does not stop: a privileged admin pointing the app at an internal
+ * host to probe it. That is a real but much weaker concern than credential
+ * theft, it needs `manage_compute` already, and it is inseparable from the
+ * legitimate case. Revisit if `manage_org_compute` is ever delegated widely on
+ * a multi-tenant instance.
+ *
+ * `isLinkLocalUrl` is reused rather than hand-rolled because a string compare
+ * against `169.254.169.254` misses the encodings that reach the same address:
+ * `http://2852039166/`, `http://0xa9fea9fe/`, `http://0251.0376.0251.0376/`.
  */
 function assertUsableServerUrl(serverUrl: string): void {
 	let parsed: URL;
@@ -49,13 +55,11 @@ function assertUsableServerUrl(serverUrl: string): void {
 	if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
 		apiError(400, ApiErrorCode.VALIDATION_FAILED, `serverUrl must use http or https: ${serverUrl}`);
 	}
-	if (env.COMPUTE_ALLOW_PRIVATE_SERVER_URL === 'true') return;
-	if (!isSafeRemoteDefinitionUrl(serverUrl)) {
+	if (isLinkLocalUrl(serverUrl)) {
 		apiError(
 			400,
 			ApiErrorCode.VALIDATION_FAILED,
-			`serverUrl points at a private, loopback, or link-local address: ${serverUrl}. ` +
-				'Set COMPUTE_ALLOW_PRIVATE_SERVER_URL=true if your compute server really is on an internal network.'
+			`serverUrl points at the link-local range, which carries the cloud metadata service: ${serverUrl}`
 		);
 	}
 }

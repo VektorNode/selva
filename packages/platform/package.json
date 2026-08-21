@@ -126,7 +126,9 @@
 		"type-check": "tsc --noEmit",
 		"prepack": "publint --strict",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"lint": "eslint .",
+		"lint:types": "eslint . --config eslint.typed.config.js"
 	},
 	"dependencies": {
 		"@selvajs/schemas": "workspace:^",

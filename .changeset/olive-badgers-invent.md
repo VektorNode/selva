@@ -1,20 +1,25 @@
 ---
 '@selvajs/local-provider': patch
+'@selvajs/cli': patch
 '@selvajs/server': minor
 '@selvajs/selva': patch
 ---
 
 Close the six findings from the app security audit.
 
-**Two settings need an operator's hand — the code cannot apply them.**
-
-`COMPUTE_ALLOW_PRIVATE_SERVER_URL=true` is now required by any deployment whose Rhino.Compute runs on loopback or a LAN address (`localhost`, `10.x`, `172.16–31.x`, `192.168.x`). A compute `serverUrl` is fetched server-side on every status probe and every solve, so an unfiltered one hands an SSRF primitive to whoever holds `manage_compute` — `http://169.254.169.254/latest/meta-data/` makes the app read the host's own cloud credentials. Private ranges are blocked by default and the flag opts back in; the `http`/`https` scheme allowlist is unconditional. The guard runs on the write path only, so stored addresses keep working and an affected deployment finds out at its next `/admin/compute` save, with an error naming the flag.
+**One setting needs an operator's hand — the code cannot apply it.**
 
 `ADDRESS_HEADER=X-Forwarded-For` and `XFF_DEPTH=<proxy count>` were already documented but unset. Without them `getClientAddress()` returns the socket peer, which behind a reverse proxy is `127.0.0.1` for every request from every user — so the login limiter had exactly one bucket. Five failed logins from anywhere returned 429 to everyone, and only a successful login clears a bucket, which nobody could then reach. Cheap unauthenticated denial of service against a whole instance, renewable indefinitely.
 
-Two changes cover the gap until an operator sets them: a per-account failure counter alongside the per-IP one (keyed on the normalized email — per-IP bounds nothing against an attacker spread across source addresses, and per-account is what protects a targeted user), and a one-time warning logged the first time a login arrives from loopback with `ADDRESS_HEADER` unset. That condition was silent before; the instance looked healthy right up until the lockout.
+Four changes cover the gap until an operator sets them. A per-account failure counter now runs alongside the per-IP one, keyed on the normalized email — per-IP bounds nothing against an attacker spread across source addresses, and per-account is what protects a targeted user. The app logs a warning the first time a login arrives from loopback with `ADDRESS_HEADER` unset. `selva doctor` reports the pair as red when `ORIGIN` is set (a proxy is in play) and `ADDRESS_HEADER` is not, and yellow when `X-Forwarded-For` is trusted without an `XFF_DEPTH` to say which hop is real. And `selva proxy` prints the two lines to add after it configures Caddy, since that is the moment the operator creates the condition.
+
+Doctor stays quiet when `ORIGIN` is unset. On a directly-reachable app these settings are a footgun — `X-Forwarded-For` is client-supplied, so trusting it there lets any caller choose their own rate-limit bucket.
+
+Caddy needs no change: `reverse_proxy` already sends the header. Only the app's willingness to trust it was missing.
 
 **The rest carry no deployment impact.**
+
+A compute `serverUrl` saved at `/admin/compute` is validated: `http`/`https` only, and never the link-local range. That URL is fetched server-side on every status probe and every solve, so an unfiltered one lets whoever holds `manage_compute` point the app at `http://169.254.169.254/latest/meta-data/` and read the host's own cloud credentials. Loopback and LAN addresses stay allowed, since running compute on `localhost` or an internal box is the ordinary self-hosted layout — blocking those would break working deployments and push operators toward disabling the guard entirely. `169.254.0.0/16` is the one range no legitimate compute server uses.
 
 `/admin/*`, `/setup` and `/login` are no longer framable. Selva apps are built for iframe embedding and app routes stay that way, but that tradeoff was being applied uniformly, leaving an authenticated instance admin open to UI-redress. `applySecurityHeaders` gained an opt-in `denyFraming` option — additive, so existing callers are unaffected.
 

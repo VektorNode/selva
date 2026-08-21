@@ -54,6 +54,12 @@ full folder layout.
 
 See [docs/self-hosting/get-started/quick-start.md](./docs/self-hosting/get-started/quick-start.md) for setup and development instructions.
 
+## Commercial services
+
+Selva is MIT-licensed and free to self-host. VektorNode AG offers deployment support, funded
+feature development, and training around it, and organisations can sponsor its development —
+see [COMMERCIAL.md](./COMMERCIAL.md).
+
 ---
 
-[MIT License](./LICENSE) · [Third-party notices](./NOTICE.md)
+[MIT License](./LICENSE) · [Third-party notices](./NOTICE.md) · [Commercial services](./COMMERCIAL.md)

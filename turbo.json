@@ -62,6 +62,23 @@
 			"outputs": [],
 			"inputs": ["src/**", "tsconfig.json"]
 		},
+		"lint": {
+			"outputs": [],
+			"inputs": [
+				"src/**",
+				"scripts/**",
+				"e2e/**",
+				"tests/**",
+				"eslint.config.js",
+				"eslint.config.mjs",
+				"package.json"
+			]
+		},
+		"lint:types": {
+			"dependsOn": ["^build"],
+			"outputs": [],
+			"inputs": ["src/**", "tsconfig.json", "eslint.typed.config.js", "package.json"]
+		},
 		"test": {
 			"dependsOn": ["^build"],
 			"outputs": [],
