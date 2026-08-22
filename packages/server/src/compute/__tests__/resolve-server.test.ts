@@ -14,10 +14,12 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT, type ComputeServerConfig, type RequestContext } from '@selvajs/platform';
 import { randomUUID } from 'node:crypto';
-import { resolveServerForOrg, ComputeServerUnconfiguredError } from '../resolve.server.js';
-import { freshProviders, seedAcme, seedOrg, type TestProviders } from '../../__tests__/fixtures.js';
+import { resolveServerForOrg } from '../resolve-server.js';
+import { ComputeServerUnconfiguredError } from '../errors.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
+import { seedAcme, seedOrg } from '../../testing/index.js';
 
-let tp: TestProviders;
+let tp: HandlerHarness;
 
 afterEach(async () => {
 	await tp?.cleanup();
@@ -60,7 +62,7 @@ function ctxFor(orgId: string): RequestContext {
 
 describe('resolveServerForOrg', () => {
 	it('throws ComputeServerUnconfiguredError when nothing is visible', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 
 		await expect(
@@ -69,7 +71,7 @@ describe('resolveServerForOrg', () => {
 	});
 
 	it('never resolves to another org private server', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 		const other = await seedOrg(tp, { name: 'Other Co', slug: 'other-co', ownerId: alice.id });
 
@@ -84,7 +86,7 @@ describe('resolveServerForOrg', () => {
 	});
 
 	it('prefers the org default over the global default', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 
 		const global = platformServer({ label: 'Global' });
@@ -101,7 +103,7 @@ describe('resolveServerForOrg', () => {
 	});
 
 	it('falls back to the global default when the org has no override', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 
 		const global = platformServer({ label: 'Global' });
@@ -116,7 +118,7 @@ describe('resolveServerForOrg', () => {
 	});
 
 	it('honours a definition pin that is visible to the org', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 
 		const global = platformServer({ label: 'Global' });
@@ -134,7 +136,7 @@ describe('resolveServerForOrg', () => {
 	});
 
 	it('ignores a pin pointing at a server the org cannot see', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 		const other = await seedOrg(tp, { name: 'Other Co', slug: 'other-co', ownerId: alice.id });
 
@@ -156,7 +158,7 @@ describe('resolveServerForOrg', () => {
 	});
 
 	it('loads the API key of the server that won, and only that one', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 
 		// Two visible servers with different keys. Returning the wrong key is a
@@ -177,7 +179,7 @@ describe('resolveServerForOrg', () => {
 	});
 
 	it('leaves apiKey unset for a server with no key stored', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 
 		const global = platformServer({ label: 'Global' });

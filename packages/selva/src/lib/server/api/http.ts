@@ -12,8 +12,7 @@
  * Scope-neutral on purpose. `/api/v1/*` and `/api/admin/*` are siblings over
  * one core, so a rule that lands here reaches both; when these lived under
  * `api/v1/` the admin routes could not receive one and hand-rolled their own
- * `if (!id)` preamble and per-handler `try/catch` instead. `api/v1/route.ts`
- * re-exports everything for the v1 handlers that already import from there.
+ * `if (!id)` preamble and per-handler `try/catch` instead.
  *
  * **The request parsers now live in `@selvajs/server/api` and are re-exported
  * below.** They never depended on SvelteKit — only their throw did — so keeping

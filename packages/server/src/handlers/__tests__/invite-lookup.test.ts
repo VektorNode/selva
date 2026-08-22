@@ -25,7 +25,19 @@ afterEach(async () => {
 	await tp?.cleanup();
 });
 
-async function seedInvite(orgId: string, email: string, invitedBy: string): Promise<Invite> {
+/**
+ * `createdAt` is passed in rather than stamped from the clock. Seeding 200+
+ * invites takes well under a millisecond each, so `new Date()` gives many of
+ * them the identical timestamp — the `createdAt desc` sort then falls back to
+ * insertion order and the "oldest" invite lands on page one at random. That
+ * made the pagination test below fail its own premise guard intermittently.
+ */
+async function seedInvite(
+	orgId: string,
+	email: string,
+	invitedBy: string,
+	createdAt = new Date().toISOString()
+): Promise<Invite> {
 	const invite: Invite = {
 		id: randomUUID(),
 		tokenHash: `hash-${email}`,
@@ -35,7 +47,7 @@ async function seedInvite(orgId: string, email: string, invitedBy: string): Prom
 		orgPermissions: [],
 		platformPermissions: [],
 		invitedBy,
-		createdAt: new Date().toISOString(),
+		createdAt,
 		expiresAt: new Date(Date.now() + 86_400_000).toISOString()
 	};
 	await tp.config.data.invites.create(SYSTEM_CONTEXT, invite);
@@ -90,10 +102,13 @@ describe('findPendingInviteInOrg', () => {
 		// The target is the OLDEST invite, not the newest. Listing defaults to
 		// `createdAt desc`, so the newest sorts onto page one and a single-page
 		// scan would still find it — the test would pass against exactly the
-		// implementation it exists to reject.
-		const oldest = await seedInvite(acme.id, 'oldest@acme.test', alice.id);
+		// implementation it exists to reject. Timestamps are explicit and a
+		// second apart because the clock is too coarse to order 206 writes.
+		const base = Date.parse('2026-01-01T00:00:00.000Z');
+		const at = (i: number) => new Date(base + i * 1000).toISOString();
+		const oldest = await seedInvite(acme.id, 'oldest@acme.test', alice.id, at(0));
 		for (let i = 0; i < 205; i++) {
-			await seedInvite(acme.id, `bulk-${i}@acme.test`, alice.id);
+			await seedInvite(acme.id, `bulk-${i}@acme.test`, alice.id, at(i + 1));
 		}
 
 		const firstPage = await tp.config.data.invites.listByOrg(SYSTEM_CONTEXT, acme.id, {

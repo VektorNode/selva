@@ -18,10 +18,7 @@ import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { isApiError } from '@selvajs/server/api';
 import { isHttpError } from '@sveltejs/kit';
 import type { RequestContext, SolveFailureKind } from '@selvajs/platform';
-import {
-	resolveServerForOrg,
-	ComputeServerUnconfiguredError
-} from '$lib/server/compute/resolve.server';
+import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 import { engine, COMPUTE_DEBUG } from '$lib/server/compute/engine.server';
 import { loadRemoteDefinition } from '$lib/server/compute/remoteDefinition.server';
 import type {

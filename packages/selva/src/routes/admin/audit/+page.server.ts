@@ -15,7 +15,7 @@ import {
 	getProjectProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 
 /**
  * Closed allowlist of event types — `searchParams` come from untrusted user

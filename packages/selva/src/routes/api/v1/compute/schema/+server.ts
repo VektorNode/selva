@@ -1,7 +1,4 @@
-import {
-	resolveServerForOrg,
-	ComputeServerUnconfiguredError
-} from '$lib/server/compute/resolve.server';
+import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 import { requireCanCreateDefinition, scoped } from '$lib/server/access.server';
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';

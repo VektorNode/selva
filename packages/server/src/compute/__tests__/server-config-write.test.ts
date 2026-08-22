@@ -11,7 +11,7 @@ import {
 	storedKeysById,
 	validateIncomingServers,
 	type IncomingServerBase
-} from '../serverConfigWrite.js';
+} from '../server-config-write.js';
 
 const server = (over: Partial<IncomingServerBase> = {}): IncomingServerBase => ({
 	id: 'srv-1',

@@ -11,11 +11,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const hasInstanceAdmin = vi.fn();
 
+// One factory for both getters: `vi.mock` is keyed by module, so a second call
+// for the same path replaces the first rather than merging into it.
 vi.mock('$lib/server/providers.server', () => ({
-	getPermissionStore: () => ({ hasInstanceAdmin })
-}));
-
-vi.mock('$lib/server/auth.server', () => ({
+	getPermissionStore: () => ({ hasInstanceAdmin }),
 	getAuthProvider: () => ({
 		passwordAuth: { verifyLogin: vi.fn() },
 		emailLink: undefined,

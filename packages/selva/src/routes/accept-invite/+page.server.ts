@@ -7,7 +7,7 @@ import {
 	getOrganizationProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 import { findAuthUserByEmail } from '$lib/server/auth-lookup.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';

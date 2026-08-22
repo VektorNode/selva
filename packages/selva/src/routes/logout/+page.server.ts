@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { destroySession, getSessionToken } from '$lib/server/admin-auth.server';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 
 export const actions = {
 	default: async ({ cookies }) => {

@@ -8,7 +8,7 @@ import {
 	type Project
 } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 import {
 	getDataProvider,
 	getOrganizationProvider,

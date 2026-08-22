@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode, handleApiError } from '$lib/server/api-errors';
-import { SolveBodySchema } from '$lib/server/api/v1/bodies';
-import { parseBody, requireCaller, requireParams } from '$lib/server/api/v1/route';
+import { SolveBodySchema } from '@selvajs/server/api';
+import { parseBody, requireCaller, requireParams } from '$lib/server/api/http';
 import type { PipelineInput } from '@selvajs/solve/server';
 import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';

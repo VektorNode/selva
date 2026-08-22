@@ -8,7 +8,7 @@ import type {
 	PlatformPermission
 } from '@selvajs/platform';
 import { ProviderError } from '@selvajs/platform';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 import { listAllOrgMembers } from '$lib/server/org-members.server';
 import {
 	getLogger,

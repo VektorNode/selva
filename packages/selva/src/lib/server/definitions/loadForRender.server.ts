@@ -18,7 +18,7 @@ import {
 	getProjectProvider,
 	getComputeServerConfigStore
 } from '../providers.server';
-import { resolveServerForOrg } from '../compute/resolve.server';
+import { resolveServerForOrg } from '@selvajs/server/compute';
 import { getClient, COMPUTE_DEBUG } from '../compute/engine.server';
 
 export { DefinitionLoadError };

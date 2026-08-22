@@ -7,7 +7,7 @@
  * entry the other doesn't — a route with no registry entry is undocumented, a
  * registry entry with no route is a spec promising something that 404s.
  *
- * Request schemas are Zod values imported from `./bodies.ts`, not transcribed,
+ * Request schemas are Zod values imported from `@selvajs/server/api`, not transcribed,
  * so a renamed field changes the spec on the next generate instead of silently
  * disagreeing with the validator.
  */
@@ -22,7 +22,7 @@ import {
 	CreateInviteBodySchema,
 	UpdateOrgMemberBodySchema,
 	OrgComputePatchBodySchema
-} from './bodies.js';
+} from '@selvajs/server/api';
 
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 

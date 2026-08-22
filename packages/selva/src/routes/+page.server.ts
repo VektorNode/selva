@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { listVisibleDefinitions } from '$lib/server/definitions/visibility.server';
+import { listVisibleDefinitions } from '@selvajs/server/definitions';
 import { accessDepsFromConfig } from '$lib/server/access.server';
 import { renderThrown } from '@selvajs/server/logging';
 import type { DefinitionRecord } from '@selvajs/platform';

@@ -3,7 +3,7 @@ import type { PageServerLoad } from './$types';
 import type { Project } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, hasPermission } from '@selvajs/platform';
 import { getProjectProvider } from '$lib/server/providers.server';
-import { resolveAccessibleProjects } from '$lib/server/definitions/visibility.server';
+import { resolveAccessibleProjects } from '@selvajs/server/definitions';
 import { accessDepsFromConfig } from '$lib/server/access.server';
 
 export interface ProjectRow extends Project {
