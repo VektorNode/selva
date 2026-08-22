@@ -6,12 +6,8 @@ import type { PipelineInput } from '@selvajs/solve/server';
 import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { runSolve, mapSolveError } from '$lib/server/compute/solve.server';
-import {
-	withIdempotency,
-	idempotencyKey,
-	toStoredResponse,
-	fromStoredResponse
-} from '$lib/server/computeIdempotency.server';
+import { withIdempotency } from '$lib/server/computeIdempotency.server';
+import { idempotencyKey, toStoredResponse, fromStoredResponse } from '@selvajs/server/compute';
 
 /**
  * The definition-addressed solve — v1's flagship action, and what the CLI's

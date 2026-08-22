@@ -91,7 +91,11 @@ describe('findPendingInviteInOrg', () => {
 		expect(found).toBeNull();
 	});
 
-	it('finds an invite past the first page', async () => {
+	// Seeds 206 invites through a real store, which takes ~2s idle and more when
+	// the rest of the suite is competing for the disk — comfortably past vitest's
+	// 5s default under load. The work is inherent: the whole point is exceeding
+	// one 200-row page.
+	it('finds an invite past the first page', { timeout: 30_000 }, async () => {
 		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 
