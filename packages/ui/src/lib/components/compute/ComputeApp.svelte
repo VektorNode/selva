@@ -72,6 +72,10 @@
 		/** Viewer chrome and defaults. `backgroundColor` and `showSceneManager` are set by the layout. */
 		viewerConfig?: ViewerConfig;
 		headerRight?: Snippet;
+		// Primary nav rendered next to the brand, so the viewer keeps the app-wide nav.
+		navItems?: Snippet;
+		homeUrl?: string;
+		brandName?: string;
 		// Replaces the built-in header; takes precedence over `headerRight`.
 		header?: Snippet;
 		// Scopes sessionStorage for external-input values; falls back to definitionKey then schema.id.
@@ -106,6 +110,9 @@
 		footerItemId = 'footer-item',
 		footerItemPriority = 0,
 		headerRight,
+		navItems,
+		homeUrl,
+		brandName,
 		header,
 		onReady,
 		onViewerReady,
@@ -215,6 +222,9 @@
 		showFooter
 		title={pageTitle}
 		{showModeToggle}
+		{navItems}
+		{homeUrl}
+		{brandName}
 		{copyrightName}
 		{footerText}
 		{header}
