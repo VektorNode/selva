@@ -1,4 +1,5 @@
 ---
+'@selvajs/server': minor
 '@selvajs/selva': minor
 ---
 
