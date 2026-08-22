@@ -20,17 +20,34 @@
 		 */
 		outliner: SceneOutliner;
 		sceneVersion?: number;
+		/**
+		 * Request a viewer repaint. Toggling `.visible` mutates three objects directly, and the
+		 * render loop is on-demand — without this the canvas only catches up on its ~500ms idle
+		 * repaint, so the row updates instantly and the geometry lags behind.
+		 */
+		onVisibilityChange?: () => void;
 	}
 
-	let { outliner, sceneVersion = 0 }: Props = $props();
+	let { outliner, sceneVersion = 0, onVisibilityChange }: Props = $props();
+
+	const toggleLayer = (objects: THREE.Object3D[]) => {
+		outliner.visibility.toggleLayer(objects);
+		onVisibilityChange?.();
+	};
+
+	const toggleObject = (object: THREE.Object3D) => {
+		outliner.toggleObject(object);
+		onVisibilityChange?.();
+	};
 
 	// Derived, not destructured: the prop is reassignable, and these must follow it.
 	const hidden = $derived(outliner.visibility.hidden);
 	const selected = $derived(outliner.selection.selected);
 	const collapsed = $derived(outliner.collapsed);
 
-	// Mirrored into runes because the outliner holds these as plain fields, not sets. Both are panel
-	// state, so reopening clears them — unlike hiding and collapse, which the outliner outlives.
+	// Panel state, so reopening clears it — unlike hiding and collapse, which the outliner outlives.
+	// Owned here rather than on the outliner: writing it back from the derived below is what the
+	// Svelte 5 `state_unsafe_mutation` rule forbids.
 	let searchQuery = $state('');
 	let anchor = $state<string | null>(null);
 
@@ -45,9 +62,7 @@
 
 	const layerGroups = $derived.by(() => {
 		void sceneVersion;
-		void searchQuery;
-		outliner.searchQuery = searchQuery;
-		return outliner.layerGroups();
+		return outliner.layerGroups(searchQuery);
 	});
 
 	// `SvelteSet.has()` is the reactive read, so go through the set rather than calling
@@ -62,10 +77,11 @@
 	// Reading `anchor` keeps the shift-range dependent on it; the outliner owns the value.
 	const selectObject = (uuid: string, event: MouseEvent) => {
 		void anchor;
-		outliner.select(uuid, {
-			shiftKey: event.shiftKey,
-			toggleKey: event.ctrlKey || event.metaKey
-		});
+		outliner.select(
+			uuid,
+			{ shiftKey: event.shiftKey, toggleKey: event.ctrlKey || event.metaKey },
+			searchQuery
+		);
 	};
 </script>
 
@@ -110,7 +126,7 @@
 
 				<button
 					class="rounded p-1 shrink-0 transition-colors hover:bg-muted"
-					onclick={() => outliner.visibility.toggleLayer(objects)}
+					onclick={() => toggleLayer(objects)}
 					title={layerHidden ? t.showLayer : t.hideLayer}
 					aria-label={layerHidden ? t.showLayer : t.hideLayer}
 				>
@@ -162,7 +178,7 @@
 								class="rounded p-1 shrink-0 transition-colors hover:bg-muted"
 								onclick={(e) => {
 									e.stopPropagation();
-									outliner.toggleObject(object);
+									toggleObject(object);
 								}}
 								title={isHidden ? t.showObject : t.hideObject}
 								aria-label={isHidden ? t.showObject : t.hideObject}

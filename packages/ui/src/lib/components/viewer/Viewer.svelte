@@ -567,7 +567,7 @@
 		{#if sceneManagerOpen && scene && outliner}
 			<Resizable.Handle withHandle />
 			<Resizable.Pane id="scene-manager" order={2} defaultSize={15} minSize={8} maxSize={30}>
-				<SceneManager {outliner} {sceneVersion} />
+				<SceneManager {outliner} {sceneVersion} onVisibilityChange={() => invalidate?.()} />
 			</Resizable.Pane>
 		{/if}
 	</Resizable.PaneGroup>

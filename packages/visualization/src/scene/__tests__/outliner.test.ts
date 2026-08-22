@@ -44,9 +44,7 @@ describe('createSceneOutliner', () => {
 
 		expect(outliner.layerGroups().size).toBe(2);
 
-		outliner.searchQuery = 'ridge';
-
-		expect([...outliner.layerGroups().keys()]).toEqual(['Roof']);
+		expect([...outliner.layerGroups('ridge').keys()]).toEqual(['Roof']);
 	});
 
 	describe('collapse', () => {
@@ -89,9 +87,7 @@ describe('createSceneOutliner', () => {
 			const { scene, objects } = sceneWith({ name: 'north' }, { name: 'ridge' });
 			const outliner = createSceneOutliner(scene);
 
-			outliner.searchQuery = 'ridge';
-
-			expect(outliner.flatVisibleUuids()).toEqual([objects[1].uuid]);
+			expect(outliner.flatVisibleUuids('ridge')).toEqual([objects[1].uuid]);
 		});
 	});
 
@@ -157,6 +153,20 @@ describe('createSceneOutliner', () => {
 		outliner.select(objects[2].uuid, SHIFT);
 
 		expect(outliner.selection.selected.size).toBe(3);
+	});
+
+	it('confines a shift-range to objects surviving the search filter', () => {
+		const { scene, objects } = sceneWith(
+			{ layer: 'L', name: 'keep-a' },
+			{ layer: 'L', name: 'drop' },
+			{ layer: 'L', name: 'keep-b' }
+		);
+		const outliner = createSceneOutliner(scene);
+
+		outliner.select(objects[0].uuid, CLICK, 'keep');
+		outliner.select(objects[2].uuid, SHIFT, 'keep');
+
+		expect([...outliner.selection.selected]).toEqual([objects[0].uuid, objects[2].uuid]);
 	});
 
 	it('reset drops hidden and selected state', () => {

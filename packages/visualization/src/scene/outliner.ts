@@ -29,13 +29,14 @@ export interface SceneOutliner {
 	readonly selection: SelectionState;
 	readonly collapsed: Set<string>;
 
-	/** Free-text search over layer and object names. */
-	searchQuery: string;
-
 	/** Not memoized — recomputes from the scene on every call. */
 	objects(): THREE.Object3D[];
-	/** Content grouped by layer, after the search filter. */
-	layerGroups(): Map<string, THREE.Object3D[]>;
+	/**
+	 * Content grouped by layer, filtered by `searchQuery` (free text over layer and object
+	 * names). The query is a parameter rather than outliner state so a host can derive this
+	 * without writing back — mutating the outliner from a `$derived` is a Svelte error.
+	 */
+	layerGroups(searchQuery?: string): Map<string, THREE.Object3D[]>;
 
 	isCollapsed(layerName: string): boolean;
 	toggleCollapsed(layerName: string): void;
@@ -46,8 +47,11 @@ export interface SceneOutliner {
 	 */
 	toggleObject(object: THREE.Object3D): void;
 
-	/** Shift-ranges resolve against `flatVisibleUuids()`, not scene-graph order. */
-	select(uuid: string, modifiers: SelectionModifiers): void;
+	/**
+	 * Shift-ranges resolve against `flatVisibleUuids()`, not scene-graph order — so pass the
+	 * same `searchQuery` the panel is displaying, or a range will span filtered-out objects.
+	 */
+	select(uuid: string, modifiers: SelectionModifiers, searchQuery?: string): void;
 
 	/**
 	 * Observe shift-range anchor moves, for hosts that mirror it into their own state.
@@ -61,7 +65,7 @@ export interface SceneOutliner {
 	 * The uuids currently visible in the panel, in display order: every object of every
 	 * non-collapsed layer that survived the search filter. This is the span a shift-range walks.
 	 */
-	flatVisibleUuids(): string[];
+	flatVisibleUuids(searchQuery?: string): string[];
 
 	/**
 	 * Re-apply hidden state to freshly built scene content. **Call after every solve.**
@@ -90,12 +94,11 @@ export function createSceneOutliner(
 		visibility,
 		selection,
 		collapsed,
-		searchQuery: '',
 
 		objects: () => getSceneObjects(scene),
 
-		layerGroups: () =>
-			filterLayerGroups(groupByLayer(getSceneObjects(scene)), outliner.searchQuery),
+		layerGroups: (searchQuery = '') =>
+			filterLayerGroups(groupByLayer(getSceneObjects(scene)), searchQuery),
 
 		isCollapsed: (layerName) => collapsed.has(layerName),
 
@@ -115,15 +118,15 @@ export function createSceneOutliner(
 			}
 		},
 
-		select(uuid, modifiers) {
-			selection.select(uuid, modifiers, () => outliner.flatVisibleUuids());
+		select(uuid, modifiers, searchQuery) {
+			selection.select(uuid, modifiers, () => outliner.flatVisibleUuids(searchQuery));
 		},
 
 		onAnchorChange: (listener) => selection.onAnchorChange(listener),
 
-		flatVisibleUuids() {
+		flatVisibleUuids(searchQuery) {
 			const result: string[] = [];
-			for (const [layerName, objects] of outliner.layerGroups()) {
+			for (const [layerName, objects] of outliner.layerGroups(searchQuery)) {
 				if (collapsed.has(layerName)) continue;
 				for (const obj of objects) result.push(obj.uuid);
 			}
