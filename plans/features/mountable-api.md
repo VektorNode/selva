@@ -1,12 +1,13 @@
 # A mountable API: one core, many hosts
 
-> **No epic issue — deliberately.** This is being finished in one sitting rather
-> than tracked, so the "What executing it taught" section below carries the
-> handoff: the recipe, the traps, and — under "What is actually left" — the
-> measured remainder and the order the dependencies imply. Per
+> **No epic issue — deliberately.** `/api/v1` is done: all 14 handler files
+> live in `@selvajs/server/handlers`. What remains — `/api/admin`, the three
+> streaming routes, and mounting in parafa — is under "What is left" below, and
+> the "What executing it taught" section carries the handoff: the recipe, the
+> traps, and the seams that had to be invented. Per
 > [CONVENTIONS](../CONVENTIONS.md) a plan owns reasoning and not status, so
-> verify those counts against the tree before trusting them. File an epic if this
-> stalls and needs picking up cold.
+> verify any count against the tree before trusting it. File an epic if the
+> remainder needs picking up cold.
 
 ## The problem, stated from evidence
 
@@ -88,9 +89,12 @@ rule, and that rule is what makes them nearly transport-free today.
 - `responses.ts` — `collection` / `created` / `noContent`.
 
 A host binds it by building an `ApiRequest` and calling `runHandler`. Selva's
-binding is **94 lines** and is the only file that knows both worlds. A Next,
-Hono or Remix binding is a sibling roughly that size. That number is the whole
-claim of this plan.
+binding is the only file that knows both worlds. It was **94 lines** when this
+was written and is **114** with all 41 endpoints mounted — the growth is the
+three host seams (`evictComputeClient`, `notifications`, `instanceName`), not
+per-handler wiring, so a Next, Hono or Remix binding is a sibling of about that
+size regardless of how many endpoints it serves. That number is the whole claim
+of this plan, and it survived the migration.
 
 ### Why `ApiResponse` is a value, not a `Response`
 
@@ -267,81 +271,104 @@ picking a stack is exactly the host's job.
 One test stayed behind: `removal-revokes-invites.test.ts` mints through the real
 `createInvite` handler, so it cannot move until `invites.ts` does.
 
-### What is actually left
+### What the move actually cost
 
-Measured after `orgMembers` moved — **one handler file of fourteen**, which is
-about 5% by volume:
+All 14 handler files moved. `/api/v1` is mountable: the app keeps the SvelteKit
+binding, its route tree, and the three streaming routes exempted from the start.
 
-|                   | Moved | Remaining       |
-| ----------------- | ----- | --------------- |
-| Handler files     | 1     | 13              |
-| Handler functions | 2     | 39              |
-| Handler LOC       | 263   | 1,447           |
-| Test files        | 4     | 12 (~1,529 LOC) |
+|                   | Before | After |
+| ----------------- | ------ | ----- |
+| Handler files     | 1      | 14    |
+| Handler functions | 2      | 41    |
+| Package tests     | 302    | 381   |
+| App tests         | 797    | 718   |
 
-That percentage understates progress. The first move paid for infrastructure
-that does not recur — `access/guards.ts`, `api/bodies.ts`, `api/pagination.ts`,
-`testing/scenarios.ts`, and the package test harness. What remains is mostly
-repetition of the recipe above.
+The test totals are the point: 1,099 both before and after, with 79 of them
+having crossed the boundary. A test that stays behind is the thing that
+diverges, so a moved handler whose tests did not follow it is a half-move.
 
-**Nine app modules still block handlers, but only one genuinely.** Eight are
-already framework-free: the apparent coupling is a re-export shell
-(`access.server`, `pagination.server`) or, in `definitions/visibility.server.ts`,
-a mention of `providers.server` **inside a comment**. They are 25–201 LOC each.
-The real blocker is `invites/deliver.server.ts`, which imports `providers.server`
-for real — and which gates only `invites.ts`.
+Nine of the ten "blockers" were framework-free once opened, exactly as
+predicted. Only `invites/deliver.server.ts` genuinely reached the composition
+root, and it needed a seam rather than a move.
 
-The blockers fan out very unevenly, which sets the order:
+### Three seams replaced module globals
 
-| Blocker                         | LOC | Unblocks                                        |
-| ------------------------------- | --- | ----------------------------------------------- |
-| `definitions/visibility.server` | 201 | `definitions`, `definitionVersions`, `projects` |
-| `compute/resolve.server`        | 47  | `definitions`, `definitionVersions`             |
-| `organizations/OrgAssetService` | 81  | `services`                                      |
-| `compute/serverConfigWrite`     | 125 | `orgCompute`                                    |
-| `compute/evictChangedServers`   | 37  | `orgCompute`                                    |
-| `projects/createProject.server` | 94  | `projects`                                      |
-| `permissions-scope.server`      | 29  | `invites`                                       |
-| `invites/lookup.server`         | 25  | `invites`                                       |
-| `invites/deliver.server`        | 51  | `invites` — **the one real blocker**            |
+A dependency that is genuinely the host's does not move — it becomes a field on
+`SelvaDeps` and the host fills it in. Three came up, and each is a different
+reason the same answer applies:
 
-`visibility.server` is the highest-leverage move by a wide margin: the three
-files it unblocks are the three largest, 641 LOC of the remaining 1,447.
+| Seam                             | Why it cannot move                                             |
+| -------------------------------- | -------------------------------------------------------------- |
+| `evictComputeClient`             | The diff is pure; the cache holding warm clients is host-owned |
+| `notifications` / `instanceName` | Which mail transport, and what the instance is called          |
+| `services.orgAssets`             | Composed, not resolved — the host may supply its own           |
 
-**Six handlers are unblocked right now** — their only app-relative imports are
-the two re-export shells: `me`, `me.starred`, `orgs`, `reclaim`, `shareLinks`,
-`orgAssets` (236 LOC together). A workable order is those six first, since they
-prove the recipe repeats before any prerequisite work; then `visibility.server`
-to unlock the big three; then the small one-to-one blockers; `invites.ts` last,
-both because it holds the only real blocker and because `deliver.server.ts` is
-in flight on the notifications branch.
+`evictComputeClient` defaults to a no-op and `notifications` is optional. That
+is deliberate: a host with no client cache has nothing to evict, and a host with
+no mail still mints valid invites. A handler must not have to know which kind of
+host it is running on.
 
-One caveat on the easy six: `me`, `me.starred`, `orgs` and `orgAssets` have **no
-direct handler tests**. Moving an untested handler is a different risk from
-moving `orgMembers`, whose 25 tests were what made that move verifiable. Either
-write tests as part of the move or move them knowing the route-level tests are
-the only cover.
+`mapCoreError` is the same idea pointed the other way. `SchemaExtractionError`
+and `ComputeServerUnconfiguredError` were mapped to 503/422 by the app, but both
+classes now ship from the package — so a host that forgot the rule would serve
+500 where every other host serves 503, the same API answering differently
+depending on who mounted it. The package owns those rules and a host adds only
+its own. The three upload-gate tests caught this in transit: they came back 500
+until the harness had a `mapError`.
 
-Two pieces of the surface were exempted from the start and remain so: the three
-streaming routes (`POST /compute`, `POST /compute/schema`,
-`POST /definitions/{guid}/solve`), which hand-roll error conversion three
-different ways — a `mountStreaming` wrapper was proposed and deferred — and
-`/api/admin`, per the sequencing above.
+### The ratchet needed two fixes to keep biting
 
-Also known and unresolved: `callHandler` does not pass Selva's env-resolved
+Both were the same failure mode the ratchet exists to prevent, and neither
+would have failed a test.
+
+`loadRoutes` resolved a handler module with `existsSync(file) ? read : ''`. Once
+a handler moved, that inlined an empty string and every source-grep assertion
+below passed vacuously against a one-line route file. It now resolves package
+handlers through the barrel and treats unresolvable as a hard failure.
+
+The barrel resolver then matched line-wise, which found the exported names but
+not the `from` clause that says where they came from — the barrel wraps long
+export lists. It reads whole `export { … } from` statements now.
+
+Both fixes were verified by mutation: stripping `parseListOptions` from a moved
+handler fails the pagination assertion for that endpoint.
+
+### What is left
+
+**`/api/admin`** — 26 handlers, still on `apiRoute`. The conformance regex is
+already scoped so v1 accepts only `mount`, so there is no drift to race: `v1`
+is `apiRoute`-free and admin is the only user of the older wrapper. Worth doing
+when a second app wants admin endpoints, which parafa may never.
+
+**The three streaming routes** (`POST /compute`, `POST /compute/schema`,
+`POST /definitions/{guid}/solve`). They build their own `Response`, never reach
+`mapAppError`, and hand-roll error conversion three different ways. A
+`mountStreaming` wrapper was proposed and deferred and is still the right shape.
+
+**parafa.** It can adopt as soon as this ships. Nothing about its fit was run,
+only read — that is decent evidence and not proof, and mounting one endpoint
+there is what turns it into proof.
+
+Also still unresolved: `callHandler` does not pass Selva's env-resolved
 `uploadLimits`, so those tests run against `depsFromConfig` defaults (50MB/10MB).
 The definition-file cap is covered; the image cap is not.
 
 ## Decisions worth recording
 
-**`apiRoute` gets deleted at the end.** Two wrappers is fine during migration and
-permanent drift if it stalls halfway. The conformance test's `(apiRoute|mount)`
-regex is a temporary state, and treating it as temporary is what stops the fork.
+**`apiRoute` survives, scoped to `/api/admin`.** The rule that mattered was
+never "one wrapper" but "no route picks the wrong one": the conformance test
+requires `mount` under `api/v1` and accepts either under `api/admin`, so v1 is
+`apiRoute`-free and enforced that way. Deleting `apiRoute` is now the last step
+of migrating admin rather than a separate cleanup, and it costs nothing to hold
+until a second app wants those endpoints.
 
-**`resolveAccessibleProjects(ctx, deps?)` takes deps optionally.** It is a
-tenancy boundary with two existing callers (the team-projects page load and
-`GET /definitions`), both of which pass nothing and hit the identical singleton
-path. Optional deps is what made the change zero-risk for them.
+**`resolveAccessibleProjects(ctx, deps)` ended up requiring deps.** It was
+introduced with deps optional so the two existing callers could keep hitting the
+singleton path unchanged. That was right while the app was the only host — and
+wrong the moment the function moved into the package, where the fallback it fell
+back _to_ does not exist. Optional deps that silently resolve a composition root
+is precisely the coupling this whole plan removes; the page loads pass theirs
+explicitly now.
 
 Its tests were written to fail when the wiring is wrong, and that was verified by
 mutation: mis-mapping `orgs -> data.projects` fails three of them. The first
