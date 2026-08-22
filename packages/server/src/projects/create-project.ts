@@ -1,6 +1,6 @@
 import type { Project, RequestContext } from '@selvajs/platform';
 import { ProviderError, slugify } from '@selvajs/platform';
-import { apiError, ApiErrorCode } from '../api/index.js';
+import { apiError, ApiErrorCode } from '../api/errors.js';
 
 const MAX_SLUG_ATTEMPTS = 25;
 

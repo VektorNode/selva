@@ -14,7 +14,7 @@
  */
 
 import { isLinkLocalUrl } from './safe-url.js';
-import { apiError, ApiErrorCode } from '../api/index.js';
+import { apiError, ApiErrorCode } from '../api/errors.js';
 
 /**
  * A stored `serverUrl` is fetched server-side on every status probe, every

@@ -27,7 +27,7 @@ import type {
 	RequestContext
 } from '@selvajs/platform';
 import { projectAccessInputFromRowsWith } from '../access/index.js';
-import type { SelvaDeps } from '../api/index.js';
+import type { SelvaDeps } from '../api/deps.js';
 
 /** Upper bound on the org/project scan. Visibility needs the whole set. */
 const SCAN_LIMIT = 200;

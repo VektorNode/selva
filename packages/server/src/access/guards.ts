@@ -49,7 +49,8 @@ import {
 	createProjectAccessInputBuilder,
 	type ProjectAccessInputBuilder
 } from './project-access-input.js';
-import { apiError, ApiErrorCode, type SelvaDeps } from '../api/index.js';
+import { apiError, ApiErrorCode } from '../api/errors.js';
+import type { SelvaDeps } from '../api/deps.js';
 
 export type AnyPermission = PlatformPermission | OrgPermission;
 
