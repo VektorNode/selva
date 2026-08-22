@@ -1,11 +1,10 @@
 /**
  * The SvelteKit binding for the transport-free handlers in `@selvajs/server/api`.
  *
- * This is the only file in the app that knows both worlds: it turns a
- * `RequestEvent` into an `ApiRequest`, and folds this app's domain errors into
- * the shared envelope. A handler mounted through here names no framework, so
- * the same handler runs under Next or Hono behind a sibling adapter roughly
- * this size.
+ * The only file in the app that knows both worlds: it turns a `RequestEvent`
+ * into an `ApiRequest` and folds this app's domain errors into the shared
+ * envelope. A handler mounted through here names no framework, so the same
+ * handler runs under Next or Hono behind a sibling adapter roughly this size.
  */
 
 import { isHttpError, type RequestEvent } from '@sveltejs/kit';
@@ -39,16 +38,14 @@ import { evictComputeClient } from '../compute/engine.server';
  * rules and a second host gets the same statuses without copying them.
  */
 export function mapAppError(err: unknown): ApiError | undefined {
-	// The access guards in `access.server.ts` throw SvelteKit's `error()`, and
-	// must keep doing so: page loads share them and need SvelteKit to render
-	// the failure. Without this branch every 403 from a guard would miss
-	// `isApiError` and land on the 500 fallback — a silent downgrade that no
-	// type or test catches unless it asserts the status.
+	// Access guards in `access.server.ts` throw SvelteKit's error() and must
+	// keep doing so — page loads share them and need SvelteKit to render the
+	// failure. Without this branch every guard 403 falls through to the 500
+	// fallback, a downgrade no type check catches.
 	if (isHttpError(err)) {
-		// `error(status, 'string')` and `error(status, { message, code, fields })`
-		// are both in use — the guards throw the first, `apiError` the second.
-		// `fields` carries Zod's per-field detail and is the reason this reads
-		// the body rather than just the status.
+		// Guards throw `error(status, 'string')`; `apiError` throws the object
+		// form with `fields` (Zod's per-field detail) — both are live, so this
+		// reads the body rather than just the status.
 		const body = err.body as
 			{ message?: string; code?: ApiErrorCode; fields?: Record<string, string> } | string;
 		if (typeof body === 'string') {
@@ -75,18 +72,16 @@ function buildDeps(event: RequestEvent): SelvaDeps {
 		},
 		{
 			// Resolved per request, not captured: both codecs re-key on the secret,
-			// so a rotated `SELVA_HMAC_KEY` takes effect without a restart.
+			// so a rotated SELVA_HMAC_KEY takes effect without a restart.
 			tokens: { shareLinks: shareLinkCodec(), invites: inviteCodec() },
-			// Passed explicitly: `depsFromConfig` defaults these, and letting the
-			// default win would silently ignore this deployment's
-			// MAX_*_FILE_SIZE_BYTES.
+			// Passed explicitly — depsFromConfig's defaults would silently ignore
+			// this deployment's MAX_*_FILE_SIZE_BYTES.
 			uploadLimits: {
 				maxDefinitionFileSize: MAX_DEFINITION_FILE_SIZE,
 				maxImageFileSize: MAX_IMAGE_FILE_SIZE
 			},
-			// Without this the compute-config write leaves a warm client holding a
-			// rotated URL or key: the cache is keyed on server id, so nothing about
-			// the change makes the stale entry expire.
+			// Cache is keyed on server id; without this a compute-config write
+			// leaves a warm client holding a rotated URL or key.
 			evictComputeClient,
 			notifications: getNotificationProvider(),
 			instanceName: getBranding().name

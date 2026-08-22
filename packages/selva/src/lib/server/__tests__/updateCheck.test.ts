@@ -1,10 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// isNewer's own tests moved with it to @selvajs/server/ops (semver.test.ts).
-
-// fetchLatestVersion is exercised here for its failure-tolerance contract:
-// any non-ok / thrown / malformed response must yield null, never throw, so
-// the admin page never breaks on a flaky registry.
+// fetchLatestVersion's failure-tolerance contract: any non-ok / thrown /
+// malformed response must yield null, never throw, so the admin page never
+// breaks on a flaky registry.
 describe('fetchLatestVersion failure tolerance', () => {
 	it('returns null on a non-200 response', async () => {
 		const { fetchLatestVersion } = await import('../updateCheck.server');
@@ -52,7 +50,7 @@ describe('fetchLatestVersion failure tolerance', () => {
 });
 
 // ============================================================================
-// Node engine pre-flight (issue #176)
+// Node engine pre-flight
 // ============================================================================
 
 function registry(body: unknown): typeof fetch {

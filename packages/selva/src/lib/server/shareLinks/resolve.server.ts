@@ -10,21 +10,19 @@ import { hashToken, looksLikeShareToken } from './token.server';
  */
 export interface ResolvedShareLink {
 	link: ShareLink;
-	/** Synthetic ctx scoped to this token. Use in place of `locals.ctx`. */
+	/** Use in place of `locals.ctx`. */
 	ctx: RequestContext;
 }
 
 /**
- * Extract a candidate share-link token from the request.
- *   - `?token=share_…` query param (most embeddable)
- *   - `Authorization: Bearer share_…` header (server-to-server)
- *
- * Returns the raw token string, or null when none present. Does NOT validate.
+ * Extracts a candidate share-link token from the request — `?token=share_…`
+ * query param, or `Authorization: Bearer share_…` header. Returns the raw
+ * token, or null when none present. Does NOT validate.
  */
 export function readShareToken(request: Request, url: URL): string | null {
-	// When share links are disabled instance-wide, ignore any token on the wire.
-	// Callers fall through to user-based auth, which 401s anonymous requests —
-	// existing tokens stop granting access without needing to revoke each one.
+	// Disabling sharing instance-wide makes every token on the wire stop
+	// granting access, without revoking each one — callers fall through to
+	// user-based auth, which 401s anonymous requests.
 	if (!flag('ENABLE_SHARING')) return null;
 
 	const q = url.searchParams.get('token');
@@ -39,14 +37,12 @@ export function readShareToken(request: Request, url: URL): string | null {
 }
 
 /**
- * Run before user-based auth on definition-scoped routes. Returns the
- * resolved link + a synthetic ctx on success.
+ * Runs before user-based auth on definition-scoped routes.
  *
- * Throws only when a token is *present but invalid* for the current request
- * (wrong definition, wrong channel, expired, revoked, view-only when solve
- * was requested) — those are deliberate 401/403/429 responses to a
- * misbehaving consumer. When no token is present at all, returns null and
- * the caller falls through to the user-based auth gate.
+ * Throws only when a token is *present but invalid* (wrong definition, wrong
+ * channel, expired, revoked, view-only when solve was requested) — deliberate
+ * 401/403/429 responses to a misbehaving consumer. When no token is present
+ * at all, returns null and the caller falls through to user-based auth.
  */
 export async function tryResolveShareToken(
 	request: Request,
@@ -59,10 +55,9 @@ export async function tryResolveShareToken(
 	if (!raw) return null;
 
 	const tokenHash = hashToken(raw);
-	// System ctx for every read on this path — the token IS the credential, and
-	// the synthetic ctx we hand back has no `auth.uid()`. Without `system: true`
-	// the Supabase adapter would fall back to the anon client and RLS would
-	// scope every downstream read to nothing.
+	// System ctx: the token IS the credential, and the synthetic ctx returned
+	// below has no `auth.uid()`. Without `system: true` the Supabase adapter
+	// falls back to the anon client and RLS scopes every read to nothing.
 	const link = await providers.data.shareLinks.getByTokenHash(SYSTEM_CONTEXT, tokenHash);
 
 	if (!link) throw error(401, 'Invalid or revoked share token.');
@@ -81,25 +76,22 @@ export async function tryResolveShareToken(
 		throw error(403, 'Share token grants view-only access.');
 	}
 
-	// Verify the parent definition is still live; without this, a deleted
-	// definition with a leaked token would still return data via blob lookup.
+	// Without this check, a deleted definition with a leaked token would still
+	// return data via blob lookup.
 	const def = await getDefinitionMeta().get(SYSTEM_CONTEXT, link.definitionId);
 	if (!def) throw error(401, 'Share token target no longer exists.');
 
 	const project = await getProjectProvider().getProject(SYSTEM_CONTEXT, def.projectId);
 	if (!project) throw error(401, 'Share token target no longer exists.');
 
-	// Synthetic ctx for the downstream solve. `system: true` so adapter dispatch
-	// uses the service-role client — no user JWT exists on a token-credentialed
-	// request, and we've already validated the token gates this exact
-	// (definition, channel) pair. Tenancy info (`actingOrgId`) is included so
-	// org-scoped lookups (e.g. compute server resolution) still target the
-	// right tenant.
+	// `system: true` for the same reason as above — no user JWT exists on a
+	// token-credentialed request. `actingOrgId` lets org-scoped lookups (e.g.
+	// compute server resolution) still target the right tenant.
 	//
-	// `shareLinkId` narrows what that `system` flag is allowed to mean: store
-	// guards written as `if (ctx.system) return` would otherwise treat an
-	// anonymous token holder as an instance admin. The sentinel `userId` keeps
-	// the same distinction in audit rows, which render a blank actor as "System".
+	// `shareLinkId` narrows what `system` is allowed to mean here: a bare
+	// `if (ctx.system) return` guard would otherwise treat an anonymous token
+	// holder as an instance admin. The sentinel `userId` keeps the same
+	// distinction in audit rows, which render a blank actor as "System".
 	const ctx: RequestContext = {
 		userId: `share:${link.id}`,
 		actingOrgId: project.orgId,

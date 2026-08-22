@@ -3,9 +3,9 @@ import { browser } from '$app/environment';
 export interface ServerHealthState {
 	state: 'idle' | 'checking' | 'loading' | 'ok' | 'warning' | 'error';
 	reachable: boolean;
-	// True once the plugin inventory has loaded, so `selvaInstalled` is
-	// authoritative. A cold server is `reachable` (the proxy answers) before
-	// it's `ready` (a child has finished enumerating Grasshopper add-ons).
+	// True once the plugin inventory loaded, so `selvaInstalled` is
+	// authoritative. A cold server is `reachable` (proxy answers) before it's
+	// `ready` (a child finished enumerating Grasshopper add-ons).
 	ready: boolean;
 	rhinoVersion: string | null;
 	computeVersion: string | null;
@@ -16,14 +16,12 @@ export interface ServerHealthState {
 	idleSpanSeconds: number | null;
 }
 
-// A manual check retries a cold/booting server for up to this long before
-// giving up, so an operator who clicks "Check" on a sleeping server sees it
-// come Online without re-clicking. Retries until the server is *ready*
-// (plugin inventory loaded), not merely reachable — the proxy answers well
-// before a child finishes loading Grasshopper add-ons, and settling on that
-// partial reading is what made Selva look "Not installed" during boot.
-// Never polls on a background timer — every probe is operator-initiated so
-// we don't wake (and bill) idle servers.
+// A manual check retries a cold/booting server for up to this long, so an
+// operator who clicks "Check" on a sleeping server sees it come Online
+// without re-clicking. Retries until *ready* (plugin inventory loaded), not
+// merely reachable — settling for reachable is what made Selva read as "Not
+// installed" during boot. Never polls on a background timer: every probe is
+// operator-initiated so we don't wake (and bill) idle servers.
 const RETRY_WINDOW_MS = 60000;
 const RETRY_INTERVAL_MS = 5000;
 
@@ -45,8 +43,7 @@ export function useServerHealth(serverId: () => string) {
 	let deadline = 0;
 	let destroyed = false;
 
-	// Returns whether the server is *ready* (reachable AND plugin inventory
-	// loaded) — the retry loop's stop condition, not mere reachability.
+	// Return value is the retry loop's stop condition: ready, not merely reachable.
 	async function probe(): Promise<boolean> {
 		if (!browser || destroyed) return false;
 		try {
@@ -85,9 +82,6 @@ export function useServerHealth(serverId: () => string) {
 	async function attempt() {
 		const ready = await probe();
 		if (destroyed || ready) return;
-		// Not ready yet — keep retrying until the window closes. On timeout,
-		// settle on whatever the last probe found rather than forcing 'error',
-		// so a reachable-but-Selva-less server reads as a warning.
 		if (Date.now() < deadline) {
 			// Keep the pill in an in-progress state between retries: 'loading' when
 			// the server is up and enumerating plugins, 'checking' otherwise. Never
@@ -97,15 +91,12 @@ export function useServerHealth(serverId: () => string) {
 		} else if (!state.reachable) {
 			state = { ...state, state: 'error', reachable: false, ready: false };
 		} else {
-			// Reachable but never became ready within the window — don't leave it
-			// stuck on 'loading'; downgrade to 'warning' so the operator knows the
-			// server is up but Selva couldn't be confirmed.
+			// Reachable but never became ready within the window: don't leave it
+			// stuck on 'loading' — the server is up but Selva couldn't be confirmed.
 			state = { ...state, state: 'warning' };
 		}
 	}
 
-	// Probes immediately, then retries a non-responding server every few
-	// seconds until RETRY_WINDOW_MS elapses.
 	function check() {
 		if (!browser || destroyed) return;
 		if (timerId !== null) {

@@ -1,14 +1,12 @@
 /**
  * Direct tests for the production `buildContext` from hooks.server.ts. The
- * fixture's `actAs()` mirrors this logic (audit T2/Q4 flagged the parallel
- * reimplementation as a drift risk); these tests pin the real function against
- * real local stores AND assert it agrees with `actAs()`, so the two can't
- * silently diverge.
+ * fixture's `actAs()` reimplements this logic in parallel — a drift risk —
+ * so these tests pin the real function against real local stores AND assert
+ * it agrees with `actAs()`, so the two can't silently diverge.
  *
- * The §1 refactor made `buildContext` a pure function of its inputs
- * (`platformPermissions` + `membership`), with the four independent bootstrap
- * reads hoisted into the hook's `Promise.all`. These tests fetch those inputs
- * the same way the hook does and feed them in.
+ * `buildContext` is a pure function of its inputs (`platformPermissions` +
+ * `membership`); these tests fetch those the same way the hook does and feed
+ * them in.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';

@@ -3,20 +3,10 @@
 // ============================================================================
 //
 // The update runner (admin/api/system/update/+server.ts) emits structured log
-// lines and a small set of meaningful exit codes. The UI must not collapse
-// those into a vague "succeeded / failed" — an operator has to be able to
-// tell, at a glance:
-//
-//   • whether anything actually changed (and from which version to which),
-//   • whether the app is UP or DOWN right now,
-//   • whether a failed update was safely rolled back (app fine) vs left the
-//     app offline (urgent), and
-//   • the exact next action when something is wrong.
-//
-// `deriveOutcome` is a pure function of (exitCode, logs) so it's testable in
-// isolation. Severity ranking: anything that leaves the app DOWN is
-// `critical`; a safe rollback is `warning`, not an error, because the site is
-// still serving.
+// lines and a small set of meaningful exit codes; `deriveOutcome` turns those
+// into a severity an operator can act on without reading the log. Ranking:
+// anything that leaves the app DOWN is `critical`; a safe rollback is
+// `warning`, not an error, because the site is still serving.
 
 export type OutcomeSeverity = 'success' | 'info' | 'warning' | 'critical' | 'pending';
 
@@ -29,11 +19,10 @@ export const TIMED_OUT = -2;
 
 export interface UpdateOutcome {
 	severity: OutcomeSeverity;
-	/** One-line headline. Must be unambiguous about app up/down state. */
+	/** Must be unambiguous about app up/down state. */
 	title: string;
-	/** Optional second line — what to do next when something is off. */
+	/** What to do next when something is off. */
 	detail?: string;
-	/** Parsed "X → Y" version transition, when the log reported one. */
 	from?: string;
 	to?: string;
 }
@@ -44,11 +33,10 @@ function firstMatch(logs: string, re: RegExp): string | undefined {
 }
 
 function parseVersions(logs: string): { from?: string; to?: string } {
-	// The pre-flight transition line, printed BEFORE npm runs — the only source
-	// of a target version when the update fails early or is a no-op:
-	//   "[INFO] Target (beta): 4.2.0 → 4.2.1-beta.1"
-	// `Available:` is the pre-channel spelling, still matched so a log captured
-	// by an older runner keeps parsing. The arrow may be → or ->.
+	// Pre-flight transition line, printed before npm runs — the only source of a
+	// target version when the update fails early or is a no-op, e.g.
+	// "[INFO] Target (beta): 4.2.0 → 4.2.1-beta.1". `Available:` is the
+	// pre-channel spelling, kept so logs from an older runner still parse.
 	const version = String.raw`\d+\.\d+\.\d+[^\s]*`;
 	const transition = new RegExp(
 		String.raw`(?:Target \([^)]*\)|Available):\s*(${version})\s*(?:→|->)\s*(${version})`

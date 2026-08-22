@@ -4,13 +4,12 @@
  * The registry and the OpenAPI document are just data until something checks
  * them against the routes that actually exist. Without these assertions
  * `x-internal` is an annotation someone remembers to write, "every collection
- * paginates" is a convention, and "404, never 403" holds only for as long as
- * the last reviewer was paying attention.
+ * paginates" is a convention, and "404, never 403" holds only as long as the
+ * last reviewer was paying attention.
  *
- * Everything here reads route files as **text**. Importing a `+server.ts` would
- * pull in `./$types`, a SvelteKit build artifact that does not resolve under
- * vitest — and importing 27 modules to read their export names would be the
- * slow way to answer a question a regex answers exactly.
+ * Everything here reads route files as **text** — importing a `+server.ts`
+ * would pull in `./$types`, a SvelteKit build artifact that doesn't resolve
+ * under vitest.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -62,18 +61,12 @@ const handlersDir = resolve(packageRoot, 'src/lib/server/api/handlers');
 const packageHandlersDir = resolve(packageRoot, '../server/src/handlers');
 
 /**
- * A route that `mount`s a transport-free handler keeps its logic in
- * `api/handlers/`, so every source-grep assertion below would pass vacuously on
- * the route file alone. Appending the handler source keeps those assertions
- * checking the code that actually runs as handlers move out of the routes.
- */
-/**
  * Drop comments before any source grep.
  *
  * Every assertion below greps for a call shape, and prose naming that shape —
- * `// throws SvelteKit's error()` — matches just as well as a call does. A
- * false positive here is worse than noise: the obvious fix is to reword the
- * comment, which leaves the next author to hit the same wall.
+ * `// throws SvelteKit's error()` — matches just as well as a call does. The
+ * obvious fix to a false positive is rewording the comment, which leaves the
+ * next author to hit the same wall.
  */
 function stripComments(source: string): string {
 	return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
@@ -83,11 +76,10 @@ function stripComments(source: string): string {
  * Every module a route mounts a handler from, whether it still lives in the app
  * or has moved into `@selvajs/server/handlers`.
  *
- * A package import names the exported functions, not the file, so the barrel is
- * what maps one to the other. Unresolvable is a hard failure rather than an
- * empty string: silently inlining nothing would leave every source-grep
- * assertion below passing vacuously against a one-line route file — green tests
- * that check nothing, which is worse than a red one.
+ * A package import names the exported functions, not the file, so the barrel
+ * is what maps one to the other. Unresolvable is a hard failure rather than an
+ * empty string — silently inlining nothing would leave every source-grep
+ * assertion below passing vacuously against a one-line route file.
  */
 function mountedSources(source: string): string[] {
 	const appImports = [...source.matchAll(/from\s+'\$lib\/server\/api\/handlers\/([\w.-]+)'/g)];
@@ -136,8 +128,7 @@ function loadRoutes(baseDir: string): RouteFile[] {
 			file,
 			routePath: routePathOf(file, baseDir),
 			source: withMountedHandlers(source),
-			// Methods come from the route file itself — a handler module exports
-			// functions, not HTTP verbs.
+			// From the route file itself — a handler module exports functions, not HTTP verbs.
 			methods: exportedMethods(source)
 		};
 	});
@@ -335,14 +326,12 @@ describe('every collection endpoint paginates', () => {
 
 describe('resource-addressed routes conceal existence', () => {
 	// A 403 on a route addressed by a guessable id tells a caller that an id they
-	// cannot reach exists. The behavioral proof lives in each route's own suite
-	// (e.g. the solve endpoint's "404s a definition the caller cannot see"); what
-	// this checks is that the registry never *documents* a 403 on such a route,
-	// which is where the promise consumers read from would break first.
+	// cannot reach exists. The behavioral proof lives in each route's own suite;
+	// this checks that the registry never *documents* a 403 on such a route,
+	// which is where consumers' promise would break first.
 	//
 	// `/me/*` is exempt: those paths address the caller's own profile, so there
-	// is no other tenant's existence to disclose. Unstarring a guid the caller
-	// cannot see is a no-op on their own row, and 204 is the honest answer.
+	// is no other tenant's existence to disclose.
 	const guessableIdRoutes = V1_ENDPOINTS.filter(
 		(e) =>
 			/\{(guid|id|versionId|linkId)\}/.test(e.path) && !e.internal && !e.path.startsWith('/me/')
@@ -374,15 +363,14 @@ describe('resource-addressed routes conceal existence', () => {
 // ============================================================================
 
 describe('every admin handler calls a platform-permission guard', () => {
-	// The `/admin` layout guard never ran for endpoints — `+layout.server.ts`
-	// does not execute for `+server.ts`. So "all admin routes guard themselves"
-	// was true only by review until this test existed.
+	// `+layout.server.ts`'s guard never runs for `+server.ts` endpoints, so each
+	// admin handler must guard itself.
 	//
 	// Four helpers, not one: three named guards plus raw `requirePermission` with
 	// a platform permission. `requireManageOrgMembers` is deliberately absent —
 	// it is org-scoped, and the one admin route that used it moved to v1.
-	// `requireAnyPlatformPermission` is absent too: it was the page-load variant
-	// only, and no endpoint ever called it.
+	// `requireAnyPlatformPermission` is absent too: it's the page-load variant,
+	// and no endpoint calls it.
 	const PLATFORM_PERMISSIONS = [
 		'instance_admin',
 		'manage_compute',
@@ -431,11 +419,7 @@ describe('every admin handler calls a platform-permission guard', () => {
 
 /**
  * `/api/v1/*` and `/api/admin/*` are siblings over one core, so a rule that
- * lands in the shared helpers must reach both. For a long time it couldn't:
- * `apiRoute` lived under `api/v1/` and 0 of the admin handlers used it, so each
- * one hand-rolled its own `try/catch` and `if (!id) apiError(400, …)` preamble.
- * A handler that forgot the catch surfaced a raw 500 with a provider message in
- * it, and nothing flagged the omission.
+ * lands in the shared helpers must reach both.
  *
  * Exempt by nature, not by neglect: handlers that return a stream own their own
  * error signalling, because the status line is already sent by the time
@@ -462,11 +446,9 @@ describe('every API handler is wrapped (v1: mount; admin: apiRoute or mount)', (
 	// from `api/handlers/` and routes its errors through `runHandler`. Both
 	// guarantee the structured envelope, which is what this asserts.
 	//
-	// **v1 accepts only `mount`.** Every v1 method is converted, so allowing
-	// `apiRoute` there would let the next new route pick the wrapper that
-	// cannot be mounted by a second host — which is exactly the drift this
-	// whole refactor exists to end. Admin still accepts either: those handlers
-	// have not been converted, and forcing them now would be a second project.
+	// v1 accepts only `mount` — allowing `apiRoute` there would let a new route
+	// pick a wrapper that can't be mounted by a second host. Admin still
+	// accepts either, since those handlers haven't converted yet.
 	function wrapsMethod(source: string, method: HttpMethod, prefix: string): boolean {
 		const wrappers = prefix === 'api/v1' ? 'mount' : '(?:apiRoute|mount)';
 		return new RegExp(`export\\s+const\\s+${method}\\s*:[^=]*=\\s*${wrappers}\\s*\\(`).test(source);
@@ -511,20 +493,17 @@ describe('every API handler is wrapped (v1: mount; admin: apiRoute or mount)', (
 // ============================================================================
 
 /**
- * `docs/contributing/permissions.md` §8 is a table — endpoint, method, governing rule — which
- * makes it the one part of a 770-line prose document a test can hold.
+ * `docs/contributing/permissions.md` §8 is a table — endpoint, method, governing
+ * rule — which makes it the one part of a 770-line prose document a test can hold.
  *
  * The registry↔route check above catches an undocumented *contract*. This
- * catches an unreviewed *authorization decision*, which is a different miss:
- * `GET /orgs/{orgId}/members` and `GET /definitions/{guid}/versions` were both
- * fully registered and fully documented in OpenAPI while being absent from the
- * matrix, so nobody had ever written down who may call them. The audit found
- * one of them returning every colleague's permission array and the other
- * acting as a cross-tenant existence oracle.
+ * catches an unreviewed *authorization decision*: a route can be fully
+ * registered and documented in OpenAPI while nobody has written down who may
+ * call it.
  *
- * Deliberately one-directional: a matrix row with no route is fine, because
- * §8 documents unbuilt endpoints on purpose (`GET /api/v1/projects` is marked
- * "not implemented yet"). The direction that matters is shipped-but-unlisted.
+ * Deliberately one-directional: a matrix row with no route is fine, because §8
+ * documents unbuilt endpoints on purpose (`GET /api/v1/projects` is marked "not
+ * implemented yet"). The direction that matters is shipped-but-unlisted.
  */
 describe('permissions.md §8 lists every route', () => {
 	const matrix = readFileSync(

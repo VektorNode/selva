@@ -24,8 +24,6 @@ import {
 import { projectAccessInputFromRowsWith, type AccessDeps } from './access.server.js';
 
 /**
- * The app's lazily initialized module globals, as `AccessDeps`.
- *
  * Built per call, not once at module scope: the getters resolve through the
  * composition root, and capturing them at import time would pin whatever was
  * wired before boot finished.
@@ -40,7 +38,6 @@ export function globalAccessDeps(): AccessDeps {
 	};
 }
 
-/** `projectAccessInputFromRowsWith`, bound to the module globals. */
 export function projectAccessInputFromRows(
 	...args: DropFirst<Parameters<typeof projectAccessInputFromRowsWith>>
 ) {

@@ -1,11 +1,10 @@
 /**
  * The share-link ctx carries `system: true` so the Supabase adapter picks the
  * service-role client — no user JWT exists on a token-credentialed request.
- * Every store guard begins `if (ctx.system) return`, so without a second marker
- * an anonymous token holder satisfies `assertAdmin`.
- *
- * `shareLinkId` is that marker. These tests pin the split: `system` still means
- * "service-role dispatch", never "authorized".
+ * Every store guard begins `if (ctx.system) return`, so without a second
+ * marker (`shareLinkId`) an anonymous token holder would satisfy `assertAdmin`.
+ * These tests pin the split: `system` means "service-role dispatch", never
+ * "authorized".
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -68,7 +67,6 @@ describe('share-link ctx is not an authority', () => {
 			tp.config.data.permissions.set(resolved.ctx, alice.id, ['instance_admin'])
 		).rejects.toMatchObject({ statusCode: 403 });
 
-		// And nothing was written.
 		expect(await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, alice.id)).not.toContain(
 			'instance_admin'
 		);
@@ -84,7 +82,7 @@ describe('share-link ctx is not an authority', () => {
 	});
 
 	it('a real system context still passes those guards', async () => {
-		// The gate must narrow share contexts only — server-internal callers
+		// The gate narrows share contexts only — server-internal callers
 		// (bootstrap, janitors) still need the bypass.
 		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice } = await seedAcme(tp);

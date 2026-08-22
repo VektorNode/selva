@@ -1,10 +1,10 @@
 /**
  * Per-test mutable holder for the provider stack. Lets `freshProviders()` in
  * fixtures.ts swap in a tmpdir-rooted LocalDataProvider for each test, while
- * the `vi.mock` in setup.ts forwards the production `$lib/server/providers.server`
- * import surface to whatever is currently set here.
+ * the `vi.mock` in setup.ts forwards the production
+ * `$lib/server/providers.server` import surface to whatever is set here.
  *
- * Keep this file free of `vi.*` calls — the mock factory in setup.ts cannot
+ * Keep this file free of `vi.*` calls: the mock factory in setup.ts can't
  * import any module that uses `vi`, since `vi.mock` is hoisted above imports.
  */
 

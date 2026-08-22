@@ -25,11 +25,9 @@ import { getLogger } from './providers.server.js';
 // Deployment-dir detection + durable paths
 // ============================================================================
 
-// Selva self-updates as a CLI-scaffolded npm deployment: the deployment dir
-// holds a package.json that depends on @selvajs/selva. Probing the cwd
-// upward for the installed package is proof we're in such a deployment;
-// `INSTALL_DIR` lets an operator pin the root explicitly (useful when the
-// SvelteKit process cwd isn't the install dir).
+// The install signal is a package.json for @selvajs/selva under node_modules;
+// `INSTALL_DIR` lets an operator pin the root when the SvelteKit process cwd
+// isn't the install dir.
 export function isDeploymentDir(dir: string): boolean {
 	return existsSync(join(dir, 'node_modules', '@selvajs', 'selva', 'package.json'));
 }
@@ -46,16 +44,12 @@ export function findDeploymentDir(env: Record<string, string | undefined>): stri
 	return null;
 }
 
-/**
- * Where the update runner mirrors all its output. Lives in the deployment dir
- * so it survives reboots; the `/tmp` fallback only applies outside a
- * deployment (dev), where no update can actually run.
- */
+// Lives in the deployment dir so it survives reboots; the `/tmp` fallback
+// only applies outside a deployment (dev), where no update can actually run.
 export function updateLogPath(deploymentDir: string | null): string {
 	return deploymentDir ? join(deploymentDir, 'selva-update.log') : '/tmp/selva-update.log';
 }
 
-/** Pending-update marker consumed by the reconciler. Sits next to the log. */
 export function updateStatePath(deploymentDir: string): string {
 	return join(deploymentDir, 'selva-update-state.json');
 }
@@ -72,7 +66,6 @@ export interface PendingUpdateState {
 // Outcome reconciliation
 // ============================================================================
 
-/** Injected so the reconciler is testable without providers or real timers. */
 export interface ReconcilerDeps {
 	deploymentDir: string;
 	emit: (event: DomainEvent) => Promise<void>;

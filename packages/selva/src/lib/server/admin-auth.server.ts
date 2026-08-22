@@ -78,7 +78,7 @@ export function setSessionCookie(cookies: Cookies, sessionToken: string): void {
 	});
 }
 
-/** Read before `destroySession` — logout needs the token to revoke it provider-side. */
+/** Call before `destroySession` — logout needs the token to revoke it provider-side. */
 export function getSessionToken(cookies: Cookies): string | undefined {
 	return cookies.get(SESSION_COOKIE_NAME);
 }
@@ -127,5 +127,4 @@ export function requireMaxBodySize(request: Request, maxBytes: number): void {
 	}
 }
 
-/** Post-login redirect validator — re-exported for the login/OAuth routes. */
 export { safeRedirectTarget };

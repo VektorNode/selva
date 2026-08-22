@@ -3,9 +3,9 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { tmpdir } from 'os';
 import { join } from 'path';
 // Import the env stub through the SAME alias the module under test uses
-// ($env/dynamic/private → env-stub), so mutating INSTALL_DIR here is visible to
-// releaseChannel.server's deployment-dir probe. (`setEnv` imports './env-stub.js'
-// which can resolve to a different module record than the aliased one.)
+// ($env/dynamic/private → env-stub) so mutating INSTALL_DIR here is visible to
+// releaseChannel.server's deployment-dir probe — `setEnv`'s direct import of
+// './env-stub.js' can resolve to a different module record than this alias.
 import { env } from '$env/dynamic/private';
 import {
 	readChannel,
@@ -14,8 +14,8 @@ import {
 	channelRegistryUrl
 } from '../releaseChannel.server';
 
-// A temp dir that LOOKS like a CLI-scaffolded deployment (has
-// node_modules/@selvajs/selva/package.json), pinned via INSTALL_DIR so the
+// A temp dir shaped like a CLI-scaffolded deployment
+// (node_modules/@selvajs/selva/package.json), pinned via INSTALL_DIR so the
 // module's deployment-dir probe resolves to it deterministically.
 let deployDir: string;
 

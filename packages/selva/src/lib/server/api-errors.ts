@@ -82,18 +82,13 @@ function friendlyConstraintMessage(raw: string): string | null {
 	return null;
 }
 
-/**
- * Normalizes any error raised inside an API handler to a structured SvelteKit
- * HTTP error. Re-throws errors already raised via `apiError`/`error`, maps
- * ProviderError to its statusCode, and falls back to a 500 INTERNAL with the
- * provided message.
- */
+/** Normalizes any error raised inside an API handler to a structured SvelteKit HTTP error. */
 export function handleApiError(err: unknown, fallback: string, log?: ILogger): never {
 	if (isHttpError(err)) throw err;
 	// The transport-free parsers in `@selvajs/server/api` raise `ApiError`, not
-	// SvelteKit's `error()`. Routes still wrapped in `apiRoute` (admin, and the
-	// streaming solve routes) reach this path, so translate rather than letting
-	// a validation failure fall through to the 500 branch below.
+	// SvelteKit's `error()`. Routes still wrapped in `apiRoute` reach this path,
+	// so translate rather than letting a validation failure fall through to the
+	// 500 branch below.
 	if (isApiError(err)) {
 		apiError(err.status, err.code, err.message, err.fields);
 	}
@@ -117,17 +112,12 @@ export function handleApiError(err: unknown, fallback: string, log?: ILogger): n
 	// connection details (host, user, sometimes a DSN) on `cause`, and a raw
 	// console call hands the whole object to stdout, where pino's redaction
 	// never runs and erasure can't follow. `renderThrown` flattens to a stack
-	// string; the logger redacts what remains.
-	// `log` is `locals.log` when a request is in scope. The console fallback is
-	// for the handful of callers outside one; `renderThrown` has already
-	// flattened the error, so no object reaches stdout either way.
+	// string first, so the console fallback below (for the handful of callers
+	// with no `locals.log` in scope) is safe too.
 	const rendered = renderThrown(err);
 	if (log) log.error(`[API] ${fallback}`, { component: 'api', err: rendered });
 	else console.error(`[API] ${fallback}:`, rendered);
 	apiError(500, ApiErrorCode.INTERNAL, fallback);
 }
 
-// `throwZodError` moved to `@selvajs/server/api`, which is where the parsers
-// that raise it now live. Keeping a second copy here would let this app's
-// validation envelope drift from the package's.
 export { throwZodError } from '@selvajs/server/api';

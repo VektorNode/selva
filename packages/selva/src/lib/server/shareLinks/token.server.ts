@@ -2,10 +2,9 @@ import { env } from '$env/dynamic/private';
 import { createTokenCodec, type TokenCodec } from '@selvajs/server/tokens';
 
 /**
- * Share-link token primitives — thin binding over `@selvajs/server/tokens`
- * (`createTokenCodec`), which owns the two-part design (per-link random
- * secret, instance-wide HMAC secret hashing tokens at rest) and enforces the
- * ≥32-char secret minimum.
+ * Share-link token primitives — thin binding over `@selvajs/server/tokens`'s
+ * `createTokenCodec`, which hashes tokens at rest with an instance-wide HMAC
+ * secret and enforces the ≥32-char secret minimum.
  *
  * ## Format
  *   raw    = `share_<base64url(32 random bytes)>`
@@ -36,11 +35,8 @@ function getCodec(): TokenCodec {
 
 /**
  * The codec itself, for the composition root to put on `SelvaDeps.tokens`.
- *
  * Handlers take their codec injected rather than importing this module — that
- * is what keeps them free of `$env` and lets a second host supply its own
- * secret. This accessor exists so the wiring reads the secret through the same
- * lazy, re-keyed path everything else here does.
+ * keeps them free of `$env` and lets a second host supply its own secret.
  */
 export function shareLinkCodec(): TokenCodec {
 	return getCodec();
@@ -58,7 +54,7 @@ export function hashToken(raw: string): string {
 
 /** Recognize our own token format on inbound requests. */
 export function looksLikeShareToken(value: string): boolean {
-	// Prefix check only — deliberately doesn't touch the codec, so a missing
-	// secret can't turn "is this even a share token?" into a 500.
+	// Doesn't touch the codec, so a missing secret can't turn "is this even a
+	// share token?" into a 500.
 	return value.startsWith(TOKEN_PREFIX);
 }

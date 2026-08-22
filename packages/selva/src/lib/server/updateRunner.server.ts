@@ -22,10 +22,9 @@ export function readRuntimeVersion(dir: string): string | undefined {
 	}
 }
 
-// Wraps in single quotes and escapes embedded single quotes with the
-// standard `'\''` trick. No caller currently passes untrusted input
-// (plan.cwd is from process.cwd(), npm package names are hardcoded), but
-// defensive quoting is cheap.
+// No caller currently passes untrusted input (plan.cwd is from
+// process.cwd(), npm package names are hardcoded), but defensive quoting is
+// cheap.
 export function shellQuote(s: string): string {
 	return `'${s.replace(/'/g, `'\\''`)}'`;
 }

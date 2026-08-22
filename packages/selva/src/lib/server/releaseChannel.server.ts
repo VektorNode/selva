@@ -19,14 +19,10 @@ import { join } from 'path';
 import { env } from '$env/dynamic/private';
 import type { ReleaseChannel } from '@selvajs/server/ops';
 
-// `@selvajs/server/ops` owns the channel union (its semver comparison is
-// channel-aware); re-exported for app consumers.
 export type { ReleaseChannel };
 
 const CHANNEL_FILE = 'selva-channel.json';
 
-// npm dist-tag each channel resolves to. Stable tracks `latest`; beta tracks
-// the `beta` dist-tag (x.y.z-beta.N pre-releases).
 export function channelTag(channel: ReleaseChannel): string {
 	return channel === 'beta' ? 'beta' : 'latest';
 }
@@ -40,7 +36,7 @@ function isChannel(v: unknown): v is ReleaseChannel {
 }
 
 // Mirrors detectUpdatePlan / readInstalledVersion so the channel file lands
-// where all three agree. Returns null when not in a deployment.
+// where all three agree.
 function deploymentDir(): string | null {
 	const candidates: string[] = [];
 	if (env.INSTALL_DIR) candidates.push(env.INSTALL_DIR);
@@ -63,7 +59,6 @@ function channelFilePath(): string {
 	return join(deploymentDir() ?? process.cwd(), CHANNEL_FILE);
 }
 
-// Any failure (missing file, bad JSON, unknown value) degrades to "stable".
 export function readChannel(): ReleaseChannel {
 	const path = channelFilePath();
 	if (!existsSync(path)) return 'stable';
@@ -75,8 +70,6 @@ export function readChannel(): ReleaseChannel {
 	}
 }
 
-// Throws only if the directory is unwritable — the caller (a form action)
-// surfaces that to the operator.
 export function writeChannel(channel: ReleaseChannel): void {
 	if (!isChannel(channel)) throw new Error(`Invalid release channel: ${channel}`);
 	writeFileSync(channelFilePath(), JSON.stringify({ channel }, null, 2) + '\n', 'utf8');

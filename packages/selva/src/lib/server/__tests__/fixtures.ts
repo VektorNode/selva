@@ -2,20 +2,16 @@
  * Test fixtures for @selvajs/selva integration tests.
  *
  * `freshProviders()` builds a real LocalDataProvider stack rooted in a fresh
- * tmpdir per test — no mocks, no stubs. Tests interact with the same store
- * implementations production uses; only the wiring (provider singleton vs.
- * per-test handle) differs.
+ * tmpdir per test — no mocks, no stubs. `setTestProviders()` from
+ * ./test-providers makes that stack visible to the mocked
+ * `$lib/server/providers.server` so route handlers and access helpers see
+ * this test's providers when they call `getProjectProvider()` etc.
  *
- * `setTestProviders()` from ./test-providers makes the stack visible to the
- * mocked `$lib/server/providers.server` so route handlers and access helpers
- * see this test's providers when they call `getProjectProvider()` etc.
- *
- * **Workspace packages resolve through `dist/`, not source.** Tests here import
+ * Workspace packages resolve through `dist/`, not source: tests import
  * `@selvajs/platform` and `@selvajs/local-provider` as built artifacts, so
- * editing a rule in `packages/platform/src` changes nothing until that package
- * is rebuilt. This matters most when checking a test by breaking the code it
- * guards: a source-only edit leaves the suite green and reads as a vacuous
- * test when it is really a stale build. Rebuild the package first.
+ * editing a rule in `packages/platform/src` changes nothing until that
+ * package is rebuilt. A source-only edit leaves a test green and reads as
+ * vacuous when it's really a stale build — rebuild first.
  */
 
 import * as fs from 'node:fs/promises';
@@ -48,9 +44,8 @@ import { setTestProviders, clearTestProviders } from './test-providers.js';
 import { accessDepsFromConfig, type AccessDeps } from '../access.server.js';
 
 const TEST_HMAC_KEY = 'test-hmac-key-32-chars-min-length';
-// Deterministic 32-byte hex — `LocalComputeServerStore.fromEnv` needs a key
-// to encrypt the per-server compute config. Tests don't read the encrypted
-// blob, but the constructor still requires one.
+// Deterministic 32-byte hex: `LocalComputeServerStore.fromEnv` requires a key
+// to construct even though tests never read the encrypted blob.
 const TEST_AT_REST_KEY = '0'.repeat(64);
 
 // ============================================================================
@@ -67,9 +62,8 @@ class RecordingEventSink implements IEventSink {
 
 /**
  * Extends `TestHarness` so the shared seeders in `@selvajs/server/testing`
- * accept it directly. The extra fields are this host's: `authUsers` is the
- * local provider's identity file, which the auth and admin route tests read
- * directly and no interface exposes.
+ * accept it directly. `authUsers` is the local provider's identity file,
+ * which auth and admin route tests read directly and no interface exposes.
  */
 export interface TestProviders extends TestHarness {
 	root: string;
@@ -77,7 +71,6 @@ export interface TestProviders extends TestHarness {
 	tenancy: TenancyMode;
 	flags: SelvaFlags;
 	definitionService: DefinitionService;
-	/** Identity-only file (auth-users.json). Shaped like the auth provider's view. */
 	authUsers: ReturnType<typeof createLocalAuthUserStore>;
 	/** Every event emitted since `freshProviders`, in order. */
 	events: DomainEvent[];
@@ -101,9 +94,9 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 	const auth = LocalAuthProvider.fromEnv(env);
 	const data = LocalDataProvider.fromEnv(env, events);
 	const storage = LocalStorageProvider.fromEnv(env);
-	// Reuse the provider's OWN store (not a second one on the same file) so seed
-	// helpers share its load-once write-through cache — otherwise seeds via this
-	// handle wouldn't be visible to the provider's verifyToken/verifyLogin. §3a.
+	// Reuse the provider's OWN store, not a second one on the same file, so seed
+	// helpers share its load-once write-through cache — a separate store's seeds
+	// wouldn't be visible to the provider's verifyToken/verifyLogin.
 	const authUsers = auth.userStore;
 	if (!authUsers) throw new Error('LocalAuthProvider has no user store (DATA_PATH unset in tests)');
 
@@ -124,7 +117,6 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 		flags: config.flags ?? {},
 		definitionService,
 		authUsers,
-		// --- TestHarness ---
 		// `null` password marks an OAuth-allowlisted entry; tests don't
 		// authenticate, they just need the ids to align across stores.
 		auth: {
@@ -133,9 +125,9 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 		},
 		mapError: mapAppError,
 		deps: {
-			// The app's own codecs, not fresh ones: a second codec would hash under
-			// a different secret than the seeders use, so every token lookup would
-			// miss and read as a broken handler rather than a broken fixture.
+			// The app's own codecs, not fresh ones — a second codec would hash under
+			// a different secret than the seeders use, so lookups would miss and
+			// read as a broken handler rather than a broken fixture.
 			tokens: { shareLinks: shareLinkCodec(), invites: inviteCodec() },
 			services: { definitions: definitionService }
 		},
@@ -161,9 +153,9 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 // ============================================================================
 
 /**
- * The basic seeders live in `@selvajs/server/testing` and are re-exported here
- * so this module stays the single import for tests. They take a `TestHarness`,
- * which `TestProviders` extends — call sites pass `tp` unchanged.
+ * Basic seeders live in `@selvajs/server/testing`, re-exported here so this
+ * module stays the single import for tests. They take a `TestHarness`, which
+ * `TestProviders` extends, so call sites pass `tp` unchanged.
  */
 export {
 	seedUser,
@@ -190,10 +182,10 @@ export type {
 /**
  * The shared `actAs`, plus this app's `deps`.
  *
- * `access.server.ts` guards read their stores off `locals.deps`, which is a
- * Selva concept — the shared harness knows only what a handler reads. Page
- * loads and the guard unit tests both pass these locals straight to a guard, so
- * the field has to be here rather than added per test.
+ * `access.server.ts` guards read their stores off `locals.deps`, a Selva
+ * concept the shared harness doesn't know about. Page loads and guard unit
+ * tests both pass these locals straight to a guard, so the field belongs
+ * here rather than added per test.
  */
 export async function actAs(
 	tp: TestProviders,
@@ -207,20 +199,20 @@ export async function actAs(
 // ============================================================================
 
 /**
- * Augment the test's auth provider with an `oauth` capability that returns
- * a synthetic session for the given email. The Supabase auth provider
+ * Augment the test's auth provider with an `oauth` capability that returns a
+ * synthetic session for the given email. Only the Supabase auth provider
  * exposes `IOAuthAuth` in production; the local one doesn't, so
- * OAuth-callback tests inject this typed shim. `exchangeOAuthCode`
- * creates the auth-users row if missing (matching real Supabase behavior
- * on first sign-in). The data-layer row is auto-seeded by the OAuth
- * callback handler itself via `ensureUser`, exactly as in production.
+ * OAuth-callback tests inject this shim. `exchangeOAuthCode` creates the
+ * auth-users row if missing, matching real Supabase behavior on first
+ * sign-in; the data-layer row is seeded by the callback handler itself via
+ * `ensureUser`, as in production.
  */
 export function installOAuthShim(
 	tp: TestProviders,
 	opts: { email: string; userId?: string }
 ): { calls: number } {
 	const state = { calls: 0 };
-	void opts.userId; // reserved for future tests that need a deterministic id
+	void opts.userId;
 	const shim: IOAuthAuth = {
 		listProviders: () => [],
 		async exchangeOAuthCode(_code: string) {
@@ -247,9 +239,8 @@ export function installOAuthShim(
 			throw new Error('OAuth shim: refreshSession not implemented for tests');
 		}
 	};
-	// `oauth` on IAuthProvider is `readonly` — we're patching the test
-	// provider's identity at runtime, which is exactly the seam the cast was
-	// papering over. The shim itself is now fully typed.
+	// `oauth` on IAuthProvider is `readonly` — cast needed to patch the test
+	// provider's identity at runtime.
 	(tp.config.auth as { oauth?: IOAuthAuth }).oauth = shim;
 	return state;
 }
@@ -257,7 +248,7 @@ export function installOAuthShim(
 /**
  * Augment the test's auth provider with a `sessionRefresh` capability that
  * records which tokens were revoked. The local provider mints stateless HMAC
- * tokens and so exposes none — Supabase does, and it is the provider whose
+ * tokens and exposes none — Supabase does, and it's the provider whose
  * sessions outlive cookie deletion.
  */
 export function installSessionRefreshShim(tp: TestProviders): { revoked: string[] } {
@@ -290,10 +281,10 @@ export async function setEnv(key: string, value: string | undefined): Promise<vo
 // ============================================================================
 
 /**
- * The tenant casts moved to `@selvajs/server/testing` alongside the handler
- * tests that use them. Re-exported here so this module stays the single import
- * for tests; they take a `TestHarness`, which `TestProviders` extends, so call
- * sites pass `tp` unchanged.
+ * Tenant casts live in `@selvajs/server/testing` alongside the handler tests
+ * that use them, re-exported here so this module stays the single import;
+ * they take a `TestHarness`, which `TestProviders` extends, so call sites
+ * pass `tp` unchanged.
  */
 export { seedAcme, seedBigClient, seedThirdOrg, seedCommons } from '@selvajs/server/testing';
 export type {
@@ -304,16 +295,15 @@ export type {
 } from '@selvajs/server/testing';
 
 /**
- * Wrap one store method to observe that it was called, leaving behaviour intact.
+ * Wrap one store method to observe that it was called, leaving behaviour
+ * intact.
  *
- * Proxies rather than spreads. The stores are class instances, so
- * `{ ...store, method: spy }` copies own properties and drops every prototype
- * method — the resulting object throws `store.getProject is not a function` at
- * the first untouched call, which surfaces as an opaque 500 rather than a
- * pointer at the spread.
+ * Proxies rather than spreads: the stores are class instances, so
+ * `{ ...store, method: spy }` drops every prototype method, and the result
+ * throws `store.getProject is not a function` at the first untouched call.
  *
- * This is what proves a handler reads `req.deps` instead of a module global:
- * the global still holds the unwrapped store, so a handler that reaches for it
+ * This is what proves a handler reads `req.deps` instead of a module global —
+ * the global still holds the unwrapped store, so a handler reaching for it
  * never trips the spy.
  */
 export function spyOnStore<
@@ -342,9 +332,7 @@ export function spyOnStore<
 	};
 }
 
-// ----------------------------------------------------------------------------
 // Synthetic RequestEvent for direct +server.ts handler invocation.
-// ----------------------------------------------------------------------------
 
 type AnyHandler = (event: any) => unknown | Promise<unknown>;
 
@@ -356,10 +344,6 @@ export interface CallOpts {
 	headers?: Record<string, string>;
 	cookies?: Map<string, string>;
 }
-
-// `CallResult` is the shared one, re-exported above — `call` and `callHandler`
-// return the same shape so a test converts between them without touching its
-// assertions.
 
 /**
  * Invoke a `+server.ts` handler directly. Catches HttpError thrown by
@@ -374,7 +358,7 @@ export async function call(handler: AnyHandler, opts: CallOpts): Promise<CallRes
 	};
 	if (opts.body !== undefined) {
 		// FormData sets its own multipart content-type with a generated boundary;
-		// forcing `application/json` onto it makes `request.formData()` throw.
+		// forcing application/json onto it makes request.formData() throw.
 		if (opts.body instanceof FormData) {
 			init.body = opts.body;
 		} else {
@@ -444,10 +428,6 @@ async function readResponse(res: Response): Promise<CallResult> {
 /**
  * Assert that an awaited promise throws a SvelteKit HttpError with the given
  * status. Returns the error body for further assertions.
- *
- * Usage:
- *   const body = await expectHttpError(requireCanEdit(locals, project.id), 403);
- *   expect(body.message).toMatch(/permission/);
  */
 export async function expectHttpError(
 	promise: Promise<unknown>,
@@ -476,10 +456,9 @@ interface HttpErrorLike {
 
 function asHttpErrorLike(err: unknown): HttpErrorLike | null {
 	if (!err || typeof err !== 'object') return null;
-	// The access guards raise `ApiError`, which carries `message`/`code` as own
-	// fields rather than under `body`. Production folds it into the envelope at
-	// the boundary (`mapAppError`, or `asHttpError` off the mounted path); these
-	// helpers call guards directly, so they normalize it here.
+	// Access guards raise `ApiError`, carrying `message`/`code` as own fields
+	// rather than under `body`. Production folds it into the envelope at the
+	// boundary; these helpers call guards directly, so they normalize it here.
 	if (isApiError(err)) {
 		return { status: err.status, body: { message: err.message, code: err.code } };
 	}

@@ -1,14 +1,7 @@
-/**
- * SEL-5. The OAuth callback is a GET that mints a session cookie, so
- * SvelteKit's CSRF origin check does not cover it and this nonce is the only
- * thing rejecting an attacker-supplied `?code=`.
- */
-
 import { describe, it, expect } from 'vitest';
 import type { Cookies } from '@sveltejs/kit';
 import { issueOAuthState, consumeOAuthState } from '../oauthState.server.js';
 
-/** Just enough of `Cookies` for get/set/delete. */
 function fakeCookies(): Cookies & { store: Map<string, string> } {
 	const store = new Map<string, string>();
 	return {

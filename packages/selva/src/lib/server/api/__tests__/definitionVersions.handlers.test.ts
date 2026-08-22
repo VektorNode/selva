@@ -189,13 +189,11 @@ describe('dependency injection', () => {
 /**
  * The upload cap is read from `deps.uploadLimits`, not a module constant.
  *
- * Worth its own test because nothing else exercises it: every other upload in
- * this suite is comfortably under the limit, so a handler that ignored the
- * injected cap would pass the whole file green.
- *
- * Calls the handler directly rather than through `mount`, because the point is
- * that the cap travels on `deps` — routing it through the binding would test
- * the binding's wiring instead, which is a different claim.
+ * Worth its own test: every other upload in this suite is comfortably under
+ * the limit, so a handler ignoring the injected cap would pass the file green
+ * otherwise. Calls the handler directly rather than through `mount`, since the
+ * point is that the cap travels on `deps` — routing through the binding would
+ * test the binding's wiring instead.
  */
 describe('upload limits come from deps', () => {
 	it('rejects a file over the injected cap', async () => {

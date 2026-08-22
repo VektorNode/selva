@@ -56,10 +56,7 @@ export interface SolveParams {
 	/** Explicit version pick; editor-only, never share-token accessible. */
 	versionId: string | null;
 	request: Request;
-	/**
-	 * Typed loosely because two route trees with different generated `$types`
-	 * both call this.
-	 */
+	/** Typed loosely: two route trees with different generated `$types` both call this. */
 	locals: App.Locals;
 	/** `performance.now()` at the very start of the request, before body parse. */
 	loadStart: number;
@@ -111,14 +108,12 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// bytes the scheduler loads ONLY when an upload is unavoidable (pointer-known
 	// re-solves move zero bytes). Remote-URL definitions carry raw fetched bytes.
 	let definitionSource: SolveDefinition;
-	// The byte-cache ref for a local solve — its `.load()` materializes bytes for
-	// schema backfill, and its `.outcome` drives the `def_bytes` Server-Timing
-	// verdict. Null for remote-URL solves (raw bytes, no ref).
+	// `.load()` materializes bytes for schema backfill; `.outcome` drives the
+	// `def_bytes` Server-Timing verdict. Null for remote-URL solves.
 	let localDefinitionRef: ByteCacheRef | null = null;
 	let localVersionForBackfill: { id: string; hasSchema: boolean } | null = null;
 	// BYO compute routing per org; null for remote definitions.
 	let solveOrgId: string | null = null;
-	// Per-definition compute pin.
 	let definitionPin: string | null = null;
 	// Solve-metric attribution; null for remote-URL solves.
 	let metricDefinitionId: string | null = null;
@@ -128,9 +123,9 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	const guid = isLocal ? definitionUrl.substring(6) : null;
 
 	// One row per solve attempt, including attempts rejected before the solve
-	// runs. Reads the attribution `let`s at call time so each record captures
-	// whatever has resolved so far (definition/version are null pre-resolution).
-	// Fire-and-forget: the sink never throws (ISolveMetricSink contract).
+	// runs — reads the attribution `let`s at call time, so definition/version
+	// are null when a record fires pre-resolution. Fire-and-forget: the sink
+	// never throws (ISolveMetricSink contract).
 	const recordMetric = (
 		failureKind: SolveFailureKind,
 		extra: { durationMs?: number; errorCount?: number; warningCount?: number } = {}
@@ -209,10 +204,9 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 					await requireCanSolve(scoped(locals), record.projectId, project ?? undefined);
 				}
 			} catch (err) {
-				// Reads the status off either error shape. The guards raise `ApiError`
-				// and `requireCanEditDefinition` may still surface an `HttpError`;
-				// matching only one lets the other's 403 through, which tells a caller
-				// that a guid they cannot reach exists.
+				// The guards raise `ApiError`, but `requireCanEditDefinition` may still
+				// surface an `HttpError` — matching only one shape would let the
+				// other's 403 leak through, confirming a guid the caller can't reach.
 				const status = isApiError(err) ? err.status : isHttpError(err) ? err.status : undefined;
 				if (concealAccessFailure && status === 403) {
 					apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' not found`);
@@ -236,12 +230,10 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		metricVersionId = version.id;
 		mark('version');
 
-		// Solve by reference: the scheduler materializes bytes lazily (only on an
-		// unavoidable upload), and the byte cache serves a warm entry without
-		// touching storage. Keyed on the immutable version id — NEVER the fileKey,
-		// which a delete-latest-then-reupload can reuse for different content. A
-		// missing blob surfaces at solve time (compute_error → 500), not as an
-		// upfront 404, since it's no longer read eagerly here.
+		// Keyed on the immutable version id, NEVER the fileKey — a
+		// delete-latest-then-reupload can reuse a fileKey for different content.
+		// A missing blob surfaces at solve time (compute_error → 500) rather than
+		// an upfront 404, since it's no longer read eagerly here.
 		localDefinitionRef = engine.definitionRef(version.id, async () => {
 			const bytes = await storage.get(version.fileKey);
 			if (!bytes) throw new Error(`Version blob missing: ${version.fileKey}`);
@@ -267,8 +259,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		mark('remoteDef');
 	}
 
-	// Phase boundary: everything above (auth, DB, blob/remote definition fetch) is
-	// the "load" phase; the tree build + solve are measured inside the pipeline.
+	// Everything above (auth, DB, blob/remote fetch) is the "load" phase; tree
+	// build and solve are measured inside the pipeline.
 	const defLoadMs = performance.now() - loadStart;
 
 	// Atomic check-and-increment; runs before solve to avoid wasting compute.
@@ -293,14 +285,13 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	mark('resolveServer');
 
 	// BRIDGE: remove ~2026-09 — lazy backfill for versions uploaded before schema
-	// caching existed. Best-effort. Removing it means: delete this block, tighten
+	// caching existed. Best-effort. Removing it: delete this block, tighten
 	// `DefinitionVersion.schema` to required in platform types + Zod, and drop the
 	// live-fetch fallback in loadForRender.server.ts.
 	if (localVersionForBackfill && !localVersionForBackfill.hasSchema && localDefinitionRef) {
 		const versionId = localVersionForBackfill.id;
 		try {
-			// Materialize through the byte cache — warms the entry the upcoming
-			// solve's `load()` would hit anyway.
+			// Warms the byte-cache entry the upcoming solve's `load()` would hit anyway.
 			const bytes = await localDefinitionRef.load();
 			const schema = await fetchSchemaFromCompute(bytes, serverConfig);
 			await providers.data.definitions.setVersionSchema(solveCtx, versionId, schema);
@@ -316,15 +307,12 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		mark('schemaBackfill');
 	}
 
-	// Hand off to the engine: warm-client lookup (stamping `definitionGuid` as an
-	// affinity header when present), input-tree build, single-flight coalescing (a
-	// hot-key burst hits compute once, for every solve, not just cacheable ones),
-	// the abort/hasWaiters dance (a coalesced solve must not follow one caller's
-	// disconnect and 499 every waiter), the pipeline call, and per-caller
-	// Accept-Encoding re-keying all live in `SolveEngine.solve`. Remote-URL solves
-	// have no version id, so the URL stands in as their coalesce-key identity
-	// (`definitionKey`); local solves carry that identity on `localDefinitionRef.key`
-	// already, so `definitionKey` is unused there.
+	// `SolveEngine.solve` owns warm-client lookup, input-tree build,
+	// single-flight coalescing, the abort/hasWaiters dance (a coalesced solve
+	// must not follow one caller's disconnect and 499 every waiter), and
+	// per-caller Accept-Encoding re-keying. Remote-URL solves have no version
+	// id, so the URL stands in as coalesce-key identity (`definitionKey`);
+	// local solves already carry that identity on `localDefinitionRef.key`.
 	const outcome = await engine.solve({
 		server: serverConfig,
 		definitionSource,
@@ -340,8 +328,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	});
 	mark('solve');
 
-	// Metric recording is app policy — the engine's `toResponse` only maps
-	// outcome→HTTP. Branches don't return; `engine.toWebResponse` below does.
+	// Metric recording is app policy — the engine only maps outcome to HTTP.
+	// These branches don't return; `engine.toWebResponse` below does.
 	if (outcome.kind === 'timeout') {
 		recordMetric('timeout', { durationMs: outcome.durationMs });
 	} else if (outcome.kind === 'client_abort') {
@@ -356,9 +344,9 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			errorCount: outcome.errorCount,
 			warningCount: outcome.warningCount
 		});
-		// Bump the definition's display counter ("N runs"). Local definitions only —
-		// remote URLs have no record. Best-effort: the solve already succeeded, so a
-		// failed counter write must not turn into a request error.
+		// Best-effort: the solve already succeeded, so a failed counter write
+		// must not turn into a request error. Local definitions only — remote
+		// URLs have no record to bump.
 		if (metricDefinitionId) {
 			providers.data.definitions.incrementSolveCount(solveCtx, metricDefinitionId).catch((err) =>
 				locals.log.warn('solveCount increment failed', {
@@ -372,9 +360,9 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		if (COMPUTE_DEBUG) logDebugBreakdown(locals, request, outcome, defLoadMs, prepMarks);
 	}
 
-	// `toWebResponse` builds the Response itself (incl. `Retry-After` on a rejected
-	// `shed`, which `apiError` cannot set) and still throws `compute_error` through
-	// to the caller's outer catch.
+	// Builds the Response itself (incl. `Retry-After` on a rejected `shed`,
+	// which `apiError` cannot set) and still throws `compute_error` through to
+	// the caller's outer catch.
 	return engine.toWebResponse(outcome);
 }
 
@@ -384,11 +372,11 @@ export async function runSolve(params: SolveParams): Promise<Response> {
  */
 export function mapSolveError(err: unknown, locals: App.Locals): never {
 	if (isHttpError(err)) throw err;
-	// A guard's own decision, not a failed solve. Converted rather than
-	// re-thrown: these routes return their Response directly instead of going
-	// through `mount`, so an `ApiError` escaping here reaches SvelteKit, which
-	// gives anything that isn't its own `HttpError` a 500 — turning a working
-	// permission check into an operator page.
+	// A guard's own refusal, not a failed solve — converted rather than
+	// re-thrown. These routes return their Response directly instead of going
+	// through `mount`, so an `ApiError` escaping here would reach SvelteKit,
+	// which gives anything that isn't an `HttpError` a 500, turning a working
+	// permission check into an operator error page.
 	if (isApiError(err)) {
 		apiError(err.status, err.code, err.message);
 	}
@@ -403,8 +391,8 @@ export function mapSolveError(err: unknown, locals: App.Locals): never {
 		err: renderThrown(err)
 	});
 
-	// The engine's fetch to the compute server failing at the transport layer is
-	// an unreachable-server condition, not an internal error.
+	// A transport-layer fetch failure means the compute server is unreachable,
+	// not an internal error.
 	if (err instanceof TypeError && message === 'fetch failed') {
 		apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, 'Compute server is unreachable');
 	}
@@ -444,7 +432,7 @@ function logDebugBreakdown(
 		});
 	} else {
 		// If this fires for browser requests, a proxy in front is stripping
-		// Accept-Encoding — compression is then impossible end-to-end from here.
+		// Accept-Encoding, making compression impossible end-to-end.
 		const acceptEncoding = request.headers.get('accept-encoding') ?? '';
 		locals.log.debug('Compression skipped', {
 			component: 'Compute/server',
@@ -457,8 +445,8 @@ function logDebugBreakdown(
 		component: 'Compute/server',
 		...Object.fromEntries(prepMarks.map(([label, ms]) => [`p_${label}Ms`, Math.round(ms)]))
 	});
-	// Aggregate cache counters — the only place evictions surface
-	// (per-request Server-Timing only carries hit/miss verdicts).
+	// The only place evictions surface — per-request Server-Timing only carries
+	// hit/miss verdicts.
 	const db = engine.stats().definitionBytes;
 	locals.log.debug('Definition byte-cache counters', {
 		component: 'Compute/def-bytes',

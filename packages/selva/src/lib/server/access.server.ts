@@ -25,15 +25,9 @@ export * from '@selvajs/server/access';
 
 /**
  * Run a guard outside `mount`, converting its `ApiError` into the `HttpError`
- * SvelteKit needs to produce a real status.
- *
- * Needed by page loads and by the few API routes that build their own
- * `Response` — the binary file proxy and the two solve routes — since those
- * never reach `mapAppError`.
- *
- * ```ts
- * const { project } = await asHttpError(() => requireCanManage(scoped(locals), id));
- * ```
+ * SvelteKit needs to produce a real status. Needed by page loads and by API
+ * routes that build their own `Response` instead of going through `mount`,
+ * since those never reach `mapAppError`.
  */
 export async function asHttpError<T>(run: () => T | Promise<T>): Promise<T> {
 	try {
@@ -46,7 +40,6 @@ export async function asHttpError<T>(run: () => T | Promise<T>): Promise<T> {
 	}
 }
 
-/** Redirects to /admin — use in page load functions. */
 export function assertPagePermission(locals: Locals, permission: AnyPermission): AuthUser {
 	const { user, ctx } = requireAuthed(locals);
 	if (!hasPermission(ctx, permission)) {
@@ -65,8 +58,6 @@ export const assertManageCompute = (locals: Locals) =>
  * `/admin` shell — `instance_admin`, `manage_compute`, `manage_instance_users`,
  * or `manage_updates` all qualify). Org-scope permissions never admit entry:
  * org admins do not belong on platform-scoped surfaces.
- *
- * Redirects to /library — use in page load functions on platform-scoped routes.
  */
 export function assertAnyPlatformPermission(locals: Locals): AuthUser {
 	const { user, ctx } = requireAuthed(locals);

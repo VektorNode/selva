@@ -68,12 +68,10 @@ const runtime = await createSelvaProviders(env, {
 	logger: lazyLogger
 });
 
-/**
- * Memoized. The first call instantiates providers from env (may throw if
- * required secrets are missing); later calls return the cached config.
- * Importing this module has no side effects — init happens lazily on the
- * first request, never at build time.
- */
+// Memoized: first call instantiates providers from env (may throw if
+// required secrets are missing) and later calls return the cached config.
+// Importing this module has no side effects — init happens lazily on the
+// first request, never at build time.
 export function resolveProviders(): SelvaConfig {
 	return runtime.resolve();
 }
@@ -93,12 +91,12 @@ export function getTenancy(): TenancyMode {
 	return runtime.tenancy();
 }
 
-/** Every field has a default so the UI never has to null-check. Override via SELVA_BRAND_* env vars. */
+// Every field has a default so the UI never has to null-check. Override via SELVA_BRAND_* env vars.
 export function getBranding(): Required<SelvaBranding> {
 	return runtime.branding();
 }
 
-/** Use this rather than reading flags directly — omitted flags resolve to false. */
+// Use this rather than reading flags directly — omitted flags resolve to false.
 export function flag(name: keyof SelvaFlags): boolean {
 	return runtime.flag(name);
 }
@@ -169,26 +167,22 @@ export function getPlatformProjectGrantStore() {
 	return resolveProviders().data.platformProjectGrants;
 }
 
-/** Defaults to `NoopSolveMetricSink` when the config omits `solveMetrics`, so the compute route always records unconditionally. */
+// Defaults to `NoopSolveMetricSink` when the config omits `solveMetrics`, so the compute route always records unconditionally.
 export function getSolveMetricSink(): ISolveMetricSink {
 	return runtime.solveMetricSink();
 }
 
-/**
- * Null on deployments where the audit log isn't queryable (local-provider
- * stays on `NoopEventSink`). Callers must handle null and degrade their UI.
- */
+// Null on deployments where the audit log isn't queryable (local-provider
+// stays on `NoopEventSink`). Callers must handle null and degrade their UI.
 export function getAuditQuery() {
 	return providers.data.auditQuery ?? null;
 }
 
 const noopEventSink = new NoopEventSink();
 
-/**
- * Write-side event sink for routes with no store mutation to piggyback on
- * (e.g. self-update lifecycle events). Prefers the explicit `SelvaConfig.events`,
- * then the data provider's own sink, then a no-op.
- */
+// Write-side sink for routes with no store mutation to piggyback on (e.g.
+// self-update lifecycle events). Prefers SelvaConfig.events, then the data
+// provider's own sink, then a no-op.
 export function getEventSink(): IEventSink {
 	const p = resolveProviders();
 	return p.events ?? p.data.events ?? noopEventSink;
@@ -207,30 +201,22 @@ const LOG_LEVEL: LogLevel = parseLogLevel(env.LOG_LEVEL);
 
 let _logger: ILogger = new ConsoleLogger({}, LOG_LEVEL);
 
-/**
- * The app's root logger. Pino-backed when `pino` is installed (ships with the
- * app; the base `@selvajs/server` install treats it as an optional peer and
- * falls back to the console).
- *
- * Prefer a request-scoped child (`event.locals.log`) in route handlers so
- * records carry `requestId`/`route`. Use this root logger for boot, shutdown,
- * and background work with no request.
- */
+// Pino-backed when `pino` is installed (ships with the app; the base
+// `@selvajs/server` install treats it as an optional peer and falls back to
+// console). Prefer a request-scoped child (`event.locals.log`) in route
+// handlers so records carry `requestId`/`route` — use this root logger for
+// boot, shutdown, and background work with no request.
 export function getLogger(): ILogger {
 	return _logger;
 }
 
 let _notifications: INotificationProvider | null = null;
 
-/**
- * Outbound message transport. SMTP-backed; sends nothing when `SMTP_HOST` is
- * unset, which is a supported deployment — callers fall back to sharing links
- * by hand.
- *
- * `env` is passed rather than read inside the provider: under `vite dev` Vite
- * does not mirror `.env` into `process.env`, so a provider reading it directly
- * would silently ignore every override.
- */
+// SMTP-backed; sends nothing when `SMTP_HOST` is unset, which is a supported
+// deployment — callers fall back to sharing links by hand. `env` is passed
+// rather than read inside the provider: under `vite dev`, Vite doesn't
+// mirror `.env` into `process.env`, so reading it directly would silently
+// ignore every override.
 export function getNotificationProvider(): INotificationProvider {
 	_notifications ??= new SmtpNotificationProvider(env);
 	return _notifications;
@@ -276,13 +262,10 @@ void createLogger({
 // Acceptable: only errors thrown in that window are lost.
 let _errorReporter: IErrorReporter = new NoopErrorReporter();
 
-/**
- * Ships errors off-box (Sentry) only when `SENTRY_DSN` is configured;
- * otherwise a no-op, so self-hosters opt in via env and the base install
- * carries no error-tracking dependency. Only genuinely unexpected errors
- * reach here — see `handleError` in hooks.server.ts for what's filtered out
- * before this is called.
- */
+// Ships errors off-box (Sentry) only when `SENTRY_DSN` is configured;
+// otherwise a no-op, so self-hosters opt in via env and the base install
+// carries no error-tracking dependency. Only genuinely unexpected errors
+// reach here — see `handleError` in hooks.server.ts for what's filtered out.
 export function getErrorReporter(): IErrorReporter {
 	return _errorReporter;
 }

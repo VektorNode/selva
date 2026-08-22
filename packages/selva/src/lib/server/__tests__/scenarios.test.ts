@@ -1,14 +1,13 @@
 /**
- * §11 sanity checks from docs/contributing/permissions.md.
+ * Sanity checks from docs/contributing/permissions.md's permission matrix.
  *
- * Each test mirrors one row of the §11 matrix end-to-end through the real
- * provider stack (LocalDataProvider in a tmpdir) — no mocks for the rules,
- * stores, or access helpers. The mock layer (setup.ts) only replaces the
- * provider singleton with the per-test handle so route handlers see this
- * test's data.
+ * Each test mirrors one matrix row end-to-end through the real provider stack
+ * (LocalDataProvider in a tmpdir) — no mocks for the rules, stores, or access
+ * helpers. The mock layer (setup.ts) only replaces the provider singleton
+ * with the per-test handle so route handlers see this test's data.
  *
- * Naming: `it()` titles match the §11 row prose so a future reader can grep
- * the spec and find the test directly.
+ * `it()` titles match the matrix row prose so a reader can grep the doc and
+ * find the test directly.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -54,10 +53,6 @@ afterEach(async () => {
 		tp = null;
 	}
 });
-
-// ============================================================================
-// §11 — visibility & cross-org
-// ============================================================================
 
 describe('§11 — visibility & cross-org', () => {
 	it('Bob (Acme member, no project membership) navigates to private URL — 403', async () => {
@@ -142,10 +137,6 @@ describe('§11 — visibility & cross-org', () => {
 	});
 });
 
-// ============================================================================
-// §11 — commons model
-// ============================================================================
-
 describe('§11 — commons model', () => {
 	it('Bob uploads a NEW definition to a commons project — OK (autoJoinOnUpload bypass)', async () => {
 		tp = await freshProviders();
@@ -225,10 +216,6 @@ describe('§11 — commons model', () => {
 	});
 });
 
-// ============================================================================
-// §11 — versioning & rollback
-// ============================================================================
-
 describe('§11 — versioning & rollback', () => {
 	it('Alice rolls live back to v1 from broken v2 — re-points pointer', async () => {
 		tp = await freshProviders();
@@ -239,7 +226,6 @@ describe('§11 — versioning & rollback', () => {
 		});
 		const aliceCtx = (await actAs(tp, alice.id)).ctx;
 
-		// Upload v2 + publish it as live.
 		const v2Schema = { name: 'Test', inputs: [], outputs: [] } as unknown as Parameters<
 			typeof tp.definitionService.uploadVersion
 		>[5];
@@ -256,7 +242,6 @@ describe('§11 — versioning & rollback', () => {
 		const afterPublish = await tp.config.data.definitions.get(aliceCtx, def.record.guid);
 		expect(afterPublish?.liveVersionId).toBe(v2.id);
 
-		// Roll back to v1.
 		await tp.definitionService.publish(aliceCtx, def.record.guid, def.version.id);
 
 		const afterRollback = await tp.config.data.definitions.get(aliceCtx, def.record.guid);
@@ -278,15 +263,10 @@ describe('§11 — versioning & rollback', () => {
 	});
 });
 
-// ============================================================================
-// §11 — project edit gates
-// ============================================================================
-
 describe('§11 — project edit gates', () => {
 	it('Project editor tries to edit settings — 403, owner-only', async () => {
 		tp = await freshProviders();
 		const { bob, alicesPrivate } = await seedAcme(tp);
-		// Promote Bob to project editor (Alice is owner).
 		await seedProjectMember(tp, {
 			projectId: alicesPrivate.id,
 			userId: bob.id,
@@ -311,21 +291,18 @@ describe('§11 — project edit gates', () => {
 	});
 
 	it('Plain org member who owns a project can edit its settings — regression for H6', async () => {
-		// Regression: PATCH /api/projects/[id] used to require BOTH the
-		// platform-scope `manage_projects` permission AND project-owner role.
-		// A plain org member (no `manage_projects`) who happened to own a
-		// project would get 403 on their own project's settings.
+		// PATCH /api/projects/[id] used to require BOTH the platform-scope
+		// `manage_projects` permission AND project-owner role, so an owner
+		// without `manage_projects` got 403 on their own project's settings.
 		tp = await freshProviders();
 		const acme = await seedAcme(tp);
 
-		// Mallory is a plain Acme member — no platform permissions, no
-		// `manage_projects`. We give her her own project and make her owner.
 		const mallory = await seedUser(tp, 'mallory@acme.test');
 		await seedOrgMember(tp, {
 			orgId: acme.acme.id,
 			userId: mallory.id,
 			role: 'member',
-			permissions: [] // explicitly nothing — *not* the role default
+			permissions: [] // not the role default
 		});
 		const mallorysProject = await seedProject(tp, {
 			orgId: acme.acme.id,
@@ -365,15 +342,11 @@ describe('§11 — project edit gates', () => {
 	});
 });
 
-// ============================================================================
-// §11 — reclaim & owner removal
-// ============================================================================
-
 describe('§11 — reclaim & owner removal', () => {
 	it('Org owner reclaims project — adds co-owner, original not demoted', async () => {
 		tp = await freshProviders();
 		const { acme, alice, bob, alicesPrivate } = await seedAcme(tp);
-		// Promote Bob to org owner so canReclaim passes for him.
+		// Bob must be an org owner for canReclaim to pass.
 		await tp.config.data.orgs.updateOrgMemberRole(SYSTEM_CONTEXT, acme.id, bob.id, 'owner');
 
 		const bobLocals = await actAs(tp, bob.id);
@@ -433,10 +406,6 @@ describe('§11 — reclaim & owner removal', () => {
 		await expectHttpError(requireCanReclaim(carolLocals, alicesPrivate.id), 403);
 	});
 });
-
-// ============================================================================
-// §11 — visibility flips
-// ============================================================================
 
 describe('§11 — visibility flips', () => {
 	it('canChangeVisibilityToPublic: org admin allowed', async () => {
@@ -562,10 +531,6 @@ describe('§11 — visibility flips', () => {
 	});
 });
 
-// ============================================================================
-// §11 — share links
-// ============================================================================
-
 describe('§11 — share links', () => {
 	it('Token at cap: tryIncrementSolveCount returns null', async () => {
 		tp = await freshProviders();
@@ -633,10 +598,6 @@ describe('§11 — share links', () => {
 	});
 });
 
-// ============================================================================
-// §11 — instance-admin invariants
-// ============================================================================
-
 describe('§11 — instance-admin invariants', () => {
 	it('Sole admin tries to revoke own instance_admin — store returns last_admin', async () => {
 		tp = await freshProviders();
@@ -682,9 +643,9 @@ describe('§11 — instance-admin invariants', () => {
 		tp = await freshProviders();
 		const { alicesPrivate, bob } = await seedAcme(tp);
 		// Bob is an Acme member but NOT a member of Alice's private project.
-		// `instance_admin` no longer bypasses content access (docs/contributing/permissions.md §2) —
-		// private projects are private from everyone without a membership, including
-		// platform staff. Reclaim is the explicit escalation path.
+		// `instance_admin` doesn't bypass content access — private projects are
+		// private from everyone without a membership, including platform staff.
+		// Reclaim is the explicit escalation path.
 		await grantPlatformPermissions(tp, bob.id, ['instance_admin']);
 		const bobLocals = await actAs(tp, bob.id);
 

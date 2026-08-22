@@ -1,16 +1,15 @@
 /**
- * Finding 29 — platform scope is not delegable, and three routes write it.
+ * Platform scope is not delegable, and three routes write it.
  *
- * `manage_org_members` mints invites, `manage_instance_users` creates and edits
- * users; neither may hand out `instance_admin`, or the holder self-elevates past
- * the role that granted it. That rule lived in three hand-written copies before
- * it became `assertCanGrantPlatformPermissions`.
+ * `manage_org_members` mints invites, `manage_instance_users` creates and
+ * edits users; neither may hand out `instance_admin`, or the holder
+ * self-elevates past the role that granted it. That rule lived in three
+ * hand-written copies before it became `assertCanGrantPlatformPermissions`.
  *
- * Every case here acts as someone who **passes the route's own gate** and still
- * must be refused. That distinction is the whole point: the pre-existing invite
- * test used a plain org member, who is rejected by `requireManageOrgMembers`
- * before the delegation guard ever runs — so it stayed green with the guard
- * disabled. Disabling the guard must turn these red.
+ * Every case here acts as someone who passes the route's own gate and still
+ * must be refused — a plain org member is rejected by `requireManageOrgMembers`
+ * before the delegation guard ever runs, so a test using one would stay green
+ * even with the guard disabled. Disabling the guard must turn these red.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -38,7 +37,7 @@ afterEach(async () => {
 	}
 });
 
-/** An org owner: holds `manage_org_members`, so the mint route's gates both pass. */
+/** Holds `manage_org_members`, so the mint route's gates both pass. */
 async function seedOrgOwner() {
 	const { acme } = await seedAcme(tp!);
 	const owner = await seedUser(tp!, 'owner@acme.test');
@@ -46,7 +45,7 @@ async function seedOrgOwner() {
 	return { acme, owner };
 }
 
-/** §8's user-admin: runs /admin/users, holds no `instance_admin`. */
+/** Runs /admin/users; holds no `instance_admin`. */
 async function seedUserAdmin() {
 	const admin = await seedUser(tp!, 'useradmin@acme.test', ['manage_instance_users']);
 	const org = await seedOrg(tp!, { name: 'Acme', slug: 'acme', ownerId: admin.id });

@@ -9,8 +9,8 @@ import {
 	REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
 	REMOTE_DEFINITION_CACHE_TTL_MS
 } from '$lib/server/computeLimits';
-// Built at module scope while the root logger is still being swapped in, so this
-// takes the forwarding logger rather than a snapshot that would pin the boot placeholder.
+// Module-scope init runs before the root logger is fully swapped in, so this
+// needs the forwarding logger, not a snapshot that would pin the boot placeholder.
 import { lazyLogger } from '$lib/server/providers.server';
 
 const fetcher = createRemoteDefinitionFetcher({

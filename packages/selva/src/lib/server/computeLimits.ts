@@ -22,7 +22,7 @@ import { lazyLogger } from '$lib/server/providers.server';
 // COMPUTE_RATE_LIMIT_MAX silently falling back to its default).
 const limits = resolveComputeLimits(env, lazyLogger);
 
-/** The whole resolved object — passed wholesale to `SolveEngine` (`engine.server.ts`). */
+/** The whole resolved object — passed wholesale to `SolveEngine` (`compute/engine.server.ts`). */
 export const computeLimits = limits;
 
 // How long one solve may run — shared with the browser so the client's

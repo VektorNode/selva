@@ -11,12 +11,12 @@ import type { ComputeServerConfig } from '@selvajs/platform';
 
 /**
  * `SELVA_FLAG_COMPUTE_DEBUG` is a three-way knob, not a boolean: `off` (default),
- * `on` (concise cache/timing logs), or `verbose` (adds FULL lib-level request/
+ * `on` (concise cache/timing logs), or `verbose` (adds full lib-level request/
  * response dumps, incl. base64 geometry). `verbose` implies `on`.
  *
- * `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE` merged into this var; still honoured so an
- * operator's existing `.env` degrades to a warning, not a silent loss of the
- * verbose logging they asked for.
+ * `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE` still honoured (as `verbose`) so an
+ * operator's existing `.env` degrades to a warning instead of silently losing
+ * the verbose logging they asked for.
  */
 const COMPUTE_DEBUG_MODE = (() => {
 	const raw = (env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase();
@@ -57,10 +57,7 @@ export const engine = new SolveEngine({
 	}
 });
 
-/**
- * Get (or create) the warm client + scheduler for a resolved compute server.
- * Also used by the render/IO path, which shares the same warm client for `getIO`.
- */
+/** Get (or create) the warm client + scheduler for a resolved compute server. */
 export function getClient(
 	serverConfig: ComputeServerConfig,
 	opts?: { definitionGuid?: string }
