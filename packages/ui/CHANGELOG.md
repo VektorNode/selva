@@ -1,5 +1,13 @@
 # @selvajs/ui
 
+## 6.2.0
+
+### Minor Changes
+
+- 90e448d: Add `ConfirmDialog` and `Callout` primitives, and guard destructive actions behind confirmation
+
+  `AppShell` and `SideNav` gain navigation and branding slots, and `ComputeApp` wires them through.
+
 ## 6.1.2
 
 ### Patch Changes

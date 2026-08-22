@@ -1,5 +1,13 @@
 # @selvajs/selva
 
+## 4.16.0
+
+### Minor Changes
+
+- 90e448d: The v1 API handlers now come from `@selvajs/server`
+
+  Handlers, permission guards, the idempotency wire contract, the login rate limiter and paging helpers moved into `@selvajs/server` so the app mounts them instead of owning them. The re-export shells left behind in the app are gone.
+
 ## 4.15.0
 
 ### Minor Changes

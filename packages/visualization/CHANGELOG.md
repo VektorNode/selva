@@ -1,5 +1,13 @@
 # @selvajs/visualization
 
+## 1.1.0
+
+### Minor Changes
+
+- 90e448d: `createSceneOutliner` accepts a search query, filtering layer groups and selection
+
+  The animation loop and `initThree` setup were reworked alongside it.
+
 ## 1.0.1
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # @selvajs/server
 
+## 1.3.0
+
+### Minor Changes
+
+- 90e448d: The v1 API handlers now come from `@selvajs/server`
+
+  Handlers, permission guards, the idempotency wire contract, the login rate limiter and paging helpers moved into `@selvajs/server` so the app mounts them instead of owning them. The re-export shells left behind in the app are gone.
+
+### Patch Changes
+
+- Updated dependencies [90e448d]
+  - @selvajs/notifications@0.2.0
+
 ## 1.2.0
 
 ### Minor Changes
