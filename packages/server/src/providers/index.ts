@@ -8,3 +8,5 @@ export {
 	type ProviderRegistry,
 	type SelvaProviderRuntime
 } from './create-selva-providers.js';
+
+export { findAuthUserByEmail } from './auth-lookup.js';

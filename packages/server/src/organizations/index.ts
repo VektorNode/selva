@@ -2,3 +2,4 @@
 // belong to neither store alone.
 
 export { OrgAssetService } from './org-asset-service.js';
+export { listAllOrgMembers } from './list-all-members.js';

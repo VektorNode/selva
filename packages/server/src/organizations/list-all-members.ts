@@ -1,6 +1,5 @@
-import type { IOrgStore, OrgMember } from '@selvajs/platform';
+import type { ILogger, IOrgStore, OrgMember } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { getLogger } from './providers.server.js';
 
 const PAGE_LIMIT = 200;
 // Runaway guard against an adapter that returns a non-advancing cursor —
@@ -14,7 +13,11 @@ const MAX_PAGES = 100;
  * PATCH payload from the displayed state — so truncation here could silently
  * wipe a user's org permissions on the next edit.
  */
-export async function listAllOrgMembers(orgs: IOrgStore, orgId: string): Promise<OrgMember[]> {
+export async function listAllOrgMembers(
+	orgs: IOrgStore,
+	orgId: string,
+	log?: ILogger
+): Promise<OrgMember[]> {
 	const members: OrgMember[] = [];
 	let cursor: string | undefined;
 	for (let page = 0; page < MAX_PAGES; page++) {
@@ -26,7 +29,10 @@ export async function listAllOrgMembers(orgs: IOrgStore, orgId: string): Promise
 		cursor = result.nextCursor;
 		if (!cursor) return members;
 	}
-	getLogger().warn('listAllOrgMembers hit the page cap — member list may be incomplete', {
+	// Injected rather than resolved: hitting the cap is the one outcome a caller
+	// must be able to see, and a package that reached for a host's logger could
+	// not be used by a host that has a different one.
+	log?.warn('listAllOrgMembers hit the page cap — member list may be incomplete', {
 		component: 'admin',
 		orgId,
 		pages: MAX_PAGES

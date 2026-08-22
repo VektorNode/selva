@@ -1,7 +1,11 @@
 import { error, type Cookies } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { createComputeRateLimiter } from '@selvajs/server/compute';
-import { declaredBodySizeExceeds, safeRedirectTarget } from '@selvajs/server/http';
+import {
+	addressKeysCollapsed,
+	createLoginRateLimiter,
+	declaredBodySizeExceeds,
+	safeRedirectTarget
+} from '@selvajs/server/http';
 
 const SESSION_COOKIE_NAME = 'admin_session';
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -13,76 +17,31 @@ const REFRESH_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 // ============================================================================
 // Login rate limiter
 // ============================================================================
-// Failure-counting flow on the shared fixed-window limiter: `peek` gates the
-// attempt without spending budget, `check` records only failed logins, and a
-// success `clear`s the bucket.
-//
-// Two limiters, not one, because neither dimension covers the other:
-//
-//   - Per-address bounds one client hammering the form. It is only meaningful
-//     when `ADDRESS_HEADER`/`XFF_DEPTH` are set (see .env.example) — behind a
-//     reverse proxy without them, `getClientAddress()` returns the socket peer,
-//     which is `127.0.0.1` for every request from every user. That collapses
-//     the whole key space into one bucket, so five failed logins from anywhere
-//     lock out the entire instance, and only a success clears it — which nobody
-//     can now reach. Hence `warnIfAddressKeysCollapse` below: the failure is
-//     otherwise completely silent.
-//   - Per-account bounds a targeted guessing attack. Address limiting does not:
-//     an attacker spread across many source IPs contends with no shared counter
-//     at all, leaving PBKDF2 cost as the only real bound on online guessing.
-//
-// An attempt must clear BOTH, and a failure charges both. A success clears only
-// the account bucket and the calling address's — a different address that
-// failed against the same account keeps its own penalty.
-const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+// This app's instance of the shared two-bucket login limiter, plus the
+// deployment check it cannot make for itself. The policy — why two buckets,
+// why failures rather than attempts, why the account cap is looser — lives in
+// `@selvajs/server/http`.
 
-const loginRateLimiter = createComputeRateLimiter({
-	windowMs: LOGIN_WINDOW_MS,
-	maxPerWindow: 5
-});
+const loginRateLimiter = createLoginRateLimiter();
 
-// Deliberately looser than the per-address cap. This one is reachable by an
-// attacker who wants to lock a known user out of their own account, so it
-// trades a little brute-force headroom for not being a cheap DoS on a named
-// victim. Keyed on the normalized email, so it survives case tricks.
-const accountRateLimiter = createComputeRateLimiter({
-	windowMs: LOGIN_WINDOW_MS,
-	maxPerWindow: 20
-});
-
-function accountKey(email: string): string {
-	return `account:${email.trim().toLowerCase()}`;
-}
-
-/**
- * Gate one login attempt. `email` may be empty — the local provider allows a
- * password-only login when no user store is configured — in which case only the
- * address bucket applies.
- */
 export function checkRateLimit(
 	ip: string,
 	email?: string
 ): { allowed: boolean; retryAfter?: number } {
-	const byAddress = loginRateLimiter.peek(ip);
-	if (!byAddress.allowed) return byAddress;
-	if (!email) return byAddress;
-	return accountRateLimiter.peek(accountKey(email));
+	return loginRateLimiter.check(ip, email);
 }
 
 export function recordFailedAttempt(ip: string, email?: string): void {
-	loginRateLimiter.check(ip);
-	if (email) accountRateLimiter.check(accountKey(email));
+	loginRateLimiter.recordFailure(ip, email);
 }
 
 export function clearRateLimit(ip: string, email?: string): void {
-	loginRateLimiter.clear(ip);
-	if (email) accountRateLimiter.clear(accountKey(email));
+	loginRateLimiter.clear(ip, email);
 }
 
 // The address-collapse failure mode is invisible in normal operation — the app
 // looks fine right up until the first five failed logins lock everyone out. So
-// say it out loud, once, the first time a real request arrives on loopback with
-// no `ADDRESS_HEADER` configured.
+// say it out loud, once, the first time a real request arrives showing it.
 let addressWarningIssued = false;
 
 export function warnIfAddressKeysCollapse(
@@ -90,8 +49,7 @@ export function warnIfAddressKeysCollapse(
 	log: { warn(message: string, fields?: Record<string, unknown>): void }
 ): void {
 	if (addressWarningIssued) return;
-	if (env.ADDRESS_HEADER) return;
-	if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') return;
+	if (!addressKeysCollapsed(ip, Boolean(env.ADDRESS_HEADER))) return;
 	addressWarningIssued = true;
 	log.warn(
 		'Login rate limiting is keyed to the loopback address for every request. ' +

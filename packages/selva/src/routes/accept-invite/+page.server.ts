@@ -8,7 +8,7 @@ import {
 	getUserProfileStore
 } from '$lib/server/providers.server';
 import { getAuthProvider } from '$lib/server/providers.server';
-import { findAuthUserByEmail } from '$lib/server/auth-lookup.server';
+import { findAuthUserByEmail } from '@selvajs/server/providers';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 import { hashToken } from '$lib/server/invites/token.server';

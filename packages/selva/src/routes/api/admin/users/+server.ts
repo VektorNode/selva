@@ -11,7 +11,7 @@ import {
 	assertCanGrantPlatformPermissions,
 	requireManageInstanceUsers
 } from '$lib/server/access.server';
-import { listAllOrgMembers } from '$lib/server/org-members.server';
+import { listAllOrgMembers } from '@selvajs/server/organizations';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { apiRoute, created, parseBody } from '$lib/server/api/http';
@@ -52,7 +52,8 @@ export const GET: RequestHandler = apiRoute('Failed to list users', async ({ loc
 	// One membership listing instead of a getOrgMember round-trip per user.
 	const memberByUserId = new Map<string, OrgMember>();
 	if (orgId) {
-		for (const m of await listAllOrgMembers(orgs, orgId)) memberByUserId.set(m.userId, m);
+		for (const m of await listAllOrgMembers(orgs, orgId, locals.log))
+			memberByUserId.set(m.userId, m);
 	}
 	const users = page.items.map((u) => {
 		const member = memberByUserId.get(u.id);

@@ -115,7 +115,6 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// schema backfill, and its `.outcome` drives the `def_bytes` Server-Timing
 	// verdict. Null for remote-URL solves (raw bytes, no ref).
 	let localDefinitionRef: ByteCacheRef | null = null;
-	// BRIDGE: remove ~2026-09 — lazy schema backfill for pre-cached versions.
 	let localVersionForBackfill: { id: string; hasSchema: boolean } | null = null;
 	// BYO compute routing per org; null for remote definitions.
 	let solveOrgId: string | null = null;

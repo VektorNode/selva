@@ -1,8 +1,8 @@
 /**
  * SEL-2. Two things had to be true and neither was:
  *
- *   - Distinct client addresses must not share a bucket. Behind a proxy with no
- *     `ADDRESS_HEADER`, `getClientAddress()` returns `127.0.0.1` for everyone,
+ *   - Distinct client addresses must not share a bucket. Behind a proxy that
+ *     forwards no client address, the host reports `127.0.0.1` for everyone,
  *     which collapsed the key space to one bucket — five failed logins from
  *     anywhere locked out the whole instance. The env fix restores real keys;
  *     this pins that the limiter itself keys per address.
@@ -11,21 +11,27 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { checkRateLimit, recordFailedAttempt, clearRateLimit } from '../admin-auth.server.js';
+import { addressKeysCollapsed, createLoginRateLimiter } from '../login-rate-limit.js';
 
 const MAX_PER_ADDRESS = 5;
 
-// The limiters are module-level and shared across tests, so every case works on
-// keys it invents itself rather than trying to reset them.
 let n = 0;
 const freshAddress = () => `203.0.113.${++n % 250}-${n}`;
 const freshEmail = () => `user${++n}@example.test`;
 
 describe('login rate limiting', () => {
+	// A fresh limiter per test rather than one module-level instance: state that
+	// leaks between cases makes a bucket's cap depend on what ran before it.
+	let limiter: ReturnType<typeof createLoginRateLimiter>;
 	let ip: string;
 	let email: string;
 
+	const checkRateLimit = (a: string, e?: string) => limiter.check(a, e);
+	const recordFailedAttempt = (a: string, e?: string) => limiter.recordFailure(a, e);
+	const clearRateLimit = (a: string, e?: string) => limiter.clear(a, e);
+
 	beforeEach(() => {
+		limiter = createLoginRateLimiter();
 		ip = freshAddress();
 		email = freshEmail();
 	});
@@ -85,5 +91,29 @@ describe('login rate limiting', () => {
 		const verdict = checkRateLimit(ip, email);
 		expect(verdict.allowed).toBe(false);
 		expect(verdict.retryAfter).toBeGreaterThan(0);
+	});
+});
+
+/**
+ * The detector behind the warning. The failure it names is silent — the app
+ * serves fine right up until the first five failed logins lock out every user
+ * at once — so nothing else reports it and nothing else tests it.
+ */
+describe('addressKeysCollapsed', () => {
+	it.each(['127.0.0.1', '::1', '::ffff:127.0.0.1'])(
+		'flags %s when no forwarded address is configured',
+		(loopback) => {
+			expect(addressKeysCollapsed(loopback, false)).toBe(true);
+		}
+	);
+
+	it('stays quiet once the host reads a forwarded address', () => {
+		// The proxy is now reporting real clients, so loopback here is a genuine
+		// local caller rather than every user wearing the same key.
+		expect(addressKeysCollapsed('127.0.0.1', true)).toBe(false);
+	});
+
+	it('stays quiet for a real client address', () => {
+		expect(addressKeysCollapsed('203.0.113.7', false)).toBe(false);
 	});
 });

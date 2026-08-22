@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { IOrgStore, OrgMember, ListOptions } from '@selvajs/platform';
-import { listAllOrgMembers } from '../org-members.server.js';
+import type { ILogger, IOrgStore, OrgMember, ListOptions } from '@selvajs/platform';
+import { listAllOrgMembers } from '../list-all-members.js';
 
 function member(userId: string): OrgMember {
 	const now = new Date().toISOString();
@@ -50,15 +50,14 @@ describe('listAllOrgMembers', () => {
 				return { items: [member('stuck')], nextCursor: 'same-cursor-every-time' };
 			}
 		} as unknown as IOrgStore;
-		// The bail-out warns through the structured logger (not console), so spy
-		// on the logger the provider mock hands out.
-		const { getLogger } = await import('$lib/server/providers.server');
-		const warn = vi.spyOn(getLogger(), 'warn').mockImplementation(() => {});
+		// Hitting the cap means the returned list is silently incomplete, so the
+		// warning is the only signal a caller gets — assert it fires.
+		const warn = vi.fn();
+		const log = { warn } as unknown as ILogger;
 
-		const all = await listAllOrgMembers(broken, 'org-1');
+		const all = await listAllOrgMembers(broken, 'org-1', log);
 
 		expect(all).toHaveLength(100); // MAX_PAGES iterations, then bail
 		expect(warn).toHaveBeenCalledOnce();
-		warn.mockRestore();
 	});
 });
