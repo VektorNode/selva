@@ -28,6 +28,9 @@ import type {
 	SelvaFlags,
 	TenancyMode
 } from '@selvajs/platform';
+import { DefinitionService } from '../../definitions/index.js';
+import { OrgAssetService } from '../../organizations/index.js';
+import { createTokenCodec } from '../../tokens/index.js';
 import { silentLog } from '../../testing/index.js';
 import type { TestHarness } from '../../testing/index.js';
 
@@ -47,6 +50,8 @@ class RecordingEventSink implements IEventSink {
 export interface HandlerHarness extends TestHarness {
 	/** Every event emitted since {@link freshHarness}, in order. */
 	events: DomainEvent[];
+	/** The same instance `callHandler` puts on `deps.services.definitions`. */
+	definitionService: DefinitionService;
 	cleanup: () => Promise<void>;
 }
 
@@ -83,8 +88,26 @@ export async function freshHarness(opts: FreshHarnessOpts = {}): Promise<Handler
 		flags: opts.flags ?? {}
 	};
 
+	// The services and codecs a host composes on top of its provider stack.
+	// `callHandler` merges these onto the deps it builds, so a handler reaching
+	// `deps.services.definitions` in a test gets the same instance the seeders
+	// wrote through — two instances over one store would each cache separately.
+	const definitionService = new DefinitionService(data, storage);
+	const deps = {
+		tokens: {
+			shareLinks: createTokenCodec({ prefix: 'share_', secret: TEST_HMAC_KEY }),
+			invites: createTokenCodec({ prefix: 'invite_', secret: TEST_HMAC_KEY })
+		},
+		services: {
+			definitions: definitionService,
+			orgAssets: new OrgAssetService(data.orgs, storage)
+		}
+	};
+
 	return {
 		config,
+		deps,
+		definitionService,
 		// `null` password marks an OAuth-allowlisted entry; these tests don't
 		// authenticate, they just need ids to align across stores.
 		auth: {

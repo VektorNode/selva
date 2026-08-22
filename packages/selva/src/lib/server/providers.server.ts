@@ -18,7 +18,7 @@ import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
 import * as header from '@selvajs/header-auth-provider';
 import { DefinitionService } from '@selvajs/server/definitions';
-import { OrgAssetService } from './organizations/OrgAssetService.js';
+import { OrgAssetService } from '@selvajs/server/organizations';
 import { SentryErrorReporter } from '@selvajs/server/errors';
 import { SmtpNotificationProvider } from '@selvajs/server/notifications';
 import { ConsoleLogger, createLogger, renderThrown } from '@selvajs/server/logging';

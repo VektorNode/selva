@@ -18,6 +18,9 @@ export {
 	seedOrgMember,
 	seedProject,
 	seedProjectMember,
+	seedDefinition,
+	seedShareLink,
+	grantPlatformPermissions,
 	actAs,
 	anon,
 	callHandler,
@@ -26,9 +29,16 @@ export {
 export type {
 	TestHarness,
 	SeededUser,
+	SeededDefinition,
+	SeededShareLink,
 	ActingLocals,
 	CallHandlerOpts,
 	CallResult
 } from './harness.js';
-export { seedAcme, seedBigClient, seedThirdOrg } from './scenarios.js';
-export type { AcmeFixture, BigClientFixture, ThirdOrgFixture } from './scenarios.js';
+export { seedAcme, seedBigClient, seedThirdOrg, seedCommons } from './scenarios.js';
+export type {
+	AcmeFixture,
+	BigClientFixture,
+	ThirdOrgFixture,
+	CommonsFixture
+} from './scenarios.js';

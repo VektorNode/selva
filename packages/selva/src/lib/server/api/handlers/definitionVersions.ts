@@ -25,7 +25,7 @@ import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import { getVisibleDefinition, loadVisibleVersion } from '../../definitions/visibility.server';
 import { parseListOptions } from '../../pagination.server';
 import { requireCaller } from '../callers';
-import { definitionService } from './services';
+import { definitionService } from '@selvajs/server/handlers';
 
 export const listVersions: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');

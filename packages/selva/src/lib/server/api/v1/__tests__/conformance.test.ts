@@ -56,6 +56,10 @@ interface RouteFile {
 }
 
 const handlersDir = resolve(packageRoot, 'src/lib/server/api/handlers');
+// Handlers are moving into `@selvajs/server`; a route mounts them by named
+// import from the package barrel rather than by path. Resolved through the
+// workspace source, not `dist`, so the assertions read what a change edited.
+const packageHandlersDir = resolve(packageRoot, '../server/src/handlers');
 
 /**
  * A route that `mount`s a transport-free handler keeps its logic in
@@ -75,13 +79,49 @@ function stripComments(source: string): string {
 	return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
-function withMountedHandlers(source: string): string {
-	const imports = [...source.matchAll(/from\s+'\$lib\/server\/api\/handlers\/([\w-]+)'/g)];
-	const bodies = imports.map(([, name]) => {
+/**
+ * Every module a route mounts a handler from, whether it still lives in the app
+ * or has moved into `@selvajs/server/handlers`.
+ *
+ * A package import names the exported functions, not the file, so the barrel is
+ * what maps one to the other. Unresolvable is a hard failure rather than an
+ * empty string: silently inlining nothing would leave every source-grep
+ * assertion below passing vacuously against a one-line route file — green tests
+ * that check nothing, which is worse than a red one.
+ */
+function mountedSources(source: string): string[] {
+	const appImports = [...source.matchAll(/from\s+'\$lib\/server\/api\/handlers\/([\w.-]+)'/g)];
+	const bodies = appImports.map(([, name]) => {
 		const file = join(handlersDir, `${name}.ts`);
-		return existsSync(file) ? readFileSync(file, 'utf8') : '';
+		if (!existsSync(file)) throw new Error(`route mounts a missing handler module: ${file}`);
+		return readFileSync(file, 'utf8');
 	});
-	return stripComments([source, ...bodies].join('\n'));
+
+	for (const [, names] of source.matchAll(
+		/import\s*\{([^}]*)\}\s*from\s+'@selvajs\/server\/handlers'/g
+	)) {
+		for (const name of names.split(',').map((n) => n.trim().replace(/^type\s+/, ''))) {
+			if (name) bodies.push(readFileSync(packageHandlerFile(name), 'utf8'));
+		}
+	}
+	return bodies;
+}
+
+/** The source file behind one export of `@selvajs/server/handlers`. */
+function packageHandlerFile(exportName: string): string {
+	const barrel = readFileSync(join(packageHandlersDir, 'index.ts'), 'utf8');
+	const line = barrel
+		.split('\n')
+		.find((l) => new RegExp(String.raw`\b${exportName}\b`).test(l) && l.includes('from'));
+	const module = line?.match(/from\s+'\.\/([\w.-]+)\.js'/)?.[1];
+	if (!module) {
+		throw new Error(`@selvajs/server/handlers does not export ${exportName} — barrel out of date?`);
+	}
+	return join(packageHandlersDir, `${module}.ts`);
+}
+
+function withMountedHandlers(source: string): string {
+	return stripComments([source, ...mountedSources(source)].join('\n'));
 }
 
 function loadRoutes(baseDir: string): RouteFile[] {

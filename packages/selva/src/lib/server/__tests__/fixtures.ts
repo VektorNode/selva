@@ -21,7 +21,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { randomUUID } from 'node:crypto';
 import {
 	LocalAuthProvider,
 	LocalDataProvider,
@@ -29,28 +28,21 @@ import {
 	createLocalAuthUserStore
 } from '@selvajs/local-provider';
 import {
-	SYSTEM_CONTEXT,
 	type AuthUser,
-	type DefinitionRecord,
-	type DefinitionVersion,
 	type DomainEvent,
 	type IEventSink,
 	type IOAuthAuth,
 	type ISessionRefresh,
-	type PlatformPermission,
-	type Project,
-	type RequestContext,
 	type SelvaConfig,
 	type SelvaFlags,
-	type ShareLink,
 	type TenancyMode
 } from '@selvajs/platform';
-import { DefinitionService, type CreateDefinitionRecord } from '@selvajs/server/definitions';
-import type { TestHarness, SeededUser, CallResult } from '@selvajs/server/testing';
-import { actAs as actAsShared, seedUser, seedProject, silentLog } from '@selvajs/server/testing';
+import { DefinitionService } from '@selvajs/server/definitions';
+import type { TestHarness, CallResult } from '@selvajs/server/testing';
+import { actAs as actAsShared, silentLog } from '@selvajs/server/testing';
 import { isApiError } from '@selvajs/server/api';
 import { mapAppError } from '../api/sveltekit.js';
-import { hashToken, mintRawToken, shareLinkCodec } from '../shareLinks/token.server.js';
+import { shareLinkCodec } from '../shareLinks/token.server.js';
 import { inviteCodec } from '../invites/token.server.js';
 import { setTestProviders, clearTestProviders } from './test-providers.js';
 import { accessDepsFromConfig, type AccessDeps } from '../access.server.js';
@@ -179,12 +171,17 @@ export {
 	seedOrgMember,
 	seedProject,
 	seedProjectMember,
+	seedDefinition,
+	seedShareLink,
+	grantPlatformPermissions,
 	anon,
 	callHandler,
 	silentLog
 } from '@selvajs/server/testing';
 export type {
 	SeededUser,
+	SeededDefinition,
+	SeededShareLink,
 	ActingLocals,
 	CallHandlerOpts,
 	CallResult
@@ -208,90 +205,6 @@ export async function actAs(
 // ============================================================================
 // Definitions + share links
 // ============================================================================
-
-export interface SeededDefinition {
-	record: DefinitionRecord;
-	version: DefinitionVersion;
-}
-
-export async function seedDefinition(
-	tp: TestProviders,
-	opts: {
-		projectId: string;
-		ownerId: string;
-		displayName?: string;
-		guid?: string;
-	}
-): Promise<SeededDefinition> {
-	const input: CreateDefinitionRecord = {
-		guid: opts.guid ?? randomUUID(),
-		projectId: opts.projectId,
-		ownerId: opts.ownerId,
-		fileExt: 'gh',
-		displayName: opts.displayName ?? 'Test Definition',
-		originalFilename: 'test.gh'
-	};
-	const file = new TextEncoder().encode('FAKE_GH_BYTES');
-	// Use an admin-shaped ctx so SYSTEM_CONTEXT-style writes aren't rejected.
-	const ctx: RequestContext = {
-		userId: opts.ownerId,
-		actingOrgId: undefined,
-		platformPermissions: ['instance_admin'],
-		orgPermissions: []
-	};
-	const schema = { name: 'Test', inputs: [], outputs: [] } as unknown as Parameters<
-		typeof tp.definitionService.create
-	>[3];
-	return tp.definitionService.create(ctx, input, file, schema);
-}
-
-export interface SeededShareLink {
-	link: ShareLink;
-	rawToken: string;
-}
-
-export async function seedShareLink(
-	tp: TestProviders,
-	opts: {
-		definitionId: string;
-		channel?: 'live' | 'draft';
-		createdBy: string;
-		allowSolve?: boolean;
-		maxSolves?: number | null;
-		expiresAt?: string | null;
-	}
-): Promise<SeededShareLink> {
-	const rawToken = mintRawToken();
-	const link: ShareLink = {
-		id: randomUUID(),
-		definitionId: opts.definitionId,
-		channel: opts.channel ?? 'live',
-		tokenHash: hashToken(rawToken),
-		createdBy: opts.createdBy,
-		createdAt: new Date().toISOString(),
-		expiresAt: opts.expiresAt ?? null,
-		revokedAt: null,
-		allowSolve: opts.allowSolve ?? true,
-		maxSolves: opts.maxSolves === undefined ? 1000 : opts.maxSolves,
-		solveCount: 0
-	};
-	const ctx: RequestContext = {
-		userId: opts.createdBy,
-		actingOrgId: undefined,
-		platformPermissions: ['instance_admin'],
-		orgPermissions: []
-	};
-	await tp.config.data.shareLinks.create(ctx, link);
-	return { link, rawToken };
-}
-
-export async function grantPlatformPermissions(
-	tp: TestProviders,
-	userId: string,
-	perms: PlatformPermission[]
-): Promise<void> {
-	await tp.config.data.permissions.set(SYSTEM_CONTEXT, userId, perms);
-}
 
 /**
  * Augment the test's auth provider with an `oauth` capability that returns
@@ -382,44 +295,13 @@ export async function setEnv(key: string, value: string | undefined): Promise<vo
  * for tests; they take a `TestHarness`, which `TestProviders` extends, so call
  * sites pass `tp` unchanged.
  */
-export { seedAcme, seedBigClient, seedThirdOrg } from '@selvajs/server/testing';
-export type { AcmeFixture, BigClientFixture, ThirdOrgFixture } from '@selvajs/server/testing';
-
-export interface CommonsFixture {
-	commonsProject: Project;
-	alicesCommonsDef: SeededDefinition;
-	peter: SeededUser;
-}
-
-/**
- * Commons-mode project (`autoJoinOnUpload=true`) inside Acme with Alice's
- * pre-existing definition. Peter is a separate authenticated user — *not* a
- * project member — who is allowed to upload his own new definitions but cannot
- * touch Alice's existing one.
- *
- * Requires {@link seedAcme} to have run first (uses Alice as project owner +
- * existing-def owner).
- */
-export async function seedCommons(
-	tp: TestProviders,
-	opts: { acmeId: string; aliceId: string }
-): Promise<CommonsFixture> {
-	const peter = await seedUser(tp, 'peter@elsewhere.test');
-	const commonsProject = await seedProject(tp, {
-		orgId: opts.acmeId,
-		name: 'Acme Commons',
-		slug: 'acme-commons',
-		ownerId: opts.aliceId,
-		visibility: 'public',
-		autoJoinOnUpload: true
-	});
-	const alicesCommonsDef = await seedDefinition(tp, {
-		projectId: commonsProject.id,
-		ownerId: opts.aliceId,
-		displayName: "Alice's Commons Def"
-	});
-	return { commonsProject, alicesCommonsDef, peter };
-}
+export { seedAcme, seedBigClient, seedThirdOrg, seedCommons } from '@selvajs/server/testing';
+export type {
+	AcmeFixture,
+	BigClientFixture,
+	ThirdOrgFixture,
+	CommonsFixture
+} from '@selvajs/server/testing';
 
 /**
  * Wrap one store method to observe that it was called, leaving behaviour intact.

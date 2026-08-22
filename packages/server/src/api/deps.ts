@@ -14,6 +14,7 @@
 
 import { isFlagEnabled, NoopEventSink } from '@selvajs/platform';
 import type { DefinitionService } from '../definitions/definition-service.js';
+import type { OrgAssetService } from '../organizations/org-asset-service.js';
 import type { TokenCodec } from '../tokens/token-codec.js';
 import type {
 	IAuthProvider,
@@ -89,13 +90,16 @@ export interface SelvaDeps {
 	/**
 	 * Composed services the host supplies.
 	 *
-	 * `definitions` is typed because handlers call it — leaving it `unknown`
-	 * pushed a cast into every call site, and a cast is exactly where a second
-	 * host's differently-shaped service would slip through unnoticed. The index
-	 * signature keeps host-specific extras (`orgAssets`) possible without
-	 * naming them here.
+	 * The named ones are typed because handlers call them — leaving a service
+	 * `unknown` pushes a cast into every call site, and a cast is exactly where
+	 * a second host's differently-shaped service would slip through unnoticed.
+	 * The index signature keeps host-specific extras possible without naming
+	 * them here.
 	 */
-	services: { definitions?: DefinitionService } & Record<string, unknown>;
+	services: {
+		definitions?: DefinitionService;
+		orgAssets?: OrgAssetService;
+	} & Record<string, unknown>;
 }
 
 /**

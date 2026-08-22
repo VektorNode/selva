@@ -19,8 +19,11 @@ import { randomUUID } from 'node:crypto';
 import {
 	SYSTEM_CONTEXT,
 	DEFAULT_ORG_PERMISSIONS,
+	DEFAULT_SHARE_LINK_MAX_SOLVES,
 	emptyProfile,
 	type AuthUser,
+	type DefinitionRecord,
+	type DefinitionVersion,
 	type ILogger,
 	type OrgMember,
 	type OrgPermission,
@@ -32,8 +35,10 @@ import {
 	type ProjectRole,
 	type ProjectVisibility,
 	type RequestContext,
-	type SelvaConfig
+	type SelvaConfig,
+	type ShareLink
 } from '@selvajs/platform';
+import type { CreateDefinitionRecord } from '../definitions/index.js';
 import { depsFromConfig, runHandler } from '../api/index.js';
 import type { ApiError, ApiHandler, ApiRequest, SelvaDeps } from '../api/index.js';
 import type { SeedAuthAdapter } from './seed-adapter.js';
@@ -187,6 +192,125 @@ export async function seedProjectMember(
 	};
 	await h.config.data.projects.addProjectMember(SYSTEM_CONTEXT, member);
 	return member;
+}
+
+/**
+ * Grant platform-wide permissions to a seeded user.
+ *
+ * Replaces the whole set rather than adding to it, matching
+ * `IPermissionStore.set` — a test that means to add has to pass the existing
+ * permissions back in.
+ */
+export async function grantPlatformPermissions(
+	h: TestHarness,
+	userId: string,
+	perms: PlatformPermission[]
+): Promise<void> {
+	await h.config.data.permissions.set(SYSTEM_CONTEXT, userId, perms);
+}
+
+// ============================================================================
+// Definitions + share links
+// ============================================================================
+
+export interface SeededDefinition {
+	record: DefinitionRecord;
+	version: DefinitionVersion;
+}
+
+/**
+ * A definition with one version, written through the host's `DefinitionService`
+ * rather than straight into the store.
+ *
+ * Going through the service is what makes the fixture match production: it is
+ * what allocates the version, writes the blob, and moves the channel pointer,
+ * and a test that seeded the record alone would exercise a definition no solve
+ * path can load.
+ */
+export async function seedDefinition(
+	h: TestHarness,
+	opts: {
+		projectId: string;
+		ownerId: string;
+		displayName?: string;
+		guid?: string;
+	}
+): Promise<SeededDefinition> {
+	const service = h.deps?.services?.definitions;
+	if (!service) throw new Error('TestHarness.deps.services.definitions is required to seed one');
+
+	const input: CreateDefinitionRecord = {
+		guid: opts.guid ?? randomUUID(),
+		projectId: opts.projectId,
+		ownerId: opts.ownerId,
+		fileExt: 'gh',
+		displayName: opts.displayName ?? 'Test Definition',
+		originalFilename: 'test.gh'
+	};
+	const file = new TextEncoder().encode('FAKE_GH_BYTES');
+	// Admin-shaped ctx so the service's own tenancy checks don't refuse a seed.
+	const ctx: RequestContext = {
+		userId: opts.ownerId,
+		actingOrgId: undefined,
+		platformPermissions: ['instance_admin'],
+		orgPermissions: []
+	};
+	const schema = { name: 'Test', inputs: [], outputs: [] } as unknown as Parameters<
+		typeof service.create
+	>[3];
+	return service.create(ctx, input, file, schema);
+}
+
+export interface SeededShareLink {
+	link: ShareLink;
+	rawToken: string;
+}
+
+/**
+ * A share link plus the plaintext token behind it.
+ *
+ * Minted through the harness's own codec, so the stored hash verifies against
+ * the same secret a handler resolves from `deps.tokens.shareLinks` — a second
+ * codec would hash to something no handler could ever match.
+ */
+export async function seedShareLink(
+	h: TestHarness,
+	opts: {
+		definitionId: string;
+		channel?: 'live' | 'draft';
+		createdBy: string;
+		allowSolve?: boolean;
+		maxSolves?: number | null;
+		expiresAt?: string | null;
+	}
+): Promise<SeededShareLink> {
+	const codec = h.deps?.tokens?.shareLinks;
+	if (!codec) throw new Error('TestHarness.deps.tokens.shareLinks is required to seed a link');
+
+	const rawToken = codec.mintRawToken();
+	const link: ShareLink = {
+		id: randomUUID(),
+		definitionId: opts.definitionId,
+		channel: opts.channel ?? 'live',
+		tokenHash: codec.hashToken(rawToken),
+		createdBy: opts.createdBy,
+		createdAt: new Date().toISOString(),
+		expiresAt: opts.expiresAt ?? null,
+		revokedAt: null,
+		allowSolve: opts.allowSolve ?? true,
+		maxSolves: opts.maxSolves === undefined ? DEFAULT_SHARE_LINK_MAX_SOLVES : opts.maxSolves,
+		solveCount: 0
+	};
+	await h.config.data.shareLinks.create(
+		{
+			userId: opts.createdBy,
+			actingOrgId: undefined,
+			platformPermissions: ['instance_admin'],
+			orgPermissions: []
+		},
+		link
+	);
+	return { link, rawToken };
 }
 
 // ============================================================================

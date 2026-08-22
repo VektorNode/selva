@@ -18,18 +18,17 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import type { DomainEvent } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
+import { freshHarness, type HandlerHarness } from './harness.js';
 import {
-	freshProviders,
 	seedAcme,
 	seedProject,
 	grantPlatformPermissions,
 	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { reclaimProject } from '$lib/server/api/handlers/reclaim.js';
+	callHandler
+} from '../../testing/index.js';
+import { reclaimProject } from '../reclaim.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -39,7 +38,7 @@ afterEach(async () => {
 });
 
 function eventsOfType<T extends DomainEvent['type']>(
-	events: TestProviders['events'],
+	events: HandlerHarness['events'],
 	type: T
 ): Extract<DomainEvent, { type: T }>[] {
 	return events.filter((e): e is Extract<DomainEvent, { type: T }> => e.type === type);
@@ -47,7 +46,7 @@ function eventsOfType<T extends DomainEvent['type']>(
 
 describe('POST /api/v1/projects/{id}/reclaim — audit trail', () => {
 	it('emits project.reclaimed naming the actor and the visibility breached', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob, alicesPrivate } = await seedAcme(tp);
 		await tp.config.data.orgs.updateOrgMemberRole(SYSTEM_CONTEXT, acme.id, bob.id, 'owner');
 
@@ -71,7 +70,7 @@ describe('POST /api/v1/projects/{id}/reclaim — audit trail', () => {
 	});
 
 	it('stays distinguishable from a routine member add', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, bob, alicesPrivate } = await seedAcme(tp);
 		await tp.config.data.orgs.updateOrgMemberRole(SYSTEM_CONTEXT, acme.id, bob.id, 'owner');
 
@@ -87,7 +86,7 @@ describe('POST /api/v1/projects/{id}/reclaim — audit trail', () => {
 	});
 
 	it('refuses to reclaim a platform project, even for instance_admin', async () => {
-		tp = await freshProviders({ flags: { ENABLE_PLATFORM_PROJECTS: true } });
+		tp = await freshHarness({ flags: { ENABLE_PLATFORM_PROJECTS: true } });
 		const { acme, alice, bob } = await seedAcme(tp);
 		const platformProject = await seedProject(tp, {
 			orgId: acme.id,

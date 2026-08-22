@@ -31,12 +31,12 @@ import {
 	requireActingOrg
 } from '../../access.server';
 import { splitFlatPermissions } from '../../permissions-scope.server';
-import { tokenCodec } from './services';
+import { tokenCodec } from '@selvajs/server/handlers';
 import { deliverInvite } from '../../invites/deliver.server';
 import { findPendingInviteInOrg } from '../../invites/lookup.server';
 import { parseListOptions } from '../../pagination.server';
 import { CreateInviteBodySchema } from '../v1/bodies';
-import { InviteResponseSchema, CreatedInviteResponseSchema } from '../v1/responses';
+import { InviteResponseSchema, CreatedInviteResponseSchema } from '@selvajs/server/api';
 import { requireCaller } from '../callers';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days

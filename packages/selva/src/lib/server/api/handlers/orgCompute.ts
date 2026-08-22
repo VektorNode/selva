@@ -27,7 +27,7 @@ import {
 	storedKeysById,
 	type IncomingServerBase
 } from '../../compute/serverConfigWrite';
-import { OrgComputeResponseSchema } from '../v1/responses';
+import { OrgComputeResponseSchema } from '@selvajs/server/api';
 import { OrgComputePatchBodySchema } from '../v1/bodies';
 
 function requireFlag(req: ApiRequest) {

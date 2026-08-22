@@ -15,21 +15,22 @@ import { randomUUID } from 'node:crypto';
 import {
 	apiError,
 	ApiErrorCode,
+	CreatedShareLinkResponseSchema,
 	noContent,
 	parseBody,
+	parseListOptions,
 	parseParam,
+	requireCaller,
 	shaped,
-	shapedCollection
-} from '@selvajs/server/api';
-import type { ApiHandler, ApiRequest } from '@selvajs/server/api';
+	shapedCollection,
+	ShareLinkResponseSchema
+} from '../api/index.js';
+import type { ApiHandler, ApiRequest } from '../api/index.js';
 import { CreateShareLinkInputSchema, DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selvajs/platform';
 import type { ShareLink } from '@selvajs/platform';
 import { GuidSchema } from '@selvajs/platform/definitions';
-import { requireEditableDefinition } from '../../access.server';
-import { tokenCodec } from './services';
-import { parseListOptions } from '../../pagination.server';
-import { CreatedShareLinkResponseSchema, ShareLinkResponseSchema } from '../v1/responses';
-import { requireCaller } from '../callers';
+import { requireEditableDefinition } from '../access/index.js';
+import { tokenCodec } from './services.js';
 
 function assertSharingEnabled(req: ApiRequest) {
 	if (!req.deps.flag('ENABLE_SHARING')) {

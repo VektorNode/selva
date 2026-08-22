@@ -11,4 +11,14 @@
  * gates, invariants, and status codes each one enforces.
  */
 
+// Accessors for the host-composed services on `SelvaDeps`. Exported because a
+// host's own handlers reach the same services through the same named failure.
+export { definitionService, orgAssetService, tokenCodec } from './services.js';
+
+export { getMe } from './me.js';
+export { starDefinition, unstarDefinition } from './me.starred.js';
+export { getOrg, listOrgMembers } from './orgs.js';
 export { updateOrgMember, removeOrgMember } from './orgMembers.js';
+export { reclaimProject } from './reclaim.js';
+export { uploadOrgAsset, removeOrgAsset } from './orgAssets.js';
+export { listShareLinks, createShareLink, revokeShareLink } from './shareLinks.js';

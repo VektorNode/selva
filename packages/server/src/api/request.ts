@@ -6,12 +6,31 @@
  * once the handlers themselves became transport-free — the logic never depended
  * on the framework, only the throw did.
  *
- * `requireCaller` is deliberately absent: it reads the host's `locals`, which is
- * a host concept. Handlers get identity from `ApiRequest.ctx` / `.user` instead.
+ * `requireCaller` reads identity off `ApiRequest`, never off a host's `locals`
+ * — a host maps its own session shape onto `ctx`/`user` when it builds the
+ * request, and nothing below this line knows how it did that.
  */
 
+import type { AuthUser, RequestContext } from '@selvajs/platform';
 import type { ZodError, ZodType } from 'zod';
 import { apiError, ApiErrorCode } from './errors.js';
+import type { ApiRequest } from './types.js';
+
+/**
+ * The authenticated caller, or a 401.
+ *
+ * `ctx` and `user` are optional on `ApiRequest` because a host builds one for
+ * anonymous requests too (share-token solves reach handlers with a `ctx` and no
+ * `user`). Every handler that needs an identity narrows it here rather than
+ * asserting the fields non-null, so the unauthenticated path fails as a denial
+ * instead of a crash.
+ */
+export function requireCaller(req: ApiRequest): { ctx: RequestContext; user: AuthUser } {
+	if (!req.ctx || !req.user) {
+		apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
+	}
+	return { ctx: req.ctx, user: req.user };
+}
 
 /**
  * Fail with a Zod error's messages, one per field.

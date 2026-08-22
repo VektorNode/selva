@@ -8,16 +8,10 @@
  * HTTP gate; the rasterization is the security control.
  */
 
-import {
-	apiError,
-	ApiErrorCode,
-	noContent,
-	requireUpload,
-	type ApiHandler
-} from '@selvajs/server/api';
+import { apiError, ApiErrorCode, noContent, requireUpload, type ApiHandler } from '../api/index.js';
 import { OrgAssetKindSchema } from '@selvajs/platform';
-import { requireManageOrgMembers, requireActingOrg } from '../../access.server';
-import { orgAssetService } from './services';
+import { requireManageOrgMembers, requireActingOrg } from '../access/index.js';
+import { orgAssetService } from './services.js';
 
 const ALLOWED_CONTENT_TYPES = new Set([
 	'image/png',

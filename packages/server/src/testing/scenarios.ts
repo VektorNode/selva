@@ -9,8 +9,8 @@
  */
 
 import type { Organization, Project } from '@selvajs/platform';
-import { seedOrg, seedOrgMember, seedProject, seedUser } from './harness.js';
-import type { SeededUser, TestHarness } from './harness.js';
+import { seedDefinition, seedOrg, seedOrgMember, seedProject, seedUser } from './harness.js';
+import type { SeededDefinition, SeededUser, TestHarness } from './harness.js';
 
 export interface AcmeFixture {
 	acme: Organization;
@@ -101,4 +101,40 @@ export async function seedThirdOrg(h: TestHarness): Promise<ThirdOrgFixture> {
 	});
 	await seedOrgMember(h, { orgId: initech.id, userId: dave.id, role: 'member' });
 	return { initech, dave };
+}
+
+export interface CommonsFixture {
+	commonsProject: Project;
+	alicesCommonsDef: SeededDefinition;
+	peter: SeededUser;
+}
+
+/**
+ * Commons-mode project (`autoJoinOnUpload=true`) inside Acme with Alice's
+ * pre-existing definition. Peter is a separate authenticated user — *not* a
+ * project member — who is allowed to upload his own new definitions but cannot
+ * touch Alice's existing one.
+ *
+ * Requires {@link seedAcme} to have run first (uses Alice as project owner +
+ * existing-def owner).
+ */
+export async function seedCommons(
+	h: TestHarness,
+	opts: { acmeId: string; aliceId: string }
+): Promise<CommonsFixture> {
+	const peter = await seedUser(h, 'peter@elsewhere.test');
+	const commonsProject = await seedProject(h, {
+		orgId: opts.acmeId,
+		name: 'Acme Commons',
+		slug: 'acme-commons',
+		ownerId: opts.aliceId,
+		visibility: 'public',
+		autoJoinOnUpload: true
+	});
+	const alicesCommonsDef = await seedDefinition(h, {
+		projectId: commonsProject.id,
+		ownerId: opts.aliceId,
+		displayName: "Alice's Commons Def"
+	});
+	return { commonsProject, alicesCommonsDef, peter };
 }

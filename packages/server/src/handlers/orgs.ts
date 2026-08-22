@@ -5,9 +5,14 @@
  * `ctx.actingOrgId`, so the URL alone never decides which tenant is read.
  */
 
-import { apiError, ApiErrorCode, collection, type ApiHandler } from '@selvajs/server/api';
-import { requireActingOrg } from '../../access.server';
-import { parseListOptions } from '../../pagination.server';
+import {
+	apiError,
+	ApiErrorCode,
+	collection,
+	parseListOptions,
+	type ApiHandler
+} from '../api/index.js';
+import { requireActingOrg } from '../access/index.js';
 
 /** The acting org's record — name, slug, and branding asset URLs. */
 export const getOrg: ApiHandler = async (req) => {

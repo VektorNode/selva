@@ -40,7 +40,7 @@ import {
 } from '../../definitions/visibility.server';
 import { parseDefinitionListOptions } from '../../pagination.server';
 import { requireCaller } from '../callers';
-import { definitionService } from './services';
+import { definitionService } from '@selvajs/server/handlers';
 
 const LISTABLE_STATUSES: DefinitionStatus[] = ['draft', 'published', 'archived'];
 

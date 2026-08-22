@@ -14,7 +14,7 @@ import {
 	InviteResponseSchema,
 	OrgComputeServerResponseSchema,
 	OrgComputeResponseSchema
-} from '../responses.js';
+} from '../responses-schema.js';
 
 describe('secrets cannot reach a client', () => {
 	it('drops a share link tokenHash', () => {

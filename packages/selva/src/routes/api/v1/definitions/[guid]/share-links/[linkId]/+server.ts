@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
 import { mount } from '$lib/server/api/sveltekit';
-import { revokeShareLink } from '$lib/server/api/handlers/shareLinks';
+import { revokeShareLink } from '@selvajs/server/handlers';
 
 export const DELETE: RequestHandler = mount('Failed to revoke share link', revokeShareLink);

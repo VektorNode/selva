@@ -4,8 +4,7 @@
  * derived per request from the caller's membership, not frozen at mint time.
  */
 
-import type { ApiHandler } from '@selvajs/server/api';
-import { requireCaller } from '../callers';
+import { requireCaller, type ApiHandler } from '../api/index.js';
 
 export const getMe: ApiHandler = async (req) => {
 	const { ctx, user } = requireCaller(req);

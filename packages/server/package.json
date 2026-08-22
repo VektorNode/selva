@@ -81,6 +81,11 @@
 			"types": "./dist/ops/index.d.ts",
 			"import": "./dist/ops/index.js"
 		},
+		"./organizations": {
+			"selva-source": "./src/organizations/index.ts",
+			"types": "./dist/organizations/index.d.ts",
+			"import": "./dist/organizations/index.js"
+		},
 		"./notifications": {
 			"selva-source": "./src/notifications/index.ts",
 			"types": "./dist/notifications/index.d.ts",

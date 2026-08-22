@@ -14,7 +14,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { mount } from '../sveltekit.js';
-import { createShareLink, listShareLinks, revokeShareLink } from '../handlers/shareLinks.js';
+import { createShareLink, listShareLinks, revokeShareLink } from '@selvajs/server/handlers';
 import {
 	freshProviders,
 	seedAcme,

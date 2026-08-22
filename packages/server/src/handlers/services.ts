@@ -7,9 +7,9 @@
  * than `Cannot read properties of undefined` from inside the service call.
  */
 
-import type { SelvaDeps } from '@selvajs/server/api';
-import type { TokenCodec } from '@selvajs/server/tokens';
-import type { OrgAssetService } from '../../organizations/OrgAssetService';
+import type { SelvaDeps } from '../api/index.js';
+import type { TokenCodec } from '../tokens/index.js';
+import type { OrgAssetService } from '../organizations/index.js';
 
 export function definitionService(deps: SelvaDeps) {
 	const service = deps.services.definitions;
@@ -19,13 +19,8 @@ export function definitionService(deps: SelvaDeps) {
 	return service;
 }
 
-/**
- * Cast rather than a typed field on `SelvaDeps`: `OrgAssetService` lives in this
- * app, not `@selvajs/server`, so the package cannot name it. Moving the class is
- * the real fix and is worth doing when org branding moves out of the app.
- */
 export function orgAssetService(deps: SelvaDeps): OrgAssetService {
-	const service = deps.services.orgAssets as OrgAssetService | undefined;
+	const service = deps.services.orgAssets;
 	if (!service) {
 		throw new Error('SelvaDeps.services.orgAssets is not wired — mount requires it.');
 	}

@@ -21,7 +21,7 @@ import {
 
 vi.mock('$lib/server/providers.server', async () => {
 	const { currentTestProviders } = await import('./test-providers.js');
-	const { OrgAssetService } = await import('../organizations/OrgAssetService.js');
+	const { OrgAssetService } = await import('@selvajs/server/organizations');
 	// Stable across calls — see `getLogger` below.
 	const testLogger = new NoopLogger();
 	return {
