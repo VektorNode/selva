@@ -15,10 +15,11 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT, type Invite } from '@selvajs/platform';
 import { randomUUID } from 'node:crypto';
-import { findPendingInviteInOrg } from '../lookup.server.js';
-import { freshProviders, seedAcme, seedOrg, type TestProviders } from '../../__tests__/fixtures.js';
+import { findPendingInviteInOrg } from '../invite-lookup.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
+import { seedAcme, seedOrg } from '../../testing/index.js';
 
-let tp: TestProviders;
+let tp: HandlerHarness;
 
 afterEach(async () => {
 	await tp?.cleanup();
@@ -43,7 +44,7 @@ async function seedInvite(orgId: string, email: string, invitedBy: string): Prom
 
 describe('findPendingInviteInOrg', () => {
 	it('finds an invite that belongs to the org', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 		const invite = await seedInvite(acme.id, 'mine@acme.test', alice.id);
 
@@ -58,7 +59,7 @@ describe('findPendingInviteInOrg', () => {
 	});
 
 	it('returns null for an id belonging to another org', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 		const other = await seedOrg(tp, { name: 'Other Co', slug: 'other-co', ownerId: alice.id });
 
@@ -79,7 +80,7 @@ describe('findPendingInviteInOrg', () => {
 	});
 
 	it('finds an invite past the first page', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 
 		// The scan pages at 200. A single-page implementation would miss anything

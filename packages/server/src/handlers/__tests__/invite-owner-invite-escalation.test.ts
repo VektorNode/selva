@@ -11,18 +11,11 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import {
-	freshProviders,
-	seedAcme,
-	seedOrgMember,
-	seedUser,
-	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { createInvite } from '$lib/server/api/handlers/invites.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
+import { seedAcme, seedOrgMember, seedUser, actAs, callHandler } from '../../testing/index.js';
+import { createInvite } from '../invites.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -35,7 +28,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — org role ceiling', () => {
 	it('refuses an owner invite minted by an admin', async () => {
 		// `seedAcme` makes alice an *admin*, which is the whole point: she holds
 		// `manage_org_members` and could previously mint any role.
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 
@@ -54,7 +47,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — org role ceiling', () => {
 	it('refuses an admin invite minted by an admin', async () => {
 		// Admin-minting-admin is the same escalation one step removed: the new
 		// admin can mint further admins, and each one holds manage_org_members.
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 
@@ -68,7 +61,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — org role ceiling', () => {
 	});
 
 	it('allows an owner to mint an owner invite', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 		const founder = await seedUser(tp, 'founder@acme.test');
 		await seedOrgMember(tp, { orgId: acme.id, userId: founder.id, role: 'owner' });
@@ -88,7 +81,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — org role ceiling', () => {
 
 	it('still allows an admin to mint an ordinary member invite', async () => {
 		// The gate must not break the common case an org admin is there to do.
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 

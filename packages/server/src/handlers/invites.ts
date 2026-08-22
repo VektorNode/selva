@@ -12,13 +12,18 @@ import { randomUUID } from 'node:crypto';
 import {
 	apiError,
 	ApiErrorCode,
+	CreatedInviteResponseSchema,
+	CreateInviteBodySchema,
+	InviteResponseSchema,
 	noContent,
 	parseBody,
+	parseListOptions,
+	requireCaller,
 	requireParams,
 	shaped,
 	shapedCollection
-} from '@selvajs/server/api';
-import type { ApiHandler } from '@selvajs/server/api';
+} from '../api/index.js';
+import type { ApiHandler, ApiRequest } from '../api/index.js';
 import {
 	DEFAULT_ORG_PERMISSIONS,
 	MEMBER_ASSIGNABLE_PERMISSIONS,
@@ -28,18 +33,42 @@ import {
 	assertCanGrantPlatformPermissions,
 	canActorChangeOrgRole,
 	requireManageOrgMembers,
-	requireActingOrg
-} from '../../access.server';
-import { splitFlatPermissions } from '../../permissions-scope.server';
-import { tokenCodec } from '@selvajs/server/handlers';
-import { deliverInvite } from '../../invites/deliver.server';
-import { findPendingInviteInOrg } from '../../invites/lookup.server';
-import { parseListOptions } from '../../pagination.server';
-import { CreateInviteBodySchema } from '../v1/bodies';
-import { InviteResponseSchema, CreatedInviteResponseSchema } from '@selvajs/server/api';
-import { requireCaller } from '../callers';
+	requireActingOrg,
+	splitFlatPermissions
+} from '../access/index.js';
+import { deliverInvite, type InviteDelivery } from '../notifications/index.js';
+import { tokenCodec } from './services.js';
+import { findPendingInviteInOrg } from './invite-lookup.js';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Mail the accept link, or report why not.
+ *
+ * Mint and resend must send the identical message, so the deps threading lives
+ * here rather than at each call site. `not-configured` when the host wired no
+ * notification provider: the invite row is already committed and the caller
+ * still holds `acceptUrl`, so an instance without mail is a working instance,
+ * not a failed write.
+ */
+async function mailInvite(
+	req: ApiRequest,
+	invite: Invite,
+	acceptUrl: string
+): Promise<InviteDelivery> {
+	const notifications = req.deps.notifications;
+	if (!notifications) return 'not-configured';
+	return deliverInvite({
+		ctx: req.ctx!,
+		log: req.log,
+		invite,
+		acceptUrl,
+		actor: { profile: req.profile, user: req.user },
+		orgs: req.deps.orgs,
+		notifications,
+		fallbackOrgName: req.deps.instanceName
+	});
+}
 
 /** Pending and recently accepted invites for the acting org. */
 export const listInvites: ApiHandler = async (req) => {
@@ -110,13 +139,7 @@ export const createInvite: ApiHandler = async (req) => {
 	// `acceptUrl` carries the raw token and exists only in this response — it
 	// is not a field of the stored invite.
 	const acceptUrl = `${req.url.origin}/accept-invite?token=${rawToken}`;
-	const delivery = await deliverInvite({
-		ctx,
-		log: req.log,
-		invite,
-		acceptUrl,
-		actor: { profile: req.profile, user: req.user }
-	});
+	const delivery = await mailInvite(req, invite, acceptUrl);
 
 	return shaped(CreatedInviteResponseSchema, { ...invite, acceptUrl, delivery }, 201);
 };
@@ -175,13 +198,7 @@ export const resendInvite: ApiHandler = async (req) => {
 	await req.deps.invites.revoke(ctx, existing.id);
 
 	const acceptUrl = `${req.url.origin}/accept-invite?token=${rawToken}`;
-	const delivery = await deliverInvite({
-		ctx,
-		log: req.log,
-		invite: replacement,
-		acceptUrl,
-		actor: { profile: req.profile, user: req.user }
-	});
+	const delivery = await mailInvite(req, replacement, acceptUrl);
 
 	return shaped(CreatedInviteResponseSchema, { ...replacement, acceptUrl, delivery }, 201);
 };

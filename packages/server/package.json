@@ -120,6 +120,7 @@
 	},
 	"dependencies": {
 		"@selvajs/compute": "workspace:^",
+		"@selvajs/notifications": "workspace:^",
 		"@selvajs/platform": "workspace:^",
 		"@selvajs/schemas": "workspace:^",
 		"zod": "catalog:"

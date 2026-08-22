@@ -1,9 +1,12 @@
-import type { ILogger, Invite, RequestContext, UserProfile, AuthUser } from '@selvajs/platform';
-import {
-	getBranding,
-	getNotificationProvider,
-	getOrganizationProvider
-} from '$lib/server/providers.server';
+import type {
+	AuthUser,
+	IDataProvider,
+	ILogger,
+	INotificationProvider,
+	Invite,
+	RequestContext,
+	UserProfile
+} from '@selvajs/platform';
 import { renderInviteEmail } from '@selvajs/notifications';
 
 export type InviteDelivery = 'sent' | 'not-configured' | 'failed';
@@ -15,6 +18,10 @@ export interface DeliverInviteInput {
 	acceptUrl: string;
 	/** The admin minting the invite — used only for the "X invited you" line. */
 	actor: { profile?: UserProfile; user?: AuthUser };
+	orgs: IDataProvider['orgs'];
+	notifications: INotificationProvider;
+	/** Falls back into the org-name slot when the org has no name of its own. */
+	fallbackOrgName: string;
 }
 
 /**
@@ -26,14 +33,14 @@ export interface DeliverInviteInput {
  * SMTP host must not report a valid invite as a failure.
  */
 export async function deliverInvite(input: DeliverInviteInput): Promise<InviteDelivery> {
-	const { ctx, log, invite, acceptUrl, actor } = input;
+	const { ctx, log, invite, acceptUrl, actor, orgs, notifications, fallbackOrgName } = input;
 	try {
-		const org = await getOrganizationProvider().getOrg(ctx, invite.orgId);
-		const { status } = await getNotificationProvider().send(
+		const org = await orgs.getOrg(ctx, invite.orgId);
+		const { status } = await notifications.send(
 			renderInviteEmail({
 				to: invite.email,
 				acceptUrl,
-				orgName: org?.name ?? getBranding().name,
+				orgName: org?.name ?? fallbackOrgName,
 				invitedBy: actor.profile?.displayName || actor.user?.email,
 				expiresAt: invite.expiresAt
 			}),

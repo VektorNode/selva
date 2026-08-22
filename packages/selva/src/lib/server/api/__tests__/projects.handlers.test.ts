@@ -19,7 +19,7 @@ import {
 	listProjectMembers,
 	removeProjectMember,
 	updateProjectMemberRole
-} from '../handlers/projectMembers.js';
+} from '@selvajs/server/handlers';
 import {
 	freshProviders,
 	seedAcme,

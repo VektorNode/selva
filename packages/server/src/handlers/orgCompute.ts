@@ -8,27 +8,33 @@
  *
  * **`apiKey` merge semantics are the trap here.** Omitted preserves the stored
  * key, `null` clears it, a string replaces it — and `/api/admin/compute` must
- * agree, which is why the merge lives in `serverConfigWrite`, not inline.
+ * agree, which is why the merge lives in `@selvajs/server/compute`, not inline.
  */
 
-import { apiError, ApiErrorCode, noContent, parseBody, shaped } from '@selvajs/server/api';
-import type { ApiHandler, ApiRequest } from '@selvajs/server/api';
+import {
+	apiError,
+	ApiErrorCode,
+	noContent,
+	OrgComputePatchBodySchema,
+	OrgComputeResponseSchema,
+	parseBody,
+	shaped
+} from '../api/index.js';
+import type { ApiHandler, ApiRequest } from '../api/index.js';
 import {
 	isOrgServer,
 	isPlatformServer,
 	serversVisibleTo,
 	type OrgComputeServer
 } from '@selvajs/platform';
-import { requireManageOrgCompute, requireActingOrg } from '../../access.server';
-import { evictChangedServers } from '../../compute/evictChangedServers';
+import { requireManageOrgCompute, requireActingOrg } from '../access/index.js';
 import {
+	evictChangedServers,
 	validateIncomingServers,
 	resolveApiKey,
 	storedKeysById,
 	type IncomingServerBase
-} from '../../compute/serverConfigWrite';
-import { OrgComputeResponseSchema } from '@selvajs/server/api';
-import { OrgComputePatchBodySchema } from '../v1/bodies';
+} from '../compute/index.js';
 
 function requireFlag(req: ApiRequest) {
 	if (!req.deps.flag('ALLOW_ORG_COMPUTE_OVERRIDE')) {
@@ -129,7 +135,8 @@ export const updateOrgCompute: ApiHandler = async (req) => {
 	// removed — keyed on `id`, they would not age out on their own.
 	evictChangedServers(
 		existing.servers.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId),
-		next
+		next,
+		req.deps.evictComputeClient
 	);
 	return noContent();
 };

@@ -9,20 +9,21 @@
  */
 
 import {
+	AddProjectMemberBodySchema,
 	apiError,
 	ApiErrorCode,
 	collection,
 	created,
 	noContent,
 	parseBody,
-	requireParams
-} from '@selvajs/server/api';
-import type { ApiHandler, ApiRequest } from '@selvajs/server/api';
+	parseListOptions,
+	requireCaller,
+	requireParams,
+	UpdateProjectMemberBodySchema
+} from '../api/index.js';
+import type { ApiHandler, ApiRequest } from '../api/index.js';
 import { checkOwnerRemoval, type ProjectMember, type ProjectRole } from '@selvajs/platform';
-import { requireCanManage, requireTargetIsOrgMember } from '../../access.server';
-import { parseListOptions } from '../../pagination.server';
-import { AddProjectMemberBodySchema, UpdateProjectMemberBodySchema } from '../v1/bodies';
-import { requireCaller } from '../callers';
+import { requireCanManage, requireTargetIsOrgMember } from '../access/index.js';
 
 export const listProjectMembers: ApiHandler = async (req) => {
 	const { id } = requireParams(req.params, 'id');

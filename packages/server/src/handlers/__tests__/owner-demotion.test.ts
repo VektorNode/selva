@@ -9,20 +9,19 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
 import {
-	freshProviders,
 	seedAcme,
 	seedProject,
 	seedProjectMember,
 	seedUser,
 	seedOrgMember,
 	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { updateProjectMemberRole } from '$lib/server/api/handlers/projectMembers.js';
+	callHandler
+} from '../../testing/index.js';
+import { updateProjectMemberRole } from '../projectMembers.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -33,7 +32,7 @@ afterEach(async () => {
 
 describe('PATCH /api/v1/projects/{id}/members/{userId} — owner count', () => {
 	it('refuses to demote the sole owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const project = await seedProject(tp, {
 			orgId: acme.id,
@@ -61,7 +60,7 @@ describe('PATCH /api/v1/projects/{id}/members/{userId} — owner count', () => {
 	});
 
 	it('requires confirmation to demote a co-owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const carol = await seedUser(tp, 'carol@acme.test');
 		await seedOrgMember(tp, { orgId: acme.id, userId: carol.id, role: 'member' });
@@ -93,7 +92,7 @@ describe('PATCH /api/v1/projects/{id}/members/{userId} — owner count', () => {
 
 	it('allows demoting a non-owner without confirmation', async () => {
 		// The guard must stay out of the way of ordinary role changes.
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const carol = await seedUser(tp, 'carol@acme.test');
 		await seedOrgMember(tp, { orgId: acme.id, userId: carol.id, role: 'member' });
@@ -117,7 +116,7 @@ describe('PATCH /api/v1/projects/{id}/members/{userId} — owner count', () => {
 	});
 
 	it('allows promoting a member to owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const carol = await seedUser(tp, 'carol@acme.test');
 		await seedOrgMember(tp, { orgId: acme.id, userId: carol.id, role: 'member' });

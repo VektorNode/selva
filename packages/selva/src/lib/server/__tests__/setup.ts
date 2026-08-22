@@ -65,6 +65,9 @@ vi.mock('$lib/server/providers.server', async () => {
 		// state, so routes already handle it — asserting on delivery would test
 		// the transport rather than the route.
 		getNotificationProvider: () => new NoopNotificationProvider(),
+		// A fixed name: `deps.instanceName` only fills the org-name slot in an
+		// invite mail when the org has none, so no test's outcome turns on it.
+		getBranding: () => ({ name: 'Selva' }),
 		// Tests assert behavior, not log output; a no-op keeps the suite quiet.
 		// One shared instance, not a fresh one per call, so a test can spy on the
 		// logger and see the calls the code under test makes through it.

@@ -626,6 +626,9 @@ importers:
       '@selvajs/compute':
         specifier: workspace:^
         version: link:../compute
+      '@selvajs/notifications':
+        specifier: workspace:^
+        version: link:../notifications
       '@selvajs/platform':
         specifier: workspace:^
         version: link:../platform

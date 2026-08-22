@@ -12,17 +12,22 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import {
-	freshProviders,
-	seedAcme,
-	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { listInvites, createInvite } from '$lib/server/api/handlers/invites.js';
-import { hashToken } from '$lib/server/invites/token.server.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
+import { seedAcme, actAs, callHandler } from '../../testing/index.js';
+import { listInvites, createInvite } from '../invites.js';
 
-let tp: TestProviders | null = null;
+/**
+ * Hash through the harness's own invite codec — the same instance the handler
+ * mints with. A second codec on a different secret would produce a hash no
+ * handler could ever have written, and the lookup would fail for the wrong reason.
+ */
+function inviteHash(h: HandlerHarness, raw: string): string {
+	const codec = h.deps?.tokens?.invites;
+	if (!codec) throw new Error('harness has no invite codec');
+	return codec.hashToken(raw);
+}
+
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -33,7 +38,7 @@ afterEach(async () => {
 
 describe('POST /api/v1/orgs/{orgId}/invites — raw-token-once + hashed-at-rest', () => {
 	it('returns the raw token only inside acceptUrl; no tokenHash in response', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 
@@ -60,7 +65,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — raw-token-once + hashed-at-rest'
 	});
 
 	it('persists the hash, not the raw token; lookup by raw token fails', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 
@@ -77,7 +82,10 @@ describe('POST /api/v1/orgs/{orgId}/invites — raw-token-once + hashed-at-rest'
 		expect(byRaw).toBeNull();
 
 		// Looking up by the HMAC of the raw token must hit.
-		const byHash = await tp.config.data.invites.getByTokenHash(SYSTEM_CONTEXT, hashToken(rawToken));
+		const byHash = await tp.config.data.invites.getByTokenHash(
+			SYSTEM_CONTEXT,
+			inviteHash(tp, rawToken)
+		);
 		expect(byHash).not.toBeNull();
 		expect(byHash?.email).toBe('newhire@acme.test');
 	});
@@ -85,7 +93,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — raw-token-once + hashed-at-rest'
 
 describe('GET /api/v1/orgs/{orgId}/invites — listing strips tokenHash', () => {
 	it('does not expose tokenHash to the admin UI', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const aliceLocals = await actAs(tp, alice.id);
 

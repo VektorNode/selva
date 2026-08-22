@@ -46,3 +46,11 @@ export {
 	updateProject,
 	deleteProject
 } from './projects.js';
+export {
+	listProjectMembers,
+	addProjectMember,
+	updateProjectMemberRole,
+	removeProjectMember
+} from './projectMembers.js';
+export { getOrgCompute, updateOrgCompute } from './orgCompute.js';
+export { listInvites, createInvite, revokeInvite, resendInvite } from './invites.js';

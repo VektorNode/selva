@@ -11,17 +11,11 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import {
-	freshProviders,
-	seedAcme,
-	actAs,
-	callHandler,
-	grantPlatformPermissions,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { createInvite } from '$lib/server/api/handlers/invites.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
+import { seedAcme, actAs, callHandler, grantPlatformPermissions } from '../../testing/index.js';
+import { createInvite } from '../invites.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -32,7 +26,7 @@ afterEach(async () => {
 
 describe('POST /api/v1/orgs/{orgId}/invites — platform permissions', () => {
 	it('stores platform permissions when an instance admin mints the invite', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		await grantPlatformPermissions(tp, alice.id, ['instance_admin']);
 		const locals = await actAs(tp, alice.id);
@@ -60,7 +54,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — platform permissions', () => {
 		// That distinction is covered in `platform-permission-delegation.test.ts`,
 		// which acts as an org owner: someone who clears this gate and must still
 		// be refused the platform scope.
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { bob, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, bob.id);
 
@@ -76,7 +70,7 @@ describe('POST /api/v1/orgs/{orgId}/invites — platform permissions', () => {
 	it('leaves platform permissions empty on an ordinary org invite', async () => {
 		// The common case must not pick anything up by default — an invite is
 		// org-scope unless someone deliberately ticked an instance box.
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		await grantPlatformPermissions(tp, alice.id, ['instance_admin']);
 		const locals = await actAs(tp, alice.id);

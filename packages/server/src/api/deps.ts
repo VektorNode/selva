@@ -20,6 +20,7 @@ import type {
 	IAuthProvider,
 	IDataProvider,
 	IEventSink,
+	INotificationProvider,
 	IStorageProvider,
 	SelvaConfig,
 	SelvaFlags
@@ -88,6 +89,31 @@ export interface SelvaDeps {
 		maxImageFileSize: number;
 	};
 	/**
+	 * Outbound mail, and the instance name to fall back to when a record has no
+	 * name of its own.
+	 *
+	 * Optional because mail is best-effort by design: an invite row is committed
+	 * before delivery is attempted, and the caller still holds the accept URL to
+	 * share by hand. A host with no mail configured wires nothing and the
+	 * handlers report `not-configured` rather than failing the write.
+	 */
+	notifications?: INotificationProvider;
+	/** Instance display name, used where a record has none. */
+	instanceName: string;
+	/**
+	 * Drop the host's warm compute client for one server id.
+	 *
+	 * A warm client caches on server `id`, so a rotated URL or key keeps the
+	 * same cache key with stale connection details and never ages out. The
+	 * config-write handlers evict through this rather than importing a cache:
+	 * which cache holds them is the host's decision, and importing one would
+	 * pull a whole solve engine into every consumer.
+	 *
+	 * Defaults to a no-op — a host with no client cache has nothing to evict,
+	 * and the handler must not have to know which kind of host it is running on.
+	 */
+	evictComputeClient: (id: string) => void;
+	/**
 	 * Composed services the host supplies.
 	 *
 	 * The named ones are typed because handlers call them — leaving a service
@@ -116,8 +142,17 @@ export function depsFromConfig(
 	services: SelvaDeps['services'] = {},
 	{
 		tokens = {},
-		uploadLimits
-	}: { tokens?: SelvaDeps['tokens']; uploadLimits?: Partial<SelvaDeps['uploadLimits']> } = {}
+		uploadLimits,
+		evictComputeClient = () => {},
+		notifications,
+		instanceName = 'Selva'
+	}: {
+		tokens?: SelvaDeps['tokens'];
+		uploadLimits?: Partial<SelvaDeps['uploadLimits']>;
+		evictComputeClient?: SelvaDeps['evictComputeClient'];
+		notifications?: INotificationProvider;
+		instanceName?: string;
+	} = {}
 ): SelvaDeps {
 	const { data } = config;
 	return {
@@ -143,6 +178,9 @@ export function depsFromConfig(
 			maxDefinitionFileSize: uploadLimits?.maxDefinitionFileSize ?? 50 * 1024 * 1024,
 			maxImageFileSize: uploadLimits?.maxImageFileSize ?? 10 * 1024 * 1024
 		},
+		evictComputeClient,
+		notifications,
+		instanceName,
 		services
 	};
 }

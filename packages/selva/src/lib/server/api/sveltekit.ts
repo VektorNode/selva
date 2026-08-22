@@ -20,10 +20,16 @@ import {
 	type ApiRequest,
 	type SelvaDeps
 } from '@selvajs/server/api';
-import { getDefinitionService, getOrgAssetService } from '../providers.server';
+import {
+	getBranding,
+	getDefinitionService,
+	getNotificationProvider,
+	getOrgAssetService
+} from '../providers.server';
 import { shareLinkCodec } from '../shareLinks/token.server';
 import { inviteCodec } from '../invites/token.server';
 import { MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '../computeLimits';
+import { evictComputeClient } from '../compute/engine.server';
 
 /**
  * This app's own errors, folded into the shared envelope.
@@ -77,7 +83,13 @@ function buildDeps(event: RequestEvent): SelvaDeps {
 			uploadLimits: {
 				maxDefinitionFileSize: MAX_DEFINITION_FILE_SIZE,
 				maxImageFileSize: MAX_IMAGE_FILE_SIZE
-			}
+			},
+			// Without this the compute-config write leaves a warm client holding a
+			// rotated URL or key: the cache is keyed on server id, so nothing about
+			// the change makes the stale entry expire.
+			evictComputeClient,
+			notifications: getNotificationProvider(),
+			instanceName: getBranding().name
 		}
 	);
 }

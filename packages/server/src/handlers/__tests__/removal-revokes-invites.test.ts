@@ -10,19 +10,12 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import {
-	freshProviders,
-	seedAcme,
-	seedOrgMember,
-	seedUser,
-	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { removeOrgMember } from '@selvajs/server/handlers';
-import { createInvite } from '$lib/server/api/handlers/invites.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
+import { seedAcme, seedOrgMember, seedUser, actAs, callHandler } from '../../testing/index.js';
+import { removeOrgMember } from '../orgMembers.js';
+import { createInvite } from '../invites.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -33,7 +26,7 @@ afterEach(async () => {
 
 /** Mint through the real route so the invite is shaped exactly as production makes it. */
 async function mintInvite(
-	providers: TestProviders,
+	providers: HandlerHarness,
 	locals: Awaited<ReturnType<typeof actAs>>,
 	orgId: string,
 	email: string
@@ -48,7 +41,7 @@ async function mintInvite(
 
 describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — pending invites', () => {
 	it('revokes the removed member’s pending invites', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 		await mintInvite(tp, locals, acme.id, bob.email);
@@ -64,7 +57,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — pending invites', () 
 	});
 
 	it('leaves other members’ invites alone', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob } = await seedAcme(tp);
 		const carol = await seedUser(tp, 'carol@acme.test');
 		await seedOrgMember(tp, { orgId: acme.id, userId: carol.id, role: 'member' });
@@ -79,7 +72,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — pending invites', () 
 	});
 
 	it('emits invite.revoked so the disarming is auditable', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 		await mintInvite(tp, locals, acme.id, bob.email);
@@ -91,7 +84,7 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — pending invites', () 
 	});
 
 	it('still removes the member when they have no pending invite', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 

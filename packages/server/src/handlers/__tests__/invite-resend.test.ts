@@ -10,18 +10,22 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import {
-	freshProviders,
-	seedAcme,
-	seedOrg,
-	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { createInvite, resendInvite } from '$lib/server/api/handlers/invites.js';
-import { hashToken } from '$lib/server/invites/token.server.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
+import { seedAcme, seedOrg, actAs, callHandler } from '../../testing/index.js';
+import { createInvite, resendInvite } from '../invites.js';
 
-let tp: TestProviders | null = null;
+/**
+ * Hash through the harness's own invite codec — the same instance the handler
+ * mints with. A second codec on a different secret would produce a hash no
+ * handler could ever have written, and the lookup would fail for the wrong reason.
+ */
+function inviteHash(h: HandlerHarness, raw: string): string {
+	const codec = h.deps?.tokens?.invites;
+	if (!codec) throw new Error('harness has no invite codec');
+	return codec.hashToken(raw);
+}
+
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -41,7 +45,7 @@ async function mint(orgId: string, locals: TestLocals, body: Record<string, unkn
 
 describe('POST /api/v1/orgs/{orgId}/invites/{id}/resend', () => {
 	it('issues a new working token and kills the old one', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 
@@ -65,15 +69,17 @@ describe('POST /api/v1/orgs/{orgId}/invites/{id}/resend', () => {
 		expect(body.tokenHash).toBeUndefined();
 
 		const store = tp.config.data.invites;
-		await expect(store.getByTokenHash(SYSTEM_CONTEXT, hashToken(newToken))).resolves.not.toBeNull();
+		await expect(
+			store.getByTokenHash(SYSTEM_CONTEXT, inviteHash(tp, newToken))
+		).resolves.not.toBeNull();
 		// The superseded link must be dead the moment resend returns.
 		await expect(
-			store.getByTokenHash(SYSTEM_CONTEXT, hashToken(original.token))
+			store.getByTokenHash(SYSTEM_CONTEXT, inviteHash(tp, original.token))
 		).resolves.toBeNull();
 	});
 
 	it('copies the original grants rather than re-deriving them', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 
@@ -98,7 +104,7 @@ describe('POST /api/v1/orgs/{orgId}/invites/{id}/resend', () => {
 	});
 
 	it('refuses an invite belonging to another org', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 		const other = await seedOrg(tp, {
