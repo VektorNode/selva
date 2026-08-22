@@ -10,6 +10,7 @@
 		SectionHeader,
 		Badge,
 		randomId,
+		ConfirmDialog,
 		type FilterableDropdownItem
 	} from '@selvajs/ui';
 	import { Server, Plus, Trash2, Star } from '@lucide/svelte';
@@ -102,7 +103,11 @@
 		// If the removed server was the org default, fall back to the global.
 		if (orgDefaultServerId === removed.id) orgDefaultServerId = '';
 		dirty = true;
+		showRemoveConfirm = false;
 	}
+
+	let confirmingRemove = $state<{ index: number; server: ServerEntry } | null>(null);
+	let showRemoveConfirm = $state(false);
 
 	async function save() {
 		saving = true;
@@ -171,7 +176,10 @@
 			<Button
 				variant="ghost"
 				size="sm"
-				onclick={() => removeServer(i)}
+				onclick={() => {
+					confirmingRemove = { index: i, server };
+					showRemoveConfirm = true;
+				}}
 				class="text-destructive hover:text-destructive h-7 w-7 p-0"
 			>
 				<Trash2 class="h-3.5 w-3.5" />
@@ -400,3 +408,16 @@
 		</Card.Content>
 	</Card.Root>
 </div>
+
+<ConfirmDialog
+	bind:open={showRemoveConfirm}
+	title="Remove this server?"
+	description={confirmingRemove
+		? `Remove "${confirmingRemove.server.label}" from your org's compute servers? It won't take effect until you Save.`
+		: undefined}
+	confirmLabel="Remove"
+	variant="destructive"
+	onConfirm={() => {
+		if (confirmingRemove) removeServer(confirmingRemove.index);
+	}}
+/>

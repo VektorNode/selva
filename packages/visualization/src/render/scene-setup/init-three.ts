@@ -244,7 +244,8 @@ export const initThree = function (
 	const {
 		animate,
 		dispose: disposeAnimation,
-		invalidate
+		invalidate,
+		renderNow
 	} = createAnimationLoop(
 		renderer,
 		scene,
@@ -271,6 +272,13 @@ export const initThree = function (
 	// call these again.
 	updateShadowBounds();
 	updateGridScale();
+
+	const captureImage = (type = 'image/png', quality?: number): Promise<Blob | null> => {
+		// Draw and read in the same task: without preserveDrawingBuffer the colour buffer is gone
+		// once the browser composites, and a deferred toBlob returns a blank image.
+		renderNow();
+		return new Promise((resolve) => renderer.domElement.toBlob(resolve, type, quality));
+	};
 
 	const addUserGeometry = (object: THREE.Object3D, appId?: string) => {
 		object.userData.source = appId === undefined ? SOURCE_USER : appSource(appId);
@@ -339,6 +347,7 @@ export const initThree = function (
 		applyEdges,
 		clearEdges,
 		invalidate,
+		captureImage,
 		setAmbientOcclusion: pipeline.setAmbientOcclusion,
 		setLook: appearance.setLook,
 		setFillLights: appearance.setFillLights,

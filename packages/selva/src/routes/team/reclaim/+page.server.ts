@@ -6,6 +6,7 @@ import { getOrganizationProvider, getProjectProvider } from '$lib/server/provide
 
 export interface ReclaimRow extends Project {
 	memberCount: number;
+	alreadyOwner: boolean;
 }
 
 /**
@@ -52,15 +53,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 		rows = await Promise.all(
 			projects.items.map(async (project): Promise<ReclaimRow> => {
 				let memberCount = 0;
+				let alreadyOwner = false;
 				try {
 					const members = await projectStore.listProjectMembers(SYSTEM_CONTEXT, project.id, {
 						limit: 200
 					});
 					memberCount = members.items.length;
+					alreadyOwner = members.items.some((m) => m.userId === ctx.userId && m.role === 'owner');
 				} catch {
 					// non-fatal
 				}
-				return { ...project, memberCount };
+				return { ...project, memberCount, alreadyOwner };
 			})
 		);
 	} catch {

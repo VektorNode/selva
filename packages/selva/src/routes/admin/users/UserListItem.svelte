@@ -176,18 +176,14 @@
 					<p class="text-muted-foreground text-sm">Not a member of the active organization.</p>
 				{:else}
 					<p class="text-muted-foreground text-sm">
+						<strong class="text-foreground capitalize">{user.orgRole}</strong>
 						{#if isOwnerOrAdmin}
-							<strong class="text-foreground capitalize">{user.orgRole}s</strong> hold every organization
-							permission.
+							— every organization permission.
 						{:else if user.orgPermissions.length > 0}
-							Member, holding {user.orgPermissions.map((p) => PERM_LABEL[p]).join(', ')}.
+							— {user.orgPermissions.map((p) => PERM_LABEL[p]).join(', ')}.
 						{:else}
-							Member, with no organization permissions granted.
+							— no organization permissions granted.
 						{/if}
-					</p>
-					<p class="text-muted-foreground mt-2 text-xs">
-						Role and organization permissions are managed at
-						<a href="/team/members" class="underline">Members &amp; roles</a>.
 					</p>
 				{/if}
 			</section>

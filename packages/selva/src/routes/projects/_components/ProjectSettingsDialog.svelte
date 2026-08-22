@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { Button, Dialog, EmptyState, Input, Label, Tabs, Textarea } from '@selvajs/ui';
+	import {
+		Button,
+		Dialog,
+		EmptyState,
+		Input,
+		Label,
+		Tabs,
+		Textarea,
+		ConfirmDialog
+	} from '@selvajs/ui';
 	import { Trash2, UserPlus, Users, X } from '@lucide/svelte';
 	import type { ProjectWithMembers, UserListItem } from '../+page.server';
 	import type { ProjectRole, ProjectVisibility } from '@selvajs/platform/projects';
@@ -47,6 +56,8 @@
 	let showAddForm = $state(false);
 	let adding = $state(false);
 	let removing = $state<string | null>(null);
+	let confirmingRemove = $state<string | null>(null);
+	let showRemoveConfirm = $state(false);
 
 	function userLabel(userId: string) {
 		const u = users.find((u) => u.id === userId);
@@ -122,10 +133,10 @@
 	}
 
 	async function remove(userId: string) {
-		if (!confirm(removalWarning(userId))) return;
 		removing = userId;
 		try {
 			await onRemoveMember(project.id, userId);
+			showRemoveConfirm = false;
 		} finally {
 			removing = null;
 		}
@@ -233,7 +244,10 @@
 									<option value="viewer">Viewer</option>
 								</select>
 								<Button
-									onclick={() => remove(member.userId)}
+									onclick={() => {
+										confirmingRemove = member.userId;
+										showRemoveConfirm = true;
+									}}
 									disabled={removing === member.userId}
 									variant="ghost"
 									size="icon"
@@ -290,3 +304,15 @@
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
+
+<ConfirmDialog
+	bind:open={showRemoveConfirm}
+	title="Remove member?"
+	description={confirmingRemove ? removalWarning(confirmingRemove) : undefined}
+	confirmLabel="Remove"
+	pendingLabel="Removing…"
+	variant="destructive"
+	onConfirm={() => {
+		if (confirmingRemove) return remove(confirmingRemove);
+	}}
+/>

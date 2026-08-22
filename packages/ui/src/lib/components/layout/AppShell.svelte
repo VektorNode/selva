@@ -81,6 +81,21 @@
 	);
 
 	const bodyShellStyle = '';
+
+	// In scroll mode the page itself scrolls, so the sidenav has to be pinned below the
+	// header or it scrolls away with the content. Fixed mode already gives the row its own
+	// height and the aside its own scroll — sticky there would only shrink it to content.
+	const sidenavWrapClass = $derived(
+		_mode === 'fixed'
+			? 'flex shrink-0'
+			: 'flex shrink-0 self-start sticky top-(--header-h) max-h-[calc(100svh-var(--header-h))]'
+	);
+
+	// The sticky wrapper is only as tall as its content, so in scroll mode the divider comes
+	// from the main column's left edge — that one spans the full body height.
+	const mainClass = $derived(
+		_mode === 'fixed' ? 'flex-1 overflow-y-auto' : 'flex-1 overflow-y-auto border-l border-border'
+	);
 </script>
 
 <div class={rootClass}>
@@ -110,8 +125,10 @@
 
 	<div class={bodyShellClass} style={bodyShellStyle}>
 		{#if sidenav}
-			{@render sidenav()}
-			<main class="flex-1 overflow-y-auto">
+			<div class={sidenavWrapClass}>
+				{@render sidenav()}
+			</div>
+			<main class={mainClass}>
 				{@render children()}
 			</main>
 		{:else}

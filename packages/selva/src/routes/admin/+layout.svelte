@@ -75,7 +75,7 @@
 
 <AppHeader>
 	{#snippet sidenav()}
-		<SideNav {items} eyebrow="Platform" />
+		<SideNav {items} eyebrow="Platform" border={false} />
 	{/snippet}
 
 	<div class="px-(--page-px) py-(--page-py)">

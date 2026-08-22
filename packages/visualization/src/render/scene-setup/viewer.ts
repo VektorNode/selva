@@ -41,6 +41,12 @@ export interface ThreeViewer {
 	 * automatically; call this after mutating the scene externally. No-op when `render.onDemand` is false.
 	 */
 	invalidate: () => void;
+	/**
+	 * PNG (or `type`) snapshot of the current view. Use this rather than reading the canvas directly —
+	 * it forces a synchronous draw first, which a plain `toBlob` on a `preserveDrawingBuffer: false`
+	 * context cannot do, and would hand back a blank image.
+	 */
+	captureImage: (type?: string, quality?: number) => Promise<Blob | null>;
 	setAmbientOcclusion: (enabled: boolean) => void;
 	/**
 	 * Retunes lighting/material (tone mapping, fill, IBL, AO) only — never edges/grid. Overwrites

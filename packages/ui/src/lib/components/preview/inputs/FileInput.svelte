@@ -2,6 +2,7 @@
 	import { Input } from '$lib/components/primitives/input';
 	import { Button } from '$lib/components/primitives/button';
 	import { Label } from '$lib/components/primitives/label';
+	import { toast } from '$lib/components/primitives/sonner';
 	import { FileUp, Link, CircleAlert, CircleCheck } from '@lucide/svelte';
 	import { APP_DEFAULTS } from '$lib/constants';
 
@@ -193,7 +194,7 @@
 		const fileEnding = getFileExtension(file.name);
 
 		if (!isValidFileExtension(fileEnding)) {
-			alert(`File format not accepted: ${fileEnding}`);
+			toast.error(`File format not accepted: ${fileEnding}`);
 			return;
 		}
 
@@ -203,7 +204,7 @@
 		// note in constants.ts) — some files pass here and still 413. The URL import
 		// path applies the same cap.
 		if (file.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) {
-			alert(
+			toast.error(
 				`File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB (max ${APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB}MB).`
 			);
 			return;

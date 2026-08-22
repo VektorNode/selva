@@ -88,15 +88,19 @@
 						</span>
 						<span class="text-right font-mono text-sm tabular-nums">{project.memberCount}</span>
 						<div class="flex justify-end">
-							<Button
-								size="sm"
-								variant="outline"
-								disabled={reclaimingId === project.id}
-								onclick={() => (confirming = project)}
-							>
-								<RotateCcw class="mr-1.5 h-3.5 w-3.5" />
-								Reclaim
-							</Button>
+							{#if project.alreadyOwner}
+								<span class="text-muted-foreground text-xs">Owned</span>
+							{:else}
+								<Button
+									size="sm"
+									variant="outline"
+									disabled={reclaimingId === project.id}
+									onclick={() => (confirming = project)}
+								>
+									<RotateCcw class="mr-1.5 h-3.5 w-3.5" />
+									Reclaim
+								</Button>
+							{/if}
 						</div>
 					{/snippet}
 				</DataTable>

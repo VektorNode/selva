@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card, toast } from '@selvajs/ui';
+	import { Button, Card, toast, ConfirmDialog } from '@selvajs/ui';
 	import { ImageUp, Trash2, Building2 } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { OrgAssetKind } from '@selvajs/platform';
@@ -25,6 +25,7 @@
 
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let busy = $state(false);
+	let confirmingRemove = $state(false);
 
 	async function onSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
@@ -66,6 +67,7 @@
 			const res = await fetch(endpoint, { method: 'DELETE' });
 			if (res.ok) {
 				toast.success(`${title} removed`);
+				confirmingRemove = false;
 				await invalidateAll();
 			} else {
 				toast.error(`Remove failed (${res.status})`);
@@ -126,7 +128,7 @@
 							variant="ghost"
 							size="sm"
 							disabled={busy}
-							onclick={remove}
+							onclick={() => (confirmingRemove = true)}
 							class="text-destructive hover:text-destructive h-8"
 						>
 							<Trash2 class="mr-1.5 h-3.5 w-3.5" />
@@ -138,3 +140,12 @@
 		</div>
 	</Card.Content>
 </Card.Root>
+
+<ConfirmDialog
+	bind:open={confirmingRemove}
+	title={`Remove ${title}?`}
+	confirmLabel="Remove"
+	pendingLabel="Removing…"
+	variant="destructive"
+	onConfirm={remove}
+/>

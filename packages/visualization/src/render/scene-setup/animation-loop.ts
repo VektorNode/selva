@@ -27,7 +27,7 @@ export function createAnimationLoop(
 	nearFitter?: NearPlaneFitter | null,
 	// false = render every frame regardless of invalidate()/camera movement.
 	onDemand: boolean = true
-): { animate: () => void; dispose: () => void; invalidate: () => void } {
+): { animate: () => void; dispose: () => void; invalidate: () => void; renderNow: () => void } {
 	let animationId: number | null = null;
 	let lastTime = performance.now();
 
@@ -90,6 +90,27 @@ export function createAnimationLoop(
 		}
 	};
 
+	const drawFrame = (activeCamera: THREE.Camera, delta: number) => {
+		const renderPipeline = getRenderPipeline?.();
+		if (renderPipeline) {
+			renderPipeline.setCamera(activeCamera); // retarget in case 2D/3D swapped
+			renderPipeline.render(delta);
+		} else {
+			renderer.render(scene, activeCamera);
+		}
+
+		if (labelLayer) labelLayer.render(scene, activeCamera);
+
+		// Corner-viewport overlay with its own clear; must render last to sit on top.
+		if (gizmo) gizmo.render(renderer);
+	};
+
+	// Without preserveDrawingBuffer the colour buffer is cleared once the browser composites, so a
+	// canvas read (toBlob/toDataURL) only sees pixels if it happens in the same task as a draw.
+	const renderNow = () => {
+		drawFrame(getActiveCamera(), 0);
+	};
+
 	const animate = function () {
 		animationId = requestAnimationFrame(animate);
 
@@ -122,18 +143,7 @@ export function createAnimationLoop(
 			lastRenderTime = now;
 		}
 
-		const renderPipeline = getRenderPipeline?.();
-		if (renderPipeline) {
-			renderPipeline.setCamera(activeCamera); // retarget in case 2D/3D swapped
-			renderPipeline.render(delta);
-		} else {
-			renderer.render(scene, activeCamera);
-		}
-
-		if (labelLayer) labelLayer.render(scene, activeCamera);
-
-		// Corner-viewport overlay with its own clear; must render last to sit on top.
-		if (gizmo) gizmo.render(renderer);
+		drawFrame(activeCamera, delta);
 	};
 
 	const dispose = () => {
@@ -148,5 +158,5 @@ export function createAnimationLoop(
 		}
 	};
 
-	return { animate, dispose, invalidate };
+	return { animate, dispose, invalidate, renderNow };
 }

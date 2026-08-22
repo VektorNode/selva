@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Button, Card } from '@selvajs/ui';
-	import { FlaskConical, ShieldCheck, TriangleAlert } from '@lucide/svelte';
+	import { Button, Callout, Card } from '@selvajs/ui';
+	import { FlaskConical, ShieldCheck } from '@lucide/svelte';
 	import { enhance } from '$app/forms';
 
 	interface Props {
@@ -104,16 +104,10 @@
 			</div>
 
 			{#if selected === 'beta'}
-				<div
-					class="border-warning/40 bg-warning/10 text-warning mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
-					role="status"
-				>
-					<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-					<span>
-						Beta builds may be unstable. You can revert to Stable here at any time and run an update
-						to roll back to the latest stable release.
-					</span>
-				</div>
+				<Callout tone="warning" class="mt-3">
+					Beta builds may be unstable. You can revert to Stable here at any time and run an update
+					to roll back to the latest stable release.
+				</Callout>
 			{/if}
 
 			<div class="mt-4 flex items-center gap-3">

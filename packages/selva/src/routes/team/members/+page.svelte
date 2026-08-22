@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { Button, Card, Input, toast, SectionHeader, EmptyState, Pagination } from '@selvajs/ui';
+	import {
+		Button,
+		Card,
+		Input,
+		toast,
+		SectionHeader,
+		EmptyState,
+		Pagination,
+		ConfirmDialog
+	} from '@selvajs/ui';
 	import { Mail, Trash2, Copy, X, UserPlus, Send, Search } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { Invite, OrgPermission, OrgRole } from '@selvajs/platform';
@@ -181,6 +190,12 @@
 	}
 
 	let removingId = $state<string | null>(null);
+	let confirmingRemove = $state<MemberRow | null>(null);
+	let confirmingResend = $state<Invite | null>(null);
+	let confirmingRevoke = $state<Invite | null>(null);
+	let showRemoveConfirm = $state(false);
+	let showResendConfirm = $state(false);
+	let showRevokeConfirm = $state(false);
 
 	const blockReasonFor = (member: MemberRow) =>
 		removalBlockReason({
@@ -190,16 +205,10 @@
 			ownerCount
 		});
 
+	// Removal proceeds even when it orphans projects (§10) — the server reports
+	// them rather than blocking, so the warning belongs here, before the fact.
 	async function removeMember(member: MemberRow) {
 		const who = member.email ?? member.displayName ?? member.userId;
-		// Removal proceeds even when it orphans projects (§10) — the server reports
-		// them rather than blocking, so the warning belongs here, before the fact.
-		if (
-			!confirm(
-				`Remove "${who}" from this organization?\n\nThey lose access to every project in it, and any pending invites to their email are revoked. Projects they solely own are left without an owner and can be adopted from Team → Reclaim.`
-			)
-		)
-			return;
 		removingId = member.userId;
 		try {
 			const res = await fetch(`/api/v1/orgs/${data.orgId}/members/${member.userId}`, {
@@ -207,6 +216,7 @@
 			});
 			if (res.ok) {
 				toast.success(`${who} removed from the organization`);
+				showRemoveConfirm = false;
 				await invalidateAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
@@ -223,12 +233,6 @@
 	// never stored, so the server mints a new one and revokes the old row. Any
 	// link already sent stops working.
 	async function resendInvite(invite: Invite) {
-		if (
-			!confirm(
-				`Resend the invite for "${invite.email}"?\n\nA new link is issued and the previous one stops working.`
-			)
-		)
-			return;
 		resendingId = invite.id;
 		try {
 			const res = await fetch(`/api/v1/orgs/${data.orgId}/invites/${invite.id}/resend`, {
@@ -242,6 +246,7 @@
 				toast.success(
 					delivery === 'sent' ? `Invite resent to ${invite.email}` : 'New invite link issued'
 				);
+				showResendConfirm = false;
 				await invalidateAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
@@ -254,13 +259,13 @@
 		}
 	}
 
-	async function revokeInvite(id: string, email: string) {
-		if (!confirm(`Revoke invite for "${email}"?`)) return;
+	async function revokeInvite(id: string) {
 		revokingId = id;
 		try {
 			const res = await fetch(`/api/v1/orgs/${data.orgId}/invites/${id}`, { method: 'DELETE' });
 			if (res.ok) {
 				toast.success('Invite revoked');
+				showRevokeConfirm = false;
 				await invalidateAll();
 			} else {
 				toast.error('Failed to revoke invite');
@@ -521,7 +526,10 @@
 											size="sm"
 											variant="ghost"
 											disabled={removingId === member.userId || !!blockReason}
-											onclick={() => removeMember(member)}
+											onclick={() => {
+												confirmingRemove = member;
+												showRemoveConfirm = true;
+											}}
 											title={blockReason ?? 'Remove from organization'}
 											class="text-destructive hover:text-destructive h-8 w-8 shrink-0 p-0"
 										>
@@ -609,7 +617,10 @@
 											size="sm"
 											variant="ghost"
 											disabled={resendingId === invite.id}
-											onclick={() => resendInvite(invite)}
+											onclick={() => {
+												confirmingResend = invite;
+												showResendConfirm = true;
+											}}
 											title={data.mailConfigured
 												? 'Email a fresh link (the current one stops working)'
 												: 'Issue a fresh link (the current one stops working)'}
@@ -621,7 +632,10 @@
 											size="sm"
 											variant="ghost"
 											disabled={revokingId === invite.id}
-											onclick={() => revokeInvite(invite.id, invite.email)}
+											onclick={() => {
+												confirmingRevoke = invite;
+												showRevokeConfirm = true;
+											}}
 											class="text-destructive hover:text-destructive"
 										>
 											<Trash2 class="h-4 w-4" />
@@ -636,3 +650,42 @@
 		{/if}
 	{/if}
 </div>
+
+<ConfirmDialog
+	bind:open={showRemoveConfirm}
+	title="Remove member?"
+	description={confirmingRemove
+		? `Remove "${confirmingRemove.email ?? confirmingRemove.displayName ?? confirmingRemove.userId}" from this organization? They lose access to every project in it, and any pending invites to their email are revoked. Projects they solely own are left without an owner and can be adopted from Team → Reclaim.`
+		: undefined}
+	confirmLabel="Remove"
+	pendingLabel="Removing…"
+	variant="destructive"
+	onConfirm={() => {
+		if (confirmingRemove) return removeMember(confirmingRemove);
+	}}
+/>
+
+<ConfirmDialog
+	bind:open={showResendConfirm}
+	title="Resend invite?"
+	description={confirmingResend
+		? `Resend the invite for "${confirmingResend.email}"? A new link is issued and the previous one stops working.`
+		: undefined}
+	confirmLabel="Resend"
+	pendingLabel="Sending…"
+	onConfirm={() => {
+		if (confirmingResend) return resendInvite(confirmingResend);
+	}}
+/>
+
+<ConfirmDialog
+	bind:open={showRevokeConfirm}
+	title="Revoke invite?"
+	description={confirmingRevoke ? `Revoke invite for "${confirmingRevoke.email}"?` : undefined}
+	confirmLabel="Revoke"
+	pendingLabel="Revoking…"
+	variant="destructive"
+	onConfirm={() => {
+		if (confirmingRevoke) return revokeInvite(confirmingRevoke.id);
+	}}
+/>

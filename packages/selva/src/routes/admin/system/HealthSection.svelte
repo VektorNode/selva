@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card } from '@selvajs/ui';
+	import { Button, Callout, Card } from '@selvajs/ui';
 	import { CircleCheck, TriangleAlert, CircleX, Minus, Stethoscope } from '@lucide/svelte';
 
 	type CheckStatus = 'ok' | 'degraded' | 'not_applicable' | 'error';
@@ -69,13 +69,7 @@
 		</Button>
 
 		{#if error}
-			<div
-				class="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
-				role="alert"
-			>
-				<CircleX class="mt-0.5 h-4 w-4 shrink-0" />
-				<span>{error}</span>
-			</div>
+			<Callout tone="danger">{error}</Callout>
 		{/if}
 
 		{#if report}

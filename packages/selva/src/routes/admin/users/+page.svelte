@@ -1,5 +1,15 @@
 <script lang="ts">
-	import { Button, Card, EmptyState, Input, toast, SectionHeader, Pagination } from '@selvajs/ui';
+	import {
+		Button,
+		Card,
+		EmptyState,
+		Input,
+		toast,
+		SectionHeader,
+		Pagination,
+		Callout,
+		ConfirmDialog
+	} from '@selvajs/ui';
 	import { Plus, ShieldCheck, X, Search, Users } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
 	import type { OrgRole, PlatformPermission } from '@selvajs/platform';
@@ -176,20 +186,20 @@
 		}
 	}
 
+	let confirmingDisable = $state<{ id: string; email: string } | null>(null);
+	let confirmingDelete = $state<{ id: string; email: string } | null>(null);
+	let showDisableConfirm = $state(false);
+	let showDeleteConfirm = $state(false);
+
 	// One-way door: there is no enable endpoint, so the confirmation says so
 	// rather than letting an admin discover it afterwards.
 	async function disableUser(id: string, email: string) {
-		if (
-			!confirm(
-				`Disable "${email}"? They keep their identity and history but cannot sign in. There is no way to re-enable them from this page.`
-			)
-		)
-			return;
 		disablingId = id;
 		try {
 			const res = await fetch(`/api/admin/users/${id}/disable`, { method: 'POST' });
 			if (res.ok) {
 				toast.success(`User "${email}" disabled`);
+				showDisableConfirm = false;
 				await invalidateAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
@@ -203,12 +213,12 @@
 	}
 
 	async function deleteUser(id: string, email: string) {
-		if (!confirm(`Delete user "${email}"? This cannot be undone.`)) return;
 		deletingId = id;
 		try {
 			const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
 			if (res.ok) {
 				toast.success(`User "${email}" deleted`);
+				showDeleteConfirm = false;
 				await invalidateAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
@@ -253,6 +263,20 @@
 			{/if}
 		{/snippet}
 	</SectionHeader>
+
+	{#if data.users !== null}
+		<Callout tone="info" title="Two kinds of permission">
+			<p>
+				<strong>Instance permissions</strong> (the badges below) apply to the whole server and are what
+				gets you into this admin area. Edit them here.
+			</p>
+			<p class="mt-1.5">
+				<strong>Org roles</strong> apply inside one organization: owners and admins can do
+				everything in theirs, members can do nothing until you grant them a permission. Edit them at
+				<a href="/team/members">Members &amp; roles</a>.
+			</p>
+		</Callout>
+	{/if}
 
 	<Card.Root>
 		<Card.Content class="space-y-4 pt-6">
@@ -390,8 +414,14 @@
 										: user.platformPermissions.filter((x) => x !== perm);
 									await updatePermissions(user.id, next);
 								}}
-								onDelete={() => deleteUser(user.id, user.email ?? user.id)}
-								onDisable={() => disableUser(user.id, user.email ?? user.id)}
+								onDelete={() => {
+									confirmingDelete = { id: user.id, email: user.email ?? user.id };
+									showDeleteConfirm = true;
+								}}
+								onDisable={() => {
+									confirmingDisable = { id: user.id, email: user.email ?? user.id };
+									showDisableConfirm = true;
+								}}
 							/>
 						{/each}
 					</div>
@@ -401,3 +431,31 @@
 		</Card.Content>
 	</Card.Root>
 </div>
+
+<ConfirmDialog
+	bind:open={showDisableConfirm}
+	title="Disable user?"
+	description={confirmingDisable
+		? `Disable "${confirmingDisable.email}"? They keep their identity and history but cannot sign in. There is no way to re-enable them from this page.`
+		: undefined}
+	confirmLabel="Disable"
+	pendingLabel="Disabling…"
+	variant="destructive"
+	onConfirm={() => {
+		if (confirmingDisable) return disableUser(confirmingDisable.id, confirmingDisable.email);
+	}}
+/>
+
+<ConfirmDialog
+	bind:open={showDeleteConfirm}
+	title="Delete user?"
+	description={confirmingDelete
+		? `Delete user "${confirmingDelete.email}"? This cannot be undone.`
+		: undefined}
+	confirmLabel="Delete"
+	pendingLabel="Deleting…"
+	variant="destructive"
+	onConfirm={() => {
+		if (confirmingDelete) return deleteUser(confirmingDelete.id, confirmingDelete.email);
+	}}
+/>

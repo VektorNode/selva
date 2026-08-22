@@ -8,7 +8,7 @@
 		exportStateAsJson,
 		importStateFromJson
 	} from '../../schema/param-exporter';
-	import { Button, Input, Label, Textarea, Dialog, Card } from '../primitives';
+	import { Button, Input, Label, Textarea, Dialog, Card, toast } from '../primitives';
 
 	import type { ActionButton } from '../../types/actionButton';
 	import { DEFAULT_PRESET_LABELS, type PresetLabels } from '../../types/presetLabels';
@@ -68,7 +68,7 @@
 
 	async function handleExport() {
 		if (!exportName.trim()) {
-			alert(t.saveNameRequired);
+			toast.error(t.saveNameRequired);
 			return;
 		}
 
@@ -108,7 +108,7 @@
 			const imported = await importStateFromJson(input.files[0]);
 			tryLoad(imported);
 		} catch (error) {
-			alert(t.loadImportError + (error as Error).message);
+			toast.error(t.loadImportError + (error as Error).message);
 		}
 
 		// Reset so re-picking the same file fires `change` again.
